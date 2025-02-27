@@ -1,7 +1,7 @@
 #include "AtomObject.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "DataObjectVisitorBase.hpp"
-#include "PotentialEntry.hpp"
+#include "AtomicPotentialEntry.hpp"
 
 AtomObject::AtomObject(void) :
     m_key_tag{ "" },

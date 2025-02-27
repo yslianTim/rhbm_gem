@@ -4,16 +4,13 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <set>
 #include <tuple>
 #include <unordered_map>
 #include "DataObjectVisitorBase.hpp"
-#include "TupleHashHelper.hpp"
 
 class AtomSelector;
 class SphereSampler;
-class DataObjectBase;
-struct AtomicPotentialEntry;
-struct GroupPotentialEntry;
 
 class PotentialAnalysisVisitor : public DataObjectVisitorBase
 {
@@ -23,8 +20,7 @@ class PotentialAnalysisVisitor : public DataObjectVisitorBase
     std::shared_ptr<AtomSelector> m_atom_selector;
     std::shared_ptr<SphereSampler> m_sphere_sampler;
     std::vector<AtomObject *> m_selected_atom_list;
-    std::unordered_map<std::tuple<int, int, int, int>, std::unique_ptr<GroupPotentialEntry>, TupleHash<int, int, int, int>> m_grouping_gaus_entry_map;
-    std::unordered_map<std::tuple<int, int, int, int>, std::vector<AtomObject *>, TupleHash<int, int, int, int>> m_grouping_atom_map;
+    std::set<std::tuple<int, int, int, int, bool>> group_type_set;
 
 public:
     PotentialAnalysisVisitor(std::shared_ptr<AtomSelector> atom_selector, std::shared_ptr<SphereSampler> sphere_sampler);
@@ -41,7 +37,7 @@ public:
     void SetModelObjectKeyTag(const std::string & value) { m_model_key_tag = value; }
 
 private:
-    void RunAtomClassification(void);
-    void RunPotentialFitting(void);
+    void RunAtomClassification(const std::string & key, ModelObject * model_object);
+    void RunPotentialFitting(const std::string & key, ModelObject * model_object);
 
 };

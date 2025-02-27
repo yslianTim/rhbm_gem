@@ -1,6 +1,7 @@
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
 #include "DataObjectVisitorBase.hpp"
+#include "GroupPotentialEntry.hpp"
 
 ModelObject::ModelObject(void) :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }

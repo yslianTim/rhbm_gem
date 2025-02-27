@@ -5,7 +5,7 @@
 #include <array>
 #include "DataObjectBase.hpp"
 
-struct AtomicPotentialEntry;
+class AtomicPotentialEntry;
 
 class AtomObject : public DataObjectBase
 {

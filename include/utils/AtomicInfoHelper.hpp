@@ -43,6 +43,24 @@ enum class Branch : int
     UNK = -1
 };
 
+struct ResidueGroupClassifierTag {};
+struct ElementGroupClassifierTag {};
+
+template <typename Tag>
+struct GroupKeyMapping;
+
+template <>
+struct GroupKeyMapping<ResidueGroupClassifierTag>
+{
+    using type = std::tuple<int, int, int, int, bool>;
+};
+
+template <>
+struct GroupKeyMapping<ElementGroupClassifierTag>
+{
+    using type = std::tuple<int, int, bool>;
+};
+
 class AtomicInfoHelper
 {
     inline static std::unordered_map<std::string_view, Residue> residue_map

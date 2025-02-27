@@ -4,14 +4,16 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include "DataObjectBase.hpp"
+#include "GroupPotentialEntryBase.hpp"
 
 class AtomObject;
-
 class ModelObject : public DataObjectBase
 {
     std::vector<std::unique_ptr<AtomObject>> m_atom_list;
     std::string m_key_tag, m_pdb_id, m_emd_id;
+    std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntryBase>> m_group_potential_entry_map;
 
 public:
     ModelObject(void);
@@ -27,12 +29,14 @@ public:
     void AddAtom(std::unique_ptr<AtomObject> component);
     void SetPdbID(const std::string & label) { m_pdb_id = label; }
     void SetEmdID(const std::string & label) { m_emd_id = label; }
+    void AddGroupPotentialEntry(const std::string & key, std::unique_ptr<GroupPotentialEntryBase> entry) { m_group_potential_entry_map[key] = std::move(entry); }
 
     int GetNumberOfAtom(void) const { return m_atom_list.size(); }
     int GetNumberOfSelectedAtom(void) const;
     const std::vector<std::unique_ptr<AtomObject>> & GetComponentsList(void) const { return m_atom_list; }
     std::string GetPdbID(void) const { return m_pdb_id; }
     std::string GetEmdID(void) const { return m_emd_id; }
+    GroupPotentialEntryBase * GetGroupPotentialEntry(const std::string & key) { return m_group_potential_entry_map.at(key).get(); }
 
 private:
     
