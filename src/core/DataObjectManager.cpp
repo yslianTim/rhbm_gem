@@ -1,0 +1,89 @@
+#include "DataObjectManager.hpp"
+#include "FileProcessFactoryBase.hpp"
+#include "FilePathHelper.hpp"
+#include "DataObjectBase.hpp"
+#include "DataObjectVisitorBase.hpp"
+#include "DatabaseManager.hpp"
+#include "ModelObject.hpp"
+
+DataObjectManager::DataObjectManager(const std::string & dbname) :
+    m_db_manager{ std::make_unique<DatabaseManager>(dbname) }
+{
+
+}
+
+DataObjectManager::~DataObjectManager()
+{
+
+}
+
+std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFactory(const std::string & file_extension)
+{
+    if (file_extension == ".pdb" || file_extension == ".cif")
+    {
+        return std::make_unique<ModelObjectFactory>();
+    }
+    else if (file_extension == ".mrc" || file_extension == ".map")
+    {
+        return std::make_unique<MapObjectFactory>();
+    }
+    else
+    {
+        throw std::runtime_error("Unsupported file format");
+    }
+}
+
+void DataObjectManager::ProcessFile(const std::string & filename, const std::string & key_tag)
+{
+    auto file_extension{ FilePathHelper::GetExtension(filename) };
+    auto factory{ CreateFactory(file_extension) };
+    auto data_object{ factory->CreateDataObject(filename) };
+    data_object->SetKeyTag(key_tag);
+    data_object->Display();
+
+    if (m_data_object_map.find(key_tag) != m_data_object_map.end())
+    {
+        std::cout <<"The key tag: ["<< key_tag <<"] already presented"
+                  <<", this data object will be replaced."<< std::endl;
+    }
+    m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
+}
+
+void DataObjectManager::LoadDataObject(const std::string & key_tag)
+{
+    m_db_manager->LoadDataObject(key_tag);
+    if (m_data_object_map.find(key_tag) != m_data_object_map.end())
+    {
+        std::cout <<"The key tag: ["<< key_tag <<"] already presented"
+                  <<", this data object will be replaced."<< std::endl;
+    }
+    m_data_object_map.insert_or_assign(key_tag, m_db_manager->LoadDataObject(key_tag));
+}
+
+void DataObjectManager::SaveDataObject(const std::string & key_tag) const
+{
+    if (m_data_object_map.find(key_tag) == m_data_object_map.end())
+    {
+        std::cout <<"The key tag: ["<< key_tag <<"] isn't presented"
+                  <<", skip saving data object."<< std::endl;
+        return;
+    }
+    m_db_manager->SaveDataObject(m_data_object_map.at(key_tag).get());
+}
+
+void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
+{
+    visitor->Analysis(this);
+}
+
+void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
+{
+    try
+    {
+        m_data_object_map.at(key_tag)->Display();
+    }
+    catch (const std::exception & ex)
+    {
+        std::cerr << ex.what() << std::endl;
+    }
+}

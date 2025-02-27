@@ -1,0 +1,27 @@
+#pragma once
+
+#include <iostream>
+#include <memory>
+#include <array>
+#include <vector>
+#include <tuple>
+
+class SphereSampler
+{
+    unsigned int m_sampling_size;
+    double m_distance_min, m_distance_max, m_distance_range;
+    std::vector<std::tuple<float, std::array<float, 3>>> m_sampling_position_list;
+
+public:
+    SphereSampler(void);
+    ~SphereSampler();
+
+    const std::vector<std::tuple<float, std::array<float, 3>>> & GenerateSamplingPoints(std::array<float, 3> position);
+    void SetSamplingSize(unsigned int value) { m_sampling_size = value; }
+    void SetDistanceRangeMinimum(double value) { m_distance_min = value; }
+    void SetDistanceRangeMaximum(double value) { m_distance_max = value; }
+
+private:
+
+
+};

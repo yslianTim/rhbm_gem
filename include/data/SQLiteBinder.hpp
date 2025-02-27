@@ -1,0 +1,87 @@
+#pragma once
+
+#include <sqlite3.h>
+#include <string>
+#include <string_view>
+#include <vector>
+
+template<typename T>
+struct SQLiteBinder
+{
+};
+
+// int specialization
+template<>
+struct SQLiteBinder<int>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, int value)
+    {
+        return sqlite3_bind_int(stmt, index, value);
+    }
+};
+
+// double specialization
+template<>
+struct SQLiteBinder<double>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, double value)
+    {
+        return sqlite3_bind_double(stmt, index, value);
+    }
+};
+
+// std::string specialization
+template<>
+struct SQLiteBinder<std::string>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, const std::string & value)
+    {
+        // SQLITE_TRANSIENT or SQLITE_STATIC
+        return sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_STATIC);
+    }
+};
+
+// std::string_view specialization (since C++17)
+template<>
+struct SQLiteBinder<std::string_view>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, std::string_view value)
+    {
+        return sqlite3_bind_text(stmt, index, value.data(),
+                                 static_cast<int>(value.size()), SQLITE_STATIC);
+    }
+};
+
+// std::vector<float> specialization
+template<>
+struct SQLiteBinder<std::vector<float>>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, const std::vector<float> & value)
+    {
+        // BLOB 寫入：把 vector<float> 的原始記憶體視為一段 bytes
+        // size() * sizeof(float) 即該資料的 byte 長度
+        return sqlite3_bind_blob(
+            stmt,
+            index,
+            reinterpret_cast<const void*>(value.data()),
+            static_cast<int>(value.size() * sizeof(float)),
+            SQLITE_STATIC
+        );
+    }
+};
+
+// std::vector<double> specialization
+template<>
+struct SQLiteBinder<std::vector<double>>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, const std::vector<double> & value)
+    {
+        return sqlite3_bind_blob(
+            stmt,
+            index,
+            reinterpret_cast<const void*>(value.data()),
+            static_cast<int>(value.size() * sizeof(double)),
+            SQLITE_STATIC
+        );
+    }
+};
