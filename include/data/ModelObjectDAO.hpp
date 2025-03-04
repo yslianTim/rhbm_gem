@@ -5,26 +5,29 @@
 #include <vector>
 #include "DataObjectDAOBase.hpp"
 
-class DatabaseManager;
 class SQLiteWrapper;
 class ModelObject;
 class AtomObject;
 
 class ModelObjectDAO : public DataObjectDAOBase
 {
-    DatabaseManager & m_db_manager;
+    SQLiteWrapper * m_database;
 
 public:
-    ModelObjectDAO(DatabaseManager & db_manager);
+    ModelObjectDAO(SQLiteWrapper * db_manager);
     ~ModelObjectDAO();
 
-    void Save(const DataObjectBase * obj, const std::string & key_tag="") override;
+    void Save(const DataObjectBase * obj) override;
     std::unique_ptr<DataObjectBase> Load(const std::string & key_tag) override;
     
 private:
-    void CreateModelObjectListTable(SQLiteWrapper * db);
-    void CreateAtomObjectListTable(SQLiteWrapper * db, const std::string & table_name);
-    void SaveAtomObjectList(const ModelObject * model_obj);
-    std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & key_tag);
+    void CreateModelObjectListTable(const std::string & table_name);
+    void CreateAtomObjectListTable(const std::string & table_name);
+    void CreateAtomicPotentialEntryListTable(const std::string & table_name);
+    void CreateAtomicPotentialEntrySubListTable(const std::string & table_name, const std::string & group_key);
+    void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
+    void SaveAtomicPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
+    void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & group_key);
+    std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & table_name);
     
 };

@@ -25,7 +25,7 @@ public:
     void Analysis(DataObjectManager * data_manager) override;
 
     void SetPosition(const std::array<float, 3> position) { m_position = position; };
-    std::vector<std::tuple<float, float>> GetSamplingDataList(void) const { return m_sampling_data_list; }
+    const std::vector<std::tuple<float, float>> & GetSamplingDataList(void) const { return m_sampling_data_list; }
 
 private:
     float MakeInterpolationInMapObject(MapObject * data_object, std::array<float, 3> position);

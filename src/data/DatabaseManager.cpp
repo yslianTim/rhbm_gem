@@ -33,7 +33,7 @@ std::unique_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(const Da
 {
     if (dynamic_cast<const ModelObject *>(obj))
     {
-        return std::make_unique<ModelObjectDAO>(*this);
+        return std::make_unique<ModelObjectDAO>(m_database.get());
     }
     else
     {

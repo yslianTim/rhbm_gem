@@ -37,5 +37,15 @@ public:
 
     int GetDistanceAndMapValueListSize(void) const { return static_cast<int>(m_distance_and_map_value_list.size()); }
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const { return m_distance_and_map_value_list; }
+    double GetAmplitudeEstimateOLS(void) const { return std::get<0>(m_gaus_estimate_ols); }
+    double GetWidthEstimateOLS(void) const { return std::get<1>(m_gaus_estimate_ols); }
+    double GetAmplitudeEstimateMDPDE(void) const { return std::get<0>(m_gaus_estimate_mdpde); }
+    double GetWidthEstimateMDPDE(void) const { return std::get<1>(m_gaus_estimate_mdpde); }
+    double GetAmplitudeEstimatePosterior(const std::string & key) const { return std::get<0>(m_gaus_estimate_posterior_map.at(key)); }
+    double GetWidthEstimatePosterior(const std::string & key) const { return std::get<1>(m_gaus_estimate_posterior_map.at(key)); }
+    double GetAmplitudeVariancePosterior(const std::string & key) const { return std::get<0>(m_gaus_variance_posterior_map.at(key)); }
+    double GetWidthVariancePosterior(const std::string & key) const { return std::get<1>(m_gaus_variance_posterior_map.at(key)); }
+    bool GetOutlierTag(const std::string & key) const { return m_outlier_tag_map.at(key); }
+    double GetStatisticalDistance(const std::string & key) const { return m_statistical_distance_map.at(key); }
 
 };

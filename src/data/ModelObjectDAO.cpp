@@ -1,15 +1,15 @@
 #include "ModelObjectDAO.hpp"
-#include "DatabaseManager.hpp"
 #include "SQLiteWrapper.hpp"
 #include "DataObjectBase.hpp"
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
+#include "AtomicPotentialEntry.hpp"
 
 #include <sstream>
 #include <stdexcept>
 
-ModelObjectDAO::ModelObjectDAO(DatabaseManager & db_manager) :
-    m_db_manager{ db_manager }
+ModelObjectDAO::ModelObjectDAO(SQLiteWrapper * database) :
+    m_database{ database }
 {
 
 }
@@ -19,18 +19,25 @@ ModelObjectDAO::~ModelObjectDAO()
 
 }
 
-void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_tag)
+void ModelObjectDAO::Save(const DataObjectBase * obj)
 {
     auto model_obj{ dynamic_cast<const ModelObject *>(obj) };
     if (!model_obj)
     {
         throw std::runtime_error("ModelObjectDAO::Save() failed: object is not a ModelObject instance.");
     }
-    auto db{ m_db_manager.GetDatabase() };
-    CreateModelObjectListTable(db);
+    auto key_tag{ model_obj->GetKeyTag() };
 
-    std::string sql{ R"(
-        INSERT INTO model_list (
+    auto model_list_table_name{ "model_list" };
+    auto atom_list_table_name{ "atom_list_in_" + key_tag };
+    auto potential_entry_table_name{ "atom_potential_entry_in_" + key_tag };
+    CreateModelObjectListTable(model_list_table_name);
+    CreateAtomObjectListTable(atom_list_table_name);
+    CreateAtomicPotentialEntryListTable(potential_entry_table_name);
+
+    std::stringstream sql;
+    sql <<"INSERT INTO "<< model_list_table_name << R"(
+        (
             key_tag, atom_size, pdb_id, emd_id
         ) VALUES (?, ?, ?, ?)
         ON CONFLICT(key_tag)
@@ -39,25 +46,25 @@ void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_ta
             atom_size = excluded.atom_size,
             pdb_id  = excluded.pdb_id,
             emd_id  = excluded.emd_id
-    )" };
+    )";
 
-    db->Prepare(sql);
-    db->Bind<std::string>(1, model_obj->GetKeyTag());
-    db->Bind<int>(2, model_obj->GetNumberOfAtom());
-    db->Bind<std::string>(3, model_obj->GetPdbID());
-    db->Bind<std::string>(4, model_obj->GetEmdID());
+    m_database->Prepare(sql.str());
+    m_database->Bind<std::string>(1, model_obj->GetKeyTag());
+    m_database->Bind<int>(2, model_obj->GetNumberOfAtom());
+    m_database->Bind<std::string>(3, model_obj->GetPdbID());
+    m_database->Bind<std::string>(4, model_obj->GetEmdID());
 
-    db->StepOnce();
-    db->Finalize();
+    m_database->StepOnce();
+    m_database->Finalize();
 
-    SaveAtomObjectList(model_obj);
+    SaveAtomObjectList(model_obj, atom_list_table_name);
+    SaveAtomicPotentialEntryList(model_obj, potential_entry_table_name);
 }
 
 std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag)
 {
-    auto atom_object_list{ LoadAtomObjectList(key_tag) };
+    auto atom_object_list{ LoadAtomObjectList("atom_list_in_" + key_tag) };
     auto model_object{ std::make_unique<ModelObject>(std::move(atom_object_list)) };
-    auto db{ m_db_manager.GetDatabase() };
 
     std::string model_table_name{ "model_list" };
     std::stringstream sql;
@@ -65,27 +72,27 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
             key_tag, atom_size, pdb_id, emd_id
     )"<<" FROM "<< model_table_name << " WHERE key_tag = ? LIMIT 1;";
 
-    db->Prepare(sql.str());
-    db->Bind<std::string>(1, key_tag);
-    auto return_code{ db->StepNext() };
+    m_database->Prepare(sql.str());
+    m_database->Bind<std::string>(1, key_tag);
+    auto return_code{ m_database->StepNext() };
     auto atom_size{ 0 };
     if (return_code == SQLiteWrapper::StepRow())
     {
-        model_object->SetKeyTag(db->GetColumn<std::string>(0));
-        model_object->SetPdbID(db->GetColumn<std::string>(2));
-        model_object->SetEmdID(db->GetColumn<std::string>(3));
-        atom_size = db->GetColumn<int>(1);
-        db->Finalize();
+        model_object->SetKeyTag(m_database->GetColumn<std::string>(0));
+        model_object->SetPdbID(m_database->GetColumn<std::string>(2));
+        model_object->SetEmdID(m_database->GetColumn<std::string>(3));
+        atom_size = m_database->GetColumn<int>(1);
+        m_database->Finalize();
     }
     else if (return_code == SQLiteWrapper::StepDone())
     {
-        db->Finalize();
+        m_database->Finalize();
         throw std::runtime_error("Cannot find the row with key_tag = " + key_tag);
     }
     else
     {
-        db->Finalize();
-        throw std::runtime_error("Step failed: " + db->ErrorMessage());
+        m_database->Finalize();
+        throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
     }
 
     if (atom_size != model_object->GetNumberOfAtom())
@@ -96,21 +103,21 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     return model_object;
 }
 
-void ModelObjectDAO::CreateModelObjectListTable(SQLiteWrapper * db)
+void ModelObjectDAO::CreateModelObjectListTable(const std::string & table_name)
 {
-    std::string sql_info{ R"(
-        CREATE TABLE IF NOT EXISTS model_list
+    std::stringstream sql;
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
         (
             key_tag           TEXT PRIMARY KEY,
             atom_size         INTEGER,
             pdb_id            TEXT,
             emd_id            TEXT
-        );
-    )" };
-    db->Execute(sql_info);
+        )
+    )";
+    m_database->Execute(sql.str());
 }
 
-void ModelObjectDAO::CreateAtomObjectListTable(SQLiteWrapper * db, const std::string & table_name)
+void ModelObjectDAO::CreateAtomObjectListTable(const std::string & table_name)
 {
     std::stringstream sql;
     sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
@@ -132,17 +139,48 @@ void ModelObjectDAO::CreateAtomObjectListTable(SQLiteWrapper * db, const std::st
             position_z DOUBLE
         )
     )";
-    db->Execute(sql.str());
+    m_database->Execute(sql.str());
 }
 
-void ModelObjectDAO::SaveAtomObjectList(const ModelObject * model_obj)
+void ModelObjectDAO::CreateAtomicPotentialEntryListTable(const std::string & table_name)
 {
-    auto key_tag{ model_obj->GetKeyTag() };
-    auto table_name{ "atom_list_in_" + key_tag };
-    const auto & atom_object_list{ model_obj->GetComponentsList() };
-    auto db{ m_db_manager.GetDatabase() };
-    CreateAtomObjectListTable(db, table_name);
-    db->BeginTransaction();
+    std::stringstream sql;
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
+        (
+            serial_id INTEGER PRIMARY KEY,
+            sampling_size INTEGER,
+            distance_and_map_value_list BLOB,
+            amplitude_estimate_ols DOUBLE,
+            width_estimate_ols DOUBLE,
+            amplitude_estimate_mdpde DOUBLE,
+            width_estimate_mdpde DOUBLE
+        )
+    )";
+    m_database->Execute(sql.str());
+}
+
+void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(
+    const std::string & table_name, const std::string & group_key)
+{
+    std::stringstream sql;
+    sql <<"CREATE TABLE IF NOT EXISTS "<< group_key <<"_"<< table_name << R"(
+        (
+            serial_id INTEGER PRIMARY KEY,
+            amplitude_estimate_posterior DOUBLE,
+            width_estimate_posterior DOUBLE,
+            amplitude_variance_posterior DOUBLE,
+            width_variance_posterior DOUBLE,
+            outlier_tag INTEGER,
+            statistical_distance DOUBLE
+        )
+    )";
+    m_database->Execute(sql.str());
+}
+
+void ModelObjectDAO::SaveAtomObjectList(
+    const ModelObject * model_obj, const std::string & table_name)
+{
+    m_database->BeginTransaction();
 
     std::stringstream sql;
     sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
@@ -155,38 +193,120 @@ void ModelObjectDAO::SaveAtomObjectList(const ModelObject * model_obj)
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 
-    db->Prepare(sql.str());
+    m_database->Prepare(sql.str());
 
-    for (auto & atom_object : atom_object_list)
+    for (auto & atom_object : model_obj->GetComponentsList())
     {
-        db->Bind<int>(1, atom_object->GetSerialID());
-        db->Bind<int>(2, atom_object->GetResidueID());
-        db->Bind<std::string>(3, atom_object->GetChainID());
-        db->Bind<std::string>(4, atom_object->GetIndicator());
-        db->Bind<double>(5, static_cast<double>(atom_object->GetOccupancy()));
-        db->Bind<double>(6, static_cast<double>(atom_object->GetTemperature()));
-        db->Bind<int>(7, atom_object->GetResidue());
-        db->Bind<int>(8, atom_object->GetElement());
-        db->Bind<int>(9, atom_object->GetRemoteness());
-        db->Bind<int>(10, atom_object->GetBranch());
-        db->Bind<int>(11, atom_object->GetStatus());
-        db->Bind<int>(12, static_cast<int>(atom_object->GetSpecialAtomFlag()));
-        db->Bind<double>(13, static_cast<double>(atom_object->GetPosition().at(0)));
-        db->Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(1)));
-        db->Bind<double>(15, static_cast<double>(atom_object->GetPosition().at(2)));
+        m_database->Bind<int>(1, atom_object->GetSerialID());
+        m_database->Bind<int>(2, atom_object->GetResidueID());
+        m_database->Bind<std::string>(3, atom_object->GetChainID());
+        m_database->Bind<std::string>(4, atom_object->GetIndicator());
+        m_database->Bind<double>(5, static_cast<double>(atom_object->GetOccupancy()));
+        m_database->Bind<double>(6, static_cast<double>(atom_object->GetTemperature()));
+        m_database->Bind<int>(7, atom_object->GetResidue());
+        m_database->Bind<int>(8, atom_object->GetElement());
+        m_database->Bind<int>(9, atom_object->GetRemoteness());
+        m_database->Bind<int>(10, atom_object->GetBranch());
+        m_database->Bind<int>(11, atom_object->GetStatus());
+        m_database->Bind<int>(12, static_cast<int>(atom_object->GetSpecialAtomFlag()));
+        m_database->Bind<double>(13, static_cast<double>(atom_object->GetPosition().at(0)));
+        m_database->Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(1)));
+        m_database->Bind<double>(15, static_cast<double>(atom_object->GetPosition().at(2)));
 
-        db->StepOnce();
-        db->Reset();
+        m_database->StepOnce();
+        m_database->Reset();
     }
 
-    db->Finalize();
-    db->CommitTransaction();
+    m_database->Finalize();
+    m_database->CommitTransaction();
 }
 
-std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(const std::string & key_tag)
+void ModelObjectDAO::SaveAtomicPotentialEntryList(
+    const ModelObject * model_obj, const std::string & table_name)
 {
-    auto table_name{ "atom_list_in_" + key_tag };
-    auto db{ m_db_manager.GetDatabase() };
+    m_database->BeginTransaction();
+
+    std::stringstream sql;
+    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
+        (
+            serial_id, sampling_size, distance_and_map_value_list,
+            amplitude_estimate_ols, width_estimate_ols,
+            amplitude_estimate_mdpde, width_estimate_mdpde
+        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+    )";
+
+    m_database->Prepare(sql.str());
+
+    for (auto & atom_object : model_obj->GetComponentsList())
+    {
+        auto entry{ atom_object->GetAtomicPotentialEntry() };
+        if (entry == nullptr) continue;
+
+        m_database->Bind<int>(1, atom_object->GetSerialID());
+        m_database->Bind<int>(2, entry->GetDistanceAndMapValueListSize());
+        m_database->Bind<std::vector<std::tuple<float, float>>>(3, entry->GetDistanceAndMapValueList());
+        m_database->Bind<double>(4, entry->GetAmplitudeEstimateOLS());
+        m_database->Bind<double>(5, entry->GetWidthEstimateOLS());
+        m_database->Bind<double>(6, entry->GetAmplitudeEstimateMDPDE());
+        m_database->Bind<double>(7, entry->GetWidthEstimateMDPDE());
+
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+
+    m_database->Finalize();
+    m_database->CommitTransaction();
+
+    std::vector<std::string> group_list;
+    for (auto & [key, entry] : model_obj->GetGroupPotentialEntryMap())
+    {
+        group_list.emplace_back(key);
+        CreateAtomicPotentialEntrySubListTable(table_name, key);
+        SaveAtomicPotentialEntrySubList(model_obj, table_name, key);
+    }
+
+}
+
+void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
+    const ModelObject * model_obj, const std::string & table_name, const std::string & group_key)
+{
+    m_database->BeginTransaction();
+
+    std::stringstream sql;
+    sql <<"INSERT OR REPLACE INTO "<< group_key <<"_"<< table_name << R"(
+        (
+            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
+            amplitude_variance_posterior, width_variance_posterior,
+            outlier_tag, statistical_distance
+        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+    )";
+
+    m_database->Prepare(sql.str());
+
+    for (auto & atom_object : model_obj->GetComponentsList())
+    {
+        auto entry{ atom_object->GetAtomicPotentialEntry() };
+        if (entry == nullptr) continue;
+
+        m_database->Bind<int>(1, atom_object->GetSerialID());
+        m_database->Bind<double>(2, entry->GetAmplitudeEstimatePosterior(group_key));
+        m_database->Bind<double>(3, entry->GetWidthEstimatePosterior(group_key));
+        m_database->Bind<double>(4, entry->GetAmplitudeVariancePosterior(group_key));
+        m_database->Bind<double>(5, entry->GetWidthVariancePosterior(group_key));
+        m_database->Bind<int>(6, static_cast<int>(entry->GetOutlierTag(group_key)));
+        m_database->Bind<double>(7, entry->GetStatisticalDistance(group_key));
+
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+
+    m_database->Finalize();
+    m_database->CommitTransaction();
+}
+
+std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
+    const std::string & table_name)
+{
     std::stringstream sql;
     sql <<"SELECT "<< R"(
             serial_id, residue_id, chain_id, indicator,
@@ -198,7 +318,7 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(cons
     
     auto row_list
     {
-        db->Query<int, int, std::string, std::string,
+        m_database->Query<int, int, std::string, std::string,
                   double, double, int, int, int, int, int, int, double, double, double>(sql.str())
     };
 

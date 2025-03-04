@@ -37,6 +37,8 @@ public:
     std::string GetPdbID(void) const { return m_pdb_id; }
     std::string GetEmdID(void) const { return m_emd_id; }
     GroupPotentialEntryBase * GetGroupPotentialEntry(const std::string & key) { return m_group_potential_entry_map.at(key).get(); }
+    const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntryBase>> & GetGroupPotentialEntryMap(void) const { return m_group_potential_entry_map; }
+
 
 private:
     

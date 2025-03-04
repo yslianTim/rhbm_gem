@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
     auto sphere_sampler{ std::make_shared<SphereSampler>() };
     sphere_sampler->SetSamplingSize(100);
     sphere_sampler->SetDistanceRangeMinimum(0.0);
-    sphere_sampler->SetDistanceRangeMaximum(1.0);
+    sphere_sampler->SetDistanceRangeMaximum(1.5);
 
     auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(atom_selector, sphere_sampler) };
     analyzer->SetMapObjectKeyTag("map_1");
