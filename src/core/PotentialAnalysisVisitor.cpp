@@ -88,33 +88,47 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
     const auto & map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
     map_object->Accept(this);
 
-    RunAtomClassification("residue_group", dynamic_cast<ModelObject*>(model_object.get()));
-    RunPotentialFitting("residue_group", dynamic_cast<ModelObject*>(model_object.get()));
+    RunAtomClassification("residue_class", dynamic_cast<ModelObject*>(model_object.get()));
+    RunPotentialFitting("residue_class", dynamic_cast<ModelObject*>(model_object.get()));
 }
 
-void PotentialAnalysisVisitor::RunAtomClassification(const std::string & key, ModelObject * model_object)
+void PotentialAnalysisVisitor::RunAtomClassification(
+    const std::string & class_key, ModelObject * model_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::RunAtomClassification");
     std::cout <<"- RunAtomClassification..." << std::endl;
-    auto group_potential_entry( GroupPotentialEntryFactory::Create(key) );
+    auto group_potential_entry( GroupPotentialEntryFactory::Create(class_key) );
     for (auto atom : m_selected_atom_list)
     {
-        auto group_type{ std::make_tuple(atom->GetResidue(), atom->GetElement(), atom->GetRemoteness(), atom->GetBranch(), atom->GetSpecialAtomFlag()) };
-        group_potential_entry->AddAtomObjectPtr(&group_type, atom);
-        group_type_set.insert(group_type);
+        if (class_key == "residue_class")
+        {
+            auto group_key{ std::any_cast<ResidueKeyType>(GroupPotentialEntryFactory::CreateGroupKeyTuple(class_key, atom)) };
+            group_potential_entry->AddAtomObjectPtr(&group_key, atom);
+            residue_class_group_set.insert(group_key);
+        }
+        else if (class_key == "element_class")
+        {
+            auto group_key{ std::any_cast<ElementKeyType>(GroupPotentialEntryFactory::CreateGroupKeyTuple(class_key, atom)) };
+            group_potential_entry->AddAtomObjectPtr(&group_key, atom);
+            element_class_group_set.insert(group_key);
+        }
+        else
+        {
+            throw std::runtime_error("Unsupported class key.");
+        }
     }
-    model_object->AddGroupPotentialEntry(key, std::unique_ptr<GroupPotentialEntryBase>(group_potential_entry.release()));
+    model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
 }
 
-void PotentialAnalysisVisitor::RunPotentialFitting(const std::string & key, ModelObject * model_object)
+void PotentialAnalysisVisitor::RunPotentialFitting(const std::string & class_key, ModelObject * model_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::RunPotentialFitting");
     std::cout <<"- RunPotentialFitting..." << std::endl;
-    auto group_potential_entry{ model_object->GetGroupPotentialEntry(key) };
-
-    for (auto & group_type : group_type_set)
+    auto group_potential_entry{ model_object->GetGroupPotentialEntry(class_key) };
+    
+    for (auto & group_key : residue_class_group_set)
     {
-        auto atom_list{ group_potential_entry->GetAtomObjectPtrList(&group_type) };
+        auto atom_list{ group_potential_entry->GetAtomObjectPtrList(&group_key) };
         auto group_size{ static_cast<int>(atom_list.size()) };
         std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
         data_array.reserve(group_size);
@@ -142,10 +156,10 @@ void PotentialAnalysisVisitor::RunPotentialFitting(const std::string & key, Mode
                 model_estimator->GetMuVectorPrior(), model_estimator->GetCapitalLambdaMatrix())
         };
 
-        group_potential_entry->AddGausEstimateMean(&group_type, GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMean()));
-        group_potential_entry->AddGausEstimateMDPDE(&group_type, GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMDPDE()));
-        group_potential_entry->AddGausEstimatePrior(&group_type, std::get<0>(gaus_prior));
-        group_potential_entry->AddGausVariancePrior(&group_type, std::get<1>(gaus_prior));
+        group_potential_entry->AddGausEstimateMean(&group_key, GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMean()));
+        group_potential_entry->AddGausEstimateMDPDE(&group_key, GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMDPDE()));
+        group_potential_entry->AddGausEstimatePrior(&group_key, std::get<0>(gaus_prior));
+        group_potential_entry->AddGausVariancePrior(&group_key, std::get<1>(gaus_prior));
 
         auto count{ 0 };
         for (auto atom : atom_list)
@@ -158,10 +172,10 @@ void PotentialAnalysisVisitor::RunPotentialFitting(const std::string & key, Mode
             auto gaus_posterior{ GausLinearTransformHelper::BuildGausModelWithVariance(beta_vector_posterior, sigma_matrix_posterior) };
             atom_entry->AddGausEstimateOLS(GausLinearTransformHelper::BuildGausModel(beta_vector_ols));
             atom_entry->AddGausEstimateMDPDE(GausLinearTransformHelper::BuildGausModel(beta_vector_mdpde));
-            atom_entry->AddGausEstimatePosterior(key, std::get<0>(gaus_posterior));
-            atom_entry->AddGausVariancePosterior(key, std::get<1>(gaus_posterior));
-            atom_entry->AddOutlierTag(key, model_estimator->GetOutlierFlag(count));
-            atom_entry->AddStatisticalDistance(key, model_estimator->GetStatisticalDistance(count));
+            atom_entry->AddGausEstimatePosterior(class_key, std::get<0>(gaus_posterior));
+            atom_entry->AddGausVariancePosterior(class_key, std::get<1>(gaus_posterior));
+            atom_entry->AddOutlierTag(class_key, model_estimator->GetOutlierFlag(count));
+            atom_entry->AddStatisticalDistance(class_key, model_estimator->GetStatisticalDistance(count));
             count++;
         }
     }
