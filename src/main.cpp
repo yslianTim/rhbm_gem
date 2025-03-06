@@ -26,11 +26,13 @@ int main(int argc, char* argv[])
     atom_selector->VetoElementType("H");
 
     auto sphere_sampler{ std::make_shared<SphereSampler>() };
-    sphere_sampler->SetSamplingSize(100);
+    sphere_sampler->SetThreadSize(4);
+    sphere_sampler->SetSamplingSize(1500);
     sphere_sampler->SetDistanceRangeMinimum(0.0);
     sphere_sampler->SetDistanceRangeMaximum(1.5);
 
     auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(atom_selector, sphere_sampler) };
+    analyzer->SetThreadSize(4);
     analyzer->SetMapObjectKeyTag("map_1");
     analyzer->SetModelObjectKeyTag("model_1");
     analyzer->SetFitRange(0.0, 1.0);

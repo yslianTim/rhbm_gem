@@ -13,6 +13,7 @@
 
 class HRLModelHelper
 {
+    unsigned int m_thread_size;
     int m_basis_size;
     int m_member_size; ///< The size of atomic member (number of members)  \f$ I \f$
     int m_maximum_iteration; ///< The upper limit of iteration (default = 100)
@@ -140,6 +141,7 @@ public:
     HRLModelHelper(int basis_size, int member_size);
     ~HRLModelHelper();
 
+    void SetThreadSize(unsigned int value) { m_thread_size = value; }
     void SetDataArray(const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array);
     void RunEstimation(double alpha_r, double alpha_g);
     void SetMaximumIteration(unsigned int size) { m_maximum_iteration = size; }

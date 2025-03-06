@@ -18,6 +18,7 @@ class SphereSampler;
 
 class PotentialAnalysisVisitor : public DataObjectVisitorBase
 {
+    unsigned int m_thread_size;
     double m_alpha_r, m_alpha_g;
     double m_x_min, m_x_max;
     std::string m_map_key_tag, m_model_key_tag;
@@ -42,6 +43,7 @@ public:
     void VisitMapObject(MapObject * data_object) override;
     void Analysis(DataObjectManager * data_manager) override;
 
+    void SetThreadSize(unsigned int thread_size) { m_thread_size = thread_size; }
     void SetFitRange(double x_min, double x_max);
     void SetAlphaR(double alpha_r) { m_alpha_r = alpha_r; }
     void SetAlphaG(double alpha_g) { m_alpha_g = alpha_g; }

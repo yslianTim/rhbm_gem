@@ -17,6 +17,7 @@
 PotentialAnalysisVisitor::PotentialAnalysisVisitor(
     std::shared_ptr<AtomSelector> atom_selector,
     std::shared_ptr<SphereSampler> sphere_sampler) :
+    m_thread_size{ 1 },
     m_alpha_r{ 0.0 }, m_alpha_g{ 0.0 },
     m_x_min{ 0.0 }, m_x_max{ 0.0 },
     m_atom_selector{ std::move(atom_selector) },
@@ -68,13 +69,13 @@ void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitMapObject");
     std::cout <<"- Visiting MapObject..." << std::endl;
-    MapInterpolationVisitor visitor{ m_sphere_sampler };
+    MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler };
     for (auto & atom : m_selected_atom_list)
     {
         auto entry{ atom->GetAtomicPotentialEntry() };
-        visitor.SetPosition(atom->GetPosition());
-        data_object->Accept(&visitor);
-        entry->AddDistanceAndMapValueList(visitor.GetSamplingDataList());
+        interpolation_visitor.SetPosition(atom->GetPosition());
+        data_object->Accept(&interpolation_visitor);
+        entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
     }
 }
 
@@ -156,6 +157,7 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
                 data_array.emplace_back(std::make_tuple(sampling_entry_list, atom->GetInfo()));
             }
             auto model_estimator{ std::make_unique<HRLModelHelper>(2, group_size) };
+            model_estimator->SetThreadSize(m_thread_size);
             model_estimator->SetDataArray(data_array);
             model_estimator->RunEstimation(m_alpha_r, m_alpha_g);
 
