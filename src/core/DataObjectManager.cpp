@@ -5,6 +5,7 @@
 #include "DataObjectVisitorBase.hpp"
 #include "DatabaseManager.hpp"
 #include "ModelObject.hpp"
+#include "ScopeTimer.hpp"
 
 DataObjectManager::DataObjectManager(const std::string & dbname) :
     m_db_manager{ std::make_unique<DatabaseManager>(dbname) }
@@ -35,6 +36,7 @@ std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFactory(const s
 
 void DataObjectManager::ProcessFile(const std::string & filename, const std::string & key_tag)
 {
+    ScopeTimer timer("DataObjectManager::ProcessFile");
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     auto factory{ CreateFactory(file_extension) };
     auto data_object{ factory->CreateDataObject(filename) };
@@ -51,6 +53,7 @@ void DataObjectManager::ProcessFile(const std::string & filename, const std::str
 
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
 {
+    ScopeTimer timer("DataObjectManager::LoadDataObject");
     m_db_manager->LoadDataObject(key_tag);
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
@@ -62,6 +65,7 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
 
 void DataObjectManager::SaveDataObject(const std::string & key_tag) const
 {
+    ScopeTimer timer("DataObjectManager::SaveDataObject");
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
     {
         std::cout <<"The key tag: ["<< key_tag <<"] isn't presented"
@@ -73,6 +77,7 @@ void DataObjectManager::SaveDataObject(const std::string & key_tag) const
 
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
 {
+    ScopeTimer timer("DataObjectManager::Accept");
     visitor->Analysis(this);
 }
 
