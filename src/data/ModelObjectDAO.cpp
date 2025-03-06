@@ -2,11 +2,17 @@
 #include "SQLiteWrapper.hpp"
 #include "DataObjectBase.hpp"
 #include "ModelObject.hpp"
+#include "AtomicInfoHelper.hpp"
 #include "AtomObject.hpp"
 #include "AtomicPotentialEntry.hpp"
+#include "GroupPotentialEntryBase.hpp"
+#include "GroupPotentialEntry.hpp"
 
 #include <sstream>
 #include <stdexcept>
+
+using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
+using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
 
 ModelObjectDAO::ModelObjectDAO(SQLiteWrapper * database) :
     m_database{ database }
@@ -30,10 +36,11 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
 
     auto model_list_table_name{ "model_list" };
     auto atom_list_table_name{ "atom_list_in_" + key_tag };
-    auto potential_entry_table_name{ "atom_potential_entry_in_" + key_tag };
+    auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + key_tag };
+    auto group_potential_entry_table_name{ "group_potential_entry_in_" + key_tag };
     CreateModelObjectListTable(model_list_table_name);
     CreateAtomObjectListTable(atom_list_table_name);
-    CreateAtomicPotentialEntryListTable(potential_entry_table_name);
+    CreateAtomicPotentialEntryListTable(atomic_potential_entry_table_name);
 
     std::stringstream sql;
     sql <<"INSERT INTO "<< model_list_table_name << R"(
@@ -58,7 +65,23 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     m_database->Finalize();
 
     SaveAtomObjectList(model_obj, atom_list_table_name);
-    SaveAtomicPotentialEntryList(model_obj, potential_entry_table_name);
+    SaveAtomicPotentialEntryList(model_obj, atomic_potential_entry_table_name);
+
+    for (auto & [class_key, group_entry] : model_obj->GetGroupPotentialEntryMap())
+    {
+        CreateAtomicPotentialEntrySubListTable(atomic_potential_entry_table_name, class_key);
+        SaveAtomicPotentialEntrySubList(model_obj, atomic_potential_entry_table_name, class_key);
+        if (class_key == "element_class")
+        {
+            CreateGroupPotentialEntryElementClassListTable(group_potential_entry_table_name);
+            SaveGroupPotentialEntryElementClassList(group_entry.get(), group_potential_entry_table_name);
+        }
+        else if (class_key == "residue_class")
+        {
+            CreateGroupPotentialEntryResidueClassListTable(group_potential_entry_table_name);
+            SaveGroupPotentialEntryResidueClassList(group_entry.get(), group_potential_entry_table_name);
+        }
+    }
 }
 
 std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag)
@@ -160,10 +183,10 @@ void ModelObjectDAO::CreateAtomicPotentialEntryListTable(const std::string & tab
 }
 
 void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(
-    const std::string & table_name, const std::string & group_key)
+    const std::string & table_name, const std::string & class_key)
 {
     std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< group_key <<"_"<< table_name << R"(
+    sql <<"CREATE TABLE IF NOT EXISTS "<< class_key <<"_"<< table_name << R"(
         (
             serial_id INTEGER PRIMARY KEY,
             amplitude_estimate_posterior DOUBLE,
@@ -177,10 +200,61 @@ void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(
     m_database->Execute(sql.str());
 }
 
+void ModelObjectDAO::CreateGroupPotentialEntryElementClassListTable(const std::string & table_name)
+{
+    std::string table_name_with_class_key{ "element_class_" + table_name };
+    std::stringstream sql;
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name_with_class_key << R"(
+        (
+            element_id INTEGER,
+            remoteness_id INTEGER,
+            special_atom_flag INTEGER,
+            atom_size INTEGER,
+            amplitude_estimate_mean DOUBLE,
+            width_estimate_mean DOUBLE,
+            amplitude_estimate_mdpde DOUBLE,
+            width_estimate_mdpde DOUBLE,
+            amplitude_estimate_prior DOUBLE,
+            width_estimate_prior DOUBLE,
+            amplitude_variance_prior DOUBLE,
+            width_variance_prior DOUBLE,
+            PRIMARY KEY (element_id, remoteness_id, special_atom_flag)
+        )
+    )";
+    m_database->Execute(sql.str());
+}
+
+void ModelObjectDAO::CreateGroupPotentialEntryResidueClassListTable(const std::string & table_name)
+{
+    std::string table_name_with_class_key{ "residue_class_" + table_name };
+    std::stringstream sql;
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name_with_class_key << R"(
+        (
+            residue_id INTEGER,
+            element_id INTEGER,
+            remoteness_id INTEGER,
+            branch_id INTEGER,
+            special_atom_flag INTEGER,
+            atom_size INTEGER,
+            amplitude_estimate_mean DOUBLE,
+            width_estimate_mean DOUBLE,
+            amplitude_estimate_mdpde DOUBLE,
+            width_estimate_mdpde DOUBLE,
+            amplitude_estimate_prior DOUBLE,
+            width_estimate_prior DOUBLE,
+            amplitude_variance_prior DOUBLE,
+            width_variance_prior DOUBLE,
+            PRIMARY KEY (residue_id, element_id, remoteness_id, branch_id, special_atom_flag)
+        )
+    )";
+    m_database->Execute(sql.str());
+}
+
 void ModelObjectDAO::SaveAtomObjectList(
     const ModelObject * model_obj, const std::string & table_name)
 {
     m_database->BeginTransaction();
+    m_database->ClearTable(table_name);
 
     std::stringstream sql;
     sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
@@ -225,6 +299,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
     const ModelObject * model_obj, const std::string & table_name)
 {
     m_database->BeginTransaction();
+    m_database->ClearTable(table_name);
 
     std::stringstream sql;
     sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
@@ -256,24 +331,17 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
 
     m_database->Finalize();
     m_database->CommitTransaction();
-
-    std::vector<std::string> group_list;
-    for (auto & [key, entry] : model_obj->GetGroupPotentialEntryMap())
-    {
-        group_list.emplace_back(key);
-        CreateAtomicPotentialEntrySubListTable(table_name, key);
-        SaveAtomicPotentialEntrySubList(model_obj, table_name, key);
-    }
-
 }
 
 void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
-    const ModelObject * model_obj, const std::string & table_name, const std::string & group_key)
+    const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
 {
+    std::string table_name_with_class_key{ class_key + "_" + table_name };
     m_database->BeginTransaction();
+    m_database->ClearTable(table_name_with_class_key);
 
     std::stringstream sql;
-    sql <<"INSERT OR REPLACE INTO "<< group_key <<"_"<< table_name << R"(
+    sql <<"INSERT OR REPLACE INTO "<< table_name_with_class_key << R"(
         (
             serial_id, amplitude_estimate_posterior, width_estimate_posterior,
             amplitude_variance_posterior, width_variance_posterior,
@@ -289,12 +357,103 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
         if (entry == nullptr) continue;
 
         m_database->Bind<int>(1, atom_object->GetSerialID());
-        m_database->Bind<double>(2, entry->GetAmplitudeEstimatePosterior(group_key));
-        m_database->Bind<double>(3, entry->GetWidthEstimatePosterior(group_key));
-        m_database->Bind<double>(4, entry->GetAmplitudeVariancePosterior(group_key));
-        m_database->Bind<double>(5, entry->GetWidthVariancePosterior(group_key));
-        m_database->Bind<int>(6, static_cast<int>(entry->GetOutlierTag(group_key)));
-        m_database->Bind<double>(7, entry->GetStatisticalDistance(group_key));
+        m_database->Bind<double>(2, entry->GetAmplitudeEstimatePosterior(class_key));
+        m_database->Bind<double>(3, entry->GetWidthEstimatePosterior(class_key));
+        m_database->Bind<double>(4, entry->GetAmplitudeVariancePosterior(class_key));
+        m_database->Bind<double>(5, entry->GetWidthVariancePosterior(class_key));
+        m_database->Bind<int>(6, static_cast<int>(entry->GetOutlierTag(class_key)));
+        m_database->Bind<double>(7, entry->GetStatisticalDistance(class_key));
+
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+
+    m_database->Finalize();
+    m_database->CommitTransaction();
+}
+
+void ModelObjectDAO::SaveGroupPotentialEntryElementClassList(
+    const GroupPotentialEntryBase * group_entry, const std::string & table_name)
+{
+    std::string table_name_with_class_key{ "element_class_" + table_name };
+    m_database->BeginTransaction();
+    m_database->ClearTable(table_name_with_class_key);
+    
+    std::stringstream sql;
+    //sql <<"DELETE FROM "<< table_name_with_class_key <<";";
+    sql <<"INSERT OR REPLACE INTO "<< table_name_with_class_key << R"(
+        (
+            element_id, remoteness_id, special_atom_flag, atom_size,
+            amplitude_estimate_mean, width_estimate_mean,
+            amplitude_estimate_mdpde, width_estimate_mdpde,
+            amplitude_estimate_prior, width_estimate_prior,
+            amplitude_variance_prior, width_variance_prior
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    )";
+
+    m_database->Prepare(sql.str());
+
+    auto element_class_group_entry{ dynamic_cast<const GroupPotentialEntry<ElementKeyType> *>(group_entry) };
+    for (auto & group_key : element_class_group_entry->GetGroupKeySet())
+    {
+        m_database->Bind<int>(1, std::get<0>(group_key));
+        m_database->Bind<int>(2, std::get<1>(group_key));
+        m_database->Bind<int>(3, std::get<2>(group_key));
+        m_database->Bind<int>(4, element_class_group_entry->GetAtomObjectPtrListSize(&group_key));
+        m_database->Bind<double>(5, std::get<0>(element_class_group_entry->GetGausEstimateMean(&group_key)));
+        m_database->Bind<double>(6, std::get<1>(element_class_group_entry->GetGausEstimateMean(&group_key)));
+        m_database->Bind<double>(7, std::get<0>(element_class_group_entry->GetGausEstimateMDPDE(&group_key)));
+        m_database->Bind<double>(8, std::get<1>(element_class_group_entry->GetGausEstimateMDPDE(&group_key)));
+        m_database->Bind<double>(9, std::get<0>(element_class_group_entry->GetGausEstimatePrior(&group_key)));
+        m_database->Bind<double>(10, std::get<1>(element_class_group_entry->GetGausEstimatePrior(&group_key)));
+        m_database->Bind<double>(11, std::get<0>(element_class_group_entry->GetGausVariancePrior(&group_key)));
+        m_database->Bind<double>(12, std::get<1>(element_class_group_entry->GetGausVariancePrior(&group_key)));
+
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+
+    m_database->Finalize();
+    m_database->CommitTransaction();
+}
+
+void ModelObjectDAO::SaveGroupPotentialEntryResidueClassList(
+    const GroupPotentialEntryBase * group_entry, const std::string & table_name)
+{
+    std::string table_name_with_class_key{ "residue_class_" + table_name };
+    m_database->BeginTransaction();
+    m_database->ClearTable(table_name_with_class_key);
+    
+    std::stringstream sql;
+    sql <<"INSERT OR REPLACE INTO "<< table_name_with_class_key << R"(
+        (
+            residue_id, element_id, remoteness_id, branch_id, special_atom_flag, atom_size,
+            amplitude_estimate_mean, width_estimate_mean,
+            amplitude_estimate_mdpde, width_estimate_mdpde,
+            amplitude_estimate_prior, width_estimate_prior,
+            amplitude_variance_prior, width_variance_prior
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    )";
+
+    m_database->Prepare(sql.str());
+
+    auto residue_class_group_entry{ dynamic_cast<const GroupPotentialEntry<ResidueKeyType> *>(group_entry) };
+    for (auto & group_key : residue_class_group_entry->GetGroupKeySet())
+    {
+        m_database->Bind<int>(1, std::get<0>(group_key));
+        m_database->Bind<int>(2, std::get<1>(group_key));
+        m_database->Bind<int>(3, std::get<2>(group_key));
+        m_database->Bind<int>(4, std::get<3>(group_key));
+        m_database->Bind<int>(5, std::get<4>(group_key));
+        m_database->Bind<int>(6, residue_class_group_entry->GetAtomObjectPtrListSize(&group_key));
+        m_database->Bind<double>(7, std::get<0>(residue_class_group_entry->GetGausEstimateMean(&group_key)));
+        m_database->Bind<double>(8, std::get<1>(residue_class_group_entry->GetGausEstimateMean(&group_key)));
+        m_database->Bind<double>(9, std::get<0>(residue_class_group_entry->GetGausEstimateMDPDE(&group_key)));
+        m_database->Bind<double>(10, std::get<1>(residue_class_group_entry->GetGausEstimateMDPDE(&group_key)));
+        m_database->Bind<double>(11, std::get<0>(residue_class_group_entry->GetGausEstimatePrior(&group_key)));
+        m_database->Bind<double>(12, std::get<1>(residue_class_group_entry->GetGausEstimatePrior(&group_key)));
+        m_database->Bind<double>(13, std::get<0>(residue_class_group_entry->GetGausVariancePrior(&group_key)));
+        m_database->Bind<double>(14, std::get<1>(residue_class_group_entry->GetGausVariancePrior(&group_key)));
 
         m_database->StepOnce();
         m_database->Reset();

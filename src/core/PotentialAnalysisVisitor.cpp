@@ -106,12 +106,14 @@ void PotentialAnalysisVisitor::RunAtomClassification(
         {
             auto group_key{ std::any_cast<ResidueKeyType>(GroupPotentialEntryFactory::CreateGroupKeyTuple(class_key, atom)) };
             group_potential_entry->AddAtomObjectPtr(&group_key, atom);
+            group_potential_entry->InsertGroupKey(&group_key);
             residue_class_group_set.insert(group_key);
         }
         else if (class_key == "element_class")
         {
             auto group_key{ std::any_cast<ElementKeyType>(GroupPotentialEntryFactory::CreateGroupKeyTuple(class_key, atom)) };
             group_potential_entry->AddAtomObjectPtr(&group_key, atom);
+            group_potential_entry->InsertGroupKey(&group_key);
             element_class_group_set.insert(group_key);
         }
         else

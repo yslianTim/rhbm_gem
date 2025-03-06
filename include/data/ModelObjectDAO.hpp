@@ -8,7 +8,7 @@
 class SQLiteWrapper;
 class ModelObject;
 class AtomObject;
-
+class GroupPotentialEntryBase;
 class ModelObjectDAO : public DataObjectDAOBase
 {
     SQLiteWrapper * m_database;
@@ -24,10 +24,14 @@ private:
     void CreateModelObjectListTable(const std::string & table_name);
     void CreateAtomObjectListTable(const std::string & table_name);
     void CreateAtomicPotentialEntryListTable(const std::string & table_name);
-    void CreateAtomicPotentialEntrySubListTable(const std::string & table_name, const std::string & group_key);
+    void CreateAtomicPotentialEntrySubListTable(const std::string & table_name, const std::string & class_key);
+    void CreateGroupPotentialEntryElementClassListTable(const std::string & table_name);
+    void CreateGroupPotentialEntryResidueClassListTable(const std::string & table_name);
     void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
     void SaveAtomicPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
-    void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & group_key);
+    void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
+    void SaveGroupPotentialEntryElementClassList(const GroupPotentialEntryBase * group_entry, const std::string & table_name);
+    void SaveGroupPotentialEntryResidueClassList(const GroupPotentialEntryBase * group_entry, const std::string & table_name);
     std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & table_name);
     
 };

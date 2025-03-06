@@ -23,6 +23,7 @@ int main(int argc, char* argv[])
     auto atom_selector{ std::make_shared<AtomSelector>() };
     atom_selector->PickChainID("A,AA,BA");
     atom_selector->PickIndicator(".,A");
+    atom_selector->VetoElementType("H");
 
     auto sphere_sampler{ std::make_shared<SphereSampler>() };
     sphere_sampler->SetSamplingSize(100);

@@ -101,3 +101,9 @@ void SQLiteWrapper::RollbackTransaction(void)
 {
     this->Execute("ROLLBACK;");
 }
+
+void SQLiteWrapper::ClearTable(const std::string & table_name)
+{
+    std::string sql{ "DELETE FROM " + table_name + ";" };
+    this->Execute(sql);
+}

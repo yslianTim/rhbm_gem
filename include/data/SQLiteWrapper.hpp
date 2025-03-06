@@ -32,6 +32,7 @@ public:
     void BeginTransaction(void);
     void CommitTransaction(void);
     void RollbackTransaction(void);
+    void ClearTable(const std::string & table_name);
 
     template<typename... Ts>
     std::vector<std::tuple<Ts...>> Query(const std::string & sql)
