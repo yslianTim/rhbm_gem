@@ -21,23 +21,19 @@ target_compile_options(CompilerFlags INTERFACE
 
 # Locate CLI11 library
 find_package(CLI11 REQUIRED)
-list(APPEND CLI11_LIBS CLI11::CLI11)
 
 # Locate OpenMP package
 find_package(OpenMP REQUIRED)
-list(APPEND OPENMP_LIBS OpenMP::OpenMP_CXX)
 
 # Locate Eigen package
 find_package(Eigen3 3.4 REQUIRED NO_MODULE)
-list(APPEND EIGEN_LIBS Eigen3::Eigen)
+
+# Locate SQLite package
+find_package(SQLite3 REQUIRED)
 
 # Locate ROOT package
 find_package(ROOT 6.28 REQUIRED COMPONENTS Core Hist Gpad RIO Tree)
 list(APPEND ROOT_LIBS ROOT::Core ROOT::Hist ROOT::Gpad ROOT::RIO ROOT::Tree)
-
-# Locate SQLite package
-find_package(SQLite3 REQUIRED)
-list(APPEND SQLITE3_LIBS SQLite::SQLite3)
 
 # Control where the static and shared libraries are built so that on windows
 # we don't need to tinker with the path to run the executable
