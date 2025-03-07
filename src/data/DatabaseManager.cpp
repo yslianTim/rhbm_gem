@@ -16,22 +16,22 @@ DatabaseManager::~DatabaseManager()
 
 }
 
-void DatabaseManager::SaveDataObject(const DataObjectBase * obj)
+void DatabaseManager::SaveDataObject(const DataObjectBase * data_object)
 {
-    auto dao{ CreateDataObjectDAO(obj) };
-    dao->Save(obj);
+    auto dao{ CreateDataObjectDAO(data_object) };
+    dao->Save(data_object);
 }
 
 std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(const std::string & key_tag)
 {
-    auto obj{ std::make_unique<ModelObject>() };
-    auto dao{ CreateDataObjectDAO(obj.get()) };
+    auto data_object{ std::make_unique<ModelObject>() };
+    auto dao{ CreateDataObjectDAO(data_object.get()) };
     return dao->Load(key_tag);
 }
 
-std::unique_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(const DataObjectBase * obj)
+std::unique_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(const DataObjectBase * data_object)
 {
-    if (dynamic_cast<const ModelObject *>(obj))
+    if (dynamic_cast<const ModelObject *>(data_object))
     {
         return std::make_unique<ModelObjectDAO>(m_database.get());
     }

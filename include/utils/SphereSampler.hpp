@@ -1,5 +1,10 @@
 #pragma once
 
+#if __INTELLISENSE__
+#undef __ARM_NEON
+#undef __ARM_NEON__
+#endif
+
 #include <iostream>
 #include <memory>
 #include <array>

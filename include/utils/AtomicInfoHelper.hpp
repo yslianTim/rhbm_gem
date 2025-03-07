@@ -63,6 +63,8 @@ struct GroupKeyMapping<ElementGroupClassifierTag>
 
 class AtomicInfoHelper
 {
+    inline static std::string m_element_class_key{ "element_class" };
+    inline static std::string m_residue_class_key{ "residue_class" };
     inline static std::unordered_map<std::string_view, Residue> residue_map
     {
         {"ALA", Residue::ALA}, {"ARG", Residue::ARG}, {"ASN", Residue::ASN}, {"ASP", Residue::ASP},
@@ -104,6 +106,8 @@ class AtomicInfoHelper
 public:
     AtomicInfoHelper(void) = default;
     ~AtomicInfoHelper() = default;
+    static const std::string & GetElementClassKey(void) { return m_element_class_key; }
+    static const std::string & GetResidueClassKey(void) { return m_residue_class_key; }
     struct ResidueTag {};
     struct ElementTag {};
     struct RemotenessTag {};

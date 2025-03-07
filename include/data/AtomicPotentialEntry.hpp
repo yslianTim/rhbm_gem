@@ -28,10 +28,14 @@ public:
     ~AtomicPotentialEntry() = default;
 
     void AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> list) { m_distance_and_map_value_list = std::move(list); }
-    void AddGausEstimateOLS(Eigen::VectorXd vec) { m_gaus_estimate_ols = std::make_tuple(vec(0), vec(1)); }
-    void AddGausEstimateMDPDE(Eigen::VectorXd vec) { m_gaus_estimate_mdpde = std::make_tuple(vec(0), vec(1)); }
-    void AddGausEstimatePosterior(const std::string & key, Eigen::VectorXd vec) { m_gaus_estimate_posterior_map[key] = std::make_tuple(vec(0), vec(1)); }
-    void AddGausVariancePosterior(const std::string & key, Eigen::VectorXd vec) { m_gaus_variance_posterior_map[key] = std::make_tuple(vec(0), vec(1)); }
+    void AddGausEstimateOLS(const Eigen::VectorXd & vec) { m_gaus_estimate_ols = std::make_tuple(vec(0), vec(1)); }
+    void AddGausEstimateOLS(double v0, double v1) { m_gaus_estimate_ols = std::make_tuple(v0, v1); }
+    void AddGausEstimateMDPDE(const Eigen::VectorXd & vec) { m_gaus_estimate_mdpde = std::make_tuple(vec(0), vec(1)); }
+    void AddGausEstimateMDPDE(double v0, double v1) { m_gaus_estimate_mdpde = std::make_tuple(v0, v1); }
+    void AddGausEstimatePosterior(const std::string & key, const Eigen::VectorXd & vec) { m_gaus_estimate_posterior_map[key] = std::make_tuple(vec(0), vec(1)); }
+    void AddGausEstimatePosterior(const std::string & key, double v0, double v1) { m_gaus_estimate_posterior_map[key] = std::make_tuple(v0, v1); }
+    void AddGausVariancePosterior(const std::string & key, const Eigen::VectorXd & vec) { m_gaus_variance_posterior_map[key] = std::make_tuple(vec(0), vec(1)); }
+    void AddGausVariancePosterior(const std::string & key, double v0, double v1) { m_gaus_variance_posterior_map[key] = std::make_tuple(v0, v1); }
     void AddOutlierTag(const std::string & key, bool value) { m_outlier_tag_map[key] = value; }
     void AddStatisticalDistance(const std::string & key, double value) { m_statistical_distance_map[key] = value; }
 
