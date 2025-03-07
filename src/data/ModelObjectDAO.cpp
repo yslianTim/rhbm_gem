@@ -72,12 +72,12 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     {
         CreateAtomicPotentialEntrySubListTable(atomic_potential_entry_table_name, class_key);
         SaveAtomicPotentialEntrySubList(model_obj, atomic_potential_entry_table_name, class_key);
-        if (class_key == "element_class")
+        if (class_key == AtomicInfoHelper::GetElementClassKey())
         {
             CreateGroupPotentialEntryElementClassListTable(group_potential_entry_table_name);
             SaveGroupPotentialEntryElementClassList(group_entry.get(), group_potential_entry_table_name);
         }
-        else if (class_key == "residue_class")
+        else if (class_key == AtomicInfoHelper::GetResidueClassKey())
         {
             CreateGroupPotentialEntryResidueClassListTable(group_potential_entry_table_name);
             SaveGroupPotentialEntryResidueClassList(group_entry.get(), group_potential_entry_table_name);
@@ -211,7 +211,7 @@ void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(
 
 void ModelObjectDAO::CreateGroupPotentialEntryElementClassListTable(const std::string & table_name)
 {
-    std::string table_name_with_class_key{ "element_class_" + table_name };
+    std::string table_name_with_class_key{ AtomicInfoHelper::GetElementClassKey() + "_" + table_name };
     std::stringstream sql;
     sql <<"CREATE TABLE IF NOT EXISTS "<< table_name_with_class_key << R"(
         (
@@ -235,7 +235,7 @@ void ModelObjectDAO::CreateGroupPotentialEntryElementClassListTable(const std::s
 
 void ModelObjectDAO::CreateGroupPotentialEntryResidueClassListTable(const std::string & table_name)
 {
-    std::string table_name_with_class_key{ "residue_class_" + table_name };
+    std::string table_name_with_class_key{ AtomicInfoHelper::GetResidueClassKey() + "_" + table_name };
     std::stringstream sql;
     sql <<"CREATE TABLE IF NOT EXISTS "<< table_name_with_class_key << R"(
         (
@@ -384,7 +384,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
 void ModelObjectDAO::SaveGroupPotentialEntryElementClassList(
     const GroupPotentialEntryBase * group_entry, const std::string & table_name)
 {
-    std::string table_name_with_class_key{ "element_class_" + table_name };
+    std::string table_name_with_class_key{ AtomicInfoHelper::GetElementClassKey() + "_" + table_name };
     m_database->BeginTransaction();
     m_database->ClearTable(table_name_with_class_key);
     
@@ -428,7 +428,7 @@ void ModelObjectDAO::SaveGroupPotentialEntryElementClassList(
 void ModelObjectDAO::SaveGroupPotentialEntryResidueClassList(
     const GroupPotentialEntryBase * group_entry, const std::string & table_name)
 {
-    std::string table_name_with_class_key{ "residue_class_" + table_name };
+    std::string table_name_with_class_key{ AtomicInfoHelper::GetResidueClassKey() + "_" + table_name };
     m_database->BeginTransaction();
     m_database->ClearTable(table_name_with_class_key);
     

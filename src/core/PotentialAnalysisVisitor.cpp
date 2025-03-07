@@ -82,17 +82,23 @@ void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
 void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
 {
     std::cout <<"- Analysis..." << std::endl;
-    
-    const auto & model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
-    model_object->Accept(this);
+    try
+    {
+        const auto & model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
+        model_object->Accept(this);
 
-    const auto & map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
-    map_object->Accept(this);
+        const auto & map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
+        map_object->Accept(this);
 
-    RunAtomClassification("element_class", dynamic_cast<ModelObject*>(model_object.get()));
-    RunAtomClassification("residue_class", dynamic_cast<ModelObject*>(model_object.get()));
-    RunPotentialFitting("element_class", dynamic_cast<ModelObject*>(model_object.get()));
-    RunPotentialFitting("residue_class", dynamic_cast<ModelObject*>(model_object.get()));
+        RunAtomClassification(AtomicInfoHelper::GetElementClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
+        RunAtomClassification(AtomicInfoHelper::GetResidueClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
+        RunPotentialFitting(AtomicInfoHelper::GetElementClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
+        RunPotentialFitting(AtomicInfoHelper::GetResidueClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
+    }
+    catch(const std::exception & e)
+    {
+        std::cerr << e.what() << std::endl;
+    }
 }
 
 void PotentialAnalysisVisitor::RunAtomClassification(
@@ -103,14 +109,14 @@ void PotentialAnalysisVisitor::RunAtomClassification(
     auto group_potential_entry( GroupPotentialEntryFactory::Create(class_key) );
     for (auto atom : m_selected_atom_list)
     {
-        if (class_key == "residue_class")
+        if (class_key == AtomicInfoHelper::GetResidueClassKey())
         {
             auto group_key{ std::any_cast<ResidueKeyType>(GroupPotentialEntryFactory::CreateGroupKeyTuple(class_key, atom)) };
             group_potential_entry->AddAtomObjectPtr(&group_key, atom);
             group_potential_entry->InsertGroupKey(&group_key);
             residue_class_group_set.insert(group_key);
         }
-        else if (class_key == "element_class")
+        else if (class_key == AtomicInfoHelper::GetElementClassKey())
         {
             auto group_key{ std::any_cast<ElementKeyType>(GroupPotentialEntryFactory::CreateGroupKeyTuple(class_key, atom)) };
             group_potential_entry->AddAtomObjectPtr(&group_key, atom);
@@ -201,7 +207,13 @@ void PotentialAnalysisVisitor::SetFitRange(double x_min, double x_max)
 PotentialAnalysisVisitor::GroupSetVariant PotentialAnalysisVisitor::GetGroupSet(
     const std::string & class_key)
 {
-    if      (class_key == "residue_class") return std::cref(residue_class_group_set);
-    else if (class_key == "element_class") return std::cref(element_class_group_set);
+    if      (class_key == AtomicInfoHelper::GetResidueClassKey())
+    {
+        return std::cref(residue_class_group_set);
+    }
+    else if (class_key == AtomicInfoHelper::GetElementClassKey())
+    {
+        return std::cref(element_class_group_set);
+    }
     throw std::runtime_error("Unknown classification: " + class_key);
 }

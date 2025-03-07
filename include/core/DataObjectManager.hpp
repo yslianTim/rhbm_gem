@@ -23,7 +23,7 @@ public:
     void SaveDataObject(const std::string & key_tag) const;
     void Accept(DataObjectVisitorBase * visitor);
     void PrintDataObjectInfo(const std::string & key_tag) const;
-    const std::unique_ptr<DataObjectBase> & GetDataObjectRef(const std::string & key_tag) { return m_data_object_map.at(key_tag); }
+    const std::unique_ptr<DataObjectBase> & GetDataObjectRef(const std::string & key_tag);
     const std::unordered_map<std::string, std::unique_ptr<DataObjectBase>> & GetDataObjectMap(void) { return m_data_object_map; }
 
 private:

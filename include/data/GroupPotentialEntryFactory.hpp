@@ -15,13 +15,13 @@ class GroupPotentialEntryFactory
 public:
     static std::unique_ptr<GroupPotentialEntryBase> Create(const std::string & class_key)
     {
-        if (class_key == "residue_class")
+        if (class_key == AtomicInfoHelper::GetResidueClassKey())
         {
             using Tag = ResidueGroupClassifierTag;
             using GroupKey = typename GroupKeyMapping<Tag>::type;
             return std::make_unique<GroupPotentialEntry<GroupKey>>();
         }
-        else if (class_key == "element_class")
+        else if (class_key == AtomicInfoHelper::GetElementClassKey())
         {
             using Tag = ElementGroupClassifierTag;
             using GroupKey = typename GroupKeyMapping<Tag>::type;
@@ -32,7 +32,7 @@ public:
 
     static std::any CreateGroupKeyTuple(const std::string & class_key, const AtomObject * atom)
     {
-        if (class_key == "residue_class")
+        if (class_key == AtomicInfoHelper::GetResidueClassKey())
         {
             return std::make_tuple(
                 atom->GetResidue(),
@@ -41,7 +41,7 @@ public:
                 atom->GetBranch(),
                 atom->GetSpecialAtomFlag());
         }
-        else if (class_key == "element_class")
+        else if (class_key == AtomicInfoHelper::GetElementClassKey())
         {
             return std::make_tuple(
                 atom->GetElement(),
