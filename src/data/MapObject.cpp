@@ -5,6 +5,7 @@
 #include <cstring>
 #include <cmath>
 #include <algorithm>
+#include <iomanip>
 
 MapObject::MapObject(
     const std::array<int, 3> & grid_size,
@@ -62,7 +63,31 @@ std::unique_ptr<DataObjectBase> MapObject::Clone() const
 
 void MapObject::Display(void) const
 {
-    std::cout << "This is MapObject." << std::endl;
+    std::cout <<" o=====================================================o\n";
+    std::cout <<" |  Map Object  |   X-axis   |   Y-axis   |   Z-axis   |\n";
+    std::cout <<" o=====================================================o\n";
+    std::cout <<" | Grid size    | ";
+    std::cout << std::setw(10) << m_grid_size.at(0) <<" | "
+              << std::setw(10) << m_grid_size.at(1) <<" | "
+              << std::setw(10) << m_grid_size.at(2) <<" |\n";
+    std::cout <<" | Grid Spacing | ";
+    std::cout << std::setw(10) << m_grid_spacing.at(0) <<" | "
+              << std::setw(10) << m_grid_spacing.at(1) <<" | "
+              << std::setw(10) << m_grid_spacing.at(2) <<" |\n";
+    std::cout <<" | Origin (A)   | ";
+    std::cout << std::setw(10) << m_origin.at(0) <<" | "
+              << std::setw(10) << m_origin.at(1) <<" | "
+              << std::setw(10) << m_origin.at(2) <<" |\n";
+    std::cout <<" | Map Length(A)| ";
+    std::cout << std::setw(10) << m_map_length.at(0) <<" | "
+              << std::setw(10) << m_map_length.at(1) <<" | "
+              << std::setw(10) << m_map_length.at(2) <<" |\n";
+    std::cout <<" |-----------------------------------------------------|\n";
+    std::cout <<" | Map value min  | "<< std::setw(34) << m_map_value_min <<" |\n";
+    std::cout <<" | Map value max  | "<< std::setw(34) << m_map_value_max <<" |\n";
+    std::cout <<" | Map value mean | "<< std::setw(34) << m_map_value_mean <<" |\n";
+    std::cout <<" | Map value s.d. | "<< std::setw(34) << m_map_value_sd <<" |\n";
+    std::cout <<" o=====================================================o\n";
 }
 
 void MapObject::Accept(DataObjectVisitorBase * visitor)
