@@ -9,12 +9,12 @@
 class MapObject : public DataObjectBase
 {
     std::string m_key_tag;
-    int m_voxel_size;
+    int m_thread_size, m_voxel_size;
+    float m_map_value_mean, m_map_value_min, m_map_value_max, m_map_value_sd;
     std::array<int, 3> m_grid_size;
     std::array<float, 3> m_grid_spacing, m_origin, m_map_length;
     std::array<float, 3> m_overflow, m_underflow, m_upper_bound, m_lower_bound;
     std::unique_ptr<float[]> m_map_value_array;
-    
 
 public:
     MapObject(const std::array<int, 3> & grid_size,
@@ -31,13 +31,22 @@ public:
 
     std::array<float, 3> GetGridSpacing(void) { return m_grid_spacing; }
     std::array<float, 3> GetOrigin(void) { return m_origin; }
-    
     std::array<int, 3> GetIndexFromPosition(const std::array<float, 3> & position) const;
     int GetGlobalIndex(int index_x, int index_y, int index_z) const;
     float GetMapValue(int index_x, int index_y, int index_z) const;
+    float GetMapValueMean(void) const { return m_map_value_mean; }
+    float GetMapValueMin(void) const { return m_map_value_min; }
+    float GetMapValueMax(void) const { return m_map_value_max; }
+    float GetMapValueSD(void) const { return m_map_value_sd; }
+    void SetThreadSize(int value) { m_thread_size = value; }
 
 private:
     void CheckIndex(int index_x, int index_y, int index_z) const;
     void CheckPosition(const std::array<float, 3> & position) const;
+    void CalculateMapValueMean(void);
+    void CalculateMapValueMin(void);
+    void CalculateMapValueMax(void);
+    void CalculateMapValueSD(void);
+    void MapValueArrayNormalization(void);
 
 };
