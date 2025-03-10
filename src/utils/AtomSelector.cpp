@@ -13,6 +13,25 @@ AtomSelector::~AtomSelector()
 
 }
 
+void AtomSelector::Print(void) const
+{
+    std::cout <<"Atomic Picking List:" << std::endl;
+    if (pick_chain_set.empty() == false)
+    {
+        std::cout <<" - chain set: ";
+        for (auto & chain : pick_chain_set) std::cout << chain <<", ";
+        std::cout << std::endl;
+    }
+
+    std::cout <<"Atomic Vetoing List:" << std::endl;
+    if (veto_chain_set.empty() == false)
+    {
+        std::cout <<" - chain set: ";
+        for (auto & chain : veto_chain_set) std::cout << chain <<", ";
+        std::cout << std::endl;
+    }
+}
+
 bool AtomSelector::GetSelectionFlag(
     const std::string & chain_id, const std::string & indicator,
     int residue, int element, int remoteness, int branch)
@@ -40,7 +59,6 @@ void AtomSelector::VetoChainID(const std::string & name)
     std::stringstream ss(name);
     std::string segment;
     while (std::getline(ss, segment, ',')) veto_chain_set.insert(segment);
-    is_up_to_date = false;
 }
 
 void AtomSelector::VetoIndicator(const std::string & name)
@@ -48,7 +66,6 @@ void AtomSelector::VetoIndicator(const std::string & name)
     std::stringstream ss(name);
     std::string segment;
     while (std::getline(ss, segment, ',')) veto_indicator_set.insert(segment);
-    is_up_to_date = false;
 }
 
 void AtomSelector::VetoResidueType(const std::string & name)
@@ -59,7 +76,6 @@ void AtomSelector::VetoResidueType(const std::string & name)
     {
         veto_residue_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ResidueTag>(segment));
     }
-    is_up_to_date = false;
 }
 
 void AtomSelector::VetoElementType(const std::string & name)
@@ -70,7 +86,6 @@ void AtomSelector::VetoElementType(const std::string & name)
     {
         veto_element_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ElementTag>(segment));
     }
-    is_up_to_date = false;
 }
 
 void AtomSelector::VetoRemotenessType(const std::string & name)
@@ -81,7 +96,6 @@ void AtomSelector::VetoRemotenessType(const std::string & name)
     {
         veto_remoteness_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::RemotenessTag>(segment));
     }
-    is_up_to_date = false;
 }
 
 void AtomSelector::VetoBranchType(const std::string & name)
@@ -92,7 +106,6 @@ void AtomSelector::VetoBranchType(const std::string & name)
     {
         veto_branch_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::BranchTag>(segment));
     }
-    is_up_to_date = false;
 }
 
 void AtomSelector::PickChainID(const std::string & name)
@@ -100,7 +113,6 @@ void AtomSelector::PickChainID(const std::string & name)
     std::stringstream ss(name);
     std::string segment;
     while (std::getline(ss, segment, ',')) pick_chain_set.insert(segment);
-    is_up_to_date = false;
 }
 
 void AtomSelector::PickIndicator(const std::string & name)
@@ -108,7 +120,6 @@ void AtomSelector::PickIndicator(const std::string & name)
     std::stringstream ss(name);
     std::string segment;
     while (std::getline(ss, segment, ',')) pick_indicator_set.insert(segment);
-    is_up_to_date = false;
 }
 
 void AtomSelector::PickResidueType(const std::string & name)
@@ -119,7 +130,6 @@ void AtomSelector::PickResidueType(const std::string & name)
     {
         pick_residue_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ResidueTag>(segment));
     }
-    is_up_to_date = false;
 }
 
 void AtomSelector::PickElementType(const std::string & name)
@@ -130,7 +140,6 @@ void AtomSelector::PickElementType(const std::string & name)
     {
         pick_element_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ElementTag>(segment));
     }
-    is_up_to_date = false;
 }
 
 void AtomSelector::PickRemotenessType(const std::string & name)
@@ -141,7 +150,6 @@ void AtomSelector::PickRemotenessType(const std::string & name)
     {
         pick_remoteness_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::RemotenessTag>(segment));
     }
-    is_up_to_date = false;
 }
 
 void AtomSelector::PickBranchType(const std::string & name)
@@ -152,5 +160,4 @@ void AtomSelector::PickBranchType(const std::string & name)
     {
         pick_branch_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::BranchTag>(segment));
     }
-    is_up_to_date = false;
 }

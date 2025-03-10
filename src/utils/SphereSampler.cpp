@@ -14,6 +14,12 @@ SphereSampler::~SphereSampler()
 
 }
 
+void SphereSampler::Print(void) const
+{
+    std::cout <<"Sampling size = "<< m_sampling_size << std::endl;
+    std::cout <<"Sampling distance from "<< m_distance_min << " to " << m_distance_max <<" A"<< std::endl;
+}
+
 const std::vector<std::tuple<float, std::array<float, 3>>> &  SphereSampler::GenerateSamplingPoints(
     std::array<float, 3> position)
 {

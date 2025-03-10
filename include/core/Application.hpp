@@ -15,33 +15,36 @@ class Application
     CLI::App * m_test_cmd;
     std::string m_selected_command;
 
+    struct AtomSelectorOptions
+    {
+        std::string pick_chain_id, veto_chain_id;
+        std::string pick_indicator, veto_indicator;
+        std::string pick_residue, veto_residue;
+        std::string pick_element, veto_element;
+        std::string pick_remoteness, veto_remoteness;
+        std::string pick_branch, veto_branch;
+    } m_atom_selector_options;
+
+    struct SphereSamplerOptions
+    {
+        int sampling_size;
+        double sampling_range_min, sampling_range_max;
+    } m_sphere_sampler_options;
+
     struct PotentialAnalysisOptions
     {
-        int thread_size, sampling_size;
-        double sampling_range_min, sampling_range_max;
         double fit_range_min, fit_range_max;
         double alpha_r, alpha_g;
-        std::string database_path;
         std::string model_file_path;
         std::string map_file_path;
-        std::string pick_chain_id;
-        std::string pick_indicator;
-        std::string pick_residue;
-        std::string pick_element;
-        std::string pick_remoteness;
-        std::string pick_branch;
-        std::string veto_chain_id;
-        std::string veto_indicator;
-        std::string veto_residue;
-        std::string veto_element;
-        std::string veto_remoteness;
-        std::string veto_branch;
+        std::string saved_key_tag;
     } m_potential_analysis_options;
 
-    struct TestOptions
+    struct GlobalOptions
     {
         int thread_size;
-    } m_test_options;
+        std::string database_path;
+    } m_global_options;
 
 public:
     Application(CLI::App * app);

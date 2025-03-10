@@ -21,6 +21,7 @@ public:
     SphereSampler(void);
     ~SphereSampler();
 
+    void Print(void) const;
     const std::vector<std::tuple<float, std::array<float, 3>>> & GenerateSamplingPoints(std::array<float, 3> position);
     void SetThreadSize(unsigned int value) { m_thread_size = value; }
     void SetSamplingSize(unsigned int value) { m_sampling_size = value; }

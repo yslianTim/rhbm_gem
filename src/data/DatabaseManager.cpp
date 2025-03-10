@@ -6,6 +6,7 @@
 #include "AtomObject.hpp"
 
 DatabaseManager::DatabaseManager(const std::string & database_path) :
+    m_database_path{ database_path },
     m_database{ std::make_unique<SQLiteWrapper>(database_path) }
 {
 

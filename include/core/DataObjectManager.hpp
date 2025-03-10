@@ -20,7 +20,7 @@ public:
     ~DataObjectManager();
     void ProcessFile(const std::string & filename, const std::string & key_tag);
     void LoadDataObject(const std::string & key_tag);
-    void SaveDataObject(const std::string & key_tag) const;
+    void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(DataObjectVisitorBase * visitor);
     void PrintDataObjectInfo(const std::string & key_tag) const;
     const std::unique_ptr<DataObjectBase> & GetDataObjectRef(const std::string & key_tag);
