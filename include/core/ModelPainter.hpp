@@ -13,6 +13,10 @@ public:
     ModelPainter(void) = delete;
     explicit ModelPainter(ModelObject * model);
     ~ModelPainter();
-    void SetFolder(std::string folder_path) override;
+    void SetFolder(const std::string & folder_path) override;
     void Painting(void) override;
+
+private:
+    void PaintResidueClassGroupGaus(const std::string & name);
+
 };

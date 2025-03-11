@@ -16,6 +16,7 @@ void PotentialDisplayCommand::Execute(void)
 
     auto analyzer{ std::make_unique<PotentialDisplayVisitor>() };
     analyzer->SetModelObjectKeyTag(m_model_key_tag);
+    analyzer->SetFolderPath(m_folder_path);
 
     data_manager->Accept(analyzer.get());
 

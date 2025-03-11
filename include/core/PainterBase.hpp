@@ -7,7 +7,7 @@ class PainterBase
 {
 public:
     virtual ~PainterBase() = default;
-    virtual void SetFolder(std::string folder_path) = 0;
+    virtual void SetFolder(const std::string & folder_path) = 0;
     virtual void Painting(void) = 0;
 
 };

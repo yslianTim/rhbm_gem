@@ -56,7 +56,6 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetVetoElementType(m_atom_selector_options.veto_element);
         command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
         command->SetVetoBranchType(m_atom_selector_options.veto_branch);
-
         return command;
     }
     else if (m_cli_app->got_subcommand(m_potential_display_cmd))
@@ -64,6 +63,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         auto command{ std::make_unique<PotentialDisplayCommand>() };
         command->SetDatabasePath(m_global_options.database_path);
         command->SetModelKeyTag(m_potential_display_options.model_key_tag);
+        command->SetFolderPath(m_potential_display_options.folder_path);
         return command;
     }
     else if (m_cli_app->got_subcommand(m_test_cmd))
@@ -97,10 +97,10 @@ void Application::RegisterPotentialAnalysisCommand(void)
         "Map file path")->required();
     m_potential_analysis_cmd->add_option(
         "-d,--database", m_global_options.database_path,
-        "Database file path")->default_str("database.sqlite");
+        "Database file path")->default_val("database.sqlite");
     m_potential_analysis_cmd->add_option(
         "-k,--save-key", m_potential_analysis_options.saved_key_tag,
-        "New key tag for saving ModelObject results into database")->default_str("");
+        "New key tag for saving ModelObject results into database")->default_val("");
     m_potential_analysis_cmd->add_option(
         "-j,--jobs", m_global_options.thread_size,
         "Number of threads")->default_val(1);
@@ -130,40 +130,40 @@ void Application::RegisterPotentialAnalysisCommand(void)
         "Alpha value for G")->default_val(0.2);
     m_potential_analysis_cmd->add_option(
         "--pick-chain", m_atom_selector_options.pick_chain_id,
-        "Pick chain ID")->default_str("");
+        "Pick chain ID")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--pick-indicator", m_atom_selector_options.pick_indicator,
-        "Pick indicator")->default_str(".,A");
+        "Pick indicator")->default_val(".,A");
     m_potential_analysis_cmd->add_option(
         "--pick-residue", m_atom_selector_options.pick_residue,
-        "Pick residue type")->default_str("");
+        "Pick residue type")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--pick-element", m_atom_selector_options.pick_element,
-        "Pick element type")->default_str("");
+        "Pick element type")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--pick-remoteness", m_atom_selector_options.pick_remoteness,
-        "Pick remoteness type")->default_str("");
+        "Pick remoteness type")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--pick-branch", m_atom_selector_options.pick_branch,
-        "Pick branch type")->default_str("");
+        "Pick branch type")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--veto-chain", m_atom_selector_options.veto_chain_id,
-        "Veto chain ID")->default_str("");
+        "Veto chain ID")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--veto-indicator", m_atom_selector_options.veto_indicator,
-        "Veto indicator")->default_str("");
+        "Veto indicator")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--veto-residue", m_atom_selector_options.veto_residue,
-        "Veto residue type")->default_str("");
+        "Veto residue type")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--veto-element", m_atom_selector_options.veto_element,
-        "Veto element type")->default_str("");
+        "Veto element type")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--veto-remoteness", m_atom_selector_options.veto_remoteness,
-        "Veto remoteness type")->default_str("");
+        "Veto remoteness type")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--veto-branch", m_atom_selector_options.veto_branch,
-        "Veto branch type")->default_str("");
+        "Veto branch type")->default_val("");
     
     m_cli_app->callback([&]()
     {
@@ -179,7 +179,10 @@ void Application::RegisterPotentialDisplayCommand(void)
         "Number of sampling points per atom")->required();
     m_potential_display_cmd->add_option(
         "-d,--database", m_global_options.database_path,
-        "Database file path")->required();
+        "Database file path")->default_val("database.sqlite");
+    m_potential_display_cmd->add_option(
+        "-o,--folder", m_potential_display_options.folder_path,
+        "folder path for output files")->default_val("./");
 
     m_cli_app->callback([&]()
     {

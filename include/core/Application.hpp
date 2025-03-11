@@ -44,6 +44,7 @@ class Application
     struct PotentialDisplayOptions
     {
         std::string model_key_tag;
+        std::string folder_path;
     } m_potential_display_options;
 
     struct GlobalOptions
