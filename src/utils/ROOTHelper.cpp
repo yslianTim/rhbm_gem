@@ -38,12 +38,12 @@ std::unique_ptr<TCanvas> ROOTHelper::CreateCanvas(
     return std::make_unique<TCanvas>(name.data(), title.data(), width, height);
 }
 
-std::unique_ptr<TGraphErrors> CreateGraphErrors(void)
+std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(void)
 {
     return std::make_unique<TGraphErrors>();
 }
 
-std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size)
+std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(const int & point_size)
 {
     return std::make_unique<TGraphErrors>(point_size);
 }
