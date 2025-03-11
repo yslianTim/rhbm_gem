@@ -5,9 +5,6 @@
 #include "SphereSampler.hpp"
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
-    m_thread_size{ 1 },
-    m_fit_range_min{ 0.0 }, m_fit_range_max{ 0.0 }, m_alpha_r{ 0.0 }, m_alpha_g{ 0.0 },
-    m_database_path{ "" }, m_model_file_path{ "" }, m_map_file_path{ "" }, m_saved_key_tag{ "" },
     m_atom_selector{ std::make_shared<AtomSelector>() },
     m_sphere_sampler{ std::make_shared<SphereSampler>() }
 {

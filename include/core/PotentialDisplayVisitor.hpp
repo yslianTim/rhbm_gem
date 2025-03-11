@@ -5,7 +5,7 @@
 
 class PotentialDisplayVisitor : public DataObjectVisitorBase
 {
-    std::string m_model_key_tag;
+    std::string m_model_key_tag, m_folder_path;
 
 public:
     PotentialDisplayVisitor(void);
@@ -17,5 +17,6 @@ public:
     void Analysis(DataObjectManager * data_manager) override;
 
     void SetModelObjectKeyTag(const std::string & value) { m_model_key_tag = value; }
+    void SetFolderPath(const std::string & value) { m_folder_path = value; }
 
 };

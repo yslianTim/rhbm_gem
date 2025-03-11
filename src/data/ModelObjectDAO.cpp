@@ -517,6 +517,10 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             atom_object->SetSelectedFlag(true);
             atom_object->AddAtomicPotentialEntry(std::move(atomic_potential_entry_map.at(serial_id)));
         }
+        else
+        {
+            atom_object->SetSelectedFlag(false);
+        }
         atom_object_list.emplace_back(std::move(atom_object));
     }
     return atom_object_list;

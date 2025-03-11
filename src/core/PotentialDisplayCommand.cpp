@@ -2,8 +2,7 @@
 #include "DataObjectManager.hpp"
 #include "PotentialDisplayVisitor.hpp"
 
-PotentialDisplayCommand::PotentialDisplayCommand(void) :
-    m_database_path{ "" }, m_model_key_tag{ "" }
+PotentialDisplayCommand::PotentialDisplayCommand(void)
 {
 
 }
