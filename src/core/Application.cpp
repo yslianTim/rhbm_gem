@@ -1,11 +1,13 @@
 #include "Application.hpp"
 #include "CommandBase.hpp"
 #include "PotentialAnalysisCommand.hpp"
+#include "PotentialDisplayCommand.hpp"
 #include "TestCommand.hpp"
 #include "ScopeTimer.hpp"
 
 Application::Application(CLI::App * app) :
-    m_cli_app{ app }, m_potential_analysis_cmd{ nullptr }, m_test_cmd{ nullptr },
+    m_cli_app{ app }, m_potential_analysis_cmd{ nullptr },
+    m_potential_display_cmd{ nullptr }, m_test_cmd{ nullptr },
     m_selected_command{ "" }
 {
     if (m_cli_app == nullptr)
@@ -57,6 +59,13 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
 
         return command;
     }
+    else if (m_cli_app->got_subcommand(m_potential_display_cmd))
+    {
+        auto command{ std::make_unique<PotentialDisplayCommand>() };
+        command->SetDatabasePath(m_global_options.database_path);
+        command->SetModelKeyTag(m_potential_display_options.model_key_tag);
+        return command;
+    }
     else if (m_cli_app->got_subcommand(m_test_cmd))
     {
         auto command{ std::make_unique<TestCommand>() };
@@ -73,6 +82,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
 void Application::RegisterCommands(void)
 {
     RegisterPotentialAnalysisCommand();
+    RegisterPotentialDisplayCommand();
     RegisterTestCommand();
 }
 
@@ -90,10 +100,13 @@ void Application::RegisterPotentialAnalysisCommand(void)
         "Database file path")->default_str("database.sqlite");
     m_potential_analysis_cmd->add_option(
         "-k,--save-key", m_potential_analysis_options.saved_key_tag,
-        "Number of sampling points per atom")->default_str("");
+        "New key tag for saving ModelObject results into database")->default_str("");
     m_potential_analysis_cmd->add_option(
         "-j,--jobs", m_global_options.thread_size,
         "Number of threads")->default_val(1);
+    m_potential_analysis_cmd->add_option(
+        "-v,--verbose", m_global_options.verbose_level,
+        "Verbose level")->default_val(1);
     m_potential_analysis_cmd->add_option(
         "-s,--sampling", m_sphere_sampler_options.sampling_size,
         "Number of sampling points per atom")->default_val(1500);
@@ -155,6 +168,22 @@ void Application::RegisterPotentialAnalysisCommand(void)
     m_cli_app->callback([&]()
     {
         m_selected_command = "potential_analysis";
+    });
+}
+
+void Application::RegisterPotentialDisplayCommand(void)
+{
+    m_potential_display_cmd = m_cli_app->add_subcommand("potential_display", "Run potential display");
+    m_potential_display_cmd->add_option(
+        "-k,--model-key", m_potential_display_options.model_key_tag,
+        "Number of sampling points per atom")->required();
+    m_potential_display_cmd->add_option(
+        "-d,--database", m_global_options.database_path,
+        "Database file path")->required();
+
+    m_cli_app->callback([&]()
+    {
+        m_selected_command = "potential_display";
     });
 }
 

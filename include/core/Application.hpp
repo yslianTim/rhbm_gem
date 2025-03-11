@@ -12,6 +12,7 @@ class Application
 {
     CLI::App * m_cli_app;
     CLI::App * m_potential_analysis_cmd;
+    CLI::App * m_potential_display_cmd;
     CLI::App * m_test_cmd;
     std::string m_selected_command;
 
@@ -40,9 +41,14 @@ class Application
         std::string saved_key_tag;
     } m_potential_analysis_options;
 
+    struct PotentialDisplayOptions
+    {
+        std::string model_key_tag;
+    } m_potential_display_options;
+
     struct GlobalOptions
     {
-        int thread_size;
+        int thread_size, verbose_level;
         std::string database_path;
     } m_global_options;
 
@@ -55,6 +61,7 @@ private:
     std::unique_ptr<CommandBase> CreateCommand(void);
     void RegisterCommands(void);
     void RegisterPotentialAnalysisCommand(void);
+    void RegisterPotentialDisplayCommand(void);
     void RegisterTestCommand(void);
 
 };
