@@ -58,13 +58,6 @@ if(NOT HAVE_CLI11)
     add_subdirectory(third_party/CLI11)
 endif()
 
-# Locate SQLite package
-find_package(SQLite3 REQUIRED)
-
-# Locate ROOT package
-find_package(ROOT 6.28 REQUIRED COMPONENTS Core Hist Gpad RIO)
-list(APPEND ROOT_LIBS ROOT::Core ROOT::Hist ROOT::Gpad ROOT::RIO)
-
 # Control where the static and shared libraries are built so that on windows
 # we don't need to tinker with the path to run the executable
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")

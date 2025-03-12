@@ -1,8 +1,11 @@
 #include "ModelPainter.hpp"
 #include "ModelObject.hpp"
-#include "ROOTHelper.hpp"
 #include "FilePathHelper.hpp"
 #include "AtomicInfoHelper.hpp"
+
+#ifdef HAVE_ROOT
+#include "ROOTHelper.hpp"
+#endif
 
 #include <TCanvas.h>
 
@@ -34,6 +37,9 @@ void ModelPainter::PaintResidueClassGroupGaus(const std::string & name)
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueGroupGaus"<<std::endl;
     std::cout <<"  Output file: "<< file_path << std::endl;
+
+    #ifdef HAVE_ROOT
+
     auto canvas{ ROOTHelper::CreateCanvas("test","") };
 
     ROOTHelper::SetCanvasStyle(canvas.get());
@@ -44,4 +50,6 @@ void ModelPainter::PaintResidueClassGroupGaus(const std::string & name)
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+
+    #endif
 }

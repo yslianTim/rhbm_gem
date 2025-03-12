@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 
+#ifdef HAVE_ROOT
 class TCanvas;
 class TPad;
 class TAttPad;
@@ -18,6 +19,7 @@ class TPaveText;
 class TLegend;
 class TVirtualPad;
 class TGraphErrors;
+#endif
 
 class ROOTHelper
 {
@@ -25,6 +27,7 @@ class ROOTHelper
 public:
     ROOTHelper(void) = default;
     ~ROOTHelper() = default;
+    #ifdef HAVE_ROOT
     static std::unique_ptr<TCanvas> CreateCanvas(const std::string & name, const std::string & title, int width=600, int height=600);
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(void);
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size);
@@ -72,5 +75,6 @@ public:
     static float GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad);
     static double GetXtoPadInCanvasPartition(double x);
     static double GetYtoPadInCanvasPartition(double y);
+    #endif
 
 };

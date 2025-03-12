@@ -1,5 +1,7 @@
 #include "ROOTHelper.hpp"
 
+#ifdef HAVE_ROOT
+
 #include <TAxis.h>
 #include <TCanvas.h>
 #include <TExec.h>
@@ -330,3 +332,5 @@ double ROOTHelper::GetYtoPadInCanvasPartition(double y)
     double fh{ ph - ph * bm - ph * tm };
     return (y * fh + bm * ph) / ph;
 }
+
+#endif
