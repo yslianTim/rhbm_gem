@@ -2,7 +2,10 @@
 #include "EigenMatrixUtility.hpp"
 
 #include <cmath>
+
+#ifdef USE_OPENMP
 #include <omp.h>
+#endif
 
 using std::string;
 using std::vector;
@@ -66,7 +69,9 @@ void HRLModelHelper::SetDataArray(
         auto data_size{ static_cast<int>(member_data.size()) };
         MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
         VectorXd y_data_vector{ VectorXd::Zero(data_size) };
+        #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(m_thread_size)
+        #endif
         for (int i = 0; i < data_size; i++)
         {
             for (int j = 0; j < m_basis_size; j++) x_data_matrix(i, j) = member_data.at(i)(j);
@@ -222,7 +227,9 @@ void HRLModelHelper::CalculateDataCovariance(int member_id)
     const auto W_inverse_trace{ EigenMatrixUtility::GetInverseDiagonalMatrix(W).diagonal().sum() };
     const auto data_size{ m_data_size_list.at(member_id) };
     VectorXd capital_sigma{ VectorXd::Zero(data_size) };
+    #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(m_thread_size)
+    #endif
     for (int j = 0; j < data_size; j++)
     {
         if (data_weight_array(j) == 0.0 || W_inverse_trace == 0.0) continue;

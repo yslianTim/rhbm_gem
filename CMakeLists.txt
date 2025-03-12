@@ -58,9 +58,6 @@ if(NOT HAVE_CLI11)
     add_subdirectory(third_party/CLI11)
 endif()
 
-# Locate OpenMP package
-find_package(OpenMP REQUIRED)
-
 # Locate SQLite package
 find_package(SQLite3 REQUIRED)
 
