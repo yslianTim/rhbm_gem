@@ -63,7 +63,8 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
     m_data_object_map.insert_or_assign(key_tag, m_db_manager->LoadDataObject(key_tag));
 }
 
-void DataObjectManager::SaveDataObject(const std::string & key_tag) const
+void DataObjectManager::SaveDataObject(
+    const std::string & key_tag, const std::string & renamed_key_tag) const
 {
     ScopeTimer timer("DataObjectManager::SaveDataObject");
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
@@ -72,6 +73,20 @@ void DataObjectManager::SaveDataObject(const std::string & key_tag) const
                   <<", skip saving data object."<< std::endl;
         return;
     }
+
+    if (renamed_key_tag != "")
+    {
+        std::cout <<"The key tag of data object will be renamed as: "
+                  <<"["<< renamed_key_tag <<"]"
+                  <<" and saved into database: "<< m_db_manager->GetDatabasePath() << std::endl;
+        m_data_object_map.at(key_tag)->SetKeyTag(renamed_key_tag);
+    }
+    else
+    {
+        std::cout <<"The data object ["<< key_tag <<"] will be saved into database: "
+                  << m_db_manager->GetDatabasePath() << std::endl;
+    }
+
     m_db_manager->SaveDataObject(m_data_object_map.at(key_tag).get());
 }
 

@@ -6,7 +6,6 @@
 
 class AtomSelector
 {
-    bool is_up_to_date;
     std::set<std::string> veto_chain_set, pick_chain_set;
     std::set<std::string> veto_indicator_set, pick_indicator_set;
     std::set<int> veto_residue_set, pick_residue_set;
@@ -17,6 +16,7 @@ class AtomSelector
 public:
     AtomSelector(void);
     ~AtomSelector();
+    void Print(void) const;
     bool GetSelectionFlag(const std::string &, const std::string &, int, int, int, int);
     void VetoChainID(const std::string & name);
     void VetoIndicator(const std::string & name);

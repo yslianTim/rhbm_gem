@@ -87,7 +87,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
 
 std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag)
 {
-    auto atom_object_list{ LoadAtomObjectList("atom_list_in_" + key_tag) };
+    auto atom_object_list{ LoadAtomObjectList(key_tag) };
     auto model_object{ std::make_unique<ModelObject>(std::move(atom_object_list)) };
 
     std::string model_table_name{ "model_list" };
@@ -472,9 +472,11 @@ void ModelObjectDAO::SaveGroupPotentialEntryResidueClassList(
 }
 
 std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
-    const std::string & table_name)
+    const std::string & key_tag)
 {
-    auto atomic_potential_entry_map{ LoadAtomicPotentialEntryMap("atomic_potential_entry_in_" + table_name) };
+    auto atom_list_table_name{ "atom_list_in_" + key_tag };
+    auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + key_tag };
+    auto atomic_potential_entry_map{ LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name) };
     std::stringstream sql;
     sql <<"SELECT "<< R"(
             serial_id, residue_id, chain_id, indicator,
@@ -482,7 +484,7 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             element_type, remoteness_type, branch_type,
             status, is_special_atom,
             position_x, position_y, position_z
-        )"<<" FROM "<< table_name <<";";
+        )"<<" FROM "<< atom_list_table_name <<";";
     
     auto row_list
     {
@@ -514,6 +516,10 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
         {
             atom_object->SetSelectedFlag(true);
             atom_object->AddAtomicPotentialEntry(std::move(atomic_potential_entry_map.at(serial_id)));
+        }
+        else
+        {
+            atom_object->SetSelectedFlag(false);
         }
         atom_object_list.emplace_back(std::move(atom_object));
     }

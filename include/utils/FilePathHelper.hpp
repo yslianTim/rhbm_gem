@@ -40,4 +40,13 @@ public:
         }
         return file_path;  // 如果沒有分隔符，整個字串就是檔案名稱
     }
+
+    static std::string EnsureTrailingSlash(const std::string & path)
+    {
+        if (!path.empty() && path.back() != '/')
+        {
+            return path + "/";
+        }
+        return path;
+    }
 };

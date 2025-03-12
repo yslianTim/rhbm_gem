@@ -19,25 +19,51 @@ target_compile_options(CompilerFlags INTERFACE
     "$<${msvc_cxx}:$<BUILD_INTERFACE:-W3>>"
 )
 
-# Locate CLI11 library
-find_package(CLI11 REQUIRED)
-list(APPEND CLI11_LIBS CLI11::CLI11)
-
-# Locate OpenMP package
-find_package(OpenMP REQUIRED)
-list(APPEND OPENMP_LIBS OpenMP::OpenMP_CXX)
+option(USE_SYSTEM_LIBS "Use system-installed libraries" ON)
 
 # Locate Eigen package
-find_package(Eigen3 3.4 REQUIRED NO_MODULE)
-list(APPEND EIGEN_LIBS Eigen3::Eigen)
+if(USE_SYSTEM_LIBS)
+    find_package(Eigen3 QUIET)
+    if(Eigen3_FOUND)
+        message(STATUS "Using system Eigen3")
+        set(HAVE_EIGEN3 TRUE)
+    else()
+        message(STATUS "System Eigen3 not found, will use third_party version")
+        set(HAVE_EIGEN3 FALSE)
+    endif()
+else()
+    message(STATUS "Forced to use third_party libraries")
+    set(HAVE_EIGEN3 FALSE)
+endif()
 
-# Locate ROOT package
-find_package(ROOT 6.28 REQUIRED COMPONENTS Core Hist Gpad RIO Tree)
-list(APPEND ROOT_LIBS ROOT::Core ROOT::Hist ROOT::Gpad ROOT::RIO ROOT::Tree)
+if(NOT HAVE_EIGEN3)
+    add_subdirectory(third_party/Eigen)
+endif()
+
+# Locate CLI11 package
+if(USE_SYSTEM_LIBS)
+    find_package(CLI11 QUIET)
+    if(CLI11_FOUND)
+        message(STATUS "Using system CLI11")
+        set(HAVE_CLI11 TRUE)
+    else()
+        message(STATUS "System CLI11 not found, will use third_party version")
+        set(HAVE_CLI11 FALSE)
+    endif()
+else()
+    set(HAVE_CLI11 FALSE)
+endif()
+
+if(NOT HAVE_CLI11)
+    add_subdirectory(third_party/CLI11)
+endif()
 
 # Locate SQLite package
 find_package(SQLite3 REQUIRED)
-list(APPEND SQLITE3_LIBS SQLite::SQLite3)
+
+# Locate ROOT package
+find_package(ROOT 6.28 REQUIRED COMPONENTS Core Hist Gpad RIO)
+list(APPEND ROOT_LIBS ROOT::Core ROOT::Hist ROOT::Gpad ROOT::RIO)
 
 # Control where the static and shared libraries are built so that on windows
 # we don't need to tinker with the path to run the executable

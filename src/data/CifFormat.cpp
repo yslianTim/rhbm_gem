@@ -39,7 +39,7 @@ void CifFormat::LoadPdbxData(const std::string & filename)
     if (!infile)
     {
         std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadPdbxDatabase failed!");
+        throw std::runtime_error("LoadPdbxData failed!");
     }
     std::string line, header;
     auto found_model_id{ false };

@@ -85,21 +85,29 @@ void MrcFormat::LoadDataArray(const std::string & filename)
                        static_cast<size_t>(m_header.array_size[2]) };
     
     size_t element_size{ GetElementSize() };
-
+    size_t total_bytes{ num_voxels * element_size };
+    
+    auto blob_buffer{ std::make_unique<char[]>(total_bytes) };
+    infile.read(blob_buffer.get(), total_bytes);
+    if (!infile)
+    {
+        throw std::runtime_error("Failed to read blob data from file");
+    }
+    
+    auto m_thread_size{ 4 };
     auto data_array{ std::make_unique<float[]>(num_voxels) };
-    switch(static_cast<MODE>(m_header.mode))
+    switch (static_cast<MODE>(m_header.mode))
     {
         case MODE::SIGNED_FLOAT32:
-            float entry;
+            #pragma omp parallel for num_threads(m_thread_size)
             for (size_t v = 0; v < num_voxels; v++)
             {
-                infile.read(reinterpret_cast<char*>(&entry), element_size);
-                data_array[v] = static_cast<float>(entry);
+                data_array[v] = *reinterpret_cast<const float*>(blob_buffer.get() + v * element_size);
             }
             m_data_array = std::move(data_array);
             break;
         default:
-            break;
+            throw std::runtime_error("Unsupported MODE in LoadDataArray");
     }
 }
 

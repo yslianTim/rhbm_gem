@@ -34,7 +34,7 @@ private:
     void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
     void SaveGroupPotentialEntryElementClassList(const GroupPotentialEntryBase * group_entry, const std::string & table_name);
     void SaveGroupPotentialEntryResidueClassList(const GroupPotentialEntryBase * group_entry, const std::string & table_name);
-    std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & table_name);
+    std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & key_tag);
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> LoadAtomicPotentialEntryMap(const std::string & table_name);
     void LoadAtomicPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map);
     void LoadGroupPotentialEntryElementClassList(ModelObject * model_obj, const std::string & table_name);
