@@ -36,8 +36,7 @@ void ModelPainter::PaintResidueClassGroupGaus(const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueGroupGaus"<<std::endl;
-    std::cout <<"  Output file: "<< file_path << std::endl;
-
+    
     #ifdef HAVE_ROOT
 
     auto canvas{ ROOTHelper::CreateCanvas("test","") };
@@ -50,6 +49,6 @@ void ModelPainter::PaintResidueClassGroupGaus(const std::string & name)
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-
+    std::cout <<"  Output file: "<< file_path << std::endl;
     #endif
 }
