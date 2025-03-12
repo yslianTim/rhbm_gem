@@ -2,6 +2,7 @@
 #include "ModelObject.hpp"
 #include "ROOTHelper.hpp"
 #include "FilePathHelper.hpp"
+#include "AtomicInfoHelper.hpp"
 
 #include <TCanvas.h>
 
@@ -38,6 +39,8 @@ void ModelPainter::PaintResidueClassGroupGaus(const std::string & name)
     ROOTHelper::SetCanvasStyle(canvas.get());
     ROOTHelper::SetPadInCanvas(canvas.get(), 1000, 600, 2, 2);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    auto group_entry{ m_model_object->GetGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey()) };
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);

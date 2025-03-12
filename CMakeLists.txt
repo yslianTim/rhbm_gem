@@ -19,14 +19,8 @@ target_compile_options(CompilerFlags INTERFACE
     "$<${msvc_cxx}:$<BUILD_INTERFACE:-W3>>"
 )
 
-# Locate CLI11 library
-find_package(CLI11 REQUIRED)
-
 # Locate OpenMP package
 find_package(OpenMP REQUIRED)
-
-# Locate Eigen package
-find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 
 # Locate SQLite package
 find_package(SQLite3 REQUIRED)
@@ -45,5 +39,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
+
+add_subdirectory(third_party/CLI11)
+add_subdirectory(third_party/eigen)
 
 add_subdirectory(src)
