@@ -160,7 +160,14 @@ public:
     {
         const auto & mapping{ GetLabelMapping(Tag{}) };
         using KeyType = typename std::remove_reference<decltype(mapping)>::type::key_type;
-        return mapping.at(static_cast<KeyType>(value));
+        KeyType key{ static_cast<KeyType>(value) };
+        if (mapping.find(key) == mapping.end())
+        {
+            std::ostringstream error_message;
+            error_message << "Invalid value: " << value << " for mapping type " << typeid(Tag).name();
+            throw std::runtime_error(error_message.str());
+        }
+        return mapping.at(key);
     }
 
     static const std::unordered_map<Residue, std::string> & GetLabelMapping(const ResidueTag &)

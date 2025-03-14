@@ -234,12 +234,12 @@ void ModelPainter::PrintWidthPad(TPad * pad, TH2 * hist)
     ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 35.0, 1.4);
     ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 30.0);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 30.0, 0.01);
-    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), 0.05, 20);
+    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), 0.05, 21);
 
     for (int i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
     {
         auto label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(i) };
-        hist->GetXaxis()->ChangeLabel(i, 30.0, -1, 31, -1, -1, label.data());
+        hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 31, -1, -1, label.data());
     }
 
     hist->SetStats(0);

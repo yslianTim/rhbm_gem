@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <tuple>
+#include <cmath>
 #include <Eigen/Dense>
 
 class HRLModelHelper

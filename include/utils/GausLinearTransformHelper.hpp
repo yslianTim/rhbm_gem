@@ -8,6 +8,7 @@
 #include <iostream>
 #include <vector>
 #include <tuple>
+#include <cmath>
 #include <Eigen/Dense>
 
 class GausLinearTransformHelper
