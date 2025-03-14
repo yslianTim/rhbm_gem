@@ -4,7 +4,7 @@
 
 #include <TAxis.h>
 #include <TCanvas.h>
-#include <TExec.h>
+#include <TPad.h>
 #include <TF1.h>
 #include <TF2.h>
 #include <TFile.h>
@@ -40,6 +40,21 @@ std::unique_ptr<TCanvas> ROOTHelper::CreateCanvas(
     return std::make_unique<TCanvas>(name.data(), title.data(), width, height);
 }
 
+std::unique_ptr<TPad> ROOTHelper::CreatePad(
+    const std::string & name, const std::string & title,
+    double x_low, double y_low, double x_up, double y_up)
+{
+    return std::make_unique<TPad>(name.data(), title.data(), x_low, y_low, x_up, y_up);
+}
+
+std::unique_ptr<TH2D> ROOTHelper::CreateHist2D(
+    const std::string & name, const std::string & title,
+    int x_bin, double x_min, double x_max,
+    int y_bin, double y_min, double y_max)
+{
+    return std::make_unique<TH2D>(name.data(), title.data(), x_bin, x_min, x_max, y_bin, y_min, y_max);
+}
+
 std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(void)
 {
     return std::make_unique<TGraphErrors>();
@@ -48,6 +63,19 @@ std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(void)
 std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(const int & point_size)
 {
     return std::make_unique<TGraphErrors>(point_size);
+}
+
+std::unique_ptr<TPaveText> ROOTHelper::CreatePaveText(
+    double x1, double y1, double x2, double y2, std::string option, bool in_partition)
+{
+    if (in_partition == true)
+    {
+        x1 = GetXtoPadInCanvasPartition(x1);
+        x2 = GetXtoPadInCanvasPartition(x2);
+        y1 = GetYtoPadInCanvasPartition(y1);
+        y2 = GetYtoPadInCanvasPartition(y2);
+    }
+    return std::make_unique<TPaveText>(x1, y1, x2, y2, option.data());
 }
 
 void ROOTHelper::PrintCanvasOpen(TCanvas * canvas, const std::string & name)
@@ -88,6 +116,84 @@ void ROOTHelper::SetPadMarginAttribute(
     pad->SetRightMargin(right);
     pad->SetBottomMargin(bottom);
     pad->SetTopMargin(top);
+}
+
+void ROOTHelper::SetPadMarginInCanvas(
+    TPad * pad, double left, double right, double bottom, double top)
+{
+    if (pad->GetCanvas() == nullptr)
+    {
+        std::cerr << "Error: TPad is not in any TCanvas! Please Draw() this pad first." << std::endl;
+        return;
+    }
+    pad->GetCanvas()->Update();
+
+    // Size of canvas's weight and height (unit: pixel)
+    auto canvas_width_pixel { pad->GetCanvas()->GetWw() };
+    auto canvas_height_pixel{ pad->GetCanvas()->GetWh() };
+
+    double pad_width_pixel { pad->GetAbsWNDC() * canvas_width_pixel };
+    double pad_height_pixel{ pad->GetAbsHNDC() * canvas_height_pixel };
+
+    double desired_left_margin_pixel  { left   * canvas_width_pixel };
+    double desired_right_margin_pixel { right  * canvas_width_pixel };
+    double desired_top_margin_pixel   { top    * canvas_height_pixel };
+    double desired_bottom_margin_pixel{ bottom * canvas_height_pixel };
+
+    double pad_left_margin  { desired_left_margin_pixel   / pad_width_pixel  };
+    double pad_right_margin { desired_right_margin_pixel  / pad_width_pixel  };
+    double pad_top_margin   { desired_top_margin_pixel    / pad_height_pixel };
+    double pad_bottom_margin{ desired_bottom_margin_pixel / pad_height_pixel };
+    SetPadMarginAttribute(pad, pad_left_margin, pad_right_margin, pad_bottom_margin, pad_top_margin);
+}
+
+void ROOTHelper::SetPaveTextMarginInCanvas(
+    TPad * pad, TPaveText * pave, double left, double right, double bottom, double top)
+{
+    if (!pave) {
+        std::cerr << "Error: TPaveText pointer is null." << std::endl;
+        return;
+    }
+    pave->Draw();
+
+    if (!pad) {
+        std::cerr << "Error: TPad pointer is null." << std::endl;
+        return;
+    }
+    if (pad->GetCanvas()) pad->GetCanvas()->Update();
+    
+
+    // 取得該 TPad 在 TCanvas 上的絕對 NDC 坐標與尺寸
+    double pad_xlow = pad->GetXlowNDC();
+    double pad_ylow = pad->GetYlowNDC();
+    double pad_width = pad->GetAbsWNDC();
+    double pad_height = pad->GetAbsHNDC();
+
+    // 設定 TPaveText 在 TCanvas 上的邊界，
+    // 此處的「margin」以整體 TCanvas 的比例來定義
+    // TPaveText 的左邊界 = pad 的左邊界 + left，
+    // TPaveText 的右邊界 = pad 的右邊界 - right，
+    // 以此類推
+    double x1_canvas = pad_xlow + left;          
+    double x2_canvas = pad_xlow + pad_width - right;
+    double y1_canvas = pad_ylow + bottom;          
+    double y2_canvas = pad_ylow + pad_height - top;
+
+    // 將 TCanvas 上的絕對坐標轉換成 TPad 的局部坐標 (0～1)
+    double x1_local = (x1_canvas - pad_xlow) / pad_width;
+    double x2_local = (x2_canvas - pad_xlow) / pad_width;
+    double y1_local = (y1_canvas - pad_ylow) / pad_height;
+    double y2_local = (y2_canvas - pad_ylow) / pad_height;
+
+    // 設定 TPaveText 的局部 NDC 坐標
+    pave->SetX1NDC(x1_local);
+    pave->SetX2NDC(x2_local);
+    pave->SetY1NDC(y1_local);
+    pave->SetY2NDC(y2_local);
+
+    std::cout << "TPaveText placed in pad local coordinates: ("
+    << x1_local << ", " << y1_local << ") to ("
+    << x2_local << ", " << y2_local << ")" << std::endl;
 }
 
 void ROOTHelper::SetAxisTitleAttribute(TAttAxis * axis, float size, float offset, short font, short color)
@@ -168,9 +274,8 @@ void ROOTHelper::SetPadInCanvas(
     pad->Divide(division_x, division_y, margin_x, margin_y);
 }
 
-void ROOTHelper::SetPadStyle(TVirtualPad * pad, double x1, double y1, double x2, double y2)
+void ROOTHelper::SetPadDefaultStyle(TVirtualPad * pad)
 {
-    ROOTHelper::SetPadRangeInCanvas(pad, x1, y1, x2, y2);
     ROOTHelper::SetPadFrameAttribute(pad);
     ROOTHelper::SetFillAttribute(pad);
 }
@@ -200,19 +305,19 @@ void ROOTHelper::SetPadLayout(
     pad->SetTicks(tick_x, tick_y);
 }
 
-void ROOTHelper::SetCanvasStyle(TCanvas * canvas)
+void ROOTHelper::SetCanvasDefaultStyle(TCanvas * canvas)
 {
     ROOTHelper::SetFillAttribute(canvas);
 }
 
-void ROOTHelper::SetPaveTextStyle(TPaveText * text)
+void ROOTHelper::SetPaveTextDefaultStyle(TPaveText * text)
 {
     ROOTHelper::SetPaveAttribute(text);
     ROOTHelper::SetFillAttribute(text);
     ROOTHelper::SetTextAttribute(text);
 }
 
-void ROOTHelper::SetLegendStyle(TLegend * legend)
+void ROOTHelper::SetLegendDefaultStyle(TLegend * legend)
 {
     ROOTHelper::SetPaveAttribute(legend);
     ROOTHelper::SetFillAttribute(legend);

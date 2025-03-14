@@ -63,6 +63,7 @@ struct GroupKeyMapping<ElementGroupClassifierTag>
 
 class AtomicInfoHelper
 {
+    inline static int m_standard_residue_count{ 20 };
     inline static std::string m_element_class_key{ "element_class" };
     inline static std::string m_residue_class_key{ "residue_class" };
     inline static std::unordered_map<std::string_view, Residue> residue_map
@@ -103,9 +104,22 @@ class AtomicInfoHelper
         {"T", Branch::TERMINAL}, {"UNK", Branch::UNK}
     };
 
+    inline static std::unordered_map<Residue, std::string> residue_label_map
+    {
+        {Residue::ALA, "ALA"}, {Residue::ARG, "ARG"}, {Residue::ASN, "ASN"}, {Residue::ASP, "ASP"},
+        {Residue::CYS, "CYS"}, {Residue::GLN, "GLN"}, {Residue::GLU, "GLU"}, {Residue::GLY, "GLY"},
+        {Residue::HIS, "HIS"}, {Residue::ILE, "ILE"}, {Residue::LEU, "LEU"}, {Residue::LYS, "LYS"},
+        {Residue::MET, "MET"}, {Residue::PHE, "PHE"}, {Residue::PRO, "PRO"}, {Residue::SER, "SER"},
+        {Residue::THR, "THR"}, {Residue::TRP, "TRP"}, {Residue::TYR, "TYR"}, {Residue::VAL, "VAL"},
+        {Residue::HOH, "HOH"}, {Residue::NA,  "NA"},  {Residue::MG,  "MG"},  {Residue::CA,  "CA"},
+        {Residue::ZN,  "ZN"},  {Residue::FE,  "FE"},  {Residue::FE2, "FE2"}, {Residue::CSX, "CSX"},
+        {Residue::CL,  "CL"},  {Residue::UNK, "UNK"}
+    };
+
 public:
     AtomicInfoHelper(void) = default;
     ~AtomicInfoHelper() = default;
+    static int GetStandardResidueCount(void) { return m_standard_residue_count; }
     static const std::string & GetElementClassKey(void) { return m_element_class_key; }
     static const std::string & GetResidueClassKey(void) { return m_residue_class_key; }
     struct ResidueTag {};
@@ -139,6 +153,19 @@ public:
     static const std::unordered_map<std::string_view, Branch> & GetMapping(const BranchTag &)
     {
         return branch_map;
+    }
+
+    template <typename Tag>
+    static std::string AtomLabelMapping(int value)
+    {
+        const auto & mapping{ GetLabelMapping(Tag{}) };
+        using KeyType = typename std::remove_reference<decltype(mapping)>::type::key_type;
+        return mapping.at(static_cast<KeyType>(value));
+    }
+
+    static const std::unordered_map<Residue, std::string> & GetLabelMapping(const ResidueTag &)
+    {
+        return residue_label_map;
     }
 
 private:
