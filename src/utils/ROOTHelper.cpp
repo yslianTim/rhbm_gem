@@ -438,4 +438,33 @@ double ROOTHelper::GetYtoPadInCanvasPartition(double y)
     return (y * fh + bm * ph) / ph;
 }
 
+double ROOTHelper::ConvertGlobalTickLengthToPadTickLength(
+    TPad * pad, double global_tick_length, bool use_width)
+{
+    // Compute the pad's physical dimensions in pixels
+    double padW = pad->GetWw() * pad->GetAbsWNDC(); // pad pixel width
+    double padH = pad->GetWh() * pad->GetAbsHNDC(); // pad pixel height
+
+    // The pad's local coordinate dimensions (typically these are 0 to 1)
+    double localWidth = pad->GetX2() - pad->GetX1();
+    double localHeight = pad->GetY2() - pad->GetY1();
+
+    // Retrieve the effective user coordinate range in the pad
+    double ux_range = pad->GetUxmax() - pad->GetUxmin();
+    double uy_range = pad->GetUymax() - pad->GetUymin();
+
+    // For the x-axis (tick length is vertical), the conversion factor is:
+    // tickScaleX = (user x-range / local pad width) * pad height (in pixels)
+    double tickScaleX = (ux_range / localWidth) * padH;
+
+    // For the y-axis (tick length is horizontal), the conversion factor is:
+    // tickScaleY = (user y-range / local pad height) * pad width (in pixels)
+    double tickScaleY = (uy_range / localHeight) * padW;
+
+    // Return the local tick length that corresponds to the desired global tick length (in pixels)
+    // When use_width is true, we use the x-axis conversion (ticks extend vertically),
+    // otherwise we use the y-axis conversion (ticks extend horizontally).
+    return (use_width) ? global_tick_length / tickScaleX : global_tick_length / tickScaleY;
+}
+
 #endif

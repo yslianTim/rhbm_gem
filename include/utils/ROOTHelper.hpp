@@ -81,6 +81,7 @@ public:
     static float GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad);
     static double GetXtoPadInCanvasPartition(double x);
     static double GetYtoPadInCanvasPartition(double y);
+    static double ConvertGlobalTickLengthToPadTickLength(TPad * pad, double global_tick_length, bool use_width=true);
     #endif
 
 };
