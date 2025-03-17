@@ -27,3 +27,9 @@ target_link_libraries(data PUBLIC
     $<$<BOOL:${USE_SYSTEM_SQLITE3}>:SQLite::SQLite3>
     $<$<NOT:$<BOOL:${USE_SYSTEM_SQLITE3}>>:sqlite3>
 )
+
+set_target_properties(data PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)

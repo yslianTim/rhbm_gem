@@ -29,3 +29,9 @@ if(ROOT_FOUND)
 else()
     message(STATUS "ROOT library not found, disabling ROOT features")
 endif()
+
+set_target_properties(utils PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)

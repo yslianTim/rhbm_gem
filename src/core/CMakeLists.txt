@@ -9,3 +9,9 @@ target_link_libraries(core PUBLIC
     CLI11::CLI11
     data
 )
+
+set_target_properties(core PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
