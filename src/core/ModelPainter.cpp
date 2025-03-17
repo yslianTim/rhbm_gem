@@ -219,8 +219,8 @@ void ModelPainter::PrintAmplitudePad(TPad * pad, TH2 * hist)
     ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 0.0);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 30.0, 0.01);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 1) };
+    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
+    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), x_tick_length, 21);
     ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), y_tick_length, 506);
     hist->SetStats(0);
@@ -236,11 +236,11 @@ void ModelPainter::PrintWidthPad(TPad * pad, TH2 * hist)
     ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
     ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0);
     ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 35.0, 1.4);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 30.0, -0.05, 103, kCyan+3);
+    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 32.0, 0.11, 103, kCyan+3);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 30.0, 0.01);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 1) };
+    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
+    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), x_tick_length, 21);
     ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), y_tick_length, 505);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
@@ -248,7 +248,7 @@ void ModelPainter::PrintWidthPad(TPad * pad, TH2 * hist)
     for (int i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
     {
         auto label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(i) };
-        hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 32, -1, -1, label.data());
+        hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 12, -1, -1, label.data());
     }
 
     hist->SetStats(0);
@@ -267,8 +267,8 @@ void ModelPainter::PrintAmplitudeSummaryPad(TPad * pad, TH2 * hist)
     ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 0.0);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 0.0);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 1) };
+    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
+    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), x_tick_length, 5);
     ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), y_tick_length, 506);
     hist->GetXaxis()->SetLimits(-1.0, 4.0);
@@ -286,15 +286,14 @@ void ModelPainter::PrintWidthSummaryPad(TPad * pad, TH2 * hist)
     ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 30.0);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 0.0);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 1) };
+    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
+    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), x_tick_length, 5);
     ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), y_tick_length, 505);
     hist->GetXaxis()->SetLimits(-1.0, 4.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
 
-    std::cout <<"N labels = "<< hist->GetXaxis()->GetNlabels() << std::endl;
     const char * label_name[4]{ "C_{#alpha}", "C", "N", "O" };
     for (int i = 0; i < 4; i++)
     {
@@ -316,8 +315,8 @@ void ModelPainter::PrintGausSummaryPad(TPad * pad, TH2 * hist)
     ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 30.0);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 30.0, 0.01);
 
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 15, 1) };
+    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.03, 0) };
+    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), x_tick_length, 505);
     ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), y_tick_length, 505);
     hist->SetStats(0);
