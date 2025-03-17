@@ -80,10 +80,10 @@ void ModelPainter::PaintResidueClassGroupGaus(const std::string & name)
     const int pad_size{ 6 };
     std::unique_ptr<TPad> pad[pad_size];
     std::unique_ptr<TH2> frame[pad_size];
-    pad[0] = ROOTHelper::CreatePad("pad1","", 0.00, 0.00, 0.50, 0.55);
-    pad[1] = ROOTHelper::CreatePad("pad2","", 0.00, 0.55, 0.50, 1.00);
-    pad[2] = ROOTHelper::CreatePad("pad3","", 0.50, 0.00, 0.65, 0.55);
-    pad[3] = ROOTHelper::CreatePad("pad4","", 0.50, 0.55, 0.65, 1.00);
+    pad[0] = ROOTHelper::CreatePad("pad1","", 0.00, 0.00, 0.52, 0.55);
+    pad[1] = ROOTHelper::CreatePad("pad2","", 0.00, 0.55, 0.52, 1.00);
+    pad[2] = ROOTHelper::CreatePad("pad3","", 0.52, 0.00, 0.65, 0.55);
+    pad[3] = ROOTHelper::CreatePad("pad4","", 0.52, 0.55, 0.65, 1.00);
     pad[4] = ROOTHelper::CreatePad("pad5","", 0.65, 0.00, 1.00, 0.80);
     pad[5] = ROOTHelper::CreatePad("pad6","", 0.65, 0.80, 1.00, 1.00);
 
@@ -132,8 +132,8 @@ void ModelPainter::PaintResidueClassGroupGaus(const std::string & name)
     {
         std::string name_amplitude{ "amplitude_hist_"+ std::to_string(i) };
         std::string name_width{ "width_hist_"+ std::to_string(i) };
-        amplitude_hist[i] = ROOTHelper::CreateHist2D(name_amplitude.data(),"", 4, -0.5, 3.5, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-        width_hist[i] = ROOTHelper::CreateHist2D(name_width.data(),"", 4, -0.5, 3.5, 100, std::get<0>(width_range), std::get<1>(width_range));
+        amplitude_hist[i] = ROOTHelper::CreateHist2D(name_amplitude.data(),"", 5, -1.0, 4.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+        width_hist[i] = ROOTHelper::CreateHist2D(name_width.data(),"", 5, -1.0, 4.0, 100, std::get<0>(width_range), std::get<1>(width_range));
         for (int p = 0; p < amplitude_graph[i]->GetN(); p++)
         {
             amplitude_hist[i]->Fill(i, amplitude_graph[i]->GetPointY(p));
@@ -160,8 +160,8 @@ void ModelPainter::PaintResidueClassGroupGaus(const std::string & name)
 
     frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, -1.0, 20.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
     frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, -1.0, 20.0, 100, std::get<0>(width_range), std::get<1>(width_range));
-    frame[3] = ROOTHelper::CreateHist2D("hist_3","", 100, -0.5, 3.5, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-    frame[2] = ROOTHelper::CreateHist2D("hist_2","", 100, -0.5, 3.5, 100, std::get<0>(width_range), std::get<1>(width_range));
+    frame[3] = ROOTHelper::CreateHist2D("hist_3","", 100, -1.0, 4.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+    frame[2] = ROOTHelper::CreateHist2D("hist_2","", 100, -1.0, 4.0, 100, std::get<0>(width_range), std::get<1>(width_range));
     frame[4] = ROOTHelper::CreateHist2D("hist_4","", 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range), 100, std::get<0>(width_range), std::get<1>(width_range));
     auto data_info_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
 
@@ -218,7 +218,8 @@ void ModelPainter::PrintAmplitudePad(TPad * pad, TH2 * hist)
     ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 35.0, 1.4);
     ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 0.0);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 30.0, 0.01);
-    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), 0.05, 505);
+    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), 0.05, 21);
+    ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), 0.05, 506);
     hist->SetStats(0);
     hist->GetYaxis()->SetTitle("Amplitude");
     hist->GetYaxis()->CenterTitle();
@@ -230,20 +231,21 @@ void ModelPainter::PrintWidthPad(TPad * pad, TH2 * hist)
     pad->cd();
     ROOTHelper::SetPadMarginInCanvas(pad, 0.08, 0.005, 0.15, 0.01);
     ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 35.0, 1.4);
+    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0);
     ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 35.0, 1.4);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 30.0);
+    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 30.0, -0.05, 103, kCyan+3);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 30.0, 0.01);
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), 0.05, 21);
-
+    ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), 0.05, 505);
+    hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
+    hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
     for (int i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
     {
         auto label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(i) };
-        hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 31, -1, -1, label.data());
+        hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 32, -1, -1, label.data());
     }
 
     hist->SetStats(0);
-    hist->GetXaxis()->SetTitle("Amino Acid");
     hist->GetYaxis()->SetTitle("Width");
     hist->GetYaxis()->CenterTitle();
     hist->Draw();
@@ -273,6 +275,8 @@ void ModelPainter::PrintWidthSummaryPad(TPad * pad, TH2 * hist)
     ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 30.0);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 0.0);
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), 0.05, 5);
+    hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
+    hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
     const char * label_name[4]{ "C_{#alpha}", "C", "N", "O" };
     for (int i = 0; i < 4; i++)
     {
