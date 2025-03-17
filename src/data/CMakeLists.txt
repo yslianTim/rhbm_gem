@@ -3,7 +3,7 @@ file(GLOB SOURCE *.cpp)
 
 # Locate SQLite package
 if(USE_SYSTEM_LIBS)
-    find_package(SQLite3 QUIET)
+    find_package(SQLite3)
     if(SQLite3_FOUND)
         message(STATUS "Using system SQLite3")
         set(USE_SYSTEM_SQLITE3 TRUE)
@@ -12,7 +12,7 @@ if(USE_SYSTEM_LIBS)
         set(USE_SYSTEM_SQLITE3 FALSE)
     endif()
 else()
-    message(STATUS "Forced to use third_party libraries")
+    message(STATUS "Forced to use SQLite3 package in third_party libraries")
     set(USE_SYSTEM_SQLITE3 FALSE)
 endif()
 
@@ -20,7 +20,7 @@ if(NOT USE_SYSTEM_SQLITE3)
     add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/sqlite ${CMAKE_BINARY_DIR}/third_party/sqlite)
 endif()
 
-add_library(data STATIC ${SOURCE})
+add_library(data SHARED ${SOURCE})
 target_include_directories(data PUBLIC ${CMAKE_SOURCE_DIR}/include/data)
 target_link_libraries(data PUBLIC
     utils

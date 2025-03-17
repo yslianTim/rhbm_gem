@@ -219,14 +219,14 @@ void ROOTHelper::SetAxisTickAttribute(TAttAxis * axis, float length, int divisio
 }
 
 void ROOTHelper::SetTextAttribute(
-    TAttText * _text,
+    TAttText * text,
     float size, short font, short align, float angle, short color, float transparent)
 {
-    _text->SetTextSize(size);
-    _text->SetTextFont(font);
-    _text->SetTextColorAlpha(color, transparent);
-    _text->SetTextAlign(align);
-    _text->SetTextAngle(angle);
+    text->SetTextSize(size);
+    text->SetTextFont(font);
+    text->SetTextColorAlpha(color, transparent);
+    text->SetTextAlign(align);
+    text->SetTextAngle(angle);
 }
 
 void ROOTHelper::SetLineAttribute(
