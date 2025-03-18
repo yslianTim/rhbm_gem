@@ -158,12 +158,14 @@ class AtomicInfoHelper
 
     inline static std::unordered_map<Remoteness, std::string> remoteness_label_map
     {
-        {Remoteness::NONE, ""}, {Remoteness::ALPHA, "#alpha"}, {Remoteness::BETA, "#beta"},
-        {Remoteness::GAMMA, "#gamma"}, {Remoteness::DELTA, "#delta"}, {Remoteness::EPSILON, "#epsilon"},
+        {Remoteness::NONE, ""}, {Remoteness::ALPHA, "#alpha"},
+        {Remoteness::BETA, "#beta"}, {Remoteness::GAMMA, "#gamma"},
+        {Remoteness::DELTA, "#delta"}, {Remoteness::EPSILON, "#varepsilon"},
         {Remoteness::ZETA, "#zeta"}, {Remoteness::ETA, "#eta"},
-        {Remoteness::ONE, "1"}, {Remoteness::TWO, "2"}, {Remoteness::THREE, "3"},
-        {Remoteness::FOUR, "4"}, {Remoteness::FIVE, "5"},
-        {Remoteness::EXTRA, "X"}, {Remoteness::UNK, "UNK"}
+        {Remoteness::ONE, "1"}, {Remoteness::TWO, "2"},
+        {Remoteness::THREE, "3"}, {Remoteness::FOUR, "4"},
+        {Remoteness::FIVE, "5"}, {Remoteness::EXTRA, "X"},
+        {Remoteness::UNK, "UNK"}
     };
 
     inline static std::unordered_map<Branch, std::string> branch_label_map

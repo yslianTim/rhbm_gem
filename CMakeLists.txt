@@ -58,6 +58,24 @@ if(NOT HAVE_CLI11)
     add_subdirectory(third_party/CLI11)
 endif()
 
+# Locate Pybind11 package
+if(USE_SYSTEM_LIBS)
+    find_package(PYBIND11 QUIET)
+    if(PYBIND11_FOUND)
+        message(STATUS "Using system Pybind11")
+        set(HAVE_PYBIND11 TRUE)
+    else()
+        message(STATUS "System Pybind11 not found, will use third_party version")
+        set(HAVE_PYBIND11 FALSE)
+    endif()
+else()
+    set(HAVE_PYBIND11 FALSE)
+endif()
+
+if(NOT HAVE_PYBIND11)
+    add_subdirectory(third_party/pybind11)
+endif()
+
 # Control where the static and shared libraries are built so that on windows
 # we don't need to tinker with the path to run the executable
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
@@ -72,3 +90,4 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 add_subdirectory(src)
+add_subdirectory(bindings)
