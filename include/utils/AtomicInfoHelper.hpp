@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <sstream>
+#include <vector>
 #include <tuple>
 #include <exception>
 #include <unordered_map>
@@ -66,6 +67,37 @@ class AtomicInfoHelper
     inline static int m_standard_residue_count{ 20 };
     inline static std::string m_element_class_key{ "element_class" };
     inline static std::string m_residue_class_key{ "residue_class" };
+    inline static std::vector<int> m_standard_residue_list
+    {
+        static_cast<int>(Residue::ALA), static_cast<int>(Residue::ARG),
+        static_cast<int>(Residue::ASN), static_cast<int>(Residue::ASP),
+        static_cast<int>(Residue::CYS), static_cast<int>(Residue::GLN),
+        static_cast<int>(Residue::GLU), static_cast<int>(Residue::GLY),
+        static_cast<int>(Residue::HIS), static_cast<int>(Residue::ILE),
+        static_cast<int>(Residue::LEU), static_cast<int>(Residue::LYS),
+        static_cast<int>(Residue::MET), static_cast<int>(Residue::PHE),
+        static_cast<int>(Residue::PRO), static_cast<int>(Residue::SER),
+        static_cast<int>(Residue::THR), static_cast<int>(Residue::TRP),
+        static_cast<int>(Residue::TYR), static_cast<int>(Residue::VAL)
+    };
+    inline static std::vector<int> m_standard_element_list
+    {
+        static_cast<int>(Element::HYDROGEN), static_cast<int>(Element::CARBON),
+        static_cast<int>(Element::NITROGEN), static_cast<int>(Element::OXYGEN),
+        static_cast<int>(Element::SULFUR)
+    };
+    inline static std::vector<int> m_standard_remoteness_list
+    {
+        static_cast<int>(Remoteness::NONE), static_cast<int>(Remoteness::ALPHA),
+        static_cast<int>(Remoteness::BETA), static_cast<int>(Remoteness::GAMMA),
+        static_cast<int>(Remoteness::DELTA), static_cast<int>(Remoteness::EPSILON),
+        static_cast<int>(Remoteness::ZETA), static_cast<int>(Remoteness::ETA)
+    };
+    inline static std::vector<int> m_standard_branch_list
+    {
+        static_cast<int>(Branch::NONE), static_cast<int>(Branch::ONE),
+        static_cast<int>(Branch::TWO), static_cast<int>(Branch::THREE)
+    };
     inline static std::unordered_map<std::string_view, Residue> residue_map
     {
         {"ALA", Residue::ALA}, {"ARG", Residue::ARG}, {"ASN", Residue::ASN}, {"ASP", Residue::ASP},
@@ -116,12 +148,42 @@ class AtomicInfoHelper
         {Residue::CL,  "CL"},  {Residue::UNK, "UNK"}
     };
 
+    inline static std::unordered_map<Element, std::string> element_label_map
+    {
+        {Element::HYDROGEN, "H"}, {Element::CARBON,    "C"}, {Element::NITROGEN,   "N"},
+        {Element::OXYGEN,   "O"}, {Element::SULFUR,    "S"}, {Element::CALCIUM,   "Ca"},
+        {Element::ZINC,    "Zn"}, {Element::SODIUM,   "Na"}, {Element::MAGNESIUM, "Mg"},
+        {Element::IRON,    "Fe"}, {Element::CHLORINE, "Cl"}, {Element::UNK,        "X"}
+    };
+
+    inline static std::unordered_map<Remoteness, std::string> remoteness_label_map
+    {
+        {Remoteness::NONE, ""}, {Remoteness::ALPHA, "#alpha"}, {Remoteness::BETA, "#beta"},
+        {Remoteness::GAMMA, "#gamma"}, {Remoteness::DELTA, "#delta"}, {Remoteness::EPSILON, "#epsilon"},
+        {Remoteness::ZETA, "#zeta"}, {Remoteness::ETA, "#eta"},
+        {Remoteness::ONE, "1"}, {Remoteness::TWO, "2"}, {Remoteness::THREE, "3"},
+        {Remoteness::FOUR, "4"}, {Remoteness::FIVE, "5"},
+        {Remoteness::EXTRA, "X"}, {Remoteness::UNK, "UNK"}
+    };
+
+    inline static std::unordered_map<Branch, std::string> branch_label_map
+    {
+        {Branch::NONE, ""}, {Branch::ONE, "1"}, {Branch::TWO, "2"}, {Branch::THREE, "3"},
+        {Branch::TERMINAL, "T"}, {Branch::UNK, "UNK"}
+    };
+
+
 public:
     AtomicInfoHelper(void) = default;
     ~AtomicInfoHelper() = default;
     static int GetStandardResidueCount(void) { return m_standard_residue_count; }
     static const std::string & GetElementClassKey(void) { return m_element_class_key; }
     static const std::string & GetResidueClassKey(void) { return m_residue_class_key; }
+    static const std::vector<int> & GetStandardResidueList(void) { return m_standard_residue_list; }
+    static const std::vector<int> & GetStandardElementList(void) { return m_standard_element_list; }
+    static const std::vector<int> & GetStandardRemotenessList(void) { return m_standard_remoteness_list; }
+    static const std::vector<int> & GetStandardBranchList(void) { return m_standard_branch_list; }
+
     struct ResidueTag {};
     struct ElementTag {};
     struct RemotenessTag {};
@@ -173,6 +235,21 @@ public:
     static const std::unordered_map<Residue, std::string> & GetLabelMapping(const ResidueTag &)
     {
         return residue_label_map;
+    }
+
+    static const std::unordered_map<Element, std::string> & GetLabelMapping(const ElementTag &)
+    {
+        return element_label_map;
+    }
+
+    static const std::unordered_map<Remoteness, std::string> & GetLabelMapping(const RemotenessTag &)
+    {
+        return remoteness_label_map;
+    }
+
+    static const std::unordered_map<Branch, std::string> & GetLabelMapping(const BranchTag &)
+    {
+        return branch_label_map;
     }
 
 private:

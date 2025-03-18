@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 #include "PainterBase.hpp"
 
 class ModelObject;
@@ -25,15 +26,22 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintResidueClassGroupGaus(const std::string & name);
+    void PaintResidueClassGroupGausMainChain(const std::string & name);
+    void PaintResidueClassGroupGausSideChain(const std::string & name);
 
     #ifdef HAVE_ROOT
-    void PrintTitlePad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id);
+    void PrintIconPad(TPad * pad, TPaveText * text);
+    void PrintInfoPad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id);
     void PrintAmplitudePad(TPad * pad, TH2 * hist);
     void PrintWidthPad(TPad * pad, TH2 * hist);
     void PrintAmplitudeSummaryPad(TPad * pad, TH2 * hist);
     void PrintWidthSummaryPad(TPad * pad, TH2 * hist);
     void PrintGausSummaryPad(TPad * pad, TH2 * hist);
+
+    void PrintAmplitudeSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
+    void PrintWidthSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
+    void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
+
     #endif
 
 };

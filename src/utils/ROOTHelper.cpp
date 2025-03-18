@@ -150,50 +150,29 @@ void ROOTHelper::SetPadMarginInCanvas(
 void ROOTHelper::SetPaveTextMarginInCanvas(
     TPad * pad, TPaveText * pave, double left, double right, double bottom, double top)
 {
-    if (!pave) {
+    if (!pave)
+    {
         std::cerr << "Error: TPaveText pointer is null." << std::endl;
         return;
     }
     pave->Draw();
 
-    if (!pad) {
+    if (!pad)
+    {
         std::cerr << "Error: TPad pointer is null." << std::endl;
         return;
     }
     if (pad->GetCanvas()) pad->GetCanvas()->Update();
-    
 
-    // 取得該 TPad 在 TCanvas 上的絕對 NDC 坐標與尺寸
-    double pad_xlow = pad->GetXlowNDC();
-    double pad_ylow = pad->GetYlowNDC();
-    double pad_width = pad->GetAbsWNDC();
-    double pad_height = pad->GetAbsHNDC();
+    double x1_canvas{ pad->GetXlowNDC() + left };          
+    double x2_canvas{ pad->GetXlowNDC() + pad->GetAbsWNDC() - right };
+    double y1_canvas{ pad->GetYlowNDC() + bottom };          
+    double y2_canvas{ pad->GetYlowNDC() + pad->GetAbsHNDC() - top };
 
-    // 設定 TPaveText 在 TCanvas 上的邊界，
-    // 此處的「margin」以整體 TCanvas 的比例來定義
-    // TPaveText 的左邊界 = pad 的左邊界 + left，
-    // TPaveText 的右邊界 = pad 的右邊界 - right，
-    // 以此類推
-    double x1_canvas = pad_xlow + left;          
-    double x2_canvas = pad_xlow + pad_width - right;
-    double y1_canvas = pad_ylow + bottom;          
-    double y2_canvas = pad_ylow + pad_height - top;
-
-    // 將 TCanvas 上的絕對坐標轉換成 TPad 的局部坐標 (0～1)
-    double x1_local = (x1_canvas - pad_xlow) / pad_width;
-    double x2_local = (x2_canvas - pad_xlow) / pad_width;
-    double y1_local = (y1_canvas - pad_ylow) / pad_height;
-    double y2_local = (y2_canvas - pad_ylow) / pad_height;
-
-    // 設定 TPaveText 的局部 NDC 坐標
-    pave->SetX1NDC(x1_local);
-    pave->SetX2NDC(x2_local);
-    pave->SetY1NDC(y1_local);
-    pave->SetY2NDC(y2_local);
-
-    std::cout << "TPaveText placed in pad local coordinates: ("
-    << x1_local << ", " << y1_local << ") to ("
-    << x2_local << ", " << y2_local << ")" << std::endl;
+    pave->SetX1NDC((x1_canvas - pad->GetXlowNDC()) / pad->GetAbsWNDC());
+    pave->SetX2NDC((x2_canvas - pad->GetXlowNDC()) / pad->GetAbsWNDC());
+    pave->SetY1NDC((y1_canvas - pad->GetYlowNDC()) / pad->GetAbsHNDC());
+    pave->SetY2NDC((y2_canvas - pad->GetYlowNDC()) / pad->GetAbsHNDC());
 }
 
 void ROOTHelper::SetAxisTitleAttribute(TAttAxis * axis, float size, float offset, short font, short color)
