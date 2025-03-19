@@ -174,6 +174,14 @@ class AtomicInfoHelper
         {Branch::TERMINAL, "T"}, {Branch::UNK, "UNK"}
     };
 
+    inline static std::unordered_map<Element, int> element_color_map
+    {
+        {Element::HYDROGEN, 921}, {Element::CARBON,   633}, {Element::NITROGEN,  418},
+        {Element::OXYGEN,   862}, {Element::SULFUR,   619}, {Element::CALCIUM,     1},
+        {Element::ZINC,       1}, {Element::SODIUM,     1}, {Element::MAGNESIUM,   1},
+        {Element::IRON,       1}, {Element::CHLORINE,   1}, {Element::UNK,         1}
+    };
+
 
 public:
     AtomicInfoHelper(void) = default;
@@ -252,6 +260,26 @@ public:
     static const std::unordered_map<Branch, std::string> & GetLabelMapping(const BranchTag &)
     {
         return branch_label_map;
+    }
+
+    template <typename Tag>
+    static int AtomColorMapping(int value)
+    {
+        const auto & mapping{ GetColorMapping(Tag{}) };
+        using KeyType = typename std::remove_reference<decltype(mapping)>::type::key_type;
+        KeyType key{ static_cast<KeyType>(value) };
+        if (mapping.find(key) == mapping.end())
+        {
+            std::ostringstream error_message;
+            error_message << "Invalid value: " << value << " for mapping type " << typeid(Tag).name();
+            throw std::runtime_error(error_message.str());
+        }
+        return mapping.at(key);
+    }
+
+    static const std::unordered_map<Element, int> & GetColorMapping(const ElementTag &)
+    {
+        return element_color_map;
     }
 
 private:

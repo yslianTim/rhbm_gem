@@ -38,6 +38,7 @@ private:
     void PrintWidthSummaryPad(TPad * pad, TH2 * hist);
     void PrintGausSummaryPad(TPad * pad, TH2 * hist);
 
+    void PrintInfoSideChainPad(TPad * pad, TPaveText * text, const std::string & residue_name);
     void PrintAmplitudeSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
     void PrintWidthSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);

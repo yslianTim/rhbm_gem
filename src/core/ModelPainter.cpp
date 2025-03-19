@@ -213,26 +213,30 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(const std::string & name)
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
-    const int pad_size{ 2 };
+    const int pad_size{ 3 };
     std::unique_ptr<TPad> pad[pad_size];
     std::unique_ptr<TH2> frame[pad_size];
     pad[0] = ROOTHelper::CreatePad("pad0","", 0.00, 0.00, 0.50, 1.00); // The left pad
     pad[1] = ROOTHelper::CreatePad("pad1","", 0.50, 0.00, 1.00, 1.00); // The right pad
+    pad[2] = ROOTHelper::CreatePad("pad2","", 0.46, 0.80, 0.54, 0.99); // The middle-top pad
     frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
-    std::unique_ptr<TGraphErrors> amplitude_graph[AtomicInfoHelper::GetStandardResidueCount()];
-    std::unique_ptr<TGraphErrors> width_graph[AtomicInfoHelper::GetStandardResidueCount()];
+    std::vector<std::unique_ptr<TGraphErrors>> amplitude_graph_list[AtomicInfoHelper::GetStandardResidueCount()];
+    std::vector<std::unique_ptr<TGraphErrors>> width_graph_list[AtomicInfoHelper::GetStandardResidueCount()];
+    std::unique_ptr<TPaveText> info_text[AtomicInfoHelper::GetStandardResidueCount()];
 
     for (auto residue : AtomicInfoHelper::GetStandardResidueList())
     {
-        amplitude_graph[residue] = ROOTHelper::CreateGraphErrors();
-        width_graph[residue] = ROOTHelper::CreateGraphErrors();
+        info_text[residue] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         std::vector<double> amplitude_array, width_array;
         std::vector<std::string> label_list;
-        auto count{ 0 };
+        auto count_total{ 0 };
         for (auto element : AtomicInfoHelper::GetStandardElementList())
         {
+            auto amplitude_graph{ ROOTHelper::CreateGraphErrors() };
+            auto width_graph{ ROOTHelper::CreateGraphErrors() };
+            auto count_element{ 0 };
             for (auto remoteness : AtomicInfoHelper::GetStandardRemotenessList())
             {
                 for (auto branch : AtomicInfoHelper::GetStandardBranchList())
@@ -243,17 +247,23 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(const std::string & name)
                     auto gaus_variance{ residue_class_group_entry->GetGausVariancePrior(&group_key) };
                     amplitude_array.push_back(std::get<0>(gaus_estimate));
                     width_array.push_back(std::get<1>(gaus_estimate));
-                    amplitude_graph[residue]->SetPoint(count, count, std::get<0>(gaus_estimate));
-                    amplitude_graph[residue]->SetPointError(count, 0.0, std::get<0>(gaus_variance));
-                    width_graph[residue]->SetPoint(count, count, std::get<1>(gaus_estimate));
-                    width_graph[residue]->SetPointError(count, 0.0, std::get<1>(gaus_variance));
+                    amplitude_graph->SetPoint(count_element, count_total, std::get<0>(gaus_estimate));
+                    amplitude_graph->SetPointError(count_element, 0.0, std::get<0>(gaus_variance));
+                    width_graph->SetPoint(count_element, count_total, std::get<1>(gaus_estimate));
+                    width_graph->SetPointError(count_element, 0.0, std::get<1>(gaus_variance));
                     auto element_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ElementTag>(element) };
                     auto remoteness_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::RemotenessTag>(remoteness) };
                     auto branch_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::BranchTag>(branch) };
                     label_list.emplace_back(element_label +"_{"+ remoteness_label + branch_label+"}");
-                    count++;
+                    count_element++;
+                    count_total++;
                 }
             }
+            auto color{ AtomicInfoHelper::AtomColorMapping<AtomicInfoHelper::ElementTag>(element) };
+            ROOTHelper::SetMarkerAttribute(amplitude_graph.get(), kFullCircle, 1.5, color);
+            ROOTHelper::SetMarkerAttribute(width_graph.get(), kFullCircle, 1.5, color);
+            amplitude_graph_list[residue].push_back(std::move(amplitude_graph));
+            width_graph_list[residue].push_back(std::move(width_graph));
         }
 
         auto scaling{ 0.3 };
@@ -271,12 +281,22 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(const std::string & name)
 
         PrintAmplitudeSideChainPad(pad[0].get(), frame[0].get(), residue, label_list);
         PrintWidthSideChainPad(pad[1].get(), frame[1].get(), residue, label_list);
+        PrintInfoSideChainPad(pad[2].get(), info_text[residue].get(), AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(residue));
 
         pad[0]->cd();
-        amplitude_graph[residue]->Draw("P X0");
+        for (auto & graph : amplitude_graph_list[residue])
+        {
+            graph->Draw("P X0");
+        }
 
         pad[1]->cd();
-        width_graph[residue]->Draw("P X0");
+        for (auto & graph : width_graph_list[residue])
+        {
+            graph->Draw("P X0");
+        }
+
+        pad[2]->cd();
+        info_text[residue]->Draw();
 
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     }
@@ -293,7 +313,7 @@ void ModelPainter::PrintIconPad(TPad * pad, TPaveText * text)
     ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.26, 0.005, 0.01, 0.02);
     ROOTHelper::SetPaveTextDefaultStyle(text);
     ROOTHelper::SetPaveAttribute(text, 0, 0.1);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7, 0.5);
+    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7);
     ROOTHelper::SetLineAttribute(text, 1, 0);
     pad->Update();
 }
@@ -431,15 +451,30 @@ void ModelPainter::PrintGausSummaryPad(TPad * pad, TH2 * hist)
     hist->Draw("Y+");
 }
 
+void ModelPainter::PrintInfoSideChainPad(
+    TPad * pad, TPaveText * text, const std::string & residue_name)
+{
+    pad->cd();
+    pad->Clear();
+    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.00, 0.00, 0.00, 0.00);
+    ROOTHelper::SetPaveTextDefaultStyle(text);
+    ROOTHelper::SetPaveAttribute(text, 0, 0.2);
+    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7);
+    ROOTHelper::SetTextAttribute(text, 45, 103, 22, 0.0, kYellow-10);
+    text->AddText(residue_name.data());
+    pad->Update();
+}
+
 void ModelPainter::PrintAmplitudeSideChainPad(
     TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list)
 {
     pad->cd();
-    ROOTHelper::SetPadMarginInCanvas(pad, 0.09, 0.005, 0.16, 0.04);
+    pad->Clear();
+    ROOTHelper::SetPadMarginInCanvas(pad, 0.07, 0.005, 0.16, 0.04);
     ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
     ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 35.0, 1.4);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 32.0, 0.01, 103, kCyan+3);
+    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 35.0, 1.2);
+    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 32.0, 0.005, 103, kCyan+3);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 30.0, 0.01);
     ModifyAxisLabelSideChain(pad, hist, residue, label_list);
     hist->SetStats(0);
@@ -452,11 +487,12 @@ void ModelPainter::PrintWidthSideChainPad(
     TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list)
 {
     pad->cd();
-    ROOTHelper::SetPadMarginInCanvas(pad, 0.005, 0.09, 0.16, 0.04);
+    pad->Clear();
+    ROOTHelper::SetPadMarginInCanvas(pad, 0.005, 0.07, 0.16, 0.04);
     ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
     ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 35.0, 1.4);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 32.0, 0.01, 103, kCyan+3);
+    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 35.0, 1.2);
+    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 32.0, 0.005, 103, kCyan+3);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 30.0, 0.01);
     ModifyAxisLabelSideChain(pad, hist, residue, label_list);
     hist->SetStats(0);
