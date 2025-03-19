@@ -13,6 +13,7 @@ class Application
     CLI::App * m_cli_app;
     CLI::App * m_potential_analysis_cmd;
     CLI::App * m_potential_display_cmd;
+    CLI::App * m_potential_comparison_cmd;
     CLI::App * m_test_cmd;
     std::string m_selected_command;
 
@@ -47,6 +48,12 @@ class Application
         std::string folder_path;
     } m_potential_display_options;
 
+    struct PotentialComparisonOptions
+    {
+        std::string model_key_tag;
+        std::string folder_path;
+    } m_potential_comparison_options;
+
     struct GlobalOptions
     {
         int thread_size, verbose_level;
@@ -63,6 +70,7 @@ private:
     void RegisterCommands(void);
     void RegisterPotentialAnalysisCommand(void);
     void RegisterPotentialDisplayCommand(void);
+    void RegisterPotentialComparisonCommand(void);
     void RegisterTestCommand(void);
 
 };

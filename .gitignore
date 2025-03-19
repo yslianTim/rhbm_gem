@@ -47,3 +47,6 @@ Release/
 .vscode/
 *.user
 *.suo
+
+# bash shell script
+*.sh

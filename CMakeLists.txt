@@ -60,6 +60,7 @@ endif()
 
 # Locate Pybind11 package
 if(USE_SYSTEM_LIBS)
+    set(PYBIND11_FINDPYTHON ON)
     find_package(PYBIND11 QUIET)
     if(PYBIND11_FOUND)
         message(STATUS "Using system Pybind11")

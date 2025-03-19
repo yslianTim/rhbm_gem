@@ -2,13 +2,14 @@
 #include "CommandBase.hpp"
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
+#include "PotentialComparisonCommand.hpp"
 #include "TestCommand.hpp"
 #include "ScopeTimer.hpp"
 
 Application::Application(CLI::App * app) :
     m_cli_app{ app }, m_potential_analysis_cmd{ nullptr },
-    m_potential_display_cmd{ nullptr }, m_test_cmd{ nullptr },
-    m_selected_command{ "" }
+    m_potential_display_cmd{ nullptr }, m_potential_comparison_cmd{ nullptr },
+    m_test_cmd{ nullptr }, m_selected_command{ "" }
 {
     if (m_cli_app == nullptr)
     {
@@ -66,6 +67,14 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetFolderPath(m_potential_display_options.folder_path);
         return command;
     }
+    else if (m_cli_app->got_subcommand(m_potential_comparison_cmd))
+    {
+        auto command{ std::make_unique<PotentialComparisonCommand>() };
+        command->SetDatabasePath(m_global_options.database_path);
+        command->SetModelKeyTag(m_potential_comparison_options.model_key_tag);
+        command->SetFolderPath(m_potential_comparison_options.folder_path);
+        return command;
+    }
     else if (m_cli_app->got_subcommand(m_test_cmd))
     {
         auto command{ std::make_unique<TestCommand>() };
@@ -83,6 +92,7 @@ void Application::RegisterCommands(void)
 {
     RegisterPotentialAnalysisCommand();
     RegisterPotentialDisplayCommand();
+    RegisterPotentialComparisonCommand();
     RegisterTestCommand();
 }
 
@@ -187,6 +197,25 @@ void Application::RegisterPotentialDisplayCommand(void)
     m_cli_app->callback([&]()
     {
         m_selected_command = "potential_display";
+    });
+}
+
+void Application::RegisterPotentialComparisonCommand(void)
+{
+    m_potential_comparison_cmd = m_cli_app->add_subcommand("potential_comparison", "Run potential comparison");
+    m_potential_comparison_cmd->add_option(
+        "-k,--model-key", m_potential_display_options.model_key_tag,
+        "Number of sampling points per atom")->required();
+        m_potential_comparison_cmd->add_option(
+        "-d,--database", m_global_options.database_path,
+        "Database file path")->default_val("database.sqlite");
+        m_potential_comparison_cmd->add_option(
+        "-o,--folder", m_potential_display_options.folder_path,
+        "folder path for output files")->default_val("./");
+
+    m_cli_app->callback([&]()
+    {
+        m_selected_command = "potential_comparison";
     });
 }
 
