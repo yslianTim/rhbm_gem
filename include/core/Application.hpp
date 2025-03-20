@@ -44,7 +44,9 @@ class Application
 
     struct PotentialDisplayOptions
     {
-        std::string model_key_tag;
+        std::string model_key_tag_list;
+        std::string sim_no_charge_key_tag_list;
+        std::string sim_buried_charge_key_tag_list;
     } m_potential_display_options;
 
     struct MapSimulationOptions

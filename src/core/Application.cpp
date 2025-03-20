@@ -63,8 +63,10 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
     {
         auto command{ std::make_unique<PotentialDisplayCommand>() };
         command->SetDatabasePath(m_global_options.database_path);
-        command->SetModelKeyTag(m_potential_display_options.model_key_tag);
         command->SetFolderPath(m_global_options.folder_path);
+        command->SetModelKeyTagList(m_potential_display_options.model_key_tag_list);
+        command->SetRefModelKeyTagList("no_charge", m_potential_display_options.sim_no_charge_key_tag_list);
+        command->SetRefModelKeyTagList("buried_charge", m_potential_display_options.sim_buried_charge_key_tag_list);
         return command;
     }
     else if (m_cli_app->got_subcommand(m_map_simulation_cmd))
@@ -202,14 +204,20 @@ void Application::RegisterPotentialDisplayCommand(void)
 {
     m_potential_display_cmd = m_cli_app->add_subcommand("potential_display", "Run potential display");
     m_potential_display_cmd->add_option(
-        "-k,--model-key", m_potential_display_options.model_key_tag,
-        "Number of sampling points per atom")->required();
+        "-k,--model-keylist", m_potential_display_options.model_key_tag_list,
+        "List of model key tag to be display")->required();
+    m_potential_display_cmd->add_option(
+        "--sim-no-charge-keylist", m_potential_display_options.sim_no_charge_key_tag_list,
+        "List of simulated (no charge) model key tag to be display")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--sim-buried-charge-keylist", m_potential_display_options.sim_buried_charge_key_tag_list,
+        "List of simulated (buried charge) model key tag to be display")->default_val("");
     m_potential_display_cmd->add_option(
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");
     m_potential_display_cmd->add_option(
         "-o,--folder", m_global_options.folder_path,
-        "folder path for output files")->default_val("./");
+        "folder path for output files")->default_val("");
 
     m_cli_app->callback([&]()
     {
@@ -225,7 +233,7 @@ void Application::RegisterMapSimulationCommand(void)
         "Model file path")->required();
     m_map_simulation_cmd->add_option(
         "-o,--folder", m_global_options.folder_path,
-        "folder path for output map files")->default_val("./");
+        "folder path for output map files")->default_val("");
     m_map_simulation_cmd->add_option(
         "-j,--jobs", m_global_options.thread_size,
         "Number of threads")->default_val(1);

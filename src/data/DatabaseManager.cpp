@@ -7,9 +7,10 @@
 
 DatabaseManager::DatabaseManager(const std::string & database_path) :
     m_database_path{ database_path },
-    m_database{ std::make_unique<SQLiteWrapper>(database_path) }
+    m_database{ nullptr }
 {
-
+    if (m_database_path == "") m_database_path = "database.sqlite";
+    m_database = std::make_unique<SQLiteWrapper>(m_database_path);
 }
 
 DatabaseManager::~DatabaseManager()

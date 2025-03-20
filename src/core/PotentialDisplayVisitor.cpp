@@ -38,13 +38,22 @@ void PotentialDisplayVisitor::VisitMapObject(MapObject * data_object)
 void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
 {
     std::cout <<"- PotentialDisplayVisitor::Analysis" << std::endl;
-    try
+    RunModelPainter(data_manager);
+}
+
+void PotentialDisplayVisitor::RunModelPainter(DataObjectManager * data_manager)
+{
+    std::cout <<"- PotentialDisplayVisitor::RunModelPainter" << std::endl;
+    for (auto & key_tag : m_model_key_tag_list)
     {
-        const auto & model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
-        model_object->Accept(this);
-    }
-    catch(const std::exception & e)
-    {
-        std::cerr << e.what() << std::endl;
+        try
+        {
+            const auto & model_object{ data_manager->GetDataObjectRef(key_tag) };
+            model_object->Accept(this);
+        }
+        catch(const std::exception & e)
+        {
+            std::cerr << e.what() << std::endl;
+        }
     }
 }
