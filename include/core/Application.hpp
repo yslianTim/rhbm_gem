@@ -14,6 +14,7 @@ class Application
     CLI::App * m_potential_analysis_cmd;
     CLI::App * m_potential_display_cmd;
     CLI::App * m_potential_comparison_cmd;
+    CLI::App * m_map_simulation_cmd;
     CLI::App * m_test_cmd;
     std::string m_selected_command;
 
@@ -45,19 +46,27 @@ class Application
     struct PotentialDisplayOptions
     {
         std::string model_key_tag;
-        std::string folder_path;
     } m_potential_display_options;
 
     struct PotentialComparisonOptions
     {
         std::string model_key_tag;
-        std::string folder_path;
     } m_potential_comparison_options;
+
+    struct MapSimulationOptions
+    {
+        std::string model_file_path;
+        int potential_model_choice;
+        int partial_charge_choice;
+        double cutoff_distance;
+        double grid_spacing;
+        std::string blurring_width_list;
+    } m_map_simulation_options;
 
     struct GlobalOptions
     {
         int thread_size, verbose_level;
-        std::string database_path;
+        std::string database_path, folder_path;
     } m_global_options;
 
 public:
@@ -71,6 +80,7 @@ private:
     void RegisterPotentialAnalysisCommand(void);
     void RegisterPotentialDisplayCommand(void);
     void RegisterPotentialComparisonCommand(void);
+    void RegisterMapSimulationCommand(void);
     void RegisterTestCommand(void);
 
 };

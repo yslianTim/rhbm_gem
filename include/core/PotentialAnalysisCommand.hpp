@@ -19,7 +19,7 @@ class PotentialAnalysisCommand : public CommandBase
 
 public:
     PotentialAnalysisCommand(void);
-    ~PotentialAnalysisCommand() = default;
+    ~PotentialAnalysisCommand();
     void Execute(void) override;
 
     void SetFitRangeMinimum(double value) { m_fit_range_min = value; }

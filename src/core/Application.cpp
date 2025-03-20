@@ -3,13 +3,14 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
 #include "PotentialComparisonCommand.hpp"
+#include "MapSimulationCommand.hpp"
 #include "TestCommand.hpp"
 #include "ScopeTimer.hpp"
 
 Application::Application(CLI::App * app) :
     m_cli_app{ app }, m_potential_analysis_cmd{ nullptr },
     m_potential_display_cmd{ nullptr }, m_potential_comparison_cmd{ nullptr },
-    m_test_cmd{ nullptr }, m_selected_command{ "" }
+    m_map_simulation_cmd{ nullptr }, m_test_cmd{ nullptr }, m_selected_command{ "" }
 {
     if (m_cli_app == nullptr)
     {
@@ -64,7 +65,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         auto command{ std::make_unique<PotentialDisplayCommand>() };
         command->SetDatabasePath(m_global_options.database_path);
         command->SetModelKeyTag(m_potential_display_options.model_key_tag);
-        command->SetFolderPath(m_potential_display_options.folder_path);
+        command->SetFolderPath(m_global_options.folder_path);
         return command;
     }
     else if (m_cli_app->got_subcommand(m_potential_comparison_cmd))
@@ -72,7 +73,32 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         auto command{ std::make_unique<PotentialComparisonCommand>() };
         command->SetDatabasePath(m_global_options.database_path);
         command->SetModelKeyTag(m_potential_comparison_options.model_key_tag);
-        command->SetFolderPath(m_potential_comparison_options.folder_path);
+        command->SetFolderPath(m_global_options.folder_path);
+        return command;
+    }
+    else if (m_cli_app->got_subcommand(m_map_simulation_cmd))
+    {
+        auto command{ std::make_unique<MapSimulationCommand>() };
+        command->SetModelFilePath(m_map_simulation_options.model_file_path);
+        command->SetFolderPath(m_global_options.folder_path);
+        command->SetThreadSize(m_global_options.thread_size);
+        command->SetPotentialModelChoice(m_map_simulation_options.potential_model_choice);
+        command->SetPartialChargeChoice(m_map_simulation_options.partial_charge_choice);
+        command->SetCutoffDistance(m_map_simulation_options.cutoff_distance);
+        command->SetGridSpacing(m_map_simulation_options.grid_spacing);
+        command->SetBlurringWidthList(m_map_simulation_options.blurring_width_list);
+        command->SetPickChainID(m_atom_selector_options.pick_chain_id);
+        command->SetPickIndicator(m_atom_selector_options.pick_indicator);
+        command->SetPickResidueType(m_atom_selector_options.pick_residue);
+        command->SetPickElementType(m_atom_selector_options.pick_element);
+        command->SetPickRemotenessType(m_atom_selector_options.pick_remoteness);
+        command->SetPickBranchType(m_atom_selector_options.pick_branch);
+        command->SetVetoChainID(m_atom_selector_options.veto_chain_id);
+        command->SetVetoIndicator(m_atom_selector_options.veto_indicator);
+        command->SetVetoResidueType(m_atom_selector_options.veto_residue);
+        command->SetVetoElementType(m_atom_selector_options.veto_element);
+        command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
+        command->SetVetoBranchType(m_atom_selector_options.veto_branch);
         return command;
     }
     else if (m_cli_app->got_subcommand(m_test_cmd))
@@ -93,6 +119,7 @@ void Application::RegisterCommands(void)
     RegisterPotentialAnalysisCommand();
     RegisterPotentialDisplayCommand();
     RegisterPotentialComparisonCommand();
+    RegisterMapSimulationCommand();
     RegisterTestCommand();
 }
 
@@ -191,7 +218,7 @@ void Application::RegisterPotentialDisplayCommand(void)
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");
     m_potential_display_cmd->add_option(
-        "-o,--folder", m_potential_display_options.folder_path,
+        "-o,--folder", m_global_options.folder_path,
         "folder path for output files")->default_val("./");
 
     m_cli_app->callback([&]()
@@ -210,12 +237,82 @@ void Application::RegisterPotentialComparisonCommand(void)
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");
         m_potential_comparison_cmd->add_option(
-        "-o,--folder", m_potential_display_options.folder_path,
+        "-o,--folder", m_global_options.folder_path,
         "folder path for output files")->default_val("./");
 
     m_cli_app->callback([&]()
     {
         m_selected_command = "potential_comparison";
+    });
+}
+
+void Application::RegisterMapSimulationCommand(void)
+{
+    m_map_simulation_cmd = m_cli_app->add_subcommand("map_simulation", "Run map simulation command");
+    m_map_simulation_cmd->add_option(
+        "-a,--model", m_map_simulation_options.model_file_path,
+        "Model file path")->required();
+    m_map_simulation_cmd->add_option(
+        "-o,--folder", m_global_options.folder_path,
+        "folder path for output map files")->default_val("./");
+    m_map_simulation_cmd->add_option(
+        "-j,--jobs", m_global_options.thread_size,
+        "Number of threads")->default_val(1);
+    m_map_simulation_cmd->add_option(
+        "--potential-model", m_map_simulation_options.potential_model_choice,
+        "Atomic potential model option")->default_val(1);
+    m_map_simulation_cmd->add_option(
+        "--charge", m_map_simulation_options.partial_charge_choice,
+        "Partial charge table option")->default_val(1);
+    m_map_simulation_cmd->add_option(
+        "-c,--cut-off", m_map_simulation_options.cutoff_distance,
+        "Cutoff distance")->default_val(5.0);
+    m_map_simulation_cmd->add_option(
+        "-g,--grid-spacing", m_map_simulation_options.grid_spacing,
+        "Grid spacing")->default_val(0.5);
+    m_map_simulation_cmd->add_option(
+        "--blurring-width", m_map_simulation_options.blurring_width_list,
+        "Blurring width (list) setting")->default_val("0.55");
+    m_map_simulation_cmd->add_option(
+        "--pick-chain", m_atom_selector_options.pick_chain_id,
+        "Pick chain ID")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--pick-indicator", m_atom_selector_options.pick_indicator,
+        "Pick indicator")->default_val(".,A");
+    m_map_simulation_cmd->add_option(
+        "--pick-residue", m_atom_selector_options.pick_residue,
+        "Pick residue type")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--pick-element", m_atom_selector_options.pick_element,
+        "Pick element type")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--pick-remoteness", m_atom_selector_options.pick_remoteness,
+        "Pick remoteness type")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--pick-branch", m_atom_selector_options.pick_branch,
+        "Pick branch type")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--veto-chain", m_atom_selector_options.veto_chain_id,
+        "Veto chain ID")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--veto-indicator", m_atom_selector_options.veto_indicator,
+        "Veto indicator")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--veto-residue", m_atom_selector_options.veto_residue,
+        "Veto residue type")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--veto-element", m_atom_selector_options.veto_element,
+        "Veto element type")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--veto-remoteness", m_atom_selector_options.veto_remoteness,
+        "Veto remoteness type")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "--veto-branch", m_atom_selector_options.veto_branch,
+        "Veto branch type")->default_val("");
+
+    m_map_simulation_cmd->callback([&]()
+    {
+        m_selected_command = "map_simulation";
     });
 }
 

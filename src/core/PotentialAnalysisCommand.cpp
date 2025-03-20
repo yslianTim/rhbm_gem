@@ -11,6 +11,11 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
 
 }
 
+PotentialAnalysisCommand::~PotentialAnalysisCommand()
+{
+    
+}
+
 void PotentialAnalysisCommand::Execute(void)
 {
     std::cout << "PotentialAnalysisCommand::Execute() called." << std::endl;
