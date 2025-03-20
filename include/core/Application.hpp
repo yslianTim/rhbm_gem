@@ -13,7 +13,6 @@ class Application
     CLI::App * m_cli_app;
     CLI::App * m_potential_analysis_cmd;
     CLI::App * m_potential_display_cmd;
-    CLI::App * m_potential_comparison_cmd;
     CLI::App * m_map_simulation_cmd;
     CLI::App * m_test_cmd;
     std::string m_selected_command;
@@ -48,11 +47,6 @@ class Application
         std::string model_key_tag;
     } m_potential_display_options;
 
-    struct PotentialComparisonOptions
-    {
-        std::string model_key_tag;
-    } m_potential_comparison_options;
-
     struct MapSimulationOptions
     {
         std::string model_file_path;
@@ -79,7 +73,6 @@ private:
     void RegisterCommands(void);
     void RegisterPotentialAnalysisCommand(void);
     void RegisterPotentialDisplayCommand(void);
-    void RegisterPotentialComparisonCommand(void);
     void RegisterMapSimulationCommand(void);
     void RegisterTestCommand(void);
 

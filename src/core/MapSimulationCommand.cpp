@@ -11,12 +11,15 @@ MapSimulationCommand::MapSimulationCommand(void) :
 
 MapSimulationCommand::~MapSimulationCommand()
 {
-    
+
 }
 
 void MapSimulationCommand::Execute(void)
 {
     std::cout << "MapSimulationCommand::Execute() called." << std::endl;
+    std::cout << "Total number of blurring width sets to be simulated: "
+              << m_blurring_width_list.size() << std::endl;
+    
 }
 
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
