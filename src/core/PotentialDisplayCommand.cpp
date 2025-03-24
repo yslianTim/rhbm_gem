@@ -26,6 +26,7 @@ void PotentialDisplayCommand::Execute(void)
 
     auto model_displayer{ std::make_unique<PotentialDisplayVisitor>() };
     model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);
+    model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
     model_displayer->SetFolderPath(m_folder_path);
     data_manager->Accept(model_displayer.get());
 }

@@ -1,5 +1,6 @@
 #include "ModelPainter.hpp"
 #include "ModelObject.hpp"
+#include "DataObjectBase.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "FilePathHelper.hpp"
 #include "AtomicInfoHelper.hpp"
@@ -25,8 +26,8 @@
 using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
 using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
 
-ModelPainter::ModelPainter(ModelObject * model) :
-    m_model_object{ model }, m_folder_path{ "./" }
+ModelPainter::ModelPainter(void) :
+    m_folder_path{ "./" }
 {
 
 }
@@ -41,20 +42,38 @@ void ModelPainter::SetFolder(const std::string & folder_path)
     m_folder_path = FilePathHelper::EnsureTrailingSlash(folder_path);
 }
 
+void ModelPainter::AddDataObject(DataObjectBase * data_object)
+{
+    m_model_object_list.push_back(dynamic_cast<ModelObject *>(data_object));
+}
+
+void ModelPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
+{
+    m_ref_model_object_map[label] = dynamic_cast<ModelObject *>(data_object);
+}
+
 void ModelPainter::Painting(void)
 {
     std::cout <<"- ModelPainter::Painting"<<std::endl;
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
-    PaintResidueClassGroupGausMainChain("residue_class_group_gaus_main_"+ m_model_object->GetPdbID() +".pdf");
-    PaintResidueClassGroupGausSideChain("residue_class_group_gaus_side_"+ m_model_object->GetPdbID() +".pdf");
+    std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
+    for (auto model_object : m_model_object_list)
+    {
+        auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetPdbID() +".pdf" };
+        PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name);
+        auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetPdbID() +".pdf" };
+        PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
+    }
+    
 }
 
-void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
+void ModelPainter::PaintResidueClassGroupGausMainChain(
+    ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ModelPainter::PaintResidueClassGroupGausMainChain"<<std::endl;
+    std::cout <<"- ModelPainter::PaintResidueClassGroupGausMainChain"<< std::endl;
 
-    auto group_entry{ m_model_object->GetGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey()) };
+    auto group_entry{ model_object->GetGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey()) };
     auto residue_class_group_entry{ dynamic_cast<GroupPotentialEntry<ResidueKeyType> *>(group_entry) };
     const auto & group_key_set{ residue_class_group_entry->GetGroupKeySet() };
     
@@ -174,7 +193,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     PrintAmplitudeSummaryPad(pad[3].get(), frame[3].get());
     PrintWidthSummaryPad(pad[2].get(), frame[2].get());
     PrintGausSummaryPad(pad[4].get(), frame[4].get());
-    PrintInfoPad(pad[5].get(), info_text.get(), m_model_object->GetPdbID() , m_model_object->GetEmdID());
+    PrintInfoPad(pad[5].get(), info_text.get(), model_object->GetPdbID() , model_object->GetEmdID());
     PrintIconPad(pad[5].get(), icon_text.get());
 
     pad[1]->cd();
@@ -198,12 +217,13 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     #endif
 }
 
-void ModelPainter::PaintResidueClassGroupGausSideChain(const std::string & name)
+void ModelPainter::PaintResidueClassGroupGausSideChain(
+    ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausSideChain"<<std::endl;
 
-    auto group_entry{ m_model_object->GetGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey()) };
+    auto group_entry{ model_object->GetGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey()) };
     auto residue_class_group_entry{ dynamic_cast<GroupPotentialEntry<ResidueKeyType> *>(group_entry) };
     const auto & group_key_set{ residue_class_group_entry->GetGroupKeySet() };
     

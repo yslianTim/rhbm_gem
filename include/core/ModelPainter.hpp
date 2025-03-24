@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include "PainterBase.hpp"
 
 class ModelObject;
@@ -15,19 +16,21 @@ class TPaveText;
 
 class ModelPainter : public PainterBase
 {
-    ModelObject * m_model_object;
+    std::vector<ModelObject *> m_model_object_list;
+    std::unordered_map<std::string, ModelObject *> m_ref_model_object_map;
     std::string m_folder_path;
 
 public:
-    ModelPainter(void) = delete;
-    explicit ModelPainter(ModelObject * model);
+    ModelPainter(void);
     ~ModelPainter();
     void SetFolder(const std::string & folder_path) override;
+    void AddDataObject(DataObjectBase * data_object) override;
+    void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting(void) override;
 
 private:
-    void PaintResidueClassGroupGausMainChain(const std::string & name);
-    void PaintResidueClassGroupGausSideChain(const std::string & name);
+    void PaintResidueClassGroupGausMainChain(ModelObject * model_object, const std::string & name);
+    void PaintResidueClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
     void PrintIconPad(TPad * pad, TPaveText * text);

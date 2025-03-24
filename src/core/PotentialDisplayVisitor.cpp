@@ -3,8 +3,10 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
+#include "DataObjectBase.hpp"
 #include "PainterBase.hpp"
 #include "ModelPainter.hpp"
+#include "ComparisonPainter.hpp"
 
 #include <memory>
 
@@ -24,32 +26,89 @@ void PotentialDisplayVisitor::VisitAtomObject(AtomObject * data_object)
 
 void PotentialDisplayVisitor::VisitModelObject(ModelObject * data_object)
 {
-    std::cout <<"- PotentialDisplayVisitor::VisitModelObject"<< std::endl;
-    auto model_painter{ std::make_unique<ModelPainter>(data_object) };
-    model_painter->SetFolder(m_folder_path);
-    model_painter->Painting();
 }
 
 void PotentialDisplayVisitor::VisitMapObject(MapObject * data_object)
 {
-    std::cout <<"This is the map object, do nothing in PotentialDisplayVisitor."<< std::endl;
 }
 
 void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
 {
     std::cout <<"- PotentialDisplayVisitor::Analysis" << std::endl;
     RunModelPainter(data_manager);
+    RunComparisonPainter(data_manager);
 }
 
 void PotentialDisplayVisitor::RunModelPainter(DataObjectManager * data_manager)
 {
     std::cout <<"- PotentialDisplayVisitor::RunModelPainter" << std::endl;
+    std::unique_ptr<PainterBase> painter{ std::make_unique<ModelPainter>() };
+    painter->SetFolder(m_folder_path);
+    BuildModelObjectList(data_manager, m_model_object_list);
+    for (auto model_object : m_model_object_list)
+    {
+        painter->AddDataObject(model_object);
+    }
+    painter->Painting();
+}
+
+void PotentialDisplayVisitor::RunComparisonPainter(DataObjectManager * data_manager)
+{
+    std::cout <<"- PotentialDisplayVisitor::RunComparisonPainter" << std::endl;
+    std::unique_ptr<PainterBase> painter{ std::make_unique<ComparisonPainter>() };
+    painter->SetFolder(m_folder_path);
+    BuildModelObjectList(data_manager, m_model_object_list);
+    for (auto model_object : m_model_object_list)
+    {
+        painter->AddDataObject(model_object);
+    }
+
+    BuildReferenceModelObjectList(data_manager, "no_charge", m_sim_no_charge_model_object_list);
+    for (auto model_object : m_sim_no_charge_model_object_list)
+    {
+        painter->AddReferenceDataObject(model_object, "no_charge");
+    }
+
+    BuildReferenceModelObjectList(data_manager, "buried_charge", m_sim_buried_charge_model_object_list);
+    for (auto model_object : m_sim_buried_charge_model_object_list)
+    {
+        painter->AddReferenceDataObject(model_object, "buried_charge");
+    }
+    painter->Painting();
+}
+
+void PotentialDisplayVisitor::BuildModelObjectList(
+    DataObjectManager * data_manager, std::vector<DataObjectBase *> & model_object_list)
+{
+    model_object_list.clear();
     for (auto & key_tag : m_model_key_tag_list)
     {
         try
         {
-            const auto & model_object{ data_manager->GetDataObjectRef(key_tag) };
-            model_object->Accept(this);
+            model_object_list.emplace_back(data_manager->GetDataObjectRef(key_tag).get());
+        }
+        catch(const std::exception & e)
+        {
+            std::cerr << e.what() << std::endl;
+        }
+    }
+}
+
+void PotentialDisplayVisitor::BuildReferenceModelObjectList(
+    DataObjectManager * data_manager,
+    const std::string & type_key, std::vector<DataObjectBase *> & model_object_list)
+{
+    model_object_list.clear();
+    if (m_ref_model_key_tag_list_map.find(type_key) == m_ref_model_key_tag_list_map.end())
+    {
+        std::cout <<" Cannot find simulation type : ["<< type_key <<"] in the list."<< std::endl;
+        return;
+    }
+    for (auto & key_tag : m_ref_model_key_tag_list_map.at(type_key))
+    {
+        try
+        {
+            model_object_list.emplace_back(data_manager->GetDataObjectRef(key_tag).get());
         }
         catch(const std::exception & e)
         {
