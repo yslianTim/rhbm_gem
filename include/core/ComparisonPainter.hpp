@@ -29,6 +29,7 @@ public:
     void Painting(void) override;
 
 private:
+    void PaintSimulationGaus(const std::string & name);
 
     #ifdef HAVE_ROOT
 

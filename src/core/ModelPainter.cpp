@@ -1,7 +1,7 @@
 #include "ModelPainter.hpp"
 #include "ModelObject.hpp"
 #include "DataObjectBase.hpp"
-#include "GroupPotentialEntry.hpp"
+#include "PotentialEntryIterator.hpp"
 #include "FilePathHelper.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "ArrayStats.hpp"
@@ -72,10 +72,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausMainChain"<< std::endl;
-
-    auto group_entry{ model_object->GetGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey()) };
-    auto residue_class_group_entry{ dynamic_cast<GroupPotentialEntry<ResidueKeyType> *>(group_entry) };
-    const auto & group_key_set{ residue_class_group_entry->GetGroupKeySet() };
+    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     
     #ifdef HAVE_ROOT
 
@@ -126,9 +123,9 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
         for (auto residue : AtomicInfoHelper::GetStandardResidueList())
         {
             auto group_key{ std::make_tuple(residue, element, remoteness, 0, false) };
-            if (group_key_set.find(group_key) == group_key_set.end()) continue;
-            auto gaus_estimate{ residue_class_group_entry->GetGausEstimatePrior(&group_key) };
-            auto gaus_variance{ residue_class_group_entry->GetGausVariancePrior(&group_key) };
+            if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
+            auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key) };
+            auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key) };
             amplitude_array.push_back(std::get<0>(gaus_estimate));
             width_array.push_back(std::get<1>(gaus_estimate));
             amplitude_graph[i]->SetPoint(residue, residue, std::get<0>(gaus_estimate));
@@ -222,10 +219,7 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausSideChain"<<std::endl;
-
-    auto group_entry{ model_object->GetGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey()) };
-    auto residue_class_group_entry{ dynamic_cast<GroupPotentialEntry<ResidueKeyType> *>(group_entry) };
-    const auto & group_key_set{ residue_class_group_entry->GetGroupKeySet() };
+    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     
     #ifdef HAVE_ROOT
 
@@ -262,9 +256,9 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
                 for (auto branch : AtomicInfoHelper::GetStandardBranchList())
                 {
                     auto group_key{ std::make_tuple(residue, element, remoteness, branch, false) };
-                    if (group_key_set.find(group_key) == group_key_set.end()) continue;
-                    auto gaus_estimate{ residue_class_group_entry->GetGausEstimatePrior(&group_key) };
-                    auto gaus_variance{ residue_class_group_entry->GetGausVariancePrior(&group_key) };
+                    if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
+                    auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key) };
+                    auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key) };
                     amplitude_array.push_back(std::get<0>(gaus_estimate));
                     width_array.push_back(std::get<1>(gaus_estimate));
                     amplitude_graph->SetPoint(count_element, count_total, std::get<0>(gaus_estimate));
