@@ -31,6 +31,7 @@ public:
 private:
     void PaintResidueClassGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
+    void PaintResidueClassGroupGausMainChain(const std::string & name);
 
     #ifdef HAVE_ROOT
     void PrintIconPad(TPad * pad, TPaveText * text);
@@ -46,6 +47,16 @@ private:
     void PrintWidthSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
 
+    void PrintIconMainChainPad(TPad * pad, TPaveText * text, const std::string & fsc, bool is_bottom_pad);
+    void PrintInfoMainChainPad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id, bool is_bottom_pad);
+
+    void PrintTitlePad(TPad * pad, TPaveText * text, const std::string & title);
+    void PrintResultPad(TPad * pad, TH2 * hist, bool draw_x_axis);
+    void PrintSummaryPad(TPad * pad, TH2 * hist, bool draw_x_axis);
+    void PrintCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_axis);
+    void PrintLeftSideChainPad(TPad * pad, TH2 * hist, int residue, const std::string & y_title, const std::vector<std::string> & label_list);
+    void PrintRightSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
+    void PrintTitleSideChainPad(TPad * pad, TPaveText * text, const std::string & residue_name);
     #endif
 
 };
