@@ -14,7 +14,7 @@
 class SphereSampler
 {
     unsigned int m_thread_size, m_sampling_size;
-    double m_distance_min, m_distance_max, m_distance_range;
+    double m_distance_min, m_distance_max;
     std::vector<std::tuple<float, std::array<float, 3>>> m_sampling_position_list;
 
 public:

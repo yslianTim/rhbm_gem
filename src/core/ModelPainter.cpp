@@ -64,7 +64,10 @@ void ModelPainter::Painting(void)
         auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetPdbID() +".pdf" };
         PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
     }
-    PaintResidueClassGroupGausMainChain("figure_1_part2.pdf");
+    if (m_model_object_list.size() == 4)
+    {
+        PaintResidueClassGroupGausMainChain("figure_1_part2.pdf");
+    }
 }
 
 void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
@@ -588,6 +591,11 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     std::cout <<"  Output file: "<< file_path << std::endl;
     #endif
+}
+
+void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const std::string & name)
+{
+
 }
 
 #ifdef HAVE_ROOT

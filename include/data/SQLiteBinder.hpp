@@ -93,13 +93,25 @@ struct SQLiteBinder<std::vector<std::tuple<float, float>>>
 {
     static int Bind(sqlite3_stmt * stmt, int index, const std::vector<std::tuple<float, float>> & value)
     {
-        // 假設 std::tuple<float, float> 是 POD 型態，且 vector 元素是連續儲存的
+        if(value.empty())
+        {
+            return sqlite3_bind_blob(stmt, index, nullptr, 0, SQLITE_STATIC);
+        }
+        
+        std::vector<float> contiguous;
+        contiguous.reserve(value.size() * 2);
+        for(const auto & tup : value)
+        {
+            contiguous.push_back(std::get<0>(tup));
+            contiguous.push_back(std::get<1>(tup));
+        }
+        
         return sqlite3_bind_blob(
             stmt,
             index,
-            reinterpret_cast<const void*>(value.data()),
-            static_cast<int>(value.size() * sizeof(std::tuple<float, float>)),
-            SQLITE_STATIC
+            reinterpret_cast<const void*>(contiguous.data()),
+            static_cast<int>(contiguous.size() * sizeof(float)),
+            SQLITE_TRANSIENT
         );
     }
 };
@@ -110,13 +122,25 @@ struct SQLiteBinder<std::vector<std::tuple<double, double>>>
 {
     static int Bind(sqlite3_stmt * stmt, int index, const std::vector<std::tuple<double, double>> & value)
     {
-        // 假設 std::tuple<double, double> 是 POD 型態，且 vector 元素是連續儲存的
+        if(value.empty())
+        {
+            return sqlite3_bind_blob(stmt, index, nullptr, 0, SQLITE_STATIC);
+        }
+        
+        std::vector<double> contiguous;
+        contiguous.reserve(value.size() * 2);
+        for(const auto & tup : value)
+        {
+            contiguous.push_back(std::get<0>(tup));
+            contiguous.push_back(std::get<1>(tup));
+        }
+        
         return sqlite3_bind_blob(
             stmt,
             index,
-            reinterpret_cast<const void*>(value.data()),
-            static_cast<int>(value.size() * sizeof(std::tuple<double, double>)),
-            SQLITE_STATIC
+            reinterpret_cast<const void*>(contiguous.data()),
+            static_cast<int>(contiguous.size() * sizeof(double)),
+            SQLITE_TRANSIENT
         );
     }
 };

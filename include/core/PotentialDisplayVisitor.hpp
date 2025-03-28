@@ -26,6 +26,7 @@ public:
     void VisitMapObject(MapObject * data_object) override;
     void Analysis(DataObjectManager * data_manager) override;
 
+    void RunAtomPainter(ModelObject * model_object);
     void RunModelPainter(DataObjectManager * data_manager);
     void RunComparisonPainter(DataObjectManager * data_manager);
     void BuildModelObjectList(DataObjectManager * data_manager, std::vector<DataObjectBase *> & model_object_list);

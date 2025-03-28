@@ -5,6 +5,7 @@
 #include "DataObjectManager.hpp"
 #include "DataObjectBase.hpp"
 #include "PainterBase.hpp"
+#include "AtomPainter.hpp" 
 #include "ModelPainter.hpp"
 #include "ComparisonPainter.hpp"
 
@@ -35,8 +36,26 @@ void PotentialDisplayVisitor::VisitMapObject(MapObject * data_object)
 void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
 {
     std::cout <<"- PotentialDisplayVisitor::Analysis" << std::endl;
+    BuildModelObjectList(data_manager, m_model_object_list);
+    RunAtomPainter(dynamic_cast<ModelObject *>(m_model_object_list.at(0)));
     RunModelPainter(data_manager);
     RunComparisonPainter(data_manager);
+}
+
+void PotentialDisplayVisitor::RunAtomPainter(ModelObject * model_object)
+{
+    std::cout <<"- PotentialDisplayVisitor::RunAtomPainter" << std::endl;
+    std::unique_ptr<PainterBase> painter{ std::make_unique<AtomPainter>() };
+    painter->SetFolder(m_folder_path);
+    for (auto & atom : model_object->GetComponentsList())
+    {
+        if (atom->GetSelectedFlag() == false) continue;
+        if (atom->GetElement() != 6) continue;
+        if (atom->GetRemoteness() != 1) continue;
+        if (atom->GetResidue() != 0) continue;
+        painter->AddDataObject(atom.get());
+    }
+    painter->Painting();
 }
 
 void PotentialDisplayVisitor::RunModelPainter(DataObjectManager * data_manager)
@@ -44,7 +63,6 @@ void PotentialDisplayVisitor::RunModelPainter(DataObjectManager * data_manager)
     std::cout <<"- PotentialDisplayVisitor::RunModelPainter" << std::endl;
     std::unique_ptr<PainterBase> painter{ std::make_unique<ModelPainter>() };
     painter->SetFolder(m_folder_path);
-    BuildModelObjectList(data_manager, m_model_object_list);
     for (auto model_object : m_model_object_list)
     {
         painter->AddDataObject(model_object);

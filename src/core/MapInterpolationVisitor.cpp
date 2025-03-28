@@ -25,7 +25,6 @@ void MapInterpolationVisitor::VisitModelObject(ModelObject * data_object)
 
 void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 {
-    //std::cout <<"- [MapInterpolationVisitor] Visiting MapObject..." << std::endl;
     const auto & sampling_position_list{ m_sphere_sampler->GenerateSamplingPoints(m_position) };
     m_sampling_data_list.clear();
     m_sampling_data_list.reserve(sampling_position_list.size());
