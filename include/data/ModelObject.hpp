@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include "DataObjectBase.hpp"
 #include "GroupPotentialEntryBase.hpp"
+#include "KDTreeAlgorithm.hpp"
 
 class AtomObject;
 class ModelObject : public DataObjectBase
@@ -14,6 +15,7 @@ class ModelObject : public DataObjectBase
     std::vector<std::unique_ptr<AtomObject>> m_atom_list;
     std::string m_key_tag, m_pdb_id, m_emd_id;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntryBase>> m_group_potential_entry_map;
+    std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
 
 public:
     ModelObject(void);
@@ -30,6 +32,7 @@ public:
     void SetPdbID(const std::string & label) { m_pdb_id = label; }
     void SetEmdID(const std::string & label) { m_emd_id = label; }
     void AddGroupPotentialEntry(const std::string & class_key, std::unique_ptr<GroupPotentialEntryBase> & entry) { m_group_potential_entry_map[class_key] = std::move(entry); }
+    void BuildKDTreeRoot(void);
 
     int GetNumberOfAtom(void) const { return m_atom_list.size(); }
     int GetNumberOfSelectedAtom(void) const;

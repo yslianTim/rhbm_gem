@@ -4,13 +4,13 @@
 #include "GroupPotentialEntry.hpp"
 
 ModelObject::ModelObject(void) :
-    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }
+    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr }
 {
 }
 
 ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_list) :
     m_atom_list{ std::move(atom_object_list) },
-    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }
+    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr }
 {
 }
 
@@ -20,7 +20,8 @@ ModelObject::~ModelObject()
 }
 
 ModelObject::ModelObject(const ModelObject & other) :
-    m_key_tag{ other.m_key_tag }, m_pdb_id{ other.m_pdb_id }, m_emd_id{ other.m_emd_id }
+    m_key_tag{ other.m_key_tag }, m_pdb_id{ other.m_pdb_id }, m_emd_id{ other.m_emd_id },
+    m_kd_tree_root{ nullptr }
 {
     m_atom_list.clear();
     m_atom_list.reserve(other.m_atom_list.size());
@@ -64,4 +65,17 @@ int ModelObject::GetNumberOfSelectedAtom(void) const
         if (atom->GetSelectedFlag() == true) count++;
     }
     return count;
+}
+
+void ModelObject::BuildKDTreeRoot(void)
+{
+    if (m_kd_tree_root != nullptr) return;
+    std::cout <<" ModelObject::BuildKDTreeRoot , #atom = "<< m_atom_list.size()<< std::endl;
+    std::vector<AtomObject *> atom_ptr_list;
+    atom_ptr_list.reserve(m_atom_list.size());
+    for (auto & atom : m_atom_list)
+    {
+        atom_ptr_list.emplace_back(atom.get());
+    }
+    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list);
 }

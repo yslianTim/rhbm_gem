@@ -65,6 +65,7 @@ void ModelPainter::Painting(void)
         PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name);
         auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetPdbID() +".pdf" };
         PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
+        model_object->BuildKDTreeRoot();
     }
     if (m_model_object_list.size() == 4)
     {
@@ -672,25 +673,25 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
                     gaus_function->Draw("SAME");
 
                     auto legend{ ROOTHelper::CreateLegend(0.0, 0.0, 1.0, 1.0, false) };
-                    ROOTHelper::SetLegendMarginInCanvas(gPad, legend.get(), 0.35, 0.02, 0.80, 0.02);
+                    ROOTHelper::SetLegendMarginInCanvas(gPad, legend.get(), 0.20, 0.02, 0.85, 0.02);
                     ROOTHelper::SetLegendDefaultStyle(legend.get());
                     ROOTHelper::SetFillAttribute(legend.get(), 4000);
-                    ROOTHelper::SetTextAttribute(legend.get(), 40, 133, 12, 0.0, kAzure-7);
-                    legend->SetMargin(0.2);
-                    legend->AddEntry(gaus_function.get(), "Single Gaus Model", "l");
+                    ROOTHelper::SetTextAttribute(legend.get(), 55, 133, 12, 0.0, kAzure-7);
+                    legend->SetMargin(0.15);
+                    legend->AddEntry(gaus_function.get(), "Single Gaus Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
                     legend->AddEntry(map_value_graph_list.at(0).get(), "Atomic Map Value Distribution", "l");
                     legend->Draw();
 
                     auto result_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC", false) };
-                    ROOTHelper::SetPaveTextMarginInCanvas(gPad, result_text.get(), 0.16, 0.02, 0.20, 0.70);
+                    ROOTHelper::SetPaveTextMarginInCanvas(gPad, result_text.get(), 0.20, 0.02, 0.20, 0.70);
                     ROOTHelper::SetPaveTextDefaultStyle(result_text.get());
                     ROOTHelper::SetPaveAttribute(result_text.get(), 0);
                     ROOTHelper::SetFillAttribute(result_text.get(), 4000);
-                    ROOTHelper::SetTextAttribute(result_text.get(), 45, 133, 22, 0.0, kAzure-7);
+                    ROOTHelper::SetTextAttribute(result_text.get(), 85, 133, 22, 0.0, kAzure-7);
                     auto gaus_prior{ entry_iter->GetGausEstimatePrior(group_key) };
                     auto amplitude{ std::get<0>(gaus_prior) };
                     auto width{ std::get<1>(gaus_prior) };
-                    result_text->AddText(Form("Amplitude #font[1]{A} = %.2f  ;  Width #font[1]{#tau} = %.2f", amplitude, width));
+                    result_text->AddText(Form("#color[633]{#font[1]{A} = %.2f  ;  #font[1]{#tau} = %.2f}", amplitude, width));
 /*
                     auto residue_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(residue) };
                     auto element_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ElementTag>(element) };
