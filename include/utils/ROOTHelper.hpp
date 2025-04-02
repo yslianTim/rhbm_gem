@@ -8,6 +8,8 @@
 class TCanvas;
 class TPad;
 class TH2D;
+class TF1;
+class TLine;
 class TAttPad;
 class TAttAxis;
 class TAttText;
@@ -35,6 +37,10 @@ public:
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(void);
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size);
     static std::unique_ptr<TPaveText> CreatePaveText(double x1, double y1, double x2, double y2, std::string option="nbNDC", bool in_partition=false);
+    static std::unique_ptr<TLegend> CreateLegend(double x1, double y1, double x2, double y2, bool in_partition=false);
+    static std::unique_ptr<TF1> CreateFunction1D(const std::string & name, const std::string & form);
+    static std::unique_ptr<TF1> CreateGausFunction1D(const std::string & name, double amplitude, double width, double x_min=0.0, double x_max=1.5);
+    static std::unique_ptr<TLine> CreateLine(double x1, double y1, double x2, double y2);
     static void PrintCanvasOpen(TCanvas * canvas, const std::string & name);
     static void PrintCanvasPad(TCanvas * canvas, const std::string & name);
     static void PrintCanvasClose(TCanvas * canvas, const std::string & name);
@@ -43,8 +49,9 @@ public:
         short line_style=0, short line_width=1, short line_color=1);
     static void SetPadMarginAttribute(
         TAttPad * pad, float left, float right, float bottom, float top);
-    static void SetPadMarginInCanvas(TPad * pad, double left, double right, double bottom, double top);
-    static void SetPaveTextMarginInCanvas(TPad * pad, TPaveText * pave, double left, double right, double bottom, double top);
+    static void SetPadMarginInCanvas(TVirtualPad * pad, double left, double right, double bottom, double top);
+    static void SetPaveTextMarginInCanvas(TVirtualPad * pad, TPaveText * pave, double left, double right, double bottom, double top);
+    static void SetLegendMarginInCanvas(TVirtualPad * pad, TLegend * legend, double left, double right, double bottom, double top);
     static void SetAxisTitleAttribute(
         TAttAxis * axis, float size, float offset=1.0f, short font=133, short color=1);
     static void SetAxisLabelAttribute(
@@ -64,7 +71,7 @@ public:
         TPave * pave, int border_size=0, double radius=0.2);
     static void SetBoxAttribute(
         TBox * box, double left, double right, double bottom, double top);
-    static void SetPadInCanvas(TPad * pad, int width, int height, int division_x=1, int divition_y=1, float margin_x=0.0f, float margin_y=0.0f);
+    static void SetPadInCanvas(TVirtualPad * pad, int width, int height, int division_x=1, int divition_y=1, float margin_x=0.0f, float margin_y=0.0f);
     static void SetPadDefaultStyle(TVirtualPad * pad);
     static void SetPadRangeInCanvas(TVirtualPad * pad, double x1, double y1, double x2, double y2);
     static void SetPadLayout(
@@ -81,7 +88,7 @@ public:
     static float GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad);
     static double GetXtoPadInCanvasPartition(double x);
     static double GetYtoPadInCanvasPartition(double y);
-    static double ConvertGlobalTickLengthToPadTickLength(TPad * pad, double global_tick_length, bool use_width=true);
+    static double ConvertGlobalTickLengthToPadTickLength(TVirtualPad * pad, double global_tick_length, bool use_width=true);
     #endif
 
 };

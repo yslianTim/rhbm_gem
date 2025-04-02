@@ -1,4 +1,5 @@
 #include "ROOTHelper.hpp"
+#include "AtomicInfoHelper.hpp"
 
 #ifdef HAVE_ROOT
 
@@ -78,6 +79,38 @@ std::unique_ptr<TPaveText> ROOTHelper::CreatePaveText(
     return std::make_unique<TPaveText>(x1, y1, x2, y2, option.data());
 }
 
+std::unique_ptr<TLegend> ROOTHelper::CreateLegend(
+    double x1, double y1, double x2, double y2, bool in_partition)
+{
+    if (in_partition == true)
+    {
+        x1 = GetXtoPadInCanvasPartition(x1);
+        x2 = GetXtoPadInCanvasPartition(x2);
+        y1 = GetYtoPadInCanvasPartition(y1);
+        y2 = GetYtoPadInCanvasPartition(y2);
+    }
+    return std::make_unique<TLegend>(x1, y1, x2, y2);
+}
+
+std::unique_ptr<TF1> ROOTHelper::CreateFunction1D(const std::string & name, const std::string & form)
+{
+    return std::make_unique<TF1>(name.data(), form.data());
+}
+
+std::unique_ptr<TF1> ROOTHelper::CreateGausFunction1D(
+    const std::string & name, double amplitude, double width, double x_min, double x_max)
+{
+    auto function{ std::make_unique<TF1>(name.data(), AtomicInfoHelper::GausModelFunction, x_min, x_max, 2) };
+    function->SetParameter(0, amplitude);
+    function->SetParameter(1, width);
+    return function;
+}
+
+std::unique_ptr<TLine> ROOTHelper::CreateLine(double x1, double y1, double x2, double y2)
+{
+    return std::make_unique<TLine>(x1, y1, x2, y2);
+}
+
 void ROOTHelper::PrintCanvasOpen(TCanvas * canvas, const std::string & name)
 {
     gErrorIgnoreLevel = kWarning;
@@ -119,7 +152,7 @@ void ROOTHelper::SetPadMarginAttribute(
 }
 
 void ROOTHelper::SetPadMarginInCanvas(
-    TPad * pad, double left, double right, double bottom, double top)
+    TVirtualPad * pad, double left, double right, double bottom, double top)
 {
     if (pad->GetCanvas() == nullptr)
     {
@@ -148,7 +181,7 @@ void ROOTHelper::SetPadMarginInCanvas(
 }
 
 void ROOTHelper::SetPaveTextMarginInCanvas(
-    TPad * pad, TPaveText * pave, double left, double right, double bottom, double top)
+    TVirtualPad * pad, TPaveText * pave, double left, double right, double bottom, double top)
 {
     if (!pave)
     {
@@ -159,7 +192,7 @@ void ROOTHelper::SetPaveTextMarginInCanvas(
 
     if (!pad)
     {
-        std::cerr << "Error: TPad pointer is null." << std::endl;
+        std::cerr << "Error: TVirtualPad pointer is null." << std::endl;
         return;
     }
     if (pad->GetCanvas()) pad->GetCanvas()->Update();
@@ -173,6 +206,34 @@ void ROOTHelper::SetPaveTextMarginInCanvas(
     pave->SetX2NDC((x2_canvas - pad->GetXlowNDC()) / pad->GetAbsWNDC());
     pave->SetY1NDC((y1_canvas - pad->GetYlowNDC()) / pad->GetAbsHNDC());
     pave->SetY2NDC((y2_canvas - pad->GetYlowNDC()) / pad->GetAbsHNDC());
+}
+
+void ROOTHelper::SetLegendMarginInCanvas(
+    TVirtualPad * pad, TLegend * legend, double left, double right, double bottom, double top)
+{
+    if (!legend)
+    {
+        std::cerr << "Error: TLegend pointer is null." << std::endl;
+        return;
+    }
+    legend->Draw();
+
+    if (!pad)
+    {
+        std::cerr << "Error: TVirtualPad pointer is null." << std::endl;
+        return;
+    }
+    if (pad->GetCanvas()) pad->GetCanvas()->Update();
+
+    double x1_canvas{ pad->GetXlowNDC() + left };          
+    double x2_canvas{ pad->GetXlowNDC() + pad->GetAbsWNDC() - right };
+    double y1_canvas{ pad->GetYlowNDC() + bottom };          
+    double y2_canvas{ pad->GetYlowNDC() + pad->GetAbsHNDC() - top };
+
+    legend->SetX1NDC((x1_canvas - pad->GetXlowNDC()) / pad->GetAbsWNDC());
+    legend->SetX2NDC((x2_canvas - pad->GetXlowNDC()) / pad->GetAbsWNDC());
+    legend->SetY1NDC((y1_canvas - pad->GetYlowNDC()) / pad->GetAbsHNDC());
+    legend->SetY2NDC((y2_canvas - pad->GetYlowNDC()) / pad->GetAbsHNDC());
 }
 
 void ROOTHelper::SetAxisTitleAttribute(TAttAxis * axis, float size, float offset, short font, short color)
@@ -246,7 +307,7 @@ void ROOTHelper::SetBoxAttribute(
 }
 
 void ROOTHelper::SetPadInCanvas(
-    TPad * pad, int width, int height,
+    TVirtualPad * pad, int width, int height,
     int division_x, int division_y, float margin_x, float margin_y)
 {
     pad->SetCanvasSize(width, height);
@@ -418,7 +479,7 @@ double ROOTHelper::GetYtoPadInCanvasPartition(double y)
 }
 
 double ROOTHelper::ConvertGlobalTickLengthToPadTickLength(
-    TPad * pad, double global_tick_length, bool use_width)
+    TVirtualPad * pad, double global_tick_length, bool use_width)
 {
     auto fraction_pad_w{ 1.0 - pad->GetLeftMargin() - pad->GetRightMargin() };
     auto fraction_pad_h{ 1.0 - pad->GetBottomMargin() - pad->GetTopMargin() };

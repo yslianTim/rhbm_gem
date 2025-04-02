@@ -32,6 +32,7 @@ private:
     void PaintResidueClassGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausMainChain(const std::string & name);
+    //void PaintResidueClassGroupGausSideChain(const std::string & name);
     void PaintResidueClassMapValue(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT

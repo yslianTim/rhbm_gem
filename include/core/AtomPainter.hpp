@@ -29,9 +29,10 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintSamplingMapValue(const std::string & name);
+    void PaintDemoPlot(const std::string & name);
 
     #ifdef HAVE_ROOT
+    void PrintDemoMainPad(TPad * pad, TH2 * frame);
     #endif
 
 };

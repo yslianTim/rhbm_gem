@@ -71,6 +71,27 @@ public:
         return static_cast<Type>(std::sqrt(sum_sq_diff / (size - 1)));
     }
 
+    static Type ComputeMedian(const std::vector<Type>& data)
+    {
+        if (data.empty())
+        {
+            return Type(0);
+        }
+        
+        std::vector<Type> sorted_data(data);
+        std::sort(sorted_data.begin(), sorted_data.end());
+        
+        size_t n{ sorted_data.size() };
+        if (n % 2 == 1)
+        {
+            return sorted_data[n / 2];
+        }
+        else
+        {
+            return static_cast<Type>((sorted_data[n / 2 - 1] + sorted_data[n / 2]) / 2.0);
+        }
+    }
+
     static std::tuple<Type, Type> ComputeRangeTuple(const std::vector<Type> & data, int thread_size = 1)
     {
         if (data.empty()) return std::make_tuple(0.0, 0.0);

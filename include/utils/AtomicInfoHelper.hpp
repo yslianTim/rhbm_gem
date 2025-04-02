@@ -193,6 +193,7 @@ public:
     static const std::vector<int> & GetStandardElementList(void) { return m_standard_element_list; }
     static const std::vector<int> & GetStandardRemotenessList(void) { return m_standard_remoteness_list; }
     static const std::vector<int> & GetStandardBranchList(void) { return m_standard_branch_list; }
+    static double GausModelFunction(double * x, double * par);
 
     struct ResidueTag {};
     struct ElementTag {};

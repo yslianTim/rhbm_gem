@@ -18,6 +18,8 @@
 #include <TMarker.h>
 #include <TAxis.h>
 #include <TH2.h>
+#include <TF1.h>
+#include <TLine.h>
 #endif
 
 #include <vector>
@@ -67,6 +69,7 @@ void ModelPainter::Painting(void)
     if (m_model_object_list.size() == 4)
     {
         PaintResidueClassGroupGausMainChain("figure_1_part2.pdf");
+        PaintResidueClassMapValue(m_model_object_list.at(3), "figure_1_part3.pdf");
     }
 }
 
@@ -105,7 +108,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     std::unique_ptr<TH2> frame[pad_size_x][pad_size_y];
     std::unique_ptr<TH2> frame_extra[pad_extra_size];
     
-    const std::string fsc_list[pad_size_y]{ "1.25", "1.52", "1.71", "1.90" };
+    const std::string fsc_list[pad_size_y]{ "1.90", "1.71", "1.52", "1.25" };
     const double x_pos[pad_size_x + 1]{ 0.00, 0.10, 0.40, 0.47, 0.77, 0.84, 1.00 };
     const double y_pos[pad_size_y + 1]{ 0.20, 0.43, 0.62, 0.81, 1.00 };
     for (int i = 0; i < pad_size_x; i++)
@@ -208,7 +211,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     std::vector<std::unique_ptr<TGraphErrors>> width_graph_list[2];
     std::vector<std::string> label_list[2];
     std::vector<double> amplitude_array, width_array;
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(0)) };
+    auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(3)) };
     int residue_list[2]{ 3, 6 };
     for (int i = 0; i < 2; i++)
     {
@@ -595,7 +598,122 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
 
 void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const std::string & name)
 {
+    auto file_path{ m_folder_path + name };
+    std::cout <<"- ModelPainter::PaintResidueClassMapValue"<<std::endl;
+    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    
+    #ifdef HAVE_ROOT
 
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 1000) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    auto frame{ ROOTHelper::CreateHist2D("hist","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
+    for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+    {
+        for (auto element : AtomicInfoHelper::GetStandardElementList())
+        {
+            for (auto remoteness : AtomicInfoHelper::GetStandardRemotenessList())
+            {
+                for (auto branch : AtomicInfoHelper::GetStandardBranchList())
+                {
+                    auto group_key{ std::make_tuple(residue, element, remoteness, branch, false) };
+                    if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
+                    std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
+                    double y_min{ 0.0 };
+                    double y_max{ 1.0 };
+                    for (auto atom : entry_iter->GetAtomObjectList(group_key))
+                    {
+                        auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
+                        auto map_value_graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
+                        map_value_graph_list.emplace_back(std::move(map_value_graph));
+
+                        auto map_value_range{ atom_iter->GetMapValueRange(0.2) };
+                        if (std::get<0>(map_value_range) < y_min) y_min = std::get<0>(map_value_range);
+                        if (std::get<1>(map_value_range) > y_max) y_max = std::get<1>(map_value_range);
+                    }
+
+                    ROOTHelper::SetPadDefaultStyle(gPad);
+                    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+                    ROOTHelper::SetPadMarginInCanvas(gPad, 0.16, 0.02, 0.14, 0.02);
+                    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 60.0, 1.1);
+                    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0, 1.3);
+                    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0, 0.01);
+                    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 60.0, 0.02);
+
+                    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, kWhite, 1, 0);
+
+                    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.04, 0) };
+                    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.05, 1) };
+                    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), x_tick_length);
+                    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), y_tick_length);
+                    frame->GetXaxis()->SetLimits(0.0, 1.5);
+                    frame->GetYaxis()->SetLimits(y_min, y_max);
+                    frame->SetStats(0);
+                    frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
+                    frame->GetYaxis()->SetTitle("Normalized Map Value");
+                    frame->Draw();
+
+                    auto ref_line{ ROOTHelper::CreateLine(0.0, 0.0, 1.5, 0.0) };
+                    ROOTHelper::SetLineAttribute(ref_line.get(), 2, 1);
+                    ref_line->Draw();
+
+                    for (auto & graph : map_value_graph_list)
+                    {
+                        ROOTHelper::SetLineAttribute(graph.get(), 1, 5, kAzure-7, 0.3);
+                        graph->Draw("LX");
+                    }
+
+                    auto gaus_function{ entry_iter->CreateGroupGausFunctionPrior(group_key) };
+                    ROOTHelper::SetLineAttribute(gaus_function.get(), 9, 5, kRed+1);
+                    gaus_function->Draw("SAME");
+
+                    auto legend{ ROOTHelper::CreateLegend(0.0, 0.0, 1.0, 1.0, false) };
+                    ROOTHelper::SetLegendMarginInCanvas(gPad, legend.get(), 0.35, 0.02, 0.80, 0.02);
+                    ROOTHelper::SetLegendDefaultStyle(legend.get());
+                    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+                    ROOTHelper::SetTextAttribute(legend.get(), 40, 133, 12, 0.0, kAzure-7);
+                    legend->SetMargin(0.2);
+                    legend->AddEntry(gaus_function.get(), "Single Gaus Model", "l");
+                    legend->AddEntry(map_value_graph_list.at(0).get(), "Atomic Map Value Distribution", "l");
+                    legend->Draw();
+
+                    auto result_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC", false) };
+                    ROOTHelper::SetPaveTextMarginInCanvas(gPad, result_text.get(), 0.16, 0.02, 0.20, 0.70);
+                    ROOTHelper::SetPaveTextDefaultStyle(result_text.get());
+                    ROOTHelper::SetPaveAttribute(result_text.get(), 0);
+                    ROOTHelper::SetFillAttribute(result_text.get(), 4000);
+                    ROOTHelper::SetTextAttribute(result_text.get(), 45, 133, 22, 0.0, kAzure-7);
+                    auto gaus_prior{ entry_iter->GetGausEstimatePrior(group_key) };
+                    auto amplitude{ std::get<0>(gaus_prior) };
+                    auto width{ std::get<1>(gaus_prior) };
+                    result_text->AddText(Form("Amplitude #font[1]{A} = %.2f  ;  Width #font[1]{#tau} = %.2f", amplitude, width));
+/*
+                    auto residue_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(residue) };
+                    auto element_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ElementTag>(element) };
+                    auto remoteness_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::RemotenessTag>(remoteness) };
+                    auto branch_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::BranchTag>(branch) };
+                    auto info_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+                    ROOTHelper::SetPaveTextMarginInCanvas(gPad, info_text.get(), 0.5, 0.01, 0.85, 0.01);
+                    ROOTHelper::SetPaveTextDefaultStyle(info_text.get());
+                    ROOTHelper::SetPaveAttribute(info_text.get(), 0, 0.2);
+                    ROOTHelper::SetFillAttribute(info_text.get(), 1001, kAzure-7);
+                    ROOTHelper::SetTextAttribute(info_text.get(), 50, 103, 22, 0.0, kYellow-10);
+                    info_text->AddText(("#font[102]{"+ residue_label + " " + element_label + " " + remoteness_label + branch_label + "}").data());
+                    //info_text->Draw();
+*/
+
+                    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+                }
+            }
+        }
+    }
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    std::cout <<"  Output file: "<< file_path << std::endl;
+    #endif
 }
 
 #ifdef HAVE_ROOT
