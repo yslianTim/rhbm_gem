@@ -41,7 +41,7 @@ public:
     KDTreeAlgorithm(void) = default;
     ~KDTreeAlgorithm() {}
     static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
-        const std::vector<NodeType *> & node_list, int depth = 0)
+        std::vector<NodeType *> & node_list, int depth = 0)
     {
         return BuildKDTree(node_list.begin(), node_list.end(), depth);
     }
