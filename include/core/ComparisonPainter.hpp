@@ -38,6 +38,7 @@ public:
 
 private:
     void PaintSimulationGaus(const std::string & name);
+    void PaintSimulationGausRatio(const std::string & name, const std::vector<ModelObject *> & model_list);
     void PaintDataSimulationComparison(const std::string & name);
     double CalculateErrorPropagation(double target_value, double reference_value, double target_error, double reference_error);
 

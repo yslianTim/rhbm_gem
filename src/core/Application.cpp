@@ -203,10 +203,10 @@ void Application::RegisterPotentialAnalysisCommand(void)
 void Application::RegisterPotentialDisplayCommand(void)
 {
     std::string default_sim_buried_charge_keylist{
-        "sim_6z6u_bw005_buried_charge,sim_6z6u_bw015_buried_charge,sim_6z6u_bw025_buried_charge,sim_6z6u_bw035_buried_charge,sim_6z6u_bw045_buried_charge,sim_6z6u_bw055_buried_charge,sim_6z6u_bw065_buried_charge,sim_6z6u_bw075_buried_charge,sim_6z6u_bw085_buried_charge,sim_6z6u_bw095_buried_charge"
+        "sim_6z6u_bw005_no_H_buried_charge,sim_6z6u_bw015_no_H_buried_charge,sim_6z6u_bw025_no_H_buried_charge,sim_6z6u_bw035_no_H_buried_charge,sim_6z6u_bw045_no_H_buried_charge,sim_6z6u_bw055_no_H_buried_charge,sim_6z6u_bw065_no_H_buried_charge,sim_6z6u_bw075_no_H_buried_charge,sim_6z6u_bw085_no_H_buried_charge,sim_6z6u_bw095_no_H_buried_charge"
     };
     std::string default_sim_no_charge_keylist{
-        "sim_6z6u_bw005_no_charge,sim_6z6u_bw015_no_charge,sim_6z6u_bw025_no_charge,sim_6z6u_bw035_no_charge,sim_6z6u_bw045_no_charge,sim_6z6u_bw055_no_charge,sim_6z6u_bw065_no_charge,sim_6z6u_bw075_no_charge,sim_6z6u_bw085_no_charge,sim_6z6u_bw095_no_charge"
+        "sim_6z6u_bw005_no_H_no_charge,sim_6z6u_bw015_no_H_no_charge,sim_6z6u_bw025_no_H_no_charge,sim_6z6u_bw035_no_H_no_charge,sim_6z6u_bw045_no_H_no_charge,sim_6z6u_bw055_no_H_no_charge,sim_6z6u_bw065_no_H_no_charge,sim_6z6u_bw075_no_H_no_charge,sim_6z6u_bw085_no_H_no_charge,sim_6z6u_bw095_no_H_no_charge"
     };
     m_potential_display_cmd = m_cli_app->add_subcommand("potential_display", "Run potential display");
     m_potential_display_cmd->add_option(

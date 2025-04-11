@@ -37,6 +37,8 @@ void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
 {
     std::cout <<"- PotentialDisplayVisitor::Analysis" << std::endl;
     BuildModelObjectList(data_manager, m_model_object_list);
+    BuildReferenceModelObjectList(data_manager, "no_charge", m_sim_no_charge_model_object_list);
+    BuildReferenceModelObjectList(data_manager, "buried_charge", m_sim_buried_charge_model_object_list);
     RunAtomPainter(dynamic_cast<ModelObject *>(m_model_object_list.at(0)));
     RunModelPainter(data_manager);
     RunComparisonPainter(data_manager);
@@ -67,6 +69,16 @@ void PotentialDisplayVisitor::RunModelPainter(DataObjectManager * data_manager)
     {
         painter->AddDataObject(model_object);
     }
+    
+    for (auto model_object : m_sim_no_charge_model_object_list)
+    {
+        painter->AddReferenceDataObject(model_object, "no_charge");
+    }
+
+    for (auto model_object : m_sim_buried_charge_model_object_list)
+    {
+        painter->AddReferenceDataObject(model_object, "buried_charge");
+    }
     painter->Painting();
 }
 
@@ -75,19 +87,17 @@ void PotentialDisplayVisitor::RunComparisonPainter(DataObjectManager * data_mana
     std::cout <<"- PotentialDisplayVisitor::RunComparisonPainter" << std::endl;
     std::unique_ptr<PainterBase> painter{ std::make_unique<ComparisonPainter>() };
     painter->SetFolder(m_folder_path);
-    BuildModelObjectList(data_manager, m_model_object_list);
+
     for (auto model_object : m_model_object_list)
     {
         painter->AddDataObject(model_object);
     }
 
-    BuildReferenceModelObjectList(data_manager, "no_charge", m_sim_no_charge_model_object_list);
     for (auto model_object : m_sim_no_charge_model_object_list)
     {
         painter->AddReferenceDataObject(model_object, "no_charge");
     }
 
-    BuildReferenceModelObjectList(data_manager, "buried_charge", m_sim_buried_charge_model_object_list);
     for (auto model_object : m_sim_buried_charge_model_object_list)
     {
         painter->AddReferenceDataObject(model_object, "buried_charge");

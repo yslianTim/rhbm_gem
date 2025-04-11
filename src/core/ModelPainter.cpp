@@ -54,7 +54,7 @@ void ModelPainter::AddDataObject(DataObjectBase * data_object)
 
 void ModelPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    m_ref_model_object_map[label] = dynamic_cast<ModelObject *>(data_object);
+    m_ref_model_object_map[label].push_back(dynamic_cast<ModelObject *>(data_object));
 }
 
 void ModelPainter::Painting(void)
@@ -62,6 +62,8 @@ void ModelPainter::Painting(void)
     std::cout <<"- ModelPainter::Painting"<<std::endl;
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
+    auto sim_buried_charge_model_object{ m_ref_model_object_map.at("buried_charge") };
+    auto sim_no_charge_model_object{ m_ref_model_object_map.at("no_charge") };
     for (auto model_object : m_model_object_list)
     {
         auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetPdbID() +".pdf" };
@@ -71,6 +73,18 @@ void ModelPainter::Painting(void)
         model_object->BuildKDTreeRoot();
         PaintResidueClassKNN(model_object, "residue_class_knn_"+ model_object->GetPdbID() +".pdf");
         PaintResidueClassXYPosition(model_object, "residue_class_xy_position_"+ model_object->GetPdbID() +".pdf");
+    }
+    for (auto model_object : sim_buried_charge_model_object)
+    {
+        auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
+        PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
+        //auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetKeyTag() +".pdf" };
+        //PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
+    }
+    for (auto model_object : sim_no_charge_model_object)
+    {
+        auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
+        PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
     }
     if (m_model_object_list.size() == 4)
     {
@@ -338,7 +352,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
 }
 
 void ModelPainter::PaintResidueClassGroupGausMainChain(
-    ModelObject * model_object, const std::string & name)
+    ModelObject * model_object, const std::string & name, bool is_simulation)
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausMainChain"<< std::endl;
@@ -447,8 +461,15 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
     PrintAmplitudeSummaryPad(pad[3].get(), frame[3].get());
     PrintWidthSummaryPad(pad[2].get(), frame[2].get());
     PrintGausSummaryPad(pad[4].get(), frame[4].get());
-    PrintInfoPad(pad[5].get(), info_text.get(), model_object->GetPdbID() , model_object->GetEmdID());
-    PrintIconPad(pad[5].get(), icon_text.get());
+    if (is_simulation == true)
+    {
+        PrintInfoPad(pad[5].get(), info_text.get(), model_object->GetPdbID(), "Simulation");
+    }
+    else
+    {
+        PrintInfoPad(pad[5].get(), info_text.get(), model_object->GetPdbID(), model_object->GetEmdID());
+    }
+    //PrintIconPad(pad[5].get(), icon_text.get());
 
     pad[1]->cd();
     for (int i = 0; i < primary_element_size; i++) amplitude_graph[i]->Draw("PL X0");
@@ -936,7 +957,7 @@ void ModelPainter::PrintInfoPad(
     TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id)
 {
     pad->cd();
-    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.005, 0.1, 0.01, 0.02);
+    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.005, 0.07, 0.01, 0.02);
     ROOTHelper::SetPaveTextDefaultStyle(text);
     ROOTHelper::SetPaveAttribute(text, 0, 0.1);
     ROOTHelper::SetFillAttribute(text, 1001, kAzure-7, 0.5);
