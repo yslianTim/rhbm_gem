@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <memory>
 #include <queue>
+#include <cmath>
 
 template <typename NodeType>
 struct KDNode
@@ -113,7 +114,12 @@ private:
     {
         auto position_a{ node_a->GetPosition() };
         auto position_b{ node_b->GetPosition() };
-        return (position_a - position_b).squaredNorm();
+        auto squared_norm{ 0.0 };
+        for (int i = 0; i < position_a.size(); i++)
+        {
+            squared_norm += std::pow(position_a.at(i) - position_b.at(i), 2.0);
+        }
+        return squared_norm;
     }
 
     static double ComputeNodeDifference(

@@ -2,6 +2,7 @@
 #include "AtomObject.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "ArrayStats.hpp"
 
 ModelObject::ModelObject(void) :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr }
@@ -78,4 +79,16 @@ void ModelObject::BuildKDTreeRoot(void)
         atom_ptr_list.emplace_back(atom.get());
     }
     m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list);
+}
+
+std::tuple<double, double> ModelObject::GetModelPositionRange(
+    int axis, double margin) const
+{
+    std::vector<double> position_list;
+    position_list.reserve(m_atom_list.size());
+    for (auto & atom : m_atom_list)
+    {
+        position_list.emplace_back(atom->GetPosition().at(axis));
+    }
+    return ArrayStats<double>::ComputeScalingRangeTuple(position_list, margin);
 }

@@ -15,7 +15,6 @@
 #include <TGraph2D.h>
 #include <TGraphErrors.h>
 #include <TGraph2DErrors.h>
-#include <TGraphMultiErrors.h>
 #include <TH1.h>
 #include <TH2.h>
 #include <TLatex.h>
@@ -64,6 +63,23 @@ std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(void)
 std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(const int & point_size)
 {
     return std::make_unique<TGraphErrors>(point_size);
+}
+
+std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors(void)
+{
+    return std::make_unique<TGraph2DErrors>();
+}
+
+std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors(const int & point_size)
+{
+    return std::make_unique<TGraph2DErrors>(point_size);
+}
+
+std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors(
+    const int & point_size,
+    std::vector<double> & x, std::vector<double> & y, std::vector<double> & z)
+{
+    return std::make_unique<TGraph2DErrors>(point_size, &x[0], &y[0], &z[0]);
 }
 
 std::unique_ptr<TPaveText> ROOTHelper::CreatePaveText(

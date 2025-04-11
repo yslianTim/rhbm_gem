@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <tuple>
 #include <unordered_map>
 #include "DataObjectBase.hpp"
 #include "GroupPotentialEntryBase.hpp"
@@ -39,9 +40,10 @@ public:
     const std::vector<std::unique_ptr<AtomObject>> & GetComponentsList(void) const { return m_atom_list; }
     std::string GetPdbID(void) const { return m_pdb_id; }
     std::string GetEmdID(void) const { return m_emd_id; }
+    std::tuple<double, double> GetModelPositionRange(int axis, double margin=0.0) const;
     GroupPotentialEntryBase * GetGroupPotentialEntry(const std::string & class_key) { return m_group_potential_entry_map.at(class_key).get(); }
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntryBase>> & GetGroupPotentialEntryMap(void) const { return m_group_potential_entry_map; }
-
+    KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
 
 private:
     

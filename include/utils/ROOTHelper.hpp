@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 #ifdef HAVE_ROOT
 class TCanvas;
@@ -22,6 +23,7 @@ class TPaveText;
 class TLegend;
 class TVirtualPad;
 class TGraphErrors;
+class TGraph2DErrors;
 #endif
 
 class ROOTHelper
@@ -36,6 +38,9 @@ public:
     static std::unique_ptr<TH2D> CreateHist2D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max, int y_bin, double y_min, double y_max);
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(void);
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size);
+    static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(void);
+    static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size);
+    static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size, std::vector<double> & x, std::vector<double> & y, std::vector<double> & z);
     static std::unique_ptr<TPaveText> CreatePaveText(double x1, double y1, double x2, double y2, std::string option="nbNDC", bool in_partition=false);
     static std::unique_ptr<TLegend> CreateLegend(double x1, double y1, double x2, double y2, bool in_partition=false);
     static std::unique_ptr<TF1> CreateFunction1D(const std::string & name, const std::string & form);

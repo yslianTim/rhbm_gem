@@ -3,10 +3,12 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <memory>
 #include <unordered_map>
 #include "PainterBase.hpp"
 
 class ModelObject;
+class AtomClassifier;
 
 #ifdef HAVE_ROOT
 class TPad;
@@ -19,6 +21,7 @@ class ModelPainter : public PainterBase
     std::vector<ModelObject *> m_model_object_list;
     std::unordered_map<std::string, ModelObject *> m_ref_model_object_map;
     std::string m_folder_path;
+    std::unique_ptr<AtomClassifier> m_atom_classifier;
 
 public:
     ModelPainter(void);
@@ -34,6 +37,8 @@ private:
     void PaintResidueClassGroupGausMainChain(const std::string & name);
     //void PaintResidueClassGroupGausSideChain(const std::string & name);
     void PaintResidueClassMapValue(ModelObject * model_object, const std::string & name);
+    void PaintResidueClassKNN(ModelObject * model_object, const std::string & name);
+    void PaintResidueClassXYPosition(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
     void PrintIconPad(TPad * pad, TPaveText * text);
