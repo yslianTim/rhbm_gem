@@ -181,18 +181,18 @@ void ROOTHelper::SetPadMarginInCanvas(
     auto canvas_width_pixel { pad->GetCanvas()->GetWw() };
     auto canvas_height_pixel{ pad->GetCanvas()->GetWh() };
 
-    double pad_width_pixel { pad->GetAbsWNDC() * canvas_width_pixel };
-    double pad_height_pixel{ pad->GetAbsHNDC() * canvas_height_pixel };
+    auto pad_width_pixel { static_cast<float>(pad->GetAbsWNDC() * canvas_width_pixel) };
+    auto pad_height_pixel{ static_cast<float>(pad->GetAbsHNDC() * canvas_height_pixel) };
 
-    double desired_left_margin_pixel  { left   * canvas_width_pixel };
-    double desired_right_margin_pixel { right  * canvas_width_pixel };
-    double desired_top_margin_pixel   { top    * canvas_height_pixel };
-    double desired_bottom_margin_pixel{ bottom * canvas_height_pixel };
+    auto desired_left_margin_pixel  { static_cast<float>(left   * canvas_width_pixel) };
+    auto desired_right_margin_pixel { static_cast<float>(right  * canvas_width_pixel) };
+    auto desired_top_margin_pixel   { static_cast<float>(top    * canvas_height_pixel) };
+    auto desired_bottom_margin_pixel{ static_cast<float>(bottom * canvas_height_pixel) };
 
-    double pad_left_margin  { desired_left_margin_pixel   / pad_width_pixel  };
-    double pad_right_margin { desired_right_margin_pixel  / pad_width_pixel  };
-    double pad_top_margin   { desired_top_margin_pixel    / pad_height_pixel };
-    double pad_bottom_margin{ desired_bottom_margin_pixel / pad_height_pixel };
+    auto pad_left_margin  { desired_left_margin_pixel   / pad_width_pixel  };
+    auto pad_right_margin { desired_right_margin_pixel  / pad_width_pixel  };
+    auto pad_top_margin   { desired_top_margin_pixel    / pad_height_pixel };
+    auto pad_bottom_margin{ desired_bottom_margin_pixel / pad_height_pixel };
     SetPadMarginAttribute(pad, pad_left_margin, pad_right_margin, pad_bottom_margin, pad_top_margin);
 }
 
@@ -387,8 +387,8 @@ void ROOTHelper::SetCanvasPartition(
 {
     if (canvas == nullptr) return;
 
-    auto vStep{ (1. - bMargin - tMargin - (Ny - 1) * vSpacing) / Ny };
-    auto hStep{ (1. - lMargin - rMargin - (Nx - 1) * hSpacing) / Nx };
+    auto vStep{ static_cast<float>((1. - bMargin - tMargin - (Ny - 1) * vSpacing) / Ny) };
+    auto hStep{ static_cast<float>((1. - lMargin - rMargin - (Nx - 1) * hSpacing) / Nx) };
     float vposd, vposu, vfactor;
     float hposl, hposr, hfactor;
     for (int i = 0; i < Nx; i++)
@@ -438,11 +438,11 @@ void ROOTHelper::SetCanvasPartition(
             auto pad{ dynamic_cast<TPad*>(canvas->FindObject(name.Data())) };
             if (pad) delete pad;
             pad = new TPad(name.Data(), "", hposl, vposd, hposr, vposu);
-            auto leftMargin{ (i == 0) ? lMargin / hfactor : 0.0 };
-            auto rightMargin{ (i == Nx - 1) ? rMargin / hfactor : 0.0 };
-            auto bottomMargin{ (j == 0) ? bMargin / vfactor : 0.0 };
-            auto topMargin{ (j == Ny - 1) ? tMargin / vfactor : 0.0 };
-            SetPadMarginAttribute(pad, leftMargin, rightMargin, bottomMargin, topMargin);
+            auto left_margin{ (i == 0) ? static_cast<float>(lMargin / hfactor) : 0.0 };
+            auto right_margin{ (i == Nx - 1) ? static_cast<float>(rMargin / hfactor) : 0.0 };
+            auto bottom_margin{ (j == 0) ? static_cast<float>(bMargin / vfactor) : 0.0 };
+            auto top_margin{ (j == Ny - 1) ? static_cast<float>(tMargin / vfactor) : 0.0 };
+            SetPadMarginAttribute(pad, left_margin, right_margin, bottom_margin, top_margin);
             SetPadFrameAttribute(pad);
             SetFillAttribute(pad);
             pad->SetBorderMode(0);
@@ -463,13 +463,13 @@ void ROOTHelper::FindPadInCanvasPartition(TCanvas * canvas, int id_x, int id_y)
 float ROOTHelper::GetPadXfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad)
 {
     auto pad_origin{ dynamic_cast<TPad*>(canvas->FindObject("pad_0_0")) };
-    return pad_origin->GetAbsWNDC() / pad->GetAbsWNDC();
+    return static_cast<float>(pad_origin->GetAbsWNDC() / pad->GetAbsWNDC());
 }
 
 float ROOTHelper::GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad)
 {
     auto pad_origin{ dynamic_cast<TPad*>(canvas->FindObject("pad_0_0")) };
-    return pad_origin->GetAbsHNDC() / pad->GetAbsHNDC();
+    return static_cast<float>(pad_origin->GetAbsHNDC() / pad->GetAbsHNDC());
 }
 
 double ROOTHelper::GetXtoPadInCanvasPartition(double x)

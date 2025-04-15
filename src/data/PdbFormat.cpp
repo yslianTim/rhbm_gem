@@ -7,6 +7,8 @@
 #include <cstring>
 #include <stdexcept>
 
+#define _CRT_SECURE_NO_WARNINGS // To disable deprecation warnings for sscanf
+
 PdbFormat::PdbFormat(void)
 {
 
@@ -113,7 +115,11 @@ void PdbFormat::BuildAtomObject(std::any atom_info, bool is_special_atom)
     }
     catch (const std::bad_any_cast &)
     {
-        // 處理轉換失敗
+        std::cerr << "Error: bad any cast in BuildAtomObject" << std::endl;
+    }
+    catch (const std::exception & e)
+    {
+        std::cerr << "Error: " << e.what() << std::endl;
     }
 }
 

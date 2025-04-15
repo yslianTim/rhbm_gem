@@ -20,11 +20,11 @@ class CifFormat : public ModelFileFormatBase
         std::string label_entity_id;
         std::string label_seq_id;
         std::string pdbx_PDB_ins_code;
-        double position_x;
-        double position_y;
-        double position_z;
-        double occupancy;
-        double B_iso_or_equiv;
+        float position_x;
+        float position_y;
+        float position_z;
+        float occupancy;
+        float B_iso_or_equiv;
         std::string pdbx_formal_charge;
         std::string auth_seq_id;
         std::string auth_comp_id;

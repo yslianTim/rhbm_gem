@@ -59,8 +59,6 @@ struct SQLiteBinder<std::vector<float>>
 {
     static int Bind(sqlite3_stmt * stmt, int index, const std::vector<float> & value)
     {
-        // BLOB 寫入：把 vector<float> 的原始記憶體視為一段 bytes
-        // size() * sizeof(float) 即該資料的 byte 長度
         return sqlite3_bind_blob(
             stmt,
             index,

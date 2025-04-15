@@ -501,15 +501,18 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
         atom_object->SetResidueID(std::get<1>(row));
         atom_object->SetChainID(std::get<2>(row));
         atom_object->SetIndicator(std::get<3>(row));
-        atom_object->SetOccupancy(std::get<4>(row));
-        atom_object->SetTemperature(std::get<5>(row));
+        atom_object->SetOccupancy(static_cast<float>(std::get<4>(row)));
+        atom_object->SetTemperature(static_cast<float>(std::get<5>(row)));
         atom_object->SetResidue(std::get<6>(row));
         atom_object->SetElement(std::get<7>(row));
         atom_object->SetRemoteness(std::get<8>(row));
         atom_object->SetBranch(std::get<9>(row));
         atom_object->SetStatus(std::get<10>(row));
         atom_object->SetSpecialAtomFlag(static_cast<bool>(std::get<11>(row)));
-        atom_object->SetPosition(std::get<12>(row), std::get<13>(row), std::get<14>(row));
+        atom_object->SetPosition(
+            static_cast<float>(std::get<12>(row)),
+            static_cast<float>(std::get<13>(row)),
+            static_cast<float>(std::get<14>(row)) );
 
         auto serial_id{ atom_object->GetSerialID() };
         if (atomic_potential_entry_map.find(serial_id) != atomic_potential_entry_map.end())

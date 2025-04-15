@@ -190,7 +190,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
                 ROOTHelper::SetTextAttribute(legend.get(), 20, 133, 12);
                 ROOTHelper::SetFillAttribute(legend.get(), 1001, kWhite, 0.5);
                 legend->AddEntry(sim_buried_charge_graph[i][1].get(), "Partial Charge", "pl");
-                legend->AddEntry(sim_no_charge_graph[i][1].get(), "No Charge", "pl");
+                legend->AddEntry(sim_no_charge_graph[i][1].get(), "Neutral", "pl");
                 legend->Draw();
             }
         }
@@ -430,7 +430,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
             ROOTHelper::SetTextAttribute(legend.get(), 30, 133, 12);
             ROOTHelper::SetFillAttribute(legend.get(), 1001, kWhite, 0.5);
             legend->AddEntry(sim_buried_charge_graph[i][1].get(), "Partial Charge", "l");
-            legend->AddEntry(sim_no_charge_graph[i][1].get(), "No Charge", "l");
+            legend->AddEntry(sim_no_charge_graph[i][1].get(), "Neutral", "l");
             legend->Draw();
         }
     }

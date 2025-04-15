@@ -35,7 +35,7 @@ public:
     void AddGroupPotentialEntry(const std::string & class_key, std::unique_ptr<GroupPotentialEntryBase> & entry) { m_group_potential_entry_map[class_key] = std::move(entry); }
     void BuildKDTreeRoot(void);
 
-    int GetNumberOfAtom(void) const { return m_atom_list.size(); }
+    int GetNumberOfAtom(void) const { return static_cast<int>(m_atom_list.size()); }
     int GetNumberOfSelectedAtom(void) const;
     const std::vector<std::unique_ptr<AtomObject>> & GetComponentsList(void) const { return m_atom_list; }
     std::string GetPdbID(void) const { return m_pdb_id; }
