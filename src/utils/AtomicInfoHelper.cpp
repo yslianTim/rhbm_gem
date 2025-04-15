@@ -1,5 +1,6 @@
 #include "AtomicInfoHelper.hpp"
 
+#define _USE_MATH_DEFINES // for MSVC compiler in Windows platform
 #include <cmath>
 
 double AtomicInfoHelper::GausModelFunction(double * x, double * par)

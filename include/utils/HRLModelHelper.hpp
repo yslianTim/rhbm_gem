@@ -5,6 +5,8 @@
 #undef __ARM_NEON__
 #endif
 
+#define _USE_MATH_DEFINES // for MSVC compiler in Windows platform
+
 #include <iostream>
 #include <vector>
 #include <string>

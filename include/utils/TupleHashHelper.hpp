@@ -15,7 +15,8 @@ std::size_t hash_tuple_impl(const Tuple & t, std::index_sequence<Is...>)
 {
     std::size_t seed = 0;
     // 依序將 tuple 中每個元素的 hash 組合到 seed 中
-    ((hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t)))), ...);
+    //((hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t)))), ...);
+    (void(hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t)))), ...);
     return seed;
 }
 
