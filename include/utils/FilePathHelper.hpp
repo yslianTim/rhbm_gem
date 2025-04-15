@@ -14,7 +14,7 @@ public:
         {
             return file_path.substr(pos);
         }
-        return "";
+        return std::string("");
     }
     
     static std::string GetDirectory(const std::string & file_path)
@@ -24,9 +24,9 @@ public:
         std::size_t pos{ std::max(pos1, pos2) };
         if (pos != std::string::npos)
         {
-            return file_path.substr(0, pos + 1);  // 包含最後的分隔符
+            return file_path.substr(0, pos + 1);
         }
-        return "";
+        return std::string("");
     }
     
     static std::string GetFileName(const std::string & file_path)
@@ -38,14 +38,17 @@ public:
         {
             return file_path.substr(pos + 1);
         }
-        return file_path;  // 如果沒有分隔符，整個字串就是檔案名稱
+        return file_path;
     }
 
     static std::string EnsureTrailingSlash(const std::string & path)
     {
-        if (!path.empty() && path.back() != '/')
+        if (!path.empty() && path.back() != '/' && path.back() != '\\')
         {
-            return path + "/";
+            if (path.find('\\') != std::string::npos)
+                return path + "\\";
+            else
+                return path + "/";
         }
         return path;
     }

@@ -53,8 +53,8 @@ struct SQLiteColumnReader<std::vector<float>>
 {
     static std::vector<float> Get(sqlite3_stmt * stmt, int index)
     {
-        auto blob_data{ sqlite3_column_blob(stmt, index) };
-        auto blob_size{ sqlite3_column_bytes(stmt, index) };
+        auto blob_data = sqlite3_column_blob(stmt, index);
+        auto blob_size = sqlite3_column_bytes(stmt, index);
         if (!blob_data || blob_size <= 0)
         {
             return {};
@@ -73,8 +73,8 @@ struct SQLiteColumnReader<std::vector<double>>
 {
     static std::vector<double> Get(sqlite3_stmt * stmt, int index)
     {
-        auto blob_data{ sqlite3_column_blob(stmt, index) };
-        auto blob_size{ sqlite3_column_bytes(stmt, index) };
+        auto blob_data = sqlite3_column_blob(stmt, index);
+        auto blob_size = sqlite3_column_bytes(stmt, index);
         if (!blob_data || blob_size <= 0)
         {
             return {};
@@ -94,8 +94,8 @@ struct SQLiteColumnReader<std::vector<std::tuple<float, float>>>
     static std::vector<std::tuple<float, float>> Get(sqlite3_stmt* stmt, int index)
     {
         // 取得 blob 資料與大小
-        auto blob_data{ sqlite3_column_blob(stmt, index) };
-        auto blob_size{ sqlite3_column_bytes(stmt, index) };
+        auto blob_data = sqlite3_column_blob(stmt, index);
+        auto blob_size = sqlite3_column_bytes(stmt, index);
         if (!blob_data || blob_size <= 0)
         {
             return {};
@@ -106,8 +106,8 @@ struct SQLiteColumnReader<std::vector<std::tuple<float, float>>>
         auto blob_floats{ reinterpret_cast<const float *>(blob_data) };
         for (int i = 0; i < count; ++i)
         {
-            auto first{ blob_floats[2 * i] };
-            auto second{ blob_floats[2 * i + 1] };
+            float first = blob_floats[2 * i];
+            float second = blob_floats[2 * i + 1];
             result.emplace_back(std::make_tuple(first, second));
         }
         return result;
@@ -121,8 +121,8 @@ struct SQLiteColumnReader<std::vector<std::tuple<double, double>>>
     static std::vector<std::tuple<double, double>> Get(sqlite3_stmt* stmt, int index)
     {
         // 取得 blob 資料與大小
-        auto blob_data{ sqlite3_column_blob(stmt, index) };
-        auto blob_size{ sqlite3_column_bytes(stmt, index) };
+        auto blob_data = sqlite3_column_blob(stmt, index);
+        auto blob_size = sqlite3_column_bytes(stmt, index);
         if (!blob_data || blob_size <= 0)
         {
             return {};
@@ -133,8 +133,8 @@ struct SQLiteColumnReader<std::vector<std::tuple<double, double>>>
         auto blob_doubles{ reinterpret_cast<const double *>(blob_data) };
         for (int i = 0; i < count; ++i)
         {
-            auto first{ blob_doubles[2 * i] };
-            auto second{ blob_doubles[2 * i + 1] };
+            double first = blob_doubles[2 * i];
+            double second = blob_doubles[2 * i + 1];
             result.emplace_back(std::make_tuple(first, second));
         }
         return result;
