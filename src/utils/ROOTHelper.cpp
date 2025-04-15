@@ -504,4 +504,35 @@ double ROOTHelper::ConvertGlobalTickLengthToPadTickLength(
     return (use_width) ? global_tick_length / tick_scale_y : global_tick_length / tick_scale_x;
 }
 
+double ROOTHelper::GetLinearRegressionRSquare(const TGraphErrors * graph, const TF1 * function)
+{
+    auto data_size{ graph->GetN() };
+    auto y_mean{ graph->GetMean(2) };
+    auto residual_sum{ 0.0 };
+    auto total_sum{ 0.0 };
+    for (int i = 0; i < data_size; i++)
+    {
+        auto x_data{ graph->GetX()[i] };
+        auto y_data{ graph->GetY()[i] };
+        auto y_model{ function->Eval(x_data) };
+        auto residual{ y_data - y_model };
+        residual_sum += residual * residual;
+        total_sum += std::pow(y_data - y_mean, 2);
+    }
+    auto r_square{ (total_sum == 0.0) ? 1.0 : 1.0 - residual_sum/total_sum };
+    return r_square;
+}
+
+double ROOTHelper::PerformLinearRegression(
+    TGraphErrors * graph, double & slope, double & intercept)
+{
+    auto fit_tmp{ CreateFunction1D("fit_linear","[1]*x+[0]") };
+    graph->Fit(fit_tmp.get(), "0 WQ");
+    double par[2];
+    fit_tmp->GetParameters(par);
+    intercept = par[0];
+    slope = par[1];
+    return GetLinearRegressionRSquare(graph, fit_tmp.get());
+}
+
 #endif

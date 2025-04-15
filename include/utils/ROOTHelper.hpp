@@ -94,6 +94,8 @@ public:
     static double GetXtoPadInCanvasPartition(double x);
     static double GetYtoPadInCanvasPartition(double y);
     static double ConvertGlobalTickLengthToPadTickLength(TVirtualPad * pad, double global_tick_length, bool use_width=true);
+    static double GetLinearRegressionRSquare(const TGraphErrors * graph, const TF1 * function);
+    static double PerformLinearRegression(TGraphErrors * graph, double & slope, double & intercept);
     #endif
 
 };

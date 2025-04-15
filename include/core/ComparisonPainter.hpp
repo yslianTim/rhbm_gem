@@ -39,13 +39,15 @@ public:
 private:
     void PaintSimulationGaus(const std::string & name);
     void PaintSimulationGausRatio(const std::string & name, const std::vector<ModelObject *> & model_list);
-    void PaintDataSimulationComparison(const std::string & name);
+    void PaintGausEstimateComparison(const std::string & name);
+    void PainMapValueComparison(const std::string & name, ModelObject * model_data, ModelObject * model_sim);
     double CalculateErrorPropagation(double target_value, double reference_value, double target_error, double reference_error);
 
     #ifdef HAVE_ROOT
     void BuildRatioGraph(TGraphErrors * ratio_graph, const TGraphErrors * target_graph, const TGraphErrors * reference_graph);
     void BuildGausEstimateToBlurringWidthGraph(ElementKeyType & group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, int par_id=0);
     void BuildAmplitudeRatioToWidthGraph(ElementKeyType & group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list);
+    void BuildMapValueScatterGraph(ElementKeyType & group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
     #endif
 
 };

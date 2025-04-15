@@ -130,6 +130,28 @@ const std::vector<AtomObject *> & PotentialEntryIterator::GetAtomObjectList(
     return m_residue_class_group_entry->GetAtomObjectPtrList(&group_key);
 }
 
+std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
+    ElementKeyType & group_key) const
+{
+    std::unordered_map<int, AtomObject *> atom_object_map;
+    for (auto & atom_object : GetAtomObjectList(group_key))
+    {
+        atom_object_map[atom_object->GetSerialID()] = atom_object;
+    }
+    return atom_object_map;
+}
+
+std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
+    ResidueKeyType & group_key) const
+{
+    std::unordered_map<int, AtomObject *> atom_object_map;
+    for (auto & atom_object : GetAtomObjectList(group_key))
+    {
+        atom_object_map[atom_object->GetSerialID()] = atom_object;
+    }
+    return atom_object_map;
+}
+
 const std::vector<std::tuple<float, float>> & PotentialEntryIterator::GetDistanceAndMapValueList(void) const
 {
     if (IsAtomicEntryAvailable() == false)
@@ -137,6 +159,33 @@ const std::vector<std::tuple<float, float>> & PotentialEntryIterator::GetDistanc
         throw std::runtime_error("Atomic entry is not available.");
     }
     return m_atomic_entry->GetDistanceAndMapValueList();
+}
+
+std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceAndMapValueList(
+    int bin_size, double x_min, double x_max) const
+{
+    if (IsAtomicEntryAvailable() == false)
+    {
+        throw std::runtime_error("Atomic entry is not available.");
+    }
+    
+    auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
+    std::unordered_map<int, std::vector<float>> bin_map;
+    for (auto & [distance, map_value] : m_atomic_entry->GetDistanceAndMapValueList())
+    {
+        auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
+        bin_map[bin_index].emplace_back(map_value);
+    }
+
+    std::vector<std::tuple<float, float>> binned_distance_and_map_value_list;
+    binned_distance_and_map_value_list.reserve(bin_size);
+    for (int i = 0; i < bin_size; i++)
+    {
+        auto x_value{ static_cast<float>(x_min + (i + 0.5) * bin_spacing) };
+        auto y_value{ ArrayStats<float>::ComputeMedian(bin_map.at(i)) };
+        binned_distance_and_map_value_list.emplace_back(std::make_tuple(x_value, y_value));
+    }
+    return binned_distance_and_map_value_list;
 }
 
 std::tuple<float, float> PotentialEntryIterator::GetDistanceRange(double margin_rate) const
@@ -339,29 +388,13 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateDistanceToMapValueGr
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBinnedDistanceToMapValueGraph(
     int bin_size, double x_min, double x_max)
 {
-    if (IsAtomicEntryAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
+    auto data_array{ GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
     auto graph{ ROOTHelper::CreateGraphErrors(bin_size) };
-    std::unordered_map<int, std::vector<float>> bin_map;
-
-    for (auto & [distance, map_value] : m_atomic_entry->GetDistanceAndMapValueList())
+    auto count{ 0 };
+    for (auto & [distance, map_value] : data_array)
     {
-        auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
-        bin_map[bin_index].emplace_back(map_value);
-    }
-
-    for (int i = 0; i < bin_size; i++)
-    {
-        auto x_value{ x_min + (i + 0.5) * bin_spacing };
-        if (bin_map.find(i) == bin_map.end())
-        {
-            graph->SetPoint(i, x_value, 0.0);
-            continue;
-        }
-        graph->SetPoint(i, x_value, ArrayStats<float>::ComputeMedian(bin_map.at(i)));
+        graph->SetPoint(count, distance, map_value);
+        count++;
     }
     return graph;
 }

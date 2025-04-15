@@ -44,8 +44,11 @@ public:
     double GetGausVariancePrior(ResidueKeyType & group_key, int par_id) const;
     const std::vector<AtomObject *> & GetAtomObjectList(ElementKeyType & group_key) const;
     const std::vector<AtomObject *> & GetAtomObjectList(ResidueKeyType & group_key) const;
+    std::unordered_map<int, AtomObject *> GetAtomObjectMap(ElementKeyType & group_key) const;
+    std::unordered_map<int, AtomObject *> GetAtomObjectMap(ResidueKeyType & group_key) const;
 
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
+    std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(int bin_size=15, double x_min=0.0, double x_max=1.5) const;
     std::tuple<float, float> GetDistanceRange(double margin_rate=0.0) const;
     std::tuple<float, float> GetMapValueRange(double margin_rate=0.0) const;
     double GetAmplitudeEstimateMDPDE(void) const;

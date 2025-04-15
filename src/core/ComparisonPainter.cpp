@@ -11,6 +11,7 @@
 #include <TStyle.h>
 #include <TCanvas.h>
 #include <TPad.h>
+#include <TF1.h>
 #include <TGraphErrors.h>
 #include <TLegend.h>
 #include <TPaveText.h>
@@ -58,13 +59,23 @@ void ComparisonPainter::Painting(void)
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
     std::cout <<"  Number of reference types to be painted: "<< m_ref_model_object_list_map.size() << std::endl;
-    if (m_model_object_list.size() != 0 && m_ref_model_object_list_map.size() == 2)
+    auto sim_buried_charge_model_object_list{ m_ref_model_object_list_map.at("buried_charge")};
+
+    if (m_model_object_list.size() != 0 && m_ref_model_object_list_map.size() == 2 && sim_buried_charge_model_object_list.size() > 1)
     {
         PaintSimulationGaus("figure_3_a.pdf");
-        PaintDataSimulationComparison("figure_3_b.pdf");
+        PaintGausEstimateComparison("figure_3_b.pdf");
     }
-    auto sim_buried_charge_model_object_list{ m_ref_model_object_list_map.at("buried_charge")};
-    PaintSimulationGausRatio("figure_2_c.pdf", sim_buried_charge_model_object_list);
+    
+    if (sim_buried_charge_model_object_list.size() > 1)
+    {
+        PaintSimulationGausRatio("figure_2_c.pdf", sim_buried_charge_model_object_list);
+    }
+
+    if (m_model_object_list.size() == 1 && sim_buried_charge_model_object_list.size() == 1)
+    {
+        PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_buried_charge_model_object_list.at(0));
+    }
 }
 
 void ComparisonPainter::PaintSimulationGaus(const std::string & name)
@@ -295,10 +306,10 @@ void ComparisonPainter::PaintSimulationGausRatio(
     #endif
 }
 
-void ComparisonPainter::PaintDataSimulationComparison(const std::string & name)
+void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ComparisonPainter::PaintDataSimulationComparison"<< std::endl;
+    std::cout <<"- ComparisonPainter::PaintGausEstimateComparison"<< std::endl;
 
     auto sim_buried_charge_model_object_list{ m_ref_model_object_list_map.at("buried_charge")};
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
@@ -429,6 +440,132 @@ void ComparisonPainter::PaintDataSimulationComparison(const std::string & name)
     #endif
 }
 
+void ComparisonPainter::PainMapValueComparison(
+    const std::string & name, ModelObject * model_data, ModelObject * model_sim)
+{
+    auto file_path{ m_folder_path + name };
+    std::cout <<"- ComparisonPainter::PainMapValueComparison"<< std::endl;
+
+    #ifdef HAVE_ROOT
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+    const int column_size{ 4 };
+    const int row_size{ 1 };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1400, 500) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.07, 0.01, 0.15, 0.11, 0.01, 0.01);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    const int primary_element_size{ 4 };
+    const char * element_label[column_size]
+    {
+        "Alpha Carbon",
+        "Carbonyl Carbon",
+        "Peptide Nitrogen",
+        "Carbonyl Oxygen"
+    };
+
+    int color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+    int marker_element[primary_element_size]{ 54, 53, 55, 59 };
+
+    std::unique_ptr<TGraphErrors> scatter_graph[column_size];
+    std::unique_ptr<TF1> fit_function[column_size];
+    double r_square[column_size]{ 0.0 };
+    double slope[column_size]{ 0.0 };
+    double intercept[column_size]{ 0.0 };
+    for (int i = 0; i < column_size; i++)
+    {
+        auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
+        scatter_graph[i] = ROOTHelper::CreateGraphErrors();
+        BuildMapValueScatterGraph(group_key, scatter_graph[i].get(), model_sim, model_data, 15, 0.0, 1.5);
+        r_square[i] = ROOTHelper::PerformLinearRegression(scatter_graph[i].get(), slope[i], intercept[i]);
+        ROOTHelper::SetMarkerAttribute(scatter_graph[i].get(), marker_element[i], 1.0, color_element[i]);
+        ROOTHelper::SetLineAttribute(scatter_graph[i].get(), 1, 2, color_element[i]);
+
+        fit_function[i] = ROOTHelper::CreateFunction1D(Form("fit_%d", i), "x*[1]+[0]");
+        fit_function[i]->SetParameters(intercept[i], slope[i]);
+        ROOTHelper::SetLineAttribute(fit_function[i].get(), 1, 2, kRed);
+    }
+
+    double x_min[column_size]{ 0.0 };
+    double x_max[column_size]{ 1.0 };
+    std::vector<double> y_array;
+    for (int i = 0; i < column_size; i++)
+    {
+        std::vector<double> x_array;
+        for (int p = 0; p < scatter_graph[i]->GetN(); p++)
+        {
+            x_array.emplace_back(scatter_graph[i]->GetPointX(p));
+            y_array.emplace_back(scatter_graph[i]->GetPointY(p));
+        }
+        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.24) };
+        x_min[i] = std::get<0>(x_range);
+        x_max[i] = std::get<1>(x_range);
+    }
+
+    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.15) };
+    auto y_min{ std::get<0>(y_range) };
+    auto y_max{ std::get<1>(y_range) };
+
+    std::unique_ptr<TH2> frame[column_size][row_size];
+    std::unique_ptr<TPaveText> title_text[column_size];
+    std::unique_ptr<TPaveText> r_square_text[column_size];
+    std::unique_ptr<TPaveText> fit_info_text[column_size];
+    for (int i = 0; i < column_size; i++)
+    {
+        for (int j = 0; j < row_size; j++)
+        {
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min, y_max);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 0.9, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), y_factor*0.05/x_factor, 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.1, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.02, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), x_factor*0.05/y_factor, 506);
+            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            frame[i][j]->GetXaxis()->SetTitle("Simulated Map Value");
+            frame[i][j]->GetYaxis()->SetTitle("Real Map Value");
+            frame[i][j]->GetXaxis()->CenterTitle();
+            frame[i][j]->GetYaxis()->CenterTitle();
+            frame[i][j]->SetStats(0);
+            frame[i][j]->Draw();
+            scatter_graph[i]->Draw("P");
+            fit_function[i]->SetRange(x_min[i], x_max[i]);
+            fit_function[i]->Draw("SAME");
+        }
+        title_text[i] = ROOTHelper::CreatePaveText(0.01, 1.01, 0.99, 1.14, "nbNDC ARC", true);
+        ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
+        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0.0, 0.2);
+        ROOTHelper::SetTextAttribute(title_text[i].get(), 40, 133, 22);
+        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5);
+        title_text[i]->AddText(element_label[i]);
+        title_text[i]->Draw();
+
+        r_square_text[i] = ROOTHelper::CreatePaveText(0.50, 0.05, 0.95, 0.18, "nbNDC ARC", true);
+        ROOTHelper::SetPaveTextDefaultStyle(r_square_text[i].get());
+        ROOTHelper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
+        ROOTHelper::SetLineAttribute(r_square_text[i].get(), 1, 0);
+        ROOTHelper::SetTextAttribute(r_square_text[i].get(), 35, 133, 22);
+        ROOTHelper::SetFillAttribute(r_square_text[i].get(), 1001, kAzure-7, 0.20f);
+        r_square_text[i]->AddText(Form("R^{2} = %.2f", r_square[i]));
+        r_square_text[i]->Draw();
+
+        fit_info_text[i] = ROOTHelper::CreatePaveText(0.12, 0.88, 0.70, 0.99, "nbNDC", true);
+        ROOTHelper::SetPaveTextDefaultStyle(fit_info_text[i].get());
+        ROOTHelper::SetTextAttribute(fit_info_text[i].get(), 35, 133, 22, 0.0, kGray);
+        fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}%+.2f", slope[i], intercept[i]));
+        fit_info_text[i]->Draw();
+    }
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    std::cout <<"  Output file: "<< file_path << std::endl;
+    #endif
+}
+
 double ComparisonPainter::CalculateErrorPropagation(
     double target_value, double reference_value, double target_error, double reference_error)
 {
@@ -495,6 +632,35 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
         graph->SetPoint(count, std::get<1>(gaus_estimate), std::get<0>(gaus_estimate));
         graph->SetPointError(count, std::get<1>(gaus_variance), std::get<0>(gaus_variance));
         count++;
+    }
+}
+
+void ComparisonPainter::BuildMapValueScatterGraph(
+    ElementKeyType & group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
+    int bin_size, double x_min, double x_max)
+{
+    auto entry1_iter{ std::make_unique<PotentialEntryIterator>(model1) };
+    auto entry2_iter{ std::make_unique<PotentialEntryIterator>(model2) };
+    if (entry1_iter->IsAvailableGroupKey(group_key) == false) return;
+    if (entry2_iter->IsAvailableGroupKey(group_key) == false) return;
+    auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key) };
+    auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key) };
+    auto count{ 0 };
+    for (auto & [atom_id, atom_object1] : model1_atom_map)
+    {
+        if (model2_atom_map.find(atom_id) == model2_atom_map.end()) continue;
+        auto atom_object2{ model2_atom_map.at(atom_id) };
+        auto atom1_iter{ std::make_unique<PotentialEntryIterator>(atom_object1) };
+        auto atom2_iter{ std::make_unique<PotentialEntryIterator>(atom_object2) };
+        auto data1_array{ atom1_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
+        auto data2_array{ atom2_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
+        for (int i = 0; i < bin_size; i++)
+        {
+            auto x_value{ std::get<1>(data1_array.at(i)) };
+            auto y_value{ std::get<1>(data2_array.at(i)) };
+            graph->SetPoint(count, x_value, y_value);
+            count++;
+        }
     }
 }
 
