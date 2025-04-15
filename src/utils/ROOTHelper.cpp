@@ -396,13 +396,13 @@ void ROOTHelper::SetCanvasPartition(
         if (i == 0)
         {
             hposl = 0.0;
-            hposr = (Nx == 1) ? 1.0 : lMargin + hStep;
+            hposr = (Nx == 1) ? 1.0f : static_cast<float>(lMargin + hStep);
             hfactor = hposr - hposl;
         }
         else if (i == Nx - 1)
         {
             hposl = hposr + hSpacing;
-            hposr = (hposl + hStep + rMargin > 1.0) ? 1.0 : hposl + hStep + rMargin;
+            hposr = (hposl + hStep + rMargin > 1.0) ? 1.0f : static_cast<float>(hposl + hStep + rMargin);
             hfactor = hposr - hposl;
         }
         else
@@ -417,13 +417,13 @@ void ROOTHelper::SetCanvasPartition(
             if (j == 0)
             {
                 vposd = 0.0;
-                vposu = (Ny == 1) ? 1.0 : bMargin + vStep;
+                vposu = (Ny == 1) ? 1.0f : static_cast<float>(bMargin + vStep);
                 vfactor = vposu - vposd;
             }
             else if (j == Ny - 1)
             {
                 vposd = vposu + vSpacing;
-                vposu = (vposd + vStep + tMargin > 1.0) ? 1.0 : vposd + vStep + tMargin;
+                vposu = (vposd + vStep + tMargin > 1.0) ? 1.0f : static_cast<float>(vposd + vStep + tMargin);
                 vfactor = vposu - vposd;
             }
             else
@@ -438,10 +438,10 @@ void ROOTHelper::SetCanvasPartition(
             auto pad{ dynamic_cast<TPad*>(canvas->FindObject(name.Data())) };
             if (pad) delete pad;
             pad = new TPad(name.Data(), "", hposl, vposd, hposr, vposu);
-            auto left_margin{ (i == 0) ? static_cast<float>(lMargin / hfactor) : 0.0 };
-            auto right_margin{ (i == Nx - 1) ? static_cast<float>(rMargin / hfactor) : 0.0 };
-            auto bottom_margin{ (j == 0) ? static_cast<float>(bMargin / vfactor) : 0.0 };
-            auto top_margin{ (j == Ny - 1) ? static_cast<float>(tMargin / vfactor) : 0.0 };
+            auto left_margin{ (i == 0) ? static_cast<float>(lMargin / hfactor) : 0.0f };
+            auto right_margin{ (i == Nx - 1) ? static_cast<float>(rMargin / hfactor) : 0.0f };
+            auto bottom_margin{ (j == 0) ? static_cast<float>(bMargin / vfactor) : 0.0f };
+            auto top_margin{ (j == Ny - 1) ? static_cast<float>(tMargin / vfactor) : 0.0f };
             SetPadMarginAttribute(pad, left_margin, right_margin, bottom_margin, top_margin);
             SetPadFrameAttribute(pad);
             SetFillAttribute(pad);

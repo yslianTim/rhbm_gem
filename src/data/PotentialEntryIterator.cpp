@@ -415,7 +415,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
         auto in_range_atom_list{ KDTreeAlgorithm<AtomObject>::RangeSearch(kd_tree_root, atom, range) };
         auto atom_entry{ atom->GetAtomicPotentialEntry() };
         auto gaus_estimate{ (par_id == 0) ? atom_entry->GetAmplitudeEstimateMDPDE() : atom_entry->GetWidthEstimateMDPDE() };
-        graph->SetPoint(count, in_range_atom_list.size(), gaus_estimate);
+        graph->SetPoint(count, static_cast<double>(in_range_atom_list.size()), gaus_estimate);
         count++;
     }
     return graph;
@@ -437,7 +437,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
         auto in_range_atom_list{ KDTreeAlgorithm<AtomObject>::RangeSearch(kd_tree_root, atom, range) };
         auto atom_entry{ atom->GetAtomicPotentialEntry() };
         auto gaus_estimate{ (par_id == 0) ? atom_entry->GetAmplitudeEstimateMDPDE() : atom_entry->GetWidthEstimateMDPDE() };
-        graph->SetPoint(count, in_range_atom_list.size(), gaus_estimate);
+        graph->SetPoint(count, static_cast<double>(in_range_atom_list.size()), gaus_estimate);
         count++;
     }
     return graph;

@@ -500,11 +500,11 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
     frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
-    std::vector<std::unique_ptr<TGraphErrors>> amplitude_graph_list[AtomicInfoHelper::GetStandardResidueCount()];
-    std::vector<std::unique_ptr<TGraphErrors>> width_graph_list[AtomicInfoHelper::GetStandardResidueCount()];
-    std::unique_ptr<TPaveText> info_text[AtomicInfoHelper::GetStandardResidueCount()];
-
-    for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+    const int residue_size{ AtomicInfoHelper::GetStandardResidueCount() };
+    std::vector<std::unique_ptr<TGraphErrors>> amplitude_graph_list[residue_size];
+    std::vector<std::unique_ptr<TGraphErrors>> width_graph_list[residue_size];
+    std::unique_ptr<TPaveText> info_text[residue_size];
+    for (int residue : AtomicInfoHelper::GetStandardResidueList())
     {
         info_text[residue] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         std::vector<double> amplitude_array, width_array;
@@ -626,17 +626,17 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
                     ROOTHelper::SetPadDefaultStyle(gPad);
                     ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
                     ROOTHelper::SetPadMarginInCanvas(gPad, 0.16, 0.02, 0.14, 0.02);
-                    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 60.0, 1.1);
-                    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0, 1.3);
-                    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0, 0.01);
-                    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 60.0, 0.02);
+                    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 60.0f, 1.1f);
+                    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.3f);
+                    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0f, 0.01f);
+                    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 60.0f, 0.02f);
 
                     ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, kWhite, 1, 0);
 
                     auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.04, 0) };
                     auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.05, 1) };
-                    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), x_tick_length);
-                    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), y_tick_length);
+                    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length));
+                    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length));
                     frame->GetXaxis()->SetLimits(0.0, 1.5);
                     frame->GetYaxis()->SetLimits(y_min, y_max);
                     frame->SetStats(0);
@@ -650,7 +650,7 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
 
                     for (auto & graph : map_value_graph_list)
                     {
-                        ROOTHelper::SetLineAttribute(graph.get(), 1, 5, kAzure-7, 0.3);
+                        ROOTHelper::SetLineAttribute(graph.get(), 1, 5, kAzure-7, 0.3f);
                         graph->Draw("LX");
                     }
 
