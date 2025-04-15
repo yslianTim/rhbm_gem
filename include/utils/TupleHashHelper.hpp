@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <tuple>
 #include <functional>
+#include <initializer_list>
 
 // 輔助函式：類似 boost::hash_combine 的實作
 inline void hash_combine(std::size_t & seed, std::size_t hash_value)
@@ -14,10 +15,10 @@ inline void hash_combine(std::size_t & seed, std::size_t hash_value)
 template <typename Tuple, std::size_t... Is>
 std::size_t hash_tuple_impl(const Tuple & t, std::index_sequence<Is...>)
 {
-    std::size_t seed = 0;
+    std::size_t seed{ 0 };
     // 依序將 tuple 中每個元素的 hash 組合到 seed 中
     //((hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t)))), ...);
-    (void(hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t)))), ...);
+    std::initializer_list<int>{ (hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t))), 0)... };
     return seed;
 }
 

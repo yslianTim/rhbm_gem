@@ -9,6 +9,10 @@ project(PotentialMap
     LANGUAGES C CXX
 )
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Specify the C++ standard (Use interface libraries)
 add_library(CompilerFlags INTERFACE)
 target_compile_features(CompilerFlags INTERFACE cxx_std_17)
@@ -16,7 +20,7 @@ set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
 set(msvc_cxx "$<COMPILE_LANG_AND_ID:CXX,MSVC>")
 target_compile_options(CompilerFlags INTERFACE
     "$<${gcc_like_cxx}:$<BUILD_INTERFACE:-Wall;-Wextra;-Wshadow;-Wformat=2;-Wunused;-Wno-psabi>>"
-    "$<${msvc_cxx}:$<BUILD_INTERFACE:-W3>>"
+    "$<${msvc_cxx}:$<BUILD_INTERFACE:-W3;/Zc:__cplusplus>>"
 )
 
 option(USE_SYSTEM_LIBS "Use system-installed libraries" ON)
