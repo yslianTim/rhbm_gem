@@ -38,7 +38,7 @@ const std::vector<std::tuple<float, std::array<float, 3>>> &  SphereSampler::Gen
     #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(m_thread_size)
     #endif
-    for (int i = 0; i < m_sampling_size; i++)
+    for (unsigned int i = 0; i < m_sampling_size; i++)
     {
         position_array.col(i) = Eigen::Quaternionf::UnitRandom() * Eigen::Vector3f::UnitZ();
         position_array.col(i) *= distance_array(i);

@@ -543,13 +543,13 @@ ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
     };
 
     auto serial_id{ 0 };
-    auto sampling_size{ 0 };
+    //auto sampling_size{ 0 };
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
     for (auto & row : row_list)
     {
         auto atomic_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
         serial_id = std::get<0>(row);
-        sampling_size = std::get<1>(row);
+        //sampling_size = std::get<1>(row);
         atomic_potential_entry->AddDistanceAndMapValueList(std::get<2>(row));
         atomic_potential_entry->AddGausEstimateOLS(std::get<3>(row), std::get<4>(row));
         atomic_potential_entry->AddGausEstimateMDPDE(std::get<5>(row), std::get<6>(row));

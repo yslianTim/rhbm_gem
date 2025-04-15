@@ -23,14 +23,17 @@ PotentialDisplayVisitor::~PotentialDisplayVisitor()
 
 void PotentialDisplayVisitor::VisitAtomObject(AtomObject * data_object)
 {
+    if (data_object == nullptr) return;
 }
 
 void PotentialDisplayVisitor::VisitModelObject(ModelObject * data_object)
 {
+    if (data_object == nullptr) return;
 }
 
 void PotentialDisplayVisitor::VisitMapObject(MapObject * data_object)
 {
+    if (data_object == nullptr) return;
 }
 
 void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
@@ -63,6 +66,7 @@ void PotentialDisplayVisitor::RunAtomPainter(ModelObject * model_object)
 void PotentialDisplayVisitor::RunModelPainter(DataObjectManager * data_manager)
 {
     std::cout <<"- PotentialDisplayVisitor::RunModelPainter" << std::endl;
+    if (data_manager == nullptr) return;
     std::unique_ptr<PainterBase> painter{ std::make_unique<ModelPainter>() };
     painter->SetFolder(m_folder_path);
     for (auto model_object : m_model_object_list)
@@ -85,6 +89,7 @@ void PotentialDisplayVisitor::RunModelPainter(DataObjectManager * data_manager)
 void PotentialDisplayVisitor::RunComparisonPainter(DataObjectManager * data_manager)
 {
     std::cout <<"- PotentialDisplayVisitor::RunComparisonPainter" << std::endl;
+    if (data_manager == nullptr) return;
     std::unique_ptr<PainterBase> painter{ std::make_unique<ComparisonPainter>() };
     painter->SetFolder(m_folder_path);
 

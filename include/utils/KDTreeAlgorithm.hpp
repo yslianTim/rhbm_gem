@@ -114,8 +114,9 @@ private:
     {
         auto position_a{ node_a->GetPosition() };
         auto position_b{ node_b->GetPosition() };
+        auto dimension{ static_cast<int>(position_a.size()) };
         auto squared_norm{ 0.0 };
-        for (int i = 0; i < position_a.size(); i++)
+        for (int i = 0; i < dimension; i++)
         {
             squared_norm += std::pow(position_a.at(i) - position_b.at(i), 2.0);
         }

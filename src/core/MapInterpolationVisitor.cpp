@@ -17,10 +17,12 @@ MapInterpolationVisitor::~MapInterpolationVisitor()
 
 void MapInterpolationVisitor::VisitAtomObject(AtomObject * data_object)
 {
+    if (data_object == nullptr) return;
 }
 
 void MapInterpolationVisitor::VisitModelObject(ModelObject * data_object)
 {
+    if (data_object == nullptr) return;
 }
 
 void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
@@ -37,6 +39,7 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 
 void MapInterpolationVisitor::Analysis(DataObjectManager * data_manager)
 {
+    if (data_manager == nullptr) return;
 }
 
 float MapInterpolationVisitor::MakeInterpolationInMapObject(

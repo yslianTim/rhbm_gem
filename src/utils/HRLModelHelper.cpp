@@ -50,7 +50,8 @@ HRLModelHelper::~HRLModelHelper()
 void HRLModelHelper::SetDataArray(
     const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array)
 {
-    if (data_array.size() != m_member_size)
+    int data_array_size{ static_cast<int>(data_array.size()) };
+    if (data_array_size != m_member_size)
     {
         throw std::runtime_error("The input size of data list isn't consistent with member size.");
     }

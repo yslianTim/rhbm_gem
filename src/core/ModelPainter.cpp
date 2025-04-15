@@ -101,15 +101,8 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     #ifdef HAVE_ROOT
 
     const int primary_element_size{ 4 };
-    const char * element_label[primary_element_size]
-    {
-        "Alpha Carbon",
-        "Carbonyl Carbon",
-        "Peptide Nitrogen",
-        "Carbonyl Oxygen"
-    };
-    int color_element[primary_element_size]   { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
-    int marker_element[primary_element_size]  { 25, 24, 26, 32 };
+    int color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+    int marker_element[primary_element_size]{ 25, 24, 26, 32 };
     double marker_size{ 1.5 };
 
     gStyle->SetLineScalePS(1.5);
@@ -226,8 +219,8 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
         auto count_total{ 0 };
         for (auto element : AtomicInfoHelper::GetStandardElementList())
         {
-            auto amplitude_graph{ ROOTHelper::CreateGraphErrors() };
-            auto width_graph{ ROOTHelper::CreateGraphErrors() };
+            auto amplitude_graph_tmp{ ROOTHelper::CreateGraphErrors() };
+            auto width_graph_tmp{ ROOTHelper::CreateGraphErrors() };
             auto count_element{ 0 };
             for (auto remoteness : AtomicInfoHelper::GetStandardRemotenessList())
             {
@@ -239,10 +232,10 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
                     auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key) };
                     amplitude_array.push_back(std::get<0>(gaus_estimate));
                     width_array.push_back(std::get<1>(gaus_estimate));
-                    amplitude_graph->SetPoint(count_element, count_total, std::get<0>(gaus_estimate));
-                    amplitude_graph->SetPointError(count_element, 0.0, std::get<0>(gaus_variance));
-                    width_graph->SetPoint(count_element, count_total, std::get<1>(gaus_estimate));
-                    width_graph->SetPointError(count_element, 0.0, std::get<1>(gaus_variance));
+                    amplitude_graph_tmp->SetPoint(count_element, count_total, std::get<0>(gaus_estimate));
+                    amplitude_graph_tmp->SetPointError(count_element, 0.0, std::get<0>(gaus_variance));
+                    width_graph_tmp->SetPoint(count_element, count_total, std::get<1>(gaus_estimate));
+                    width_graph_tmp->SetPointError(count_element, 0.0, std::get<1>(gaus_variance));
                     auto element_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ElementTag>(element) };
                     auto remoteness_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::RemotenessTag>(remoteness) };
                     auto branch_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::BranchTag>(branch) };
@@ -252,10 +245,10 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
                 }
             }
             auto color{ AtomicInfoHelper::AtomColorMapping<AtomicInfoHelper::ElementTag>(element) };
-            ROOTHelper::SetMarkerAttribute(amplitude_graph.get(), kFullCircle, marker_size, color);
-            ROOTHelper::SetMarkerAttribute(width_graph.get(), kFullCircle, marker_size, color);
-            amplitude_graph_list[i].push_back(std::move(amplitude_graph));
-            width_graph_list[i].push_back(std::move(width_graph));
+            ROOTHelper::SetMarkerAttribute(amplitude_graph_tmp.get(), kFullCircle, marker_size, color);
+            ROOTHelper::SetMarkerAttribute(width_graph_tmp.get(), kFullCircle, marker_size, color);
+            amplitude_graph_list[i].push_back(std::move(amplitude_graph_tmp));
+            width_graph_list[i].push_back(std::move(width_graph_tmp));
         }
     }
     auto scaling{ 0.3 };
@@ -361,15 +354,8 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
     #ifdef HAVE_ROOT
 
     const int primary_element_size{ 4 };
-    const char * element_label[primary_element_size]
-    {
-        "Alpha Carbon",
-        "Carbonyl Carbon",
-        "Peptide Nitrogen",
-        "Carbonyl Oxygen"
-    };
-    int color_element[primary_element_size]   { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
-    int marker_element[primary_element_size]  { 54, 53, 55, 59 };
+    int color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+    int marker_element[primary_element_size]{ 54, 53, 55, 59 };
 
     gStyle->SetLineScalePS(1.0);
     gStyle->SetGridColor(kGray);
@@ -1139,6 +1125,8 @@ void ModelPainter::PrintWidthSideChainPad(
 void ModelPainter::ModifyAxisLabelSideChain(
     TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list)
 {
+    if (residue < 0 || residue >= AtomicInfoHelper::GetStandardResidueCount()) return;
+
     auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
     auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), x_tick_length, label_list.size()+1);
@@ -1148,7 +1136,8 @@ void ModelPainter::ModifyAxisLabelSideChain(
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
 
-    for (int i = 0; i < label_list.size(); i++)
+    auto label_size{ static_cast<int>(label_list.size()) };
+    for (int i = 0; i < label_size; i++)
     {
         hist->GetXaxis()->ChangeLabel(i+2, 0.0, -1, -1, -1, -1, label_list.at(i).data());
     }

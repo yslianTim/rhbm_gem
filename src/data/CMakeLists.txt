@@ -26,6 +26,7 @@ target_link_libraries(data PUBLIC
     utils
     $<$<BOOL:${USE_SYSTEM_SQLITE3}>:SQLite::SQLite3>
     $<$<NOT:$<BOOL:${USE_SYSTEM_SQLITE3}>>:sqlite3>
+    CompilerFlags
 )
 
 set_target_properties(data PROPERTIES

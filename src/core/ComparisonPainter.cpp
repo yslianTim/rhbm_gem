@@ -587,12 +587,11 @@ void ComparisonPainter::BuildRatioGraph(
     for (int i = 0; i < target_graph->GetN(); i++)
     {
         double x_value_target, y_value_target, x_value_reference, y_value_reference;
-        double x_error_target, y_error_target, x_error_reference, y_error_reference;
+        double x_error_target, y_error_target, y_error_reference;
         target_graph->GetPoint(i, x_value_target, y_value_target);
         x_error_target = target_graph->GetErrorX(i);
         y_error_target = target_graph->GetErrorY(i);
         reference_graph->GetPoint(i, x_value_reference, y_value_reference);
-        x_error_reference = reference_graph->GetErrorX(i);
         y_error_reference = reference_graph->GetErrorY(i);
         auto ratio{ y_value_target / y_value_reference };
         auto error{ CalculateErrorPropagation(y_value_target, y_value_reference, y_error_target, y_error_reference) };
