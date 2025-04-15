@@ -93,7 +93,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
     const int row_size{ 2 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 950, 600) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.1, 0.01, 0.11, 0.07, 0.01, 0.005);
+    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.1f, 0.01f, 0.11f, 0.07f, 0.01f, 0.005f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     
@@ -110,7 +110,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
         "Width",
         "Amplitude"
     };
-    int color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+    short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
 
     std::unique_ptr<TGraphErrors> sim_buried_charge_graph[primary_element_size][row_size];
     std::unique_ptr<TGraphErrors> sim_no_charge_graph[primary_element_size][row_size];
@@ -137,8 +137,8 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
                 y_array[j].push_back(sim_no_charge_graph[i][j]->GetPointY(p));
             }
 
-            ROOTHelper::SetMarkerAttribute(sim_buried_charge_graph[i][j].get(), 20, 1.2, color_element[i]);
-            ROOTHelper::SetMarkerAttribute(sim_no_charge_graph[i][j].get(), 53, 1.2, color_element[i]);
+            ROOTHelper::SetMarkerAttribute(sim_buried_charge_graph[i][j].get(), 20, 1.2f, color_element[i]);
+            ROOTHelper::SetMarkerAttribute(sim_no_charge_graph[i][j].get(), 53, 1.2f, color_element[i]);
             ROOTHelper::SetLineAttribute(sim_buried_charge_graph[i][j].get(), 1, 2, color_element[i]);
             ROOTHelper::SetLineAttribute(sim_no_charge_graph[i][j].get(), 2, 2, color_element[i]);
         }
@@ -168,12 +168,12 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min, x_max, 500, y_min[j], y_max[j]);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 30, 1.0, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 30, 0.005, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), y_factor*0.05/x_factor, 506);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 35, 1.3, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35, 0.01, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), x_factor*0.05/y_factor, 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 30, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 30, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 35, 1.3f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35, 0.01f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("Blurring Width");
             frame[i][j]->GetYaxis()->SetTitle(y_axis_title[j].data());
@@ -198,7 +198,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
         ROOTHelper::SetPaveAttribute(title_text[i].get(), 0.0, 0.2);
         ROOTHelper::SetTextAttribute(title_text[i].get(), 25, 133, 22);
-        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5);
+        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5f);
         title_text[i]->AddText(element_label[i]);
         title_text[i]->Draw();
     }
@@ -221,7 +221,7 @@ void ComparisonPainter::PaintSimulationGausRatio(
     const int row_size{ 1 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 600) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.11, 0.11, 0.15, 0.05, 0.01, 0.01);
+    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.11f, 0.11f, 0.15f, 0.05f, 0.01f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
     
     const int primary_element_size{ 4 };
@@ -254,7 +254,7 @@ void ComparisonPainter::PaintSimulationGausRatio(
             x_array.push_back(ratio_graph[i]->GetPointX(p));
             y_array.push_back(ratio_graph[i]->GetPointY(p));
         }
-        ROOTHelper::SetMarkerAttribute(ratio_graph[i].get(), 20, 1.2, kRed+1);
+        ROOTHelper::SetMarkerAttribute(ratio_graph[i].get(), 20, 1.2f, kRed+1);
         ROOTHelper::SetLineAttribute(ratio_graph[i].get(), 1, 2, kRed+1);
     }
 
@@ -275,12 +275,12 @@ void ComparisonPainter::PaintSimulationGausRatio(
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min, x_max, 500, y_min, y_max);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 40, 1.0, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40, 0.005, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), y_factor*0.05/x_factor, 506);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.3, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.01, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), x_factor*0.05/y_factor, 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 40, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.3f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.01f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("Blurring Width");
             frame[i][j]->GetYaxis()->SetTitle(y_axis_title[i].data());
@@ -321,7 +321,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     const int row_size{ 1 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 500) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.1, 0.01, 0.15, 0.1, 0.01, 0.01);
+    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.1f, 0.01f, 0.15f, 0.1f, 0.01f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     const int primary_element_size{ 4 };
@@ -332,8 +332,8 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
         "Peptide Nitrogen"
     };
 
-    int color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
-    int marker_element[primary_element_size]{ 54, 53, 55, 59 };
+    short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+    short marker_element[primary_element_size]{ 54, 53, 55, 59 };
 
     std::unique_ptr<TGraphErrors> data_graph[primary_element_size][2];
     std::unique_ptr<TGraphErrors> sim_buried_charge_graph[primary_element_size][2];
@@ -374,9 +374,9 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
         x_min[i] = std::get<0>(x_range);
         x_max[i] = std::get<1>(x_range);
 
-        ROOTHelper::SetMarkerAttribute(data_graph[i][1].get(), marker_element[i], 1.3, color_element[i]);
-        ROOTHelper::SetMarkerAttribute(sim_buried_charge_graph[i][1].get(), marker_element[i], 1.3, color_element[i]);
-        ROOTHelper::SetMarkerAttribute(sim_no_charge_graph[i][1].get(), marker_element[i], 1.3, color_element[i]);
+        ROOTHelper::SetMarkerAttribute(data_graph[i][1].get(), marker_element[i], 1.3f, color_element[i]);
+        ROOTHelper::SetMarkerAttribute(sim_buried_charge_graph[i][1].get(), marker_element[i], 1.3f, color_element[i]);
+        ROOTHelper::SetMarkerAttribute(sim_no_charge_graph[i][1].get(), marker_element[i], 1.3f, color_element[i]);
         ROOTHelper::SetLineAttribute(data_graph[i][1].get(), 1, 2, color_element[i]);
         ROOTHelper::SetLineAttribute(sim_buried_charge_graph[i][1].get(), 1, 2, color_element[i]);
         ROOTHelper::SetLineAttribute(sim_no_charge_graph[i][1].get(), 2, 2, color_element[i]);
@@ -398,12 +398,12 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min, y_max);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 0.9, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), y_factor*0.05/x_factor, 506);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.1, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.02, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), x_factor*0.05/y_factor, 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 0.9f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.1f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.02f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("Width");
             frame[i][j]->GetYaxis()->SetTitle("Amplitude Ratio #font[1]{A} / #font[1]{A}_{O}");
@@ -419,7 +419,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
         ROOTHelper::SetPaveAttribute(title_text[i].get(), 0.0, 0.2);
         ROOTHelper::SetTextAttribute(title_text[i].get(), 40, 133, 22);
-        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5);
+        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5f);
         title_text[i]->AddText(element_label[i]);
         title_text[i]->Draw();
 
@@ -453,7 +453,7 @@ void ComparisonPainter::PainMapValueComparison(
     const int row_size{ 1 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1400, 500) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.07, 0.01, 0.15, 0.11, 0.01, 0.01);
+    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.07f, 0.01f, 0.15f, 0.11f, 0.01f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     const int primary_element_size{ 4 };
@@ -465,8 +465,8 @@ void ComparisonPainter::PainMapValueComparison(
         "Carbonyl Oxygen"
     };
 
-    int color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
-    int marker_element[primary_element_size]{ 54, 53, 55, 59 };
+    short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+    short marker_element[primary_element_size]{ 54, 53, 55, 59 };
 
     std::unique_ptr<TGraphErrors> scatter_graph[column_size];
     std::unique_ptr<TF1> fit_function[column_size];
@@ -479,7 +479,7 @@ void ComparisonPainter::PainMapValueComparison(
         scatter_graph[i] = ROOTHelper::CreateGraphErrors();
         BuildMapValueScatterGraph(group_key, scatter_graph[i].get(), model_sim, model_data, 15, 0.0, 1.5);
         r_square[i] = ROOTHelper::PerformLinearRegression(scatter_graph[i].get(), slope[i], intercept[i]);
-        ROOTHelper::SetMarkerAttribute(scatter_graph[i].get(), marker_element[i], 1.0, color_element[i]);
+        ROOTHelper::SetMarkerAttribute(scatter_graph[i].get(), marker_element[i], 1.0f, color_element[i]);
         ROOTHelper::SetLineAttribute(scatter_graph[i].get(), 1, 2, color_element[i]);
 
         fit_function[i] = ROOTHelper::CreateFunction1D(Form("fit_%d", i), "x*[1]+[0]");
@@ -520,12 +520,12 @@ void ComparisonPainter::PainMapValueComparison(
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min, y_max);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 0.9, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), y_factor*0.05/x_factor, 506);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.1, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.02, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), x_factor*0.05/y_factor, 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 0.9f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.1f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.02f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("Simulated Map Value");
             frame[i][j]->GetYaxis()->SetTitle("Real Map Value");
@@ -541,7 +541,7 @@ void ComparisonPainter::PainMapValueComparison(
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
         ROOTHelper::SetPaveAttribute(title_text[i].get(), 0.0, 0.2);
         ROOTHelper::SetTextAttribute(title_text[i].get(), 40, 133, 22);
-        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5);
+        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5f);
         title_text[i]->AddText(element_label[i]);
         title_text[i]->Draw();
 
@@ -653,7 +653,7 @@ void ComparisonPainter::BuildMapValueScatterGraph(
         auto atom2_iter{ std::make_unique<PotentialEntryIterator>(atom_object2) };
         auto data1_array{ atom1_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
         auto data2_array{ atom2_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
-        for (int i = 0; i < bin_size; i++)
+        for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
             auto x_value{ std::get<1>(data1_array.at(i)) };
             auto y_value{ std::get<1>(data2_array.at(i)) };

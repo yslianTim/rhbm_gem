@@ -20,7 +20,7 @@ MapObject::MapObject(
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
     m_map_value_array{ std::move(map_value_array) }
 {
-    for (int i = 0; i < 3; i++)
+    for (size_t i = 0; i < 3; i++)
     {
         m_map_length.at(i) = static_cast<float>(m_grid_size.at(i) * m_grid_spacing.at(i));
         m_overflow.at(i) = static_cast<float>(m_origin.at(i) + m_map_length.at(i) - m_grid_spacing.at(i));
@@ -47,9 +47,9 @@ MapObject::MapObject(const MapObject & other) :
     m_grid_size{ other.m_grid_size }, m_grid_spacing{ other.m_grid_spacing }, m_origin{ other.m_origin },
     m_map_length{ other.m_map_length }, m_overflow{ other.m_overflow }, m_underflow{ other.m_underflow },
     m_upper_bound{ other.m_upper_bound }, m_lower_bound{ other.m_lower_bound },
-    m_map_value_array{ std::make_unique<float[]>(other.m_voxel_size) }
+    m_map_value_array{ std::make_unique<float[]>(static_cast<size_t>(other.m_voxel_size)) }
 {
-    std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(float));
+    std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), static_cast<size_t>(m_voxel_size) * sizeof(float));
     CalculateMapValueMin();
     CalculateMapValueMax();
     CalculateMapValueMean();
@@ -131,7 +131,7 @@ float MapObject::GetMapValue(int index_x, int index_y, int index_z) const
         std::cerr << exception.what() << '\n';
         return 0.0f;
     }
-    return m_map_value_array[GetGlobalIndex(index_x, index_y, index_z)];
+    return m_map_value_array[static_cast<size_t>(GetGlobalIndex(index_x, index_y, index_z))];
 }
 
 void MapObject::CheckIndex(int index_x, int index_y, int index_z) const
@@ -185,7 +185,7 @@ void MapObject::CalculateMapValueSD(void)
 
 void MapObject::MapValueArrayNormalization(void)
 {
-    for (int i = 0; i < m_voxel_size; i++)
+    for (size_t i = 0; i < static_cast<size_t>(m_voxel_size); i++)
     {
         m_map_value_array[i] /= m_map_value_sd;
     }

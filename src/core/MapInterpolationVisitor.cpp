@@ -50,7 +50,7 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     auto grid_spacing{ data_object->GetGridSpacing() };
 
     std::array<float, 3> local;
-    for (int i = 0; i < 3; i++)
+    for (size_t i = 0; i < 3; i++)
     {
         local.at(i) = (position.at(i) - origin.at(i) - index.at(i)*grid_spacing.at(i))/grid_spacing.at(i);
     }
@@ -59,9 +59,9 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     auto cubicInterpolate = [](float p0, float p1, float p2, float p3, float t)
     {
         float a0 = p1;
-        float a1 = 0.5*(p2 - p0);
-        float a2 = 0.5*(-p3 + 4.0*p2 - 5.0*p1 + 2.0*p0);
-        float a3 = 0.5*(p3 - 3.0*p2 + 3.0*p1 - p0);
+        float a1 = 0.5f * (p2 - p0);
+        float a2 = 0.5f * (-p3 + 4.0f*p2 - 5.0f*p1 + 2.0f*p0);
+        float a3 = 0.5f * (p3 - 3.0f*p2 + 3.0f*p1 - p0);
         return a3 * t * t * t + a2 * t * t + a1 * t + a0;
     };
 
@@ -73,21 +73,24 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
         {
             for (int k = -1; k < 3; ++k)
             {
-                values[i + 1][j + 1][k + 1] = data_object->GetMapValue(index.at(0) + i, index.at(1) + j, index.at(2) + k);
+                size_t i_next{ static_cast<size_t>(i + 1) };
+                size_t j_next{ static_cast<size_t>(j + 1) };
+                size_t k_next{ static_cast<size_t>(k + 1) };
+                values[i_next][j_next][k_next] = data_object->GetMapValue(index.at(0) + i, index.at(1) + j, index.at(2) + k);
             }
         }
     }
     // Interpolate along x direction
     std::array<std::array<float, 4>, 4> tempY;
-    for (int j = 0; j < 4; ++j) {
-        for (int k = 0; k < 4; ++k) {
+    for (size_t j = 0; j < 4; ++j) {
+        for (size_t k = 0; k < 4; ++k) {
             tempY[j][k] = cubicInterpolate(values[0][j][k], values[1][j][k], values[2][j][k], values[3][j][k], local.at(0));
         }
     }
 
     // Interpolate along y direction
     std::array<float, 4> tempZ;
-    for (int k = 0; k < 4; ++k) {
+    for (size_t k = 0; k < 4; ++k) {
         tempZ[k] = cubicInterpolate(tempY[0][k], tempY[1][k], tempY[2][k], tempY[3][k], local.at(1));
     }
 

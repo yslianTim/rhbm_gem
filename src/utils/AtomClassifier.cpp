@@ -37,7 +37,7 @@ std::vector<ResidueKeyType> AtomClassifier::GetMainChainResidueClassGroupKeyList
 
     if (residue == -1)
     {
-        group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
+        group_key_list.reserve(static_cast<size_t>(AtomicInfoHelper::GetStandardResidueCount()));
         for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
         {
             auto group_key{ std::make_tuple(residue_id, element_id, remoteness_id, 0, false) };

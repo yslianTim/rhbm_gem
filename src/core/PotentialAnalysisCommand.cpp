@@ -28,7 +28,7 @@ void PotentialAnalysisCommand::Execute(void)
     m_sphere_sampler->Print();
 
     auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_atom_selector, m_sphere_sampler) };
-    analyzer->SetThreadSize(m_thread_size);
+    analyzer->SetThreadSize(static_cast<unsigned int>(m_thread_size));
     analyzer->SetModelObjectKeyTag("model");
     analyzer->SetMapObjectKeyTag("map");
     analyzer->SetFitRange(m_fit_range_min, m_fit_range_max);
@@ -43,12 +43,12 @@ void PotentialAnalysisCommand::Execute(void)
 void PotentialAnalysisCommand::SetThreadSize(int value)
 {
     m_thread_size = value;
-    m_sphere_sampler->SetThreadSize(value);
+    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(value));
 }
 
 void PotentialAnalysisCommand::SetSamplingSize(int value)
 {
-    m_sphere_sampler->SetSamplingSize(value);
+    m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(value));
 }
 
 void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)

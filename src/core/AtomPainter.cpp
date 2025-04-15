@@ -98,7 +98,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     ROOTHelper::SetLineAttribute(ref_line.get(), 2, 1);
     ref_line->Draw();
 
-    auto marker_size{ 1.5 };
+    auto marker_size{ 1.5f };
     ROOTHelper::SetMarkerAttribute(map_value_graph.get(), 20, marker_size, kSpring-1);
     ROOTHelper::SetLineAttribute(map_value_graph.get(), 1, 1, kBlack);
     map_value_graph->Draw("P SAME");
@@ -135,17 +135,17 @@ void AtomPainter::PrintDemoMainPad(TPad * pad, TH2 * frame)
     ROOTHelper::SetPadDefaultStyle(pad);
     ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0, 0, 0);
     ROOTHelper::SetPadMarginInCanvas(pad, 0.18, 0.02, 0.13, 0.02);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 60.0, 1.1);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0, 1.3);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0, 0.01);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 60.0, 0.02);
+    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 60.0, 1.1f);
+    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0, 1.3f);
+    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0, 0.01f);
+    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 60.0, 0.02f);
 
     ROOTHelper::SetPadFrameAttribute(pad, 0, 0, 4000, kWhite, 1, 0);
 
     auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.04, 0) };
     auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.05, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), x_tick_length);
-    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), y_tick_length);
+    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length));
+    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length));
     frame->SetStats(0);
     frame->GetXaxis()->CenterTitle();
     frame->GetYaxis()->CenterTitle();

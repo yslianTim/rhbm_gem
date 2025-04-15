@@ -178,7 +178,7 @@ std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceA
     }
 
     std::vector<std::tuple<float, float>> binned_distance_and_map_value_list;
-    binned_distance_and_map_value_list.reserve(bin_size);
+    binned_distance_and_map_value_list.reserve(static_cast<size_t>(bin_size));
     for (int i = 0; i < bin_size; i++)
     {
         auto x_value{ static_cast<float>(x_min + (i + 0.5) * bin_spacing) };
@@ -195,7 +195,7 @@ std::tuple<float, float> PotentialEntryIterator::GetDistanceRange(double margin_
         throw std::runtime_error("Atomic entry is not available.");
     }
     std::vector<float> distance_array;
-    distance_array.reserve(m_atomic_entry->GetDistanceAndMapValueListSize());
+    distance_array.reserve(static_cast<size_t>(m_atomic_entry->GetDistanceAndMapValueListSize()));
     for (auto & [distance, map_value] : m_atomic_entry->GetDistanceAndMapValueList())
     {
         distance_array.emplace_back(distance);
@@ -210,7 +210,7 @@ std::tuple<float, float> PotentialEntryIterator::GetMapValueRange(double margin_
         throw std::runtime_error("Atomic entry is not available.");
     }
     std::vector<float> map_value_array;
-    map_value_array.reserve(m_atomic_entry->GetDistanceAndMapValueListSize());
+    map_value_array.reserve(static_cast<size_t>(m_atomic_entry->GetDistanceAndMapValueListSize()));
     for (auto & [distance, map_value] : m_atomic_entry->GetDistanceAndMapValueList())
     {
         map_value_array.emplace_back(map_value);

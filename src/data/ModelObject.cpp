@@ -88,7 +88,7 @@ std::tuple<double, double> ModelObject::GetModelPositionRange(
     position_list.reserve(m_atom_list.size());
     for (auto & atom : m_atom_list)
     {
-        position_list.emplace_back(atom->GetPosition().at(axis));
+        position_list.emplace_back(atom->GetPosition().at(static_cast<size_t>(axis)));
     }
     return ArrayStats<double>::ComputeScalingRangeTuple(position_list, margin);
 }

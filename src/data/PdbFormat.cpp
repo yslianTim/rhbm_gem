@@ -52,7 +52,7 @@ void PdbFormat::LoadAtomSiteData(const std::string & filename)
     while (std::getline(infile, line))
     {
         char * buffer{ line.data() };
-        std::string header_str{ line.substr(0, header_string_length) };
+        std::string header_str{ line.substr(0, static_cast<size_t>(header_string_length)) };
         if (header_str == "ENDMDL") break; // end of reading file for multi-model PDB
         switch (MapToHeaderType(header_str))
         {

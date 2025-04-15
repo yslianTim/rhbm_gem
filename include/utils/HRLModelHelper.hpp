@@ -145,11 +145,11 @@ public:
 
     void SetDataArray(const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array);
     void RunEstimation(double alpha_r, double alpha_g);
-    void SetMaximumIteration(unsigned int size) { m_maximum_iteration = size; }
+    void SetMaximumIteration(unsigned int size) { m_maximum_iteration = static_cast<int>(size); }
     void SetTolerance(double value) { m_tolerance = value; }
     bool GetOutlierFlag(int id) const { return m_outlier_flag_array(id); }
     double GetStatisticalDistance(int id) const { return m_statistical_distance_array(id); }
-    const Eigen::MatrixXd & GetCapitalSigmaMatrixPosterior(int id) const { return m_capital_sigma_posterior_list.at(id); }
+    const Eigen::MatrixXd & GetCapitalSigmaMatrixPosterior(int id) const { return m_capital_sigma_posterior_list.at(static_cast<size_t>(id)); }
     const Eigen::MatrixXd & GetCapitalLambdaMatrix(void) const { return m_capital_lambda; }
     const Eigen::VectorXd & GetMuVectorPrior(void) const { return m_mu_prior; }
     const Eigen::VectorXd & GetMuVectorMDPDE(void) const { return m_mu_MDPDE; }

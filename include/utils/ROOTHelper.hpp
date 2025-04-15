@@ -62,7 +62,7 @@ public:
     static void SetAxisLabelAttribute(
         TAttAxis * axis, float size, float offset=0.005f, short font=133, short color=1);
     static void SetAxisTickAttribute(
-        TAttAxis * axis, float length=0.03, int division=510);
+        TAttAxis * axis, float length=0.03f, int division=510);
     static void SetTextAttribute(
         TAttText * _text,
         float size=1.0f, short font=133, short align=12, float angle=0.0f, short color=1, float transparent=1.0f);

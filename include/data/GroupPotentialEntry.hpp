@@ -29,7 +29,7 @@ public:
     GroupPotentialEntry(void) = default;
     ~GroupPotentialEntry() = default;
     void InsertGroupKey(const void * group_key) override { m_group_key_set.insert(GetKey(group_key)); }
-    void ReserveAtomObjectPtrList(const void * group_key, int size) override { m_group_atom_list_map[GetKey(group_key)].reserve(size); }
+    void ReserveAtomObjectPtrList(const void * group_key, int size) override { m_group_atom_list_map[GetKey(group_key)].reserve(static_cast<size_t>(size)); }
     void AddAtomObjectPtr(const void * group_key, AtomObject * atom_object) override { m_group_atom_list_map[GetKey(group_key)].emplace_back(atom_object); }
     void AddGausEstimateMean(const void * group_key, Eigen::VectorXd vec) override { m_gaus_estimate_mean_map[GetKey(group_key)] = std::make_tuple(vec(0), vec(1)); }
     void AddGausEstimateMean(const void * group_key, double v0, double v1) override { m_gaus_estimate_mean_map[GetKey(group_key)] = std::make_tuple(v0, v1); }

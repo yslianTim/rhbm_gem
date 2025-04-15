@@ -14,7 +14,8 @@ template <typename Type>
 class ArrayStats
 {
 public:
-    static Type ComputeMin(const Type * data, int size, int thread_size = 1)
+    static Type ComputeMin(
+        const Type * data, int size, [[maybe_unused]] int thread_size = 1)
     {
         if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
         Type min_value{ std::numeric_limits<Type>::max() };
@@ -28,7 +29,8 @@ public:
         return min_value;
     }
 
-    static Type ComputeMax(const Type * data, int size, int thread_size = 1)
+    static Type ComputeMax(
+        const Type * data, int size, [[maybe_unused]] int thread_size = 1)
     {
         if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
         Type max_value{ std::numeric_limits<Type>::lowest() };
@@ -42,7 +44,8 @@ public:
         return max_value;
     }
 
-    static Type ComputeMean(const Type * data, int size, int thread_size = 1)
+    static Type ComputeMean(
+        const Type * data, int size, [[maybe_unused]] int thread_size = 1)
     {
         if (size <= 0) return Type(0);
         double sum{ 0.0 };
@@ -56,7 +59,8 @@ public:
         return static_cast<Type>(sum / size);
     }
 
-    static Type ComputeStandardDeviation(const Type * data, int size, Type mean, int thread_size = 1)
+    static Type ComputeStandardDeviation(
+        const Type * data, int size, Type mean, [[maybe_unused]] int thread_size = 1)
     {
         if (size <= 1) return Type(0);
         double sum_sq_diff{ 0.0 };
@@ -71,7 +75,7 @@ public:
         return static_cast<Type>(std::sqrt(sum_sq_diff / (size - 1)));
     }
 
-    static Type ComputeMedian(const std::vector<Type>& data)
+    static Type ComputeMedian(const std::vector<Type> & data)
     {
         if (data.empty())
         {

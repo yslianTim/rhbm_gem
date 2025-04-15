@@ -326,7 +326,7 @@ void ROOTHelper::SetPadInCanvas(
     TVirtualPad * pad, int width, int height,
     int division_x, int division_y, float margin_x, float margin_y)
 {
-    pad->SetCanvasSize(width, height);
+    pad->SetCanvasSize(static_cast<unsigned int>(width), static_cast<unsigned int>(height));
     pad->Divide(division_x, division_y, margin_x, margin_y);
 }
 

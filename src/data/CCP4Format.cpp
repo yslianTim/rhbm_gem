@@ -78,18 +78,19 @@ void CCP4Format::LoadDataArray(const std::string & filename)
     size_t total_bytes{ num_voxels * element_size };
     
     auto blob_buffer{ std::make_unique<char[]>(total_bytes) };
-    infile.read(blob_buffer.get(), total_bytes);
+    infile.read(blob_buffer.get(), static_cast<long>(total_bytes));
     if (!infile)
     {
         throw std::runtime_error("Failed to read blob data from file");
     }
     
-    auto m_thread_size{ 4 };
     auto data_array{ std::make_unique<float[]>(num_voxels) };
     switch (static_cast<MODE>(m_header.mode))
     {
         case MODE::SIGNED_FLOAT32:
-            #pragma omp parallel for num_threads(m_thread_size)
+            #ifdef USE_OPENMP
+            #pragma omp parallel for num_threads(4)
+            #endif
             for (size_t v = 0; v < num_voxels; v++)
             {
                 data_array[v] = *reinterpret_cast<const float*>(blob_buffer.get() + v * element_size);

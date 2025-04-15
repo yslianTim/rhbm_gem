@@ -15,8 +15,8 @@ template <typename Tuple, std::size_t... Is>
 std::size_t hash_tuple_impl(const Tuple & t, std::index_sequence<Is...>)
 {
     std::size_t seed{ 0 };
-    //((hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t)))), ...);
-    std::initializer_list<int>{ (hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t))), 0)... };
+    ((hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t)))), ...);
+    //std::initializer_list<int>{ (hash_combine(seed, std::hash<std::tuple_element_t<Is, Tuple>>{}(std::get<Is>(t))), 0)... };
     return seed;
 }
 

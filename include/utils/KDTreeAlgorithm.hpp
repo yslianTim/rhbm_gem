@@ -87,7 +87,7 @@ private:
         }
 
         constexpr int dimension{ 3 };
-        int axis{ depth % dimension };
+        auto axis{ static_cast<size_t>(depth % dimension) };
         auto count{ std::distance(begin, end) };
         auto mid_iter{ begin + count / 2 };
 
@@ -114,9 +114,9 @@ private:
     {
         auto position_a{ node_a->GetPosition() };
         auto position_b{ node_b->GetPosition() };
-        auto dimension{ static_cast<int>(position_a.size()) };
+        auto dimension{ static_cast<size_t>(position_a.size()) };
         auto squared_norm{ 0.0 };
-        for (int i = 0; i < dimension; i++)
+        for (size_t i = 0; i < dimension; i++)
         {
             squared_norm += std::pow(position_a.at(i) - position_b.at(i), 2.0);
         }
@@ -128,7 +128,7 @@ private:
     {
         auto position_a{ node_a->GetPosition() };
         auto position_b{ node_b->GetPosition() };
-        return position_a.at(axis) - position_b.at(axis);
+        return position_a.at(static_cast<size_t>(axis)) - position_b.at(static_cast<size_t>(axis));
     }
 
     static void KNearestNeighborsHelper(

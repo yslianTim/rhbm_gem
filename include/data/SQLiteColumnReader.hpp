@@ -59,10 +59,10 @@ struct SQLiteColumnReader<std::vector<float>>
         {
             return {};
         }
-        int count{ blob_size / static_cast<int>(sizeof(float)) };
+        auto count{ blob_size / static_cast<int>(sizeof(float)) };
         std::vector<float> result;
-        result.resize(count);
-        std::memcpy(result.data(), blob_data, blob_size);
+        result.resize(static_cast<size_t>(count));
+        std::memcpy(result.data(), blob_data, static_cast<size_t>(blob_size));
         return result;
     }
 };
@@ -81,8 +81,8 @@ struct SQLiteColumnReader<std::vector<double>>
         }
         int count{ blob_size / static_cast<int>(sizeof(double)) };
         std::vector<double> result;
-        result.resize(count);
-        std::memcpy(result.data(), blob_data, blob_size);
+        result.resize(static_cast<size_t>(count));
+        std::memcpy(result.data(), blob_data, static_cast<size_t>(blob_size));
         return result;
     }
 };
@@ -101,7 +101,7 @@ struct SQLiteColumnReader<std::vector<std::tuple<float, float>>>
         }
         int count{ blob_size / (2 * static_cast<int>(sizeof(float))) };
         std::vector<std::tuple<float, float>> result;
-        result.reserve(count);
+        result.reserve(static_cast<size_t>(count));
         const float * blob_floats{ reinterpret_cast<const float *>(blob_data) };
         for (int i = 0; i < count; ++i)
         {
@@ -127,7 +127,7 @@ struct SQLiteColumnReader<std::vector<std::tuple<double, double>>>
         }
         int count{ blob_size / (2 * static_cast<int>(sizeof(double))) };
         std::vector<std::tuple<double, double>> result;
-        result.reserve(count);
+        result.reserve(static_cast<size_t>(count));
         const double * blob_doubles{ reinterpret_cast<const double *>(blob_data) };
         for (int i = 0; i < count; ++i)
         {

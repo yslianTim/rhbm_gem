@@ -51,7 +51,7 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitModelObject");
     std::cout <<"- Visiting ModelObject..." << std::endl;
-    auto selected_atom_size{ data_object->GetNumberOfSelectedAtom() };
+    auto selected_atom_size{ static_cast<size_t>(data_object->GetNumberOfSelectedAtom()) };
     const auto & atom_list{ data_object->GetComponentsList() };
     m_selected_atom_list.clear();
     m_selected_atom_list.reserve(selected_atom_size);
@@ -146,12 +146,12 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
             auto atom_list{ group_potential_entry->GetAtomObjectPtrList(&group_key) };
             auto group_size{ static_cast<int>(atom_list.size()) };
             std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
-            data_array.reserve(group_size);
+            data_array.reserve(static_cast<size_t>(group_size));
             for (auto atom : atom_list)
             {
                 auto entry{ atom->GetAtomicPotentialEntry() };
                 std::vector<Eigen::VectorXd> sampling_entry_list;
-                sampling_entry_list.reserve(entry->GetDistanceAndMapValueListSize());
+                sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
                 for (auto & data_entry : entry->GetDistanceAndMapValueList())
                 {
                     auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
