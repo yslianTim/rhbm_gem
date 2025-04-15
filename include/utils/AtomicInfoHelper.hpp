@@ -9,6 +9,9 @@
 #include <exception>
 #include <unordered_map>
 
+#define _USE_MATH_DEFINES // for MSVC compiler in Windows platform
+#include <cmath>
+
 enum class Residue : int
 {
     ALA =  0, ARG =  1, ASN =  2, ASP =  3, CYS =  4,
