@@ -1,5 +1,6 @@
 #include "FileProcessFactoryBase.hpp"
 #include "ModelFileReader.hpp"
+#include "ModelFileWriter.hpp"
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
 
@@ -13,4 +14,11 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
     model_object->SetPdbID(file_reader->GetPdbID());
     model_object->SetEmdID(file_reader->GetEmdID());
     return model_object;
+}
+
+void ModelObjectFactory::OutputDataObject(const std::string & filename, DataObjectBase * data_object)
+{
+    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
+    auto file_writer{ std::make_unique<ModelFileWriter>(filename, model_object) };
+    file_writer->Write();
 }

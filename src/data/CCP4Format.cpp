@@ -31,6 +31,22 @@ void CCP4Format::LoadHeader(const std::string & filename)
     }
 }
 
+void CCP4Format::SaveHeader(const std::string & filename)
+{
+    std::ofstream outfile{ filename, std::ios::binary };
+    if (!outfile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("SaveHeader failed!");
+    }
+    
+    outfile.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
+    if (!outfile)
+    {
+        throw std::runtime_error("SaveHeader failed!");
+    }
+}
+
 void CCP4Format::PrintHeader(void) const
 {
     std::cout << "CCP4 Header Info:" << std::endl;
@@ -102,6 +118,28 @@ void CCP4Format::LoadDataArray(const std::string & filename)
     }
 }
 
+void CCP4Format::SaveDataArray(const std::string & filename)
+{
+    std::ofstream outfile{ filename, std::ios::binary };
+    if (!outfile)
+    {
+        throw std::runtime_error("Cannot open the file: " + filename);
+    }
+    
+    size_t num_voxels{ static_cast<size_t>(m_header.array_size[0]) *
+                       static_cast<size_t>(m_header.array_size[1]) *
+                       static_cast<size_t>(m_header.array_size[2]) };
+    
+    size_t element_size{ GetElementSize() };
+    size_t total_bytes{ num_voxels * element_size };
+    
+    outfile.write(reinterpret_cast<const char*>(m_data_array.get()), static_cast<long>(total_bytes));
+    if (!outfile)
+    {
+        throw std::runtime_error("Failed to write data array to file");
+    }
+}
+
 std::unique_ptr<float[]> CCP4Format::GetDataArray(void)
 {
     return std::move(m_data_array);
@@ -132,4 +170,30 @@ std::array<float, 3> CCP4Format::GetOrigin(void)
     origin.at(1) = 0.0;
     origin.at(2) = 0.0;
     return origin;
+}
+
+void CCP4Format::SetDataArray(size_t array_size, const float * data_array)
+{
+    m_data_array = std::make_unique<float[]>(array_size);
+    std::memcpy(m_data_array.get(), data_array, array_size * sizeof(float));
+}
+
+void CCP4Format::SetGridSize(const std::array<int, 3> & grid_size)
+{
+    std::memcpy(m_header.grid_size, grid_size.data(), sizeof(m_header.grid_size));
+}
+
+void CCP4Format::SetGridSpacing(const std::array<float, 3> & grid_spacing)
+{
+    m_header.map_length[0] = grid_spacing.at(0) * static_cast<float>(m_header.grid_size[0]);
+    m_header.map_length[1] = grid_spacing.at(1) * static_cast<float>(m_header.grid_size[1]);
+    m_header.map_length[2] = grid_spacing.at(2) * static_cast<float>(m_header.grid_size[2]);
+}
+
+void CCP4Format::SetOrigin(const std::array<float, 3> & origin)
+{
+    if (origin.at(0) != 0.0 || origin.at(1) != 0.0 || origin.at(2) != 0.0)
+    {
+        throw std::runtime_error("CCP4 format does not support setting origin");
+    }
 }

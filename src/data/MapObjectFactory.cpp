@@ -1,5 +1,6 @@
 #include "FileProcessFactoryBase.hpp"
 #include "MapFileReader.hpp"
+#include "MapFileWriter.hpp"
 #include "MapObject.hpp"
 
 #include <stdexcept>
@@ -14,4 +15,11 @@ std::unique_ptr<DataObjectBase> MapObjectFactory::CreateDataObject(const std::st
         file_reader->GetOriginArray(),
         file_reader->GetMapValueArray()
     );
+}
+
+void MapObjectFactory::OutputDataObject(const std::string & filename, DataObjectBase * data_object)
+{
+    auto map_object{ dynamic_cast<MapObject *>(data_object) };
+    auto file_writer{ std::make_unique<MapFileWriter>(filename, map_object) };
+    file_writer->Write();
 }

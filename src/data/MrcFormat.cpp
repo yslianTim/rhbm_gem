@@ -31,6 +31,22 @@ void MrcFormat::LoadHeader(const std::string & filename)
     }
 }
 
+void MrcFormat::SaveHeader(const std::string & filename)
+{
+    std::ofstream outfile{ filename, std::ios::binary };
+    if (!outfile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("SaveHeader failed!");
+    }
+    
+    outfile.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
+    if (!outfile)
+    {
+        throw std::runtime_error("SaveHeader failed!");
+    }
+}
+
 void MrcFormat::PrintHeader(void) const
 {
     std::cout << "MRC Header Info:" << std::endl;
@@ -112,6 +128,28 @@ void MrcFormat::LoadDataArray(const std::string & filename)
     }
 }
 
+void MrcFormat::SaveDataArray(const std::string & filename)
+{
+    std::ofstream outfile{ filename, std::ios::binary };
+    if (!outfile)
+    {
+        throw std::runtime_error("Cannot open the file: " + filename);
+    }
+    
+    size_t num_voxels{ static_cast<size_t>(m_header.array_size[0]) *
+                       static_cast<size_t>(m_header.array_size[1]) *
+                       static_cast<size_t>(m_header.array_size[2]) };
+    
+    size_t element_size{ GetElementSize() };
+    size_t total_bytes{ num_voxels * element_size };
+    
+    outfile.write(reinterpret_cast<const char*>(m_data_array.get()), static_cast<long>(total_bytes));
+    if (!outfile)
+    {
+        throw std::runtime_error("Failed to write data array to file");
+    }
+}
+
 std::unique_ptr<float[]> MrcFormat::GetDataArray(void)
 {
     return std::move(m_data_array);
@@ -142,4 +180,27 @@ std::array<float, 3> MrcFormat::GetOrigin(void)
     origin.at(1) = m_header.origin[1];
     origin.at(2) = m_header.origin[2];
     return origin;
+}
+
+void MrcFormat::SetDataArray(size_t array_size, const float * data_array)
+{
+    m_data_array = std::make_unique<float[]>(array_size);
+    std::memcpy(m_data_array.get(), data_array, array_size * sizeof(float));
+}
+
+void MrcFormat::SetGridSize(const std::array<int, 3> & grid_size)
+{
+    std::memcpy(m_header.grid_size, grid_size.data(), sizeof(m_header.grid_size));
+}
+
+void MrcFormat::SetGridSpacing(const std::array<float, 3> & grid_spacing)
+{
+    m_header.cell_dimension[0] = grid_spacing.at(0) * static_cast<float>(m_header.grid_size[0]);
+    m_header.cell_dimension[1] = grid_spacing.at(1) * static_cast<float>(m_header.grid_size[1]);
+    m_header.cell_dimension[2] = grid_spacing.at(2) * static_cast<float>(m_header.grid_size[2]);
+}
+
+void MrcFormat::SetOrigin(const std::array<float, 3> & origin)
+{
+    std::memcpy(m_header.origin, origin.data(), sizeof(m_header.origin));
 }

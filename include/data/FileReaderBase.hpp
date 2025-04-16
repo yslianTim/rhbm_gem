@@ -1,9 +1,5 @@
 #pragma once
 
-#include <iostream>
-#include <memory>
-#include <string>
-
 class FileReaderBase
 {
 public:

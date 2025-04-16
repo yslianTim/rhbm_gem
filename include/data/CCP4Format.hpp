@@ -1,8 +1,6 @@
 #pragma once
 
-#include <string>
 #include <vector>
-#include <memory>
 #include "MapFileFormatBase.hpp"
 
 class CCP4Format : public MapFileFormatBase
@@ -62,12 +60,19 @@ public:
     CCP4Format(void);
     ~CCP4Format();
     void LoadHeader(const std::string & filename) override;
+    void SaveHeader(const std::string & filename) override;
     void PrintHeader(void) const override;
     void LoadDataArray(const std::string & filename) override;
+    void SaveDataArray(const std::string & filename) override;
     std::unique_ptr<float[]> GetDataArray(void) override;
     std::array<int, 3> GetGridSize(void) override;
     std::array<float, 3> GetGridSpacing(void) override;
     std::array<float, 3> GetOrigin(void) override;
+    void SetDataArray(size_t array_size, const float * data_array) override;
+    void SetGridSize(const std::array<int, 3> & grid_size) override;
+    void SetGridSpacing(const std::array<float, 3> & grid_spacing) override;
+    void SetOrigin(const std::array<float, 3> & origin) override;
+
     const CCP4Header & GetHeader(void) const { return m_header; }
     
 private:

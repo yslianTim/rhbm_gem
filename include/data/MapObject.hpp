@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <array>
@@ -29,8 +30,11 @@ public:
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag(void) const override { return m_key_tag; }
 
-    std::array<float, 3> GetGridSpacing(void) { return m_grid_spacing; }
-    std::array<float, 3> GetOrigin(void) { return m_origin; }
+    std::array<int, 3> GetGridSize(void) const { return m_grid_size; }
+    std::array<float, 3> GetGridSpacing(void) const { return m_grid_spacing; }
+    std::array<float, 3> GetOrigin(void) const { return m_origin; }
+    std::size_t GetMapValueArraySize(void) const { return static_cast<size_t>(m_voxel_size); }
+    const float * GetMapValueArray(void) const { return m_map_value_array.get(); }
     std::array<int, 3> GetIndexFromPosition(const std::array<float, 3> & position) const;
     int GetGlobalIndex(int index_x, int index_y, int index_z) const;
     float GetMapValue(int index_x, int index_y, int index_z) const;

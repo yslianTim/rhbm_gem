@@ -51,6 +51,21 @@ void DataObjectManager::ProcessFile(const std::string & filename, const std::str
     m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
 }
 
+void DataObjectManager::ProduceFile(const std::string & filename, const std::string & key_tag)
+{
+    ScopeTimer timer("DataObjectManager::ProduceFile");
+    if (m_data_object_map.find(key_tag) == m_data_object_map.end())
+    {
+        std::cout <<"The data object with key tag: ["<< key_tag <<"] is not exists"
+                  <<", no file will be produced."<< std::endl;
+        return;
+    }
+    auto data_object{ m_data_object_map.at(key_tag).get() };
+    auto file_extension{ FilePathHelper::GetExtension(filename) };
+    auto factory{ CreateFactory(file_extension) };
+    factory->OutputDataObject(filename, data_object);
+};
+
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
 {
     ScopeTimer timer("DataObjectManager::LoadDataObject");

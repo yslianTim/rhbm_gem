@@ -19,6 +19,7 @@ public:
     DataObjectManager(const std::string & dbname);
     ~DataObjectManager();
     void ProcessFile(const std::string & filename, const std::string & key_tag);
+    void ProduceFile(const std::string & filename, const std::string & key_tag);
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(DataObjectVisitorBase * visitor);
