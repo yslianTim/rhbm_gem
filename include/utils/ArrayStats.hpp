@@ -47,8 +47,11 @@ public:
     static Type ComputeMean(
         const Type * data, int size, [[maybe_unused]] int thread_size = 1)
     {
-        if (size <= 0) return Type(0);
-        double sum{ 0.0 };
+        if (size <= 0)
+        {
+            return static_cast<Type>(0.0);
+        }
+        auto sum{ static_cast<Type>(0.0) };
         #ifdef USE_OPENMP
         #pragma omp parallel for reduction(+:sum) num_threads(thread_size)
         #endif
@@ -56,30 +59,33 @@ public:
         {
             sum += data[i];
         }
-        return static_cast<Type>(sum / size);
+        return sum / static_cast<Type>(size);
     }
 
     static Type ComputeStandardDeviation(
         const Type * data, int size, Type mean, [[maybe_unused]] int thread_size = 1)
     {
-        if (size <= 1) return Type(0);
-        double sum_sq_diff{ 0.0 };
+        if (size <= 1)
+        {
+            return static_cast<Type>(0.0);
+        }
+        auto sum_sq_diff{ static_cast<Type>(0.0) };
         #ifdef USE_OPENMP
         #pragma omp parallel for reduction(+:sum_sq_diff) num_threads(thread_size)
         #endif
         for (int i = 0; i < size; i++)
         {
-            double diff{ static_cast<double>(data[i]) - static_cast<double>(mean) };
+            auto diff{ static_cast<Type>(data[i]) - static_cast<Type>(mean) };
             sum_sq_diff += diff * diff;
         }
-        return static_cast<Type>(std::sqrt(sum_sq_diff / (size - 1)));
+        return std::sqrt(sum_sq_diff / static_cast<Type>(size - 1));
     }
 
     static Type ComputeMedian(const std::vector<Type> & data)
     {
         if (data.empty())
         {
-            return Type(0);
+            return static_cast<Type>(0.0);
         }
         
         std::vector<Type> sorted_data(data);
@@ -98,7 +104,10 @@ public:
 
     static std::tuple<Type, Type> ComputeRangeTuple(const std::vector<Type> & data, int thread_size = 1)
     {
-        if (data.empty()) return std::make_tuple(0.0, 0.0);
+        if (data.empty())
+        {
+            return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
+        }
         auto min_value{ ComputeMin(data.data(), static_cast<int>(data.size()), thread_size) };
         auto max_value{ ComputeMax(data.data(), static_cast<int>(data.size()), thread_size) };
         return std::make_tuple(min_value, max_value);

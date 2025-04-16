@@ -12,10 +12,10 @@ template <typename NodeType>
 struct KDNode
 {
     NodeType * m_node;
-    int m_axis;
+    size_t m_axis;
     std::unique_ptr<KDNode> m_left;
     std::unique_ptr<KDNode> m_right;
-    KDNode(NodeType * node, int axis) :
+    KDNode(NodeType * node, size_t axis) :
         m_node{ node }, m_axis{ axis }, m_left{ nullptr }, m_right{ nullptr } {}
 };
 
@@ -48,7 +48,7 @@ public:
     }
 
     static std::vector<NodeType *> KNearestNeighbors(
-        const KDNode<NodeType> * root_kd_node, const NodeType * query_node, int k_size)
+        const KDNode<NodeType> * root_kd_node, const NodeType * query_node, size_t k_size)
     {
         if (k_size <= 0) return {};
 
@@ -124,7 +124,7 @@ private:
     }
 
     static double ComputeNodeDifference(
-        const NodeType * node_a, const NodeType * node_b, int axis)
+        const NodeType * node_a, const NodeType * node_b, size_t axis)
     {
         auto position_a{ node_a->GetPosition() };
         auto position_b{ node_b->GetPosition() };
@@ -137,7 +137,7 @@ private:
     {
         if (kd_node == nullptr) return;
 
-        double dist{ ComputeNodeDistanceSquare(query_node, kd_node->m_node) };
+        auto dist{ ComputeNodeDistanceSquare(query_node, kd_node->m_node) };
         if (static_cast<int>(max_heap.size()) < k)
         {
             max_heap.push(DistNode(dist, kd_node->m_node));
@@ -148,15 +148,15 @@ private:
             max_heap.push(DistNode(dist, kd_node->m_node));
         }
 
-        int axis{ kd_node->m_axis };
-        double diff{ ComputeNodeDifference(query_node, kd_node->m_node, axis) };
+        auto axis{ kd_node->m_axis };
+        auto diff{ ComputeNodeDifference(query_node, kd_node->m_node, axis) };
 
         const KDNode<NodeType> * next_branch{ (diff < 0.0) ? kd_node->m_left.get() : kd_node->m_right.get() };
         const KDNode<NodeType> * other_branch{ (diff < 0.0) ? kd_node->m_right.get() : kd_node->m_left.get() };
 
         KNearestNeighborsHelper(next_branch, query_node, k, max_heap);
 
-        double dist_axis{ diff * diff };
+        auto dist_axis{ diff * diff };
         if (static_cast<int>(max_heap.size()) < k || dist_axis < max_heap.top().m_distance)
         {
             KNearestNeighborsHelper(other_branch, query_node, k, max_heap);
