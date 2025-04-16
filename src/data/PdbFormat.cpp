@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS // To disable deprecation warnings for sscanf
 #include "PdbFormat.hpp"
 #include "AtomObject.hpp"
 #include "StringHelper.hpp"
@@ -6,8 +7,6 @@
 #include <iostream>
 #include <cstring>
 #include <stdexcept>
-
-#define _CRT_SECURE_NO_WARNINGS // To disable deprecation warnings for sscanf
 
 PdbFormat::PdbFormat(void)
 {
@@ -142,12 +141,11 @@ PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const
 {
     try
     {
-        header_map.at(name);
+        return header_map.at(name);
     }
     catch(const std::exception & except)
     {
         std::cerr << except.what() << std::endl;
         return PDB_HEADER::UNK;
     }
-    return header_map.at(name);
 }

@@ -78,7 +78,7 @@ void ModelObject::BuildKDTreeRoot(void)
     {
         atom_ptr_list.emplace_back(atom.get());
     }
-    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list);
+    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0);
 }
 
 std::tuple<double, double> ModelObject::GetModelPositionRange(

@@ -105,7 +105,7 @@ public:
     }
 
     static std::tuple<Type, Type> ComputeScalingRangeTuple(
-        const std::vector<Type> & data, double scaling, int thread_size = 1)
+        const std::vector<Type> & data, Type scaling, int thread_size = 1)
     {
         auto range_tuple{ ComputeRangeTuple(data, thread_size) };
         auto range{ std::get<1>(range_tuple) - std::get<0>(range_tuple) };

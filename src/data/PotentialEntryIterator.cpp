@@ -200,7 +200,7 @@ std::tuple<float, float> PotentialEntryIterator::GetDistanceRange(double margin_
     {
         distance_array.emplace_back(distance);
     }
-    return ArrayStats<float>::ComputeScalingRangeTuple(distance_array, margin_rate);
+    return ArrayStats<float>::ComputeScalingRangeTuple(distance_array, static_cast<float>(margin_rate));
 }
 
 std::tuple<float, float> PotentialEntryIterator::GetMapValueRange(double margin_rate) const
@@ -215,7 +215,7 @@ std::tuple<float, float> PotentialEntryIterator::GetMapValueRange(double margin_
     {
         map_value_array.emplace_back(map_value);
     }
-    return ArrayStats<float>::ComputeScalingRangeTuple(map_value_array, margin_rate);
+    return ArrayStats<float>::ComputeScalingRangeTuple(map_value_array, static_cast<float>(margin_rate));
 }
 
 double PotentialEntryIterator::GetAmplitudeEstimateMDPDE(void) const

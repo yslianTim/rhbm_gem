@@ -196,7 +196,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
         }
         title_text[i] = ROOTHelper::CreatePaveText(0.01, 1.01, 0.99, 1.16, "nbNDC ARC", true);
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
-        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0.0, 0.2);
+        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
         ROOTHelper::SetTextAttribute(title_text[i].get(), 25, 133, 22);
         ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5f);
         title_text[i]->AddText(element_label[i]);
@@ -417,7 +417,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
         }
         title_text[i] = ROOTHelper::CreatePaveText(0.01, 1.01, 0.99, 1.13, "nbNDC ARC", true);
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
-        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0.0, 0.2);
+        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
         ROOTHelper::SetTextAttribute(title_text[i].get(), 40, 133, 22);
         ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5f);
         title_text[i]->AddText(element_label[i]);
@@ -539,7 +539,7 @@ void ComparisonPainter::PainMapValueComparison(
         }
         title_text[i] = ROOTHelper::CreatePaveText(0.01, 1.01, 0.99, 1.14, "nbNDC ARC", true);
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
-        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0.0, 0.2);
+        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
         ROOTHelper::SetTextAttribute(title_text[i].get(), 40, 133, 22);
         ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5f);
         title_text[i]->AddText(element_label[i]);

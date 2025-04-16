@@ -5,13 +5,15 @@
 #undef __ARM_NEON__
 #endif
 
-#define _USE_MATH_DEFINES // for MSVC compiler in Windows platform
-
 #include <iostream>
 #include <vector>
 #include <tuple>
 #include <cmath>
 #include <Eigen/Dense>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846264338327950288
+#endif
 
 class GausLinearTransformHelper
 {
