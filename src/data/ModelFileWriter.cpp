@@ -30,5 +30,5 @@ ModelFileWriter::~ModelFileWriter()
 
 void ModelFileWriter::Write(void)
 {
-
+    if (m_model_object == nullptr) return;
 }
