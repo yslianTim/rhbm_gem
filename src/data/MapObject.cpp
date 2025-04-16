@@ -22,7 +22,7 @@ MapObject::MapObject(
 {
     for (size_t i = 0; i < 3; i++)
     {
-        m_map_length.at(i) = static_cast<float>(m_grid_size.at(i) * m_grid_spacing.at(i));
+        m_map_length.at(i) = static_cast<float>(m_grid_size.at(i)) * m_grid_spacing.at(i);
         m_overflow.at(i) = static_cast<float>(m_origin.at(i) + m_map_length.at(i) - m_grid_spacing.at(i));
         m_upper_bound.at(i) = static_cast<float>(m_overflow.at(i) + 0.5 * m_grid_spacing.at(i));
         m_lower_bound.at(i) = static_cast<float>(m_underflow.at(i) - 0.5 * m_grid_spacing.at(i));

@@ -1136,7 +1136,7 @@ void ModelPainter::ModifyAxisLabelSideChain(
     ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), label_size+1);
     ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 506);
 
-    hist->GetXaxis()->SetLimits(-1.0, label_list.size());
+    hist->GetXaxis()->SetLimits(-1.0, static_cast<double>(label_list.size()));
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
 

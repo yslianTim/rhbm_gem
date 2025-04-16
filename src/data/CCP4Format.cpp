@@ -119,9 +119,9 @@ std::array<int, 3> CCP4Format::GetGridSize(void)
 std::array<float, 3> CCP4Format::GetGridSpacing(void)
 {
     std::array<float, 3> grid_spacing;
-    grid_spacing.at(0) = m_header.map_length[0] / m_header.grid_size[0];
-    grid_spacing.at(1) = m_header.map_length[1] / m_header.grid_size[1];
-    grid_spacing.at(2) = m_header.map_length[2] / m_header.grid_size[2];
+    grid_spacing.at(0) = m_header.map_length[0] / static_cast<float>(m_header.grid_size[0]);
+    grid_spacing.at(1) = m_header.map_length[1] / static_cast<float>(m_header.grid_size[1]);
+    grid_spacing.at(2) = m_header.map_length[2] / static_cast<float>(m_header.grid_size[2]);
     return grid_spacing;
 }
 

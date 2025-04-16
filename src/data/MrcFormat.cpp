@@ -129,9 +129,9 @@ std::array<int, 3> MrcFormat::GetGridSize(void)
 std::array<float, 3> MrcFormat::GetGridSpacing(void)
 {
     std::array<float, 3> grid_spacing;
-    grid_spacing.at(0) = m_header.cell_dimension[0] / m_header.grid_size[0];
-    grid_spacing.at(1) = m_header.cell_dimension[1] / m_header.grid_size[1];
-    grid_spacing.at(2) = m_header.cell_dimension[2] / m_header.grid_size[2];
+    grid_spacing.at(0) = m_header.cell_dimension[0] / static_cast<float>(m_header.grid_size[0]);
+    grid_spacing.at(1) = m_header.cell_dimension[1] / static_cast<float>(m_header.grid_size[1]);
+    grid_spacing.at(2) = m_header.cell_dimension[2] / static_cast<float>(m_header.grid_size[2]);
     return grid_spacing;
 }
 

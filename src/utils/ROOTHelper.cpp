@@ -387,8 +387,10 @@ void ROOTHelper::SetCanvasPartition(
 {
     if (canvas == nullptr) return;
 
-    auto vStep{ static_cast<float>((1. - bMargin - tMargin - (Ny - 1) * vSpacing) / Ny) };
-    auto hStep{ static_cast<float>((1. - lMargin - rMargin - (Nx - 1) * hSpacing) / Nx) };
+    auto x_dim{ static_cast<float>(Nx) };
+    auto y_dim{ static_cast<float>(Ny) };
+    auto vStep{ (1.0f - bMargin - tMargin - (y_dim - 1.0f) * vSpacing) / y_dim };
+    auto hStep{ (1.0f - lMargin - rMargin - (x_dim - 1.0f) * hSpacing) / x_dim };
     float vposd, vposu, vfactor;
     float hposl, hposr, hfactor;
     for (int i = 0; i < Nx; i++)

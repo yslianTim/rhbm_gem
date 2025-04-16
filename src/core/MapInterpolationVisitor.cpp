@@ -52,7 +52,7 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     std::array<float, 3> local;
     for (size_t i = 0; i < 3; i++)
     {
-        local.at(i) = (position.at(i) - origin.at(i) - index.at(i)*grid_spacing.at(i))/grid_spacing.at(i);
+        local.at(i) = (position.at(i) - origin.at(i) - static_cast<float>(index.at(i))*grid_spacing.at(i))/grid_spacing.at(i);
     }
 
     // Helper function for cubic interpolation
