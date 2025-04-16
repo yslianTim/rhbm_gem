@@ -7,6 +7,12 @@
 #include "ModelObject.hpp"
 #include "ScopeTimer.hpp"
 
+DataObjectManager::DataObjectManager(void) :
+    m_db_manager{ nullptr }
+{
+
+}
+
 DataObjectManager::DataObjectManager(const std::string & dbname) :
     m_db_manager{ std::make_unique<DatabaseManager>(dbname) }
 {
@@ -66,9 +72,24 @@ void DataObjectManager::ProduceFile(const std::string & filename, const std::str
     factory->OutputDataObject(filename, data_object);
 };
 
+void DataObjectManager::AddDataObject(
+    const std::string & key_tag, std::unique_ptr<DataObjectBase> data_object)
+{
+    if (m_data_object_map.find(key_tag) != m_data_object_map.end())
+    {
+        std::cout <<"[Warning] The key tag: ["<< key_tag <<"] already presented in the data object map"
+                  <<", this data object will be replaced."<< std::endl;
+    }
+    m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
+}
+
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
 {
     ScopeTimer timer("DataObjectManager::LoadDataObject");
+    if (m_db_manager == nullptr)
+    {
+        throw std::runtime_error("Database manager is not initialized.");
+    }
     m_db_manager->LoadDataObject(key_tag);
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
@@ -82,6 +103,10 @@ void DataObjectManager::SaveDataObject(
     const std::string & key_tag, const std::string & renamed_key_tag) const
 {
     ScopeTimer timer("DataObjectManager::SaveDataObject");
+    if (m_db_manager == nullptr)
+    {
+        throw std::runtime_error("Database manager is not initialized.");
+    }
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
     {
         std::cout <<"The key tag: ["<< key_tag <<"] isn't presented"

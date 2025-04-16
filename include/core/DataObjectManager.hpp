@@ -16,10 +16,12 @@ class DataObjectManager
     std::unordered_map<std::string, std::unique_ptr<DataObjectBase>> m_data_object_map;
 
 public:
+    DataObjectManager(void);
     DataObjectManager(const std::string & dbname);
     ~DataObjectManager();
     void ProcessFile(const std::string & filename, const std::string & key_tag);
     void ProduceFile(const std::string & filename, const std::string & key_tag);
+    void AddDataObject(const std::string & key_tag, std::unique_ptr<DataObjectBase> data_object);
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(DataObjectVisitorBase * visitor);
