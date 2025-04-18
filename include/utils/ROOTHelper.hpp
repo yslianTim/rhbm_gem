@@ -98,4 +98,9 @@ public:
     static double PerformLinearRegression(TGraphErrors * graph, double & slope, double & intercept);
     #endif
 
+private:
+    #ifdef HAVE_ROOT
+    static double GausModelFunction(double * x, double * par);
+    #endif
+
 };

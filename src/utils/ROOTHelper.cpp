@@ -116,7 +116,7 @@ std::unique_ptr<TF1> ROOTHelper::CreateFunction1D(const std::string & name, cons
 std::unique_ptr<TF1> ROOTHelper::CreateGausFunction1D(
     const std::string & name, double amplitude, double width, double x_min, double x_max)
 {
-    auto function{ std::make_unique<TF1>(name.data(), AtomicInfoHelper::GausModelFunction, x_min, x_max, 2) };
+    auto function{ std::make_unique<TF1>(name.data(), GausModelFunction, x_min, x_max, 2) };
     function->SetParameter(0, amplitude);
     function->SetParameter(1, width);
     return function;
@@ -535,6 +535,13 @@ double ROOTHelper::PerformLinearRegression(
     intercept = par[0];
     slope = par[1];
     return GetLinearRegressionRSquare(graph, fit_tmp.get());
+}
+
+double ROOTHelper::GausModelFunction(double * x, double * par)
+{
+    double tau_square{ par[1]*par[1] };
+    double y{ par[0] * std::pow(2.0*TMath::Pi()*tau_square, -1.5) * std::exp(-x[0]*x[0]/(2.0*tau_square)) };
+    return y;
 }
 
 #endif
