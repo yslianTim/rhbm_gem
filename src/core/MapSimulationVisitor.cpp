@@ -107,7 +107,6 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
 
     auto voxel_size{ map_object->GetMapValueArraySize() };
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
-    auto query_pseudo_atom{ std::make_unique<AtomObject>() };
 
     std::cout <<"  - Start map value array production ..."<< std::endl;
     #ifdef USE_OPENMP
@@ -115,6 +114,7 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
     #endif
     for (size_t i = 0; i < voxel_size; i++)
     {
+        auto query_pseudo_atom{ std::make_unique<AtomObject>() };
         query_pseudo_atom->SetPosition(map_object->GetGridPosition(i));
         auto in_range_atom_list{
             KDTreeAlgorithm<AtomObject>::RangeSearch(
