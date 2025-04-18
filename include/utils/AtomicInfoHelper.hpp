@@ -64,7 +64,6 @@ struct GroupKeyMapping<ElementGroupClassifierTag>
 
 class AtomicInfoHelper
 {
-    static const std::unordered_map<Element, int> atomic_number_map;
     inline static int m_standard_residue_count{ 20 };
     inline static std::string m_element_class_key{ "element_class" };
     inline static std::string m_residue_class_key{ "residue_class" };
@@ -73,6 +72,7 @@ class AtomicInfoHelper
     static const std::vector<int> m_standard_remoteness_list;
     static const std::vector<int> m_standard_branch_list;
 
+    static const std::unordered_map<Element, int> m_atomic_number_map;
     static const std::unordered_map<std::string_view, Residue> residue_map;
     static const std::unordered_map<std::string_view, Element> element_map;
     static const std::unordered_map<std::string_view, Remoteness> remoteness_map;
@@ -88,7 +88,7 @@ class AtomicInfoHelper
 public:
     AtomicInfoHelper(void) = default;
     ~AtomicInfoHelper() = default;
-    static int GetAtomicNumber(Element element) { return atomic_number_map.at(element); }
+    static int GetAtomicNumber(Element element) { return m_atomic_number_map.at(element); }
     static int GetStandardResidueCount(void) { return m_standard_residue_count; }
     static const std::string & GetElementClassKey(void) { return m_element_class_key; }
     static const std::string & GetResidueClassKey(void) { return m_residue_class_key; }

@@ -35,7 +35,7 @@ const std::vector<int> AtomicInfoHelper::m_standard_branch_list
     static_cast<int>(Branch::TWO), static_cast<int>(Branch::THREE)
 };
 
-const std::unordered_map<Element, int> AtomicInfoHelper::atomic_number_map
+const std::unordered_map<Element, int> AtomicInfoHelper::m_atomic_number_map
 {
     {Element::HYDROGEN, 1}, {Element::CARBON,    6}, {Element::NITROGEN,   7},
     {Element::OXYGEN,   8}, {Element::SODIUM,   11}, {Element::MAGNESIUM, 12},
