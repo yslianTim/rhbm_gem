@@ -4,6 +4,7 @@
 #include <limits>
 #include <vector>
 #include <tuple>
+#include <array>
 #include <algorithm>
 
 #ifdef USE_OPENMP
@@ -15,14 +16,14 @@ class ArrayStats
 {
 public:
     static Type ComputeMin(
-        const Type * data, int size, [[maybe_unused]] int thread_size = 1)
+        const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
     {
         if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
         Type min_value{ std::numeric_limits<Type>::max() };
         #ifdef USE_OPENMP
         #pragma omp parallel for reduction(min:min_value) num_threads(thread_size)
         #endif
-        for (int i = 0; i < size; i++)
+        for (size_t i = 0; i < size; i++)
         {
             min_value = std::min(min_value, data[i]);
         }
@@ -30,14 +31,14 @@ public:
     }
 
     static Type ComputeMax(
-        const Type * data, int size, [[maybe_unused]] int thread_size = 1)
+        const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
     {
         if (size <= 0) return std::numeric_limits<Type>::quiet_NaN();
         Type max_value{ std::numeric_limits<Type>::lowest() };
         #ifdef USE_OPENMP
         #pragma omp parallel for reduction(max:max_value) num_threads(thread_size)
         #endif
-        for (int i = 0; i < size; i++)
+        for (size_t i = 0; i < size; i++)
         {
             max_value = std::max(max_value, data[i]);
         }
@@ -45,7 +46,7 @@ public:
     }
 
     static Type ComputeMean(
-        const Type * data, int size, [[maybe_unused]] int thread_size = 1)
+        const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
     {
         if (size <= 0)
         {
@@ -55,7 +56,7 @@ public:
         #ifdef USE_OPENMP
         #pragma omp parallel for reduction(+:sum) num_threads(thread_size)
         #endif
-        for (int i = 0; i < size; i++)
+        for (size_t i = 0; i < size; i++)
         {
             sum += data[i];
         }
@@ -63,7 +64,7 @@ public:
     }
 
     static Type ComputeStandardDeviation(
-        const Type * data, int size, Type mean, [[maybe_unused]] int thread_size = 1)
+        const Type * data, size_t size, Type mean, [[maybe_unused]] int thread_size = 1)
     {
         if (size <= 1)
         {
@@ -73,7 +74,7 @@ public:
         #ifdef USE_OPENMP
         #pragma omp parallel for reduction(+:sum_sq_diff) num_threads(thread_size)
         #endif
-        for (int i = 0; i < size; i++)
+        for (size_t i = 0; i < size; i++)
         {
             auto diff{ static_cast<Type>(data[i]) - static_cast<Type>(mean) };
             sum_sq_diff += diff * diff;
@@ -108,8 +109,8 @@ public:
         {
             return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
         }
-        auto min_value{ ComputeMin(data.data(), static_cast<int>(data.size()), thread_size) };
-        auto max_value{ ComputeMax(data.data(), static_cast<int>(data.size()), thread_size) };
+        auto min_value{ ComputeMin(data.data(), data.size(), thread_size) };
+        auto max_value{ ComputeMax(data.data(), data.size(), thread_size) };
         return std::make_tuple(min_value, max_value);
     }
 
@@ -121,5 +122,13 @@ public:
         auto min_value{ std::get<0>(range_tuple) - scaling * range };
         auto max_value{ std::get<1>(range_tuple) + scaling * range };
         return std::make_tuple(min_value, max_value);
+    }
+
+    static Type ComputeNorm(const std::array<Type, 3> & v1, const std::array<Type, 3> & v2)
+    {
+        auto diff_x{ static_cast<Type>(v1[0] - v2[0]) };
+        auto diff_y{ static_cast<Type>(v1[1] - v2[1]) };
+        auto diff_z{ static_cast<Type>(v1[2] - v2[2]) };
+        return static_cast<Type>(std::sqrt(std::pow(diff_x, 2) + std::pow(diff_y, 2) + std::pow(diff_z, 2)));
     }
 };

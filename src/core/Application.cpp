@@ -289,7 +289,7 @@ void Application::RegisterMapSimulationCommand(void)
         "Veto residue type")->default_val("");
     m_map_simulation_cmd->add_option(
         "--veto-element", m_atom_selector_options.veto_element,
-        "Veto element type")->default_val("");
+        "Veto element type")->default_val("H");
     m_map_simulation_cmd->add_option(
         "--veto-remoteness", m_atom_selector_options.veto_remoteness,
         "Veto remoteness type")->default_val("");

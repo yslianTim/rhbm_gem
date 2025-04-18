@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <sstream>
 
 class StringHelper
 {
@@ -24,6 +25,15 @@ public:
             input++;
         }
         return result;
+    }
+
+    template <typename Type>
+    static std::string ToStringWithPrecision(const Type a_value, const int n = 6)
+    {
+        std::ostringstream out;
+        out.precision(n);
+        out << std::fixed << a_value;
+        return std::move(out).str();
     }
 
 };

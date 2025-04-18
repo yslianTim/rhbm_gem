@@ -59,6 +59,7 @@ class CCP4Format : public MapFileFormatBase
 public:
     CCP4Format(void);
     ~CCP4Format();
+    void InitHeader(void) override;
     void LoadHeader(const std::string & filename) override;
     void SaveHeader(const std::string & filename) override;
     void PrintHeader(void) const override;

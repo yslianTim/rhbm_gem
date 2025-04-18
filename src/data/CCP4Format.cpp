@@ -7,12 +7,58 @@
 
 CCP4Format::CCP4Format(void)
 {
-    std::memset(&m_header, 0, sizeof(m_header));
+    InitHeader();
 }
 
 CCP4Format::~CCP4Format()
 {
 
+}
+
+void CCP4Format::InitHeader(void)
+{
+    std::memset(&m_header, 0, sizeof(m_header));
+    m_header.array_size[0] = 1;
+    m_header.array_size[1] = 1;
+    m_header.array_size[2] = 1;
+    m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
+    m_header.location_index[0] = 0;
+    m_header.location_index[1] = 0;
+    m_header.location_index[2] = 0;
+    m_header.grid_size[0] = 1;
+    m_header.grid_size[1] = 1;
+    m_header.grid_size[2] = 1;
+    m_header.map_length[0] = 1.0f;
+    m_header.map_length[1] = 1.0f;
+    m_header.map_length[2] = 1.0f;
+    m_header.cell_angle[0] = 90.0f;
+    m_header.cell_angle[1] = 90.0f;
+    m_header.cell_angle[2] = 90.0f;
+    m_header.axis[0] = 1;
+    m_header.axis[1] = 2;
+    m_header.axis[2] = 3;
+    m_header.min_density = 0.0f;
+    m_header.max_density = 0.0f;
+    m_header.mean_density = 0.0f;
+    m_header.space_group = 0;
+    m_header.symmetry_table_size = 0;
+    m_header.skew_matrix_flag = 0;
+    for (int i = 0; i < 9; i++) m_header.skew_matrix[i] = 0.0f;
+    for (int i = 0; i < 3; i++) m_header.skew_translation[i] = 0.0f;
+    for (int i = 0; i < 15; i++) m_header.extra[i] = 0.0f;
+    m_header.map_format_id[0] = 'M';
+    m_header.map_format_id[1] = 'A';
+    m_header.map_format_id[2] = 'P';
+    m_header.map_format_id[3] = '\0';
+    m_header.machine_stamp[0] = '0';
+    m_header.machine_stamp[1] = '0';
+    m_header.machine_stamp[2] = '0';
+    m_header.machine_stamp[3] = '\0';
+    m_header.rms = 0.0f;
+    m_header.label_size = 0;
+    for (int i = 0; i < HEAD::NUM_LABEL; i++)
+        for (int j = 0; j <HEAD::SIZE_LABEL; j++)
+            m_header.label[i][j] = '0';
 }
 
 void CCP4Format::LoadHeader(const std::string & filename)
@@ -52,6 +98,8 @@ void CCP4Format::PrintHeader(void) const
     std::cout << "CCP4 Header Info:" << std::endl;
     std::cout << "Array Size: " << m_header.array_size[0] << " x "
               << m_header.array_size[1] << " x " << m_header.array_size[2] << std::endl;
+    std::cout << "Grid Size: " << m_header.grid_size[0] << " x "
+              << m_header.grid_size[1] << " x " << m_header.grid_size[2] << std::endl;
     std::cout << "Map Length: " << m_header.map_length[0] << ", "
               << m_header.map_length[1] << ", " << m_header.map_length[2] << std::endl;
 }
@@ -120,23 +168,56 @@ void CCP4Format::LoadDataArray(const std::string & filename)
 
 void CCP4Format::SaveDataArray(const std::string & filename)
 {
-    std::ofstream outfile{ filename, std::ios::binary };
-    if (!outfile)
+    if (!m_data_array)
     {
-        throw std::runtime_error("Cannot open the file: " + filename);
+        throw std::runtime_error("SaveDataArray: data array is empty");
     }
-    
-    size_t num_voxels{ static_cast<size_t>(m_header.array_size[0]) *
-                       static_cast<size_t>(m_header.array_size[1]) *
-                       static_cast<size_t>(m_header.array_size[2]) };
-    
-    size_t element_size{ GetElementSize() };
-    size_t total_bytes{ num_voxels * element_size };
-    
-    outfile.write(reinterpret_cast<const char*>(m_data_array.get()), static_cast<long>(total_bytes));
-    if (!outfile)
+
+    // Open existing file for update—do NOT truncate header we just saved.
+    std::fstream file{ filename, std::ios::in | std::ios::out | std::ios::binary };
+    if (!file)
     {
-        throw std::runtime_error("Failed to write data array to file");
+        throw std::runtime_error("Cannot open file for updating: " + filename);
+    }
+
+    // In CCP4/MRC format, voxel data follow immediately after:
+    //   1) 1024‑byte standard header
+    //   2) Symmetry records (optional, multiple of 80 bytes)
+    const std::streamoff data_offset{
+        HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.symmetry_table_size)
+    };
+
+    file.seekp(data_offset, std::ios::beg);
+    if (!file)
+    {
+        throw std::runtime_error("SaveDataArray: failed to seek to data section");
+    }
+
+    // Calculate payload size
+    const size_t num_voxels{
+        static_cast<size_t>(m_header.array_size[0]) *
+        static_cast<size_t>(m_header.array_size[1]) *
+        static_cast<size_t>(m_header.array_size[2])
+    };
+
+    const size_t element_size{ GetElementSize() };
+    const size_t total_bytes{ num_voxels * element_size };
+
+    switch (static_cast<MODE>(m_header.mode))
+    {
+        case MODE::SIGNED_FLOAT32:
+        {
+            file.write(reinterpret_cast<const char*>(m_data_array.get()),
+                       static_cast<std::streamsize>(total_bytes));
+            break;
+        }
+        default:
+            throw std::runtime_error("SaveDataArray: unsupported MODE");
+    }
+
+    if (!file)
+    {
+        throw std::runtime_error("SaveDataArray: failed to write voxel data");
     }
 }
 
@@ -166,9 +247,9 @@ std::array<float, 3> CCP4Format::GetGridSpacing(void)
 std::array<float, 3> CCP4Format::GetOrigin(void)
 {
     std::array<float, 3> origin;
-    origin.at(0) = 0.0;
-    origin.at(1) = 0.0;
-    origin.at(2) = 0.0;
+    origin.at(0) = 0.0f;
+    origin.at(1) = 0.0f;
+    origin.at(2) = 0.0f;
     return origin;
 }
 
@@ -180,6 +261,7 @@ void CCP4Format::SetDataArray(size_t array_size, const float * data_array)
 
 void CCP4Format::SetGridSize(const std::array<int, 3> & grid_size)
 {
+    std::memcpy(m_header.array_size, grid_size.data(), sizeof(m_header.array_size));
     std::memcpy(m_header.grid_size, grid_size.data(), sizeof(m_header.grid_size));
 }
 
@@ -192,7 +274,7 @@ void CCP4Format::SetGridSpacing(const std::array<float, 3> & grid_spacing)
 
 void CCP4Format::SetOrigin(const std::array<float, 3> & origin)
 {
-    if (origin.at(0) != 0.0 || origin.at(1) != 0.0 || origin.at(2) != 0.0)
+    if (origin.at(0) != 0.0f || origin.at(1) != 0.0f || origin.at(2) != 0.0f)
     {
         throw std::runtime_error("CCP4 format does not support setting origin");
     }

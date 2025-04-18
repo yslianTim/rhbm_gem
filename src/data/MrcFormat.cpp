@@ -7,12 +7,69 @@
 
 MrcFormat::MrcFormat(void)
 {
-    std::memset(&m_header, 0, sizeof(m_header));
+    InitHeader();
 }
 
 MrcFormat::~MrcFormat()
 {
 
+}
+
+void MrcFormat::InitHeader(void)
+{
+    std::memset(&m_header, 0, sizeof(m_header));
+    m_header.array_size[0] = 1;
+    m_header.array_size[1] = 1;
+    m_header.array_size[2] = 1;
+    m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
+    m_header.location_index[0] = 0;
+    m_header.location_index[1] = 0;
+    m_header.location_index[2] = 0;
+    m_header.grid_size[0] = 1;
+    m_header.grid_size[1] = 1;
+    m_header.grid_size[2] = 1;
+    m_header.cell_dimension[0] = 1.0f;
+    m_header.cell_dimension[1] = 1.0f;
+    m_header.cell_dimension[2] = 1.0f;
+    m_header.cell_angle[0] = 90.0f;
+    m_header.cell_angle[1] = 90.0f;
+    m_header.cell_angle[2] = 90.0f;
+    m_header.axis[0] = 1;
+    m_header.axis[1] = 2;
+    m_header.axis[2] = 3;
+    m_header.min_density = 0.0f;
+    m_header.max_density = 0.0f;
+    m_header.mean_density = 0.0f;
+    m_header.space_group = 0;
+    m_header.extra_size = 0;
+    for (int i = 0; i < HEAD::SIZE_WORD; i++) m_header.extra[i] = '0';
+    m_header.imodStamp = 0;
+    m_header.imodFlags = 0;
+    m_header.idtype = 0;
+    m_header.lens = 0;
+    m_header.nd1 = 0;
+    m_header.nd2 = 0;
+    m_header.vd1 = 0;
+    m_header.vd2 = 0;
+    m_header.tiltangles[0] = 0.0f;
+    m_header.tiltangles[1] = 0.0f;
+    m_header.tiltangles[2] = 0.0f;
+    m_header.tiltangles[3] = 0.0f;
+    m_header.tiltangles[4] = 0.0f;
+    m_header.tiltangles[5] = 0.0f;
+    m_header.map[0] = 'M';
+    m_header.map[1] = 'A';
+    m_header.map[2] = 'P';
+    m_header.map[3] = '\0';
+    m_header.stamp[0] = '0';
+    m_header.stamp[1] = '0';
+    m_header.stamp[2] = '0';
+    m_header.stamp[3] = '\0';
+    m_header.rms = 0.0f;
+    m_header.label_size = 0;
+    for (int i = 0; i < HEAD::NUM_LABEL; i++)
+        for (int j = 0; j <HEAD::SIZE_LABEL; j++)
+            m_header.label[i][j] = '0';
 }
 
 void MrcFormat::LoadHeader(const std::string & filename)
@@ -52,6 +109,8 @@ void MrcFormat::PrintHeader(void) const
     std::cout << "MRC Header Info:" << std::endl;
     std::cout << "Array Size: " << m_header.array_size[0] << " x "
               << m_header.array_size[1] << " x " << m_header.array_size[2] << std::endl;
+    std::cout << "Grid Size: " << m_header.grid_size[0] << " x "
+              << m_header.grid_size[1] << " x " << m_header.grid_size[2] << std::endl;
     std::cout << "Cell Dimensions: " << m_header.cell_dimension[0] << ", "
               << m_header.cell_dimension[1] << ", " << m_header.cell_dimension[2] << std::endl;
 }
@@ -130,21 +189,38 @@ void MrcFormat::LoadDataArray(const std::string & filename)
 
 void MrcFormat::SaveDataArray(const std::string & filename)
 {
-    std::ofstream outfile{ filename, std::ios::binary };
-    if (!outfile)
+    // Open existing file for *update* – we do NOT want to truncate the header we just saved.
+    //   std::fstream allows simultaneous in/out without the implicit ios::trunc that comes with ofstream.
+    std::fstream file{ filename, std::ios::in | std::ios::out | std::ios::binary };
+    if (!file)
     {
         throw std::runtime_error("Cannot open the file: " + filename);
     }
-    
-    size_t num_voxels{ static_cast<size_t>(m_header.array_size[0]) *
-                       static_cast<size_t>(m_header.array_size[1]) *
-                       static_cast<size_t>(m_header.array_size[2]) };
-    
-    size_t element_size{ GetElementSize() };
-    size_t total_bytes{ num_voxels * element_size };
-    
-    outfile.write(reinterpret_cast<const char*>(m_data_array.get()), static_cast<long>(total_bytes));
-    if (!outfile)
+
+    // Determine where the voxel data should start:
+    //  – Standard MRC header: 1024 bytes
+    //  – Optional extra header follows immediately thereafter
+    std::streamoff data_offset{ HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.extra_size) };
+    file.seekp(data_offset, std::ios::beg);
+    if (!file)
+    {
+        throw std::runtime_error("Failed to seek to data offset");
+    }
+
+    // Compute voxel count and total payload size
+    const size_t num_voxels{
+        static_cast<size_t>(m_header.array_size[0]) *
+        static_cast<size_t>(m_header.array_size[1]) *
+        static_cast<size_t>(m_header.array_size[2])
+    };
+
+    const size_t element_size{ GetElementSize() };
+    const size_t total_bytes{ num_voxels * element_size };
+
+    // Write binary voxel block
+    file.write(reinterpret_cast<const char*>(m_data_array.get()),
+               static_cast<std::streamsize>(total_bytes));
+    if (!file)
     {
         throw std::runtime_error("Failed to write data array to file");
     }
@@ -190,6 +266,7 @@ void MrcFormat::SetDataArray(size_t array_size, const float * data_array)
 
 void MrcFormat::SetGridSize(const std::array<int, 3> & grid_size)
 {
+    std::memcpy(m_header.array_size, grid_size.data(), sizeof(m_header.array_size));
     std::memcpy(m_header.grid_size, grid_size.data(), sizeof(m_header.grid_size));
 }
 

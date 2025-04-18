@@ -1,15 +1,11 @@
 #pragma once
 
 #include <iostream>
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
-#include <set>
-#include <tuple>
-#include <any>
+#include <array>
 #include <unordered_map>
-#include <variant>
-#include <functional>
 #include "DataObjectVisitorBase.hpp"
 #include "AtomicInfoHelper.hpp"
 
@@ -21,7 +17,7 @@ class MapSimulationVisitor : public DataObjectVisitorBase
     int m_potential_model_choice;
     int m_partial_charge_choice;
     double m_cutoff_distance;
-    double m_grid_spacing;
+    float m_grid_spacing;
     std::string m_model_key_tag, m_folder_path;
     std::vector<double> m_blurring_width_list;
     AtomSelector * m_atom_selector;
@@ -40,11 +36,12 @@ public:
     void SetPotentialModelChoice(int value) { m_potential_model_choice = value; }
     void SetPartialChargeChoice(int value) { m_partial_charge_choice = value; }
     void SetCutoffDistance(double value) { m_cutoff_distance = value; }
-    void SetGridSpacing(double value) { m_grid_spacing = value; }
+    void SetGridSpacing(double value) { m_grid_spacing = static_cast<float>(value); }
     void SetBlurringWidthList(const std::vector<double> & value) { m_blurring_width_list = value; }
     void SetModelObjectKeyTag(const std::string & value) { m_model_key_tag = value; }
 
 private:
     std::unique_ptr<MapObject> CreateSimulatedMapObject(double blurring_width);
+    std::array<int, 3> CalculateGridSize(const std::array<float, 3> & grid_spacing, const std::array<float, 3> & origin);
 
 };

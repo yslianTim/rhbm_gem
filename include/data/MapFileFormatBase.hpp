@@ -10,6 +10,7 @@ class MapFileFormatBase
 {
 public:
     virtual ~MapFileFormatBase() = default;
+    virtual void InitHeader(void) = 0;
     virtual void LoadHeader(const std::string & filename) = 0;
     virtual void SaveHeader(const std::string & filename) = 0;
     virtual void PrintHeader(void) const = 0;

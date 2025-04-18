@@ -97,3 +97,39 @@ void AtomObject::AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> e
 {
     m_atomic_potential_entry = std::move(entry);
 }
+
+Element AtomObject::GetElementType(void) const
+{
+    return static_cast<Element>(m_element_type);
+}
+
+Residue AtomObject::GetResidueType(void) const
+{
+    return static_cast<Residue>(m_residue_type);
+}
+
+Remoteness AtomObject::GetRemotenessType(void) const
+{
+    return static_cast<Remoteness>(m_remoteness_type);
+}
+
+Branch AtomObject::GetBranchType(void) const
+{
+    return static_cast<Branch>(m_branch_type);
+}
+
+bool AtomObject::IsUnknownAtom(void) const
+{
+    auto element{ GetElementType() };
+    auto residue{ GetResidueType() };
+    auto remoteness{ GetRemotenessType() };
+    auto branch{ GetBranchType() };
+    if (element == Element::UNK ||
+        residue == Residue::UNK ||
+        remoteness == Remoteness::UNK ||
+        branch == Branch::UNK)
+    {
+        return true;
+    }
+    return false;
+}

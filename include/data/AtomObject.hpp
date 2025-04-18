@@ -6,6 +6,10 @@
 #include "DataObjectBase.hpp"
 
 class AtomicPotentialEntry;
+enum class Element : int;
+enum class Residue : int;
+enum class Remoteness : int;
+enum class Branch : int;
 
 class AtomObject : public DataObjectBase
 {
@@ -52,9 +56,15 @@ public:
     void SetBranch(const std::string & name);
     void SetStatus(int value) { m_status = value; }
     void SetPosition(float x, float y, float z);
+    void SetPosition(const std::array<float, 3> & value) { m_position = value; }
     void AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry);
 
     std::string GetInfo(void) const;
+    Element GetElementType(void) const;
+    Residue GetResidueType(void) const;
+    Remoteness GetRemotenessType(void) const;
+    Branch GetBranchType(void) const;
+    bool IsUnknownAtom(void) const;
     bool GetSelectedFlag(void) const { return m_is_selected; }
     bool GetSpecialAtomFlag(void) const { return m_is_special_atom; }
     int GetSerialID(void) const { return m_serial_id; }

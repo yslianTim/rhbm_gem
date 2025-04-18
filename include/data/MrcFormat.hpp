@@ -70,6 +70,7 @@ class MrcFormat : public MapFileFormatBase
 public:
     MrcFormat(void);
     ~MrcFormat();
+    void InitHeader(void) override;
     void LoadHeader(const std::string & filename) override;
     void SaveHeader(const std::string & filename) override;
     void PrintHeader(void) const override;
