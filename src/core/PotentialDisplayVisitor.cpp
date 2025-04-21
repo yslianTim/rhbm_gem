@@ -8,6 +8,7 @@
 #include "AtomPainter.hpp" 
 #include "ModelPainter.hpp"
 #include "ComparisonPainter.hpp"
+#include "AtomicInfoHelper.hpp"
 
 #include <memory>
 
@@ -55,9 +56,9 @@ void PotentialDisplayVisitor::RunAtomPainter(ModelObject * model_object)
     for (auto & atom : model_object->GetComponentsList())
     {
         if (atom->GetSelectedFlag() == false) continue;
-        if (atom->GetElement() != 6) continue;
-        if (atom->GetRemoteness() != 1) continue;
-        if (atom->GetResidue() != 0) continue;
+        if (atom->GetElement() != Element::CARBON) continue;
+        if (atom->GetRemoteness() != Remoteness::ALPHA) continue;
+        if (atom->GetResidue() != Residue::ALA) continue;
         painter->AddDataObject(atom.get());
     }
     painter->Painting();

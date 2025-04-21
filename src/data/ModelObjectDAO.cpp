@@ -286,11 +286,11 @@ void ModelObjectDAO::SaveAtomObjectList(
         m_database->Bind<std::string>(4, atom_object->GetIndicator());
         m_database->Bind<double>(5, static_cast<double>(atom_object->GetOccupancy()));
         m_database->Bind<double>(6, static_cast<double>(atom_object->GetTemperature()));
-        m_database->Bind<int>(7, atom_object->GetResidue());
-        m_database->Bind<int>(8, atom_object->GetElement());
-        m_database->Bind<int>(9, atom_object->GetRemoteness());
-        m_database->Bind<int>(10, atom_object->GetBranch());
-        m_database->Bind<int>(11, atom_object->GetStatus());
+        m_database->Bind<int>(7, static_cast<int>(atom_object->GetResidue()));
+        m_database->Bind<int>(8, static_cast<int>(atom_object->GetElement()));
+        m_database->Bind<int>(9, static_cast<int>(atom_object->GetRemoteness()));
+        m_database->Bind<int>(10, static_cast<int>(atom_object->GetBranch()));
+        m_database->Bind<int>(11, static_cast<int>(atom_object->GetStructure()));
         m_database->Bind<int>(12, static_cast<int>(atom_object->GetSpecialAtomFlag()));
         m_database->Bind<double>(13, static_cast<double>(atom_object->GetPosition().at(0)));
         m_database->Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(1)));
@@ -503,11 +503,11 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
         atom_object->SetIndicator(std::get<3>(row));
         atom_object->SetOccupancy(static_cast<float>(std::get<4>(row)));
         atom_object->SetTemperature(static_cast<float>(std::get<5>(row)));
-        atom_object->SetResidue(std::get<6>(row));
-        atom_object->SetElement(std::get<7>(row));
-        atom_object->SetRemoteness(std::get<8>(row));
-        atom_object->SetBranch(std::get<9>(row));
-        atom_object->SetStatus(std::get<10>(row));
+        atom_object->SetResidue(static_cast<Residue>(std::get<6>(row)));
+        atom_object->SetElement(static_cast<Element>(std::get<7>(row)));
+        atom_object->SetRemoteness(static_cast<Remoteness>(std::get<8>(row)));
+        atom_object->SetBranch(static_cast<Branch>(std::get<9>(row)));
+        atom_object->SetStructure(static_cast<Structure>(std::get<10>(row)));
         atom_object->SetSpecialAtomFlag(static_cast<bool>(std::get<11>(row)));
         atom_object->SetPosition(
             static_cast<float>(std::get<12>(row)),

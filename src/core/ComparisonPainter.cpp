@@ -59,22 +59,26 @@ void ComparisonPainter::Painting(void)
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
     std::cout <<"  Number of reference types to be painted: "<< m_ref_model_object_list_map.size() << std::endl;
-    auto sim_buried_charge_model_object_list{ m_ref_model_object_list_map.at("buried_charge")};
 
-    if (m_model_object_list.size() != 0 && m_ref_model_object_list_map.size() == 2 && sim_buried_charge_model_object_list.size() > 1)
+    if (m_ref_model_object_list_map.find("buried_charge") != m_ref_model_object_list_map.end())
     {
-        PaintSimulationGaus("figure_3_a.pdf");
-        PaintGausEstimateComparison("figure_3_b.pdf");
-    }
-    
-    if (sim_buried_charge_model_object_list.size() > 1)
-    {
-        PaintSimulationGausRatio("figure_2_c.pdf", sim_buried_charge_model_object_list);
-    }
+        auto sim_buried_charge_model_object_list{ m_ref_model_object_list_map.at("buried_charge") };
 
-    if (m_model_object_list.size() == 1 && sim_buried_charge_model_object_list.size() == 1)
-    {
-        PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_buried_charge_model_object_list.at(0));
+        if (m_model_object_list.size() != 0 && m_ref_model_object_list_map.size() == 2 && sim_buried_charge_model_object_list.size() > 1)
+        {
+            PaintSimulationGaus("figure_3_a.pdf");
+            PaintGausEstimateComparison("figure_3_b.pdf");
+        }
+        
+        if (sim_buried_charge_model_object_list.size() > 1)
+        {
+            PaintSimulationGausRatio("figure_2_c.pdf", sim_buried_charge_model_object_list);
+        }
+
+        if (m_model_object_list.size() == 1 && sim_buried_charge_model_object_list.size() == 1)
+        {
+            PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_buried_charge_model_object_list.at(0));
+        }
     }
 }
 

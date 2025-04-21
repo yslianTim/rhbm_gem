@@ -62,8 +62,7 @@ void ModelPainter::Painting(void)
     std::cout <<"- ModelPainter::Painting"<<std::endl;
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
-    auto sim_buried_charge_model_object{ m_ref_model_object_map.at("buried_charge") };
-    auto sim_no_charge_model_object{ m_ref_model_object_map.at("no_charge") };
+    
     for (auto model_object : m_model_object_list)
     {
         auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetPdbID() +".pdf" };
@@ -74,18 +73,29 @@ void ModelPainter::Painting(void)
         PaintResidueClassKNN(model_object, "residue_class_knn_"+ model_object->GetPdbID() +".pdf");
         PaintResidueClassXYPosition(model_object, "residue_class_xy_position_"+ model_object->GetPdbID() +".pdf");
     }
-    for (auto model_object : sim_buried_charge_model_object)
+
+    if (m_ref_model_object_map.find("buried_charge") != m_ref_model_object_map.end())
     {
-        auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
-        PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
-        //auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetKeyTag() +".pdf" };
-        //PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
+        auto sim_buried_charge_model_object{ m_ref_model_object_map.at("buried_charge") };
+        for (auto model_object : sim_buried_charge_model_object)
+        {
+            auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
+            PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
+            //auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetKeyTag() +".pdf" };
+            //PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
+        }
     }
-    for (auto model_object : sim_no_charge_model_object)
+
+    if (m_ref_model_object_map.find("no_charge") != m_ref_model_object_map.end())
     {
-        auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
-        PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
+        auto sim_no_charge_model_object{ m_ref_model_object_map.at("no_charge") };
+        for (auto model_object : sim_no_charge_model_object)
+        {
+            auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
+            PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
+        }
     }
+
     if (m_model_object_list.size() == 4)
     {
         PaintResidueClassGroupGausMainChain("figure_1_part2.pdf");

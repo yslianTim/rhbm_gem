@@ -1,13 +1,14 @@
 #pragma once
 
 #include <unordered_map>
+#include <cstdint>
 #include <array>
 
-enum class Element : int;
+enum class Element : uint16_t;
 
 class ElectricPotential
 {
-    enum class ModelChoice : int
+    enum class ModelChoice : uint8_t
     {
         SINGLE_GAUS      = 0,
         FIVE_GAUS_CHARGE = 1

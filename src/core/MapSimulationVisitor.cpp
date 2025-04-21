@@ -31,10 +31,10 @@ void MapSimulationVisitor::VisitAtomObject(AtomObject * data_object)
         m_atom_selector->GetSelectionFlag(
             data_object->GetChainID(),
             data_object->GetIndicator(),
-            data_object->GetResidue(),
-            data_object->GetElement(),
-            data_object->GetRemoteness(),
-            data_object->GetBranch()
+            static_cast<int>(data_object->GetResidue()),
+            static_cast<int>(data_object->GetElement()),
+            static_cast<int>(data_object->GetRemoteness()),
+            static_cast<int>(data_object->GetBranch())
         )
     };
     data_object->SetSelectedFlag(selected_flag);
@@ -128,13 +128,13 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
             };
             auto charge{ (m_partial_charge_choice == 0) ? 0.0 :
                 AminoAcidInfoHelper::GetPartialCharge(
-                    atom->GetResidueType(),
-                    atom->GetElementType(),
-                    atom->GetRemotenessType(),
-                    atom->GetBranchType())
+                    atom->GetResidue(),
+                    atom->GetElement(),
+                    atom->GetRemoteness(),
+                    atom->GetBranch())
             };
             map_value_array[i] += static_cast<float>(
-                electric_potential->GetPotentialValue(atom->GetElementType(), distance, charge)
+                electric_potential->GetPotentialValue(atom->GetElement(), distance, charge)
             );
         }
     }
