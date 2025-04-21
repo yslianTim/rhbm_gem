@@ -1,6 +1,7 @@
 #include "AtomSelector.hpp"
 #include "AtomicInfoHelper.hpp"
 
+#include <iostream>
 #include <sstream>
 
 AtomSelector::AtomSelector(void)
@@ -34,7 +35,7 @@ void AtomSelector::Print(void) const
 
 bool AtomSelector::GetSelectionFlag(
     const std::string & chain_id, const std::string & indicator,
-    int residue, int element, int remoteness, int branch)
+    Residue residue, Element element, Remoteness remoteness, Branch branch)
 {
     auto selected{ true };
     if (!pick_chain_set.empty() && pick_chain_set.find(chain_id) == pick_chain_set.end()) selected = false;
@@ -74,7 +75,7 @@ void AtomSelector::VetoResidueType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        veto_residue_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ResidueTag>(segment));
+        veto_residue_set.insert(AtomicInfoHelper::GetResidueFromString(segment));
     }
 }
 
@@ -84,7 +85,7 @@ void AtomSelector::VetoElementType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        veto_element_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ElementTag>(segment));
+        veto_element_set.insert(AtomicInfoHelper::GetElementFromString(segment));
     }
 }
 
@@ -94,7 +95,7 @@ void AtomSelector::VetoRemotenessType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        veto_remoteness_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::RemotenessTag>(segment));
+        veto_remoteness_set.insert(AtomicInfoHelper::GetRemotenessFromString(segment));
     }
 }
 
@@ -104,7 +105,7 @@ void AtomSelector::VetoBranchType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        veto_branch_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::BranchTag>(segment));
+        veto_branch_set.insert(AtomicInfoHelper::GetBranchFromString(segment));
     }
 }
 
@@ -128,7 +129,7 @@ void AtomSelector::PickResidueType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        pick_residue_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ResidueTag>(segment));
+        pick_residue_set.insert(AtomicInfoHelper::GetResidueFromString(segment));
     }
 }
 
@@ -138,7 +139,7 @@ void AtomSelector::PickElementType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        pick_element_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ElementTag>(segment));
+        pick_element_set.insert(AtomicInfoHelper::GetElementFromString(segment));
     }
 }
 
@@ -148,7 +149,7 @@ void AtomSelector::PickRemotenessType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        pick_remoteness_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::RemotenessTag>(segment));
+        pick_remoteness_set.insert(AtomicInfoHelper::GetRemotenessFromString(segment));
     }
 }
 
@@ -158,6 +159,6 @@ void AtomSelector::PickBranchType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        pick_branch_set.insert(AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::BranchTag>(segment));
+        pick_branch_set.insert(AtomicInfoHelper::GetBranchFromString(segment));
     }
 }

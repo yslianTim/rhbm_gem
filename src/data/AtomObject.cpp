@@ -70,26 +70,22 @@ void AtomObject::SetStructure(Structure value) { m_structure = value; }
 
 void AtomObject::SetResidue(const std::string & name)
 {
-    auto residue{ AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ResidueTag>(name) };
-    m_residue = static_cast<Residue>(residue);
+    m_residue = AtomicInfoHelper::GetResidueFromString(name);
 }
 
 void AtomObject::SetElement(const std::string & name)
 {
-    auto element{ AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::ElementTag>(name) };
-    m_element = static_cast<Element>(element);
+    m_element = AtomicInfoHelper::GetElementFromString(name);
 }
 
 void AtomObject::SetRemoteness(const std::string & name)
 {
-    auto remoteness{ AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::RemotenessTag>(name) };
-    m_remoteness = static_cast<Remoteness>(remoteness);
+    m_remoteness = AtomicInfoHelper::GetRemotenessFromString(name);
 }
 
 void AtomObject::SetBranch(const std::string & name)
 {
-    auto branch{ AtomicInfoHelper::AtomInfoMapping<AtomicInfoHelper::BranchTag>(name) };
-    m_branch = static_cast<Branch>(branch);
+    m_branch = AtomicInfoHelper::GetBranchFromString(name);
 }
 
 void AtomObject::SetPosition(float x, float y, float z)

@@ -35,17 +35,17 @@ public:
         if (class_key == AtomicInfoHelper::GetResidueClassKey())
         {
             return std::make_tuple(
-                static_cast<int>(atom->GetResidue()),
-                static_cast<int>(atom->GetElement()),
-                static_cast<int>(atom->GetRemoteness()),
-                static_cast<int>(atom->GetBranch()),
+                atom->GetResidue(),
+                atom->GetElement(),
+                atom->GetRemoteness(),
+                atom->GetBranch(),
                 atom->GetSpecialAtomFlag());
         }
         else if (class_key == AtomicInfoHelper::GetElementClassKey())
         {
             return std::make_tuple(
-                static_cast<int>(atom->GetElement()),
-                static_cast<int>(atom->GetRemoteness()),
+                atom->GetElement(),
+                atom->GetRemoteness(),
                 atom->GetSpecialAtomFlag());
         }
         throw std::runtime_error("Unknown class key: " + class_key);

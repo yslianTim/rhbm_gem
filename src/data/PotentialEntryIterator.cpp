@@ -283,10 +283,10 @@ bool PotentialEntryIterator::CheckGroupKey(ElementKeyType & group_key, bool verb
     {
         if (verbose == true)
         {
-            std::cout <<"Elelemt class group key :"
-                      << std::get<0>(group_key) <<", "
-                      << std::get<1>(group_key) <<", "
-                      << std::get<2>(group_key) << std::boolalpha <<" not found." << std::endl;
+            std::cout <<"Elelemt class group key :" << std::boolalpha
+                      << static_cast<int>(std::get<0>(group_key)) <<", "
+                      << static_cast<int>(std::get<1>(group_key)) <<", "
+                      << std::get<2>(group_key) <<" not found." << std::endl;
         }
         return false;
     }
@@ -300,12 +300,12 @@ bool PotentialEntryIterator::CheckGroupKey(ResidueKeyType & group_key, bool verb
     {
         if (verbose == true)
         {
-            std::cout <<"Residue class group key : tuple<"
-                      << std::get<0>(group_key) <<", "
-                      << std::get<1>(group_key) <<", "
-                      << std::get<2>(group_key) <<", "
-                      << std::get<3>(group_key) <<", "
-                      << std::get<4>(group_key) << std::boolalpha <<"> not found." << std::endl;
+            std::cout <<"Residue class group key : tuple<" << std::boolalpha
+                      << static_cast<int>(std::get<0>(group_key)) <<", "
+                      << static_cast<int>(std::get<1>(group_key)) <<", "
+                      << static_cast<int>(std::get<2>(group_key)) <<", "
+                      << static_cast<int>(std::get<3>(group_key)) <<", "
+                      << std::get<4>(group_key) <<"> not found." << std::endl;
         }
         return false;
     }
@@ -330,7 +330,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
         auto gaus_variance{ GetGausVariancePrior(group_key) };
         auto y_value{ (par_id == 0) ? std::get<0>(gaus_estimate) : std::get<1>(gaus_estimate) };
         auto y_error{ (par_id == 0) ? std::get<0>(gaus_variance) : std::get<1>(gaus_variance) };
-        auto x_value{ std::get<0>(group_key) };
+        auto x_value{ static_cast<int>(std::get<0>(group_key)) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;

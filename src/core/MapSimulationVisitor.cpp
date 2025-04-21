@@ -31,10 +31,10 @@ void MapSimulationVisitor::VisitAtomObject(AtomObject * data_object)
         m_atom_selector->GetSelectionFlag(
             data_object->GetChainID(),
             data_object->GetIndicator(),
-            static_cast<int>(data_object->GetResidue()),
-            static_cast<int>(data_object->GetElement()),
-            static_cast<int>(data_object->GetRemoteness()),
-            static_cast<int>(data_object->GetBranch())
+            data_object->GetResidue(),
+            data_object->GetElement(),
+            data_object->GetRemoteness(),
+            data_object->GetBranch()
         )
     };
     data_object->SetSelectedFlag(selected_flag);

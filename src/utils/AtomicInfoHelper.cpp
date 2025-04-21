@@ -1,38 +1,29 @@
 #include "AtomicInfoHelper.hpp"
 
-const std::vector<int> AtomicInfoHelper::m_standard_residue_list
+#include <algorithm>
+
+const std::vector<Residue> AtomicInfoHelper::m_standard_residue_list
 {
-    static_cast<int>(Residue::ALA), static_cast<int>(Residue::ARG),
-    static_cast<int>(Residue::ASN), static_cast<int>(Residue::ASP),
-    static_cast<int>(Residue::CYS), static_cast<int>(Residue::GLN),
-    static_cast<int>(Residue::GLU), static_cast<int>(Residue::GLY),
-    static_cast<int>(Residue::HIS), static_cast<int>(Residue::ILE),
-    static_cast<int>(Residue::LEU), static_cast<int>(Residue::LYS),
-    static_cast<int>(Residue::MET), static_cast<int>(Residue::PHE),
-    static_cast<int>(Residue::PRO), static_cast<int>(Residue::SER),
-    static_cast<int>(Residue::THR), static_cast<int>(Residue::TRP),
-    static_cast<int>(Residue::TYR), static_cast<int>(Residue::VAL)
+    Residue::ALA, Residue::ARG, Residue::ASN, Residue::ASP, Residue::CYS,
+    Residue::GLN, Residue::GLU, Residue::GLY, Residue::HIS, Residue::ILE,
+    Residue::LEU, Residue::LYS, Residue::MET, Residue::PHE, Residue::PRO,
+    Residue::SER, Residue::THR, Residue::TRP, Residue::TYR, Residue::VAL
 };
 
-const std::vector<int> AtomicInfoHelper::m_standard_element_list
+const std::vector<Element> AtomicInfoHelper::m_standard_element_list
 {
-    static_cast<int>(Element::HYDROGEN), static_cast<int>(Element::CARBON),
-    static_cast<int>(Element::NITROGEN), static_cast<int>(Element::OXYGEN),
-    static_cast<int>(Element::SULFUR)
+    Element::HYDROGEN, Element::CARBON, Element::NITROGEN, Element::OXYGEN, Element::SULFUR
 };
 
-const std::vector<int> AtomicInfoHelper::m_standard_remoteness_list
+const std::vector<Remoteness> AtomicInfoHelper::m_standard_remoteness_list
 {
-    static_cast<int>(Remoteness::NONE), static_cast<int>(Remoteness::ALPHA),
-    static_cast<int>(Remoteness::BETA), static_cast<int>(Remoteness::GAMMA),
-    static_cast<int>(Remoteness::DELTA), static_cast<int>(Remoteness::EPSILON),
-    static_cast<int>(Remoteness::ZETA), static_cast<int>(Remoteness::ETA)
+    Remoteness::NONE, Remoteness::ALPHA, Remoteness::BETA, Remoteness::GAMMA,
+    Remoteness::DELTA, Remoteness::EPSILON, Remoteness::ZETA, Remoteness::ETA
 };
 
-const std::vector<int> AtomicInfoHelper::m_standard_branch_list
+const std::vector<Branch> AtomicInfoHelper::m_standard_branch_list
 {
-    static_cast<int>(Branch::NONE), static_cast<int>(Branch::ONE),
-    static_cast<int>(Branch::TWO), static_cast<int>(Branch::THREE)
+    Branch::NONE, Branch::ONE, Branch::TWO, Branch::THREE
 };
 
 const std::unordered_map<Element, int> AtomicInfoHelper::m_atomic_number_map
@@ -126,3 +117,9 @@ const std::unordered_map<Element, int> AtomicInfoHelper::element_color_map
     {Element::ZINC,       1}, {Element::SODIUM,     1}, {Element::MAGNESIUM,   1},
     {Element::IRON,       1}, {Element::CHLORINE,   1}, {Element::UNK,         1}
 };
+
+bool AtomicInfoHelper::IsStandardResidue(Residue residue)
+{
+    return std::find(m_standard_residue_list.begin(), m_standard_residue_list.end(), residue)
+            != m_standard_residue_list.end();
+}

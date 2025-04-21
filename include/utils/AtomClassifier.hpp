@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <vector>
 #include <tuple>
 #include "AtomicInfoHelper.hpp"
@@ -18,8 +17,10 @@ public:
     AtomClassifier(void);
     ~AtomClassifier();
 
-    ElementKeyType GetMainChainElementClassGroupKey(size_t id);
-    std::vector<ResidueKeyType> GetMainChainResidueClassGroupKeyList(size_t id, int residue = -1);
+    static Element GetMainChainElement(size_t id);
+    static Remoteness GetMainChainRemoteness(size_t id);
+    ElementKeyType GetMainChainElementClassGroupKey(size_t id) const;
+    std::vector<ResidueKeyType> GetMainChainResidueClassGroupKeyList(size_t id, Residue residue = Residue::UNK) const;
 
 private:
 

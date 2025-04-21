@@ -68,13 +68,13 @@ struct GroupKeyMapping;
 template <>
 struct GroupKeyMapping<ResidueGroupClassifierTag>
 {
-    using type = std::tuple<int, int, int, int, bool>;
+    using type = std::tuple<Residue, Element, Remoteness, Branch, bool>;
 };
 
 template <>
 struct GroupKeyMapping<ElementGroupClassifierTag>
 {
-    using type = std::tuple<int, int, bool>;
+    using type = std::tuple<Element, Remoteness, bool>;
 };
 
 class AtomicInfoHelper
@@ -82,10 +82,10 @@ class AtomicInfoHelper
     inline static int m_standard_residue_count{ 20 };
     inline static std::string m_element_class_key{ "element_class" };
     inline static std::string m_residue_class_key{ "residue_class" };
-    static const std::vector<int> m_standard_residue_list;
-    static const std::vector<int> m_standard_element_list;
-    static const std::vector<int> m_standard_remoteness_list;
-    static const std::vector<int> m_standard_branch_list;
+    static const std::vector<Residue> m_standard_residue_list;
+    static const std::vector<Element> m_standard_element_list;
+    static const std::vector<Remoteness> m_standard_remoteness_list;
+    static const std::vector<Branch> m_standard_branch_list;
 
     static const std::unordered_map<Element, int> m_atomic_number_map;
     static const std::unordered_map<std::string_view, Residue> residue_map;
@@ -107,110 +107,24 @@ public:
     static int GetStandardResidueCount(void) { return m_standard_residue_count; }
     static const std::string & GetElementClassKey(void) { return m_element_class_key; }
     static const std::string & GetResidueClassKey(void) { return m_residue_class_key; }
-    static const std::vector<int> & GetStandardResidueList(void) { return m_standard_residue_list; }
-    static const std::vector<int> & GetStandardElementList(void) { return m_standard_element_list; }
-    static const std::vector<int> & GetStandardRemotenessList(void) { return m_standard_remoteness_list; }
-    static const std::vector<int> & GetStandardBranchList(void) { return m_standard_branch_list; }
+    static const std::vector<Residue> & GetStandardResidueList(void) { return m_standard_residue_list; }
+    static const std::vector<Element> & GetStandardElementList(void) { return m_standard_element_list; }
+    static const std::vector<Remoteness> & GetStandardRemotenessList(void) { return m_standard_remoteness_list; }
+    static const std::vector<Branch> & GetStandardBranchList(void) { return m_standard_branch_list; }
+    static bool IsStandardResidue(Residue residue);
 
-    struct ResidueTag {};
-    struct ElementTag {};
-    struct RemotenessTag {};
-    struct BranchTag {};
+    static Residue GetResidueFromString(const std::string & name) { return residue_map.at(name); }
+    static Element GetElementFromString(const std::string & name) { return element_map.at(name); }
+    static Remoteness GetRemotenessFromString(const std::string & name) { return remoteness_map.at(name); }
+    static Branch GetBranchFromString(const std::string & name) { return branch_map.at(name); }
 
-    template <typename Tag>
-    static int AtomInfoMapping(const std::string & name)
-    {
-        const auto & mapping{ GetMapping(Tag{}) };
-        CheckEnumTypeName(name, mapping, typeid(Tag).name());
-        return static_cast<int>(mapping.at(name));
-    }
+    static const std::string & GetLabel(Residue residue) { return residue_label_map.at(residue); }
+    static const std::string & GetLabel(Element element) { return element_label_map.at(element); }
+    static const std::string & GetLabel(Remoteness remoteness) { return remoteness_label_map.at(remoteness); }
+    static const std::string & GetLabel(Branch branch) { return branch_label_map.at(branch); }
 
-    static const std::unordered_map<std::string_view, Residue> & GetMapping(const ResidueTag &)
-    {
-        return residue_map;
-    }
-
-    static const std::unordered_map<std::string_view, Element> & GetMapping(const ElementTag &)
-    {
-        return element_map;
-    }
-
-    static const std::unordered_map<std::string_view, Remoteness> & GetMapping(const RemotenessTag &)
-    {
-        return remoteness_map;
-    }
-
-    static const std::unordered_map<std::string_view, Branch> & GetMapping(const BranchTag &)
-    {
-        return branch_map;
-    }
-
-    template <typename Tag>
-    static std::string AtomLabelMapping(int value)
-    {
-        const auto & mapping{ GetLabelMapping(Tag{}) };
-        using KeyType = typename std::remove_reference<decltype(mapping)>::type::key_type;
-        KeyType key{ static_cast<KeyType>(value) };
-        if (mapping.find(key) == mapping.end())
-        {
-            std::ostringstream error_message;
-            error_message << "Invalid value: " << value << " for mapping type " << typeid(Tag).name();
-            throw std::runtime_error(error_message.str());
-        }
-        return mapping.at(key);
-    }
-
-    static const std::unordered_map<Residue, std::string> & GetLabelMapping(const ResidueTag &)
-    {
-        return residue_label_map;
-    }
-
-    static const std::unordered_map<Element, std::string> & GetLabelMapping(const ElementTag &)
-    {
-        return element_label_map;
-    }
-
-    static const std::unordered_map<Remoteness, std::string> & GetLabelMapping(const RemotenessTag &)
-    {
-        return remoteness_label_map;
-    }
-
-    static const std::unordered_map<Branch, std::string> & GetLabelMapping(const BranchTag &)
-    {
-        return branch_label_map;
-    }
-
-    template <typename Tag>
-    static int AtomColorMapping(int value)
-    {
-        const auto & mapping{ GetColorMapping(Tag{}) };
-        using KeyType = typename std::remove_reference<decltype(mapping)>::type::key_type;
-        KeyType key{ static_cast<KeyType>(value) };
-        if (mapping.find(key) == mapping.end())
-        {
-            std::ostringstream error_message;
-            error_message << "Invalid value: " << value << " for mapping type " << typeid(Tag).name();
-            throw std::runtime_error(error_message.str());
-        }
-        return mapping.at(key);
-    }
-
-    static const std::unordered_map<Element, int> & GetColorMapping(const ElementTag &)
-    {
-        return element_color_map;
-    }
+    static int GetDisplayColor(Element element) { return static_cast<int>(element_color_map.at(element)); }
 
 private:
-    template <typename EnumType>
-    static void CheckEnumTypeName(const std::string & name,
-                                  const std::unordered_map<std::string_view, EnumType> & mapping,
-                                  const std::string & mapping_type)
-    {
-        if (mapping.find(name) == mapping.end())
-        {
-            std::ostringstream error_message;
-            error_message << "Invalid " << mapping_type << " name: " << name;
-            throw std::runtime_error(error_message.str());
-        }
-    }
+ 
 };

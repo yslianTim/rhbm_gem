@@ -9,6 +9,7 @@
 
 class ModelObject;
 class AtomClassifier;
+enum class Residue : uint16_t;
 
 #ifdef HAVE_ROOT
 class TPad;
@@ -50,9 +51,9 @@ private:
     void PrintGausSummaryPad(TPad * pad, TH2 * hist);
 
     void PrintInfoSideChainPad(TPad * pad, TPaveText * text, const std::string & residue_name);
-    void PrintAmplitudeSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
-    void PrintWidthSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
-    void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
+    void PrintAmplitudeSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
+    void PrintWidthSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
+    void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
 
     void PrintIconMainChainPad(TPad * pad, TPaveText * text, const std::string & fsc, bool is_bottom_pad);
     void PrintInfoMainChainPad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id, bool is_bottom_pad);
@@ -61,8 +62,8 @@ private:
     void PrintResultPad(TPad * pad, TH2 * hist, bool draw_x_axis);
     void PrintSummaryPad(TPad * pad, TH2 * hist, bool draw_x_axis);
     void PrintCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_axis);
-    void PrintLeftSideChainPad(TPad * pad, TH2 * hist, int residue, const std::string & y_title, const std::vector<std::string> & label_list);
-    void PrintRightSideChainPad(TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list);
+    void PrintLeftSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::string & y_title, const std::vector<std::string> & label_list);
+    void PrintRightSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
     void PrintTitleSideChainPad(TPad * pad, TPaveText * text, const std::string & residue_name);
     #endif
 
