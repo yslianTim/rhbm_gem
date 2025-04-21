@@ -119,16 +119,17 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
     std::unique_ptr<TGraphErrors> sim_buried_charge_graph[primary_element_size][row_size];
     std::unique_ptr<TGraphErrors> sim_no_charge_graph[primary_element_size][row_size];
     std::vector<double> x_array, y_array[row_size];
-    for (int i = 0; i < primary_element_size; i++)
+    for (size_t i = 0; i < primary_element_size; i++)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
-        for (int j = 0; j < row_size; j++)
+        for (size_t j = 0; j < row_size; j++)
         {
             sim_buried_charge_graph[i][j] = ROOTHelper::CreateGraphErrors();
             sim_no_charge_graph[i][j] = ROOTHelper::CreateGraphErrors();
 
-            BuildGausEstimateToBlurringWidthGraph(group_key, sim_buried_charge_graph[i][j].get(), sim_buried_charge_model_object_list, row_size-j-1);
-            BuildGausEstimateToBlurringWidthGraph(group_key, sim_no_charge_graph[i][j].get(), sim_no_charge_model_object_list, row_size-j-1);
+            int reverse_index{ row_size - static_cast<int>(j) - 1 };
+            BuildGausEstimateToBlurringWidthGraph(group_key, sim_buried_charge_graph[i][j].get(), sim_buried_charge_model_object_list, reverse_index);
+            BuildGausEstimateToBlurringWidthGraph(group_key, sim_no_charge_graph[i][j].get(), sim_no_charge_model_object_list, reverse_index);
 
             for (int p = 0; p < sim_buried_charge_graph[i][j]->GetN(); p++)
             {
@@ -236,7 +237,7 @@ void ComparisonPainter::PaintSimulationGausRatio(
     };
 
     std::unique_ptr<TGraphErrors> simulation_graph[primary_element_size][2];
-    for (int i = 0; i < primary_element_size; i++)
+    for (size_t i = 0; i < primary_element_size; i++)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         for (int j = 0; j < 2; j++)
@@ -342,7 +343,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     std::unique_ptr<TGraphErrors> data_graph[primary_element_size][2];
     std::unique_ptr<TGraphErrors> sim_buried_charge_graph[primary_element_size][2];
     std::unique_ptr<TGraphErrors> sim_no_charge_graph[primary_element_size][2];
-    for (int i = 0; i < primary_element_size; i++)
+    for (size_t i = 0; i < primary_element_size; i++)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         data_graph[i][0] = ROOTHelper::CreateGraphErrors();
@@ -477,7 +478,7 @@ void ComparisonPainter::PainMapValueComparison(
     double r_square[column_size]{ 0.0 };
     double slope[column_size]{ 0.0 };
     double intercept[column_size]{ 0.0 };
-    for (int i = 0; i < column_size; i++)
+    for (size_t i = 0; i < column_size; i++)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         scatter_graph[i] = ROOTHelper::CreateGraphErrors();
@@ -486,7 +487,7 @@ void ComparisonPainter::PainMapValueComparison(
         ROOTHelper::SetMarkerAttribute(scatter_graph[i].get(), marker_element[i], 1.0f, color_element[i]);
         ROOTHelper::SetLineAttribute(scatter_graph[i].get(), 1, 2, color_element[i]);
 
-        fit_function[i] = ROOTHelper::CreateFunction1D(Form("fit_%d", i), "x*[1]+[0]");
+        fit_function[i] = ROOTHelper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]");
         fit_function[i]->SetParameters(intercept[i], slope[i]);
         ROOTHelper::SetLineAttribute(fit_function[i].get(), 1, 2, kRed);
     }

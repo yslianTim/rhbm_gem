@@ -11,15 +11,15 @@ class AtomClassifier
     using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
 
     static const int m_main_chain_member_count{ 4 };
-    const int m_main_chain_element_index[m_main_chain_member_count]   { 6, 6, 7, 8 };
-    const int m_main_chain_remoteness_index[m_main_chain_member_count]{ 1, 0, 0, 0 };
+    static const std::vector<Element> m_main_chain_member_element_list;
+    static const std::vector<Remoteness> m_main_chain_member_remoteness_list;
 
 public:
     AtomClassifier(void);
     ~AtomClassifier();
 
-    ElementKeyType GetMainChainElementClassGroupKey(int id);
-    std::vector<ResidueKeyType> GetMainChainResidueClassGroupKeyList(int id, int residue = -1);
+    ElementKeyType GetMainChainElementClassGroupKey(size_t id);
+    std::vector<ResidueKeyType> GetMainChainResidueClassGroupKeyList(size_t id, int residue = -1);
 
 private:
 

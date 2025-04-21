@@ -3,6 +3,16 @@
 using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
 using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
 
+const std::vector<Element> AtomClassifier::m_main_chain_member_element_list
+{
+    Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN
+};
+
+const std::vector<Remoteness> AtomClassifier::m_main_chain_member_remoteness_list
+{
+    Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE, Remoteness::NONE
+};
+
 AtomClassifier::AtomClassifier(void)
 {
 
@@ -13,18 +23,20 @@ AtomClassifier::~AtomClassifier()
 
 }
 
-ElementKeyType AtomClassifier::GetMainChainElementClassGroupKey(int id)
+ElementKeyType AtomClassifier::GetMainChainElementClassGroupKey(size_t id)
 {
     if (id >= m_main_chain_member_count)
     {
         std::cerr << "Invalid id: " << id << std::endl;
         return {};
     }
-    return std::make_tuple(m_main_chain_element_index[id], m_main_chain_remoteness_index[id], false);
+    auto element_id{ static_cast<int>(m_main_chain_member_element_list.at(id)) };
+    auto remoteness_id{ static_cast<int>(m_main_chain_member_remoteness_list.at(id)) };
+    return std::make_tuple(element_id, remoteness_id, false);
 }
 
 std::vector<ResidueKeyType> AtomClassifier::GetMainChainResidueClassGroupKeyList(
-    int id, int residue)
+    size_t id, int residue)
 {
     if (id >= m_main_chain_member_count)
     {
@@ -32,8 +44,8 @@ std::vector<ResidueKeyType> AtomClassifier::GetMainChainResidueClassGroupKeyList
         return {};
     }
     std::vector<ResidueKeyType> group_key_list;
-    auto element_id{ m_main_chain_element_index[id] };
-    auto remoteness_id{ m_main_chain_remoteness_index[id] };
+    auto element_id{ static_cast<int>(m_main_chain_member_element_list.at(id)) };
+    auto remoteness_id{ static_cast<int>(m_main_chain_member_remoteness_list.at(id)) };
 
     if (residue == -1)
     {

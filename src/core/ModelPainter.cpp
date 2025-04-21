@@ -158,13 +158,13 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     std::unique_ptr<TH2D> amplitude_hist[pad_size_y][primary_element_size];
     std::unique_ptr<TH2D> width_hist[pad_size_y][primary_element_size];
     std::vector<double> width_array_total;
-    for (int j = 0; j < pad_size_y; j++)
+    for (size_t j = 0; j < pad_size_y; j++)
     {
         std::vector<double> amplitude_array, width_array;
         info_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         icon_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(static_cast<size_t>(j))) };
-        for (int k = 0; k < primary_element_size; k++)
+        for (size_t k = 0; k < primary_element_size; k++)
         {
             auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(k) };
             amplitude_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, 0);
@@ -393,7 +393,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
     std::vector<double> amplitude_array, width_array;
     amplitude_array.reserve(static_cast<size_t>(primary_element_size * AtomicInfoHelper::GetStandardResidueCount()));
     width_array.reserve(static_cast<size_t>(primary_element_size * AtomicInfoHelper::GetStandardResidueCount()));
-    for (int i = 0; i < primary_element_size; i++)
+    for (size_t i = 0; i < primary_element_size; i++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i) };
         amplitude_graph[i] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, 0);
@@ -859,7 +859,7 @@ void ModelPainter::PaintResidueClassXYPosition(
     std::unique_ptr<TGraph2DErrors> amplitude_2d_graph[column_size][row_size];
     std::unique_ptr<TGraph2DErrors> width_2d_graph[column_size][row_size];
     std::unique_ptr<TGraphErrors> total_graph[row_size];
-    for (int i = 0; i < column_size; i++)
+    for (size_t i = 0; i < column_size; i++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i) };
         position_graph[i][0] = entry_iter->CreateXYPositionTomographyGraph(group_key_list, 0.3, 0.1) ;
