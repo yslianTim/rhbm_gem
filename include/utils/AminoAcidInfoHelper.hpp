@@ -22,8 +22,8 @@ public:
     AminoAcidInfoHelper(void) = default;
     ~AminoAcidInfoHelper() = default;
 
-    static size_t GetAtomCount(Residue residue) { return m_atom_count_map.at(residue); }
-    static size_t GetAtomCount(int residue) { return m_atom_count_map.at(static_cast<Residue>(residue)); }
+    static size_t GetAtomCount(Residue residue);
+    static size_t GetAtomCount(int residue);
     static double GetPartialCharge(Residue residue, Element element, Remoteness remoteness, Branch branch, bool verbose=0);
 
 };

@@ -369,10 +369,44 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
+    Element element, bool reverse)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto count{ 0 };
+    for (auto & atom : m_model_object->GetComponentsList())
+    {
+        if (atom->GetElement() == element && atom->GetSelectedFlag() == true)
+        {
+            auto entry{ atom->GetAtomicPotentialEntry() };
+            if (reverse == false)
+            {
+                graph->SetPoint(count, entry->GetAmplitudeEstimateMDPDE(), entry->GetWidthEstimateMDPDE());
+            }
+            else
+            {
+                graph->SetPoint(count, entry->GetWidthEstimateMDPDE(), entry->GetAmplitudeEstimateMDPDE());
+            }
+            count++;
+        }
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
     ResidueKeyType & group_key1, ResidueKeyType & group_key2, const int par_id)
 {
-    if (IsModelObjectAvailable() == false || IsAvailableGroupKey(group_key1) == false || IsAvailableGroupKey(group_key2))
+    if (IsModelObjectAvailable() == false)
     {
+        return nullptr;
+    }
+    if (IsAvailableGroupKey(group_key1) == false || IsAvailableGroupKey(group_key2) == false)
+    {
+        std::cerr << "Group key is not available." << std::endl;
         return nullptr;
     }
     auto graph{ ROOTHelper::CreateGraphErrors() };

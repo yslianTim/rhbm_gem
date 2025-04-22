@@ -36,7 +36,7 @@ public:
     void BuildKDTreeRoot(void);
 
     int GetNumberOfAtom(void) const { return static_cast<int>(m_atom_list.size()); }
-    int GetNumberOfSelectedAtom(void) const;
+    size_t GetNumberOfSelectedAtom(void) const;
     const std::vector<std::unique_ptr<AtomObject>> & GetComponentsList(void) const { return m_atom_list; }
     std::string GetPdbID(void) const { return m_pdb_id; }
     std::string GetEmdID(void) const { return m_emd_id; }

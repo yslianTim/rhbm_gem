@@ -111,12 +111,30 @@ const std::unordered_map<Branch, std::string> AtomicInfoHelper::branch_label_map
     {Branch::TERMINAL, "T"}, {Branch::UNK, "UNK"}
 };
 
-const std::unordered_map<Element, int> AtomicInfoHelper::element_color_map
+const std::unordered_map<Element, int> AtomicInfoHelper::m_element_color_map
 {
     {Element::HYDROGEN, 921}, {Element::CARBON,   633}, {Element::NITROGEN,  418},
     {Element::OXYGEN,   862}, {Element::SULFUR,   619}, {Element::CALCIUM,     1},
     {Element::ZINC,       1}, {Element::SODIUM,     1}, {Element::MAGNESIUM,   1},
     {Element::IRON,       1}, {Element::CHLORINE,   1}, {Element::UNK,         1}
+};
+
+const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_color_map
+{
+    {Residue::ALA, 632}, {Residue::ARG, 633}, {Residue::ASN, 634}, {Residue::ASP, 635},
+    {Residue::CYS, 800}, {Residue::GLN, 801}, {Residue::GLU, 802}, {Residue::GLY, 803},
+    {Residue::HIS, 416}, {Residue::ILE, 417}, {Residue::LEU, 418}, {Residue::LYS, 419},
+    {Residue::MET, 600}, {Residue::PHE, 601}, {Residue::PRO, 602}, {Residue::SER, 603},
+    {Residue::THR, 880}, {Residue::TRP, 881}, {Residue::TYR, 882}, {Residue::VAL, 883}
+};
+
+const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
+{
+    {Residue::ALA, 20}, {Residue::ARG, 21}, {Residue::ASN, 22}, {Residue::ASP, 23},
+    {Residue::CYS, 24}, {Residue::GLN, 25}, {Residue::GLU, 26}, {Residue::GLY, 27},
+    {Residue::HIS, 28}, {Residue::ILE, 29}, {Residue::LEU, 30}, {Residue::LYS, 31},
+    {Residue::MET, 32}, {Residue::PHE, 33}, {Residue::PRO, 34}, {Residue::SER, 35},
+    {Residue::THR, 36}, {Residue::TRP, 37}, {Residue::TYR, 38}, {Residue::VAL, 39}
 };
 
 int AtomicInfoHelper::GetAtomicNumber(Element element)
@@ -207,5 +225,15 @@ const std::string & AtomicInfoHelper::GetLabel(Branch branch)
 
 int AtomicInfoHelper::GetDisplayColor(Element element)
 {
-    return static_cast<int>(element_color_map.at(element));
+    return static_cast<int>(m_element_color_map.at(element));
+}
+
+short AtomicInfoHelper::GetDisplayColor(Residue residue)
+{
+    return static_cast<short>(m_residue_color_map.at(residue));
+}
+
+short AtomicInfoHelper::GetDisplayMarker(Residue residue)
+{
+    return static_cast<short>(m_residue_marker_map.at(residue));
 }

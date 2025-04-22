@@ -58,9 +58,9 @@ void ModelObject::AddAtom(std::unique_ptr<AtomObject> component)
     m_atom_list.emplace_back(std::move(component));
 }
 
-int ModelObject::GetNumberOfSelectedAtom(void) const
+size_t ModelObject::GetNumberOfSelectedAtom(void) const
 {
-    auto count{ 0 };
+    size_t count{ 0 };
     for (auto & atom : m_atom_list)
     {
         if (atom->GetSelectedFlag() == true) count++;

@@ -250,6 +250,16 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_bu
     {Residue::VAL, { 0.560, 0.215,-0.588,-0.661,-0.005,-0.362,-0.360}}
 };
 
+size_t AminoAcidInfoHelper::GetAtomCount(Residue residue)
+{
+    return m_atom_count_map.at(residue);
+}
+
+size_t AminoAcidInfoHelper::GetAtomCount(int residue)
+{
+    return m_atom_count_map.at(static_cast<Residue>(residue));
+}
+
 double AminoAcidInfoHelper::GetPartialCharge(
     Residue residue, Element element, Remoteness remoteness, Branch branch, bool verbose)
 {

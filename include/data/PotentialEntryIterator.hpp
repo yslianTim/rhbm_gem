@@ -57,6 +57,7 @@ public:
     #ifdef HAVE_ROOT
     std::unique_ptr<TGraphErrors> CreateGausEstimateToResidueGraph(std::vector<ResidueKeyType> & group_key_list, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(std::vector<ResidueKeyType> & group_key_list, bool reverse=false);
+    std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(Element element, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(ResidueKeyType & group_key1, ResidueKeyType & group_key2, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateDistanceToMapValueGraph(void);
     std::unique_ptr<TGraphErrors> CreateBinnedDistanceToMapValueGraph(int bin_size=15, double x_min=0.0, double x_max=1.5);

@@ -94,8 +94,9 @@ class AtomicInfoHelper
     static const std::unordered_map<Remoteness, std::string> remoteness_label_map;
     static const std::unordered_map<Branch, std::string> branch_label_map;
 
-    static const std::unordered_map<Element, int> element_color_map;
-
+    static const std::unordered_map<Element, int> m_element_color_map;
+    static const std::unordered_map<Residue, int> m_residue_color_map;
+    static const std::unordered_map<Residue, int> m_residue_marker_map;
 
 public:
     AtomicInfoHelper(void) = default;
@@ -121,6 +122,8 @@ public:
     static const std::string & GetLabel(Branch branch);
 
     static int GetDisplayColor(Element element);
+    static short GetDisplayColor(Residue residue);
+    static short GetDisplayMarker(Residue residue);
 private:
  
 };
