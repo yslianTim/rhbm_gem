@@ -600,6 +600,95 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
     #endif
 }
 
+void ModelPainter::PaintResidueClassGroupGausScatter(
+    ModelObject * model_object, const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    std::cout <<"- ModelPainter::PaintResidueClassGroupGausScatter"<< std::endl;
+    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+
+    #ifdef HAVE_ROOT
+
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 500) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), 4, 2, 0.1f, 0.01f, 0.15f, 0.01f, 0.01f, 0.005f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    const int column_size{ 3 };
+    const int row_size{ 1 };
+    const std::string element_label[column_size]
+    {
+        "Alpha Carbon",
+        "Carbonyl Carbon",
+        "Peptide Nitrogen"
+    };
+
+    short color_element[column_size] { kRed+1, kOrange+1, kGreen+2 };
+    short marker_element[column_size]{ 54, 53, 55 };
+    std::unique_ptr<TH2> frame[column_size][row_size];
+
+    std::vector<std::unique_ptr<TGraphErrors>> graph_list[column_size];
+    double x_min[column_size]{ 0.0 };
+    double x_max[column_size]{ 1.0 };
+    double y_min{ 0.0 };
+    double y_max{ 1.0 };
+    for (size_t i = 0; i < column_size; i++)
+    {
+        for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+        {
+            auto group_key{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i, residue).at(0) };
+            if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
+            auto group_key_ref{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(3, residue).at(0) };
+            if (entry_iter->IsAvailableGroupKey(group_key_ref) == false) continue;
+            auto graph{ entry_iter->CreateGausEstimateScatterGraph(group_key_ref, group_key, 0) };
+            double x_min_tmp, x_max_tmp, y_min_tmp, y_max_tmp;
+            graph->ComputeRange(x_min_tmp, y_min_tmp, x_max_tmp, y_max_tmp);
+            x_min[i] = (x_min_tmp < x_min[i]) ? x_min_tmp : x_min[i];
+            x_max[i] = (x_max_tmp > x_max[i]) ? x_max_tmp : x_max[i];
+            y_min = (y_min_tmp < y_min) ? y_min_tmp : y_min;
+            y_max = (y_max_tmp > y_max) ? y_max_tmp : y_max;
+
+            graph_list[i].emplace_back(std::move(graph));
+        }
+    }
+
+    for (int i = 0; i < column_size; i++)
+    {
+        for (int j = 0; j < row_size; j++)
+        {
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min, y_max);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 35, 1.6f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35, 0.01f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
+            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            frame[i][j]->GetXaxis()->SetTitle("Oxygen");
+            frame[i][j]->GetYaxis()->SetTitle(element_label[i].data());
+            frame[i][j]->GetYaxis()->CenterTitle();
+            frame[i][j]->SetStats(0);
+            frame[i][j]->Draw();
+            for (auto & graph : graph_list[i])
+            {
+                ROOTHelper::SetMarkerAttribute(graph.get(), marker_element[i], 1.3f, color_element[i]);
+                graph->Draw("P X0");
+            }
+        }
+    }
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    std::cout <<"  Output file: "<< file_path << std::endl;
+    #endif
+}
+
 void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };

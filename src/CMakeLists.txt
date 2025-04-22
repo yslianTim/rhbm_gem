@@ -7,6 +7,8 @@ add_executable(${MAIN_EXEC_NAME} main.cpp)
 
 target_link_libraries(${MAIN_EXEC_NAME} PUBLIC
     core
+    utils
+    data
     CompilerFlags
 )
 

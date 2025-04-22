@@ -20,7 +20,7 @@ if(NOT USE_SYSTEM_SQLITE3)
     add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/sqlite ${CMAKE_BINARY_DIR}/third_party/sqlite)
 endif()
 
-add_library(data STATIC ${SOURCE})
+add_library(data SHARED ${SOURCE})
 target_include_directories(data PUBLIC ${CMAKE_SOURCE_DIR}/include/data)
 target_link_libraries(data PUBLIC
     utils

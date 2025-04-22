@@ -368,6 +368,39 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     return graph;
 }
 
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
+    ResidueKeyType & group_key1, ResidueKeyType & group_key2, const int par_id)
+{
+    if (IsModelObjectAvailable() == false || IsAvailableGroupKey(group_key1) == false || IsAvailableGroupKey(group_key2))
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+
+    const auto & atom_list1{ GetAtomObjectList(group_key1) };
+    const auto & atom_list2{ GetAtomObjectList(group_key2) };
+
+    auto count{ 0 };
+    for (auto atom1 : atom_list1)
+    {
+        auto entry1{ atom1->GetAtomicPotentialEntry() };
+        for (auto atom2 : atom_list2)
+        {
+            auto entry2{ atom2->GetAtomicPotentialEntry() };
+            if (atom1->GetResidueID() == atom2->GetResidueID() &&
+                atom1->GetChainID() == atom2->GetChainID())
+            {
+                auto gaus_estimate1{ (par_id == 0) ? entry1->GetAmplitudeEstimateMDPDE() : entry1->GetWidthEstimateMDPDE() };
+                auto gaus_estimate2{ (par_id == 0) ? entry2->GetAmplitudeEstimateMDPDE() : entry2->GetWidthEstimateMDPDE() };
+                graph->SetPoint(count, gaus_estimate1, gaus_estimate2);
+                count++;
+                break;
+            } 
+        }
+    }
+    return graph;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateDistanceToMapValueGraph(void)
 {
     if (IsAtomicEntryAvailable() == false)
