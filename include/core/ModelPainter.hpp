@@ -37,7 +37,7 @@ private:
     void PaintResidueClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausMainChain(const std::string & name);
     //void PaintResidueClassGroupGausSideChain(const std::string & name);
-    void PaintResidueClassGroupGausScatter(ModelObject * model_object, const std::string & name);
+    void PaintResidueClassGroupGausScatter(ModelObject * model_object, const std::string & name, int par_id=0);
     void PaintResidueClassMapValue(ModelObject * model_object, const std::string & name);
     void PaintResidueClassKNN(ModelObject * model_object, const std::string & name);
     void PaintResidueClassXYPosition(ModelObject * model_object, const std::string & name);

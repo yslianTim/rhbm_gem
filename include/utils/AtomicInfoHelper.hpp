@@ -100,28 +100,27 @@ class AtomicInfoHelper
 public:
     AtomicInfoHelper(void) = default;
     ~AtomicInfoHelper() = default;
-    static int GetAtomicNumber(Element element) { return m_atomic_number_map.at(element); }
-    static int GetStandardResidueCount(void) { return m_standard_residue_count; }
-    static const std::string & GetElementClassKey(void) { return m_element_class_key; }
-    static const std::string & GetResidueClassKey(void) { return m_residue_class_key; }
-    static const std::vector<Residue> & GetStandardResidueList(void) { return m_standard_residue_list; }
-    static const std::vector<Element> & GetStandardElementList(void) { return m_standard_element_list; }
-    static const std::vector<Remoteness> & GetStandardRemotenessList(void) { return m_standard_remoteness_list; }
-    static const std::vector<Branch> & GetStandardBranchList(void) { return m_standard_branch_list; }
+    static int GetAtomicNumber(Element element);
+    static int GetStandardResidueCount(void);
+    static const std::string & GetElementClassKey(void);
+    static const std::string & GetResidueClassKey(void);
+    static const std::vector<Residue> & GetStandardResidueList(void);
+    static const std::vector<Element> & GetStandardElementList(void);
+    static const std::vector<Remoteness> & GetStandardRemotenessList(void);
+    static const std::vector<Branch> & GetStandardBranchList(void);
     static bool IsStandardResidue(Residue residue);
 
-    static Residue GetResidueFromString(const std::string & name) { return residue_map.at(name); }
-    static Element GetElementFromString(const std::string & name) { return element_map.at(name); }
-    static Remoteness GetRemotenessFromString(const std::string & name) { return remoteness_map.at(name); }
-    static Branch GetBranchFromString(const std::string & name) { return branch_map.at(name); }
+    static Residue GetResidueFromString(const std::string & name);
+    static Element GetElementFromString(const std::string & name);
+    static Remoteness GetRemotenessFromString(const std::string & name);
+    static Branch GetBranchFromString(const std::string & name);
 
-    static const std::string & GetLabel(Residue residue) { return residue_label_map.at(residue); }
-    static const std::string & GetLabel(Element element) { return element_label_map.at(element); }
-    static const std::string & GetLabel(Remoteness remoteness) { return remoteness_label_map.at(remoteness); }
-    static const std::string & GetLabel(Branch branch) { return branch_label_map.at(branch); }
+    static const std::string & GetLabel(Residue residue);
+    static const std::string & GetLabel(Element element);
+    static const std::string & GetLabel(Remoteness remoteness);
+    static const std::string & GetLabel(Branch branch);
 
-    static int GetDisplayColor(Element element) { return static_cast<int>(element_color_map.at(element)); }
-
+    static int GetDisplayColor(Element element);
 private:
  
 };

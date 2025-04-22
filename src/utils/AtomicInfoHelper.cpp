@@ -119,8 +119,93 @@ const std::unordered_map<Element, int> AtomicInfoHelper::element_color_map
     {Element::IRON,       1}, {Element::CHLORINE,   1}, {Element::UNK,         1}
 };
 
+int AtomicInfoHelper::GetAtomicNumber(Element element)
+{
+    return m_atomic_number_map.at(element);
+}
+
+int AtomicInfoHelper::GetStandardResidueCount(void)
+{
+    return m_standard_residue_count;
+}
+
+const std::string & AtomicInfoHelper::GetElementClassKey(void)
+{
+    return m_element_class_key;
+}
+
+const std::string & AtomicInfoHelper::GetResidueClassKey(void)
+{
+    return m_residue_class_key;
+}
+
+const std::vector<Residue> & AtomicInfoHelper::GetStandardResidueList(void)
+{
+    return m_standard_residue_list;
+}
+
+const std::vector<Element> & AtomicInfoHelper::GetStandardElementList(void)
+{
+    return m_standard_element_list;
+}
+
+const std::vector<Remoteness> & AtomicInfoHelper::GetStandardRemotenessList(void)
+{
+    return m_standard_remoteness_list;
+}
+
+const std::vector<Branch> & AtomicInfoHelper::GetStandardBranchList(void)
+{
+    return m_standard_branch_list;
+}
+
 bool AtomicInfoHelper::IsStandardResidue(Residue residue)
 {
     return std::find(m_standard_residue_list.begin(), m_standard_residue_list.end(), residue)
             != m_standard_residue_list.end();
+}
+
+Residue AtomicInfoHelper::GetResidueFromString(const std::string & name)
+{
+    return residue_map.at(name);
+}
+
+Element AtomicInfoHelper::GetElementFromString(const std::string & name)
+{
+    return element_map.at(name);
+}
+
+Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)
+{
+    return remoteness_map.at(name);
+}
+
+Branch AtomicInfoHelper::GetBranchFromString(const std::string & name)
+{
+    return branch_map.at(name);
+}
+
+const std::string & AtomicInfoHelper::GetLabel(Residue residue)
+{
+    return residue_label_map.at(residue);
+}
+
+const std::string & AtomicInfoHelper::GetLabel(Element element)
+{
+    return element_label_map.at(element);
+}
+
+const std::string & AtomicInfoHelper::GetLabel(Remoteness remoteness)
+{
+    return remoteness_label_map.at(remoteness);
+}
+
+const std::string & AtomicInfoHelper::GetLabel(Branch branch)
+{
+    return branch_label_map.at(branch);
+}
+
+int AtomicInfoHelper::GetDisplayColor(Element element)
+{
+    return static_cast<int>(element_color_map.at(element));
 }

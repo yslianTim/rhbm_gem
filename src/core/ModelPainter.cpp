@@ -72,6 +72,8 @@ void ModelPainter::Painting(void)
         model_object->BuildKDTreeRoot();
         PaintResidueClassKNN(model_object, "residue_class_knn_"+ model_object->GetPdbID() +".pdf");
         PaintResidueClassXYPosition(model_object, "residue_class_xy_position_"+ model_object->GetPdbID() +".pdf");
+        PaintResidueClassGroupGausScatter(model_object, "amplitude_scatter_"+ model_object->GetPdbID() +".pdf", 0);
+        PaintResidueClassGroupGausScatter(model_object, "width_scatter_"+ model_object->GetPdbID() +".pdf", 1);
     }
 
     if (m_ref_model_object_map.find("buried_charge") != m_ref_model_object_map.end())
@@ -601,7 +603,7 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
 }
 
 void ModelPainter::PaintResidueClassGroupGausScatter(
-    ModelObject * model_object, const std::string & name)
+    ModelObject * model_object, const std::string & name, int par_id)
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausScatter"<< std::endl;
@@ -643,7 +645,7 @@ void ModelPainter::PaintResidueClassGroupGausScatter(
             if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
             auto group_key_ref{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(3, residue).at(0) };
             if (entry_iter->IsAvailableGroupKey(group_key_ref) == false) continue;
-            auto graph{ entry_iter->CreateGausEstimateScatterGraph(group_key_ref, group_key, 0) };
+            auto graph{ entry_iter->CreateGausEstimateScatterGraph(group_key_ref, group_key, par_id) };
             double x_min_tmp, x_max_tmp, y_min_tmp, y_max_tmp;
             graph->ComputeRange(x_min_tmp, y_min_tmp, x_max_tmp, y_max_tmp);
             x_min[i] = (x_min_tmp < x_min[i]) ? x_min_tmp : x_min[i];
