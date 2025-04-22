@@ -1,9 +1,10 @@
 #include "AminoAcidInfoHelper.hpp"
 #include "AtomicInfoHelper.hpp"
-#include <stdexcept>
-#include <cstdint>
 
-const std::unordered_map<Residue, size_t> AminoAcidInfoHelper::atom_count_map
+#include <iostream>
+#include <stdexcept>
+
+const std::unordered_map<Residue, size_t> AminoAcidInfoHelper::m_atom_count_map
 {
     {Residue::ALA,  5}, {Residue::ARG, 11}, {Residue::ASN,  8}, {Residue::ASP,  8},
     {Residue::CYS,  6}, {Residue::GLN,  9}, {Residue::GLU,  9}, {Residue::GLY,  4},
@@ -12,7 +13,7 @@ const std::unordered_map<Residue, size_t> AminoAcidInfoHelper::atom_count_map
     {Residue::THR,  7}, {Residue::TRP, 14}, {Residue::TYR, 12}, {Residue::VAL,  7}
 };
 
-const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::element_map
+const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_element_map
 {
     {Residue::ALA, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
                     Element::CARBON}},
@@ -83,7 +84,7 @@ const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::ele
                     Element::CARBON, Element::CARBON, Element::CARBON}}
 };
 
-const std::unordered_map<Residue, std::vector<Remoteness>> AminoAcidInfoHelper::remoteness_map
+const std::unordered_map<Residue, std::vector<Remoteness>> AminoAcidInfoHelper::m_remoteness_map
 {
     {Residue::ALA, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
                     Remoteness::BETA}},
@@ -154,7 +155,7 @@ const std::unordered_map<Residue, std::vector<Remoteness>> AminoAcidInfoHelper::
                     Remoteness::BETA, Remoteness::GAMMA, Remoteness::GAMMA}}
 };
 
-const std::unordered_map<Residue, std::vector<Branch>> AminoAcidInfoHelper::branch_map
+const std::unordered_map<Residue, std::vector<Branch>> AminoAcidInfoHelper::m_branch_map
 {
     {Residue::ALA, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
                     Branch::NONE}},
@@ -225,7 +226,7 @@ const std::unordered_map<Residue, std::vector<Branch>> AminoAcidInfoHelper::bran
                     Branch::NONE, Branch::ONE, Branch::TWO}}
 };
 
-const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::buried_partial_charge_map
+const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_buried_partial_charge_map
 {
     {Residue::ALA, { 0.560, 0.267,-0.592,-0.673,-0.392}},
     {Residue::ARG, { 0.558, 0.240,-0.590,-0.658,-0.215,-0.190, 0.116,-0.604, 0.901,-0.908,-0.906}},
@@ -250,9 +251,8 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::buri
 };
 
 double AminoAcidInfoHelper::GetPartialCharge(
-    Residue residue, Element element, Remoteness remoteness, Branch branch)
+    Residue residue, Element element, Remoteness remoteness, Branch branch, bool verbose)
 {
-    // ---- fast key‑based cache for O(1) lookup ----
     using Key = std::uint32_t; // packed <Element, Remoteness, Branch>
     auto pack_key = [](Element e, Remoteness r, Branch b) noexcept -> Key
     {
@@ -269,11 +269,11 @@ double AminoAcidInfoHelper::GetPartialCharge(
     {
         if (residue_cache.empty()) // first request for this residue
         {
-            auto atom_size{ atom_count_map.at(residue) };
-            const auto & element_list{ element_map.at(residue) };
-            const auto & remoteness_list{ remoteness_map.at(residue) };
-            const auto & branch_list{ branch_map.at(residue) };
-            const auto & charge_list{ buried_partial_charge_map.at(residue) };
+            auto atom_size{ m_atom_count_map.at(residue) };
+            const auto & element_list{ m_element_map.at(residue) };
+            const auto & remoteness_list{ m_remoteness_map.at(residue) };
+            const auto & branch_list{ m_branch_map.at(residue) };
+            const auto & charge_list{ m_buried_partial_charge_map.at(residue) };
 
             // the four vectors should guaranteed aligned
             if (atom_size != element_list.size() ||
@@ -293,13 +293,12 @@ double AminoAcidInfoHelper::GetPartialCharge(
             }
         }
     }
-    catch(const std::exception & e)
+    catch(const std::exception & except)
     {
+        if (verbose == true) std::cout << except.what() << std::endl;
         return 0.0;
     }
     
-    
-
     const Key key{ pack_key(element, remoteness, branch) };
     const auto it{ residue_cache.find(key) };
     if (it != residue_cache.end())
@@ -308,5 +307,4 @@ double AminoAcidInfoHelper::GetPartialCharge(
     }
 
     return 0.0;
-    //throw std::out_of_range("AminoAcidInfoHelper::GetPartialCharge ‑ unmatched atom signature");
 }

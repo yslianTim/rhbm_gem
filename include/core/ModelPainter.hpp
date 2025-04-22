@@ -40,6 +40,8 @@ private:
     void PaintResidueClassMapValue(ModelObject * model_object, const std::string & name);
     void PaintResidueClassKNN(ModelObject * model_object, const std::string & name);
     void PaintResidueClassXYPosition(ModelObject * model_object, const std::string & name);
+    void PaintElementClassGroupGausToFSC(const std::string & name);
+
 
     #ifdef HAVE_ROOT
     void PrintIconPad(TPad * pad, TPaveText * text);

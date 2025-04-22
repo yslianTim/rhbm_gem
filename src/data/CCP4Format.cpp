@@ -173,16 +173,13 @@ void CCP4Format::SaveDataArray(const std::string & filename)
         throw std::runtime_error("SaveDataArray: data array is empty");
     }
 
-    // Open existing file for update—do NOT truncate header we just saved.
+    // Open existing file for update -- do NOT truncate header we just saved.
     std::fstream file{ filename, std::ios::in | std::ios::out | std::ios::binary };
     if (!file)
     {
         throw std::runtime_error("Cannot open file for updating: " + filename);
     }
 
-    // In CCP4/MRC format, voxel data follow immediately after:
-    //   1) 1024‑byte standard header
-    //   2) Symmetry records (optional, multiple of 80 bytes)
     const std::streamoff data_offset{
         HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.symmetry_table_size)
     };

@@ -101,6 +101,11 @@ void ModelPainter::Painting(void)
         PaintResidueClassGroupGausMainChain("figure_1_part2.pdf");
         PaintResidueClassMapValue(m_model_object_list.at(3), "figure_1_part3.pdf");
     }
+
+    if (m_model_object_list.size() == 11)
+    {
+        PaintElementClassGroupGausToFSC("figure6_a.pdf");
+    }
 }
 
 void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
@@ -928,6 +933,102 @@ void ModelPainter::PaintResidueClassXYPosition(
             width_2d_graph[i][j]->SetTitle("");
             width_2d_graph[i][j]->Draw("PCOLZ");
         }
+    }
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    std::cout <<"  Output file: "<< file_path << std::endl;
+    #endif
+}
+
+void ModelPainter::PaintElementClassGroupGausToFSC(const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    std::cout <<"- ModelPainter::PaintElementClassGroupGausToFSC"<< std::endl;
+
+    std::vector<double> fsc_list;
+    fsc_list.reserve(m_model_object_list.size());
+
+
+    #ifdef HAVE_ROOT
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+    const int column_size{ 4 };
+    const int row_size{ 1 };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 950, 300) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.1f, 0.01f, 0.11f, 0.07f, 0.01f, 0.005f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    
+    const int primary_element_size{ 4 };
+    const char * element_label[primary_element_size]
+    {
+        "Alpha Carbon",
+        "Carbonyl Carbon",
+        "Peptide Nitrogen",
+        "Carbonyl Oxygen"
+    };
+    short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+
+    std::unique_ptr<TGraphErrors> graph[primary_element_size];
+    std::vector<double> x_array, y_array;
+    for (size_t i = 0; i < primary_element_size; i++)
+    {
+        auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
+        graph[i] = ROOTHelper::CreateGraphErrors();
+        //BuildGausEstimateToFSCGraph(group_key, graph[i].get(), m_model_object_list, fsc_list);
+
+        for (int p = 0; p < graph[i]->GetN(); p++)
+        {
+            x_array.push_back(graph[i]->GetPointX(p));
+            y_array.push_back(graph[i]->GetPointY(p));
+        }
+
+        ROOTHelper::SetMarkerAttribute(graph[i].get(), 20, 1.2f, color_element[i]);
+        ROOTHelper::SetLineAttribute(graph[i].get(), 1, 2, color_element[i]);
+    }
+
+    auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+    double x_min{ std::get<0>(x_range) };
+    double x_max{ std::get<1>(x_range) };
+
+    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.3) };
+    double y_min{ std::get<0>(y_range) };
+    double y_max{ std::get<1>(y_range) };
+
+    std::unique_ptr<TH2> frame[column_size][row_size];
+    std::unique_ptr<TPaveText> title_text[column_size];
+    for (int i = 0; i < column_size; i++)
+    {
+        for (int j = 0; j < row_size; j++)
+        {
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min, x_max, 500, y_min, y_max);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 30, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 30, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 35, 1.3f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35, 0.01f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
+            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            frame[i][j]->GetXaxis()->SetTitle("FSC");
+            frame[i][j]->GetYaxis()->SetTitle("Width");
+            frame[i][j]->GetXaxis()->CenterTitle();
+            frame[i][j]->GetYaxis()->CenterTitle();
+            frame[i][j]->SetStats(0);
+            frame[i][j]->Draw();
+            graph[i]->Draw("PL X0");
+        }
+        title_text[i] = ROOTHelper::CreatePaveText(0.01, 1.01, 0.99, 1.16, "nbNDC ARC", true);
+        ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
+        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
+        ROOTHelper::SetTextAttribute(title_text[i].get(), 25, 133, 22);
+        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5f);
+        title_text[i]->AddText(element_label[i]);
+        title_text[i]->Draw();
     }
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);

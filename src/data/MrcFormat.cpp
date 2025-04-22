@@ -189,17 +189,12 @@ void MrcFormat::LoadDataArray(const std::string & filename)
 
 void MrcFormat::SaveDataArray(const std::string & filename)
 {
-    // Open existing file for *update* – we do NOT want to truncate the header we just saved.
-    //   std::fstream allows simultaneous in/out without the implicit ios::trunc that comes with ofstream.
     std::fstream file{ filename, std::ios::in | std::ios::out | std::ios::binary };
     if (!file)
     {
         throw std::runtime_error("Cannot open the file: " + filename);
     }
 
-    // Determine where the voxel data should start:
-    //  – Standard MRC header: 1024 bytes
-    //  – Optional extra header follows immediately thereafter
     std::streamoff data_offset{ HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.extra_size) };
     file.seekp(data_offset, std::ios::beg);
     if (!file)
@@ -207,7 +202,6 @@ void MrcFormat::SaveDataArray(const std::string & filename)
         throw std::runtime_error("Failed to seek to data offset");
     }
 
-    // Compute voxel count and total payload size
     const size_t num_voxels{
         static_cast<size_t>(m_header.array_size[0]) *
         static_cast<size_t>(m_header.array_size[1]) *
@@ -216,8 +210,6 @@ void MrcFormat::SaveDataArray(const std::string & filename)
 
     const size_t element_size{ GetElementSize() };
     const size_t total_bytes{ num_voxels * element_size };
-
-    // Write binary voxel block
     file.write(reinterpret_cast<const char*>(m_data_array.get()),
                static_cast<std::streamsize>(total_bytes));
     if (!file)

@@ -3,7 +3,7 @@ file(GLOB SOURCE *.cpp)
 
 
 # Build utils module
-add_library(utils SHARED ${SOURCE})
+add_library(utils STATIC ${SOURCE})
 target_include_directories(utils PUBLIC ${CMAKE_SOURCE_DIR}/include/utils)
 target_link_libraries(utils PUBLIC Eigen3::Eigen CompilerFlags)
 
