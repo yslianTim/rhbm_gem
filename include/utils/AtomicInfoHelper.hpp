@@ -56,24 +56,6 @@ enum class Structure : uint8_t
     UNK = UINT8_MAX
 };
 
-struct ResidueGroupClassifierTag {};
-struct ElementGroupClassifierTag {};
-
-template <typename Tag>
-struct GroupKeyMapping;
-
-template <>
-struct GroupKeyMapping<ResidueGroupClassifierTag>
-{
-    using type = std::tuple<Residue, Element, Remoteness, Branch, bool>;
-};
-
-template <>
-struct GroupKeyMapping<ElementGroupClassifierTag>
-{
-    using type = std::tuple<Element, Remoteness, bool>;
-};
-
 class AtomicInfoHelper
 {
     inline static int m_standard_residue_count{ 20 };

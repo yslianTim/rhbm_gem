@@ -58,6 +58,11 @@ void ModelObject::AddAtom(std::unique_ptr<AtomObject> component)
     m_atom_list.emplace_back(std::move(component));
 }
 
+void ModelObject::AddGroupPotentialEntry(const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
+{
+    m_group_potential_entry_map[class_key] = std::move(entry);
+}
+
 size_t ModelObject::GetNumberOfSelectedAtom(void) const
 {
     size_t count{ 0 };
@@ -91,4 +96,14 @@ std::tuple<double, double> ModelObject::GetModelPositionRange(
         position_list.emplace_back(atom->GetPosition().at(static_cast<size_t>(axis)));
     }
     return ArrayStats<double>::ComputeScalingRangeTuple(position_list, margin);
+}
+
+GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & class_key) const
+{
+    return m_group_potential_entry_map.at(class_key).get();
+}
+
+const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> & ModelObject::GetGroupPotentialEntryMap(void) const
+{
+    return m_group_potential_entry_map;
 }

@@ -25,8 +25,6 @@
 #include <vector>
 #include <tuple>
 
-using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
-using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
 
 AtomPainter::AtomPainter(void) :
     m_folder_path{ "./" }

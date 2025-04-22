@@ -20,9 +20,6 @@ class TGraphErrors;
 
 class ComparisonPainter : public PainterBase
 {
-    using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
-    using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
-
     std::vector<ModelObject *> m_model_object_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::string m_folder_path;
@@ -45,9 +42,9 @@ private:
 
     #ifdef HAVE_ROOT
     void BuildRatioGraph(TGraphErrors * ratio_graph, const TGraphErrors * target_graph, const TGraphErrors * reference_graph);
-    void BuildGausEstimateToBlurringWidthGraph(ElementKeyType & group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, int par_id=0);
-    void BuildAmplitudeRatioToWidthGraph(ElementKeyType & group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list);
-    void BuildMapValueScatterGraph(ElementKeyType & group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
+    void BuildGausEstimateToBlurringWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, int par_id=0);
+    void BuildAmplitudeRatioToWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list);
+    void BuildMapValueScatterGraph(uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
     #endif
 
 };

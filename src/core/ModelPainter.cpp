@@ -6,6 +6,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "ArrayStats.hpp"
+#include "KeyPacker.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -27,9 +28,6 @@
 
 #include <vector>
 #include <tuple>
-
-using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
-using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
 
 ModelPainter::ModelPainter(void) :
     m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
@@ -114,6 +112,7 @@ void ModelPainter::Painting(void)
 void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
 {
     auto file_path{ m_folder_path + name };
+    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausMainChain"<< std::endl;
 
     #ifdef HAVE_ROOT
@@ -175,9 +174,9 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
         for (size_t k = 0; k < primary_element_size; k++)
         {
             auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(k) };
-            amplitude_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, 0);
-            width_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, 1);
-            correlation_graph[j][k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, true);
+            amplitude_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 0);
+            width_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 1);
+            correlation_graph[j][k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class, true);
             for (int p = 0; p < amplitude_graph[j][k]->GetN(); p++)
             {
                 amplitude_array.push_back(amplitude_graph[j][k]->GetPointY(p));
@@ -244,10 +243,10 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
             {
                 for (auto branch : AtomicInfoHelper::GetStandardBranchList())
                 {
-                    auto group_key{ std::make_tuple(residue, element, remoteness, branch, false) };
-                    if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
-                    auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key) };
-                    auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key) };
+                    auto group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
+                    if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
+                    auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, residue_class) };
+                    auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key, residue_class) };
                     amplitude_array.push_back(std::get<0>(gaus_estimate));
                     width_array.push_back(std::get<1>(gaus_estimate));
                     amplitude_graph_tmp->SetPoint(count_element, count_total, std::get<0>(gaus_estimate));
@@ -369,6 +368,8 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausMainChain"<< std::endl;
+    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     
     #ifdef HAVE_ROOT
@@ -404,9 +405,9 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
     for (size_t i = 0; i < primary_element_size; i++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i) };
-        amplitude_graph[i] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, 0);
-        width_graph[i] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, 1);
-        correlation_graph[i] = entry_iter->CreateGausEstimateScatterGraph(group_key_list);
+        amplitude_graph[i] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 0);
+        width_graph[i] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 1);
+        correlation_graph[i] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class);
         for (int p = 0; p < amplitude_graph[i]->GetN(); p++)
         {
             amplitude_array.push_back(amplitude_graph[i]->GetPointY(p));
@@ -502,6 +503,8 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausSideChain"<<std::endl;
+    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     
     #ifdef HAVE_ROOT
@@ -539,10 +542,10 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
             {
                 for (auto branch : AtomicInfoHelper::GetStandardBranchList())
                 {
-                    auto group_key{ std::make_tuple(residue, element, remoteness, branch, false) };
-                    if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
-                    auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key) };
-                    auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key) };
+                    auto group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
+                    if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
+                    auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, residue_class) };
+                    auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key, residue_class) };
                     amplitude_array.push_back(std::get<0>(gaus_estimate));
                     width_array.push_back(std::get<1>(gaus_estimate));
                     amplitude_graph->SetPoint(count_element, count_total, std::get<0>(gaus_estimate));
@@ -608,6 +611,8 @@ void ModelPainter::PaintResidueClassGroupGausScatter(
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassGroupGausScatter"<< std::endl;
+    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
     const int column_size{ 3 };
@@ -647,10 +652,10 @@ void ModelPainter::PaintResidueClassGroupGausScatter(
         for (auto residue : AtomicInfoHelper::GetStandardResidueList())
         {
             auto group_key{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(element_index[i], residue).at(0) };
-            if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
+            if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
             auto group_key_ref{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(element_index[column_size], residue).at(0) };
-            if (entry_iter->IsAvailableGroupKey(group_key_ref) == false) continue;
-            auto graph{ entry_iter->CreateGausEstimateScatterGraph(group_key_ref, group_key, par_id) };
+            if (entry_iter->IsAvailableGroupKey(group_key_ref, residue_class) == false) continue;
+            auto graph{ entry_iter->CreateGausEstimateScatterGraph(group_key_ref, group_key, residue_class, par_id) };
             ROOTHelper::SetMarkerAttribute(graph.get(), AtomicInfoHelper::GetDisplayMarker(residue), 1.3f, AtomicInfoHelper::GetDisplayColor(residue));
             double x_min_tmp, x_max_tmp, y_min_tmp, y_max_tmp;
             graph->ComputeRange(x_min_tmp, y_min_tmp, x_max_tmp, y_max_tmp);
@@ -733,6 +738,8 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassMapValue"<<std::endl;
+    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     
     #ifdef HAVE_ROOT
@@ -753,12 +760,12 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
             {
                 for (auto branch : AtomicInfoHelper::GetStandardBranchList())
                 {
-                    auto group_key{ std::make_tuple(residue, element, remoteness, branch, false) };
-                    if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
+                    auto group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
+                    if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
                     std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
                     double y_min{ 0.0 };
                     double y_max{ 1.0 };
-                    for (auto atom : entry_iter->GetAtomObjectList(group_key))
+                    for (auto atom : entry_iter->GetAtomObjectList(group_key, residue_class))
                     {
                         auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
                         auto map_value_graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
@@ -800,7 +807,7 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
                         graph->Draw("LX");
                     }
 
-                    auto gaus_function{ entry_iter->CreateGroupGausFunctionPrior(group_key) };
+                    auto gaus_function{ entry_iter->CreateGroupGausFunctionPrior(group_key, residue_class) };
                     ROOTHelper::SetLineAttribute(gaus_function.get(), 9, 5, kRed+1);
                     gaus_function->Draw("SAME");
 
@@ -820,7 +827,7 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
                     ROOTHelper::SetPaveAttribute(result_text.get(), 0);
                     ROOTHelper::SetFillAttribute(result_text.get(), 4000);
                     ROOTHelper::SetTextAttribute(result_text.get(), 85, 133, 22, 0.0, kAzure-7);
-                    auto gaus_prior{ entry_iter->GetGausEstimatePrior(group_key) };
+                    auto gaus_prior{ entry_iter->GetGausEstimatePrior(group_key, residue_class) };
                     auto amplitude{ std::get<0>(gaus_prior) };
                     auto width{ std::get<1>(gaus_prior) };
                     result_text->AddText(Form("#color[633]{#font[1]{A} = %.2f  ;  #font[1]{#tau} = %.2f}", amplitude, width));
@@ -853,6 +860,8 @@ void ModelPainter::PaintResidueClassKNN(ModelObject * model_object, const std::s
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassKNN"<< std::endl;
+    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -894,9 +903,9 @@ void ModelPainter::PaintResidueClassKNN(ModelObject * model_object, const std::s
         for (auto residue : AtomicInfoHelper::GetStandardResidueList())
         {
             auto group_key{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i, residue).at(0) };
-            if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
-            auto amplitude_graph{ entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, 5.0, 0) };
-            auto width_graph{ entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, 5.0, 1) };
+            if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
+            auto amplitude_graph{ entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 0) };
+            auto width_graph{ entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 1) };
             double knn_min, knn_max, amplitude_min, amplitude_max;
             amplitude_graph->ComputeRange(knn_min, amplitude_min, knn_max, amplitude_max);
             x_min[i] = (knn_min < x_min[i]) ? knn_min : x_min[i];
@@ -954,6 +963,8 @@ void ModelPainter::PaintResidueClassXYPosition(
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintResidueClassXYPosition"<< std::endl;
+    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     auto x_range_tuple{ model_object->GetModelPositionRange(0, 0.1) };
     auto y_range_tuple{ model_object->GetModelPositionRange(1, 0.1) };
@@ -992,15 +1003,15 @@ void ModelPainter::PaintResidueClassXYPosition(
     for (size_t i = 0; i < column_size; i++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i) };
-        position_graph[i][0] = entry_iter->CreateXYPositionTomographyGraph(group_key_list, 0.3, 0.1) ;
-        position_graph[i][1] = entry_iter->CreateXYPositionTomographyGraph(group_key_list, 0.4, 0.1);
-        position_graph[i][2] = entry_iter->CreateXYPositionTomographyGraph(group_key_list, 0.5, 0.1);
-        amplitude_2d_graph[i][0] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, 0.3, 0.1, 0);
-        amplitude_2d_graph[i][1] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, 0.4, 0.1, 0);
-        amplitude_2d_graph[i][2] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, 0.5, 0.1, 0);
-        width_2d_graph[i][0] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, 0.3, 0.1, 1);
-        width_2d_graph[i][1] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, 0.4, 0.1, 1);
-        width_2d_graph[i][2] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, 0.5, 0.1, 1);
+        position_graph[i][0] = entry_iter->CreateXYPositionTomographyGraph(group_key_list, residue_class, 0.3, 0.1) ;
+        position_graph[i][1] = entry_iter->CreateXYPositionTomographyGraph(group_key_list, residue_class, 0.4, 0.1);
+        position_graph[i][2] = entry_iter->CreateXYPositionTomographyGraph(group_key_list, residue_class, 0.5, 0.1);
+        amplitude_2d_graph[i][0] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, residue_class, 0.3, 0.1, 0);
+        amplitude_2d_graph[i][1] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, residue_class, 0.4, 0.1, 0);
+        amplitude_2d_graph[i][2] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, residue_class, 0.5, 0.1, 0);
+        width_2d_graph[i][0] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, residue_class, 0.3, 0.1, 1);
+        width_2d_graph[i][1] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, residue_class, 0.4, 0.1, 1);
+        width_2d_graph[i][2] = entry_iter->CreateXYPositionTomographyToGausEstimateGraph2D(group_key_list, residue_class, 0.5, 0.1, 1);
     }
     total_graph[0] = entry_iter->CreateXYPositionTomographyGraph(0.3, 0.1);
     total_graph[1] = entry_iter->CreateXYPositionTomographyGraph(0.4, 0.1);

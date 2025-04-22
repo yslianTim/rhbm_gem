@@ -6,12 +6,9 @@
 #include <vector>
 #include <set>
 #include <tuple>
-#include <any>
 #include <unordered_map>
-#include <variant>
 #include <functional>
 #include "DataObjectVisitorBase.hpp"
-#include "AtomicInfoHelper.hpp"
 
 class AtomSelector;
 class SphereSampler;
@@ -26,14 +23,8 @@ class PotentialAnalysisVisitor : public DataObjectVisitorBase
     std::shared_ptr<SphereSampler> m_sphere_sampler;
     std::vector<AtomObject *> m_selected_atom_list;
 
-    using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
-    using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
-    std::set<ElementKeyType> element_class_group_set;
-    std::set<ResidueKeyType> residue_class_group_set;
-    using GroupSetVariant = std::variant<
-        std::reference_wrapper<const std::set<ElementKeyType>>,
-        std::reference_wrapper<const std::set<ResidueKeyType>>
-    >;
+    std::set<uint64_t> element_class_group_set;
+    std::set<uint64_t> residue_class_group_set;
 
 public:
     PotentialAnalysisVisitor(std::shared_ptr<AtomSelector> atom_selector, std::shared_ptr<SphereSampler> sphere_sampler);
@@ -51,7 +42,7 @@ public:
     void SetModelObjectKeyTag(const std::string & value) { m_model_key_tag = value; }
 
 private:
-    GroupSetVariant GetGroupSet(const std::string & class_key);
+    const std::set<uint64_t> & GetGroupSet(const std::string & class_key);
     void RunAtomClassification(const std::string & class_key, ModelObject * model_object);
     void RunPotentialFitting(const std::string & class_key, ModelObject * model_object);
 
