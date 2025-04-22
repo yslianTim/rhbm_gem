@@ -62,8 +62,7 @@ void ModelPainter::Painting(void)
     std::cout <<"- ModelPainter::Painting"<<std::endl;
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
-    auto sim_buried_charge_model_object{ m_ref_model_object_map.at("buried_charge") };
-    auto sim_no_charge_model_object{ m_ref_model_object_map.at("no_charge") };
+    
     for (auto model_object : m_model_object_list)
     {
         auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetPdbID() +".pdf" };
@@ -74,18 +73,29 @@ void ModelPainter::Painting(void)
         PaintResidueClassKNN(model_object, "residue_class_knn_"+ model_object->GetPdbID() +".pdf");
         PaintResidueClassXYPosition(model_object, "residue_class_xy_position_"+ model_object->GetPdbID() +".pdf");
     }
-    for (auto model_object : sim_buried_charge_model_object)
+
+    if (m_ref_model_object_map.find("buried_charge") != m_ref_model_object_map.end())
     {
-        auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
-        PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
-        //auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetKeyTag() +".pdf" };
-        //PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
+        auto sim_buried_charge_model_object{ m_ref_model_object_map.at("buried_charge") };
+        for (auto model_object : sim_buried_charge_model_object)
+        {
+            auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
+            PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
+            //auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetKeyTag() +".pdf" };
+            //PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
+        }
     }
-    for (auto model_object : sim_no_charge_model_object)
+
+    if (m_ref_model_object_map.find("no_charge") != m_ref_model_object_map.end())
     {
-        auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
-        PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
+        auto sim_no_charge_model_object{ m_ref_model_object_map.at("no_charge") };
+        for (auto model_object : sim_no_charge_model_object)
+        {
+            auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
+            PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
+        }
     }
+
     if (m_model_object_list.size() == 4)
     {
         PaintResidueClassGroupGausMainChain("figure_1_part2.pdf");
@@ -148,13 +158,13 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     std::unique_ptr<TH2D> amplitude_hist[pad_size_y][primary_element_size];
     std::unique_ptr<TH2D> width_hist[pad_size_y][primary_element_size];
     std::vector<double> width_array_total;
-    for (int j = 0; j < pad_size_y; j++)
+    for (size_t j = 0; j < pad_size_y; j++)
     {
         std::vector<double> amplitude_array, width_array;
         info_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         icon_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(static_cast<size_t>(j))) };
-        for (int k = 0; k < primary_element_size; k++)
+        for (size_t k = 0; k < primary_element_size; k++)
         {
             auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(k) };
             amplitude_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, 0);
@@ -212,7 +222,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     std::vector<std::string> label_list[2];
     std::vector<double> amplitude_array, width_array;
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(3)) };
-    int residue_list[2]{ 3, 6 };
+    Residue residue_list[2]{ Residue::ASN, Residue::GLN };
     for (int i = 0; i < 2; i++)
     {
         auto residue{ residue_list[i] };
@@ -236,15 +246,15 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
                     amplitude_graph_tmp->SetPointError(count_element, 0.0, std::get<0>(gaus_variance));
                     width_graph_tmp->SetPoint(count_element, count_total, std::get<1>(gaus_estimate));
                     width_graph_tmp->SetPointError(count_element, 0.0, std::get<1>(gaus_variance));
-                    auto element_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ElementTag>(element) };
-                    auto remoteness_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::RemotenessTag>(remoteness) };
-                    auto branch_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::BranchTag>(branch) };
+                    auto element_label{ AtomicInfoHelper::GetLabel(element) };
+                    auto remoteness_label{ AtomicInfoHelper::GetLabel(remoteness) };
+                    auto branch_label{ AtomicInfoHelper::GetLabel(branch) };
                     label_list[i].emplace_back(element_label +"_{"+ remoteness_label + branch_label+"}");
                     count_element++;
                     count_total++;
                 }
             }
-            auto color{ static_cast<short>(AtomicInfoHelper::AtomColorMapping<AtomicInfoHelper::ElementTag>(element)) };
+            auto color{ static_cast<short>(AtomicInfoHelper::GetDisplayColor(element)) };
             ROOTHelper::SetMarkerAttribute(amplitude_graph_tmp.get(), kFullCircle, marker_size, color);
             ROOTHelper::SetMarkerAttribute(width_graph_tmp.get(), kFullCircle, marker_size, color);
             amplitude_graph_list[i].push_back(std::move(amplitude_graph_tmp));
@@ -326,19 +336,19 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
 
     pad_extra[0]->cd();
     for (auto & graph : amplitude_graph_list[0]) graph->Draw("P X0");
-    PrintTitleSideChainPad(pad_extra[0].get(), side_chain_title_text[0].get(), AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(residue_list[0]));
+    PrintTitleSideChainPad(pad_extra[0].get(), side_chain_title_text[0].get(), AtomicInfoHelper::GetLabel(residue_list[0]));
 
     pad_extra[1]->cd();
     for (auto & graph : amplitude_graph_list[1]) graph->Draw("P X0");
-    PrintTitleSideChainPad(pad_extra[1].get(), side_chain_title_text[1].get(), AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(residue_list[1]));
+    PrintTitleSideChainPad(pad_extra[1].get(), side_chain_title_text[1].get(), AtomicInfoHelper::GetLabel(residue_list[1]));
 
     pad_extra[2]->cd();
     for (auto & graph : width_graph_list[0]) graph->Draw("P X0");
-    PrintTitleSideChainPad(pad_extra[2].get(), side_chain_title_text[2].get(), AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(residue_list[0]));
+    PrintTitleSideChainPad(pad_extra[2].get(), side_chain_title_text[2].get(), AtomicInfoHelper::GetLabel(residue_list[0]));
 
     pad_extra[3]->cd();
     for (auto & graph : width_graph_list[1]) graph->Draw("P X0");
-    PrintTitleSideChainPad(pad_extra[3].get(), side_chain_title_text[3].get(), AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(residue_list[1]));
+    PrintTitleSideChainPad(pad_extra[3].get(), side_chain_title_text[3].get(), AtomicInfoHelper::GetLabel(residue_list[1]));
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
@@ -383,7 +393,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
     std::vector<double> amplitude_array, width_array;
     amplitude_array.reserve(static_cast<size_t>(primary_element_size * AtomicInfoHelper::GetStandardResidueCount()));
     width_array.reserve(static_cast<size_t>(primary_element_size * AtomicInfoHelper::GetStandardResidueCount()));
-    for (int i = 0; i < primary_element_size; i++)
+    for (size_t i = 0; i < primary_element_size; i++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i) };
         amplitude_graph[i] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, 0);
@@ -457,7 +467,6 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(
     {
         PrintInfoPad(pad[5].get(), info_text.get(), model_object->GetPdbID(), model_object->GetEmdID());
     }
-    //PrintIconPad(pad[5].get(), icon_text.get());
 
     pad[1]->cd();
     for (int i = 0; i < primary_element_size; i++) amplitude_graph[i]->Draw("PL X0");
@@ -506,7 +515,7 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_graph_list(residue_size);
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> width_graph_list(residue_size);
     std::vector<std::unique_ptr<TPaveText>> info_text(residue_size);
-    for (int residue : AtomicInfoHelper::GetStandardResidueList())
+    for (auto residue : AtomicInfoHelper::GetStandardResidueList())
     {
         size_t residue_index{ static_cast<size_t>(residue) };
         info_text[residue_index] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
@@ -532,15 +541,15 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
                     amplitude_graph->SetPointError(count_element, 0.0, std::get<0>(gaus_variance));
                     width_graph->SetPoint(count_element, count_total, std::get<1>(gaus_estimate));
                     width_graph->SetPointError(count_element, 0.0, std::get<1>(gaus_variance));
-                    auto element_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ElementTag>(element) };
-                    auto remoteness_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::RemotenessTag>(remoteness) };
-                    auto branch_label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::BranchTag>(branch) };
+                    auto element_label{ AtomicInfoHelper::GetLabel(element) };
+                    auto remoteness_label{ AtomicInfoHelper::GetLabel(remoteness) };
+                    auto branch_label{ AtomicInfoHelper::GetLabel(branch) };
                     label_list.emplace_back(element_label +"_{"+ remoteness_label + branch_label+"}");
                     count_element++;
                     count_total++;
                 }
             }
-            auto color{ static_cast<short>(AtomicInfoHelper::AtomColorMapping<AtomicInfoHelper::ElementTag>(element)) };
+            auto color{ static_cast<short>(AtomicInfoHelper::GetDisplayColor(element)) };
             ROOTHelper::SetMarkerAttribute(amplitude_graph.get(), kFullCircle, 1.5f, color);
             ROOTHelper::SetMarkerAttribute(width_graph.get(), kFullCircle, 1.5f, color);
             amplitude_graph_list[residue_index].push_back(std::move(amplitude_graph));
@@ -562,7 +571,7 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
 
         PrintAmplitudeSideChainPad(pad[0].get(), frame[0].get(), residue, label_list);
         PrintWidthSideChainPad(pad[1].get(), frame[1].get(), residue, label_list);
-        PrintInfoSideChainPad(pad[2].get(), info_text[residue_index].get(), AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(residue));
+        PrintInfoSideChainPad(pad[2].get(), info_text[residue_index].get(), AtomicInfoHelper::GetLabel(residue));
 
         pad[0]->cd();
         for (auto & graph : amplitude_graph_list[residue_index])
@@ -736,8 +745,7 @@ void ModelPainter::PaintResidueClassKNN(ModelObject * model_object, const std::s
         "Width #hat{#sigma}",
         "Amplitude #hat{A}"
     };
-    int element_index[column_size]   { 6, 6, 7, 8 };
-    int remoteness_index[column_size]{ 1, 0, 0, 0 };
+
     short color_element[column_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
     short marker_element[column_size]{ 54, 53, 55, 59 };
     std::unique_ptr<TH2> frame[column_size][row_size];
@@ -747,13 +755,11 @@ void ModelPainter::PaintResidueClassKNN(ModelObject * model_object, const std::s
     double x_max[column_size]{ 1.0 };
     double y_min[row_size]{ 0.0 };
     double y_max[row_size]{ 1.0 };
-    for (int i = 0; i < column_size; i++)
+    for (size_t i = 0; i < column_size; i++)
     {
-        auto element{ element_index[i] };
-        auto remoteness{ remoteness_index[i] };
         for (auto residue : AtomicInfoHelper::GetStandardResidueList())
         {
-            auto group_key{ std::make_tuple(residue, element, remoteness, 0, false) };
+            auto group_key{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i, residue).at(0) };
             if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
             auto amplitude_graph{ entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, 5.0, 0) };
             auto width_graph{ entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, 5.0, 1) };
@@ -849,7 +855,7 @@ void ModelPainter::PaintResidueClassXYPosition(
     std::unique_ptr<TGraph2DErrors> amplitude_2d_graph[column_size][row_size];
     std::unique_ptr<TGraph2DErrors> width_2d_graph[column_size][row_size];
     std::unique_ptr<TGraphErrors> total_graph[row_size];
-    for (int i = 0; i < column_size; i++)
+    for (size_t i = 0; i < column_size; i++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i) };
         position_graph[i][0] = entry_iter->CreateXYPositionTomographyGraph(group_key_list, 0.3, 0.1) ;
@@ -996,7 +1002,8 @@ void ModelPainter::PrintWidthPad(TPad * pad, TH2 * hist)
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
     for (int i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
     {
-        auto label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(i) };
+        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(static_cast<size_t>(i)) };
+        auto label{ AtomicInfoHelper::GetLabel(residue) };
         hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 12, -1, -1, label.data());
     }
 
@@ -1090,7 +1097,7 @@ void ModelPainter::PrintInfoSideChainPad(
 }
 
 void ModelPainter::PrintAmplitudeSideChainPad(
-    TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list)
+    TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list)
 {
     pad->cd();
     pad->Clear();
@@ -1108,7 +1115,7 @@ void ModelPainter::PrintAmplitudeSideChainPad(
 }
 
 void ModelPainter::PrintWidthSideChainPad(
-    TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list)
+    TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list)
 {
     pad->cd();
     pad->Clear();
@@ -1126,9 +1133,9 @@ void ModelPainter::PrintWidthSideChainPad(
 }
 
 void ModelPainter::ModifyAxisLabelSideChain(
-    TPad * pad, TH2 * hist, int residue, const std::vector<std::string> & label_list)
+    TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list)
 {
-    if (residue < 0 || residue >= AtomicInfoHelper::GetStandardResidueCount()) return;
+    if (AtomicInfoHelper::IsStandardResidue(residue) == false) return;
 
     auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
     auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
@@ -1216,7 +1223,8 @@ void ModelPainter::PrintResultPad(TPad * pad, TH2 * hist, bool draw_x_axis)
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
     for (int i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
     {
-        auto label{ AtomicInfoHelper::AtomLabelMapping<AtomicInfoHelper::ResidueTag>(i) };
+        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(static_cast<size_t>(i)) };
+        auto label{ AtomicInfoHelper::GetLabel(residue) };
         hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 12, -1, -1, label.data());
     }
 
@@ -1281,7 +1289,7 @@ void ModelPainter::PrintCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_axis)
 }
 
 void ModelPainter::PrintLeftSideChainPad(
-    TPad * pad, TH2 * hist, int residue, const std::string & y_title,
+    TPad * pad, TH2 * hist, Residue residue, const std::string & y_title,
     const std::vector<std::string> & label_list)
 {
     pad->cd();
@@ -1300,7 +1308,7 @@ void ModelPainter::PrintLeftSideChainPad(
 }
 
 void ModelPainter::PrintRightSideChainPad(
-    TPad * pad, TH2 * hist, int residue,
+    TPad * pad, TH2 * hist, Residue residue,
     const std::vector<std::string> & label_list)
 {
     pad->cd();

@@ -286,11 +286,11 @@ void ModelObjectDAO::SaveAtomObjectList(
         m_database->Bind<std::string>(4, atom_object->GetIndicator());
         m_database->Bind<double>(5, static_cast<double>(atom_object->GetOccupancy()));
         m_database->Bind<double>(6, static_cast<double>(atom_object->GetTemperature()));
-        m_database->Bind<int>(7, atom_object->GetResidue());
-        m_database->Bind<int>(8, atom_object->GetElement());
-        m_database->Bind<int>(9, atom_object->GetRemoteness());
-        m_database->Bind<int>(10, atom_object->GetBranch());
-        m_database->Bind<int>(11, atom_object->GetStatus());
+        m_database->Bind<int>(7, static_cast<int>(atom_object->GetResidue()));
+        m_database->Bind<int>(8, static_cast<int>(atom_object->GetElement()));
+        m_database->Bind<int>(9, static_cast<int>(atom_object->GetRemoteness()));
+        m_database->Bind<int>(10, static_cast<int>(atom_object->GetBranch()));
+        m_database->Bind<int>(11, static_cast<int>(atom_object->GetStructure()));
         m_database->Bind<int>(12, static_cast<int>(atom_object->GetSpecialAtomFlag()));
         m_database->Bind<double>(13, static_cast<double>(atom_object->GetPosition().at(0)));
         m_database->Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(1)));
@@ -404,9 +404,9 @@ void ModelObjectDAO::SaveGroupPotentialEntryElementClassList(
     auto element_class_group_entry{ dynamic_cast<const GroupPotentialEntry<ElementKeyType> *>(group_entry) };
     for (auto & group_key : element_class_group_entry->GetGroupKeySet())
     {
-        m_database->Bind<int>(1, std::get<0>(group_key));
-        m_database->Bind<int>(2, std::get<1>(group_key));
-        m_database->Bind<int>(3, std::get<2>(group_key));
+        m_database->Bind<int>(1, static_cast<int>(std::get<0>(group_key)));
+        m_database->Bind<int>(2, static_cast<int>(std::get<1>(group_key)));
+        m_database->Bind<int>(3, static_cast<int>(std::get<2>(group_key)));
         m_database->Bind<int>(4, element_class_group_entry->GetAtomObjectPtrListSize(&group_key));
         m_database->Bind<double>(5, std::get<0>(element_class_group_entry->GetGausEstimateMean(&group_key)));
         m_database->Bind<double>(6, std::get<1>(element_class_group_entry->GetGausEstimateMean(&group_key)));
@@ -448,11 +448,11 @@ void ModelObjectDAO::SaveGroupPotentialEntryResidueClassList(
     auto residue_class_group_entry{ dynamic_cast<const GroupPotentialEntry<ResidueKeyType> *>(group_entry) };
     for (auto & group_key : residue_class_group_entry->GetGroupKeySet())
     {
-        m_database->Bind<int>(1, std::get<0>(group_key));
-        m_database->Bind<int>(2, std::get<1>(group_key));
-        m_database->Bind<int>(3, std::get<2>(group_key));
-        m_database->Bind<int>(4, std::get<3>(group_key));
-        m_database->Bind<int>(5, std::get<4>(group_key));
+        m_database->Bind<int>(1, static_cast<int>(std::get<0>(group_key)));
+        m_database->Bind<int>(2, static_cast<int>(std::get<1>(group_key)));
+        m_database->Bind<int>(3, static_cast<int>(std::get<2>(group_key)));
+        m_database->Bind<int>(4, static_cast<int>(std::get<3>(group_key)));
+        m_database->Bind<int>(5, static_cast<int>(std::get<4>(group_key)));
         m_database->Bind<int>(6, residue_class_group_entry->GetAtomObjectPtrListSize(&group_key));
         m_database->Bind<double>(7, std::get<0>(residue_class_group_entry->GetGausEstimateMean(&group_key)));
         m_database->Bind<double>(8, std::get<1>(residue_class_group_entry->GetGausEstimateMean(&group_key)));
@@ -503,11 +503,11 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
         atom_object->SetIndicator(std::get<3>(row));
         atom_object->SetOccupancy(static_cast<float>(std::get<4>(row)));
         atom_object->SetTemperature(static_cast<float>(std::get<5>(row)));
-        atom_object->SetResidue(std::get<6>(row));
-        atom_object->SetElement(std::get<7>(row));
-        atom_object->SetRemoteness(std::get<8>(row));
-        atom_object->SetBranch(std::get<9>(row));
-        atom_object->SetStatus(std::get<10>(row));
+        atom_object->SetResidue(static_cast<Residue>(std::get<6>(row)));
+        atom_object->SetElement(static_cast<Element>(std::get<7>(row)));
+        atom_object->SetRemoteness(static_cast<Remoteness>(std::get<8>(row)));
+        atom_object->SetBranch(static_cast<Branch>(std::get<9>(row)));
+        atom_object->SetStructure(static_cast<Structure>(std::get<10>(row)));
         atom_object->SetSpecialAtomFlag(static_cast<bool>(std::get<11>(row)));
         atom_object->SetPosition(
             static_cast<float>(std::get<12>(row)),
@@ -617,7 +617,9 @@ void ModelObjectDAO::LoadGroupPotentialEntryElementClassList(
     auto element_class_group_entry{ dynamic_cast<GroupPotentialEntry<ElementKeyType> *>(group_entry) };
     for (auto & row : row_list)
     {
-        auto group_key{ std::make_tuple(std::get<0>(row), std::get<1>(row), static_cast<bool>(std::get<2>(row))) };
+        auto element{ static_cast<Element>(std::get<0>(row)) };
+        auto remoteness{ static_cast<Remoteness>(std::get<1>(row)) };
+        auto group_key{ std::make_tuple(element, remoteness, static_cast<bool>(std::get<2>(row))) };
         element_class_group_entry->InsertGroupKey(&group_key);
         element_class_group_entry->ReserveAtomObjectPtrList(&group_key, std::get<3>(row));
         element_class_group_entry->AddGausEstimateMean(&group_key, std::get<4>(row), std::get<5>(row));
@@ -658,7 +660,11 @@ void ModelObjectDAO::LoadGroupPotentialEntryResidueClassList(
     auto residue_class_group_entry{ dynamic_cast<GroupPotentialEntry<ResidueKeyType> *>(group_entry) };
     for (auto & row : row_list)
     {
-        auto group_key{ std::make_tuple(std::get<0>(row), std::get<1>(row), std::get<2>(row), std::get<3>(row), static_cast<bool>(std::get<4>(row))) };
+        auto residue{ static_cast<Residue>(std::get<0>(row)) };
+        auto element{ static_cast<Element>(std::get<1>(row)) };
+        auto remoteness{ static_cast<Remoteness>(std::get<2>(row)) };
+        auto branch{ static_cast<Branch>(std::get<3>(row)) };
+        auto group_key{ std::make_tuple(residue, element, remoteness, branch, static_cast<bool>(std::get<4>(row))) };
         residue_class_group_entry->InsertGroupKey(&group_key);
         residue_class_group_entry->ReserveAtomObjectPtrList(&group_key, std::get<5>(row));
         residue_class_group_entry->AddGausEstimateMean(&group_key, std::get<6>(row), std::get<7>(row));

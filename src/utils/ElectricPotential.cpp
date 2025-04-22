@@ -170,9 +170,9 @@ ElectricPotential::ModelChoice ElectricPotential::CheckModelChoice(int value) co
 {
     switch (value)
     {
-        case static_cast<int>(ModelChoice::SINGLE_GAUS):
+        case static_cast<uint8_t>(ModelChoice::SINGLE_GAUS):
             return ModelChoice::SINGLE_GAUS;
-        case static_cast<int>(ModelChoice::FIVE_GAUS_CHARGE):
+        case static_cast<uint8_t>(ModelChoice::FIVE_GAUS_CHARGE):
             return ModelChoice::FIVE_GAUS_CHARGE;
         default:
             throw std::out_of_range(

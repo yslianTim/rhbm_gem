@@ -128,13 +128,13 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
             };
             auto charge{ (m_partial_charge_choice == 0) ? 0.0 :
                 AminoAcidInfoHelper::GetPartialCharge(
-                    atom->GetResidueType(),
-                    atom->GetElementType(),
-                    atom->GetRemotenessType(),
-                    atom->GetBranchType())
+                    atom->GetResidue(),
+                    atom->GetElement(),
+                    atom->GetRemoteness(),
+                    atom->GetBranch())
             };
             map_value_array[i] += static_cast<float>(
-                electric_potential->GetPotentialValue(atom->GetElementType(), distance, charge)
+                electric_potential->GetPotentialValue(atom->GetElement(), distance, charge)
             );
         }
     }

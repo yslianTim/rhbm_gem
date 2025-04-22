@@ -1,23 +1,28 @@
 #pragma once
 
-#include <iostream>
+#include <cstdint>
 #include <string>
 #include <set>
+
+enum class Residue : uint16_t;
+enum class Element : uint16_t;
+enum class Remoteness : uint8_t;
+enum class Branch : uint8_t;
 
 class AtomSelector
 {
     std::set<std::string> veto_chain_set, pick_chain_set;
     std::set<std::string> veto_indicator_set, pick_indicator_set;
-    std::set<int> veto_residue_set, pick_residue_set;
-    std::set<int> veto_element_set, pick_element_set;
-    std::set<int> veto_remoteness_set, pick_remoteness_set;
-    std::set<int> veto_branch_set, pick_branch_set;
+    std::set<Residue> veto_residue_set, pick_residue_set;
+    std::set<Element> veto_element_set, pick_element_set;
+    std::set<Remoteness> veto_remoteness_set, pick_remoteness_set;
+    std::set<Branch> veto_branch_set, pick_branch_set;
 
 public:
     AtomSelector(void);
     ~AtomSelector();
     void Print(void) const;
-    bool GetSelectionFlag(const std::string &, const std::string &, int, int, int, int);
+    bool GetSelectionFlag(const std::string &, const std::string &, Residue, Element, Remoteness, Branch);
     void VetoChainID(const std::string & name);
     void VetoIndicator(const std::string & name);
     void VetoResidueType(const std::string & name);

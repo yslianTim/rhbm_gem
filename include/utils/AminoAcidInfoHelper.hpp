@@ -1,13 +1,14 @@
 #pragma once
 
+#include <cstdint>
 #include <cstddef>
 #include <vector>
 #include <unordered_map>
 
-enum class Element : int;
-enum class Residue : int;
-enum class Remoteness : int;
-enum class Branch : int;
+enum class Residue : uint16_t;
+enum class Element : uint16_t;
+enum class Remoteness : uint8_t;
+enum class Branch : uint8_t;
 
 class AminoAcidInfoHelper
 {
