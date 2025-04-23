@@ -24,9 +24,6 @@
 #include <vector>
 #include <tuple>
 
-using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
-using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
-
 ComparisonPainter::ComparisonPainter(void) :
     m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
 {
@@ -606,16 +603,15 @@ void ComparisonPainter::BuildRatioGraph(
 }
 
 void ComparisonPainter::BuildGausEstimateToBlurringWidthGraph(
-    ElementKeyType & group_key, TGraphErrors * graph,
+    uint64_t group_key, TGraphErrors * graph,
     const std::vector<ModelObject *> & model_list, int par_id)
 {
     auto count{ 0 };
     for (auto model_object : model_list)
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
-        if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
-        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, par_id) };
-        auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key, par_id) };
+        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetElementClassKey(), par_id) };
+        auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetElementClassKey(), par_id) };
         auto x_value{ count * 0.1 + 0.05 };
         graph->SetPoint(count, x_value, gaus_estimate);
         graph->SetPointError(count, 0.0, gaus_variance);
@@ -624,15 +620,15 @@ void ComparisonPainter::BuildGausEstimateToBlurringWidthGraph(
 }
 
 void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
-    ElementKeyType & group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list)
+    uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list)
 {
     auto count{ 0 };
     for (auto model_object : model_list)
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
-        if (entry_iter->IsAvailableGroupKey(group_key) == false) continue;
-        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key) };
-        auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key) };
+        if (entry_iter->IsAvailableGroupKey(group_key, AtomicInfoHelper::GetElementClassKey()) == false) continue;
+        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetElementClassKey()) };
+        auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetElementClassKey()) };
         graph->SetPoint(count, std::get<1>(gaus_estimate), std::get<0>(gaus_estimate));
         graph->SetPointError(count, std::get<1>(gaus_variance), std::get<0>(gaus_variance));
         count++;
@@ -640,15 +636,15 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
 }
 
 void ComparisonPainter::BuildMapValueScatterGraph(
-    ElementKeyType & group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
+    uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
     int bin_size, double x_min, double x_max)
 {
     auto entry1_iter{ std::make_unique<PotentialEntryIterator>(model1) };
     auto entry2_iter{ std::make_unique<PotentialEntryIterator>(model2) };
-    if (entry1_iter->IsAvailableGroupKey(group_key) == false) return;
-    if (entry2_iter->IsAvailableGroupKey(group_key) == false) return;
-    auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key) };
-    auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key) };
+    if (entry1_iter->IsAvailableGroupKey(group_key, AtomicInfoHelper::GetElementClassKey()) == false) return;
+    if (entry2_iter->IsAvailableGroupKey(group_key, AtomicInfoHelper::GetElementClassKey()) == false) return;
+    auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key, AtomicInfoHelper::GetElementClassKey()) };
+    auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key, AtomicInfoHelper::GetElementClassKey()) };
     auto count{ 0 };
     for (auto & [atom_id, atom_object1] : model1_atom_map)
     {

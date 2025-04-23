@@ -1,9 +1,8 @@
 #include "AtomClassifier.hpp"
+#include "AtomicInfoHelper.hpp"
+#include "KeyPacker.hpp"
 
 #include <iostream>
-
-using ElementKeyType = GroupKeyMapping<ElementGroupClassifierTag>::type;
-using ResidueKeyType = GroupKeyMapping<ResidueGroupClassifierTag>::type;
 
 const std::vector<Element> AtomClassifier::m_main_chain_member_element_list
 {
@@ -45,7 +44,7 @@ Remoteness AtomClassifier::GetMainChainRemoteness(size_t id)
     return m_main_chain_member_remoteness_list.at(id);
 }
 
-ElementKeyType AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
+uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
 {
     if (id >= m_main_chain_member_count)
     {
@@ -54,10 +53,10 @@ ElementKeyType AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
     }
     auto element_id{ m_main_chain_member_element_list.at(id) };
     auto remoteness_id{ m_main_chain_member_remoteness_list.at(id) };
-    return std::make_tuple(element_id, remoteness_id, false);
+    return KeyPackerElementClass::Pack(element_id, remoteness_id, false);
 }
 
-std::vector<ResidueKeyType> AtomClassifier::GetMainChainResidueClassGroupKeyList(
+std::vector<uint64_t> AtomClassifier::GetMainChainResidueClassGroupKeyList(
     size_t id, Residue residue) const
 {
     if (id >= m_main_chain_member_count)
@@ -65,7 +64,7 @@ std::vector<ResidueKeyType> AtomClassifier::GetMainChainResidueClassGroupKeyList
         std::cerr << "Invalid id: " << id << std::endl;
         return {};
     }
-    std::vector<ResidueKeyType> group_key_list;
+    std::vector<uint64_t> group_key_list;
     auto element_id{ m_main_chain_member_element_list.at(id) };
     auto remoteness_id{ m_main_chain_member_remoteness_list.at(id) };
 
@@ -74,13 +73,13 @@ std::vector<ResidueKeyType> AtomClassifier::GetMainChainResidueClassGroupKeyList
         group_key_list.reserve(static_cast<size_t>(AtomicInfoHelper::GetStandardResidueCount()));
         for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
         {
-            auto group_key{ std::make_tuple(residue_id, element_id, remoteness_id, Branch::NONE, false) };
+            auto group_key{ KeyPackerResidueClass::Pack(residue_id, element_id, remoteness_id, Branch::NONE, false) };
             group_key_list.emplace_back(group_key);
         }
     }
     else
     {
-        auto group_key{ std::make_tuple(residue, element_id, remoteness_id, Branch::NONE, false) };
+        auto group_key{ KeyPackerResidueClass::Pack(residue, element_id, remoteness_id, Branch::NONE, false) };
         group_key_list.emplace_back(group_key);
     }
 

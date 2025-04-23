@@ -10,7 +10,7 @@ class SQLiteWrapper;
 class ModelObject;
 class AtomObject;
 class AtomicPotentialEntry;
-class GroupPotentialEntryBase;
+class GroupPotentialEntry;
 class ModelObjectDAO : public DataObjectDAOBase
 {
     SQLiteWrapper * m_database;
@@ -32,8 +32,8 @@ private:
     void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
     void SaveAtomicPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
     void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
-    void SaveGroupPotentialEntryElementClassList(const GroupPotentialEntryBase * group_entry, const std::string & table_name);
-    void SaveGroupPotentialEntryResidueClassList(const GroupPotentialEntryBase * group_entry, const std::string & table_name);
+    void SaveGroupPotentialEntryElementClassList(const GroupPotentialEntry * group_entry, const std::string & table_name);
+    void SaveGroupPotentialEntryResidueClassList(const GroupPotentialEntry * group_entry, const std::string & table_name);
     std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & key_tag);
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> LoadAtomicPotentialEntryMap(const std::string & table_name);
     void LoadAtomicPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map);

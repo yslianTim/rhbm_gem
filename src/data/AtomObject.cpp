@@ -2,6 +2,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "AtomicPotentialEntry.hpp"
+#include "GlobalEnumClass.hpp"
 
 AtomObject::AtomObject(void) :
     m_key_tag{ "" },

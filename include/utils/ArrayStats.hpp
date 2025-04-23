@@ -45,6 +45,33 @@ public:
         return max_value;
     }
 
+    static Type ComputePercentile(const std::vector<Type> & data, double percentile)
+    {
+        if (data.empty() || percentile <= 0.0)
+        {
+            return static_cast<Type>(0.0);
+        }
+        if (percentile >= 1.0)
+        {
+            return data.empty() ? static_cast<Type>(0.0) :
+                   *std::max_element(data.begin(), data.end());
+        }
+        std::vector<Type> sorted_data(data);
+        std::sort(sorted_data.begin(), sorted_data.end());
+        auto n{ sorted_data.size() };
+        auto pos{ percentile * static_cast<double>(n - 1) };
+        auto idx{ static_cast<size_t>(std::floor(pos)) };
+        double frac{ pos - static_cast<double>(idx) };
+        if (idx + 1 < n)
+        {
+            return static_cast<Type>(sorted_data[idx] * (1 - frac) + sorted_data[idx + 1] * frac);
+        }
+        else
+        {
+            return sorted_data[idx];
+        }
+    }
+
     static Type ComputeMean(
         const Type * data, size_t size, [[maybe_unused]] int thread_size = 1)
     {
@@ -103,7 +130,31 @@ public:
         }
     }
 
-    static std::tuple<Type, Type> ComputeRangeTuple(const std::vector<Type> & data, int thread_size = 1)
+    static std::tuple<Type, Type> ComputePercentileRangeTuple(
+        const std::vector<Type> & data, double percentile_min=0.01, double percentile_max=0.99)
+    {
+        if (data.empty())
+        {
+            return std::make_tuple(static_cast<Type>(0.0), static_cast<Type>(0.0));
+        }
+        auto min_value{ ComputePercentile(data, percentile_min) };
+        auto max_value{ ComputePercentile(data, percentile_max) };
+        return std::make_tuple(min_value, max_value);
+    }
+
+    static std::tuple<Type, Type> ComputeScalingPercentileRangeTuple(
+        const std::vector<Type> & data, Type scaling,
+        double percentile_min=0.01, double percentile_max=0.99)
+    {
+        auto range_tuple{ ComputePercentileRangeTuple(data, percentile_min, percentile_max) };
+        auto range{ std::get<1>(range_tuple) - std::get<0>(range_tuple) };
+        auto min_value{ std::get<0>(range_tuple) - scaling * range };
+        auto max_value{ std::get<1>(range_tuple) + scaling * range };
+        return std::make_tuple(min_value, max_value);
+    }
+
+    static std::tuple<Type, Type> ComputeRangeTuple(
+        const std::vector<Type> & data, int thread_size = 1)
     {
         if (data.empty())
         {
