@@ -23,6 +23,8 @@ public:
     std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(void);
     std::string GetPdbID(void) const;
     std::string GetEmdID(void) const;
+    double GetResolution(void) const;
+    std::string GetResolutionMethod(void) const;
 
 private:
     void ReadHeader(void);

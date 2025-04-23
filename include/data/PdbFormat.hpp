@@ -82,6 +82,7 @@ class PdbFormat : public ModelFileFormatBase
 
     const int header_string_length{ 6 };
     std::string m_map_id, m_model_id;
+    std::string m_resolution, m_resolution_method;
     std::vector<std::unique_ptr<AtomObject>> m_atom_object_list;
 
 public:
@@ -94,6 +95,8 @@ public:
     std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(void) override;
     std::string GetPdbID(void) const override;
     std::string GetEmdID(void) const override;
+    double GetResolution(void) const override;
+    std::string GetResolutionMethod(void) const override;
 
 private:
     void LoadAtomSiteData(const std::string & filename);

@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -44,21 +45,36 @@ void CifFormat::LoadPdbxData(const std::string & filename)
     std::string line, header;
     auto found_model_id{ false };
     auto found_map_id{ false };
+    auto found_resolution{ false };
+    auto found_resolution_method{ false };
     while (std::getline(infile, line))
     {
-        if (line.find("_pdbx_database_related.db_id") != std::string::npos)
+        if (line.find("_pdbx_database_related.db_id ") != std::string::npos)
         {
             std::istringstream iss(line);
             iss >> header >> m_map_id;
             found_map_id = true;
         }
-        if (line.find("_pdbx_database_status.entry_id") != std::string::npos)
+        if (line.find("_pdbx_database_status.entry_id ") != std::string::npos)
         {
             std::istringstream iss(line);
             iss >> header >> m_model_id;
             found_model_id = true;
         }
-        if (found_model_id && found_map_id) break;
+        if (line.find("_em_3d_reconstruction.resolution ") != std::string::npos)
+        {
+            std::istringstream iss(line);
+            iss >> header >> m_resolution;
+            found_resolution = true;
+        }
+        if (line.find("_em_3d_reconstruction.resolution_method ") != std::string::npos)
+        {
+            std::istringstream iss(line);
+            iss >> header;
+            iss >> std::quoted(m_resolution_method, '\'');
+            found_resolution_method = true;
+        }
+        if (found_model_id && found_map_id && found_resolution && found_resolution_method) break;
     }
 }
 
@@ -144,4 +160,14 @@ std::string CifFormat::GetPdbID(void) const
 std::string CifFormat::GetEmdID(void) const
 {
     return m_map_id;
+}
+
+double CifFormat::GetResolution(void) const
+{
+    return std::stod(m_resolution);
+}
+
+std::string CifFormat::GetResolutionMethod(void) const
+{
+    return m_resolution_method;
 }

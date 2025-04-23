@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -15,6 +14,8 @@ class ModelObject : public DataObjectBase
 {
     std::vector<std::unique_ptr<AtomObject>> m_atom_list;
     std::string m_key_tag, m_pdb_id, m_emd_id;
+    std::string m_resolution_method;
+    double m_resolution;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_group_potential_entry_map;
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
 
@@ -32,6 +33,8 @@ public:
     void AddAtom(std::unique_ptr<AtomObject> component);
     void SetPdbID(const std::string & label) { m_pdb_id = label; }
     void SetEmdID(const std::string & label) { m_emd_id = label; }
+    void SetResolution(double value) { m_resolution = value; }
+    void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void AddGroupPotentialEntry(const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry);
     void BuildKDTreeRoot(void);
 
@@ -40,6 +43,8 @@ public:
     const std::vector<std::unique_ptr<AtomObject>> & GetComponentsList(void) const { return m_atom_list; }
     std::string GetPdbID(void) const { return m_pdb_id; }
     std::string GetEmdID(void) const { return m_emd_id; }
+    double GetResolution(void) const { return m_resolution; }
+    std::string GetResolutionMethod(void) const { return m_resolution_method; }
     std::tuple<double, double> GetModelPositionRange(int axis, double margin=0.0) const;
     GroupPotentialEntry * GetGroupPotentialEntry(const std::string & class_key) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> & GetGroupPotentialEntryMap(void) const;

@@ -13,6 +13,8 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
     auto model_object{ std::make_unique<ModelObject>(file_reader->GetAtomObjectList()) };
     model_object->SetPdbID(file_reader->GetPdbID());
     model_object->SetEmdID(file_reader->GetEmdID());
+    model_object->SetResolution(file_reader->GetResolution());
+    model_object->SetResolutionMethod(file_reader->GetResolutionMethod());
     return model_object;
 }
 

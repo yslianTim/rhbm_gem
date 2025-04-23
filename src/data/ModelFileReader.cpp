@@ -73,3 +73,13 @@ std::string ModelFileReader::GetEmdID(void) const
 {
     return m_file_format_helper->GetEmdID();
 }
+
+double ModelFileReader::GetResolution(void) const
+{
+    return m_file_format_helper->GetResolution();
+}
+
+std::string ModelFileReader::GetResolutionMethod(void) const
+{
+    return m_file_format_helper->GetResolutionMethod();
+}

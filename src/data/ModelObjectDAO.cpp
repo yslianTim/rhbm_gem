@@ -42,14 +42,16 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     std::stringstream sql;
     sql <<"INSERT INTO "<< model_list_table_name << R"(
         (
-            key_tag, atom_size, pdb_id, emd_id
-        ) VALUES (?, ?, ?, ?)
+            key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
+        ) VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(key_tag)
         DO UPDATE SET
             key_tag = excluded.key_tag,
             atom_size = excluded.atom_size,
             pdb_id  = excluded.pdb_id,
-            emd_id  = excluded.emd_id
+            emd_id  = excluded.emd_id,
+            map_resolution = excluded.map_resolution,
+            resolution_method = excluded.resolution_method
     )";
 
     m_database->Prepare(sql.str());
@@ -57,6 +59,8 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     m_database->Bind<int>(2, model_obj->GetNumberOfAtom());
     m_database->Bind<std::string>(3, model_obj->GetPdbID());
     m_database->Bind<std::string>(4, model_obj->GetEmdID());
+    m_database->Bind<double>(5, model_obj->GetResolution());
+    m_database->Bind<std::string>(6, model_obj->GetResolutionMethod());
 
     m_database->StepOnce();
     m_database->Finalize();
@@ -89,7 +93,7 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     std::string model_table_name{ "model_list" };
     std::stringstream sql;
     sql <<"SELECT "<< R"(
-            key_tag, atom_size, pdb_id, emd_id
+            key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
     )"<<" FROM "<< model_table_name << " WHERE key_tag = ? LIMIT 1;";
 
     m_database->Prepare(sql.str());
@@ -101,6 +105,8 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
         model_object->SetKeyTag(m_database->GetColumn<std::string>(0));
         model_object->SetPdbID(m_database->GetColumn<std::string>(2));
         model_object->SetEmdID(m_database->GetColumn<std::string>(3));
+        model_object->SetResolution(m_database->GetColumn<double>(4));
+        model_object->SetResolutionMethod(m_database->GetColumn<std::string>(5));
         atom_size = m_database->GetColumn<int>(1);
         m_database->Finalize();
     }
@@ -139,7 +145,9 @@ void ModelObjectDAO::CreateModelObjectListTable(const std::string & table_name)
             key_tag           TEXT PRIMARY KEY,
             atom_size         INTEGER,
             pdb_id            TEXT,
-            emd_id            TEXT
+            emd_id            TEXT,
+            map_resolution    DOUBLE,
+            resolution_method TEXT
         )
     )";
     m_database->Execute(sql.str());

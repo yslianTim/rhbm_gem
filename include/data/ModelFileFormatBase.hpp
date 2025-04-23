@@ -19,5 +19,7 @@ public:
     virtual std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(void) = 0;
     virtual std::string GetPdbID(void) const = 0;
     virtual std::string GetEmdID(void) const = 0;
+    virtual double GetResolution(void) const = 0;
+    virtual std::string GetResolutionMethod(void) const = 0;
 
 };
