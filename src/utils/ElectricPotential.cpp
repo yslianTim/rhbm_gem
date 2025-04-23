@@ -1,5 +1,6 @@
 #include "ElectricPotential.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "GlobalEnumClass.hpp"
 
 #include <stdexcept>
 #include <string>

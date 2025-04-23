@@ -1,5 +1,6 @@
 #include "ModelPainter.hpp"
 #include "ModelObject.hpp"
+#include "AtomObject.hpp"
 #include "DataObjectBase.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "FilePathHelper.hpp"
@@ -261,7 +262,7 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
                     count_total++;
                 }
             }
-            auto color{ static_cast<short>(AtomicInfoHelper::GetDisplayColor(element)) };
+            auto color{ AtomicInfoHelper::GetDisplayColor(element) };
             ROOTHelper::SetMarkerAttribute(amplitude_graph_tmp.get(), kFullCircle, marker_size, color);
             ROOTHelper::SetMarkerAttribute(width_graph_tmp.get(), kFullCircle, marker_size, color);
             amplitude_graph_list[i].push_back(std::move(amplitude_graph_tmp));
@@ -560,7 +561,7 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
                     count_total++;
                 }
             }
-            auto color{ static_cast<short>(AtomicInfoHelper::GetDisplayColor(element)) };
+            auto color{ AtomicInfoHelper::GetDisplayColor(element) };
             ROOTHelper::SetMarkerAttribute(amplitude_graph.get(), kFullCircle, 1.5f, color);
             ROOTHelper::SetMarkerAttribute(width_graph.get(), kFullCircle, 1.5f, color);
             amplitude_graph_list[residue_index].push_back(std::move(amplitude_graph));
@@ -1181,6 +1182,7 @@ void ModelPainter::PaintAtomGausScatter(
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintAtomGausScatter"<< std::endl;
+    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -1191,16 +1193,54 @@ void ModelPainter::PaintAtomGausScatter(
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
     
-    const Element element_list[3]{ Element::CARBON, Element::NITROGEN, Element::OXYGEN };
+    const int element_size{ 3 };
+    Element element_list[element_size]{ Element::CARBON, Element::NITROGEN, Element::OXYGEN };
 
-    short color_element[3] { kRed+1, kGreen+2, kAzure+2 };
     std::unique_ptr<TH2> frame;
+    std::vector<std::unique_ptr<TGraphErrors>> graph_list;
+    graph_list.reserve(element_size);
+    std::vector<double> x_array, y_array;
+    x_array.reserve(model_object->GetNumberOfSelectedAtom());
+    y_array.reserve(model_object->GetNumberOfSelectedAtom());
+    int amplitude_cut_count[element_size]{ 0 };
+    int width_cut_count[element_size]{ 0 };
+    int atom_count[element_size]{ 0 };
+    for (size_t i = 0; i < element_size; i++)
+    {
+        auto graph{ entry_iter->CreateGausEstimateScatterGraph(element_list[i]) };
+        ROOTHelper::SetMarkerAttribute(graph.get(),
+            AtomicInfoHelper::GetDisplayMarker(element_list[i]), 1.2f,
+            AtomicInfoHelper::GetDisplayColor(element_list[i]));
+        for (int p = 0; p < graph->GetN(); p++)
+        {
+            auto x{ graph->GetPointX(p) };
+            auto y{ graph->GetPointY(p) };
+            x_array.emplace_back(x);
+            y_array.emplace_back(y);
+            if (x <= 50.0) amplitude_cut_count[i]++;
+            if (y <= 0.6) width_cut_count[i]++;
+        }
+        atom_count[i] = graph->GetN();
+        std::cout << "Ratio of amplitude selected atoms: "<< amplitude_cut_count[i] <<" / "<< atom_count[i] << std::endl;
+        std::cout << "Ratio of width selected atoms: "<< width_cut_count[i] <<" / "<< atom_count[i] << std::endl;
+        graph_list.emplace_back(std::move(graph));
+    }
 
-    std::vector<std::unique_ptr<TGraphErrors>> graph_list[3];
-    std::vector<double> data_array;
-    for (size_t i = 0; i < 3; i++)
+    auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array, 0.1) };
+    double x_min{ std::get<0>(x_range) };
+    double x_max{ std::get<1>(x_range) };
+
+    auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.1) };
+    double y_min{ std::get<0>(y_range) };
+    double y_max{ std::get<1>(y_range) };
+
+    frame = ROOTHelper::CreateHist2D("frame","", 500, x_min, x_max, 500, y_min, y_max);
+    frame->SetStats(0);
+    frame->Draw();
+    for (auto & graph : graph_list)
     {
         
+        graph->Draw("P X0");
     }
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);

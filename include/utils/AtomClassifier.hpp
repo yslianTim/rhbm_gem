@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <vector>
-#include "AtomicInfoHelper.hpp"
+#include "GlobalEnumClass.hpp"
 
 class AtomClassifier
 {

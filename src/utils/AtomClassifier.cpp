@@ -1,4 +1,5 @@
 #include "AtomClassifier.hpp"
+#include "AtomicInfoHelper.hpp"
 #include "KeyPacker.hpp"
 
 #include <iostream>

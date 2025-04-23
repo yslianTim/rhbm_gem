@@ -9,6 +9,7 @@
 #include "ModelPainter.hpp"
 #include "ComparisonPainter.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "GlobalEnumClass.hpp"
 
 #include <memory>
 

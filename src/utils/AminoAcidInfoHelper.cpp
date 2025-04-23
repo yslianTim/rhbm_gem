@@ -1,5 +1,6 @@
 #include "AminoAcidInfoHelper.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "GlobalEnumClass.hpp"
 
 #include <iostream>
 #include <stdexcept>

@@ -1,4 +1,5 @@
 #include "AtomicInfoHelper.hpp"
+#include "GlobalEnumClass.hpp"
 
 #include <iostream>
 #include <algorithm>
@@ -128,6 +129,14 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_color_map
     {Residue::THR, 880}, {Residue::TRP, 881}, {Residue::TYR, 882}, {Residue::VAL, 883}
 };
 
+const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
+{
+    {Element::HYDROGEN,  5}, {Element::CARBON,   53}, {Element::NITROGEN,  55},
+    {Element::OXYGEN,   59}, {Element::SULFUR,   27}, {Element::CALCIUM,   28},
+    {Element::ZINC,     30}, {Element::SODIUM,   31}, {Element::MAGNESIUM, 32},
+    {Element::IRON,     35}, {Element::CHLORINE, 36}, {Element::UNK,       37}
+};
+
 const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
 {
     {Residue::ALA, 20}, {Residue::ARG, 21}, {Residue::ASN, 22}, {Residue::ASP, 23},
@@ -223,14 +232,19 @@ const std::string & AtomicInfoHelper::GetLabel(Branch branch)
     return branch_label_map.at(branch);
 }
 
-int AtomicInfoHelper::GetDisplayColor(Element element)
+short AtomicInfoHelper::GetDisplayColor(Element element)
 {
-    return static_cast<int>(m_element_color_map.at(element));
+    return static_cast<short>(m_element_color_map.at(element));
 }
 
 short AtomicInfoHelper::GetDisplayColor(Residue residue)
 {
     return static_cast<short>(m_residue_color_map.at(residue));
+}
+
+short AtomicInfoHelper::GetDisplayMarker(Element element)
+{
+    return static_cast<short>(m_element_marker_map.at(element));
 }
 
 short AtomicInfoHelper::GetDisplayMarker(Residue residue)
