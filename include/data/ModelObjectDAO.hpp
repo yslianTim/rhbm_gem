@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <memory>
 #include <vector>
 #include <unordered_map>
@@ -26,7 +25,7 @@ private:
     void CreateModelObjectListTable(const std::string & table_name);
     void CreateAtomObjectListTable(const std::string & table_name);
     void CreateAtomicPotentialEntryListTable(const std::string & table_name);
-    void CreateAtomicPotentialEntrySubListTable(const std::string & table_name, const std::string & class_key);
+    void CreateAtomicPotentialEntrySubListTable(const std::string & table_name);
     void CreateGroupPotentialEntryListTable(const std::string & table_name);
     void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
     void SaveAtomicPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);

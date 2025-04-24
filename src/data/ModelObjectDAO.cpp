@@ -8,6 +8,7 @@
 #include "GroupPotentialEntry.hpp"
 #include "KeyPacker.hpp"
 
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 
@@ -29,8 +30,8 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     {
         throw std::runtime_error("ModelObjectDAO::Save() failed: object is not a ModelObject instance.");
     }
+    
     auto key_tag{ model_obj->GetKeyTag() };
-
     auto model_list_table_name{ "model_list" };
     auto atom_list_table_name{ "atom_list_in_" + key_tag };
     auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + key_tag };
@@ -61,7 +62,6 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     m_database->Bind<std::string>(4, model_obj->GetEmdID());
     m_database->Bind<double>(5, model_obj->GetResolution());
     m_database->Bind<std::string>(6, model_obj->GetResolutionMethod());
-
     m_database->StepOnce();
     m_database->Finalize();
 
@@ -70,11 +70,12 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
 
     for (auto & [class_key, group_entry] : model_obj->GetGroupPotentialEntryMap())
     {
-        auto table_name{ class_key + "_" + group_potential_entry_table_name };
-        CreateAtomicPotentialEntrySubListTable(atomic_potential_entry_table_name, class_key);
-        SaveAtomicPotentialEntrySubList(model_obj, atomic_potential_entry_table_name, class_key);
-        CreateGroupPotentialEntryListTable(table_name);
-        SaveGroupPotentialEntryList(group_entry.get(), table_name);
+        auto group_table_name{ class_key + "_" + group_potential_entry_table_name };
+        auto atom_table_name{ class_key + "_" + atomic_potential_entry_table_name };
+        CreateAtomicPotentialEntrySubListTable(atom_table_name);
+        SaveAtomicPotentialEntrySubList(model_obj, atom_table_name, class_key);
+        CreateGroupPotentialEntryListTable(group_table_name);
+        SaveGroupPotentialEntryList(group_entry.get(), group_table_name);
     }
 }
 
@@ -119,15 +120,14 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
         throw std::runtime_error("The number of atoms in the model object does not match the database record.");
     }
 
-    auto element_class_table_name{ AtomicInfoHelper::GetElementClassKey() + "_group_potential_entry_in_" + key_tag };
-    auto residue_class_table_name{ AtomicInfoHelper::GetResidueClassKey() + "_group_potential_entry_in_" + key_tag };
-    auto element_class_group_entry{ std::make_unique<GroupPotentialEntry>() };
-    auto residue_class_group_entry{ std::make_unique<GroupPotentialEntry>() };
-    model_object->AddGroupPotentialEntry(AtomicInfoHelper::GetElementClassKey(), element_class_group_entry);
-    model_object->AddGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey(), residue_class_group_entry);
-    LoadGroupPotentialEntryList(model_object.get(), AtomicInfoHelper::GetElementClassKey(), element_class_table_name);
-    LoadGroupPotentialEntryList(model_object.get(), AtomicInfoHelper::GetResidueClassKey(), residue_class_table_name);
-
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+    {
+        auto group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        auto table_name{ group_class_key + "_group_potential_entry_in_" + key_tag };
+        auto group_entry{ std::make_unique<GroupPotentialEntry>() };
+        model_object->AddGroupPotentialEntry(group_class_key, group_entry);
+        LoadGroupPotentialEntryList(model_object.get(), group_class_key, table_name);
+    }
     return model_object;
 }
 
@@ -189,11 +189,10 @@ void ModelObjectDAO::CreateAtomicPotentialEntryListTable(const std::string & tab
     m_database->Execute(sql.str());
 }
 
-void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(
-    const std::string & table_name, const std::string & class_key)
+void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(const std::string & table_name)
 {
     std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< class_key <<"_"<< table_name << R"(
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
         (
             serial_id INTEGER PRIMARY KEY,
             amplitude_estimate_posterior DOUBLE,
@@ -313,12 +312,11 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
 void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
 {
-    std::string table_name_with_class_key{ class_key + "_" + table_name };
     m_database->BeginTransaction();
-    m_database->ClearTable(table_name_with_class_key);
+    m_database->ClearTable(table_name);
 
     std::stringstream sql;
-    sql <<"INSERT OR REPLACE INTO "<< table_name_with_class_key << R"(
+    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
         (
             serial_id, amplitude_estimate_posterior, width_estimate_posterior,
             amplitude_variance_posterior, width_variance_posterior,
@@ -327,12 +325,10 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     )";
 
     m_database->Prepare(sql.str());
-
     for (auto & atom_object : model_obj->GetComponentsList())
     {
         auto entry{ atom_object->GetAtomicPotentialEntry() };
         if (entry == nullptr) continue;
-
         m_database->Bind<int>(1, atom_object->GetSerialID());
         m_database->Bind<double>(2, entry->GetAmplitudeEstimatePosterior(class_key));
         m_database->Bind<double>(3, entry->GetWidthEstimatePosterior(class_key));
@@ -340,7 +336,6 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
         m_database->Bind<double>(5, entry->GetWidthVariancePosterior(class_key));
         m_database->Bind<int>(6, static_cast<int>(entry->GetOutlierTag(class_key)));
         m_database->Bind<double>(7, entry->GetStatisticalDistance(class_key));
-
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -367,7 +362,6 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
     )";
 
     m_database->Prepare(sql.str());
-    std::cout << group_entry->GetGroupKeySet().size() << std::endl;
     for (auto & group_key : group_entry->GetGroupKeySet())
     {
         m_database->Bind<int64_t>(1, static_cast<int64_t>(group_key));
@@ -380,7 +374,6 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
         m_database->Bind<double>(8, std::get<1>(group_entry->GetGausEstimatePrior(group_key)));
         m_database->Bind<double>(9, std::get<0>(group_entry->GetGausVariancePrior(group_key)));
         m_database->Bind<double>(10, std::get<1>(group_entry->GetGausVariancePrior(group_key)));
-
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -474,8 +467,13 @@ ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
         atomic_potential_entry->AddGausEstimateMDPDE(std::get<5>(row), std::get<6>(row));
         atomic_potential_entry_map[serial_id] = std::move(atomic_potential_entry);
     }
-    LoadAtomicPotentialEntrySubList(table_name, AtomicInfoHelper::GetElementClassKey(), atomic_potential_entry_map);
-    LoadAtomicPotentialEntrySubList(table_name, AtomicInfoHelper::GetResidueClassKey(), atomic_potential_entry_map);
+
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+    {
+        auto class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        auto table_name_with_class_key{ class_key + "_" + table_name };
+        LoadAtomicPotentialEntrySubList(table_name_with_class_key, class_key, atomic_potential_entry_map);
+    }
     return atomic_potential_entry_map;
 }
 
@@ -483,13 +481,12 @@ void ModelObjectDAO::LoadAtomicPotentialEntrySubList(
     const std::string & table_name, const std::string & class_key,
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map)
 {
-    std::string table_name_with_class_key{ class_key + "_" + table_name };
     std::stringstream sql;
     sql <<"SELECT "<< R"(
             serial_id, amplitude_estimate_posterior, width_estimate_posterior,
             amplitude_variance_posterior, width_variance_posterior,
             outlier_tag, statistical_distance
-        )"<<" FROM "<< table_name_with_class_key <<";";
+        )"<<" FROM "<< table_name <<";";
     
     auto row_list
     {
@@ -567,5 +564,10 @@ void ModelObjectDAO::LoadGroupPotentialEntrySubList(
             };
             group_entry->AddAtomObjectPtr(group_key, atom.get());
         }
+    }
+    else
+    {
+        throw std::runtime_error("ModelObjectDAO::LoadGroupPotentialEntrySubList() failed: "
+                                 "Unsupported group class key: " + class_key);
     }
 }

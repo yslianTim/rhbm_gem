@@ -4,6 +4,11 @@
 #include <iostream>
 #include <algorithm>
 
+const std::vector<std::string> AtomicInfoHelper::m_group_class_key_list
+{
+    "element_class", "residue_class"
+};
+
 const std::vector<Residue> AtomicInfoHelper::m_standard_residue_list
 {
     Residue::ALA, Residue::ARG, Residue::ASN, Residue::ASP, Residue::CYS,
@@ -36,7 +41,7 @@ const std::unordered_map<Element, int> AtomicInfoHelper::m_atomic_number_map
     {Element::IRON,    26}, {Element::ZINC,     30}
 };
 
-const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::residue_map
+const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_map
 {
     {"ALA", Residue::ALA}, {"ARG", Residue::ARG}, {"ASN", Residue::ASN}, {"ASP", Residue::ASP},
     {"CYS", Residue::CYS}, {"GLN", Residue::GLN}, {"GLU", Residue::GLU}, {"GLY", Residue::GLY},
@@ -48,7 +53,7 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::residue_ma
     {"CL",  Residue::CL},  {"UNK", Residue::UNK}
 };
 
-const std::unordered_map<std::string_view, Element> AtomicInfoHelper::element_map
+const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
 {
     {"H",  Element::HYDROGEN},
     {"C",  Element::CARBON},    {"N",  Element::NITROGEN},
@@ -58,7 +63,7 @@ const std::unordered_map<std::string_view, Element> AtomicInfoHelper::element_ma
     {"UNK",Element::UNK}
 };
 
-const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::remoteness_map
+const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remoteness_map
 {
     {" ", Remoteness::NONE}, {"A", Remoteness::ALPHA}, {"B", Remoteness::BETA},
     {"G", Remoteness::GAMMA},{"D", Remoteness::DELTA}, {"E", Remoteness::EPSILON},
@@ -68,13 +73,13 @@ const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::remoten
     {"X", Remoteness::EXTRA},{"UNK",Remoteness::UNK}
 };
 
-const std::unordered_map<std::string_view, Branch> AtomicInfoHelper::branch_map
+const std::unordered_map<std::string_view, Branch> AtomicInfoHelper::m_branch_map
 {
     {" ", Branch::NONE}, {"1", Branch::ONE}, {"2", Branch::TWO}, {"3", Branch::THREE},
     {"T", Branch::TERMINAL}, {"UNK", Branch::UNK}
 };
 
-const std::unordered_map<Residue, std::string> AtomicInfoHelper::residue_label_map
+const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label_map
 {
     {Residue::ALA, "ALA"}, {Residue::ARG, "ARG"}, {Residue::ASN, "ASN"}, {Residue::ASP, "ASP"},
     {Residue::CYS, "CYS"}, {Residue::GLN, "GLN"}, {Residue::GLU, "GLU"}, {Residue::GLY, "GLY"},
@@ -86,7 +91,7 @@ const std::unordered_map<Residue, std::string> AtomicInfoHelper::residue_label_m
     {Residue::CL,  "CL"},  {Residue::UNK, "UNK"}
 };
 
-const std::unordered_map<Element, std::string> AtomicInfoHelper::element_label_map
+const std::unordered_map<Element, std::string> AtomicInfoHelper::m_element_label_map
 {
     {Element::HYDROGEN, "H"}, {Element::CARBON,    "C"}, {Element::NITROGEN,   "N"},
     {Element::OXYGEN,   "O"}, {Element::SULFUR,    "S"}, {Element::CALCIUM,   "Ca"},
@@ -94,7 +99,7 @@ const std::unordered_map<Element, std::string> AtomicInfoHelper::element_label_m
     {Element::IRON,    "Fe"}, {Element::CHLORINE, "Cl"}, {Element::UNK,        "X"}
 };
 
-const std::unordered_map<Remoteness, std::string> AtomicInfoHelper::remoteness_label_map
+const std::unordered_map<Remoteness, std::string> AtomicInfoHelper::m_remoteness_label_map
 {
     {Remoteness::NONE, ""}, {Remoteness::ALPHA, "#alpha"},
     {Remoteness::BETA, "#beta"}, {Remoteness::GAMMA, "#gamma"},
@@ -106,7 +111,7 @@ const std::unordered_map<Remoteness, std::string> AtomicInfoHelper::remoteness_l
     {Remoteness::UNK, "UNK"}
 };
 
-const std::unordered_map<Branch, std::string> AtomicInfoHelper::branch_label_map
+const std::unordered_map<Branch, std::string> AtomicInfoHelper::m_branch_label_map
 {
     {Branch::NONE, ""}, {Branch::ONE, "1"}, {Branch::TWO, "2"}, {Branch::THREE, "3"},
     {Branch::TERMINAL, "T"}, {Branch::UNK, "UNK"}
@@ -151,19 +156,29 @@ int AtomicInfoHelper::GetAtomicNumber(Element element)
     return m_atomic_number_map.at(element);
 }
 
-int AtomicInfoHelper::GetStandardResidueCount(void)
+size_t AtomicInfoHelper::GetGroupClassCount(void)
 {
-    return m_standard_residue_count;
+    return m_group_class_key_list.size();
+}
+
+size_t AtomicInfoHelper::GetStandardResidueCount(void)
+{
+    return m_standard_residue_list.size();
+}
+
+const std::string & AtomicInfoHelper::GetGroupClassKey(size_t class_id)
+{
+    return m_group_class_key_list.at(class_id);
 }
 
 const std::string & AtomicInfoHelper::GetElementClassKey(void)
 {
-    return m_element_class_key;
+    return m_group_class_key_list.at(0);
 }
 
 const std::string & AtomicInfoHelper::GetResidueClassKey(void)
 {
-    return m_residue_class_key;
+    return m_group_class_key_list.at(1);
 }
 
 const std::vector<Residue> & AtomicInfoHelper::GetStandardResidueList(void)
@@ -194,42 +209,42 @@ bool AtomicInfoHelper::IsStandardResidue(Residue residue)
 
 Residue AtomicInfoHelper::GetResidueFromString(const std::string & name)
 {
-    return residue_map.at(name);
+    return m_residue_map.at(name);
 }
 
 Element AtomicInfoHelper::GetElementFromString(const std::string & name)
 {
-    return element_map.at(name);
+    return m_element_map.at(name);
 }
 
 Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)
 {
-    return remoteness_map.at(name);
+    return m_remoteness_map.at(name);
 }
 
 Branch AtomicInfoHelper::GetBranchFromString(const std::string & name)
 {
-    return branch_map.at(name);
+    return m_branch_map.at(name);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Residue residue)
 {
-    return residue_label_map.at(residue);
+    return m_residue_label_map.at(residue);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Element element)
 {
-    return element_label_map.at(element);
+    return m_element_label_map.at(element);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Remoteness remoteness)
 {
-    return remoteness_label_map.at(remoteness);
+    return m_remoteness_label_map.at(remoteness);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Branch branch)
 {
-    return branch_label_map.at(branch);
+    return m_branch_label_map.at(branch);
 }
 
 short AtomicInfoHelper::GetDisplayColor(Element element)
