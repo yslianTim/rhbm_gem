@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include "ModelFileFormatBase.hpp"
 
+enum class Element : uint16_t;
+
 class CifFormat : public ModelFileFormatBase
 {
     struct AtomSite
@@ -44,13 +46,14 @@ class CifFormat : public ModelFileFormatBase
         std::string end_label_comp_id;
         std::string end_label_asym_id;
         std::string end_label_seq_id;
-        int         pdbx_PDB_helix_length;
+        int pdbx_PDB_helix_length;
     };
 
     std::string m_map_id, m_model_id;
     std::string m_resolution, m_resolution_method;
     std::vector<std::unique_ptr<AtomObject>> m_atom_object_list;
     std::vector<std::unique_ptr<StructConf>> m_struct_conf_list;
+    std::vector<Element> m_element_type_list;
 
 public:
     CifFormat(void);
@@ -67,6 +70,7 @@ public:
 
 private:
     void LoadPdbxData(const std::string & filename);
+    void LoadElementTypeList(const std::string & filename);
     void LoadAtomSiteData(const std::string & filename);
     void LoadStructConfData(const std::string & filename);
     void SetStructureInfo(AtomObject * atom_object);

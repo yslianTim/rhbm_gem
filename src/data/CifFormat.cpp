@@ -24,6 +24,7 @@ CifFormat::~CifFormat()
 void CifFormat::LoadHeader(const std::string & filename)
 {
     LoadPdbxData(filename);
+    LoadElementTypeList(filename);
 }
 
 void CifFormat::PrintHeader(void) const
@@ -79,6 +80,27 @@ void CifFormat::LoadPdbxData(const std::string & filename)
         }
         if (found_model_id && found_map_id && found_resolution && found_resolution_method) break;
     }
+}
+
+void CifFormat::LoadElementTypeList(const std::string & filename)
+{
+    std::ifstream infile{ filename, std::ios::binary };
+    if (!infile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("LoadElementTypeList failed!");
+    }
+
+    ParseLoopBlock(infile, "_atom_type.",
+        [this](const std::unordered_map<std::string, size_t> & idx,
+               const std::vector<std::string> & tok)
+        {
+            auto element_type_string{ tok[idx.at("symbol")] };
+            auto element{ AtomicInfoHelper::GetElementFromString(element_type_string) };
+            m_element_type_list.emplace_back(element);
+        }
+    );
+    std::cout <<"Number of element types in PDBx/mmCIF = "<< m_element_type_list.size() << std::endl;
 }
 
 void CifFormat::LoadAtomSiteData(const std::string & filename)

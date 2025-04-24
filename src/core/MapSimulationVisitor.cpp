@@ -53,7 +53,8 @@ void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
         if (atom->IsUnknownAtom() == true) continue;
         m_selected_atom_list.emplace_back(atom.get());
     }
-    std::cout <<" Number of selected atoms for simulation = "<< selected_atom_size << std::endl;
+    std::cout <<" Number of selected atoms to be simulated = "
+              << m_selected_atom_list.size() <<" / "<< atom_list.size() << std::endl;
 }
 
 void MapSimulationVisitor::VisitMapObject(MapObject * data_object)
