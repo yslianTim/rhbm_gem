@@ -1,13 +1,10 @@
 #pragma once
 
-#include <iostream>
 #include <string>
 #include <memory>
 #include <vector>
-#include <set>
-#include <tuple>
 #include <unordered_map>
-#include <functional>
+#include <unordered_set>
 #include "DataObjectVisitorBase.hpp"
 
 class AtomSelector;
@@ -22,9 +19,7 @@ class PotentialAnalysisVisitor : public DataObjectVisitorBase
     std::shared_ptr<AtomSelector> m_atom_selector;
     std::shared_ptr<SphereSampler> m_sphere_sampler;
     std::vector<AtomObject *> m_selected_atom_list;
-
-    std::set<uint64_t> element_class_group_set;
-    std::set<uint64_t> residue_class_group_set;
+    std::unordered_map<std::string, std::unordered_set<uint64_t>> m_group_set_map;
 
 public:
     PotentialAnalysisVisitor(std::shared_ptr<AtomSelector> atom_selector, std::shared_ptr<SphereSampler> sphere_sampler);
@@ -42,7 +37,6 @@ public:
     void SetModelObjectKeyTag(const std::string & value) { m_model_key_tag = value; }
 
 private:
-    const std::set<uint64_t> & GetGroupSet(const std::string & class_key);
     void RunAtomClassification(const std::string & class_key, ModelObject * model_object);
     void RunPotentialFitting(const std::string & class_key, ModelObject * model_object);
 

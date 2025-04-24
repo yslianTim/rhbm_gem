@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
 #include <unordered_map>
 #include "ModelFileFormatBase.hpp"
 
@@ -33,9 +34,34 @@ class CifFormat : public ModelFileFormatBase
         int pdbx_PDB_model_num;
     };
 
+    struct StructConf
+    {
+        std::string conf_type_id;
+        std::string id;
+        std::string pdbx_PDB_helix_id;
+        std::string beg_label_comp_id;
+        std::string beg_label_asym_id;
+        std::string beg_label_seq_id;
+        std::string pdbx_beg_PDB_ins_code;
+        std::string end_label_comp_id;
+        std::string end_label_asym_id;
+        std::string end_label_seq_id;
+        std::string pdbx_end_PDB_ins_code;
+        std::string beg_auth_comp_id;
+        std::string beg_auth_asym_id;
+        std::string beg_auth_seq_id;
+        std::string end_auth_comp_id;
+        std::string end_auth_asym_id;
+        std::string end_auth_seq_id;
+        std::string pdbx_PDB_helix_class;
+        std::string details;
+        int         pdbx_PDB_helix_length;
+    };
+
     std::string m_map_id, m_model_id;
     std::string m_resolution, m_resolution_method;
     std::vector<std::unique_ptr<AtomObject>> m_atom_object_list;
+    std::vector<std::unique_ptr<StructConf>> m_struct_conf_list;
 
 public:
     CifFormat(void);
@@ -53,5 +79,10 @@ public:
 private:
     void LoadPdbxData(const std::string & filename);
     void LoadAtomSiteData(const std::string & filename);
+    void LoadStructConfData(const std::string & filename);
+    void ParseLoopBlock(std::ifstream & infile,
+        const std::string & prefix,
+        const std::function<void(const std::unordered_map<std::string, size_t> &,
+                                 const std::vector<std::string> &)> & row_handler);
 
 };

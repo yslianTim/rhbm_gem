@@ -14,6 +14,9 @@
 #include "AtomicInfoHelper.hpp"
 #include "KeyPacker.hpp"
 
+#include <iostream>
+#include <tuple>
+
 PotentialAnalysisVisitor::PotentialAnalysisVisitor(
     std::shared_ptr<AtomSelector> atom_selector,
     std::shared_ptr<SphereSampler> sphere_sampler) :
@@ -90,10 +93,12 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
         const auto & map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
         map_object->Accept(this);
 
-        RunAtomClassification(AtomicInfoHelper::GetElementClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
-        RunAtomClassification(AtomicInfoHelper::GetResidueClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
-        RunPotentialFitting(AtomicInfoHelper::GetElementClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
-        RunPotentialFitting(AtomicInfoHelper::GetResidueClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
+        for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+        {
+            auto group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+            RunAtomClassification(group_class_key, dynamic_cast<ModelObject*>(model_object.get()));
+            RunPotentialFitting(group_class_key, dynamic_cast<ModelObject*>(model_object.get()));
+        }
     }
     catch(const std::exception & e)
     {
@@ -109,25 +114,28 @@ void PotentialAnalysisVisitor::RunAtomClassification(
     auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
     for (auto atom : m_selected_atom_list)
     {
+        uint64_t group_key;
         if (class_key == AtomicInfoHelper::GetResidueClassKey())
         {
-            auto group_key{ KeyPackerResidueClass::Pack(
-                atom->GetResidue(), atom->GetElement(), atom->GetRemoteness(), atom->GetBranch(), atom->GetSpecialAtomFlag()) };
-            group_potential_entry->AddAtomObjectPtr(group_key, atom);
-            group_potential_entry->InsertGroupKey(group_key);
-            residue_class_group_set.insert(group_key);
+            group_key = KeyPackerResidueClass::Pack(
+                atom->GetResidue(), atom->GetElement(),
+                atom->GetRemoteness(), atom->GetBranch(),
+                atom->GetSpecialAtomFlag());
         }
         else if (class_key == AtomicInfoHelper::GetElementClassKey())
         {
-            auto group_key{ KeyPackerElementClass::Pack(atom->GetElement(), atom->GetRemoteness(), atom->GetSpecialAtomFlag()) };
-            group_potential_entry->AddAtomObjectPtr(group_key, atom);
-            group_potential_entry->InsertGroupKey(group_key);
-            element_class_group_set.insert(group_key);
+            group_key = KeyPackerElementClass::Pack(
+                atom->GetElement(), atom->GetRemoteness(),
+                atom->GetSpecialAtomFlag());
         }
         else
         {
-            throw std::runtime_error("Unsupported class key.");
+            throw std::runtime_error("PotentialAnalysisVisitor::RunAtomClassification()"
+                                     " : Unsupported class key."+ class_key);
         }
+        group_potential_entry->AddAtomObjectPtr(group_key, atom);
+        group_potential_entry->InsertGroupKey(group_key);
+        m_group_set_map[class_key].insert(group_key);
     }
     model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
 }
@@ -139,7 +147,7 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
     std::cout <<"- RunPotentialFitting..." << std::endl;
     auto group_potential_entry{ model_object->GetGroupPotentialEntry(class_key) };
     
-    for (const auto & group_key : GetGroupSet(class_key))
+    for (const auto & group_key : m_group_set_map.at(class_key))
     {
         auto atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
         auto group_size{ static_cast<int>(atom_list.size()) };
@@ -198,18 +206,4 @@ void PotentialAnalysisVisitor::SetFitRange(double x_min, double x_max)
 {
     m_x_min = x_min;
     m_x_max = x_max;
-}
-
-const std::set<uint64_t> & PotentialAnalysisVisitor::GetGroupSet(
-    const std::string & class_key)
-{
-    if      (class_key == AtomicInfoHelper::GetResidueClassKey())
-    {
-        return residue_class_group_set;
-    }
-    else if (class_key == AtomicInfoHelper::GetElementClassKey())
-    {
-        return element_class_group_set;
-    }
-    throw std::runtime_error("Unknown classification: " + class_key);
 }
