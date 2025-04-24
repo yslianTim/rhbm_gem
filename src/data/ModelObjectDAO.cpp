@@ -70,18 +70,11 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
 
     for (auto & [class_key, group_entry] : model_obj->GetGroupPotentialEntryMap())
     {
+        auto table_name{ class_key + "_" + group_potential_entry_table_name };
         CreateAtomicPotentialEntrySubListTable(atomic_potential_entry_table_name, class_key);
         SaveAtomicPotentialEntrySubList(model_obj, atomic_potential_entry_table_name, class_key);
-        if (class_key == AtomicInfoHelper::GetElementClassKey())
-        {
-            CreateGroupPotentialEntryElementClassListTable(group_potential_entry_table_name);
-            SaveGroupPotentialEntryElementClassList(group_entry.get(), group_potential_entry_table_name);
-        }
-        else if (class_key == AtomicInfoHelper::GetResidueClassKey())
-        {
-            CreateGroupPotentialEntryResidueClassListTable(group_potential_entry_table_name);
-            SaveGroupPotentialEntryResidueClassList(group_entry.get(), group_potential_entry_table_name);
-        }
+        CreateGroupPotentialEntryListTable(table_name);
+        SaveGroupPotentialEntryList(group_entry.get(), table_name);
     }
 }
 
@@ -126,13 +119,14 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
         throw std::runtime_error("The number of atoms in the model object does not match the database record.");
     }
 
-    auto group_potential_entry_table_name{ "group_potential_entry_in_" + key_tag };
+    auto element_class_table_name{ AtomicInfoHelper::GetElementClassKey() + "_group_potential_entry_in_" + key_tag };
+    auto residue_class_table_name{ AtomicInfoHelper::GetResidueClassKey() + "_group_potential_entry_in_" + key_tag };
     auto element_class_group_entry{ std::make_unique<GroupPotentialEntry>() };
     auto residue_class_group_entry{ std::make_unique<GroupPotentialEntry>() };
     model_object->AddGroupPotentialEntry(AtomicInfoHelper::GetElementClassKey(), element_class_group_entry);
     model_object->AddGroupPotentialEntry(AtomicInfoHelper::GetResidueClassKey(), residue_class_group_entry);
-    LoadGroupPotentialEntryElementClassList(model_object.get(), group_potential_entry_table_name);
-    LoadGroupPotentialEntryResidueClassList(model_object.get(), group_potential_entry_table_name);
+    LoadGroupPotentialEntryList(model_object.get(), AtomicInfoHelper::GetElementClassKey(), element_class_table_name);
+    LoadGroupPotentialEntryList(model_object.get(), AtomicInfoHelper::GetResidueClassKey(), residue_class_table_name);
 
     return model_object;
 }
@@ -213,15 +207,12 @@ void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(
     m_database->Execute(sql.str());
 }
 
-void ModelObjectDAO::CreateGroupPotentialEntryElementClassListTable(const std::string & table_name)
+void ModelObjectDAO::CreateGroupPotentialEntryListTable(const std::string & table_name)
 {
-    std::string table_name_with_class_key{ AtomicInfoHelper::GetElementClassKey() + "_" + table_name };
     std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name_with_class_key << R"(
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
         (
-            element_id INTEGER,
-            remoteness_id INTEGER,
-            special_atom_flag INTEGER,
+            key_id INTEGER PRIMARY KEY,
             atom_size INTEGER,
             amplitude_estimate_mean DOUBLE,
             width_estimate_mean DOUBLE,
@@ -230,34 +221,7 @@ void ModelObjectDAO::CreateGroupPotentialEntryElementClassListTable(const std::s
             amplitude_estimate_prior DOUBLE,
             width_estimate_prior DOUBLE,
             amplitude_variance_prior DOUBLE,
-            width_variance_prior DOUBLE,
-            PRIMARY KEY (element_id, remoteness_id, special_atom_flag)
-        )
-    )";
-    m_database->Execute(sql.str());
-}
-
-void ModelObjectDAO::CreateGroupPotentialEntryResidueClassListTable(const std::string & table_name)
-{
-    std::string table_name_with_class_key{ AtomicInfoHelper::GetResidueClassKey() + "_" + table_name };
-    std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name_with_class_key << R"(
-        (
-            residue_id INTEGER,
-            element_id INTEGER,
-            remoteness_id INTEGER,
-            branch_id INTEGER,
-            special_atom_flag INTEGER,
-            atom_size INTEGER,
-            amplitude_estimate_mean DOUBLE,
-            width_estimate_mean DOUBLE,
-            amplitude_estimate_mdpde DOUBLE,
-            width_estimate_mdpde DOUBLE,
-            amplitude_estimate_prior DOUBLE,
-            width_estimate_prior DOUBLE,
-            amplitude_variance_prior DOUBLE,
-            width_variance_prior DOUBLE,
-            PRIMARY KEY (residue_id, element_id, remoteness_id, branch_id, special_atom_flag)
+            width_variance_prior DOUBLE
         )
     )";
     m_database->Execute(sql.str());
@@ -385,87 +349,37 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     m_database->CommitTransaction();
 }
 
-void ModelObjectDAO::SaveGroupPotentialEntryElementClassList(
+void ModelObjectDAO::SaveGroupPotentialEntryList(
     const GroupPotentialEntry * group_entry, const std::string & table_name)
 {
-    std::string table_name_with_class_key{ AtomicInfoHelper::GetElementClassKey() + "_" + table_name };
     m_database->BeginTransaction();
-    m_database->ClearTable(table_name_with_class_key);
+    m_database->ClearTable(table_name);
     
     std::stringstream sql;
-    sql <<"INSERT OR REPLACE INTO "<< table_name_with_class_key << R"(
+    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
         (
-            element_id, remoteness_id, special_atom_flag, atom_size,
+            key_id, atom_size,
             amplitude_estimate_mean, width_estimate_mean,
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
             amplitude_variance_prior, width_variance_prior
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 
     m_database->Prepare(sql.str());
-
+    std::cout << group_entry->GetGroupKeySet().size() << std::endl;
     for (auto & group_key : group_entry->GetGroupKeySet())
     {
-        auto unpack_group_key{ KeyPackerElementClass::Unpack(group_key) };
-        m_database->Bind<int>(1, static_cast<int>(std::get<0>(unpack_group_key)));
-        m_database->Bind<int>(2, static_cast<int>(std::get<1>(unpack_group_key)));
-        m_database->Bind<int>(3, static_cast<int>(std::get<2>(unpack_group_key)));
-        m_database->Bind<int>(4, group_entry->GetAtomObjectPtrListSize(group_key));
-        m_database->Bind<double>(5, std::get<0>(group_entry->GetGausEstimateMean(group_key)));
-        m_database->Bind<double>(6, std::get<1>(group_entry->GetGausEstimateMean(group_key)));
-        m_database->Bind<double>(7, std::get<0>(group_entry->GetGausEstimateMDPDE(group_key)));
-        m_database->Bind<double>(8, std::get<1>(group_entry->GetGausEstimateMDPDE(group_key)));
-        m_database->Bind<double>(9, std::get<0>(group_entry->GetGausEstimatePrior(group_key)));
-        m_database->Bind<double>(10, std::get<1>(group_entry->GetGausEstimatePrior(group_key)));
-        m_database->Bind<double>(11, std::get<0>(group_entry->GetGausVariancePrior(group_key)));
-        m_database->Bind<double>(12, std::get<1>(group_entry->GetGausVariancePrior(group_key)));
-
-        m_database->StepOnce();
-        m_database->Reset();
-    }
-
-    m_database->Finalize();
-    m_database->CommitTransaction();
-}
-
-void ModelObjectDAO::SaveGroupPotentialEntryResidueClassList(
-    const GroupPotentialEntry * group_entry, const std::string & table_name)
-{
-    std::string table_name_with_class_key{ AtomicInfoHelper::GetResidueClassKey() + "_" + table_name };
-    m_database->BeginTransaction();
-    m_database->ClearTable(table_name_with_class_key);
-    
-    std::stringstream sql;
-    sql <<"INSERT OR REPLACE INTO "<< table_name_with_class_key << R"(
-        (
-            residue_id, element_id, remoteness_id, branch_id, special_atom_flag, atom_size,
-            amplitude_estimate_mean, width_estimate_mean,
-            amplitude_estimate_mdpde, width_estimate_mdpde,
-            amplitude_estimate_prior, width_estimate_prior,
-            amplitude_variance_prior, width_variance_prior
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    )";
-
-    m_database->Prepare(sql.str());
-
-    for (auto & group_key : group_entry->GetGroupKeySet())
-    {
-        auto unpack_group_key{ KeyPackerResidueClass::Unpack(group_key) };
-        m_database->Bind<int>(1, static_cast<int>(std::get<0>(unpack_group_key)));
-        m_database->Bind<int>(2, static_cast<int>(std::get<1>(unpack_group_key)));
-        m_database->Bind<int>(3, static_cast<int>(std::get<2>(unpack_group_key)));
-        m_database->Bind<int>(4, static_cast<int>(std::get<3>(unpack_group_key)));
-        m_database->Bind<int>(5, static_cast<int>(std::get<4>(unpack_group_key)));
-        m_database->Bind<int>(6, group_entry->GetAtomObjectPtrListSize(group_key));
-        m_database->Bind<double>(7, std::get<0>(group_entry->GetGausEstimateMean(group_key)));
-        m_database->Bind<double>(8, std::get<1>(group_entry->GetGausEstimateMean(group_key)));
-        m_database->Bind<double>(9, std::get<0>(group_entry->GetGausEstimateMDPDE(group_key)));
-        m_database->Bind<double>(10, std::get<1>(group_entry->GetGausEstimateMDPDE(group_key)));
-        m_database->Bind<double>(11, std::get<0>(group_entry->GetGausEstimatePrior(group_key)));
-        m_database->Bind<double>(12, std::get<1>(group_entry->GetGausEstimatePrior(group_key)));
-        m_database->Bind<double>(13, std::get<0>(group_entry->GetGausVariancePrior(group_key)));
-        m_database->Bind<double>(14, std::get<1>(group_entry->GetGausVariancePrior(group_key)));
+        m_database->Bind<int64_t>(1, static_cast<int64_t>(group_key));
+        m_database->Bind<int>(2, group_entry->GetAtomObjectPtrListSize(group_key));
+        m_database->Bind<double>(3, std::get<0>(group_entry->GetGausEstimateMean(group_key)));
+        m_database->Bind<double>(4, std::get<1>(group_entry->GetGausEstimateMean(group_key)));
+        m_database->Bind<double>(5, std::get<0>(group_entry->GetGausEstimateMDPDE(group_key)));
+        m_database->Bind<double>(6, std::get<1>(group_entry->GetGausEstimateMDPDE(group_key)));
+        m_database->Bind<double>(7, std::get<0>(group_entry->GetGausEstimatePrior(group_key)));
+        m_database->Bind<double>(8, std::get<1>(group_entry->GetGausEstimatePrior(group_key)));
+        m_database->Bind<double>(9, std::get<0>(group_entry->GetGausVariancePrior(group_key)));
+        m_database->Bind<double>(10, std::get<1>(group_entry->GetGausVariancePrior(group_key)));
 
         m_database->StepOnce();
         m_database->Reset();
@@ -550,13 +464,11 @@ ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
     };
 
     auto serial_id{ 0 };
-    //auto sampling_size{ 0 };
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
     for (auto & row : row_list)
     {
         auto atomic_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
         serial_id = std::get<0>(row);
-        //sampling_size = std::get<1>(row);
         atomic_potential_entry->AddDistanceAndMapValueList(std::get<2>(row));
         atomic_potential_entry->AddGausEstimateOLS(std::get<3>(row), std::get<4>(row));
         atomic_potential_entry->AddGausEstimateMDPDE(std::get<5>(row), std::get<6>(row));
@@ -597,94 +509,63 @@ void ModelObjectDAO::LoadAtomicPotentialEntrySubList(
     }
 }
 
-void ModelObjectDAO::LoadGroupPotentialEntryElementClassList(
-    ModelObject * model_obj, const std::string & table_name)
+void ModelObjectDAO::LoadGroupPotentialEntryList(
+    ModelObject * model_obj, const std::string & class_key, const std::string & table_name)
 {
-    std::string class_key{ AtomicInfoHelper::GetElementClassKey() };
-    std::string table_name_with_class_key{ class_key + "_" + table_name };
     std::stringstream sql;
     sql <<"SELECT "<< R"(
-            element_id, remoteness_id, special_atom_flag, atom_size,
+            key_id, atom_size,
             amplitude_estimate_mean, width_estimate_mean,
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
             amplitude_variance_prior, width_variance_prior
-        )"<<" FROM "<< table_name_with_class_key <<";";
+        )"<<" FROM "<< table_name <<";";
     
     auto row_list
     {
-        m_database->Query<int, int, int, int, double, double, double, double,
-                  double, double, double, double>(sql.str())
+        m_database->Query<int64_t, int,
+                          double, double, double, double,
+                          double, double, double, double>(sql.str())
     };
 
     auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
     for (auto & row : row_list)
     {
-        auto element{ static_cast<Element>(std::get<0>(row)) };
-        auto remoteness{ static_cast<Remoteness>(std::get<1>(row)) };
-        auto is_special_atom{ static_cast<bool>(std::get<2>(row)) };
-        auto group_key{ KeyPackerElementClass::Pack(element, remoteness, is_special_atom) };
+        auto group_key{ static_cast<uint64_t>(std::get<0>(row)) };
         group_entry->InsertGroupKey(group_key);
-        group_entry->ReserveAtomObjectPtrList(group_key, std::get<3>(row));
-        group_entry->AddGausEstimateMean(group_key, std::get<4>(row), std::get<5>(row));
-        group_entry->AddGausEstimateMDPDE(group_key, std::get<6>(row), std::get<7>(row));
-        group_entry->AddGausEstimatePrior(group_key, std::get<8>(row), std::get<9>(row));
-        group_entry->AddGausVariancePrior(group_key, std::get<10>(row), std::get<11>(row));
+        group_entry->ReserveAtomObjectPtrList(group_key, std::get<1>(row));
+        group_entry->AddGausEstimateMean(group_key, std::get<2>(row), std::get<3>(row));
+        group_entry->AddGausEstimateMDPDE(group_key, std::get<4>(row), std::get<5>(row));
+        group_entry->AddGausEstimatePrior(group_key, std::get<6>(row), std::get<7>(row));
+        group_entry->AddGausVariancePrior(group_key, std::get<8>(row), std::get<9>(row));
     }
-
-    for (auto & atom : model_obj->GetComponentsList())
-    {
-        if (atom->GetSelectedFlag() == false) continue;
-        auto group_key{ KeyPackerElementClass::Pack(atom->GetElement(), atom->GetRemoteness(), atom->GetSpecialAtomFlag()) };
-        group_entry->AddAtomObjectPtr(group_key, atom.get());
-    }
+    LoadGroupPotentialEntrySubList(model_obj, class_key);
 }
 
-void ModelObjectDAO::LoadGroupPotentialEntryResidueClassList(
-    ModelObject * model_obj, const std::string & table_name)
+void ModelObjectDAO::LoadGroupPotentialEntrySubList(
+    ModelObject * model_obj, const std::string & class_key)
 {
-    std::string class_key{ AtomicInfoHelper::GetResidueClassKey() };
-    std::string table_name_with_class_key{ class_key + "_" + table_name };
-    std::stringstream sql;
-    sql <<"SELECT "<< R"(
-            residue_id, element_id, remoteness_id, branch_id, special_atom_flag, atom_size,
-            amplitude_estimate_mean, width_estimate_mean,
-            amplitude_estimate_mdpde, width_estimate_mdpde,
-            amplitude_estimate_prior, width_estimate_prior,
-            amplitude_variance_prior, width_variance_prior
-        )"<<" FROM "<< table_name_with_class_key <<";";
-    
-    auto row_list
-    {
-        m_database->Query<int, int, int, int, int, int, double, double, double, double,
-                  double, double, double, double>(sql.str())
-    };
-
     auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
-    for (auto & row : row_list)
+    if (class_key == AtomicInfoHelper::GetElementClassKey())
     {
-        auto residue{ static_cast<Residue>(std::get<0>(row)) };
-        auto element{ static_cast<Element>(std::get<1>(row)) };
-        auto remoteness{ static_cast<Remoteness>(std::get<2>(row)) };
-        auto branch{ static_cast<Branch>(std::get<3>(row)) };
-        auto is_special_atom{ static_cast<bool>(std::get<4>(row)) };
-        auto group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, is_special_atom) };
-        group_entry->InsertGroupKey(group_key);
-        group_entry->ReserveAtomObjectPtrList(group_key, std::get<5>(row));
-        group_entry->AddGausEstimateMean(group_key, std::get<6>(row), std::get<7>(row));
-        group_entry->AddGausEstimateMDPDE(group_key, std::get<8>(row), std::get<9>(row));
-        group_entry->AddGausEstimatePrior(group_key, std::get<10>(row), std::get<11>(row));
-        group_entry->AddGausVariancePrior(group_key, std::get<12>(row), std::get<13>(row));
+        for (auto & atom : model_obj->GetComponentsList())
+        {
+            if (atom->GetSelectedFlag() == false) continue;
+            auto group_key{ KeyPackerElementClass::Pack(atom->GetElement(), atom->GetRemoteness(), atom->GetSpecialAtomFlag()) };
+            group_entry->AddAtomObjectPtr(group_key, atom.get());
+        }
     }
-
-    for (auto & atom : model_obj->GetComponentsList())
+    else if (class_key == AtomicInfoHelper::GetResidueClassKey())
     {
-        if (atom->GetSelectedFlag() == false) continue;
-        auto group_key{
-            KeyPackerResidueClass::Pack(
-                atom->GetResidue(), atom->GetElement(),
-                atom->GetRemoteness(), atom->GetBranch(), atom->GetSpecialAtomFlag())
-        };
-        group_entry->AddAtomObjectPtr(group_key, atom.get());
+        for (auto & atom : model_obj->GetComponentsList())
+        {
+            if (atom->GetSelectedFlag() == false) continue;
+            auto group_key{
+                KeyPackerResidueClass::Pack(
+                    atom->GetResidue(), atom->GetElement(),
+                    atom->GetRemoteness(), atom->GetBranch(), atom->GetSpecialAtomFlag())
+            };
+            group_entry->AddAtomObjectPtr(group_key, atom.get());
+        }
     }
 }

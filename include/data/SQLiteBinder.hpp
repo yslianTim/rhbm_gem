@@ -11,13 +11,23 @@ struct SQLiteBinder
 {
 };
 
-// int specialization
+// int 32-bits specialization
 template<>
 struct SQLiteBinder<int>
 {
     static int Bind(sqlite3_stmt * stmt, int index, int value)
     {
         return sqlite3_bind_int(stmt, index, value);
+    }
+};
+
+// int 64-bits specialization
+template<>
+struct SQLiteBinder<int64_t>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, int64_t value)
+    {
+        return sqlite3_bind_int64(stmt, index, value);
     }
 };
 
