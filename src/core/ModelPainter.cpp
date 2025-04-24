@@ -137,7 +137,6 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
     std::unique_ptr<TH2> frame[pad_size_x][pad_size_y];
     std::unique_ptr<TH2> frame_extra[pad_extra_size];
     
-    const std::string fsc_list[pad_size_y]{ "1.90", "1.71", "1.52", "1.25" };
     const double x_pos[pad_size_x + 1]{ 0.00, 0.10, 0.40, 0.47, 0.77, 0.84, 1.00 };
     const double y_pos[pad_size_y + 1]{ 0.20, 0.43, 0.62, 0.81, 1.00 };
     for (int i = 0; i < pad_size_x; i++)
@@ -310,8 +309,9 @@ void ModelPainter::PaintResidueClassGroupGausMainChain(const std::string & name)
         pad[0][j]->cd();
         auto pdb_text{ m_model_object_list.at(static_cast<size_t>(j))->GetPdbID() };
         auto emd_text{ m_model_object_list.at(static_cast<size_t>(j))->GetEmdID() };
+        auto resolution{ m_model_object_list.at(static_cast<size_t>(j))->GetResolution() };
         PrintInfoMainChainPad(pad[0][j].get(), info_text[j].get(), pdb_text, emd_text, draw_axis_flag);
-        PrintIconMainChainPad(pad[0][j].get(), icon_text[j].get(), fsc_list[j], draw_axis_flag);
+        PrintIconMainChainPad(pad[0][j].get(), icon_text[j].get(), resolution, draw_axis_flag);
 
         pad[1][j]->cd();
         PrintResultPad(pad[1][j].get(), frame[0][j].get(), draw_axis_flag);
@@ -1106,10 +1106,6 @@ void ModelPainter::PaintElementClassGroupGausToFSC(const std::string & name)
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintElementClassGroupGausToFSC"<< std::endl;
 
-    std::vector<double> fsc_list;
-    fsc_list.reserve(m_model_object_list.size());
-
-
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
@@ -1137,7 +1133,7 @@ void ModelPainter::PaintElementClassGroupGausToFSC(const std::string & name)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         graph[i] = ROOTHelper::CreateGraphErrors();
-        //BuildGausEstimateToFSCGraph(group_key, graph[i].get(), m_model_object_list, fsc_list);
+        //BuildGausEstimateToFSCGraph(group_key, graph[i].get(), m_model_object_list);
 
         for (int p = 0; p < graph[i]->GetN(); p++)
         {
@@ -1489,7 +1485,7 @@ void ModelPainter::ModifyAxisLabelSideChain(
 }
 
 void ModelPainter::PrintIconMainChainPad(
-    TPad * pad, TPaveText * text, const std::string & fsc, bool is_bottom_pad)
+    TPad * pad, TPaveText * text, double resolution, bool is_bottom_pad)
 {
     pad->cd();
     auto bottom_margin{ (is_bottom_pad) ? 0.16 : 0.12 };
@@ -1499,7 +1495,7 @@ void ModelPainter::PrintIconMainChainPad(
     ROOTHelper::SetPaveAttribute(text, 0, 0.2);
     ROOTHelper::SetFillAttribute(text, 1001, kAzure-7);
     ROOTHelper::SetTextAttribute(text, 80, 133, 22, 0.0, kYellow-10);
-    text->AddText((fsc + " #AA").data());
+    text->AddText(Form("%.2f #AA", resolution));
     pad->Update();
 }
 

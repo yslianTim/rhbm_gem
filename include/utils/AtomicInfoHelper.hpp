@@ -26,6 +26,8 @@ class AtomicInfoHelper
     static const std::unordered_map<std::string_view, Element> m_element_map;
     static const std::unordered_map<std::string_view, Remoteness> m_remoteness_map;
     static const std::unordered_map<std::string_view, Branch> m_branch_map;
+    static const std::unordered_map<std::string_view, Structure> m_structure_map;
+
     static const std::unordered_map<Residue, std::string> m_residue_label_map;
     static const std::unordered_map<Element, std::string> m_element_label_map;
     static const std::unordered_map<Remoteness, std::string> m_remoteness_label_map;
@@ -55,6 +57,7 @@ public:
     static Element GetElementFromString(const std::string & name);
     static Remoteness GetRemotenessFromString(const std::string & name);
     static Branch GetBranchFromString(const std::string & name);
+    static Structure GetStructureFromString(const std::string & name);
 
     static const std::string & GetLabel(Residue residue);
     static const std::string & GetLabel(Element element);

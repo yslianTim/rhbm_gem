@@ -58,7 +58,7 @@ private:
     void PrintWidthSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
 
-    void PrintIconMainChainPad(TPad * pad, TPaveText * text, const std::string & fsc, bool is_bottom_pad);
+    void PrintIconMainChainPad(TPad * pad, TPaveText * text, double resolution, bool is_bottom_pad);
     void PrintInfoMainChainPad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id, bool is_bottom_pad);
 
     void PrintTitlePad(TPad * pad, TPaveText * text, const std::string & title);

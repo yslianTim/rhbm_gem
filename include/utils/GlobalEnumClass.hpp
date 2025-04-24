@@ -45,8 +45,11 @@ enum class Branch : uint8_t
     UNK = UINT8_MAX
 };
 
+// Ref: https://mmcif.wwpdb.org/dictionaries/mmcif_ma.dic/Items/_struct_conf_type.id.html
 enum class Structure : uint8_t
 {
-    FREE = 0, HELIX = 1, SHEET = 2,
+    FREE = 0, BEND = 1, STRN = 2, OTHER = 3,
+    HELX_P = 10,
+    TURN_P = 100,
     UNK = UINT8_MAX
 };

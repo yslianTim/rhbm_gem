@@ -50,7 +50,7 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_
     {"THR", Residue::THR}, {"TRP", Residue::TRP}, {"TYR", Residue::TYR}, {"VAL", Residue::VAL},
     {"HOH", Residue::HOH}, {"NA",  Residue::NA},  {"MG",  Residue::MG},  {"CA",  Residue::CA},
     {"ZN",  Residue::ZN},  {"FE",  Residue::FE},  {"FE2", Residue::FE2}, {"CSX", Residue::CSX},
-    {"CL",  Residue::CL},  {"UNK", Residue::UNK}
+    {"CL",  Residue::CL}
 };
 
 const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
@@ -59,8 +59,7 @@ const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_
     {"C",  Element::CARBON},    {"N",  Element::NITROGEN},
     {"O",  Element::OXYGEN},    {"S",  Element::SULFUR},
     {"CA", Element::CALCIUM},   {"ZN", Element::ZINC},    {"NA", Element::SODIUM},
-    {"MG", Element::MAGNESIUM}, {"FE", Element::IRON},    {"CL", Element::CHLORINE},
-    {"UNK",Element::UNK}
+    {"MG", Element::MAGNESIUM}, {"FE", Element::IRON},    {"CL", Element::CHLORINE}
 };
 
 const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remoteness_map
@@ -70,13 +69,21 @@ const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remot
     {"Z", Remoteness::ZETA}, {"H", Remoteness::ETA},
     {"1", Remoteness::ONE},  {"2", Remoteness::TWO},   {"3", Remoteness::THREE},
     {"4", Remoteness::FOUR}, {"5", Remoteness::FIVE},
-    {"X", Remoteness::EXTRA},{"UNK",Remoteness::UNK}
+    {"X", Remoteness::EXTRA}
 };
 
 const std::unordered_map<std::string_view, Branch> AtomicInfoHelper::m_branch_map
 {
     {" ", Branch::NONE}, {"1", Branch::ONE}, {"2", Branch::TWO}, {"3", Branch::THREE},
-    {"T", Branch::TERMINAL}, {"UNK", Branch::UNK}
+    {"T", Branch::TERMINAL}
+};
+
+const std::unordered_map<std::string_view, Structure> AtomicInfoHelper::m_structure_map
+{
+    {" ", Structure::FREE}, {"BEND", Structure::BEND}, {"STRN", Structure::STRN},
+    {"OTHER", Structure::OTHER},
+    {"HELX_P", Structure::HELX_P},
+    {"TURN_P", Structure::TURN_P}
 };
 
 const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label_map
@@ -153,6 +160,7 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
 
 int AtomicInfoHelper::GetAtomicNumber(Element element)
 {
+    if (m_atomic_number_map.find(element) == m_atomic_number_map.end()) return 0;
     return m_atomic_number_map.at(element);
 }
 
@@ -209,22 +217,32 @@ bool AtomicInfoHelper::IsStandardResidue(Residue residue)
 
 Residue AtomicInfoHelper::GetResidueFromString(const std::string & name)
 {
+    if (m_residue_map.find(name) == m_residue_map.end()) return Residue::UNK;
     return m_residue_map.at(name);
 }
 
 Element AtomicInfoHelper::GetElementFromString(const std::string & name)
 {
+    if (m_element_map.find(name) == m_element_map.end()) return Element::UNK;
     return m_element_map.at(name);
 }
 
 Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)
 {
+    if (m_remoteness_map.find(name) == m_remoteness_map.end()) return Remoteness::UNK;
     return m_remoteness_map.at(name);
 }
 
 Branch AtomicInfoHelper::GetBranchFromString(const std::string & name)
 {
+    if (m_branch_map.find(name) == m_branch_map.end()) return Branch::UNK;
     return m_branch_map.at(name);
+}
+
+Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
+{
+    if (m_structure_map.find(name) == m_structure_map.end()) return Structure::UNK;
+    return m_structure_map.at(name);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Residue residue)
