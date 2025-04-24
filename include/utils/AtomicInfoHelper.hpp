@@ -4,7 +4,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include <tuple>
 #include <unordered_map>
 
 enum class Residue : uint16_t;

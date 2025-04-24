@@ -171,6 +171,7 @@ void CifFormat::BuildAtomObject(std::any atom_info, bool is_special_atom)
         atom_object->SetOccupancy(atom->occupancy);
         atom_object->SetTemperature(atom->B_iso_or_equiv);
         atom_object->SetSpecialAtomFlag(is_special_atom);
+        SetStructureInfo(atom_object.get());
         m_atom_object_list.emplace_back(std::move(atom_object));
     }
     catch (const std::bad_any_cast &)
@@ -182,18 +183,10 @@ void CifFormat::BuildAtomObject(std::any atom_info, bool is_special_atom)
 void CifFormat::SetStructureInfo(AtomObject * atom_object)
 {
     auto chain_id{ atom_object->GetChainID() };
-    auto residue_type{ atom_object->GetResidue() };
     auto residue_id{ atom_object->GetResidueID() };
-
     for (const auto & entry : m_struct_conf_list)
     {
-        auto residue_beg{ AtomicInfoHelper::GetResidueFromString(entry->beg_label_comp_id) };
-        auto residue_end{ AtomicInfoHelper::GetResidueFromString(entry->end_label_comp_id) };
-
-        if (chain_id == entry->beg_label_asym_id &&
-            chain_id == entry->end_label_asym_id &&
-            residue_type == residue_beg &&
-            residue_type == residue_end)
+        if (chain_id == entry->beg_label_asym_id || chain_id == entry->end_label_asym_id)
         {
             auto beg{ std::stoi(entry->beg_label_seq_id) };
             auto end{ std::stoi(entry->end_label_seq_id) };
@@ -205,7 +198,6 @@ void CifFormat::SetStructureInfo(AtomObject * atom_object)
             }
         }
     }
-
     atom_object->SetStructure(Structure::FREE);
 }
 
