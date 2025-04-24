@@ -1,6 +1,8 @@
 #include "CifFormat.hpp"
 #include "AtomObject.hpp"
 #include "StringHelper.hpp"
+#include "GlobalEnumClass.hpp"
+#include "AtomicInfoHelper.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -31,8 +33,8 @@ void CifFormat::PrintHeader(void) const
 
 void CifFormat::LoadDataArray(const std::string & filename)
 {
-    LoadAtomSiteData(filename);
     LoadStructConfData(filename);
+    LoadAtomSiteData(filename);
 }
 
 void CifFormat::LoadPdbxData(const std::string & filename)
@@ -138,23 +140,12 @@ void CifFormat::LoadStructConfData(const std::string & filename)
             auto entry{ std::make_unique<StructConf>() };
             entry->conf_type_id          = tok[idx.at("conf_type_id")];
             entry->id                    = tok[idx.at("id")];
-            entry->pdbx_PDB_helix_id     = tok[idx.at("pdbx_PDB_helix_id")];
             entry->beg_label_comp_id     = tok[idx.at("beg_label_comp_id")];
             entry->beg_label_asym_id     = tok[idx.at("beg_label_asym_id")];
             entry->beg_label_seq_id      = tok[idx.at("beg_label_seq_id")];
-            entry->pdbx_beg_PDB_ins_code = tok[idx.at("pdbx_beg_PDB_ins_code")];
             entry->end_label_comp_id     = tok[idx.at("end_label_comp_id")];
             entry->end_label_asym_id     = tok[idx.at("end_label_asym_id")];
             entry->end_label_seq_id      = tok[idx.at("end_label_seq_id")];
-            entry->pdbx_end_PDB_ins_code = tok[idx.at("pdbx_end_PDB_ins_code")];
-            entry->beg_auth_comp_id      = tok[idx.at("beg_auth_comp_id")];
-            entry->beg_auth_asym_id      = tok[idx.at("beg_auth_asym_id")];
-            entry->beg_auth_seq_id       = tok[idx.at("beg_auth_seq_id")];
-            entry->end_auth_comp_id      = tok[idx.at("end_auth_comp_id")];
-            entry->end_auth_asym_id      = tok[idx.at("end_auth_asym_id")];
-            entry->end_auth_seq_id       = tok[idx.at("end_auth_seq_id")];
-            entry->pdbx_PDB_helix_class  = tok[idx.at("pdbx_PDB_helix_class")];
-            entry->details               = tok[idx.at("details")];
             entry->pdbx_PDB_helix_length = std::stoi(tok[idx.at("pdbx_PDB_helix_length")]);
             m_struct_conf_list.emplace_back(std::move(entry));
         }
@@ -186,6 +177,36 @@ void CifFormat::BuildAtomObject(std::any atom_info, bool is_special_atom)
     {
         std::cout <<"Error: bad any cast in BuildAtomObject"<< std::endl;
     }
+}
+
+void CifFormat::SetStructureInfo(AtomObject * atom_object)
+{
+    auto chain_id{ atom_object->GetChainID() };
+    auto residue_type{ atom_object->GetResidue() };
+    auto residue_id{ atom_object->GetResidueID() };
+
+    for (const auto & entry : m_struct_conf_list)
+    {
+        auto residue_beg{ AtomicInfoHelper::GetResidueFromString(entry->beg_label_comp_id) };
+        auto residue_end{ AtomicInfoHelper::GetResidueFromString(entry->end_label_comp_id) };
+
+        if (chain_id == entry->beg_label_asym_id &&
+            chain_id == entry->end_label_asym_id &&
+            residue_type == residue_beg &&
+            residue_type == residue_end)
+        {
+            auto beg{ std::stoi(entry->beg_label_seq_id) };
+            auto end{ std::stoi(entry->end_label_seq_id) };
+            if (residue_id >= beg && residue_id <= end)
+            {
+                auto structure = AtomicInfoHelper::GetStructureFromString(entry->conf_type_id);
+                atom_object->SetStructure(structure);
+                return;
+            }
+        }
+    }
+
+    atom_object->SetStructure(Structure::FREE);
 }
 
 std::vector<std::unique_ptr<AtomObject>> CifFormat::GetAtomObjectList(void)

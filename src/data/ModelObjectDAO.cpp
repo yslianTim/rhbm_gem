@@ -30,7 +30,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     {
         throw std::runtime_error("ModelObjectDAO::Save() failed: object is not a ModelObject instance.");
     }
-    
+
     auto key_tag{ model_obj->GetKeyTag() };
     auto model_list_table_name{ "model_list" };
     auto atom_list_table_name{ "atom_list_in_" + key_tag };
@@ -162,7 +162,7 @@ void ModelObjectDAO::CreateAtomObjectListTable(const std::string & table_name)
             element_type INTEGER,
             remoteness_type INTEGER,
             branch_type INTEGER,
-            status INTEGER,
+            structure INTEGER,
             is_special_atom INTEGER,
             position_x DOUBLE,
             position_y DOUBLE,
@@ -238,7 +238,7 @@ void ModelObjectDAO::SaveAtomObjectList(
             serial_id, residue_id, chain_id, indicator,
             occupancy, temperature, residue_type,
             element_type, remoteness_type, branch_type,
-            status, is_special_atom,
+            structure, is_special_atom,
             position_x, position_y, position_z
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
@@ -393,7 +393,7 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             serial_id, residue_id, chain_id, indicator,
             occupancy, temperature, residue_type,
             element_type, remoteness_type, branch_type,
-            status, is_special_atom,
+            structure, is_special_atom,
             position_x, position_y, position_z
         )"<<" FROM "<< atom_list_table_name <<";";
     

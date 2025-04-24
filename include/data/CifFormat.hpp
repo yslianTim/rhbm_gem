@@ -38,23 +38,12 @@ class CifFormat : public ModelFileFormatBase
     {
         std::string conf_type_id;
         std::string id;
-        std::string pdbx_PDB_helix_id;
-        std::string beg_label_comp_id;
-        std::string beg_label_asym_id;
-        std::string beg_label_seq_id;
-        std::string pdbx_beg_PDB_ins_code;
+        std::string beg_label_comp_id; // residue type
+        std::string beg_label_asym_id; // chain ID
+        std::string beg_label_seq_id;  // residue ID
         std::string end_label_comp_id;
         std::string end_label_asym_id;
         std::string end_label_seq_id;
-        std::string pdbx_end_PDB_ins_code;
-        std::string beg_auth_comp_id;
-        std::string beg_auth_asym_id;
-        std::string beg_auth_seq_id;
-        std::string end_auth_comp_id;
-        std::string end_auth_asym_id;
-        std::string end_auth_seq_id;
-        std::string pdbx_PDB_helix_class;
-        std::string details;
         int         pdbx_PDB_helix_length;
     };
 
@@ -80,6 +69,8 @@ private:
     void LoadPdbxData(const std::string & filename);
     void LoadAtomSiteData(const std::string & filename);
     void LoadStructConfData(const std::string & filename);
+    void SetStructureInfo(AtomObject * atom_object);
+
     void ParseLoopBlock(std::ifstream & infile,
         const std::string & prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,
