@@ -12,13 +12,23 @@ struct SQLiteColumnReader
 {
 };
 
-// int specialization
+// int 32-bits specialization
 template<>
 struct SQLiteColumnReader<int>
 {
     static int Get(sqlite3_stmt * stmt, int index)
     {
         return sqlite3_column_int(stmt, index);
+    }
+};
+
+// int 64-bits specialization
+template<>
+struct SQLiteColumnReader<int64_t>
+{
+    static int64_t Get(sqlite3_stmt * stmt, int index)
+    {
+        return sqlite3_column_int64(stmt, index);
     }
 };
 

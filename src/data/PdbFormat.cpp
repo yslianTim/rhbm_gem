@@ -149,3 +149,13 @@ PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const
         return PDB_HEADER::UNK;
     }
 }
+
+double PdbFormat::GetResolution(void) const
+{
+    return std::stod(m_resolution);
+}
+
+std::string PdbFormat::GetResolutionMethod(void) const
+{
+    return m_resolution_method;
+}

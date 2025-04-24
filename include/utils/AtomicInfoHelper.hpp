@@ -15,23 +15,21 @@ enum class Structure : uint8_t;
 
 class AtomicInfoHelper
 {
-    inline static int m_standard_residue_count{ 20 };
-    inline static std::string m_element_class_key{ "element_class" };
-    inline static std::string m_residue_class_key{ "residue_class" };
+    static const std::vector<std::string> m_group_class_key_list;
     static const std::vector<Residue> m_standard_residue_list;
     static const std::vector<Element> m_standard_element_list;
     static const std::vector<Remoteness> m_standard_remoteness_list;
     static const std::vector<Branch> m_standard_branch_list;
 
     static const std::unordered_map<Element, int> m_atomic_number_map;
-    static const std::unordered_map<std::string_view, Residue> residue_map;
-    static const std::unordered_map<std::string_view, Element> element_map;
-    static const std::unordered_map<std::string_view, Remoteness> remoteness_map;
-    static const std::unordered_map<std::string_view, Branch> branch_map;
-    static const std::unordered_map<Residue, std::string> residue_label_map;
-    static const std::unordered_map<Element, std::string> element_label_map;
-    static const std::unordered_map<Remoteness, std::string> remoteness_label_map;
-    static const std::unordered_map<Branch, std::string> branch_label_map;
+    static const std::unordered_map<std::string_view, Residue> m_residue_map;
+    static const std::unordered_map<std::string_view, Element> m_element_map;
+    static const std::unordered_map<std::string_view, Remoteness> m_remoteness_map;
+    static const std::unordered_map<std::string_view, Branch> m_branch_map;
+    static const std::unordered_map<Residue, std::string> m_residue_label_map;
+    static const std::unordered_map<Element, std::string> m_element_label_map;
+    static const std::unordered_map<Remoteness, std::string> m_remoteness_label_map;
+    static const std::unordered_map<Branch, std::string> m_branch_label_map;
 
     static const std::unordered_map<Element, int> m_element_color_map;
     static const std::unordered_map<Residue, int> m_residue_color_map;
@@ -42,7 +40,9 @@ public:
     AtomicInfoHelper(void) = default;
     ~AtomicInfoHelper() = default;
     static int GetAtomicNumber(Element element);
-    static int GetStandardResidueCount(void);
+    static size_t GetGroupClassCount(void);
+    static size_t GetStandardResidueCount(void);
+    static const std::string & GetGroupClassKey(size_t class_id);
     static const std::string & GetElementClassKey(void);
     static const std::string & GetResidueClassKey(void);
     static const std::vector<Residue> & GetStandardResidueList(void);

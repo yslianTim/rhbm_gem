@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <memory>
 #include <vector>
 #include <unordered_map>
@@ -26,18 +25,16 @@ private:
     void CreateModelObjectListTable(const std::string & table_name);
     void CreateAtomObjectListTable(const std::string & table_name);
     void CreateAtomicPotentialEntryListTable(const std::string & table_name);
-    void CreateAtomicPotentialEntrySubListTable(const std::string & table_name, const std::string & class_key);
-    void CreateGroupPotentialEntryElementClassListTable(const std::string & table_name);
-    void CreateGroupPotentialEntryResidueClassListTable(const std::string & table_name);
+    void CreateAtomicPotentialEntrySubListTable(const std::string & table_name);
+    void CreateGroupPotentialEntryListTable(const std::string & table_name);
     void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
     void SaveAtomicPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
     void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
-    void SaveGroupPotentialEntryElementClassList(const GroupPotentialEntry * group_entry, const std::string & table_name);
-    void SaveGroupPotentialEntryResidueClassList(const GroupPotentialEntry * group_entry, const std::string & table_name);
+    void SaveGroupPotentialEntryList(const GroupPotentialEntry * group_entry, const std::string & table_name);
     std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & key_tag);
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> LoadAtomicPotentialEntryMap(const std::string & table_name);
     void LoadAtomicPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map);
-    void LoadGroupPotentialEntryElementClassList(ModelObject * model_obj, const std::string & table_name);
-    void LoadGroupPotentialEntryResidueClassList(ModelObject * model_obj, const std::string & table_name);
+    void LoadGroupPotentialEntryList(ModelObject * model_obj, const std::string & class_key, const std::string & table_name);
+    void LoadGroupPotentialEntrySubList(ModelObject * model_obj, const std::string & class_key);
     
 };

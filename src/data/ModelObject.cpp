@@ -4,6 +4,8 @@
 #include "GroupPotentialEntry.hpp"
 #include "ArrayStats.hpp"
 
+#include <iostream>
+
 ModelObject::ModelObject(void) :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr }
 {

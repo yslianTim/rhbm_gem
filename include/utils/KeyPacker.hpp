@@ -9,11 +9,10 @@ enum class Element : uint16_t;
 enum class Remoteness : uint8_t;
 enum class Branch : uint8_t;
 
-static_assert(std::is_same_v<std::underlying_type_t<Residue>, uint16_t>);
-static_assert(std::is_same_v<std::underlying_type_t<Element>, uint16_t>);
+static_assert(std::is_same_v<std::underlying_type_t<Residue>,    uint16_t>);
+static_assert(std::is_same_v<std::underlying_type_t<Element>,    uint16_t>);
 static_assert(std::is_same_v<std::underlying_type_t<Remoteness>, uint8_t>);
-static_assert(std::is_same_v<std::underlying_type_t<Branch>,    uint8_t>);
-
+static_assert(std::is_same_v<std::underlying_type_t<Branch>,     uint8_t>);
 
 struct KeyPackerElementClass
 {

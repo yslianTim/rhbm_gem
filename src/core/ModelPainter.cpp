@@ -1334,11 +1334,12 @@ void ModelPainter::PrintWidthPad(TPad * pad, TH2 * hist)
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (int i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
     {
-        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(static_cast<size_t>(i)) };
+        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(i) };
         auto label{ AtomicInfoHelper::GetLabel(residue) };
-        hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 12, -1, -1, label.data());
+        auto label_index{ static_cast<int>(i) + 2 };
+        hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
     }
 
     hist->SetStats(0);
@@ -1555,11 +1556,12 @@ void ModelPainter::PrintResultPad(TPad * pad, TH2 * hist, bool draw_x_axis)
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (int i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
     {
-        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(static_cast<size_t>(i)) };
+        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(i) };
         auto label{ AtomicInfoHelper::GetLabel(residue) };
-        hist->GetXaxis()->ChangeLabel(i+2, 90.0, -1, 12, -1, -1, label.data());
+        auto label_index{ static_cast<int>(i) + 2 };
+        hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
     }
 
     hist->SetStats(0);
