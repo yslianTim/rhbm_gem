@@ -548,7 +548,8 @@ void ModelObjectDAO::LoadGroupPotentialEntrySubList(
         for (auto & atom : model_obj->GetComponentsList())
         {
             if (atom->GetSelectedFlag() == false) continue;
-            auto group_key{ KeyPackerElementClass::Pack(atom->GetElement(), atom->GetRemoteness(), atom->GetSpecialAtomFlag()) };
+            auto group_key{ KeyPackerElementClass::Pack(
+                atom->GetElement(), atom->GetRemoteness(), atom->GetSpecialAtomFlag()) };
             group_entry->AddAtomObjectPtr(group_key, atom.get());
         }
     }
@@ -561,6 +562,20 @@ void ModelObjectDAO::LoadGroupPotentialEntrySubList(
                 KeyPackerResidueClass::Pack(
                     atom->GetResidue(), atom->GetElement(),
                     atom->GetRemoteness(), atom->GetBranch(), atom->GetSpecialAtomFlag())
+            };
+            group_entry->AddAtomObjectPtr(group_key, atom.get());
+        }
+    }
+    else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+    {
+        for (auto & atom : model_obj->GetComponentsList())
+        {
+            if (atom->GetSelectedFlag() == false) continue;
+            auto group_key{
+                KeyPackerStructureClass::Pack(
+                    atom->GetStructure(), atom->GetResidue(),
+                    atom->GetElement(), atom->GetRemoteness(),
+                    atom->GetBranch(), atom->GetSpecialAtomFlag())
             };
             group_entry->AddAtomObjectPtr(group_key, atom.get());
         }

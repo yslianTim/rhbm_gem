@@ -46,6 +46,7 @@ public:
     static const std::string & GetGroupClassKey(size_t class_id);
     static const std::string & GetElementClassKey(void);
     static const std::string & GetResidueClassKey(void);
+    static const std::string & GetStructureClassKey(void);
     static const std::vector<Residue> & GetStandardResidueList(void);
     static const std::vector<Element> & GetStandardElementList(void);
     static const std::vector<Remoteness> & GetStandardRemotenessList(void);

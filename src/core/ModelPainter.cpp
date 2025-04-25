@@ -1133,23 +1133,28 @@ void ModelPainter::PaintElementClassGroupGausToFSC(const std::string & name)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         graph[i] = ROOTHelper::CreateGraphErrors();
-        //BuildGausEstimateToFSCGraph(group_key, graph[i].get(), m_model_object_list);
-
+        auto count{ 0 };
+        for (auto model : m_model_object_list)
+        {
+            auto entry_iter{ std::make_unique<PotentialEntryIterator>(model) };
+            auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetElementClassKey()) };
+            graph[i]->SetPoint(count, model->GetResolution(), std::get<1>(gaus_estimate));
+            count++;
+        }
         for (int p = 0; p < graph[i]->GetN(); p++)
         {
             x_array.push_back(graph[i]->GetPointX(p));
             y_array.push_back(graph[i]->GetPointY(p));
         }
-
         ROOTHelper::SetMarkerAttribute(graph[i].get(), 20, 1.2f, color_element[i]);
         ROOTHelper::SetLineAttribute(graph[i].get(), 1, 2, color_element[i]);
     }
 
-    auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+    auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.1) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.3) };
+    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.1) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
 

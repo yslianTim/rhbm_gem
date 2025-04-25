@@ -133,6 +133,13 @@ void PotentialAnalysisVisitor::RunAtomClassification(
                 atom->GetElement(), atom->GetRemoteness(),
                 atom->GetSpecialAtomFlag());
         }
+        else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+        {
+            group_key = KeyPackerStructureClass::Pack(
+                atom->GetStructure(), atom->GetResidue(), atom->GetElement(),
+                atom->GetRemoteness(), atom->GetBranch(),
+                atom->GetSpecialAtomFlag());
+        }
         else
         {
             throw std::runtime_error("PotentialAnalysisVisitor::RunAtomClassification()"

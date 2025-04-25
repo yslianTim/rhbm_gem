@@ -6,7 +6,7 @@
 
 const std::vector<std::string> AtomicInfoHelper::m_group_class_key_list
 {
-    "element_class", "residue_class"
+    "element_class", "residue_class", "structure_class"
 };
 
 const std::vector<Residue> AtomicInfoHelper::m_standard_residue_list
@@ -57,7 +57,8 @@ const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_
 {
     {"H",  Element::HYDROGEN},
     {"C",  Element::CARBON},    {"N",  Element::NITROGEN},
-    {"O",  Element::OXYGEN},    {"S",  Element::SULFUR},
+    {"O",  Element::OXYGEN},    {"P",  Element::PHOSPHORUS},
+    {"S",  Element::SULFUR},
     {"CA", Element::CALCIUM},   {"ZN", Element::ZINC},    {"NA", Element::SODIUM},
     {"MG", Element::MAGNESIUM}, {"FE", Element::IRON},    {"CL", Element::CHLORINE}
 };
@@ -100,10 +101,11 @@ const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label
 
 const std::unordered_map<Element, std::string> AtomicInfoHelper::m_element_label_map
 {
-    {Element::HYDROGEN, "H"}, {Element::CARBON,    "C"}, {Element::NITROGEN,   "N"},
-    {Element::OXYGEN,   "O"}, {Element::SULFUR,    "S"}, {Element::CALCIUM,   "Ca"},
-    {Element::ZINC,    "Zn"}, {Element::SODIUM,   "Na"}, {Element::MAGNESIUM, "Mg"},
-    {Element::IRON,    "Fe"}, {Element::CHLORINE, "Cl"}, {Element::UNK,        "X"}
+    {Element::HYDROGEN, "H"}, {Element::CARBON,     "C"}, {Element::NITROGEN,   "N"},
+    {Element::OXYGEN,   "O"}, {Element::PHOSPHORUS, "P"},
+    {Element::SULFUR,   "S"}, {Element::CALCIUM,   "Ca"},
+    {Element::ZINC,    "Zn"}, {Element::SODIUM,    "Na"}, {Element::MAGNESIUM, "Mg"},
+    {Element::IRON,    "Fe"}, {Element::CHLORINE,  "Cl"}, {Element::UNK,        "X"}
 };
 
 const std::unordered_map<Remoteness, std::string> AtomicInfoHelper::m_remoteness_label_map
@@ -127,7 +129,8 @@ const std::unordered_map<Branch, std::string> AtomicInfoHelper::m_branch_label_m
 const std::unordered_map<Element, int> AtomicInfoHelper::m_element_color_map
 {
     {Element::HYDROGEN, 921}, {Element::CARBON,   633}, {Element::NITROGEN,  418},
-    {Element::OXYGEN,   862}, {Element::SULFUR,   619}, {Element::CALCIUM,     1},
+    {Element::OXYGEN,   862}, {Element::PHOSPHORUS, 2},
+    {Element::SULFUR,   619}, {Element::CALCIUM,    1},
     {Element::ZINC,       1}, {Element::SODIUM,     1}, {Element::MAGNESIUM,   1},
     {Element::IRON,       1}, {Element::CHLORINE,   1}, {Element::UNK,         1}
 };
@@ -143,10 +146,11 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_color_map
 
 const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
 {
-    {Element::HYDROGEN,  5}, {Element::CARBON,   53}, {Element::NITROGEN,  55},
-    {Element::OXYGEN,   59}, {Element::SULFUR,   27}, {Element::CALCIUM,   28},
-    {Element::ZINC,     30}, {Element::SODIUM,   31}, {Element::MAGNESIUM, 32},
-    {Element::IRON,     35}, {Element::CHLORINE, 36}, {Element::UNK,       37}
+    {Element::HYDROGEN,  5}, {Element::CARBON,    53}, {Element::NITROGEN,  55},
+    {Element::OXYGEN,   59}, {Element::PHOSPHORUS,44},
+    {Element::SULFUR,   27}, {Element::CALCIUM,   28},
+    {Element::ZINC,     30}, {Element::SODIUM,    31}, {Element::MAGNESIUM, 32},
+    {Element::IRON,     35}, {Element::CHLORINE,  36}, {Element::UNK,       37}
 };
 
 const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
@@ -176,6 +180,10 @@ size_t AtomicInfoHelper::GetStandardResidueCount(void)
 
 const std::string & AtomicInfoHelper::GetGroupClassKey(size_t class_id)
 {
+    if (class_id >= m_group_class_key_list.size())
+    {
+        throw std::out_of_range("class_id out of range");
+    }
     return m_group_class_key_list.at(class_id);
 }
 
@@ -187,6 +195,11 @@ const std::string & AtomicInfoHelper::GetElementClassKey(void)
 const std::string & AtomicInfoHelper::GetResidueClassKey(void)
 {
     return m_group_class_key_list.at(1);
+}
+
+const std::string & AtomicInfoHelper::GetStructureClassKey(void)
+{
+    return m_group_class_key_list.at(2);
 }
 
 const std::vector<Residue> & AtomicInfoHelper::GetStandardResidueList(void)
