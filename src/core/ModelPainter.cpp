@@ -76,10 +76,10 @@ void ModelPainter::Painting(void)
         PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ model_object->GetPdbID() +".pdf");
     }
 
-    if (m_ref_model_object_map.find("buried_charge") != m_ref_model_object_map.end())
+    if (m_ref_model_object_map.find("with_charge") != m_ref_model_object_map.end())
     {
-        auto sim_buried_charge_model_object{ m_ref_model_object_map.at("buried_charge") };
-        for (auto model_object : sim_buried_charge_model_object)
+        auto sim_with_charge_model_object{ m_ref_model_object_map.at("with_charge") };
+        for (auto model_object : sim_with_charge_model_object)
         {
             auto plot_main_chain_name{ "residue_class_group_gaus_main_"+ model_object->GetKeyTag() +".pdf" };
             PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name, true);
