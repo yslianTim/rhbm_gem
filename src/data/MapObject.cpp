@@ -191,6 +191,11 @@ std::array<int, 3> MapObject::GetIndexFromPosition(const std::array<float, 3> & 
         static_cast<int>(std::floor(z))};
 }
 
+float MapObject::GetMapValue(size_t global_index) const
+{
+    return m_map_value_array[global_index];
+}
+
 float MapObject::GetMapValue(int index_x, int index_y, int index_z) const
 {
     try

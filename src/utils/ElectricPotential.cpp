@@ -2,6 +2,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
 
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <cmath>
@@ -13,7 +14,6 @@
 const std::unordered_map<Element, std::array<double, 5>> ElectricPotential::a_neutral_par_map
 {
     {Element::HYDROGEN, {   0.0088,   0.0449,   0.1481,   0.2356,   0.0914 }}, // s up to 6.0 A^-1
-    //{Element::HYDROGEN, {   0.0349,   0.1201,   0.1970,   0.0573,   0.1195 }}, // s up to 2.0 A^-1
     {Element::CARBON,   {   0.0489,   0.2091,   0.7537,   1.1420,   0.3555 }},
     {Element::NITROGEN, {   0.0267,   0.1328,   0.5301,   1.1020,   0.4215 }},
     {Element::OXYGEN,   {   0.0365,   0.1729,   0.5805,   0.8814,   0.3121 }},
@@ -28,7 +28,6 @@ const std::unordered_map<Element, std::array<double, 5>> ElectricPotential::a_ne
 const std::unordered_map<Element, std::array<double, 5>> ElectricPotential::b_neutral_par_map
 {
     {Element::HYDROGEN, {   0.1152,   1.0867,   4.9755,  16.5591,  43.2743 }}, // s up to 6.0 A^-1
-    //{Element::HYDROGEN, {   0.5347,   3.5867,  12.3471,  18.9525,  38.6269 }}, // s up to 2.0 A^-1
     {Element::CARBON,   {   0.1140,   1.0825,   5.4281,  17.8811,  51.1341 }},
     {Element::NITROGEN, {   0.0541,   0.5165,   2.8207,  10.6297,  34.3764 }},
     {Element::OXYGEN,   {   0.0652,   0.6184,   2.9449,   9.6298,  28.2194 }},
@@ -131,6 +130,7 @@ double ElectricPotential::GetPotentialValue(
         case ModelChoice::FIVE_GAUS_CHARGE:
             return CalculateFiveGausChargeModel(element, distance, charge);
         default:
+            std::cout << "ElectricPotential::GetPotentialValue: ModelChoice not set" << std::endl;
             return 0.0;
     }
 }
@@ -140,9 +140,33 @@ const std::array<double, 5> & ElectricPotential::GetModelParameterAList(
 {
     switch(delta_z)
     {
-        case  0: return a_neutral_par_map.at(element);
-        case  1: return a_positive_par_map.at(element);
-        case -1: return a_negative_par_map.at(element);
+        case  0:
+            if (a_neutral_par_map.find(element) == a_neutral_par_map.end())
+            {
+                throw std::out_of_range(
+                    "ElectricPotential::GetModelParameterAList element not found "
+                    + std::to_string(static_cast<int>(element))
+                );
+            }
+            return a_neutral_par_map.at(element);
+        case  1:
+            if (a_positive_par_map.find(element) == a_positive_par_map.end())
+            {
+                throw std::out_of_range(
+                    "ElectricPotential::GetModelParameterAList element not found "
+                    + std::to_string(static_cast<int>(element))
+                );
+            }
+            return a_positive_par_map.at(element);
+        case -1:
+            if (a_negative_par_map.find(element) == a_negative_par_map.end())
+            {
+                throw std::out_of_range(
+                    "ElectricPotential::GetModelParameterAList element not found "
+                    + std::to_string(static_cast<int>(element))
+                );
+            }
+            return a_negative_par_map.at(element);
         default:
             throw std::out_of_range(
                 "ElectricPotential::GetModelParameterAList delta_z out of range "
@@ -156,9 +180,33 @@ const std::array<double, 5> & ElectricPotential::GetModelParameterBList(
 {
     switch(delta_z)
     {
-        case  0: return b_neutral_par_map.at(element);
-        case  1: return b_positive_par_map.at(element);
-        case -1: return b_negative_par_map.at(element);
+        case  0:
+            if (b_neutral_par_map.find(element) == b_neutral_par_map.end())
+            {
+                throw std::out_of_range(
+                    "ElectricPotential::GetModelParameterBList element not found "
+                    + std::to_string(static_cast<int>(element))
+                );
+            }
+            return b_neutral_par_map.at(element);
+        case  1:
+            if (b_positive_par_map.find(element) == b_positive_par_map.end())
+            {
+                throw std::out_of_range(
+                    "ElectricPotential::GetModelParameterBList element not found "
+                    + std::to_string(static_cast<int>(element))
+                );
+            }
+            return b_positive_par_map.at(element);
+        case -1:
+            if (b_negative_par_map.find(element) == b_negative_par_map.end())
+            {
+                throw std::out_of_range(
+                    "ElectricPotential::GetModelParameterBList element not found "
+                    + std::to_string(static_cast<int>(element))
+                );
+            }
+            return b_negative_par_map.at(element);
         default:
             throw std::out_of_range(
                 "ElectricPotential::GetModelParameterBList delta_z out of range "

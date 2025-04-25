@@ -18,7 +18,7 @@ class MapSimulationVisitor : public DataObjectVisitorBase
     int m_partial_charge_choice;
     double m_cutoff_distance;
     float m_grid_spacing;
-    std::string m_model_key_tag, m_folder_path;
+    std::string m_model_key_tag, m_folder_path, m_pdb_id;
     std::vector<double> m_blurring_width_list;
     AtomSelector * m_atom_selector;
     std::vector<AtomObject *> m_selected_atom_list;
@@ -42,6 +42,7 @@ public:
 
 private:
     std::unique_ptr<MapObject> CreateSimulatedMapObject(double blurring_width);
-    std::array<int, 3> CalculateGridSize(const std::array<float, 3> & grid_spacing, const std::array<float, 3> & origin);
+    std::array<int, 3> CalculateGridSize(
+        const std::array<float, 3> & grid_spacing, const std::array<float, 3> & origin);
 
 };

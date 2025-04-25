@@ -48,8 +48,14 @@ enum class Branch : uint8_t
 // Ref: https://mmcif.wwpdb.org/dictionaries/mmcif_ma.dic/Items/_struct_conf_type.id.html
 enum class Structure : uint8_t
 {
-    FREE = 0, BEND = 1, STRN = 2, OTHER = 3,
+    FREE = 0, BEND = 1,
+    /* beta-sheet */
+    STRN = 2,
+    OTHER = 9,
+    /* 10 - 99 for alpha-helix */
     HELX_P = 10,
+
+    /* 100 - 199 for turn */
     TURN_P = 100,
     UNK = UINT8_MAX
 };

@@ -43,6 +43,7 @@ public:
     std::array<int, 3> GetGridIndex(size_t global_index) const;
     std::array<float, 3> GetGridPosition(size_t global_index) const;
     size_t GetGlobalIndex(int index_x, int index_y, int index_z) const;
+    float GetMapValue(size_t global_index) const;
     float GetMapValue(int index_x, int index_y, int index_z) const;
     float GetMapValueMean(void) const { return m_map_value_mean; }
     float GetMapValueMin(void) const { return m_map_value_min; }

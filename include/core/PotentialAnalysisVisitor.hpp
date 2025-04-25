@@ -29,15 +29,16 @@ public:
     void VisitMapObject(MapObject * data_object) override;
     void Analysis(DataObjectManager * data_manager) override;
 
-    void SetThreadSize(unsigned int thread_size) { m_thread_size = thread_size; }
+    void SetThreadSize(unsigned int thread_size);
     void SetFitRange(double x_min, double x_max);
-    void SetAlphaR(double alpha_r) { m_alpha_r = alpha_r; }
-    void SetAlphaG(double alpha_g) { m_alpha_g = alpha_g; }
-    void SetMapObjectKeyTag(const std::string & value) { m_map_key_tag = value; }
-    void SetModelObjectKeyTag(const std::string & value) { m_model_key_tag = value; }
+    void SetAlphaR(double alpha_r);
+    void SetAlphaG(double alpha_g);
+    void SetMapObjectKeyTag(const std::string & value);
+    void SetModelObjectKeyTag(const std::string & value);
 
 private:
     void RunAtomClassification(const std::string & class_key, ModelObject * model_object);
     void RunPotentialFitting(const std::string & class_key, ModelObject * model_object);
-
+    void RunMapValueDumping(MapObject * map_object); // For test, to be move to other place
+    void RunAtomPositionDumping(void); // For test, to be move to other place
 };
