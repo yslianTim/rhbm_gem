@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 
 #ifndef UINT16_MAX
 #define UINT16_MAX 65535

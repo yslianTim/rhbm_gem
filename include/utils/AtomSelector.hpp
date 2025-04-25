@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <string>
-#include <set>
+#include <unordered_set>
 
 enum class Residue : uint16_t;
 enum class Element : uint16_t;
@@ -11,12 +11,12 @@ enum class Branch : uint8_t;
 
 class AtomSelector
 {
-    std::set<std::string> veto_chain_set, pick_chain_set;
-    std::set<std::string> veto_indicator_set, pick_indicator_set;
-    std::set<Residue> veto_residue_set, pick_residue_set;
-    std::set<Element> veto_element_set, pick_element_set;
-    std::set<Remoteness> veto_remoteness_set, pick_remoteness_set;
-    std::set<Branch> veto_branch_set, pick_branch_set;
+    std::unordered_set<std::string> veto_chain_set, pick_chain_set;
+    std::unordered_set<std::string> veto_indicator_set, pick_indicator_set;
+    std::unordered_set<Residue> veto_residue_set, pick_residue_set;
+    std::unordered_set<Element> veto_element_set, pick_element_set;
+    std::unordered_set<Remoteness> veto_remoteness_set, pick_remoteness_set;
+    std::unordered_set<Branch> veto_branch_set, pick_branch_set;
 
 public:
     AtomSelector(void);
