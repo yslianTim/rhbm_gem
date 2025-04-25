@@ -5,15 +5,6 @@
 #include <iostream>
 #include <stdexcept>
 
-const std::unordered_map<Residue, size_t> AminoAcidInfoHelper::m_atom_count_map
-{
-    {Residue::ALA,  5}, {Residue::ARG, 11}, {Residue::ASN,  8}, {Residue::ASP,  8},
-    {Residue::CYS,  6}, {Residue::GLN,  9}, {Residue::GLU,  9}, {Residue::GLY,  4},
-    {Residue::HIS, 10}, {Residue::ILE,  8}, {Residue::LEU,  8}, {Residue::LYS,  9},
-    {Residue::MET,  8}, {Residue::PHE, 11}, {Residue::PRO,  7}, {Residue::SER,  6},
-    {Residue::THR,  7}, {Residue::TRP, 14}, {Residue::TYR, 12}, {Residue::VAL,  7}
-};
-
 const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_element_map
 {
     {Residue::ALA, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
@@ -82,7 +73,10 @@ const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_e
                     Element::CARBON, Element::CARBON, Element::CARBON, Element::OXYGEN}},
 
     {Residue::VAL, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
-                    Element::CARBON, Element::CARBON, Element::CARBON}}
+                    Element::CARBON, Element::CARBON, Element::CARBON}},
+
+    {Residue::CSX, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
+                    Element::CARBON, Element::SULFUR, Element::OXYGEN}}
 };
 
 const std::unordered_map<Residue, std::vector<Remoteness>> AminoAcidInfoHelper::m_remoteness_map
@@ -153,7 +147,10 @@ const std::unordered_map<Residue, std::vector<Remoteness>> AminoAcidInfoHelper::
                     Remoteness::EPSILON, Remoteness::EPSILON, Remoteness::ZETA, Remoteness::ETA}},
 
     {Residue::VAL, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::GAMMA}}
+                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::GAMMA}},
+
+    {Residue::CSX, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
+                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA}}
 };
 
 const std::unordered_map<Residue, std::vector<Branch>> AminoAcidInfoHelper::m_branch_map
@@ -224,11 +221,15 @@ const std::unordered_map<Residue, std::vector<Branch>> AminoAcidInfoHelper::m_br
                     Branch::ONE, Branch::TWO, Branch::NONE, Branch::NONE}},
 
     {Residue::VAL, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::ONE, Branch::TWO}}
+                    Branch::NONE, Branch::ONE, Branch::TWO}},
+    
+    {Residue::CSX, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
+                    Branch::NONE, Branch::NONE, Branch::NONE}}
 };
 
 const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_buried_partial_charge_map
 {
+    //               C      CA     N      O      CB
     {Residue::ALA, { 0.560, 0.267,-0.592,-0.673,-0.392}},
     {Residue::ARG, { 0.558, 0.240,-0.590,-0.658,-0.215,-0.190, 0.116,-0.604, 0.901,-0.908,-0.906}},
     {Residue::ASN, { 0.561, 0.244,-0.585,-0.664,-0.238, 0.673,-0.659,-0.872}},
@@ -248,21 +249,49 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_bu
     {Residue::THR, { 0.565, 0.169,-0.573,-0.659, 0.232,-0.494,-0.413}},
     {Residue::TRP, { 0.565, 0.233,-0.589,-0.669,-0.133,-0.175,-0.083, 0.013,-0.310, 0.195,-0.230,-0.268,-0.213,-0.190}},
     {Residue::TYR, { 0.561, 0.235,-0.586,-0.662,-0.148,-0.044,-0.182,-0.182,-0.334,-0.345, 0.403,-0.568}},
-    {Residue::VAL, { 0.560, 0.215,-0.588,-0.661,-0.005,-0.362,-0.360}}
+    {Residue::VAL, { 0.560, 0.215,-0.588,-0.661,-0.005,-0.362,-0.360}},
+    {Residue::CSX, { 0.574, 0.186,-0.558,-0.694, 0.096,-0.285, 0.000}}
+};
+
+const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_helix_partial_charge_map
+{
+    //               C      CA     N      O      CB
+    {Residue::ALA, { 0.559, 0.272,-0.598,-0.701,-0.400}},
+    {Residue::ARG, { 0.560, 0.243,-0.595,-0.682,-0.224,-0.193, 0.113,-0.596, 0.902,-0.909,-0.911}},
+    {Residue::ASN, { 0.559, 0.243,-0.589,-0.693,-0.247, 0.680,-0.659,-0.877}},
+    {Residue::ASP, { 0.573, 0.246,-0.574,-0.698,-0.285, 0.713,-0.777,-0.782}},
+    {Residue::CYS, { 0.571, 0.188,-0.577,-0.718, 0.086,-0.285}},
+    {Residue::GLN, { 0.565, 0.236,-0.587,-0.687,-0.221,-0.193, 0.667,-0.646,-0.885}},
+    {Residue::GLU, { 0.569, 0.236,-0.584,-0.705,-0.214,-0.224, 0.694,-0.777,-0.771}},
+    {Residue::GLY, { 0.575, 0.119,-0.575,-0.706}},
+    {Residue::HIS, { 0.571, 0.235,-0.589,-0.690,-0.167, 0.032,-0.280,-0.185,-0.015,-0.236}},
+    {Residue::ILE, { 0.562, 0.217,-0.601,-0.698,-0.039,-0.153,-0.360,-0.331}},
+    {Residue::LEU, { 0.558, 0.245,-0.600,-0.699,-0.245, 0.047,-0.359,-0.362}},
+    {Residue::LYS, { 0.560, 0.242,-0.592,-0.683,-0.224,-0.166,-0.192, 0.038,-0.402}},
+    {Residue::MET, { 0.559, 0.249,-0.602,-0.706,-0.283, 0.072,-0.155,-0.071}},
+    {Residue::PHE, { 0.569, 0.239,-0.603,-0.688,-0.171, 0.011,-0.204,-0.204,-0.181,-0.181,-0.185}},
+    {Residue::PRO, { 0.555, 0.166,-0.343,-0.727,-0.207,-0.165, 0.021}}, // same as buried charge
+    {Residue::SER, { 0.562, 0.197,-0.595,-0.698, 0.071,-0.501}},
+    {Residue::THR, { 0.563, 0.173,-0.589,-0.690, 0.225,-0.506,-0.410}},
+    {Residue::TRP, { 0.568, 0.234,-0.602,-0.697,-0.142,-0.171,-0.085, 0.018,-0.410, 0.197,-0.225,-0.269,-0.213,-0.188}},
+    {Residue::TYR, { 0.573, 0.238,-0.599,-0.690,-0.165,-0.037,-0.181,-0.182,-0.335,-0.349, 0.401,-0.565}},
+    {Residue::VAL, { 0.559, 0.220,-0.602,-0.695,-0.013,-0.362,-0.362}},
+    {Residue::CSX, { 0.571, 0.188,-0.577,-0.718, 0.086,-0.285, 0.000}}
 };
 
 size_t AminoAcidInfoHelper::GetAtomCount(Residue residue)
 {
-    return m_atom_count_map.at(residue);
+    return m_element_map.at(residue).size();
 }
 
 size_t AminoAcidInfoHelper::GetAtomCount(int residue)
 {
-    return m_atom_count_map.at(static_cast<Residue>(residue));
+    return m_element_map.at(static_cast<Residue>(residue)).size();
 }
 
 double AminoAcidInfoHelper::GetPartialCharge(
-    Residue residue, Element element, Remoteness remoteness, Branch branch, bool verbose)
+    Residue residue, Element element, Remoteness remoteness, Branch branch,
+    Structure structure, bool verbose)
 {
     using Key = std::uint32_t; // packed <Element, Remoteness, Branch>
     auto pack_key = [](Element e, Remoteness r, Branch b) noexcept -> Key
@@ -280,11 +309,11 @@ double AminoAcidInfoHelper::GetPartialCharge(
     {
         if (residue_cache.empty()) // first request for this residue
         {
-            auto atom_size{ m_atom_count_map.at(residue) };
+            auto atom_size{ m_element_map.at(residue).size() };
             const auto & element_list{ m_element_map.at(residue) };
             const auto & remoteness_list{ m_remoteness_map.at(residue) };
             const auto & branch_list{ m_branch_map.at(residue) };
-            const auto & charge_list{ m_buried_partial_charge_map.at(residue) };
+            const auto & charge_list{ GetPartialChargeList(residue, structure) };
 
             // the four vectors should guaranteed aligned
             if (atom_size != element_list.size() ||
@@ -311,11 +340,29 @@ double AminoAcidInfoHelper::GetPartialCharge(
     }
     
     const Key key{ pack_key(element, remoteness, branch) };
-    const auto it{ residue_cache.find(key) };
-    if (it != residue_cache.end())
+    if (residue_cache.find(key) != residue_cache.end())
     {
-        return it->second;
+        return residue_cache.at(key);
     }
 
+    if (verbose == true) std::cout << "No partial charge data for this atom." << std::endl;
     return 0.0;
+}
+
+const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeList(
+    Residue residue, Structure structure)
+{
+    if (structure == Structure::FREE)
+    {
+        return m_buried_partial_charge_map.at(residue);
+    }
+    else if (structure >= Structure::HELX_P && structure < Structure::TURN_P)
+    {
+        return m_helix_partial_charge_map.at(residue);
+    }
+    else
+    {
+        throw std::out_of_range(
+            "AminoAcidInfoHelper::GetPartialChargeList ‑ structure is not supported");
+    }
 }

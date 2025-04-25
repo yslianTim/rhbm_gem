@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 
 #ifndef UINT16_MAX
 #define UINT16_MAX 65535
@@ -25,7 +26,7 @@ enum class Residue : uint16_t
 enum class Element : uint16_t
 {
     HYDROGEN = 1, CARBON = 6, NITROGEN = 7, OXYGEN = 8,
-    SODIUM = 11, MAGNESIUM = 12, SULFUR = 16, CHLORINE = 17,
+    SODIUM = 11, MAGNESIUM = 12, PHOSPHORUS = 15, SULFUR = 16, CHLORINE = 17,
     CALCIUM = 20, IRON = 26, ZINC = 30,
     UNK = UINT16_MAX
 };
@@ -45,8 +46,17 @@ enum class Branch : uint8_t
     UNK = UINT8_MAX
 };
 
+// Ref: https://mmcif.wwpdb.org/dictionaries/mmcif_ma.dic/Items/_struct_conf_type.id.html
 enum class Structure : uint8_t
 {
-    FREE = 0, HELIX = 1, SHEET = 2,
+    FREE = 0, BEND = 1,
+    /* beta-sheet */
+    STRN = 2,
+    OTHER = 9,
+    /* 10 - 99 for alpha-helix */
+    HELX_P = 10,
+
+    /* 100 - 199 for turn */
+    TURN_P = 100,
     UNK = UINT8_MAX
 };

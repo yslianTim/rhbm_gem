@@ -1,6 +1,8 @@
 #include "SphereSampler.hpp"
 #include <Eigen/Dense>
 
+#include <iostream>
+
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif

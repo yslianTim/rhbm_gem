@@ -3,8 +3,11 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
 #include <unordered_map>
 #include "ModelFileFormatBase.hpp"
+
+enum class Element : uint16_t;
 
 class CifFormat : public ModelFileFormatBase
 {
@@ -33,9 +36,24 @@ class CifFormat : public ModelFileFormatBase
         int pdbx_PDB_model_num;
     };
 
+    struct StructConf
+    {
+        std::string conf_type_id;
+        std::string id;
+        std::string beg_label_comp_id; // residue type
+        std::string beg_label_asym_id; // chain ID
+        std::string beg_label_seq_id;  // residue ID
+        std::string end_label_comp_id;
+        std::string end_label_asym_id;
+        std::string end_label_seq_id;
+        int pdbx_PDB_helix_length;
+    };
+
     std::string m_map_id, m_model_id;
     std::string m_resolution, m_resolution_method;
     std::vector<std::unique_ptr<AtomObject>> m_atom_object_list;
+    std::vector<std::unique_ptr<StructConf>> m_struct_conf_list;
+    std::vector<Element> m_element_type_list;
 
 public:
     CifFormat(void);
@@ -52,6 +70,14 @@ public:
 
 private:
     void LoadPdbxData(const std::string & filename);
+    void LoadElementTypeList(const std::string & filename);
     void LoadAtomSiteData(const std::string & filename);
+    void LoadStructConfData(const std::string & filename);
+    void SetStructureInfo(AtomObject * atom_object);
+
+    void ParseLoopBlock(std::ifstream & infile,
+        const std::string & prefix,
+        const std::function<void(const std::unordered_map<std::string, size_t> &,
+                                 const std::vector<std::string> &)> & row_handler);
 
 };

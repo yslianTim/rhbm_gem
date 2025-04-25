@@ -5,8 +5,6 @@
 #undef __ARM_NEON__
 #endif
 
-#include <iostream>
-#include <memory>
 #include <array>
 #include <vector>
 #include <tuple>

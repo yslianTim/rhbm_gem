@@ -66,7 +66,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetFolderPath(m_global_options.folder_path);
         command->SetModelKeyTagList(m_potential_display_options.model_key_tag_list);
         command->SetRefModelKeyTagList("no_charge", m_potential_display_options.sim_no_charge_key_tag_list);
-        command->SetRefModelKeyTagList("buried_charge", m_potential_display_options.sim_buried_charge_key_tag_list);
+        command->SetRefModelKeyTagList("with_charge", m_potential_display_options.sim_with_charge_key_tag_list);
         return command;
     }
     else if (m_cli_app->got_subcommand(m_map_simulation_cmd))
@@ -202,11 +202,11 @@ void Application::RegisterPotentialAnalysisCommand(void)
 
 void Application::RegisterPotentialDisplayCommand(void)
 {
-    std::string default_sim_buried_charge_keylist{
-        "sim_6z6u_bw005_no_H_buried_charge,sim_6z6u_bw015_no_H_buried_charge,sim_6z6u_bw025_no_H_buried_charge,sim_6z6u_bw035_no_H_buried_charge,sim_6z6u_bw045_no_H_buried_charge,sim_6z6u_bw055_no_H_buried_charge,sim_6z6u_bw065_no_H_buried_charge,sim_6z6u_bw075_no_H_buried_charge,sim_6z6u_bw085_no_H_buried_charge,sim_6z6u_bw095_no_H_buried_charge"
+    std::string default_sim_with_charge_keylist{
+        "sim1_bw005,sim1_bw015,sim1_bw025,sim1_bw035,sim1_bw045,sim1_bw055,sim1_bw065,sim1_bw075,sim1_bw085,sim1_bw095"
     };
     std::string default_sim_no_charge_keylist{
-        "sim_6z6u_bw005_no_H_no_charge,sim_6z6u_bw015_no_H_no_charge,sim_6z6u_bw025_no_H_no_charge,sim_6z6u_bw035_no_H_no_charge,sim_6z6u_bw045_no_H_no_charge,sim_6z6u_bw055_no_H_no_charge,sim_6z6u_bw065_no_H_no_charge,sim_6z6u_bw075_no_H_no_charge,sim_6z6u_bw085_no_H_no_charge,sim_6z6u_bw095_no_H_no_charge"
+        "sim0_bw005,sim0_bw015,sim0_bw025,sim0_bw035,sim0_bw045,sim0_bw055,sim0_bw065,sim0_bw075,sim0_bw085,sim0_bw095"
     };
     m_potential_display_cmd = m_cli_app->add_subcommand("potential_display", "Run potential display");
     m_potential_display_cmd->add_option(
@@ -217,9 +217,9 @@ void Application::RegisterPotentialDisplayCommand(void)
         "List of simulated (no charge) model key tag to be display")
         ->default_val(default_sim_no_charge_keylist.data());
     m_potential_display_cmd->add_option(
-        "--sim-buried-charge-keylist", m_potential_display_options.sim_buried_charge_key_tag_list,
-        "List of simulated (buried charge) model key tag to be display")
-        ->default_val(default_sim_buried_charge_keylist.data());
+        "--sim-with-charge-keylist", m_potential_display_options.sim_with_charge_key_tag_list,
+        "List of simulated (with charge) model key tag to be display")
+        ->default_val(default_sim_with_charge_keylist.data());
     m_potential_display_cmd->add_option(
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");

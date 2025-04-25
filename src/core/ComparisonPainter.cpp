@@ -57,24 +57,24 @@ void ComparisonPainter::Painting(void)
     std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
     std::cout <<"  Number of reference types to be painted: "<< m_ref_model_object_list_map.size() << std::endl;
 
-    if (m_ref_model_object_list_map.find("buried_charge") != m_ref_model_object_list_map.end())
+    if (m_ref_model_object_list_map.find("with_charge") != m_ref_model_object_list_map.end())
     {
-        auto sim_buried_charge_model_object_list{ m_ref_model_object_list_map.at("buried_charge") };
+        auto sim_with_charge_model_object_list{ m_ref_model_object_list_map.at("with_charge") };
 
-        if (m_model_object_list.size() != 0 && m_ref_model_object_list_map.size() == 2 && sim_buried_charge_model_object_list.size() > 1)
+        if (m_model_object_list.size() != 0 && m_ref_model_object_list_map.size() == 2 && sim_with_charge_model_object_list.size() > 1)
         {
             PaintSimulationGaus("figure_3_a.pdf");
             PaintGausEstimateComparison("figure_3_b.pdf");
         }
         
-        if (sim_buried_charge_model_object_list.size() > 1)
+        if (sim_with_charge_model_object_list.size() > 1)
         {
-            PaintSimulationGausRatio("figure_2_c.pdf", sim_buried_charge_model_object_list);
+            PaintSimulationGausRatio("figure_2_c.pdf", sim_with_charge_model_object_list);
         }
 
-        if (m_model_object_list.size() == 1 && sim_buried_charge_model_object_list.size() == 1)
+        if (m_model_object_list.size() == 1 && sim_with_charge_model_object_list.size() == 1)
         {
-            PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_buried_charge_model_object_list.at(0));
+            PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_with_charge_model_object_list.at(0));
         }
     }
 }
@@ -84,7 +84,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
     auto file_path{ m_folder_path + name };
     std::cout <<"- ComparisonPainter::PaintSimulationGaus"<< std::endl;
 
-    auto sim_buried_charge_model_object_list{ m_ref_model_object_list_map.at("buried_charge")};
+    auto sim_with_charge_model_object_list{ m_ref_model_object_list_map.at("with_charge")};
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
 
     #ifdef HAVE_ROOT
@@ -113,7 +113,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
     };
     short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
 
-    std::unique_ptr<TGraphErrors> sim_buried_charge_graph[primary_element_size][row_size];
+    std::unique_ptr<TGraphErrors> sim_with_charge_graph[primary_element_size][row_size];
     std::unique_ptr<TGraphErrors> sim_no_charge_graph[primary_element_size][row_size];
     std::vector<double> x_array, y_array[row_size];
     for (size_t i = 0; i < primary_element_size; i++)
@@ -121,17 +121,17 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         for (size_t j = 0; j < row_size; j++)
         {
-            sim_buried_charge_graph[i][j] = ROOTHelper::CreateGraphErrors();
+            sim_with_charge_graph[i][j] = ROOTHelper::CreateGraphErrors();
             sim_no_charge_graph[i][j] = ROOTHelper::CreateGraphErrors();
 
             int reverse_index{ row_size - static_cast<int>(j) - 1 };
-            BuildGausEstimateToBlurringWidthGraph(group_key, sim_buried_charge_graph[i][j].get(), sim_buried_charge_model_object_list, reverse_index);
+            BuildGausEstimateToBlurringWidthGraph(group_key, sim_with_charge_graph[i][j].get(), sim_with_charge_model_object_list, reverse_index);
             BuildGausEstimateToBlurringWidthGraph(group_key, sim_no_charge_graph[i][j].get(), sim_no_charge_model_object_list, reverse_index);
 
-            for (int p = 0; p < sim_buried_charge_graph[i][j]->GetN(); p++)
+            for (int p = 0; p < sim_with_charge_graph[i][j]->GetN(); p++)
             {
-                x_array.push_back(sim_buried_charge_graph[i][j]->GetPointX(p));
-                y_array[j].push_back(sim_buried_charge_graph[i][j]->GetPointY(p));
+                x_array.push_back(sim_with_charge_graph[i][j]->GetPointX(p));
+                y_array[j].push_back(sim_with_charge_graph[i][j]->GetPointY(p));
             }
             for (int p = 0; p < sim_no_charge_graph[i][j]->GetN(); p++)
             {
@@ -139,9 +139,9 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
                 y_array[j].push_back(sim_no_charge_graph[i][j]->GetPointY(p));
             }
 
-            ROOTHelper::SetMarkerAttribute(sim_buried_charge_graph[i][j].get(), 20, 1.2f, color_element[i]);
+            ROOTHelper::SetMarkerAttribute(sim_with_charge_graph[i][j].get(), 20, 1.2f, color_element[i]);
             ROOTHelper::SetMarkerAttribute(sim_no_charge_graph[i][j].get(), 53, 1.2f, color_element[i]);
-            ROOTHelper::SetLineAttribute(sim_buried_charge_graph[i][j].get(), 1, 2, color_element[i]);
+            ROOTHelper::SetLineAttribute(sim_with_charge_graph[i][j].get(), 1, 2, color_element[i]);
             ROOTHelper::SetLineAttribute(sim_no_charge_graph[i][j].get(), 2, 2, color_element[i]);
         }
     }
@@ -183,7 +183,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw();
-            sim_buried_charge_graph[i][j]->Draw("PL X0");
+            sim_with_charge_graph[i][j]->Draw("PL X0");
             sim_no_charge_graph[i][j]->Draw("PL X0");
             if (i == column_size - 1 && j == row_size - 1)
             {
@@ -191,7 +191,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
                 ROOTHelper::SetLegendDefaultStyle(legend.get());
                 ROOTHelper::SetTextAttribute(legend.get(), 20, 133, 12);
                 ROOTHelper::SetFillAttribute(legend.get(), 1001, kWhite, 0.5);
-                legend->AddEntry(sim_buried_charge_graph[i][1].get(), "Partial Charge", "pl");
+                legend->AddEntry(sim_with_charge_graph[i][1].get(), "Partial Charge", "pl");
                 legend->AddEntry(sim_no_charge_graph[i][1].get(), "Neutral", "pl");
                 legend->Draw();
             }
@@ -313,7 +313,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     auto file_path{ m_folder_path + name };
     std::cout <<"- ComparisonPainter::PaintGausEstimateComparison"<< std::endl;
 
-    auto sim_buried_charge_model_object_list{ m_ref_model_object_list_map.at("buried_charge")};
+    auto sim_with_charge_model_object_list{ m_ref_model_object_list_map.at("with_charge")};
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
 
     #ifdef HAVE_ROOT
@@ -338,17 +338,17 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     short marker_element[primary_element_size]{ 54, 53, 55, 59 };
 
     std::unique_ptr<TGraphErrors> data_graph[primary_element_size][2];
-    std::unique_ptr<TGraphErrors> sim_buried_charge_graph[primary_element_size][2];
+    std::unique_ptr<TGraphErrors> sim_with_charge_graph[primary_element_size][2];
     std::unique_ptr<TGraphErrors> sim_no_charge_graph[primary_element_size][2];
     for (size_t i = 0; i < primary_element_size; i++)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         data_graph[i][0] = ROOTHelper::CreateGraphErrors();
-        sim_buried_charge_graph[i][0] = ROOTHelper::CreateGraphErrors();
+        sim_with_charge_graph[i][0] = ROOTHelper::CreateGraphErrors();
         sim_no_charge_graph[i][0] = ROOTHelper::CreateGraphErrors();
 
         BuildAmplitudeRatioToWidthGraph(group_key, data_graph[i][0].get(), m_model_object_list);
-        BuildAmplitudeRatioToWidthGraph(group_key, sim_buried_charge_graph[i][0].get(), sim_buried_charge_model_object_list);
+        BuildAmplitudeRatioToWidthGraph(group_key, sim_with_charge_graph[i][0].get(), sim_with_charge_model_object_list);
         BuildAmplitudeRatioToWidthGraph(group_key, sim_no_charge_graph[i][0].get(), sim_no_charge_model_object_list);
     }
 
@@ -359,11 +359,11 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     for (int i = 0; i < column_size; i++)
     {
         data_graph[i][1] = ROOTHelper::CreateGraphErrors();
-        sim_buried_charge_graph[i][1] = ROOTHelper::CreateGraphErrors();
+        sim_with_charge_graph[i][1] = ROOTHelper::CreateGraphErrors();
         sim_no_charge_graph[i][1] = ROOTHelper::CreateGraphErrors();
 
         BuildRatioGraph(data_graph[i][1].get(), data_graph[i][0].get(), data_graph[ref_id][0].get());
-        BuildRatioGraph(sim_buried_charge_graph[i][1].get(), sim_buried_charge_graph[i][0].get(), sim_buried_charge_graph[ref_id][0].get());
+        BuildRatioGraph(sim_with_charge_graph[i][1].get(), sim_with_charge_graph[i][0].get(), sim_with_charge_graph[ref_id][0].get());
         BuildRatioGraph(sim_no_charge_graph[i][1].get(), sim_no_charge_graph[i][0].get(), sim_no_charge_graph[ref_id][0].get());
 
         std::vector<double> x_array;
@@ -377,10 +377,10 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
         x_max[i] = std::get<1>(x_range);
 
         ROOTHelper::SetMarkerAttribute(data_graph[i][1].get(), marker_element[i], 1.3f, color_element[i]);
-        ROOTHelper::SetMarkerAttribute(sim_buried_charge_graph[i][1].get(), marker_element[i], 1.3f, color_element[i]);
+        ROOTHelper::SetMarkerAttribute(sim_with_charge_graph[i][1].get(), marker_element[i], 1.3f, color_element[i]);
         ROOTHelper::SetMarkerAttribute(sim_no_charge_graph[i][1].get(), marker_element[i], 1.3f, color_element[i]);
         ROOTHelper::SetLineAttribute(data_graph[i][1].get(), 1, 2, color_element[i]);
-        ROOTHelper::SetLineAttribute(sim_buried_charge_graph[i][1].get(), 1, 2, color_element[i]);
+        ROOTHelper::SetLineAttribute(sim_with_charge_graph[i][1].get(), 1, 2, color_element[i]);
         ROOTHelper::SetLineAttribute(sim_no_charge_graph[i][1].get(), 2, 2, color_element[i]);
     }
 
@@ -413,7 +413,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw();
-            sim_buried_charge_graph[i][1]->Draw("L X0");
+            sim_with_charge_graph[i][1]->Draw("L X0");
             sim_no_charge_graph[i][1]->Draw("L X0");
             data_graph[i][1]->Draw("P");
         }
@@ -431,7 +431,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
             ROOTHelper::SetLegendDefaultStyle(legend.get());
             ROOTHelper::SetTextAttribute(legend.get(), 30, 133, 12);
             ROOTHelper::SetFillAttribute(legend.get(), 1001, kWhite, 0.5);
-            legend->AddEntry(sim_buried_charge_graph[i][1].get(), "Partial Charge", "l");
+            legend->AddEntry(sim_with_charge_graph[i][1].get(), "Partial Charge", "l");
             legend->AddEntry(sim_no_charge_graph[i][1].get(), "Neutral", "l");
             legend->Draw();
         }

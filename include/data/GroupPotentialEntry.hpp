@@ -10,13 +10,13 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <set>
+#include <unordered_set>
 #include <Eigen/Dense>
 
 class AtomObject;
 class GroupPotentialEntry
 {
-    std::set<uint64_t> m_group_key_set;
+    std::unordered_set<uint64_t> m_group_key_set;
     std::unordered_map<uint64_t, std::vector<AtomObject *>> m_group_atom_list_map;
     std::unordered_map<uint64_t, std::tuple<double, double>> m_gaus_estimate_mean_map;
     std::unordered_map<uint64_t, std::tuple<double, double>> m_gaus_estimate_mdpde_map;
@@ -43,7 +43,7 @@ public:
     std::tuple<double, double> GetGausEstimateMDPDE(uint64_t group_key) const;
     std::tuple<double, double> GetGausEstimatePrior(uint64_t group_key) const;
     std::tuple<double, double> GetGausVariancePrior(uint64_t group_key) const;
-    const std::set<uint64_t> & GetGroupKeySet(void) const;
+    const std::unordered_set<uint64_t> & GetGroupKeySet(void) const;
 
 private:
 

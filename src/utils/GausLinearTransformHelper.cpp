@@ -1,6 +1,5 @@
 #include "GausLinearTransformHelper.hpp"
-
-#include <cmath>
+#include "Constants.hpp"
 
 Eigen::VectorXd GausLinearTransformHelper::BuildLinearModelDataVector(double gaus_x, double gaus_y)
 {
@@ -24,7 +23,7 @@ Eigen::VectorXd GausLinearTransformHelper::BuildGausModel(const Eigen::VectorXd 
     Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
     if (linear_model(1) <= 0.0) return gaus_model;
 
-    gaus_model(0) = std::exp(linear_model(0)) * std::pow(m_two_pi / linear_model(1), 1.5);
+    gaus_model(0) = std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5);
     gaus_model(1) = 1.0 / std::sqrt(linear_model(1));
 
     return gaus_model;
@@ -45,7 +44,7 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> GausLinearTransformHelper::BuildGau
     auto var_beta1{ covariance_matrix(1, 1) };
     auto cov{ covariance_matrix(0, 1) };
     auto var_amplitude{
-        std::pow(m_two_pi, 3) * std::exp(2.0*beta0) * std::pow(beta1, -5) *
+        std::pow(Constants::two_pi, 3) * std::exp(2.0*beta0) * std::pow(beta1, -5) *
         (std::pow(beta1, 2) * var_beta0 + 2.25 * var_beta1 - 3.0 * beta1 * cov)
     };
     auto var_width{ 0.25 * std::pow(beta1, -3) * var_beta1 };

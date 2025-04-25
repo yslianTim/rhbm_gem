@@ -5,16 +5,10 @@
 #undef __ARM_NEON__
 #endif
 
-#include <iostream>
 #include <vector>
 #include <string>
 #include <tuple>
-#include <cmath>
 #include <Eigen/Dense>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846264338327950288
-#endif
 
 class HRLModelHelper
 {
@@ -137,8 +131,6 @@ class HRLModelHelper
     Eigen::VectorXd m_mu_iter, m_mu_MDPDE, m_mu_prior, m_mu_mean; // [basis_size x 1]
     Eigen::MatrixXd m_beta_iter_array;
     Eigen::MatrixXd m_beta_OLS_array, m_beta_MDPDE_array, m_beta_posterior_array; // [basis_size x member_size]
-
-    static constexpr double m_two_pi{ 2.0 * M_PI }; ///< a pre-calculated value of \f$ 2\pi \f$
 
 public:
     HRLModelHelper(void) = delete;

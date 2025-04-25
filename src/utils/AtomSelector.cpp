@@ -17,20 +17,23 @@ AtomSelector::~AtomSelector()
 void AtomSelector::Print(void) const
 {
     std::cout <<"Atomic Picking List:" << std::endl;
-    if (pick_chain_set.empty() == false)
-    {
-        std::cout <<" - chain set: ";
-        for (auto & chain : pick_chain_set) std::cout << chain <<", ";
-        std::cout << std::endl;
-    }
+    std::cout <<" - chain set: ";
+    for (auto & chain : pick_chain_set) std::cout << chain <<", ";
+    std::cout << std::endl << " - residue set: ";
+    for (auto & residue : pick_residue_set) std::cout << AtomicInfoHelper::GetLabel(residue) <<", ";
+    std::cout << std::endl << " - element set: ";
+    for (auto & element : pick_element_set) std::cout << AtomicInfoHelper::GetLabel(element) <<", ";
+    std::cout << std::endl;
+
 
     std::cout <<"Atomic Vetoing List:" << std::endl;
-    if (veto_chain_set.empty() == false)
-    {
-        std::cout <<" - chain set: ";
-        for (auto & chain : veto_chain_set) std::cout << chain <<", ";
-        std::cout << std::endl;
-    }
+    std::cout <<" - chain set: ";
+    for (auto & chain : veto_chain_set) std::cout << chain <<", ";
+    std::cout << std::endl << " - residue set: ";
+    for (auto & residue : veto_residue_set) std::cout << AtomicInfoHelper::GetLabel(residue) <<", ";
+    std::cout << std::endl << " - element set: ";
+    for (auto & element : veto_element_set) std::cout << AtomicInfoHelper::GetLabel(element) <<", ";
+    std::cout << std::endl;
 }
 
 bool AtomSelector::GetSelectionFlag(

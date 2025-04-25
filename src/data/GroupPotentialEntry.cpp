@@ -8,7 +8,7 @@ GroupPotentialEntry::GroupPotentialEntry(void)
 
 GroupPotentialEntry::~GroupPotentialEntry()
 {
-    
+
 }
 
 void GroupPotentialEntry::InsertGroupKey(uint64_t group_key)
@@ -96,7 +96,7 @@ std::tuple<double, double> GroupPotentialEntry::GetGausVariancePrior(uint64_t gr
     return m_gaus_variance_prior_map.at(group_key);
 }
 
-const std::set<uint64_t> & GroupPotentialEntry::GetGroupKeySet(void) const
+const std::unordered_set<uint64_t> & GroupPotentialEntry::GetGroupKeySet(void) const
 {
     return m_group_key_set;
 }

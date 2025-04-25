@@ -13,6 +13,11 @@
 #include "GroupPotentialEntry.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "KeyPacker.hpp"
+#include "ArrayStats.hpp"
+
+#include <iostream>
+#include <tuple>
+#include <fstream>
 
 PotentialAnalysisVisitor::PotentialAnalysisVisitor(
     std::shared_ptr<AtomSelector> atom_selector,
@@ -90,10 +95,15 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
         const auto & map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
         map_object->Accept(this);
 
-        RunAtomClassification(AtomicInfoHelper::GetElementClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
-        RunAtomClassification(AtomicInfoHelper::GetResidueClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
-        RunPotentialFitting(AtomicInfoHelper::GetElementClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
-        RunPotentialFitting(AtomicInfoHelper::GetResidueClassKey(), dynamic_cast<ModelObject*>(model_object.get()));
+        //RunAtomPositionDumping(); // For test, to be move to other place
+        //RunMapValueDumping(dynamic_cast<MapObject *>(map_object.get())); // For test, to be move to other place
+
+        for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+        {
+            auto group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+            RunAtomClassification(group_class_key, dynamic_cast<ModelObject*>(model_object.get()));
+            RunPotentialFitting(group_class_key, dynamic_cast<ModelObject*>(model_object.get()));
+        }
     }
     catch(const std::exception & e)
     {
@@ -109,25 +119,35 @@ void PotentialAnalysisVisitor::RunAtomClassification(
     auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
     for (auto atom : m_selected_atom_list)
     {
+        uint64_t group_key;
         if (class_key == AtomicInfoHelper::GetResidueClassKey())
         {
-            auto group_key{ KeyPackerResidueClass::Pack(
-                atom->GetResidue(), atom->GetElement(), atom->GetRemoteness(), atom->GetBranch(), atom->GetSpecialAtomFlag()) };
-            group_potential_entry->AddAtomObjectPtr(group_key, atom);
-            group_potential_entry->InsertGroupKey(group_key);
-            residue_class_group_set.insert(group_key);
+            group_key = KeyPackerResidueClass::Pack(
+                atom->GetResidue(), atom->GetElement(),
+                atom->GetRemoteness(), atom->GetBranch(),
+                atom->GetSpecialAtomFlag());
         }
         else if (class_key == AtomicInfoHelper::GetElementClassKey())
         {
-            auto group_key{ KeyPackerElementClass::Pack(atom->GetElement(), atom->GetRemoteness(), atom->GetSpecialAtomFlag()) };
-            group_potential_entry->AddAtomObjectPtr(group_key, atom);
-            group_potential_entry->InsertGroupKey(group_key);
-            element_class_group_set.insert(group_key);
+            group_key = KeyPackerElementClass::Pack(
+                atom->GetElement(), atom->GetRemoteness(),
+                atom->GetSpecialAtomFlag());
+        }
+        else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+        {
+            group_key = KeyPackerStructureClass::Pack(
+                atom->GetStructure(), atom->GetResidue(), atom->GetElement(),
+                atom->GetRemoteness(), atom->GetBranch(),
+                atom->GetSpecialAtomFlag());
         }
         else
         {
-            throw std::runtime_error("Unsupported class key.");
+            throw std::runtime_error("PotentialAnalysisVisitor::RunAtomClassification()"
+                                     " : Unsupported class key."+ class_key);
         }
+        group_potential_entry->AddAtomObjectPtr(group_key, atom);
+        group_potential_entry->InsertGroupKey(group_key);
+        m_group_set_map[class_key].insert(group_key);
     }
     model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
 }
@@ -139,7 +159,7 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
     std::cout <<"- RunPotentialFitting..." << std::endl;
     auto group_potential_entry{ model_object->GetGroupPotentialEntry(class_key) };
     
-    for (const auto & group_key : GetGroupSet(class_key))
+    for (const auto & group_key : m_group_set_map.at(class_key))
     {
         auto atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
         auto group_size{ static_cast<int>(atom_list.size()) };
@@ -194,22 +214,105 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
     }
 }
 
+void PotentialAnalysisVisitor::RunMapValueDumping(MapObject * map_object)
+{
+    ScopeTimer timer("PotentialAnalysisVisitor::RunMapValueDumping");
+    std::cout <<"- RunMapValueDumping..." << std::endl;
+    auto selected_atom_size{ m_selected_atom_list.size() };
+    std::array<float, 3> atom_range_min, atom_range_max;
+    std::vector<float> x_list, y_list, z_list;
+    x_list.reserve(selected_atom_size);
+    y_list.reserve(selected_atom_size);
+    z_list.reserve(selected_atom_size);
+    for (auto & atom : m_selected_atom_list)
+    {
+        x_list.emplace_back(atom->GetPosition().at(0));
+        y_list.emplace_back(atom->GetPosition().at(1));
+        z_list.emplace_back(atom->GetPosition().at(2));
+    }
+    atom_range_min.at(0) = ArrayStats<float>::ComputeMin(x_list.data(), selected_atom_size) - 3.0f;
+    atom_range_min.at(1) = ArrayStats<float>::ComputeMin(y_list.data(), selected_atom_size) - 3.0f;
+    atom_range_min.at(2) = ArrayStats<float>::ComputeMin(z_list.data(), selected_atom_size) - 3.0f;
+    atom_range_max.at(0) = ArrayStats<float>::ComputeMax(x_list.data(), selected_atom_size) + 3.0f;
+    atom_range_max.at(1) = ArrayStats<float>::ComputeMax(y_list.data(), selected_atom_size) + 3.0f;
+    atom_range_max.at(2) = ArrayStats<float>::ComputeMax(z_list.data(), selected_atom_size) + 3.0f;
+
+    std::string output_path{ "/Users/yslian/Downloads/map_value_list_emd_11103_unsharpened.csv" };
+    std::ofstream outfile(output_path);
+    if (!outfile.is_open())
+    {
+        std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
+        return;
+    }
+    outfile << "GridID,X,Y,Z,MapValue\n";
+    auto count{ 0 };
+    for (size_t i = 0; i < map_object->GetMapValueArraySize(); i++)
+    {
+        auto grid_position{ map_object->GetGridPosition(i) };
+        if (grid_position.at(0) < atom_range_min.at(0) || grid_position.at(0) > atom_range_max.at(0)) continue;
+        if (grid_position.at(1) < atom_range_min.at(1) || grid_position.at(1) > atom_range_max.at(1)) continue;
+        if (grid_position.at(2) < atom_range_min.at(2) || grid_position.at(2) > atom_range_max.at(2)) continue;
+        auto map_value{ map_object->GetMapValue(i) };
+        if (map_value <= 0.0f) continue;
+        outfile << i <<','
+                << grid_position.at(0) <<','<< grid_position.at(1) <<','<< grid_position.at(2) <<','
+                << map_value <<'\n';
+        count++;
+    }
+    std::cout <<"Selected map grid size = "<< count <<" / "<< map_object->GetMapValueArraySize() << std::endl;
+}
+
+void PotentialAnalysisVisitor::RunAtomPositionDumping(void)
+{
+    ScopeTimer timer("PotentialAnalysisVisitor::RunAtomPositionDumping");
+    std::cout <<"- RunAtomPositionDumping..." << std::endl;
+
+    std::string output_path{ "/Users/yslian/Downloads/atom_position_list_6z6u.csv" };
+    std::ofstream outfile(output_path);
+    if (!outfile.is_open())
+    {
+        std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
+        return;
+    }
+    outfile << "SerialID,X,Y,Z\n";
+    for (auto & atom : m_selected_atom_list)
+    {
+        outfile << atom->GetSerialID() <<','
+                << atom->GetPosition().at(0) <<','
+                << atom->GetPosition().at(1) <<','
+                << atom->GetPosition().at(2) <<'\n';
+    }
+    outfile.close();
+    std::cout <<"Number of selected atom to be output = "<< m_selected_atom_list.size() << std::endl;
+}
+
+void PotentialAnalysisVisitor::SetThreadSize(unsigned int thread_size)
+{
+    m_thread_size = thread_size;
+}
+
 void PotentialAnalysisVisitor::SetFitRange(double x_min, double x_max)
 {
     m_x_min = x_min;
     m_x_max = x_max;
 }
 
-const std::set<uint64_t> & PotentialAnalysisVisitor::GetGroupSet(
-    const std::string & class_key)
+void PotentialAnalysisVisitor::SetAlphaR(double alpha_r)
 {
-    if      (class_key == AtomicInfoHelper::GetResidueClassKey())
-    {
-        return residue_class_group_set;
-    }
-    else if (class_key == AtomicInfoHelper::GetElementClassKey())
-    {
-        return element_class_group_set;
-    }
-    throw std::runtime_error("Unknown classification: " + class_key);
+    m_alpha_r = alpha_r;
+}
+
+void PotentialAnalysisVisitor::SetAlphaG(double alpha_g)
+{
+    m_alpha_g = alpha_g;
+}
+
+void PotentialAnalysisVisitor::SetMapObjectKeyTag(const std::string & value)
+{
+    m_map_key_tag = value;
+}
+
+void PotentialAnalysisVisitor::SetModelObjectKeyTag(const std::string & value)
+{
+    m_model_key_tag = value;
 }
