@@ -2,14 +2,13 @@
 
 #include <tuple>
 #include <vector>
-#include <memory>
 #include <unordered_map>
-#include "AtomicInfoHelper.hpp"
 #include "GroupPotentialEntry.hpp"
 
 class AtomObject;
 class ModelObject;
 class AtomicPotentialEntry;
+enum class Element : uint16_t;
 
 #ifdef HAVE_ROOT
 class TGraphErrors;

@@ -2,6 +2,7 @@
 #include "DataObjectVisitorBase.hpp"
 #include "ArrayStats.hpp"
 
+#include <iostream>
 #include <cstring>
 #include <cmath>
 #include <algorithm>

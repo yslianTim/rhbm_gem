@@ -11,6 +11,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
 
+#include <iostream>
 #include <memory>
 
 PotentialDisplayVisitor::PotentialDisplayVisitor(void)

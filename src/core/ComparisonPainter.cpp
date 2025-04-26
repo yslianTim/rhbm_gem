@@ -5,6 +5,8 @@
 #include "FilePathHelper.hpp"
 #include "ArrayStats.hpp"
 #include "AtomClassifier.hpp"
+#include "AtomicInfoHelper.hpp"
+#include "GlobalEnumClass.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -21,7 +23,6 @@
 #include <TH2.h>
 #endif
 
-#include <vector>
 #include <tuple>
 
 ComparisonPainter::ComparisonPainter(void) :

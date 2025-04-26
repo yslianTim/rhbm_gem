@@ -1,10 +1,12 @@
 #pragma once
 
-#include <iostream>
 #include <memory>
-#include <vector>
 #include <string>
-#include <CLI/CLI.hpp>
+
+namespace CLI
+{
+    class App;
+}
 
 class CommandBase;
 
@@ -14,7 +16,6 @@ class Application
     CLI::App * m_potential_analysis_cmd;
     CLI::App * m_potential_display_cmd;
     CLI::App * m_map_simulation_cmd;
-    CLI::App * m_test_cmd;
     std::string m_selected_command;
 
     struct AtomSelectorOptions
@@ -76,6 +77,5 @@ private:
     void RegisterPotentialAnalysisCommand(void);
     void RegisterPotentialDisplayCommand(void);
     void RegisterMapSimulationCommand(void);
-    void RegisterTestCommand(void);
 
 };

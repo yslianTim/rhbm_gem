@@ -1,12 +1,11 @@
 #pragma once
 
-#include <iostream>
 #include <string>
 #include <vector>
 #include <memory>
 #include <unordered_map>
 #include "PainterBase.hpp"
-#include "AtomicInfoHelper.hpp"
+
 
 class ModelObject;
 class AtomClassifier;

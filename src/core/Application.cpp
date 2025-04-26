@@ -3,13 +3,14 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
 #include "MapSimulationCommand.hpp"
-#include "TestCommand.hpp"
 #include "ScopeTimer.hpp"
+
+#include <CLI/CLI.hpp>
 
 Application::Application(CLI::App * app) :
     m_cli_app{ app }, m_potential_analysis_cmd{ nullptr },
     m_potential_display_cmd{ nullptr },
-    m_map_simulation_cmd{ nullptr }, m_test_cmd{ nullptr }, m_selected_command{ "" }
+    m_map_simulation_cmd{ nullptr }, m_selected_command{ "" }
 {
     if (m_cli_app == nullptr)
     {
@@ -94,12 +95,6 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetVetoBranchType(m_atom_selector_options.veto_branch);
         return command;
     }
-    else if (m_cli_app->got_subcommand(m_test_cmd))
-    {
-        auto command{ std::make_unique<TestCommand>() };
-        command->SetThreadSize(m_global_options.thread_size);
-        return command;
-    }
     else
     {
         std::cerr <<"The sub-command is not defined!"<< std::endl;
@@ -112,7 +107,6 @@ void Application::RegisterCommands(void)
     RegisterPotentialAnalysisCommand();
     RegisterPotentialDisplayCommand();
     RegisterMapSimulationCommand();
-    RegisterTestCommand();
 }
 
 void Application::RegisterPotentialAnalysisCommand(void)
@@ -300,17 +294,5 @@ void Application::RegisterMapSimulationCommand(void)
     m_map_simulation_cmd->callback([&]()
     {
         m_selected_command = "map_simulation";
-    });
-}
-
-void Application::RegisterTestCommand(void)
-{
-    m_test_cmd = m_cli_app->add_subcommand("test", "Run test command");
-    m_test_cmd->add_option(
-        "-j,--jobs", m_global_options.thread_size,
-        "Number of threads");
-    m_cli_app->callback([&]()
-    {
-        m_selected_command = "test";
     });
 }

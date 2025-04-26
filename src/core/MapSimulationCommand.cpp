@@ -3,6 +3,7 @@
 #include "DataObjectManager.hpp"
 #include "MapSimulationVisitor.hpp"
 
+#include <iostream>
 #include <sstream>
 
 MapSimulationCommand::MapSimulationCommand(void) :
