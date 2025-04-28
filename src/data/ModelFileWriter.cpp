@@ -5,6 +5,8 @@
 #include "CifFormat.hpp"
 #include "ModelObject.hpp"
 
+#include <iostream>
+
 ModelFileWriter::ModelFileWriter(const std::string & filename, const ModelObject * model_object) :
     m_file_path{ filename }, m_model_object{ model_object }
 {

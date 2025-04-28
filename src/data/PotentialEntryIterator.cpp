@@ -9,6 +9,7 @@
 #include "KeyPacker.hpp"
 
 #include <cmath>
+#include <iostream>
 
 #ifdef HAVE_ROOT
 #include <TGraphErrors.h>

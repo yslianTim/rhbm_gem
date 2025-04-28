@@ -2,6 +2,7 @@
 
 #include <tuple>
 #include <vector>
+#include <memory>
 #include <unordered_map>
 #include "GroupPotentialEntry.hpp"
 
