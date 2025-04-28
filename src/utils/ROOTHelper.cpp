@@ -232,7 +232,7 @@ void ROOTHelper::SetLegendMarginInCanvas(
         std::cerr << "Error: TLegend pointer is null." << std::endl;
         return;
     }
-    legend->Draw();
+    //legend->Draw();
 
     if (!pad)
     {

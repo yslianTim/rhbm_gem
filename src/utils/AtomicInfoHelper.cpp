@@ -178,6 +178,11 @@ size_t AtomicInfoHelper::GetStandardResidueCount(void)
     return m_standard_residue_list.size();
 }
 
+size_t AtomicInfoHelper::GetElementCount(void)
+{
+    return m_element_map.size();
+}
+
 const std::string & AtomicInfoHelper::GetGroupClassKey(size_t class_id)
 {
     if (class_id >= m_group_class_key_list.size())
@@ -220,6 +225,17 @@ const std::vector<Remoteness> & AtomicInfoHelper::GetStandardRemotenessList(void
 const std::vector<Branch> & AtomicInfoHelper::GetStandardBranchList(void)
 {
     return m_standard_branch_list;
+}
+
+const std::unordered_map<Element, std::string> & AtomicInfoHelper::GetElementLabelMap(void)
+{
+    return m_element_label_map;
+}
+
+bool AtomicInfoHelper::IsStandardElement(Element element)
+{
+    return std::find(m_standard_element_list.begin(), m_standard_element_list.end(), element)
+            != m_standard_element_list.end();
 }
 
 bool AtomicInfoHelper::IsStandardResidue(Residue residue)
