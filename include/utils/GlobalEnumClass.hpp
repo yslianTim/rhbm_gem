@@ -25,9 +25,12 @@ enum class Residue : uint16_t
 
 enum class Element : uint16_t
 {
-    HYDROGEN = 1, CARBON = 6, NITROGEN = 7, OXYGEN = 8,
-    SODIUM = 11, MAGNESIUM = 12, PHOSPHORUS = 15, SULFUR = 16, CHLORINE = 17,
-    CALCIUM = 20, IRON = 26, ZINC = 30,
+    HYDROGEN =  1, HELIUM    =  2, LITHIUM  =  3, BERYLLIUM =  4, BORON      =  5,
+    CARBON   =  6, NITROGEN  =  7, OXYGEN   =  8, FLUORINE  =  9, NEON       = 10,
+    SODIUM   = 11, MAGNESIUM = 12, ALUMINUM = 13, SILICON   = 14, PHOSPHORUS = 15,
+    SULFUR   = 16, CHLORINE  = 17, ARGON    = 18, POTASSIUM = 19, CALCIUM    = 20,
+    SCANDIUM = 21, TITANIUM  = 22, VANADIUM = 23, CHROMIUM  = 24, MANGANESE  = 25,
+    IRON     = 26, COBALT    = 27, NICKEL   = 28, COPPER    = 29, ZINC       = 30,
     UNK = UINT16_MAX
 };
 
