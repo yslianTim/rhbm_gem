@@ -7,6 +7,7 @@
 #include "ROOTHelper.hpp"
 #include "ArrayStats.hpp"
 #include "KeyPacker.hpp"
+#include "Constants.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -249,6 +250,32 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
 }
 
 #ifdef HAVE_ROOT
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatterGraph(
+    uint64_t group_key, const std::string & class_key)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    if (IsAvailableGroupKey(group_key, class_key) == false)
+    {
+        std::cerr << "Group key is not available." << std::endl;
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    const auto & atom_list{ GetAtomObjectList(group_key, class_key) };
+
+    auto count{ 0 };
+    for (auto & atom : atom_list)
+    {
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        graph->SetPoint(count, atom->GetTemperature()/(8.0*Constants::pi_square), entry->GetWidthEstimateMDPDE());
+        count++;
+    }
+
+    return graph;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueGraph(
     std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id)
 {

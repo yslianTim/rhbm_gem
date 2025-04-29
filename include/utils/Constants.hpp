@@ -10,4 +10,5 @@ namespace Constants
 {
     inline constexpr double pi{ M_PI };
     inline constexpr double two_pi{ 2.0 * pi };
+    inline constexpr double pi_square{ pi * pi };
 }

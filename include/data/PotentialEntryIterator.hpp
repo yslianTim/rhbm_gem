@@ -43,6 +43,7 @@ public:
     double GetWidthEstimateMDPDE(void) const;
 
     #ifdef HAVE_ROOT
+    std::unique_ptr<TGraphErrors> CreateBfactorToWidthScatterGraph(uint64_t group_key, const std::string & class_key);
     std::unique_ptr<TGraphErrors> CreateGausEstimateToResidueGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(Element element, bool reverse=false);
