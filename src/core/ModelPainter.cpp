@@ -71,6 +71,8 @@ void ModelPainter::Painting(void)
         PaintResidueClassGroupGausMainChain(model_object, plot_main_chain_name);
         auto plot_side_chain_name{ "residue_class_group_gaus_side_"+ model_object->GetPdbID() +".pdf" };
         PaintResidueClassGroupGausSideChain(model_object, plot_side_chain_name);
+        auto plot2_side_chain_name{ "structure_class_group_gaus_side_"+ model_object->GetPdbID() +".pdf" };
+        PaintStructureClassGroupGausSideChain(model_object, plot2_side_chain_name);
         auto plot_map_value_name{ "residue_class_map_value_"+ model_object->GetPdbID() +".pdf" };
         PaintResidueClassMapValue(model_object, plot_map_value_name);
         model_object->BuildKDTreeRoot();
@@ -324,6 +326,143 @@ void ModelPainter::PaintResidueClassGroupGausSideChain(
         {
             graph->Draw("P X0");
         }
+
+        pad[2]->cd();
+        info_text[residue_index]->Draw();
+
+        ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    }
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    std::cout <<"  Output file: "<< file_path << std::endl;
+    #endif
+}
+
+void ModelPainter::PaintStructureClassGroupGausSideChain(
+    ModelObject * model_object, const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    std::cout <<"- ModelPainter::PaintStructureClassGroupGausSideChain"<<std::endl;
+    auto class_key{ AtomicInfoHelper::GetStructureClassKey() };
+
+    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    
+    #ifdef HAVE_ROOT
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1200, 300) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    const int pad_size{ 3 };
+    std::unique_ptr<TPad> pad[pad_size];
+    std::unique_ptr<TH2> frame[pad_size];
+    pad[0] = ROOTHelper::CreatePad("pad0","", 0.00, 0.00, 0.50, 1.00); // The left pad
+    pad[1] = ROOTHelper::CreatePad("pad1","", 0.50, 0.00, 1.00, 1.00); // The right pad
+    pad[2] = ROOTHelper::CreatePad("pad2","", 0.46, 0.80, 0.54, 0.99); // The middle-top pad
+    frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
+    frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
+
+    size_t residue_size{ static_cast<size_t>(AtomicInfoHelper::GetStandardResidueCount()) };
+    std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_free_graph_list(residue_size);
+    std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_helix_graph_list(residue_size);
+    std::vector<std::vector<std::unique_ptr<TGraphErrors>>> width_free_graph_list(residue_size);
+    std::vector<std::vector<std::unique_ptr<TGraphErrors>>> width_helix_graph_list(residue_size);
+    std::vector<std::unique_ptr<TPaveText>> info_text(residue_size);
+    for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+    {
+        size_t residue_index{ static_cast<size_t>(residue) };
+        info_text[residue_index] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
+        std::vector<double> amplitude_array, width_array;
+        std::vector<std::string> label_list;
+        auto count_total{ 0 };
+        for (auto element : AtomicInfoHelper::GetStandardElementList())
+        {
+            auto amplitude_free_graph{ ROOTHelper::CreateGraphErrors() };
+            auto amplitude_helix_graph{ ROOTHelper::CreateGraphErrors() };
+            auto width_free_graph{ ROOTHelper::CreateGraphErrors() };
+            auto width_helix_graph{ ROOTHelper::CreateGraphErrors() };
+            auto count_free{ 0 };
+            auto count_helix{ 0 };
+            for (auto remoteness : AtomicInfoHelper::GetStandardRemotenessList())
+            {
+                for (auto branch : AtomicInfoHelper::GetStandardBranchList())
+                {
+                    auto free_group_key{ KeyPackerStructureClass::Pack(Structure::FREE, residue, element, remoteness, branch, false) };
+                    auto helix_group_key{ KeyPackerStructureClass::Pack(Structure::HELX_P, residue, element, remoteness, branch, false) };
+                    bool has_free{ false };
+                    bool has_helix{ false };
+                    if (entry_iter->IsAvailableGroupKey(free_group_key, class_key) == true)
+                    {
+                        has_free = true;
+                        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(free_group_key, class_key) };
+                        auto gaus_variance{ entry_iter->GetGausVariancePrior(free_group_key, class_key) };
+                        amplitude_array.push_back(std::get<0>(gaus_estimate));
+                        width_array.push_back(std::get<1>(gaus_estimate));
+                        amplitude_free_graph->SetPoint(count_free, count_total, std::get<0>(gaus_estimate));
+                        amplitude_free_graph->SetPointError(count_free, 0.0, std::get<0>(gaus_variance));
+                        width_free_graph->SetPoint(count_free, count_total, std::get<1>(gaus_estimate));
+                        width_free_graph->SetPointError(count_free, 0.0, std::get<1>(gaus_variance));
+                        count_free++;
+                    }
+
+                    if (entry_iter->IsAvailableGroupKey(helix_group_key, class_key) == true)
+                    {
+                        has_helix = true;
+                        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(helix_group_key, class_key) };
+                        auto gaus_variance{ entry_iter->GetGausVariancePrior(helix_group_key, class_key) };
+                        amplitude_array.push_back(std::get<0>(gaus_estimate));
+                        width_array.push_back(std::get<1>(gaus_estimate));
+                        amplitude_helix_graph->SetPoint(count_helix, count_total, std::get<0>(gaus_estimate));
+                        amplitude_helix_graph->SetPointError(count_helix, 0.0, std::get<0>(gaus_variance));
+                        width_helix_graph->SetPoint(count_helix, count_total, std::get<1>(gaus_estimate));
+                        width_helix_graph->SetPointError(count_helix, 0.0, std::get<1>(gaus_variance));
+                        count_helix++;
+                    }
+
+                    if (has_free || has_helix)
+                    {
+                        auto element_label{ AtomicInfoHelper::GetLabel(element) };
+                        auto remoteness_label{ AtomicInfoHelper::GetLabel(remoteness) };
+                        auto branch_label{ AtomicInfoHelper::GetLabel(branch) };
+                        label_list.emplace_back(element_label +"_{"+ remoteness_label + branch_label+"}");
+                        count_total++;
+                    }
+                }
+            }
+            auto color{ AtomicInfoHelper::GetDisplayColor(element) };
+            ROOTHelper::SetMarkerAttribute(amplitude_free_graph.get(), kFullCircle, 1.5f, color);
+            ROOTHelper::SetMarkerAttribute(width_free_graph.get(), kFullCircle, 1.5f, color);
+            ROOTHelper::SetMarkerAttribute(amplitude_helix_graph.get(), kOpenCircle, 1.5f, color);
+            ROOTHelper::SetMarkerAttribute(width_helix_graph.get(), kOpenCircle, 1.5f, color);
+            amplitude_free_graph_list[residue_index].push_back(std::move(amplitude_free_graph));
+            amplitude_helix_graph_list[residue_index].push_back(std::move(amplitude_helix_graph));
+            width_free_graph_list[residue_index].push_back(std::move(width_free_graph));
+            width_helix_graph_list[residue_index].push_back(std::move(width_helix_graph));
+        }
+
+        auto scaling{ 0.3 };
+        auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
+        auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+
+        canvas->cd();
+        for (int i = 0; i < pad_size; i++)
+        {
+            ROOTHelper::SetPadDefaultStyle(pad[i].get());
+            pad[i]->Draw();
+        }
+        frame[0]->GetYaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+        frame[1]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
+
+        PrintAmplitudeSideChainPad(pad[0].get(), frame[0].get(), residue, label_list);
+        PrintWidthSideChainPad(pad[1].get(), frame[1].get(), residue, label_list);
+        PrintInfoSideChainPad(pad[2].get(), info_text[residue_index].get(), AtomicInfoHelper::GetLabel(residue));
+
+        pad[0]->cd();
+        for (auto & graph : amplitude_free_graph_list[residue_index]) graph->Draw("P X0");
+        for (auto & graph : amplitude_helix_graph_list[residue_index]) graph->Draw("P X0");
+
+        pad[1]->cd();
+        for (auto & graph : width_free_graph_list[residue_index]) graph->Draw("P X0");
+        for (auto & graph : width_helix_graph_list[residue_index]) graph->Draw("P X0");
 
         pad[2]->cd();
         info_text[residue_index]->Draw();

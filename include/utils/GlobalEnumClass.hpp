@@ -80,5 +80,6 @@ enum class Structure : uint8_t
     TURN_TY1P_P = 102, TURN_TY1_P = 103,
     TURN_TY2P_P = 104, TURN_TY2_P = 105,
     TURN_TY3P_P = 106, TURN_TY3_P = 107,
+    
     UNK = UINT8_MAX
 };
