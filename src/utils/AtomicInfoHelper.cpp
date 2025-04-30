@@ -35,10 +35,16 @@ const std::vector<Branch> AtomicInfoHelper::m_standard_branch_list
 
 const std::unordered_map<Element, int> AtomicInfoHelper::m_atomic_number_map
 {
-    {Element::HYDROGEN, 1}, {Element::CARBON,    6}, {Element::NITROGEN,   7},
-    {Element::OXYGEN,   8}, {Element::SODIUM,   11}, {Element::MAGNESIUM, 12},
-    {Element::SULFUR,  16}, {Element::CHLORINE, 17}, {Element::CALCIUM,   20},
-    {Element::IRON,    26}, {Element::ZINC,     30}
+    {Element::HYDROGEN,   1}, {Element::HELIUM,    2}, {Element::LITHIUM,     3},
+    {Element::BERYLLIUM,  4}, {Element::BORON,     5}, {Element::CARBON,      6},
+    {Element::NITROGEN,   7}, {Element::OXYGEN,    8}, {Element::FLUORINE,    9},
+    {Element::NEON,      10}, {Element::SODIUM,   11}, {Element::MAGNESIUM,  12},
+    {Element::ALUMINUM,  13}, {Element::SILICON,  14}, {Element::PHOSPHORUS, 15},
+    {Element::SULFUR,    16}, {Element::CHLORINE, 17}, {Element::ARGON,      18},
+    {Element::POTASSIUM, 19}, {Element::CALCIUM,  20}, {Element::SCANDIUM,   21},
+    {Element::TITANIUM,  22}, {Element::VANADIUM, 23}, {Element::CHROMIUM,   24},
+    {Element::MANGANESE, 25}, {Element::IRON,     26}, {Element::COBALT,     27},
+    {Element::NICKEL,    28}, {Element::COPPER,   29}, {Element::ZINC,       30}
 };
 
 const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_map
@@ -55,12 +61,16 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_
 
 const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
 {
-    {"H",  Element::HYDROGEN},
-    {"C",  Element::CARBON},    {"N",  Element::NITROGEN},
-    {"O",  Element::OXYGEN},    {"P",  Element::PHOSPHORUS},
-    {"S",  Element::SULFUR},
-    {"CA", Element::CALCIUM},   {"ZN", Element::ZINC},    {"NA", Element::SODIUM},
-    {"MG", Element::MAGNESIUM}, {"FE", Element::IRON},    {"CL", Element::CHLORINE}
+    {"H",  Element::HYDROGEN},  {"He", Element::HELIUM},   {"Li", Element::LITHIUM},
+    {"Be", Element::BERYLLIUM}, {"B",  Element::BORON},    {"C",  Element::CARBON},
+    {"N",  Element::NITROGEN},  {"O",  Element::OXYGEN},   {"F",  Element::FLUORINE},
+    {"Ne", Element::NEON},      {"Na", Element::SODIUM},   {"Mg", Element::MAGNESIUM},
+    {"Al", Element::ALUMINUM},  {"Si", Element::SILICON},  {"P",  Element::PHOSPHORUS},
+    {"S",  Element::SULFUR},    {"Cl", Element::CHLORINE}, {"Ar", Element::ARGON},
+    {"K",  Element::POTASSIUM}, {"Ca", Element::CALCIUM},  {"Sc", Element::SCANDIUM},
+    {"Ti", Element::TITANIUM},  {"V",  Element::VANADIUM}, {"Cr", Element::CHROMIUM},
+    {"Mn", Element::MANGANESE}, {"Fe", Element::IRON},     {"Co", Element::COBALT},
+    {"Ni", Element::NICKEL},    {"Cu", Element::COPPER},   {"Zn", Element::ZINC}
 };
 
 const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remoteness_map
@@ -101,11 +111,16 @@ const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label
 
 const std::unordered_map<Element, std::string> AtomicInfoHelper::m_element_label_map
 {
-    {Element::HYDROGEN, "H"}, {Element::CARBON,     "C"}, {Element::NITROGEN,   "N"},
-    {Element::OXYGEN,   "O"}, {Element::PHOSPHORUS, "P"},
-    {Element::SULFUR,   "S"}, {Element::CALCIUM,   "Ca"},
-    {Element::ZINC,    "Zn"}, {Element::SODIUM,    "Na"}, {Element::MAGNESIUM, "Mg"},
-    {Element::IRON,    "Fe"}, {Element::CHLORINE,  "Cl"}, {Element::UNK,        "X"}
+    {Element::HYDROGEN,  "H" }, {Element::HELIUM,   "He"}, {Element::LITHIUM,    "Li"},
+    {Element::BERYLLIUM, "Be"}, {Element::BORON,    "B" }, {Element::CARBON,     "C" },
+    {Element::NITROGEN,  "N" }, {Element::OXYGEN,   "O" }, {Element::FLUORINE,   "F" },
+    {Element::NEON,      "Ne"}, {Element::SODIUM,   "Na"}, {Element::MAGNESIUM,  "Mg"},
+    {Element::ALUMINUM,  "Al"}, {Element::SILICON,  "Si"}, {Element::PHOSPHORUS, "P" },
+    {Element::SULFUR,    "S" }, {Element::CHLORINE, "Cl"}, {Element::ARGON,      "Ar"},
+    {Element::POTASSIUM, "K" }, {Element::CALCIUM,  "Ca"}, {Element::SCANDIUM,   "Sc"},
+    {Element::TITANIUM,  "Ti"}, {Element::VANADIUM, "V" }, {Element::CHROMIUM,   "Cr"},
+    {Element::MANGANESE, "Mn"}, {Element::IRON,     "Fe"}, {Element::COBALT,     "Co"},
+    {Element::NICKEL,    "Ni"}, {Element::COPPER,   "Cu"}, {Element::ZINC,       "Zn"}
 };
 
 const std::unordered_map<Remoteness, std::string> AtomicInfoHelper::m_remoteness_label_map
@@ -178,6 +193,11 @@ size_t AtomicInfoHelper::GetStandardResidueCount(void)
     return m_standard_residue_list.size();
 }
 
+size_t AtomicInfoHelper::GetElementCount(void)
+{
+    return m_element_map.size();
+}
+
 const std::string & AtomicInfoHelper::GetGroupClassKey(size_t class_id)
 {
     if (class_id >= m_group_class_key_list.size())
@@ -222,6 +242,17 @@ const std::vector<Branch> & AtomicInfoHelper::GetStandardBranchList(void)
     return m_standard_branch_list;
 }
 
+const std::unordered_map<Element, std::string> & AtomicInfoHelper::GetElementLabelMap(void)
+{
+    return m_element_label_map;
+}
+
+bool AtomicInfoHelper::IsStandardElement(Element element)
+{
+    return std::find(m_standard_element_list.begin(), m_standard_element_list.end(), element)
+            != m_standard_element_list.end();
+}
+
 bool AtomicInfoHelper::IsStandardResidue(Residue residue)
 {
     return std::find(m_standard_residue_list.begin(), m_standard_residue_list.end(), residue)
@@ -260,40 +291,52 @@ Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
 
 const std::string & AtomicInfoHelper::GetLabel(Residue residue)
 {
+    static std::string unk_label{"?"};
+    if (m_residue_label_map.find(residue) == m_residue_label_map.end()) return unk_label;
     return m_residue_label_map.at(residue);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Element element)
 {
+    static std::string unk_label{"?"};
+    if (m_element_label_map.find(element) == m_element_label_map.end()) return unk_label;
     return m_element_label_map.at(element);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Remoteness remoteness)
 {
+    static std::string unk_label{"?"};
+    if (m_remoteness_label_map.find(remoteness) == m_remoteness_label_map.end()) return unk_label;
     return m_remoteness_label_map.at(remoteness);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Branch branch)
 {
+    static std::string unk_label{"?"};
+    if (m_branch_label_map.find(branch) == m_branch_label_map.end()) return unk_label;
     return m_branch_label_map.at(branch);
 }
 
 short AtomicInfoHelper::GetDisplayColor(Element element)
 {
+    if (m_element_color_map.find(element) == m_element_color_map.end()) return 1;
     return static_cast<short>(m_element_color_map.at(element));
 }
 
 short AtomicInfoHelper::GetDisplayColor(Residue residue)
 {
+    if (m_residue_color_map.find(residue) == m_residue_color_map.end()) return 1;
     return static_cast<short>(m_residue_color_map.at(residue));
 }
 
 short AtomicInfoHelper::GetDisplayMarker(Element element)
 {
+    if (m_element_marker_map.find(element) == m_element_marker_map.end()) return 1;
     return static_cast<short>(m_element_marker_map.at(element));
 }
 
 short AtomicInfoHelper::GetDisplayMarker(Residue residue)
 {
+    if (m_residue_marker_map.find(residue) == m_residue_marker_map.end()) return 1;
     return static_cast<short>(m_residue_marker_map.at(residue));
 }

@@ -47,6 +47,13 @@ std::unique_ptr<TPad> ROOTHelper::CreatePad(
     return std::make_unique<TPad>(name.data(), title.data(), x_low, y_low, x_up, y_up);
 }
 
+std::unique_ptr<TH1D> ROOTHelper::CreateHist1D(
+    const std::string & name, const std::string & title,
+    int x_bin, double x_min, double x_max)
+{
+    return std::make_unique<TH1D>(name.data(), title.data(), x_bin, x_min, x_max);
+}
+
 std::unique_ptr<TH2D> ROOTHelper::CreateHist2D(
     const std::string & name, const std::string & title,
     int x_bin, double x_min, double x_max,
@@ -232,7 +239,7 @@ void ROOTHelper::SetLegendMarginInCanvas(
         std::cerr << "Error: TLegend pointer is null." << std::endl;
         return;
     }
-    legend->Draw();
+    //legend->Draw();
 
     if (!pad)
     {

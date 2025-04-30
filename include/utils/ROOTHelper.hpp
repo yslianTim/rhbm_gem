@@ -8,6 +8,7 @@
 #ifdef HAVE_ROOT
 class TCanvas;
 class TPad;
+class TH1D;
 class TH2D;
 class TF1;
 class TLine;
@@ -35,6 +36,7 @@ public:
     #ifdef HAVE_ROOT
     static std::unique_ptr<TCanvas> CreateCanvas(const std::string & name, const std::string & title, int width=600, int height=600);
     static std::unique_ptr<TPad> CreatePad(const std::string & name, const std::string & title, double x_low, double y_low, double x_up, double y_up);
+    static std::unique_ptr<TH1D> CreateHist1D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max);
     static std::unique_ptr<TH2D> CreateHist2D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max, int y_bin, double y_min, double y_max);
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(void);
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size);

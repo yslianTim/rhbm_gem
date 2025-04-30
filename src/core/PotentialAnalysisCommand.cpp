@@ -4,6 +4,8 @@
 #include "AtomSelector.hpp"
 #include "SphereSampler.hpp"
 
+#include <iostream>
+
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_atom_selector{ std::make_shared<AtomSelector>() },
     m_sphere_sampler{ std::make_shared<SphereSampler>() }

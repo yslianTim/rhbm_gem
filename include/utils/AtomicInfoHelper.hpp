@@ -43,6 +43,7 @@ public:
     static int GetAtomicNumber(Element element);
     static size_t GetGroupClassCount(void);
     static size_t GetStandardResidueCount(void);
+    static size_t GetElementCount(void);
     static const std::string & GetGroupClassKey(size_t class_id);
     static const std::string & GetElementClassKey(void);
     static const std::string & GetResidueClassKey(void);
@@ -51,6 +52,8 @@ public:
     static const std::vector<Element> & GetStandardElementList(void);
     static const std::vector<Remoteness> & GetStandardRemotenessList(void);
     static const std::vector<Branch> & GetStandardBranchList(void);
+    static const std::unordered_map<Element, std::string> & GetElementLabelMap(void);
+    static bool IsStandardElement(Element element);
     static bool IsStandardResidue(Residue residue);
 
     static Residue GetResidueFromString(const std::string & name);

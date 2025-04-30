@@ -2,6 +2,7 @@
 #include "DataObjectManager.hpp"
 #include "PotentialDisplayVisitor.hpp"
 
+#include <iostream>
 #include <sstream>
 
 PotentialDisplayCommand::PotentialDisplayCommand(void)

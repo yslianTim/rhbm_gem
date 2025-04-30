@@ -5,6 +5,8 @@
 #include "CifFormat.hpp"
 #include "AtomObject.hpp"
 
+#include <iostream>
+
 ModelFileReader::ModelFileReader(const std::string & filename) :
     m_file_path{ filename }
 {

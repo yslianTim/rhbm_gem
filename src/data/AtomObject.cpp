@@ -4,6 +4,8 @@
 #include "AtomicPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 
+#include <iostream>
+
 AtomObject::AtomObject(void) :
     m_key_tag{ "" },
     m_is_selected{ true }, m_is_special_atom{ false },

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -29,6 +28,7 @@ public:
     void RunAtomPainter(ModelObject * model_object);
     void RunModelPainter(DataObjectManager * data_manager);
     void RunComparisonPainter(DataObjectManager * data_manager);
+    void RunDemoPainter(DataObjectManager * data_manager);
     void BuildModelObjectList(DataObjectManager * data_manager, std::vector<DataObjectBase *> & model_object_list);
     void BuildReferenceModelObjectList(DataObjectManager * data_manager, const std::string & type_key, std::vector<DataObjectBase *> & model_object_list);
     void SetModelObjectKeyTagList(std::vector<std::string> value) { m_model_key_tag_list = std::move(value); }

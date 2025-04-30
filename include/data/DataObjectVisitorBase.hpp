@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-
 class AtomObject;
 class ModelObject;
 class MapObject;

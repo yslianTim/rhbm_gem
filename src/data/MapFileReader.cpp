@@ -4,6 +4,8 @@
 #include "MrcFormat.hpp"
 #include "CCP4Format.hpp"
 
+#include <iostream>
+
 MapFileReader::MapFileReader(const std::string & filename) :
     m_file_path{ filename }
 {

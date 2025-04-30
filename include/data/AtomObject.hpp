@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <string>
 #include "DataObjectBase.hpp"
 
 class AtomicPotentialEntry;

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-
 class CommandBase
 {
 public:

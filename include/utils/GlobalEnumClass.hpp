@@ -25,9 +25,12 @@ enum class Residue : uint16_t
 
 enum class Element : uint16_t
 {
-    HYDROGEN = 1, CARBON = 6, NITROGEN = 7, OXYGEN = 8,
-    SODIUM = 11, MAGNESIUM = 12, PHOSPHORUS = 15, SULFUR = 16, CHLORINE = 17,
-    CALCIUM = 20, IRON = 26, ZINC = 30,
+    HYDROGEN =  1, HELIUM    =  2, LITHIUM  =  3, BERYLLIUM =  4, BORON      =  5,
+    CARBON   =  6, NITROGEN  =  7, OXYGEN   =  8, FLUORINE  =  9, NEON       = 10,
+    SODIUM   = 11, MAGNESIUM = 12, ALUMINUM = 13, SILICON   = 14, PHOSPHORUS = 15,
+    SULFUR   = 16, CHLORINE  = 17, ARGON    = 18, POTASSIUM = 19, CALCIUM    = 20,
+    SCANDIUM = 21, TITANIUM  = 22, VANADIUM = 23, CHROMIUM  = 24, MANGANESE  = 25,
+    IRON     = 26, COBALT    = 27, NICKEL   = 28, COPPER    = 29, ZINC       = 30,
     UNK = UINT16_MAX
 };
 
@@ -53,10 +56,30 @@ enum class Structure : uint8_t
     /* beta-sheet */
     STRN = 2,
     OTHER = 9,
+
     /* 10 - 99 for alpha-helix */
-    HELX_P = 10,
+    HELX_P       = 10, HELX_OT_P    = 11,
+    HELX_LH_27_P = 12, HELX_RH_27_P = 13,
+    HELX_LH_3T_P = 14, HELX_RH_3T_P = 15,
+    HELX_LH_AL_P = 16, HELX_RH_AL_P = 17,
+    HELX_LH_GA_P = 18, HELX_RH_GA_P = 19,
+    HELX_LH_OM_P = 20, HELX_RH_OM_P = 21,
+    HELX_LH_PI_P = 22, HELX_RH_PI_P = 23,
+    HELX_LH_PP_P = 24, HELX_RH_PP_P = 25,
+    HELX_LH_OT_P = 26, HELX_RH_OT_P = 27,
+
+    HELX_N       = 50, HELX_OT_N    = 51,
+    HELX_LH_N    = 52, HELX_RH_N    = 53,
+    HELX_LH_OT_N = 54, HELX_RH_OT_N = 55,
+    HELX_LH_A_N  = 56, HELX_RH_A_N  = 57,
+    HELX_LH_B_N  = 58, HELX_RH_B_N  = 59,
+    HELX_LH_Z_N  = 60, HELX_RH_Z_N  = 61,
 
     /* 100 - 199 for turn */
-    TURN_P = 100,
+    TURN_P      = 100, TURN_OT_P  = 101,
+    TURN_TY1P_P = 102, TURN_TY1_P = 103,
+    TURN_TY2P_P = 104, TURN_TY2_P = 105,
+    TURN_TY3P_P = 106, TURN_TY3_P = 107,
+    
     UNK = UINT8_MAX
 };

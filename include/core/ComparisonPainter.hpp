@@ -1,12 +1,11 @@
 #pragma once
 
-#include <iostream>
 #include <string>
 #include <vector>
 #include <memory>
 #include <unordered_map>
 #include "PainterBase.hpp"
-#include "AtomicInfoHelper.hpp"
+
 
 class ModelObject;
 class AtomClassifier;
@@ -38,6 +37,7 @@ private:
     void PaintSimulationGausRatio(const std::string & name, const std::vector<ModelObject *> & model_list);
     void PaintGausEstimateComparison(const std::string & name);
     void PainMapValueComparison(const std::string & name, ModelObject * model_data, ModelObject * model_sim);
+    void PainResidueClassGausComparison(const std::string & name, ModelObject * model_data, ModelObject * model_sim, int par_id);
     double CalculateErrorPropagation(double target_value, double reference_value, double target_error, double reference_error);
 
     #ifdef HAVE_ROOT
@@ -45,6 +45,7 @@ private:
     void BuildGausEstimateToBlurringWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, int par_id=0);
     void BuildAmplitudeRatioToWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list);
     void BuildMapValueScatterGraph(uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
+    void BuildGausScatterGraph(const std::vector<uint64_t> & group_key_list, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, const std::string & class_key, int par_id=0);
     #endif
 
 };

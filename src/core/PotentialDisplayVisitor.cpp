@@ -8,9 +8,11 @@
 #include "AtomPainter.hpp" 
 #include "ModelPainter.hpp"
 #include "ComparisonPainter.hpp"
+#include "DemoPainter.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
 
+#include <iostream>
 #include <memory>
 
 PotentialDisplayVisitor::PotentialDisplayVisitor(void)
@@ -47,6 +49,7 @@ void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
     //RunAtomPainter(dynamic_cast<ModelObject *>(m_model_object_list.at(0)));
     RunModelPainter(data_manager);
     RunComparisonPainter(data_manager);
+    RunDemoPainter(data_manager);
 }
 
 void PotentialDisplayVisitor::RunAtomPainter(ModelObject * model_object)
@@ -100,6 +103,28 @@ void PotentialDisplayVisitor::RunComparisonPainter(DataObjectManager * data_mana
         painter->AddDataObject(model_object);
     }
 
+    for (auto model_object : m_sim_no_charge_model_object_list)
+    {
+        painter->AddReferenceDataObject(model_object, "no_charge");
+    }
+
+    for (auto model_object : m_sim_with_charge_model_object_list)
+    {
+        painter->AddReferenceDataObject(model_object, "with_charge");
+    }
+    painter->Painting();
+}
+
+void PotentialDisplayVisitor::RunDemoPainter(DataObjectManager * data_manager)
+{
+    std::cout <<"- PotentialDisplayVisitor::RunDemoPainter" << std::endl;
+    if (data_manager == nullptr) return;
+    std::unique_ptr<PainterBase> painter{ std::make_unique<DemoPainter>() };
+    painter->SetFolder(m_folder_path);
+    for (auto model_object : m_model_object_list)
+    {
+        painter->AddDataObject(model_object);
+    }
     for (auto model_object : m_sim_no_charge_model_object_list)
     {
         painter->AddReferenceDataObject(model_object, "no_charge");

@@ -5,6 +5,8 @@
 #include "CCP4Format.hpp"
 #include "MapObject.hpp"
 
+#include <iostream>
+
 MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map_object) :
     m_file_path{ filename }, m_map_object{ map_object }
 {
