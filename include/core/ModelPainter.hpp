@@ -33,7 +33,7 @@ public:
 
 private:
     void PaintResidueClassGroupGausMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
-    void PaintResidueClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
+    void PaintStructureClassGroupGausMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
     void PaintStructureClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausScatter(ModelObject * model_object, const std::string & name, int par_id=0);
     void PaintResidueClassMapValue(ModelObject * model_object, const std::string & name);
@@ -49,6 +49,7 @@ private:
     void PrintAmplitudeSummaryPad(TPad * pad, TH2 * hist);
     void PrintWidthSummaryPad(TPad * pad, TH2 * hist);
     void PrintGausSummaryPad(TPad * pad, TH2 * hist);
+    void PrintCountSummaryPad(TPad * pad, TH2 * hist);
 
     void PrintInfoSideChainPad(TPad * pad, TPaveText * text, const std::string & residue_name);
     void PrintAmplitudeSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);

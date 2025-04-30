@@ -8,6 +8,7 @@
 #include "ArrayStats.hpp"
 #include "KeyPacker.hpp"
 #include "Constants.hpp"
+#include "GlobalEnumClass.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -16,6 +17,7 @@
 #include <TGraphErrors.h>
 #include <TGraph2DErrors.h>
 #include <TF1.h>
+#include <TH1.h>
 #endif
 
 PotentialEntryIterator::PotentialEntryIterator(ModelObject * model_object) :
@@ -47,6 +49,25 @@ std::tuple<double, double> PotentialEntryIterator::GetGausEstimatePrior(
         return std::make_tuple(0.0, 0.0);
     }
     return m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key);
+}
+
+size_t PotentialEntryIterator::GetResidueCount(
+    const std::string & class_key, Residue residue, Structure structure) const
+{
+    uint64_t group_key;
+    if (class_key == AtomicInfoHelper::GetResidueClassKey())
+    {
+        group_key = KeyPackerResidueClass::Pack(residue, Element::CARBON, Remoteness::ALPHA, Branch::NONE, false);
+    }
+    else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+    {
+        group_key = KeyPackerStructureClass::Pack(structure, residue, Element::CARBON, Remoteness::ALPHA, Branch::NONE, false);
+    }
+    if (IsAvailableGroupKey(group_key, class_key) == false)
+    {
+        return 0;
+    }
+    return GetAtomObjectList(group_key, class_key).size();
 }
 
 std::tuple<double, double> PotentialEntryIterator::GetGausVariancePrior(
@@ -243,13 +264,61 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
                           << static_cast<int>(std::get<3>(unpack_key)) <<", "
                           << std::get<4>(unpack_key) <<"> not found." << std::endl;
             }
+            else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+            {
+                auto unpack_key{ KeyPackerStructureClass::Unpack(group_key) };
+                std::cout <<"Structure class group key : tuple<" << std::boolalpha
+                          << static_cast<int>(std::get<0>(unpack_key)) <<", "
+                          << static_cast<int>(std::get<1>(unpack_key)) <<", "
+                          << static_cast<int>(std::get<2>(unpack_key)) <<", "
+                          << static_cast<int>(std::get<3>(unpack_key)) <<", "
+                          << static_cast<int>(std::get<4>(unpack_key)) <<", "
+                          << std::get<5>(unpack_key) <<"> not found." << std::endl;
+            }
         }
         return false;
     }
     return true;
 }
 
+Residue PotentialEntryIterator::GetResidueFromGroupKey(
+    uint64_t group_key, const std::string & class_key) const
+{
+    if (class_key == AtomicInfoHelper::GetElementClassKey())
+    {
+        std::cout <<"Element class group key is not recording Residue info."<< std::endl;
+        return Residue::UNK;
+    }
+    else if (class_key == AtomicInfoHelper::GetResidueClassKey())
+    {
+        auto unpack_key{ KeyPackerResidueClass::Unpack(group_key) };
+        return static_cast<Residue>(std::get<0>(unpack_key));
+    }
+    else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+    {
+        auto unpack_key{ KeyPackerStructureClass::Unpack(group_key) };
+        return static_cast<Residue>(std::get<1>(unpack_key));
+    }
+    return Residue::UNK;
+}
+
 #ifdef HAVE_ROOT
+std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
+    const std::string & class_key, Structure structure)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
+    for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
+    {
+        auto count{ GetResidueCount(class_key, residue, structure) };
+        hist->SetBinContent(static_cast<int>(residue) + 1, static_cast<double>(count));
+    }
+    return hist;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatterGraph(
     uint64_t group_key, const std::string & class_key)
 {
@@ -289,8 +358,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
     for (auto & group_key : group_key_list)
     {
         if (IsAvailableGroupKey(group_key, class_key) == false) continue;
-        auto unpack_key{ KeyPackerResidueClass::Unpack(group_key) };
-        auto residue_id{ std::get<0>(unpack_key) };
+        auto residue_id{ GetResidueFromGroupKey(group_key, class_key) };
         auto gaus_estimate{ GetGausEstimatePrior(group_key, class_key) };
         auto gaus_variance{ GetGausVariancePrior(group_key, class_key) };
         auto y_value{ (par_id == 0) ? std::get<0>(gaus_estimate) : std::get<1>(gaus_estimate) };

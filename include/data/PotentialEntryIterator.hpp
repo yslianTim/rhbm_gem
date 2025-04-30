@@ -10,8 +10,11 @@ class AtomObject;
 class ModelObject;
 class AtomicPotentialEntry;
 enum class Element : uint16_t;
+enum class Residue : uint16_t;
+enum class Structure : uint8_t;
 
 #ifdef HAVE_ROOT
+class TH1D;
 class TGraphErrors;
 class TGraph2DErrors;
 class TF1;
@@ -28,6 +31,7 @@ public:
     PotentialEntryIterator(AtomObject * atom_object);
     ~PotentialEntryIterator();
     bool IsAvailableGroupKey(uint64_t group_key, const std::string & class_key) const;
+    size_t GetResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;
     std::tuple<double, double> GetGausEstimatePrior(uint64_t group_key, const std::string & class_key) const;
     std::tuple<double, double> GetGausVariancePrior(uint64_t group_key, const std::string & class_key) const;
     double GetGausEstimatePrior(uint64_t group_key, const std::string & class_key, int par_id) const;
@@ -43,6 +47,7 @@ public:
     double GetWidthEstimateMDPDE(void) const;
 
     #ifdef HAVE_ROOT
+    std::unique_ptr<TH1D> CreateResidueCountHistogram(const std::string & class_key, Structure structure=static_cast<Structure>(0));
     std::unique_ptr<TGraphErrors> CreateBfactorToWidthScatterGraph(uint64_t group_key, const std::string & class_key);
     std::unique_ptr<TGraphErrors> CreateGausEstimateToResidueGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, bool reverse=false);
@@ -63,5 +68,6 @@ private:
     bool IsModelObjectAvailable(void) const;
     bool CheckParameterIndex(int par_id) const;
     bool CheckGroupKey(uint64_t group_key, const std::string & class_key, bool verbose=true) const;
+    Residue GetResidueFromGroupKey(uint64_t group_key, const std::string & class_key) const;
 
 };

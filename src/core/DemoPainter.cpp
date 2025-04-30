@@ -8,6 +8,7 @@
 #include "AtomClassifier.hpp"
 #include "ArrayStats.hpp"
 #include "KeyPacker.hpp"
+#include "GlobalEnumClass.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
