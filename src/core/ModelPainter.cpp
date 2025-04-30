@@ -441,6 +441,10 @@ void ModelPainter::PaintStructureClassGroupGausMainChain(
     ROOTHelper::SetMarkerAttribute(count_hist[0].get(), 20, 7.0f, kAzure);
     count_hist[0]->Draw("HIST TEXT0 SAME");
 
+    ROOTHelper::SetFillAttribute(count_hist[2].get(), 1001, kGray);
+    ROOTHelper::SetLineAttribute(count_hist[2].get(), 1, 1, kGray);
+    count_hist[2]->Draw("HIST SAME");
+
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     std::cout <<"  Output file: "<< file_path << std::endl;
