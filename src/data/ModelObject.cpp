@@ -24,6 +24,7 @@ ModelObject::~ModelObject()
 
 ModelObject::ModelObject(const ModelObject & other) :
     m_key_tag{ other.m_key_tag }, m_pdb_id{ other.m_pdb_id }, m_emd_id{ other.m_emd_id },
+    m_resolution_method{ other.m_resolution_method }, m_resolution{ other.m_resolution },
     m_kd_tree_root{ nullptr }
 {
     m_atom_list.clear();
@@ -88,16 +89,35 @@ void ModelObject::BuildKDTreeRoot(void)
     m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0);
 }
 
-std::tuple<double, double> ModelObject::GetModelPositionRange(
-    int axis, double margin) const
+std::tuple<double, double> ModelObject::GetModelPositionRange(int axis)
 {
+    if (m_model_position_range[axis] != nullptr)
+    {
+        return *(m_model_position_range[axis]);
+    }
     std::vector<double> position_list;
     position_list.reserve(m_atom_list.size());
     for (auto & atom : m_atom_list)
     {
         position_list.emplace_back(atom->GetPosition().at(static_cast<size_t>(axis)));
     }
-    return ArrayStats<double>::ComputeScalingRangeTuple(position_list, margin);
+    m_model_position_range[axis] = std::make_unique<std::tuple<double, double>>(
+        ArrayStats<double>::ComputeScalingRangeTuple(position_list, 0.0));
+    return *(m_model_position_range[axis]);
+}
+
+double ModelObject::GetModelPosition(int axis, double normalized_pos)
+{
+    auto range_tuple{ GetModelPositionRange(axis) };
+    auto pos_min{ std::get<0>(range_tuple) };
+    auto pos_max{ std::get<1>(range_tuple) };
+    return pos_min + normalized_pos * (pos_max - pos_min);
+}
+
+double ModelObject::GetModelLength(int axis)
+{
+    auto range_tuple{ GetModelPositionRange(axis) };
+    return std::get<1>(range_tuple) - std::get<0>(range_tuple);
 }
 
 GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & class_key) const

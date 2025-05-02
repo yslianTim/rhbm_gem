@@ -30,6 +30,7 @@ public:
     PotentialEntryIterator(ModelObject * model_object);
     PotentialEntryIterator(AtomObject * atom_object);
     ~PotentialEntryIterator();
+    double GetGausEstimateMinimum(int par_id, Element element) const;
     bool IsAvailableGroupKey(uint64_t group_key, const std::string & class_key) const;
     size_t GetResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;
     std::tuple<double, double> GetGausEstimatePrior(uint64_t group_key, const std::string & class_key) const;
@@ -48,6 +49,7 @@ public:
 
     #ifdef HAVE_ROOT
     std::unique_ptr<TH1D> CreateResidueCountHistogram(const std::string & class_key, Structure structure=static_cast<Structure>(0));
+    std::unique_ptr<TGraphErrors> CreateNormalizedGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateBfactorToWidthScatterGraph(uint64_t group_key, const std::string & class_key);
     std::unique_ptr<TGraphErrors> CreateGausEstimateToResidueGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, bool reverse=false);

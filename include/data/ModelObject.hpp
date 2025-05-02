@@ -18,6 +18,7 @@ class ModelObject : public DataObjectBase
     double m_resolution;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_group_potential_entry_map;
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
+    std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
 
 public:
     ModelObject(void);
@@ -45,7 +46,9 @@ public:
     std::string GetEmdID(void) const { return m_emd_id; }
     double GetResolution(void) const { return m_resolution; }
     std::string GetResolutionMethod(void) const { return m_resolution_method; }
-    std::tuple<double, double> GetModelPositionRange(int axis, double margin=0.0) const;
+    std::tuple<double, double> GetModelPositionRange(int axis);
+    double GetModelPosition(int axis, double normalized_pos);
+    double GetModelLength(int axis);
     GroupPotentialEntry * GetGroupPotentialEntry(const std::string & class_key) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> & GetGroupPotentialEntryMap(void) const;
     KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }

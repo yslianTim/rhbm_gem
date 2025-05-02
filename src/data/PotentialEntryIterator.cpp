@@ -36,6 +36,26 @@ PotentialEntryIterator::~PotentialEntryIterator()
 
 }
 
+double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element element) const
+{
+    if (m_model_object == nullptr)
+    {
+        throw std::runtime_error("Model object is not available.");
+    }
+    std::vector<double> gaus_estimate_list;
+    gaus_estimate_list.reserve(m_model_object->GetNumberOfSelectedAtom());
+    for (auto & atom : m_model_object->GetComponentsList())
+    {
+        if (atom->GetSelectedFlag() == false) continue;
+        if (atom->GetElement() != element) continue;
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto gaus_estimate{ (par_id == 0) ?
+            entry->GetAmplitudeEstimateMDPDE() : entry->GetWidthEstimateMDPDE() };
+        gaus_estimate_list.emplace_back(gaus_estimate);
+    }
+    return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
+}
+
 bool PotentialEntryIterator::IsAvailableGroupKey(uint64_t group_key, const std::string & class_key) const
 {
     return CheckGroupKey(group_key, class_key, false);
@@ -319,6 +339,54 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
     return hist;
 }
 
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstimateScatterGraph(
+    Element element, double reference_amplitude, bool reverse)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
+    for (auto & atom : m_model_object->GetComponentsList())
+    {
+        if (atom->GetSelectedFlag() == false) continue;
+        if (atom->GetElement() != Element::OXYGEN) continue;
+        if (atom->GetRemoteness() != Remoteness::NONE) continue;
+        if (atom->GetSpecialAtomFlag() == false)
+        {
+            auto entry{ atom->GetAtomicPotentialEntry() };
+            auto residue_id{ atom->GetResidueID() };
+            auto amplitude_estimate{ entry->GetAmplitudeEstimateMDPDE() };
+            amplitude_diff_to_carbonyl_oxygen_map[residue_id] = amplitude_estimate - reference_amplitude;
+        }
+    }
+    auto count{ 0 };
+    for (auto & atom : m_model_object->GetComponentsList())
+    {
+        if (atom->GetElement() == element && atom->GetSelectedFlag() == true)
+        {
+            auto residue_id{ atom->GetResidueID() };
+            auto entry{ atom->GetAtomicPotentialEntry() };
+            auto normalized_amplitude{ entry->GetAmplitudeEstimateMDPDE() };
+            if (amplitude_diff_to_carbonyl_oxygen_map.find(residue_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
+            {
+                normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(residue_id);
+            }
+            if (reverse == false)
+            {
+                graph->SetPoint(count, normalized_amplitude, entry->GetWidthEstimateMDPDE());
+            }
+            else
+            {
+                graph->SetPoint(count, entry->GetWidthEstimateMDPDE(), normalized_amplitude);
+            }
+            count++;
+        }
+    }
+    return graph;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatterGraph(
     uint64_t group_key, const std::string & class_key)
 {
@@ -529,13 +597,10 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomography
         return nullptr;
     }
     auto graph{ ROOTHelper::CreateGraphErrors() };
-    auto z_range_tuple{ m_model_object->GetModelPositionRange(2) };
-    auto z_pos_min{ std::get<0>(z_range_tuple) };
-    auto z_pos_max{ std::get<1>(z_range_tuple) };
-    auto z_range{ z_pos_max - z_pos_min };
-    auto window_width{ 0.5 * z_range * z_ratio_window };
-    auto z_window_min{ z_pos_min + normalized_z_pos * z_range - window_width };
-    auto z_window_max{ z_pos_min + normalized_z_pos * z_range + window_width };
+    auto z_pos{ m_model_object->GetModelPosition(2, normalized_z_pos) };
+    auto window_width{ 0.5 * m_model_object->GetModelLength(2) * z_ratio_window };
+    auto z_window_min{ z_pos - window_width };
+    auto z_window_max{ z_pos + window_width };
     
     auto count{ 0 };
     for (auto & atom : m_model_object->GetComponentsList())
