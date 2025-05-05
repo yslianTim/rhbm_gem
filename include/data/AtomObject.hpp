@@ -75,6 +75,7 @@ public:
     float GetOccupancy(void) const { return m_occupancy; }
     float GetTemperature(void) const { return m_temperature; }
     std::array<float, 3> GetPosition(void) const { return m_position; }
+    const std::array<float, 3> & GetPositionRef(void) const { return m_position; }
     AtomicPotentialEntry * GetAtomicPotentialEntry(void) const { return m_atomic_potential_entry.get(); }
 
 private:

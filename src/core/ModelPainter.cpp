@@ -76,12 +76,14 @@ void ModelPainter::Painting(void)
         auto plot_map_value_name{ "residue_class_map_value_"+ model_object->GetPdbID() +".pdf" };
         PaintResidueClassMapValue(model_object, plot_map_value_name);
         model_object->BuildKDTreeRoot();
-        PaintResidueClassKNN(model_object, "residue_class_knn_"+ model_object->GetPdbID() +".pdf");
+        PaintResidueClassWidthScatterPlot(model_object, "residue_class_com_"+ model_object->GetPdbID() +".pdf", 0, true);
+        PaintResidueClassWidthScatterPlot(model_object, "residue_class_knn_"+ model_object->GetPdbID() +".pdf", 1, true);
         PaintResidueClassXYPosition(model_object, "residue_class_xy_position_"+ model_object->GetPdbID() +".pdf");
         PaintResidueClassGroupGausScatter(model_object, "amplitude_scatter_"+ model_object->GetPdbID() +".pdf", 0);
         PaintResidueClassGroupGausScatter(model_object, "width_scatter_"+ model_object->GetPdbID() +".pdf", 1);
         PaintAtomXYPosition(model_object, "atom_position_"+ model_object->GetPdbID() +".pdf");
-        PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ model_object->GetPdbID() +".pdf");
+        PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ model_object->GetPdbID() +".pdf", false);
+        PaintAtomGausScatter(model_object, "atom_gaus_scatter_normalized_"+ model_object->GetPdbID() +".pdf", true);
     }
 
     if (m_ref_model_object_map.find("with_charge") != m_ref_model_object_map.end())
@@ -493,8 +495,8 @@ void ModelPainter::PaintResidueClassGroupGausScatter(
     ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.10f, 0.02f, 0.08f, 0.02f, 0.02f, 0.02f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
     
-    const size_t col_element_index[column_size]{ 1, 2, 3 };
-    const size_t row_element_index[row_size]{ 0, 3, 2 };
+    const size_t col_element_index[column_size]{ 2, 1, 0 };
+    const size_t row_element_index[row_size]{ 3, 0, 1 };
     const std::string element_label[4]
     {
         "Alpha Carbon",
@@ -771,10 +773,11 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
     #endif
 }
 
-void ModelPainter::PaintResidueClassKNN(ModelObject * model_object, const std::string & name)
+void ModelPainter::PaintResidueClassWidthScatterPlot(
+    ModelObject * model_object, const std::string & name, int par_id, bool draw_box_plot)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ModelPainter::PaintResidueClassKNN"<< std::endl;
+    std::cout <<"- ModelPainter::PaintResidueClassWidthScatterPlot"<< std::endl;
     auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -805,37 +808,73 @@ void ModelPainter::PaintResidueClassKNN(ModelObject * model_object, const std::s
     };
 
     short color_element[column_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
-    short marker_element[column_size]{ 54, 53, 55, 59 };
     std::unique_ptr<TH2> frame[column_size][row_size];
-
     std::vector<std::unique_ptr<TGraphErrors>> graph_list[column_size][row_size];
-    double x_min[column_size]{ 0.0 };
-    double x_max[column_size]{ 1.0 };
-    double y_min[row_size]{ 0.0 };
-    double y_max[row_size]{ 1.0 };
+    std::vector<double> x_array[column_size];
+    std::vector<double> y_array[row_size];
     for (size_t i = 0; i < column_size; i++)
     {
         for (auto residue : AtomicInfoHelper::GetStandardResidueList())
         {
             auto group_key{ m_atom_classifier->GetMainChainResidueClassGroupKey(i, residue) };
             if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
-            auto amplitude_graph{ entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 0) };
-            auto width_graph{ entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 1) };
-            double knn_min, knn_max, amplitude_min, amplitude_max;
-            amplitude_graph->ComputeRange(knn_min, amplitude_min, knn_max, amplitude_max);
-            x_min[i] = (knn_min < x_min[i]) ? knn_min : x_min[i];
-            x_max[i] = (knn_max > x_max[i]) ? knn_max : x_max[i];
-            y_min[1] = (amplitude_min < y_min[1]) ? amplitude_min : y_min[1];
-            y_max[1] = (amplitude_max > y_max[1]) ? amplitude_max : y_max[1];
-            double width_min, width_max;
-            width_graph->ComputeRange(knn_min, width_min, knn_max, width_max);
-            x_min[i] = (knn_min < x_min[i]) ? knn_min : x_min[i];
-            x_max[i] = (knn_max > x_max[i]) ? knn_max : x_max[i];
-            y_min[0] = (width_min < y_min[0]) ? width_min : y_min[0];
-            y_max[0] = (width_max > y_max[0]) ? width_max : y_max[0];
+            auto amplitude_graph
+            {
+                (par_id == 0) ?
+                entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, residue_class, 0) :
+                entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 0)
+            };
+            auto width_graph
+            {
+                (par_id == 0) ?
+                entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, residue_class, 1) :
+                entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 1) };
+            for (int p = 0; p < amplitude_graph->GetN(); p++)
+            {
+                x_array[i].emplace_back(amplitude_graph->GetPointX(p));
+                y_array[1].emplace_back(amplitude_graph->GetPointY(p));
+            }
+
+            for (int p = 0; p < width_graph->GetN(); p++)
+            {
+                y_array[0].emplace_back(width_graph->GetPointY(p));
+            }
 
             graph_list[i][1].emplace_back(std::move(amplitude_graph));
             graph_list[i][0].emplace_back(std::move(width_graph));
+        }
+    }
+
+    double x_min[column_size];
+    double x_max[column_size];
+    double y_min[row_size];
+    double y_max[row_size];
+    for (int i = 0; i < column_size; i++)
+    {
+        auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array[i], 0.0) };
+        x_min[i] = std::get<0>(x_range);
+        x_max[i] = std::get<1>(x_range);
+    }
+    for (int j = 0; j < row_size; j++)
+    {
+        auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.3) };
+        y_min[j] = std::get<0>(y_range);
+        y_max[j] = std::get<1>(y_range);
+    }
+
+    std::unique_ptr<TH2D> summary_hist[column_size][row_size];
+    for (int i = 0; i < column_size; i++)
+    {
+        for (int j = 0; j < row_size; j++)
+        {
+            summary_hist[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j), "", 5, x_min[i], x_max[i], 100, y_min[j], y_max[j]);
+            for (auto & graph : graph_list[i][j])
+            {
+                for (int p = 0; p < graph->GetN(); p++)
+                {
+                    summary_hist[i][j]->Fill(graph->GetPointX(p), graph->GetPointY(p));
+                }
+            }
         }
     }
 
@@ -847,7 +886,7 @@ void ModelPainter::PaintResidueClassKNN(ModelObject * model_object, const std::s
             ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[j], y_max[j]);
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[j], y_max[j]);
             ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 1.0f, 133);
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
@@ -855,15 +894,25 @@ void ModelPainter::PaintResidueClassKNN(ModelObject * model_object, const std::s
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35, 0.01f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
-            frame[i][j]->GetXaxis()->SetTitle("#In Range atoms");
+            auto title{ (par_id == 0)? "To C.M. Distance #[]{#AA}" : "In Range Atoms" };
+            frame[i][j]->GetXaxis()->SetTitle(title);
             frame[i][j]->GetYaxis()->SetTitle(y_axis_title[j].data());
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw();
-            for (auto & graph : graph_list[i][j])
+            if (draw_box_plot == true)
             {
-                ROOTHelper::SetMarkerAttribute(graph.get(), marker_element[i], 1.3f, color_element[i]);
-                graph->Draw("P X0");
+                ROOTHelper::SetLineAttribute(summary_hist[i][j].get(), 1, 1, color_element[i]);
+                ROOTHelper::SetFillAttribute(summary_hist[i][j].get(), 1001, color_element[i], 0.3f);
+                summary_hist[i][j]->Draw("CANDLE3 SAME");
+            }
+            else
+            {
+                for (auto & graph : graph_list[i][j])
+                {
+                    ROOTHelper::SetMarkerAttribute(graph.get(), 24, 1.0f, color_element[i]);
+                    graph->Draw("P");
+                }
             }
         }
     }
@@ -1013,9 +1062,10 @@ void ModelPainter::PaintAtomXYPosition(
 
     auto normalized_z_position{ 0.5 };
     auto z_ratio_window{ 0.1 };
-    auto graph{ entry_iter->CreateXYPositionTomographyGraph(normalized_z_position, z_ratio_window) };
+    auto graph{ entry_iter->CreateXYPositionTomographyGraph(normalized_z_position, z_ratio_window, true) };
     auto z_position{ model_object->GetModelPosition(2, normalized_z_position) };
     auto z_window{ model_object->GetModelLength(2) * z_ratio_window };
+    auto com_pos{ model_object->GetCenterOfMassPosition() };
     std::vector<double> x_array, y_array;
     x_array.reserve(static_cast<size_t>(graph->GetN()));
     y_array.reserve(static_cast<size_t>(graph->GetN()));
@@ -1056,7 +1106,7 @@ void ModelPainter::PaintAtomXYPosition(
     ROOTHelper::SetTextAttribute(pos_text.get(), 35, 133, 32);
     pos_text->AddText(
         Form("Atom Position #font[2]{z} = %.1f #pm %.1f #[]{#AA}",
-        z_position, z_window*0.5));
+        z_position - com_pos.at(2), z_window*0.5));
     pos_text->Draw();
 
     auto title_text{ ROOTHelper::CreatePaveText(0.02, 0.89, 0.67, 0.98, "nbNDC ARC", false) };
@@ -1083,12 +1133,12 @@ void ModelPainter::PaintAtomXYPosition(
 }
 
 void ModelPainter::PaintAtomGausScatter(
-    ModelObject * model_object, const std::string & name)
+    ModelObject * model_object, const std::string & name, bool do_normalize)
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintAtomGausScatter"<< std::endl;
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
-    //auto amplitude_min{ entry_iter->GetGausEstimateMinimum(0, Element::OXYGEN) };
+    auto amplitude_min{ entry_iter->GetGausEstimateMinimum(0, Element::OXYGEN) };
 
     #ifdef HAVE_ROOT
 
@@ -1111,8 +1161,12 @@ void ModelPainter::PaintAtomGausScatter(
     y_array.reserve(model_object->GetNumberOfSelectedAtom());
     for (auto & [element_type, element_name] : AtomicInfoHelper::GetElementLabelMap())
     {
-        auto graph{ entry_iter->CreateGausEstimateScatterGraph(element_type) };
-        //auto graph{ entry_iter->CreateNormalizedGausEstimateScatterGraph(element_type, amplitude_min) };
+        auto graph
+        {
+            (do_normalize == true) ?
+            entry_iter->CreateNormalizedGausEstimateScatterGraph(element_type, amplitude_min) :
+            entry_iter->CreateGausEstimateScatterGraph(element_type)
+        };
         auto marker_size{ (AtomicInfoHelper::IsStandardElement(element_type)) ? 1.5f : 2.0f };
         ROOTHelper::SetMarkerAttribute(graph.get(),
             AtomicInfoHelper::GetDisplayMarker(element_type), marker_size,

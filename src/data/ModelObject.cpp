@@ -89,6 +89,30 @@ void ModelObject::BuildKDTreeRoot(void)
     m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0);
 }
 
+std::array<float, 3> ModelObject::GetCenterOfMassPosition(void)
+{
+    if (m_center_of_mass_position != nullptr)
+    {
+        return *(m_center_of_mass_position);
+    }
+    std::vector<float> pos_x, pos_y, pos_z;
+    pos_x.reserve(m_atom_list.size());
+    pos_y.reserve(m_atom_list.size());
+    pos_z.reserve(m_atom_list.size());
+    for (auto & atom : m_atom_list)
+    {
+        const auto & pos{ atom->GetPositionRef() };
+        pos_x.emplace_back(pos.at(0));
+        pos_y.emplace_back(pos.at(1));
+        pos_z.emplace_back(pos.at(2));
+    }
+    m_center_of_mass_position = std::make_unique<std::array<float, 3>>();
+    m_center_of_mass_position->at(0) = ArrayStats<float>::ComputeMean(pos_x.data(), pos_x.size());
+    m_center_of_mass_position->at(1) = ArrayStats<float>::ComputeMean(pos_y.data(), pos_y.size());
+    m_center_of_mass_position->at(2) = ArrayStats<float>::ComputeMean(pos_z.data(), pos_z.size());
+    return *(m_center_of_mass_position);
+}
+
 std::tuple<double, double> ModelObject::GetModelPositionRange(int axis)
 {
     if (m_model_position_range[axis] != nullptr)

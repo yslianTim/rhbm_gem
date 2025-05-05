@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <array>
 #include <tuple>
 #include <unordered_map>
 #include "DataObjectBase.hpp"
@@ -18,6 +19,7 @@ class ModelObject : public DataObjectBase
     double m_resolution;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_group_potential_entry_map;
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
+    std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
 
 public:
@@ -46,6 +48,7 @@ public:
     std::string GetEmdID(void) const { return m_emd_id; }
     double GetResolution(void) const { return m_resolution; }
     std::string GetResolutionMethod(void) const { return m_resolution_method; }
+    std::array<float, 3> GetCenterOfMassPosition(void);
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);

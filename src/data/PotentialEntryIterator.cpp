@@ -576,6 +576,11 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
     }
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto kd_tree_root{ m_model_object->GetKDTreeRoot() };
+    if (kd_tree_root == nullptr)
+    {
+        std::cerr << "KDTree is not available." << std::endl;
+        return nullptr;
+    }
 
     auto count{ 0 };
     for (auto & atom : GetAtomObjectList(group_key, class_key))
@@ -589,13 +594,37 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
     return graph;
 }
 
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateCOMDistanceToGausEstimateGraph(
+    uint64_t group_key, const std::string & class_key, int par_id)
+{
+    if (IsModelObjectAvailable() == false || CheckParameterIndex(par_id) == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto center_of_mass_pos{ m_model_object->GetCenterOfMassPosition() };
+
+    auto count{ 0 };
+    for (auto & atom : GetAtomObjectList(group_key, class_key))
+    {
+        const auto & atom_pos{ atom->GetPositionRef() };
+        auto distance{ ArrayStats<float>::ComputeNorm(atom_pos, center_of_mass_pos) };
+        auto atom_entry{ atom->GetAtomicPotentialEntry() };
+        auto gaus_estimate{ (par_id == 0) ? atom_entry->GetAmplitudeEstimateMDPDE() : atom_entry->GetWidthEstimateMDPDE() };
+        graph->SetPoint(count, static_cast<double>(distance), gaus_estimate);
+        count++;
+    }
+    return graph;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomographyGraph(
-    double normalized_z_pos, double z_ratio_window)
+    double normalized_z_pos, double z_ratio_window, bool com_center)
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
+    auto com_pos{ com_center ? m_model_object->GetCenterOfMassPosition() : std::array<float, 3>{0.0, 0.0, 0.0} };
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto z_pos{ m_model_object->GetModelPosition(2, normalized_z_pos) };
     auto window_width{ 0.5 * m_model_object->GetModelLength(2) * z_ratio_window };
@@ -610,7 +639,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomography
         {
             continue;
         }
-        graph->SetPoint(count, position.at(0), position.at(1));
+        graph->SetPoint(count, position.at(0) - com_pos.at(0), position.at(1) - com_pos.at(1));
         count++;
     }
     return graph;

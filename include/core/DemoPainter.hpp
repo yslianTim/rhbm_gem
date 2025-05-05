@@ -36,6 +36,7 @@ private:
     void PaintResidueClassGroupGausSideChainSummary(const std::string & name);
     void PaintElementClassGroupGausToFSC(const std::string & name);
     void PaintWidthToBfactorScatterPlotSummary(const std::string & name);
+    void PaintResidueClassWidthScatterPlot(const std::string & name, int par_id=0, bool draw_box_plot=false);
 
     #ifdef HAVE_ROOT
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
