@@ -9,6 +9,7 @@
 #include "KeyPacker.hpp"
 #include "Constants.hpp"
 #include "GlobalEnumClass.hpp"
+#include "AtomClassifier.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -410,6 +411,43 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
         count++;
     }
 
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueIDGraph(
+    size_t main_chain_element_id, std::string & chain_id, const int par_id, Residue residue)
+{
+    if (IsModelObjectAvailable() == false || CheckParameterIndex(par_id) == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    
+    auto count{ 0 };
+    auto residue_id_previous{ -1 };
+    for (auto & atom : m_model_object->GetComponentsList())
+    {
+        if (atom->GetSelectedFlag() == false) continue;
+        if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
+        if (atom->GetRemoteness() != AtomClassifier::GetMainChainRemoteness(main_chain_element_id)) continue;
+        if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto residue_id{ atom->GetResidueID() };
+        chain_id = atom->GetChainID();
+        if (residue_id < residue_id_previous)
+        {
+            std::cout << "Found the second chain, skip the rest of chains." << std::endl;
+            break;
+        }
+        residue_id_previous = residue_id;
+        auto amplitude{ entry->GetAmplitudeEstimateMDPDE() };
+        auto width{ entry->GetWidthEstimateMDPDE() };
+        //auto intensity{ amplitude * std::pow(Constants::two_pi*width*width, -1.5) };
+        auto x_value{ static_cast<double>(residue_id) };
+        auto y_value{ (par_id == 0) ? amplitude : width };
+        graph->SetPoint(count, x_value, y_value);
+        count++;
+    }
     return graph;
 }
 

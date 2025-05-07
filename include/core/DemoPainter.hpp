@@ -37,6 +37,7 @@ private:
     void PaintElementClassGroupGausToFSC(const std::string & name);
     void PaintWidthToBfactorScatterPlotSummary(const std::string & name);
     void PaintResidueClassWidthScatterPlot(const std::string & name, int par_id=0, bool draw_box_plot=false);
+    void PaintAtomGausMainChain(const std::string & name, int par_id=0);
 
     #ifdef HAVE_ROOT
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
@@ -50,6 +51,9 @@ private:
     void PrintLeftSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::string & y_title, const std::vector<std::string> & label_list);
     void PrintRightSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
     void PrintTitleSideChainPad(TPad * pad, TPaveText * text, const std::string & residue_name);
+
+    void PrintGausResultInResidueIDPad(TPad * pad, TH2 * hist, int par_id=0);
+    void PrintInfoInResidueIDPad(TPad * pad, TPaveText * text, const ModelObject * model_object, const std::string & chain_id, int residue_size);
     #endif
 
 };
