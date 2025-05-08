@@ -602,9 +602,9 @@ void ComparisonPainter::PainResidueClassGausComparison(
     std::unique_ptr<TF1> fit_function[column_size][row_size];
     std::vector<double> x_array[column_size];
     std::vector<double> y_array[row_size];
-    double r_square[column_size][row_size]{ 0.0 };
-    double slope[column_size][row_size]{ 0.0 };
-    double intercept[column_size][row_size]{ 0.0 };
+    double r_square[column_size][row_size]{ {0.0} };
+    double slope[column_size][row_size]{ {0.0} };
+    double intercept[column_size][row_size]{ {0.0} };
     for (size_t i = 0; i < column_size; i++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i) };

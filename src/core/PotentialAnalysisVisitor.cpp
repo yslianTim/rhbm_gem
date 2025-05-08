@@ -20,13 +20,13 @@
 #include <fstream>
 
 PotentialAnalysisVisitor::PotentialAnalysisVisitor(
-    std::shared_ptr<AtomSelector> atom_selector,
-    std::shared_ptr<SphereSampler> sphere_sampler) :
+    AtomSelector * atom_selector,
+    SphereSampler * sphere_sampler) :
     m_thread_size{ 1 },
     m_alpha_r{ 0.0 }, m_alpha_g{ 0.0 },
     m_x_min{ 0.0 }, m_x_max{ 0.0 },
-    m_atom_selector{ std::move(atom_selector) },
-    m_sphere_sampler{ std::move(sphere_sampler) }
+    m_atom_selector{ atom_selector },
+    m_sphere_sampler{ sphere_sampler }
 {
 
 }

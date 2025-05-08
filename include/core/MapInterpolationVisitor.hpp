@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <vector>
 #include <array>
 #include <tuple>
@@ -10,12 +9,12 @@ class SphereSampler;
 
 class MapInterpolationVisitor : public DataObjectVisitorBase
 {
-    std::shared_ptr<SphereSampler> m_sphere_sampler;
+    SphereSampler * m_sphere_sampler;
     std::array<float, 3> m_position;
     std::vector<std::tuple<float, float>> m_sampling_data_list;
 
 public:
-    MapInterpolationVisitor(std::shared_ptr<SphereSampler> sphere_sampler);
+    MapInterpolationVisitor(SphereSampler * sphere_sampler);
     ~MapInterpolationVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;

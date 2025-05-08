@@ -519,9 +519,9 @@ void DemoPainter::PaintWidthToBfactorScatterPlotSummary(const std::string & name
     std::unique_ptr<TGraphErrors> graph[primary_element_size][row_size];
     std::unique_ptr<TF1> fit_function[col_size][row_size];
     std::vector<double> x_array[col_size], y_array[row_size];
-    double r_square[col_size][row_size]{ 0.0 };
-    double slope[col_size][row_size]{ 0.0 };
-    double intercept[col_size][row_size]{ 0.0 };
+    double r_square[col_size][row_size]{ {0.0} };
+    double slope[col_size][row_size]{ {0.0} };
+    double intercept[col_size][row_size]{ {0.0} };
     for (size_t i = 0; i < primary_element_size; i++)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };

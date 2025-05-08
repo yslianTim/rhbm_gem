@@ -72,7 +72,7 @@ bool PotentialEntryIterator::IsAvailableGroupKey(uint64_t group_key, const std::
 size_t PotentialEntryIterator::GetResidueCount(
     const std::string & class_key, Residue residue, Structure structure) const
 {
-    uint64_t group_key;
+    uint64_t group_key{ 0 };
     if (class_key == AtomicInfoHelper::GetResidueClassKey())
     {
         group_key = KeyPackerResidueClass::Pack(residue, Element::CARBON, Remoteness::ALPHA, Branch::NONE, false);

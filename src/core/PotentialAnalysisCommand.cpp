@@ -7,8 +7,8 @@
 #include <iostream>
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
-    m_atom_selector{ std::make_shared<AtomSelector>() },
-    m_sphere_sampler{ std::make_shared<SphereSampler>() }
+    m_atom_selector{ std::make_unique<AtomSelector>() },
+    m_sphere_sampler{ std::make_unique<SphereSampler>() }
 {
 
 }
@@ -29,7 +29,7 @@ void PotentialAnalysisCommand::Execute(void)
     m_atom_selector->Print();
     m_sphere_sampler->Print();
 
-    auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_atom_selector, m_sphere_sampler) };
+    auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_atom_selector.get(), m_sphere_sampler.get()) };
     analyzer->SetThreadSize(static_cast<unsigned int>(m_thread_size));
     analyzer->SetModelObjectKeyTag("model");
     analyzer->SetMapObjectKeyTag("map");

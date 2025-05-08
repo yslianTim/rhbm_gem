@@ -702,7 +702,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
         auto remoteness{ AtomClassifier::GetMainChainRemoteness(k) };
         auto group_key{ KeyPackerElementClass::Pack(element, remoteness, false) };
         if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
-        auto outlier_count{ 0 };
+        //auto outlier_count{ 0 };
         for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
         {
             auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
@@ -713,7 +713,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             auto map_value_range{ atom_iter->GetMapValueRange(0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
-            if (atom_iter->IsOutlierAtom(class_key) == true) outlier_count++;
+            //if (atom_iter->IsOutlierAtom(class_key) == true) outlier_count++;
         }
         gaus_function[k] = entry_iter->CreateGroupGausFunctionPrior(group_key, class_key);
     }

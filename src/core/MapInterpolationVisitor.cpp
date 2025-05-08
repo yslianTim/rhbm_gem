@@ -4,8 +4,8 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 
-MapInterpolationVisitor::MapInterpolationVisitor(std::shared_ptr<SphereSampler> sphere_sampler) :
-    m_sphere_sampler{ std::move(sphere_sampler) }, m_position{ 0.0, 0.0, 0.0 }
+MapInterpolationVisitor::MapInterpolationVisitor(SphereSampler * sphere_sampler) :
+    m_sphere_sampler{ sphere_sampler }, m_position{ 0.0, 0.0, 0.0 }
 {
 
 }
@@ -82,15 +82,18 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     }
     // Interpolate along x direction
     std::array<std::array<float, 4>, 4> tempY;
-    for (size_t j = 0; j < 4; ++j) {
-        for (size_t k = 0; k < 4; ++k) {
+    for (size_t j = 0; j < 4; ++j)
+    {
+        for (size_t k = 0; k < 4; ++k)
+        {
             tempY[j][k] = cubicInterpolate(values[0][j][k], values[1][j][k], values[2][j][k], values[3][j][k], local.at(0));
         }
     }
 
     // Interpolate along y direction
     std::array<float, 4> tempZ;
-    for (size_t k = 0; k < 4; ++k) {
+    for (size_t k = 0; k < 4; ++k)
+    {
         tempZ[k] = cubicInterpolate(tempY[0][k], tempY[1][k], tempY[2][k], tempY[3][k], local.at(1));
     }
 
