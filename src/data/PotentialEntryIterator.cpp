@@ -55,6 +55,15 @@ double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element elemen
     return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
 
+bool PotentialEntryIterator::IsOutlierAtom(const std::string & class_key) const
+{
+    if (IsAtomicEntryAvailable() == false)
+    {
+        throw std::runtime_error("Atomic entry is not available.");
+    }
+    return m_atomic_entry->GetOutlierTag(class_key);
+}
+
 bool PotentialEntryIterator::IsAvailableGroupKey(uint64_t group_key, const std::string & class_key) const
 {
     return CheckGroupKey(group_key, class_key, false);

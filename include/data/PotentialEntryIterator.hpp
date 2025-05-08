@@ -31,6 +31,7 @@ public:
     PotentialEntryIterator(AtomObject * atom_object);
     ~PotentialEntryIterator();
     double GetGausEstimateMinimum(int par_id, Element element) const;
+    bool IsOutlierAtom(const std::string & class_key) const;
     bool IsAvailableGroupKey(uint64_t group_key, const std::string & class_key) const;
     size_t GetResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;
     double GetGausEstimatePrior(uint64_t group_key, const std::string & class_key, int par_id) const;

@@ -35,7 +35,7 @@ private:
     void PaintStructureClassGroupGausMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
     void PaintStructureClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausScatter(ModelObject * model_object, const std::string & name, int par_id=0);
-    void PaintResidueClassMapValue(ModelObject * model_object, const std::string & name);
+    void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassWidthScatterPlot(ModelObject * model_object, const std::string & name, int par_id=0, bool draw_box_plot=false);
     void PaintResidueClassXYPosition(ModelObject * model_object, const std::string & name);
     void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
