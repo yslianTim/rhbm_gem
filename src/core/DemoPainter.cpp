@@ -137,7 +137,7 @@ void DemoPainter::PaintResidueClassGroupGausMainChainSummary(const std::string &
             auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(k) };
             amplitude_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 0);
             width_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 1);
-            correlation_graph[j][k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class, true);
+            correlation_graph[j][k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
             for (int p = 0; p < amplitude_graph[j][k]->GetN(); p++)
             {
                 amplitude_array.push_back(amplitude_graph[j][k]->GetPointY(p));
@@ -297,14 +297,16 @@ void DemoPainter::PaintResidueClassGroupGausSideChainSummary(const std::string &
                 {
                     auto group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
                     if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
-                    auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, residue_class) };
-                    auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key, residue_class) };
-                    amplitude_array.push_back(std::get<0>(gaus_estimate));
-                    width_array.push_back(std::get<1>(gaus_estimate));
-                    amplitude_graph_tmp->SetPoint(count_element, count_total, std::get<0>(gaus_estimate));
-                    amplitude_graph_tmp->SetPointError(count_element, 0.0, std::get<0>(gaus_variance));
-                    width_graph_tmp->SetPoint(count_element, count_total, std::get<1>(gaus_estimate));
-                    width_graph_tmp->SetPointError(count_element, 0.0, std::get<1>(gaus_variance));
+                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(group_key, residue_class, 0) };
+                    auto width_value{ entry_iter->GetGausEstimatePrior(group_key, residue_class, 1) };
+                    auto amplitude_error{ entry_iter->GetGausVariancePrior(group_key, residue_class, 0) };
+                    auto width_error{ entry_iter->GetGausVariancePrior(group_key, residue_class, 1) };
+                    amplitude_array.emplace_back(amplitude_value);
+                    width_array.emplace_back(width_value);
+                    amplitude_graph_tmp->SetPoint(count_element, count_total, amplitude_value);
+                    amplitude_graph_tmp->SetPointError(count_element, 0.0, amplitude_error);
+                    width_graph_tmp->SetPoint(count_element, count_total, width_value);
+                    width_graph_tmp->SetPointError(count_element, 0.0, width_error);
                     auto element_label{ AtomicInfoHelper::GetLabel(element) };
                     auto remoteness_label{ AtomicInfoHelper::GetLabel(remoteness) };
                     auto branch_label{ AtomicInfoHelper::GetLabel(branch) };
@@ -402,10 +404,10 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
         for (auto model : m_model_object_list)
         {
             auto entry_iter{ std::make_unique<PotentialEntryIterator>(model) };
-            auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetElementClassKey()) };
-            auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetElementClassKey()) };
-            graph[i]->SetPoint(count, model->GetResolution(), std::get<1>(gaus_estimate));
-            graph[i]->SetPointError(count, 0.0, std::get<1>(gaus_variance));
+            auto width_value{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetElementClassKey(), 1) };
+            auto width_error{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetElementClassKey(), 1) };
+            graph[i]->SetPoint(count, model->GetResolution(), width_value);
+            graph[i]->SetPointError(count, 0.0, width_error);
             count++;
         }
         for (int p = 0; p < graph[i]->GetN(); p++)

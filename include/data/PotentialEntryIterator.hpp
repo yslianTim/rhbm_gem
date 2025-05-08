@@ -33,8 +33,6 @@ public:
     double GetGausEstimateMinimum(int par_id, Element element) const;
     bool IsAvailableGroupKey(uint64_t group_key, const std::string & class_key) const;
     size_t GetResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;
-    std::tuple<double, double> GetGausEstimatePrior(uint64_t group_key, const std::string & class_key) const;
-    std::tuple<double, double> GetGausVariancePrior(uint64_t group_key, const std::string & class_key) const;
     double GetGausEstimatePrior(uint64_t group_key, const std::string & class_key, int par_id) const;
     double GetGausVariancePrior(uint64_t group_key, const std::string & class_key, int par_id) const;
     const std::vector<AtomObject *> & GetAtomObjectList(uint64_t group_key, const std::string & class_key) const;
@@ -53,7 +51,7 @@ public:
     std::unique_ptr<TGraphErrors> CreateBfactorToWidthScatterGraph(uint64_t group_key, const std::string & class_key);
     std::unique_ptr<TGraphErrors> CreateGausEstimateToResidueIDGraph(size_t main_chain_element_id, std::string & chain_id, const int par_id=0, Residue residue=static_cast<Residue>(65535));
     std::unique_ptr<TGraphErrors> CreateGausEstimateToResidueGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id=0);
-    std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, bool reverse=false);
+    std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(Element element, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(uint64_t group_key1, uint64_t group_key2, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateDistanceToMapValueGraph(void);
@@ -70,7 +68,6 @@ private:
     bool IsAtomObjectAvailable(void) const;
     bool IsAtomicEntryAvailable(void) const;
     bool IsModelObjectAvailable(void) const;
-    bool CheckParameterIndex(int par_id) const;
     bool CheckGroupKey(uint64_t group_key, const std::string & class_key, bool verbose=true) const;
     Residue GetResidueFromGroupKey(uint64_t group_key, const std::string & class_key) const;
 

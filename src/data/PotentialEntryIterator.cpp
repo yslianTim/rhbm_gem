@@ -50,9 +50,7 @@ double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element elemen
         if (atom->GetSelectedFlag() == false) continue;
         if (atom->GetElement() != element) continue;
         auto entry{ atom->GetAtomicPotentialEntry() };
-        auto gaus_estimate{ (par_id == 0) ?
-            entry->GetAmplitudeEstimateMDPDE() : entry->GetWidthEstimateMDPDE() };
-        gaus_estimate_list.emplace_back(gaus_estimate);
+        gaus_estimate_list.emplace_back(entry->GetGausEstimateMDPDE(par_id));
     }
     return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
 }
@@ -60,16 +58,6 @@ double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element elemen
 bool PotentialEntryIterator::IsAvailableGroupKey(uint64_t group_key, const std::string & class_key) const
 {
     return CheckGroupKey(group_key, class_key, false);
-}
-
-std::tuple<double, double> PotentialEntryIterator::GetGausEstimatePrior(
-    uint64_t group_key, const std::string & class_key) const
-{
-    if (CheckGroupKey(group_key, class_key) == false)
-    {
-        return std::make_tuple(0.0, 0.0);
-    }
-    return m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key);
 }
 
 size_t PotentialEntryIterator::GetResidueCount(
@@ -91,28 +79,24 @@ size_t PotentialEntryIterator::GetResidueCount(
     return GetAtomObjectList(group_key, class_key).size();
 }
 
-std::tuple<double, double> PotentialEntryIterator::GetGausVariancePrior(
-    uint64_t group_key, const std::string & class_key) const
+double PotentialEntryIterator::GetGausEstimatePrior(
+    uint64_t group_key, const std::string & class_key, int par_id) const
 {
     if (CheckGroupKey(group_key, class_key) == false)
     {
-        return std::make_tuple(0.0, 0.0);
+        throw std::runtime_error("Group key is not available.");
     }
-    return m_model_object->GetGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key);
+    return m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id);
 }
 
-double PotentialEntryIterator::GetGausEstimatePrior(uint64_t group_key, const std::string & class_key, int par_id) const
+double PotentialEntryIterator::GetGausVariancePrior(
+    uint64_t group_key, const std::string & class_key, int par_id) const
 {
-    if (CheckParameterIndex(par_id) == false) return 0.0;
-    auto gaus_estimate{ GetGausEstimatePrior(group_key, class_key) };
-    return (par_id == 0) ? std::get<0>(gaus_estimate) : std::get<1>(gaus_estimate);
-}
-
-double PotentialEntryIterator::GetGausVariancePrior(uint64_t group_key, const std::string & class_key, int par_id) const
-{
-    if (CheckParameterIndex(par_id) == false) return 0.0;
-    auto gaus_variance{ GetGausVariancePrior(group_key, class_key) };
-    return (par_id == 0) ? std::get<0>(gaus_variance) : std::get<1>(gaus_variance);
+    if (CheckGroupKey(group_key, class_key) == false)
+    {
+        throw std::runtime_error("Group key is not available.");
+    }
+    return m_model_object->GetGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id);
 }
 
 const std::vector<AtomObject *> & PotentialEntryIterator::GetAtomObjectList(
@@ -245,16 +229,6 @@ bool PotentialEntryIterator::IsModelObjectAvailable(void) const
     if (m_model_object == nullptr)
     {
         std::cerr << "Model object is not available." << std::endl;
-        return false;
-    }
-    return true;
-}
-
-bool PotentialEntryIterator::CheckParameterIndex(int par_id) const
-{
-    if (par_id < 0 || par_id > 1)
-    {
-        std::cerr << "Invalid parameter index: " << par_id << std::endl;
         return false;
     }
     return true;
@@ -417,7 +391,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueIDGraph(
     size_t main_chain_element_id, std::string & chain_id, const int par_id, Residue residue)
 {
-    if (IsModelObjectAvailable() == false || CheckParameterIndex(par_id) == false)
+    if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
@@ -440,12 +414,8 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
             break;
         }
         residue_id_previous = residue_id;
-        auto amplitude{ entry->GetAmplitudeEstimateMDPDE() };
-        auto width{ entry->GetWidthEstimateMDPDE() };
-        //auto intensity{ amplitude * std::pow(Constants::two_pi*width*width, -1.5) };
         auto x_value{ static_cast<double>(residue_id) };
-        auto y_value{ (par_id == 0) ? amplitude : width };
-        graph->SetPoint(count, x_value, y_value);
+        graph->SetPoint(count, x_value, entry->GetGausEstimateMDPDE(par_id));
         count++;
     }
     return graph;
@@ -453,32 +423,6 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueGraph(
     std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id)
-{
-    if (IsModelObjectAvailable() == false || CheckParameterIndex(par_id) == false)
-    {
-        return nullptr;
-    }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
-    
-    auto count{ 0 };
-    for (auto & group_key : group_key_list)
-    {
-        if (IsAvailableGroupKey(group_key, class_key) == false) continue;
-        auto residue_id{ GetResidueFromGroupKey(group_key, class_key) };
-        auto gaus_estimate{ GetGausEstimatePrior(group_key, class_key) };
-        auto gaus_variance{ GetGausVariancePrior(group_key, class_key) };
-        auto y_value{ (par_id == 0) ? std::get<0>(gaus_estimate) : std::get<1>(gaus_estimate) };
-        auto y_error{ (par_id == 0) ? std::get<0>(gaus_variance) : std::get<1>(gaus_variance) };
-        auto x_value{ static_cast<int>(residue_id) };
-        graph->SetPoint(count, x_value, y_value);
-        graph->SetPointError(count, 0.0, y_error);
-        count++;
-    }
-    return graph;
-}
-
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
-    std::vector<uint64_t> & group_key_list, const std::string & class_key, bool reverse)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -490,18 +434,36 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     for (auto & group_key : group_key_list)
     {
         if (IsAvailableGroupKey(group_key, class_key) == false) continue;
-        auto gaus_estimate{ GetGausEstimatePrior(group_key, class_key) };
-        auto gaus_variance{ GetGausVariancePrior(group_key, class_key) };
-        if (reverse == false)
-        {
-            graph->SetPoint(count, std::get<0>(gaus_estimate), std::get<1>(gaus_estimate));
-            graph->SetPointError(count, std::get<0>(gaus_variance), std::get<1>(gaus_variance));
-        }
-        else
-        {
-            graph->SetPoint(count, std::get<1>(gaus_estimate), std::get<0>(gaus_estimate));
-            graph->SetPointError(count, std::get<1>(gaus_variance), std::get<0>(gaus_variance));
-        }
+        auto x_value{ static_cast<int>(GetResidueFromGroupKey(group_key, class_key)) };
+        auto y_value{ m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id) };
+        auto y_error{ m_model_object->GetGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
+        graph->SetPoint(count, x_value, y_value);
+        graph->SetPointError(count, 0.0, y_error);
+        count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
+    std::vector<uint64_t> & group_key_list, const std::string & class_key,
+    int par1_id, int par2_id)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    
+    auto count{ 0 };
+    for (auto & group_key : group_key_list)
+    {
+        if (IsAvailableGroupKey(group_key, class_key) == false) continue;
+        graph->SetPoint(count,
+            GetGausEstimatePrior(group_key, class_key, par1_id),
+            GetGausEstimatePrior(group_key, class_key, par2_id));
+        graph->SetPointError(count,
+            GetGausVariancePrior(group_key, class_key, par1_id),
+            GetGausVariancePrior(group_key, class_key, par2_id));
         count++;
     }
     return graph;
@@ -563,9 +525,9 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
             if (atom1->GetResidueID() == atom2->GetResidueID() &&
                 atom1->GetChainID() == atom2->GetChainID())
             {
-                auto gaus_estimate1{ (par_id == 0) ? entry1->GetAmplitudeEstimateMDPDE() : entry1->GetWidthEstimateMDPDE() };
-                auto gaus_estimate2{ (par_id == 0) ? entry2->GetAmplitudeEstimateMDPDE() : entry2->GetWidthEstimateMDPDE() };
-                graph->SetPoint(count, gaus_estimate1, gaus_estimate2);
+                graph->SetPoint(count,
+                    entry1->GetGausEstimateMDPDE(par_id),
+                    entry2->GetGausEstimateMDPDE(par_id));
                 count++;
                 break;
             } 
@@ -608,7 +570,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBinnedDistanceToMapV
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEstimateGraph(
     uint64_t group_key, const std::string & class_key, double range, int par_id)
 {
-    if (IsModelObjectAvailable() == false || CheckParameterIndex(par_id) == false)
+    if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
@@ -625,8 +587,9 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
     {
         auto in_range_atom_list{ KDTreeAlgorithm<AtomObject>::RangeSearch(kd_tree_root, atom, range) };
         auto atom_entry{ atom->GetAtomicPotentialEntry() };
-        auto gaus_estimate{ (par_id == 0) ? atom_entry->GetAmplitudeEstimateMDPDE() : atom_entry->GetWidthEstimateMDPDE() };
-        graph->SetPoint(count, static_cast<double>(in_range_atom_list.size()), gaus_estimate);
+        graph->SetPoint(count,
+            static_cast<double>(in_range_atom_list.size()),
+            atom_entry->GetGausEstimateMDPDE(par_id));
         count++;
     }
     return graph;
@@ -635,7 +598,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateCOMDistanceToGausEstimateGraph(
     uint64_t group_key, const std::string & class_key, int par_id)
 {
-    if (IsModelObjectAvailable() == false || CheckParameterIndex(par_id) == false)
+    if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
@@ -648,8 +611,8 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateCOMDistanceToGausEst
         const auto & atom_pos{ atom->GetPositionRef() };
         auto distance{ ArrayStats<float>::ComputeNorm(atom_pos, center_of_mass_pos) };
         auto atom_entry{ atom->GetAtomicPotentialEntry() };
-        auto gaus_estimate{ (par_id == 0) ? atom_entry->GetAmplitudeEstimateMDPDE() : atom_entry->GetWidthEstimateMDPDE() };
-        graph->SetPoint(count, static_cast<double>(distance), gaus_estimate);
+        graph->SetPoint(count,
+            static_cast<double>(distance), atom_entry->GetGausEstimateMDPDE(par_id));
         count++;
     }
     return graph;
@@ -718,9 +681,10 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomography
 }
 
 std::unique_ptr<TGraph2DErrors> PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2D(
-    std::vector<uint64_t> & group_key_list, const std::string & class_key, double normalized_z_pos, double z_ratio_window, int par_id)
+    std::vector<uint64_t> & group_key_list, const std::string & class_key,
+    double normalized_z_pos, double z_ratio_window, int par_id)
 {
-    if (IsModelObjectAvailable() == false || CheckParameterIndex(par_id) == false)
+    if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
@@ -745,20 +709,9 @@ std::unique_ptr<TGraph2DErrors> PotentialEntryIterator::CreateXYPositionTomograp
                 continue;
             }
             auto entry_iter{ atom->GetAtomicPotentialEntry() };
-            auto gaus_estimate{ 0.0 };
-            switch(par_id)
-            {
-                case 0:
-                    gaus_estimate = entry_iter->GetAmplitudeEstimatePosterior(AtomicInfoHelper::GetResidueClassKey());
-                    break;
-                case 1:
-                    gaus_estimate = entry_iter->GetWidthEstimatePosterior(AtomicInfoHelper::GetResidueClassKey());
-                    break;
-                default:
-                    std::cerr << "Invalid parameter id." << std::endl;
-                    return nullptr;
-            }
-            graph->SetPoint(count, position.at(0), position.at(1), gaus_estimate);
+            graph->SetPoint(count,
+                position.at(0), position.at(1),
+                entry_iter->GetGausEstimatePosterior(class_key, par_id));
             count++;
         }
     }
@@ -768,9 +721,14 @@ std::unique_ptr<TGraph2DErrors> PotentialEntryIterator::CreateXYPositionTomograp
 std::unique_ptr<TF1> PotentialEntryIterator::CreateGroupGausFunctionPrior(
     uint64_t group_key, const std::string & class_key) const
 {
-    auto gaus_estimate{ GetGausEstimatePrior(group_key, class_key) };
-    auto amplitude{ std::get<0>(gaus_estimate) };
-    auto width{  std::get<1>(gaus_estimate) };
+    auto amplitude
+    {
+        m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 0)
+    };
+    auto width
+    {
+        m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
+    };
     return ROOTHelper::CreateGausFunction1D("gaus", amplitude, width);
 }
 #endif

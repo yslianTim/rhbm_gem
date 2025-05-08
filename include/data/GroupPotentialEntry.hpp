@@ -1,17 +1,11 @@
 #pragma once
 
-#if __INTELLISENSE__
-#undef __ARM_NEON
-#undef __ARM_NEON__
-#endif
-
 #include <cstdint>
 #include <tuple>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <Eigen/Dense>
 
 class AtomObject;
 class GroupPotentialEntry
@@ -29,13 +23,9 @@ public:
     void InsertGroupKey(uint64_t group_key);
     void ReserveAtomObjectPtrList(uint64_t group_key, int size);
     void AddAtomObjectPtr(uint64_t group_key, AtomObject * atom_object);
-    void AddGausEstimateMean(uint64_t group_key, Eigen::VectorXd vec);
     void AddGausEstimateMean(uint64_t group_key, double v0, double v1);
-    void AddGausEstimateMDPDE(uint64_t group_key, Eigen::VectorXd vec);
     void AddGausEstimateMDPDE(uint64_t group_key, double v0, double v1);
-    void AddGausEstimatePrior(uint64_t group_key, Eigen::VectorXd vec);
     void AddGausEstimatePrior(uint64_t group_key, double v0, double v1);
-    void AddGausVariancePrior(uint64_t group_key, Eigen::VectorXd vec);
     void AddGausVariancePrior(uint64_t group_key, double v0, double v1);
     int GetAtomObjectPtrListSize(uint64_t group_key) const;
     const std::vector<AtomObject *> & GetAtomObjectPtrList(uint64_t group_key) const;
@@ -43,8 +33,16 @@ public:
     std::tuple<double, double> GetGausEstimateMDPDE(uint64_t group_key) const;
     std::tuple<double, double> GetGausEstimatePrior(uint64_t group_key) const;
     std::tuple<double, double> GetGausVariancePrior(uint64_t group_key) const;
+    double GetGausEstimateMean(uint64_t group_key, int par_id) const;
+    double GetGausEstimateMDPDE(uint64_t group_key, int par_id) const;
+    double GetGausEstimatePrior(uint64_t group_key, int par_id) const;
+    double GetGausVariancePrior(uint64_t group_key, int par_id) const;
     const std::unordered_set<uint64_t> & GetGroupKeySet(void) const;
 
 private:
+    double GetGausEstimateFromTuple(const std::tuple<double, double> & estimate, int par_id) const;
+    double GetGausVarianceFromTuple(const std::tuple<double, double> & estimate, const std::tuple<double, double> & variance, int par_id) const;
+    double CalculateIntensityEstimate(const std::tuple<double, double> & estimate) const;
+    double CalculateIntensityVariance(const std::tuple<double, double> & estimate, const std::tuple<double, double> & variance) const;
 
 };

@@ -184,29 +184,40 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
         model_estimator->SetDataArray(data_array);
         model_estimator->RunEstimation(m_alpha_r, m_alpha_g);
 
+        auto gaus_group_mean{ GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMean()) };
+        group_potential_entry->AddGausEstimateMean(group_key, gaus_group_mean(0), gaus_group_mean(1));
+
+        auto gaus_group_mdpde{ GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMDPDE()) };
+        group_potential_entry->AddGausEstimateMDPDE(group_key, gaus_group_mdpde(0), gaus_group_mdpde(1));
+
         auto gaus_prior{
             GausLinearTransformHelper::BuildGausModelWithVariance(
                 model_estimator->GetMuVectorPrior(), model_estimator->GetCapitalLambdaMatrix())
         };
-
-        group_potential_entry->AddGausEstimateMean(group_key, GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMean()));
-        group_potential_entry->AddGausEstimateMDPDE(group_key, GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMDPDE()));
-        group_potential_entry->AddGausEstimatePrior(group_key, std::get<0>(gaus_prior));
-        group_potential_entry->AddGausVariancePrior(group_key, std::get<1>(gaus_prior));
+        auto prior_estimate{ std::get<0>(gaus_prior) };
+        auto prior_variance{ std::get<1>(gaus_prior) };
+        group_potential_entry->AddGausEstimatePrior(group_key, prior_estimate(0), prior_estimate(1));
+        group_potential_entry->AddGausVariancePrior(group_key, prior_variance(0), prior_variance(1));
 
         auto count{ 0 };
         for (auto atom : atom_list)
         {
             auto atom_entry{ atom->GetAtomicPotentialEntry() };
             Eigen::VectorXd beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
+            auto gaus_ols{ GausLinearTransformHelper::BuildGausModel(beta_vector_ols) };
+            atom_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
+
             Eigen::VectorXd beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
+            auto gaus_mdpde{ GausLinearTransformHelper::BuildGausModel(beta_vector_mdpde) };
+            atom_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
+
             Eigen::VectorXd beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
             auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
             auto gaus_posterior{ GausLinearTransformHelper::BuildGausModelWithVariance(beta_vector_posterior, sigma_matrix_posterior) };
-            atom_entry->AddGausEstimateOLS(GausLinearTransformHelper::BuildGausModel(beta_vector_ols));
-            atom_entry->AddGausEstimateMDPDE(GausLinearTransformHelper::BuildGausModel(beta_vector_mdpde));
-            atom_entry->AddGausEstimatePosterior(class_key, std::get<0>(gaus_posterior));
-            atom_entry->AddGausVariancePosterior(class_key, std::get<1>(gaus_posterior));
+            auto posterior_estimate{ std::get<0>(gaus_posterior) };
+            auto posterior_variance{ std::get<1>(gaus_posterior) };
+            atom_entry->AddGausEstimatePosterior(class_key, posterior_estimate(0), posterior_estimate(1));
+            atom_entry->AddGausVariancePosterior(class_key, posterior_variance(0), posterior_variance(1));
             atom_entry->AddOutlierTag(class_key, model_estimator->GetOutlierFlag(count));
             atom_entry->AddStatisticalDistance(class_key, model_estimator->GetStatisticalDistance(count));
             count++;

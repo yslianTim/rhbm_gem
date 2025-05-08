@@ -1,15 +1,9 @@
 #pragma once
 
-#if __INTELLISENSE__
-#undef __ARM_NEON
-#undef __ARM_NEON__
-#endif
-
 #include <vector>
 #include <tuple>
 #include <string>
 #include <unordered_map>
-#include <Eigen/Dense>
 
 class DataObjectBase;
 
@@ -24,32 +18,40 @@ class AtomicPotentialEntry
     std::unordered_map<std::string, double> m_statistical_distance_map;
 
 public:
-    AtomicPotentialEntry(void) = default;
-    ~AtomicPotentialEntry() = default;
+    AtomicPotentialEntry(void);
+    ~AtomicPotentialEntry();
 
-    void AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> list) { m_distance_and_map_value_list = std::move(list); }
-    void AddGausEstimateOLS(const Eigen::VectorXd & vec) { m_gaus_estimate_ols = std::make_tuple(vec(0), vec(1)); }
-    void AddGausEstimateOLS(double v0, double v1) { m_gaus_estimate_ols = std::make_tuple(v0, v1); }
-    void AddGausEstimateMDPDE(const Eigen::VectorXd & vec) { m_gaus_estimate_mdpde = std::make_tuple(vec(0), vec(1)); }
-    void AddGausEstimateMDPDE(double v0, double v1) { m_gaus_estimate_mdpde = std::make_tuple(v0, v1); }
-    void AddGausEstimatePosterior(const std::string & key, const Eigen::VectorXd & vec) { m_gaus_estimate_posterior_map[key] = std::make_tuple(vec(0), vec(1)); }
-    void AddGausEstimatePosterior(const std::string & key, double v0, double v1) { m_gaus_estimate_posterior_map[key] = std::make_tuple(v0, v1); }
-    void AddGausVariancePosterior(const std::string & key, const Eigen::VectorXd & vec) { m_gaus_variance_posterior_map[key] = std::make_tuple(vec(0), vec(1)); }
-    void AddGausVariancePosterior(const std::string & key, double v0, double v1) { m_gaus_variance_posterior_map[key] = std::make_tuple(v0, v1); }
-    void AddOutlierTag(const std::string & key, bool value) { m_outlier_tag_map[key] = value; }
-    void AddStatisticalDistance(const std::string & key, double value) { m_statistical_distance_map[key] = value; }
+    void AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> list);
+    void AddGausEstimateOLS(double v0, double v1);
+    void AddGausEstimateMDPDE(double v0, double v1);
+    void AddGausEstimatePosterior(const std::string & key, double v0, double v1);
+    void AddGausVariancePosterior(const std::string & key, double v0, double v1);
+    void AddOutlierTag(const std::string & key, bool value);
+    void AddStatisticalDistance(const std::string & key, double value);
 
-    int GetDistanceAndMapValueListSize(void) const { return static_cast<int>(m_distance_and_map_value_list.size()); }
-    const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const { return m_distance_and_map_value_list; }
-    double GetAmplitudeEstimateOLS(void) const { return std::get<0>(m_gaus_estimate_ols); }
-    double GetWidthEstimateOLS(void) const { return std::get<1>(m_gaus_estimate_ols); }
-    double GetAmplitudeEstimateMDPDE(void) const { return std::get<0>(m_gaus_estimate_mdpde); }
-    double GetWidthEstimateMDPDE(void) const { return std::get<1>(m_gaus_estimate_mdpde); }
-    double GetAmplitudeEstimatePosterior(const std::string & key) const { return std::get<0>(m_gaus_estimate_posterior_map.at(key)); }
-    double GetWidthEstimatePosterior(const std::string & key) const { return std::get<1>(m_gaus_estimate_posterior_map.at(key)); }
-    double GetAmplitudeVariancePosterior(const std::string & key) const { return std::get<0>(m_gaus_variance_posterior_map.at(key)); }
-    double GetWidthVariancePosterior(const std::string & key) const { return std::get<1>(m_gaus_variance_posterior_map.at(key)); }
-    bool GetOutlierTag(const std::string & key) const { return m_outlier_tag_map.at(key); }
-    double GetStatisticalDistance(const std::string & key) const { return m_statistical_distance_map.at(key); }
+    int GetDistanceAndMapValueListSize(void) const;
+    const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
+    double GetGausEstimateOLS(int par_id) const;
+    double GetAmplitudeEstimateOLS(void) const;
+    double GetWidthEstimateOLS(void) const;
+    double GetIntensityEstimateOLS(void) const;
+    double GetGausEstimateMDPDE(int par_id) const;
+    double GetAmplitudeEstimateMDPDE(void) const;
+    double GetWidthEstimateMDPDE(void) const;
+    double GetIntensityEstimateMDPDE(void) const;
+    double GetGausEstimatePosterior(const std::string & key, int par_id) const;
+    double GetAmplitudeEstimatePosterior(const std::string & key) const;
+    double GetWidthEstimatePosterior(const std::string & key) const;
+    double GetIntensityEstimatePosterior(const std::string & key) const;
+    double GetGausVariancePosterior(const std::string & key, int par_id) const;
+    double GetAmplitudeVariancePosterior(const std::string & key) const;
+    double GetWidthVariancePosterior(const std::string & key) const;
+    double GetIntensityVariancePosterior(const std::string & key) const;
+    bool GetOutlierTag(const std::string & key) const;
+    double GetStatisticalDistance(const std::string & key) const;
+
+private:
+    double CalculateIntensityEstimate(double amplitude, double width) const;
+    double CalculateIntensityVariance(double amplitude, double sigma_amplitude, double width, double sigma_width) const;
 
 };

@@ -83,7 +83,6 @@ void ModelPainter::Painting(void)
         PaintResidueClassGroupGausScatter(model_object, "width_scatter_"+ model_object->GetPdbID() +".pdf", 1);
         PaintAtomXYPosition(model_object, "atom_position_"+ model_object->GetPdbID() +".pdf");
         PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ model_object->GetPdbID() +".pdf", false);
-        PaintAtomGausScatter(model_object, "atom_gaus_scatter_normalized_"+ model_object->GetPdbID() +".pdf", true);
         PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ model_object->GetPdbID() +".pdf");
     }
 
@@ -171,7 +170,7 @@ void ModelPainter::PaintStructureClassGroupGausMainChain(
         {
             amplitude_graph[i][j] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list[i][j], class_key_list[j], 0);
             width_graph[i][j] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list[i][j], class_key_list[j], 1);
-            correlation_graph[i][j] = entry_iter->CreateGausEstimateScatterGraph(group_key_list[i][j], class_key_list[j]);
+            correlation_graph[i][j] = entry_iter->CreateGausEstimateScatterGraph(group_key_list[i][j], class_key_list[j], 0, 1);
             for (int p = 0; p < amplitude_graph[i][j]->GetN(); p++)
             {
                 if (j != 0) break;
@@ -375,40 +374,46 @@ void ModelPainter::PaintStructureClassGroupGausSideChain(
                     if (entry_iter->IsAvailableGroupKey(mix_group_key, AtomicInfoHelper::GetResidueClassKey()) == true)
                     {
                         has_data = true;
-                        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey()) };
-                        auto gaus_variance{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey()) };
-                        amplitude_array.push_back(std::get<0>(gaus_estimate));
-                        width_array.push_back(std::get<1>(gaus_estimate));
-                        amplitude_mix_graph->SetPoint(count_mix, count_total, std::get<0>(gaus_estimate));
-                        amplitude_mix_graph->SetPointError(count_mix, 0.0, std::get<0>(gaus_variance));
-                        width_mix_graph->SetPoint(count_mix, count_total, std::get<1>(gaus_estimate));
-                        width_mix_graph->SetPointError(count_mix, 0.0, std::get<1>(gaus_variance));
+                        auto amplitude_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 0) };
+                        auto width_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 1) };
+                        auto amplitude_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 0) };
+                        auto width_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 1) };
+                        amplitude_array.emplace_back(amplitude_value);
+                        width_array.emplace_back(width_value);
+                        amplitude_mix_graph->SetPoint(count_mix, count_total, amplitude_value);
+                        amplitude_mix_graph->SetPointError(count_mix, 0.0, amplitude_error);
+                        width_mix_graph->SetPoint(count_mix, count_total, width_value);
+                        width_mix_graph->SetPointError(count_mix, 0.0, width_error);
                         count_mix++;
                     }
 
                     if (entry_iter->IsAvailableGroupKey(free_group_key, AtomicInfoHelper::GetStructureClassKey()) == true)
                     {
-                        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey()) };
-                        auto gaus_variance{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey()) };
-                        amplitude_array.push_back(std::get<0>(gaus_estimate));
-                        width_array.push_back(std::get<1>(gaus_estimate));
-                        amplitude_free_graph->SetPoint(count_free, count_total, std::get<0>(gaus_estimate));
-                        amplitude_free_graph->SetPointError(count_free, 0.0, std::get<0>(gaus_variance));
-                        width_free_graph->SetPoint(count_free, count_total, std::get<1>(gaus_estimate));
-                        width_free_graph->SetPointError(count_free, 0.0, std::get<1>(gaus_variance));
+                        auto amplitude_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
+                        auto width_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                        auto amplitude_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
+                        auto width_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                        amplitude_array.emplace_back(amplitude_value);
+                        width_array.emplace_back(width_value);
+                        amplitude_free_graph->SetPoint(count_free, count_total, amplitude_value);
+                        amplitude_free_graph->SetPointError(count_free, 0.0, amplitude_error);
+                        width_free_graph->SetPoint(count_free, count_total, width_value);
+                        width_free_graph->SetPointError(count_free, 0.0, width_error);
                         count_free++;
                     }
 
                     if (entry_iter->IsAvailableGroupKey(helix_group_key, AtomicInfoHelper::GetStructureClassKey()) == true)
                     {
-                        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey()) };
-                        auto gaus_variance{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey()) };
-                        amplitude_array.push_back(std::get<0>(gaus_estimate));
-                        width_array.push_back(std::get<1>(gaus_estimate));
-                        amplitude_helix_graph->SetPoint(count_helix, count_total, std::get<0>(gaus_estimate));
-                        amplitude_helix_graph->SetPointError(count_helix, 0.0, std::get<0>(gaus_variance));
-                        width_helix_graph->SetPoint(count_helix, count_total, std::get<1>(gaus_estimate));
-                        width_helix_graph->SetPointError(count_helix, 0.0, std::get<1>(gaus_variance));
+                        auto amplitude_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
+                        auto width_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                        auto amplitude_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
+                        auto width_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                        amplitude_array.emplace_back(amplitude_value);
+                        width_array.emplace_back(width_value);
+                        amplitude_helix_graph->SetPoint(count_helix, count_total, amplitude_value);
+                        amplitude_helix_graph->SetPointError(count_helix, 0.0, amplitude_error);
+                        width_helix_graph->SetPoint(count_helix, count_total, width_value);
+                        width_helix_graph->SetPointError(count_helix, 0.0, width_error);
                         count_helix++;
                     }
 
@@ -759,9 +764,8 @@ void ModelPainter::PaintResidueClassMapValue(ModelObject * model_object, const s
                     ROOTHelper::SetPaveAttribute(result_text.get(), 0);
                     ROOTHelper::SetFillAttribute(result_text.get(), 4000);
                     ROOTHelper::SetTextAttribute(result_text.get(), 85, 133, 22, 0.0, kAzure-7);
-                    auto gaus_prior{ entry_iter->GetGausEstimatePrior(group_key, residue_class) };
-                    auto amplitude{ std::get<0>(gaus_prior) };
-                    auto width{ std::get<1>(gaus_prior) };
+                    auto amplitude{ entry_iter->GetGausEstimatePrior(group_key, residue_class, 0) };
+                    auto width{ entry_iter->GetGausEstimatePrior(group_key, residue_class, 1) };
                     result_text->AddText(Form("#color[633]{#font[1]{A} = %.2f  ;  #font[1]{#tau} = %.2f}", amplitude, width));
 
                     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
@@ -1255,7 +1259,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
     const int col_size{ 1 };
-    const int row_size{ 2 };
+    const int row_size{ 3 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 900) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
     ROOTHelper::SetCanvasPartition(
@@ -1272,18 +1276,19 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
     };
     const std::string y_title[row_size]
     {
+        "Intensity",
         "Width",
         "Amplitude"
     };
     short color_element[main_chain_element_count] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
-    short marker_element[main_chain_element_count]{ 54, 53, 55, 59 };
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TGraphErrors> gaus_graph[row_size][main_chain_element_count];
     std::string chain_id;
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph[1][k] = entry_iter->CreateGausEstimateToResidueIDGraph(k, chain_id, 0);
-        gaus_graph[0][k] = entry_iter->CreateGausEstimateToResidueIDGraph(k, chain_id, 1);
+        gaus_graph[2][k] = entry_iter->CreateGausEstimateToResidueIDGraph(k, chain_id, 0);
+        gaus_graph[1][k] = entry_iter->CreateGausEstimateToResidueIDGraph(k, chain_id, 1);
+        gaus_graph[0][k] = entry_iter->CreateGausEstimateToResidueIDGraph(k, chain_id, 2);
     }
 
     std::vector<double> y_array[row_size];
@@ -1315,32 +1320,34 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
         for (int j = 0; j < row_size; j++)
         {
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0, x_max+5, 500, y_min[j], y_max[j]);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 40.0f, 1.0f, 133);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 45.0f, 0.9f, 133);
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.01f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 510);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 1.4f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40.0f, 0.01f, 133);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 1.3f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40.0f, 0.005f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.02/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("Residue ID");
             frame[i][j]->GetYaxis()->SetTitle(y_title[j].data());
+            frame[i][j]->GetXaxis()->CenterTitle();
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw();
             for (size_t k = 0; k < main_chain_element_count; k++)
             {
-                ROOTHelper::SetMarkerAttribute(gaus_graph[j][k].get(), marker_element[k], 1.0f, color_element[k]);
+                ROOTHelper::SetMarkerAttribute(gaus_graph[j][k].get(), 20, 0.7f, color_element[k]);
                 ROOTHelper::SetLineAttribute(gaus_graph[j][k].get(), 1, 1, color_element[k]);
                 gaus_graph[j][k]->Draw("PL X0");
             }
 
             if (i == 0 && j == row_size - 1)
             {
-                subtitle1_text = ROOTHelper::CreatePaveText(0.00, 1.01, 0.15, 1.24, "nbNDC ARC", true);
+                subtitle1_text = ROOTHelper::CreatePaveText(0.00, 1.01, 0.15, 1.32, "nbNDC ARC", true);
                 ROOTHelper::SetPaveTextDefaultStyle(subtitle1_text.get());
                 ROOTHelper::SetPaveAttribute(subtitle1_text.get(), 0, 0.2);
                 ROOTHelper::SetFillAttribute(subtitle1_text.get(), 1001, kAzure-7);
@@ -1348,7 +1355,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
                 subtitle1_text->AddText(Form("%.2f #AA", model_object->GetResolution()));
                 subtitle1_text->Draw();
 
-                subtitle2_text = ROOTHelper::CreatePaveText(0.16, 1.01, 0.35, 1.24, "nbNDC ARC", true);
+                subtitle2_text = ROOTHelper::CreatePaveText(0.16, 1.01, 0.35, 1.32, "nbNDC ARC", true);
                 ROOTHelper::SetPaveTextDefaultStyle(subtitle2_text.get());
                 ROOTHelper::SetPaveAttribute(subtitle2_text.get(), 0, 0.2);
                 ROOTHelper::SetFillAttribute(subtitle2_text.get(), 1001, kAzure-7, 0.5f);
@@ -1356,7 +1363,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
                 subtitle2_text->AddText(Form("PDB-%s", model_object->GetPdbID().data()));
                 subtitle2_text->Draw();
 
-                subtitle3_text = ROOTHelper::CreatePaveText(0.36, 1.01, 0.57, 1.24, "nbNDC ARC", true);
+                subtitle3_text = ROOTHelper::CreatePaveText(0.36, 1.01, 0.57, 1.32, "nbNDC ARC", true);
                 ROOTHelper::SetPaveTextDefaultStyle(subtitle3_text.get());
                 ROOTHelper::SetPaveAttribute(subtitle3_text.get(), 0, 0.2);
                 ROOTHelper::SetFillAttribute(subtitle3_text.get(), 1001, kAzure-7, 0.5f);
@@ -1364,7 +1371,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
                 subtitle3_text->AddText(model_object->GetEmdID().data());
                 subtitle3_text->Draw();
 
-                legend = ROOTHelper::CreateLegend(0.58, 1.01, 0.98, 1.24, true);
+                legend = ROOTHelper::CreateLegend(0.58, 1.01, 0.98, 1.32, true);
                 ROOTHelper::SetLegendDefaultStyle(legend.get());
                 ROOTHelper::SetTextAttribute(legend.get(), 30.0f, 133, 12);
                 ROOTHelper::SetFillAttribute(legend.get(), 4000);

@@ -758,15 +758,18 @@ void ComparisonPainter::BuildGausEstimateToBlurringWidthGraph(
 void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list)
 {
+    const auto & class_key{ AtomicInfoHelper::GetElementClassKey() };
     auto count{ 0 };
     for (auto model_object : model_list)
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
-        if (entry_iter->IsAvailableGroupKey(group_key, AtomicInfoHelper::GetElementClassKey()) == false) continue;
-        auto gaus_estimate{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetElementClassKey()) };
-        auto gaus_variance{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetElementClassKey()) };
-        graph->SetPoint(count, std::get<1>(gaus_estimate), std::get<0>(gaus_estimate));
-        graph->SetPointError(count, std::get<1>(gaus_variance), std::get<0>(gaus_variance));
+        if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
+        graph->SetPoint(count,
+            entry_iter->GetGausEstimatePrior(group_key, class_key, 1),
+            entry_iter->GetGausEstimatePrior(group_key, class_key, 0));
+        graph->SetPointError(count,
+            entry_iter->GetGausVariancePrior(group_key, class_key, 1),
+            entry_iter->GetGausVariancePrior(group_key, class_key, 0));
         count++;
     }
 }
@@ -811,14 +814,10 @@ void ComparisonPainter::BuildGausScatterGraph(
     {
         if (entry1_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
         if (entry2_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
-        auto gaus_estimate1{ entry1_iter->GetGausEstimatePrior(group_key, class_key) };
-        auto gaus_variance1{ entry1_iter->GetGausVariancePrior(group_key, class_key) };
-        auto gaus_estimate2{ entry2_iter->GetGausEstimatePrior(group_key, class_key) };
-        auto gaus_variance2{ entry2_iter->GetGausVariancePrior(group_key, class_key) };
-        auto x_value{ (par_id == 0) ? std::get<0>(gaus_estimate1) : std::get<1>(gaus_estimate1) };
-        auto y_value{ (par_id == 0) ? std::get<0>(gaus_estimate2) : std::get<1>(gaus_estimate2) };
-        auto x_error{ (par_id == 0) ? std::get<0>(gaus_variance1) : std::get<1>(gaus_variance1) };
-        auto y_error{ (par_id == 0) ? std::get<0>(gaus_variance2) : std::get<1>(gaus_variance2) };
+        auto x_value{ entry1_iter->GetGausEstimatePrior(group_key, class_key, par_id) };
+        auto y_value{ entry2_iter->GetGausEstimatePrior(group_key, class_key, par_id) };
+        auto x_error{ entry1_iter->GetGausVariancePrior(group_key, class_key, par_id) };
+        auto y_error{ entry2_iter->GetGausVariancePrior(group_key, class_key, par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, x_error, y_error);
         count++;
