@@ -33,6 +33,26 @@ AtomClassifier::~AtomClassifier()
 
 }
 
+bool AtomClassifier::IsMainChainMember(
+    Element element, Remoteness remoteness, size_t & main_chain_member_id)
+{
+    for (size_t i = 0; i < m_main_chain_member_count; i++)
+    {
+        if (m_main_chain_member_element_list.at(i) == element &&
+            m_main_chain_member_remoteness_list.at(i) == remoteness)
+        {
+            main_chain_member_id = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+size_t AtomClassifier::GetMainChainMemberCount(void)
+{
+    return m_main_chain_member_count;
+}
+
 Element AtomClassifier::GetMainChainElement(size_t id)
 {
     if (id >= m_main_chain_member_count)

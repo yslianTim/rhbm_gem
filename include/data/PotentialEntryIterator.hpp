@@ -48,6 +48,7 @@ public:
 
     #ifdef HAVE_ROOT
     std::unique_ptr<TH1D> CreateResidueCountHistogram(const std::string & class_key, Structure structure=static_cast<Structure>(0));
+    std::vector<std::unique_ptr<TH1D>> CreateMainChainRankHistogram(int par_id, Residue residue=static_cast<Residue>(65535), int extra_id=0);
     std::unique_ptr<TGraphErrors> CreateNormalizedGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateBfactorToWidthScatterGraph(uint64_t group_key, const std::string & class_key);
     std::unique_ptr<TGraphErrors> CreateGausEstimateToResidueIDGraph(size_t main_chain_element_id, std::string & chain_id, const int par_id=0, Residue residue=static_cast<Residue>(65535));

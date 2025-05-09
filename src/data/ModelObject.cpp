@@ -15,6 +15,7 @@ ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_li
     m_atom_list{ std::move(atom_object_list) },
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr }
 {
+    Update();
 }
 
 ModelObject::~ModelObject()
@@ -33,6 +34,7 @@ ModelObject::ModelObject(const ModelObject & other) :
     {
         m_atom_list.emplace_back(atom->AtomObjectClone());
     }
+    Update();
 }
 
 std::unique_ptr<DataObjectBase> ModelObject::Clone() const
@@ -45,6 +47,11 @@ void ModelObject::Display(void) const
     std::cout << "This is ModelObject."
               << " It contains: "<< m_atom_list.size() << " atoms." << std::endl;
     std::cout << "The number of selected atom = " << GetNumberOfSelectedAtom() << std::endl;
+}
+
+void ModelObject::Update(void)
+{
+    BuildSelectedAtomList();
 }
 
 void ModelObject::Accept(DataObjectVisitorBase * visitor)
@@ -61,19 +68,10 @@ void ModelObject::AddAtom(std::unique_ptr<AtomObject> component)
     m_atom_list.emplace_back(std::move(component));
 }
 
-void ModelObject::AddGroupPotentialEntry(const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
+void ModelObject::AddGroupPotentialEntry(
+    const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
 {
     m_group_potential_entry_map[class_key] = std::move(entry);
-}
-
-size_t ModelObject::GetNumberOfSelectedAtom(void) const
-{
-    size_t count{ 0 };
-    for (auto & atom : m_atom_list)
-    {
-        if (atom->GetSelectedFlag() == true) count++;
-    }
-    return count;
 }
 
 void ModelObject::BuildKDTreeRoot(void)
@@ -149,7 +147,19 @@ GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & cl
     return m_group_potential_entry_map.at(class_key).get();
 }
 
-const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> & ModelObject::GetGroupPotentialEntryMap(void) const
+const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
+ModelObject::GetGroupPotentialEntryMap(void) const
 {
     return m_group_potential_entry_map;
+}
+
+void ModelObject::BuildSelectedAtomList(void)
+{
+    m_selected_atom_list.clear();
+    m_selected_atom_list.reserve(m_atom_list.size());
+    for (auto & atom : m_atom_list)
+    {
+        if (atom->GetSelectedFlag() == false) continue;
+        m_selected_atom_list.emplace_back(atom.get());
+    }
 }

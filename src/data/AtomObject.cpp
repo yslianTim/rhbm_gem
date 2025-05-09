@@ -3,6 +3,7 @@
 #include "DataObjectVisitorBase.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
+#include "AtomClassifier.hpp"
 
 #include <iostream>
 
@@ -47,6 +48,11 @@ std::unique_ptr<DataObjectBase> AtomObject::Clone() const
 void AtomObject::Display(void) const
 {
     std::cout << "This is AtomObject." << std::endl;
+}
+
+void AtomObject::Update(void)
+{
+    std::cout << "Do AtomObject Update." << std::endl;
 }
 
 void AtomObject::Accept(DataObjectVisitorBase * visitor)

@@ -45,9 +45,8 @@ double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element elemen
     }
     std::vector<double> gaus_estimate_list;
     gaus_estimate_list.reserve(m_model_object->GetNumberOfSelectedAtom());
-    for (auto & atom : m_model_object->GetComponentsList())
+    for (auto & atom : m_model_object->GetSelectedAtomList())
     {
-        if (atom->GetSelectedFlag() == false) continue;
         if (atom->GetElement() != element) continue;
         auto entry{ atom->GetAtomicPotentialEntry() };
         gaus_estimate_list.emplace_back(entry->GetGausEstimateMDPDE(par_id));
@@ -323,6 +322,48 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
     return hist;
 }
 
+std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHistogram(
+    int par_id, Residue residue, int extra_id)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return {};
+    }
+    
+    std::unordered_map<int, std::array<double, 4>> values_map;
+    auto residue_id_previous{ -1 };
+    for (auto & atom : m_model_object->GetSelectedAtomList())
+    {
+        size_t id;
+        if (AtomClassifier::IsMainChainMember(
+            atom->GetElement(), atom->GetRemoteness(), id) == false) continue;
+        if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
+        auto residue_id{ atom->GetResidueID() };
+        if (residue_id < residue_id_previous)
+        {
+            std::cout << "Found the second chain, skip the rest of chains." << std::endl;
+            break;
+        }
+        residue_id_previous = residue_id;
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto gaus_value{ entry->GetGausEstimateMDPDE(par_id) };
+        values_map[residue_id].at(id) = gaus_value;
+    }
+
+    std::vector<std::unique_ptr<TH1D>> hist_list;
+    for (size_t i = 0; i < 4; i++)
+    {
+        auto name{ Form("h%d_%d_%d_%d", extra_id, static_cast<int>(i), static_cast<int>(residue), par_id) };
+        auto hist{ ROOTHelper::CreateHist1D(name, "", 4,  0.5, 4.5) };
+        for (auto & [residue_id, values] : values_map)
+        {
+            hist->Fill(ArrayStats<double>::ComputeRank(values, i));
+        }
+        hist_list.emplace_back(std::move(hist));
+    }
+    return hist_list;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstimateScatterGraph(
     Element element, double reference_amplitude, bool reverse)
 {
@@ -332,9 +373,8 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstima
     }
     auto graph{ ROOTHelper::CreateGraphErrors() };
     std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
-    for (auto & atom : m_model_object->GetComponentsList())
+    for (auto & atom : m_model_object->GetSelectedAtomList())
     {
-        if (atom->GetSelectedFlag() == false) continue;
         if (atom->GetElement() != Element::OXYGEN) continue;
         if (atom->GetRemoteness() != Remoteness::NONE) continue;
         if (atom->GetSpecialAtomFlag() == false)
@@ -346,27 +386,25 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstima
         }
     }
     auto count{ 0 };
-    for (auto & atom : m_model_object->GetComponentsList())
+    for (auto & atom : m_model_object->GetSelectedAtomList())
     {
-        if (atom->GetElement() == element && atom->GetSelectedFlag() == true)
+        if (atom->GetElement() != element) continue;
+        auto residue_id{ atom->GetResidueID() };
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto normalized_amplitude{ entry->GetAmplitudeEstimateMDPDE() };
+        if (amplitude_diff_to_carbonyl_oxygen_map.find(residue_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
         {
-            auto residue_id{ atom->GetResidueID() };
-            auto entry{ atom->GetAtomicPotentialEntry() };
-            auto normalized_amplitude{ entry->GetAmplitudeEstimateMDPDE() };
-            if (amplitude_diff_to_carbonyl_oxygen_map.find(residue_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
-            {
-                normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(residue_id);
-            }
-            if (reverse == false)
-            {
-                graph->SetPoint(count, normalized_amplitude, entry->GetWidthEstimateMDPDE());
-            }
-            else
-            {
-                graph->SetPoint(count, entry->GetWidthEstimateMDPDE(), normalized_amplitude);
-            }
-            count++;
+            normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(residue_id);
         }
+        if (reverse == false)
+        {
+            graph->SetPoint(count, normalized_amplitude, entry->GetWidthEstimateMDPDE());
+        }
+        else
+        {
+            graph->SetPoint(count, entry->GetWidthEstimateMDPDE(), normalized_amplitude);
+        }
+        count++;
     }
     return graph;
 }
@@ -408,9 +446,8 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
     
     auto count{ 0 };
     auto residue_id_previous{ -1 };
-    for (auto & atom : m_model_object->GetComponentsList())
+    for (auto & atom : m_model_object->GetSelectedAtomList())
     {
-        if (atom->GetSelectedFlag() == false) continue;
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetRemoteness() != AtomClassifier::GetMainChainRemoteness(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
@@ -488,21 +525,19 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
-    for (auto & atom : m_model_object->GetComponentsList())
+    for (auto & atom : m_model_object->GetSelectedAtomList())
     {
-        if (atom->GetElement() == element && atom->GetSelectedFlag() == true)
+        if (atom->GetElement() != element) continue;
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        if (reverse == false)
         {
-            auto entry{ atom->GetAtomicPotentialEntry() };
-            if (reverse == false)
-            {
-                graph->SetPoint(count, entry->GetAmplitudeEstimateMDPDE(), entry->GetWidthEstimateMDPDE());
-            }
-            else
-            {
-                graph->SetPoint(count, entry->GetWidthEstimateMDPDE(), entry->GetAmplitudeEstimateMDPDE());
-            }
-            count++;
+            graph->SetPoint(count, entry->GetAmplitudeEstimateMDPDE(), entry->GetWidthEstimateMDPDE());
         }
+        else
+        {
+            graph->SetPoint(count, entry->GetWidthEstimateMDPDE(), entry->GetAmplitudeEstimateMDPDE());
+        }
+        count++;
     }
     return graph;
 }

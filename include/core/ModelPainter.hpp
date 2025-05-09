@@ -41,6 +41,7 @@ private:
     void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
     void PaintAtomGausScatter(ModelObject * model_object, const std::string & name, bool do_normalize=false);
     void PaintAtomGausMainChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomRankMainChain(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
     void PrintResolutionInfoPad(TPad * pad, TPaveText * text, double resolution);
