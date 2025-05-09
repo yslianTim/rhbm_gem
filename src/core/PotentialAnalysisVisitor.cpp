@@ -14,6 +14,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "KeyPacker.hpp"
 #include "ArrayStats.hpp"
+#include "AtomClassifier.hpp"
 
 #include <iostream>
 #include <tuple>
@@ -63,8 +64,8 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
     for (auto & atom : atom_list)
     {
         if (atom->GetSelectedFlag() == false) continue;
-        auto potential_entry{ std::make_unique<AtomicPotentialEntry>() };
-        atom->AddAtomicPotentialEntry(std::move(potential_entry));
+        auto atom_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        atom->AddAtomicPotentialEntry(std::move(atom_potential_entry));
         m_selected_atom_list.emplace_back(atom.get());
     }
     std::cout <<" Number of selected atom = "<< selected_atom_size << std::endl;
@@ -100,9 +101,9 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
 
         for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
         {
-            const auto & group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
-            RunAtomClassification(group_class_key, dynamic_cast<ModelObject*>(model_object.get()));
-            RunPotentialFitting(group_class_key, dynamic_cast<ModelObject*>(model_object.get()));
+            const auto & class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+            RunAtomClassification(class_key, dynamic_cast<ModelObject*>(model_object.get()));
+            RunPotentialFitting(class_key, dynamic_cast<ModelObject*>(model_object.get()));
         }
     }
     catch(const std::exception & e)
@@ -119,32 +120,7 @@ void PotentialAnalysisVisitor::RunAtomClassification(
     auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
     for (auto atom : m_selected_atom_list)
     {
-        uint64_t group_key;
-        if (class_key == AtomicInfoHelper::GetResidueClassKey())
-        {
-            group_key = KeyPackerResidueClass::Pack(
-                atom->GetResidue(), atom->GetElement(),
-                atom->GetRemoteness(), atom->GetBranch(),
-                atom->GetSpecialAtomFlag());
-        }
-        else if (class_key == AtomicInfoHelper::GetElementClassKey())
-        {
-            group_key = KeyPackerElementClass::Pack(
-                atom->GetElement(), atom->GetRemoteness(),
-                atom->GetSpecialAtomFlag());
-        }
-        else if (class_key == AtomicInfoHelper::GetStructureClassKey())
-        {
-            group_key = KeyPackerStructureClass::Pack(
-                atom->GetStructure(), atom->GetResidue(), atom->GetElement(),
-                atom->GetRemoteness(), atom->GetBranch(),
-                atom->GetSpecialAtomFlag());
-        }
-        else
-        {
-            throw std::runtime_error("PotentialAnalysisVisitor::RunAtomClassification()"
-                                     " : Unsupported class key."+ class_key);
-        }
+        auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
         group_potential_entry->AddAtomObjectPtr(group_key, atom);
         group_potential_entry->InsertGroupKey(group_key);
         m_group_set_map[class_key].insert(group_key);

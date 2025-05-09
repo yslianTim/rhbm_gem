@@ -2,6 +2,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "KeyPacker.hpp"
+#include "AtomObject.hpp"
 
 #include <iostream>
 
@@ -81,6 +82,41 @@ const std::string & AtomClassifier::GetMainChainElementLabel(size_t id)
         return m_main_chain_member_label.at(0);
     }
     return m_main_chain_member_label.at(id);
+}
+
+uint64_t AtomClassifier::GetGroupKeyInClass(
+    const AtomObject * atom_object, const std::string & class_key)
+{
+    if (class_key == AtomicInfoHelper::GetElementClassKey())
+    {
+        return KeyPackerElementClass::Pack(
+            atom_object->GetElement(),
+            atom_object->GetRemoteness(),
+            atom_object->GetSpecialAtomFlag());
+    }
+    else if (class_key == AtomicInfoHelper::GetResidueClassKey())
+    {
+        return KeyPackerResidueClass::Pack(
+            atom_object->GetResidue(),
+            atom_object->GetElement(),
+            atom_object->GetRemoteness(),
+            atom_object->GetBranch(),
+            atom_object->GetSpecialAtomFlag());
+    }
+    else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+    {
+        return KeyPackerStructureClass::Pack(
+            atom_object->GetStructure(),
+            atom_object->GetResidue(),
+            atom_object->GetElement(),
+            atom_object->GetRemoteness(),
+            atom_object->GetBranch(),
+            atom_object->GetSpecialAtomFlag());
+    }
+    else
+    {
+        throw std::runtime_error("Unsupported class key."+ class_key);
+    }
 }
 
 uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
