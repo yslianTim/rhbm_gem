@@ -923,7 +923,7 @@ void DemoPainter::PaintAtomRankMainChain(
     short color_element[main_chain_element_count] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
     
     std::vector<std::unique_ptr<TH1D>> rank_hist_list[row_size][3];
-    double y_max[row_size]{ {0.0} };
+    double y_max[row_size]{ 0.0 };
     for (int j = 0; j < row_size; j++)
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(static_cast<size_t>(j))) };

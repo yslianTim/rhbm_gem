@@ -1448,7 +1448,7 @@ void ModelPainter::PaintAtomRankMainChain(
     rank_hist_list[1][2] = entry_iter->CreateMainChainRankHistogram(1, Residue::PRO);
     rank_hist_list[0][2] = entry_iter->CreateMainChainRankHistogram(2, Residue::PRO);
 
-    double y_max[row_size]{ {0.0} };
+    double y_max[row_size]{ 0.0 };
     for (int j = 0; j < row_size; j++)
     {
         for (auto & hist : rank_hist_list[j][0])

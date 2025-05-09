@@ -56,7 +56,7 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitModelObject");
     std::cout <<"- Visiting ModelObject..." << std::endl;
-    auto selected_atom_size{ static_cast<size_t>(data_object->GetNumberOfSelectedAtom()) };
+    auto selected_atom_size{ data_object->GetNumberOfSelectedAtom() };
     const auto & atom_list{ data_object->GetComponentsList() };
     m_selected_atom_list.clear();
     m_selected_atom_list.reserve(selected_atom_size);
@@ -100,7 +100,7 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
 
         for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
         {
-            auto group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+            const auto & group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
             RunAtomClassification(group_class_key, dynamic_cast<ModelObject*>(model_object.get()));
             RunPotentialFitting(group_class_key, dynamic_cast<ModelObject*>(model_object.get()));
         }
@@ -162,9 +162,9 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
     for (const auto & group_key : m_group_set_map.at(class_key))
     {
         auto atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
-        auto group_size{ static_cast<int>(atom_list.size()) };
+        auto group_size{ atom_list.size() };
         std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
-        data_array.reserve(static_cast<size_t>(group_size));
+        data_array.reserve(group_size);
         for (auto atom : atom_list)
         {
             auto entry{ atom->GetAtomicPotentialEntry() };
@@ -180,7 +180,7 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
             }
             data_array.emplace_back(std::make_tuple(sampling_entry_list, atom->GetInfo()));
         }
-        auto model_estimator{ std::make_unique<HRLModelHelper>(2, group_size) };
+        auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
         model_estimator->SetDataArray(data_array);
         model_estimator->RunEstimation(m_alpha_r, m_alpha_g);
 
