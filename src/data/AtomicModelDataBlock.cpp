@@ -12,9 +12,10 @@ AtomicModelDataBlock::~AtomicModelDataBlock()
 
 }
 
-void AtomicModelDataBlock::AddAtomObject(std::unique_ptr<AtomObject> atom_object)
+void AtomicModelDataBlock::AddAtomObject(
+    int model_number, std::unique_ptr<AtomObject> atom_object)
 {
-    m_atom_object_list.emplace_back(std::move(atom_object));
+    m_atom_object_list_map[model_number].emplace_back(std::move(atom_object));
 }
 
 void AtomicModelDataBlock::AddElementType(const Element & element)
@@ -22,9 +23,9 @@ void AtomicModelDataBlock::AddElementType(const Element & element)
     m_element_type_list.emplace_back(element);
 }
 
-std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::GetAtomObjectList(void)
+std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::GetAtomObjectList(int model_number)
 {
-    return std::move(m_atom_object_list);
+    return std::move(m_atom_object_list_map.at(model_number));
 }
 
 std::string AtomicModelDataBlock::GetPdbID(void) const

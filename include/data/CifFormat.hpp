@@ -51,7 +51,7 @@ class CifFormat : public ModelFileFormatBase
         int pdbx_PDB_helix_length;
     };
 
-    std::unordered_map<std::string, int> struct_sheet_map;
+    std::unordered_map<std::string, int> m_struct_sheet_map;
     std::vector<std::unique_ptr<StructConf>> m_struct_conf_list;
 
     std::unique_ptr<AtomicModelDataBlock> m_data_block;
@@ -62,10 +62,10 @@ public:
     void LoadHeader(const std::string & filename) override;
     void PrintHeader(void) const override;
     void LoadDataArray(const std::string & filename) override;
-    void BuildAtomObject(std::any atom_info, bool is_special_atom) override;
     AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
+    void LoadDatabaseInfo(const std::string & filename);
     void LoadPdbxData(const std::string & filename);
     void LoadElementTypeList(const std::string & filename);
     void LoadAtomSiteData(const std::string & filename);

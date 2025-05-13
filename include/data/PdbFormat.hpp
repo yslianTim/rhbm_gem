@@ -91,12 +91,11 @@ public:
     void LoadHeader(const std::string & filename) override;
     void PrintHeader(void) const override;
     void LoadDataArray(const std::string & filename) override;
-    void BuildAtomObject(std::any atom_info, bool is_special_atom) override;
     AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
     void LoadAtomSiteData(const std::string & filename);
-    void ScanAtomEntry(char * line, bool is_special);
+    void ScanAtomEntry(char * line, bool is_special, int model_number);
     PDB_HEADER MapToHeaderType(const std::string & name) const;
 
 };
