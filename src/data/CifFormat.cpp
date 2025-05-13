@@ -92,10 +92,10 @@ void CifFormat::LoadElementTypeList(const std::string & filename)
     }
 
     ParseLoopBlock(infile, "_atom_type.",
-        [this](const std::unordered_map<std::string, size_t> & idx,
-               const std::vector<std::string> & tok)
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
         {
-            auto element_type_string{ tok[idx.at("symbol")] };
+            auto element_type_string{ token_list[index_map.at("symbol")] };
             auto element{ AtomicInfoHelper::GetElementFromString(element_type_string) };
             m_element_type_list.emplace_back(element);
         }
@@ -156,19 +156,19 @@ void CifFormat::LoadStructConfData(const std::string & filename)
     }
 
     ParseLoopBlock(infile, "_struct_conf.",
-        [this](const std::unordered_map<std::string, size_t> & idx,
-               const std::vector<std::string> & tok)
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
         {
             auto entry{ std::make_unique<StructConf>() };
-            entry->conf_type_id          = tok[idx.at("conf_type_id")];
-            entry->id                    = tok[idx.at("id")];
-            entry->beg_label_comp_id     = tok[idx.at("beg_label_comp_id")];
-            entry->beg_label_asym_id     = tok[idx.at("beg_label_asym_id")];
-            entry->beg_label_seq_id      = tok[idx.at("beg_label_seq_id")];
-            entry->end_label_comp_id     = tok[idx.at("end_label_comp_id")];
-            entry->end_label_asym_id     = tok[idx.at("end_label_asym_id")];
-            entry->end_label_seq_id      = tok[idx.at("end_label_seq_id")];
-            entry->pdbx_PDB_helix_length = std::stoi(tok[idx.at("pdbx_PDB_helix_length")]);
+            entry->conf_type_id          = token_list[index_map.at("conf_type_id")];
+            entry->id                    = token_list[index_map.at("id")];
+            entry->beg_label_comp_id     = token_list[index_map.at("beg_label_comp_id")];
+            entry->beg_label_asym_id     = token_list[index_map.at("beg_label_asym_id")];
+            entry->beg_label_seq_id      = token_list[index_map.at("beg_label_seq_id")];
+            entry->end_label_comp_id     = token_list[index_map.at("end_label_comp_id")];
+            entry->end_label_asym_id     = token_list[index_map.at("end_label_asym_id")];
+            entry->end_label_seq_id      = token_list[index_map.at("end_label_seq_id")];
+            entry->pdbx_PDB_helix_length = std::stoi(token_list[index_map.at("pdbx_PDB_helix_length")]);
             m_struct_conf_list.emplace_back(std::move(entry));
         }
     );
