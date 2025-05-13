@@ -2,13 +2,15 @@
 #include "PdbFormat.hpp"
 #include "AtomObject.hpp"
 #include "StringHelper.hpp"
+#include "AtomicModelDataBlock.hpp"
 
 #include <fstream>
 #include <iostream>
 #include <cstring>
 #include <stdexcept>
 
-PdbFormat::PdbFormat(void)
+PdbFormat::PdbFormat(void) :
+    m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
 
 }
@@ -109,8 +111,7 @@ void PdbFormat::BuildAtomObject(std::any atom_info, bool is_special_atom)
         atom_object->SetOccupancy(atom->occupancy);
         atom_object->SetTemperature(atom->temperature);
         atom_object->SetSpecialAtomFlag(is_special_atom);
-        //atom_object->SetCharge();
-        m_atom_object_list.emplace_back(std::move(atom_object));
+        m_data_block->AddAtomObject(std::move(atom_object));
     }
     catch (const std::bad_any_cast &)
     {
@@ -122,19 +123,9 @@ void PdbFormat::BuildAtomObject(std::any atom_info, bool is_special_atom)
     }
 }
 
-std::vector<std::unique_ptr<AtomObject>> PdbFormat::GetAtomObjectList(void)
+AtomicModelDataBlock * PdbFormat::GetDataBlockPtr(void)
 {
-    return std::move(m_atom_object_list);
-}
-
-std::string PdbFormat::GetPdbID(void) const
-{
-    return m_model_id;
-}
-
-std::string PdbFormat::GetEmdID(void) const
-{
-    return m_map_id;
+    return m_data_block.get();
 }
 
 PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const
@@ -148,14 +139,4 @@ PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const
         std::cerr << except.what() << std::endl;
         return PDB_HEADER::UNK;
     }
-}
-
-double PdbFormat::GetResolution(void) const
-{
-    return std::stod(m_resolution);
-}
-
-std::string PdbFormat::GetResolutionMethod(void) const
-{
-    return m_resolution_method;
 }

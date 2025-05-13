@@ -13,11 +13,11 @@ ModelFileWriter::ModelFileWriter(const std::string & filename, const ModelObject
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     if      (file_extension == ".pdb")
     {
-        m_file_format_helper = std::make_unique<PdbFormat>();
+        m_file_object = std::make_unique<PdbFormat>();
     }
     else if (file_extension == ".cif")
     {
-        m_file_format_helper = std::make_unique<CifFormat>();
+        m_file_object = std::make_unique<CifFormat>();
     }
     else
     {

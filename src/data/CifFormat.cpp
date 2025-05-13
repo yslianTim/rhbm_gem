@@ -3,6 +3,7 @@
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "AtomicModelDataBlock.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -11,7 +12,8 @@
 #include <sstream>
 #include <stdexcept>
 
-CifFormat::CifFormat(void)
+CifFormat::CifFormat(void) :
+    m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
 
 }
@@ -46,7 +48,7 @@ void CifFormat::LoadPdbxData(const std::string & filename)
         std::cerr << "Cannot open the file: " << filename << std::endl;
         throw std::runtime_error("LoadPdbxData failed!");
     }
-    std::string line, header;
+    std::string line, header, map_id, model_id, resolution, resolution_method;
     auto found_model_id{ false };
     auto found_map_id{ false };
     auto found_resolution{ false };
@@ -56,26 +58,30 @@ void CifFormat::LoadPdbxData(const std::string & filename)
         if (line.find("_pdbx_database_related.db_id ") != std::string::npos)
         {
             std::istringstream iss(line);
-            iss >> header >> m_map_id;
+            iss >> header >> map_id;
+            m_data_block->SetEmdID(map_id);
             found_map_id = true;
         }
         if (line.find("_pdbx_database_status.entry_id ") != std::string::npos)
         {
             std::istringstream iss(line);
-            iss >> header >> m_model_id;
+            iss >> header >> model_id;
+            m_data_block->SetPdbID(model_id);
             found_model_id = true;
         }
         if (line.find("_em_3d_reconstruction.resolution ") != std::string::npos)
         {
             std::istringstream iss(line);
-            iss >> header >> m_resolution;
+            iss >> header >> resolution;
+            m_data_block->SetResolution(resolution);
             found_resolution = true;
         }
         if (line.find("_em_3d_reconstruction.resolution_method ") != std::string::npos)
         {
             std::istringstream iss(line);
             iss >> header;
-            iss >> std::quoted(m_resolution_method, '\'');
+            iss >> std::quoted(resolution_method, '\'');
+            m_data_block->SetResolutionMethod(resolution_method);
             found_resolution_method = true;
         }
         if (found_model_id && found_map_id && found_resolution && found_resolution_method) break;
@@ -97,10 +103,9 @@ void CifFormat::LoadElementTypeList(const std::string & filename)
         {
             auto element_type_string{ token_list[index_map.at("symbol")] };
             auto element{ AtomicInfoHelper::GetElementFromString(element_type_string) };
-            m_element_type_list.emplace_back(element);
+            m_data_block->AddElementType(element);
         }
     );
-    std::cout <<"Number of element types in PDBx/mmCIF = "<< m_element_type_list.size() << std::endl;
 }
 
 void CifFormat::LoadAtomSiteData(const std::string & filename)
@@ -194,7 +199,7 @@ void CifFormat::BuildAtomObject(std::any atom_info, bool is_special_atom)
         atom_object->SetTemperature(atom->B_iso_or_equiv);
         atom_object->SetSpecialAtomFlag(is_special_atom);
         SetStructureInfo(atom_object.get());
-        m_atom_object_list.emplace_back(std::move(atom_object));
+        m_data_block->AddAtomObject(std::move(atom_object));
     }
     catch (const std::bad_any_cast &)
     {
@@ -223,29 +228,9 @@ void CifFormat::SetStructureInfo(AtomObject * atom_object)
     atom_object->SetStructure(Structure::FREE);
 }
 
-std::vector<std::unique_ptr<AtomObject>> CifFormat::GetAtomObjectList(void)
+AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
 {
-    return std::move(m_atom_object_list);
-}
-
-std::string CifFormat::GetPdbID(void) const
-{
-    return m_model_id;
-}
-
-std::string CifFormat::GetEmdID(void) const
-{
-    return m_map_id;
-}
-
-double CifFormat::GetResolution(void) const
-{
-    return std::stod(m_resolution);
-}
-
-std::string CifFormat::GetResolutionMethod(void) const
-{
-    return m_resolution_method;
+    return m_data_block.get();
 }
 
 void CifFormat::ParseLoopBlock(

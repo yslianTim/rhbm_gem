@@ -9,6 +9,8 @@
 
 enum class Element : uint16_t;
 
+class AtomicModelDataBlock;
+
 class CifFormat : public ModelFileFormatBase
 {
     struct AtomSite
@@ -50,12 +52,9 @@ class CifFormat : public ModelFileFormatBase
     };
 
     std::unordered_map<std::string, int> struct_sheet_map;
-
-    std::string m_map_id, m_model_id;
-    std::string m_resolution, m_resolution_method;
-    std::vector<std::unique_ptr<AtomObject>> m_atom_object_list;
     std::vector<std::unique_ptr<StructConf>> m_struct_conf_list;
-    std::vector<Element> m_element_type_list;
+
+    std::unique_ptr<AtomicModelDataBlock> m_data_block;
 
 public:
     CifFormat(void);
@@ -64,11 +63,7 @@ public:
     void PrintHeader(void) const override;
     void LoadDataArray(const std::string & filename) override;
     void BuildAtomObject(std::any atom_info, bool is_special_atom) override;
-    std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(void) override;
-    std::string GetPdbID(void) const override;
-    std::string GetEmdID(void) const override;
-    double GetResolution(void) const override;
-    std::string GetResolutionMethod(void) const override;
+    AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
     void LoadPdbxData(const std::string & filename);
