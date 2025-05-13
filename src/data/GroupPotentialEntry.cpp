@@ -140,6 +140,7 @@ double GroupPotentialEntry::CalculateIntensityEstimate(
 {
     auto amplitude{ std::get<0>(estimate) };
     auto width{ std::get<1>(estimate) };
+    if (width == 0.0) return 0.0;
     return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
 }
 

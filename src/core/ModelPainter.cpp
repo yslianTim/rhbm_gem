@@ -76,7 +76,7 @@ void ModelPainter::Painting(void)
         model_object->BuildKDTreeRoot();
         PaintResidueClassWidthScatterPlot(model_object, "residue_class_com_"+ model_object->GetPdbID() +".pdf", 0, true);
         //PaintResidueClassWidthScatterPlot(model_object, "residue_class_knn_"+ model_object->GetPdbID() +".pdf", 1, true);
-        PaintResidueClassXYPosition(model_object, "residue_class_xy_position_"+ model_object->GetPdbID() +".pdf");
+        //PaintResidueClassXYPosition(model_object, "residue_class_xy_position_"+ model_object->GetPdbID() +".pdf");
         PaintResidueClassGroupGausScatter(model_object, "amplitude_scatter_"+ model_object->GetPdbID() +".pdf", 0);
         PaintResidueClassGroupGausScatter(model_object, "width_scatter_"+ model_object->GetPdbID() +".pdf", 1);
         PaintAtomXYPosition(model_object, "atom_position_"+ model_object->GetPdbID() +".pdf");
@@ -1300,110 +1300,119 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
     };
     short color_element[main_chain_element_count] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
     std::unique_ptr<TH2> frame[col_size][row_size];
-    std::unique_ptr<TGraphErrors> gaus_graph[row_size][main_chain_element_count];
-    std::string chain_id;
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_map[row_size][main_chain_element_count];
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph[2][k] = entry_iter->CreateGausEstimateToResidueIDGraph(k, chain_id, 0);
-        gaus_graph[1][k] = entry_iter->CreateGausEstimateToResidueIDGraph(k, chain_id, 1);
-        gaus_graph[0][k] = entry_iter->CreateGausEstimateToResidueIDGraph(k, chain_id, 2);
+        gaus_graph_map[2][k] = entry_iter->CreateGausEstimateToResidueIDGraphMap(k, 0);
+        gaus_graph_map[1][k] = entry_iter->CreateGausEstimateToResidueIDGraphMap(k, 1);
+        gaus_graph_map[0][k] = entry_iter->CreateGausEstimateToResidueIDGraphMap(k, 2);
     }
 
-    std::vector<double> y_array[row_size];
-    double y_min[row_size], y_max[row_size];
-    for (int j = 0; j < row_size; j++)
+    for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])
     {
-        y_array[j].reserve(static_cast<size_t>(gaus_graph[j][0]->GetN() * 4));
-        for (size_t k = 0; k < main_chain_element_count; k++)
-        {
-            for (int p = 0; p < gaus_graph[j][k]->GetN(); p++)
-            {
-                y_array[j].emplace_back(gaus_graph[j][k]->GetPointY(p));
-            }
-        }
-        auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.2) };
-        y_min[j] = std::get<0>(y_range);
-        y_max[j] = std::get<1>(y_range);
-    }
-    
-    double x_min, x_max, y_min_tmp, y_max_tmp;
-    gaus_graph[0][0]->ComputeRange(x_min, y_min_tmp, x_max, y_max_tmp);
-
-    std::unique_ptr<TPaveText> subtitle1_text;
-    std::unique_ptr<TPaveText> subtitle2_text;
-    std::unique_ptr<TPaveText> subtitle3_text;
-    std::unique_ptr<TLegend> legend;
-    for (int i = 0; i < col_size; i++)
-    {
+        std::vector<double> x_array;
+        std::vector<double> y_array[row_size];
+        double y_min[row_size], y_max[row_size];
         for (int j = 0; j < row_size; j++)
         {
-            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
-            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0, x_max+5, 500, y_min[j], y_max[j]);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 45.0f, 0.9f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.01f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 510);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 1.3f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.02/y_factor), 506);
-            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
-            frame[i][j]->GetXaxis()->SetTitle("Residue ID");
-            frame[i][j]->GetYaxis()->SetTitle(y_title[j].data());
-            frame[i][j]->GetXaxis()->CenterTitle();
-            frame[i][j]->GetYaxis()->CenterTitle();
-            frame[i][j]->SetStats(0);
-            frame[i][j]->Draw();
+            y_array[j].reserve(static_cast<size_t>(gaus_graph->GetN() * 4));
             for (size_t k = 0; k < main_chain_element_count; k++)
             {
-                ROOTHelper::SetMarkerAttribute(gaus_graph[j][k].get(), 20, 0.7f, color_element[k]);
-                ROOTHelper::SetLineAttribute(gaus_graph[j][k].get(), 1, 1, color_element[k]);
-                gaus_graph[j][k]->Draw("PL X0");
+                for (int p = 0; p < gaus_graph_map[j][k].at(chain_id)->GetN(); p++)
+                {
+                    if (j == 0) x_array.emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointX(p));
+                    y_array[j].emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointY(p));
+                }
             }
+            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.2) };
+            y_min[j] = std::get<0>(y_range);
+            y_max[j] = std::get<1>(y_range);
+        }
+        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+        auto x_min{ std::get<0>(x_range) };
+        auto x_max{ std::get<1>(x_range) };
 
-            if (i == 0 && j == row_size - 1)
+        std::unique_ptr<TPaveText> subtitle1_text;
+        std::unique_ptr<TPaveText> subtitle2_text;
+        std::unique_ptr<TPaveText> subtitle3_text;
+        std::unique_ptr<TLegend> legend;
+        for (int i = 0; i < col_size; i++)
+        {
+            for (int j = 0; j < row_size; j++)
             {
-                subtitle1_text = ROOTHelper::CreatePaveText(0.00, 1.01, 0.15, 1.32, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(subtitle1_text.get());
-                ROOTHelper::SetPaveAttribute(subtitle1_text.get(), 0, 0.2);
-                ROOTHelper::SetFillAttribute(subtitle1_text.get(), 1001, kAzure-7);
-                ROOTHelper::SetTextAttribute(subtitle1_text.get(), 60.0f, 133, 22, 0.0, kYellow-10);
-                subtitle1_text->AddText(Form("%.2f #AA", model_object->GetResolution()));
-                subtitle1_text->Draw();
-
-                subtitle2_text = ROOTHelper::CreatePaveText(0.16, 1.01, 0.35, 1.32, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(subtitle2_text.get());
-                ROOTHelper::SetPaveAttribute(subtitle2_text.get(), 0, 0.2);
-                ROOTHelper::SetFillAttribute(subtitle2_text.get(), 1001, kAzure-7, 0.5f);
-                ROOTHelper::SetTextAttribute(subtitle2_text.get(), 50.0f, 103, 22);
-                subtitle2_text->AddText(Form("PDB-%s", model_object->GetPdbID().data()));
-                subtitle2_text->Draw();
-
-                subtitle3_text = ROOTHelper::CreatePaveText(0.36, 1.01, 0.57, 1.32, "nbNDC ARC", true);
-                ROOTHelper::SetPaveTextDefaultStyle(subtitle3_text.get());
-                ROOTHelper::SetPaveAttribute(subtitle3_text.get(), 0, 0.2);
-                ROOTHelper::SetFillAttribute(subtitle3_text.get(), 1001, kAzure-7, 0.5f);
-                ROOTHelper::SetTextAttribute(subtitle3_text.get(), 50.0f, 103, 22);
-                subtitle3_text->AddText(model_object->GetEmdID().data());
-                subtitle3_text->Draw();
-
-                legend = ROOTHelper::CreateLegend(0.58, 1.01, 0.98, 1.32, true);
-                ROOTHelper::SetLegendDefaultStyle(legend.get());
-                ROOTHelper::SetTextAttribute(legend.get(), 30.0f, 133, 12);
-                ROOTHelper::SetFillAttribute(legend.get(), 4000);
+                ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
+                ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+                ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
+                auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+                auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+                if (frame[i][j] == nullptr)
+                {
+                    frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0.0, 1.0, 500, 0.0, 1.0);
+                    ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 45.0f, 0.9f, 133);
+                    ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.01f, 133);
+                    ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 510);
+                    ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 1.3f, 133);
+                    ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40.0f, 0.005f, 133);
+                    ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.02/y_factor), 506);
+                    ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+                    frame[i][j]->GetXaxis()->CenterTitle();
+                    frame[i][j]->GetYaxis()->CenterTitle();
+                    frame[i][j]->SetStats(0);
+                }
+                frame[i][j]->GetXaxis()->SetTitle(Form("Residue ID #[]{Chain %s}", chain_id.data()));
+                frame[i][j]->GetYaxis()->SetTitle(y_title[j].data());
+                frame[i][j]->GetXaxis()->SetLimits(x_min, x_max);
+                frame[i][j]->GetYaxis()->SetLimits(y_min[j], y_max[j]);
+                frame[i][j]->Draw();
                 for (size_t k = 0; k < main_chain_element_count; k++)
                 {
-                    legend->AddEntry(gaus_graph[j][k].get(),
-                    AtomClassifier::GetMainChainElementLabel(k).data(), "pl");
+                    ROOTHelper::SetMarkerAttribute(gaus_graph_map[j][k].at(chain_id).get(), 20, 0.7f, color_element[k]);
+                    ROOTHelper::SetLineAttribute(gaus_graph_map[j][k].at(chain_id).get(), 1, 1, color_element[k]);
+                    gaus_graph_map[j][k].at(chain_id)->Draw("PL X0");
                 }
-                legend->SetNColumns(2);
-                legend->Draw();
+
+                if (i == 0 && j == row_size - 1)
+                {
+                    subtitle1_text = ROOTHelper::CreatePaveText(0.00, 1.02, 0.15, 1.37, "nbNDC ARC", true);
+                    ROOTHelper::SetPaveTextDefaultStyle(subtitle1_text.get());
+                    ROOTHelper::SetPaveAttribute(subtitle1_text.get(), 0, 0.2);
+                    ROOTHelper::SetFillAttribute(subtitle1_text.get(), 1001, kAzure-7);
+                    ROOTHelper::SetTextAttribute(subtitle1_text.get(), 60.0f, 133, 22, 0.0, kYellow-10);
+                    subtitle1_text->AddText(Form("%.2f #AA", model_object->GetResolution()));
+                    subtitle1_text->Draw();
+
+                    subtitle2_text = ROOTHelper::CreatePaveText(0.16, 1.02, 0.35, 1.37, "nbNDC ARC", true);
+                    ROOTHelper::SetPaveTextDefaultStyle(subtitle2_text.get());
+                    ROOTHelper::SetPaveAttribute(subtitle2_text.get(), 0, 0.2);
+                    ROOTHelper::SetFillAttribute(subtitle2_text.get(), 1001, kAzure-7, 0.5f);
+                    ROOTHelper::SetTextAttribute(subtitle2_text.get(), 50.0f, 103, 22);
+                    subtitle2_text->AddText(Form("PDB-%s", model_object->GetPdbID().data()));
+                    subtitle2_text->Draw();
+
+                    subtitle3_text = ROOTHelper::CreatePaveText(0.36, 1.02, 0.57, 1.37, "nbNDC ARC", true);
+                    ROOTHelper::SetPaveTextDefaultStyle(subtitle3_text.get());
+                    ROOTHelper::SetPaveAttribute(subtitle3_text.get(), 0, 0.2);
+                    ROOTHelper::SetFillAttribute(subtitle3_text.get(), 1001, kAzure-7, 0.5f);
+                    ROOTHelper::SetTextAttribute(subtitle3_text.get(), 50.0f, 103, 22);
+                    subtitle3_text->AddText(model_object->GetEmdID().data());
+                    subtitle3_text->Draw();
+
+                    legend = ROOTHelper::CreateLegend(0.58, 1.02, 0.98, 1.37, true);
+                    ROOTHelper::SetLegendDefaultStyle(legend.get());
+                    ROOTHelper::SetTextAttribute(legend.get(), 30.0f, 133, 12);
+                    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+                    for (size_t k = 0; k < main_chain_element_count; k++)
+                    {
+                        legend->AddEntry(gaus_graph_map[j][k].at(chain_id).get(),
+                        AtomClassifier::GetMainChainElementLabel(k).data(), "pl");
+                    }
+                    legend->SetNColumns(2);
+                    legend->Draw();
+                }
             }
         }
+        ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     }
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     std::cout <<"  Output file: "<< file_path << std::endl;
     #endif
@@ -1436,17 +1445,21 @@ void ModelPainter::PaintAtomRankMainChain(
         "Amplitude"
     };
     short color_element[main_chain_element_count] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+
+    int chain_size;
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::vector<std::unique_ptr<TH1D>> rank_hist_list[row_size][3];
-    rank_hist_list[2][0] = entry_iter->CreateMainChainRankHistogram(0);
-    rank_hist_list[1][0] = entry_iter->CreateMainChainRankHistogram(1);
-    rank_hist_list[0][0] = entry_iter->CreateMainChainRankHistogram(2);
-    rank_hist_list[2][1] = entry_iter->CreateMainChainRankHistogram(0, Residue::GLY);
-    rank_hist_list[1][1] = entry_iter->CreateMainChainRankHistogram(1, Residue::GLY);
-    rank_hist_list[0][1] = entry_iter->CreateMainChainRankHistogram(2, Residue::GLY);
-    rank_hist_list[2][2] = entry_iter->CreateMainChainRankHistogram(0, Residue::PRO);
-    rank_hist_list[1][2] = entry_iter->CreateMainChainRankHistogram(1, Residue::PRO);
-    rank_hist_list[0][2] = entry_iter->CreateMainChainRankHistogram(2, Residue::PRO);
+    std::unique_ptr<TH1D> rank_reference[row_size];
+    std::vector<Residue> veto_residues_list{ Residue::GLY, Residue::PRO };
+    rank_hist_list[2][0] = entry_iter->CreateMainChainRankHistogram(0, chain_size, Residue::UNK, 2, veto_residues_list);
+    rank_hist_list[1][0] = entry_iter->CreateMainChainRankHistogram(1, chain_size, Residue::UNK, 1, veto_residues_list);
+    rank_hist_list[0][0] = entry_iter->CreateMainChainRankHistogram(2, chain_size, Residue::UNK, 0, veto_residues_list);
+    rank_hist_list[2][1] = entry_iter->CreateMainChainRankHistogram(0, chain_size, Residue::GLY);
+    rank_hist_list[1][1] = entry_iter->CreateMainChainRankHistogram(1, chain_size, Residue::GLY);
+    rank_hist_list[0][1] = entry_iter->CreateMainChainRankHistogram(2, chain_size, Residue::GLY);
+    rank_hist_list[2][2] = entry_iter->CreateMainChainRankHistogram(0, chain_size, Residue::PRO);
+    rank_hist_list[1][2] = entry_iter->CreateMainChainRankHistogram(1, chain_size, Residue::PRO);
+    rank_hist_list[0][2] = entry_iter->CreateMainChainRankHistogram(2, chain_size, Residue::PRO);
 
     double y_max[row_size]{ 0.0 };
     for (int j = 0; j < row_size; j++)
@@ -1455,6 +1468,11 @@ void ModelPainter::PaintAtomRankMainChain(
         {
             auto max_tmp{ hist->GetMaximum() };
             if (y_max[j] < max_tmp) y_max[j] = max_tmp;
+        }
+        rank_reference[j] = ROOTHelper::CreateHist1D(Form("rank_reference_%d", j),"", 4, 0.5, 4.5);
+        for (int p = 1; p <= rank_reference[j]->GetNbinsX(); p++)
+        {
+            rank_reference[j]->SetBinContent(p, y_max[j]*10.0);
         }
     }
 
@@ -1465,13 +1483,13 @@ void ModelPainter::PaintAtomRankMainChain(
         for (int j = 0; j < row_size; j++)
         {
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 1, 0, 0);
+            ROOTHelper::SetPadLayout(gPad, 1, 0, 0, 1, 0, 0);
             ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 100, 0.1, 4.9, 100, 0.2, 2.0*y_max[j]);
             ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 45.0f, 0.8f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.01f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.01f, 103, kCyan+3);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 5);
             ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.8f, 133);
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 25.0f, 0.005f, 133);
@@ -1483,25 +1501,32 @@ void ModelPainter::PaintAtomRankMainChain(
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw();
+
+            ROOTHelper::SetFillAttribute(rank_reference[j].get(), 1001, kGray, 0.2f);
+            rank_reference[j]->SetBarWidth(0.9f);
+            rank_reference[j]->SetBarOffset(0.05f);
+            rank_reference[j]->Draw("BAR SAME");
+
+            auto text_size{ 0.2f * 4.0f/static_cast<float>(gPad->GetAbsHNDC()) };
             ROOTHelper::SetFillAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1001, kAzure-7, 0.5f);
-            ROOTHelper::SetLineAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1, 3, kAzure-7);
-            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 20, 5.0f, kAzure-7);
-            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarWidth(0.9f);
-            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarOffset(0.05f);
+            ROOTHelper::SetLineAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1, 0);
+            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 20, text_size, kAzure-7);
+            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
+            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarOffset(0.125f);
             rank_hist_list[j][0].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
 
-            ROOTHelper::SetFillAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1001, kGreen);
-            ROOTHelper::SetLineAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1, 1, kGreen);
-            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 20, 5.0f, kGreen);
-            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarWidth(0.4f);
-            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarOffset(0.1f);
+            ROOTHelper::SetFillAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1001, kOrange-6, 0.5f);
+            ROOTHelper::SetLineAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1, 0);
+            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 20, text_size, kOrange-6);
+            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
+            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarOffset(0.375f);
             rank_hist_list[j][1].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
 
-            ROOTHelper::SetFillAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1001, kMagenta);
-            ROOTHelper::SetLineAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1, 1, kMagenta);
-            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 20, 5.0f, kMagenta);
-            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarWidth(0.4f);
-            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarOffset(0.5f);
+            ROOTHelper::SetFillAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1001, kMagenta-2, 0.5f);
+            ROOTHelper::SetLineAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1, 0);
+            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 20, text_size, kMagenta-2);
+            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
+            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarOffset(0.625f);
             rank_hist_list[j][2].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
 
             if (j == row_size - 1)

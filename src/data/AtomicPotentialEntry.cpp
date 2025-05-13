@@ -186,6 +186,7 @@ double AtomicPotentialEntry::GetStatisticalDistance(const std::string & key) con
 
 double AtomicPotentialEntry::CalculateIntensityEstimate(double amplitude, double width) const
 {
+    if (width == 0.0) return 0.0;
     return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
 }
 

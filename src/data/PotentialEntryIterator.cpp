@@ -323,41 +323,46 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
 }
 
 std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHistogram(
-    int par_id, Residue residue, int extra_id)
+    int par_id, int & chain_size, Residue residue,
+    int extra_id, std::vector<Residue> veto_residues_list)
 {
     if (IsModelObjectAvailable() == false)
     {
         return {};
     }
     
-    std::unordered_map<int, std::array<double, 4>> values_map;
-    auto residue_id_previous{ -1 };
+    std::unordered_map<std::string, std::unordered_map<int, std::array<double, 4>>> values_map;
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         size_t id;
         if (AtomClassifier::IsMainChainMember(
             atom->GetElement(), atom->GetRemoteness(), id) == false) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
-        auto residue_id{ atom->GetResidueID() };
-        if (residue_id < residue_id_previous)
+        bool is_veto_residue{ false };
+        for (auto & veto_residue : veto_residues_list)
         {
-            std::cout << "Found the second chain, skip the rest of chains." << std::endl;
-            break;
+            if (atom->GetResidue() == veto_residue) is_veto_residue = true;
         }
-        residue_id_previous = residue_id;
+        if (is_veto_residue == true) continue;
+        auto residue_id{ atom->GetResidueID() };
+        auto chain_id{ atom->GetChainID() };
         auto entry{ atom->GetAtomicPotentialEntry() };
         auto gaus_value{ entry->GetGausEstimateMDPDE(par_id) };
-        values_map[residue_id].at(id) = gaus_value;
+        values_map[chain_id][residue_id].at(id) = gaus_value;
     }
+    chain_size = static_cast<int>(values_map.size());
 
     std::vector<std::unique_ptr<TH1D>> hist_list;
     for (size_t i = 0; i < 4; i++)
     {
         auto name{ Form("h%d_%d_%d_%d", extra_id, static_cast<int>(i), static_cast<int>(residue), par_id) };
         auto hist{ ROOTHelper::CreateHist1D(name, "", 4,  0.5, 4.5) };
-        for (auto & [residue_id, values] : values_map)
+        for (auto & [chain_id, values_map_tmp] : values_map)
         {
-            hist->Fill(ArrayStats<double>::ComputeRank(values, i));
+            for (auto & [residue_id, values] : values_map_tmp)
+            {
+                hist->Fill(ArrayStats<double>::ComputeRank(values, i));
+            }
         }
         hist_list.emplace_back(std::move(hist));
     }
@@ -435,17 +440,16 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueIDGraph(
-    size_t main_chain_element_id, std::string & chain_id, const int par_id, Residue residue)
+std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
+    size_t main_chain_element_id, const int par_id, Residue residue)
 {
     if (IsModelObjectAvailable() == false)
     {
-        return nullptr;
+        return {};
     }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
     
-    auto count{ 0 };
-    auto residue_id_previous{ -1 };
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
+    std::unordered_map<std::string, int> count_map;
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
@@ -453,18 +457,17 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         auto entry{ atom->GetAtomicPotentialEntry() };
         auto residue_id{ atom->GetResidueID() };
-        chain_id = atom->GetChainID();
-        if (residue_id < residue_id_previous)
+        auto chain_id{ atom->GetChainID() };
+        if (graph_map.find(chain_id) == graph_map.end())
         {
-            std::cout << "Found the second chain, skip the rest of chains." << std::endl;
-            break;
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            count_map[chain_id] = 0;
         }
-        residue_id_previous = residue_id;
         auto x_value{ static_cast<double>(residue_id) };
-        graph->SetPoint(count, x_value, entry->GetGausEstimateMDPDE(par_id));
-        count++;
+        graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, entry->GetGausEstimateMDPDE(par_id));
+        count_map[chain_id]++;
     }
-    return graph;
+    return graph_map;
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueGraph(

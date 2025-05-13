@@ -76,7 +76,7 @@ void DemoPainter::Painting(void)
         PaintWidthToBfactorScatterPlotSummary("test_width_bfactor.pdf");
         PaintResidueClassWidthScatterPlot("figure_4_b.pdf", 1, true);
         PaintAtomRankMainChain("test_rank_a.pdf", 0);
-        //PaintAtomRankMainChain("test_rank_b.pdf", 1);
+        PaintAtomRankMainChain("test_rank_b.pdf", 1);
     }
 
     if (m_model_object_list.size() > 5)
@@ -820,14 +820,14 @@ void DemoPainter::PaintAtomGausMainChain(const std::string & name, int par_id)
     std::unique_ptr<TGraphErrors> gaus_gly_graph[pad_size];
     std::unique_ptr<TGraphErrors> gaus_pro_graph[pad_size];
     std::vector<double> x_array[pad_size], y_array[pad_size];
-    std::string chain_id[pad_size];
+    std::string chain_id[pad_size]{ "A", "A", "B", "A" };
     for (size_t i = 0; i < pad_size; i++)
     {
         info_text[i] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(static_cast<size_t>(i))) };
         for (size_t j = 0; j < main_chain_element_count; j++)
         {
-            gaus_graph[i][j] = entry_iter->CreateGausEstimateToResidueIDGraph(j, chain_id[i], par_id);
+            gaus_graph[i][j] = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(j, par_id).at(chain_id[i]));
             for (int p = 0; p < gaus_graph[i][j]->GetN(); p++)
             {
                 x_array[i].emplace_back(gaus_graph[i][j]->GetPointX(p));
@@ -840,8 +840,8 @@ void DemoPainter::PaintAtomGausMainChain(const std::string & name, int par_id)
             ("frame"+std::to_string(i)).data(),"",
             100, 0.0, std::get<1>(x_range), 100, std::get<0>(y_range), std::get<1>(y_range));
 
-        gaus_gly_graph[i] = entry_iter->CreateGausEstimateToResidueIDGraph(0, chain_id[i], par_id, Residue::GLY);
-        gaus_pro_graph[i] = entry_iter->CreateGausEstimateToResidueIDGraph(0, chain_id[i], par_id, Residue::PRO);
+        gaus_gly_graph[i] = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(0, par_id, Residue::GLY).at(chain_id[i]));
+        gaus_pro_graph[i] = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(0, par_id, Residue::PRO).at(chain_id[i]));
         for (size_t j = 0; j < main_chain_element_count; j++)
         {
             for (int p = 0; p < gaus_gly_graph[i]->GetN(); p++)
@@ -872,9 +872,9 @@ void DemoPainter::PaintAtomGausMainChain(const std::string & name, int par_id)
             ROOTHelper::SetLineAttribute(gaus_graph[i][j].get(), 1, 1, color_element[j]);
             gaus_graph[i][j]->Draw("PL X0");
         }
-        ROOTHelper::SetMarkerAttribute(gaus_gly_graph[i].get(), 40, 2.0f, kGreen);
+        ROOTHelper::SetMarkerAttribute(gaus_gly_graph[i].get(), 20, 1.0f, kOrange-6);
         gaus_gly_graph[i]->Draw("P X0");
-        ROOTHelper::SetMarkerAttribute(gaus_pro_graph[i].get(), 44, 2.0f, kMagenta);
+        ROOTHelper::SetMarkerAttribute(gaus_pro_graph[i].get(), 20, 1.0f, kMagenta-2);
         gaus_pro_graph[i]->Draw("P X0");
         PrintInfoInResidueIDPad(
             pad[i].get(), info_text[i].get(),
@@ -922,20 +922,29 @@ void DemoPainter::PaintAtomRankMainChain(
     const int main_chain_element_count{ 4 };
     short color_element[main_chain_element_count] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
     
+    int chain_size[row_size];
+    std::unique_ptr<TH1D> rank_reference[row_size];
     std::vector<std::unique_ptr<TH1D>> rank_hist_list[row_size][3];
+    std::vector<Residue> veto_residues_list{ Residue::GLY, Residue::PRO };
     double y_max[row_size]{ 0.0 };
     for (int j = 0; j < row_size; j++)
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(static_cast<size_t>(j))) };
-        rank_hist_list[j][0] = entry_iter->CreateMainChainRankHistogram(par_id, Residue::UNK, j);
-        rank_hist_list[j][1] = entry_iter->CreateMainChainRankHistogram(par_id, Residue::GLY, j);
-        rank_hist_list[j][2] = entry_iter->CreateMainChainRankHistogram(par_id, Residue::PRO, j);
+        rank_hist_list[j][0] = entry_iter->CreateMainChainRankHistogram(par_id, chain_size[j], Residue::UNK, j, veto_residues_list);
+        rank_hist_list[j][1] = entry_iter->CreateMainChainRankHistogram(par_id, chain_size[j], Residue::GLY, j);
+        rank_hist_list[j][2] = entry_iter->CreateMainChainRankHistogram(par_id, chain_size[j], Residue::PRO, j);
         for (auto & hist : rank_hist_list[j][0])
         {
             auto max_tmp{ hist->GetMaximum() };
             if (y_max[j] < max_tmp) y_max[j] = max_tmp;
         }
+        rank_reference[j] = ROOTHelper::CreateHist1D(Form("rank_reference_%d", j),"", 4, 0.5, 4.5);
+        for (int p = 1; p <= rank_reference[j]->GetNbinsX(); p++)
+        {
+            rank_reference[j]->SetBinContent(p, y_max[j]*10.0);
+        }
     }
+
 
     gStyle->SetTextFont(22);
     std::unique_ptr<TH2> frame[col_size][row_size];
@@ -966,26 +975,32 @@ void DemoPainter::PaintAtomRankMainChain(
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw();
 
-            auto text_size{ 0.2f * 5.0f/static_cast<float>(gPad->GetAbsHNDC()) };
+            
+            ROOTHelper::SetFillAttribute(rank_reference[j].get(), 1001, kGray, 0.2f);
+            rank_reference[j]->SetBarWidth(0.9f);
+            rank_reference[j]->SetBarOffset(0.05f);
+            rank_reference[j]->Draw("BAR SAME");
+
+            auto text_size{ 0.2f * 4.0f/static_cast<float>(gPad->GetAbsHNDC()) };
             ROOTHelper::SetFillAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1001, kAzure-7, 0.5f);
-            ROOTHelper::SetLineAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1, 3, kAzure-7);
+            ROOTHelper::SetLineAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1, 0, kAzure-7);
             ROOTHelper::SetMarkerAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 20, text_size, kAzure-7);
-            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarWidth(0.9f);
-            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarOffset(0.05f);
+            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
+            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarOffset(0.125f);
             rank_hist_list[j][0].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
 
-            ROOTHelper::SetFillAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1001, kGreen);
-            ROOTHelper::SetLineAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1, 1, kGreen);
-            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 20, text_size, kGreen);
-            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarWidth(0.4f);
-            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarOffset(0.1f);
+            ROOTHelper::SetFillAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1001, kOrange-6, 0.5f);
+            ROOTHelper::SetLineAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1, 0, kOrange-6);
+            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 20, text_size, kOrange-6);
+            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
+            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarOffset(0.375f);
             rank_hist_list[j][1].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
 
-            ROOTHelper::SetFillAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1001, kMagenta);
-            ROOTHelper::SetLineAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1, 1, kMagenta);
-            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 20, text_size, kMagenta);
-            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarWidth(0.4f);
-            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarOffset(0.5f);
+            ROOTHelper::SetFillAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1001, kMagenta-2, 0.5f);
+            ROOTHelper::SetLineAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1, 0, kMagenta-2);
+            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 20, text_size, kMagenta-2);
+            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
+            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarOffset(0.625f);
             rank_hist_list[j][2].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
 
             if (j == row_size - 1)
@@ -1001,12 +1016,30 @@ void DemoPainter::PaintAtomRankMainChain(
 
             if (i == col_size - 1)
             {
-                info_text[j] = ROOTHelper::CreatePaveText(1.01, 0.01, 1.75, 0.99, "nbNDC ARC", true);
+                auto residue_size
+                {
+                    rank_hist_list[j][0].at(static_cast<size_t>(i))->GetEntries() +
+                    rank_hist_list[j][1].at(static_cast<size_t>(i))->GetEntries() +
+                    rank_hist_list[j][2].at(static_cast<size_t>(i))->GetEntries()
+                };
+                info_text[j] = ROOTHelper::CreatePaveText(1.01, 0.01, 1.77, 0.99, "nbNDC ARC", true);
                 PrintInfoInRankPad(
                     gPad, info_text[j].get(),
-                    m_model_object_list.at(static_cast<size_t>(i)), "A",
-                    static_cast<int>(rank_hist_list[j][0].at(static_cast<size_t>(i))->GetEntries()));
+                    m_model_object_list.at(static_cast<size_t>(j)), chain_size[j],
+                    static_cast<int>(residue_size));
                 info_text[j]->Draw();
+            }
+
+            if (i == col_size - 1 && j == row_size - 1)
+            {
+                legend = ROOTHelper::CreateLegend(1.01, 1.02, 1.77, 1.30, true);
+                ROOTHelper::SetLegendDefaultStyle(legend.get());
+                ROOTHelper::SetTextAttribute(legend.get(), 20.0f, 133, 12);
+                ROOTHelper::SetFillAttribute(legend.get(), 4000);
+                legend->AddEntry(rank_hist_list[j][0].at(0).get(), "Other Residues", "f");
+                legend->AddEntry(rank_hist_list[j][1].at(0).get(), "GLY", "f");
+                legend->AddEntry(rank_hist_list[j][2].at(0).get(), "PRO", "f");
+                legend->Draw();
             }
         }
     }
@@ -1275,7 +1308,7 @@ void DemoPainter::PrintInfoInResidueIDPad(
 
 void DemoPainter::PrintInfoInRankPad(
     TVirtualPad * pad, TPaveText * text, const ModelObject * model_object,
-    const std::string & chain_id, int residue_size)
+    int chain_size, int residue_size)
 {
     pad->cd();
     ROOTHelper::SetPaveTextDefaultStyle(text);
@@ -1286,7 +1319,7 @@ void DemoPainter::PrintInfoInRankPad(
     text->AddText("---------------------");
     text->AddText(("#font[102]{PDB-" + model_object->GetPdbID() +"}").data());
     text->AddText(("#font[102]{"+ model_object->GetEmdID() +"}").data());
-    text->AddText(Form("Chain ID = %s", chain_id.data()));
+    text->AddText(Form("#Chains = %d", chain_size));
     text->AddText(Form("#Residues = %d", residue_size));
     text->AddText("---------------------");
     pad->Update();
