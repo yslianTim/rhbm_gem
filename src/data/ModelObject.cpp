@@ -46,7 +46,6 @@ void ModelObject::Display(void) const
 {
     std::cout << "This is ModelObject."
               << " It contains: "<< m_atom_list.size() << " atoms." << std::endl;
-    std::cout << "The number of selected atom = " << GetNumberOfSelectedAtom() << std::endl;
 }
 
 void ModelObject::Update(void)

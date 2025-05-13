@@ -134,6 +134,7 @@ void CifFormat::LoadAtomSiteData(const std::string & filename)
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
         {
+            static AtomObject * last_atom_object{ nullptr };
             auto group_type{ token_list[index_map.at("group_PDB")] };
             bool is_special_atom{ (group_type == "HETATM") ? true : false };
             auto atom_object{ std::make_unique<AtomObject>() };
@@ -155,18 +156,42 @@ void CifFormat::LoadAtomSiteData(const std::string & filename)
             atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
             atom_object->SetSerialID(std::stoi(token_list[index_map.at("id")]));
             atom_object->SetChainID(token_list[index_map.at("label_asym_id")]);
-            atom_object->SetPosition(
-                std::stof(token_list[index_map.at("Cartn_x")]),
-                std::stof(token_list[index_map.at("Cartn_y")]),
-                std::stof(token_list[index_map.at("Cartn_z")]));
-            atom_object->SetOccupancy(std::stof(token_list[index_map.at("occupancy")]));
-            atom_object->SetTemperature(std::stof(token_list[index_map.at("B_iso_or_equiv")]));
+            
+            auto position_x{ std::stof(token_list[index_map.at("Cartn_x")]) };
+            auto position_y{ std::stof(token_list[index_map.at("Cartn_y")]) };
+            auto position_z{ std::stof(token_list[index_map.at("Cartn_z")]) };
+            auto occupancy{ std::stof(token_list[index_map.at("occupancy")]) };
+            auto temperature{ std::stof(token_list[index_map.at("B_iso_or_equiv")]) };
+            atom_object->SetPosition(position_x, position_y, position_z);
+            atom_object->SetOccupancy(occupancy);
+            atom_object->SetTemperature(temperature);
             atom_object->SetSpecialAtomFlag(is_special_atom);
             SetStructureInfo(atom_object.get());
 
             auto model_number{ std::stoi(token_list[index_map.at("pdbx_PDB_model_num")]) };
-            if (indicator != "." && indicator != "A") return; // skip if there are other alternate position presented
+            //if (indicator != "." && indicator != "A") return; // skip if there are other alternate position presented
+
+            if (indicator != ".")
+            {
+                if (last_atom_object == nullptr)
+                {
+                    
+                    last_atom_object = atom_object.get();
+                    m_data_block->AddAtomObject(model_number, std::move(atom_object));
+                }
+                else
+                {
+                    //std::cout << atom_object->GetIndicator() << std::endl;
+                    last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});
+                    last_atom_object->AddAlternateOccupancy(indicator, occupancy);
+                    last_atom_object->AddAlternateTemperature(indicator, temperature);
+                    last_atom_object = nullptr;
+                }
+                return;
+            }
+
             m_data_block->AddAtomObject(model_number, std::move(atom_object));
+            last_atom_object = nullptr;
         }
     );
 }

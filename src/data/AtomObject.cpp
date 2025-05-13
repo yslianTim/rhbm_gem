@@ -114,6 +114,24 @@ void AtomObject::AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> e
     m_atomic_potential_entry = std::move(entry);
 }
 
+void AtomObject::AddAlternatePosition(
+    const std::string & indicator, const std::array<float, 3> & value)
+{
+    m_alternate_position_map[indicator] = value;
+}
+
+void AtomObject::AddAlternateOccupancy(
+    const std::string & indicator, float value)
+{
+    m_alternate_occupancy_map[indicator] = value;
+}
+
+void AtomObject::AddAlternateTemperature(
+    const std::string & indicator, float value)
+{
+    m_alternate_temperature_map[indicator] = value;
+}
+
 Element AtomObject::GetElement(void) const { return m_element; }
 Residue AtomObject::GetResidue(void) const { return m_residue; }
 Remoteness AtomObject::GetRemoteness(void) const { return m_remoteness; }

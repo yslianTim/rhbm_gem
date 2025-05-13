@@ -2,6 +2,7 @@
 
 #include <array>
 #include <string>
+#include <unordered_map>
 #include "DataObjectBase.hpp"
 
 class AtomicPotentialEntry;
@@ -25,6 +26,9 @@ class AtomObject : public DataObjectBase
     Branch m_branch;
     Structure m_structure;
     std::array<float, 3> m_position;
+    std::unordered_map<std::string, std::array<float, 3>> m_alternate_position_map;
+    std::unordered_map<std::string, float> m_alternate_occupancy_map;
+    std::unordered_map<std::string, float> m_alternate_temperature_map;
     std::unique_ptr<AtomicPotentialEntry> m_atomic_potential_entry;
 
 public:
@@ -59,6 +63,9 @@ public:
     void SetPosition(float x, float y, float z);
     void SetPosition(const std::array<float, 3> & value) { m_position = value; }
     void AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry);
+    void AddAlternatePosition(const std::string & indicator, const std::array<float, 3> & value);
+    void AddAlternateOccupancy(const std::string & indicator, float value);
+    void AddAlternateTemperature(const std::string & indicator, float value);
 
     std::string GetInfo(void) const;
     Element GetElement(void) const;
