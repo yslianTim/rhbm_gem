@@ -14,7 +14,7 @@ class AtomicModelDataBlock
     std::vector<Element> m_element_type_list;
 
 public:
-    AtomicModelDataBlock(void);
-    ~AtomicModelDataBlock();
+    AtomicModelDataBlock(void){}
+    ~AtomicModelDataBlock(){}
 
 };
