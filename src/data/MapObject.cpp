@@ -49,10 +49,7 @@ MapObject::MapObject(
         m_upper_bound.at(i) = static_cast<float>(m_overflow.at(i) + 0.5 * m_grid_spacing.at(i));
         m_lower_bound.at(i) = static_cast<float>(m_underflow.at(i) - 0.5 * m_grid_spacing.at(i));
     }
-    CalculateMapValueMin();
-    CalculateMapValueMax();
-    CalculateMapValueMean();
-    CalculateMapValueSD();
+    Update();
     MapValueArrayNormalization();
 }
 
@@ -72,10 +69,7 @@ MapObject::MapObject(const MapObject & other) :
     m_map_value_array{ std::make_unique<float[]>(other.m_voxel_size) }
 {
     std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(float));
-    CalculateMapValueMin();
-    CalculateMapValueMax();
-    CalculateMapValueMean();
-    CalculateMapValueSD();
+    Update();
 }
 
 std::unique_ptr<DataObjectBase> MapObject::Clone() const
@@ -112,6 +106,14 @@ void MapObject::Display(void) const
     std::cout <<" o=====================================================o\n";
 }
 
+void MapObject::Update(void)
+{
+    CalculateMapValueMin();
+    CalculateMapValueMax();
+    CalculateMapValueMean();
+    CalculateMapValueSD();
+}
+
 void MapObject::Accept(DataObjectVisitorBase * visitor)
 {
     visitor->VisitMapObject(this);
@@ -126,10 +128,7 @@ void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
         m_map_value_array.reset();
     }
     std::memcpy(m_map_value_array.get(), map_value_array.get(), m_voxel_size * sizeof(float));
-    CalculateMapValueMin();
-    CalculateMapValueMax();
-    CalculateMapValueMean();
-    CalculateMapValueSD();
+    Update();
 }
 
 size_t MapObject::GetGlobalIndex(int index_x, int index_y, int index_z) const

@@ -38,7 +38,7 @@ void AtomSelector::Print(void) const
 
 bool AtomSelector::GetSelectionFlag(
     const std::string & chain_id, const std::string & indicator,
-    Residue residue, Element element, Remoteness remoteness, Branch branch)
+    Residue residue, Element element, Remoteness remoteness, Branch branch) const
 {
     auto selected{ true };
     if (!pick_chain_set.empty() && pick_chain_set.find(chain_id) == pick_chain_set.end()) selected = false;

@@ -32,18 +32,20 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintResidueClassGroupGausMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
     void PaintStructureClassGroupGausMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
     void PaintStructureClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausScatter(ModelObject * model_object, const std::string & name, int par_id=0);
-    void PaintResidueClassMapValue(ModelObject * model_object, const std::string & name);
-    void PaintResidueClassKNN(ModelObject * model_object, const std::string & name);
+    void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);
+    void PaintResidueClassWidthScatterPlot(ModelObject * model_object, const std::string & name, int par_id=0, bool draw_box_plot=false);
     void PaintResidueClassXYPosition(ModelObject * model_object, const std::string & name);
-    void PaintAtomGausScatter(ModelObject * model_object, const std::string & name);
+    void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
+    void PaintAtomGausScatter(ModelObject * model_object, const std::string & name, bool do_normalize=false);
+    void PaintAtomGausMainChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomRankMainChain(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
-    void PrintIconPad(TPad * pad, TPaveText * text);
-    void PrintInfoPad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id);
+    void PrintResolutionInfoPad(TPad * pad, TPaveText * text, double resolution);
+    void PrintDataInfoPad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id);
     void PrintAmplitudePad(TPad * pad, TH2 * hist);
     void PrintWidthPad(TPad * pad, TH2 * hist);
     void PrintAmplitudeSummaryPad(TPad * pad, TH2 * hist);

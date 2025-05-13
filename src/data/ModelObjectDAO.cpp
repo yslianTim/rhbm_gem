@@ -57,7 +57,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
 
     m_database->Prepare(sql.str());
     m_database->Bind<std::string>(1, model_obj->GetKeyTag());
-    m_database->Bind<int>(2, model_obj->GetNumberOfAtom());
+    m_database->Bind<int>(2, static_cast<int>(model_obj->GetNumberOfAtom()));
     m_database->Bind<std::string>(3, model_obj->GetPdbID());
     m_database->Bind<std::string>(4, model_obj->GetEmdID());
     m_database->Bind<double>(5, model_obj->GetResolution());
@@ -115,7 +115,7 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
         throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
     }
 
-    if (atom_size != model_object->GetNumberOfAtom())
+    if (atom_size != static_cast<int>(model_object->GetNumberOfAtom()))
     {
         throw std::runtime_error("The number of atoms in the model object does not match the database record.");
     }
@@ -545,39 +545,36 @@ void ModelObjectDAO::LoadGroupPotentialEntrySubList(
     auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
     if (class_key == AtomicInfoHelper::GetElementClassKey())
     {
-        for (auto & atom : model_obj->GetComponentsList())
+        for (auto & atom : model_obj->GetSelectedAtomList())
         {
-            if (atom->GetSelectedFlag() == false) continue;
             auto group_key{ KeyPackerElementClass::Pack(
                 atom->GetElement(), atom->GetRemoteness(), atom->GetSpecialAtomFlag()) };
-            group_entry->AddAtomObjectPtr(group_key, atom.get());
+            group_entry->AddAtomObjectPtr(group_key, atom);
         }
     }
     else if (class_key == AtomicInfoHelper::GetResidueClassKey())
     {
-        for (auto & atom : model_obj->GetComponentsList())
+        for (auto & atom : model_obj->GetSelectedAtomList())
         {
-            if (atom->GetSelectedFlag() == false) continue;
             auto group_key{
                 KeyPackerResidueClass::Pack(
                     atom->GetResidue(), atom->GetElement(),
                     atom->GetRemoteness(), atom->GetBranch(), atom->GetSpecialAtomFlag())
             };
-            group_entry->AddAtomObjectPtr(group_key, atom.get());
+            group_entry->AddAtomObjectPtr(group_key, atom);
         }
     }
     else if (class_key == AtomicInfoHelper::GetStructureClassKey())
     {
-        for (auto & atom : model_obj->GetComponentsList())
+        for (auto & atom : model_obj->GetSelectedAtomList())
         {
-            if (atom->GetSelectedFlag() == false) continue;
             auto group_key{
                 KeyPackerStructureClass::Pack(
                     atom->GetStructure(), atom->GetResidue(),
                     atom->GetElement(), atom->GetRemoteness(),
                     atom->GetBranch(), atom->GetSpecialAtomFlag())
             };
-            group_entry->AddAtomObjectPtr(group_key, atom.get());
+            group_entry->AddAtomObjectPtr(group_key, atom);
         }
     }
     else

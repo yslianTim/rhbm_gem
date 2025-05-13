@@ -13,8 +13,8 @@ class PotentialAnalysisCommand : public CommandBase
     double m_alpha_r, m_alpha_g;
     std::string m_database_path, m_model_file_path, m_map_file_path;
     std::string m_saved_key_tag;
-    std::shared_ptr<AtomSelector> m_atom_selector;
-    std::shared_ptr<SphereSampler> m_sphere_sampler;
+    std::unique_ptr<AtomSelector> m_atom_selector;
+    std::unique_ptr<SphereSampler> m_sphere_sampler;
 
 public:
     PotentialAnalysisCommand(void);

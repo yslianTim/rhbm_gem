@@ -6,6 +6,7 @@
 #include <tuple>
 #include <array>
 #include <algorithm>
+#include <stdexcept>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -181,5 +182,20 @@ public:
         auto diff_y{ static_cast<Type>(v1[1] - v2[1]) };
         auto diff_z{ static_cast<Type>(v1[2] - v2[2]) };
         return static_cast<Type>(std::sqrt(std::pow(diff_x, 2) + std::pow(diff_y, 2) + std::pow(diff_z, 2)));
+    }
+
+    template <std::size_t N>
+    static int ComputeRank(const std::array<Type, N> & values, std::size_t index_to_rank)
+    {
+        if (index_to_rank >= N)
+        {
+            throw std::out_of_range("GetRank index_to_rank out of range");
+        }
+
+        std::array<Type, N> sorted_values{ values };
+        std::sort(sorted_values.begin(), sorted_values.end());
+
+        auto it{ std::find(sorted_values.begin(), sorted_values.end(), values[index_to_rank]) };
+        return static_cast<int>(std::distance(sorted_values.begin(), it)) + 1;
     }
 };

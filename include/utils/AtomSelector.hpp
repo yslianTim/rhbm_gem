@@ -22,7 +22,7 @@ public:
     AtomSelector(void);
     ~AtomSelector();
     void Print(void) const;
-    bool GetSelectionFlag(const std::string &, const std::string &, Residue, Element, Remoteness, Branch);
+    bool GetSelectionFlag(const std::string &, const std::string &, Residue, Element, Remoteness, Branch) const;
     void VetoChainID(const std::string & name);
     void VetoIndicator(const std::string & name);
     void VetoResidueType(const std::string & name);

@@ -49,6 +49,8 @@ class CifFormat : public ModelFileFormatBase
         int pdbx_PDB_helix_length;
     };
 
+    std::unordered_map<std::string, int> struct_sheet_map;
+
     std::string m_map_id, m_model_id;
     std::string m_resolution, m_resolution_method;
     std::vector<std::unique_ptr<AtomObject>> m_atom_object_list;
