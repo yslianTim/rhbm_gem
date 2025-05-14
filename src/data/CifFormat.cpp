@@ -28,6 +28,8 @@ void CifFormat::LoadHeader(const std::string & filename)
     LoadDatabaseInfo(filename);
     LoadPdbxData(filename);
     LoadElementTypeList(filename);
+    LoadStructHelixInfo(filename);
+    LoadStructSheetInfo(filename);
 }
 
 void CifFormat::PrintHeader(void) const
@@ -37,7 +39,6 @@ void CifFormat::PrintHeader(void) const
 
 void CifFormat::LoadDataArray(const std::string & filename)
 {
-    LoadStructConfData(filename);
     LoadAtomSiteData(filename);
 }
 
@@ -65,6 +66,27 @@ void CifFormat::LoadDatabaseInfo(const std::string & filename)
             {
                 m_data_block->SetEmdID(data_map.at("EMDB"));
             }
+        }
+    );
+}
+
+void CifFormat::LoadEntityInfo(const std::string & filename)
+{
+    std::ifstream infile{ filename, std::ios::binary };
+    if (!infile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("LoadDatabaseInfo failed!");
+    }
+
+    ParseLoopBlock(infile, "_entity.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto entity_id{ token_list[index_map.at("id")] };
+            auto entity_type{ token_list[index_map.at("type")] };
+            m_data_block->AddChainEntityType(
+                entity_id, AtomicInfoHelper::GetEntityFromString(entity_type));
         }
     );
 }
@@ -166,83 +188,95 @@ void CifFormat::LoadAtomSiteData(const std::string & filename)
             atom_object->SetOccupancy(occupancy);
             atom_object->SetTemperature(temperature);
             atom_object->SetSpecialAtomFlag(is_special_atom);
-            SetStructureInfo(atom_object.get());
+            m_data_block->SetStructureInfo(atom_object.get());
 
             auto model_number{ std::stoi(token_list[index_map.at("pdbx_PDB_model_num")]) };
-            //if (indicator != "." && indicator != "A") return; // skip if there are other alternate position presented
-
-            if (indicator != ".")
+            if (indicator == ".")
+            {
+                last_atom_object = nullptr;
+                m_data_block->AddAtomObject(model_number, std::move(atom_object));
+            }
+            else if (indicator == "A")
+            {
+                last_atom_object = atom_object.get();
+                m_data_block->AddAtomObject(model_number, std::move(atom_object));
+            }
+            else
             {
                 if (last_atom_object == nullptr)
                 {
-                    
-                    last_atom_object = atom_object.get();
-                    m_data_block->AddAtomObject(model_number, std::move(atom_object));
+                    std::cout <<"CifFormat::LoadAtomSiteData() atom_object is missing."<< std::endl;
+                    return;
                 }
-                else
-                {
-                    //std::cout << atom_object->GetIndicator() << std::endl;
-                    last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});
-                    last_atom_object->AddAlternateOccupancy(indicator, occupancy);
-                    last_atom_object->AddAlternateTemperature(indicator, temperature);
-                    last_atom_object = nullptr;
-                }
-                return;
+                last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});
+                last_atom_object->AddAlternateOccupancy(indicator, occupancy);
+                last_atom_object->AddAlternateTemperature(indicator, temperature);
             }
-
-            m_data_block->AddAtomObject(model_number, std::move(atom_object));
-            last_atom_object = nullptr;
         }
     );
 }
 
-void CifFormat::LoadStructConfData(const std::string & filename)
+void CifFormat::LoadStructHelixInfo(const std::string & filename)
 {
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
         std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadStructConfData failed!");
+        throw std::runtime_error("LoadStructHelixInfo failed!");
     }
 
     ParseLoopBlock(infile, "_struct_conf.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
         {
-            auto entry{ std::make_unique<StructConf>() };
-            entry->conf_type_id          = token_list[index_map.at("conf_type_id")];
-            entry->id                    = token_list[index_map.at("id")];
-            entry->beg_label_comp_id     = token_list[index_map.at("beg_label_comp_id")];
-            entry->beg_label_asym_id     = token_list[index_map.at("beg_label_asym_id")];
-            entry->beg_label_seq_id      = token_list[index_map.at("beg_label_seq_id")];
-            entry->end_label_comp_id     = token_list[index_map.at("end_label_comp_id")];
-            entry->end_label_asym_id     = token_list[index_map.at("end_label_asym_id")];
-            entry->end_label_seq_id      = token_list[index_map.at("end_label_seq_id")];
-            entry->pdbx_PDB_helix_length = std::stoi(token_list[index_map.at("pdbx_PDB_helix_length")]);
-            m_struct_conf_list.emplace_back(std::move(entry));
+            auto helix_id{ token_list[index_map.at("id")] };
+            auto conf_type{ token_list[index_map.at("conf_type_id")] };
+            auto chain_id_beg{ token_list[index_map.at("beg_label_asym_id")] };
+            auto reisude_id_beg{ token_list[index_map.at("beg_label_seq_id")] };
+            auto chain_id_end{ token_list[index_map.at("end_label_asym_id")] };
+            auto reisude_id_end{ token_list[index_map.at("end_label_seq_id")] };
+            m_data_block->AddHelixRange(
+                helix_id,
+                {chain_id_beg, reisude_id_beg, chain_id_end, reisude_id_end, conf_type});
         }
     );
 }
 
-void CifFormat::SetStructureInfo(AtomObject * atom_object)
+void CifFormat::LoadStructSheetInfo(const std::string & filename)
 {
-    auto chain_id{ atom_object->GetChainID() };
-    auto residue_id{ atom_object->GetResidueID() };
-    for (const auto & entry : m_struct_conf_list)
+    std::ifstream infile{ filename, std::ios::binary };
+    if (!infile)
     {
-        if (chain_id == entry->beg_label_asym_id || chain_id == entry->end_label_asym_id)
-        {
-            auto beg{ std::stoi(entry->beg_label_seq_id) };
-            auto end{ std::stoi(entry->end_label_seq_id) };
-            if (residue_id >= beg && residue_id <= end)
-            {
-                auto structure = AtomicInfoHelper::GetStructureFromString(entry->conf_type_id);
-                atom_object->SetStructure(structure);
-                return;
-            }
-        }
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("LoadStructSheetInfo failed!");
     }
-    atom_object->SetStructure(Structure::FREE);
+
+    ParseLoopBlock(infile, "_struct_sheet.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto sheet_id{ token_list[index_map.at("id")] };
+            auto strands_size{ std::stoi(token_list[index_map.at("number_strands")]) };
+            m_data_block->AddSheetStrands(sheet_id, strands_size);
+        }
+    );
+
+    ParseLoopBlock(infile, "_struct_sheet_range.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto sheet_id{ token_list[index_map.at("sheet_id")] };
+            auto range_id{ token_list[index_map.at("id")] };
+            auto composite_sheet_id{ sheet_id + range_id };
+            auto chain_id_beg{ token_list[index_map.at("beg_label_asym_id")] };
+            auto reisude_id_beg{ token_list[index_map.at("beg_label_seq_id")] };
+            auto chain_id_end{ token_list[index_map.at("end_label_asym_id")] };
+            auto reisude_id_end{ token_list[index_map.at("end_label_seq_id")] };
+            m_data_block->AddSheetRange(
+                composite_sheet_id,
+                {chain_id_beg, reisude_id_beg, chain_id_end, reisude_id_end});
+        }
+    );
 }
 
 AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)

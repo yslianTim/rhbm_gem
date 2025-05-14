@@ -97,6 +97,13 @@ const std::unordered_map<std::string_view, Structure> AtomicInfoHelper::m_struct
     {"TURN_P", Structure::TURN_P}
 };
 
+const std::unordered_map<std::string_view, Entity> AtomicInfoHelper::m_entity_map
+{
+    {"polymer",  Entity::POLYMER},  {"non-polymer", Entity::NONPOLYMER},
+    {"branched", Entity::BRANCHED}, {"macrolide",   Entity::MACROLIDE},
+    {"water",    Entity::WATER}
+};
+
 const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label_map
 {
     {Residue::ALA, "ALA"}, {Residue::ARG, "ARG"}, {Residue::ASN, "ASN"}, {Residue::ASP, "ASP"},
@@ -287,6 +294,12 @@ Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
 {
     if (m_structure_map.find(name) == m_structure_map.end()) return Structure::UNK;
     return m_structure_map.at(name);
+}
+
+Entity AtomicInfoHelper::GetEntityFromString(const std::string & name)
+{
+    if (m_entity_map.find(name) == m_entity_map.end()) return Entity::UNK;
+    return m_entity_map.at(name);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Residue residue)

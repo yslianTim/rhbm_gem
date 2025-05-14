@@ -57,18 +57,14 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitModelObject");
     std::cout <<"- Visiting ModelObject..." << std::endl;
-    auto selected_atom_size{ data_object->GetNumberOfSelectedAtom() };
-    const auto & atom_list{ data_object->GetComponentsList() };
-    m_selected_atom_list.clear();
-    m_selected_atom_list.reserve(selected_atom_size);
-    for (auto & atom : atom_list)
+    data_object->Update();
+    m_selected_atom_list = data_object->GetSelectedAtomList();
+    for (auto & atom : m_selected_atom_list)
     {
-        if (atom->GetSelectedFlag() == false) continue;
         auto atom_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
         atom->AddAtomicPotentialEntry(std::move(atom_potential_entry));
-        m_selected_atom_list.emplace_back(atom.get());
     }
-    std::cout <<" Number of selected atom = "<< selected_atom_size << std::endl;
+    std::cout <<" Number of selected atom = "<< m_selected_atom_list.size() << std::endl;
 }
 
 void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)

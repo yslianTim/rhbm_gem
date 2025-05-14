@@ -83,3 +83,10 @@ enum class Structure : uint8_t
     
     UNK = UINT8_MAX
 };
+
+enum class Entity : uint8_t
+{
+    POLYMER = 0, NONPOLYMER = 1, BRANCHED = 2, MACROLIDE = 3,
+    WATER = 4,
+    UNK = UINT8_MAX
+};

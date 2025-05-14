@@ -1,11 +1,13 @@
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
 #include <memory>
 #include <unordered_map>
 
 enum class Element : uint16_t;
+enum class Entity : uint8_t;
 
 class AtomObject;
 
@@ -15,6 +17,10 @@ class AtomicModelDataBlock
     std::string m_resolution, m_resolution_method;
 
     std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> m_atom_object_list_map;
+    std::unordered_map<std::string, Entity> m_chain_entity_type_map;
+    std::unordered_map<std::string, int> m_struct_sheet_strand_map;
+    std::unordered_map<std::string, std::array<std::string, 5>> m_struct_helix_range_map;
+    std::unordered_map<std::string, std::array<std::string, 4>> m_struct_sheet_range_map;
     std::vector<Element> m_element_type_list;
 
 public:
@@ -22,11 +28,16 @@ public:
     ~AtomicModelDataBlock();
 
     void AddAtomObject(int model_number, std::unique_ptr<AtomObject> atom_object);
+    void AddChainEntityType(const std::string & entity_id, Entity entity);
+    void AddSheetStrands(const std::string & sheet_id, int strands_size);
+    void AddSheetRange(const std::string & composite_sheet_id, const std::array<std::string, 4> & range);
+    void AddHelixRange(const std::string & helix_id, const std::array<std::string, 5> & range);
     void AddElementType(const Element & element);
     void SetPdbID(const std::string & label) { m_model_id = label; }
     void SetEmdID(const std::string & label) { m_map_id = label; }
     void SetResolution(const std::string & value) { m_resolution = value; }
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
+    void SetStructureInfo(AtomObject * atom_object);
 
     std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(int model_number=1);
     std::string GetPdbID(void) const;
