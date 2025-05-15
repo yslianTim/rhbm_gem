@@ -17,6 +17,7 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
     model_object->SetEmdID(data_block->GetEmdID());
     model_object->SetResolution(data_block->GetResolution());
     model_object->SetResolutionMethod(data_block->GetResolutionMethod());
+    model_object->SetChainIDListMap(data_block->GetChainIDListMap());
     return model_object;
 }
 

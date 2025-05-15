@@ -45,7 +45,6 @@ public:
     void SetResolution(const std::string & value) { m_resolution = value; }
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetStructureInfo(AtomObject * atom_object);
-    void SetAtomSelection(AtomObject * atom_object, bool is_asymmetry);
 
     std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(int model_number=1);
     std::string GetPdbID(void) const;

@@ -39,7 +39,7 @@ PotentialAnalysisVisitor::~PotentialAnalysisVisitor()
 
 void PotentialAnalysisVisitor::VisitAtomObject(AtomObject * data_object)
 {
-    bool additional_selected_flag
+    bool selected_flag
     {
         m_atom_selector->GetSelectionFlag(
             data_object->GetChainID(),
@@ -49,8 +49,6 @@ void PotentialAnalysisVisitor::VisitAtomObject(AtomObject * data_object)
             data_object->GetBranch()
         )
     };
-    auto original_selected_flag{ data_object->GetSelectedFlag() };
-    auto selected_flag{ original_selected_flag && additional_selected_flag };
     data_object->SetSelectedFlag(selected_flag);
 }
 
@@ -58,6 +56,7 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitModelObject");
     std::cout <<"- Visiting ModelObject..." << std::endl;
+    data_object->FilterAtomFromSymmetry(m_is_asymmetry);
     data_object->Update();
     m_selected_atom_list = data_object->GetSelectedAtomList();
     for (auto & atom : m_selected_atom_list)
@@ -268,6 +267,11 @@ void PotentialAnalysisVisitor::RunAtomPositionDumping(void)
     }
     outfile.close();
     std::cout <<"Number of selected atom to be output = "<< m_selected_atom_list.size() << std::endl;
+}
+
+void PotentialAnalysisVisitor::SetAsymmetryFlag(bool value)
+{
+    m_is_asymmetry = value;
 }
 
 void PotentialAnalysisVisitor::SetThreadSize(unsigned int thread_size)

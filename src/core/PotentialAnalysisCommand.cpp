@@ -30,6 +30,7 @@ void PotentialAnalysisCommand::Execute(void)
     m_sphere_sampler->Print();
 
     auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_atom_selector.get(), m_sphere_sampler.get()) };
+    analyzer->SetAsymmetryFlag(m_is_asymmetry);
     analyzer->SetThreadSize(static_cast<unsigned int>(m_thread_size));
     analyzer->SetModelObjectKeyTag("model");
     analyzer->SetMapObjectKeyTag("map");

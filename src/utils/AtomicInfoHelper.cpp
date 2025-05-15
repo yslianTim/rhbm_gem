@@ -61,16 +61,16 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_
 
 const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
 {
-    {"H",  Element::HYDROGEN},  {"He", Element::HELIUM},   {"Li", Element::LITHIUM},
-    {"Be", Element::BERYLLIUM}, {"B",  Element::BORON},    {"C",  Element::CARBON},
+    {"H",  Element::HYDROGEN},  {"HE", Element::HELIUM},   {"LI", Element::LITHIUM},
+    {"BE", Element::BERYLLIUM}, {"B",  Element::BORON},    {"C",  Element::CARBON},
     {"N",  Element::NITROGEN},  {"O",  Element::OXYGEN},   {"F",  Element::FLUORINE},
-    {"Ne", Element::NEON},      {"Na", Element::SODIUM},   {"Mg", Element::MAGNESIUM},
-    {"Al", Element::ALUMINUM},  {"Si", Element::SILICON},  {"P",  Element::PHOSPHORUS},
-    {"S",  Element::SULFUR},    {"Cl", Element::CHLORINE}, {"Ar", Element::ARGON},
-    {"K",  Element::POTASSIUM}, {"Ca", Element::CALCIUM},  {"Sc", Element::SCANDIUM},
-    {"Ti", Element::TITANIUM},  {"V",  Element::VANADIUM}, {"Cr", Element::CHROMIUM},
-    {"Mn", Element::MANGANESE}, {"Fe", Element::IRON},     {"Co", Element::COBALT},
-    {"Ni", Element::NICKEL},    {"Cu", Element::COPPER},   {"Zn", Element::ZINC}
+    {"NE", Element::NEON},      {"NA", Element::SODIUM},   {"MG", Element::MAGNESIUM},
+    {"AL", Element::ALUMINUM},  {"SI", Element::SILICON},  {"P",  Element::PHOSPHORUS},
+    {"S",  Element::SULFUR},    {"CL", Element::CHLORINE}, {"AR", Element::ARGON},
+    {"K",  Element::POTASSIUM}, {"CA", Element::CALCIUM},  {"SC", Element::SCANDIUM},
+    {"TI", Element::TITANIUM},  {"V",  Element::VANADIUM}, {"CR", Element::CHROMIUM},
+    {"MN", Element::MANGANESE}, {"FE", Element::IRON},     {"CO", Element::COBALT},
+    {"NI", Element::NICKEL},    {"CU", Element::COPPER},   {"ZN", Element::ZINC}
 };
 
 const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remoteness_map

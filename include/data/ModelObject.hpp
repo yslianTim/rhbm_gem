@@ -18,6 +18,7 @@ class ModelObject : public DataObjectBase
     std::string m_key_tag, m_pdb_id, m_emd_id;
     std::string m_resolution_method;
     double m_resolution;
+    std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map; // key : entity_id
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_group_potential_entry_map;
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
@@ -40,8 +41,10 @@ public:
     void SetEmdID(const std::string & label) { m_emd_id = label; }
     void SetResolution(double value) { m_resolution = value; }
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
+    void SetChainIDListMap(const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
     void AddGroupPotentialEntry(const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry);
     void BuildKDTreeRoot(void);
+    void FilterAtomFromSymmetry(bool is_asymmetry);
 
     size_t GetNumberOfAtom(void) const { return m_atom_list.size(); }
     size_t GetNumberOfSelectedAtom(void) const { return m_selected_atom_list.size(); }

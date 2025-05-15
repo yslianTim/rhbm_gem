@@ -12,6 +12,7 @@ class SphereSampler;
 
 class PotentialAnalysisVisitor : public DataObjectVisitorBase
 {
+    bool m_is_asymmetry;
     unsigned int m_thread_size;
     double m_alpha_r, m_alpha_g;
     double m_x_min, m_x_max;
@@ -29,6 +30,7 @@ public:
     void VisitMapObject(MapObject * data_object) override;
     void Analysis(DataObjectManager * data_manager) override;
 
+    void SetAsymmetryFlag(bool value);
     void SetThreadSize(unsigned int thread_size);
     void SetFitRange(double x_min, double x_max);
     void SetAlphaR(double alpha_r);

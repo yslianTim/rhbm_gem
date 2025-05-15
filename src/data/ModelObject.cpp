@@ -162,3 +162,28 @@ void ModelObject::BuildSelectedAtomList(void)
         m_selected_atom_list.emplace_back(atom.get());
     }
 }
+
+void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
+{
+    if (is_asymmetry == true)
+    {
+        return;
+    }
+
+    for (auto & atom : m_atom_list)
+    {
+        auto original_selection_flag{ atom->GetSelectedFlag() };
+        auto chain_id{ atom->GetChainID() };
+        bool in_candidate_chain{ false };
+        for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
+        {
+            if (chain_id == chain_id_list.at(0))
+            {
+                atom->SetSelectedFlag(original_selection_flag);
+                in_candidate_chain = true;
+                break;
+            }
+        }
+        if (in_candidate_chain == false) atom->SetSelectedFlag(false);
+    }
+}

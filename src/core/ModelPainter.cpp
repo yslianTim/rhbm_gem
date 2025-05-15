@@ -81,7 +81,7 @@ void ModelPainter::Painting(void)
         PaintResidueClassGroupGausScatter(model_object, "width_scatter_"+ model_object->GetPdbID() +".pdf", 1);
         PaintAtomXYPosition(model_object, "atom_position_"+ model_object->GetPdbID() +".pdf");
         PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ model_object->GetPdbID() +".pdf", false);
-        //PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ model_object->GetPdbID() +".pdf");
+        PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ model_object->GetPdbID() +".pdf");
         PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ model_object->GetPdbID() +".pdf");
         PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ model_object->GetPdbID() +".pdf");
     }

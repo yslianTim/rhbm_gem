@@ -97,27 +97,6 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
     atom_object->SetStructure(Structure::FREE);
 }
 
-void AtomicModelDataBlock::SetAtomSelection(
-    AtomObject * atom_object, bool is_asymmetry)
-{
-    if (is_asymmetry == true)
-    {
-        atom_object->SetSelectedFlag(true);
-        return;
-    }
-
-    auto chain_id{ atom_object->GetChainID() };
-    for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
-    {
-        if (chain_id == chain_id_list.at(0))
-        {
-            atom_object->SetSelectedFlag(true);
-            return;
-        }
-    }
-    atom_object->SetSelectedFlag(false);
-}
-
 std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::GetAtomObjectList(int model_number)
 {
     return std::move(m_atom_object_list_map.at(model_number));

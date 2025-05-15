@@ -37,6 +37,20 @@ void CifFormat::LoadHeader(const std::string & filename)
 void CifFormat::PrintHeader(void) const
 {
     std::cout <<"#Entities = "<< m_data_block->GetEntityTypeMap().size() << std::endl;
+    for (auto & [entity_id, chain_id] : m_data_block->GetChainIDListMap())
+    {
+        std::cout << entity_id <<": ";
+        for (auto & chain : chain_id)
+        {
+            std::cout << chain << ",";
+        }
+        std::cout << std::endl;
+    }
+    for (auto element : m_data_block->GetElementTypeList())
+    {
+        std::cout << AtomicInfoHelper::GetLabel(element) << ",";
+    }
+    std::cout << std::endl;
 }
 
 void CifFormat::LoadDataArray(const std::string & filename)
@@ -268,7 +282,6 @@ void CifFormat::LoadAtomSiteData(const std::string & filename)
             atom_object->SetTemperature(temperature);
             atom_object->SetSpecialAtomFlag(is_special_atom);
             m_data_block->SetStructureInfo(atom_object.get());
-            m_data_block->SetAtomSelection(atom_object.get(), true); // To be modified
 
             auto model_number{ std::stoi(token_list[index_map.at("pdbx_PDB_model_num")]) };
             if (indicator == ".")
