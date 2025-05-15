@@ -68,11 +68,6 @@ void PotentialAnalysisCommand::SetPickChainID(const std::string & value)
     m_atom_selector->PickChainID(value);
 }
 
-void PotentialAnalysisCommand::SetPickIndicator(const std::string & value)
-{
-    m_atom_selector->PickIndicator(value);
-}
-
 void PotentialAnalysisCommand::SetPickResidueType(const std::string & value)
 {
     m_atom_selector->PickResidueType(value);
@@ -96,11 +91,6 @@ void PotentialAnalysisCommand::SetPickBranchType(const std::string & value)
 void PotentialAnalysisCommand::SetVetoChainID(const std::string & value)
 {
     m_atom_selector->VetoChainID(value);
-}
-
-void PotentialAnalysisCommand::SetVetoIndicator(const std::string & value)
-{
-    m_atom_selector->VetoIndicator(value);
 }
 
 void PotentialAnalysisCommand::SetVetoResidueType(const std::string & value)

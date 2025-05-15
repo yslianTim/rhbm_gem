@@ -32,13 +32,11 @@ public:
     void SetGridSpacing(double value) { m_grid_spacing = value; }
     void SetBlurringWidthList(const std::string & value);
     void SetPickChainID(const std::string & value);
-    void SetPickIndicator(const std::string & value);
     void SetPickResidueType(const std::string & value);
     void SetPickElementType(const std::string & value);
     void SetPickRemotenessType(const std::string & value);
     void SetPickBranchType(const std::string & value);
     void SetVetoChainID(const std::string & value);
-    void SetVetoIndicator(const std::string & value);
     void SetVetoResidueType(const std::string & value);
     void SetVetoElementType(const std::string & value);
     void SetVetoRemotenessType(const std::string & value);

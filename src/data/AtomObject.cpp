@@ -9,7 +9,7 @@
 
 AtomObject::AtomObject(void) :
     m_key_tag{ "" },
-    m_is_selected{ true }, m_is_special_atom{ false },
+    m_is_selected{ false }, m_is_special_atom{ false },
     m_serial_id{ 0 }, m_residue_id{ 0 },
     m_chain_id{ "" }, m_indicator{ "" },
     m_occupancy{ 0.0 }, m_temperature{ 0.0 },

@@ -37,19 +37,17 @@ void AtomSelector::Print(void) const
 }
 
 bool AtomSelector::GetSelectionFlag(
-    const std::string & chain_id, const std::string & indicator,
+    const std::string & chain_id,
     Residue residue, Element element, Remoteness remoteness, Branch branch) const
 {
     auto selected{ true };
     if (!pick_chain_set.empty() && pick_chain_set.find(chain_id) == pick_chain_set.end()) selected = false;
-    if (!pick_indicator_set.empty() && pick_indicator_set.find(indicator) == pick_indicator_set.end()) selected = false;
     if (!pick_residue_set.empty() && pick_residue_set.find(residue) == pick_residue_set.end()) selected = false;
     if (!pick_element_set.empty() && pick_element_set.find(element) == pick_element_set.end()) selected = false;
     if (!pick_remoteness_set.empty() && pick_remoteness_set.find(remoteness) == pick_remoteness_set.end()) selected = false;
     if (!pick_branch_set.empty() && pick_branch_set.find(branch) == pick_branch_set.end()) selected = false;
     
     if (veto_chain_set.find(chain_id) != veto_chain_set.end()) selected = false;
-    if (veto_indicator_set.find(indicator) != veto_indicator_set.end()) selected = false;
     if (veto_residue_set.find(residue) != veto_residue_set.end()) selected = false;
     if (veto_element_set.find(element) != veto_element_set.end()) selected = false;
     if (veto_remoteness_set.find(remoteness) != veto_remoteness_set.end()) selected = false;
@@ -63,13 +61,6 @@ void AtomSelector::VetoChainID(const std::string & name)
     std::stringstream ss(name);
     std::string segment;
     while (std::getline(ss, segment, ',')) veto_chain_set.insert(segment);
-}
-
-void AtomSelector::VetoIndicator(const std::string & name)
-{
-    std::stringstream ss(name);
-    std::string segment;
-    while (std::getline(ss, segment, ',')) veto_indicator_set.insert(segment);
 }
 
 void AtomSelector::VetoResidueType(const std::string & name)
@@ -117,13 +108,6 @@ void AtomSelector::PickChainID(const std::string & name)
     std::stringstream ss(name);
     std::string segment;
     while (std::getline(ss, segment, ',')) pick_chain_set.insert(segment);
-}
-
-void AtomSelector::PickIndicator(const std::string & name)
-{
-    std::stringstream ss(name);
-    std::string segment;
-    while (std::getline(ss, segment, ',')) pick_indicator_set.insert(segment);
 }
 
 void AtomSelector::PickResidueType(const std::string & name)

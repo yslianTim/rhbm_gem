@@ -92,6 +92,7 @@ void PdbFormat::ScanAtomEntry(char * line, bool is_special, int model_number)
     auto atom_object{ std::make_unique<AtomObject>() };
     auto atom_name{ StringHelper::ConvertCharArrayToString(atom->atom_name) };
     auto element_name{ StringHelper::ConvertCharArrayToString(atom->element) };
+    if (element_name == "H") return; // Skip hydrogen atom
     auto indicator{ (atom->indicator == ' ') ? "." : std::string(1, atom->indicator) };
     atom_object->SetElement(element_name);
     atom_object->SetRemoteness(StringHelper::ExtractCharAsString(atom_name, element_name.size()));

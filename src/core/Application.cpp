@@ -35,6 +35,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
     {
         auto command{ std::make_unique<PotentialAnalysisCommand>() };
         command->SetThreadSize(m_global_options.thread_size);
+        command->SetAsymmetryFlag(m_potential_analysis_options.is_asymmetry);
         command->SetSavedKeyTag(m_potential_analysis_options.saved_key_tag);
         command->SetSamplingSize(m_sphere_sampler_options.sampling_size);
         command->SetSamplingRangeMinimum(m_sphere_sampler_options.sampling_range_min);
@@ -47,13 +48,11 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetAlphaR(m_potential_analysis_options.alpha_r);
         command->SetAlphaG(m_potential_analysis_options.alpha_g);
         command->SetPickChainID(m_atom_selector_options.pick_chain_id);
-        command->SetPickIndicator(m_atom_selector_options.pick_indicator);
         command->SetPickResidueType(m_atom_selector_options.pick_residue);
         command->SetPickElementType(m_atom_selector_options.pick_element);
         command->SetPickRemotenessType(m_atom_selector_options.pick_remoteness);
         command->SetPickBranchType(m_atom_selector_options.pick_branch);
         command->SetVetoChainID(m_atom_selector_options.veto_chain_id);
-        command->SetVetoIndicator(m_atom_selector_options.veto_indicator);
         command->SetVetoResidueType(m_atom_selector_options.veto_residue);
         command->SetVetoElementType(m_atom_selector_options.veto_element);
         command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
@@ -82,13 +81,11 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetGridSpacing(m_map_simulation_options.grid_spacing);
         command->SetBlurringWidthList(m_map_simulation_options.blurring_width_list);
         command->SetPickChainID(m_atom_selector_options.pick_chain_id);
-        command->SetPickIndicator(m_atom_selector_options.pick_indicator);
         command->SetPickResidueType(m_atom_selector_options.pick_residue);
         command->SetPickElementType(m_atom_selector_options.pick_element);
         command->SetPickRemotenessType(m_atom_selector_options.pick_remoteness);
         command->SetPickBranchType(m_atom_selector_options.pick_branch);
         command->SetVetoChainID(m_atom_selector_options.veto_chain_id);
-        command->SetVetoIndicator(m_atom_selector_options.veto_indicator);
         command->SetVetoResidueType(m_atom_selector_options.veto_residue);
         command->SetVetoElementType(m_atom_selector_options.veto_element);
         command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
@@ -131,6 +128,9 @@ void Application::RegisterPotentialAnalysisCommand(void)
         "-v,--verbose", m_global_options.verbose_level,
         "Verbose level")->default_val(1);
     m_potential_analysis_cmd->add_option(
+        "--asymmetry", m_potential_analysis_options.is_asymmetry,
+        "Turn On/Off asymmetry flag")->default_val(false);
+    m_potential_analysis_cmd->add_option(
         "-s,--sampling", m_sphere_sampler_options.sampling_size,
         "Number of sampling points per atom")->default_val(1500);
     m_potential_analysis_cmd->add_option(
@@ -155,9 +155,6 @@ void Application::RegisterPotentialAnalysisCommand(void)
         "--pick-chain", m_atom_selector_options.pick_chain_id,
         "Pick chain ID")->default_val("");
     m_potential_analysis_cmd->add_option(
-        "--pick-indicator", m_atom_selector_options.pick_indicator,
-        "Pick indicator")->default_val(".,A");
-    m_potential_analysis_cmd->add_option(
         "--pick-residue", m_atom_selector_options.pick_residue,
         "Pick residue type")->default_val("");
     m_potential_analysis_cmd->add_option(
@@ -172,9 +169,6 @@ void Application::RegisterPotentialAnalysisCommand(void)
     m_potential_analysis_cmd->add_option(
         "--veto-chain", m_atom_selector_options.veto_chain_id,
         "Veto chain ID")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--veto-indicator", m_atom_selector_options.veto_indicator,
-        "Veto indicator")->default_val("");
     m_potential_analysis_cmd->add_option(
         "--veto-residue", m_atom_selector_options.veto_residue,
         "Veto residue type")->default_val("");
@@ -258,9 +252,6 @@ void Application::RegisterMapSimulationCommand(void)
         "--pick-chain", m_atom_selector_options.pick_chain_id,
         "Pick chain ID")->default_val("");
     m_map_simulation_cmd->add_option(
-        "--pick-indicator", m_atom_selector_options.pick_indicator,
-        "Pick indicator")->default_val(".,A");
-    m_map_simulation_cmd->add_option(
         "--pick-residue", m_atom_selector_options.pick_residue,
         "Pick residue type")->default_val("");
     m_map_simulation_cmd->add_option(
@@ -276,14 +267,11 @@ void Application::RegisterMapSimulationCommand(void)
         "--veto-chain", m_atom_selector_options.veto_chain_id,
         "Veto chain ID")->default_val("");
     m_map_simulation_cmd->add_option(
-        "--veto-indicator", m_atom_selector_options.veto_indicator,
-        "Veto indicator")->default_val("");
-    m_map_simulation_cmd->add_option(
         "--veto-residue", m_atom_selector_options.veto_residue,
         "Veto residue type")->default_val("");
     m_map_simulation_cmd->add_option(
         "--veto-element", m_atom_selector_options.veto_element,
-        "Veto element type")->default_val("H");
+        "Veto element type")->default_val("");
     m_map_simulation_cmd->add_option(
         "--veto-remoteness", m_atom_selector_options.veto_remoteness,
         "Veto remoteness type")->default_val("");

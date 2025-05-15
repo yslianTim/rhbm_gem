@@ -30,7 +30,6 @@ void MapSimulationVisitor::VisitAtomObject(AtomObject * data_object)
     {
         m_atom_selector->GetSelectionFlag(
             data_object->GetChainID(),
-            data_object->GetIndicator(),
             data_object->GetResidue(),
             data_object->GetElement(),
             data_object->GetRemoteness(),

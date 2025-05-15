@@ -39,17 +39,18 @@ PotentialAnalysisVisitor::~PotentialAnalysisVisitor()
 
 void PotentialAnalysisVisitor::VisitAtomObject(AtomObject * data_object)
 {
-    bool selected_flag
+    bool additional_selected_flag
     {
         m_atom_selector->GetSelectionFlag(
             data_object->GetChainID(),
-            data_object->GetIndicator(),
             data_object->GetResidue(),
             data_object->GetElement(),
             data_object->GetRemoteness(),
             data_object->GetBranch()
         )
     };
+    auto original_selected_flag{ data_object->GetSelectedFlag() };
+    auto selected_flag{ original_selected_flag && additional_selected_flag };
     data_object->SetSelectedFlag(selected_flag);
 }
 

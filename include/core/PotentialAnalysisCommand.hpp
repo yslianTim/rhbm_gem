@@ -9,6 +9,7 @@ class SphereSampler;
 class PotentialAnalysisCommand : public CommandBase
 {
     int m_thread_size;
+    bool m_is_asymmetry;
     double m_fit_range_min, m_fit_range_max;
     double m_alpha_r, m_alpha_g;
     std::string m_database_path, m_model_file_path, m_map_file_path;
@@ -21,6 +22,7 @@ public:
     ~PotentialAnalysisCommand();
     void Execute(void) override;
 
+    void SetAsymmetryFlag(bool value) { m_is_asymmetry = value; }
     void SetFitRangeMinimum(double value) { m_fit_range_min = value; }
     void SetFitRangeMaximum(double value) { m_fit_range_max = value; }
     void SetAlphaR(double value) { m_alpha_r = value; }

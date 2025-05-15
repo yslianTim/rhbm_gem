@@ -27,9 +27,9 @@ private:
     void LoadEntityInfo(const std::string & filename);
     void LoadPdbxData(const std::string & filename);
     void LoadElementTypeList(const std::string & filename);
-    void LoadAtomSiteData(const std::string & filename);
     void LoadStructHelixInfo(const std::string & filename);
     void LoadStructSheetInfo(const std::string & filename);
+    void LoadAtomSiteData(const std::string & filename);
     void ParseLoopBlock(std::ifstream & infile,
         const std::string & prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,

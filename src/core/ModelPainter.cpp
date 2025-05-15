@@ -81,7 +81,7 @@ void ModelPainter::Painting(void)
         PaintResidueClassGroupGausScatter(model_object, "width_scatter_"+ model_object->GetPdbID() +".pdf", 1);
         PaintAtomXYPosition(model_object, "atom_position_"+ model_object->GetPdbID() +".pdf");
         PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ model_object->GetPdbID() +".pdf", false);
-        PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ model_object->GetPdbID() +".pdf");
+        //PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ model_object->GetPdbID() +".pdf");
         PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ model_object->GetPdbID() +".pdf");
         PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ model_object->GetPdbID() +".pdf");
     }
@@ -695,6 +695,8 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
 
     std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list[main_chain_element_size];
     std::unique_ptr<TF1> gaus_function[main_chain_element_size];
+    double amplitude_prior[main_chain_element_size];
+    double width_prior[main_chain_element_size];
     std::vector<double> y_array;
     y_array.reserve(model_object->GetNumberOfSelectedAtom());
     for (size_t k = 0; k < main_chain_element_size; k++)
@@ -703,20 +705,19 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
         auto remoteness{ AtomClassifier::GetMainChainRemoteness(k) };
         auto group_key{ KeyPackerElementClass::Pack(element, remoteness, false) };
         if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
-        //auto outlier_count{ 0 };
         for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
         {
             auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
             auto graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
-            //int color{ (atom_iter->IsOutlierAtom(class_key) == true) ? kRed+1 : kAzure-7 };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             auto map_value_range{ atom_iter->GetMapValueRange(0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
-            //if (atom_iter->IsOutlierAtom(class_key) == true) outlier_count++;
         }
         gaus_function[k] = entry_iter->CreateGroupGausFunctionPrior(group_key, class_key);
+        amplitude_prior[k] = entry_iter->GetGausEstimatePrior(group_key, class_key, 0);
+        width_prior[k] = entry_iter->GetGausEstimatePrior(group_key, class_key, 1);
     }
 
     auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -732,6 +733,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
 
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> element_text[col_size];
+    std::unique_ptr<TPaveText> result_text[col_size];
     for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
@@ -772,6 +774,13 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, color_element[i], 0.5f);
             element_text[i]->AddText(AtomClassifier::GetMainChainElementLabel(static_cast<size_t>(i)).data());
             element_text[i]->Draw();
+
+            result_text[i] = ROOTHelper::CreatePaveText(0.05, 0.10, 0.95, 0.25, "nbNDC", true);
+            ROOTHelper::SetPaveTextDefaultStyle(result_text[i].get());
+            ROOTHelper::SetTextAttribute(result_text[i].get(), 18.0f, 133, 22);
+            ROOTHelper::SetFillAttribute(result_text[i].get(), 4000);
+            result_text[i]->AddText(Form("#hat{A} = #color[2]{%.2f}  ;  #hat{#tau} = #color[2]{%.2f}", amplitude_prior[i], width_prior[i]));
+            result_text[i]->Draw();
         }
     }
 
@@ -783,6 +792,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     ROOTHelper::SetFillAttribute(subtitle1_text.get(), 1001, kAzure-7);
     ROOTHelper::SetTextAttribute(subtitle1_text.get(), 40.0f, 133, 22, 0.0, kYellow-10);
     subtitle1_text->AddText(Form("%.2f #AA", model_object->GetResolution()));
+    //subtitle1_text->AddText("#sigma_{BW} = 0.5");
     subtitle1_text->Draw();
 
     auto subtitle2_text{ ROOTHelper::CreatePaveText(0.26, 0.10, 0.45, 0.90, "nbNDC ARC", false) };
@@ -799,6 +809,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     ROOTHelper::SetFillAttribute(subtitle3_text.get(), 1001, kAzure-7, 0.5f);
     ROOTHelper::SetTextAttribute(subtitle3_text.get(), 35.0f, 103, 22);
     subtitle3_text->AddText(model_object->GetEmdID().data());
+    //subtitle3_text->AddText("Simulation");
     subtitle3_text->Draw();
 
     auto legend{ ROOTHelper::CreateLegend(0.69, 0.10, 0.99, 0.90, false) };
@@ -1209,11 +1220,7 @@ void ModelPainter::PaintAtomGausScatter(
             auto y{ graph->GetPointY(p) };
             x_array.emplace_back(x);
             y_array.emplace_back(y);
-            //if (x <= 50.0) amplitude_cut_count[i]++;
-            //if (y <= 0.6) width_cut_count[i]++;
         }
-        //std::cout << "Ratio of amplitude selected atoms: "<< amplitude_cut_count[i] <<" / "<< atom_count[i] << std::endl;
-        //std::cout << "Ratio of width selected atoms: "<< width_cut_count[i] <<" / "<< atom_count[i] << std::endl;
         if (graph->GetN() == 0) continue;
         atom_count_list.emplace_back(graph->GetN());
         element_name_list.emplace_back(element_name);

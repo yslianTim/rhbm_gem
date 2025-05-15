@@ -19,9 +19,23 @@ void AtomicModelDataBlock::AddAtomObject(
     m_atom_object_list_map[model_number].emplace_back(std::move(atom_object));
 }
 
-void AtomicModelDataBlock::AddChainEntityType(const std::string & entity_id, Entity entity)
+void AtomicModelDataBlock::AddEntityTypeInEntityMap(
+    const std::string & entity_id, Entity entity)
 {
-    m_chain_entity_type_map[entity_id] = entity;
+    m_entity_type_map[entity_id] = entity;
+    m_entity_id_list_map[entity].emplace_back(entity_id);
+}
+
+void AtomicModelDataBlock::AddChainIDInEntityMap(
+    const std::string & entity_id, const std::string & chain_id)
+{
+    m_chain_id_list_map[entity_id].emplace_back(chain_id);
+}
+
+void AtomicModelDataBlock::AddMoleculesSizeInEntityMap(
+    const std::string & entity_id, int molecules_size)
+{
+    m_molecules_size_map[entity_id] = molecules_size;
 }
 
 void AtomicModelDataBlock::AddSheetStrands(
@@ -83,6 +97,27 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
     atom_object->SetStructure(Structure::FREE);
 }
 
+void AtomicModelDataBlock::SetAtomSelection(
+    AtomObject * atom_object, bool is_asymmetry)
+{
+    if (is_asymmetry == true)
+    {
+        atom_object->SetSelectedFlag(true);
+        return;
+    }
+
+    auto chain_id{ atom_object->GetChainID() };
+    for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
+    {
+        if (chain_id == chain_id_list.at(0))
+        {
+            atom_object->SetSelectedFlag(true);
+            return;
+        }
+    }
+    atom_object->SetSelectedFlag(false);
+}
+
 std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::GetAtomObjectList(int model_number)
 {
     return std::move(m_atom_object_list_map.at(model_number));
@@ -106,4 +141,33 @@ double AtomicModelDataBlock::GetResolution(void) const
 std::string AtomicModelDataBlock::GetResolutionMethod(void) const
 {
     return m_resolution_method;
+}
+
+const std::vector<Element> & AtomicModelDataBlock::GetElementTypeList(void) const
+{
+    return m_element_type_list;
+}
+
+const std::unordered_map<std::string, Entity> &
+AtomicModelDataBlock::GetEntityTypeMap(void) const
+{
+    return m_entity_type_map;
+}
+
+const std::unordered_map<std::string, int> &
+AtomicModelDataBlock::GetMoleculesSizeMap(void) const
+{
+    return m_molecules_size_map;
+}
+
+const std::unordered_map<Entity, std::vector<std::string>> &
+AtomicModelDataBlock::GetEntityIDListMap(void) const
+{
+    return m_entity_id_list_map;
+}
+
+const std::unordered_map<std::string, std::vector<std::string>> &
+AtomicModelDataBlock::GetChainIDListMap(void) const
+{
+    return m_chain_id_list_map;
 }

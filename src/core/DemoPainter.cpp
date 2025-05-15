@@ -921,32 +921,37 @@ void DemoPainter::PaintAtomRankMainChain(
 
     const int main_chain_element_count{ 4 };
     short color_element[main_chain_element_count] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+
+    const std::string y_title[3]
+    {
+        "Amplitude Rank",
+        "Width Rank",
+        "Intensity Rank"
+    };
     
     int chain_size[row_size];
     std::unique_ptr<TH1D> rank_reference[row_size];
     std::vector<std::unique_ptr<TH1D>> rank_hist_list[row_size][3];
     std::vector<Residue> veto_residues_list{ Residue::GLY, Residue::PRO };
-    double y_max[row_size]{ 0.0 };
     for (int j = 0; j < row_size; j++)
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(static_cast<size_t>(j))) };
         rank_hist_list[j][0] = entry_iter->CreateMainChainRankHistogram(par_id, chain_size[j], Residue::UNK, j, veto_residues_list);
         rank_hist_list[j][1] = entry_iter->CreateMainChainRankHistogram(par_id, chain_size[j], Residue::GLY, j);
         rank_hist_list[j][2] = entry_iter->CreateMainChainRankHistogram(par_id, chain_size[j], Residue::PRO, j);
-        for (auto & hist : rank_hist_list[j][0])
-        {
-            auto max_tmp{ hist->GetMaximum() };
-            if (y_max[j] < max_tmp) y_max[j] = max_tmp;
-        }
+        for (auto & hist : rank_hist_list[j][0]) hist->Scale(100.0 / hist->GetEntries());
+        for (auto & hist : rank_hist_list[j][1]) hist->Scale(100.0 / hist->GetEntries());
+        for (auto & hist : rank_hist_list[j][2]) hist->Scale(100.0 / hist->GetEntries());
         rank_reference[j] = ROOTHelper::CreateHist1D(Form("rank_reference_%d", j),"", 4, 0.5, 4.5);
         for (int p = 1; p <= rank_reference[j]->GetNbinsX(); p++)
         {
-            rank_reference[j]->SetBinContent(p, y_max[j]*10.0);
+            rank_reference[j]->SetBinContent(p, 150.0);
         }
     }
 
 
     gStyle->SetTextFont(22);
+    gStyle->SetPaintTextFormat(".0f");
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> element_text[col_size];
     std::unique_ptr<TPaveText> info_text[row_size];
@@ -956,11 +961,11 @@ void DemoPainter::PaintAtomRankMainChain(
         for (int j = 0; j < row_size; j++)
         {
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 0, 0, 1, 0, 0);
+            ROOTHelper::SetPadLayout(gPad, 1, 0, 0, 0, 0, 0);
             ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 100, 0.1, 4.9, 100, 0.2, 2.0*y_max[j]);
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 100, 0.1, 4.9, 100, 0.01, 110.0);
             ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.9f, 133);
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 103, kCyan+3);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 5);
@@ -968,8 +973,8 @@ void DemoPainter::PaintAtomRankMainChain(
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 30.0f, 0.005f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
-            frame[i][j]->GetXaxis()->SetTitle("Amplitude Rank");
-            frame[i][j]->GetYaxis()->SetTitle("Residue Counts");
+            frame[i][j]->GetXaxis()->SetTitle(y_title[par_id].data());
+            frame[i][j]->GetYaxis()->SetTitle("Count Ratio (%)");
             frame[i][j]->GetXaxis()->CenterTitle();
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
@@ -981,24 +986,24 @@ void DemoPainter::PaintAtomRankMainChain(
             rank_reference[j]->SetBarOffset(0.05f);
             rank_reference[j]->Draw("BAR SAME");
 
-            auto text_size{ 0.2f * 4.0f/static_cast<float>(gPad->GetAbsHNDC()) };
+            auto text_size{ 0.2f * 3.0f/static_cast<float>(gPad->GetAbsHNDC()) };
             ROOTHelper::SetFillAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1001, kAzure-7, 0.5f);
             ROOTHelper::SetLineAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1, 0, kAzure-7);
-            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 20, text_size, kAzure-7);
+            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1, text_size, kAzure-7);
             rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
             rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarOffset(0.125f);
             rank_hist_list[j][0].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
 
             ROOTHelper::SetFillAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1001, kOrange-6, 0.5f);
             ROOTHelper::SetLineAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1, 0, kOrange-6);
-            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 20, text_size, kOrange-6);
+            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1, text_size, kOrange-6);
             rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
             rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarOffset(0.375f);
             rank_hist_list[j][1].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
 
             ROOTHelper::SetFillAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1001, kMagenta-2, 0.5f);
             ROOTHelper::SetLineAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1, 0, kMagenta-2);
-            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 20, text_size, kMagenta-2);
+            ROOTHelper::SetMarkerAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1, text_size, kMagenta-2);
             rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
             rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarOffset(0.625f);
             rank_hist_list[j][2].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");

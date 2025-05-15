@@ -21,7 +21,6 @@ class Application
     struct AtomSelectorOptions
     {
         std::string pick_chain_id, veto_chain_id;
-        std::string pick_indicator, veto_indicator;
         std::string pick_residue, veto_residue;
         std::string pick_element, veto_element;
         std::string pick_remoteness, veto_remoteness;
@@ -36,6 +35,7 @@ class Application
 
     struct PotentialAnalysisOptions
     {
+        bool is_asymmetry;
         double fit_range_min, fit_range_max;
         double alpha_r, alpha_g;
         std::string model_file_path;
