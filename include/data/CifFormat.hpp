@@ -31,7 +31,7 @@ private:
     void LoadStructSheetInfo(const std::string & filename);
     void LoadAtomSiteData(const std::string & filename);
     void ParseLoopBlock(std::ifstream & infile,
-        const std::string & prefix,
+        const std::string & data_block_prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,
                                  const std::vector<std::string> &)> & row_handler);
 

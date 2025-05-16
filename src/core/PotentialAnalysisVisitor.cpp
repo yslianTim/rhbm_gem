@@ -55,7 +55,6 @@ void PotentialAnalysisVisitor::VisitAtomObject(AtomObject * data_object)
 void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitModelObject");
-    std::cout <<"- Visiting ModelObject..." << std::endl;
     data_object->FilterAtomFromSymmetry(m_is_asymmetry);
     data_object->Update();
     m_selected_atom_list = data_object->GetSelectedAtomList();
@@ -70,7 +69,6 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitMapObject");
-    std::cout <<"- Visiting MapObject..." << std::endl;
     MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler };
     for (auto & atom : m_selected_atom_list)
     {
@@ -111,8 +109,6 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
 void PotentialAnalysisVisitor::RunAtomClassification(
     const std::string & class_key, ModelObject * model_object)
 {
-    ScopeTimer timer("PotentialAnalysisVisitor::RunAtomClassification");
-    std::cout <<"- RunAtomClassification..." << std::endl;
     auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
     for (auto atom : m_selected_atom_list)
     {
@@ -128,7 +124,6 @@ void PotentialAnalysisVisitor::RunPotentialFitting(
     const std::string & class_key, ModelObject * model_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::RunPotentialFitting");
-    std::cout <<"- RunPotentialFitting..." << std::endl;
     auto group_potential_entry{ model_object->GetGroupPotentialEntry(class_key) };
     
     for (const auto & group_key : m_group_set_map.at(class_key))

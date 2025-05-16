@@ -91,7 +91,8 @@ const std::unordered_map<std::string_view, Branch> AtomicInfoHelper::m_branch_ma
 
 const std::unordered_map<std::string_view, Structure> AtomicInfoHelper::m_structure_map
 {
-    {" ", Structure::FREE}, {"BEND", Structure::BEND}, {"STRN", Structure::STRN},
+    {" ", Structure::FREE}, {"BEND", Structure::BEND},
+    {"STRN", Structure::STRN},
     {"OTHER", Structure::OTHER},
     {"HELX_P", Structure::HELX_P},
     {"TURN_P", Structure::TURN_P}

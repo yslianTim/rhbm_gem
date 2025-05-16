@@ -101,7 +101,17 @@ void CifFormat::LoadEntityInfo(const std::string & filename)
         {
             auto entity_id{ token_list[index_map.at("id")] };
             auto entity_type{ token_list[index_map.at("type")] };
-            auto molecules_size{ std::stoi(token_list[index_map.at("pdbx_number_of_molecules")]) };
+            auto molecules_size_string{ token_list[index_map.at("pdbx_number_of_molecules")] };
+            int molecules_size{ -1 };
+            try
+            {
+                molecules_size = std::stoi(molecules_size_string);
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << e.what() <<": "<< molecules_size_string << '\n';
+            }
+            
             m_data_block->AddEntityTypeInEntityMap(
                 entity_id, AtomicInfoHelper::GetEntityFromString(entity_type));
             m_data_block->AddMoleculesSizeInEntityMap(entity_id, molecules_size);
@@ -316,70 +326,113 @@ AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
 
 void CifFormat::ParseLoopBlock(
     std::ifstream & infile,
-    const std::string & block_prefix,
+    const std::string & data_block_prefix,
     const std::function<void(const std::unordered_map<std::string, size_t> &,
                              const std::vector<std::string> &)> & row_handler)
 {
     std::string line;
-    bool in_loop{ false };
-    bool header_parsed{ false };
-    std::vector<std::string> field_order;
+    auto header_parsed{ false };
+    std::vector<std::string> data_column_list;
     std::unordered_map<std::string, size_t> index_map;
     while (std::getline(infile, line))
     {
-        if (in_loop == false)
-        {
-            if (line.find("loop_") != std::string::npos)
-            {
-                in_loop = true;
-            }
-            continue;
-        }
         if (header_parsed == false)
         {
-            if (line.rfind(block_prefix, 0) == 0)
+            if (line.find(data_block_prefix, 0) == 0)
             {
                 std::istringstream iss(line);
-                std::string full;
-                iss >> full;
-                field_order.emplace_back(full.substr(block_prefix.size()));
+                std::string full_line;
+                iss >> full_line;
+                data_column_list.emplace_back(full_line.substr(data_block_prefix.size()));
                 continue;
             }
-            if (field_order.empty() == false)
+            
+            if (data_column_list.empty() == false)
             {
                 header_parsed = true;
-                for (size_t i = 0; i < field_order.size(); i++)
+                for (size_t i = 0; i < data_column_list.size(); i++)
                 {
-                    index_map[field_order[i]] = i;
+                    index_map[data_column_list.at(i)] = i;
                 }
             }
         }
         if (header_parsed == true)
         {
             if (line.empty() || line[0] == '#') break;
-            std::vector<std::string> token_list;
-            token_list.reserve(index_map.size());
-            for (std::size_t pos = 0; pos < line.size();)
-            {
-                // skip leading whitespace
-                while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
-                if (pos >= line.size()) break;
 
-                if (line[pos] == '\'')
-                { // single‑quoted token
-                    ++pos; // skip opening quote
-                    std::size_t start = pos;
-                    while (pos < line.size() && line[pos] != '\'') ++pos;
-                    token_list.emplace_back(line.substr(start, pos - start));
-                    if (pos < line.size()) ++pos; // skip closing quote
+            const auto expected_fields{ index_map.size() };
+            std::vector<std::string> token_list;
+            token_list.reserve(expected_fields);
+
+            // helper to tokenize a single line with '\'' grouping
+            auto split_tokens = [&](const std::string & text)
+            {
+                std::vector<std::string> tmp;
+                tmp.reserve(expected_fields);
+                for (size_t pos = 0; pos < text.size();)
+                {
+                    while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) ++pos;
+                    if (pos >= text.size()) break;
+                    if (text[pos] == '\'')
+                    {
+                        ++pos;
+                        auto start{ pos };
+                        while (pos < text.size() && text[pos] != '\'') ++pos;
+                        tmp.emplace_back(text.substr(start, pos - start));
+                        if (pos < text.size()) ++pos;
+                    }
+                    else
+                    {
+                        auto start{ pos };
+                        while (pos < text.size() && !std::isspace(static_cast<unsigned char>(text[pos]))) ++pos;
+                        tmp.emplace_back(text.substr(start, pos - start));
+                    }
+                }
+                return tmp;
+            };
+
+            // initial tokens from this line
+            auto initial{ split_tokens(line) };
+            token_list.insert(token_list.end(), initial.begin(), initial.end());
+
+            // now read continuation lines until we have all fields
+            bool in_multiline{ false };
+            std::string multiline_content;
+            std::string next_line;
+            while (token_list.size() < expected_fields && std::getline(infile, next_line))
+            {
+                if (next_line.empty()) continue;
+                if (!in_multiline && next_line[0] == ';')
+                {
+                    // start of multiline literal for the next field
+                    in_multiline = true;
+                    multiline_content.clear();
+                    // strip leading semicolon
+                    auto content{ next_line.substr(1) };
+                    if (!content.empty()) multiline_content = content;
+                }
+                else if (in_multiline)
+                {
+                    if (!next_line.empty() && next_line[0] == ';')
+                    {
+                        // end of multiline literal
+                        token_list.emplace_back(std::move(multiline_content));
+                        in_multiline = false;
+                    }
+                    else
+                    {
+                        // accumulate lines
+                        multiline_content += "\n" + next_line;
+                    }
                 }
                 else
-                { // unquoted token
-                    std::size_t start = pos;
-                    while (pos < line.size() && !std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
-                    token_list.emplace_back(line.substr(start, pos - start));
+                {
+                    // normal continuation tokens
+                    auto more{ split_tokens(next_line) };
+                    token_list.insert(token_list.end(), more.begin(), more.end());
                 }
             }
+
             row_handler(index_map, token_list);
         }
     }

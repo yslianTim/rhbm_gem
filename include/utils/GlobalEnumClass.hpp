@@ -54,7 +54,8 @@ enum class Structure : uint8_t
 {
     FREE = 0, BEND = 1,
     /* beta-sheet */
-    STRN = 2,
+    SHEET = 2,
+    STRN = 3,
     OTHER = 9,
 
     /* 10 - 99 for alpha-helix */

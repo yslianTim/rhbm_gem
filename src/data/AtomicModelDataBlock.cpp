@@ -88,7 +88,7 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
             auto end{ std::stoi(range.at(3)) };
             if (residue_id >= beg && residue_id <= end)
             {
-                atom_object->SetStructure(Structure::STRN);
+                atom_object->SetStructure(Structure::SHEET);
                 return;
             }
         }
