@@ -1325,6 +1325,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
             y_array[j].reserve(static_cast<size_t>(gaus_graph->GetN() * 4));
             for (size_t k = 0; k < main_chain_element_count; k++)
             {
+                if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
                 for (int p = 0; p < gaus_graph_map[j][k].at(chain_id)->GetN(); p++)
                 {
                     if (j == 0) x_array.emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointX(p));
@@ -1373,6 +1374,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
                 frame[i][j]->Draw();
                 for (size_t k = 0; k < main_chain_element_count; k++)
                 {
+                    if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
                     ROOTHelper::SetMarkerAttribute(gaus_graph_map[j][k].at(chain_id).get(), 20, 0.7f, color_element[k]);
                     ROOTHelper::SetLineAttribute(gaus_graph_map[j][k].at(chain_id).get(), 1, 1, color_element[k]);
                     gaus_graph_map[j][k].at(chain_id)->Draw("PL X0");
@@ -1410,6 +1412,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
                     ROOTHelper::SetFillAttribute(legend.get(), 4000);
                     for (size_t k = 0; k < main_chain_element_count; k++)
                     {
+                        if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
                         legend->AddEntry(gaus_graph_map[j][k].at(chain_id).get(),
                         AtomClassifier::GetMainChainElementLabel(k).data(), "pl");
                     }

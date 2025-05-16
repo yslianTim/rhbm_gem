@@ -268,65 +268,169 @@ bool AtomicInfoHelper::IsStandardResidue(Residue residue)
 
 Residue AtomicInfoHelper::GetResidueFromString(const std::string & name)
 {
-    if (m_residue_map.find(name) == m_residue_map.end()) return Residue::UNK;
+    static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_residue_map.find(name) == m_residue_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            std::cout <<"[Warning] AtomicInfoHelper::GetResidueFromString - Unknown string : "
+                    << name << std::endl;
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return Residue::UNK;
+    }
     return m_residue_map.at(name);
 }
 
 Element AtomicInfoHelper::GetElementFromString(const std::string & name)
 {
-    if (m_element_map.find(name) == m_element_map.end()) return Element::UNK;
+    static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_element_map.find(name) == m_element_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            std::cout <<"[Warning] AtomicInfoHelper::GetElementFromString - Unknown string : "
+                    << name << std::endl;
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return Element::UNK;
+    }
     return m_element_map.at(name);
 }
 
 Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)
 {
-    if (m_remoteness_map.find(name) == m_remoteness_map.end()) return Remoteness::UNK;
+    static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_remoteness_map.find(name) == m_remoteness_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            std::cout <<"[Warning] AtomicInfoHelper::GetRemotenessFromString - Unknown string : "
+                    << name << std::endl;
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return Remoteness::UNK;
+    }
     return m_remoteness_map.at(name);
 }
 
 Branch AtomicInfoHelper::GetBranchFromString(const std::string & name)
 {
-    if (m_branch_map.find(name) == m_branch_map.end()) return Branch::UNK;
+    static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_branch_map.find(name) == m_branch_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            std::cout <<"[Warning] AtomicInfoHelper::GetBranchFromString - Unknown string : "
+                    << name << std::endl;
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return Branch::UNK;
+    }
     return m_branch_map.at(name);
 }
 
 Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
 {
-    if (m_structure_map.find(name) == m_structure_map.end()) return Structure::UNK;
+    static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_structure_map.find(name) == m_structure_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            std::cout <<"[Warning] AtomicInfoHelper::GetStructureFromString - Unknown string : "
+                    << name << std::endl;
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return Structure::UNK;
+    }
     return m_structure_map.at(name);
 }
 
 Entity AtomicInfoHelper::GetEntityFromString(const std::string & name)
 {
-    if (m_entity_map.find(name) == m_entity_map.end()) return Entity::UNK;
+    static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_entity_map.find(name) == m_entity_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            std::cout <<"[Warning] AtomicInfoHelper::GetEntityFromString - Unknown string : "
+                    << name << std::endl;
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return Entity::UNK;
+    }
     return m_entity_map.at(name);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Residue residue)
 {
     static std::string unk_label{"?"};
-    if (m_residue_label_map.find(residue) == m_residue_label_map.end()) return unk_label;
+    if (m_residue_label_map.find(residue) == m_residue_label_map.end())
+    {
+        std::cout <<"[Warning] AtomicInfoHelper::GetLabel - Unknown Residue : "
+                  << static_cast<int>(residue) << std::endl;
+        return unk_label;
+    }
     return m_residue_label_map.at(residue);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Element element)
 {
     static std::string unk_label{"?"};
-    if (m_element_label_map.find(element) == m_element_label_map.end()) return unk_label;
+    if (m_element_label_map.find(element) == m_element_label_map.end())
+    {
+        std::cout <<"[Warning] AtomicInfoHelper::GetLabel - Unknown Residue : "
+                  << static_cast<int>(element) << std::endl;
+        return unk_label;
+    }
     return m_element_label_map.at(element);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Remoteness remoteness)
 {
     static std::string unk_label{"?"};
-    if (m_remoteness_label_map.find(remoteness) == m_remoteness_label_map.end()) return unk_label;
+    if (m_remoteness_label_map.find(remoteness) == m_remoteness_label_map.end())
+    {
+        std::cout <<"[Warning] AtomicInfoHelper::GetLabel - Unknown Residue : "
+                  << static_cast<int>(remoteness) << std::endl;
+        return unk_label;
+    }
     return m_remoteness_label_map.at(remoteness);
 }
 
 const std::string & AtomicInfoHelper::GetLabel(Branch branch)
 {
     static std::string unk_label{"?"};
-    if (m_branch_label_map.find(branch) == m_branch_label_map.end()) return unk_label;
+    if (m_branch_label_map.find(branch) == m_branch_label_map.end())
+    {
+        std::cout <<"[Warning] AtomicInfoHelper::GetLabel - Unknown Residue : "
+                  << static_cast<int>(branch) << std::endl;
+        return unk_label;
+    }
     return m_branch_label_map.at(branch);
 }
 

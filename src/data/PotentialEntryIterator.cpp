@@ -440,7 +440,8 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
     return graph;
 }
 
-std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
+std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
+PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
     size_t main_chain_element_id, const int par_id, Residue residue)
 {
     if (IsModelObjectAvailable() == false)
@@ -458,6 +459,7 @@ std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> PotentialEntryIte
         auto entry{ atom->GetAtomicPotentialEntry() };
         auto residue_id{ atom->GetResidueID() };
         auto chain_id{ atom->GetChainID() };
+        if (residue_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
             graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
