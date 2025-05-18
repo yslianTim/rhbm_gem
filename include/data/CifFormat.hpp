@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <memory>
 #include <functional>
@@ -31,7 +32,7 @@ private:
     void LoadStructSheetInfo(const std::string & filename);
     void LoadAtomSiteData(const std::string & filename);
     void ParseLoopBlock(std::ifstream & infile,
-        const std::string & data_block_prefix,
+        std::string_view data_block_prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,
                                  const std::vector<std::string> &)> & row_handler);
 

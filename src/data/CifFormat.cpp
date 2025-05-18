@@ -325,81 +325,52 @@ AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
 }
 
 void CifFormat::ParseLoopBlock(
-    std::ifstream & infile,
-    const std::string & data_block_prefix,
+    std::ifstream & infile, std::string_view data_block_prefix,
     const std::function<void(const std::unordered_map<std::string, size_t> &,
-                             const std::vector<std::string> &)> & row_handler)
+                             const std::vector<std::string> &)> & table_handler)
 {
     std::string line;
     auto header_parsed{ false };
     std::vector<std::string> data_column_list;
-    std::unordered_map<std::string, size_t> index_map;
+    std::unordered_map<std::string, size_t> column_index_map;
     while (std::getline(infile, line))
     {
         if (header_parsed == false)
         {
-            if (line.find(data_block_prefix, 0) == 0)
+            if (line.rfind(data_block_prefix, 0) == 0)
             {
-                std::istringstream iss(line);
-                std::string full_line;
-                iss >> full_line;
+                auto pos{ line.find_first_of(" \t") }; // extract the token up to the first whitespace
+                std::string full_line{ (pos == std::string::npos) ? line : line.substr(0, pos) };
                 data_column_list.emplace_back(full_line.substr(data_block_prefix.size()));
                 continue;
             }
             
-            if (data_column_list.empty() == false)
+            if (data_column_list.empty() == true) continue;
+            column_index_map.reserve(data_column_list.size());
+            for (size_t i = 0; i < data_column_list.size(); i++)
             {
-                header_parsed = true;
-                for (size_t i = 0; i < data_column_list.size(); i++)
-                {
-                    index_map[data_column_list.at(i)] = i;
-                }
+                column_index_map[data_column_list.at(i)] = i;
             }
+            header_parsed = true;
+            
         }
         if (header_parsed == true)
         {
             if (line.empty() || line[0] == '#') break;
 
-            const auto expected_fields{ index_map.size() };
+            const auto expected_column_size{ column_index_map.size() };
             std::vector<std::string> token_list;
-            token_list.reserve(expected_fields);
-
-            // helper to tokenize a single line with '\'' grouping
-            auto split_tokens = [&](const std::string & text)
-            {
-                std::vector<std::string> tmp;
-                tmp.reserve(expected_fields);
-                for (size_t pos = 0; pos < text.size();)
-                {
-                    while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) ++pos;
-                    if (pos >= text.size()) break;
-                    if (text[pos] == '\'')
-                    {
-                        ++pos;
-                        auto start{ pos };
-                        while (pos < text.size() && text[pos] != '\'') ++pos;
-                        tmp.emplace_back(text.substr(start, pos - start));
-                        if (pos < text.size()) ++pos;
-                    }
-                    else
-                    {
-                        auto start{ pos };
-                        while (pos < text.size() && !std::isspace(static_cast<unsigned char>(text[pos]))) ++pos;
-                        tmp.emplace_back(text.substr(start, pos - start));
-                    }
-                }
-                return tmp;
-            };
+            token_list.reserve(expected_column_size);
 
             // initial tokens from this line
-            auto initial{ split_tokens(line) };
+            auto initial{ StringHelper::SpliteStringLineAsTokens(line, expected_column_size) };
             token_list.insert(token_list.end(), initial.begin(), initial.end());
 
             // now read continuation lines until we have all fields
             bool in_multiline{ false };
             std::string multiline_content;
             std::string next_line;
-            while (token_list.size() < expected_fields && std::getline(infile, next_line))
+            while (token_list.size() < expected_column_size && std::getline(infile, next_line))
             {
                 if (next_line.empty()) continue;
                 if (!in_multiline && next_line[0] == ';')
@@ -428,12 +399,12 @@ void CifFormat::ParseLoopBlock(
                 else
                 {
                     // normal continuation tokens
-                    auto more{ split_tokens(next_line) };
+                    auto more{ StringHelper::SpliteStringLineAsTokens(next_line, expected_column_size) };
                     token_list.insert(token_list.end(), more.begin(), more.end());
                 }
             }
 
-            row_handler(index_map, token_list);
+            table_handler(column_index_map, token_list);
         }
     }
 }
