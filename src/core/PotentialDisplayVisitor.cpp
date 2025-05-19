@@ -6,6 +6,7 @@
 #include "DataObjectBase.hpp"
 #include "PainterBase.hpp"
 #include "AtomPainter.hpp" 
+#include "AtomSelector.hpp"
 #include "ModelPainter.hpp"
 #include "ComparisonPainter.hpp"
 #include "DemoPainter.hpp"
@@ -15,7 +16,8 @@
 #include <iostream>
 #include <memory>
 
-PotentialDisplayVisitor::PotentialDisplayVisitor(void)
+PotentialDisplayVisitor::PotentialDisplayVisitor(AtomSelector * atom_selector) :
+    m_atom_selector{ atom_selector }
 {
 
 }

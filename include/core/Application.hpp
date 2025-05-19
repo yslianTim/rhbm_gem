@@ -24,7 +24,6 @@ class Application
         std::string pick_residue, veto_residue;
         std::string pick_element, veto_element;
         std::string pick_remoteness, veto_remoteness;
-        std::string pick_branch, veto_branch;
     } m_atom_selector_options;
 
     struct SphereSamplerOptions

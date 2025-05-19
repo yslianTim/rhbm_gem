@@ -4,7 +4,6 @@
 #include <string>
 #include "CommandBase.hpp"
 
-class AtomSelector;
 class SphereSampler;
 class PotentialAnalysisCommand : public CommandBase
 {
@@ -14,7 +13,6 @@ class PotentialAnalysisCommand : public CommandBase
     double m_alpha_r, m_alpha_g;
     std::string m_database_path, m_model_file_path, m_map_file_path;
     std::string m_saved_key_tag;
-    std::unique_ptr<AtomSelector> m_atom_selector;
     std::unique_ptr<SphereSampler> m_sphere_sampler;
 
 public:
@@ -35,14 +33,5 @@ public:
     void SetSamplingSize(int value);
     void SetSamplingRangeMinimum(double value);
     void SetSamplingRangeMaximum(double value);
-    void SetPickChainID(const std::string & value);
-    void SetPickResidueType(const std::string & value);
-    void SetPickElementType(const std::string & value);
-    void SetPickRemotenessType(const std::string & value);
-    void SetPickBranchType(const std::string & value);
-    void SetVetoChainID(const std::string & value);
-    void SetVetoResidueType(const std::string & value);
-    void SetVetoElementType(const std::string & value);
-    void SetVetoRemotenessType(const std::string & value);
-    void SetVetoBranchType(const std::string & value);
+
 };

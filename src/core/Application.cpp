@@ -47,16 +47,6 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetFitRangeMaximum(m_potential_analysis_options.fit_range_max);
         command->SetAlphaR(m_potential_analysis_options.alpha_r);
         command->SetAlphaG(m_potential_analysis_options.alpha_g);
-        command->SetPickChainID(m_atom_selector_options.pick_chain_id);
-        command->SetPickResidueType(m_atom_selector_options.pick_residue);
-        command->SetPickElementType(m_atom_selector_options.pick_element);
-        command->SetPickRemotenessType(m_atom_selector_options.pick_remoteness);
-        command->SetPickBranchType(m_atom_selector_options.pick_branch);
-        command->SetVetoChainID(m_atom_selector_options.veto_chain_id);
-        command->SetVetoResidueType(m_atom_selector_options.veto_residue);
-        command->SetVetoElementType(m_atom_selector_options.veto_element);
-        command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
-        command->SetVetoBranchType(m_atom_selector_options.veto_branch);
         return command;
     }
     else if (m_cli_app->got_subcommand(m_potential_display_cmd))
@@ -67,6 +57,14 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetModelKeyTagList(m_potential_display_options.model_key_tag_list);
         command->SetRefModelKeyTagList("no_charge", m_potential_display_options.sim_no_charge_key_tag_list);
         command->SetRefModelKeyTagList("with_charge", m_potential_display_options.sim_with_charge_key_tag_list);
+        command->SetPickChainID(m_atom_selector_options.pick_chain_id);
+        command->SetPickResidueType(m_atom_selector_options.pick_residue);
+        command->SetPickElementType(m_atom_selector_options.pick_element);
+        command->SetPickRemotenessType(m_atom_selector_options.pick_remoteness);
+        command->SetVetoChainID(m_atom_selector_options.veto_chain_id);
+        command->SetVetoResidueType(m_atom_selector_options.veto_residue);
+        command->SetVetoElementType(m_atom_selector_options.veto_element);
+        command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
         return command;
     }
     else if (m_cli_app->got_subcommand(m_map_simulation_cmd))
@@ -84,12 +82,10 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetPickResidueType(m_atom_selector_options.pick_residue);
         command->SetPickElementType(m_atom_selector_options.pick_element);
         command->SetPickRemotenessType(m_atom_selector_options.pick_remoteness);
-        command->SetPickBranchType(m_atom_selector_options.pick_branch);
         command->SetVetoChainID(m_atom_selector_options.veto_chain_id);
         command->SetVetoResidueType(m_atom_selector_options.veto_residue);
         command->SetVetoElementType(m_atom_selector_options.veto_element);
         command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
-        command->SetVetoBranchType(m_atom_selector_options.veto_branch);
         return command;
     }
     else
@@ -151,36 +147,6 @@ void Application::RegisterPotentialAnalysisCommand(void)
     m_potential_analysis_cmd->add_option(
         "--alpha-g", m_potential_analysis_options.alpha_g,
         "Alpha value for G")->default_val(0.2);
-    m_potential_analysis_cmd->add_option(
-        "--pick-chain", m_atom_selector_options.pick_chain_id,
-        "Pick chain ID")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--pick-residue", m_atom_selector_options.pick_residue,
-        "Pick residue type")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--pick-element", m_atom_selector_options.pick_element,
-        "Pick element type")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--pick-remoteness", m_atom_selector_options.pick_remoteness,
-        "Pick remoteness type")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--pick-branch", m_atom_selector_options.pick_branch,
-        "Pick branch type")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--veto-chain", m_atom_selector_options.veto_chain_id,
-        "Veto chain ID")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--veto-residue", m_atom_selector_options.veto_residue,
-        "Veto residue type")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--veto-element", m_atom_selector_options.veto_element,
-        "Veto element type")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--veto-remoteness", m_atom_selector_options.veto_remoteness,
-        "Veto remoteness type")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--veto-branch", m_atom_selector_options.veto_branch,
-        "Veto branch type")->default_val("");
     
     m_cli_app->callback([&]()
     {
@@ -214,6 +180,30 @@ void Application::RegisterPotentialDisplayCommand(void)
     m_potential_display_cmd->add_option(
         "-o,--folder", m_global_options.folder_path,
         "folder path for output files")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--pick-chain", m_atom_selector_options.pick_chain_id,
+        "Pick chain ID")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--pick-residue", m_atom_selector_options.pick_residue,
+        "Pick residue type")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--pick-element", m_atom_selector_options.pick_element,
+        "Pick element type")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--pick-remoteness", m_atom_selector_options.pick_remoteness,
+        "Pick remoteness type")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--veto-chain", m_atom_selector_options.veto_chain_id,
+        "Veto chain ID")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--veto-residue", m_atom_selector_options.veto_residue,
+        "Veto residue type")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--veto-element", m_atom_selector_options.veto_element,
+        "Veto element type")->default_val("");
+    m_potential_display_cmd->add_option(
+        "--veto-remoteness", m_atom_selector_options.veto_remoteness,
+        "Veto remoteness type")->default_val("");
 
     m_cli_app->callback([&]()
     {
@@ -261,9 +251,6 @@ void Application::RegisterMapSimulationCommand(void)
         "--pick-remoteness", m_atom_selector_options.pick_remoteness,
         "Pick remoteness type")->default_val("");
     m_map_simulation_cmd->add_option(
-        "--pick-branch", m_atom_selector_options.pick_branch,
-        "Pick branch type")->default_val("");
-    m_map_simulation_cmd->add_option(
         "--veto-chain", m_atom_selector_options.veto_chain_id,
         "Veto chain ID")->default_val("");
     m_map_simulation_cmd->add_option(
@@ -275,9 +262,6 @@ void Application::RegisterMapSimulationCommand(void)
     m_map_simulation_cmd->add_option(
         "--veto-remoteness", m_atom_selector_options.veto_remoteness,
         "Veto remoteness type")->default_val("");
-    m_map_simulation_cmd->add_option(
-        "--veto-branch", m_atom_selector_options.veto_branch,
-        "Veto branch type")->default_val("");
 
     m_map_simulation_cmd->callback([&]()
     {

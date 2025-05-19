@@ -35,11 +35,9 @@ public:
     void SetPickResidueType(const std::string & value);
     void SetPickElementType(const std::string & value);
     void SetPickRemotenessType(const std::string & value);
-    void SetPickBranchType(const std::string & value);
     void SetVetoChainID(const std::string & value);
     void SetVetoResidueType(const std::string & value);
     void SetVetoElementType(const std::string & value);
     void SetVetoRemotenessType(const std::string & value);
-    void SetVetoBranchType(const std::string & value);
 
 };

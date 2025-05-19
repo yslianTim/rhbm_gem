@@ -1,11 +1,13 @@
 #include "PotentialDisplayCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "PotentialDisplayVisitor.hpp"
+#include "AtomSelector.hpp"
 
 #include <iostream>
 #include <sstream>
 
-PotentialDisplayCommand::PotentialDisplayCommand(void)
+PotentialDisplayCommand::PotentialDisplayCommand(void) :
+    m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 
 }
@@ -25,7 +27,9 @@ void PotentialDisplayCommand::Execute(void)
     LoadModelObjects(data_manager.get());
     LoadRefModelObjects(data_manager.get());
 
-    auto model_displayer{ std::make_unique<PotentialDisplayVisitor>() };
+    m_atom_selector->Print();
+
+    auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
     model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);
     model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
     model_displayer->SetFolderPath(m_folder_path);
@@ -72,4 +76,44 @@ void PotentialDisplayCommand::LoadRefModelObjects(DataObjectManager * data_manag
             data_manager->LoadDataObject(key_tag);
         }
     }
+}
+
+void PotentialDisplayCommand::SetPickChainID(const std::string & value)
+{
+    m_atom_selector->PickChainID(value);
+}
+
+void PotentialDisplayCommand::SetPickResidueType(const std::string & value)
+{
+    m_atom_selector->PickResidueType(value);
+}
+
+void PotentialDisplayCommand::SetPickElementType(const std::string & value)
+{
+    m_atom_selector->PickElementType(value);
+}
+
+void PotentialDisplayCommand::SetPickRemotenessType(const std::string & value)
+{
+    m_atom_selector->PickRemotenessType(value);
+}
+
+void PotentialDisplayCommand::SetVetoChainID(const std::string & value)
+{
+    m_atom_selector->VetoChainID(value);
+}
+
+void PotentialDisplayCommand::SetVetoResidueType(const std::string & value)
+{
+    m_atom_selector->VetoResidueType(value);
+}
+
+void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
+{
+    m_atom_selector->VetoElementType(value);
+}
+
+void PotentialDisplayCommand::SetVetoRemotenessType(const std::string & value)
+{
+    m_atom_selector->VetoRemotenessType(value);
 }

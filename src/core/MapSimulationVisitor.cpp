@@ -32,8 +32,7 @@ void MapSimulationVisitor::VisitAtomObject(AtomObject * data_object)
             data_object->GetChainID(),
             data_object->GetResidue(),
             data_object->GetElement(),
-            data_object->GetRemoteness(),
-            data_object->GetBranch()
+            data_object->GetRemoteness()
         )
     };
     data_object->SetSelectedFlag(selected_flag);

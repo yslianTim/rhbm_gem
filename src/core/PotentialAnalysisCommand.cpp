@@ -1,13 +1,12 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "PotentialAnalysisVisitor.hpp"
-#include "AtomSelector.hpp"
+
 #include "SphereSampler.hpp"
 
 #include <iostream>
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
-    m_atom_selector{ std::make_unique<AtomSelector>() },
     m_sphere_sampler{ std::make_unique<SphereSampler>() }
 {
 
@@ -26,10 +25,9 @@ void PotentialAnalysisCommand::Execute(void)
     data_manager->ProcessFile(m_model_file_path, "model");
     data_manager->ProcessFile(m_map_file_path, "map");
 
-    m_atom_selector->Print();
     m_sphere_sampler->Print();
 
-    auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_atom_selector.get(), m_sphere_sampler.get()) };
+    auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_sphere_sampler.get()) };
     analyzer->SetAsymmetryFlag(m_is_asymmetry);
     analyzer->SetThreadSize(static_cast<unsigned int>(m_thread_size));
     analyzer->SetModelObjectKeyTag("model");
@@ -62,54 +60,4 @@ void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)
 void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
 {
     m_sphere_sampler->SetDistanceRangeMaximum(value);
-}
-
-void PotentialAnalysisCommand::SetPickChainID(const std::string & value)
-{
-    m_atom_selector->PickChainID(value);
-}
-
-void PotentialAnalysisCommand::SetPickResidueType(const std::string & value)
-{
-    m_atom_selector->PickResidueType(value);
-}
-
-void PotentialAnalysisCommand::SetPickElementType(const std::string & value)
-{
-    m_atom_selector->PickElementType(value);
-}
-
-void PotentialAnalysisCommand::SetPickRemotenessType(const std::string & value)
-{
-    m_atom_selector->PickRemotenessType(value);
-}
-
-void PotentialAnalysisCommand::SetPickBranchType(const std::string & value)
-{
-    m_atom_selector->PickBranchType(value);
-}
-
-void PotentialAnalysisCommand::SetVetoChainID(const std::string & value)
-{
-    m_atom_selector->VetoChainID(value);
-}
-
-void PotentialAnalysisCommand::SetVetoResidueType(const std::string & value)
-{
-    m_atom_selector->VetoResidueType(value);
-}
-
-void PotentialAnalysisCommand::SetVetoElementType(const std::string & value)
-{
-    m_atom_selector->VetoElementType(value);
-}
-
-void PotentialAnalysisCommand::SetVetoRemotenessType(const std::string & value)
-{
-    m_atom_selector->VetoRemotenessType(value);
-}
-
-void PotentialAnalysisCommand::SetVetoBranchType(const std::string & value)
-{
-    m_atom_selector->VetoBranchType(value);
 }

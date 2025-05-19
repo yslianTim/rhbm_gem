@@ -3,7 +3,6 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
-#include "AtomSelector.hpp"
 #include "SphereSampler.hpp"
 #include "MapInterpolationVisitor.hpp"
 #include "HRLModelHelper.hpp"
@@ -21,12 +20,10 @@
 #include <fstream>
 
 PotentialAnalysisVisitor::PotentialAnalysisVisitor(
-    AtomSelector * atom_selector,
     SphereSampler * sphere_sampler) :
     m_thread_size{ 1 },
     m_alpha_r{ 0.0 }, m_alpha_g{ 0.0 },
     m_x_min{ 0.0 }, m_x_max{ 0.0 },
-    m_atom_selector{ atom_selector },
     m_sphere_sampler{ sphere_sampler }
 {
 
@@ -39,22 +36,14 @@ PotentialAnalysisVisitor::~PotentialAnalysisVisitor()
 
 void PotentialAnalysisVisitor::VisitAtomObject(AtomObject * data_object)
 {
-    bool selected_flag
-    {
-        m_atom_selector->GetSelectionFlag(
-            data_object->GetChainID(),
-            data_object->GetResidue(),
-            data_object->GetElement(),
-            data_object->GetRemoteness(),
-            data_object->GetBranch()
-        )
-    };
-    data_object->SetSelectedFlag(selected_flag);
+    if (data_object == nullptr) return;
+    data_object->SetSelectedFlag(true);
 }
 
 void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitModelObject");
+    if (data_object == nullptr) return;
     data_object->FilterAtomFromSymmetry(m_is_asymmetry);
     data_object->Update();
     m_selected_atom_list = data_object->GetSelectedAtomList();
@@ -69,6 +58,7 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitMapObject");
+    if (data_object == nullptr) return;
     MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler };
     for (auto & atom : m_selected_atom_list)
     {
