@@ -56,8 +56,6 @@ private:
 
     void PrintGausResultInResidueIDPad(TPad * pad, TH2 * hist, int par_id=0);
     void PrintInfoInResidueIDPad(TVirtualPad * pad, TPaveText * text, const ModelObject * model_object, const std::string & chain_id, int residue_size);
-
-    void PrintInfoInRankPad(TVirtualPad * pad, TPaveText * text, const ModelObject * model_object, int chain_size, int residue_size);
     #endif
 
 };

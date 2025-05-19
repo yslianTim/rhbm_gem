@@ -4,7 +4,6 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
 #include "DataObjectVisitorBase.hpp"
 
 class SphereSampler;
@@ -18,7 +17,6 @@ class PotentialAnalysisVisitor : public DataObjectVisitorBase
     std::string m_map_key_tag, m_model_key_tag;
     SphereSampler * m_sphere_sampler;
     std::vector<AtomObject *> m_selected_atom_list;
-    std::unordered_map<std::string, std::unordered_set<uint64_t>> m_group_set_map;
 
 public:
     PotentialAnalysisVisitor(SphereSampler * sphere_sampler);
@@ -37,8 +35,7 @@ public:
     void SetModelObjectKeyTag(const std::string & value);
 
 private:
-    void RunAtomClassification(const std::string & class_key, ModelObject * model_object);
-    void RunPotentialFitting(const std::string & class_key, ModelObject * model_object);
+    void RunPotentialFitting(ModelObject * model_object);
     void RunMapValueDumping(MapObject * map_object); // For test, to be move to other place
     void RunAtomPositionDumping(void); // For test, to be move to other place
 };

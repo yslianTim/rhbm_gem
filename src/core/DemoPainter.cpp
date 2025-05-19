@@ -1021,17 +1021,22 @@ void DemoPainter::PaintAtomRankMainChain(
 
             if (i == col_size - 1)
             {
-                auto residue_size
-                {
-                    rank_hist_list[j][0].at(static_cast<size_t>(i))->GetEntries() +
-                    rank_hist_list[j][1].at(static_cast<size_t>(i))->GetEntries() +
-                    rank_hist_list[j][2].at(static_cast<size_t>(i))->GetEntries()
-                };
+                auto other_size{ static_cast<int>(rank_hist_list[j][0].at(static_cast<size_t>(i))->GetEntries()) };
+                auto gly_size{ static_cast<int>(rank_hist_list[j][1].at(static_cast<size_t>(i))->GetEntries()) };
+                auto pro_size{ static_cast<int>(rank_hist_list[j][2].at(static_cast<size_t>(i))->GetEntries()) };
                 info_text[j] = ROOTHelper::CreatePaveText(1.01, 0.01, 1.77, 0.99, "nbNDC ARC", true);
-                PrintInfoInRankPad(
-                    gPad, info_text[j].get(),
-                    m_model_object_list.at(static_cast<size_t>(j)), chain_size[j],
-                    static_cast<int>(residue_size));
+                ROOTHelper::SetPaveTextDefaultStyle(info_text[j].get());
+                ROOTHelper::SetPaveAttribute(info_text[j].get(), 0, 0.1);
+                ROOTHelper::SetFillAttribute(info_text[j].get(), 1001, kAzure-7, 0.5);
+                ROOTHelper::SetTextAttribute(info_text[j].get(), 30.0f, 133, 12);
+                ROOTHelper::SetLineAttribute(info_text[j].get(), 1, 0);
+                info_text[j]->AddText("---------------------");
+                info_text[j]->AddText(("#font[102]{PDB-" + m_model_object_list.at(static_cast<size_t>(j))->GetPdbID() +"}").data());
+                info_text[j]->AddText(("#font[102]{"+ m_model_object_list.at(static_cast<size_t>(j))->GetEmdID() +"}").data());
+                info_text[j]->AddText(Form("#GLY = %d", gly_size));
+                info_text[j]->AddText(Form("#PRO = %d", pro_size));
+                info_text[j]->AddText(Form("#Others = %d", other_size));
+                info_text[j]->AddText("---------------------");
                 info_text[j]->Draw();
             }
 
@@ -1306,25 +1311,6 @@ void DemoPainter::PrintInfoInResidueIDPad(
     text->AddText(("#font[102]{PDB-" + model_object->GetPdbID() +"}").data());
     text->AddText(("#font[102]{"+ model_object->GetEmdID() +"}").data());
     text->AddText(Form("Chain ID = %s", chain_id.data()));
-    text->AddText(Form("#Residues = %d", residue_size));
-    text->AddText("---------------------");
-    pad->Update();
-}
-
-void DemoPainter::PrintInfoInRankPad(
-    TVirtualPad * pad, TPaveText * text, const ModelObject * model_object,
-    int chain_size, int residue_size)
-{
-    pad->cd();
-    ROOTHelper::SetPaveTextDefaultStyle(text);
-    ROOTHelper::SetPaveAttribute(text, 0, 0.1);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7, 0.5);
-    ROOTHelper::SetTextAttribute(text, 30.0f, 133, 12);
-    ROOTHelper::SetLineAttribute(text, 1, 0);
-    text->AddText("---------------------");
-    text->AddText(("#font[102]{PDB-" + model_object->GetPdbID() +"}").data());
-    text->AddText(("#font[102]{"+ model_object->GetEmdID() +"}").data());
-    text->AddText(Form("#Chains = %d", chain_size));
     text->AddText(Form("#Residues = %d", residue_size));
     text->AddText("---------------------");
     pad->Update();

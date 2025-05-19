@@ -39,16 +39,24 @@ void CifFormat::PrintHeader(void) const
     std::cout <<"#Entities = "<< m_data_block->GetEntityTypeMap().size() << std::endl;
     for (auto & [entity_id, chain_id] : m_data_block->GetChainIDListMap())
     {
-        std::cout << entity_id <<": ";
-        for (auto & chain : chain_id)
+        std::cout <<"[" << entity_id <<"] : ";
+        for (size_t i = 0; i < chain_id.size(); i++)
         {
-            std::cout << chain << ",";
+            std::cout << chain_id.at(i);
+            if (i < chain_id.size() - 1) std::cout << ",";
         }
         std::cout << std::endl;
     }
+
+    auto element_size{ m_data_block->GetElementTypeList().size() };
+    std::cout <<"#Elementry types = "<< element_size << std::endl;
+    std::cout <<"Element type list : ";
+    size_t count{ 0 };
     for (auto element : m_data_block->GetElementTypeList())
     {
-        std::cout << AtomicInfoHelper::GetLabel(element) << ",";
+        std::cout << AtomicInfoHelper::GetLabel(element);
+        if (count < element_size - 1) std::cout << ",";
+        count++;
     }
     std::cout << std::endl;
 }
@@ -372,19 +380,19 @@ void CifFormat::ParseLoopBlock(
             std::string next_line;
             while (token_list.size() < expected_column_size && std::getline(infile, next_line))
             {
-                if (next_line.empty()) continue;
-                if (!in_multiline && next_line[0] == ';')
+                if (next_line.empty() == true) continue;
+                if (in_multiline == false && next_line[0] == ';')
                 {
                     // start of multiline literal for the next field
                     in_multiline = true;
                     multiline_content.clear();
                     // strip leading semicolon
                     auto content{ next_line.substr(1) };
-                    if (!content.empty()) multiline_content = content;
+                    if (content.empty() == false) multiline_content = content;
                 }
-                else if (in_multiline)
+                else if (in_multiline == true)
                 {
-                    if (!next_line.empty() && next_line[0] == ';')
+                    if (next_line.empty() == false && next_line[0] == ';')
                     {
                         // end of multiline literal
                         token_list.emplace_back(std::move(multiline_content));
