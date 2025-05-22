@@ -773,7 +773,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     ROOTHelper::SetTextAttribute(legend.get(), 20.0f, 133, 12, 0.0);
     legend->SetMargin(0.15f);
     legend->AddEntry(gaus_function[0].get(),
-        "Single Gaus Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+        "Single Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
     legend->AddEntry(map_value_graph_list[0].at(0).get(),
         "Map Value Distribution (Median)", "l");
     legend->Draw();
