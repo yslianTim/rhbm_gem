@@ -35,11 +35,12 @@ public:
 private:
     void PaintAtomMapValueExample(const std::string & name);
     void PaintGroupGausMainChainSummary(const std::string & name);
+    void PaintGroupGausMainChainSingle(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausSideChainSummary(const std::string & name);
     void PaintElementClassGroupGausToFSC(const std::string & name);
     void PaintWidthToBfactorScatterPlotSummary(const std::string & name);
     void PaintResidueClassWidthScatterPlot(const std::string & name, int par_id=0, bool draw_box_plot=false);
-    void PaintAtomGausMainChainDemo(const std::string & name, int par_id=0);
+    void PaintAtomGausMainChainDemo(ModelObject * model_object, const std::string & name, int par_id=0);
     void PaintAtomGausMainChain(const std::string & name, int par_id=0);
     void PaintAtomRankMainChain(const std::string & name, int par_id=0);
 
@@ -47,6 +48,8 @@ private:
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
     void PrintIconMainChainPad(TPad * pad, TPaveText * text, double resolution, bool is_bottom_pad, bool is_top_pad);
     void PrintInfoMainChainPad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id, bool is_bottom_pad, bool is_top_pad);
+
+    void PrintGausResultGlobalPad(TPad * pad, TH2 * hist, double left_margin, double right_margin, double bottom_margin, double top_margin, bool is_right_side_pad);
 
     void PrintGausTitlePad(TPad * pad, TPaveText * text, const std::string & title, float text_size);
     void PrintGausResultPad(TPad * pad, TH2 * hist, bool draw_x_axis, bool draw_title_label, bool is_right_side_pad);
