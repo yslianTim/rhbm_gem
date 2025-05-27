@@ -37,6 +37,7 @@ private:
     void PaintGroupGausMainChainSummary(const std::string & name);
     void PaintGroupGausMainChainSingle(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausSideChainSummary(const std::string & name);
+    void PaintWidthScatterPlotSingle(ModelObject * model_object, const std::string & name, bool draw_box_plot=false);
     void PaintElementClassGroupGausToFSC(const std::string & name);
     void PaintWidthToBfactorScatterPlotSummary(const std::string & name);
     void PaintResidueClassWidthScatterPlot(const std::string & name, int par_id=0, bool draw_box_plot=false);

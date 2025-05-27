@@ -3,6 +3,7 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
 #include "MapSimulationCommand.hpp"
+#include "ChargeAnalysisCommand.hpp"
 #include "ScopeTimer.hpp"
 
 #include <CLI/CLI.hpp>
@@ -10,7 +11,8 @@
 Application::Application(CLI::App * app) :
     m_cli_app{ app }, m_potential_analysis_cmd{ nullptr },
     m_potential_display_cmd{ nullptr },
-    m_map_simulation_cmd{ nullptr }, m_selected_command{ "" }
+    m_map_simulation_cmd{ nullptr }, m_charge_analysis_cmd{ nullptr },
+    m_selected_command{ "" }
 {
     if (m_cli_app == nullptr)
     {
@@ -88,6 +90,21 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
         return command;
     }
+    else if (m_cli_app->got_subcommand(m_charge_analysis_cmd))
+    {
+        auto command{ std::make_unique<ChargeAnalysisCommand>() };
+        command->SetThreadSize(m_global_options.thread_size);
+        command->SetAsymmetryFlag(m_charge_analysis_options.is_asymmetry);
+        command->SetSavedKeyTag(m_charge_analysis_options.saved_key_tag);
+        command->SetDatabasePath(m_global_options.database_path);
+        command->SetModelFilePath(m_charge_analysis_options.model_file_path);
+        command->SetMapFilePath(m_charge_analysis_options.map_file_path);
+        command->SetFitRangeMinimum(m_charge_analysis_options.fit_range_min);
+        command->SetFitRangeMaximum(m_charge_analysis_options.fit_range_max);
+        command->SetAlphaR(m_charge_analysis_options.alpha_r);
+        command->SetAlphaG(m_charge_analysis_options.alpha_g);
+        return command;
+    }
     else
     {
         std::cerr <<"The sub-command is not defined!"<< std::endl;
@@ -100,6 +117,7 @@ void Application::RegisterCommands(void)
     RegisterPotentialAnalysisCommand();
     RegisterPotentialDisplayCommand();
     RegisterMapSimulationCommand();
+    RegisterChargeAnalysisCommand();
 }
 
 void Application::RegisterPotentialAnalysisCommand(void)
@@ -266,5 +284,48 @@ void Application::RegisterMapSimulationCommand(void)
     m_map_simulation_cmd->callback([&]()
     {
         m_selected_command = "map_simulation";
+    });
+}
+
+void Application::RegisterChargeAnalysisCommand(void)
+{
+    m_charge_analysis_cmd = m_cli_app->add_subcommand("charge_analysis", "Run charge analysis");
+    m_charge_analysis_cmd->add_option(
+        "-a,--model", m_potential_analysis_options.model_file_path,
+        "Model file path")->required();
+    m_charge_analysis_cmd->add_option(
+        "-m,--map", m_potential_analysis_options.map_file_path,
+        "Map file path")->required();
+    m_charge_analysis_cmd->add_option(
+        "-d,--database", m_global_options.database_path,
+        "Database file path")->default_val("database.sqlite");
+    m_charge_analysis_cmd->add_option(
+        "-k,--save-key", m_potential_analysis_options.saved_key_tag,
+        "New key tag for saving ModelObject results into database")->default_val("");
+    m_charge_analysis_cmd->add_option(
+        "-j,--jobs", m_global_options.thread_size,
+        "Number of threads")->default_val(1);
+    m_charge_analysis_cmd->add_option(
+        "-v,--verbose", m_global_options.verbose_level,
+        "Verbose level")->default_val(1);
+    m_charge_analysis_cmd->add_option(
+        "--asymmetry", m_potential_analysis_options.is_asymmetry,
+        "Turn On/Off asymmetry flag")->default_val(false);
+    m_charge_analysis_cmd->add_option(
+        "--fit-min", m_potential_analysis_options.fit_range_min,
+        "Minimum fitting range")->default_val(0.0);
+    m_charge_analysis_cmd->add_option(
+        "--fit-max", m_potential_analysis_options.fit_range_max,
+        "Maximum fitting range")->default_val(1.0);
+    m_charge_analysis_cmd->add_option(
+        "--alpha-r", m_potential_analysis_options.alpha_r,
+        "Alpha value for R")->default_val(0.1);
+    m_charge_analysis_cmd->add_option(
+        "--alpha-g", m_potential_analysis_options.alpha_g,
+        "Alpha value for G")->default_val(0.2);
+    
+    m_cli_app->callback([&]()
+    {
+        m_selected_command = "charge_analysis";
     });
 }
