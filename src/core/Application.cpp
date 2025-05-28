@@ -102,6 +102,9 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetDatabasePath(m_global_options.database_path);
         command->SetModelFilePath(m_charge_analysis_options.model_file_path);
         command->SetMapFilePath(m_charge_analysis_options.map_file_path);
+        command->SetSimulatedNeutralMapFilePath(m_charge_analysis_options.sim_neutral_map_file_path);
+        command->SetSimulatedPositiveMapFilePath(m_charge_analysis_options.sim_positive_map_file_path);
+        command->SetSimulatedNegativeMapFilePath(m_charge_analysis_options.sim_negative_map_file_path);
         command->SetFitRangeMinimum(m_charge_analysis_options.fit_range_min);
         command->SetFitRangeMaximum(m_charge_analysis_options.fit_range_max);
         command->SetAlphaR(m_charge_analysis_options.alpha_r);
@@ -294,16 +297,25 @@ void Application::RegisterChargeAnalysisCommand(void)
 {
     m_charge_analysis_cmd = m_cli_app->add_subcommand("charge_analysis", "Run charge analysis");
     m_charge_analysis_cmd->add_option(
-        "-a,--model", m_potential_analysis_options.model_file_path,
+        "-a,--model", m_charge_analysis_options.model_file_path,
         "Model file path")->required();
     m_charge_analysis_cmd->add_option(
-        "-m,--map", m_potential_analysis_options.map_file_path,
+        "-m,--map", m_charge_analysis_options.map_file_path,
         "Map file path")->required();
+    m_charge_analysis_cmd->add_option(
+        "--map-neutral", m_charge_analysis_options.sim_neutral_map_file_path,
+        "Simulated neutral map file path")->required();
+    m_charge_analysis_cmd->add_option(
+        "--map-pos", m_charge_analysis_options.sim_positive_map_file_path,
+        "Simulated positive map file path")->required();
+    m_charge_analysis_cmd->add_option(
+        "--map-neg", m_charge_analysis_options.sim_negative_map_file_path,
+        "Simulated negative map file path")->required();
     m_charge_analysis_cmd->add_option(
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");
     m_charge_analysis_cmd->add_option(
-        "-k,--save-key", m_potential_analysis_options.saved_key_tag,
+        "-k,--save-key", m_charge_analysis_options.saved_key_tag,
         "New key tag for saving ModelObject results into database")->default_val("");
     m_charge_analysis_cmd->add_option(
         "-j,--jobs", m_global_options.thread_size,
@@ -312,11 +324,11 @@ void Application::RegisterChargeAnalysisCommand(void)
         "-v,--verbose", m_global_options.verbose_level,
         "Verbose level")->default_val(1);
     m_charge_analysis_cmd->add_option(
-        "--asymmetry", m_potential_analysis_options.is_asymmetry,
+        "--asymmetry", m_charge_analysis_options.is_asymmetry,
         "Turn On/Off asymmetry flag")->default_val(false);
     m_charge_analysis_cmd->add_option(
         "-s,--sampling", m_sphere_sampler_options.sampling_size,
-        "Number of sampling points per atom")->default_val(1500);
+        "Number of sampling points per atom")->default_val(100);
     m_charge_analysis_cmd->add_option(
         "--sampling-min", m_sphere_sampler_options.sampling_range_min,
         "Minimum sampling range")->default_val(0.0);
@@ -324,16 +336,16 @@ void Application::RegisterChargeAnalysisCommand(void)
         "--sampling-max", m_sphere_sampler_options.sampling_range_max,
         "Maximum sampling range")->default_val(1.5);
     m_charge_analysis_cmd->add_option(
-        "--fit-min", m_potential_analysis_options.fit_range_min,
+        "--fit-min", m_charge_analysis_options.fit_range_min,
         "Minimum fitting range")->default_val(0.0);
     m_charge_analysis_cmd->add_option(
-        "--fit-max", m_potential_analysis_options.fit_range_max,
+        "--fit-max", m_charge_analysis_options.fit_range_max,
         "Maximum fitting range")->default_val(1.0);
     m_charge_analysis_cmd->add_option(
-        "--alpha-r", m_potential_analysis_options.alpha_r,
+        "--alpha-r", m_charge_analysis_options.alpha_r,
         "Alpha value for R")->default_val(0.1);
     m_charge_analysis_cmd->add_option(
-        "--alpha-g", m_potential_analysis_options.alpha_g,
+        "--alpha-g", m_charge_analysis_options.alpha_g,
         "Alpha value for G")->default_val(0.2);
     
     m_cli_app->callback([&]()

@@ -6,6 +6,7 @@
 #include "DataObjectBase.hpp"
 
 class AtomicPotentialEntry;
+class AtomicChargeEntry;
 enum class Residue : uint16_t;
 enum class Element : uint16_t;
 enum class Remoteness : uint8_t;
@@ -30,6 +31,7 @@ class AtomObject : public DataObjectBase
     std::unordered_map<std::string, float> m_alternate_occupancy_map;
     std::unordered_map<std::string, float> m_alternate_temperature_map;
     std::unique_ptr<AtomicPotentialEntry> m_atomic_potential_entry;
+    std::unique_ptr<AtomicChargeEntry> m_atomic_charge_entry;
 
 public:
     AtomObject(void);
@@ -63,6 +65,7 @@ public:
     void SetPosition(float x, float y, float z);
     void SetPosition(const std::array<float, 3> & value) { m_position = value; }
     void AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry);
+    void AddAtomicChargeEntry(std::unique_ptr<AtomicChargeEntry> entry);
     void AddAlternatePosition(const std::string & indicator, const std::array<float, 3> & value);
     void AddAlternateOccupancy(const std::string & indicator, float value);
     void AddAlternateTemperature(const std::string & indicator, float value);
@@ -85,6 +88,7 @@ public:
     std::array<float, 3> GetPosition(void) const { return m_position; }
     const std::array<float, 3> & GetPositionRef(void) const { return m_position; }
     AtomicPotentialEntry * GetAtomicPotentialEntry(void) const { return m_atomic_potential_entry.get(); }
+    AtomicChargeEntry * GetAtomicChargeEntry(void) const { return m_atomic_charge_entry.get(); }
 
 private:
     

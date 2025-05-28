@@ -2,6 +2,7 @@
 #include "AtomObject.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "GroupChargeEntry.hpp"
 #include "ArrayStats.hpp"
 
 #include <iostream>
@@ -71,6 +72,12 @@ void ModelObject::AddGroupPotentialEntry(
     const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
 {
     m_group_potential_entry_map[class_key] = std::move(entry);
+}
+
+void ModelObject::AddGroupChargeEntry(
+    const std::string & class_key, std::unique_ptr<GroupChargeEntry> & entry)
+{
+    m_group_charge_entry_map[class_key] = std::move(entry);
 }
 
 void ModelObject::BuildKDTreeRoot(void)
@@ -146,10 +153,21 @@ GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & cl
     return m_group_potential_entry_map.at(class_key).get();
 }
 
+GroupChargeEntry * ModelObject::GetGroupChargeEntry(const std::string & class_key) const
+{
+    return m_group_charge_entry_map.at(class_key).get();
+}
+
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
 ModelObject::GetGroupPotentialEntryMap(void) const
 {
     return m_group_potential_entry_map;
+}
+
+const std::unordered_map<std::string, std::unique_ptr<GroupChargeEntry>> &
+ModelObject::GetGroupChargeEntryMap(void) const
+{
+    return m_group_charge_entry_map;
 }
 
 void ModelObject::BuildSelectedAtomList(void)

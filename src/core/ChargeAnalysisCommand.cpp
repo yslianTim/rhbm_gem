@@ -23,6 +23,9 @@ void ChargeAnalysisCommand::Execute(void)
     auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
     data_manager->ProcessFile(m_model_file_path, "model");
     data_manager->ProcessFile(m_map_file_path, "map");
+    data_manager->ProcessFile(m_sim_neutral_map_file_path, "map_neutral");
+    data_manager->ProcessFile(m_sim_positive_map_file_path, "map_positive");
+    data_manager->ProcessFile(m_sim_negative_map_file_path, "map_negative");
 
     m_sphere_sampler->Print();
 
@@ -31,6 +34,9 @@ void ChargeAnalysisCommand::Execute(void)
     analyzer->SetThreadSize(static_cast<unsigned int>(m_thread_size));
     analyzer->SetModelObjectKeyTag("model");
     analyzer->SetMapObjectKeyTag("map");
+    analyzer->SetNeutralMapObjectKeyTag("map_neutral");
+    analyzer->SetPositiveMapObjectKeyTag("map_positive");
+    analyzer->SetNegativeMapObjectKeyTag("map_negative");
     analyzer->SetFitRange(m_fit_range_min, m_fit_range_max);
     analyzer->SetAlphaR(m_alpha_r);
     analyzer->SetAlphaG(m_alpha_g);

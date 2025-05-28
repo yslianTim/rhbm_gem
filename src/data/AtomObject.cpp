@@ -2,6 +2,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "AtomicPotentialEntry.hpp"
+#include "AtomicChargeEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
 
@@ -16,7 +17,8 @@ AtomObject::AtomObject(void) :
     m_residue{ Residue::UNK }, m_element{ Element::UNK },
     m_remoteness{ Remoteness::UNK }, m_branch{ Branch::UNK },
     m_structure{ Structure::UNK },
-    m_position{ 0.0, 0.0, 0.0 }, m_atomic_potential_entry{ nullptr }
+    m_position{ 0.0, 0.0, 0.0 },
+    m_atomic_potential_entry{ nullptr }, m_atomic_charge_entry{ nullptr }
 {
 
 }
@@ -112,6 +114,11 @@ std::string AtomObject::GetInfo(void) const
 void AtomObject::AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry)
 {
     m_atomic_potential_entry = std::move(entry);
+}
+
+void AtomObject::AddAtomicChargeEntry(std::unique_ptr<AtomicChargeEntry> entry)
+{
+    m_atomic_charge_entry = std::move(entry);
 }
 
 void AtomObject::AddAlternatePosition(

@@ -15,6 +15,7 @@ class ChargeAnalysisVisitor : public DataObjectVisitorBase
     double m_alpha_r, m_alpha_g;
     double m_x_min, m_x_max;
     std::string m_map_key_tag, m_model_key_tag;
+    std::string m_neutral_map_key_tag, m_positive_map_key_tag, m_negative_map_key_tag;
     SphereSampler * m_sphere_sampler;
     std::vector<AtomObject *> m_selected_atom_list;
 
@@ -33,7 +34,11 @@ public:
     void SetAlphaG(double alpha_g);
     void SetMapObjectKeyTag(const std::string & value);
     void SetModelObjectKeyTag(const std::string & value);
+    void SetNeutralMapObjectKeyTag(const std::string & value);
+    void SetPositiveMapObjectKeyTag(const std::string & value);
+    void SetNegativeMapObjectKeyTag(const std::string & value);
 
 private:
+    void RunChargeFitting(ModelObject * model_object);
 
 };

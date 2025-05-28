@@ -6,7 +6,6 @@
 #include "SphereSampler.hpp"
 #include "MapInterpolationVisitor.hpp"
 #include "HRLModelHelper.hpp"
-#include "GausLinearTransformHelper.hpp"
 #include "ScopeTimer.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
@@ -14,6 +13,7 @@
 #include "KeyPacker.hpp"
 #include "ArrayStats.hpp"
 #include "AtomClassifier.hpp"
+#include "GausLinearTransformHelper.hpp"
 
 #include <iostream>
 #include <tuple>

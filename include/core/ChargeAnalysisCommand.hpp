@@ -12,6 +12,7 @@ class ChargeAnalysisCommand : public CommandBase
     double m_fit_range_min, m_fit_range_max;
     double m_alpha_r, m_alpha_g;
     std::string m_database_path, m_model_file_path, m_map_file_path;
+    std::string m_sim_neutral_map_file_path, m_sim_positive_map_file_path, m_sim_negative_map_file_path;
     std::string m_saved_key_tag;
     std::unique_ptr<SphereSampler> m_sphere_sampler;
 
@@ -28,6 +29,9 @@ public:
     void SetDatabasePath(const std::string & path) { m_database_path = path; }
     void SetModelFilePath(const std::string & path) { m_model_file_path = path; }
     void SetMapFilePath(const std::string & path) { m_map_file_path = path; }
+    void SetSimulatedNeutralMapFilePath(const std::string & path) { m_sim_neutral_map_file_path = path; }
+    void SetSimulatedPositiveMapFilePath(const std::string & path) { m_sim_positive_map_file_path = path; }
+    void SetSimulatedNegativeMapFilePath(const std::string & path) { m_sim_negative_map_file_path = path; }
     void SetSavedKeyTag(const std::string & tag) { m_saved_key_tag = tag; }
     void SetThreadSize(int value);
     void SetSamplingSize(int value);

@@ -131,14 +131,38 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
             auto distance{
                 ArrayStats<float>::ComputeNorm(query_pseudo_atom->GetPosition(), atom->GetPosition())
             };
-            auto charge{ (m_partial_charge_choice == 0) ? 0.0 :
-                AminoAcidInfoHelper::GetPartialCharge(
-                    atom->GetResidue(),
-                    atom->GetElement(),
-                    atom->GetRemoteness(),
-                    atom->GetBranch(),
-                    atom->GetStructure())
-            };
+            //auto charge{ (m_partial_charge_choice == 0) ? 0.0 :
+            //    AminoAcidInfoHelper::GetPartialCharge(
+            //        atom->GetResidue(),
+            //        atom->GetElement(),
+            //        atom->GetRemoteness(),
+            //        atom->GetBranch(),
+            //        atom->GetStructure())
+            //};
+            auto charge{ 0.0 };
+            switch (m_partial_charge_choice)
+            {
+                case 0: // Neutral
+                    charge = 0.0;
+                    break;
+                case 1: // Partial Charge
+                    charge = AminoAcidInfoHelper::GetPartialCharge(
+                        atom->GetResidue(),
+                        atom->GetElement(),
+                        atom->GetRemoteness(),
+                        atom->GetBranch(),
+                        atom->GetStructure());
+                    break;
+                case 2: // +1 Positive Charge
+                    charge = 1.0;
+                    break;
+                case 3: // -1 Negative Charge
+                    charge = -1.0;
+                    break;
+                default:
+                    std::cerr << "Error: Invalid partial charge choice." << std::endl;
+                    break;
+            }
             map_value_array[i] += static_cast<float>(
                 electric_potential->GetPotentialValue(atom->GetElement(), distance, charge)
             );

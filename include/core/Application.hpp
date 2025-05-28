@@ -67,6 +67,9 @@ class Application
         double alpha_r, alpha_g;
         std::string model_file_path;
         std::string map_file_path;
+        std::string sim_neutral_map_file_path;
+        std::string sim_positive_map_file_path;
+        std::string sim_negative_map_file_path;
         std::string saved_key_tag;
     } m_charge_analysis_options;
 
