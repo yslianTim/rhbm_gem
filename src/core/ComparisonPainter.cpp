@@ -21,6 +21,7 @@
 #include <TMarker.h>
 #include <TAxis.h>
 #include <TH2.h>
+#include <TLatex.h>
 #endif
 
 #include <tuple>
@@ -64,19 +65,19 @@ void ComparisonPainter::Painting(void)
 
         if (m_model_object_list.size() != 0 && m_ref_model_object_list_map.size() == 2 && sim_with_charge_model_object_list.size() > 1)
         {
-            PaintSimulationGaus("figure_3_a.pdf");
+            //PaintSimulationGaus("figure_3_a.pdf");
             PaintGausEstimateComparison("figure_3_b.pdf");
         }
         
         if (sim_with_charge_model_object_list.size() > 1)
         {
-            PaintSimulationGausRatio("figure_2_c.pdf", sim_with_charge_model_object_list);
+            //PaintSimulationGausRatio("figure_2_c.pdf", sim_with_charge_model_object_list);
         }
 
         if (m_model_object_list.size() == 1 && sim_with_charge_model_object_list.size() == 1)
         {
-            PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_with_charge_model_object_list.at(0));
-            PainResidueClassGausComparison("figure_width_comparison.pdf", m_model_object_list.at(0), sim_with_charge_model_object_list.at(0), 1);
+            //PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_with_charge_model_object_list.at(0));
+            //PainResidueClassGausComparison("figure_width_comparison.pdf", m_model_object_list.at(0), sim_with_charge_model_object_list.at(0), 1);
         }
     }
 }
@@ -92,11 +93,11 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
-    const int column_size{ 4 };
+    const int col_size{ 4 };
     const int row_size{ 2 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 950, 600) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.1f, 0.01f, 0.11f, 0.07f, 0.01f, 0.005f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.1f, 0.01f, 0.11f, 0.07f, 0.01f, 0.005f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     
@@ -160,10 +161,10 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
         y_max[j] = std::get<1>(y_range);
     }
 
-    std::unique_ptr<TH2> frame[column_size][row_size];
-    std::unique_ptr<TPaveText> title_text[column_size];
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    std::unique_ptr<TPaveText> title_text[col_size];
     std::unique_ptr<TLegend> legend;
-    for (int i = 0; i < column_size; i++)
+    for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
         {
@@ -187,7 +188,7 @@ void ComparisonPainter::PaintSimulationGaus(const std::string & name)
             frame[i][j]->Draw();
             sim_with_charge_graph[i][j]->Draw("PL X0");
             sim_no_charge_graph[i][j]->Draw("PL X0");
-            if (i == column_size - 1 && j == row_size - 1)
+            if (i == col_size - 1 && j == row_size - 1)
             {
                 legend = ROOTHelper::CreateLegend(0.1, 0.7, 0.9, 0.99, true);
                 ROOTHelper::SetLegendDefaultStyle(legend.get());
@@ -221,15 +222,15 @@ void ComparisonPainter::PaintSimulationGausRatio(
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
-    const int column_size{ 2 };
+    const int col_size{ 2 };
     const int row_size{ 1 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 600) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.11f, 0.11f, 0.15f, 0.05f, 0.01f, 0.01f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.11f, 0.11f, 0.15f, 0.05f, 0.01f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
     
     const int primary_element_size{ 4 };
-    const std::string y_axis_title[column_size]
+    const std::string y_axis_title[col_size]
     {
         "Amplitude Ratio A_{C#alpha} / A_{C}",
         "Width Ratio #tau_{C#alpha} / #tau_{C}"
@@ -246,9 +247,9 @@ void ComparisonPainter::PaintSimulationGausRatio(
         }
     }
 
-    std::unique_ptr<TGraphErrors> ratio_graph[column_size];
+    std::unique_ptr<TGraphErrors> ratio_graph[col_size];
     std::vector<double> x_array, y_array;
-    for (int i = 0; i < column_size; i++)
+    for (int i = 0; i < col_size; i++)
     {
         ratio_graph[i] = ROOTHelper::CreateGraphErrors();
         BuildRatioGraph(ratio_graph[i].get(), simulation_graph[0][i].get(), simulation_graph[1][i].get());
@@ -269,8 +270,8 @@ void ComparisonPainter::PaintSimulationGausRatio(
     auto y_min{ std::get<0>(y_range) };
     auto y_max{ std::get<1>(y_range) };
 
-    std::unique_ptr<TH2> frame[column_size][row_size];
-    for (int i = 0; i < column_size; i++)
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
         {
@@ -321,20 +322,15 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
-    const int column_size{ 3 };
+    const int col_size{ 3 };
     const int row_size{ 1 };
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 500) };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 500) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.1f, 0.01f, 0.15f, 0.1f, 0.01f, 0.01f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.06f, 0.20f, 0.20f, 0.12f, 0.01f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     const int primary_element_size{ 4 };
-    const char * element_label[column_size]
-    {
-        "Alpha Carbon",
-        "Carbonyl Carbon",
-        "Peptide Nitrogen"
-    };
+    const char * element_label[col_size]{ "C#alpha", "C", "N" };
 
     short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
     short marker_element[primary_element_size]{ 54, 53, 55, 59 };
@@ -355,10 +351,10 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     }
 
     int ref_id{ 3 };
-    double x_min[column_size]{ 0.0 };
-    double x_max[column_size]{ 1.0 };
+    double x_min[col_size]{ 0.0 };
+    double x_max[col_size]{ 1.0 };
     std::vector<double> y_array;
-    for (int i = 0; i < column_size; i++)
+    for (int i = 0; i < col_size; i++)
     {
         data_graph[i][1] = ROOTHelper::CreateGraphErrors();
         sim_with_charge_graph[i][1] = ROOTHelper::CreateGraphErrors();
@@ -390,27 +386,28 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     auto y_min{ std::get<0>(y_range) };
     auto y_max{ std::get<1>(y_range) };
 
-    std::unique_ptr<TH2> frame[column_size][row_size];
-    std::unique_ptr<TPaveText> title_text[column_size];
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    std::unique_ptr<TPaveText> title_text[col_size];
     std::unique_ptr<TLegend> legend;
-    for (int i = 0; i < column_size; i++)
+    for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
         {
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
-            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 0, 0, 4000, 0);
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min, y_max);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 0.9f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005f, 133);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.9f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 45.0f, 0.005f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.1f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.02f, 133);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.9f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
-            frame[i][j]->GetXaxis()->SetTitle("Width");
-            frame[i][j]->GetYaxis()->SetTitle("Amplitude Ratio #font[1]{A} / #font[1]{A}_{O}");
+            frame[i][j]->GetXaxis()->SetTitle("");
+            frame[i][j]->GetYaxis()->SetTitle("Amplitude Ratio #font[1]{A}/#font[1]{A}_{#font[102]{O}}");
             frame[i][j]->GetXaxis()->CenterTitle();
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
@@ -419,25 +416,37 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
             sim_no_charge_graph[i][1]->Draw("L X0");
             data_graph[i][1]->Draw("P");
         }
-        title_text[i] = ROOTHelper::CreatePaveText(0.01, 1.01, 0.99, 1.13, "nbNDC ARC", true);
+        title_text[i] = ROOTHelper::CreatePaveText(0.30, 1.01, 0.70, 1.16, "nbNDC ARC", true);
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
         ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
-        ROOTHelper::SetTextAttribute(title_text[i].get(), 40, 133, 22);
+        ROOTHelper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
         ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, color_element[i], 0.5f);
         title_text[i]->AddText(element_label[i]);
         title_text[i]->Draw();
 
-        if (i == column_size - 1)
+        if (i == col_size - 1)
         {
             legend = ROOTHelper::CreateLegend(0.1, 0.7, 0.9, 0.99, true);
             ROOTHelper::SetLegendDefaultStyle(legend.get());
-            ROOTHelper::SetTextAttribute(legend.get(), 30, 133, 12);
+            ROOTHelper::SetTextAttribute(legend.get(), 50.0f, 133, 12);
             ROOTHelper::SetFillAttribute(legend.get(), 1001, kWhite, 0.5);
             legend->AddEntry(sim_with_charge_graph[i][1].get(), "Partial Charge", "l");
             legend->AddEntry(sim_no_charge_graph[i][1].get(), "Neutral", "l");
             legend->Draw();
         }
     }
+    canvas->cd();
+    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.10, 0.00, 0.80, 0.12) };
+    pad_extra->Draw();
+    pad_extra->cd();
+    ROOTHelper::SetPadDefaultStyle(pad_extra.get());
+    ROOTHelper::SetFillAttribute(pad_extra.get(), 4000);
+    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
+    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
+    bottom_title_text->AddText("Width #tau");
+    bottom_title_text->Draw();
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     std::cout <<"  Output file: "<< file_path << std::endl;
@@ -453,15 +462,15 @@ void ComparisonPainter::PainMapValueComparison(
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
-    const int column_size{ 4 };
+    const int col_size{ 4 };
     const int row_size{ 1 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1400, 500) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.07f, 0.01f, 0.15f, 0.11f, 0.01f, 0.01f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.07f, 0.01f, 0.15f, 0.11f, 0.01f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     const int primary_element_size{ 4 };
-    const char * element_label[column_size]
+    const char * element_label[col_size]
     {
         "Alpha Carbon",
         "Carbonyl Carbon",
@@ -472,12 +481,12 @@ void ComparisonPainter::PainMapValueComparison(
     short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
     short marker_element[primary_element_size]{ 54, 53, 55, 59 };
 
-    std::unique_ptr<TGraphErrors> scatter_graph[column_size];
-    std::unique_ptr<TF1> fit_function[column_size];
-    double r_square[column_size]{ 0.0 };
-    double slope[column_size]{ 0.0 };
-    double intercept[column_size]{ 0.0 };
-    for (size_t i = 0; i < column_size; i++)
+    std::unique_ptr<TGraphErrors> scatter_graph[col_size];
+    std::unique_ptr<TF1> fit_function[col_size];
+    double r_square[col_size]{ 0.0 };
+    double slope[col_size]{ 0.0 };
+    double intercept[col_size]{ 0.0 };
+    for (size_t i = 0; i < col_size; i++)
     {
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         scatter_graph[i] = ROOTHelper::CreateGraphErrors();
@@ -491,10 +500,10 @@ void ComparisonPainter::PainMapValueComparison(
         ROOTHelper::SetLineAttribute(fit_function[i].get(), 1, 2, kRed);
     }
 
-    double x_min[column_size]{ 0.0 };
-    double x_max[column_size]{ 1.0 };
+    double x_min[col_size]{ 0.0 };
+    double x_max[col_size]{ 1.0 };
     std::vector<double> y_array;
-    for (int i = 0; i < column_size; i++)
+    for (int i = 0; i < col_size; i++)
     {
         std::vector<double> x_array;
         for (int p = 0; p < scatter_graph[i]->GetN(); p++)
@@ -511,11 +520,11 @@ void ComparisonPainter::PainMapValueComparison(
     auto y_min{ std::get<0>(y_range) };
     auto y_max{ std::get<1>(y_range) };
 
-    std::unique_ptr<TH2> frame[column_size][row_size];
-    std::unique_ptr<TPaveText> title_text[column_size];
-    std::unique_ptr<TPaveText> r_square_text[column_size];
-    std::unique_ptr<TPaveText> fit_info_text[column_size];
-    for (int i = 0; i < column_size; i++)
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    std::unique_ptr<TPaveText> title_text[col_size];
+    std::unique_ptr<TPaveText> r_square_text[col_size];
+    std::unique_ptr<TPaveText> fit_info_text[col_size];
+    for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
         {
@@ -579,15 +588,15 @@ void ComparisonPainter::PainResidueClassGausComparison(
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
-    const int column_size{ 4 };
+    const int col_size{ 4 };
     const int row_size{ 1 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1400, 500) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), column_size, row_size, 0.07f, 0.01f, 0.15f, 0.11f, 0.01f, 0.01f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.07f, 0.01f, 0.15f, 0.11f, 0.01f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     const int primary_element_size{ 4 };
-    const char * element_label[column_size]
+    const char * element_label[col_size]
     {
         "Alpha Carbon",
         "Carbonyl Carbon",
@@ -598,14 +607,14 @@ void ComparisonPainter::PainResidueClassGausComparison(
     short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
     short marker_element[primary_element_size]{ 54, 53, 55, 59 };
 
-    std::unique_ptr<TGraphErrors> scatter_graph[column_size][row_size];
-    std::unique_ptr<TF1> fit_function[column_size][row_size];
-    std::vector<double> x_array[column_size];
+    std::unique_ptr<TGraphErrors> scatter_graph[col_size][row_size];
+    std::unique_ptr<TF1> fit_function[col_size][row_size];
+    std::vector<double> x_array[col_size];
     std::vector<double> y_array[row_size];
-    double r_square[column_size][row_size]{ {0.0} };
-    double slope[column_size][row_size]{ {0.0} };
-    double intercept[column_size][row_size]{ {0.0} };
-    for (size_t i = 0; i < column_size; i++)
+    double r_square[col_size][row_size]{ {0.0} };
+    double slope[col_size][row_size]{ {0.0} };
+    double intercept[col_size][row_size]{ {0.0} };
+    for (size_t i = 0; i < col_size; i++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(i) };
         for (size_t j = 0; j < row_size; j++)
@@ -623,11 +632,11 @@ void ComparisonPainter::PainResidueClassGausComparison(
         }
     }
 
-    double x_min[column_size]{ 0.0 };
-    double x_max[column_size]{ 1.0 };
+    double x_min[col_size]{ 0.0 };
+    double x_max[col_size]{ 1.0 };
     double y_min[row_size]{ 0.0 };
     double y_max[row_size]{ 1.0 };
-    for (size_t i = 0; i < column_size; i++)
+    for (size_t i = 0; i < col_size; i++)
     {        
         auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array[i], 0.1) };
         x_min[i] = std::get<0>(x_range);
@@ -641,11 +650,11 @@ void ComparisonPainter::PainResidueClassGausComparison(
         y_max[j] = std::get<1>(y_range);
     }
 
-    std::unique_ptr<TH2> frame[column_size][row_size];
-    std::unique_ptr<TPaveText> title_text[column_size];
-    std::unique_ptr<TPaveText> r_square_text[column_size][row_size];
-    std::unique_ptr<TPaveText> fit_info_text[column_size][row_size];
-    for (int i = 0; i < column_size; i++)
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    std::unique_ptr<TPaveText> title_text[col_size];
+    std::unique_ptr<TPaveText> r_square_text[col_size][row_size];
+    std::unique_ptr<TPaveText> fit_info_text[col_size][row_size];
+    for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
         {
@@ -756,7 +765,8 @@ void ComparisonPainter::BuildGausEstimateToBlurringWidthGraph(
 }
 
 void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
-    uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list)
+    uint64_t group_key, TGraphErrors * graph,
+    const std::vector<ModelObject *> & model_list)
 {
     const auto & class_key{ AtomicInfoHelper::GetElementClassKey() };
     auto count{ 0 };
@@ -771,6 +781,7 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
             entry_iter->GetGausVariancePrior(group_key, class_key, 1),
             entry_iter->GetGausVariancePrior(group_key, class_key, 0));
         count++;
+        //label_list.emplace_back(model_object->GetResolution() + model_object->GetPdbID() + "/" + model_object->GetEmdID());
     }
 }
 

@@ -4,6 +4,7 @@
 #include <string>
 #include "CommandBase.hpp"
 
+class SphereSampler;
 class ChargeAnalysisCommand : public CommandBase
 {
     int m_thread_size;
@@ -12,6 +13,7 @@ class ChargeAnalysisCommand : public CommandBase
     double m_alpha_r, m_alpha_g;
     std::string m_database_path, m_model_file_path, m_map_file_path;
     std::string m_saved_key_tag;
+    std::unique_ptr<SphereSampler> m_sphere_sampler;
 
 public:
     ChargeAnalysisCommand(void);
@@ -27,6 +29,9 @@ public:
     void SetModelFilePath(const std::string & path) { m_model_file_path = path; }
     void SetMapFilePath(const std::string & path) { m_map_file_path = path; }
     void SetSavedKeyTag(const std::string & tag) { m_saved_key_tag = tag; }
-    void SetThreadSize(int value) { m_thread_size = value; }
+    void SetThreadSize(int value);
+    void SetSamplingSize(int value);
+    void SetSamplingRangeMinimum(double value);
+    void SetSamplingRangeMaximum(double value);
 
 };

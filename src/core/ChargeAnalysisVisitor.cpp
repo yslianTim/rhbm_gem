@@ -16,9 +16,11 @@
 #include <fstream>
 #include <unordered_set>
 
-ChargeAnalysisVisitor::ChargeAnalysisVisitor(void) :
+ChargeAnalysisVisitor::ChargeAnalysisVisitor(
+    SphereSampler * sphere_sampler) :
     m_thread_size{ 1 },
-    m_alpha_r{ 0.0 }, m_alpha_g{ 0.0 }, m_x_min{ 0.0 }, m_x_max{ 0.0 }
+    m_alpha_r{ 0.0 }, m_alpha_g{ 0.0 }, m_x_min{ 0.0 }, m_x_max{ 0.0 },
+    m_sphere_sampler{ sphere_sampler }
 {
 
 }

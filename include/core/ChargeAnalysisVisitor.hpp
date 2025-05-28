@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include "DataObjectVisitorBase.hpp"
 
+class SphereSampler;
+
 class ChargeAnalysisVisitor : public DataObjectVisitorBase
 {
     bool m_is_asymmetry;
@@ -13,10 +15,11 @@ class ChargeAnalysisVisitor : public DataObjectVisitorBase
     double m_alpha_r, m_alpha_g;
     double m_x_min, m_x_max;
     std::string m_map_key_tag, m_model_key_tag;
+    SphereSampler * m_sphere_sampler;
     std::vector<AtomObject *> m_selected_atom_list;
 
 public:
-    ChargeAnalysisVisitor(void);
+    ChargeAnalysisVisitor(SphereSampler * sphere_sampler);
     ~ChargeAnalysisVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;

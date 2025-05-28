@@ -201,12 +201,12 @@ void DemoPainter::PaintAtomMapValueExample(const std::string & name)
     auto legend{ ROOTHelper::CreateLegend(0.25, 0.82, 0.99, 0.95, false) };
     ROOTHelper::SetLegendDefaultStyle(legend.get());
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    ROOTHelper::SetTextAttribute(legend.get(), 50.0f, 133, 12, 0.0);
+    ROOTHelper::SetTextAttribute(legend.get(), 65.0f, 133, 12, 0.0);
     legend->SetMargin(0.15f);
     legend->AddEntry(gaus_function.get(),
-        "Single Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+        "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
     legend->AddEntry(map_value_graph_list.at(0).get(),
-        "Map Value Distribution (Median)", "l");
+        "Degenerated Map Value", "l");
     legend->Draw();
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
@@ -373,7 +373,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(const std::string & name)
                 legend->AddEntry(correlation_graph[j][k].get(), label, "p");
             }
             legend->SetNColumns(4);
-            legend->Draw();
+            //legend->Draw();
         }
     }
 
@@ -658,6 +658,8 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
     gStyle->SetGridColor(kGray);
     const int col_size{ 4 };
     const int row_size{ 1 };
+    const char * data_index[11]{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"};
+
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 600) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
     ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.20f, 0.20f, 0.12f, 0.01f, 0.005f);
@@ -686,14 +688,23 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
             graph[i]->SetPointError(count, 0.0, width_error);
 
-            TLatex * latex = new TLatex(model->GetResolution(), width_value + 1.1*width_error, std::to_string(count).data());
-            ROOTHelper::SetTextAttribute(latex, 20.0f, 103, 21);
+            std::string label;
+            if (count > 11)
+            {
+                std::cout <<"Warning: Data label size exceeds 12, label switch to numbers."<< std::endl;
+                label = std::to_string(count);
+            }
+            else
+            {
+                label = data_index[count];
+            }
+            TLatex * latex = new TLatex(model->GetResolution(), width_value + 1.1*width_error, label.data());
+            ROOTHelper::SetTextAttribute(latex, 18.0f, 103, 21);
             graph[i]->GetListOfFunctions()->Add(latex);
             
             if (i == 0)
             {
-                auto label{ model->GetPdbID() + "/" + model->GetEmdID() };
-                data_label.emplace_back(label);
+                data_label.emplace_back(model->GetPdbID() + "/" + model->GetEmdID());
             }
             count++;
         }
@@ -720,6 +731,7 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
     double y_max{ std::get<1>(y_range) };
 
     const char * element_label[col_size]{ "C#alpha", "C", "N", "O" };
+    
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> title_text[col_size];
     std::unique_ptr<TPaveText> r_square_text[col_size];
@@ -789,11 +801,16 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
             ROOTHelper::SetPaveAttribute(info_text.get(), 0, 0.05);
             ROOTHelper::SetLineAttribute(info_text.get(), 1, 0);
             ROOTHelper::SetFillAttribute(info_text.get(), 1001, kAzure-7);
-            ROOTHelper::SetTextAttribute(info_text.get(), 27.0f, 103, 12, 0.0, kYellow-10);
+            ROOTHelper::SetTextAttribute(info_text.get(), 28.0f, 103, 12, 0.0, kYellow-10);
             info_text->AddText("      #font[2]{Data List}");
             for (size_t p = 0; p < data_label.size(); p++)
             {
-                info_text->AddText(Form("[%2d]%s", static_cast<int>(p), data_label.at(p).data()));
+                if (p > 11)
+                {
+                    std::cout << "  Warning: Data label size exceeds 12, only first 11 will be displayed." << std::endl;
+                    break;
+                }
+                info_text->AddText(Form("[%s]%s", data_index[p], data_label.at(p).data()));
             }
             info_text->AddText("");
             info_text->Draw();
@@ -1829,6 +1846,7 @@ void DemoPainter::PrintGausResultPad(
     auto label_size{ (draw_x_axis) ? 55.0f : 0.0f };
     ROOTHelper::SetPadMarginInCanvas(pad, left_margin, right_margin, bottom_margin, top_margin);
     ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
+    ROOTHelper::SetPadFrameAttribute(pad, 0, 0, 4000, 0, 0, 0, 0);
     ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0f);
     ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
     ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), label_size, 0.17f, 103, kCyan+3);
@@ -1857,13 +1875,14 @@ void DemoPainter::PrintGausCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_ax
     pad->cd();
     auto bottom_margin{ (draw_x_axis) ? 0.105 : 0.010 };
     auto top_margin{ (draw_title_label) ? 0.105 : 0.010 };
-    auto title_size{ (draw_x_axis) ? 70.0f : 0.0f };
-    auto label_size{ (draw_x_axis) ? 50.0f : 12.0f };
+    auto title_size{ (draw_x_axis) ? 80.0f : 0.0f };
+    //auto label_size{ (draw_x_axis) ? 50.0f : 12.0f };
     ROOTHelper::SetPadMarginInCanvas(pad, 0.005, 0.005, bottom_margin, top_margin);
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), title_size, 0.8f);
+    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0, 0, 0);
+    ROOTHelper::SetPadFrameAttribute(pad, 0, 0, 4000, 0, 0, 0, 0);
+    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), title_size, 0.5f);
     ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), label_size);
+    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 0.0f);
     ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 0.0f);
 
     auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.022, 0) };

@@ -1,7 +1,6 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "PotentialAnalysisVisitor.hpp"
-
 #include "SphereSampler.hpp"
 
 #include <iostream>
