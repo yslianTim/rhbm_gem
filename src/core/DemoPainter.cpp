@@ -26,6 +26,7 @@
 #include <TF1.h>
 #include <TLine.h>
 #include <TH3F.h>
+#include <TLatex.h>
 #endif
 
 #include <iostream>
@@ -659,16 +660,16 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
     const int row_size{ 1 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 600) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.01f, 0.20f, 0.12f, 0.01f, 0.005f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.20f, 0.20f, 0.12f, 0.01f, 0.005f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
-    
     const int primary_element_size{ 4 };
     short color_element[primary_element_size] { kRed+1, kViolet+1, kGreen+2, kAzure+2 };
 
     std::unique_ptr<TGraphErrors> graph[primary_element_size];
     std::unique_ptr<TF1> fit_function[col_size];
     std::vector<double> x_array, y_array;
+    std::vector<std::string> data_label;
     double r_square[col_size]{ 0.0 };
     double slope[col_size]{ 0.0 };
     double intercept[col_size]{ 0.0 };
@@ -684,6 +685,16 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
             auto width_error{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetElementClassKey(), 1) };
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
             graph[i]->SetPointError(count, 0.0, width_error);
+
+            TLatex * latex = new TLatex(model->GetResolution(), width_value + 1.1*width_error, std::to_string(count).data());
+            ROOTHelper::SetTextAttribute(latex, 20.0f, 103, 21);
+            graph[i]->GetListOfFunctions()->Add(latex);
+            
+            if (i == 0)
+            {
+                auto label{ model->GetPdbID() + "/" + model->GetEmdID() };
+                data_label.emplace_back(label);
+            }
             count++;
         }
         for (int p = 0; p < graph[i]->GetN(); p++)
@@ -713,6 +724,7 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
     std::unique_ptr<TPaveText> title_text[col_size];
     std::unique_ptr<TPaveText> r_square_text[col_size];
     std::unique_ptr<TPaveText> fit_info_text[col_size];
+    std::unique_ptr<TPaveText> info_text;
     for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
@@ -748,7 +760,7 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
         title_text[i]->AddText(element_label[i]);
         title_text[i]->Draw();
 
-        r_square_text[i] = ROOTHelper::CreatePaveText(0.45, 0.05, 0.95, 0.18, "nbNDC ARC", true);
+        r_square_text[i] = ROOTHelper::CreatePaveText(0.30, 0.05, 0.95, 0.18, "nbNDC ARC", true);
         ROOTHelper::SetPaveTextDefaultStyle(r_square_text[i].get());
         ROOTHelper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
         ROOTHelper::SetLineAttribute(r_square_text[i].get(), 1, 0);
@@ -757,14 +769,38 @@ void DemoPainter::PaintElementClassGroupGausToFSC(const std::string & name)
         r_square_text[i]->AddText(Form("R^{2} = %.2f", r_square[i]));
         r_square_text[i]->Draw();
 
-        fit_info_text[i] = ROOTHelper::CreatePaveText(0.12, 0.88, 0.70, 0.99, "nbNDC", true);
+        fit_info_text[i] = ROOTHelper::CreatePaveText(0.12, 0.88, 0.75, 0.99, "nbNDC", true);
         ROOTHelper::SetPaveTextDefaultStyle(fit_info_text[i].get());
-        ROOTHelper::SetTextAttribute(fit_info_text[i].get(), 40.0f, 133, 22, 0.0, kGray+1);
-        fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}%+.2f", slope[i], intercept[i]));
+        ROOTHelper::SetTextAttribute(fit_info_text[i].get(), 30.0f, 133, 22, 0.0, kGray+1);
+        if (intercept[i] > 0.0)
+        {
+            fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}+ %.2f", slope[i], intercept[i]));
+        }
+        else
+        {
+            fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}#minus %.2f", slope[i], std::fabs(intercept[i])));
+        }
         fit_info_text[i]->Draw();
+
+        if (i == col_size - 1)
+        {
+            info_text = ROOTHelper::CreatePaveText(1.01, -0.28, 2.12, 1.16, "nbNDC ARC", true);
+            ROOTHelper::SetPaveTextDefaultStyle(info_text.get());
+            ROOTHelper::SetPaveAttribute(info_text.get(), 0, 0.05);
+            ROOTHelper::SetLineAttribute(info_text.get(), 1, 0);
+            ROOTHelper::SetFillAttribute(info_text.get(), 1001, kAzure-7);
+            ROOTHelper::SetTextAttribute(info_text.get(), 27.0f, 103, 12, 0.0, kYellow-10);
+            info_text->AddText("      #font[2]{Data List}");
+            for (size_t p = 0; p < data_label.size(); p++)
+            {
+                info_text->AddText(Form("[%2d]%s", static_cast<int>(p), data_label.at(p).data()));
+            }
+            info_text->AddText("");
+            info_text->Draw();
+        }
     }
     canvas->cd();
-    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.08, 0.00, 0.99, 0.12) };
+    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.08, 0.00, 0.80, 0.12) };
     pad_extra->Draw();
     pad_extra->cd();
     ROOTHelper::SetPadDefaultStyle(pad_extra.get());
