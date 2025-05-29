@@ -48,6 +48,8 @@ public:
     #ifdef HAVE_ROOT
     std::unique_ptr<TH1D> CreateResidueCountHistogram(const std::string & class_key, Structure structure=static_cast<Structure>(0));
     std::unique_ptr<TGraphErrors> CreateModelEstimateToResidueGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id=0);
+    std::unique_ptr<TGraphErrors> CreateModelEstimateScatterGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateModelEstimateToResidueIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=static_cast<Residue>(65535));
     #endif
 
 private:

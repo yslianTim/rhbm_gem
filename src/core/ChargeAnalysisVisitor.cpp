@@ -144,7 +144,6 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                         atom->GetRemoteness() == Remoteness::ALPHA)
                     {
                         is_negative_charged = true;
-                    
                     }
                 }
                 std::vector<Eigen::VectorXd> sampling_entry_list;
@@ -162,8 +161,8 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                     auto y_neutral{ std::get<1>(neutral_data_entry) };
                     auto y_positive{ std::get<1>(positive_data_entry) };
                     auto y_negative{ std::get<1>(negative_data_entry) };
-                    auto model_x_positive{  y_positive - y_neutral };
-                    auto model_x_negative{  y_neutral - y_negative };
+                    auto model_x_positive{ y_positive - y_neutral };
+                    auto model_x_negative{ y_neutral - y_negative };
                     auto model_y{ y_data - y_neutral };
                     
                     Eigen::VectorXd sampling_entry(3);
@@ -180,15 +179,9 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
             model_estimator->RunEstimation(m_alpha_r, m_alpha_g);
 
             auto model_group_mean{ model_estimator->GetMuVectorMean() };
-            group_charge_entry->AddModelEstimateMean(
-                group_key, model_group_mean(0), model_group_mean(1)
-            );
-
+            group_charge_entry->AddModelEstimateMean(group_key, model_group_mean(0), model_group_mean(1));
             auto model_group_mdpde{ model_estimator->GetMuVectorMDPDE() };
-            group_charge_entry->AddModelEstimateMDPDE(
-                group_key, model_group_mdpde(0), model_group_mdpde(1)
-            );
-
+            group_charge_entry->AddModelEstimateMDPDE(group_key, model_group_mdpde(0), model_group_mdpde(1));
             auto prior_estimate{ model_estimator->GetMuVectorPrior() };
             auto prior_variance{ model_estimator->GetCapitalLambdaMatrix() };
             group_charge_entry->AddModelEstimatePrior(group_key, prior_estimate(0), prior_estimate(1));
@@ -200,10 +193,8 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                 auto atom_entry{ atom->GetAtomicChargeEntry() };
                 Eigen::VectorXd beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
                 atom_entry->AddModelEstimateOLS(beta_vector_ols(0), beta_vector_ols(1));
-
                 Eigen::VectorXd beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
                 atom_entry->AddModelEstimateMDPDE(beta_vector_mdpde(0), beta_vector_mdpde(1));
-
                 Eigen::VectorXd beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
                 atom_entry->AddModelEstimatePosterior(class_key, beta_vector_posterior(0), beta_vector_posterior(1));

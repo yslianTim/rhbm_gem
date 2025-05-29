@@ -317,4 +317,61 @@ std::unique_ptr<TGraphErrors> ChargeEntryIterator::CreateModelEstimateToResidueG
     }
     return graph;
 }
+
+std::unique_ptr<TGraphErrors> ChargeEntryIterator::CreateModelEstimateScatterGraph(
+    std::vector<uint64_t> & group_key_list, const std::string & class_key,
+    int par1_id, int par2_id)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    
+    auto count{ 0 };
+    for (auto & group_key : group_key_list)
+    {
+        if (IsAvailableGroupKey(group_key, class_key) == false) continue;
+        graph->SetPoint(count,
+            GetModelEstimatePrior(group_key, class_key, par1_id),
+            GetModelEstimatePrior(group_key, class_key, par2_id));
+        graph->SetPointError(count,
+            GetModelVariancePrior(group_key, class_key, par1_id),
+            GetModelVariancePrior(group_key, class_key, par2_id));
+        count++;
+    }
+    return graph;
+}
+
+std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
+ChargeEntryIterator::CreateModelEstimateToResidueIDGraphMap(
+    size_t main_chain_element_id, const int par_id, Residue residue)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return {};
+    }
+    
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
+    std::unordered_map<std::string, int> count_map;
+    for (auto & atom : m_model_object->GetSelectedAtomList())
+    {
+        if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
+        if (atom->GetRemoteness() != AtomClassifier::GetMainChainRemoteness(main_chain_element_id)) continue;
+        if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
+        auto entry{ atom->GetAtomicChargeEntry() };
+        auto residue_id{ atom->GetResidueID() };
+        auto chain_id{ atom->GetChainID() };
+        if (residue_id < 0) continue;
+        if (graph_map.find(chain_id) == graph_map.end())
+        {
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            count_map[chain_id] = 0;
+        }
+        auto x_value{ static_cast<double>(residue_id) };
+        graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, entry->GetModelEstimateMDPDE(par_id));
+        count_map[chain_id]++;
+    }
+    return graph_map;
+}
 #endif
