@@ -137,13 +137,13 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                           << atom->GetInfo() << ". This atom will be skipped." << std::endl;
                     continue;
                 }
-                bool is_negative_charged{ false };
+                bool is_negative_charged{ true };
                 if (atom->GetElement() == Element::CARBON)
                 {
                     if (atom->GetRemoteness() == Remoteness::NONE ||
                         atom->GetRemoteness() == Remoteness::ALPHA)
                     {
-                        is_negative_charged = true;
+                        is_negative_charged = false;
                     }
                 }
                 std::vector<Eigen::VectorXd> sampling_entry_list;
@@ -161,8 +161,10 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                     auto y_neutral{ std::get<1>(neutral_data_entry) };
                     auto y_positive{ std::get<1>(positive_data_entry) };
                     auto y_negative{ std::get<1>(negative_data_entry) };
-                    auto model_x_positive{ y_positive - y_neutral };
-                    auto model_x_negative{ y_neutral - y_negative };
+                    //auto model_x_positive{ y_positive - y_neutral }; // formula on draft
+                    //auto model_x_negative{ y_neutral - y_negative };
+                    auto model_x_positive{ - y_positive + y_neutral };
+                    auto model_x_negative{ - y_neutral + y_negative };
                     auto model_y{ y_data - y_neutral };
                     
                     Eigen::VectorXd sampling_entry(3);
