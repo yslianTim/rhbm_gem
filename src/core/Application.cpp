@@ -328,7 +328,7 @@ void Application::RegisterChargeAnalysisCommand(void)
         "Turn On/Off asymmetry flag")->default_val(false);
     m_charge_analysis_cmd->add_option(
         "-s,--sampling", m_sphere_sampler_options.sampling_size,
-        "Number of sampling points per atom")->default_val(100);
+        "Number of sampling points per atom")->default_val(1500);
     m_charge_analysis_cmd->add_option(
         "--sampling-min", m_sphere_sampler_options.sampling_range_min,
         "Minimum sampling range")->default_val(0.0);

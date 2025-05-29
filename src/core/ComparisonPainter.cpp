@@ -22,6 +22,7 @@
 #include <TAxis.h>
 #include <TH2.h>
 #include <TLatex.h>
+#include <TLine.h>
 #endif
 
 #include <tuple>
@@ -330,9 +331,9 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     const int primary_element_size{ 4 };
-    const char * element_label[col_size]{ "C#alpha", "C", "N" };
+    const char * element_label[col_size]{ "C_{#alpha}", "C", "N" };
 
-    short color_element[primary_element_size] { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+    short color_element[primary_element_size] { kRed+1, kViolet+1, kGreen+2, kAzure+2 };
     short marker_element[primary_element_size]{ 54, 53, 55, 59 };
 
     std::unique_ptr<TGraphErrors> data_graph[primary_element_size][2];
@@ -350,6 +351,14 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
         BuildAmplitudeRatioToWidthGraph(group_key, sim_no_charge_graph[i][0].get(), sim_no_charge_model_object_list);
     }
 
+    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
+    std::vector<double> resolution_list;
+    resolution_list.reserve(m_model_object_list.size());
+    for (auto & model : m_model_object_list)
+    {
+        resolution_list.emplace_back(model->GetResolution());
+    }
+
     int ref_id{ 3 };
     double x_min[col_size]{ 0.0 };
     double x_max[col_size]{ 1.0 };
@@ -360,7 +369,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
         sim_with_charge_graph[i][1] = ROOTHelper::CreateGraphErrors();
         sim_no_charge_graph[i][1] = ROOTHelper::CreateGraphErrors();
 
-        BuildRatioGraph(data_graph[i][1].get(), data_graph[i][0].get(), data_graph[ref_id][0].get());
+        BuildRatioGraph(data_graph[i][1].get(), data_graph[i][0].get(), data_graph[ref_id][0].get(), true);
         BuildRatioGraph(sim_with_charge_graph[i][1].get(), sim_with_charge_graph[i][0].get(), sim_with_charge_graph[ref_id][0].get());
         BuildRatioGraph(sim_no_charge_graph[i][1].get(), sim_no_charge_graph[i][0].get(), sim_no_charge_graph[ref_id][0].get());
 
@@ -388,7 +397,10 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
 
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> title_text[col_size];
+    std::unique_ptr<TPaveText> info_text;
     std::unique_ptr<TLegend> legend;
+    std::unique_ptr<TLine> line_ref1;
+    std::unique_ptr<TLine> line_ref2;
     for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
@@ -407,7 +419,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
-            frame[i][j]->GetYaxis()->SetTitle("Amplitude Ratio #font[1]{A}/#font[1]{A}_{#font[102]{O}}");
+            frame[i][j]->GetYaxis()->SetTitle("Amplitude Ratio #font[1]{A}/#font[1]{A}_{ #font[102]{O}}");
             frame[i][j]->GetXaxis()->CenterTitle();
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
@@ -416,7 +428,7 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
             sim_no_charge_graph[i][1]->Draw("L X0");
             data_graph[i][1]->Draw("P");
         }
-        title_text[i] = ROOTHelper::CreatePaveText(0.30, 1.01, 0.70, 1.16, "nbNDC ARC", true);
+        title_text[i] = ROOTHelper::CreatePaveText(0.10, 0.96, 0.40, 1.17, "nbNDC ARC", true);
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
         ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
         ROOTHelper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
@@ -426,13 +438,31 @@ void ComparisonPainter::PaintGausEstimateComparison(const std::string & name)
 
         if (i == col_size - 1)
         {
-            legend = ROOTHelper::CreateLegend(0.1, 0.7, 0.9, 0.99, true);
+            line_ref1 = ROOTHelper::CreateLine(0.0, 0.0, 1.0, 1.0);
+            line_ref2 = ROOTHelper::CreateLine(0.0, 0.0, 1.0, 1.0);
+            ROOTHelper::SetLineAttribute(line_ref1.get(), 1, 5, kGray+2);
+            ROOTHelper::SetLineAttribute(line_ref2.get(), 2, 5, kGray+2);
+            
+            legend = ROOTHelper::CreateLegend(0.60, 0.75, 1.80, 1.17, true);
             ROOTHelper::SetLegendDefaultStyle(legend.get());
             ROOTHelper::SetTextAttribute(legend.get(), 50.0f, 133, 12);
-            ROOTHelper::SetFillAttribute(legend.get(), 1001, kWhite, 0.5);
-            legend->AddEntry(sim_with_charge_graph[i][1].get(), "Partial Charge", "l");
-            legend->AddEntry(sim_no_charge_graph[i][1].get(), "Neutral", "l");
+            ROOTHelper::SetFillAttribute(legend.get(), 4000);
+            legend->AddEntry(line_ref1.get(), "Partial Charge", "l");
+            legend->AddEntry(line_ref2.get(), "Neutral", "l");
             legend->Draw();
+
+            info_text = ROOTHelper::CreatePaveText(1.01, -0.28, 1.80, 0.75, "nbNDC", true);
+            ROOTHelper::SetPaveTextDefaultStyle(info_text.get());
+            ROOTHelper::SetFillAttribute(info_text.get(), 4000);
+            ROOTHelper::SetTextAttribute(info_text.get(), 50.0f, 133, 12);
+            auto count{ 0 };
+            for (auto & line : resolution_list)
+            {
+                info_text->AddText(Form("#font[102]{[#color[922]{%s}]} %.2f #AA", data_index[count], line));
+                count++;
+                if (count >= 10) break;
+            }
+            info_text->Draw();
         }
     }
     canvas->cd();
@@ -724,13 +754,14 @@ double ComparisonPainter::CalculateErrorPropagation(
 #ifdef HAVE_ROOT
 void ComparisonPainter::BuildRatioGraph(
     TGraphErrors * ratio_graph,
-    const TGraphErrors * target_graph, const TGraphErrors * reference_graph)
+    const TGraphErrors * target_graph, const TGraphErrors * reference_graph, bool draw_index)
 {
     if (target_graph->GetN() != reference_graph->GetN())
     {
         std::cerr << "Error: target and reference graph have different number of points." << std::endl;
         return;
     }
+    const char * data_index[11]{"A","B","C","D","E","F","G","H","I","J","K"};
     for (int i = 0; i < target_graph->GetN(); i++)
     {
         double x_value_target, y_value_target, x_value_reference, y_value_reference;
@@ -744,6 +775,22 @@ void ComparisonPainter::BuildRatioGraph(
         auto error{ CalculateErrorPropagation(y_value_target, y_value_reference, y_error_target, y_error_reference) };
         ratio_graph->SetPoint(i, x_value_target, ratio);
         ratio_graph->SetPointError(i, x_error_target, error);
+        if (draw_index == true)
+        {
+            std::string label;
+            if (i > 11)
+            {
+                std::cout <<"Warning: Data label size exceeds 12, label switch to numbers."<< std::endl;
+                label = std::to_string(i);
+            }
+            else
+            {
+                label = data_index[i];
+            }
+            TLatex * latex = new TLatex(x_value_target, ratio + 1.1*error, label.data());
+            ROOTHelper::SetTextAttribute(latex, 30.0f, 103, 21, 0.0, kGray+2);
+            ratio_graph->GetListOfFunctions()->Add(latex);
+        }
     }
 }
 
@@ -774,14 +821,13 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
         if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
-        graph->SetPoint(count,
-            entry_iter->GetGausEstimatePrior(group_key, class_key, 1),
-            entry_iter->GetGausEstimatePrior(group_key, class_key, 0));
-        graph->SetPointError(count,
-            entry_iter->GetGausVariancePrior(group_key, class_key, 1),
-            entry_iter->GetGausVariancePrior(group_key, class_key, 0));
+        auto x_value{ entry_iter->GetGausEstimatePrior(group_key, class_key, 1) };
+        auto y_value{ entry_iter->GetGausEstimatePrior(group_key, class_key, 0) };
+        auto x_error{ entry_iter->GetGausVariancePrior(group_key, class_key, 1) };
+        auto y_error{ entry_iter->GetGausVariancePrior(group_key, class_key, 0) };
+        graph->SetPoint(count, x_value, y_value);
+        graph->SetPointError(count, x_error, y_error);
         count++;
-        //label_list.emplace_back(model_object->GetResolution() + model_object->GetPdbID() + "/" + model_object->GetEmdID());
     }
 }
 

@@ -41,7 +41,8 @@ private:
     void PaintElementClassGroupGausToFSC(const std::string & name);
     void PaintWidthToBfactorScatterPlotSummary(const std::string & name);
     void PaintResidueClassWidthScatterPlot(const std::string & name, int par_id=0, bool draw_box_plot=false);
-    void PaintAtomGausMainChainDemo(ModelObject * model_object, const std::string & name, int par_id=0);
+    void PaintAtomGausMainChainDemo(ModelObject * model_object1, ModelObject * model_object2, const std::string & name, int par_id=0);
+    void PaintAtomGausMainChainDemoSingle(ModelObject * model_object, const std::string & name, int par_id=0);
     void PaintAtomGausMainChain(const std::string & name, int par_id=0);
     void PaintAtomRankMainChain(const std::string & name, int par_id=0);
 

@@ -41,7 +41,7 @@ private:
     double CalculateErrorPropagation(double target_value, double reference_value, double target_error, double reference_error);
 
     #ifdef HAVE_ROOT
-    void BuildRatioGraph(TGraphErrors * ratio_graph, const TGraphErrors * target_graph, const TGraphErrors * reference_graph);
+    void BuildRatioGraph(TGraphErrors * ratio_graph, const TGraphErrors * target_graph, const TGraphErrors * reference_graph, bool draw_index=false);
     void BuildGausEstimateToBlurringWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, int par_id=0);
     void BuildAmplitudeRatioToWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list);
     void BuildMapValueScatterGraph(uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);

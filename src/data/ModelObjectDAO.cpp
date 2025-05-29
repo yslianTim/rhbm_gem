@@ -6,6 +6,8 @@
 #include "AtomObject.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "AtomicChargeEntry.hpp"
+#include "GroupChargeEntry.hpp"
 #include "KeyPacker.hpp"
 
 #include <iostream>
@@ -32,14 +34,10 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     }
 
     auto key_tag{ model_obj->GetKeyTag() };
+    
+    // Save model object list
     auto model_list_table_name{ "model_list" };
-    auto atom_list_table_name{ "atom_list_in_" + key_tag };
-    auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + key_tag };
-    auto group_potential_entry_table_name{ "group_potential_entry_in_" + key_tag };
     CreateModelObjectListTable(model_list_table_name);
-    CreateAtomObjectListTable(atom_list_table_name);
-    CreateAtomicPotentialEntryListTable(atomic_potential_entry_table_name);
-
     std::stringstream sql;
     sql <<"INSERT INTO "<< model_list_table_name << R"(
         (
@@ -54,7 +52,6 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
             map_resolution = excluded.map_resolution,
             resolution_method = excluded.resolution_method
     )";
-
     m_database->Prepare(sql.str());
     m_database->Bind<std::string>(1, model_obj->GetKeyTag());
     m_database->Bind<int>(2, static_cast<int>(model_obj->GetNumberOfAtom()));
@@ -65,17 +62,47 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     m_database->StepOnce();
     m_database->Finalize();
 
+    // Save atom object list
+    auto atom_list_table_name{ "atom_list_in_" + key_tag };
+    CreateAtomObjectListTable(atom_list_table_name);
     SaveAtomObjectList(model_obj, atom_list_table_name);
-    SaveAtomicPotentialEntryList(model_obj, atomic_potential_entry_table_name);
 
-    for (auto & [class_key, group_entry] : model_obj->GetGroupPotentialEntryMap())
+    // Save atomic potential entries
+    if (model_obj->GetGroupPotentialEntryMap().empty() == false)
     {
-        auto group_table_name{ class_key + "_" + group_potential_entry_table_name };
-        auto atom_table_name{ class_key + "_" + atomic_potential_entry_table_name };
-        CreateAtomicPotentialEntrySubListTable(atom_table_name);
-        SaveAtomicPotentialEntrySubList(model_obj, atom_table_name, class_key);
-        CreateGroupPotentialEntryListTable(group_table_name);
-        SaveGroupPotentialEntryList(group_entry.get(), group_table_name);
+        auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + key_tag };
+        CreateAtomicPotentialEntryListTable(atomic_potential_entry_table_name);
+        SaveAtomicPotentialEntryList(model_obj, atomic_potential_entry_table_name);
+
+        auto group_potential_entry_table_name{ "group_potential_entry_in_" + key_tag };
+        for (auto & [class_key, group_entry] : model_obj->GetGroupPotentialEntryMap())
+        {
+            auto group_table_name{ class_key + "_" + group_potential_entry_table_name };
+            auto atom_table_name{ class_key + "_" + atomic_potential_entry_table_name };
+            CreateAtomicPotentialEntrySubListTable(atom_table_name);
+            SaveAtomicPotentialEntrySubList(model_obj, atom_table_name, class_key);
+            CreateGroupPotentialEntryListTable(group_table_name);
+            SaveGroupPotentialEntryList(group_entry.get(), group_table_name);
+        }
+    }
+
+    // Save atomic charge entries
+    if (model_obj->GetGroupChargeEntryMap().empty() == false)
+    {
+        auto atomic_charge_entry_table_name{ "atomic_charge_entry_in_" + key_tag };
+        CreateAtomicChargeEntryListTable(atomic_charge_entry_table_name);
+        SaveAtomicChargeEntryList(model_obj, atomic_charge_entry_table_name);
+
+        auto group_charge_entry_table_name{ "group_charge_entry_in_" + key_tag };
+        for (auto & [class_key, group_entry] : model_obj->GetGroupChargeEntryMap())
+        {
+            auto group_table_name{ class_key + "_" + group_charge_entry_table_name };
+            auto atom_table_name{ class_key + "_" + atomic_charge_entry_table_name };
+            CreateAtomicChargeEntrySubListTable(atom_table_name);
+            SaveAtomicChargeEntrySubList(model_obj, atom_table_name, class_key);
+            CreateGroupChargeEntryListTable(group_table_name);
+            SaveGroupChargeEntryList(group_entry.get(), group_table_name);
+        }
     }
 }
 
@@ -123,10 +150,16 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
     {
         auto group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
-        auto table_name{ group_class_key + "_group_potential_entry_in_" + key_tag };
-        auto group_entry{ std::make_unique<GroupPotentialEntry>() };
-        model_object->AddGroupPotentialEntry(group_class_key, group_entry);
-        LoadGroupPotentialEntryList(model_object.get(), group_class_key, table_name);
+        // Load potential entry
+        auto potential_table_name{ group_class_key + "_group_potential_entry_in_" + key_tag };
+        auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
+        model_object->AddGroupPotentialEntry(group_class_key, group_potential_entry);
+        LoadGroupPotentialEntryList(model_object.get(), group_class_key, potential_table_name);
+        // Load charge entry
+        auto charge_table_name{ group_class_key + "_group_charge_entry_in_" + key_tag };
+        auto group_charge_entry{ std::make_unique<GroupChargeEntry>() };
+        model_object->AddGroupChargeEntry(group_class_key, group_charge_entry);
+        LoadGroupChargeEntryList(model_object.get(), group_class_key, charge_table_name);
     }
     return model_object;
 }
@@ -221,6 +254,63 @@ void ModelObjectDAO::CreateGroupPotentialEntryListTable(const std::string & tabl
             width_estimate_prior DOUBLE,
             amplitude_variance_prior DOUBLE,
             width_variance_prior DOUBLE
+        )
+    )";
+    m_database->Execute(sql.str());
+}
+
+void ModelObjectDAO::CreateAtomicChargeEntryListTable(const std::string & table_name)
+{
+    std::stringstream sql;
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
+        (
+            serial_id INTEGER PRIMARY KEY,
+            sampling_size INTEGER,
+            distance_and_map_value_list BLOB,
+            distance_and_neutral_map_value_list BLOB,
+            distance_and_positive_map_value_list BLOB,
+            distance_and_negative_map_value_list BLOB,
+            intercept_estimate_ols DOUBLE,
+            charge_estimate_ols DOUBLE,
+            intercept_estimate_mdpde DOUBLE,
+            charge_estimate_mdpde DOUBLE
+        )
+    )";
+    m_database->Execute(sql.str());
+}
+
+void ModelObjectDAO::CreateAtomicChargeEntrySubListTable(const std::string & table_name)
+{
+    std::stringstream sql;
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
+        (
+            serial_id INTEGER PRIMARY KEY,
+            intercept_estimate_posterior DOUBLE,
+            charge_estimate_posterior DOUBLE,
+            intercept_variance_posterior DOUBLE,
+            charge_variance_posterior DOUBLE,
+            outlier_tag INTEGER,
+            statistical_distance DOUBLE
+        )
+    )";
+    m_database->Execute(sql.str());
+}
+
+void ModelObjectDAO::CreateGroupChargeEntryListTable(const std::string & table_name)
+{
+    std::stringstream sql;
+    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
+        (
+            key_id INTEGER PRIMARY KEY,
+            atom_size INTEGER,
+            intercept_estimate_mean DOUBLE,
+            charge_estimate_mean DOUBLE,
+            intercept_estimate_mdpde DOUBLE,
+            charge_estimate_mdpde DOUBLE,
+            intercept_estimate_prior DOUBLE,
+            charge_estimate_prior DOUBLE,
+            intercept_variance_prior DOUBLE,
+            charge_variance_prior DOUBLE
         )
     )";
     m_database->Execute(sql.str());
@@ -382,12 +472,136 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
     m_database->CommitTransaction();
 }
 
+void ModelObjectDAO::SaveAtomicChargeEntryList(
+    const ModelObject * model_obj, const std::string & table_name)
+{
+    m_database->BeginTransaction();
+    m_database->ClearTable(table_name);
+
+    std::stringstream sql;
+    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
+        (
+            serial_id, sampling_size,
+            distance_and_map_value_list,
+            distance_and_neutral_map_value_list,
+            distance_and_positive_map_value_list,
+            distance_and_negative_map_value_list,
+            intercept_estimate_ols, charge_estimate_ols,
+            intercept_estimate_mdpde, charge_estimate_mdpde
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    )";
+
+    m_database->Prepare(sql.str());
+
+    for (auto & atom_object : model_obj->GetComponentsList())
+    {
+        auto entry{ atom_object->GetAtomicChargeEntry() };
+        if (entry == nullptr) continue;
+
+        m_database->Bind<int>(1, atom_object->GetSerialID());
+        m_database->Bind<int>(2, static_cast<int>(entry->GetDistanceAndMapValueListSize()));
+        m_database->Bind<std::vector<std::tuple<float, float>>>(3, entry->GetDistanceAndMapValueList());
+        m_database->Bind<std::vector<std::tuple<float, float>>>(4, entry->GetDistanceAndNeutralMapValueList());
+        m_database->Bind<std::vector<std::tuple<float, float>>>(5, entry->GetDistanceAndPositiveMapValueList());
+        m_database->Bind<std::vector<std::tuple<float, float>>>(6, entry->GetDistanceAndNegativeMapValueList());
+        m_database->Bind<double>(7, entry->GetModelEstimateOLS(0));
+        m_database->Bind<double>(8, entry->GetModelEstimateOLS(1));
+        m_database->Bind<double>(9, entry->GetModelEstimateMDPDE(0));
+        m_database->Bind<double>(10, entry->GetModelEstimateMDPDE(1));
+
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+
+    m_database->Finalize();
+    m_database->CommitTransaction();
+}
+
+void ModelObjectDAO::SaveAtomicChargeEntrySubList(
+    const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
+{
+    m_database->BeginTransaction();
+    m_database->ClearTable(table_name);
+
+    std::stringstream sql;
+    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
+        (
+            serial_id,
+            intercept_estimate_posterior, charge_estimate_posterior,
+            intercept_variance_posterior, charge_variance_posterior,
+            outlier_tag, statistical_distance
+        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+    )";
+
+    m_database->Prepare(sql.str());
+    for (auto & atom_object : model_obj->GetComponentsList())
+    {
+        auto entry{ atom_object->GetAtomicChargeEntry() };
+        if (entry == nullptr) continue;
+        m_database->Bind<int>(1, atom_object->GetSerialID());
+        m_database->Bind<double>(2, entry->GetModelEstimatePosterior(class_key, 0));
+        m_database->Bind<double>(3, entry->GetModelEstimatePosterior(class_key, 1));
+        m_database->Bind<double>(4, entry->GetModelVariancePosterior(class_key, 0));
+        m_database->Bind<double>(5, entry->GetModelVariancePosterior(class_key, 1));
+        m_database->Bind<int>(6, static_cast<int>(entry->GetOutlierTag(class_key)));
+        m_database->Bind<double>(7, entry->GetStatisticalDistance(class_key));
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+
+    m_database->Finalize();
+    m_database->CommitTransaction();
+}
+
+void ModelObjectDAO::SaveGroupChargeEntryList(
+    const GroupChargeEntry * group_entry, const std::string & table_name)
+{
+    m_database->BeginTransaction();
+    m_database->ClearTable(table_name);
+    
+    std::stringstream sql;
+    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
+        (
+            key_id, atom_size,
+            intercept_estimate_mean, charge_estimate_mean,
+            intercept_estimate_mdpde, charge_estimate_mdpde,
+            intercept_estimate_prior, charge_estimate_prior,
+            intercept_variance_prior, charge_variance_prior
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    )";
+
+    m_database->Prepare(sql.str());
+    for (auto & group_key : group_entry->GetGroupKeySet())
+    {
+        m_database->Bind<int64_t>(1, static_cast<int64_t>(group_key));
+        m_database->Bind<int>(2, group_entry->GetAtomObjectPtrListSize(group_key));
+        m_database->Bind<double>(3, std::get<0>(group_entry->GetModelEstimateMean(group_key)));
+        m_database->Bind<double>(4, std::get<1>(group_entry->GetModelEstimateMean(group_key)));
+        m_database->Bind<double>(5, std::get<0>(group_entry->GetModelEstimateMDPDE(group_key)));
+        m_database->Bind<double>(6, std::get<1>(group_entry->GetModelEstimateMDPDE(group_key)));
+        m_database->Bind<double>(7, std::get<0>(group_entry->GetModelEstimatePrior(group_key)));
+        m_database->Bind<double>(8, std::get<1>(group_entry->GetModelEstimatePrior(group_key)));
+        m_database->Bind<double>(9, std::get<0>(group_entry->GetModelVariancePrior(group_key)));
+        m_database->Bind<double>(10, std::get<1>(group_entry->GetModelVariancePrior(group_key)));
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+
+    m_database->Finalize();
+    m_database->CommitTransaction();
+}
+
 std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     const std::string & key_tag)
 {
     auto atom_list_table_name{ "atom_list_in_" + key_tag };
+
     auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + key_tag };
     auto atomic_potential_entry_map{ LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name) };
+
+    auto atomic_charge_entry_table_name{ "atomic_charge_entry_in_" + key_tag };
+    auto atomic_charge_entry_map{ LoadAtomicChargeEntryMap(atomic_charge_entry_table_name) };
+
     std::stringstream sql;
     sql <<"SELECT "<< R"(
             serial_id, residue_id, chain_id, indicator,
@@ -426,15 +640,30 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             static_cast<float>(std::get<14>(row)) );
 
         auto serial_id{ atom_object->GetSerialID() };
-        if (atomic_potential_entry_map.find(serial_id) != atomic_potential_entry_map.end())
+
+        // Load potential entry
+        if (atomic_potential_entry_map.empty() == false)
         {
-            atom_object->SetSelectedFlag(true);
-            atom_object->AddAtomicPotentialEntry(std::move(atomic_potential_entry_map.at(serial_id)));
+            if (atomic_potential_entry_map.find(serial_id) != atomic_potential_entry_map.end())
+            {
+                atom_object->SetSelectedFlag(true);
+                atom_object->AddAtomicPotentialEntry(std::move(atomic_potential_entry_map.at(serial_id)));
+            }
+            else
+            {
+                atom_object->SetSelectedFlag(false);
+            }
         }
-        else
+
+        // Load charge entry
+        if (atomic_charge_entry_map.empty() == false)
         {
-            atom_object->SetSelectedFlag(false);
+            if (atomic_charge_entry_map.find(serial_id) != atomic_charge_entry_map.end())
+            {
+                atom_object->AddAtomicChargeEntry(std::move(atomic_charge_entry_map.at(serial_id)));
+            }
         }
+
         atom_object_list.emplace_back(std::move(atom_object));
     }
     return atom_object_list;
@@ -443,6 +672,7 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
 std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>>
 ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
 {
+    if (TableExists(table_name) == false) return {};
     std::stringstream sql;
     sql <<"SELECT "<< R"(
             serial_id, sampling_size, distance_and_map_value_list,
@@ -509,6 +739,7 @@ void ModelObjectDAO::LoadAtomicPotentialEntrySubList(
 void ModelObjectDAO::LoadGroupPotentialEntryList(
     ModelObject * model_obj, const std::string & class_key, const std::string & table_name)
 {
+    if (TableExists(table_name) == false) return;
     std::stringstream sql;
     sql <<"SELECT "<< R"(
             key_id, atom_size,
@@ -582,4 +813,174 @@ void ModelObjectDAO::LoadGroupPotentialEntrySubList(
         throw std::runtime_error("ModelObjectDAO::LoadGroupPotentialEntrySubList() failed: "
                                  "Unsupported group class key: " + class_key);
     }
+}
+
+std::unordered_map<int, std::unique_ptr<AtomicChargeEntry>>
+ModelObjectDAO::LoadAtomicChargeEntryMap(const std::string & table_name)
+{
+    if (TableExists(table_name) == false) return {};
+    std::stringstream sql;
+    sql <<"SELECT "<< R"(
+            serial_id, sampling_size,
+            distance_and_map_value_list,
+            distance_and_neutral_map_value_list,
+            distance_and_positive_map_value_list,
+            distance_and_negative_map_value_list,
+            intercept_estimate_ols, charge_estimate_ols,
+            intercept_estimate_mdpde, charge_estimate_mdpde
+        )"<<" FROM "<< table_name <<";";
+    
+    auto row_list
+    {
+        m_database->Query<int, int,
+                          std::vector<std::tuple<float, float>>,
+                          std::vector<std::tuple<float, float>>,
+                          std::vector<std::tuple<float, float>>,
+                          std::vector<std::tuple<float, float>>,
+                          double, double, double, double>(sql.str())
+    };
+
+    auto serial_id{ 0 };
+    std::unordered_map<int, std::unique_ptr<AtomicChargeEntry>> atomic_charge_entry_map;
+    for (auto & row : row_list)
+    {
+        auto atomic_charge_entry{ std::make_unique<AtomicChargeEntry>() };
+        serial_id = std::get<0>(row);
+        atomic_charge_entry->AddDistanceAndMapValueList(std::get<2>(row));
+        atomic_charge_entry->AddDistanceAndNeutralMapValueList(std::get<3>(row));
+        atomic_charge_entry->AddDistanceAndPositiveMapValueList(std::get<4>(row));
+        atomic_charge_entry->AddDistanceAndNegativeMapValueList(std::get<5>(row));
+        atomic_charge_entry->AddModelEstimateOLS(std::get<6>(row), std::get<7>(row));
+        atomic_charge_entry->AddModelEstimateMDPDE(std::get<8>(row), std::get<9>(row));
+        atomic_charge_entry_map[serial_id] = std::move(atomic_charge_entry);
+    }
+
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+    {
+        auto class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        auto table_name_with_class_key{ class_key + "_" + table_name };
+        LoadAtomicChargeEntrySubList(table_name_with_class_key, class_key, atomic_charge_entry_map);
+    }
+    return atomic_charge_entry_map;
+}
+
+void ModelObjectDAO::LoadAtomicChargeEntrySubList(
+    const std::string & table_name, const std::string & class_key,
+    std::unordered_map<int, std::unique_ptr<AtomicChargeEntry>> & entry_map)
+{
+    if (TableExists(table_name) == false) return;
+    std::stringstream sql;
+    sql <<"SELECT "<< R"(
+            serial_id,
+            intercept_estimate_posterior, charge_estimate_posterior,
+            intercept_variance_posterior, charge_variance_posterior,
+            outlier_tag, statistical_distance
+        )"<<" FROM "<< table_name <<";";
+    
+    auto row_list
+    {
+        m_database->Query<int, double, double, double, double, int, double>(sql.str())
+    };
+
+    auto serial_id{ 0 };
+    for (auto & row : row_list)
+    {
+        serial_id = std::get<0>(row);
+        if (entry_map.find(serial_id) == entry_map.end()) continue;
+        auto & entry{ entry_map.at(serial_id) };
+        entry->AddModelEstimatePosterior(class_key, std::get<1>(row), std::get<2>(row));
+        entry->AddModelVariancePosterior(class_key, std::get<3>(row), std::get<4>(row));
+        entry->AddOutlierTag(class_key, static_cast<bool>(std::get<5>(row)));
+        entry->AddStatisticalDistance(class_key, std::get<6>(row));
+    }
+}
+
+void ModelObjectDAO::LoadGroupChargeEntryList(
+    ModelObject * model_obj, const std::string & class_key, const std::string & table_name)
+{
+    if (TableExists(table_name) == false) return;
+    std::stringstream sql;
+    sql <<"SELECT "<< R"(
+            key_id, atom_size,
+            intercept_estimate_mean, charge_estimate_mean,
+            intercept_estimate_mdpde, charge_estimate_mdpde,
+            intercept_estimate_prior, charge_estimate_prior,
+            intercept_variance_prior, charge_variance_prior
+        )"<<" FROM "<< table_name <<";";
+    
+    auto row_list
+    {
+        m_database->Query<int64_t, int,
+                          double, double, double, double,
+                          double, double, double, double>(sql.str())
+    };
+
+    auto group_entry{ model_obj->GetGroupChargeEntry(class_key) };
+    for (auto & row : row_list)
+    {
+        auto group_key{ static_cast<uint64_t>(std::get<0>(row)) };
+        group_entry->InsertGroupKey(group_key);
+        group_entry->ReserveAtomObjectPtrList(group_key, std::get<1>(row));
+        group_entry->AddModelEstimateMean(group_key, std::get<2>(row), std::get<3>(row));
+        group_entry->AddModelEstimateMDPDE(group_key, std::get<4>(row), std::get<5>(row));
+        group_entry->AddModelEstimatePrior(group_key, std::get<6>(row), std::get<7>(row));
+        group_entry->AddModelVariancePrior(group_key, std::get<8>(row), std::get<9>(row));
+    }
+    LoadGroupChargeEntrySubList(model_obj, class_key);
+}
+
+void ModelObjectDAO::LoadGroupChargeEntrySubList(
+    ModelObject * model_obj, const std::string & class_key)
+{
+    auto group_entry{ model_obj->GetGroupChargeEntry(class_key) };
+    if (class_key == AtomicInfoHelper::GetElementClassKey())
+    {
+        for (auto & atom : model_obj->GetSelectedAtomList())
+        {
+            auto group_key{ KeyPackerElementClass::Pack(
+                atom->GetElement(), atom->GetRemoteness(), atom->GetSpecialAtomFlag()) };
+            group_entry->AddAtomObjectPtr(group_key, atom);
+        }
+    }
+    else if (class_key == AtomicInfoHelper::GetResidueClassKey())
+    {
+        for (auto & atom : model_obj->GetSelectedAtomList())
+        {
+            auto group_key{
+                KeyPackerResidueClass::Pack(
+                    atom->GetResidue(), atom->GetElement(),
+                    atom->GetRemoteness(), atom->GetBranch(), atom->GetSpecialAtomFlag())
+            };
+            group_entry->AddAtomObjectPtr(group_key, atom);
+        }
+    }
+    else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+    {
+        for (auto & atom : model_obj->GetSelectedAtomList())
+        {
+            auto group_key{
+                KeyPackerStructureClass::Pack(
+                    atom->GetStructure(), atom->GetResidue(),
+                    atom->GetElement(), atom->GetRemoteness(),
+                    atom->GetBranch(), atom->GetSpecialAtomFlag())
+            };
+            group_entry->AddAtomObjectPtr(group_key, atom);
+        }
+    }
+    else
+    {
+        throw std::runtime_error("ModelObjectDAO::LoadGroupChargeEntrySubList() failed: "
+                                 "Unsupported group class key: " + class_key);
+    }
+}
+
+bool ModelObjectDAO::TableExists(const std::string & table_name) const
+{
+    std::stringstream sql;
+    sql << "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;";
+    m_database->Prepare(sql.str());
+    m_database->Bind<std::string>(1, table_name);
+    auto rc{ m_database->StepNext() };
+    m_database->Finalize();
+    return rc == SQLiteWrapper::StepRow();
 }

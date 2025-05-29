@@ -33,6 +33,7 @@ public:
 
 private:
     void PaintGroupGausMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
+    void PaintGroupChargeMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
     void PaintStructureClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausScatter(ModelObject * model_object, const std::string & name, int par_id=0);
     void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);

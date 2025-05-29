@@ -13,6 +13,7 @@
 #include "KeyPacker.hpp"
 #include "ArrayStats.hpp"
 #include "AtomClassifier.hpp"
+#include "GlobalEnumClass.hpp"
 
 #include <iostream>
 #include <tuple>
@@ -124,9 +125,28 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
             for (auto atom : atom_list)
             {
                 auto entry{ atom->GetAtomicChargeEntry() };
-                if (entry == nullptr) continue;
-                if (entry->IsDataListSizeValid() == false) continue;
+                if (entry == nullptr)
+                {
+                    std::cout <<"Warning: Atomic charge entry is nullptr for atom "
+                          << atom->GetInfo() << ". This atom will be skipped." << std::endl;
+                    continue;
+                }
+                if (entry->IsDataListSizeValid() == false)
+                {
+                    std::cout <<"Warning: Atomic charge entry data list size is not valid for atom "
+                          << atom->GetInfo() << ". This atom will be skipped." << std::endl;
+                    continue;
+                }
                 bool is_negative_charged{ false };
+                if (atom->GetElement() == Element::CARBON)
+                {
+                    if (atom->GetRemoteness() == Remoteness::NONE ||
+                        atom->GetRemoteness() == Remoteness::ALPHA)
+                    {
+                        is_negative_charged = true;
+                    
+                    }
+                }
                 std::vector<Eigen::VectorXd> sampling_entry_list;
                 sampling_entry_list.reserve(entry->GetDistanceAndMapValueListSize());
                 for (size_t p = 0; p < entry->GetDistanceAndMapValueListSize(); p++)
@@ -146,13 +166,15 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                     auto model_x_negative{  y_neutral - y_negative };
                     auto model_y{ y_data - y_neutral };
                     
-                    Eigen::VectorXd sampling_entry(2);
-                    sampling_entry(0) = (is_negative_charged) ? model_x_negative : model_x_positive;
-                    sampling_entry(1) = model_y;
+                    Eigen::VectorXd sampling_entry(3);
+                    sampling_entry(0) = 1.0;
+                    sampling_entry(1) = (is_negative_charged) ? model_x_negative : model_x_positive;
+                    sampling_entry(2) = model_y;
                     sampling_entry_list.emplace_back(sampling_entry);
                 }
                 data_array.emplace_back(std::make_tuple(sampling_entry_list, atom->GetInfo()));
             }
+            
             auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
             model_estimator->SetDataArray(data_array);
             model_estimator->RunEstimation(m_alpha_r, m_alpha_g);

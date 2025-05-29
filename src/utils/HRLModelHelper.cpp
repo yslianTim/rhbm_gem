@@ -67,6 +67,10 @@ void HRLModelHelper::SetDataArray(
         VectorXd y_data_vector{ VectorXd::Zero(data_size) };
         for (int i = 0; i < data_size; i++)
         {
+            if (member_data.at(static_cast<size_t>(i)).size() != m_basis_size + 1)
+            {
+                throw std::runtime_error("The input data size isn't consistent with basis size.");
+            }
             for (int j = 0; j < m_basis_size; j++)
             {
                 x_data_matrix(i, j) = member_data.at(static_cast<size_t>(i))(j);
