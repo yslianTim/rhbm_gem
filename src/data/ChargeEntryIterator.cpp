@@ -389,6 +389,17 @@ std::unique_ptr<TGraphErrors> ChargeEntryIterator::CreateModelBasisToMapValueGra
     auto x{ 0.0 };
     for (size_t p = 0; p < data_list.size(); p++)
     {
+        auto distance_data{ std::get<0>(data_list.at(p)) };
+        auto distance_map_0{ std::get<0>(map_0_list.at(p)) };
+        auto distance_map_pos{ std::get<0>(map_pos_list.at(p)) };
+        auto distance_map_neg{ std::get<0>(map_neg_list.at(p)) };
+        if (distance_data != distance_map_0 ||
+            distance_data != distance_map_pos ||
+            distance_data != distance_map_neg)
+        {
+            std::cerr << "Distance mismatch in ChargeEntryIterator::CreateModelBasisToMapValueGraph." << std::endl;
+            continue;
+        }
         if      (basis_id == 0) x = std::get<1>(map_0_list.at(p));
         else if (basis_id == 1) x = std::get<1>(map_pos_list.at(p)) - std::get<1>(map_0_list.at(p));
         else if (basis_id == 2) x = std::get<1>(map_0_list.at(p)) - std::get<1>(map_neg_list.at(p));

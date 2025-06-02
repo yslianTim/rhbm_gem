@@ -139,8 +139,6 @@ void AtomPainter::PaintRegressionCheckPlot(const std::string & name)
     std::vector<std::unique_ptr<TGraphErrors>> graph_list;
     for (auto & atom : m_atom_object_list)
     {
-        
-
         auto atom_iter{ std::make_unique<ChargeEntryIterator>(atom) };
         auto graph{ atom_iter->CreateModelBasisToMapValueGraph(0) };
         //auto frame{ ROOTHelper::CreateHist2D("frame","", 100, 0.0, 1.5, 100, -0.5, 0.5) };
