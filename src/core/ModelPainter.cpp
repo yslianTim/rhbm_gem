@@ -405,12 +405,14 @@ void ModelPainter::PaintGroupChargeMainChain(
         auto resolution_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
 
         PrintAmplitudePad(pad[1].get(), frame[1].get());
-        frame[1]->GetYaxis()->SetTitle("Intercept");
+        frame[1]->GetYaxis()->SetTitle("Intercept #beta_{0}");
         PrintWidthPad(pad[0].get(), frame[0].get());
         frame[0]->GetYaxis()->SetTitle("Partial Charge #alpha");
         PrintAmplitudeSummaryPad(pad[3].get(), frame[3].get());
         PrintWidthSummaryPad(pad[2].get(), frame[2].get());
         PrintGausSummaryPad(pad[4].get(), frame[4].get());
+        frame[4]->GetXaxis()->SetTitle("Intercept #beta_{0}");
+        frame[4]->GetYaxis()->SetTitle("Partial Charge #alpha");
         PrintCountSummaryPad(pad[6].get(), frame[5].get());
         auto emd_id{ (is_simulation == true) ? "Simulation" : model_object->GetEmdID() };
         PrintDataInfoPad(pad[5].get(), info_text.get(), model_object->GetPdbID(), emd_id);

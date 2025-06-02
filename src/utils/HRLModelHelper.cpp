@@ -154,8 +154,11 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
         m_capital_lambda_list.at(0) = m_capital_lambda;
         return;
     }
-    m_mu_iter(0) = EigenMatrixUtility::GetMedian(m_beta_MDPDE_array.row(0));
-    m_mu_iter(1) = EigenMatrixUtility::GetMedian(m_beta_MDPDE_array.row(1));
+
+    for (int b = 0; b < m_basis_size; b++)
+    {
+        m_mu_iter(b) = EigenMatrixUtility::GetMedian(m_beta_MDPDE_array.row(b));
+    }
 
     VectorXd mu_in_previous_iter;
     for (int iter = 0; iter < m_maximum_iteration; iter++)

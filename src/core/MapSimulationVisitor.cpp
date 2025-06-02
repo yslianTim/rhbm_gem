@@ -132,14 +132,6 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
             auto distance{
                 ArrayStats<float>::ComputeNorm(query_pseudo_atom->GetPosition(), atom->GetPosition())
             };
-            //auto charge{ (m_partial_charge_choice == 0) ? 0.0 :
-            //    AminoAcidInfoHelper::GetPartialCharge(
-            //        atom->GetResidue(),
-            //        atom->GetElement(),
-            //        atom->GetRemoteness(),
-            //        atom->GetBranch(),
-            //        atom->GetStructure())
-            //};
             auto charge{ 0.0 };
             switch (m_partial_charge_choice)
             {

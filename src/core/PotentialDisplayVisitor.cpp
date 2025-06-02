@@ -48,7 +48,7 @@ void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
     BuildModelObjectList(data_manager, m_model_object_list);
     BuildReferenceModelObjectList(data_manager, "no_charge", m_sim_no_charge_model_object_list);
     BuildReferenceModelObjectList(data_manager, "with_charge", m_sim_with_charge_model_object_list);
-    //RunAtomPainter(dynamic_cast<ModelObject *>(m_model_object_list.at(0)));
+    RunAtomPainter(dynamic_cast<ModelObject *>(m_model_object_list.at(0)));
     RunModelPainter(data_manager);
     RunComparisonPainter(data_manager);
     RunDemoPainter(data_manager);
@@ -61,10 +61,7 @@ void PotentialDisplayVisitor::RunAtomPainter(ModelObject * model_object)
     painter->SetFolder(m_folder_path);
     for (auto & atom : model_object->GetComponentsList())
     {
-        if (atom->GetSelectedFlag() == false) continue;
-        if (atom->GetElement() != Element::CARBON) continue;
-        if (atom->GetRemoteness() != Remoteness::ALPHA) continue;
-        if (atom->GetResidue() != Residue::ALA) continue;
+        if (atom->GetAtomicChargeEntry() == nullptr) continue;
         painter->AddDataObject(atom.get());
     }
     painter->Painting();

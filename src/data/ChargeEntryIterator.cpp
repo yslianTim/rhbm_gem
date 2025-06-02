@@ -374,4 +374,26 @@ ChargeEntryIterator::CreateModelEstimateToResidueIDGraphMap(
     }
     return graph_map;
 }
+
+std::unique_ptr<TGraphErrors> ChargeEntryIterator::CreateModelBasisToMapValueGraph(int basis_id)
+{
+    if (IsAtomObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto data_list{ m_atomic_entry->GetDistanceAndMapValueList() };
+    auto map_0_list{ m_atomic_entry->GetDistanceAndNeutralMapValueList() };
+    auto map_pos_list{ m_atomic_entry->GetDistanceAndPositiveMapValueList() };
+    auto map_neg_list{ m_atomic_entry->GetDistanceAndNegativeMapValueList() };
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto x{ 0.0 };
+    for (size_t p = 0; p < data_list.size(); p++)
+    {
+        if      (basis_id == 0) x = std::get<1>(map_0_list.at(p));
+        else if (basis_id == 1) x = std::get<1>(map_pos_list.at(p)) - std::get<1>(map_0_list.at(p));
+        else if (basis_id == 2) x = std::get<1>(map_0_list.at(p)) - std::get<1>(map_neg_list.at(p));
+        graph->SetPoint(static_cast<int>(p), x, std::get<1>(data_list.at(p)));
+    }
+    return graph;
+}
 #endif

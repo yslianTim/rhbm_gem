@@ -14,6 +14,8 @@
 #include "ArrayStats.hpp"
 #include "AtomClassifier.hpp"
 #include "GlobalEnumClass.hpp"
+#include "AminoAcidInfoHelper.hpp"
+#include "ElectricPotential.hpp"
 
 #include <iostream>
 #include <tuple>
@@ -59,6 +61,7 @@ void ChargeAnalysisVisitor::VisitMapObject(MapObject * data_object)
 {
     ScopeTimer timer("ChargeAnalysisVisitor::VisitMapObject");
     if (data_object == nullptr) return;
+    data_object->MapValueArrayNormalization();
 }
 
 void ChargeAnalysisVisitor::Analysis(DataObjectManager * data_manager)
@@ -73,6 +76,10 @@ void ChargeAnalysisVisitor::Analysis(DataObjectManager * data_manager)
         const auto & neutral_map_object{ data_manager->GetDataObjectRef(m_neutral_map_key_tag) };
         const auto & positive_map_object{ data_manager->GetDataObjectRef(m_positive_map_key_tag) };
         const auto & negative_map_object{ data_manager->GetDataObjectRef(m_negative_map_key_tag) };
+        //map_object->Accept(this);
+        //neutral_map_object->Accept(this);
+        //positive_map_object->Accept(this);
+        //negative_map_object->Accept(this);
         
         for (auto & atom : m_selected_atom_list)
         {
@@ -100,6 +107,10 @@ void ChargeAnalysisVisitor::Analysis(DataObjectManager * data_manager)
 void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
 {
     ScopeTimer timer("ChargeAnalysisVisitor::RunChargeFitting");
+    auto blurring_width{ 0.50 };
+    auto electric_potential{ std::make_unique<ElectricPotential>() };
+    electric_potential->SetBlurringWidth(blurring_width);
+    electric_potential->SetModelChoice(1);
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
     {
         const auto & class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
@@ -137,15 +148,23 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                           << atom->GetInfo() << ". This atom will be skipped." << std::endl;
                     continue;
                 }
-                bool is_negative_charged{ true };
-                if (atom->GetElement() == Element::CARBON)
-                {
-                    if (atom->GetRemoteness() == Remoteness::NONE ||
-                        atom->GetRemoteness() == Remoteness::ALPHA)
-                    {
-                        is_negative_charged = false;
-                    }
-                }
+                //if (atom->GetSerialID() == 1474 && i == 0) first = true;
+                //bool is_negative_charged{ true };
+                //if (atom->GetElement() == Element::CARBON)
+                //{
+                //    if (atom->GetRemoteness() == Remoteness::NONE ||
+                //        atom->GetRemoteness() == Remoteness::ALPHA)
+                //    {
+                //        is_negative_charged = false;
+                //    }
+                //}
+                auto charge{ AminoAcidInfoHelper::GetPartialCharge(
+                    atom->GetResidue(),
+                    atom->GetElement(),
+                    atom->GetRemoteness(),
+                    atom->GetBranch(),
+                    atom->GetStructure()) };
+                auto is_negative_charged{ charge < 0.0 };
                 std::vector<Eigen::VectorXd> sampling_entry_list;
                 sampling_entry_list.reserve(entry->GetDistanceAndMapValueListSize());
                 for (size_t p = 0; p < entry->GetDistanceAndMapValueListSize(); p++)
@@ -157,50 +176,62 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                     auto distance{ std::get<0>(data_entry) };
                     if (distance < m_x_min || distance > m_x_max) continue;
 
-                    auto y_data{ std::get<1>(data_entry) };
-                    auto y_neutral{ std::get<1>(neutral_data_entry) };
-                    auto y_positive{ std::get<1>(positive_data_entry) };
-                    auto y_negative{ std::get<1>(negative_data_entry) };
-                    //auto model_x_positive{ y_positive - y_neutral }; // formula on draft
-                    //auto model_x_negative{ y_neutral - y_negative };
-                    auto model_x_positive{ - y_positive + y_neutral };
-                    auto model_x_negative{ - y_neutral + y_negative };
-                    auto model_y{ y_data - y_neutral };
-                    
-                    Eigen::VectorXd sampling_entry(3);
+                    auto map_data{ std::get<1>(data_entry) };
+                    auto map_0{ std::get<1>(neutral_data_entry) };
+                    auto map_pos{ std::get<1>(positive_data_entry) };
+                    auto map_neg{ std::get<1>(negative_data_entry) };
+                    auto x0{ map_0 };
+                    auto x1_pos{ map_pos - map_0 };
+                    auto x1_neg{ map_0 - map_neg };
+                    //auto x0{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 0.0) };
+                    //auto x1_pos{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 1.0) };
+                    //auto x1_neg{ electric_potential->GetPotentialValue(atom->GetElement(), distance, -1.0) };
+                    auto y{ map_data };
+
+                    Eigen::VectorXd sampling_entry(4);
                     sampling_entry(0) = 1.0;
-                    sampling_entry(1) = (is_negative_charged) ? model_x_negative : model_x_positive;
-                    sampling_entry(2) = model_y;
+                    sampling_entry(1) = x0;
+                    //sampling_entry(2) = (is_negative_charged) ? x1_neg : x1_pos;
+                    sampling_entry(2) = x1_pos;
+                    sampling_entry(3) = y;
                     sampling_entry_list.emplace_back(sampling_entry);
                 }
                 data_array.emplace_back(std::make_tuple(sampling_entry_list, atom->GetInfo()));
             }
             
-            auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
+            auto model_estimator{ std::make_unique<HRLModelHelper>(3, static_cast<int>(group_size)) };
             model_estimator->SetDataArray(data_array);
             model_estimator->RunEstimation(m_alpha_r, m_alpha_g);
 
             auto model_group_mean{ model_estimator->GetMuVectorMean() };
-            group_charge_entry->AddModelEstimateMean(group_key, model_group_mean(0), model_group_mean(1));
+            group_charge_entry->AddModelEstimateMean(group_key, model_group_mean(0), model_group_mean(2)/model_group_mean(1));
+            //group_charge_entry->AddModelEstimateMean(group_key, model_group_mean(0), model_group_mean(1));
             auto model_group_mdpde{ model_estimator->GetMuVectorMDPDE() };
-            group_charge_entry->AddModelEstimateMDPDE(group_key, model_group_mdpde(0), model_group_mdpde(1));
+            group_charge_entry->AddModelEstimateMDPDE(group_key, model_group_mdpde(0), model_group_mdpde(2)/model_group_mdpde(1));
+            //group_charge_entry->AddModelEstimateMDPDE(group_key, model_group_mdpde(0), model_group_mdpde(1));
             auto prior_estimate{ model_estimator->GetMuVectorPrior() };
             auto prior_variance{ model_estimator->GetCapitalLambdaMatrix() };
-            group_charge_entry->AddModelEstimatePrior(group_key, prior_estimate(0), prior_estimate(1));
-            group_charge_entry->AddModelVariancePrior(group_key, prior_variance(0, 0), prior_variance(1, 1));
+            group_charge_entry->AddModelEstimatePrior(group_key, prior_estimate(0), prior_estimate(2)/prior_estimate(1));
+            group_charge_entry->AddModelVariancePrior(group_key, prior_variance(0, 0), prior_variance(2, 2));
+            //group_charge_entry->AddModelEstimatePrior(group_key, prior_estimate(0), prior_estimate(1));
+            //group_charge_entry->AddModelVariancePrior(group_key, prior_variance(0, 0), prior_variance(1, 1));
 
             auto count{ 0 };
             for (auto atom : atom_list)
             {
                 auto atom_entry{ atom->GetAtomicChargeEntry() };
                 Eigen::VectorXd beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
-                atom_entry->AddModelEstimateOLS(beta_vector_ols(0), beta_vector_ols(1));
+                atom_entry->AddModelEstimateOLS(beta_vector_ols(0), beta_vector_ols(2)/beta_vector_ols(1));
+                //atom_entry->AddModelEstimateOLS(beta_vector_ols(0), beta_vector_ols(1));
                 Eigen::VectorXd beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
-                atom_entry->AddModelEstimateMDPDE(beta_vector_mdpde(0), beta_vector_mdpde(1));
+                atom_entry->AddModelEstimateMDPDE(beta_vector_mdpde(0), beta_vector_mdpde(2)/beta_vector_mdpde(1));
+                //atom_entry->AddModelEstimateMDPDE(beta_vector_mdpde(0), beta_vector_mdpde(1));
                 Eigen::VectorXd beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
-                atom_entry->AddModelEstimatePosterior(class_key, beta_vector_posterior(0), beta_vector_posterior(1));
-                atom_entry->AddModelVariancePosterior(class_key, sigma_matrix_posterior(0, 0), sigma_matrix_posterior(1, 1));
+                atom_entry->AddModelEstimatePosterior(class_key, beta_vector_posterior(0), beta_vector_posterior(2)/beta_vector_posterior(1));
+                atom_entry->AddModelVariancePosterior(class_key, sigma_matrix_posterior(0, 0), sigma_matrix_posterior(2, 2));
+                //atom_entry->AddModelEstimatePosterior(class_key, beta_vector_posterior(0), beta_vector_posterior(1));
+                //atom_entry->AddModelVariancePosterior(class_key, sigma_matrix_posterior(0, 0), sigma_matrix_posterior(1, 1));
                 atom_entry->AddOutlierTag(class_key, model_estimator->GetOutlierFlag(count));
                 atom_entry->AddStatisticalDistance(class_key, model_estimator->GetStatisticalDistance(count));
                 count++;

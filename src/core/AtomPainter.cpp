@@ -2,6 +2,7 @@
 #include "AtomObject.hpp"
 #include "DataObjectBase.hpp"
 #include "PotentialEntryIterator.hpp"
+#include "ChargeEntryIterator.hpp"
 #include "FilePathHelper.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "ArrayStats.hpp"
@@ -58,7 +59,8 @@ void AtomPainter::Painting(void)
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of atom objects to be painted: "<< m_atom_object_list.size() << std::endl;
     
-    PaintDemoPlot("demo_plot.pdf");
+    //PaintDemoPlot("demo_plot.pdf");
+    PaintRegressionCheckPlot("regression_check_plot.pdf");
 }
 
 void AtomPainter::PaintDemoPlot(const std::string & name)
@@ -120,6 +122,36 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
 
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    #endif
+}
+
+void AtomPainter::PaintRegressionCheckPlot(const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+
+    #ifdef HAVE_ROOT
+    gStyle->SetGridColor(kGray);
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 1000) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+   
+    std::vector<std::unique_ptr<TGraphErrors>> graph_list;
+    for (auto & atom : m_atom_object_list)
+    {
+        
+
+        auto atom_iter{ std::make_unique<ChargeEntryIterator>(atom) };
+        auto graph{ atom_iter->CreateModelBasisToMapValueGraph(0) };
+        //auto frame{ ROOTHelper::CreateHist2D("frame","", 100, 0.0, 1.5, 100, -0.5, 0.5) };
+        //frame->SetStats(0);
+        //frame->Draw("");
+        ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, kBlack);
+        graph->Draw("AP");
+        graph_list.emplace_back(std::move(graph));
+
+        ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    }
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     #endif
 }

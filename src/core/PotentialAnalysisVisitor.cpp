@@ -59,6 +59,7 @@ void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitMapObject");
     if (data_object == nullptr) return;
+    data_object->MapValueArrayNormalization();
     MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler };
     for (auto & atom : m_selected_atom_list)
     {
