@@ -83,8 +83,8 @@ void MapSimulationVisitor::Analysis(DataObjectManager * data_manager)
             data_manager->AddDataObject(map_key_tag, CreateSimulatedMapObject(blurring_width));
 
             auto extension{ std::string(".map") };
-            //auto file_name{ std::string("sim_map_conf_charge_") + map_key_tag + extension };
-            auto file_name{ std::string("sim_map_negative_charge_") + map_key_tag + extension };
+            auto file_name{ std::string("sim_map_test_charge_") + map_key_tag + extension };
+            //auto file_name{ std::string("sim_map_n0.5_charge_") + map_key_tag + extension };
             auto output_file_name{ FilePathHelper::EnsureTrailingSlash(m_folder_path) + file_name };
             data_manager->ProduceFile(output_file_name, map_key_tag);
         }
@@ -151,6 +151,12 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
                     break;
                 case 3: // -1 Negative Charge
                     charge = -1.0;
+                    break;
+                case 4: // +0.5 Positive Charge
+                    charge = 0.5;
+                    break;
+                case 5: // -0.5 Negative Charge
+                    charge = -0.5;
                     break;
                 default:
                     std::cerr << "Error: Invalid partial charge choice." << std::endl;

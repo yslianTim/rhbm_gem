@@ -148,16 +148,7 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                           << atom->GetInfo() << ". This atom will be skipped." << std::endl;
                     continue;
                 }
-                //if (atom->GetSerialID() == 1474 && i == 0) first = true;
-                //bool is_negative_charged{ true };
-                //if (atom->GetElement() == Element::CARBON)
-                //{
-                //    if (atom->GetRemoteness() == Remoteness::NONE ||
-                //        atom->GetRemoteness() == Remoteness::ALPHA)
-                //    {
-                //        is_negative_charged = false;
-                //    }
-                //}
+
                 auto charge{ AminoAcidInfoHelper::GetPartialCharge(
                     atom->GetResidue(),
                     atom->GetElement(),
@@ -165,7 +156,8 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                     atom->GetBranch(),
                     atom->GetStructure()) };
                 auto is_negative_charged{ charge < 0.0 };
-                std::vector<Eigen::VectorXd> sampling_entry_list;
+                std::vector<std::tuple<float, float, float>> regression_data_list;
+                std::vector<Eigen::VectorXd> sampling_entry_list; // same as regression_data_list
                 sampling_entry_list.reserve(entry->GetDistanceAndMapValueListSize());
                 for (size_t p = 0; p < entry->GetDistanceAndMapValueListSize(); p++)
                 {
@@ -176,26 +168,35 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                     auto distance{ std::get<0>(data_entry) };
                     if (distance < m_x_min || distance > m_x_max) continue;
 
-                    auto map_data{ std::get<1>(data_entry) };
-                    auto map_0{ std::get<1>(neutral_data_entry) };
-                    auto map_pos{ std::get<1>(positive_data_entry) };
-                    auto map_neg{ std::get<1>(negative_data_entry) };
-                    auto x0{ map_0 };
-                    auto x1_pos{ map_pos - map_0 };
-                    auto x1_neg{ map_0 - map_neg };
-                    //auto x0{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 0.0) };
-                    //auto x1_pos{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 1.0) };
-                    //auto x1_neg{ electric_potential->GetPotentialValue(atom->GetElement(), distance, -1.0) };
-                    auto y{ map_data };
+                    //auto func_phi_charge{ electric_potential->GetPotentialValue(atom->GetElement(), distance, charge) };
+                    auto func_phi_0{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 0.0) };
+                    auto func_phi_pos{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 1.0) };
+                    auto func_phi_neg{ electric_potential->GetPotentialValue(atom->GetElement(), distance, -1.0) };
+
+                    
+                    auto phi_data{ std::get<1>(data_entry) };
+                    auto phi_0{ std::get<1>(neutral_data_entry) };
+                    //auto phi_pos{ std::get<1>(positive_data_entry) };
+                    //auto phi_neg{ std::get<1>(negative_data_entry) };
+                    auto weight{ func_phi_0 / phi_0 };
+                    auto x0{ func_phi_0 };
+                    //auto x1_pos{ func_phi_pos - func_phi_0 };
+                    //auto x1_neg{ func_phi_0 - func_phi_neg };
+                    auto x1_pos{ func_phi_pos };
+                    auto x1_neg{ func_phi_neg };
+                    auto x1{ (is_negative_charged) ? -x1_neg : x1_pos };
+                    //auto x1{ x1_pos };
+                    auto y{ weight * phi_data };
 
                     Eigen::VectorXd sampling_entry(4);
                     sampling_entry(0) = 1.0;
                     sampling_entry(1) = x0;
-                    //sampling_entry(2) = (is_negative_charged) ? x1_neg : x1_pos;
-                    sampling_entry(2) = x1_pos;
+                    sampling_entry(2) = x1;
                     sampling_entry(3) = y;
                     sampling_entry_list.emplace_back(sampling_entry);
+                    regression_data_list.emplace_back(std::make_tuple(x0, x1, y));
                 }
+                entry->AddRegressionDataList(regression_data_list);
                 data_array.emplace_back(std::make_tuple(sampling_entry_list, atom->GetInfo()));
             }
             
@@ -204,34 +205,26 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
             model_estimator->RunEstimation(m_alpha_r, m_alpha_g);
 
             auto model_group_mean{ model_estimator->GetMuVectorMean() };
-            group_charge_entry->AddModelEstimateMean(group_key, model_group_mean(0), model_group_mean(2)/model_group_mean(1));
-            //group_charge_entry->AddModelEstimateMean(group_key, model_group_mean(0), model_group_mean(1));
+            group_charge_entry->AddModelEstimateMean(group_key, model_group_mean(0), model_group_mean(1), model_group_mean(2));
             auto model_group_mdpde{ model_estimator->GetMuVectorMDPDE() };
-            group_charge_entry->AddModelEstimateMDPDE(group_key, model_group_mdpde(0), model_group_mdpde(2)/model_group_mdpde(1));
-            //group_charge_entry->AddModelEstimateMDPDE(group_key, model_group_mdpde(0), model_group_mdpde(1));
+            group_charge_entry->AddModelEstimateMDPDE(group_key, model_group_mdpde(0), model_group_mdpde(1), model_group_mdpde(2));
             auto prior_estimate{ model_estimator->GetMuVectorPrior() };
             auto prior_variance{ model_estimator->GetCapitalLambdaMatrix() };
-            group_charge_entry->AddModelEstimatePrior(group_key, prior_estimate(0), prior_estimate(2)/prior_estimate(1));
-            group_charge_entry->AddModelVariancePrior(group_key, prior_variance(0, 0), prior_variance(2, 2));
-            //group_charge_entry->AddModelEstimatePrior(group_key, prior_estimate(0), prior_estimate(1));
-            //group_charge_entry->AddModelVariancePrior(group_key, prior_variance(0, 0), prior_variance(1, 1));
+            group_charge_entry->AddModelEstimatePrior(group_key, prior_estimate(0), prior_estimate(1), prior_estimate(2));
+            group_charge_entry->AddModelVariancePrior(group_key, prior_variance(0, 0), prior_variance(1, 1), prior_variance(2, 2));
 
             auto count{ 0 };
             for (auto atom : atom_list)
             {
                 auto atom_entry{ atom->GetAtomicChargeEntry() };
                 Eigen::VectorXd beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
-                atom_entry->AddModelEstimateOLS(beta_vector_ols(0), beta_vector_ols(2)/beta_vector_ols(1));
-                //atom_entry->AddModelEstimateOLS(beta_vector_ols(0), beta_vector_ols(1));
+                atom_entry->AddModelEstimateOLS(beta_vector_ols(0), beta_vector_ols(1), beta_vector_ols(2));
                 Eigen::VectorXd beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
-                atom_entry->AddModelEstimateMDPDE(beta_vector_mdpde(0), beta_vector_mdpde(2)/beta_vector_mdpde(1));
-                //atom_entry->AddModelEstimateMDPDE(beta_vector_mdpde(0), beta_vector_mdpde(1));
+                atom_entry->AddModelEstimateMDPDE(beta_vector_mdpde(0), beta_vector_mdpde(1), beta_vector_mdpde(2));
                 Eigen::VectorXd beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
-                atom_entry->AddModelEstimatePosterior(class_key, beta_vector_posterior(0), beta_vector_posterior(2)/beta_vector_posterior(1));
-                atom_entry->AddModelVariancePosterior(class_key, sigma_matrix_posterior(0, 0), sigma_matrix_posterior(2, 2));
-                //atom_entry->AddModelEstimatePosterior(class_key, beta_vector_posterior(0), beta_vector_posterior(1));
-                //atom_entry->AddModelVariancePosterior(class_key, sigma_matrix_posterior(0, 0), sigma_matrix_posterior(1, 1));
+                atom_entry->AddModelEstimatePosterior(class_key, beta_vector_posterior(0), beta_vector_posterior(1), beta_vector_posterior(2));
+                atom_entry->AddModelVariancePosterior(class_key, sigma_matrix_posterior(0, 0), sigma_matrix_posterior(1, 1), sigma_matrix_posterior(2, 2));
                 atom_entry->AddOutlierTag(class_key, model_estimator->GetOutlierFlag(count));
                 atom_entry->AddStatisticalDistance(class_key, model_estimator->GetStatisticalDistance(count));
                 count++;

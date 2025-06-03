@@ -123,6 +123,33 @@ struct SQLiteColumnReader<std::vector<std::tuple<float, float>>>
     }
 };
 
+// std::vector<std::tuple<float, float, float>> specialization
+template <>
+struct SQLiteColumnReader<std::vector<std::tuple<float, float, float>>>
+{
+    static std::vector<std::tuple<float, float, float>> Get(sqlite3_stmt* stmt, int index)
+    {
+        const void * blob_data = sqlite3_column_blob(stmt, index);
+        int blob_size{ sqlite3_column_bytes(stmt, index) };
+        if (!blob_data || blob_size <= 0)
+        {
+            return {};
+        }
+        int count{ blob_size / (3 * static_cast<int>(sizeof(float))) };
+        std::vector<std::tuple<float, float, float>> result;
+        result.reserve(static_cast<size_t>(count));
+        const float * blob_floats{ reinterpret_cast<const float *>(blob_data) };
+        for (int i = 0; i < count; ++i)
+        {
+            float first = blob_floats[3 * i];
+            float second = blob_floats[3 * i + 1];
+            float third = blob_floats[3 * i + 2];
+            result.emplace_back(std::make_tuple(first, second, third));
+        }
+        return result;
+    }
+};
+
 // std::vector<std::tuple<double, double>> specialization
 template <>
 struct SQLiteColumnReader<std::vector<std::tuple<double, double>>>

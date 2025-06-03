@@ -341,9 +341,9 @@ void ModelPainter::PaintGroupChargeMainChain(
         auto class_key{ (j == 0) ? AtomicInfoHelper::GetResidueClassKey() : AtomicInfoHelper::GetStructureClassKey() };
         for (size_t i = 0; i < primary_element_size; i++)
         {
-            intercept_graph[i] = entry_iter->CreateModelEstimateToResidueGraph(group_key_list[i][j], class_key, 0);
-            charge_graph[i] = entry_iter->CreateModelEstimateToResidueGraph(group_key_list[i][j], class_key, 1);
-            correlation_graph[i] = entry_iter->CreateModelEstimateScatterGraph(group_key_list[i][j], class_key, 0, 1);
+            intercept_graph[i] = entry_iter->CreateModelEstimateToResidueGraph(group_key_list[i][j], class_key, 1);
+            charge_graph[i] = entry_iter->CreateModelEstimateToResidueGraph(group_key_list[i][j], class_key, 2);
+            correlation_graph[i] = entry_iter->CreateModelEstimateScatterGraph(group_key_list[i][j], class_key, 1, 2);
             for (int p = 0; p < intercept_graph[i]->GetN(); p++)
             {
                 intercept_array.push_back(intercept_graph[i]->GetPointY(p));

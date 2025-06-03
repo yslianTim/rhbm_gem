@@ -62,6 +62,9 @@ void PotentialDisplayVisitor::RunAtomPainter(ModelObject * model_object)
     for (auto & atom : model_object->GetComponentsList())
     {
         if (atom->GetAtomicChargeEntry() == nullptr) continue;
+        if (atom->GetRemoteness() != Remoteness::NONE && 
+            atom->GetRemoteness() != Remoteness::ALPHA) continue;
+        if (atom->GetSpecialAtomFlag() == true) continue;
         painter->AddDataObject(atom.get());
     }
     painter->Painting();

@@ -30,24 +30,24 @@ void GroupChargeEntry::AddAtomObjectPtr(uint64_t group_key, AtomObject * atom_ob
     m_group_atom_list_map[group_key].emplace_back(atom_object);
 }
 
-void GroupChargeEntry::AddModelEstimateMean(uint64_t group_key, double v0, double v1)
+void GroupChargeEntry::AddModelEstimateMean(uint64_t group_key, double v0, double v1, double v2)
 {
-    m_model_estimate_mean_map[group_key] = std::make_tuple(v0, v1);
+    m_model_estimate_mean_map[group_key] = std::make_tuple(v0, v1, v2);
 }
 
-void GroupChargeEntry::AddModelEstimateMDPDE(uint64_t group_key, double v0, double v1)
+void GroupChargeEntry::AddModelEstimateMDPDE(uint64_t group_key, double v0, double v1, double v2)
 {
-    m_model_estimate_mdpde_map[group_key] = std::make_tuple(v0, v1);
+    m_model_estimate_mdpde_map[group_key] = std::make_tuple(v0, v1, v2);
 }
 
-void GroupChargeEntry::AddModelEstimatePrior(uint64_t group_key, double v0, double v1)
+void GroupChargeEntry::AddModelEstimatePrior(uint64_t group_key, double v0, double v1, double v2)
 {
-    m_model_estimate_prior_map[group_key] = std::make_tuple(v0, v1);
+    m_model_estimate_prior_map[group_key] = std::make_tuple(v0, v1, v2);
 }
 
-void GroupChargeEntry::AddModelVariancePrior(uint64_t group_key, double v0, double v1)
+void GroupChargeEntry::AddModelVariancePrior(uint64_t group_key, double v0, double v1, double v2)
 {
-    m_model_variance_prior_map[group_key] = std::make_tuple(v0, v1);
+    m_model_variance_prior_map[group_key] = std::make_tuple(v0, v1, v2);
 }
 
 int GroupChargeEntry::GetAtomObjectPtrListSize(uint64_t group_key) const
@@ -60,22 +60,22 @@ const std::vector<AtomObject *> & GroupChargeEntry::GetAtomObjectPtrList(uint64_
     return m_group_atom_list_map.at(group_key);
 }
 
-std::tuple<double, double> GroupChargeEntry::GetModelEstimateMean(uint64_t group_key) const
+std::tuple<double, double, double> GroupChargeEntry::GetModelEstimateMean(uint64_t group_key) const
 {
     return m_model_estimate_mean_map.at(group_key);
 }
 
-std::tuple<double, double> GroupChargeEntry::GetModelEstimateMDPDE(uint64_t group_key) const
+std::tuple<double, double, double> GroupChargeEntry::GetModelEstimateMDPDE(uint64_t group_key) const
 {
     return m_model_estimate_mdpde_map.at(group_key);
 }
 
-std::tuple<double, double> GroupChargeEntry::GetModelEstimatePrior(uint64_t group_key) const
+std::tuple<double, double, double> GroupChargeEntry::GetModelEstimatePrior(uint64_t group_key) const
 {
     return m_model_estimate_prior_map.at(group_key);
 }
 
-std::tuple<double, double> GroupChargeEntry::GetModelVariancePrior(uint64_t group_key) const
+std::tuple<double, double, double> GroupChargeEntry::GetModelVariancePrior(uint64_t group_key) const
 {
     return m_model_variance_prior_map.at(group_key);
 }
@@ -106,12 +106,13 @@ double GroupChargeEntry::GetModelVariancePrior(uint64_t group_key, int par_id) c
 }
 
 double GroupChargeEntry::GetModelEstimateFromTuple(
-    const std::tuple<double, double> & estimate, int par_id) const
+    const std::tuple<double, double, double> & estimate, int par_id) const
 {
     switch (par_id)
     {
         case 0: return std::get<0>(estimate);
         case 1: return std::get<1>(estimate);
+        case 2: return std::get<2>(estimate);
         default:
             std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
             return 0.0;
@@ -119,12 +120,13 @@ double GroupChargeEntry::GetModelEstimateFromTuple(
 }
 
 double GroupChargeEntry::GetModelVarianceFromTuple(
-    const std::tuple<double, double> & variance, int par_id) const
+    const std::tuple<double, double, double> & variance, int par_id) const
 {
     switch (par_id)
     {
         case 0: return std::get<0>(variance);
         case 1: return std::get<1>(variance);
+        case 2: return std::get<2>(variance);
         default:
             std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
             return 0.0;

@@ -167,6 +167,15 @@ std::tuple<float, float> ChargeEntryIterator::GetMapValueRange(double margin_rat
     return ArrayStats<float>::ComputeScalingRangeTuple(map_value_array, static_cast<float>(margin_rate));
 }
 
+double ChargeEntryIterator::GetModelEstimateMDPDE(int par_id) const
+{
+    if (IsAtomicEntryAvailable() == false)
+    {
+        throw std::runtime_error("Atomic entry is not available.");
+    }
+    return m_atomic_entry->GetModelEstimateMDPDE(par_id);
+}
+
 double ChargeEntryIterator::GetInterceptEstimateMDPDE(void) const
 {
     if (IsAtomicEntryAvailable() == false)
@@ -176,13 +185,22 @@ double ChargeEntryIterator::GetInterceptEstimateMDPDE(void) const
     return m_atomic_entry->GetModelEstimateMDPDE(0);
 }
 
-double ChargeEntryIterator::GetChargeEstimateMDPDE(void) const
+double ChargeEntryIterator::GetScaleEstimateMDPDE(void) const
 {
     if (IsAtomicEntryAvailable() == false)
     {
         return 0.0;
     }
     return m_atomic_entry->GetModelEstimateMDPDE(1);
+}
+
+double ChargeEntryIterator::GetChargeEstimateMDPDE(void) const
+{
+    if (IsAtomicEntryAvailable() == false)
+    {
+        return 0.0;
+    }
+    return m_atomic_entry->GetModelEstimateMDPDE(2);
 }
 
 bool ChargeEntryIterator::IsAtomObjectAvailable(void) const
@@ -387,6 +405,7 @@ std::unique_ptr<TGraphErrors> ChargeEntryIterator::CreateModelBasisToMapValueGra
     auto map_neg_list{ m_atomic_entry->GetDistanceAndNegativeMapValueList() };
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto x{ 0.0 };
+    auto y{ 0.0 };
     for (size_t p = 0; p < data_list.size(); p++)
     {
         auto distance_data{ std::get<0>(data_list.at(p)) };
@@ -401,9 +420,32 @@ std::unique_ptr<TGraphErrors> ChargeEntryIterator::CreateModelBasisToMapValueGra
             continue;
         }
         if      (basis_id == 0) x = std::get<1>(map_0_list.at(p));
-        else if (basis_id == 1) x = std::get<1>(map_pos_list.at(p)) - std::get<1>(map_0_list.at(p));
-        else if (basis_id == 2) x = std::get<1>(map_0_list.at(p)) - std::get<1>(map_neg_list.at(p));
-        graph->SetPoint(static_cast<int>(p), x, std::get<1>(data_list.at(p)));
+        //else if (basis_id == 1) x = std::get<1>(map_pos_list.at(p)) - std::get<1>(map_0_list.at(p));
+        //else if (basis_id == 2) x = std::get<1>(map_0_list.at(p)) - std::get<1>(map_neg_list.at(p));
+        else if (basis_id == 1) x = std::get<1>(map_pos_list.at(p));
+        else if (basis_id == 2) x = std::get<1>(map_neg_list.at(p));
+        y = std::get<1>(data_list.at(p));
+        graph->SetPoint(static_cast<int>(p), x, y);
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> ChargeEntryIterator::CreateRegressionDataGraph(int basis_id)
+{
+    if (IsAtomObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto data_list{ m_atomic_entry->GetRegressionDataList() };
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto x{ 0.0 };
+    auto count{ 0 };
+    for (auto & [x1, x2, y] : data_list)
+    {
+        if      (basis_id == 0) x = x1;
+        else if (basis_id == 1) x = x2;
+        graph->SetPoint(count, x, y);
+        count++;
     }
     return graph;
 }

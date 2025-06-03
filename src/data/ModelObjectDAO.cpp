@@ -270,9 +270,12 @@ void ModelObjectDAO::CreateAtomicChargeEntryListTable(const std::string & table_
             distance_and_neutral_map_value_list BLOB,
             distance_and_positive_map_value_list BLOB,
             distance_and_negative_map_value_list BLOB,
+            regression_data_list BLOB,
             intercept_estimate_ols DOUBLE,
+            scale_estimate_ols DOUBLE,
             charge_estimate_ols DOUBLE,
             intercept_estimate_mdpde DOUBLE,
+            scale_estimate_mdpde DOUBLE,
             charge_estimate_mdpde DOUBLE
         )
     )";
@@ -286,8 +289,10 @@ void ModelObjectDAO::CreateAtomicChargeEntrySubListTable(const std::string & tab
         (
             serial_id INTEGER PRIMARY KEY,
             intercept_estimate_posterior DOUBLE,
+            scale_estimate_posterior DOUBLE,
             charge_estimate_posterior DOUBLE,
             intercept_variance_posterior DOUBLE,
+            scale_variance_posterior DOUBLE,
             charge_variance_posterior DOUBLE,
             outlier_tag INTEGER,
             statistical_distance DOUBLE
@@ -304,12 +309,16 @@ void ModelObjectDAO::CreateGroupChargeEntryListTable(const std::string & table_n
             key_id INTEGER PRIMARY KEY,
             atom_size INTEGER,
             intercept_estimate_mean DOUBLE,
+            scale_estimate_mean DOUBLE,
             charge_estimate_mean DOUBLE,
             intercept_estimate_mdpde DOUBLE,
+            scale_estimate_mdpde DOUBLE,
             charge_estimate_mdpde DOUBLE,
             intercept_estimate_prior DOUBLE,
+            scale_estimate_prior DOUBLE,
             charge_estimate_prior DOUBLE,
             intercept_variance_prior DOUBLE,
+            scale_variance_prior DOUBLE,
             charge_variance_prior DOUBLE
         )
     )";
@@ -486,9 +495,10 @@ void ModelObjectDAO::SaveAtomicChargeEntryList(
             distance_and_neutral_map_value_list,
             distance_and_positive_map_value_list,
             distance_and_negative_map_value_list,
-            intercept_estimate_ols, charge_estimate_ols,
-            intercept_estimate_mdpde, charge_estimate_mdpde
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            regression_data_list,
+            intercept_estimate_ols, scale_estimate_ols, charge_estimate_ols,
+            intercept_estimate_mdpde, scale_estimate_mdpde, charge_estimate_mdpde
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 
     m_database->Prepare(sql.str());
@@ -504,10 +514,13 @@ void ModelObjectDAO::SaveAtomicChargeEntryList(
         m_database->Bind<std::vector<std::tuple<float, float>>>(4, entry->GetDistanceAndNeutralMapValueList());
         m_database->Bind<std::vector<std::tuple<float, float>>>(5, entry->GetDistanceAndPositiveMapValueList());
         m_database->Bind<std::vector<std::tuple<float, float>>>(6, entry->GetDistanceAndNegativeMapValueList());
-        m_database->Bind<double>(7, entry->GetModelEstimateOLS(0));
-        m_database->Bind<double>(8, entry->GetModelEstimateOLS(1));
-        m_database->Bind<double>(9, entry->GetModelEstimateMDPDE(0));
-        m_database->Bind<double>(10, entry->GetModelEstimateMDPDE(1));
+        m_database->Bind<std::vector<std::tuple<float, float, float>>>(7, entry->GetRegressionDataList());
+        m_database->Bind<double>(8, entry->GetModelEstimateOLS(0));
+        m_database->Bind<double>(9, entry->GetModelEstimateOLS(1));
+        m_database->Bind<double>(10, entry->GetModelEstimateOLS(2));
+        m_database->Bind<double>(11, entry->GetModelEstimateMDPDE(0));
+        m_database->Bind<double>(12, entry->GetModelEstimateMDPDE(1));
+        m_database->Bind<double>(13, entry->GetModelEstimateMDPDE(2));
 
         m_database->StepOnce();
         m_database->Reset();
@@ -527,10 +540,10 @@ void ModelObjectDAO::SaveAtomicChargeEntrySubList(
     sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
         (
             serial_id,
-            intercept_estimate_posterior, charge_estimate_posterior,
-            intercept_variance_posterior, charge_variance_posterior,
+            intercept_estimate_posterior, scale_estimate_posterior, charge_estimate_posterior,
+            intercept_variance_posterior, scale_variance_posterior, charge_variance_posterior,
             outlier_tag, statistical_distance
-        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 
     m_database->Prepare(sql.str());
@@ -541,10 +554,12 @@ void ModelObjectDAO::SaveAtomicChargeEntrySubList(
         m_database->Bind<int>(1, atom_object->GetSerialID());
         m_database->Bind<double>(2, entry->GetModelEstimatePosterior(class_key, 0));
         m_database->Bind<double>(3, entry->GetModelEstimatePosterior(class_key, 1));
-        m_database->Bind<double>(4, entry->GetModelVariancePosterior(class_key, 0));
-        m_database->Bind<double>(5, entry->GetModelVariancePosterior(class_key, 1));
-        m_database->Bind<int>(6, static_cast<int>(entry->GetOutlierTag(class_key)));
-        m_database->Bind<double>(7, entry->GetStatisticalDistance(class_key));
+        m_database->Bind<double>(4, entry->GetModelEstimatePosterior(class_key, 2));
+        m_database->Bind<double>(5, entry->GetModelVariancePosterior(class_key, 0));
+        m_database->Bind<double>(6, entry->GetModelVariancePosterior(class_key, 1));
+        m_database->Bind<double>(7, entry->GetModelVariancePosterior(class_key, 2));
+        m_database->Bind<int>(8, static_cast<int>(entry->GetOutlierTag(class_key)));
+        m_database->Bind<double>(9, entry->GetStatisticalDistance(class_key));
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -563,11 +578,11 @@ void ModelObjectDAO::SaveGroupChargeEntryList(
     sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
         (
             key_id, atom_size,
-            intercept_estimate_mean, charge_estimate_mean,
-            intercept_estimate_mdpde, charge_estimate_mdpde,
-            intercept_estimate_prior, charge_estimate_prior,
-            intercept_variance_prior, charge_variance_prior
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            intercept_estimate_mean, scale_estimate_mean, charge_estimate_mean,
+            intercept_estimate_mdpde, scale_estimate_mdpde, charge_estimate_mdpde,
+            intercept_estimate_prior, scale_estimate_prior, charge_estimate_prior,
+            intercept_variance_prior, scale_variance_prior, charge_variance_prior
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )";
 
     m_database->Prepare(sql.str());
@@ -577,12 +592,16 @@ void ModelObjectDAO::SaveGroupChargeEntryList(
         m_database->Bind<int>(2, group_entry->GetAtomObjectPtrListSize(group_key));
         m_database->Bind<double>(3, std::get<0>(group_entry->GetModelEstimateMean(group_key)));
         m_database->Bind<double>(4, std::get<1>(group_entry->GetModelEstimateMean(group_key)));
-        m_database->Bind<double>(5, std::get<0>(group_entry->GetModelEstimateMDPDE(group_key)));
-        m_database->Bind<double>(6, std::get<1>(group_entry->GetModelEstimateMDPDE(group_key)));
-        m_database->Bind<double>(7, std::get<0>(group_entry->GetModelEstimatePrior(group_key)));
-        m_database->Bind<double>(8, std::get<1>(group_entry->GetModelEstimatePrior(group_key)));
-        m_database->Bind<double>(9, std::get<0>(group_entry->GetModelVariancePrior(group_key)));
-        m_database->Bind<double>(10, std::get<1>(group_entry->GetModelVariancePrior(group_key)));
+        m_database->Bind<double>(5, std::get<2>(group_entry->GetModelEstimateMean(group_key)));
+        m_database->Bind<double>(6, std::get<0>(group_entry->GetModelEstimateMDPDE(group_key)));
+        m_database->Bind<double>(7, std::get<1>(group_entry->GetModelEstimateMDPDE(group_key)));
+        m_database->Bind<double>(8, std::get<2>(group_entry->GetModelEstimateMDPDE(group_key)));
+        m_database->Bind<double>(9, std::get<0>(group_entry->GetModelEstimatePrior(group_key)));
+        m_database->Bind<double>(10, std::get<1>(group_entry->GetModelEstimatePrior(group_key)));
+        m_database->Bind<double>(11, std::get<2>(group_entry->GetModelEstimatePrior(group_key)));
+        m_database->Bind<double>(12, std::get<0>(group_entry->GetModelVariancePrior(group_key)));
+        m_database->Bind<double>(13, std::get<1>(group_entry->GetModelVariancePrior(group_key)));
+        m_database->Bind<double>(14, std::get<2>(group_entry->GetModelVariancePrior(group_key)));
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -826,8 +845,9 @@ ModelObjectDAO::LoadAtomicChargeEntryMap(const std::string & table_name)
             distance_and_neutral_map_value_list,
             distance_and_positive_map_value_list,
             distance_and_negative_map_value_list,
-            intercept_estimate_ols, charge_estimate_ols,
-            intercept_estimate_mdpde, charge_estimate_mdpde
+            regression_data_list,
+            intercept_estimate_ols, scale_estimate_ols, charge_estimate_ols,
+            intercept_estimate_mdpde, scale_estimate_mdpde, charge_estimate_mdpde
         )"<<" FROM "<< table_name <<";";
     
     auto row_list
@@ -837,7 +857,9 @@ ModelObjectDAO::LoadAtomicChargeEntryMap(const std::string & table_name)
                           std::vector<std::tuple<float, float>>,
                           std::vector<std::tuple<float, float>>,
                           std::vector<std::tuple<float, float>>,
-                          double, double, double, double>(sql.str())
+                          std::vector<std::tuple<float, float, float>>,
+                          double, double, double,
+                          double, double, double>(sql.str())
     };
 
     auto serial_id{ 0 };
@@ -850,8 +872,9 @@ ModelObjectDAO::LoadAtomicChargeEntryMap(const std::string & table_name)
         atomic_charge_entry->AddDistanceAndNeutralMapValueList(std::get<3>(row));
         atomic_charge_entry->AddDistanceAndPositiveMapValueList(std::get<4>(row));
         atomic_charge_entry->AddDistanceAndNegativeMapValueList(std::get<5>(row));
-        atomic_charge_entry->AddModelEstimateOLS(std::get<6>(row), std::get<7>(row));
-        atomic_charge_entry->AddModelEstimateMDPDE(std::get<8>(row), std::get<9>(row));
+        atomic_charge_entry->AddRegressionDataList(std::get<6>(row));
+        atomic_charge_entry->AddModelEstimateOLS(std::get<7>(row), std::get<8>(row), std::get<9>(row));
+        atomic_charge_entry->AddModelEstimateMDPDE(std::get<10>(row), std::get<11>(row), std::get<12>(row));
         atomic_charge_entry_map[serial_id] = std::move(atomic_charge_entry);
     }
 
@@ -872,14 +895,17 @@ void ModelObjectDAO::LoadAtomicChargeEntrySubList(
     std::stringstream sql;
     sql <<"SELECT "<< R"(
             serial_id,
-            intercept_estimate_posterior, charge_estimate_posterior,
-            intercept_variance_posterior, charge_variance_posterior,
+            intercept_estimate_posterior, scale_estimate_posterior, charge_estimate_posterior,
+            intercept_variance_posterior, scale_variance_posterior, charge_variance_posterior,
             outlier_tag, statistical_distance
         )"<<" FROM "<< table_name <<";";
     
     auto row_list
     {
-        m_database->Query<int, double, double, double, double, int, double>(sql.str())
+        m_database->Query<int,
+                          double, double, double,
+                          double, double, double,
+                          int, double>(sql.str())
     };
 
     auto serial_id{ 0 };
@@ -888,10 +914,10 @@ void ModelObjectDAO::LoadAtomicChargeEntrySubList(
         serial_id = std::get<0>(row);
         if (entry_map.find(serial_id) == entry_map.end()) continue;
         auto & entry{ entry_map.at(serial_id) };
-        entry->AddModelEstimatePosterior(class_key, std::get<1>(row), std::get<2>(row));
-        entry->AddModelVariancePosterior(class_key, std::get<3>(row), std::get<4>(row));
-        entry->AddOutlierTag(class_key, static_cast<bool>(std::get<5>(row)));
-        entry->AddStatisticalDistance(class_key, std::get<6>(row));
+        entry->AddModelEstimatePosterior(class_key, std::get<1>(row), std::get<2>(row), std::get<3>(row));
+        entry->AddModelVariancePosterior(class_key, std::get<4>(row), std::get<5>(row), std::get<6>(row));
+        entry->AddOutlierTag(class_key, static_cast<bool>(std::get<7>(row)));
+        entry->AddStatisticalDistance(class_key, std::get<8>(row));
     }
 }
 
@@ -902,17 +928,19 @@ void ModelObjectDAO::LoadGroupChargeEntryList(
     std::stringstream sql;
     sql <<"SELECT "<< R"(
             key_id, atom_size,
-            intercept_estimate_mean, charge_estimate_mean,
-            intercept_estimate_mdpde, charge_estimate_mdpde,
-            intercept_estimate_prior, charge_estimate_prior,
-            intercept_variance_prior, charge_variance_prior
+            intercept_estimate_mean, scale_estimate_mean, charge_estimate_mean,
+            intercept_estimate_mdpde, scale_estimate_mdpde, charge_estimate_mdpde,
+            intercept_estimate_prior, scale_estimate_prior, charge_estimate_prior,
+            intercept_variance_prior, scale_variance_prior, charge_variance_prior
         )"<<" FROM "<< table_name <<";";
     
     auto row_list
     {
         m_database->Query<int64_t, int,
-                          double, double, double, double,
-                          double, double, double, double>(sql.str())
+                          double, double, double,
+                          double, double, double,
+                          double, double, double,
+                          double, double, double>(sql.str())
     };
 
     auto group_entry{ model_obj->GetGroupChargeEntry(class_key) };
@@ -921,10 +949,10 @@ void ModelObjectDAO::LoadGroupChargeEntryList(
         auto group_key{ static_cast<uint64_t>(std::get<0>(row)) };
         group_entry->InsertGroupKey(group_key);
         group_entry->ReserveAtomObjectPtrList(group_key, std::get<1>(row));
-        group_entry->AddModelEstimateMean(group_key, std::get<2>(row), std::get<3>(row));
-        group_entry->AddModelEstimateMDPDE(group_key, std::get<4>(row), std::get<5>(row));
-        group_entry->AddModelEstimatePrior(group_key, std::get<6>(row), std::get<7>(row));
-        group_entry->AddModelVariancePrior(group_key, std::get<8>(row), std::get<9>(row));
+        group_entry->AddModelEstimateMean(group_key, std::get<2>(row), std::get<3>(row), std::get<4>(row));
+        group_entry->AddModelEstimateMDPDE(group_key, std::get<5>(row), std::get<6>(row), std::get<7>(row));
+        group_entry->AddModelEstimatePrior(group_key, std::get<8>(row), std::get<9>(row), std::get<10>(row));
+        group_entry->AddModelVariancePrior(group_key, std::get<11>(row), std::get<12>(row), std::get<13>(row));
     }
     LoadGroupChargeEntrySubList(model_obj, class_key);
 }

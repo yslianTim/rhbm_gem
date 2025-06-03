@@ -14,6 +14,11 @@ AtomicChargeEntry::~AtomicChargeEntry()
 
 }
 
+void AtomicChargeEntry::AddRegressionDataList(std::vector<std::tuple<float, float, float>> list)
+{
+    m_regression_data_list = std::move(list);
+}
+
 void AtomicChargeEntry::AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> list)
 {
     m_distance_and_map_value_list = std::move(list);
@@ -34,24 +39,24 @@ void AtomicChargeEntry::AddDistanceAndNegativeMapValueList(std::vector<std::tupl
     m_distance_and_negative_map_value_list = std::move(list);
 }
 
-void AtomicChargeEntry::AddModelEstimateOLS(double v0, double v1)
+void AtomicChargeEntry::AddModelEstimateOLS(double v0, double v1, double v2)
 {
-    m_model_estimate_ols = std::make_tuple(v0, v1);
+    m_model_estimate_ols = std::make_tuple(v0, v1, v2);
 }
 
-void AtomicChargeEntry::AddModelEstimateMDPDE(double v0, double v1)
+void AtomicChargeEntry::AddModelEstimateMDPDE(double v0, double v1, double v2)
 {
-    m_model_estimate_mdpde = std::make_tuple(v0, v1);
+    m_model_estimate_mdpde = std::make_tuple(v0, v1, v2);
 }
 
-void AtomicChargeEntry::AddModelEstimatePosterior(const std::string & key, double v0, double v1)
+void AtomicChargeEntry::AddModelEstimatePosterior(const std::string & key, double v0, double v1, double v2)
 {
-    m_model_estimate_posterior_map[key] = std::make_tuple(v0, v1);
+    m_model_estimate_posterior_map[key] = std::make_tuple(v0, v1, v2);
 }
 
-void AtomicChargeEntry::AddModelVariancePosterior(const std::string & key, double v0, double v1)
+void AtomicChargeEntry::AddModelVariancePosterior(const std::string & key, double v0, double v1, double v2)
 {
-    m_model_variance_posterior_map[key] = std::make_tuple(v0, v1);
+    m_model_variance_posterior_map[key] = std::make_tuple(v0, v1, v2);
 }
 
 void AtomicChargeEntry::AddOutlierTag(const std::string & key, bool value)
@@ -67,6 +72,11 @@ void AtomicChargeEntry::AddStatisticalDistance(const std::string & key, double v
 size_t AtomicChargeEntry::GetDistanceAndMapValueListSize(void) const
 {
     return m_distance_and_map_value_list.size();
+}
+
+const std::vector<std::tuple<float, float, float>> & AtomicChargeEntry::GetRegressionDataList(void) const
+{
+    return m_regression_data_list;
 }
 
 const std::vector<std::tuple<float, float>> & AtomicChargeEntry::GetDistanceAndMapValueList(void) const
@@ -95,6 +105,7 @@ double AtomicChargeEntry::GetModelEstimateOLS(int par_id) const
     {
         case 0: return std::get<0>(m_model_estimate_ols);
         case 1: return std::get<1>(m_model_estimate_ols);
+        case 2: return std::get<2>(m_model_estimate_ols);
         default:
             std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
             return 0.0;
@@ -107,6 +118,7 @@ double AtomicChargeEntry::GetModelEstimateMDPDE(int par_id) const
     {
         case 0: return std::get<0>(m_model_estimate_mdpde);
         case 1: return std::get<1>(m_model_estimate_mdpde);
+        case 2: return std::get<2>(m_model_estimate_mdpde);
         default:
             std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
             return 0.0;
@@ -124,6 +136,7 @@ double AtomicChargeEntry::GetModelEstimatePosterior(const std::string & key, int
     {
         case 0: return std::get<0>(m_model_estimate_posterior_map.at(key));
         case 1: return std::get<1>(m_model_estimate_posterior_map.at(key));
+        case 2: return std::get<2>(m_model_estimate_posterior_map.at(key));
         default:
             std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
             return 0.0;
@@ -141,6 +154,7 @@ double AtomicChargeEntry::GetModelVariancePosterior(const std::string & key, int
     {
         case 0: return std::get<0>(m_model_variance_posterior_map.at(key));
         case 1: return std::get<1>(m_model_variance_posterior_map.at(key));
+        case 2: return std::get<2>(m_model_variance_posterior_map.at(key));
         default:
             std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
             return 0.0;

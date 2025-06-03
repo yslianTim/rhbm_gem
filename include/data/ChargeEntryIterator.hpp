@@ -42,7 +42,9 @@ public:
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
     std::tuple<float, float> GetDistanceRange(double margin_rate=0.0) const;
     std::tuple<float, float> GetMapValueRange(double margin_rate=0.0) const;
+    double GetModelEstimateMDPDE(int par_id) const;
     double GetInterceptEstimateMDPDE(void) const;
+    double GetScaleEstimateMDPDE(void) const;
     double GetChargeEstimateMDPDE(void) const;
 
     #ifdef HAVE_ROOT
@@ -51,6 +53,7 @@ public:
     std::unique_ptr<TGraphErrors> CreateModelEstimateScatterGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateModelEstimateToResidueIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=static_cast<Residue>(65535));
     std::unique_ptr<TGraphErrors> CreateModelBasisToMapValueGraph(int basis_id);
+    std::unique_ptr<TGraphErrors> CreateRegressionDataGraph(int basis_id);
     #endif
 
 private:
