@@ -168,7 +168,7 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                     auto distance{ std::get<0>(data_entry) };
                     if (distance < m_x_min || distance > m_x_max) continue;
 
-                    //auto func_phi_charge{ electric_potential->GetPotentialValue(atom->GetElement(), distance, charge) };
+                    auto func_phi_charge{ electric_potential->GetPotentialValue(atom->GetElement(), distance, charge) };
                     auto func_phi_0{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 0.0) };
                     auto func_phi_pos{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 1.0) };
                     auto func_phi_neg{ electric_potential->GetPotentialValue(atom->GetElement(), distance, -1.0) };
@@ -179,7 +179,9 @@ void ChargeAnalysisVisitor::RunChargeFitting(ModelObject * model_object)
                     //auto phi_pos{ std::get<1>(positive_data_entry) };
                     //auto phi_neg{ std::get<1>(negative_data_entry) };
                     auto weight{ func_phi_0 / phi_0 };
-                    auto x0{ func_phi_0 };
+                    auto background{ phi_0 - func_phi_0 };
+                    auto x0{ func_phi_0 + background };
+                    //auto x0{ phi_0 };
                     //auto x1_pos{ func_phi_pos - func_phi_0 };
                     //auto x1_neg{ func_phi_0 - func_phi_neg };
                     auto x1_pos{ func_phi_pos };

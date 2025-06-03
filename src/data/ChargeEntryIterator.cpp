@@ -329,6 +329,12 @@ std::unique_ptr<TGraphErrors> ChargeEntryIterator::CreateModelEstimateToResidueG
         auto x_value{ static_cast<int>(GetResidueFromGroupKey(group_key, class_key)) };
         auto y_value{ m_model_object->GetGroupChargeEntry(class_key)->GetModelEstimatePrior(group_key, par_id) };
         auto y_error{ m_model_object->GetGroupChargeEntry(class_key)->GetModelVariancePrior(group_key, par_id) };
+        //if (par_id == 2)
+        //{
+            //auto beta_1{ m_model_object->GetGroupChargeEntry(class_key)->GetModelEstimatePrior(group_key, 1) };
+            //auto beta_2{ m_model_object->GetGroupChargeEntry(class_key)->GetModelEstimatePrior(group_key, 2) };
+            //y_value = beta_2 / (beta_1 + beta_2);
+        //}
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
