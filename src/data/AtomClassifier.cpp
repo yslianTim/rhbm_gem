@@ -16,12 +16,20 @@ const std::vector<Remoteness> AtomClassifier::m_main_chain_member_remoteness_lis
     Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE, Remoteness::NONE
 };
 
-const std::vector<std::string> AtomClassifier::m_main_chain_member_label
+const std::vector<std::string> AtomClassifier::m_main_chain_member_title_list
 {
     "Alpha Carbon",
     "Carbonyl Carbon",
     "Peptide Nitrogen",
     "Carbonyl Oxygen"
+};
+
+const std::vector<std::string> AtomClassifier::m_main_chain_member_label_list
+{
+    "C_{#alpha}",
+    "C",
+    "N",
+    "O"
 };
 
 AtomClassifier::AtomClassifier(void)
@@ -79,9 +87,19 @@ const std::string & AtomClassifier::GetMainChainElementLabel(size_t id)
     if (id >= m_main_chain_member_count)
     {
         std::cerr << "Invalid id: " << id << std::endl;
-        return m_main_chain_member_label.at(0);
+        return m_main_chain_member_label_list.at(0);
     }
-    return m_main_chain_member_label.at(id);
+    return m_main_chain_member_label_list.at(id);
+}
+
+const std::string & AtomClassifier::GetMainChainElementTitle(size_t id)
+{
+    if (id >= m_main_chain_member_count)
+    {
+        std::cerr << "Invalid id: " << id << std::endl;
+        return m_main_chain_member_title_list.at(0);
+    }
+    return m_main_chain_member_title_list.at(id);
 }
 
 uint64_t AtomClassifier::GetGroupKeyInClass(

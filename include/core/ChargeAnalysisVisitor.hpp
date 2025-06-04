@@ -37,5 +37,6 @@ public:
 private:
     std::unordered_map<int, AtomObject *> BuildSerialIDAtomObjectMap(ModelObject * model_object);
     void RunChargeFitting(ModelObject * model_neutral, ModelObject * model_pos, ModelObject * model_neg);
+    void PrintRegressionResult(const std::unordered_map<size_t, std::vector<std::tuple<float, float, float>>> & data);
 
 };

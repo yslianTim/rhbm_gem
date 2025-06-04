@@ -15,7 +15,8 @@ class AtomClassifier
     static const size_t m_main_chain_member_count{ 4 };
     static const std::vector<Element> m_main_chain_member_element_list;
     static const std::vector<Remoteness> m_main_chain_member_remoteness_list;
-    static const std::vector<std::string> m_main_chain_member_label;
+    static const std::vector<std::string> m_main_chain_member_label_list;
+    static const std::vector<std::string> m_main_chain_member_title_list;
 
 public:
     AtomClassifier(void);
@@ -26,6 +27,7 @@ public:
     static Element GetMainChainElement(size_t id);
     static Remoteness GetMainChainRemoteness(size_t id);
     static const std::string & GetMainChainElementLabel(size_t id);
+    static const std::string & GetMainChainElementTitle(size_t id);
 
     static uint64_t GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);
 

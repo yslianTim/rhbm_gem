@@ -23,6 +23,22 @@
 #include <fstream>
 #include <unordered_set>
 
+#ifdef HAVE_ROOT
+#include "ROOTHelper.hpp"
+#include <TStyle.h>
+#include <TCanvas.h>
+#include <TPad.h>
+#include <TLine.h>
+#include <TGraphErrors.h>
+#include <TLegend.h>
+#include <TPaveText.h>
+#include <TColor.h>
+#include <TMarker.h>
+#include <TAxis.h>
+#include <TH2.h>
+#include <TF1.h>
+#endif
+
 ChargeAnalysisVisitor::ChargeAnalysisVisitor(void) :
     m_thread_size{ 1 },
     m_alpha_r{ 0.0 }, m_alpha_g{ 0.0 }, m_x_min{ 0.0 }, m_x_max{ 0.0 }
@@ -103,18 +119,17 @@ void ChargeAnalysisVisitor::RunChargeFitting(
     auto negative_atom_map{ BuildSerialIDAtomObjectMap(model_neg) };
 
     // Atom Classification
-    std::unordered_map<int, std::vector<AtomObject *>> atom_list_map;
+    std::unordered_map<size_t, std::vector<AtomObject *>> atom_list_map;
+    size_t type_id{ 999 };
     for (auto atom : m_selected_atom_list)
     {
         if (atom->GetSpecialAtomFlag() == true) continue;
-        if      (atom->GetElement() == Element::CARBON && atom->GetRemoteness() == Remoteness::ALPHA) atom_list_map[0].emplace_back(atom);
-        else if (atom->GetElement() == Element::CARBON && atom->GetRemoteness() == Remoteness::NONE) atom_list_map[1].emplace_back(atom);
-        else if (atom->GetElement() == Element::NITROGEN && atom->GetRemoteness() == Remoteness::NONE) atom_list_map[2].emplace_back(atom);
-        else if (atom->GetElement() == Element::OXYGEN && atom->GetRemoteness() == Remoteness::NONE) atom_list_map[3].emplace_back(atom);
+        if (AtomClassifier::IsMainChainMember(atom->GetElement(), atom->GetRemoteness(), type_id) == false) continue;
+        atom_list_map[type_id].emplace_back(atom);
     }
     std::cout << "Size of group :" << atom_list_map.size() << std::endl;
 
-    
+    std::unordered_map<size_t, std::vector<std::tuple<float, float, float>>> regression_data_list_map;
 
     // Group Charge Fitting
     for (const auto & [id, atom_list] : atom_list_map)
@@ -153,44 +168,48 @@ void ChargeAnalysisVisitor::RunChargeFitting(
                 atom->GetStructure()) };
             auto is_negative_charged{ charge < 0.0 };
             
-            auto distance{ 0.5 };
-            auto func_phi_0{
-                electric_potential->GetPotentialValue(
-                    atom->GetElement(), distance, 0.0,
-                    potential_entry_neutral->GetAmplitudeEstimateMDPDE(),
-                    potential_entry_neutral->GetWidthEstimateMDPDE()) };
-            auto func_phi_pos{
-                electric_potential->GetPotentialValue(
-                    atom->GetElement(), distance, 1.0,
-                    potential_entry_positive->GetAmplitudeEstimateMDPDE(),
-                    potential_entry_positive->GetWidthEstimateMDPDE()) };
-            auto func_phi_neg{
-                electric_potential->GetPotentialValue(
-                    atom->GetElement(), distance, -1.0,
-                    potential_entry_negative->GetAmplitudeEstimateMDPDE(),
-                    potential_entry_negative->GetWidthEstimateMDPDE()) };
+            for (int i = 0; i < 1; i++)
+            {
+                auto distance{ 0.1 * i };
+                auto func_phi_0{
+                    gaus_potential->GetPotentialValue(
+                        atom->GetElement(), distance, 0.0,
+                        potential_entry_neutral->GetAmplitudeEstimateMDPDE(),
+                        potential_entry_neutral->GetWidthEstimateMDPDE()) };
+                auto func_phi_pos{
+                    gaus_potential->GetPotentialValue(
+                        atom->GetElement(), distance, 1.0,
+                        potential_entry_positive->GetAmplitudeEstimateMDPDE(),
+                        potential_entry_positive->GetWidthEstimateMDPDE()) };
+                auto func_phi_neg{
+                    gaus_potential->GetPotentialValue(
+                        atom->GetElement(), distance, -1.0,
+                        potential_entry_negative->GetAmplitudeEstimateMDPDE(),
+                        potential_entry_negative->GetWidthEstimateMDPDE()) };
+                std::cout << func_phi_0 <<
+                    "\t" << func_phi_pos << "\t" << func_phi_neg << std::endl;
 
+                auto x0{ func_phi_0 };
+                //auto x1_pos{ func_phi_pos - func_phi_0 };
+                //auto x1_neg{ func_phi_0 - func_phi_neg };
+                auto x1_pos{ func_phi_pos };
+                auto x1_neg{ func_phi_neg };
+                auto x1{ (is_negative_charged) ? -x1_neg : x1_pos };
+                auto amplitude{ potential_entry->GetAmplitudeEstimateMDPDE() };
+                auto width{ potential_entry->GetWidthEstimateMDPDE() };
+                auto y{ gaus_potential->GetPotentialValue(atom->GetElement(), distance, 0.0, amplitude, width) };
 
-            auto x0{ func_phi_0 };
-            //auto x1_pos{ func_phi_pos - func_phi_0 };
-            //auto x1_neg{ func_phi_0 - func_phi_neg };
-            auto x1_pos{ func_phi_pos };
-            auto x1_neg{ func_phi_neg };
-            auto x1{ (is_negative_charged) ? -x1_neg : x1_pos };
-            auto amplitude{ potential_entry->GetAmplitudeEstimateMDPDE() };
-            auto width{ potential_entry->GetWidthEstimateMDPDE() };
-            auto y{ gaus_potential->GetPotentialValue(atom->GetElement(), distance, 0.0, amplitude, width) };
-
-            Eigen::VectorXd sampling_entry(4);
-            sampling_entry(0) = 1.0;
-            sampling_entry(1) = x0;
-            sampling_entry(2) = x1;
-            sampling_entry(3) = y;
-            sampling_entry_list.emplace_back(sampling_entry);
-            regression_data_list.emplace_back(std::make_tuple(x0, x1, y));
+                Eigen::VectorXd sampling_entry(4);
+                sampling_entry(0) = 1.0;
+                sampling_entry(1) = x0;
+                sampling_entry(2) = x1;
+                sampling_entry(3) = y;
+                sampling_entry_list.emplace_back(sampling_entry);
+                regression_data_list.emplace_back(std::make_tuple(x0, x1, y));
+            }
             data_array.emplace_back(std::make_tuple(sampling_entry_list, ""));
         }
-        
+        regression_data_list_map[id] = regression_data_list;
 
         auto model_estimator{ std::make_unique<HRLModelHelper>(3, static_cast<int>(group_size)) };
         model_estimator->SetDataArray(data_array);
@@ -203,6 +222,7 @@ void ChargeAnalysisVisitor::RunChargeFitting(
         std::cout <<"[ID-"<< id <<"] "<< model_group_mdpde.transpose() <<"\t"<< model_group_mdpde(2)/(model_group_mdpde(1)+model_group_mdpde(2)) << std::endl;
         std::cout <<"[ID-"<< id <<"] "<< prior_estimate.transpose() <<"\t"<< prior_estimate(2)/(prior_estimate(1)+prior_estimate(2)) << std::endl;
     }
+    PrintRegressionResult(regression_data_list_map);
 }
 
 void ChargeAnalysisVisitor::SetFitRange(double x_min, double x_max)
@@ -230,4 +250,86 @@ ChargeAnalysisVisitor::BuildSerialIDAtomObjectMap(ModelObject * model_object)
     }
     std::cout << "Number of atoms in map: " << map.size() << std::endl;
     return map;
+}
+
+void ChargeAnalysisVisitor::PrintRegressionResult(
+    const std::unordered_map<size_t, std::vector<std::tuple<float, float, float>>> & data_map)
+{
+    auto file_path{ "/Users/yslian/Downloads/regression_data.pdf" };
+
+    const int col_size{ 2 };
+    const std::string col_label[col_size]
+    {
+        "#font[2]{x}_{1}",
+        "#font[2]{x}_{2}"
+    };
+
+    #ifdef HAVE_ROOT
+    gStyle->SetGridColor(kGray);
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 700, 400) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, 1, 0.12f, 0.02f, 0.20f, 0.02f, 0.02f, 0.02f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    std::unique_ptr<TH2> frame[col_size];
+    for (int i = 0; i < col_size; i++)
+    {
+        ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, 0);
+        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+        auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+        frame[i] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, 0),"", 100, 0.0, 1.0, 100, 0.0, 1.0);
+        ROOTHelper::SetAxisTitleAttribute(frame[i]->GetXaxis(), 35.0f, 0.9f, 133);
+        ROOTHelper::SetAxisLabelAttribute(frame[i]->GetXaxis(), 35.0f, 0.005f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame[i]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 505);
+        ROOTHelper::SetAxisTitleAttribute(frame[i]->GetYaxis(), 40.0f, 1.0f, 133);
+        ROOTHelper::SetAxisLabelAttribute(frame[i]->GetYaxis(), 35.0f, 0.01f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame[i]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+        ROOTHelper::SetLineAttribute(frame[i].get(), 1, 0);
+        frame[i]->SetStats(0);
+        frame[i]->GetXaxis()->SetTitle(col_label[i].data());
+        frame[i]->GetXaxis()->CenterTitle();
+        frame[i]->GetYaxis()->CenterTitle();
+    }
+
+    std::vector<std::unique_ptr<TGraphErrors>> graph_list;
+    for (auto & [id, data_array] : data_map)
+    {
+        auto label{ AtomClassifier::GetMainChainElementLabel(id) };
+        
+
+        std::unique_ptr<TGraphErrors> graph[col_size];
+        graph[0] = ROOTHelper::CreateGraphErrors();
+        graph[1] = ROOTHelper::CreateGraphErrors();
+        std::cout << data_array.size() << std::endl;
+        auto count{ 0 };
+        for (auto & [x1, x2, y] : data_array)
+        {
+            graph[0]->SetPoint(count, x1, y);
+            graph[1]->SetPoint(count, x2, y);
+            count++;
+        }
+
+        for (int i = 0; i < col_size; i++)
+        {
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, 0);
+            double x_min, x_max, y_min, y_max;
+            graph[i]->ComputeRange(x_min, y_min, x_max, y_max);
+            auto x_range{ x_max - x_min };
+
+            frame[i]->GetYaxis()->SetTitle(Form("#font[2]{y} (#font[102]{%s})", label.data()));
+            frame[i]->GetXaxis()->SetLimits(x_min - 0.1*x_range, x_max + 0.1*x_range);
+            frame[i]->GetYaxis()->SetLimits(y_min, y_max);
+            frame[i]->Draw();
+
+            ROOTHelper::SetMarkerAttribute(graph[i].get(), 20, 1.0f, kAzure-7);
+            graph[i]->Draw("P");
+            graph_list.emplace_back(std::move(graph[i]));
+        }
+
+        ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    }
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    #endif
 }
