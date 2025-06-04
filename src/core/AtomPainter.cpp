@@ -133,9 +133,8 @@ void AtomPainter::PaintRegressionCheckPlot(const std::string & name)
     const int col_size{ 2 };
     const std::string col_label[col_size]
     {
-        "#phi^{0}",
-        //"#phi^{+} #minus #phi^{0} (#phi^{0} #minus #phi^{#minus})"
-        "#phi^{+} (#phi^{#minus})"
+        "#font[2]{x}_{1}",
+        "#font[2]{x}_{2}"
     };
 
     #ifdef HAVE_ROOT
@@ -174,7 +173,7 @@ void AtomPainter::PaintRegressionCheckPlot(const std::string & name)
         auto element_label{ AtomicInfoHelper::GetLabel(atom->GetElement()) };
         auto remoteness_label{ AtomicInfoHelper::GetLabel(atom->GetRemoteness()) };
         auto label{ element_label + "_{" + remoteness_label + "}" };
-        frame[0]->GetYaxis()->SetTitle(Form("#phi^{#alpha} (#font[102]{%s})", label.data()));
+        frame[0]->GetYaxis()->SetTitle(Form("#font[2]{y} (#font[102]{%s})", label.data()));
         for (int i = 0; i < col_size; i++)
         {
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, 0);

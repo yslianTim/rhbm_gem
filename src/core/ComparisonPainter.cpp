@@ -613,7 +613,7 @@ void ComparisonPainter::PainResidueClassGausComparison(
     const std::string & name, ModelObject * model_data, ModelObject * model_sim, int par_id)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ComparisonPainter::PainMapValueComparison"<< std::endl;
+    std::cout <<"- ComparisonPainter::PainResidueClassGausComparison"<< std::endl;
 
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);

@@ -94,17 +94,11 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
     {
         auto command{ std::make_unique<ChargeAnalysisCommand>() };
         command->SetThreadSize(m_global_options.thread_size);
-        command->SetAsymmetryFlag(m_charge_analysis_options.is_asymmetry);
-        command->SetSavedKeyTag(m_charge_analysis_options.saved_key_tag);
-        command->SetSamplingSize(m_sphere_sampler_options.sampling_size);
-        command->SetSamplingRangeMinimum(m_sphere_sampler_options.sampling_range_min);
-        command->SetSamplingRangeMaximum(m_sphere_sampler_options.sampling_range_max);
+        command->SetModelKeyTag(m_charge_analysis_options.model_key_tag);
         command->SetDatabasePath(m_global_options.database_path);
-        command->SetModelFilePath(m_charge_analysis_options.model_file_path);
-        command->SetMapFilePath(m_charge_analysis_options.map_file_path);
-        command->SetSimulatedNeutralMapFilePath(m_charge_analysis_options.sim_neutral_map_file_path);
-        command->SetSimulatedPositiveMapFilePath(m_charge_analysis_options.sim_positive_map_file_path);
-        command->SetSimulatedNegativeMapFilePath(m_charge_analysis_options.sim_negative_map_file_path);
+        command->SetSimulatedNeutralModelKeyTag(m_charge_analysis_options.sim_neutral_model_key_tag);
+        command->SetSimulatedPositiveModelKeyTag(m_charge_analysis_options.sim_positive_model_key_tag);
+        command->SetSimulatedNegativeModelKeyTag(m_charge_analysis_options.sim_negative_model_key_tag);
         command->SetFitRangeMinimum(m_charge_analysis_options.fit_range_min);
         command->SetFitRangeMaximum(m_charge_analysis_options.fit_range_max);
         command->SetAlphaR(m_charge_analysis_options.alpha_r);
@@ -297,44 +291,26 @@ void Application::RegisterChargeAnalysisCommand(void)
 {
     m_charge_analysis_cmd = m_cli_app->add_subcommand("charge_analysis", "Run charge analysis");
     m_charge_analysis_cmd->add_option(
-        "-a,--model", m_charge_analysis_options.model_file_path,
-        "Model file path")->required();
+        "-k,--model-key", m_charge_analysis_options.model_key_tag,
+        "Model key tag to be analysis")->required();
     m_charge_analysis_cmd->add_option(
-        "-m,--map", m_charge_analysis_options.map_file_path,
-        "Map file path")->required();
+        "--model-neutral", m_charge_analysis_options.sim_neutral_model_key_tag,
+        "Simulated neutral model key tag")->required();
     m_charge_analysis_cmd->add_option(
-        "--map-neutral", m_charge_analysis_options.sim_neutral_map_file_path,
-        "Simulated neutral map file path")->required();
+        "--model-pos", m_charge_analysis_options.sim_positive_model_key_tag,
+        "Simulated positive model key tag")->required();
     m_charge_analysis_cmd->add_option(
-        "--map-pos", m_charge_analysis_options.sim_positive_map_file_path,
-        "Simulated positive map file path")->required();
-    m_charge_analysis_cmd->add_option(
-        "--map-neg", m_charge_analysis_options.sim_negative_map_file_path,
-        "Simulated negative map file path")->required();
+        "--model-neg", m_charge_analysis_options.sim_negative_model_key_tag,
+        "Simulated negative model key tag")->required();
     m_charge_analysis_cmd->add_option(
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");
-    m_charge_analysis_cmd->add_option(
-        "-k,--save-key", m_charge_analysis_options.saved_key_tag,
-        "New key tag for saving ModelObject results into database")->default_val("");
     m_charge_analysis_cmd->add_option(
         "-j,--jobs", m_global_options.thread_size,
         "Number of threads")->default_val(1);
     m_charge_analysis_cmd->add_option(
         "-v,--verbose", m_global_options.verbose_level,
         "Verbose level")->default_val(1);
-    m_charge_analysis_cmd->add_option(
-        "--asymmetry", m_charge_analysis_options.is_asymmetry,
-        "Turn On/Off asymmetry flag")->default_val(false);
-    m_charge_analysis_cmd->add_option(
-        "-s,--sampling", m_sphere_sampler_options.sampling_size,
-        "Number of sampling points per atom")->default_val(1500);
-    m_charge_analysis_cmd->add_option(
-        "--sampling-min", m_sphere_sampler_options.sampling_range_min,
-        "Minimum sampling range")->default_val(0.0);
-    m_charge_analysis_cmd->add_option(
-        "--sampling-max", m_sphere_sampler_options.sampling_range_max,
-        "Maximum sampling range")->default_val(1.5);
     m_charge_analysis_cmd->add_option(
         "--fit-min", m_charge_analysis_options.fit_range_min,
         "Minimum fitting range")->default_val(0.0);

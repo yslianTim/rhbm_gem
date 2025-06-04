@@ -62,15 +62,12 @@ class Application
 
     struct ChargeAnalysisOptions
     {
-        bool is_asymmetry;
         double fit_range_min, fit_range_max;
         double alpha_r, alpha_g;
-        std::string model_file_path;
-        std::string map_file_path;
-        std::string sim_neutral_map_file_path;
-        std::string sim_positive_map_file_path;
-        std::string sim_negative_map_file_path;
-        std::string saved_key_tag;
+        std::string model_key_tag;
+        std::string sim_neutral_model_key_tag;
+        std::string sim_positive_model_key_tag;
+        std::string sim_negative_model_key_tag;
     } m_charge_analysis_options;
 
     struct GlobalOptions
