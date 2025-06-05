@@ -15,6 +15,7 @@ class AminoAcidInfoHelper
     static const std::unordered_map<Residue, std::vector<Element>> m_element_map;
     static const std::unordered_map<Residue, std::vector<Remoteness>> m_remoteness_map;
     static const std::unordered_map<Residue, std::vector<Branch>> m_branch_map;
+    static const std::unordered_map<Residue, std::vector<double>> m_amber95_partial_charge_map;
     static const std::unordered_map<Residue, std::vector<double>> m_buried_partial_charge_map;
     static const std::unordered_map<Residue, std::vector<double>> m_helix_partial_charge_map;
     static const std::unordered_map<Residue, std::vector<double>> m_sheet_partial_charge_map;
