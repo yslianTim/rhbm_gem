@@ -127,14 +127,17 @@ void ChargeAnalysisVisitor::RunChargeFitting(
         if (AtomClassifier::IsMainChainMember(atom->GetElement(), atom->GetRemoteness(), type_id) == false) continue;
         atom_list_map[type_id].emplace_back(atom);
     }
-    std::cout << "Size of group :" << atom_list_map.size() << std::endl;
 
     std::unordered_map<size_t, std::vector<std::tuple<float, float, float>>> regression_data_list_map;
+
+    
 
     // Group Charge Fitting
     for (const auto & [id, atom_list] : atom_list_map)
     {
         auto group_size{ atom_list.size() };
+        Eigen::ArrayXf distance_array{ Eigen::ArrayXf::Zero(static_cast<int>(group_size)) };
+        distance_array.setRandom();
 
         std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
         std::vector<std::tuple<float, float, float>> regression_data_list;
@@ -142,6 +145,8 @@ void ChargeAnalysisVisitor::RunChargeFitting(
         data_array.reserve(group_size);
         regression_data_list.reserve(group_size);
         sampling_entry_list.reserve(group_size);
+
+        auto count{ 0 };
         for (auto atom : atom_list)
         {
             auto potential_entry{ atom->GetAtomicPotentialEntry() };
@@ -168,46 +173,36 @@ void ChargeAnalysisVisitor::RunChargeFitting(
                 atom->GetStructure()) };
             auto is_negative_charged{ charge < 0.0 };
             
-            for (int i = 0; i < 1; i++)
-            {
-                auto distance{ 0.1 * i };
-                auto func_phi_0{
-                    gaus_potential->GetPotentialValue(
-                        atom->GetElement(), distance, 0.0,
-                        potential_entry_neutral->GetAmplitudeEstimateMDPDE(),
-                        potential_entry_neutral->GetWidthEstimateMDPDE()) };
-                auto func_phi_pos{
-                    gaus_potential->GetPotentialValue(
-                        atom->GetElement(), distance, 1.0,
-                        potential_entry_positive->GetAmplitudeEstimateMDPDE(),
-                        potential_entry_positive->GetWidthEstimateMDPDE()) };
-                auto func_phi_neg{
-                    gaus_potential->GetPotentialValue(
-                        atom->GetElement(), distance, -1.0,
-                        potential_entry_negative->GetAmplitudeEstimateMDPDE(),
-                        potential_entry_negative->GetWidthEstimateMDPDE()) };
-                std::cout << func_phi_0 <<
-                    "\t" << func_phi_pos << "\t" << func_phi_neg << std::endl;
+            auto distance{ distance_array(count) };
+            auto func_phi_0{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 0.0) };
+            auto func_phi_pos{ electric_potential->GetPotentialValue(atom->GetElement(), distance, 1.0) };
+            auto func_phi_neg{ electric_potential->GetPotentialValue(atom->GetElement(), distance, -1.0) };
+            //std::cout << func_phi_0 << "\t" << func_phi_pos << "\t" << func_phi_neg << std::endl;
 
-                auto x0{ func_phi_0 };
-                //auto x1_pos{ func_phi_pos - func_phi_0 };
-                //auto x1_neg{ func_phi_0 - func_phi_neg };
-                auto x1_pos{ func_phi_pos };
-                auto x1_neg{ func_phi_neg };
-                auto x1{ (is_negative_charged) ? -x1_neg : x1_pos };
-                auto amplitude{ potential_entry->GetAmplitudeEstimateMDPDE() };
-                auto width{ potential_entry->GetWidthEstimateMDPDE() };
-                auto y{ gaus_potential->GetPotentialValue(atom->GetElement(), distance, 0.0, amplitude, width) };
+            //auto x0{ potential_entry_neutral->GetAmplitudeEstimateMDPDE() / std::pow(potential_entry_neutral->GetWidthEstimateMDPDE(), 3) };
+            //auto x1_pos{ potential_entry_positive->GetAmplitudeEstimateMDPDE() / std::pow(potential_entry_positive->GetWidthEstimateMDPDE(), 3) };
+            //auto x1_neg{ potential_entry_negative->GetAmplitudeEstimateMDPDE() / std::pow(potential_entry_negative->GetWidthEstimateMDPDE(), 3) };
+            auto x0{ func_phi_0 };
+            //auto x1_pos{ func_phi_pos - func_phi_0 };
+            //auto x1_neg{ func_phi_0 - func_phi_neg };
+            auto x1_pos{ func_phi_pos };
+            auto x1_neg{ func_phi_neg };
+            auto x1{ (is_negative_charged) ? -x1_neg : x1_pos };
+            auto amplitude{ potential_entry->GetAmplitudeEstimateMDPDE() };
+            auto width{ potential_entry->GetWidthEstimateMDPDE() };
+            auto y{ gaus_potential->GetPotentialValue(atom->GetElement(), distance, 0.0, amplitude, width) };
+            //auto y{ amplitude / std::pow(width, 3) };
 
-                Eigen::VectorXd sampling_entry(4);
-                sampling_entry(0) = 1.0;
-                sampling_entry(1) = x0;
-                sampling_entry(2) = x1;
-                sampling_entry(3) = y;
-                sampling_entry_list.emplace_back(sampling_entry);
-                regression_data_list.emplace_back(std::make_tuple(x0, x1, y));
-            }
+            Eigen::VectorXd sampling_entry(4);
+            sampling_entry(0) = 1.0;
+            sampling_entry(1) = x0;
+            sampling_entry(2) = x1;
+            sampling_entry(3) = y;
+            sampling_entry_list.emplace_back(sampling_entry);
+            regression_data_list.emplace_back(std::make_tuple(x0, x1, y));
             data_array.emplace_back(std::make_tuple(sampling_entry_list, ""));
+
+            count++;
         }
         regression_data_list_map[id] = regression_data_list;
 
@@ -219,8 +214,9 @@ void ChargeAnalysisVisitor::RunChargeFitting(
         auto model_group_mdpde{ model_estimator->GetMuVectorMDPDE() };
         auto prior_estimate{ model_estimator->GetMuVectorPrior() };
         auto prior_variance{ model_estimator->GetCapitalLambdaMatrix() };
-        std::cout <<"[ID-"<< id <<"] "<< model_group_mdpde.transpose() <<"\t"<< model_group_mdpde(2)/(model_group_mdpde(1)+model_group_mdpde(2)) << std::endl;
-        std::cout <<"[ID-"<< id <<"] "<< prior_estimate.transpose() <<"\t"<< prior_estimate(2)/(prior_estimate(1)+prior_estimate(2)) << std::endl;
+        //std::cout <<"[ID-"<< id <<"] "<< model_group_mdpde.transpose() <<"\t"<< model_group_mdpde(2)/(model_group_mdpde(1)+model_group_mdpde(2)) << std::endl;
+        std::cout <<"[ID-"<< id <<"] "<< regression_data_list.size() <<"\t"<< prior_estimate.transpose() <<"\t"<< prior_estimate(2)/(prior_estimate(1)+prior_estimate(2)) << std::endl;
+        
     }
     PrintRegressionResult(regression_data_list_map);
 }
@@ -248,7 +244,7 @@ ChargeAnalysisVisitor::BuildSerialIDAtomObjectMap(ModelObject * model_object)
             std::cerr << "Warning: Duplicate serial ID found: " << serial_id << std::endl;
         }
     }
-    std::cout << "Number of atoms in map: " << map.size() << std::endl;
+    //std::cout << "Number of atoms in map: " << map.size() << std::endl;
     return map;
 }
 
@@ -302,7 +298,6 @@ void ChargeAnalysisVisitor::PrintRegressionResult(
         std::unique_ptr<TGraphErrors> graph[col_size];
         graph[0] = ROOTHelper::CreateGraphErrors();
         graph[1] = ROOTHelper::CreateGraphErrors();
-        std::cout << data_array.size() << std::endl;
         auto count{ 0 };
         for (auto & [x1, x2, y] : data_array)
         {

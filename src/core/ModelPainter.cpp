@@ -72,8 +72,8 @@ void ModelPainter::Painting(void)
     {
         auto plot_gaus_main_chain_name{ "group_gaus_main_"+ model_object->GetPdbID() +".pdf" };
         PaintGroupGausMainChain(model_object, plot_gaus_main_chain_name);
-        auto plot_charge_main_chain_name{ "group_charge_main_"+ model_object->GetPdbID() +".pdf" };
-        PaintGroupChargeMainChain(model_object, plot_charge_main_chain_name);
+        //auto plot_charge_main_chain_name{ "group_charge_main_"+ model_object->GetPdbID() +".pdf" };
+        //PaintGroupChargeMainChain(model_object, plot_charge_main_chain_name);
         auto plot_side_chain_name{ "structure_class_group_gaus_side_"+ model_object->GetPdbID() +".pdf" };
         PaintStructureClassGroupGausSideChain(model_object, plot_side_chain_name);
         model_object->BuildKDTreeRoot();
@@ -85,7 +85,7 @@ void ModelPainter::Painting(void)
         PaintAtomXYPosition(model_object, "atom_position_"+ model_object->GetPdbID() +".pdf");
         PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ model_object->GetPdbID() +".pdf", false);
         PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ model_object->GetPdbID() +".pdf");
-        PaintAtomChargeMainChain(model_object, "atom_charge_main_chain_"+ model_object->GetPdbID() +".pdf");
+        //PaintAtomChargeMainChain(model_object, "atom_charge_main_chain_"+ model_object->GetPdbID() +".pdf");
         PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ model_object->GetPdbID() +".pdf");
         PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ model_object->GetPdbID() +".pdf");
     }

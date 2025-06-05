@@ -77,7 +77,7 @@ void ComparisonPainter::Painting(void)
 
         if (m_model_object_list.size() == 1 && sim_with_charge_model_object_list.size() == 1)
         {
-            //PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_with_charge_model_object_list.at(0));
+            PainMapValueComparison("figure_2_a.pdf", m_model_object_list.at(0), sim_with_charge_model_object_list.at(0));
             //PainResidueClassGausComparison("figure_width_comparison.pdf", m_model_object_list.at(0), sim_with_charge_model_object_list.at(0), 1);
         }
     }

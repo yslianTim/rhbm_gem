@@ -69,7 +69,7 @@ void DemoPainter::Painting(void)
         model->BuildKDTreeRoot();
     }
 
-    ModelObject * demo_model_object;
+    ModelObject * demo_model_object{ nullptr };
     for (auto model : m_model_object_list)
     {
         if (model->GetPdbID() == "6Z6U")
@@ -78,8 +78,11 @@ void DemoPainter::Painting(void)
             break;
         }
     };
-    PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_d1.pdf", 0);
-    PaintWidthScatterPlotSingle(demo_model_object, "figure_4_c.pdf", true);
+    if (demo_model_object != nullptr)
+    {
+        PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_d1.pdf", 0);
+        PaintWidthScatterPlotSingle(demo_model_object, "figure_4_c.pdf", true);
+    }
 
     if (m_model_object_list.size() == 4)
     {
