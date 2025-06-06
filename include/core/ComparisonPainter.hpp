@@ -36,6 +36,7 @@ private:
     void PaintSimulationGaus(const std::string & name);
     void PaintSimulationGausRatio(const std::string & name, const std::vector<ModelObject *> & model_list);
     void PaintGausEstimateComparison(const std::string & name);
+    void PaintGausEstimateScatterComparison(const std::string & name);
     void PainMapValueComparison(const std::string & name, ModelObject * model_data, ModelObject * model_sim);
     void PainResidueClassGausComparison(const std::string & name, ModelObject * model_data, ModelObject * model_sim, int par_id);
     double CalculateErrorPropagation(double target_value, double reference_value, double target_error, double reference_error);
@@ -43,7 +44,8 @@ private:
     #ifdef HAVE_ROOT
     void BuildRatioGraph(TGraphErrors * ratio_graph, const TGraphErrors * target_graph, const TGraphErrors * reference_graph, bool draw_index=false);
     void BuildGausEstimateToBlurringWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, int par_id=0);
-    void BuildAmplitudeRatioToWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list);
+    void BuildAmplitudeToWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list);
+    void BuildAmplitudeRatioToWidthScatterGraph(size_t target_id, size_t reference_id, TGraphErrors * graph, ModelObject * model);
     void BuildMapValueScatterGraph(uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
     void BuildGausScatterGraph(const std::vector<uint64_t> & group_key_list, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, const std::string & class_key, int par_id=0);
     #endif

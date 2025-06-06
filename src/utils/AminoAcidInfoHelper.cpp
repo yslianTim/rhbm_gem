@@ -407,14 +407,17 @@ const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeList(
     if (structure == Structure::FREE)
     {
         return m_buried_partial_charge_map.at(residue);
+        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
     }
     else if (structure == Structure::SHEET)
     {
         return m_sheet_partial_charge_map.at(residue);
+        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
     }
     else if (structure >= Structure::HELX_P && structure < Structure::TURN_P)
     {
         return m_helix_partial_charge_map.at(residue);
+        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
     }
     else
     {
