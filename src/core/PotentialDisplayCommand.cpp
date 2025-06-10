@@ -26,6 +26,7 @@ void PotentialDisplayCommand::Execute(void)
     auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
     LoadModelObjects(data_manager.get());
     LoadRefModelObjects(data_manager.get());
+    LoadAdditionalReferenceModelObjects(data_manager.get());
 
     m_atom_selector->Print();
 
@@ -116,4 +117,47 @@ void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
 void PotentialDisplayCommand::SetVetoRemotenessType(const std::string & value)
 {
     m_atom_selector->VetoRemotenessType(value);
+}
+
+void PotentialDisplayCommand::LoadAdditionalReferenceModelObjects(DataObjectManager * data_manager)
+{
+    /*
+    std::vector<std::string> element_list{"Ap", "Cp", "Nn", "On"};
+    std::vector<std::string> charge_list{"1", "3", "5", "7"};
+    std::unordered_map<std::string, std::vector<std::string>> additional_list_map;
+    for (auto & element : element_list)
+    {
+        for (auto & charge : charge_list)
+        {
+            auto model_class{ element + charge };
+            std::vector<std::string> key_tag_list;
+            key_tag_list.reserve(10);
+            for (int i = 0; i < 10; i++)
+            {
+                key_tag_list.emplace_back(model_class + "_b" + std::to_string(i));
+            }
+            additional_list_map[model_class] = key_tag_list;
+            m_ref_model_key_tag_list_map[model_class] = key_tag_list;
+            
+        }
+    }
+    for (auto & [model_class, key_tag_list] : additional_list_map)
+    {
+        std::cout <<"["<< model_class <<"]"<< std::endl;
+        for (auto & key_tag : key_tag_list)
+        {
+            data_manager->LoadDataObject(key_tag);
+        }
+    }*/
+
+    std::vector<std::string> key_tag_list
+    {
+        "amber_b0","amber_b1","amber_b2","amber_b3","amber_b4",
+        "amber_b5","amber_b6","amber_b7","amber_b8","amber_b9"
+    };
+    m_ref_model_key_tag_list_map["amber95"] = key_tag_list;
+    for (auto & key_tag : key_tag_list)
+    {
+        data_manager->LoadDataObject(key_tag);
+    }
 }

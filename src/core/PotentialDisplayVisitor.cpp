@@ -48,6 +48,19 @@ void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
     BuildModelObjectList(data_manager, m_model_object_list);
     BuildReferenceModelObjectList(data_manager, "no_charge", m_sim_no_charge_model_object_list);
     BuildReferenceModelObjectList(data_manager, "with_charge", m_sim_with_charge_model_object_list);
+    BuildReferenceModelObjectList(data_manager, "amber95", m_additional_model_object_list_map["amber95"]);
+/* 
+    std::vector<std::string> element_list{"Ap", "Cp", "Nn", "On"};
+    std::vector<std::string> charge_list{"1", "3", "5", "7"};
+    for (auto & element : element_list)
+    {
+        for (auto & charge : charge_list)
+        {
+            auto model_class{ element + charge };
+            BuildReferenceModelObjectList(data_manager, model_class, m_additional_model_object_list_map[model_class]);
+        }
+    }
+*/
     RunAtomPainter(dynamic_cast<ModelObject *>(m_model_object_list.at(0)));
     RunModelPainter(data_manager);
     RunComparisonPainter(data_manager);
@@ -113,6 +126,14 @@ void PotentialDisplayVisitor::RunComparisonPainter(DataObjectManager * data_mana
     for (auto model_object : m_sim_with_charge_model_object_list)
     {
         painter->AddReferenceDataObject(model_object, "with_charge");
+    }
+
+    for (auto & [model_class, model_object_list] : m_additional_model_object_list_map)
+    {
+        for (auto & model : model_object_list)
+        {
+            painter->AddReferenceDataObject(model, model_class);
+        }
     }
     painter->Painting();
 }

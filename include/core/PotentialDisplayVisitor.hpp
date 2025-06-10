@@ -16,6 +16,7 @@ class PotentialDisplayVisitor : public DataObjectVisitorBase
     std::vector<DataObjectBase *> m_model_object_list;
     std::vector<DataObjectBase *> m_sim_no_charge_model_object_list;
     std::vector<DataObjectBase *> m_sim_with_charge_model_object_list;
+    std::unordered_map<std::string, std::vector<DataObjectBase *>> m_additional_model_object_list_map;
     AtomSelector * m_atom_selector;
 
 public:

@@ -85,7 +85,7 @@ void MapSimulationVisitor::Analysis(DataObjectManager * data_manager)
 
             auto extension{ std::string(".map") };
             //auto file_name{ std::string("sim_map_amber95_charge_") + map_key_tag + extension };
-            auto file_name{ std::string("sim_map_conf_charge_On070_") + map_key_tag + extension };
+            auto file_name{ std::string("sim_map_conf_charge_Ap070_") + map_key_tag + extension };
             auto output_file_name{ FilePathHelper::EnsureTrailingSlash(m_folder_path) + file_name };
             data_manager->ProduceFile(output_file_name, map_key_tag);
         }
@@ -147,8 +147,8 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
                         atom->GetBranch(),
                         atom->GetStructure());
 
-                    if (atom->GetElement() == Element::OXYGEN &&
-                        atom->GetRemoteness() == Remoteness::NONE) charge = -0.7;
+                    if (atom->GetElement() == Element::CARBON &&
+                        atom->GetRemoteness() == Remoteness::ALPHA) charge = 0.7;
                     break;
                 case 2: // +1 Positive Charge
                     charge = 1.0;

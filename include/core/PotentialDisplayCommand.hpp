@@ -36,4 +36,7 @@ public:
     void SetVetoElementType(const std::string & value);
     void SetVetoRemotenessType(const std::string & value);
 
+private:
+    void LoadAdditionalReferenceModelObjects(DataObjectManager * data_manager);
+
 };
