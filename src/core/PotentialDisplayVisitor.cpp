@@ -49,6 +49,7 @@ void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
     BuildReferenceModelObjectList(data_manager, "no_charge", m_sim_no_charge_model_object_list);
     BuildReferenceModelObjectList(data_manager, "with_charge", m_sim_with_charge_model_object_list);
     BuildReferenceModelObjectList(data_manager, "amber95", m_additional_model_object_list_map["amber95"]);
+    BuildReferenceModelObjectList(data_manager, "sim_test", m_additional_model_object_list_map["sim_test"]);
 /* 
     std::vector<std::string> element_list{"Ap", "Cp", "Nn", "On"};
     std::vector<std::string> charge_list{"1", "3", "5", "7"};

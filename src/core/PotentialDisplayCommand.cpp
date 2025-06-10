@@ -160,4 +160,15 @@ void PotentialDisplayCommand::LoadAdditionalReferenceModelObjects(DataObjectMana
     {
         data_manager->LoadDataObject(key_tag);
     }
+
+    std::vector<std::string> sim_key_tag_list
+    {
+        "Nn1_b0","Nn1_b1","Nn1_b2","Nn1_b3","Nn1_b4",
+        "Nn1_b5","Nn1_b6","Nn1_b7","Nn1_b8","Nn1_b9"
+    };
+    m_ref_model_key_tag_list_map["sim_test"] = sim_key_tag_list;
+    for (auto & key_tag : sim_key_tag_list)
+    {
+        data_manager->LoadDataObject(key_tag);
+    }
 }
