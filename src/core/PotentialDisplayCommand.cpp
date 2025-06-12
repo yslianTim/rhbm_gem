@@ -121,39 +121,14 @@ void PotentialDisplayCommand::SetVetoRemotenessType(const std::string & value)
 
 void PotentialDisplayCommand::LoadAdditionalReferenceModelObjects(DataObjectManager * data_manager)
 {
-    /*
-    std::vector<std::string> element_list{"Ap", "Cp", "Nn", "On"};
-    std::vector<std::string> charge_list{"1", "3", "5", "7"};
-    std::unordered_map<std::string, std::vector<std::string>> additional_list_map;
-    for (auto & element : element_list)
-    {
-        for (auto & charge : charge_list)
-        {
-            auto model_class{ element + charge };
-            std::vector<std::string> key_tag_list;
-            key_tag_list.reserve(10);
-            for (int i = 0; i < 10; i++)
-            {
-                key_tag_list.emplace_back(model_class + "_b" + std::to_string(i));
-            }
-            additional_list_map[model_class] = key_tag_list;
-            m_ref_model_key_tag_list_map[model_class] = key_tag_list;
-            
-        }
-    }
-    for (auto & [model_class, key_tag_list] : additional_list_map)
-    {
-        std::cout <<"["<< model_class <<"]"<< std::endl;
-        for (auto & key_tag : key_tag_list)
-        {
-            data_manager->LoadDataObject(key_tag);
-        }
-    }*/
-
     std::vector<std::string> key_tag_list
     {
-        "amber_b0","amber_b1","amber_b2","amber_b3","amber_b4",
-        "amber_b5","amber_b6","amber_b7","amber_b8","amber_b9"
+        //"amber_b05","amber_b10","amber_b15","amber_b20","amber_b25",
+        //"amber_b30","amber_b35","amber_b40","amber_b45","amber_b50",
+        //"amber_b55","amber_b60","amber_b65","amber_b70","amber_b75",
+        //"amber_b80","amber_b85","amber_b90","amber_b95"
+        "amber_b10","amber_b20","amber_b30","amber_b40","amber_b50",
+        "amber_b60","amber_b70","amber_b80","amber_b90"
     };
     m_ref_model_key_tag_list_map["amber95"] = key_tag_list;
     for (auto & key_tag : key_tag_list)
@@ -163,8 +138,8 @@ void PotentialDisplayCommand::LoadAdditionalReferenceModelObjects(DataObjectMana
 
     std::vector<std::string> sim_key_tag_list
     {
-        "Nn1_b0","Nn1_b1","Nn1_b2","Nn1_b3","Nn1_b4",
-        "Nn1_b5","Nn1_b6","Nn1_b7","Nn1_b8","Nn1_b9"
+        "Nn1_b05","Nn1_b15","Nn1_b25","Nn1_b35","Nn1_b45",
+        "Nn1_b55","Nn1_b65","Nn1_b75","Nn1_b85","Nn1_b95"
     };
     m_ref_model_key_tag_list_map["sim_test"] = sim_key_tag_list;
     for (auto & key_tag : sim_key_tag_list)

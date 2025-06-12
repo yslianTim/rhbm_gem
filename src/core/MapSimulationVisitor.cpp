@@ -84,8 +84,7 @@ void MapSimulationVisitor::Analysis(DataObjectManager * data_manager)
             data_manager->AddDataObject(map_key_tag, CreateSimulatedMapObject(blurring_width));
 
             auto extension{ std::string(".map") };
-            //auto file_name{ std::string("sim_map_amber95_charge_") + map_key_tag + extension };
-            auto file_name{ std::string("sim_map_conf_charge_Ap070_") + map_key_tag + extension };
+            auto file_name{ m_map_file_name +"_"+ map_key_tag + extension };
             auto output_file_name{ FilePathHelper::EnsureTrailingSlash(m_folder_path) + file_name };
             data_manager->ProduceFile(output_file_name, map_key_tag);
         }
@@ -146,21 +145,14 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
                         atom->GetRemoteness(),
                         atom->GetBranch(),
                         atom->GetStructure());
-
-                    if (atom->GetElement() == Element::CARBON &&
-                        atom->GetRemoteness() == Remoteness::ALPHA) charge = 0.7;
                     break;
-                case 2: // +1 Positive Charge
-                    charge = 1.0;
-                    break;
-                case 3: // -1 Negative Charge
-                    charge = -1.0;
-                    break;
-                case 4: // +0.5 Positive Charge
-                    charge = 0.5;
-                    break;
-                case 5: // -0.5 Negative Charge
-                    charge = -0.5;
+                case 2: // Partial Charge (AMBER table)
+                    charge = AminoAcidInfoHelper::GetPartialCharge(
+                        atom->GetResidue(),
+                        atom->GetElement(),
+                        atom->GetRemoteness(),
+                        atom->GetBranch(),
+                        atom->GetStructure(), true);
                     break;
                 default:
                     std::cerr << "Error: Invalid partial charge choice." << std::endl;

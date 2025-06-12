@@ -52,7 +52,7 @@ class Application
 
     struct MapSimulationOptions
     {
-        std::string model_file_path;
+        std::string model_file_path, map_file_name;
         int potential_model_choice;
         int partial_charge_choice;
         double cutoff_distance;

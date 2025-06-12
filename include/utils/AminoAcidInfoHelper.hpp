@@ -28,7 +28,8 @@ public:
     static size_t GetAtomCount(int residue);
     static double GetPartialCharge(
         Residue residue, Element element, Remoteness remoteness, Branch branch,
-        Structure structure, bool verbose=0);
+        Structure structure, bool use_amber_table=false, bool verbose=false);
     static const std::vector<double> & GetPartialChargeList(Residue residue, Structure structure);
+    static const std::vector<double> & GetPartialChargeListAmber(Residue residue);
 
 };

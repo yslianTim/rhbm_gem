@@ -14,8 +14,8 @@ class PotentialDisplayVisitor : public DataObjectVisitorBase
     std::vector<std::string> m_model_key_tag_list;
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     std::vector<DataObjectBase *> m_model_object_list;
-    std::vector<DataObjectBase *> m_sim_no_charge_model_object_list;
-    std::vector<DataObjectBase *> m_sim_with_charge_model_object_list;
+    //std::vector<DataObjectBase *> m_sim_no_charge_model_object_list;
+    //std::vector<DataObjectBase *> m_sim_with_charge_model_object_list;
     std::unordered_map<std::string, std::vector<DataObjectBase *>> m_additional_model_object_list_map;
     AtomSelector * m_atom_selector;
 

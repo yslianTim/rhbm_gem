@@ -156,14 +156,14 @@ void ChargeAnalysisVisitor::RunChargeFitting(
                         << atom->GetInfo() << ". This atom will be skipped." << std::endl;
                 continue;
             }
-            auto serial_id{ atom->GetSerialID() };
-            auto atom_neutral{ neutral_atom_map.at(serial_id) };
-            auto atom_positive{ positive_atom_map.at(serial_id) };
-            auto atom_negative{ negative_atom_map.at(serial_id) };
+            //auto serial_id{ atom->GetSerialID() };
+            //auto atom_neutral{ neutral_atom_map.at(serial_id) };
+            //auto atom_positive{ positive_atom_map.at(serial_id) };
+            //auto atom_negative{ negative_atom_map.at(serial_id) };
 
-            auto potential_entry_neutral{ atom_neutral->GetAtomicPotentialEntry() };
-            auto potential_entry_positive{ atom_positive->GetAtomicPotentialEntry() };
-            auto potential_entry_negative{ atom_negative->GetAtomicPotentialEntry() };
+            //auto potential_entry_neutral{ atom_neutral->GetAtomicPotentialEntry() };
+            //auto potential_entry_positive{ atom_positive->GetAtomicPotentialEntry() };
+            //auto potential_entry_negative{ atom_negative->GetAtomicPotentialEntry() };
 
             auto charge{ AminoAcidInfoHelper::GetPartialCharge(
                 atom->GetResidue(),

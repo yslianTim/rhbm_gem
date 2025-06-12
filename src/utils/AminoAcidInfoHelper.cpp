@@ -343,7 +343,7 @@ size_t AminoAcidInfoHelper::GetAtomCount(int residue)
 
 double AminoAcidInfoHelper::GetPartialCharge(
     Residue residue, Element element, Remoteness remoteness, Branch branch,
-    Structure structure, bool verbose)
+    Structure structure, bool use_amber_table, bool verbose)
 {
     using Key = std::uint32_t; // packed <Element, Remoteness, Branch>
     auto pack_key = [](Element e, Remoteness r, Branch b) noexcept -> Key
@@ -365,7 +365,12 @@ double AminoAcidInfoHelper::GetPartialCharge(
             const auto & element_list{ m_element_map.at(residue) };
             const auto & remoteness_list{ m_remoteness_map.at(residue) };
             const auto & branch_list{ m_branch_map.at(residue) };
-            const auto & charge_list{ GetPartialChargeList(residue, structure) };
+            const auto & charge_list
+            {
+                (use_amber_table == true) ?
+                GetPartialChargeListAmber(residue) :
+                GetPartialChargeList(residue, structure)
+            };
 
             // the four vectors should guaranteed aligned
             if (atom_size != element_list.size() ||
@@ -424,4 +429,9 @@ const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeList(
         throw std::out_of_range(
             "AminoAcidInfoHelper::GetPartialChargeList ‑ structure is not supported");
     }
+}
+
+const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeListAmber(Residue residue)
+{
+    return m_amber95_partial_charge_map.at(residue);
 }

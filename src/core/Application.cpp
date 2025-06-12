@@ -73,6 +73,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
     {
         auto command{ std::make_unique<MapSimulationCommand>() };
         command->SetModelFilePath(m_map_simulation_options.model_file_path);
+        command->SetMapFileName(m_map_simulation_options.map_file_name);
         command->SetFolderPath(m_global_options.folder_path);
         command->SetThreadSize(m_global_options.thread_size);
         command->SetPotentialModelChoice(m_map_simulation_options.potential_model_choice);
@@ -238,6 +239,9 @@ void Application::RegisterMapSimulationCommand(void)
     m_map_simulation_cmd->add_option(
         "-o,--folder", m_global_options.folder_path,
         "folder path for output map files")->default_val("");
+    m_map_simulation_cmd->add_option(
+        "-n,--name", m_map_simulation_options.map_file_name,
+        "File name for output map files")->default_val("sim_map");
     m_map_simulation_cmd->add_option(
         "-j,--jobs", m_global_options.thread_size,
         "Number of threads")->default_val(1);
