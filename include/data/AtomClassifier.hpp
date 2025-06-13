@@ -13,6 +13,9 @@ class AtomObject;
 class AtomClassifier
 {
     static const size_t m_main_chain_member_count{ 4 };
+    static const std::vector<short> m_main_chain_member_color_list;
+    static const std::vector<short> m_main_chain_member_solid_marker_list;
+    static const std::vector<short> m_main_chain_member_open_marker_list;
     static const std::vector<Element> m_main_chain_member_element_list;
     static const std::vector<Remoteness> m_main_chain_member_remoteness_list;
     static const std::vector<std::string> m_main_chain_member_label_list;
@@ -26,6 +29,9 @@ public:
     static size_t GetMainChainMemberCount(void);
     static Element GetMainChainElement(size_t id);
     static Remoteness GetMainChainRemoteness(size_t id);
+    static short GetMainChainElementColor(size_t id);
+    static short GetMainChainElementSolidMarker(size_t id);
+    static short GetMainChainElementOpenMarker(size_t id);
     static const std::string & GetMainChainElementLabel(size_t id);
     static const std::string & GetMainChainElementTitle(size_t id);
 
@@ -38,6 +44,6 @@ public:
     std::vector<uint64_t> GetMainChainStructureClassGroupKeyList(size_t id, Structure structure) const;
 
 private:
-
+    static bool IsValidMainChainMemberID(size_t id);
 
 };

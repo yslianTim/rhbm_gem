@@ -45,6 +45,7 @@ class Application
 
     struct PotentialDisplayOptions
     {
+        int painter_choice;
         std::string model_key_tag_list;
         std::string sim_no_charge_key_tag_list;
         std::string sim_with_charge_key_tag_list;

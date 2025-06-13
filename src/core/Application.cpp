@@ -54,6 +54,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
     else if (m_cli_app->got_subcommand(m_potential_display_cmd))
     {
         auto command{ std::make_unique<PotentialDisplayCommand>() };
+        command->SetPainterChoice(m_potential_display_options.painter_choice);
         command->SetDatabasePath(m_global_options.database_path);
         command->SetFolderPath(m_global_options.folder_path);
         command->SetModelKeyTagList(m_potential_display_options.model_key_tag_list);
@@ -175,24 +176,19 @@ void Application::RegisterPotentialAnalysisCommand(void)
 
 void Application::RegisterPotentialDisplayCommand(void)
 {
-    std::string default_sim_with_charge_keylist{
-        "sim1_bw005,sim1_bw015,sim1_bw025,sim1_bw035,sim1_bw045,sim1_bw055,sim1_bw065,sim1_bw075,sim1_bw085,sim1_bw095"
-    };
-    std::string default_sim_no_charge_keylist{
-        "sim0_bw005,sim0_bw015,sim0_bw025,sim0_bw035,sim0_bw045,sim0_bw055,sim0_bw065,sim0_bw075,sim0_bw085,sim0_bw095"
-    };
     m_potential_display_cmd = m_cli_app->add_subcommand("potential_display", "Run potential display");
+    m_potential_display_cmd->add_option(
+        "-p,--painter", m_potential_display_options.painter_choice,
+        "Painter choice")->required();
     m_potential_display_cmd->add_option(
         "-k,--model-keylist", m_potential_display_options.model_key_tag_list,
         "List of model key tag to be display")->required();
     m_potential_display_cmd->add_option(
         "--sim-no-charge-keylist", m_potential_display_options.sim_no_charge_key_tag_list,
-        "List of simulated (no charge) model key tag to be display")
-        ->default_val(default_sim_no_charge_keylist.data());
+        "List of simulated (no charge) model key tag to be display")->default_val("");
     m_potential_display_cmd->add_option(
         "--sim-with-charge-keylist", m_potential_display_options.sim_with_charge_key_tag_list,
-        "List of simulated (with charge) model key tag to be display")
-        ->default_val(default_sim_with_charge_keylist.data());
+        "List of simulated (with charge) model key tag to be display")->default_val("");
     m_potential_display_cmd->add_option(
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");

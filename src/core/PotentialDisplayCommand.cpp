@@ -28,12 +28,11 @@ void PotentialDisplayCommand::Execute(void)
     LoadRefModelObjects(data_manager.get());
     LoadAdditionalReferenceModelObjects(data_manager.get());
 
-    m_atom_selector->Print();
-
     auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
     model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);
     model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
     model_displayer->SetFolderPath(m_folder_path);
+    model_displayer->SetPainterChoice(m_painter_choice);
     data_manager->Accept(model_displayer.get());
 }
 
@@ -123,12 +122,8 @@ void PotentialDisplayCommand::LoadAdditionalReferenceModelObjects(DataObjectMana
 {
     std::vector<std::string> key_tag_list
     {
-        //"amber_b05","amber_b10","amber_b15","amber_b20","amber_b25",
-        //"amber_b30","amber_b35","amber_b40","amber_b45","amber_b50",
-        //"amber_b55","amber_b60","amber_b65","amber_b70","amber_b75",
-        //"amber_b80","amber_b85","amber_b90","amber_b95"
-        "amber_b10","amber_b20","amber_b30","amber_b40","amber_b50",
-        "amber_b60","amber_b70","amber_b80","amber_b90"
+        "amber_b15","amber_b25","amber_b35","amber_b45","amber_b55",
+        "amber_b65","amber_b75","amber_b85","amber_b95"
     };
     m_ref_model_key_tag_list_map["amber95"] = key_tag_list;
     for (auto & key_tag : key_tag_list)
@@ -138,7 +133,7 @@ void PotentialDisplayCommand::LoadAdditionalReferenceModelObjects(DataObjectMana
 
     std::vector<std::string> sim_key_tag_list
     {
-        "Nn1_b05","Nn1_b15","Nn1_b25","Nn1_b35","Nn1_b45",
+        "Nn1_b15","Nn1_b25","Nn1_b35","Nn1_b45",
         "Nn1_b55","Nn1_b65","Nn1_b75","Nn1_b85","Nn1_b95"
     };
     m_ref_model_key_tag_list_map["sim_test"] = sim_key_tag_list;

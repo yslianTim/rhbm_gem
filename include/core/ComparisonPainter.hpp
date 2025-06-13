@@ -20,9 +20,10 @@ class TGraphErrors;
 
 class ComparisonPainter : public PainterBase
 {
-    std::vector<ModelObject *> m_model_object_list;
-    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::string m_folder_path;
+    std::vector<ModelObject *> m_model_object_list;
+    std::vector<double> m_resolution_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
 
 public:
@@ -34,10 +35,10 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintGausEstimateComparison(const std::string & name);
-    void PaintGausEstimateResidueComparison(const std::string & name);
-    void PaintGausEstimateResidueMixComparison(const std::string & name);
-    void PainMapValueComparison(const std::string & name, ModelObject * model_data, ModelObject * model_sim);
+    void PaintGausEstimateElementClassComparison(const std::string & name);
+    void PaintGausEstimateResidueClassComparison(const std::string & name);
+    void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
+    void PainMapValueComparison(const std::string & name, ModelObject * model_object, const std::vector<ModelObject *> & ref_model_object_list);
 
     #ifdef HAVE_ROOT
     void BuildAmplitudeRatioToWidthGraph(size_t target_id, size_t reference_id, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, bool draw_index=false, Residue residue=static_cast<Residue>(65535));

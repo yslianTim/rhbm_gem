@@ -30,6 +30,16 @@ PotentialDisplayVisitor::~PotentialDisplayVisitor()
 void PotentialDisplayVisitor::VisitAtomObject(AtomObject * data_object)
 {
     if (data_object == nullptr) return;
+    bool selected_flag
+    {
+        m_atom_selector->GetSelectionFlag(
+            data_object->GetChainID(),
+            data_object->GetResidue(),
+            data_object->GetElement(),
+            data_object->GetRemoteness()
+        )
+    };
+    data_object->SetSelectedFlag(selected_flag);
 }
 
 void PotentialDisplayVisitor::VisitModelObject(ModelObject * data_object)
@@ -45,134 +55,81 @@ void PotentialDisplayVisitor::VisitMapObject(MapObject * data_object)
 void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
 {
     std::cout <<"- PotentialDisplayVisitor::Analysis" << std::endl;
-    BuildModelObjectList(data_manager, m_model_object_list);
-    BuildReferenceModelObjectList(data_manager, "no_charge", m_additional_model_object_list_map["no_charge"]);
-    BuildReferenceModelObjectList(data_manager, "with_charge", m_additional_model_object_list_map["with_charge"]);
-    BuildReferenceModelObjectList(data_manager, "amber95", m_additional_model_object_list_map["amber95"]);
-    BuildReferenceModelObjectList(data_manager, "sim_test", m_additional_model_object_list_map["sim_test"]);
-
-    RunAtomPainter(dynamic_cast<ModelObject *>(m_model_object_list.at(0)));
-    RunModelPainter(data_manager);
-    RunComparisonPainter(data_manager);
-    RunDemoPainter(data_manager);
-}
-
-void PotentialDisplayVisitor::RunAtomPainter(ModelObject * model_object)
-{
-    std::cout <<"- PotentialDisplayVisitor::RunAtomPainter" << std::endl;
-    std::unique_ptr<PainterBase> painter{ std::make_unique<AtomPainter>() };
-    painter->SetFolder(m_folder_path);
-    for (auto & atom : model_object->GetComponentsList())
-    {
-        if (atom->GetAtomicChargeEntry() == nullptr) continue;
-        if (atom->GetRemoteness() != Remoteness::NONE && 
-            atom->GetRemoteness() != Remoteness::ALPHA) continue;
-        if (atom->GetSpecialAtomFlag() == true) continue;
-        painter->AddDataObject(atom.get());
-    }
-    painter->Painting();
-}
-
-void PotentialDisplayVisitor::RunModelPainter(DataObjectManager * data_manager)
-{
-    std::cout <<"- PotentialDisplayVisitor::RunModelPainter" << std::endl;
     if (data_manager == nullptr) return;
-    std::unique_ptr<PainterBase> painter{ std::make_unique<ModelPainter>() };
-    painter->SetFolder(m_folder_path);
-    for (auto model_object : m_model_object_list)
+
+    std::unique_ptr<PainterBase> painter{ nullptr };
+    
+    switch (m_painter_choice)
     {
-        painter->AddDataObject(model_object);
+        case 0:
+            painter = std::make_unique<AtomPainter>();
+            AddAtomObjectToPainter(data_manager, painter.get());
+            m_atom_selector->Print();
+            break;
+        case 1:
+            painter = std::make_unique<ModelPainter>();
+            AddModelObjectToPainter(data_manager, painter.get());
+            AddReferenceModelObjectToPainter(data_manager, painter.get());
+            break;
+        case 2:
+            painter = std::make_unique<ComparisonPainter>();
+            AddModelObjectToPainter(data_manager, painter.get());
+            AddReferenceModelObjectToPainter(data_manager, painter.get());
+            break;
+        case 3:
+            painter = std::make_unique<DemoPainter>();
+            AddModelObjectToPainter(data_manager, painter.get());
+            AddReferenceModelObjectToPainter(data_manager, painter.get());
+            break;
+        default:
+            std::cout <<"[Warning] Invalid painter choice input : ["<< m_painter_choice <<"]"<< std::endl;
+            std::cout <<" * Available Painter Choices : "<< std::endl;
+            std::cout <<"   - [0] AtomPainter : "<< std::endl;
+            std::cout <<"   - [1] ModelPainter : "<< std::endl;
+            std::cout <<"   - [2] ComparisonPainter : "<< std::endl;
+            std::cout <<"   - [3] DemoPainter : "<< std::endl;
+            break;
     }
 
-    for (auto & [model_class, model_object_list] : m_additional_model_object_list_map)
-    {
-        for (auto & model : model_object_list)
-        {
-            painter->AddReferenceDataObject(model, model_class);
-        }
-    }
+    painter->SetFolder(m_folder_path);
     painter->Painting();
 }
 
-void PotentialDisplayVisitor::RunComparisonPainter(DataObjectManager * data_manager)
+void PotentialDisplayVisitor::AddAtomObjectToPainter(
+    DataObjectManager * data_manager, PainterBase * painter)
 {
-    std::cout <<"- PotentialDisplayVisitor::RunComparisonPainter" << std::endl;
-    if (data_manager == nullptr) return;
-    std::unique_ptr<PainterBase> painter{ std::make_unique<ComparisonPainter>() };
-    painter->SetFolder(m_folder_path);
-
-    for (auto model_object : m_model_object_list)
-    {
-        painter->AddDataObject(model_object);
-    }
-
-    for (auto & [model_class, model_object_list] : m_additional_model_object_list_map)
-    {
-        for (auto & model : model_object_list)
-        {
-            painter->AddReferenceDataObject(model, model_class);
-        }
-    }
-    painter->Painting();
-}
-
-void PotentialDisplayVisitor::RunDemoPainter(DataObjectManager * data_manager)
-{
-    std::cout <<"- PotentialDisplayVisitor::RunDemoPainter" << std::endl;
-    if (data_manager == nullptr) return;
-    std::unique_ptr<PainterBase> painter{ std::make_unique<DemoPainter>() };
-    painter->SetFolder(m_folder_path);
-    for (auto model_object : m_model_object_list)
-    {
-        painter->AddDataObject(model_object);
-    }
-
-    for (auto & [model_class, model_object_list] : m_additional_model_object_list_map)
-    {
-        for (auto & model : model_object_list)
-        {
-            painter->AddReferenceDataObject(model, model_class);
-        }
-    }
-    painter->Painting();
-}
-
-void PotentialDisplayVisitor::BuildModelObjectList(
-    DataObjectManager * data_manager, std::vector<DataObjectBase *> & model_object_list)
-{
-    model_object_list.clear();
     for (auto & key_tag : m_model_key_tag_list)
     {
-        try
+        auto & data_object{ data_manager->GetDataObjectRef(key_tag) };
+        auto model_object{ dynamic_cast<ModelObject *>(data_object.get()) };
+        model_object->Accept(this);
+        for (auto & atom : model_object->GetComponentsList())
         {
-            model_object_list.emplace_back(data_manager->GetDataObjectRef(key_tag).get());
-        }
-        catch(const std::exception & e)
-        {
-            std::cerr << e.what() << std::endl;
+            if (atom->GetSelectedFlag() == false) continue;
+            painter->AddDataObject(atom.get());
         }
     }
 }
 
-void PotentialDisplayVisitor::BuildReferenceModelObjectList(
-    DataObjectManager * data_manager,
-    const std::string & type_key, std::vector<DataObjectBase *> & model_object_list)
+void PotentialDisplayVisitor::AddModelObjectToPainter(
+    DataObjectManager * data_manager, PainterBase * painter)
 {
-    model_object_list.clear();
-    if (m_ref_model_key_tag_list_map.find(type_key) == m_ref_model_key_tag_list_map.end())
+    for (auto & key_tag : m_model_key_tag_list)
     {
-        std::cout <<" Cannot find simulation type : ["<< type_key <<"] in the list."<< std::endl;
-        return;
+        auto & data_object{ data_manager->GetDataObjectRef(key_tag) };
+        painter->AddDataObject(data_object.get());
     }
-    for (auto & key_tag : m_ref_model_key_tag_list_map.at(type_key))
+}
+
+void PotentialDisplayVisitor::AddReferenceModelObjectToPainter(
+    DataObjectManager * data_manager, PainterBase * painter)
+{
+    for (auto & [class_key, key_tag_list] : m_ref_model_key_tag_list_map)
     {
-        try
+        for (auto & key_tag : key_tag_list)
         {
-            model_object_list.emplace_back(data_manager->GetDataObjectRef(key_tag).get());
-        }
-        catch(const std::exception & e)
-        {
-            std::cerr << e.what() << std::endl;
+            auto & data_object{ data_manager->GetDataObjectRef(key_tag) };
+            painter->AddReferenceDataObject(data_object.get(), class_key);
         }
     }
 }
