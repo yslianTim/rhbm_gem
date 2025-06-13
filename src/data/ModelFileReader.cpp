@@ -4,6 +4,7 @@
 #include "PdbFormat.hpp"
 #include "CifFormat.hpp"
 #include "AtomObject.hpp"
+#include "AtomicModelDataBlock.hpp"
 
 #include <iostream>
 
@@ -13,11 +14,11 @@ ModelFileReader::ModelFileReader(const std::string & filename) :
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     if      (file_extension == ".pdb")
     {
-        m_file_format_helper = std::make_unique<PdbFormat>();
+        m_file_object = std::make_unique<PdbFormat>();
     }
     else if (file_extension == ".cif")
     {
-        m_file_format_helper = std::make_unique<CifFormat>();
+        m_file_object = std::make_unique<CifFormat>();
     }
     else
     {
@@ -40,8 +41,8 @@ void ModelFileReader::ReadHeader(void)
 {
     try
     {
-        m_file_format_helper->LoadHeader(m_file_path);
-        m_file_format_helper->PrintHeader();
+        m_file_object->LoadHeader(m_file_path);
+        m_file_object->PrintHeader();
     }
     catch (const std::exception & ex)
     {
@@ -53,7 +54,7 @@ void ModelFileReader::ReadDataArray(void)
 {
     try
     {
-        m_file_format_helper->LoadDataArray(m_file_path);
+        m_file_object->LoadDataArray(m_file_path);
     }
     catch (const std::exception & ex)
     {
@@ -61,27 +62,7 @@ void ModelFileReader::ReadDataArray(void)
     }
 }
 
-std::vector<std::unique_ptr<AtomObject>> ModelFileReader::GetAtomObjectList(void)
+AtomicModelDataBlock * ModelFileReader::GetDataBlockPtr(void)
 {
-    return m_file_format_helper->GetAtomObjectList();
-}
-
-std::string ModelFileReader::GetPdbID(void) const
-{
-    return m_file_format_helper->GetPdbID();
-}
-
-std::string ModelFileReader::GetEmdID(void) const
-{
-    return m_file_format_helper->GetEmdID();
-}
-
-double ModelFileReader::GetResolution(void) const
-{
-    return m_file_format_helper->GetResolution();
-}
-
-std::string ModelFileReader::GetResolutionMethod(void) const
-{
-    return m_file_format_helper->GetResolutionMethod();
+    return m_file_object->GetDataBlockPtr();
 }

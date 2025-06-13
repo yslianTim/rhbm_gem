@@ -18,9 +18,9 @@ class TPaveText;
 
 class ModelPainter : public PainterBase
 {
-    std::vector<ModelObject *> m_model_object_list;
-    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_map;
     std::string m_folder_path;
+    std::vector<ModelObject *> m_model_object_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
 
 public:
@@ -32,7 +32,7 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintStructureClassGroupGausMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
+    void PaintGroupGausMainChain(ModelObject * model_object, const std::string & name, bool is_simulation=false);
     void PaintStructureClassGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausScatter(ModelObject * model_object, const std::string & name, int par_id=0);
     void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);

@@ -10,7 +10,7 @@ class ModelObject;
 class ModelFileWriter : public FileWriterBase
 {
     std::string m_file_path;
-    std::unique_ptr<ModelFileFormatBase> m_file_format_helper;
+    std::unique_ptr<ModelFileFormatBase> m_file_object;
     const ModelObject * m_model_object;
 
 public:

@@ -7,22 +7,19 @@
 
 class ModelFileFormatBase;
 class AtomObject;
+class AtomicModelDataBlock;
 
 class ModelFileReader : public FileReaderBase
 {
     std::string m_file_path;
-    std::unique_ptr<ModelFileFormatBase> m_file_format_helper;
+    std::unique_ptr<ModelFileFormatBase> m_file_object;
 
 public:
     ModelFileReader(const std::string & filename);
     ~ModelFileReader();
     void Read(void) override;
 
-    std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(void);
-    std::string GetPdbID(void) const;
-    std::string GetEmdID(void) const;
-    double GetResolution(void) const;
-    std::string GetResolutionMethod(void) const;
+    AtomicModelDataBlock * GetDataBlockPtr(void);
 
 private:
     void ReadHeader(void);

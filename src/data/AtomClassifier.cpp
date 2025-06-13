@@ -6,6 +6,22 @@
 
 #include <iostream>
 
+const std::vector<short> AtomClassifier::m_main_chain_member_color_list
+{   // [Color defined in ROOT style]
+    // kRed+1, kViolet+1, kGreen+2, kAzure+2 
+          633,       881,      418,      862
+};
+
+const std::vector<short> AtomClassifier::m_main_chain_member_solid_marker_list
+{   // [Marker defined in ROOT style]
+    21, 20, 22, 23
+};
+
+const std::vector<short> AtomClassifier::m_main_chain_member_open_marker_list
+{   // [Marker defined in ROOT style]
+    25, 24, 26, 32
+};
+
 const std::vector<Element> AtomClassifier::m_main_chain_member_element_list
 {
     Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN
@@ -16,12 +32,20 @@ const std::vector<Remoteness> AtomClassifier::m_main_chain_member_remoteness_lis
     Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE, Remoteness::NONE
 };
 
-const std::vector<std::string> AtomClassifier::m_main_chain_member_label
+const std::vector<std::string> AtomClassifier::m_main_chain_member_title_list
 {
     "Alpha Carbon",
     "Carbonyl Carbon",
     "Peptide Nitrogen",
     "Carbonyl Oxygen"
+};
+
+const std::vector<std::string> AtomClassifier::m_main_chain_member_label_list
+{
+    "C_{#alpha}",
+    "C",
+    "N",
+    "O"
 };
 
 AtomClassifier::AtomClassifier(void)
@@ -54,34 +78,56 @@ size_t AtomClassifier::GetMainChainMemberCount(void)
     return m_main_chain_member_count;
 }
 
-Element AtomClassifier::GetMainChainElement(size_t id)
+bool AtomClassifier::IsValidMainChainMemberID(size_t id)
 {
     if (id >= m_main_chain_member_count)
     {
         std::cerr << "Invalid id: " << id << std::endl;
-        return Element::UNK;
+        return false;
     }
+    return true;
+}
+
+short AtomClassifier::GetMainChainElementColor(size_t id)
+{
+    if (IsValidMainChainMemberID(id) == false) return 1;
+    return m_main_chain_member_color_list.at(id);
+}
+
+short AtomClassifier::GetMainChainElementSolidMarker(size_t id)
+{
+    if (IsValidMainChainMemberID(id) == false) return 1;
+    return m_main_chain_member_solid_marker_list.at(id);
+}
+
+short AtomClassifier::GetMainChainElementOpenMarker(size_t id)
+{
+    if (IsValidMainChainMemberID(id) == false) return 1;
+    return m_main_chain_member_open_marker_list.at(id);
+}
+
+Element AtomClassifier::GetMainChainElement(size_t id)
+{
+    if (IsValidMainChainMemberID(id) == false)  return Element::UNK;
     return m_main_chain_member_element_list.at(id);
 }
 
 Remoteness AtomClassifier::GetMainChainRemoteness(size_t id)
 {
-    if (id >= m_main_chain_member_count)
-    {
-        std::cerr << "Invalid id: " << id << std::endl;
-        return Remoteness::UNK;
-    }
+    if (IsValidMainChainMemberID(id) == false) return Remoteness::UNK;
     return m_main_chain_member_remoteness_list.at(id);
 }
 
 const std::string & AtomClassifier::GetMainChainElementLabel(size_t id)
 {
-    if (id >= m_main_chain_member_count)
-    {
-        std::cerr << "Invalid id: " << id << std::endl;
-        return m_main_chain_member_label.at(0);
-    }
-    return m_main_chain_member_label.at(id);
+    if (IsValidMainChainMemberID(id) == false) return m_main_chain_member_label_list.at(0);
+    return m_main_chain_member_label_list.at(id);
+}
+
+const std::string & AtomClassifier::GetMainChainElementTitle(size_t id)
+{
+    if (IsValidMainChainMemberID(id) == false) return m_main_chain_member_title_list.at(0);
+    return m_main_chain_member_title_list.at(id);
 }
 
 uint64_t AtomClassifier::GetGroupKeyInClass(
@@ -121,11 +167,7 @@ uint64_t AtomClassifier::GetGroupKeyInClass(
 
 uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
 {
-    if (id >= m_main_chain_member_count)
-    {
-        std::cerr << "Invalid id: " << id << std::endl;
-        return {};
-    }
+    if (IsValidMainChainMemberID(id) == false) return 0;
     auto element_id{ m_main_chain_member_element_list.at(id) };
     auto remoteness_id{ m_main_chain_member_remoteness_list.at(id) };
     return KeyPackerElementClass::Pack(element_id, remoteness_id, false);
@@ -133,11 +175,7 @@ uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
 
 uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue residue) const
 {
-    if (id >= m_main_chain_member_count)
-    {
-        std::cerr << "Invalid id: " << id << std::endl;
-        return {};
-    }
+    if (IsValidMainChainMemberID(id) == false) return 0;
     auto element_id{ m_main_chain_member_element_list.at(id) };
     auto remoteness_id{ m_main_chain_member_remoteness_list.at(id) };
     return KeyPackerResidueClass::Pack(residue, element_id, remoteness_id, Branch::NONE, false);
@@ -146,11 +184,7 @@ uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue res
 uint64_t AtomClassifier::GetMainChainStructureClassGroupKey(
     size_t id, Structure structure, Residue residue) const
 {
-    if (id >= m_main_chain_member_count)
-    {
-        std::cerr << "Invalid id: " << id << std::endl;
-        return {};
-    }
+    if (IsValidMainChainMemberID(id) == false) return 0;
     auto element_id{ m_main_chain_member_element_list.at(id) };
     auto remoteness_id{ m_main_chain_member_remoteness_list.at(id) };
     return KeyPackerStructureClass::Pack(structure, residue, element_id, remoteness_id, Branch::NONE, false);
@@ -159,6 +193,7 @@ uint64_t AtomClassifier::GetMainChainStructureClassGroupKey(
 std::vector<uint64_t> AtomClassifier::GetMainChainResidueClassGroupKeyList(
     size_t id) const
 {
+    if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<uint64_t> group_key_list;
     group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
     for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
@@ -171,6 +206,7 @@ std::vector<uint64_t> AtomClassifier::GetMainChainResidueClassGroupKeyList(
 std::vector<uint64_t> AtomClassifier::GetMainChainStructureClassGroupKeyList(
     size_t id, Structure structure) const
 {
+    if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<uint64_t> group_key_list;
     group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
     for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())

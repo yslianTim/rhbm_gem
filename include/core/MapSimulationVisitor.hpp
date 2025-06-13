@@ -15,7 +15,7 @@ class MapSimulationVisitor : public DataObjectVisitorBase
     int m_partial_charge_choice;
     double m_cutoff_distance;
     float m_grid_spacing;
-    std::string m_model_key_tag, m_folder_path, m_pdb_id;
+    std::string m_model_key_tag, m_folder_path, m_pdb_id, m_map_file_name;
     std::vector<double> m_blurring_width_list;
     AtomSelector * m_atom_selector;
     std::vector<AtomObject *> m_selected_atom_list;
@@ -29,6 +29,7 @@ public:
     void Analysis(DataObjectManager * data_manager) override;
 
     void SetFolderPath(const std::string & path) { m_folder_path = path; }
+    void SetMapFileName(const std::string & value) { m_map_file_name = value; }
     void SetThreadSize(unsigned int thread_size) { m_thread_size = thread_size; }
     void SetPotentialModelChoice(int value) { m_potential_model_choice = value; }
     void SetPartialChargeChoice(int value) { m_partial_charge_choice = value; }

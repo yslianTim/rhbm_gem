@@ -11,6 +11,7 @@
 #include "AminoAcidInfoHelper.hpp"
 #include "ArrayStats.hpp"
 #include "StringHelper.hpp"
+#include "GlobalEnumClass.hpp"
 
 MapSimulationVisitor::MapSimulationVisitor(AtomSelector * atom_selector) :
     m_thread_size{ 1 },
@@ -30,11 +31,9 @@ void MapSimulationVisitor::VisitAtomObject(AtomObject * data_object)
     {
         m_atom_selector->GetSelectionFlag(
             data_object->GetChainID(),
-            data_object->GetIndicator(),
             data_object->GetResidue(),
             data_object->GetElement(),
-            data_object->GetRemoteness(),
-            data_object->GetBranch()
+            data_object->GetRemoteness()
         )
     };
     data_object->SetSelectedFlag(selected_flag);
@@ -85,7 +84,7 @@ void MapSimulationVisitor::Analysis(DataObjectManager * data_manager)
             data_manager->AddDataObject(map_key_tag, CreateSimulatedMapObject(blurring_width));
 
             auto extension{ std::string(".map") };
-            auto file_name{ std::string("sim_map_conf_charge_") + map_key_tag + extension };
+            auto file_name{ m_map_file_name +"_"+ map_key_tag + extension };
             auto output_file_name{ FilePathHelper::EnsureTrailingSlash(m_folder_path) + file_name };
             data_manager->ProduceFile(output_file_name, map_key_tag);
         }
@@ -133,14 +132,32 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
             auto distance{
                 ArrayStats<float>::ComputeNorm(query_pseudo_atom->GetPosition(), atom->GetPosition())
             };
-            auto charge{ (m_partial_charge_choice == 0) ? 0.0 :
-                AminoAcidInfoHelper::GetPartialCharge(
-                    atom->GetResidue(),
-                    atom->GetElement(),
-                    atom->GetRemoteness(),
-                    atom->GetBranch(),
-                    atom->GetStructure())
-            };
+            auto charge{ 0.0 };
+            switch (m_partial_charge_choice)
+            {
+                case 0: // Neutral
+                    charge = 0.0;
+                    break;
+                case 1: // Partial Charge
+                    charge = AminoAcidInfoHelper::GetPartialCharge(
+                        atom->GetResidue(),
+                        atom->GetElement(),
+                        atom->GetRemoteness(),
+                        atom->GetBranch(),
+                        atom->GetStructure());
+                    break;
+                case 2: // Partial Charge (AMBER table)
+                    charge = AminoAcidInfoHelper::GetPartialCharge(
+                        atom->GetResidue(),
+                        atom->GetElement(),
+                        atom->GetRemoteness(),
+                        atom->GetBranch(),
+                        atom->GetStructure(), true);
+                    break;
+                default:
+                    std::cerr << "Error: Invalid partial charge choice." << std::endl;
+                    break;
+            }
             map_value_array[i] += static_cast<float>(
                 electric_potential->GetPotentialValue(atom->GetElement(), distance, charge)
             );

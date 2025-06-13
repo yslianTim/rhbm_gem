@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include "ModelFileFormatBase.hpp"
 
+class AtomicModelDataBlock;
+
 class PdbFormat : public ModelFileFormatBase
 {
     enum class PDB_HEADER
@@ -81,9 +83,7 @@ class PdbFormat : public ModelFileFormatBase
     };
 
     const int header_string_length{ 6 };
-    std::string m_map_id, m_model_id;
-    std::string m_resolution, m_resolution_method;
-    std::vector<std::unique_ptr<AtomObject>> m_atom_object_list;
+    std::unique_ptr<AtomicModelDataBlock> m_data_block;
 
 public:
     PdbFormat(void);
@@ -91,16 +91,11 @@ public:
     void LoadHeader(const std::string & filename) override;
     void PrintHeader(void) const override;
     void LoadDataArray(const std::string & filename) override;
-    void BuildAtomObject(std::any atom_info, bool is_special_atom) override;
-    std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(void) override;
-    std::string GetPdbID(void) const override;
-    std::string GetEmdID(void) const override;
-    double GetResolution(void) const override;
-    std::string GetResolutionMethod(void) const override;
+    AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
     void LoadAtomSiteData(const std::string & filename);
-    void ScanAtomEntry(char * line, bool is_special);
+    void ScanAtomEntry(char * line, bool is_special, int model_number);
     PDB_HEADER MapToHeaderType(const std::string & name) const;
 
 };

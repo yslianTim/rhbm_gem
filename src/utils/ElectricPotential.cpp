@@ -121,7 +121,7 @@ void ElectricPotential::SetBlurringWidth(double value)
 }
 
 double ElectricPotential::GetPotentialValue(
-    Element element, double distance, double charge) const
+    Element element, double distance, double charge, double amplitude, double width) const
 {
     switch (m_model_choice)
     {
@@ -129,6 +129,8 @@ double ElectricPotential::GetPotentialValue(
             return CalculateSingleGausModel(element, distance);
         case ModelChoice::FIVE_GAUS_CHARGE:
             return CalculateFiveGausChargeModel(element, distance, charge);
+        case ModelChoice::SINGLE_GAUS_USER:
+            return CalculateSingleGausUserModel(distance, amplitude, width);
         default:
             std::cout << "ElectricPotential::GetPotentialValue: ModelChoice not set" << std::endl;
             return 0.0;
@@ -223,6 +225,8 @@ ElectricPotential::ModelChoice ElectricPotential::CheckModelChoice(int value) co
             return ModelChoice::SINGLE_GAUS;
         case static_cast<uint8_t>(ModelChoice::FIVE_GAUS_CHARGE):
             return ModelChoice::FIVE_GAUS_CHARGE;
+        case static_cast<uint8_t>(ModelChoice::SINGLE_GAUS_USER):
+            return ModelChoice::SINGLE_GAUS_USER;
         default:
             throw std::out_of_range(
                 "ElectricPotential::ModelChoice out of range " + std::to_string(value)
@@ -238,6 +242,15 @@ double ElectricPotential::CalculateSingleGausModel(
     auto exp_index{ -std::pow(distance, 2)/(2.0 * sigma_total_square) };
     return std::pow(2.0 * M_PI * sigma_total_square, -1.5) * std::exp(exp_index);
 }
+
+double ElectricPotential::CalculateSingleGausUserModel(
+    double distance, double amplitude, double width) const
+{
+    auto sigma_square{ std::pow(width, 2) };
+    auto exp_index{ -std::pow(distance, 2)/(2.0 * sigma_square) };
+    return amplitude * std::pow(2.0 * M_PI * sigma_square, -1.5) * std::exp(exp_index);
+}
+
 
 double ElectricPotential::CalculateFiveGausChargeModel(
     Element element, double distance, double charge) const

@@ -9,6 +9,7 @@
 
 class ModelObject;
 class AtomClassifier;
+enum class Residue : uint16_t;
 
 #ifdef HAVE_ROOT
 class TPad;
@@ -19,9 +20,10 @@ class TGraphErrors;
 
 class ComparisonPainter : public PainterBase
 {
-    std::vector<ModelObject *> m_model_object_list;
-    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::string m_folder_path;
+    std::vector<ModelObject *> m_model_object_list;
+    std::vector<double> m_resolution_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
 
 public:
@@ -33,19 +35,14 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintSimulationGaus(const std::string & name);
-    void PaintSimulationGausRatio(const std::string & name, const std::vector<ModelObject *> & model_list);
-    void PaintGausEstimateComparison(const std::string & name);
-    void PainMapValueComparison(const std::string & name, ModelObject * model_data, ModelObject * model_sim);
-    void PainResidueClassGausComparison(const std::string & name, ModelObject * model_data, ModelObject * model_sim, int par_id);
-    double CalculateErrorPropagation(double target_value, double reference_value, double target_error, double reference_error);
+    void PaintGausEstimateElementClassComparison(const std::string & name);
+    void PaintGausEstimateResidueClassComparison(const std::string & name);
+    void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
+    void PainMapValueComparison(const std::string & name, ModelObject * model_object, const std::vector<ModelObject *> & ref_model_object_list);
 
     #ifdef HAVE_ROOT
-    void BuildRatioGraph(TGraphErrors * ratio_graph, const TGraphErrors * target_graph, const TGraphErrors * reference_graph);
-    void BuildGausEstimateToBlurringWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, int par_id=0);
-    void BuildAmplitudeRatioToWidthGraph(uint64_t group_key, TGraphErrors * graph, const std::vector<ModelObject *> & model_list);
+    void BuildAmplitudeRatioToWidthGraph(size_t target_id, size_t reference_id, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, bool draw_index=false, Residue residue=static_cast<Residue>(65535));
     void BuildMapValueScatterGraph(uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
-    void BuildGausScatterGraph(const std::vector<uint64_t> & group_key_list, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, const std::string & class_key, int par_id=0);
     #endif
 
 };

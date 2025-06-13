@@ -227,6 +227,32 @@ const std::unordered_map<Residue, std::vector<Branch>> AminoAcidInfoHelper::m_br
                     Branch::NONE, Branch::NONE, Branch::NONE}}
 };
 
+const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_amber95_partial_charge_map
+{
+    //               C      CA     N      O      CB
+    {Residue::ALA, { 0.597, 0.034,-0.416,-0.568,-0.183}},
+    {Residue::ARG, { 0.734,-0.264,-0.348,-0.589,-0.001, 0.039, 0.049,-0.530, 0.808,-0.823,-0.823}},
+    {Residue::ASN, { 0.597, 0.014,-0.416,-0.568,-0.204, 0.713,-0.593,-0.919}},
+    {Residue::ASP, { 0.537, 0.038,-0.516,-0.582,-0.030, 0.799,-0.801,-0.801}},
+    {Residue::CYS, { 0.597, 0.021,-0.416,-0.568,-0.123,-0.285}},
+    {Residue::GLN, { 0.597,-0.003,-0.416,-0.568,-0.004,-0.065, 0.695,-0.609,-0.941}},
+    {Residue::GLU, { 0.537, 0.040,-0.416,-0.582, 0.056, 0.014, 0.805,-0.819,-0.819}},
+    {Residue::GLY, { 0.597,-0.025,-0.416,-0.568}},
+    {Residue::HIS, { 0.597,-0.058,-0.416,-0.568,-0.007, 0.187,-0.543,-0.221, 0.164,-0.280}},
+    {Residue::ILE, { 0.597, 0.060,-0.416,-0.568, 0.130,-0.043,-0.320,-0.066}},
+    {Residue::LEU, { 0.597,-0.052,-0.416,-0.568,-0.110, 0.353,-0.412,-0.412}},
+    {Residue::LYS, { 0.734,-0.240,-0.416,-0.589,-0.009, 0.019,-0.048,-0.014,-0.385}},
+    {Residue::MET, { 0.597,-0.024,-0.416,-0.568, 0.003, 0.002,-0.054,-0.274}},
+    {Residue::PHE, { 0.597,-0.002,-0.416,-0.568,-0.034, 0.012,-0.126,-0.126,-0.170,-0.170,-0.107}},
+    {Residue::PRO, { 0.590,-0.027,-0.255,-0.548,-0.007, 0.019, 0.019}},
+    {Residue::SER, { 0.597,-0.025,-0.416,-0.568, 0.212,-0.655}},
+    {Residue::THR, { 0.597,-0.039,-0.416,-0.568, 0.365,-0.676,-0.244}},
+    {Residue::TRP, { 0.597,-0.028,-0.416,-0.568,-0.005,-0.142,-0.164, 0.124,-0.342, 0.138,-0.239,-0.260,-0.197,-0.113}},
+    {Residue::TYR, { 0.597,-0.001,-0.416,-0.568,-0.015,-0.001,-0.191,-0.191,-0.234,-0.234, 0.326,-0.558}},
+    {Residue::VAL, { 0.597,-0.088,-0.416,-0.568, 0.299,-0.319,-0.319}},
+    {Residue::CSX, { 0.597, 0.021,-0.416,-0.568,-0.123,-0.285, 0.000}}
+};
+
 const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_buried_partial_charge_map
 {
     //               C      CA     N      O      CB
@@ -273,10 +299,36 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_he
     {Residue::PRO, { 0.555, 0.166,-0.343,-0.727,-0.207,-0.165, 0.021}}, // same as buried charge
     {Residue::SER, { 0.562, 0.197,-0.595,-0.698, 0.071,-0.501}},
     {Residue::THR, { 0.563, 0.173,-0.589,-0.690, 0.225,-0.506,-0.410}},
-    {Residue::TRP, { 0.568, 0.234,-0.602,-0.697,-0.142,-0.171,-0.085, 0.018,-0.410, 0.197,-0.225,-0.269,-0.213,-0.188}},
+    {Residue::TRP, { 0.568, 0.234,-0.602,-0.697,-0.142,-0.171,-0.085, 0.018,-0.310, 0.197,-0.225,-0.269,-0.213,-0.188}},
     {Residue::TYR, { 0.573, 0.238,-0.599,-0.690,-0.165,-0.037,-0.181,-0.182,-0.335,-0.349, 0.401,-0.565}},
     {Residue::VAL, { 0.559, 0.220,-0.602,-0.695,-0.013,-0.362,-0.362}},
     {Residue::CSX, { 0.571, 0.188,-0.577,-0.718, 0.086,-0.285, 0.000}}
+};
+
+const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_sheet_partial_charge_map
+{
+    //               C      CA     N      O      CB
+    {Residue::ALA, { 0.562, 0.264,-0.588,-0.661,-0.380}},
+    {Residue::ARG, { 0.557, 0.238,-0.586,-0.658,-0.206,-0.189, 0.119,-0.610, 0.901,-0.905,-0.898}},
+    {Residue::ASN, { 0.564, 0.239,-0.576,-0.656,-0.233, 0.672,-0.643,-0.871}},
+    {Residue::ASP, { 0.570, 0.242,-0.560,-0.665,-0.271, 0.701,-0.769,-0.749}},
+    {Residue::CYS, { 0.584, 0.183,-0.550,-0.695, 0.103,-0.285}},
+    {Residue::GLN, { 0.563, 0.233,-0.578,-0.673,-0.203,-0.189, 0.664,-0.652,-0.869}},
+    {Residue::GLU, { 0.569, 0.228,-0.564,-0.676,-0.199,-0.225, 0.691,-0.763,-0.757}},
+    {Residue::GLY, { 0.580, 0.103,-0.563,-0.653}},
+    {Residue::HIS, { 0.564, 0.234,-0.577,-0.657,-0.145, 0.020,-0.295,-0.180,-0.011,-0.228}},
+    {Residue::ILE, { 0.565, 0.213,-0.587,-0.655,-0.027,-0.153,-0.359,-0.331}},
+    {Residue::LEU, { 0.563, 0.239,-0.586,-0.649,-0.227, 0.049,-0.358,-0.360}},
+    {Residue::LYS, { 0.562, 0.237,-0.586,-0.662,-0.204,-0.162,-0.191, 0.040,-0.398}},
+    {Residue::MET, { 0.563, 0.240,-0.583,-0.654,-0.266, 0.074,-0.134,-0.068}},
+    {Residue::PHE, { 0.559, 0.234,-0.581,-0.644,-0.148, 0.008,-0.200,-0.205,-0.173,-0.177,-0.180}},
+    {Residue::PRO, { 0.555, 0.166,-0.343,-0.727,-0.207,-0.165, 0.021}}, // same as buried charge
+    {Residue::SER, { 0.566, 0.190,-0.571,-0.668, 0.085,-0.477}},
+    {Residue::THR, { 0.568, 0.168,-0.569,-0.663, 0.238,-0.482,-0.409}},
+    {Residue::TRP, { 0.562, 0.229,-0.575,-0.661,-0.124,-0.181,-0.091, 0.008,-0.311, 0.195,-0.234,-0.270,-0.206,-0.186}},
+    {Residue::TYR, { 0.561, 0.233,-0.578,-0.663,-0.138,-0.047,-0.180,-0.183,-0.330,-0.344, 0.408,-0.560}},
+    {Residue::VAL, { 0.563, 0.214,-0.587,-0.657, 0.000,-0.361,-0.356}},
+    {Residue::CSX, { 0.584, 0.183,-0.550,-0.695, 0.103,-0.285, 0.000}}
 };
 
 size_t AminoAcidInfoHelper::GetAtomCount(Residue residue)
@@ -291,7 +343,7 @@ size_t AminoAcidInfoHelper::GetAtomCount(int residue)
 
 double AminoAcidInfoHelper::GetPartialCharge(
     Residue residue, Element element, Remoteness remoteness, Branch branch,
-    Structure structure, bool verbose)
+    Structure structure, bool use_amber_table, bool verbose)
 {
     using Key = std::uint32_t; // packed <Element, Remoteness, Branch>
     auto pack_key = [](Element e, Remoteness r, Branch b) noexcept -> Key
@@ -313,7 +365,12 @@ double AminoAcidInfoHelper::GetPartialCharge(
             const auto & element_list{ m_element_map.at(residue) };
             const auto & remoteness_list{ m_remoteness_map.at(residue) };
             const auto & branch_list{ m_branch_map.at(residue) };
-            const auto & charge_list{ GetPartialChargeList(residue, structure) };
+            const auto & charge_list
+            {
+                (use_amber_table == true) ?
+                GetPartialChargeListAmber(residue) :
+                GetPartialChargeList(residue, structure)
+            };
 
             // the four vectors should guaranteed aligned
             if (atom_size != element_list.size() ||
@@ -355,14 +412,26 @@ const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeList(
     if (structure == Structure::FREE)
     {
         return m_buried_partial_charge_map.at(residue);
+        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
+    }
+    else if (structure == Structure::SHEET)
+    {
+        return m_sheet_partial_charge_map.at(residue);
+        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
     }
     else if (structure >= Structure::HELX_P && structure < Structure::TURN_P)
     {
         return m_helix_partial_charge_map.at(residue);
+        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
     }
     else
     {
         throw std::out_of_range(
             "AminoAcidInfoHelper::GetPartialChargeList ‑ structure is not supported");
     }
+}
+
+const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeListAmber(Residue residue)
+{
+    return m_amber95_partial_charge_map.at(residue);
 }

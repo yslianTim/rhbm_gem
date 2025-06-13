@@ -41,7 +41,7 @@ else()
 endif()
 
 if(NOT HAVE_EIGEN3)
-    add_subdirectory(third_party/Eigen)
+    add_subdirectory(third_party/eigen)
 endif()
 
 # Locate CLI11 package

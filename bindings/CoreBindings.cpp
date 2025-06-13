@@ -1,11 +1,13 @@
 #include <pybind11/pybind11.h>
 #include "PotentialAnalysisCommand.hpp"
+#include "MapSimulationCommand.hpp"
 
 PYBIND11_MODULE(cpp_module, m)
 {
     pybind11::class_<PotentialAnalysisCommand>(m, "PotentialAnalysisCommand")
         .def(pybind11::init<>())
         .def("Execute",                 &PotentialAnalysisCommand::Execute)
+        .def("SetAsymmetryFlag",        &PotentialAnalysisCommand::SetAsymmetryFlag)
         .def("SetFitRangeMinimum",      &PotentialAnalysisCommand::SetFitRangeMinimum)
         .def("SetFitRangeMaximum",      &PotentialAnalysisCommand::SetFitRangeMaximum)
         .def("SetAlphaR",               &PotentialAnalysisCommand::SetAlphaR)
@@ -18,17 +20,26 @@ PYBIND11_MODULE(cpp_module, m)
         .def("SetSamplingSize",         &PotentialAnalysisCommand::SetSamplingSize)
         .def("SetSamplingRangeMinimum", &PotentialAnalysisCommand::SetSamplingRangeMinimum)
         .def("SetSamplingRangeMaximum", &PotentialAnalysisCommand::SetSamplingRangeMaximum)
-        .def("SetPickChainID",          &PotentialAnalysisCommand::SetPickChainID)
-        .def("SetPickIndicator",        &PotentialAnalysisCommand::SetPickIndicator)
-        .def("SetPickResidueType",      &PotentialAnalysisCommand::SetPickResidueType)
-        .def("SetPickElementType",      &PotentialAnalysisCommand::SetPickElementType)
-        .def("SetPickRemotenessType",   &PotentialAnalysisCommand::SetPickRemotenessType)
-        .def("SetPickBranchType",       &PotentialAnalysisCommand::SetPickBranchType)
-        .def("SetVetoChainID",          &PotentialAnalysisCommand::SetVetoChainID)
-        .def("SetVetoIndicator",        &PotentialAnalysisCommand::SetVetoIndicator)
-        .def("SetVetoResidueType",      &PotentialAnalysisCommand::SetVetoResidueType)
-        .def("SetVetoElementType",      &PotentialAnalysisCommand::SetVetoElementType)
-        .def("SetVetoRemotenessType",   &PotentialAnalysisCommand::SetVetoRemotenessType)
-        .def("SetVetoBranchType",       &PotentialAnalysisCommand::SetVetoBranchType)
+        ;
+
+    pybind11::class_<MapSimulationCommand>(m, "MapSimulationCommand")
+        .def(pybind11::init<>())
+        .def("Execute",                 &MapSimulationCommand::Execute)
+        .def("SetFolderPath",           &MapSimulationCommand::SetFolderPath)
+        .def("SetModelFilePath",        &MapSimulationCommand::SetModelFilePath)
+        .def("SetThreadSize",           &MapSimulationCommand::SetThreadSize)
+        .def("SetPotentialModelChoice", &MapSimulationCommand::SetPotentialModelChoice)
+        .def("SetPartialChargeChoice",  &MapSimulationCommand::SetPartialChargeChoice)
+        .def("SetCutoffDistance",       &MapSimulationCommand::SetCutoffDistance)
+        .def("SetGridSpacing",          &MapSimulationCommand::SetGridSpacing)
+        .def("SetBlurringWidthList",    &MapSimulationCommand::SetBlurringWidthList)
+        .def("SetPickChainID",          &MapSimulationCommand::SetPickChainID)
+        .def("SetPickResidueType",      &MapSimulationCommand::SetPickResidueType)
+        .def("SetPickElementType",      &MapSimulationCommand::SetPickElementType)
+        .def("SetPickRemotenessType",   &MapSimulationCommand::SetPickRemotenessType)
+        .def("SetVetoChainID",          &MapSimulationCommand::SetVetoChainID)
+        .def("SetVetoResidueType",      &MapSimulationCommand::SetVetoResidueType)
+        .def("SetVetoElementType",      &MapSimulationCommand::SetVetoElementType)
+        .def("SetVetoRemotenessType",   &MapSimulationCommand::SetVetoRemotenessType)
         ;
 }

@@ -67,6 +67,10 @@ void HRLModelHelper::SetDataArray(
         VectorXd y_data_vector{ VectorXd::Zero(data_size) };
         for (int i = 0; i < data_size; i++)
         {
+            if (member_data.at(static_cast<size_t>(i)).size() != m_basis_size + 1)
+            {
+                throw std::runtime_error("The input data size isn't consistent with basis size.");
+            }
             for (int j = 0; j < m_basis_size; j++)
             {
                 x_data_matrix(i, j) = member_data.at(static_cast<size_t>(i))(j);
@@ -150,8 +154,11 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
         m_capital_lambda_list.at(0) = m_capital_lambda;
         return;
     }
-    m_mu_iter(0) = EigenMatrixUtility::GetMedian(m_beta_MDPDE_array.row(0));
-    m_mu_iter(1) = EigenMatrixUtility::GetMedian(m_beta_MDPDE_array.row(1));
+
+    for (int b = 0; b < m_basis_size; b++)
+    {
+        m_mu_iter(b) = EigenMatrixUtility::GetMedian(m_beta_MDPDE_array.row(b));
+    }
 
     VectorXd mu_in_previous_iter;
     for (int iter = 0; iter < m_maximum_iteration; iter++)

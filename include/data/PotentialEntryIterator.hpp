@@ -49,9 +49,11 @@ public:
     #ifdef HAVE_ROOT
     std::unique_ptr<TH1D> CreateResidueCountHistogram(const std::string & class_key, Structure structure=static_cast<Structure>(0));
     std::vector<std::unique_ptr<TH1D>> CreateMainChainRankHistogram(int par_id, int & chain_size, Residue residue=static_cast<Residue>(65535), int extra_id=0, std::vector<Residue> veto_residues_list={});
+    std::unique_ptr<TGraphErrors> CreateAmplitudeRatioToWidthScatterGraph(size_t target_id, size_t reference_id, Residue residue=static_cast<Residue>(65535));
     std::unique_ptr<TGraphErrors> CreateNormalizedGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateBfactorToWidthScatterGraph(uint64_t group_key, const std::string & class_key);
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateGausEstimateToResidueIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=static_cast<Residue>(65535));
+    std::unordered_map<std::string, std::vector<std::unique_ptr<TGraphErrors>>> CreateStructureToResidueIDGraphMap(Structure structure);
     std::unique_ptr<TGraphErrors> CreateGausEstimateToResidueGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateGausEstimateScatterGraph(Element element, bool reverse=false);

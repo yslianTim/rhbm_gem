@@ -2,6 +2,7 @@
 #include "AtomObject.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "GroupChargeEntry.hpp"
 #include "ArrayStats.hpp"
 
 #include <iostream>
@@ -46,7 +47,6 @@ void ModelObject::Display(void) const
 {
     std::cout << "This is ModelObject."
               << " It contains: "<< m_atom_list.size() << " atoms." << std::endl;
-    std::cout << "The number of selected atom = " << GetNumberOfSelectedAtom() << std::endl;
 }
 
 void ModelObject::Update(void)
@@ -72,6 +72,12 @@ void ModelObject::AddGroupPotentialEntry(
     const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
 {
     m_group_potential_entry_map[class_key] = std::move(entry);
+}
+
+void ModelObject::AddGroupChargeEntry(
+    const std::string & class_key, std::unique_ptr<GroupChargeEntry> & entry)
+{
+    m_group_charge_entry_map[class_key] = std::move(entry);
 }
 
 void ModelObject::BuildKDTreeRoot(void)
@@ -147,10 +153,21 @@ GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & cl
     return m_group_potential_entry_map.at(class_key).get();
 }
 
+GroupChargeEntry * ModelObject::GetGroupChargeEntry(const std::string & class_key) const
+{
+    return m_group_charge_entry_map.at(class_key).get();
+}
+
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
 ModelObject::GetGroupPotentialEntryMap(void) const
 {
     return m_group_potential_entry_map;
+}
+
+const std::unordered_map<std::string, std::unique_ptr<GroupChargeEntry>> &
+ModelObject::GetGroupChargeEntryMap(void) const
+{
+    return m_group_charge_entry_map;
 }
 
 void ModelObject::BuildSelectedAtomList(void)
@@ -161,5 +178,30 @@ void ModelObject::BuildSelectedAtomList(void)
     {
         if (atom->GetSelectedFlag() == false) continue;
         m_selected_atom_list.emplace_back(atom.get());
+    }
+}
+
+void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
+{
+    if (is_asymmetry == true)
+    {
+        return;
+    }
+
+    for (auto & atom : m_atom_list)
+    {
+        auto original_selection_flag{ atom->GetSelectedFlag() };
+        auto chain_id{ atom->GetChainID() };
+        bool in_candidate_chain{ false };
+        for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
+        {
+            if (chain_id == chain_id_list.at(0))
+            {
+                atom->SetSelectedFlag(original_selection_flag);
+                in_candidate_chain = true;
+                break;
+            }
+        }
+        if (in_candidate_chain == false) atom->SetSelectedFlag(false);
     }
 }

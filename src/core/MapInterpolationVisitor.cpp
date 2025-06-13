@@ -4,6 +4,13 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 
+MapInterpolationVisitor::MapInterpolationVisitor(
+    const std::vector<std::tuple<float, std::array<float, 3>>> & sampling_points) :
+    m_sphere_sampler{ nullptr }, m_position{ 0.0, 0.0, 0.0 }, m_sampling_point_list{ sampling_points }
+{
+
+}
+
 MapInterpolationVisitor::MapInterpolationVisitor(SphereSampler * sphere_sampler) :
     m_sphere_sampler{ sphere_sampler }, m_position{ 0.0, 0.0, 0.0 }
 {
@@ -27,13 +34,26 @@ void MapInterpolationVisitor::VisitModelObject(ModelObject * data_object)
 
 void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 {
-    const auto & sampling_position_list{ m_sphere_sampler->GenerateSamplingPoints(m_position) };
+    if (data_object == nullptr) return;
     m_sampling_data_list.clear();
-    m_sampling_data_list.reserve(sampling_position_list.size());
-    for (auto & [distance, point] : sampling_position_list)
+    if (m_sphere_sampler != nullptr)
     {
-        auto map_value{ MakeInterpolationInMapObject(data_object, point) };
-        m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
+        const auto & sampling_position_list{ m_sphere_sampler->GenerateSamplingPoints(m_position) };
+        m_sampling_data_list.reserve(sampling_position_list.size());
+        for (auto & [distance, point] : sampling_position_list)
+        {
+            auto map_value{ MakeInterpolationInMapObject(data_object, point) };
+            m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
+        }
+    }
+    else
+    {
+        m_sampling_data_list.reserve(m_sampling_point_list.size());
+        for (auto & [distance, point] : m_sampling_point_list)
+        {
+            auto map_value{ MakeInterpolationInMapObject(data_object, point) };
+            m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
+        }
     }
 }
 

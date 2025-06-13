@@ -57,11 +57,6 @@ void MapSimulationCommand::SetPickChainID(const std::string & value)
     m_atom_selector->PickChainID(value);
 }
 
-void MapSimulationCommand::SetPickIndicator(const std::string & value)
-{
-    m_atom_selector->PickIndicator(value);
-}
-
 void MapSimulationCommand::SetPickResidueType(const std::string & value)
 {
     m_atom_selector->PickResidueType(value);
@@ -77,19 +72,9 @@ void MapSimulationCommand::SetPickRemotenessType(const std::string & value)
     m_atom_selector->PickRemotenessType(value);
 }
 
-void MapSimulationCommand::SetPickBranchType(const std::string & value)
-{
-    m_atom_selector->PickBranchType(value);
-}
-
 void MapSimulationCommand::SetVetoChainID(const std::string & value)
 {
     m_atom_selector->VetoChainID(value);
-}
-
-void MapSimulationCommand::SetVetoIndicator(const std::string & value)
-{
-    m_atom_selector->VetoIndicator(value);
 }
 
 void MapSimulationCommand::SetVetoResidueType(const std::string & value)
@@ -105,9 +90,4 @@ void MapSimulationCommand::SetVetoElementType(const std::string & value)
 void MapSimulationCommand::SetVetoRemotenessType(const std::string & value)
 {
     m_atom_selector->VetoRemotenessType(value);
-}
-
-void MapSimulationCommand::SetVetoBranchType(const std::string & value)
-{
-    m_atom_selector->VetoBranchType(value);
 }

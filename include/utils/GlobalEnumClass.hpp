@@ -54,7 +54,8 @@ enum class Structure : uint8_t
 {
     FREE = 0, BEND = 1,
     /* beta-sheet */
-    STRN = 2,
+    SHEET = 2,
+    STRN = 3,
     OTHER = 9,
 
     /* 10 - 99 for alpha-helix */
@@ -81,5 +82,12 @@ enum class Structure : uint8_t
     TURN_TY2P_P = 104, TURN_TY2_P = 105,
     TURN_TY3P_P = 106, TURN_TY3_P = 107,
     
+    UNK = UINT8_MAX
+};
+
+enum class Entity : uint8_t
+{
+    POLYMER = 0, NONPOLYMER = 1, BRANCHED = 2, MACROLIDE = 3,
+    WATER = 4,
     UNK = UINT8_MAX
 };

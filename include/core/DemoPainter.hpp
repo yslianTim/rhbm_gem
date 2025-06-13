@@ -19,9 +19,9 @@ class TPaveText;
 
 class DemoPainter : public PainterBase
 {
-    std::vector<ModelObject *> m_model_object_list;
-    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_map;
     std::string m_folder_path;
+    std::vector<ModelObject *> m_model_object_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
 
 public:
@@ -33,12 +33,16 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintResidueClassGroupGausMainChainSummary(const std::string & name);
+    void PaintAtomMapValueExample(const std::string & name);
+    void PaintGroupGausMainChainSummary(const std::string & name);
+    void PaintGroupGausMainChainSingle(ModelObject * model_object, const std::string & name);
     void PaintResidueClassGroupGausSideChainSummary(const std::string & name);
+    void PaintWidthScatterPlotSingle(ModelObject * model_object, const std::string & name, bool draw_box_plot=false);
     void PaintElementClassGroupGausToFSC(const std::string & name);
     void PaintWidthToBfactorScatterPlotSummary(const std::string & name);
     void PaintResidueClassWidthScatterPlot(const std::string & name, int par_id=0, bool draw_box_plot=false);
-    void PaintAtomGausMainChain(const std::string & name, int par_id=0);
+    void PaintAtomGausMainChainDemo(ModelObject * model_object1, ModelObject * model_object2, const std::string & name, int par_id=0);
+    void PaintAtomGausMainChainDemoSingle(ModelObject * model_object, const std::string & name, int par_id=0);
     void PaintAtomRankMainChain(const std::string & name, int par_id=0);
 
     #ifdef HAVE_ROOT
@@ -46,18 +50,18 @@ private:
     void PrintIconMainChainPad(TPad * pad, TPaveText * text, double resolution, bool is_bottom_pad, bool is_top_pad);
     void PrintInfoMainChainPad(TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id, bool is_bottom_pad, bool is_top_pad);
 
-    void PrintTitlePad(TPad * pad, TPaveText * text, const std::string & title);
-    void PrintResultPad(TPad * pad, TH2 * hist, bool draw_x_axis, bool draw_title_label);
-    void PrintSummaryPad(TPad * pad, TH2 * hist, bool draw_x_axis, bool draw_title_label);
-    void PrintCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_axis, bool draw_title_label);
+    void PrintGausResultGlobalPad(TPad * pad, TH2 * hist, double left_margin, double right_margin, double bottom_margin, double top_margin, bool is_right_side_pad);
+
+    void PrintGausTitlePad(TPad * pad, TPaveText * text, const std::string & title, float text_size);
+    void PrintGausResultPad(TPad * pad, TH2 * hist, bool draw_x_axis, bool draw_title_label, bool is_right_side_pad);
+    void PrintGausCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_axis, bool draw_title_label);
+    
     void PrintLeftSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::string & y_title, const std::vector<std::string> & label_list);
     void PrintRightSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
     void PrintTitleSideChainPad(TPad * pad, TPaveText * text, const std::string & residue_name);
 
     void PrintGausResultInResidueIDPad(TPad * pad, TH2 * hist, int par_id=0);
     void PrintInfoInResidueIDPad(TVirtualPad * pad, TPaveText * text, const ModelObject * model_object, const std::string & chain_id, int residue_size);
-
-    void PrintInfoInRankPad(TVirtualPad * pad, TPaveText * text, const ModelObject * model_object, int chain_size, int residue_size);
     #endif
 
 };

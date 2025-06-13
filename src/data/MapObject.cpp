@@ -50,7 +50,7 @@ MapObject::MapObject(
         m_lower_bound.at(i) = static_cast<float>(m_underflow.at(i) - 0.5 * m_grid_spacing.at(i));
     }
     Update();
-    MapValueArrayNormalization();
+    //MapValueArrayNormalization();
 }
 
 MapObject::~MapObject()
@@ -265,4 +265,5 @@ void MapObject::MapValueArrayNormalization(void)
     {
         m_map_value_array[i] /= m_map_value_sd;
     }
+    Update();
 }

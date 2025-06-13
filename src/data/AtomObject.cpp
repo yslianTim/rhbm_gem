@@ -2,6 +2,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "AtomicPotentialEntry.hpp"
+#include "AtomicChargeEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
 
@@ -9,14 +10,15 @@
 
 AtomObject::AtomObject(void) :
     m_key_tag{ "" },
-    m_is_selected{ true }, m_is_special_atom{ false },
+    m_is_selected{ false }, m_is_special_atom{ false },
     m_serial_id{ 0 }, m_residue_id{ 0 },
     m_chain_id{ "" }, m_indicator{ "" },
     m_occupancy{ 0.0 }, m_temperature{ 0.0 },
     m_residue{ Residue::UNK }, m_element{ Element::UNK },
     m_remoteness{ Remoteness::UNK }, m_branch{ Branch::UNK },
     m_structure{ Structure::UNK },
-    m_position{ 0.0, 0.0, 0.0 }, m_atomic_potential_entry{ nullptr }
+    m_position{ 0.0, 0.0, 0.0 },
+    m_atomic_potential_entry{ nullptr }, m_atomic_charge_entry{ nullptr }
 {
 
 }
@@ -112,6 +114,29 @@ std::string AtomObject::GetInfo(void) const
 void AtomObject::AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry)
 {
     m_atomic_potential_entry = std::move(entry);
+}
+
+void AtomObject::AddAtomicChargeEntry(std::unique_ptr<AtomicChargeEntry> entry)
+{
+    m_atomic_charge_entry = std::move(entry);
+}
+
+void AtomObject::AddAlternatePosition(
+    const std::string & indicator, const std::array<float, 3> & value)
+{
+    m_alternate_position_map[indicator] = value;
+}
+
+void AtomObject::AddAlternateOccupancy(
+    const std::string & indicator, float value)
+{
+    m_alternate_occupancy_map[indicator] = value;
+}
+
+void AtomObject::AddAlternateTemperature(
+    const std::string & indicator, float value)
+{
+    m_alternate_temperature_map[indicator] = value;
 }
 
 Element AtomObject::GetElement(void) const { return m_element; }

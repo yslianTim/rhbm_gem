@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
 #include <sstream>
 
 class StringHelper
@@ -25,6 +26,33 @@ public:
             input++;
         }
         return result;
+    }
+
+    static std::vector<std::string> SpliteStringLineAsTokens(
+        const std::string & line, size_t token_count, char group_delimiter='\'')
+    {
+        std::vector<std::string> token_list;
+        token_list.reserve(token_count);
+        for (size_t pos = 0; pos < line.size();)
+        {
+            while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
+            if (pos >= line.size()) break;
+            if (line[pos] == group_delimiter)
+            {
+                ++pos;
+                auto start{ pos };
+                while (pos < line.size() && line[pos] != group_delimiter) ++pos;
+                token_list.emplace_back(line.substr(start, pos - start));
+                if (pos < line.size()) ++pos;
+            }
+            else
+            {
+                auto start{ pos };
+                while (pos < line.size() && !std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
+                token_list.emplace_back(line.substr(start, pos - start));
+            }
+        }
+        return token_list;
     }
 
     template <typename Type>

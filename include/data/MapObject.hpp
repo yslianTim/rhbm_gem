@@ -50,6 +50,7 @@ public:
     float GetMapValueSD(void) const { return m_map_value_sd; }
     void SetThreadSize(int value) { m_thread_size = value; }
     void SetMapValueArray(std::unique_ptr<float[]> map_value_array);
+    void MapValueArrayNormalization(void);
 
 private:
     void CheckIndex(int index_x, int index_y, int index_z) const;
@@ -58,6 +59,5 @@ private:
     void CalculateMapValueMin(void);
     void CalculateMapValueMax(void);
     void CalculateMapValueSD(void);
-    void MapValueArrayNormalization(void);
 
 };

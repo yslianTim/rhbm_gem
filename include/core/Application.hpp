@@ -16,16 +16,15 @@ class Application
     CLI::App * m_potential_analysis_cmd;
     CLI::App * m_potential_display_cmd;
     CLI::App * m_map_simulation_cmd;
+    CLI::App * m_charge_analysis_cmd;
     std::string m_selected_command;
 
     struct AtomSelectorOptions
     {
         std::string pick_chain_id, veto_chain_id;
-        std::string pick_indicator, veto_indicator;
         std::string pick_residue, veto_residue;
         std::string pick_element, veto_element;
         std::string pick_remoteness, veto_remoteness;
-        std::string pick_branch, veto_branch;
     } m_atom_selector_options;
 
     struct SphereSamplerOptions
@@ -36,6 +35,7 @@ class Application
 
     struct PotentialAnalysisOptions
     {
+        bool is_asymmetry;
         double fit_range_min, fit_range_max;
         double alpha_r, alpha_g;
         std::string model_file_path;
@@ -45,6 +45,7 @@ class Application
 
     struct PotentialDisplayOptions
     {
+        int painter_choice;
         std::string model_key_tag_list;
         std::string sim_no_charge_key_tag_list;
         std::string sim_with_charge_key_tag_list;
@@ -52,13 +53,23 @@ class Application
 
     struct MapSimulationOptions
     {
-        std::string model_file_path;
+        std::string model_file_path, map_file_name;
         int potential_model_choice;
         int partial_charge_choice;
         double cutoff_distance;
         double grid_spacing;
         std::string blurring_width_list;
     } m_map_simulation_options;
+
+    struct ChargeAnalysisOptions
+    {
+        double fit_range_min, fit_range_max;
+        double alpha_r, alpha_g;
+        std::string model_key_tag;
+        std::string sim_neutral_model_key_tag;
+        std::string sim_positive_model_key_tag;
+        std::string sim_negative_model_key_tag;
+    } m_charge_analysis_options;
 
     struct GlobalOptions
     {
@@ -77,5 +88,6 @@ private:
     void RegisterPotentialAnalysisCommand(void);
     void RegisterPotentialDisplayCommand(void);
     void RegisterMapSimulationCommand(void);
+    void RegisterChargeAnalysisCommand(void);
 
 };

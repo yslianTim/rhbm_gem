@@ -3,6 +3,7 @@
 #include "ModelFileWriter.hpp"
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
+#include "AtomicModelDataBlock.hpp"
 
 #include <stdexcept>
 
@@ -10,11 +11,13 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
 {
     auto file_reader{ std::make_unique<ModelFileReader>(filename) };
     file_reader->Read();
-    auto model_object{ std::make_unique<ModelObject>(file_reader->GetAtomObjectList()) };
-    model_object->SetPdbID(file_reader->GetPdbID());
-    model_object->SetEmdID(file_reader->GetEmdID());
-    model_object->SetResolution(file_reader->GetResolution());
-    model_object->SetResolutionMethod(file_reader->GetResolutionMethod());
+    auto data_block{ file_reader->GetDataBlockPtr() };
+    auto model_object{ std::make_unique<ModelObject>(data_block->GetAtomObjectList()) };
+    model_object->SetPdbID(data_block->GetPdbID());
+    model_object->SetEmdID(data_block->GetEmdID());
+    model_object->SetResolution(data_block->GetResolution());
+    model_object->SetResolutionMethod(data_block->GetResolutionMethod());
+    model_object->SetChainIDListMap(data_block->GetChainIDListMap());
     return model_object;
 }
 

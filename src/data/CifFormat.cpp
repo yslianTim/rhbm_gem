@@ -3,6 +3,7 @@
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "AtomicModelDataBlock.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -10,8 +11,10 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <cctype>
 
-CifFormat::CifFormat(void)
+CifFormat::CifFormat(void) :
+    m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
 
 }
@@ -23,19 +26,115 @@ CifFormat::~CifFormat()
 
 void CifFormat::LoadHeader(const std::string & filename)
 {
+    LoadDatabaseInfo(filename);
+    LoadEntityInfo(filename);
     LoadPdbxData(filename);
     LoadElementTypeList(filename);
+    LoadStructHelixInfo(filename);
+    LoadStructSheetInfo(filename);
 }
 
 void CifFormat::PrintHeader(void) const
 {
-    
+    std::cout <<"#Entities = "<< m_data_block->GetEntityTypeMap().size() << std::endl;
+    for (auto & [entity_id, chain_id] : m_data_block->GetChainIDListMap())
+    {
+        std::cout <<"[" << entity_id <<"] : ";
+        for (size_t i = 0; i < chain_id.size(); i++)
+        {
+            std::cout << chain_id.at(i);
+            if (i < chain_id.size() - 1) std::cout << ",";
+        }
+        std::cout << std::endl;
+    }
+
+    auto element_size{ m_data_block->GetElementTypeList().size() };
+    std::cout <<"#Elementry types = "<< element_size << std::endl;
+    std::cout <<"Element type list : ";
+    size_t count{ 0 };
+    for (auto element : m_data_block->GetElementTypeList())
+    {
+        std::cout << AtomicInfoHelper::GetLabel(element);
+        if (count < element_size - 1) std::cout << ",";
+        count++;
+    }
+    std::cout << std::endl;
 }
 
 void CifFormat::LoadDataArray(const std::string & filename)
 {
-    LoadStructConfData(filename);
     LoadAtomSiteData(filename);
+}
+
+void CifFormat::LoadDatabaseInfo(const std::string & filename)
+{
+    std::ifstream infile{ filename, std::ios::binary };
+    if (!infile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("LoadDatabaseInfo failed!");
+    }
+
+    ParseLoopBlock(infile, "_database_2.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            std::unordered_map<std::string, std::string> data_map;
+            auto key{ token_list[index_map.at("database_id")] };
+            data_map[key] = token_list[index_map.at("database_code")];
+            if (data_map.find("PDB") != data_map.end())
+            {
+                m_data_block->SetPdbID(data_map.at("PDB"));
+            }
+            if (data_map.find("EMDB") != data_map.end())
+            {
+                m_data_block->SetEmdID(data_map.at("EMDB"));
+            }
+        }
+    );
+}
+
+void CifFormat::LoadEntityInfo(const std::string & filename)
+{
+    std::ifstream infile{ filename, std::ios::binary };
+    if (!infile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("LoadDatabaseInfo failed!");
+    }
+
+    ParseLoopBlock(infile, "_entity.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto entity_id{ token_list[index_map.at("id")] };
+            auto entity_type{ token_list[index_map.at("type")] };
+            auto molecules_size_string{ token_list[index_map.at("pdbx_number_of_molecules")] };
+            int molecules_size{ -1 };
+            try
+            {
+                molecules_size = std::stoi(molecules_size_string);
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << e.what() <<": "<< molecules_size_string << '\n';
+            }
+            
+            m_data_block->AddEntityTypeInEntityMap(
+                entity_id, AtomicInfoHelper::GetEntityFromString(entity_type));
+            m_data_block->AddMoleculesSizeInEntityMap(entity_id, molecules_size);
+        }
+    );
+
+    ParseLoopBlock(infile, "_struct_asym.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto entity_id{ token_list[index_map.at("entity_id")] };
+            auto chain_id{ token_list[index_map.at("id")] };
+            m_data_block->AddChainIDInEntityMap(entity_id, chain_id);
+        }
+    );
 }
 
 void CifFormat::LoadPdbxData(const std::string & filename)
@@ -46,39 +145,27 @@ void CifFormat::LoadPdbxData(const std::string & filename)
         std::cerr << "Cannot open the file: " << filename << std::endl;
         throw std::runtime_error("LoadPdbxData failed!");
     }
-    std::string line, header;
-    auto found_model_id{ false };
-    auto found_map_id{ false };
+    std::string line, header, resolution, resolution_method;
     auto found_resolution{ false };
     auto found_resolution_method{ false };
     while (std::getline(infile, line))
     {
-        if (line.find("_pdbx_database_related.db_id ") != std::string::npos)
-        {
-            std::istringstream iss(line);
-            iss >> header >> m_map_id;
-            found_map_id = true;
-        }
-        if (line.find("_pdbx_database_status.entry_id ") != std::string::npos)
-        {
-            std::istringstream iss(line);
-            iss >> header >> m_model_id;
-            found_model_id = true;
-        }
         if (line.find("_em_3d_reconstruction.resolution ") != std::string::npos)
         {
             std::istringstream iss(line);
-            iss >> header >> m_resolution;
+            iss >> header >> resolution;
+            m_data_block->SetResolution(resolution);
             found_resolution = true;
         }
         if (line.find("_em_3d_reconstruction.resolution_method ") != std::string::npos)
         {
             std::istringstream iss(line);
             iss >> header;
-            iss >> std::quoted(m_resolution_method, '\'');
+            iss >> std::quoted(resolution_method, '\'');
+            m_data_block->SetResolutionMethod(resolution_method);
             found_resolution_method = true;
         }
-        if (found_model_id && found_map_id && found_resolution && found_resolution_method) break;
+        if (found_resolution && found_resolution_method) break;
     }
 }
 
@@ -97,10 +184,72 @@ void CifFormat::LoadElementTypeList(const std::string & filename)
         {
             auto element_type_string{ token_list[index_map.at("symbol")] };
             auto element{ AtomicInfoHelper::GetElementFromString(element_type_string) };
-            m_element_type_list.emplace_back(element);
+            m_data_block->AddElementType(element);
         }
     );
-    std::cout <<"Number of element types in PDBx/mmCIF = "<< m_element_type_list.size() << std::endl;
+}
+
+void CifFormat::LoadStructHelixInfo(const std::string & filename)
+{
+    std::ifstream infile{ filename, std::ios::binary };
+    if (!infile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("LoadStructHelixInfo failed!");
+    }
+
+    ParseLoopBlock(infile, "_struct_conf.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto helix_id{ token_list[index_map.at("id")] };
+            auto conf_type{ token_list[index_map.at("conf_type_id")] };
+            auto chain_id_beg{ token_list[index_map.at("beg_label_asym_id")] };
+            auto reisude_id_beg{ token_list[index_map.at("beg_label_seq_id")] };
+            auto chain_id_end{ token_list[index_map.at("end_label_asym_id")] };
+            auto reisude_id_end{ token_list[index_map.at("end_label_seq_id")] };
+            m_data_block->AddHelixRange(
+                helix_id,
+                {chain_id_beg, reisude_id_beg, chain_id_end, reisude_id_end, conf_type});
+        }
+    );
+}
+
+void CifFormat::LoadStructSheetInfo(const std::string & filename)
+{
+    std::ifstream infile{ filename, std::ios::binary };
+    if (!infile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("LoadStructSheetInfo failed!");
+    }
+
+    ParseLoopBlock(infile, "_struct_sheet.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto sheet_id{ token_list[index_map.at("id")] };
+            auto strands_size{ std::stoi(token_list[index_map.at("number_strands")]) };
+            m_data_block->AddSheetStrands(sheet_id, strands_size);
+        }
+    );
+
+    ParseLoopBlock(infile, "_struct_sheet_range.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto sheet_id{ token_list[index_map.at("sheet_id")] };
+            auto range_id{ token_list[index_map.at("id")] };
+            auto composite_sheet_id{ sheet_id + range_id };
+            auto chain_id_beg{ token_list[index_map.at("beg_label_asym_id")] };
+            auto reisude_id_beg{ token_list[index_map.at("beg_label_seq_id")] };
+            auto chain_id_end{ token_list[index_map.at("end_label_asym_id")] };
+            auto reisude_id_end{ token_list[index_map.at("end_label_seq_id")] };
+            m_data_block->AddSheetRange(
+                composite_sheet_id,
+                {chain_id_beg, reisude_id_beg, chain_id_end, reisude_id_end});
+        }
+    );
 }
 
 void CifFormat::LoadAtomSiteData(const std::string & filename)
@@ -116,186 +265,154 @@ void CifFormat::LoadAtomSiteData(const std::string & filename)
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
         {
-            auto atom{ std::make_unique<AtomSite>() };
-            atom->group_PDB          = token_list[index_map.at("group_PDB")];
-            atom->id                 = std::stoi(token_list[index_map.at("id")]);
-            atom->type_symbol        = token_list[index_map.at("type_symbol")];
-            atom->label_atom_id      = token_list[index_map.at("label_atom_id")];
-            atom->label_alt_id       = token_list[index_map.at("label_alt_id")];
-            atom->label_comp_id      = token_list[index_map.at("label_comp_id")];
-            atom->label_asym_id      = token_list[index_map.at("label_asym_id")];
-            atom->label_entity_id    = token_list[index_map.at("label_entity_id")];
-            atom->label_seq_id       = token_list[index_map.at("label_seq_id")];
-            atom->pdbx_PDB_ins_code  = token_list[index_map.at("pdbx_PDB_ins_code")];
-            atom->position_x         = std::stof(token_list[index_map.at("Cartn_x")]);
-            atom->position_y         = std::stof(token_list[index_map.at("Cartn_y")]);
-            atom->position_z         = std::stof(token_list[index_map.at("Cartn_z")]);
-            atom->occupancy          = std::stof(token_list[index_map.at("occupancy")]);
-            atom->B_iso_or_equiv     = std::stof(token_list[index_map.at("B_iso_or_equiv")]);
-            atom->pdbx_formal_charge = token_list[index_map.at("pdbx_formal_charge")];
-            atom->auth_seq_id        = token_list[index_map.at("auth_seq_id")];
-            atom->auth_comp_id       = token_list[index_map.at("auth_comp_id")];
-            atom->auth_asym_id       = token_list[index_map.at("auth_asym_id")];
-            atom->auth_atom_id       = token_list[index_map.at("auth_atom_id")];
-            atom->pdbx_PDB_model_num = std::stoi(token_list[index_map.at("pdbx_PDB_model_num")]);
-            bool is_special{ (atom->group_PDB == "HETATM") ? true : false };
-            if (atom->pdbx_PDB_model_num > 1) return; // end of reading file for multi-model PDB
-            if (atom->label_alt_id != "." && atom->label_alt_id != "A") return; // skip if there are other alternate position presented
-            BuildAtomObject(atom.get(), is_special);
-        }
-    );
-}
+            static AtomObject * last_atom_object{ nullptr };
+            auto group_type{ token_list[index_map.at("group_PDB")] };
+            auto element_type{ token_list[index_map.at("type_symbol")] };
+            if (element_type == "H") return; // Skip hydrogen atom
+            auto is_special_atom{ (group_type == "HETATM") ? true : false };
+            auto atom_object{ std::make_unique<AtomObject>() };
+            atom_object->SetElement(element_type);
+            atom_object->SetRemoteness(
+                StringHelper::ExtractCharAsString(
+                    token_list[index_map.at("label_atom_id")],
+                    token_list[index_map.at("type_symbol")].size()
+                ));
+            atom_object->SetBranch(
+                StringHelper::ExtractCharAsString(
+                    token_list[index_map.at("label_atom_id")],
+                    token_list[index_map.at("type_symbol")].size() + 1
+                ));
+            atom_object->SetResidue(token_list[index_map.at("label_comp_id")]);
+            auto indicator{ token_list[index_map.at("label_alt_id")] };
+            atom_object->SetIndicator(indicator);
+            auto residue_id{ token_list[index_map.at("label_seq_id")] };
+            atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
+            atom_object->SetSerialID(std::stoi(token_list[index_map.at("id")]));
+            atom_object->SetChainID(token_list[index_map.at("label_asym_id")]);
+            
+            auto position_x{ std::stof(token_list[index_map.at("Cartn_x")]) };
+            auto position_y{ std::stof(token_list[index_map.at("Cartn_y")]) };
+            auto position_z{ std::stof(token_list[index_map.at("Cartn_z")]) };
+            auto occupancy{ std::stof(token_list[index_map.at("occupancy")]) };
+            auto temperature{ std::stof(token_list[index_map.at("B_iso_or_equiv")]) };
+            atom_object->SetPosition(position_x, position_y, position_z);
+            atom_object->SetOccupancy(occupancy);
+            atom_object->SetTemperature(temperature);
+            atom_object->SetSpecialAtomFlag(is_special_atom);
+            m_data_block->SetStructureInfo(atom_object.get());
 
-void CifFormat::LoadStructConfData(const std::string & filename)
-{
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadStructConfData failed!");
-    }
-
-    ParseLoopBlock(infile, "_struct_conf.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
-               const std::vector<std::string> & token_list)
-        {
-            auto entry{ std::make_unique<StructConf>() };
-            entry->conf_type_id          = token_list[index_map.at("conf_type_id")];
-            entry->id                    = token_list[index_map.at("id")];
-            entry->beg_label_comp_id     = token_list[index_map.at("beg_label_comp_id")];
-            entry->beg_label_asym_id     = token_list[index_map.at("beg_label_asym_id")];
-            entry->beg_label_seq_id      = token_list[index_map.at("beg_label_seq_id")];
-            entry->end_label_comp_id     = token_list[index_map.at("end_label_comp_id")];
-            entry->end_label_asym_id     = token_list[index_map.at("end_label_asym_id")];
-            entry->end_label_seq_id      = token_list[index_map.at("end_label_seq_id")];
-            entry->pdbx_PDB_helix_length = std::stoi(token_list[index_map.at("pdbx_PDB_helix_length")]);
-            m_struct_conf_list.emplace_back(std::move(entry));
-        }
-    );
-}
-
-void CifFormat::BuildAtomObject(std::any atom_info, bool is_special_atom)
-{
-    try
-    {
-        auto atom{ std::any_cast<AtomSite *>(atom_info) };
-        auto atom_object{ std::make_unique<AtomObject>() };
-        atom_object->SetElement(atom->type_symbol);
-        atom_object->SetRemoteness(StringHelper::ExtractCharAsString(atom->label_atom_id, atom->type_symbol.size()));
-        atom_object->SetBranch(StringHelper::ExtractCharAsString(atom->label_atom_id, atom->type_symbol.size()+1));
-        atom_object->SetResidue(atom->label_comp_id);
-        atom_object->SetIndicator(atom->label_alt_id);
-        auto residue_id{ (atom->label_seq_id == ".") ? -1 : std::stoi(atom->label_seq_id) };
-        atom_object->SetResidueID(residue_id);
-        atom_object->SetSerialID(atom->id);
-        atom_object->SetChainID(atom->label_asym_id);
-        atom_object->SetPosition(atom->position_x, atom->position_y, atom->position_z);
-        atom_object->SetOccupancy(atom->occupancy);
-        atom_object->SetTemperature(atom->B_iso_or_equiv);
-        atom_object->SetSpecialAtomFlag(is_special_atom);
-        SetStructureInfo(atom_object.get());
-        m_atom_object_list.emplace_back(std::move(atom_object));
-    }
-    catch (const std::bad_any_cast &)
-    {
-        std::cout <<"Error: bad any cast in BuildAtomObject"<< std::endl;
-    }
-}
-
-void CifFormat::SetStructureInfo(AtomObject * atom_object)
-{
-    auto chain_id{ atom_object->GetChainID() };
-    auto residue_id{ atom_object->GetResidueID() };
-    for (const auto & entry : m_struct_conf_list)
-    {
-        if (chain_id == entry->beg_label_asym_id || chain_id == entry->end_label_asym_id)
-        {
-            auto beg{ std::stoi(entry->beg_label_seq_id) };
-            auto end{ std::stoi(entry->end_label_seq_id) };
-            if (residue_id >= beg && residue_id <= end)
+            auto model_number{ std::stoi(token_list[index_map.at("pdbx_PDB_model_num")]) };
+            if (indicator == ".")
             {
-                auto structure = AtomicInfoHelper::GetStructureFromString(entry->conf_type_id);
-                atom_object->SetStructure(structure);
-                return;
+                last_atom_object = nullptr;
+                m_data_block->AddAtomObject(model_number, std::move(atom_object));
+            }
+            else if (indicator == "A")
+            {
+                last_atom_object = atom_object.get();
+                m_data_block->AddAtomObject(model_number, std::move(atom_object));
+            }
+            else
+            {
+                if (last_atom_object == nullptr)
+                {
+                    std::cout <<"CifFormat::LoadAtomSiteData() atom_object is missing."<< std::endl;
+                    return;
+                }
+                last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});
+                last_atom_object->AddAlternateOccupancy(indicator, occupancy);
+                last_atom_object->AddAlternateTemperature(indicator, temperature);
             }
         }
-    }
-    atom_object->SetStructure(Structure::FREE);
+    );
 }
 
-std::vector<std::unique_ptr<AtomObject>> CifFormat::GetAtomObjectList(void)
+AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
 {
-    return std::move(m_atom_object_list);
-}
-
-std::string CifFormat::GetPdbID(void) const
-{
-    return m_model_id;
-}
-
-std::string CifFormat::GetEmdID(void) const
-{
-    return m_map_id;
-}
-
-double CifFormat::GetResolution(void) const
-{
-    return std::stod(m_resolution);
-}
-
-std::string CifFormat::GetResolutionMethod(void) const
-{
-    return m_resolution_method;
+    return m_data_block.get();
 }
 
 void CifFormat::ParseLoopBlock(
-    std::ifstream & infile,
-    const std::string & block_prefix,
+    std::ifstream & infile, std::string_view data_block_prefix,
     const std::function<void(const std::unordered_map<std::string, size_t> &,
-                             const std::vector<std::string> &)> & row_handler)
+                             const std::vector<std::string> &)> & table_handler)
 {
     std::string line;
-    bool in_loop{ false };
-    bool header_parsed{ false };
-    std::vector<std::string> field_order;
-    std::unordered_map<std::string, size_t> index_map;
+    auto header_parsed{ false };
+    std::vector<std::string> data_column_list;
+    std::unordered_map<std::string, size_t> column_index_map;
     while (std::getline(infile, line))
     {
-        if (in_loop == false)
-        {
-            if (line.find("loop_") != std::string::npos)
-            {
-                in_loop = true;
-            }
-            continue;
-        }
         if (header_parsed == false)
         {
-            if (line.rfind(block_prefix, 0) == 0)
+            if (line.rfind(data_block_prefix, 0) == 0)
             {
-                std::istringstream iss(line);
-                std::string full;
-                iss >> full;
-                field_order.emplace_back(full.substr(block_prefix.size()));
+                auto pos{ line.find_first_of(" \t") }; // extract the token up to the first whitespace
+                std::string full_line{ (pos == std::string::npos) ? line : line.substr(0, pos) };
+                data_column_list.emplace_back(full_line.substr(data_block_prefix.size()));
                 continue;
             }
-            if (field_order.empty() == false)
+            
+            if (data_column_list.empty() == true) continue;
+            column_index_map.reserve(data_column_list.size());
+            for (size_t i = 0; i < data_column_list.size(); i++)
             {
-                header_parsed = true;
-                for (size_t i = 0; i < field_order.size(); i++)
-                {
-                    index_map[field_order[i]] = i;
-                }
+                column_index_map[data_column_list.at(i)] = i;
             }
+            header_parsed = true;
+            
         }
         if (header_parsed == true)
         {
             if (line.empty() || line[0] == '#') break;
-            std::istringstream iss(line);
+
+            const auto expected_column_size{ column_index_map.size() };
             std::vector<std::string> token_list;
-            std::string token;
-            while (iss >> token) token_list.emplace_back(token);
-            row_handler(index_map, token_list);
+            token_list.reserve(expected_column_size);
+
+            // initial tokens from this line
+            auto initial{ StringHelper::SpliteStringLineAsTokens(line, expected_column_size) };
+            token_list.insert(token_list.end(), initial.begin(), initial.end());
+
+            // now read continuation lines until we have all fields
+            bool in_multiline{ false };
+            std::string multiline_content;
+            std::string next_line;
+            while (token_list.size() < expected_column_size && std::getline(infile, next_line))
+            {
+                if (next_line.empty() == true) continue;
+                if (in_multiline == false && next_line[0] == ';')
+                {
+                    // start of multiline literal for the next field
+                    in_multiline = true;
+                    multiline_content.clear();
+                    // strip leading semicolon
+                    auto content{ next_line.substr(1) };
+                    if (content.empty() == false) multiline_content = content;
+                }
+                else if (in_multiline == true)
+                {
+                    if (next_line.empty() == false && next_line[0] == ';')
+                    {
+                        // end of multiline literal
+                        token_list.emplace_back(std::move(multiline_content));
+                        in_multiline = false;
+                    }
+                    else
+                    {
+                        // accumulate lines
+                        multiline_content += "\n" + next_line;
+                    }
+                }
+                else
+                {
+                    // normal continuation tokens
+                    auto more{ StringHelper::SpliteStringLineAsTokens(next_line, expected_column_size) };
+                    token_list.insert(token_list.end(), more.begin(), more.end());
+                }
+            }
+
+            table_handler(column_index_map, token_list);
         }
     }
 }

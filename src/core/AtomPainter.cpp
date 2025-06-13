@@ -2,6 +2,7 @@
 #include "AtomObject.hpp"
 #include "DataObjectBase.hpp"
 #include "PotentialEntryIterator.hpp"
+#include "ChargeEntryIterator.hpp"
 #include "FilePathHelper.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "ArrayStats.hpp"
@@ -58,7 +59,8 @@ void AtomPainter::Painting(void)
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of atom objects to be painted: "<< m_atom_object_list.size() << std::endl;
     
-    PaintDemoPlot("demo_plot.pdf");
+    //PaintDemoPlot("demo_plot.pdf");
+    PaintRegressionCheckPlot("regression_check_plot.pdf");
 }
 
 void AtomPainter::PaintDemoPlot(const std::string & name)
@@ -120,6 +122,91 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
 
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    #endif
+}
+
+void AtomPainter::PaintRegressionCheckPlot(const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+
+    const int col_size{ 2 };
+    const std::string col_label[col_size]
+    {
+        "#font[2]{x}_{1}",
+        "#font[2]{x}_{2}"
+    };
+
+    #ifdef HAVE_ROOT
+    gStyle->SetGridColor(kGray);
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 700, 400) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, 1, 0.12f, 0.02f, 0.20f, 0.02f, 0.02f, 0.02f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    std::unique_ptr<TH2> frame[col_size];
+    for (int i = 0; i < col_size; i++)
+    {
+        ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, 0);
+        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+        auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+        frame[i] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, 0),"", 100, 0.0, 1.0, 100, 0.0, 1.0);
+        ROOTHelper::SetAxisTitleAttribute(frame[i]->GetXaxis(), 35.0f, 0.9f, 133);
+        ROOTHelper::SetAxisLabelAttribute(frame[i]->GetXaxis(), 35.0f, 0.005f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame[i]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 505);
+        ROOTHelper::SetAxisTitleAttribute(frame[i]->GetYaxis(), 40.0f, 1.0f, 133);
+        ROOTHelper::SetAxisLabelAttribute(frame[i]->GetYaxis(), 35.0f, 0.01f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame[i]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+        ROOTHelper::SetLineAttribute(frame[i].get(), 1, 0);
+        frame[i]->SetStats(0);
+        frame[i]->GetXaxis()->SetTitle(col_label[i].data());
+        frame[i]->GetXaxis()->CenterTitle();
+        frame[i]->GetYaxis()->CenterTitle();
+    }
+
+    std::vector<std::unique_ptr<TGraphErrors>> graph_list;
+    std::vector<std::unique_ptr<TF1>> function_list;
+    for (auto & atom : m_atom_object_list)
+    {
+        auto element_label{ AtomicInfoHelper::GetLabel(atom->GetElement()) };
+        auto remoteness_label{ AtomicInfoHelper::GetLabel(atom->GetRemoteness()) };
+        auto label{ element_label + "_{" + remoteness_label + "}" };
+        frame[0]->GetYaxis()->SetTitle(Form("#font[2]{y} (#font[102]{%s})", label.data()));
+        for (int i = 0; i < col_size; i++)
+        {
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, 0);
+            auto atom_iter{ std::make_unique<ChargeEntryIterator>(atom) };
+            auto graph{ atom_iter->CreateRegressionDataGraph(i) };
+            double x_min, x_max, y_min, y_max;
+            graph->ComputeRange(x_min, y_min, x_max, y_max);
+            auto x_range{ x_max - x_min };
+
+            auto par1{ 0.0 };
+            if      (i == 0) par1 = atom_iter->GetModelEstimateMDPDE(1);
+            else if (i == 1) par1 = atom_iter->GetModelEstimateMDPDE(2);
+            //else if (i == 2) par1 = atom_iter->GetModelEstimateMDPDE(2);
+            auto function{ ROOTHelper::CreateFunction1D(Form("func_%d_%d", i, atom->GetSerialID()), "[0] + [1]*x") };
+            function->SetRange(x_min, x_max);
+            function->SetParameter(0, atom_iter->GetModelEstimateMDPDE(0)); // Intercept
+            function->SetParameter(1, par1); // Slope
+
+            frame[i]->GetXaxis()->SetLimits(x_min - 0.1*x_range, x_max + 0.1*x_range);
+            frame[i]->GetYaxis()->SetLimits(y_min, y_max);
+            frame[i]->Draw();
+
+            ROOTHelper::SetLineAttribute(function.get(), 1, 2, kRed);
+            //function->Draw("SAME");
+            function_list.emplace_back(std::move(function));
+
+            ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.0f, kAzure-7);
+            graph->Draw("P");
+            graph_list.emplace_back(std::move(graph));
+        }
+
+        ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    }
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     #endif
 }

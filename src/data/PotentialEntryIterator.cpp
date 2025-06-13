@@ -369,6 +369,50 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
     return hist_list;
 }
 
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAmplitudeRatioToWidthScatterGraph(
+    size_t target_id, size_t reference_id, Residue residue)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto element_size{ AtomClassifier::GetMainChainMemberCount() };
+    if (target_id >= element_size || reference_id >= element_size)
+    {
+        std::cerr << "Error: target or reference ID exceeds the number of main chain elements." << std::endl;
+        return nullptr;
+    }
+    std::unordered_map<int, std::tuple<double, double>> gaus_estimate_map[4];
+    size_t current_id{ 0 };
+    for (auto & atom : m_model_object->GetSelectedAtomList())
+    {
+        if (atom->GetSpecialAtomFlag() == true) continue;
+        if (AtomClassifier::IsMainChainMember(atom->GetElement(), atom->GetRemoteness(), current_id) == false) continue;
+        if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto residue_id{ atom->GetResidueID() };
+        auto amplitude_estimate{ entry->GetAmplitudeEstimateMDPDE() };
+        auto width_estimate{ entry->GetWidthEstimateMDPDE() };
+        (gaus_estimate_map[current_id])[residue_id] = std::make_tuple(amplitude_estimate, width_estimate);
+    }
+
+    auto count{ 0 };
+    for (auto & [residue_id, gaus_estimate] : gaus_estimate_map[target_id])
+    {
+        if (gaus_estimate_map[reference_id].find(residue_id) == gaus_estimate_map[reference_id].end()) continue;
+        auto target_amplitude{ std::get<0>(gaus_estimate) };
+        auto target_width{ std::get<1>(gaus_estimate) };
+        auto reference_amplitude{ std::get<0>(gaus_estimate_map[reference_id].at(residue_id)) };
+        if (reference_amplitude <= 0.0) continue;
+        auto ratio{ target_amplitude / reference_amplitude };
+        graph->SetPoint(count, target_width, ratio);
+        graph->SetPointError(count, 0.0, 0.0);
+        count++;
+    }
+    return graph;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstimateScatterGraph(
     Element element, double reference_amplitude, bool reverse)
 {
@@ -440,7 +484,8 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
     return graph;
 }
 
-std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
+std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
+PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
     size_t main_chain_element_id, const int par_id, Residue residue)
 {
     if (IsModelObjectAvailable() == false)
@@ -458,6 +503,7 @@ std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> PotentialEntryIte
         auto entry{ atom->GetAtomicPotentialEntry() };
         auto residue_id{ atom->GetResidueID() };
         auto chain_id{ atom->GetChainID() };
+        if (residue_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
             graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
@@ -468,6 +514,27 @@ std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> PotentialEntryIte
         count_map[chain_id]++;
     }
     return graph_map;
+}
+
+std::unordered_map<std::string, std::vector<std::unique_ptr<TGraphErrors>>>
+PotentialEntryIterator::CreateStructureToResidueIDGraphMap(Structure structure)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return {};
+    }
+    
+    std::unordered_map<std::string, std::vector<std::unique_ptr<TGraphErrors>>> graph_list_map;
+    for (auto & atom : m_model_object->GetSelectedAtomList())
+    {
+        if (atom->GetElement() != AtomClassifier::GetMainChainElement(0)) continue;
+        if (atom->GetRemoteness() != AtomClassifier::GetMainChainRemoteness(0)) continue;
+        auto residue_id{ atom->GetResidueID() };
+        auto chain_id{ atom->GetChainID() };
+        if (residue_id < 0) continue;
+        
+    }
+    return graph_list_map;
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueGraph(

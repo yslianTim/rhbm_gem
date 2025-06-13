@@ -29,6 +29,7 @@ public:
 
 private:
     void PaintDemoPlot(const std::string & name);
+    void PaintRegressionCheckPlot(const std::string & name);
 
     #ifdef HAVE_ROOT
     void PrintDemoMainPad(TPad * pad, TH2 * frame);
