@@ -56,7 +56,7 @@ void DemoPainter::AddDataObject(DataObjectBase * data_object)
 
 void DemoPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    m_ref_model_object_map[label].push_back(dynamic_cast<ModelObject *>(data_object));
+    m_ref_model_object_list_map[label].push_back(dynamic_cast<ModelObject *>(data_object));
 }
 
 void DemoPainter::Painting(void)
@@ -72,7 +72,7 @@ void DemoPainter::Painting(void)
     ModelObject * demo_model_object{ nullptr };
     for (auto model : m_model_object_list)
     {
-        if (model->GetPdbID() == "6Z6U")
+        if (model->GetPdbID() == "6Z6U" && model->GetEmdID() == "EMD-11103")
         {
             demo_model_object = model;
             break;
@@ -88,15 +88,12 @@ void DemoPainter::Painting(void)
     {
         PaintAtomMapValueExample("figure_1_a.pdf");
         PaintGroupGausMainChainSummary("figure_1_b.pdf");
-        //PaintAtomGausMainChain("figure_1_b.pdf", 0);
-        //PaintAtomGausMainChain("figure_4_a.pdf", 1);
         //PaintWidthToBfactorScatterPlotSummary("test_width_bfactor.pdf");
         PaintResidueClassWidthScatterPlot("figure_4_b.pdf", 1, true);
-        PaintAtomRankMainChain("test_rank_a.pdf", 0);
-        PaintAtomRankMainChain("test_rank_b.pdf", 1);
+        PaintAtomRankMainChain("figure_rank_amplitude.pdf", 0);
     }
 
-    for (auto & [key, model_list] : m_ref_model_object_map)
+    for (auto & [key, model_list] : m_ref_model_object_list_map)
     {
         if (key != "with_charge") continue;
         for (auto & model : model_list)
@@ -106,10 +103,7 @@ void DemoPainter::Painting(void)
         }
     }
 
-    if (m_model_object_list.size() > 5)
-    {
-        PaintElementClassGroupGausToFSC("figure_4_a.pdf");
-    }
+    PaintElementClassGroupGausToFSC("figure_4_a.pdf");
 }
 
 void DemoPainter::PaintAtomMapValueExample(const std::string & name)
@@ -1519,118 +1513,6 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     {
         legend->AddEntry(gaus_graph[i].get(), label_name[i], "pl");
     }
-    legend->Draw();
-
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
-    #endif
-}
-
-void DemoPainter::PaintAtomGausMainChain(const std::string & name, int par_id)
-{
-    auto file_path{ m_folder_path + name };
-    std::cout <<"- DemoPainter::PaintAtomGausMainChain"<< std::endl;
-    
-    #ifdef HAVE_ROOT
-
-    const int main_chain_element_count{ 4 };
-    short color_element[main_chain_element_count] { kRed+1, kViolet+1, kGreen+2, kAzure+2 };
-
-    gStyle->SetLineScalePS(1.0);
-    gStyle->SetGridColor(kGray);
-
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 3000, 1800) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
-    const int pad_size{ 4 };
-    std::unique_ptr<TPad> pad[pad_size + 1];
-    std::unique_ptr<TH2> frame[pad_size];
-    
-    pad[0] = ROOTHelper::CreatePad("pad0","", 0.00, 0.00, 1.00, 0.24);
-    pad[1] = ROOTHelper::CreatePad("pad1","", 0.00, 0.24, 1.00, 0.48);
-    pad[2] = ROOTHelper::CreatePad("pad2","", 0.00, 0.48, 1.00, 0.72);
-    pad[3] = ROOTHelper::CreatePad("pad3","", 0.00, 0.72, 1.00, 0.96);
-    pad[4] = ROOTHelper::CreatePad("pad4","", 0.00, 0.96, 1.00, 1.00);
-
-    std::unique_ptr<TPaveText> info_text[pad_size];
-    std::unique_ptr<TGraphErrors> gaus_graph[pad_size][main_chain_element_count];
-    std::unique_ptr<TGraphErrors> gaus_gly_graph[pad_size];
-    std::unique_ptr<TGraphErrors> gaus_pro_graph[pad_size];
-    std::vector<double> x_array[pad_size], y_array[pad_size];
-    std::string chain_id[pad_size]{ "A", "A", "B", "A" };
-    for (size_t i = 0; i < pad_size; i++)
-    {
-        info_text[i] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
-        auto entry_iter{ std::make_unique<PotentialEntryIterator>(m_model_object_list.at(static_cast<size_t>(i))) };
-        for (size_t j = 0; j < main_chain_element_count; j++)
-        {
-            gaus_graph[i][j] = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(j, par_id).at(chain_id[i]));
-            for (int p = 0; p < gaus_graph[i][j]->GetN(); p++)
-            {
-                x_array[i].emplace_back(gaus_graph[i][j]->GetPointX(p));
-                y_array[i].emplace_back(gaus_graph[i][j]->GetPointY(p));
-            }
-        }
-        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array[i], 0.01) };
-        auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[i], 0.2) };
-        frame[i] = ROOTHelper::CreateHist2D(
-            ("frame"+std::to_string(i)).data(),"",
-            100, 0.0, std::get<1>(x_range), 100, std::get<0>(y_range), std::get<1>(y_range));
-
-        gaus_gly_graph[i] = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(0, par_id, Residue::GLY).at(chain_id[i]));
-        gaus_pro_graph[i] = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(0, par_id, Residue::PRO).at(chain_id[i]));
-        for (size_t j = 0; j < main_chain_element_count; j++)
-        {
-            for (int p = 0; p < gaus_gly_graph[i]->GetN(); p++)
-            {
-                gaus_gly_graph[i]->SetPointY(p, std::get<1>(y_range));
-            }
-            for (int p = 0; p < gaus_pro_graph[i]->GetN(); p++)
-            {
-                gaus_pro_graph[i]->SetPointY(p, std::get<1>(y_range));
-            }
-        }
-    }
-
-    canvas->cd();
-    for (int i = 0; i < pad_size + 1; i++)
-    {
-        ROOTHelper::SetPadDefaultStyle(pad[i].get());
-        pad[i]->Draw();
-    }
-
-    for (int i = 0; i < pad_size; i++)
-    {
-        pad[i]->cd();
-        PrintGausResultInResidueIDPad(pad[i].get(), frame[i].get(), par_id);
-        for (size_t j = 0; j < main_chain_element_count; j++)
-        {
-            ROOTHelper::SetMarkerAttribute(gaus_graph[i][j].get(), 20, 0.5f, color_element[j]);
-            ROOTHelper::SetLineAttribute(gaus_graph[i][j].get(), 1, 1, color_element[j]);
-            gaus_graph[i][j]->Draw("PL X0");
-        }
-        ROOTHelper::SetMarkerAttribute(gaus_gly_graph[i].get(), 23, 1.0f, kOrange-6);
-        gaus_gly_graph[i]->Draw("P X0");
-        ROOTHelper::SetMarkerAttribute(gaus_pro_graph[i].get(), 23, 1.0f, kMagenta-2);
-        gaus_pro_graph[i]->Draw("P X0");
-        PrintInfoInResidueIDPad(
-            pad[i].get(), info_text[i].get(),
-            m_model_object_list.at(static_cast<size_t>(i)), chain_id[i], gaus_graph[i][0]->GetN());
-    }
-
-    pad[4]->cd();
-    auto legend{ ROOTHelper::CreateLegend(0.05, 0.00, 0.90, 1.00, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetTextAttribute(legend.get(), 50.0f, 133, 12);
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    for (size_t j = 0; j < main_chain_element_count; j++)
-    {
-        legend->AddEntry(gaus_graph[0][j].get(), AtomClassifier::GetMainChainElementLabel(j).data(), "pl");
-    }
-    legend->AddEntry(gaus_gly_graph[0].get(), "GLY", "p");
-    legend->AddEntry(gaus_pro_graph[0].get(), "PRO", "p");
-    legend->SetNColumns(6);
     legend->Draw();
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);

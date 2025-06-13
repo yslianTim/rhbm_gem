@@ -64,20 +64,17 @@ void ComparisonPainter::Painting(void)
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
 
-    if (m_ref_model_object_list_map.find("with_charge") == m_ref_model_object_list_map.end() ||
-        m_ref_model_object_list_map.find("no_charge") == m_ref_model_object_list_map.end())
+    if (m_ref_model_object_list_map.find("with_charge") != m_ref_model_object_list_map.end() &&
+        m_ref_model_object_list_map.find("no_charge") != m_ref_model_object_list_map.end())
     {
-        std::cout <<"[ComparisonPainter::Painting] Missing simulation data [with_charge] and [no_charge] class. Skip..."<< std::endl;
-        return;
+        PaintGausEstimateElementClassComparison("figure_3_a.pdf");
+        PaintGausEstimateResidueClassComparison("figure_3_b.pdf");
+        PaintGausEstimateResidueClassDenseComparison("figure_3_sup.pdf");
     }
-
-    PaintGausEstimateElementClassComparison("figure_3_a.pdf");
-    PaintGausEstimateResidueClassComparison("figure_3_b.pdf");
-    PaintGausEstimateResidueClassDenseComparison("figure_3_sup.pdf");
 
     for (auto & model_object : m_model_object_list)
     {
-        auto plot_name{ "figure_2_charge_"+ model_object->GetPdbID() +".pdf" };
+        auto plot_name{ "figure_method_charge_"+ model_object->GetPdbID() +".pdf" };
         auto & ref_model_object_list{ m_ref_model_object_list_map.at("with_charge") };
         if (model_object->GetPdbID() == ref_model_object_list.at(0)->GetPdbID())
         {
@@ -612,48 +609,50 @@ void ComparisonPainter::PainMapValueComparison(
     gStyle->SetGridColor(kGray);
     const int col_size{ 4 };
     const int row_size{ 1 };
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1400, 500) };
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 600) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.07f, 0.01f, 0.15f, 0.11f, 0.01f, 0.01f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.02f, 0.20f, 0.12f, 0.01f, 0.005f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
+    std::vector<std::unique_ptr<TGraphErrors>> scatter_graph_list;
+    std::vector<std::unique_ptr<TF1>> fit_function_list;
     for (auto & ref_model_object : ref_model_object_list)
     {
         if (model_object->GetPdbID() != ref_model_object->GetPdbID()) continue;
-        std::unique_ptr<TGraphErrors> scatter_graph[col_size];
-        std::unique_ptr<TF1> fit_function[col_size];
+        TGraphErrors * scatter_graph[col_size];
+        TF1 * fit_function[col_size];
         double r_square[col_size]{ 0.0 };
         double slope[col_size]{ 0.0 };
         double intercept[col_size]{ 0.0 };
+        std::vector<double> x_array, y_array;
         for (size_t i = 0; i < col_size; i++)
         {
             auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
-            scatter_graph[i] = ROOTHelper::CreateGraphErrors();
-            BuildMapValueScatterGraph(group_key, scatter_graph[i].get(), ref_model_object, model_object, 15, 0.0, 1.5);
-            r_square[i] = ROOTHelper::PerformLinearRegression(scatter_graph[i].get(), slope[i], intercept[i]);
-            fit_function[i] = ROOTHelper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]");
-            fit_function[i]->SetParameters(intercept[i], slope[i]);
-        }
+            auto graph{ ROOTHelper::CreateGraphErrors() };
+            BuildMapValueScatterGraph(group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
+            r_square[i] = ROOTHelper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
+            auto function{ ROOTHelper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
+            function->SetParameters(intercept[i], slope[i]);
+            scatter_graph[i] = graph.get();
+            fit_function[i] = function.get();
+            scatter_graph_list.emplace_back(std::move(graph));
+            fit_function_list.emplace_back(std::move(function));
 
-        double x_min[col_size]{ 0.0 };
-        double x_max[col_size]{ 1.0 };
-        std::vector<double> y_array;
-        for (int i = 0; i < col_size; i++)
-        {
-            std::vector<double> x_array;
             for (int p = 0; p < scatter_graph[i]->GetN(); p++)
             {
                 x_array.emplace_back(scatter_graph[i]->GetPointX(p));
                 y_array.emplace_back(scatter_graph[i]->GetPointY(p));
             }
-            auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.24) };
-            x_min[i] = std::get<0>(x_range);
-            x_max[i] = std::get<1>(x_range);
         }
 
-        auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.15) };
-        auto y_min{ std::get<0>(y_range) };
-        auto y_max{ std::get<1>(y_range) };
+        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+        double x_min{ std::get<0>(x_range) };
+        double x_max{ std::get<1>(x_range) };
+
+        auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.2) };
+        double y_min{ std::get<0>(y_range) };
+        double y_max{ std::get<1>(y_range) };
 
         std::unique_ptr<TH2> frame[col_size][row_size];
         std::unique_ptr<TPaveText> title_text[col_size];
@@ -667,53 +666,72 @@ void ComparisonPainter::PainMapValueComparison(
             for (int j = 0; j < row_size; j++)
             {
                 ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
-                ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+                ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+                ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
                 auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
                 auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-                frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 500, x_min[i], x_max[i], 500, y_min, y_max);
-                ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35, 0.9f, 133);
-                ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35, 0.005f, 133);
+                frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 500, x_min, x_max, 500, y_min, y_max);
+                ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
+                ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.005f, 133);
                 ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
-                ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40, 1.1f, 133);
-                ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 40, 0.02f, 133);
-                ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
+                ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 60.0f, 1.0f, 133);
+                ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 50.0f, 0.01f, 133);
+                ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
                 ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
-                frame[i][j]->GetXaxis()->SetTitle("Simulated Map Value");
+                frame[i][j]->GetXaxis()->SetTitle("");
                 frame[i][j]->GetYaxis()->SetTitle("Real Map Value");
-                frame[i][j]->GetXaxis()->CenterTitle();
                 frame[i][j]->GetYaxis()->CenterTitle();
                 frame[i][j]->SetStats(0);
                 frame[i][j]->Draw();
-                ROOTHelper::SetMarkerAttribute(scatter_graph[i].get(), element_marker, 1.0f, element_color);
-                ROOTHelper::SetLineAttribute(scatter_graph[i].get(), 1, 2, element_color);
+                ROOTHelper::SetMarkerAttribute(scatter_graph[i], element_marker, 1.0f, element_color);
+                ROOTHelper::SetLineAttribute(scatter_graph[i], 1, 2, element_color);
                 scatter_graph[i]->Draw("P");
-                ROOTHelper::SetLineAttribute(fit_function[i].get(), 1, 2, kRed);
-                fit_function[i]->SetRange(x_min[i], x_max[i]);
+                ROOTHelper::SetLineAttribute(fit_function[i], 2, 2, kRed);
+                fit_function[i]->SetRange(x_min, x_max);
                 fit_function[i]->Draw("SAME");
             }
-            title_text[i] = ROOTHelper::CreatePaveText(0.01, 1.01, 0.99, 1.14, "nbNDC ARC", true);
+            title_text[i] = ROOTHelper::CreatePaveText(0.30, 1.01, 0.70, 1.16, "nbNDC ARC", true);
             ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
             ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
-            ROOTHelper::SetTextAttribute(title_text[i].get(), 40, 133, 22);
+            ROOTHelper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
             ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, element_color, 0.5f);
             title_text[i]->AddText(element_label.data());
             title_text[i]->Draw();
 
-            r_square_text[i] = ROOTHelper::CreatePaveText(0.50, 0.05, 0.95, 0.18, "nbNDC ARC", true);
+            r_square_text[i] = ROOTHelper::CreatePaveText(0.30, 0.05, 0.95, 0.18, "nbNDC ARC", true);
             ROOTHelper::SetPaveTextDefaultStyle(r_square_text[i].get());
             ROOTHelper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
             ROOTHelper::SetLineAttribute(r_square_text[i].get(), 1, 0);
-            ROOTHelper::SetTextAttribute(r_square_text[i].get(), 35, 133, 22);
+            ROOTHelper::SetTextAttribute(r_square_text[i].get(), 45.0f, 133, 22);
             ROOTHelper::SetFillAttribute(r_square_text[i].get(), 1001, kAzure-7, 0.20f);
             r_square_text[i]->AddText(Form("R^{2} = %.2f", r_square[i]));
             r_square_text[i]->Draw();
 
-            fit_info_text[i] = ROOTHelper::CreatePaveText(0.12, 0.88, 0.70, 0.99, "nbNDC", true);
+            fit_info_text[i] = ROOTHelper::CreatePaveText(0.05, 0.88, 0.95, 0.99, "nbNDC", true);
             ROOTHelper::SetPaveTextDefaultStyle(fit_info_text[i].get());
-            ROOTHelper::SetTextAttribute(fit_info_text[i].get(), 35, 133, 22, 0.0, kGray);
-            fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}%+.2f", slope[i], intercept[i]));
+            ROOTHelper::SetTextAttribute(fit_info_text[i].get(), 45.0f, 133, 22, 0.0, kGray+2);
+            if (intercept[i] > 0.0)
+            {
+                fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}+ %.2f", slope[i], intercept[i]));
+            }
+            else
+            {
+                fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}#minus %.2f", slope[i], std::fabs(intercept[i])));
+            }
             fit_info_text[i]->Draw();
         }
+        canvas->cd();
+        auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.08, 0.00, 0.98, 0.12) };
+        pad_extra->Draw();
+        pad_extra->cd();
+        ROOTHelper::SetPadDefaultStyle(pad_extra.get());
+        ROOTHelper::SetFillAttribute(pad_extra.get(), 4000);
+        auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+        ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
+        ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
+        ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
+        bottom_title_text->AddText("Simulated Map Value");
+        bottom_title_text->Draw();
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     }
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);

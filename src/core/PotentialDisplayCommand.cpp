@@ -26,7 +26,7 @@ void PotentialDisplayCommand::Execute(void)
     auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
     LoadModelObjects(data_manager.get());
     LoadRefModelObjects(data_manager.get());
-    LoadAdditionalReferenceModelObjects(data_manager.get());
+    //LoadAdditionalReferenceModelObjects(data_manager.get());
 
     auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
     model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);

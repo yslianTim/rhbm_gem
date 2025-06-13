@@ -19,9 +19,9 @@ class TPaveText;
 
 class DemoPainter : public PainterBase
 {
-    std::vector<ModelObject *> m_model_object_list;
-    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_map;
     std::string m_folder_path;
+    std::vector<ModelObject *> m_model_object_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
 
 public:
@@ -43,7 +43,6 @@ private:
     void PaintResidueClassWidthScatterPlot(const std::string & name, int par_id=0, bool draw_box_plot=false);
     void PaintAtomGausMainChainDemo(ModelObject * model_object1, ModelObject * model_object2, const std::string & name, int par_id=0);
     void PaintAtomGausMainChainDemoSingle(ModelObject * model_object, const std::string & name, int par_id=0);
-    void PaintAtomGausMainChain(const std::string & name, int par_id=0);
     void PaintAtomRankMainChain(const std::string & name, int par_id=0);
 
     #ifdef HAVE_ROOT
