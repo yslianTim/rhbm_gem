@@ -516,27 +516,6 @@ PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
     return graph_map;
 }
 
-std::unordered_map<std::string, std::vector<std::unique_ptr<TGraphErrors>>>
-PotentialEntryIterator::CreateStructureToResidueIDGraphMap(Structure structure)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return {};
-    }
-    
-    std::unordered_map<std::string, std::vector<std::unique_ptr<TGraphErrors>>> graph_list_map;
-    for (auto & atom : m_model_object->GetSelectedAtomList())
-    {
-        if (atom->GetElement() != AtomClassifier::GetMainChainElement(0)) continue;
-        if (atom->GetRemoteness() != AtomClassifier::GetMainChainRemoteness(0)) continue;
-        auto residue_id{ atom->GetResidueID() };
-        auto chain_id{ atom->GetChainID() };
-        if (residue_id < 0) continue;
-        
-    }
-    return graph_list_map;
-}
-
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueGraph(
     std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id)
 {

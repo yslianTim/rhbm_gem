@@ -46,6 +46,10 @@ void DataObjectManager::ProcessFile(const std::string & filename, const std::str
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     auto factory{ CreateFactory(file_extension) };
     auto data_object{ factory->CreateDataObject(filename) };
+    if (data_object == nullptr)
+    {
+        throw std::runtime_error("Failed to create data object");
+    }
     data_object->SetKeyTag(key_tag);
     data_object->Display();
 

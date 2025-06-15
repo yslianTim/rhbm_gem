@@ -11,6 +11,7 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
 {
     auto file_reader{ std::make_unique<ModelFileReader>(filename) };
     file_reader->Read();
+    if (file_reader->IsSuccessfullyRead() == false) return nullptr;
     auto data_block{ file_reader->GetDataBlockPtr() };
     auto model_object{ std::make_unique<ModelObject>(data_block->GetAtomObjectList()) };
     model_object->SetPdbID(data_block->GetPdbID());

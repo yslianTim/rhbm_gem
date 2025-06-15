@@ -21,8 +21,16 @@ void PotentialAnalysisCommand::Execute(void)
     std::cout << "PotentialAnalysisCommand::Execute() called." << std::endl;
 
     auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
-    data_manager->ProcessFile(m_model_file_path, "model");
-    data_manager->ProcessFile(m_map_file_path, "map");
+    try
+    {
+        data_manager->ProcessFile(m_model_file_path, "model");
+        data_manager->ProcessFile(m_map_file_path, "map");
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+        return;
+    }
 
     m_sphere_sampler->Print();
 

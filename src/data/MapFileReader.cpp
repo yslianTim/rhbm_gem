@@ -7,7 +7,7 @@
 #include <iostream>
 
 MapFileReader::MapFileReader(const std::string & filename) :
-    m_file_path{ filename }
+    m_successfully_read_file{ false }, m_file_path{ filename }
 {
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     if      (file_extension == ".mrc")
@@ -41,10 +41,12 @@ void MapFileReader::ReadHeader(void)
     {
         m_file_format_helper->LoadHeader(m_file_path);
         m_file_format_helper->PrintHeader();
+        m_successfully_read_file = true;
     }
     catch (const std::exception & ex)
     {
         std::cerr << ex.what() << std::endl;
+        m_successfully_read_file = false;
     }
 }
 
@@ -53,29 +55,35 @@ void MapFileReader::ReadMapValueArray(void)
     try
     {
         m_file_format_helper->LoadDataArray(m_file_path);
+        m_successfully_read_file = true;
     }
     catch (const std::exception & ex)
     {
         std::cerr << ex.what() << std::endl;
+        m_successfully_read_file = false;
     }
 }
 
 std::unique_ptr<float[]> MapFileReader::GetMapValueArray(void)
 {
+    if (m_file_format_helper == nullptr || m_successfully_read_file == false) return nullptr;
     return m_file_format_helper->GetDataArray();
 }
 
 std::array<int, 3> MapFileReader::GetGridSizeArray(void)
 {
+    if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
     return m_file_format_helper->GetGridSize();
 }
 
 std::array<float, 3> MapFileReader::GetGridSpacingArray(void)
 {
+    if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
     return m_file_format_helper->GetGridSpacing();
 }
 
 std::array<float, 3> MapFileReader::GetOriginArray(void)
 {
+    if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
     return m_file_format_helper->GetOrigin();
 }
