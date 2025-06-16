@@ -33,17 +33,14 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintAtomMapValueExample(const std::string & name);
-    void PaintGroupGausMainChainSummary(const std::string & name);
+    void PaintAtomMapValueExample(ModelObject * model_object, const std::string & name);
+    void PaintGroupGausMainChainSummary(const std::vector<ModelObject *> & model_list, const std::string & name);
     void PaintGroupGausMainChainSingle(ModelObject * model_object, const std::string & name);
-    void PaintResidueClassGroupGausSideChainSummary(const std::string & name);
-    void PaintWidthScatterPlotSingle(ModelObject * model_object, const std::string & name, bool draw_box_plot=false);
-    void PaintElementClassGroupGausToFSC(const std::string & name);
-    void PaintWidthToBfactorScatterPlotSummary(const std::string & name);
-    void PaintResidueClassWidthScatterPlot(const std::string & name, int par_id=0, bool draw_box_plot=false);
+    void PaintAtomWidthScatterPlotSingle(ModelObject * model_object, const std::string & name, bool draw_box_plot=false);
+    void PaintGroupGausToFSC(const std::string & name);
+    void PaintGroupWidthScatterPlot(const std::vector<ModelObject *> & model_list, const std::string & name, int par_id=0, bool draw_box_plot=false);
     void PaintAtomGausMainChainDemo(ModelObject * model_object1, ModelObject * model_object2, const std::string & name, int par_id=0);
     void PaintAtomGausMainChainDemoSingle(ModelObject * model_object, const std::string & name, int par_id=0);
-    void PaintAtomRankMainChain(const std::string & name, int par_id=0);
 
     #ifdef HAVE_ROOT
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);

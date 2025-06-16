@@ -35,9 +35,10 @@ class Application
 
     struct PotentialAnalysisOptions
     {
-        bool is_asymmetry;
+        bool is_asymmetry, is_simulation;
         double fit_range_min, fit_range_max;
         double alpha_r, alpha_g;
+        double resolution_simulation;
         std::string model_file_path;
         std::string map_file_path;
         std::string saved_key_tag;

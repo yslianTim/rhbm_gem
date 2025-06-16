@@ -9,6 +9,7 @@
 #include "ArrayStats.hpp"
 #include "KeyPacker.hpp"
 #include "GlobalEnumClass.hpp"
+#include "StringHelper.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -67,33 +68,29 @@ void ModelPainter::Painting(void)
 
     for (auto model_object : m_model_object_list)
     {
-        auto plot_gaus_main_chain_name{ "group_gaus_main_"+ model_object->GetPdbID() +".pdf" };
-        PaintGroupGausMainChain(model_object, plot_gaus_main_chain_name);
-        auto plot_side_chain_name{ "structure_class_group_gaus_side_"+ model_object->GetPdbID() +".pdf" };
-        PaintStructureClassGroupGausSideChain(model_object, plot_side_chain_name);
-        model_object->BuildKDTreeRoot();
-        PaintResidueClassWidthScatterPlot(model_object, "residue_class_com_"+ model_object->GetPdbID() +".pdf", 0, true);
-        //PaintResidueClassWidthScatterPlot(model_object, "residue_class_knn_"+ model_object->GetPdbID() +".pdf", 1, true);
-        PaintAtomXYPosition(model_object, "atom_position_"+ model_object->GetPdbID() +".pdf");
-        PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ model_object->GetPdbID() +".pdf", false);
-        PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ model_object->GetPdbID() +".pdf");
-        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ model_object->GetPdbID() +".pdf");
-        PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ model_object->GetPdbID() +".pdf");
-    }
-
-    if (m_ref_model_object_list_map.find("with_charge") != m_ref_model_object_list_map.end())
-    {
-        auto sim_model_object_list{ m_ref_model_object_list_map.at("with_charge") };
-        if (sim_model_object_list.size() == 1)
+        auto is_simulation{ model_object->GetEmdID().find("Simulation") != std::string::npos };
+        auto label{ model_object->GetPdbID() };
+        if (is_simulation == true)
         {
-            auto plot_main_chain_name{ "group_gaus_main_simulation.pdf" };
-            PaintGroupGausMainChain(sim_model_object_list.at(0), plot_main_chain_name, true);
+            label += "_"+ model_object->GetEmdID() +
+                     "_bw"+ StringHelper::ToStringWithPrecision(model_object->GetResolution(), 2);
         }
+        label += ".pdf";
+        PaintGroupGausMainChain(model_object, "group_gaus_main_chain_"+ label);
+        PaintGroupGausSideChain(model_object, "group_gaus_side_chain_"+ label);
+        model_object->BuildKDTreeRoot();
+        PaintGroupWidthScatterPlot(model_object, "group_gaus_com_"+ label, 0, true);
+        PaintGroupWidthScatterPlot(model_object, "group_gaus_knn_"+ label, 1, true);
+        PaintAtomXYPosition(model_object, "atom_position_"+ label);
+        PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ label, false);
+        PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
+        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
+        PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
     }
 }
 
 void ModelPainter::PaintGroupGausMainChain(
-    ModelObject * model_object, const std::string & name, bool is_simulation)
+    ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- ModelPainter::PaintGroupGausMainChain"<< std::endl;
@@ -222,35 +219,70 @@ void ModelPainter::PaintGroupGausMainChain(
         frame[4]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
         frame[5]->GetYaxis()->SetLimits(0.0, max_count*1.1);
 
-        auto info_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-        auto resolution_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-
-        PrintAmplitudePad(pad[1].get(), frame[1].get());
-        PrintWidthPad(pad[0].get(), frame[0].get());
-        PrintAmplitudeSummaryPad(pad[3].get(), frame[3].get());
-        PrintWidthSummaryPad(pad[2].get(), frame[2].get());
-        PrintGausSummaryPad(pad[4].get(), frame[4].get());
-        PrintCountSummaryPad(pad[6].get(), frame[5].get());
-        auto emd_id{ (is_simulation == true) ? "Simulation" : model_object->GetEmdID() };
-        PrintDataInfoPad(pad[5].get(), info_text.get(), model_object->GetPdbID(), emd_id);
-        PrintResolutionInfoPad(pad[5].get(), resolution_text.get(), model_object->GetResolution());
-
         pad[1]->cd();
+        PrintAmplitudePad(pad[1].get(), frame[1].get());
         for (int i = 0; i < primary_element_size; i++) amplitude_graph[i]->Draw("PL X0");
 
         pad[0]->cd();
+        PrintWidthPad(pad[0].get(), frame[0].get());
         for (int i = 0; i < primary_element_size; i++) width_graph[i]->Draw("PL X0");
 
         pad[3]->cd();
+        PrintAmplitudeSummaryPad(pad[3].get(), frame[3].get());
         for (int i = 0; i < primary_element_size; i++) amplitude_hist[i]->Draw("CANDLE3 SAME");
 
         pad[2]->cd();
+        PrintWidthSummaryPad(pad[2].get(), frame[2].get());
         for (int i = 0; i < primary_element_size; i++) width_hist[i]->Draw("CANDLE3 SAME");
 
         pad[4]->cd();
+        PrintGausSummaryPad(pad[4].get(), frame[4].get());
         for (int i = 0; i < primary_element_size; i++) correlation_graph[i]->Draw("P X0");
 
+        pad[5]->cd();
+        auto info_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+        auto resolution_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, info_text.get(), 0.005, 0.24, 0.01, 0.02);
+        ROOTHelper::SetPaveTextDefaultStyle(info_text.get());
+        ROOTHelper::SetPaveAttribute(info_text.get(), 0, 0.1);
+        ROOTHelper::SetFillAttribute(info_text.get(), 1001, kAzure-7, 0.5);
+        ROOTHelper::SetTextAttribute(info_text.get(), 55, 133, 12);
+        info_text->AddText(("#font[102]{PDB-" + model_object->GetPdbID() +"}").data());
+        info_text->AddText(("#font[102]{"+ model_object->GetEmdID() +"}").data());
+        info_text->Draw();
+
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, resolution_text.get(), 0.25, 0.07, 0.01, 0.02);
+        ROOTHelper::SetPaveTextDefaultStyle(resolution_text.get());
+        ROOTHelper::SetPaveAttribute(resolution_text.get(), 0, 0.1);
+        ROOTHelper::SetFillAttribute(resolution_text.get(), 1001, kAzure-7);
+        ROOTHelper::SetLineAttribute(resolution_text.get(), 1, 0);
+        ROOTHelper::SetTextAttribute(resolution_text.get(), 75.0f, 133, 22, 0.0, kYellow-10);
+        if (model_object->GetEmdID().find("Simulation") != std::string::npos)
+        {
+            resolution_text->AddText(Form("#sigma_{B}=%.2f", model_object->GetResolution()));
+        }
+        else
+        {
+            resolution_text->AddText(Form("%.2f #AA", model_object->GetResolution()));
+        }
+        resolution_text->Draw();
+
         pad[6]->cd();
+        ROOTHelper::SetPadMarginInCanvas(gPad, 0.07, 0.005, 0.01, 0.02);
+        ROOTHelper::SetPadLayout(gPad, 1, 0, 0, 0, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        ROOTHelper::SetAxisTitleAttribute(frame[5]->GetXaxis(), 0.0f);
+        ROOTHelper::SetAxisTitleAttribute(frame[5]->GetYaxis(), 32.0f, 1.2f);
+        ROOTHelper::SetAxisLabelAttribute(frame[5]->GetXaxis(), 0.0f);
+        ROOTHelper::SetAxisLabelAttribute(frame[5]->GetYaxis(), 0.0f);
+        ROOTHelper::SetAxisTickAttribute(frame[5]->GetXaxis(), 0.0f, 21);
+        ROOTHelper::SetAxisTickAttribute(frame[5]->GetYaxis(), 0.0f);
+        frame[5]->GetXaxis()->SetLimits(-1.0, 20.0);
+        frame[5]->SetMinimum(0.5);
+        frame[5]->SetStats(0);
+        frame[5]->GetYaxis()->SetTitle("#splitline{Residue}{Counts}");
+        frame[5]->GetYaxis()->CenterTitle();
+        frame[5]->Draw();
         gStyle->SetTextFont(132);
         ROOTHelper::SetFillAttribute(count_hist.get(), 1001, kAzure-7, 0.5f);
         ROOTHelper::SetLineAttribute(count_hist.get(), 1, 1, kAzure-7);
@@ -264,11 +296,11 @@ void ModelPainter::PaintGroupGausMainChain(
     #endif
 }
 
-void ModelPainter::PaintStructureClassGroupGausSideChain(
+void ModelPainter::PaintGroupGausSideChain(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ModelPainter::PaintStructureClassGroupGausSideChain"<<std::endl;
+    std::cout <<"- ModelPainter::PaintGroupGausSideChain"<<std::endl;
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     
@@ -585,11 +617,11 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     #endif
 }
 
-void ModelPainter::PaintResidueClassWidthScatterPlot(
+void ModelPainter::PaintGroupWidthScatterPlot(
     ModelObject * model_object, const std::string & name, int par_id, bool draw_box_plot)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ModelPainter::PaintResidueClassWidthScatterPlot"<< std::endl;
+    std::cout <<"- ModelPainter::PaintGroupWidthScatterPlot"<< std::endl;
     auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -1209,34 +1241,6 @@ void ModelPainter::PaintAtomRankMainChain(
 }
 
 #ifdef HAVE_ROOT
-
-void ModelPainter::PrintResolutionInfoPad(TPad * pad, TPaveText * text, double resolution)
-{
-    pad->cd();
-    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.25, 0.07, 0.01, 0.02);
-    ROOTHelper::SetPaveTextDefaultStyle(text);
-    ROOTHelper::SetPaveAttribute(text, 0, 0.1);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7);
-    ROOTHelper::SetLineAttribute(text, 1, 0);
-    ROOTHelper::SetTextAttribute(text, 80, 133, 22, 0.0, kYellow-10);
-    text->AddText(Form("%.2f #AA", resolution));
-    pad->Update();
-}
-
-void ModelPainter::PrintDataInfoPad(
-    TPad * pad, TPaveText * text, const std::string & pdb_id, const std::string & emd_id)
-{
-    pad->cd();
-    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.005, 0.24, 0.01, 0.02);
-    ROOTHelper::SetPaveTextDefaultStyle(text);
-    ROOTHelper::SetPaveAttribute(text, 0, 0.1);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7, 0.5);
-    ROOTHelper::SetTextAttribute(text, 55, 133, 12);
-    text->AddText(("#font[102]{PDB-" + pdb_id +"}").data());
-    text->AddText(("#font[102]{"+ emd_id +"}").data());
-    pad->Update();
-}
-
 void ModelPainter::PrintAmplitudePad(TPad * pad, TH2 * hist)
 {
     pad->cd();
@@ -1358,26 +1362,6 @@ void ModelPainter::PrintGausSummaryPad(TPad * pad, TH2 * hist)
     hist->GetXaxis()->CenterTitle();
     hist->GetYaxis()->CenterTitle();
     hist->Draw("Y+");
-}
-
-void ModelPainter::PrintCountSummaryPad(TPad * pad, TH2 * hist)
-{
-    pad->cd();
-    ROOTHelper::SetPadMarginInCanvas(pad, 0.07, 0.005, 0.01, 0.02);
-    ROOTHelper::SetPadLayout(pad, 1, 0, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(pad, 0, 0, 4000, 0, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0f);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 32.0f, 1.2f);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 0.0f);
-    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), 0.0f, 21);
-    ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), 0.0f);
-    hist->GetXaxis()->SetLimits(-1.0, 20.0);
-    hist->SetMinimum(0.5);
-    hist->SetStats(0);
-    hist->GetYaxis()->SetTitle("#splitline{Residue}{Counts}");
-    hist->GetYaxis()->CenterTitle();
-    hist->Draw();
 }
 
 void ModelPainter::PrintInfoSideChainPad(

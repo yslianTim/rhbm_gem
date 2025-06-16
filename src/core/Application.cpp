@@ -38,6 +38,8 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         auto command{ std::make_unique<PotentialAnalysisCommand>() };
         command->SetThreadSize(m_global_options.thread_size);
         command->SetAsymmetryFlag(m_potential_analysis_options.is_asymmetry);
+        command->SetSimulationFlag(m_potential_analysis_options.is_simulation);
+        command->SetSimulatedMapResolution(m_potential_analysis_options.resolution_simulation);
         command->SetSavedKeyTag(m_potential_analysis_options.saved_key_tag);
         command->SetSamplingSize(m_sphere_sampler_options.sampling_size);
         command->SetSamplingRangeMinimum(m_sphere_sampler_options.sampling_range_min);
@@ -131,6 +133,12 @@ void Application::RegisterPotentialAnalysisCommand(void)
     m_potential_analysis_cmd->add_option(
         "-m,--map", m_potential_analysis_options.map_file_path,
         "Map file path")->required();
+    m_potential_analysis_cmd->add_option(
+        "--simulation", m_potential_analysis_options.is_simulation,
+        "Simulation flag")->default_val(false);
+    m_potential_analysis_cmd->add_option(
+        "-r,--sim-resolution", m_potential_analysis_options.resolution_simulation,
+        "Set simulated map's resolution (blurring width)")->default_val(0.0);
     m_potential_analysis_cmd->add_option(
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");

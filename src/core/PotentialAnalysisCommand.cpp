@@ -2,10 +2,12 @@
 #include "DataObjectManager.hpp"
 #include "PotentialAnalysisVisitor.hpp"
 #include "SphereSampler.hpp"
+#include "ModelObject.hpp"
 
 #include <iostream>
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
+    m_simulated_map_resolution{ 0.0 },
     m_sphere_sampler{ std::make_unique<SphereSampler>() }
 {
 
@@ -25,14 +27,18 @@ void PotentialAnalysisCommand::Execute(void)
     {
         data_manager->ProcessFile(m_model_file_path, "model");
         data_manager->ProcessFile(m_map_file_path, "map");
+        if (m_is_simulation == true)
+        {
+            auto model_object{
+                dynamic_cast<ModelObject *>(data_manager->GetDataObjectRef("model").get()) };
+            UpdateModelObjectForSimulation(model_object);
+        }
     }
-    catch(const std::exception& e)
+    catch (const std::exception & e)
     {
         std::cerr << e.what() << '\n';
         return;
     }
-
-    m_sphere_sampler->Print();
 
     auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_sphere_sampler.get()) };
     analyzer->SetAsymmetryFlag(m_is_asymmetry);
@@ -44,7 +50,6 @@ void PotentialAnalysisCommand::Execute(void)
     analyzer->SetAlphaG(m_alpha_g);
 
     data_manager->Accept(analyzer.get());
-
     data_manager->SaveDataObject("model", m_saved_key_tag);
 }
 
@@ -67,4 +72,18 @@ void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)
 void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
 {
     m_sphere_sampler->SetDistanceRangeMaximum(value);
+}
+
+void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * model_object)
+{
+    if (model_object == nullptr) return;
+    if (m_simulated_map_resolution == 0.0)
+    {
+        std::cout <<"[Warning] The resolution of input simulated map hasn't been set.\n";
+        std::cout <<"          Please give the corresponding resolution value for this map.\n";
+        std::cout <<"          (-r, --sim-resolution)"<< std::endl;
+    }
+    model_object->SetEmdID("Simulation");
+    model_object->SetResolution(m_simulated_map_resolution);
+    model_object->SetResolutionMethod("Blurring Width");
 }

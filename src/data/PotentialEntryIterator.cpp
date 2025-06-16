@@ -324,7 +324,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
 
 std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHistogram(
     int par_id, int & chain_size, Residue residue,
-    int extra_id, std::vector<Residue> veto_residues_list)
+    size_t extra_id, std::vector<Residue> veto_residues_list)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -355,7 +355,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
     std::vector<std::unique_ptr<TH1D>> hist_list;
     for (size_t i = 0; i < 4; i++)
     {
-        auto name{ Form("h%d_%d_%d_%d", extra_id, static_cast<int>(i), static_cast<int>(residue), par_id) };
+        auto name{ Form("h%d_%d_%d_%d", static_cast<int>(extra_id), static_cast<int>(i), static_cast<int>(residue), par_id) };
         auto hist{ ROOTHelper::CreateHist1D(name, "", 4,  0.5, 4.5) };
         for (auto & [chain_id, values_map_tmp] : values_map)
         {
