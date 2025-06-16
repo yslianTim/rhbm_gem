@@ -16,7 +16,6 @@
 #include <TCanvas.h>
 #include <TPad.h>
 #include <TGraphErrors.h>
-#include <TGraph2DErrors.h>
 #include <TLegend.h>
 #include <TPaveText.h>
 #include <TColor.h>
@@ -25,7 +24,6 @@
 #include <TH2.h>
 #include <TF1.h>
 #include <TLine.h>
-#include <TH3F.h>
 #include <TLatex.h>
 #endif
 
@@ -1250,61 +1248,6 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
 }
 
 #ifdef HAVE_ROOT
-
-void DemoPainter::ModifyAxisLabelSideChain(
-    TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list)
-{
-    if (AtomicInfoHelper::IsStandardResidue(residue) == false) return;
-
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
-    auto label_size{ static_cast<int>(label_list.size()) };
-    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), label_size+1);
-    ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 506);
-
-    hist->GetXaxis()->SetLimits(-1.0, static_cast<double>(label_list.size()));
-    hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
-    hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-
-    for (int i = 0; i < label_size; i++)
-    {
-        hist->GetXaxis()->ChangeLabel(i+2, 0.0, -1, -1, -1, -1, label_list.at(static_cast<size_t>(i)).data());
-    }
-}
-
-void DemoPainter::PrintIconMainChainPad(
-    TPad * pad, TPaveText * text, double resolution, bool is_bottom_pad, bool is_top_pad)
-{
-    pad->cd();
-    auto bottom_margin{ (is_bottom_pad) ? 0.20 : 0.14 };
-    auto top_margin{ (is_top_pad) ? 0.06 : 0.01 };
-    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.005, 0.005, bottom_margin, top_margin);
-    ROOTHelper::SetPaveTextDefaultStyle(text);
-    ROOTHelper::SetPaveAttribute(text, 0, 0.2);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7);
-    ROOTHelper::SetTextAttribute(text, 80, 133, 22, 0.0, kYellow-10);
-    text->AddText(Form("%.2f #AA", resolution));
-    pad->Update();
-}
-
-void DemoPainter::PrintInfoMainChainPad(
-    TPad * pad, TPaveText * text,
-    const std::string & pdb_id, const std::string & emd_id, bool is_bottom_pad, bool is_top_pad)
-{
-    pad->cd();
-    auto bottom_margin{ (is_bottom_pad) ? 0.06 : 0.01 };
-    auto top_margin{ (is_top_pad) ? 0.13 : 0.07 };
-    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.005, 0.005, bottom_margin, top_margin);
-    ROOTHelper::SetPaveTextDefaultStyle(text);
-    ROOTHelper::SetPaveAttribute(text, 0, 0.1);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7, 0.5);
-    ROOTHelper::SetTextAttribute(text, 50, 133, 13);
-    ROOTHelper::SetLineAttribute(text, 1, 0);
-    text->AddText(("#font[102]{PDB-" + pdb_id +"}").data());
-    text->AddText(("#font[102]{"+ emd_id +"}").data());
-    pad->Update();
-}
-
 void DemoPainter::PrintGausTitlePad(
     TPad * pad, TPaveText * text, const std::string & title, float text_size)
 {
@@ -1412,100 +1355,4 @@ void DemoPainter::PrintGausCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_ax
     hist->GetXaxis()->CenterTitle();
     hist->Draw("");
 }
-
-void DemoPainter::PrintLeftSideChainPad(
-    TPad * pad, TH2 * hist, Residue residue, const std::string & y_title,
-    const std::vector<std::string> & label_list)
-{
-    pad->cd();
-    pad->Clear();
-    ROOTHelper::SetPadMarginInCanvas(pad, 0.04, 0.005, 0.03, 0.02);
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 45.0, 1.2f);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 40.0, 0.005f, 103, kCyan+3);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 40.0, 0.01f);
-    ModifyAxisLabelSideChain(pad, hist, residue, label_list);
-    hist->SetStats(0);
-    hist->GetYaxis()->SetTitle(y_title.data());
-    hist->GetYaxis()->CenterTitle();
-    hist->Draw();
-}
-
-void DemoPainter::PrintRightSideChainPad(
-    TPad * pad, TH2 * hist, Residue residue,
-    const std::vector<std::string> & label_list)
-{
-    pad->cd();
-    pad->Clear();
-    ROOTHelper::SetPadMarginInCanvas(pad, 0.005, 0.04, 0.03, 0.02);
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 0.0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 0.0);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 40.0, 0.005f, 103, kCyan+3);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 0.0);
-    ModifyAxisLabelSideChain(pad, hist, residue, label_list);
-    hist->SetStats(0);
-    hist->Draw();
-}
-
-void DemoPainter::PrintTitleSideChainPad(
-    TPad * pad, TPaveText * text, const std::string & residue_name)
-{
-    pad->cd();
-    auto left_margin{ (0.33 + pad->GetLeftMargin()) * pad->GetAbsWNDC() };
-    auto right_margin{ (0.33 + pad->GetRightMargin()) * pad->GetAbsWNDC() };
-    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, left_margin, right_margin, 0.165, 0.01);
-    ROOTHelper::SetPaveTextDefaultStyle(text);
-    ROOTHelper::SetPaveAttribute(text, 0, 0.2);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7);
-    ROOTHelper::SetTextAttribute(text, 50, 103, 22, 0.0, kYellow-10);
-    text->AddText(residue_name.data());
-    pad->Update();
-}
-
-void DemoPainter::PrintGausResultInResidueIDPad(TPad * pad, TH2 * hist, int par_id)
-{
-    pad->cd();
-    ROOTHelper::SetPadMarginInCanvas(pad, 0.05, 0.10, 0.05, 0.01);
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadFrameAttribute(pad, 0, 0, 4000, 0, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetXaxis(), 45.0f, 0.9f, 133);
-    ROOTHelper::SetAxisTitleAttribute(hist->GetYaxis(), 50.0f, 1.5f, 133);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetXaxis(), 45.0f, 0.01f, 133);
-    ROOTHelper::SetAxisLabelAttribute(hist->GetYaxis(), 45.0f, 0.005f, 133);
-
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.008, 1) };
-    ROOTHelper::SetAxisTickAttribute(hist->GetXaxis(), static_cast<float>(x_tick_length), 520);
-    ROOTHelper::SetAxisTickAttribute(hist->GetYaxis(), static_cast<float>(y_tick_length), 505);
-
-    hist->SetStats(0);
-    hist->GetXaxis()->CenterTitle();
-    hist->GetYaxis()->CenterTitle();
-    hist->GetXaxis()->SetTitle("Residue ID");
-    hist->GetYaxis()->SetTitle((par_id == 0) ? "Amplitude" : "Width");
-    hist->Draw();
-}
-
-void DemoPainter::PrintInfoInResidueIDPad(
-    TVirtualPad * pad, TPaveText * text, const ModelObject * model_object,
-    const std::string & chain_id, int residue_size)
-{
-    pad->cd();
-    ROOTHelper::SetPaveTextMarginInCanvas(pad, text, 0.903, 0.003, 0.05, 0.01);
-    ROOTHelper::SetPaveTextDefaultStyle(text);
-    ROOTHelper::SetPaveAttribute(text, 0, 0.1);
-    ROOTHelper::SetFillAttribute(text, 1001, kAzure-7, 0.5);
-    ROOTHelper::SetTextAttribute(text, 40.0f, 133, 12);
-    ROOTHelper::SetLineAttribute(text, 1, 0);
-    text->AddText("---------------------");
-    text->AddText(("#font[102]{PDB-" + model_object->GetPdbID() +"}").data());
-    text->AddText(("#font[102]{"+ model_object->GetEmdID() +"}").data());
-    text->AddText(Form("Chain ID = %s", chain_id.data()));
-    text->AddText(Form("#Residues = %d", residue_size));
-    text->AddText("---------------------");
-    pad->Update();
-}
-
 #endif
