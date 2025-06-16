@@ -259,6 +259,12 @@ void MapObject::CalculateMapValueSD(void)
 
 void MapObject::MapValueArrayNormalization(void)
 {
+    if (m_map_value_sd == 0.0f)
+    {
+        std::cout <<"[Warning] The standard deviation of map value array is zero,"
+                  <<" skip normalization."<< std::endl;
+        return;
+    }
     for (size_t i = 0; i < static_cast<size_t>(m_voxel_size); i++)
     {
         m_map_value_array[i] /= m_map_value_sd;
