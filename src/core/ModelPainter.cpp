@@ -64,8 +64,6 @@ void ModelPainter::Painting(void)
     std::cout <<"- ModelPainter::Painting"<<std::endl;
     std::cout <<"  Folder path: "<< m_folder_path << std::endl;
     std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
-    
-    if (m_model_object_list.size() > 1) return;
 
     for (auto model_object : m_model_object_list)
     {

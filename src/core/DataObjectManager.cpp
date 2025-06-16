@@ -94,13 +94,13 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
     {
         throw std::runtime_error("Database manager is not initialized.");
     }
-    m_db_manager->LoadDataObject(key_tag);
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
         std::cout <<"The key tag: ["<< key_tag <<"] already presented"
                   <<", this data object will be replaced."<< std::endl;
     }
-    m_data_object_map.insert_or_assign(key_tag, m_db_manager->LoadDataObject(key_tag));
+    auto data_object{ m_db_manager->LoadDataObject(key_tag) };
+    m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
 }
 
 void DataObjectManager::SaveDataObject(
