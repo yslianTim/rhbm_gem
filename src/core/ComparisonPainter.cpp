@@ -82,6 +82,9 @@ void ComparisonPainter::Painting(void)
         }
     }
 
+    PaintSimulationGausRatio("figure_gaus_ratio.pdf",
+        m_ref_model_object_list_map.at("with_charge"), m_ref_model_object_list_map.at("no_charge"));
+
 }
 
 void ComparisonPainter::PaintGausEstimateElementClassComparison(const std::string & name)
@@ -204,7 +207,7 @@ void ComparisonPainter::PaintGausEstimateElementClassComparison(const std::strin
     ROOTHelper::SetFillAttribute(top_title_text.get(), 1001, kAzure-7);
     ROOTHelper::SetTextAttribute(top_title_text.get(), 75.0f, 133, 22, 0.0, kYellow-10);
     ROOTHelper::SetLineAttribute(top_title_text.get(), 1, 0);
-    top_title_text->AddText("Integrated with All Residues");
+    top_title_text->AddText("The Whole-Protein Level");
     top_title_text->Draw();
 
     for (size_t i = 0; i < primary_element_size; i++)
@@ -739,7 +742,172 @@ void ComparisonPainter::PainMapValueComparison(
     #endif
 }
 
+void ComparisonPainter::PaintSimulationGausRatio(
+    const std::string & name,
+    const std::vector<ModelObject *> & model_list1, const std::vector<ModelObject *> & model_list2)
+{
+    auto file_path{ m_folder_path + name };
+    std::cout <<"- ComparisonPainter::PaintSimulationGausRatio"<< std::endl;
+
+    auto class_key{ AtomicInfoHelper::GetElementClassKey() };
+
+    #ifdef HAVE_ROOT
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+    const int col_size{ 2 };
+    const int row_size{ 1 };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 600) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.12f, 0.12f, 0.19f, 0.04f, 0.02f, 0.02f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    
+    const int target_id{ 0 };
+    const int reference_id{ 1 };
+    auto target_label{ AtomClassifier::GetMainChainElementLabel(target_id) };
+    auto reference_label{ AtomClassifier::GetMainChainElementLabel(reference_id) };
+    auto target_color{ AtomClassifier::GetMainChainElementColor(target_id) };
+    auto reference_color{ AtomClassifier::GetMainChainElementColor(reference_id) };
+
+    const std::string y_axis_title[col_size]
+    {
+        Form("Amplitude Ratio #font[2]{A}_{#color[%d]{#font[102]{%s}}} / #font[2]{A}_{#color[%d]{#font[102]{%s}}}",
+            target_color, target_label.data(), reference_color, reference_label.data()),
+        Form("Width Ratio #tau_{#color[%d]{#font[102]{%s}}} / #tau_{#color[%d]{#font[102]{%s}}}",
+            target_color, target_label.data(), reference_color, reference_label.data())
+    };
+
+    std::unique_ptr<TGraphErrors> simulation1_graph[col_size];
+    std::unique_ptr<TGraphErrors> simulation2_graph[col_size];
+    std::vector<double> x_array, y_array;
+    for (int i = 0; i < col_size; i++)
+    {
+        simulation1_graph[i] = ROOTHelper::CreateGraphErrors();
+        simulation2_graph[i] = ROOTHelper::CreateGraphErrors();
+        BuildGausRatioToResolutionGraph(i, target_id, reference_id, simulation1_graph[i].get(), model_list1, class_key);
+        BuildGausRatioToResolutionGraph(i, target_id, reference_id, simulation2_graph[i].get(), model_list2, class_key);
+        for (int p = 0; p < simulation1_graph[i]->GetN(); p++)
+        {
+            x_array.push_back(simulation1_graph[i]->GetPointX(p));
+            y_array.push_back(simulation1_graph[i]->GetPointY(p));
+        }
+        for (int p = 0; p < simulation2_graph[i]->GetN(); p++)
+        {
+            x_array.push_back(simulation2_graph[i]->GetPointX(p));
+            y_array.push_back(simulation2_graph[i]->GetPointY(p));
+        }
+    }
+
+    auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.1) };
+    auto x_min{ std::get<0>(x_range) };
+    auto x_max{ std::get<1>(x_range) };
+    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.2) };
+    auto y_min{ std::get<0>(y_range) };
+    auto y_max{ std::get<1>(y_range) };
+
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    std::unique_ptr<TLegend> legend;
+    for (int i = 0; i < col_size; i++)
+    {
+        for (int j = 0; j < row_size; j++)
+        {
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 500, x_min, x_max, 500, y_min, y_max);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.1f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 50.0f, 0.02f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
+            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            frame[i][j]->GetXaxis()->SetTitle("");
+            frame[i][j]->GetYaxis()->SetTitle(y_axis_title[i].data());
+            frame[i][j]->GetYaxis()->CenterTitle();
+            frame[i][j]->SetStats(0);
+            
+            ROOTHelper::SetMarkerAttribute(simulation1_graph[i].get(), 20, 1.5f, kRed);
+            ROOTHelper::SetLineAttribute(simulation1_graph[i].get(), 1, 3, kRed);
+            ROOTHelper::SetMarkerAttribute(simulation2_graph[i].get(), 24, 1.5f, kAzure-7);
+            ROOTHelper::SetLineAttribute(simulation2_graph[i].get(), 2, 3, kAzure-7);
+            if (i == 0)
+            {
+                frame[i][j]->Draw();
+                simulation1_graph[i]->Draw("PL X0");
+                simulation2_graph[i]->Draw("PL X0");
+            }
+            else
+            {
+                frame[i][j]->Draw("Y+");
+                simulation1_graph[i]->Draw("PL X0");
+                simulation2_graph[i]->Draw("PL X0");
+
+                legend = ROOTHelper::CreateLegend(0.10, 0.55, 0.90, 0.95, true);
+                ROOTHelper::SetLegendDefaultStyle(legend.get());
+                ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12);
+                ROOTHelper::SetFillAttribute(legend.get(), 4000);
+                legend->AddEntry(simulation1_graph[i].get(), "Partial Charge");
+                legend->AddEntry(simulation2_graph[i].get(), "Neutral");
+                legend->Draw();
+            }
+        }
+    }
+    canvas->cd();
+    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.12, 0.00, 0.88, 0.10) };
+    pad_extra->Draw();
+    pad_extra->cd();
+    ROOTHelper::SetPadDefaultStyle(pad_extra.get());
+    ROOTHelper::SetFillAttribute(pad_extra.get(), 4000);
+    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
+    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
+    bottom_title_text->AddText("Blurring Width #sigma_{B}");
+    bottom_title_text->Draw();
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    std::cout <<"  Output file: "<< file_path << std::endl;
+    #endif
+}
+
 #ifdef HAVE_ROOT
+void ComparisonPainter::BuildGausRatioToResolutionGraph(
+    int par_id, size_t target_id, size_t reference_id, TGraphErrors * graph,
+    const std::vector<ModelObject *> & model_list, const std::string & class_key, Residue residue)
+{
+    auto group_key
+    {
+        (class_key == AtomicInfoHelper::GetElementClassKey()) ?
+        m_atom_classifier->GetMainChainElementClassGroupKey(target_id) :
+        m_atom_classifier->GetMainChainResidueClassGroupKey(target_id, residue)
+    };
+    auto ref_group_key
+    {
+        (class_key == AtomicInfoHelper::GetElementClassKey()) ?
+        m_atom_classifier->GetMainChainElementClassGroupKey(reference_id) :
+        m_atom_classifier->GetMainChainResidueClassGroupKey(reference_id, residue)
+    };
+    auto count{ 0 };
+    for (auto model_object : model_list)
+    {
+        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+        if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
+        if (entry_iter->IsAvailableGroupKey(ref_group_key, class_key) == false) continue;
+        auto x_value{ model_object->GetResolution() };
+        auto y_value{ entry_iter->GetGausEstimatePrior(group_key, class_key, par_id) };
+        auto y_error{ entry_iter->GetGausVariancePrior(group_key, class_key, par_id) };
+        auto ref_y_value{ entry_iter->GetGausEstimatePrior(ref_group_key, class_key, par_id) };
+        auto ref_y_error{ entry_iter->GetGausVariancePrior(ref_group_key, class_key, par_id) };
+        if (x_value == 0.0 || ref_y_value == 0.0) continue;
+        auto ratio{ y_value/ref_y_value };
+        auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };
+        graph->SetPoint(count, x_value, ratio);
+        graph->SetPointError(count, 0.0, error);
+        count++;
+    }
+}
+
 void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     size_t target_id, size_t reference_id, TGraphErrors * graph,
     const std::vector<ModelObject *> & model_list, const std::string & class_key,

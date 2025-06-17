@@ -39,8 +39,10 @@ private:
     void PaintGausEstimateResidueClassComparison(const std::string & name);
     void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
     void PainMapValueComparison(const std::string & name, ModelObject * model_object, const std::vector<ModelObject *> & ref_model_object_list);
+    void PaintSimulationGausRatio(const std::string & name, const std::vector<ModelObject *> & model_list1, const std::vector<ModelObject *> & model_list2);
 
     #ifdef HAVE_ROOT
+    void BuildGausRatioToResolutionGraph(int par_id, size_t target_id, size_t reference_id, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, Residue residue=static_cast<Residue>(65535));
     void BuildAmplitudeRatioToWidthGraph(size_t target_id, size_t reference_id, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, bool draw_index=false, Residue residue=static_cast<Residue>(65535));
     void BuildMapValueScatterGraph(uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
     #endif
