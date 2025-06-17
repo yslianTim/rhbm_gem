@@ -32,6 +32,7 @@ public:
     void Painting(void) override;
 
 private:
+    void PaintGroupGausMainChainStyle1(ModelObject * model_object, const std::string & name);
     void PaintGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);
@@ -42,15 +43,15 @@ private:
     void PaintAtomRankMainChain(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
+    void PrintGausResultGlobalPad(TPad * pad, TH2 * hist, double left_margin, double right_margin, double bottom_margin, double top_margin, bool is_right_side_pad);
+    void PrintGausTitlePad(TPad * pad, TPaveText * text, const std::string & title, float text_size);
+
     void PrintAmplitudePad(TPad * pad, TH2 * hist);
     void PrintWidthPad(TPad * pad, TH2 * hist);
     void PrintAmplitudeSummaryPad(TPad * pad, TH2 * hist);
     void PrintWidthSummaryPad(TPad * pad, TH2 * hist);
     void PrintGausSummaryPad(TPad * pad, TH2 * hist);
 
-    void PrintInfoSideChainPad(TPad * pad, TPaveText * text, const std::string & residue_name);
-    void PrintAmplitudeSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
-    void PrintWidthSideChainPad(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
     #endif
 

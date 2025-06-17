@@ -430,6 +430,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
 
     pad[0]->cd();
     auto pdb_id{ model_object->GetPdbID() };
+    auto emd_id{ model_object->GetEmdID() };
 
     // PDB & EMD Text
     ROOTHelper::SetPaveTextMarginInCanvas(pad[0].get(), info_text.get(), 0.003, 0.00, 0.25, 0.25);
@@ -439,7 +440,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     ROOTHelper::SetTextAttribute(info_text.get(), 75.0f, 103, 32);
     ROOTHelper::SetLineAttribute(info_text.get(), 1, 0);
     info_text->AddText(pdb_id.data());
-    info_text->AddText("Simulation");
+    info_text->AddText(emd_id.data());
     info_text->Draw();
     
     // Resolution Text
