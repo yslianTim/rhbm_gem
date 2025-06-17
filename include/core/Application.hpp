@@ -15,6 +15,7 @@ class Application
     CLI::App * m_cli_app;
     CLI::App * m_potential_analysis_cmd;
     CLI::App * m_potential_display_cmd;
+    CLI::App * m_result_dump_cmd;
     CLI::App * m_map_simulation_cmd;
     CLI::App * m_charge_analysis_cmd;
     std::string m_selected_command;
@@ -52,6 +53,13 @@ class Application
         std::string sim_with_charge_key_tag_list;
     } m_potential_display_options;
 
+    struct ResultDumpOptions
+    {
+        int printer_choice;
+        std::string model_key_tag_list;
+        std::string map_file_path;
+    } m_result_dump_options;
+
     struct MapSimulationOptions
     {
         std::string model_file_path, map_file_name;
@@ -88,6 +96,7 @@ private:
     void RegisterCommands(void);
     void RegisterPotentialAnalysisCommand(void);
     void RegisterPotentialDisplayCommand(void);
+    void RegisterResultDumpCommand(void);
     void RegisterMapSimulationCommand(void);
     void RegisterChargeAnalysisCommand(void);
 

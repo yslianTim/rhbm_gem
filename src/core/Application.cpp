@@ -2,6 +2,7 @@
 #include "CommandBase.hpp"
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
+#include "ResultDumpCommand.hpp"
 #include "MapSimulationCommand.hpp"
 #include "ChargeAnalysisCommand.hpp"
 #include "ScopeTimer.hpp"
@@ -10,7 +11,7 @@
 
 Application::Application(CLI::App * app) :
     m_cli_app{ app }, m_potential_analysis_cmd{ nullptr },
-    m_potential_display_cmd{ nullptr },
+    m_potential_display_cmd{ nullptr }, m_result_dump_cmd{ nullptr },
     m_map_simulation_cmd{ nullptr }, m_charge_analysis_cmd{ nullptr },
     m_selected_command{ "" }
 {
@@ -72,6 +73,16 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
         return command;
     }
+    else if (m_cli_app->got_subcommand(m_result_dump_cmd))
+    {
+        auto command{ std::make_unique<ResultDumpCommand>() };
+        command->SetPrinterChoice(m_result_dump_options.printer_choice);
+        command->SetModelKeyTagList(m_result_dump_options.model_key_tag_list);
+        command->SetMapFilePath(m_result_dump_options.map_file_path);
+        command->SetDatabasePath(m_global_options.database_path);
+        command->SetFolderPath(m_global_options.folder_path);
+        return command;
+    }
     else if (m_cli_app->got_subcommand(m_map_simulation_cmd))
     {
         auto command{ std::make_unique<MapSimulationCommand>() };
@@ -120,6 +131,7 @@ void Application::RegisterCommands(void)
 {
     RegisterPotentialAnalysisCommand();
     RegisterPotentialDisplayCommand();
+    RegisterResultDumpCommand();
     RegisterMapSimulationCommand();
     RegisterChargeAnalysisCommand();
 }
@@ -231,6 +243,31 @@ void Application::RegisterPotentialDisplayCommand(void)
     m_cli_app->callback([&]()
     {
         m_selected_command = "potential_display";
+    });
+}
+
+void Application::RegisterResultDumpCommand(void)
+{
+    m_result_dump_cmd = m_cli_app->add_subcommand("result_dump", "Run result dump");
+    m_result_dump_cmd->add_option(
+        "-p,--printer", m_result_dump_options.printer_choice,
+        "Printer choice")->required();
+    m_result_dump_cmd->add_option(
+        "-k,--model-keylist", m_result_dump_options.model_key_tag_list,
+        "List of model key tag to be display")->required();
+    m_result_dump_cmd->add_option(
+        "-d,--database", m_global_options.database_path,
+        "Database file path")->default_val("database.sqlite");
+    m_result_dump_cmd->add_option(
+        "-o,--folder", m_global_options.folder_path,
+        "folder path for output files")->default_val("");
+    m_result_dump_cmd->add_option(
+        "-m,--map", m_result_dump_options.map_file_path,
+        "Map file path")->default_val("");
+
+    m_cli_app->callback([&]()
+    {
+        m_selected_command = "result_dump";
     });
 }
 

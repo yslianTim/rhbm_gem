@@ -82,9 +82,6 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
         const auto & map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
         map_object->Accept(this);
 
-        //RunAtomPositionDumping(); // For test, to be move to other place
-        //RunMapValueDumping(dynamic_cast<MapObject *>(map_object.get())); // For test, to be move to other place
-
         RunPotentialFitting(dynamic_cast<ModelObject*>(model_object.get()));
     }
     catch(const std::exception & e)
@@ -191,78 +188,6 @@ void PotentialAnalysisVisitor::RunPotentialFitting(ModelObject * model_object)
         }
         model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
     }
-}
-
-void PotentialAnalysisVisitor::RunMapValueDumping(MapObject * map_object)
-{
-    ScopeTimer timer("PotentialAnalysisVisitor::RunMapValueDumping");
-    std::cout <<"- RunMapValueDumping..." << std::endl;
-    auto selected_atom_size{ m_selected_atom_list.size() };
-    std::array<float, 3> atom_range_min, atom_range_max;
-    std::vector<float> x_list, y_list, z_list;
-    x_list.reserve(selected_atom_size);
-    y_list.reserve(selected_atom_size);
-    z_list.reserve(selected_atom_size);
-    for (auto & atom : m_selected_atom_list)
-    {
-        x_list.emplace_back(atom->GetPosition().at(0));
-        y_list.emplace_back(atom->GetPosition().at(1));
-        z_list.emplace_back(atom->GetPosition().at(2));
-    }
-    atom_range_min.at(0) = ArrayStats<float>::ComputeMin(x_list.data(), selected_atom_size) - 3.0f;
-    atom_range_min.at(1) = ArrayStats<float>::ComputeMin(y_list.data(), selected_atom_size) - 3.0f;
-    atom_range_min.at(2) = ArrayStats<float>::ComputeMin(z_list.data(), selected_atom_size) - 3.0f;
-    atom_range_max.at(0) = ArrayStats<float>::ComputeMax(x_list.data(), selected_atom_size) + 3.0f;
-    atom_range_max.at(1) = ArrayStats<float>::ComputeMax(y_list.data(), selected_atom_size) + 3.0f;
-    atom_range_max.at(2) = ArrayStats<float>::ComputeMax(z_list.data(), selected_atom_size) + 3.0f;
-
-    std::string output_path{ "/Users/yslian/Downloads/map_value_list_emd_11103_unsharpened.csv" };
-    std::ofstream outfile(output_path);
-    if (!outfile.is_open())
-    {
-        std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
-        return;
-    }
-    outfile << "GridID,X,Y,Z,MapValue\n";
-    auto count{ 0 };
-    for (size_t i = 0; i < map_object->GetMapValueArraySize(); i++)
-    {
-        auto grid_position{ map_object->GetGridPosition(i) };
-        if (grid_position.at(0) < atom_range_min.at(0) || grid_position.at(0) > atom_range_max.at(0)) continue;
-        if (grid_position.at(1) < atom_range_min.at(1) || grid_position.at(1) > atom_range_max.at(1)) continue;
-        if (grid_position.at(2) < atom_range_min.at(2) || grid_position.at(2) > atom_range_max.at(2)) continue;
-        auto map_value{ map_object->GetMapValue(i) };
-        if (map_value <= 0.0f) continue;
-        outfile << i <<','
-                << grid_position.at(0) <<','<< grid_position.at(1) <<','<< grid_position.at(2) <<','
-                << map_value <<'\n';
-        count++;
-    }
-    std::cout <<"Selected map grid size = "<< count <<" / "<< map_object->GetMapValueArraySize() << std::endl;
-}
-
-void PotentialAnalysisVisitor::RunAtomPositionDumping(void)
-{
-    ScopeTimer timer("PotentialAnalysisVisitor::RunAtomPositionDumping");
-    std::cout <<"- RunAtomPositionDumping..." << std::endl;
-
-    std::string output_path{ "/Users/yslian/Downloads/atom_position_list_6z6u.csv" };
-    std::ofstream outfile(output_path);
-    if (!outfile.is_open())
-    {
-        std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
-        return;
-    }
-    outfile << "SerialID,X,Y,Z\n";
-    for (auto & atom : m_selected_atom_list)
-    {
-        outfile << atom->GetSerialID() <<','
-                << atom->GetPosition().at(0) <<','
-                << atom->GetPosition().at(1) <<','
-                << atom->GetPosition().at(2) <<'\n';
-    }
-    outfile.close();
-    std::cout <<"Number of selected atom to be output = "<< m_selected_atom_list.size() << std::endl;
 }
 
 void PotentialAnalysisVisitor::SetAsymmetryFlag(bool value)
