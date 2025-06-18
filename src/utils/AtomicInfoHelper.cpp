@@ -269,7 +269,7 @@ bool AtomicInfoHelper::IsStandardResidue(Residue residue)
 
 Residue AtomicInfoHelper::GetResidueFromString(const std::string & name)
 {
-    static std::unordered_map<std::string, int> unknown_name_count_list;
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_residue_map.find(name) == m_residue_map.end())
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
@@ -289,7 +289,7 @@ Residue AtomicInfoHelper::GetResidueFromString(const std::string & name)
 
 Element AtomicInfoHelper::GetElementFromString(const std::string & name)
 {
-    static std::unordered_map<std::string, int> unknown_name_count_list;
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_element_map.find(name) == m_element_map.end())
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
@@ -309,7 +309,7 @@ Element AtomicInfoHelper::GetElementFromString(const std::string & name)
 
 Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)
 {
-    static std::unordered_map<std::string, int> unknown_name_count_list;
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_remoteness_map.find(name) == m_remoteness_map.end())
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
@@ -329,7 +329,7 @@ Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)
 
 Branch AtomicInfoHelper::GetBranchFromString(const std::string & name)
 {
-    static std::unordered_map<std::string, int> unknown_name_count_list;
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_branch_map.find(name) == m_branch_map.end())
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
@@ -349,7 +349,7 @@ Branch AtomicInfoHelper::GetBranchFromString(const std::string & name)
 
 Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
 {
-    static std::unordered_map<std::string, int> unknown_name_count_list;
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_structure_map.find(name) == m_structure_map.end())
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
@@ -369,7 +369,7 @@ Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
 
 Entity AtomicInfoHelper::GetEntityFromString(const std::string & name)
 {
-    static std::unordered_map<std::string, int> unknown_name_count_list;
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_entity_map.find(name) == m_entity_map.end())
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())

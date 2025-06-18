@@ -67,7 +67,7 @@ SphereSampler::GenerateSamplingPoints(std::array<float,3> position)
     const Eigen::Vector3f center{ position[0], position[1], position[2] };
 
     std::vector<std::tuple<float, std::array<float, 3>>> samples;
-    samples.reserve(m_sampling_size);
+    samples.resize(m_sampling_size);
 
     #pragma omp parallel
     {
@@ -93,10 +93,8 @@ SphereSampler::GenerateSamplingPoints(std::array<float,3> position)
                 center.y() + d * y,
                 center.z() + d * z };
 
-            // 串列寫入：需 critical 區或分段鏡射；這裡用 atomic push_back
-            #pragma omp critical
-            samples.emplace_back(d, p);
+            samples[i] = std::make_tuple(d, p);
         }
     }
-    return samples;      // RVO：零拷貝回傳
+    return samples;
 }

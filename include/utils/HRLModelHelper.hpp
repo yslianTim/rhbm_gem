@@ -158,7 +158,7 @@ private:
     void AlgorithmMuMDPDE(double alpha_g);
     void AlgorithmWEB(void);
     void CalculateBetaByMDPDE(int member_id);
-    void CalcualteMuByMDPDE(void);
+    void CalculateMuByMDPDE(void);
     void CalculateDataVarianceSquare(int member_id, double alpha_r);
     void CalculateDataCovariance(int member_id);
     void CalculateMemberCovariance(double alpha_g);
