@@ -68,8 +68,9 @@ void ComparisonPainter::Painting(void)
     if (m_ref_model_object_list_map.find("with_charge") != m_ref_model_object_list_map.end() &&
         m_ref_model_object_list_map.find("no_charge") != m_ref_model_object_list_map.end())
     {
-        PaintGausEstimateElementClassComparison("figure_3_a.pdf");
-        PaintGausEstimateResidueClassComparison("figure_3_b.pdf");
+        //PaintGausEstimateElementClassComparison("figure_3_a.pdf");
+        //PaintGausEstimateResidueClassComparison("figure_3_b.pdf");
+        PaintGroupGausEstimateComparison("figure_3.pdf");
         PaintGausEstimateResidueClassDenseComparison("figure_3_sup.pdf");
     }
 
@@ -83,9 +84,216 @@ void ComparisonPainter::Painting(void)
         }
     }
 
-    PaintSimulationGausRatio("figure_gaus_ratio.pdf",
-        m_ref_model_object_list_map.at("with_charge"), m_ref_model_object_list_map.at("no_charge"));
+    //PaintSimulationGausRatio("figure_gaus_ratio.pdf",
+    //    m_ref_model_object_list_map.at("with_charge"), m_ref_model_object_list_map.at("no_charge"));
 
+}
+
+void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    std::cout <<"- ComparisonPainter::PaintGroupGausEstimateComparison"<< std::endl;
+
+    auto sim_with_charge_model_object_list{ m_ref_model_object_list_map.at("with_charge")};
+    auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
+    auto sim_amber95_model_object_list{ m_ref_model_object_list_map.at("amber95")};
+
+    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
+
+    #ifdef HAVE_ROOT
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+    const int extra_pad_size{ 6 };
+    const int col_size{ 3 };
+    const int row_size{ 4 };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 2000, 1800) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.20f, 0.25f, 0.09f, 0.15f, 0.01f, 0.01f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    std::unique_ptr<TPad> pad_extra[extra_pad_size];
+    std::unique_ptr<TH2> frame_extra[extra_pad_size];
+    pad_extra[0] = ROOTHelper::CreatePad("pad_0","", 0.75, 0.00, 1.00, 0.35); // Right bottom
+    pad_extra[1] = ROOTHelper::CreatePad("pad_1","", 0.75, 0.35, 1.00, 0.70); // Right middle
+    pad_extra[2] = ROOTHelper::CreatePad("pad_2","", 0.75, 0.70, 1.00, 1.00); // Right top
+    pad_extra[3] = ROOTHelper::CreatePad("pad_3","", 0.10, 0.00, 0.75, 0.05); // Left bottom
+    pad_extra[4] = ROOTHelper::CreatePad("pad_4","", 0.10, 0.09, 0.05, 0.85); // Left middle
+    pad_extra[5] = ROOTHelper::CreatePad("pad_5","", 0.10, 0.90, 0.75, 1.00); // Left top
+
+    size_t ref_id[col_size]{ 3, 3, 3 };
+    Residue residue_id[row_size]{ Residue::TRP, Residue::ILE, Residue::GLU, Residue::UNK };
+
+    std::unique_ptr<TGraphErrors> data_graph[col_size][row_size];
+    std::unique_ptr<TGraphErrors> sim_with_charge_graph[col_size][row_size];
+    std::unique_ptr<TGraphErrors> sim_no_charge_graph[col_size][row_size];
+    std::unique_ptr<TGraphErrors> sim_additional_graph[col_size][row_size];
+    double x_min[col_size]{ 0.0 };
+    double x_max[col_size]{ 1.0 };
+    double y_min[row_size]{ 0.0 };
+    double y_max[row_size]{ 1.0 };
+    std::vector<double> x_array[col_size], y_array[row_size];
+    for (size_t i = 0; i < col_size; i++)
+    {
+        for (size_t j = 0; j < row_size; j++)
+        {
+            data_graph[i][j] = ROOTHelper::CreateGraphErrors();
+            sim_with_charge_graph[i][j] = ROOTHelper::CreateGraphErrors();
+            sim_no_charge_graph[i][j] = ROOTHelper::CreateGraphErrors();
+            sim_additional_graph[i][j] = ROOTHelper::CreateGraphErrors();
+
+            auto class_key{ (j == row_size - 1) ? AtomicInfoHelper::GetElementClassKey() : AtomicInfoHelper::GetResidueClassKey() };
+            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], data_graph[i][j].get(), m_model_object_list, class_key, true, residue_id[j]);
+            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_with_charge_graph[i][j].get(), sim_with_charge_model_object_list, class_key, false, residue_id[j]);
+            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_no_charge_graph[i][j].get(), sim_no_charge_model_object_list, class_key, false, residue_id[j]);
+            BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_additional_graph[i][j].get(), sim_amber95_model_object_list, class_key, false, residue_id[j]);
+
+            for (int p = 0; p < data_graph[i][j]->GetN(); p++)
+            {
+                x_array[i].emplace_back(data_graph[i][j]->GetPointX(p));
+                y_array[j].emplace_back(data_graph[i][j]->GetPointY(p));
+            }
+        }
+    }
+
+    for (size_t i = 0; i < col_size; i++)
+    {
+        auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array[i], 0.10) };
+        x_min[i] = std::get<0>(x_range);
+        x_max[i] = std::get<1>(x_range);
+    }
+
+    for (size_t j = 0; j < row_size; j++)
+    {
+        auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array[j], 0.30) };
+        y_min[j] = std::get<0>(y_range);
+        y_max[j] = std::get<1>(y_range);
+    }
+
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    std::unique_ptr<TPaveText> info_text[row_size];
+    for (size_t i = 0; i < col_size; i++)
+    {
+        for (size_t j = 0; j < row_size; j++)
+        {
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), static_cast<int>(j));
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 0, 0, 4000, 0);
+            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d", i),"", 500, x_min[i], x_max[i], 500, y_min[j], y_max[j]);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 504);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 50.0f, 0.02f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            frame[i][j]->GetXaxis()->CenterTitle();
+            frame[i][j]->GetYaxis()->CenterTitle();
+            frame[i][j]->SetStats(0);
+            auto element_label{ AtomClassifier::GetMainChainElementLabel(i) };
+            auto ref_element_label{ AtomClassifier::GetMainChainElementLabel(ref_id[i]) };
+            auto element_color{  AtomClassifier::GetMainChainElementColor(i)};
+            auto ref_element_color{  AtomClassifier::GetMainChainElementColor(ref_id[i]) };
+            frame[i][j]->GetXaxis()->SetTitle(
+                Form("#tau_{#font[102]{#color[%d]{%s}}}",
+                    element_color, element_label.data()));
+            frame[i][j]->GetYaxis()->SetTitle(
+                Form("#font[1]{A}_{#font[102]{#color[%d]{%s}}} / #font[1]{A}_{#font[102]{#color[%d]{%s}}}",
+                    element_color, element_label.data(), ref_element_color, ref_element_label.data()));
+            frame[i][j]->Draw();
+
+            auto element_marker{ AtomClassifier::GetMainChainElementSolidMarker(i) };
+            ROOTHelper::SetMarkerAttribute(data_graph[i][j].get(), element_marker, 2.0f, element_color);
+            ROOTHelper::SetLineAttribute(sim_with_charge_graph[i][j].get(), 1, 2, kRed);
+            ROOTHelper::SetLineAttribute(sim_no_charge_graph[i][j].get(),   2, 2, kGray+2);
+            ROOTHelper::SetLineAttribute(sim_additional_graph[i][j].get(),  3, 2, kBlue);
+            sim_with_charge_graph[i][j]->Draw("C X0");
+            sim_no_charge_graph[i][j]->Draw("C X0");
+            sim_additional_graph[i][j]->Draw("C X0");
+            data_graph[i][j]->Draw("P X0");
+
+            if (i == 0)
+            {
+                info_text[j] = ROOTHelper::CreatePaveText(0.06, 0.01, 0.99, 0.40, "nbNDC ARC", true);
+                ROOTHelper::SetPaveTextDefaultStyle(info_text[j].get());
+                ROOTHelper::SetPaveAttribute(info_text[j].get(), 0, 0.1);
+                ROOTHelper::SetFillAttribute(info_text[j].get(), 1001, kAzure-7);
+                ROOTHelper::SetTextAttribute(info_text[j].get(), 70.0f, 133, 22, 0.0, kYellow-10);
+                ROOTHelper::SetLineAttribute(info_text[j].get(), 1, 0);
+                if (j == row_size - 1) info_text[j]->AddText("Whole-Protein");
+                else info_text[j]->AddText(Form("#font[102]{%s}", AtomicInfoHelper::GetLabel(residue_id[j]).data()));
+                info_text[j]->Draw();
+            }
+        }
+    }
+
+    canvas->cd();
+    for (int i = 0; i < extra_pad_size; i++)
+    {
+        ROOTHelper::SetPadDefaultStyle(pad_extra[i].get());
+        pad_extra[i]->Draw();
+    }
+
+    pad_extra[0]->cd();
+
+    pad_extra[1]->cd();
+
+    pad_extra[2]->cd(); // right top legend
+    auto legend{ ROOTHelper::CreateLegend(0.06, 0.43, 0.60, 1.00, false) };
+    ROOTHelper::SetLegendDefaultStyle(legend.get());
+    ROOTHelper::SetTextAttribute(legend.get(), 45.0f, 133, 12);
+    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+    legend->SetNColumns(2);
+    legend->AddEntry(sim_with_charge_graph[0][0].get(), "A. Thomas #font[2]{et al.}", "l");
+    legend->AddEntry(sim_additional_graph[0][0].get(), "W. D. Cornell #font[2]{et al.}", "l");
+    legend->AddEntry(sim_no_charge_graph[0][0].get(), "All Neutral #alpha = 0", "l");
+    legend->Draw();
+
+    pad_extra[3]->cd(); // bottom X title
+    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
+    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
+    bottom_title_text->AddText("Width");
+    bottom_title_text->Draw();
+
+    pad_extra[4]->cd(); // left Y title
+    auto left_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    ROOTHelper::SetPaveTextDefaultStyle(left_title_text.get());
+    ROOTHelper::SetFillAttribute(left_title_text.get(), 4000);
+    ROOTHelper::SetTextAttribute(left_title_text.get(), 50.0f, 133, 22);
+    left_title_text->AddText("Amplitude Ratio");
+    left_title_text->Draw();
+
+    pad_extra[5]->cd(); // top data info
+    std::unique_ptr<TPaveText> data_text[3];
+    double x_pos[4]{ 0.60, 0.73, 0.86, 0.99 };
+    for (int i = 0; i < 3; i++)
+    {
+        data_text[i] = ROOTHelper::CreatePaveText(x_pos[i], 0.43, x_pos[i+1], 1.00, "nbNDC", false);
+        ROOTHelper::SetPaveTextDefaultStyle(data_text[i].get());
+        ROOTHelper::SetFillAttribute(data_text[i].get(), 4000);
+        ROOTHelper::SetTextAttribute(data_text[i].get(), 45.0f, 133, 12);
+    }
+    auto count{ 0 };
+    for (auto & resolution : m_resolution_list)
+    {
+        auto id{ count / 3 };
+        data_text[id]->AddText(Form("#font[102]{[#color[853]{%s}]} %.2f #AA", data_index[count], resolution));
+        count++;
+        if (count >= 10) break;
+    }
+    data_text[2]->AddText("");
+    data_text[2]->AddText("");
+    data_text[0]->Draw();
+    data_text[1]->Draw();
+    data_text[2]->Draw();
+
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    std::cout <<"  Output file: "<< file_path << std::endl;
+    #endif
 }
 
 void ComparisonPainter::PaintGausEstimateElementClassComparison(const std::string & name)
@@ -98,7 +306,6 @@ void ComparisonPainter::PaintGausEstimateElementClassComparison(const std::strin
     auto sim_with_charge_model_object_list{ m_ref_model_object_list_map.at("with_charge")};
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
     auto sim_amber95_model_object_list{ m_ref_model_object_list_map.at("amber95")};
-    auto sim_test_model_object_list{ m_ref_model_object_list_map.at("sim_test")};
 
     const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
 
@@ -125,7 +332,6 @@ void ComparisonPainter::PaintGausEstimateElementClassComparison(const std::strin
     std::unique_ptr<TGraphErrors> sim_with_charge_graph[primary_element_size];
     std::unique_ptr<TGraphErrors> sim_no_charge_graph[primary_element_size];
     std::unique_ptr<TGraphErrors> sim_additional_graph[primary_element_size];
-    std::unique_ptr<TGraphErrors> sim_test_graph[primary_element_size];
     double x_min[primary_element_size]{ 0.0 };
     double x_max[primary_element_size]{ 1.0 };
     double y_min[primary_element_size]{ 0.0 };
@@ -136,13 +342,11 @@ void ComparisonPainter::PaintGausEstimateElementClassComparison(const std::strin
         sim_with_charge_graph[i] = ROOTHelper::CreateGraphErrors();
         sim_no_charge_graph[i] = ROOTHelper::CreateGraphErrors();
         sim_additional_graph[i] = ROOTHelper::CreateGraphErrors();
-        sim_test_graph[i] = ROOTHelper::CreateGraphErrors();
 
         BuildAmplitudeRatioToWidthGraph(i, ref_id[i], data_graph[i].get(), m_model_object_list, class_key, true);
         BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_with_charge_graph[i].get(), sim_with_charge_model_object_list, class_key);
         BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_no_charge_graph[i].get(), sim_no_charge_model_object_list, class_key);
         BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_additional_graph[i].get(), sim_amber95_model_object_list, class_key);
-        BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_test_graph[i].get(), sim_test_model_object_list, class_key);
 
         std::vector<double> x_array, y_array;
         for (int p = 0; p < data_graph[i]->GetN(); p++)
@@ -176,7 +380,6 @@ void ComparisonPainter::PaintGausEstimateElementClassComparison(const std::strin
     legend->AddEntry(sim_with_charge_graph[0].get(), "A. Thomas #font[2]{et al.}", "l");
     legend->AddEntry(sim_additional_graph[0].get(), "W. D. Cornell #font[2]{et al.}", "l");
     legend->AddEntry(sim_no_charge_graph[0].get(), "All Neutral #alpha = 0", "l");
-    legend->AddEntry(sim_test_graph[0].get(), "Partial Charge #alpha_{#color[418]{#font[102]{N}}} = #minus0.1", "l");
     legend->Draw();
 
     std::unique_ptr<TPaveText> info_text[3];
@@ -248,11 +451,9 @@ void ComparisonPainter::PaintGausEstimateElementClassComparison(const std::strin
         ROOTHelper::SetLineAttribute(sim_with_charge_graph[i].get(), 1, 2, kRed);
         ROOTHelper::SetLineAttribute(sim_no_charge_graph[i].get(),   2, 2, kGray+2);
         ROOTHelper::SetLineAttribute(sim_additional_graph[i].get(),  3, 2, kBlue);
-        ROOTHelper::SetLineAttribute(sim_test_graph[i].get(),  4, 2, kViolet);
         sim_with_charge_graph[i]->Draw("C X0");
         sim_no_charge_graph[i]->Draw("C X0");
         sim_additional_graph[i]->Draw("C X0");
-        sim_test_graph[i]->Draw("L X0");
         data_graph[i]->Draw("P X0");
     }
 
@@ -431,9 +632,9 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
     ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.09f, 0.00f, 0.09f, 0.15f, 0.01f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
-    const int primary_element_size{ 4 };
+    const int primary_element_size{ 3 };
     const int standard_residue_size{ 20 };
-    size_t ref_id[primary_element_size]{ 3, 3, 3, 1 };
+    size_t ref_id[primary_element_size]{ 3, 3, 3 };
 
     std::unordered_map<Residue, std::unique_ptr<TGraphErrors>> data_graph_map[primary_element_size];
     std::unordered_map<Residue, std::unique_ptr<TGraphErrors>> sim_with_charge_graph_map[primary_element_size];

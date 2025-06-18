@@ -26,7 +26,7 @@ void PotentialDisplayCommand::Execute(void)
     auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
     LoadModelObjects(data_manager.get());
     LoadRefModelObjects(data_manager.get());
-    //LoadAdditionalReferenceModelObjects(data_manager.get());
+    LoadAdditionalReferenceModelObjects(data_manager.get());
 
     auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
     model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);
@@ -127,17 +127,6 @@ void PotentialDisplayCommand::LoadAdditionalReferenceModelObjects(DataObjectMana
     };
     m_ref_model_key_tag_list_map["amber95"] = key_tag_list;
     for (auto & key_tag : key_tag_list)
-    {
-        data_manager->LoadDataObject(key_tag);
-    }
-
-    std::vector<std::string> sim_key_tag_list
-    {
-        "Nn1_b15","Nn1_b25","Nn1_b35","Nn1_b45",
-        "Nn1_b55","Nn1_b65","Nn1_b75","Nn1_b85","Nn1_b95"
-    };
-    m_ref_model_key_tag_list_map["sim_test"] = sim_key_tag_list;
-    for (auto & key_tag : sim_key_tag_list)
     {
         data_manager->LoadDataObject(key_tag);
     }

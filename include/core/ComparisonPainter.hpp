@@ -35,6 +35,7 @@ public:
     void Painting(void) override;
 
 private:
+    void PaintGroupGausEstimateComparison(const std::string & name);
     void PaintGausEstimateElementClassComparison(const std::string & name);
     void PaintGausEstimateResidueClassComparison(const std::string & name);
     void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
