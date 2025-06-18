@@ -27,7 +27,4 @@ public:
     void SetDistanceRangeMinimum(double value) { m_distance_min = value; }
     void SetDistanceRangeMaximum(double value) { m_distance_max = value; }
 
-private:
-
-
 };

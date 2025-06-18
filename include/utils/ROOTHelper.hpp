@@ -78,7 +78,7 @@ public:
         TPave * pave, int border_size=0, double radius=0.2);
     static void SetBoxAttribute(
         TBox * box, double left, double right, double bottom, double top);
-    static void SetPadInCanvas(TVirtualPad * pad, int width, int height, int division_x=1, int divition_y=1, float margin_x=0.0f, float margin_y=0.0f);
+    static void SetPadInCanvas(TVirtualPad * pad, int width, int height, int division_x=1, int division_y=1, float margin_x=0.0f, float margin_y=0.0f);
     static void SetPadDefaultStyle(TVirtualPad * pad);
     static void SetPadRangeInCanvas(TVirtualPad * pad, double x1, double y1, double x2, double y2);
     static void SetPadLayout(

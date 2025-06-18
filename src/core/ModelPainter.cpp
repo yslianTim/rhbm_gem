@@ -608,7 +608,7 @@ void ModelPainter::PaintGroupGausSideChain(
         ROOTHelper::SetAxisLabelAttribute(frame[0]->GetYaxis(), 30.0, 0.01f);
         ModifyAxisLabelSideChain(pad[0].get(), frame[0].get(), residue, label_list);
         frame[0]->SetStats(0);
-        frame[0]->GetYaxis()->SetTitle("Amplitude");
+        frame[0]->GetYaxis()->SetTitle("Amplitude #font[2]{A}");
         frame[0]->GetYaxis()->CenterTitle();
         frame[0]->Draw();
         for (auto & graph : amplitude_mix_graph_list[residue_index]) graph->Draw("P X0");
@@ -625,7 +625,7 @@ void ModelPainter::PaintGroupGausSideChain(
         ROOTHelper::SetAxisLabelAttribute(frame[1]->GetYaxis(), 30.0, 0.01f);
         ModifyAxisLabelSideChain(pad[1].get(), frame[1].get(), residue, label_list);
         frame[1]->SetStats(0);
-        frame[1]->GetYaxis()->SetTitle("Width");
+        frame[1]->GetYaxis()->SetTitle("Width #tau");
         frame[1]->GetYaxis()->CenterTitle();
         frame[1]->Draw("Y+");
         for (auto & graph : width_mix_graph_list[residue_index]) graph->Draw("P X0");

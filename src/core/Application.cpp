@@ -133,7 +133,7 @@ void Application::RegisterCommands(void)
     RegisterPotentialDisplayCommand();
     RegisterResultDumpCommand();
     RegisterMapSimulationCommand();
-    RegisterChargeAnalysisCommand();
+    //RegisterChargeAnalysisCommand();
 }
 
 void Application::RegisterPotentialAnalysisCommand(void)
