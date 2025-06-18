@@ -23,7 +23,4 @@ public:
     SQLiteWrapper * GetDatabase(void) { return m_database.get(); }
     std::unique_ptr<DataObjectDAOBase> CreateDataObjectDAO(const DataObjectBase * obj);
     
-private:
-    
-    
 };

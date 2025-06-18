@@ -74,6 +74,5 @@ public:
     static short GetDisplayColor(Residue residue);
     static short GetDisplayMarker(Element element);
     static short GetDisplayMarker(Residue residue);
-private:
- 
+
 };

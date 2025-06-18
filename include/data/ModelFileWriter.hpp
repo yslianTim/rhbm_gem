@@ -18,6 +18,4 @@ public:
     ~ModelFileWriter();
     void Write(void) override;
 
-private:
-
 };

@@ -1356,4 +1356,5 @@ void DemoPainter::PrintGausCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_ax
     hist->GetXaxis()->CenterTitle();
     hist->Draw("");
 }
+
 #endif

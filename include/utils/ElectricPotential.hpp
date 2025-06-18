@@ -36,7 +36,6 @@ public:
     double GetPotentialValue(Element element, double distance, double charge, double amplitude=0.0, double width=0.0) const;
     const std::array<double, 5> & GetModelParameterAList(Element element, int delta_z) const;
     const std::array<double, 5> & GetModelParameterBList(Element element, int delta_z) const;
-    
 
 private:
     ModelChoice CheckModelChoice(int value) const;
@@ -45,7 +44,5 @@ private:
     double CalculateFiveGausChargeModel(Element element, double distance, double charge) const;
     double CalculateFiveGausChargeIntrinsicTerm(Element element, double distance, int delta_z) const;
     double CalculateFiveGausChargeDeltaTerm(double distance, double charge) const;
-    
-    
 
 };
