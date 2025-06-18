@@ -234,7 +234,7 @@ void ModelPainter::PaintGroupGausMainChainStyle1(
     frame[1]->GetXaxis()->CenterTitle();
     frame[1]->Draw("");
     for (int k = 0; k < main_chain_element_count; k++) correlation_graph[k]->Draw("P X0");
-    PrintGausTitlePad(pad[2].get(), correlation_title_text.get(), "Scatter Plot", 60.0f);
+    PrintGausTitlePad(pad[2].get(), correlation_title_text.get(), "#tau#minus#font[2]{A} Plot", 80.0f);
 
     pad[3]->cd();
     PrintGausResultGlobalPad(pad[3].get(), frame[2].get(), 0.005, 0.030, 0.205, 0.205, true);

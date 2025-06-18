@@ -25,6 +25,7 @@
 #include <TF1.h>
 #include <TLine.h>
 #include <TLatex.h>
+#include <TEllipse.h>
 #endif
 
 #include <iostream>
@@ -83,18 +84,19 @@ void DemoPainter::Painting(void)
 
     PaintAtomMapValueExample(demo_model_object, "figure_1_a.pdf");
     PaintGroupGausMainChainSummary(demo_model_list, "figure_1_b.pdf");
-    PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_d1.pdf", 0);
-    PaintGroupGausToFSC("figure_4_a.pdf");
-    PaintGroupWidthScatterPlot(demo_model_list, "figure_4_b.pdf", 1, true);
-    PaintAtomWidthScatterPlotSingle(demo_model_object, "figure_4_c.pdf", true);
+    PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_c1.pdf", 0);
 
+    PaintGroupGausToFSC("figure_4_a.pdf");
+    PaintAtomWidthScatterPlotSingle(demo_model_object, "figure_4_b.pdf", true);
+    PaintGroupWidthScatterPlot(demo_model_list, "figure_4_c.pdf", 1, true);
+    
     for (auto & [key, model_list] : m_ref_model_object_list_map)
     {
         if (key != "with_charge") continue;
         for (auto & model : model_list)
         {
-            PaintGroupGausMainChainSingle(model, "figure_2_c.pdf");
-            PaintAtomGausMainChainDemoSingle(model, "figure_2_d2.pdf", 0);
+            PaintAtomGausMainChainDemoSingle(model, "figure_2_c2.pdf", 0);
+            PaintGroupGausMainChainSingle(model, "figure_2_d.pdf");
         }
     }
 }
@@ -337,7 +339,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         pad[2][j]->cd();
         PrintGausCorrelationPad(pad[2][j].get(), frame[1][j].get(), draw_axis_flag, draw_title_flag);
         for (int k = 0; k < main_chain_element_count; k++) correlation_graph[j][k]->Draw("P X0");
-        if (j == pad_size_y - 1) PrintGausTitlePad(pad[2][j].get(), correlation_title_text.get(), "Scatter Plot", 60.0f);
+        if (j == pad_size_y - 1) PrintGausTitlePad(pad[2][j].get(), correlation_title_text.get(), "#tau#minus#font[2]{A} Plot", 80.0f);
 
         pad[3][j]->cd();
         PrintGausResultPad(pad[3][j].get(), frame[2][j].get(), draw_axis_flag, draw_title_flag, true);
@@ -448,8 +450,16 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     ROOTHelper::SetPaveTextDefaultStyle(resolution_text.get());
     ROOTHelper::SetPaveAttribute(resolution_text.get(), 0, 0.2);
     ROOTHelper::SetFillAttribute(resolution_text.get(), 1001, kAzure-7);
-    ROOTHelper::SetTextAttribute(resolution_text.get(), 70.0f, 133, 22, 0.0, kYellow-10);
-    resolution_text->AddText(Form("#sigma_{BW} = 0.5"));
+    ROOTHelper::SetTextAttribute(resolution_text.get(), 80.0f, 133, 22, 0.0, kYellow-10);
+    auto resolution{ model_object->GetResolution() };
+    if (emd_id == "Simulation")
+    {
+        resolution_text->AddText(Form("#sigma_{B} = %.1f", resolution));
+    }
+    else
+    {
+        resolution_text->AddText(Form("%.2f #AA", resolution));
+    }
     resolution_text->Draw();
 
     auto legend{ ROOTHelper::CreateLegend(0.15, 0.00, 1.00, 0.20, false) };
@@ -487,7 +497,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     frame[1]->GetXaxis()->CenterTitle();
     frame[1]->Draw("");
     for (int k = 0; k < main_chain_element_count; k++) correlation_graph[k]->Draw("P X0");
-    PrintGausTitlePad(pad[2].get(), correlation_title_text.get(), "Scatter Plot", 60.0f);
+    PrintGausTitlePad(pad[2].get(), correlation_title_text.get(), "#tau#minus#font[2]{A} Plot", 80.0f);
 
     pad[3]->cd();
     PrintGausResultGlobalPad(pad[3].get(), frame[2].get(), 0.005, 0.030, 0.205, 0.205, true);
@@ -725,7 +735,8 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     for (int i = 0; i < pad_size - 1; i++)
     {
         summary_hist[i] = ROOTHelper::CreateHist2D(
-            Form("hist_%d", i), "", 5, x_min[i], x_max[i], 100, y_min, y_max);
+            //Form("hist_%d", i), "", 5, x_min[i], x_max[i], 100, y_min, y_max);
+            Form("hist_%d", i), "", 5, 35.0, 65.0, 100, y_min, y_max);
         for (auto & graph : graph_list[i])
         {
             for (int p = 0; p < graph->GetN(); p++)
@@ -757,6 +768,16 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     frame[0]->Draw();
     ROOTHelper::SetMarkerAttribute(graph_position.get(), 20, 0.2f, kAzure-7);
     graph_position->Draw("P X0");
+
+    // circle
+    auto circle_inner{ new TEllipse(0.0, 0.0, 40.0) };
+    ROOTHelper::SetFillAttribute(circle_inner, 0);
+    ROOTHelper::SetLineAttribute(circle_inner, 1, 1, kRed);
+    circle_inner->Draw();
+    auto circle_outer{ new TEllipse(0.0, 0.0, 60.0) };
+    ROOTHelper::SetFillAttribute(circle_outer, 0);
+    ROOTHelper::SetLineAttribute(circle_outer, 1, 1, kRed);
+    circle_outer->Draw();
 
     auto pos_text{ ROOTHelper::CreatePaveText(0.08, 1.0, 1.0, 1.2, "nbNDC", true) };
     ROOTHelper::SetPaveTextDefaultStyle(pos_text.get());
@@ -790,6 +811,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         frame[i]->GetXaxis()->CenterTitle();
         frame[i]->GetYaxis()->CenterTitle();
         frame[i]->SetStats(0);
+        frame[i]->GetXaxis()->SetLimits(35.0, 65.0);
         frame[i]->Draw("Y+");
 
         auto element_color{ AtomClassifier::GetMainChainElementColor(static_cast<size_t>(element_id)) };
@@ -827,7 +849,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
     ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
-    bottom_title_text->AddText("Distance to Center of Mass #[]{#AA}");
+    bottom_title_text->AddText("Distance to Center of Mass #font[2]{d} #[]{#AA}");
     bottom_title_text->Draw();
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
