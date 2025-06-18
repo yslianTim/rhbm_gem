@@ -57,19 +57,23 @@ public:
             return data.empty() ? static_cast<Type>(0.0) :
                    *std::max_element(data.begin(), data.end());
         }
-        std::vector<Type> sorted_data(data);
-        std::sort(sorted_data.begin(), sorted_data.end());
-        auto n{ sorted_data.size() };
+        std::vector<Type> buffer(data);
+        auto n{ buffer.size() };
         auto pos{ percentile * static_cast<double>(n - 1) };
         auto idx{ static_cast<size_t>(std::floor(pos)) };
         double frac{ pos - static_cast<double>(idx) };
+
+        std::nth_element(buffer.begin(), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx), buffer.end());
+        Type lower{ buffer[idx] };
         if (idx + 1 < n)
         {
-            return static_cast<Type>(sorted_data[idx] * (1 - frac) + sorted_data[idx + 1] * frac);
+            std::nth_element(buffer.begin(), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx + 1), buffer.end());
+            Type upper{ buffer[idx + 1] };
+            return static_cast<Type>(lower * (1 - frac) + upper * frac);
         }
         else
         {
-            return sorted_data[idx];
+            return lower;
         }
     }
 
@@ -117,17 +121,21 @@ public:
             return static_cast<Type>(0.0);
         }
         
-        std::vector<Type> sorted_data(data);
-        std::sort(sorted_data.begin(), sorted_data.end());
-        
-        size_t n{ sorted_data.size() };
+        std::vector<Type> buffer(data);
+        size_t n{ buffer.size() };
+        size_t mid{ n / 2 };
+
+        std::nth_element(buffer.begin(), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid), buffer.end());
+        Type upper_mid{ buffer[mid] };
         if (n % 2 == 1)
         {
-            return sorted_data[n / 2];
+            return upper_mid;
         }
         else
         {
-            return static_cast<Type>((sorted_data[n / 2 - 1] + sorted_data[n / 2]) / 2.0);
+            std::nth_element(buffer.begin(), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid - 1), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid));
+            Type lower_mid{ buffer[mid - 1] };
+            return static_cast<Type>((lower_mid + upper_mid) / 2.0);
         }
     }
 
