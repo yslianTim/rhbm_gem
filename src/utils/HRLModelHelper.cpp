@@ -42,11 +42,6 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_capital_lambda_list.reserve(static_cast<size_t>(m_member_size));
 }
 
-HRLModelHelper::~HRLModelHelper()
-{
-
-}
-
 void HRLModelHelper::SetDataArray(
     const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array)
 {

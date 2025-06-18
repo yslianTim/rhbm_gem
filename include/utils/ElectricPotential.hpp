@@ -29,7 +29,7 @@ class ElectricPotential
 
 public:
     ElectricPotential(void);
-    ~ElectricPotential();
+    ~ElectricPotential() = default;
     
     void SetModelChoice(int value);
     void SetBlurringWidth(double value);

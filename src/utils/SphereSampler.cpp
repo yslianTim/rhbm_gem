@@ -15,11 +15,6 @@ SphereSampler::SphereSampler(void) :
 
 }
 
-SphereSampler::~SphereSampler()
-{
-
-}
-
 void SphereSampler::Print(void) const
 {
     std::cout <<"Sampling size = "<< m_sampling_size << std::endl;

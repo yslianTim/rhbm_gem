@@ -135,7 +135,7 @@ class HRLModelHelper
 public:
     HRLModelHelper(void) = delete;
     HRLModelHelper(int basis_size, int member_size);
-    ~HRLModelHelper();
+    ~HRLModelHelper() = default;
 
     void SetDataArray(const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array);
     void RunEstimation(double alpha_r, double alpha_g);

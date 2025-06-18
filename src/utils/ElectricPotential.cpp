@@ -105,11 +105,6 @@ ElectricPotential::ElectricPotential(void)
 
 }
 
-ElectricPotential::~ElectricPotential()
-{
-
-}
-
 void ElectricPotential::SetModelChoice(int value)
 {
     m_model_choice = CheckModelChoice(value);

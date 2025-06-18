@@ -17,7 +17,7 @@ class SphereSampler
 
 public:
     SphereSampler(void);
-    ~SphereSampler();
+    ~SphereSampler() = default;
 
     void Print(void) const;
     //const std::vector<std::tuple<float, std::array<float, 3>>> & GenerateSamplingPoints(std::array<float, 3> position);
