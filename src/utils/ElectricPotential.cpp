@@ -233,16 +233,19 @@ double ElectricPotential::CalculateSingleGausModel(
     Element element, double distance) const
 {
     auto atomic_number{ AtomicInfoHelper::GetAtomicNumber(element) };
-    auto sigma_total_square{ std::pow(1.0/atomic_number, 2) + std::pow(m_blurring_width, 2) };
-    auto exp_index{ -std::pow(distance, 2)/(2.0 * sigma_total_square) };
+    auto inv_atomic_number{ 1.0/static_cast<double>(atomic_number) };
+    auto sigma_total_square{ inv_atomic_number * inv_atomic_number + m_blurring_width * m_blurring_width };
+    auto distance_square{ distance * distance };
+    auto exp_index{ -distance_square/(2.0 * sigma_total_square) };
     return std::pow(2.0 * M_PI * sigma_total_square, -1.5) * std::exp(exp_index);
 }
 
 double ElectricPotential::CalculateSingleGausUserModel(
     double distance, double amplitude, double width) const
 {
-    auto sigma_square{ std::pow(width, 2) };
-    auto exp_index{ -std::pow(distance, 2)/(2.0 * sigma_square) };
+    auto sigma_square{ width * width };
+    auto distance_square{ distance * distance };
+    auto exp_index{ -distance_square/(2.0 * sigma_square) };
     return amplitude * std::pow(2.0 * M_PI * sigma_square, -1.5) * std::exp(exp_index);
 }
 

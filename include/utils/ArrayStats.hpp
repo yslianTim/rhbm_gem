@@ -189,7 +189,7 @@ public:
         auto diff_x{ static_cast<Type>(v1[0] - v2[0]) };
         auto diff_y{ static_cast<Type>(v1[1] - v2[1]) };
         auto diff_z{ static_cast<Type>(v1[2] - v2[2]) };
-        return static_cast<Type>(std::sqrt(std::pow(diff_x, 2) + std::pow(diff_y, 2) + std::pow(diff_z, 2)));
+        return static_cast<Type>(std::sqrt(diff_x * diff_x + diff_y * diff_y + diff_z * diff_z));
     }
 
     template <std::size_t N>

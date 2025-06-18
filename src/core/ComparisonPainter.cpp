@@ -28,6 +28,7 @@
 #include <TLine.h>
 #endif
 
+#include <iostream>
 #include <tuple>
 
 ComparisonPainter::ComparisonPainter(void) :

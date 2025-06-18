@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <mutex>
 
 const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_element_map
 {
@@ -355,7 +356,9 @@ double AminoAcidInfoHelper::GetPartialCharge(
 
     // one cache bucket per residue, lazily initialised on first use
     static std::unordered_map<Residue, std::unordered_map<Key, double>> cache;
+    static std::mutex cache_mutex;
 
+    std::lock_guard<std::mutex> lock(cache_mutex);
     auto & residue_cache{ cache[residue] };
     try
     {
@@ -412,17 +415,14 @@ const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeList(
     if (structure == Structure::FREE)
     {
         return m_buried_partial_charge_map.at(residue);
-        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
     }
     else if (structure == Structure::SHEET)
     {
         return m_sheet_partial_charge_map.at(residue);
-        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
     }
     else if (structure >= Structure::HELX_P && structure < Structure::TURN_P)
     {
         return m_helix_partial_charge_map.at(residue);
-        //return m_amber95_partial_charge_map.at(residue); // Amber95 Table Test
     }
     else
     {
