@@ -70,23 +70,70 @@ void DemoPainter::Painting(void)
 
     ModelObject * demo_model_object{ nullptr };
     std::vector<ModelObject *> demo_model_list{ nullptr, nullptr, nullptr, nullptr };
+    std::vector<ModelObject *> demo_fsc_model_list
+    {
+        nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr
+    };
     for (auto model : m_model_object_list)
     {
         if (model->GetPdbID() == "6Z6U" && model->GetEmdID() == "EMD-11103")
         {
             demo_model_object = model;
             demo_model_list[3] = model;
+            demo_fsc_model_list[0] = model;
         }
-        else if (model->GetPdbID() == "8DQV" && model->GetEmdID() == "EMD-27661") demo_model_list[2] = model;
-        else if (model->GetPdbID() == "9EVX" && model->GetEmdID() == "EMD-50019") demo_model_list[1] = model;
-        else if (model->GetPdbID() == "6CVM" && model->GetEmdID() == "EMD-7770" ) demo_model_list[0] = model;
+        else if (model->GetPdbID() == "8DQV" && model->GetEmdID() == "EMD-27661")
+        {
+            demo_model_list[2] = model;
+            demo_fsc_model_list[1] = model;
+        }
+        else if (model->GetPdbID() == "9EVX" && model->GetEmdID() == "EMD-50019")
+        {
+            demo_model_list[1] = model;
+            demo_fsc_model_list[2] = model;
+        }
+        else if (model->GetPdbID() == "6CVM" && model->GetEmdID() == "EMD-7770" )
+        {
+            demo_model_list[0] = model;
+            demo_fsc_model_list[3] = model;
+        }
+        else if (model->GetPdbID() == "8RQB" && model->GetEmdID() == "EMD-19436")
+        {
+            demo_fsc_model_list[4] = model;
+        }
+        else if (model->GetPdbID() == "7A6A" && model->GetEmdID() == "EMD-11668")
+        {
+            demo_fsc_model_list[5] = model;
+        }
+        else if (model->GetPdbID() == "7A6B" && model->GetEmdID() == "EMD-11669")
+        {
+            demo_fsc_model_list[6] = model;
+        }
+        else if (model->GetPdbID() == "6Z9E" && model->GetEmdID() == "EMD-11121")
+        {
+            demo_fsc_model_list[7] = model;
+        }
+        else if (model->GetPdbID() == "6Z9F" && model->GetEmdID() == "EMD-11122")
+        {
+            demo_fsc_model_list[8] = model;
+        }
+        else if (model->GetPdbID() == "7KOD" && model->GetEmdID() == "EMD-22972")
+        {
+            demo_fsc_model_list[9] = model;
+        }
+        else if (model->GetPdbID() == "6DRV" && model->GetEmdID() == "EMD-8908" )
+        {
+            demo_fsc_model_list[10] = model;
+        }
     };
 
     PaintAtomMapValueExample(demo_model_object, "figure_1_a.pdf");
     PaintGroupGausMainChainSummary(demo_model_list, "figure_1_b.pdf");
     PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_c1.pdf", 0);
 
-    PaintGroupGausToFSC("figure_4_a.pdf");
+    PaintGroupGausToFSC(demo_fsc_model_list, "figure_4_a.pdf");
     PaintAtomWidthScatterPlotSingle(demo_model_object, "figure_4_b.pdf", true);
     PaintGroupWidthScatterPlot(demo_model_list, "figure_4_c.pdf", 1, true);
     
@@ -510,10 +557,17 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     #endif
 }
 
-void DemoPainter::PaintGroupGausToFSC(const std::string & name)
+void DemoPainter::PaintGroupGausToFSC(
+    const std::vector<ModelObject *> & model_list, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     std::cout <<"- DemoPainter::PaintGroupGausToFSC"<< std::endl;
+
+    for (auto & model : model_list)
+    {
+        if (model == nullptr) return;
+        std::cout <<"find model " << model->GetPdbID() << std::endl;
+    }
 
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
@@ -538,7 +592,7 @@ void DemoPainter::PaintGroupGausToFSC(const std::string & name)
         auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
         graph[i] = ROOTHelper::CreateGraphErrors();
         auto count{ 0 };
-        for (auto model : m_model_object_list)
+        for (auto model : model_list)
         {
             auto entry_iter{ std::make_unique<PotentialEntryIterator>(model) };
             auto width_value{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetElementClassKey(), 1) };

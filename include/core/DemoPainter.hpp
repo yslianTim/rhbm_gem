@@ -37,7 +37,7 @@ private:
     void PaintGroupGausMainChainSummary(const std::vector<ModelObject *> & model_list, const std::string & name);
     void PaintGroupGausMainChainSingle(ModelObject * model_object, const std::string & name);
     void PaintAtomWidthScatterPlotSingle(ModelObject * model_object, const std::string & name, bool draw_box_plot=false);
-    void PaintGroupGausToFSC(const std::string & name);
+    void PaintGroupGausToFSC(const std::vector<ModelObject *> & model_list, const std::string & name);
     void PaintGroupWidthScatterPlot(const std::vector<ModelObject *> & model_list, const std::string & name, int par_id=0, bool draw_box_plot=false);
     void PaintAtomGausMainChainDemo(ModelObject * model_object1, ModelObject * model_object2, const std::string & name, int par_id=0);
     void PaintAtomGausMainChainDemoSingle(ModelObject * model_object, const std::string & name, int par_id=0);

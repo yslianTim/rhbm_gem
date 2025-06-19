@@ -1312,7 +1312,7 @@ void ModelPainter::PaintAtomRankMainChain(
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::vector<std::unique_ptr<TH1D>> rank_hist_list[row_size][3];
     std::unique_ptr<TH1D> rank_reference[row_size];
-    std::vector<Residue> veto_residues_list{ Residue::GLY, Residue::PRO };
+    std::vector<Residue> veto_residues_list{  };
     rank_hist_list[2][0] = entry_iter->CreateMainChainRankHistogram(0, chain_size, Residue::UNK, 2, veto_residues_list);
     rank_hist_list[1][0] = entry_iter->CreateMainChainRankHistogram(1, chain_size, Residue::UNK, 1, veto_residues_list);
     rank_hist_list[0][0] = entry_iter->CreateMainChainRankHistogram(2, chain_size, Residue::UNK, 0, veto_residues_list);
@@ -1336,7 +1336,7 @@ void ModelPainter::PaintAtomRankMainChain(
     }
 
     gStyle->SetTextFont(22);
-    gStyle->SetPaintTextFormat(".0f");
+    gStyle->SetPaintTextFormat(".1f");
     std::unique_ptr<TPaveText> element_text[col_size];
     std::unique_ptr<TPaveText> par_text[row_size];
     std::unique_ptr<TLegend> legend;

@@ -338,6 +338,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
         if (AtomClassifier::IsMainChainMember(
             atom->GetElement(), atom->GetRemoteness(), id) == false) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
+        if (atom->GetSpecialAtomFlag() == true) continue;
         bool is_veto_residue{ false };
         for (auto & veto_residue : veto_residues_list)
         {
