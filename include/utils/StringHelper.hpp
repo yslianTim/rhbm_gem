@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <cctype>
 
 class StringHelper
 {
@@ -19,6 +20,10 @@ public:
     
     static std::string ConvertCharArrayToString(const char * input)
     {
+        if (input == nullptr)
+        {
+            return "";
+        }
         std::string result;
         while (*input != '\0')
         {
@@ -28,7 +33,7 @@ public:
         return result;
     }
 
-    static std::vector<std::string> SpliteStringLineAsTokens(
+    static std::vector<std::string> SplitStringLineAsTokens(
         const std::string & line, size_t token_count, char group_delimiter='\'')
     {
         std::vector<std::string> token_list;
@@ -61,7 +66,7 @@ public:
         std::ostringstream out;
         out.precision(n);
         out << std::fixed << a_value;
-        return std::move(out).str();
+        return out.str();
     }
 
 };

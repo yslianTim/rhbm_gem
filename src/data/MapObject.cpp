@@ -50,7 +50,6 @@ MapObject::MapObject(
         m_lower_bound.at(i) = static_cast<float>(m_underflow.at(i) - 0.5 * m_grid_spacing.at(i));
     }
     Update();
-    //MapValueArrayNormalization();
 }
 
 MapObject::~MapObject()
@@ -125,9 +124,8 @@ void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
     {
         std::cout <<"[Warning] MapObject::SetMapValueArray - MapObject already has a map value array."
                   <<" The map value array will be replaced by new inserted data."<< std::endl;
-        m_map_value_array.reset();
     }
-    std::memcpy(m_map_value_array.get(), map_value_array.get(), m_voxel_size * sizeof(float));
+    m_map_value_array = std::move(map_value_array);
     Update();
 }
 
@@ -261,6 +259,12 @@ void MapObject::CalculateMapValueSD(void)
 
 void MapObject::MapValueArrayNormalization(void)
 {
+    if (m_map_value_sd == 0.0f)
+    {
+        std::cout <<"[Warning] The standard deviation of map value array is zero,"
+                  <<" skip normalization."<< std::endl;
+        return;
+    }
     for (size_t i = 0; i < static_cast<size_t>(m_voxel_size); i++)
     {
         m_map_value_array[i] /= m_map_value_sd;

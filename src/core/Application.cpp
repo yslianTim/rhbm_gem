@@ -2,6 +2,7 @@
 #include "CommandBase.hpp"
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
+#include "ResultDumpCommand.hpp"
 #include "MapSimulationCommand.hpp"
 #include "ChargeAnalysisCommand.hpp"
 #include "ScopeTimer.hpp"
@@ -10,7 +11,7 @@
 
 Application::Application(CLI::App * app) :
     m_cli_app{ app }, m_potential_analysis_cmd{ nullptr },
-    m_potential_display_cmd{ nullptr },
+    m_potential_display_cmd{ nullptr }, m_result_dump_cmd{ nullptr },
     m_map_simulation_cmd{ nullptr }, m_charge_analysis_cmd{ nullptr },
     m_selected_command{ "" }
 {
@@ -38,6 +39,8 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         auto command{ std::make_unique<PotentialAnalysisCommand>() };
         command->SetThreadSize(m_global_options.thread_size);
         command->SetAsymmetryFlag(m_potential_analysis_options.is_asymmetry);
+        command->SetSimulationFlag(m_potential_analysis_options.is_simulation);
+        command->SetSimulatedMapResolution(m_potential_analysis_options.resolution_simulation);
         command->SetSavedKeyTag(m_potential_analysis_options.saved_key_tag);
         command->SetSamplingSize(m_sphere_sampler_options.sampling_size);
         command->SetSamplingRangeMinimum(m_sphere_sampler_options.sampling_range_min);
@@ -68,6 +71,16 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetVetoResidueType(m_atom_selector_options.veto_residue);
         command->SetVetoElementType(m_atom_selector_options.veto_element);
         command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
+        return command;
+    }
+    else if (m_cli_app->got_subcommand(m_result_dump_cmd))
+    {
+        auto command{ std::make_unique<ResultDumpCommand>() };
+        command->SetPrinterChoice(m_result_dump_options.printer_choice);
+        command->SetModelKeyTagList(m_result_dump_options.model_key_tag_list);
+        command->SetMapFilePath(m_result_dump_options.map_file_path);
+        command->SetDatabasePath(m_global_options.database_path);
+        command->SetFolderPath(m_global_options.folder_path);
         return command;
     }
     else if (m_cli_app->got_subcommand(m_map_simulation_cmd))
@@ -118,8 +131,9 @@ void Application::RegisterCommands(void)
 {
     RegisterPotentialAnalysisCommand();
     RegisterPotentialDisplayCommand();
+    RegisterResultDumpCommand();
     RegisterMapSimulationCommand();
-    RegisterChargeAnalysisCommand();
+    //RegisterChargeAnalysisCommand();
 }
 
 void Application::RegisterPotentialAnalysisCommand(void)
@@ -131,6 +145,12 @@ void Application::RegisterPotentialAnalysisCommand(void)
     m_potential_analysis_cmd->add_option(
         "-m,--map", m_potential_analysis_options.map_file_path,
         "Map file path")->required();
+    m_potential_analysis_cmd->add_option(
+        "--simulation", m_potential_analysis_options.is_simulation,
+        "Simulation flag")->default_val(false);
+    m_potential_analysis_cmd->add_option(
+        "-r,--sim-resolution", m_potential_analysis_options.resolution_simulation,
+        "Set simulated map's resolution (blurring width)")->default_val(0.0);
     m_potential_analysis_cmd->add_option(
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");
@@ -223,6 +243,31 @@ void Application::RegisterPotentialDisplayCommand(void)
     m_cli_app->callback([&]()
     {
         m_selected_command = "potential_display";
+    });
+}
+
+void Application::RegisterResultDumpCommand(void)
+{
+    m_result_dump_cmd = m_cli_app->add_subcommand("result_dump", "Run result dump");
+    m_result_dump_cmd->add_option(
+        "-p,--printer", m_result_dump_options.printer_choice,
+        "Printer choice")->required();
+    m_result_dump_cmd->add_option(
+        "-k,--model-keylist", m_result_dump_options.model_key_tag_list,
+        "List of model key tag to be display")->required();
+    m_result_dump_cmd->add_option(
+        "-d,--database", m_global_options.database_path,
+        "Database file path")->default_val("database.sqlite");
+    m_result_dump_cmd->add_option(
+        "-o,--folder", m_global_options.folder_path,
+        "folder path for output files")->default_val("");
+    m_result_dump_cmd->add_option(
+        "-m,--map", m_result_dump_options.map_file_path,
+        "Map file path")->default_val("");
+
+    m_cli_app->callback([&]()
+    {
+        m_selected_command = "result_dump";
     });
 }
 

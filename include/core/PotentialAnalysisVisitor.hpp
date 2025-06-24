@@ -36,6 +36,5 @@ public:
 
 private:
     void RunPotentialFitting(ModelObject * model_object);
-    void RunMapValueDumping(MapObject * map_object); // For test, to be move to other place
-    void RunAtomPositionDumping(void); // For test, to be move to other place
+
 };

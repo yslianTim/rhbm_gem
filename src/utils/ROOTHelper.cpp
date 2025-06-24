@@ -22,7 +22,6 @@
 #include <TLine.h>
 #include <TMarker.h>
 #include <TMath.h>
-#include <TPad.h>
 #include <TPaletteAxis.h>
 #include <TPaveStats.h>
 #include <TPaveText.h>

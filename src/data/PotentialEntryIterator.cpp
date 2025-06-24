@@ -324,7 +324,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
 
 std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHistogram(
     int par_id, int & chain_size, Residue residue,
-    int extra_id, std::vector<Residue> veto_residues_list)
+    size_t extra_id, std::vector<Residue> veto_residues_list)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -338,6 +338,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
         if (AtomClassifier::IsMainChainMember(
             atom->GetElement(), atom->GetRemoteness(), id) == false) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
+        if (atom->GetSpecialAtomFlag() == true) continue;
         bool is_veto_residue{ false };
         for (auto & veto_residue : veto_residues_list)
         {
@@ -355,7 +356,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
     std::vector<std::unique_ptr<TH1D>> hist_list;
     for (size_t i = 0; i < 4; i++)
     {
-        auto name{ Form("h%d_%d_%d_%d", extra_id, static_cast<int>(i), static_cast<int>(residue), par_id) };
+        auto name{ Form("h%d_%d_%d_%d", static_cast<int>(extra_id), static_cast<int>(i), static_cast<int>(residue), par_id) };
         auto hist{ ROOTHelper::CreateHist1D(name, "", 4,  0.5, 4.5) };
         for (auto & [chain_id, values_map_tmp] : values_map)
         {
@@ -514,27 +515,6 @@ PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
         count_map[chain_id]++;
     }
     return graph_map;
-}
-
-std::unordered_map<std::string, std::vector<std::unique_ptr<TGraphErrors>>>
-PotentialEntryIterator::CreateStructureToResidueIDGraphMap(Structure structure)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return {};
-    }
-    
-    std::unordered_map<std::string, std::vector<std::unique_ptr<TGraphErrors>>> graph_list_map;
-    for (auto & atom : m_model_object->GetSelectedAtomList())
-    {
-        if (atom->GetElement() != AtomClassifier::GetMainChainElement(0)) continue;
-        if (atom->GetRemoteness() != AtomClassifier::GetMainChainRemoteness(0)) continue;
-        auto residue_id{ atom->GetResidueID() };
-        auto chain_id{ atom->GetChainID() };
-        if (residue_id < 0) continue;
-        
-    }
-    return graph_list_map;
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueGraph(

@@ -174,6 +174,11 @@ std::array<int, 3> MapSimulationVisitor::CalculateGridSize(
     const std::array<float, 3> & grid_spacing, const std::array<float, 3> & origin)
 {
     auto selected_atom_size{ m_selected_atom_list.size() };
+    if (selected_atom_size == 0)
+    {
+        std::cout <<"Warning: no atoms selected. Grid size is set to [1,1,1]."<< std::endl;
+        return std::array{ 1, 1, 1 };
+    }
     std::array<float, 3> atom_range_max;
     std::vector<float> x_list, y_list, z_list;
     x_list.reserve(selected_atom_size);

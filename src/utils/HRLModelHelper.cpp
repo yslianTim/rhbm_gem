@@ -42,11 +42,6 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_capital_lambda_list.reserve(static_cast<size_t>(m_member_size));
 }
 
-HRLModelHelper::~HRLModelHelper()
-{
-
-}
-
 void HRLModelHelper::SetDataArray(
     const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array)
 {
@@ -165,7 +160,7 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
     { //=== Begin of iteration loop
         mu_in_previous_iter = m_mu_iter;
         CalculateMemberWeight(alpha_g);
-        CalcualteMuByMDPDE();
+        CalculateMuByMDPDE();
         CalculateMemberCovariance(alpha_g);
         if ((m_mu_iter - mu_in_previous_iter).squaredNorm() < m_tolerance) break;
         if (iter == m_maximum_iteration - 1)
@@ -261,7 +256,7 @@ void HRLModelHelper::CalculateBetaByMDPDE(int member_id)
     m_beta_iter_array.col(member_id) = inverse_gram_matrix * (X.transpose() * W * y);
 }
 
-void HRLModelHelper::CalcualteMuByMDPDE(void)
+void HRLModelHelper::CalculateMuByMDPDE(void)
 {
     MatrixXd numerator{ m_beta_MDPDE_array.array() / m_omega_sum };
     for (int i = 0; i < m_member_size; i++) numerator.col(i) *= m_omega_array(i);

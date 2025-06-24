@@ -371,7 +371,7 @@ void CifFormat::ParseLoopBlock(
             token_list.reserve(expected_column_size);
 
             // initial tokens from this line
-            auto initial{ StringHelper::SpliteStringLineAsTokens(line, expected_column_size) };
+            auto initial{ StringHelper::SplitStringLineAsTokens(line, expected_column_size) };
             token_list.insert(token_list.end(), initial.begin(), initial.end());
 
             // now read continuation lines until we have all fields
@@ -407,7 +407,7 @@ void CifFormat::ParseLoopBlock(
                 else
                 {
                     // normal continuation tokens
-                    auto more{ StringHelper::SpliteStringLineAsTokens(next_line, expected_column_size) };
+                    auto more{ StringHelper::SplitStringLineAsTokens(next_line, expected_column_size) };
                     token_list.insert(token_list.end(), more.begin(), more.end());
                 }
             }

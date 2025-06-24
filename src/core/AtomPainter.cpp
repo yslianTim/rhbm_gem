@@ -23,6 +23,7 @@
 #include <TF1.h>
 #endif
 
+#include <iostream>
 #include <vector>
 #include <tuple>
 
@@ -91,8 +92,26 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
         map_value_hist->Fill(map_value_graph->GetPointX(p), map_value_graph->GetPointY(p));
     }
 
+    pad_main->cd();
     auto frame_hist{ ROOTHelper::CreateHist2D("frame","", 100, 0.0, 1.5, 100, std::get<0>(map_value_range), std::get<1>(map_value_range)) };
-    PrintDemoMainPad(pad_main.get(), frame_hist.get());
+    ROOTHelper::SetPadDefaultStyle(gPad);
+    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, kWhite, 1, 0);
+    ROOTHelper::SetPadMarginInCanvas(gPad, 0.18, 0.02, 0.13, 0.02);
+    ROOTHelper::SetAxisTitleAttribute(frame_hist->GetXaxis(), 60.0, 1.1f);
+    ROOTHelper::SetAxisTitleAttribute(frame_hist->GetYaxis(), 60.0, 1.3f);
+    ROOTHelper::SetAxisLabelAttribute(frame_hist->GetXaxis(), 60.0, 0.01f);
+    ROOTHelper::SetAxisLabelAttribute(frame_hist->GetYaxis(), 60.0, 0.02f);
+    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.04, 0) };
+    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.05, 1) };
+    ROOTHelper::SetAxisTickAttribute(frame_hist->GetXaxis(), static_cast<float>(x_tick_length));
+    ROOTHelper::SetAxisTickAttribute(frame_hist->GetYaxis(), static_cast<float>(y_tick_length));
+    frame_hist->SetStats(0);
+    frame_hist->GetXaxis()->CenterTitle();
+    frame_hist->GetYaxis()->CenterTitle();
+    frame_hist->GetXaxis()->SetTitle("Radial Distance #font[12]{r_{j}} #[]{#AA}");
+    frame_hist->GetYaxis()->SetTitle("Sampled Map Value around #font[102]{C_{#alpha}}(ALA-1) #font[12]{y_{1, j}}");
+    frame_hist->Draw("");
 
     auto ref_line{ ROOTHelper::CreateLine(0.0, 0.0, 1.5, 0.0) };
     ROOTHelper::SetLineAttribute(ref_line.get(), 2, 1);
@@ -210,33 +229,3 @@ void AtomPainter::PaintRegressionCheckPlot(const std::string & name)
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     #endif
 }
-
-
-#ifdef HAVE_ROOT
-
-void AtomPainter::PrintDemoMainPad(TPad * pad, TH2 * frame)
-{
-    pad->cd();
-    ROOTHelper::SetPadDefaultStyle(pad);
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0, 0, 0);
-    ROOTHelper::SetPadMarginInCanvas(pad, 0.18, 0.02, 0.13, 0.02);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 60.0, 1.1f);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0, 1.3f);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 60.0, 0.01f);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 60.0, 0.02f);
-
-    ROOTHelper::SetPadFrameAttribute(pad, 0, 0, 4000, kWhite, 1, 0);
-
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.04, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.05, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length));
-    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length));
-    frame->SetStats(0);
-    frame->GetXaxis()->CenterTitle();
-    frame->GetYaxis()->CenterTitle();
-    frame->GetXaxis()->SetTitle("Radial Distance #font[12]{r_{j}} #[]{#AA}");
-    frame->GetYaxis()->SetTitle("Sampled Map Value around #font[102]{C_{#alpha}}(ALA-1) #font[12]{y_{1, j}}");
-    frame->Draw("");
-}
-
-#endif

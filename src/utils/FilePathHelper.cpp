@@ -1,53 +1,48 @@
 #include "FilePathHelper.hpp"
 
 #include <algorithm>
+#include <filesystem>
 
 std::string FilePathHelper::GetExtension(const std::string & file_path)
 {
-    std::size_t pos{ file_path.find_last_of('.') };
-    if (pos != std::string::npos && pos + 1 < file_path.length())
-    {
-        return file_path.substr(pos);
-    }
-    return std::string("");
+    std::filesystem::path path{ file_path };
+    return (path.has_extension()) ? path.extension().string() : std::string("");
 }
 
 std::string FilePathHelper::GetDirectory(const std::string & file_path)
 {
-    std::size_t pos1{ file_path.find_last_of('/') };
-    std::size_t pos2{ file_path.find_last_of('\\') };
-    std::size_t pos{ std::max(pos1, pos2) };
-    if (pos != std::string::npos)
+    std::filesystem::path path{ file_path };
+    auto parent{ path.parent_path() };
+    if (!parent.empty())
     {
-        return file_path.substr(0, pos + 1);
+        std::string dir{ parent.string() };
+        if (!dir.empty() && IsEndedWithSeparator(path) == false)
+        {
+            dir.push_back(std::filesystem::path::preferred_separator);
+        }
+        return dir;
     }
     return std::string("");
 }
 
 std::string FilePathHelper::GetFileName(const std::string & file_path)
 {
-    std::size_t pos1{ file_path.find_last_of('/') };
-    std::size_t pos2{ file_path.find_last_of('\\') };
-    std::size_t pos{ std::max(pos1, pos2) };
-    if (pos != std::string::npos && pos + 1 < file_path.length())
-    {
-        return file_path.substr(pos + 1);
-    }
-    return file_path;
+    std::filesystem::path path{ file_path };
+    return path.filename().string();
 }
 
 std::string FilePathHelper::EnsureTrailingSlash(const std::string & path)
 {
-    if (!path.empty() && path.back() != '/' && path.back() != '\\')
+    if (!path.empty() && IsEndedWithSeparator(path) == false)
     {
-        if (path.find('\\') != std::string::npos)
-        {
-            return path + "\\";
-        }
-        else
-        {
-            return path + "/";
-        }
+        return path + std::filesystem::path::preferred_separator;
     }
     return path;
+}
+
+bool FilePathHelper::IsEndedWithSeparator(const std::string & file_path)
+{
+    if (file_path.back() == '/' || file_path.back() == '\\') return true;
+    if (file_path.back() == std::filesystem::path::preferred_separator) return true;
+    return false;
 }

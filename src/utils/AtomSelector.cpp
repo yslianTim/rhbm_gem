@@ -9,11 +9,6 @@ AtomSelector::AtomSelector(void)
 
 }
 
-AtomSelector::~AtomSelector()
-{
-
-}
-
 void AtomSelector::Print(void) const
 {
     std::cout <<"Atomic Picking List:" << std::endl;

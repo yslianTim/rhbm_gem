@@ -135,7 +135,7 @@ class HRLModelHelper
 public:
     HRLModelHelper(void) = delete;
     HRLModelHelper(int basis_size, int member_size);
-    ~HRLModelHelper();
+    ~HRLModelHelper() = default;
 
     void SetDataArray(const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array);
     void RunEstimation(double alpha_r, double alpha_g);
@@ -158,7 +158,7 @@ private:
     void AlgorithmMuMDPDE(double alpha_g);
     void AlgorithmWEB(void);
     void CalculateBetaByMDPDE(int member_id);
-    void CalcualteMuByMDPDE(void);
+    void CalculateMuByMDPDE(void);
     void CalculateDataVarianceSquare(int member_id, double alpha_r);
     void CalculateDataCovariance(int member_id);
     void CalculateMemberCovariance(double alpha_g);

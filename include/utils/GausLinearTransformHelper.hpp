@@ -20,7 +20,5 @@ public:
     static Eigen::VectorXd BuildGausModel(const Eigen::VectorXd & linear_model);
     static std::tuple<Eigen::VectorXd, Eigen::VectorXd> BuildGausModelWithVariance(
         const Eigen::VectorXd & linear_model, const Eigen::MatrixXd & covariance_matrix);
-
-private:
-
+    
 };

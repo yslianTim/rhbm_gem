@@ -41,6 +41,8 @@ else()
 endif()
 
 if(NOT HAVE_EIGEN3)
+    # Disable Eigen tests to avoid policy warnings
+    set(BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests" FORCE)
     add_subdirectory(third_party/eigen)
 endif()
 

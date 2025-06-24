@@ -9,7 +9,7 @@
 #include <iostream>
 
 ModelFileReader::ModelFileReader(const std::string & filename) :
-    m_file_path{ filename }
+    m_successfully_read_file{ false }, m_file_path{ filename }
 {
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     if      (file_extension == ".pdb")
@@ -43,10 +43,12 @@ void ModelFileReader::ReadHeader(void)
     {
         m_file_object->LoadHeader(m_file_path);
         m_file_object->PrintHeader();
+        m_successfully_read_file = true;
     }
     catch (const std::exception & ex)
     {
         std::cerr << ex.what() << std::endl;
+        m_successfully_read_file = false;
     }
 }
 
@@ -55,14 +57,17 @@ void ModelFileReader::ReadDataArray(void)
     try
     {
         m_file_object->LoadDataArray(m_file_path);
+        m_successfully_read_file = true;
     }
     catch (const std::exception & ex)
     {
         std::cerr << ex.what() << std::endl;
+        m_successfully_read_file = false;
     }
 }
 
 AtomicModelDataBlock * ModelFileReader::GetDataBlockPtr(void)
 {
+    if (m_file_object == nullptr || m_successfully_read_file == false) return nullptr;
     return m_file_object->GetDataBlockPtr();
 }
