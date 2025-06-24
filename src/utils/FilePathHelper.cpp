@@ -3,46 +3,44 @@
 #include <algorithm>
 #include <filesystem>
 
-std::string FilePathHelper::GetExtension(const std::string & file_path)
+std::string FilePathHelper::GetExtension(std::string_view file_path)
 {
-    std::filesystem::path path{ file_path };
+    const std::filesystem::path path{ file_path };
     return (path.has_extension()) ? path.extension().string() : std::string("");
 }
 
-std::string FilePathHelper::GetDirectory(const std::string & file_path)
+std::string FilePathHelper::GetDirectory(std::string_view file_path)
 {
-    std::filesystem::path path{ file_path };
+    const std::filesystem::path path{ file_path };
     auto parent{ path.parent_path() };
-    if (!parent.empty())
+    if (parent.empty()) return {};
+    
+    std::string dir{ parent.string() };
+    if (!dir.empty() && IsEndedWithSeparator(dir) == false)
     {
-        std::string dir{ parent.string() };
-        if (!dir.empty() && IsEndedWithSeparator(path) == false)
-        {
-            dir.push_back(std::filesystem::path::preferred_separator);
-        }
-        return dir;
+        dir.push_back(std::filesystem::path::preferred_separator);
     }
-    return std::string("");
+    return dir;
 }
 
-std::string FilePathHelper::GetFileName(const std::string & file_path)
+std::string FilePathHelper::GetFileName(std::string_view file_path)
 {
-    std::filesystem::path path{ file_path };
-    return path.filename().string();
+    return std::filesystem::path(file_path).filename().string();
 }
 
-std::string FilePathHelper::EnsureTrailingSlash(const std::string & path)
+std::string FilePathHelper::EnsureTrailingSlash(std::string_view path)
 {
-    if (!path.empty() && IsEndedWithSeparator(path) == false)
+    std::string result(path);
+    if (!result.empty() && IsEndedWithSeparator(result) == false)
     {
-        return path + std::filesystem::path::preferred_separator;
+        result.push_back(std::filesystem::path::preferred_separator);
     }
-    return path;
+    return result;
 }
 
-bool FilePathHelper::IsEndedWithSeparator(const std::string & file_path)
+constexpr bool FilePathHelper::IsEndedWithSeparator(std::string_view file_path)
 {
-    if (file_path.back() == '/' || file_path.back() == '\\') return true;
-    if (file_path.back() == std::filesystem::path::preferred_separator) return true;
-    return false;
+    if (file_path.empty()) return false;
+    const char c{ file_path.back() };
+    return c == '/' || c == '\\' || c == std::filesystem::path::preferred_separator;
 }

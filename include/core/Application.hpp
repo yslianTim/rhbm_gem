@@ -17,7 +17,6 @@ class Application
     CLI::App * m_potential_display_cmd;
     CLI::App * m_result_dump_cmd;
     CLI::App * m_map_simulation_cmd;
-    CLI::App * m_charge_analysis_cmd;
     std::string m_selected_command;
 
     struct AtomSelectorOptions
@@ -70,16 +69,6 @@ class Application
         std::string blurring_width_list;
     } m_map_simulation_options;
 
-    struct ChargeAnalysisOptions
-    {
-        double fit_range_min, fit_range_max;
-        double alpha_r, alpha_g;
-        std::string model_key_tag;
-        std::string sim_neutral_model_key_tag;
-        std::string sim_positive_model_key_tag;
-        std::string sim_negative_model_key_tag;
-    } m_charge_analysis_options;
-
     struct GlobalOptions
     {
         int thread_size, verbose_level;
@@ -98,6 +87,5 @@ private:
     void RegisterPotentialDisplayCommand(void);
     void RegisterResultDumpCommand(void);
     void RegisterMapSimulationCommand(void);
-    void RegisterChargeAnalysisCommand(void);
 
 };

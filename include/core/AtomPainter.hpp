@@ -29,6 +29,5 @@ public:
 
 private:
     void PaintDemoPlot(const std::string & name);
-    void PaintRegressionCheckPlot(const std::string & name);
 
 };

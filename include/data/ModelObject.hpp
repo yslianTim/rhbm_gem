@@ -12,7 +12,6 @@
 
 class AtomObject;
 class GroupPotentialEntry;
-class GroupChargeEntry;
 class ModelObject : public DataObjectBase
 {
     std::vector<std::unique_ptr<AtomObject>> m_atom_list;
@@ -22,7 +21,6 @@ class ModelObject : public DataObjectBase
     double m_resolution;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map; // key : entity_id
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_group_potential_entry_map;
-    std::unordered_map<std::string, std::unique_ptr<GroupChargeEntry>> m_group_charge_entry_map;
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
@@ -46,7 +44,6 @@ public:
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetChainIDListMap(const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
     void AddGroupPotentialEntry(const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry);
-    void AddGroupChargeEntry(const std::string & class_key, std::unique_ptr<GroupChargeEntry> & entry);
     void BuildKDTreeRoot(void);
     void FilterAtomFromSymmetry(bool is_asymmetry);
 
@@ -63,9 +60,7 @@ public:
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
     GroupPotentialEntry * GetGroupPotentialEntry(const std::string & class_key) const;
-    GroupChargeEntry * GetGroupChargeEntry(const std::string & class_key) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> & GetGroupPotentialEntryMap(void) const;
-    const std::unordered_map<std::string, std::unique_ptr<GroupChargeEntry>> & GetGroupChargeEntryMap(void) const;
     KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
 
 private:
