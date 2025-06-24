@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <sqlite3.h>
 #include <stdexcept>
 #include <string>

@@ -5,6 +5,7 @@
 #undef __ARM_NEON__
 #endif
 
+#include <cstddef>
 #include <vector>
 #include <string>
 #include <tuple>
