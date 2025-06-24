@@ -9,6 +9,8 @@
 #include "ArrayStats.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "AtomicInfoHelper.hpp"
+#include "KeyPacker.hpp"
 
 #include <iostream>
 #include <memory>
@@ -54,6 +56,7 @@ void ResultDumpVisitor::Analysis(DataObjectManager * data_manager)
             RunMapValueDumping(data_manager);
             break;
         case 2:
+            RunGroupGausEstimatesDumping(data_manager);
             RunGausEstimatesDumping(data_manager);
             break;
         default:
@@ -216,15 +219,64 @@ void ResultDumpVisitor::RunGausEstimatesDumping(DataObjectManager * data_manager
             std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
             return;
         }
-        outfile << "SerialID,Amplitude,Width,Intensity\n";
+        outfile << "SerialID,Amplitude,Width\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
             auto entry{ atom->GetAtomicPotentialEntry() };
             outfile << atom->GetSerialID() <<','
                     << entry->GetAmplitudeEstimateMDPDE() <<','
-                    << entry->GetWidthEstimateMDPDE() <<','
-                    << entry->GetIntensityEstimateMDPDE() <<'\n';
+                    << entry->GetWidthEstimateMDPDE() <<'\n';
         }
+        outfile.close();
+        std::cout <<"Output file: "<< output_path << std::endl;
+    }
+}
+
+void ResultDumpVisitor::RunGroupGausEstimatesDumping(DataObjectManager * data_manager)
+{
+    ScopeTimer timer("ResultDumpVisitor::RunGroupGausEstimatesDumping");
+    if (data_manager == nullptr) return;
+
+    for (auto & key_tag : m_model_key_tag_list)
+    {
+        auto & data_object{ data_manager->GetDataObjectRef(key_tag) };
+        auto model_object{ dynamic_cast<ModelObject *>(data_object.get()) };
+        if (model_object == nullptr) continue;
+        auto entry{ model_object->GetGroupPotentialEntry("residue_class") };
+
+        std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };
+        std::string output_path{ m_folder_path + file_name };
+        std::ofstream outfile(output_path);
+        if (!outfile.is_open())
+        {
+            std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
+            return;
+        }
+        outfile << "Residue,Element,Remoteness,Branch,Amplitude,Width\n";
+        for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
+        {
+            auto residue_name{ AtomicInfoHelper::GetLabel(residue) };
+            for (auto & element : AtomicInfoHelper::GetStandardElementList())
+            {
+                auto element_name{ AtomicInfoHelper::GetLabel(element) };
+                for (auto & remoteness : AtomicInfoHelper::GetStandardRemotenessList())
+                {
+                    auto remoteness_name{ AtomicInfoHelper::GetLabel(remoteness) };
+                    for (auto & branch : AtomicInfoHelper::GetStandardBranchList())
+                    {
+                        auto branch_name{ AtomicInfoHelper::GetLabel(branch) };
+                        auto group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
+                        outfile << residue_name <<','
+                                << element_name <<','
+                                << remoteness_name <<','
+                                << branch_name <<','
+                                << entry->GetGausEstimatePrior(group_key, 0) <<','
+                                << entry->GetGausEstimatePrior(group_key, 1) <<'\n';
+                    }
+                }
+            }
+        }
+
         outfile.close();
         std::cout <<"Output file: "<< output_path << std::endl;
     }

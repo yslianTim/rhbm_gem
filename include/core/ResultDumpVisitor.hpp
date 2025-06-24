@@ -34,5 +34,6 @@ private:
     void RunAtomPositionDumping(DataObjectManager * data_manager);
     void RunMapValueDumping(DataObjectManager * data_manager);
     void RunGausEstimatesDumping(DataObjectManager * data_manager);
+    void RunGroupGausEstimatesDumping(DataObjectManager * data_manager);
 
 };

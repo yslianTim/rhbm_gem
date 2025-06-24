@@ -1,5 +1,7 @@
 #include <pybind11/pybind11.h>
 #include "PotentialAnalysisCommand.hpp"
+#include "PotentialDisplayCommand.hpp"
+#include "ResultDumpCommand.hpp"
 #include "MapSimulationCommand.hpp"
 
 PYBIND11_MODULE(cpp_module, m)
@@ -20,6 +22,27 @@ PYBIND11_MODULE(cpp_module, m)
         .def("SetSamplingSize",         &PotentialAnalysisCommand::SetSamplingSize)
         .def("SetSamplingRangeMinimum", &PotentialAnalysisCommand::SetSamplingRangeMinimum)
         .def("SetSamplingRangeMaximum", &PotentialAnalysisCommand::SetSamplingRangeMaximum)
+        .def("SetSimulationFlag",       &PotentialAnalysisCommand::SetSimulationFlag)
+        .def("SetSimulatedMapResolution",&PotentialAnalysisCommand::SetSimulatedMapResolution)
+        ;
+
+    pybind11::class_<PotentialDisplayCommand>(m, "PotentialDisplayCommand")
+        .def(pybind11::init<>())
+        .def("Execute",                 &PotentialDisplayCommand::Execute)
+        .def("SetPainterChoice",        &PotentialDisplayCommand::SetPainterChoice)
+        .def("SetModelKeyTagList",      &PotentialDisplayCommand::SetModelKeyTagList)
+        .def("SetDatabasePath",         &PotentialDisplayCommand::SetDatabasePath)
+        .def("SetFolderPath",           &PotentialDisplayCommand::SetFolderPath)
+        ;
+
+    pybind11::class_<ResultDumpCommand>(m, "ResultDumpCommand")
+        .def(pybind11::init<>())
+        .def("Execute",                 &ResultDumpCommand::Execute)
+        .def("SetPrinterChoice",        &ResultDumpCommand::SetPrinterChoice)
+        .def("SetModelKeyTagList",      &ResultDumpCommand::SetModelKeyTagList)
+        .def("SetDatabasePath",         &ResultDumpCommand::SetDatabasePath)
+        .def("SetMapFilePath",          &ResultDumpCommand::SetMapFilePath)
+        .def("SetFolderPath",           &ResultDumpCommand::SetFolderPath)
         ;
 
     pybind11::class_<MapSimulationCommand>(m, "MapSimulationCommand")
