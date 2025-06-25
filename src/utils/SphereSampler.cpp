@@ -1,6 +1,5 @@
 #include "SphereSampler.hpp"
 #include "Constants.hpp"
-#include <Eigen/Dense>
 
 #include <iostream>
 #include <random>
@@ -22,27 +21,39 @@ void SphereSampler::Print(void) const
 }
 
 std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamplingPoints(
-    const std::array<float, 3> & position)
+    const std::array<float, 3> & position) const
 {
     std::vector<std::tuple<float, std::array<float, 3>>> sampling_position_list;
     sampling_position_list.resize(m_sampling_size);
-    auto distance_range{ m_distance_max - m_distance_min };
-
-    Eigen::Array3f atom_location{ position.at(0), position.at(1), position.at(2) };
-    Eigen::ArrayXf distance_array{ Eigen::ArrayXf::Zero(m_sampling_size) };
-    distance_array.setRandom();
-    distance_array = (distance_array + 1.0) * 0.5 * distance_range + m_distance_min;
 
     #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(m_thread_size)
     #endif
     for (unsigned int i = 0; i < m_sampling_size; i++)
     {
-        Eigen::Array3f pos{ Eigen::Quaternionf::UnitRandom() * Eigen::Vector3f::UnitZ() };
-        pos *= distance_array(i);
-        pos += atom_location;
-        sampling_position_list[i] =
-            std::make_tuple(distance_array(i), std::array<float, 3>{ pos(0), pos(1), pos(2) });
+        static thread_local std::mt19937 engine{ std::random_device{}() };
+        std::uniform_real_distribution<float> dist_r(static_cast<float>(m_distance_min), static_cast<float>(m_distance_max));
+        std::uniform_real_distribution<float> dist_phi(0.0f, static_cast<float>(Constants::two_pi));
+        std::uniform_real_distribution<float> dist_cos(-1.0f, 1.0f);
+
+        float r{ dist_r(engine) };
+        float phi{ dist_phi(engine) };
+        float cos_theta{ dist_cos(engine) };
+        float sin_theta{ std::sqrt(1.0f - cos_theta * cos_theta) };
+
+        std::array<float, 3> direction{
+            sin_theta * std::cos(phi),
+            sin_theta * std::sin(phi),
+            cos_theta
+        };
+
+        std::array<float, 3> pos{
+            position.at(0) + r * direction[0],
+            position.at(1) + r * direction[1],
+            position.at(2) + r * direction[2]
+        };
+
+        sampling_position_list[i] = std::make_tuple(r, pos);
     }
 
     return sampling_position_list;
