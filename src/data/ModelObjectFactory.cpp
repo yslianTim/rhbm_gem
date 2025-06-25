@@ -25,6 +25,11 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
 void ModelObjectFactory::OutputDataObject(const std::string & filename, DataObjectBase * data_object)
 {
     auto model_object{ dynamic_cast<ModelObject *>(data_object) };
+    if (model_object == nullptr)
+    {
+        throw std::runtime_error(
+            "ModelObjectFactory::OutputDataObject(): invalid data_object type");
+    }
     auto file_writer{ std::make_unique<ModelFileWriter>(filename, model_object) };
     file_writer->Write();
 }

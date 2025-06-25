@@ -52,12 +52,24 @@ void ModelPainter::SetFolder(const std::string & folder_path)
 
 void ModelPainter::AddDataObject(DataObjectBase * data_object)
 {
-    m_model_object_list.push_back(dynamic_cast<ModelObject *>(data_object));
+    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
+    if (model_object == nullptr)
+    {
+        throw std::runtime_error(
+            "ModelPainter::AddDataObject(): invalid data_object type");
+    }
+    m_model_object_list.push_back(model_object);
 }
 
 void ModelPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    m_ref_model_object_list_map[label].push_back(dynamic_cast<ModelObject *>(data_object));
+    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
+    if (model_object == nullptr)
+    {
+        throw std::runtime_error(
+            "ModelPainter::AddReferenceDataObject(): invalid data_object type");
+    }
+    m_ref_model_object_list_map[label].push_back(model_object);
 }
 
 void ModelPainter::Painting(void)

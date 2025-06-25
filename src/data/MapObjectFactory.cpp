@@ -21,6 +21,11 @@ std::unique_ptr<DataObjectBase> MapObjectFactory::CreateDataObject(const std::st
 void MapObjectFactory::OutputDataObject(const std::string & filename, DataObjectBase * data_object)
 {
     auto map_object{ dynamic_cast<MapObject *>(data_object) };
+    if (map_object == nullptr)
+    {
+        throw std::runtime_error(
+            "MapObjectFactory::OutputDataObject(): invalid data_object type");
+    }
     auto file_writer{ std::make_unique<MapFileWriter>(filename, map_object) };
     file_writer->Write();
 }

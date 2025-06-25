@@ -47,10 +47,10 @@ public:
     void SetStructureInfo(AtomObject * atom_object);
 
     std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(int model_number=1);
-    std::string GetPdbID(void) const;
-    std::string GetEmdID(void) const;
+    const std::string & GetPdbID(void) const;
+    const std::string & GetEmdID(void) const;
     double GetResolution(void) const;
-    std::string GetResolutionMethod(void) const;
+    const std::string & GetResolutionMethod(void) const;
     const std::vector<Element> & GetElementTypeList(void) const;
     const std::unordered_map<std::string, Entity> & GetEntityTypeMap(void) const;
     const std::unordered_map<std::string, int> & GetMoleculesSizeMap(void) const;

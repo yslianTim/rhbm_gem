@@ -5,6 +5,7 @@
 #include "CCP4Format.hpp"
 
 #include <iostream>
+#include <stdexcept>
 
 MapFileReader::MapFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }

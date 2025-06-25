@@ -463,7 +463,12 @@ void ROOTHelper::SetCanvasPartition(
 void ROOTHelper::FindPadInCanvasPartition(TCanvas * canvas, int id_x, int id_y)
 {
     canvas->cd(0);
-    auto pad{ dynamic_cast<TPad*>(canvas->FindObject(TString::Format("pad_%d_%d", id_x, id_y).Data())) };
+    auto pad{ dynamic_cast<TPad*>(canvas->FindObject(
+        TString::Format("pad_%d_%d", id_x, id_y).Data())) };
+    if (pad == nullptr)
+    {
+        throw std::runtime_error("ROOTHelper::FindPadInCanvasPartition(): pad not found");
+    }
     pad->Draw();
     pad->cd();
 }
@@ -471,12 +476,20 @@ void ROOTHelper::FindPadInCanvasPartition(TCanvas * canvas, int id_x, int id_y)
 float ROOTHelper::GetPadXfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad)
 {
     auto pad_origin{ dynamic_cast<TPad*>(canvas->FindObject("pad_0_0")) };
+    if (pad_origin == nullptr)
+    {
+        throw std::runtime_error("ROOTHelper::GetPadXfactorInCanvasPartition(): pad_0_0 not found");
+    }
     return static_cast<float>(pad_origin->GetAbsWNDC() / pad->GetAbsWNDC());
 }
 
 float ROOTHelper::GetPadYfactorInCanvasPartition(TCanvas * canvas, TVirtualPad * pad)
 {
     auto pad_origin{ dynamic_cast<TPad*>(canvas->FindObject("pad_0_0")) };
+    if (pad_origin == nullptr)
+    {
+        throw std::runtime_error("ROOTHelper::GetPadYfactorInCanvasPartition(): pad_0_0 not found");
+    }
     return static_cast<float>(pad_origin->GetAbsHNDC() / pad->GetAbsHNDC());
 }
 

@@ -31,6 +31,11 @@ void PotentialAnalysisCommand::Execute(void)
         {
             auto model_object{
                 dynamic_cast<ModelObject *>(data_manager->GetDataObjectRef("model").get()) };
+            if (model_object == nullptr)
+            {
+                throw std::runtime_error(
+                    "PotentialAnalysisCommand::Execute(): invalid model object");
+            }
             UpdateModelObjectForSimulation(model_object);
         }
     }

@@ -102,12 +102,12 @@ std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::GetAtomObjectList
     return std::move(m_atom_object_list_map.at(model_number));
 }
 
-std::string AtomicModelDataBlock::GetPdbID(void) const
+const std::string & AtomicModelDataBlock::GetPdbID(void) const
 {
     return m_model_id;
 }
 
-std::string AtomicModelDataBlock::GetEmdID(void) const
+const std::string & AtomicModelDataBlock::GetEmdID(void) const
 {
     return m_map_id;
 }
@@ -117,7 +117,7 @@ double AtomicModelDataBlock::GetResolution(void) const
     return std::stod(m_resolution);
 }
 
-std::string AtomicModelDataBlock::GetResolutionMethod(void) const
+const std::string & AtomicModelDataBlock::GetResolutionMethod(void) const
 {
     return m_resolution_method;
 }

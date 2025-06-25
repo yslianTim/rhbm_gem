@@ -50,13 +50,24 @@ void ComparisonPainter::SetFolder(const std::string & folder_path)
 void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
 {
     auto model_object{ dynamic_cast<ModelObject *>(data_object) };
+    if (model_object == nullptr)
+    {
+        throw std::runtime_error(
+            "ComparisonPainter::AddDataObject(): invalid data_object type");
+    }
     m_model_object_list.emplace_back(model_object);
     m_resolution_list.emplace_back(model_object->GetResolution());
 }
 
 void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    m_ref_model_object_list_map[label].emplace_back(dynamic_cast<ModelObject *>(data_object));
+    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
+    if (model_object == nullptr)
+    {
+        throw std::runtime_error(
+            "ComparisonPainter::AddReferenceDataObject(): invalid data_object type");
+    }
+    m_ref_model_object_list_map[label].emplace_back(model_object);
 }
 
 void ComparisonPainter::Painting(void)

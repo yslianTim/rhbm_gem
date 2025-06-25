@@ -45,12 +45,24 @@ void AtomPainter::SetFolder(const std::string & folder_path)
 
 void AtomPainter::AddDataObject(DataObjectBase * data_object)
 {
-    m_atom_object_list.push_back(dynamic_cast<AtomObject *>(data_object));
+    auto atom_obj{ dynamic_cast<AtomObject *>(data_object) };
+    if (atom_obj == nullptr)
+    {
+        throw std::runtime_error(
+            "AtomPainter::AddDataObject(): invalid data_object type");
+    }
+    m_atom_object_list.push_back(atom_obj);
 }
 
 void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    m_ref_atom_object_map[label] = dynamic_cast<AtomObject *>(data_object);
+    auto atom_obj{ dynamic_cast<AtomObject *>(data_object) };
+    if (atom_obj == nullptr)
+    {
+        throw std::runtime_error(
+            "AtomPainter::AddReferenceDataObject(): invalid data_object type");
+    }
+    m_ref_atom_object_map[label] = atom_obj;
 }
 
 void AtomPainter::Painting(void)

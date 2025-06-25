@@ -82,7 +82,13 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
         const auto & map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
         map_object->Accept(this);
 
-        RunPotentialFitting(dynamic_cast<ModelObject*>(model_object.get()));
+        auto model_obj_ptr{ dynamic_cast<ModelObject*>(model_object.get()) };
+        if (model_obj_ptr == nullptr)
+        {
+            throw std::runtime_error(
+                "PotentialAnalysisVisitor::Visit(): invalid model object");
+        }
+        RunPotentialFitting(model_obj_ptr);
     }
     catch(const std::exception & e)
     {

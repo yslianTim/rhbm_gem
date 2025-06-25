@@ -102,6 +102,11 @@ void PotentialDisplayVisitor::AddAtomObjectToPainter(
     {
         auto & data_object{ data_manager->GetDataObjectRef(key_tag) };
         auto model_object{ dynamic_cast<ModelObject *>(data_object.get()) };
+        if (model_object == nullptr)
+        {
+            throw std::runtime_error(
+                "PotentialDisplayVisitor::Visit(): invalid model object");
+        }
         model_object->Accept(this);
         for (auto & atom : model_object->GetComponentsList())
         {

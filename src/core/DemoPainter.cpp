@@ -50,12 +50,24 @@ void DemoPainter::SetFolder(const std::string & folder_path)
 
 void DemoPainter::AddDataObject(DataObjectBase * data_object)
 {
-    m_model_object_list.push_back(dynamic_cast<ModelObject *>(data_object));
+    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
+    if (model_object == nullptr)
+    {
+        throw std::runtime_error(
+            "DemoPainter::AddDataObject(): invalid data_object type");
+    }
+    m_model_object_list.push_back(model_object);
 }
 
 void DemoPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    m_ref_model_object_list_map[label].push_back(dynamic_cast<ModelObject *>(data_object));
+    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
+    if (model_object == nullptr)
+    {
+        throw std::runtime_error(
+            "DemoPainter::AddReferenceDataObject(): invalid data_object type");
+    }
+    m_ref_model_object_list_map[label].push_back(model_object);
 }
 
 void DemoPainter::Painting(void)
