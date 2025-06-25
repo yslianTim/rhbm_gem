@@ -5,7 +5,6 @@
 #include "AtomicInfoHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
 
-#include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -26,12 +25,29 @@ CifFormat::~CifFormat()
 
 void CifFormat::LoadHeader(const std::string & filename)
 {
-    LoadDatabaseInfo(filename);
-    LoadEntityInfo(filename);
-    LoadPdbxData(filename);
-    LoadElementTypeList(filename);
-    LoadStructHelixInfo(filename);
-    LoadStructSheetInfo(filename);
+    std::ifstream infile{ filename, std::ios::binary };
+    if (!infile)
+    {
+        std::cerr << "Cannot open the file: " << filename << std::endl;
+        throw std::runtime_error("LoadHeader failed!");
+    }
+
+    LoadDatabaseInfo(infile);
+    infile.clear();
+    infile.seekg(0);
+    LoadEntityInfo(infile);
+    infile.clear();
+    infile.seekg(0);
+    LoadPdbxData(infile);
+    infile.clear();
+    infile.seekg(0);
+    LoadElementTypeList(infile);
+    infile.clear();
+    infile.seekg(0);
+    LoadStructHelixInfo(infile);
+    infile.clear();
+    infile.seekg(0);
+    LoadStructSheetInfo(infile);
 }
 
 void CifFormat::PrintHeader(void) const
@@ -63,18 +79,17 @@ void CifFormat::PrintHeader(void) const
 
 void CifFormat::LoadDataArray(const std::string & filename)
 {
-    LoadAtomSiteData(filename);
-}
-
-void CifFormat::LoadDatabaseInfo(const std::string & filename)
-{
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
         std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadDatabaseInfo failed!");
+        throw std::runtime_error("LoadDataArray failed!");
     }
+    LoadAtomSiteData(infile);
+}
 
+void CifFormat::LoadDatabaseInfo(std::ifstream & infile)
+{
     ParseLoopBlock(infile, "_database_2.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -94,15 +109,8 @@ void CifFormat::LoadDatabaseInfo(const std::string & filename)
     );
 }
 
-void CifFormat::LoadEntityInfo(const std::string & filename)
+void CifFormat::LoadEntityInfo(std::ifstream & infile)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadDatabaseInfo failed!");
-    }
-
     ParseLoopBlock(infile, "_entity.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -137,14 +145,8 @@ void CifFormat::LoadEntityInfo(const std::string & filename)
     );
 }
 
-void CifFormat::LoadPdbxData(const std::string & filename)
+void CifFormat::LoadPdbxData(std::ifstream & infile)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadPdbxData failed!");
-    }
     std::string line, header, resolution, resolution_method;
     auto found_resolution{ false };
     auto found_resolution_method{ false };
@@ -169,15 +171,8 @@ void CifFormat::LoadPdbxData(const std::string & filename)
     }
 }
 
-void CifFormat::LoadElementTypeList(const std::string & filename)
+void CifFormat::LoadElementTypeList(std::ifstream & infile)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadElementTypeList failed!");
-    }
-
     ParseLoopBlock(infile, "_atom_type.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -189,15 +184,8 @@ void CifFormat::LoadElementTypeList(const std::string & filename)
     );
 }
 
-void CifFormat::LoadStructHelixInfo(const std::string & filename)
+void CifFormat::LoadStructHelixInfo(std::ifstream & infile)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadStructHelixInfo failed!");
-    }
-
     ParseLoopBlock(infile, "_struct_conf.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -215,15 +203,8 @@ void CifFormat::LoadStructHelixInfo(const std::string & filename)
     );
 }
 
-void CifFormat::LoadStructSheetInfo(const std::string & filename)
+void CifFormat::LoadStructSheetInfo(std::ifstream & infile)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadStructSheetInfo failed!");
-    }
-
     ParseLoopBlock(infile, "_struct_sheet.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -252,15 +233,8 @@ void CifFormat::LoadStructSheetInfo(const std::string & filename)
     );
 }
 
-void CifFormat::LoadAtomSiteData(const std::string & filename)
+void CifFormat::LoadAtomSiteData(std::ifstream & infile)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadAtomSiteData failed!");
-    }
-
     ParseLoopBlock(infile, "_atom_site.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)

@@ -7,6 +7,7 @@
 #include <memory>
 #include <functional>
 #include <unordered_map>
+#include <fstream>
 #include "ModelFileFormatBase.hpp"
 
 enum class Element : uint16_t;
@@ -25,13 +26,13 @@ public:
     AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
-    void LoadDatabaseInfo(const std::string & filename);
-    void LoadEntityInfo(const std::string & filename);
-    void LoadPdbxData(const std::string & filename);
-    void LoadElementTypeList(const std::string & filename);
-    void LoadStructHelixInfo(const std::string & filename);
-    void LoadStructSheetInfo(const std::string & filename);
-    void LoadAtomSiteData(const std::string & filename);
+    void LoadDatabaseInfo(std::ifstream & infile);
+    void LoadEntityInfo(std::ifstream & infile);
+    void LoadPdbxData(std::ifstream & infile);
+    void LoadElementTypeList(std::ifstream & infile);
+    void LoadStructHelixInfo(std::ifstream & infile);
+    void LoadStructSheetInfo(std::ifstream & infile);
+    void LoadAtomSiteData(std::ifstream & infile);
     void ParseLoopBlock(std::ifstream & infile,
         std::string_view data_block_prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,

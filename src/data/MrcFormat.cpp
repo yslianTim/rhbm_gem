@@ -162,28 +162,38 @@ void MrcFormat::LoadDataArray(const std::string & filename)
     size_t element_size{ GetElementSize() };
     size_t total_bytes{ num_voxels * element_size };
     
-    auto blob_buffer{ std::make_unique<char[]>(total_bytes) };
-    infile.read(blob_buffer.get(), static_cast<long>(total_bytes));
-    if (!infile)
-    {
-        throw std::runtime_error("Failed to read blob data from file");
-    }
-    
     auto data_array{ std::make_unique<float[]>(num_voxels) };
     switch (static_cast<MODE>(m_header.mode))
     {
         case MODE::SIGNED_FLOAT32:
-            #ifdef USE_OPENMP
-            #pragma omp parallel for num_threads(4)
-            #endif
-            for (size_t v = 0; v < num_voxels; v++)
+            // Data already stored as float32, so read directly into the array
+            infile.read(reinterpret_cast<char*>(data_array.get()), static_cast<std::streamsize>(total_bytes));
+            if (!infile)
             {
-                data_array[v] = *reinterpret_cast<const float*>(blob_buffer.get() + v * element_size);
+                throw std::runtime_error("Failed to read voxel data from file");
             }
             m_data_array = std::move(data_array);
             break;
         default:
-            throw std::runtime_error("Unsupported MODE in LoadDataArray");
+            // For other modes read raw bytes then convert element by element
+            {
+                auto blob_buffer{ std::make_unique<char[]>(total_bytes) };
+                infile.read(blob_buffer.get(), static_cast<std::streamsize>(total_bytes));
+                if (!infile)
+                {
+                    throw std::runtime_error("Failed to read blob data from file");
+                }
+
+                #ifdef USE_OPENMP
+                #pragma omp parallel for num_threads(4)
+                #endif
+                for (size_t v = 0; v < num_voxels; v++)
+                {
+                    data_array[v] = *reinterpret_cast<const float*>(blob_buffer.get() + v * element_size);
+                }
+                m_data_array = std::move(data_array);
+            }
+            break;
     }
 }
 

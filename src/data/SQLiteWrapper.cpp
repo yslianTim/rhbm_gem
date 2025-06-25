@@ -78,7 +78,10 @@ void SQLiteWrapper::Reset(void)
 
 void SQLiteWrapper::Finalize(void)
 {
-    sqlite3_finalize(m_statement_ptr);
+    if (m_statement_ptr)
+    {
+        sqlite3_finalize(m_statement_ptr);
+    }
     m_statement_ptr = nullptr;
 }
 
