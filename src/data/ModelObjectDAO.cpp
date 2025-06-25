@@ -51,6 +51,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
             resolution_method = excluded.resolution_method
     )";
     m_database->Prepare(sql.str());
+    SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, model_obj->GetKeyTag());
     m_database->Bind<int>(2, static_cast<int>(model_obj->GetNumberOfAtom()));
     m_database->Bind<std::string>(3, model_obj->GetPdbID());
@@ -58,7 +59,6 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     m_database->Bind<double>(5, model_obj->GetResolution());
     m_database->Bind<std::string>(6, model_obj->GetResolutionMethod());
     m_database->StepOnce();
-    m_database->Finalize();
 
     // Save atom object list
     auto atom_list_table_name{ "atom_list_in_" + key_tag };
@@ -97,6 +97,7 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     )"<<" FROM "<< model_table_name << " WHERE key_tag = ? LIMIT 1;";
 
     m_database->Prepare(sql.str());
+    SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
     auto return_code{ m_database->StepNext() };
     auto atom_size{ 0 };
@@ -108,16 +109,13 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
         model_object->SetResolution(m_database->GetColumn<double>(4));
         model_object->SetResolutionMethod(m_database->GetColumn<std::string>(5));
         atom_size = m_database->GetColumn<int>(1);
-        m_database->Finalize();
     }
     else if (return_code == SQLiteWrapper::StepDone())
     {
-        m_database->Finalize();
         throw std::runtime_error("Cannot find the row with key_tag = " + key_tag);
     }
     else
     {
-        m_database->Finalize();
         throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
     }
 
@@ -251,6 +249,7 @@ void ModelObjectDAO::SaveAtomObjectList(
     )";
 
     m_database->Prepare(sql.str());
+    SQLiteWrapper::StatementGuard guard(*m_database);
 
     for (auto & atom_object : model_obj->GetComponentsList())
     {
@@ -274,7 +273,6 @@ void ModelObjectDAO::SaveAtomObjectList(
         m_database->Reset();
     }
 
-    m_database->Finalize();
     m_database->CommitTransaction();
 }
 
@@ -294,6 +292,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
     )";
 
     m_database->Prepare(sql.str());
+    SQLiteWrapper::StatementGuard guard(*m_database);
 
     for (auto & atom_object : model_obj->GetComponentsList())
     {
@@ -312,7 +311,6 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
         m_database->Reset();
     }
 
-    m_database->Finalize();
     m_database->CommitTransaction();
 }
 
@@ -332,6 +330,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     )";
 
     m_database->Prepare(sql.str());
+    SQLiteWrapper::StatementGuard guard(*m_database);
     for (auto & atom_object : model_obj->GetComponentsList())
     {
         auto entry{ atom_object->GetAtomicPotentialEntry() };
@@ -347,7 +346,6 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
         m_database->Reset();
     }
 
-    m_database->Finalize();
     m_database->CommitTransaction();
 }
 
@@ -369,6 +367,7 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
     )";
 
     m_database->Prepare(sql.str());
+    SQLiteWrapper::StatementGuard guard(*m_database);
     for (auto & group_key : group_entry->GetGroupKeySet())
     {
         m_database->Bind<int64_t>(1, static_cast<int64_t>(group_key));
@@ -385,7 +384,6 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
         m_database->Reset();
     }
 
-    m_database->Finalize();
     m_database->CommitTransaction();
 }
 
@@ -606,8 +604,8 @@ bool ModelObjectDAO::TableExists(const std::string & table_name) const
     std::stringstream sql;
     sql << "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;";
     m_database->Prepare(sql.str());
+    SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, table_name);
     auto rc{ m_database->StepNext() };
-    m_database->Finalize();
     return rc == SQLiteWrapper::StepRow();
 }

@@ -14,6 +14,22 @@ class SQLiteWrapper
     sqlite3_stmt * m_statement_ptr;
 
 public:
+    /**
+     * @brief Helper class to ensure prepared statements are finalized.
+     */
+    class StatementGuard
+    {
+        SQLiteWrapper & m_db;
+
+    public:
+        explicit StatementGuard(SQLiteWrapper & db) : m_db{ db } {}
+        ~StatementGuard() { m_db.Finalize(); }
+
+        StatementGuard(const StatementGuard &) = delete;
+        StatementGuard & operator=(const StatementGuard &) = delete;
+    };
+
+public:
     explicit SQLiteWrapper(const std::string & database_path);
     ~SQLiteWrapper();
 
@@ -40,6 +56,7 @@ public:
     {
         std::vector<std::tuple<Ts...>> results;
         Prepare(sql);
+        StatementGuard guard(*this);
         while (true)
         {
             auto return_code{ StepNext() };
@@ -54,11 +71,9 @@ public:
             }
             else
             {
-                Finalize();
                 throw std::runtime_error("Query step failed: " + ErrorMessage());
             }
         }
-        Finalize();
         return results;
     }
 
