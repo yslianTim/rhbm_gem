@@ -88,17 +88,17 @@ void ModelPainter::Painting(void)
                      "_bw"+ StringHelper::ToStringWithPrecision(model_object->GetResolution(), 2);
         }
         label += ".pdf";
-        PaintGroupGausMainChainStyle1(model_object, "group_gaus_main_chain_style1_"+ label);
+        //PaintGroupGausMainChainStyle1(model_object, "group_gaus_main_chain_style1_"+ label);
         PaintGroupGausMainChain(model_object, "group_gaus_main_chain_"+ label);
         PaintGroupGausSideChain(model_object, "group_gaus_side_chain_"+ label);
         model_object->BuildKDTreeRoot();
-        PaintGroupWidthScatterPlot(model_object, "group_gaus_com_"+ label, 0, true);
-        PaintGroupWidthScatterPlot(model_object, "group_gaus_knn_"+ label, 1, true);
-        PaintAtomXYPosition(model_object, "atom_position_"+ label);
-        PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ label, false);
+        //PaintGroupWidthScatterPlot(model_object, "group_gaus_com_"+ label, 0, true);
+        //PaintGroupWidthScatterPlot(model_object, "group_gaus_knn_"+ label, 1, true);
+        //PaintAtomXYPosition(model_object, "atom_position_"+ label);
+        //PaintAtomGausScatter(model_object, "atom_gaus_scatter_"+ label, false);
         PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
         PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
-        PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
+        //PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
     }
 }
 
@@ -715,10 +715,6 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     auto y_max{ std::get<1>(y_range) };
     auto line_ref{ ROOTHelper::CreateLine(x_min, 0.0, x_max, 0.0) };
 
-    auto pad_title{ ROOTHelper::CreatePad("pad_title","", 0.00, 0.80, 1.00, 1.00) };
-    ROOTHelper::SetPadDefaultStyle(pad_title.get());
-    pad_title->Draw();
-
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> element_text[col_size];
     std::unique_ptr<TPaveText> result_text[col_size];
@@ -732,15 +728,15 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", i, j),"", 100, x_min, x_max, 100, y_min, y_max);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 35.0f, 0.8f);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35.0f, 0.005f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 505);
             ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 40.0f, 1.2f);
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35.0f, 0.01f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->SetStats(0);
-            frame[i][j]->GetXaxis()->SetTitle("Distance #[]{#AA}");
+            frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle("Map Value");
             frame[i][j]->Draw();
 
@@ -755,23 +751,27 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetLineAttribute(gaus_function[i].get(), 2, 2, kRed);
             gaus_function[i]->Draw("SAME");
 
-            element_text[i] = ROOTHelper::CreatePaveText(0.35, 0.85, 0.99, 0.99, "nbNDC ARC", true);
+            element_text[i] = ROOTHelper::CreatePaveText(0.70, 0.75, 0.99, 0.99, "nbNDC ARC", true);
             ROOTHelper::SetPaveTextDefaultStyle(element_text[i].get());
             ROOTHelper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
-            ROOTHelper::SetTextAttribute(element_text[i].get(), 18.0f, 133, 22);
+            ROOTHelper::SetTextAttribute(element_text[i].get(), 40.0f, 103, 22);
             ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, AtomClassifier::GetMainChainElementColor(static_cast<size_t>(i)), 0.5f);
             element_text[i]->AddText(AtomClassifier::GetMainChainElementLabel(static_cast<size_t>(i)).data());
             element_text[i]->Draw();
 
-            result_text[i] = ROOTHelper::CreatePaveText(0.05, 0.10, 0.95, 0.25, "nbNDC", true);
+            result_text[i] = ROOTHelper::CreatePaveText(0.05, 0.08, 0.95, 0.25, "nbNDC", true);
             ROOTHelper::SetPaveTextDefaultStyle(result_text[i].get());
-            ROOTHelper::SetTextAttribute(result_text[i].get(), 18.0f, 133, 22);
+            ROOTHelper::SetTextAttribute(result_text[i].get(), 20.0f, 133, 22, 0.0, kRed);
             ROOTHelper::SetFillAttribute(result_text[i].get(), 4000);
-            result_text[i]->AddText(Form("#hat{A} = #color[2]{%.2f}  ;  #hat{#tau} = #color[2]{%.2f}", amplitude_prior[i], width_prior[i]));
+            result_text[i]->AddText(Form("#font[2]{A} = %.2f  ;  #tau = %.2f", amplitude_prior[i], width_prior[i]));
             result_text[i]->Draw();
         }
     }
 
+    canvas->cd();
+    auto pad_title{ ROOTHelper::CreatePad("pad_title","", 0.00, 0.80, 1.00, 1.00) };
+    ROOTHelper::SetPadDefaultStyle(pad_title.get());
+    pad_title->Draw();
     pad_title->cd();
 
     auto subtitle1_text{ ROOTHelper::CreatePaveText(0.10, 0.10, 0.25, 0.90, "nbNDC ARC", false) };
@@ -796,19 +796,30 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     ROOTHelper::SetFillAttribute(subtitle3_text.get(), 1001, kAzure-7, 0.5f);
     ROOTHelper::SetTextAttribute(subtitle3_text.get(), 35.0f, 103, 22);
     subtitle3_text->AddText(model_object->GetEmdID().data());
-    //subtitle3_text->AddText("Simulation");
     subtitle3_text->Draw();
 
     auto legend{ ROOTHelper::CreateLegend(0.69, 0.10, 0.99, 0.90, false) };
     ROOTHelper::SetLegendDefaultStyle(legend.get());
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    ROOTHelper::SetTextAttribute(legend.get(), 20.0f, 133, 12, 0.0);
+    ROOTHelper::SetTextAttribute(legend.get(), 25.0f, 133, 12, 0.0);
     legend->SetMargin(0.15f);
     legend->AddEntry(gaus_function[0].get(),
-        "Single Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+        "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
     legend->AddEntry(map_value_graph_list[0].at(0).get(),
-        "Map Value Distribution (Median)", "l");
+        "Degenerated Map Value", "l");
     legend->Draw();
+
+    canvas->cd();
+    auto pad_bottom{ ROOTHelper::CreatePad("pad_bottom","", 0.10, 0.00, 0.98, 0.11) };
+    ROOTHelper::SetPadDefaultStyle(pad_bottom.get());
+    pad_bottom->Draw();
+    pad_bottom->cd();
+    auto x_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC", false) };
+    ROOTHelper::SetPaveTextDefaultStyle(x_title_text.get());
+    ROOTHelper::SetFillAttribute(x_title_text.get(), 4000);
+    ROOTHelper::SetTextAttribute(x_title_text.get(), 35.0f, 133, 22);
+    x_title_text->AddText("Radial Distance #[]{#AA}");
+    x_title_text->Draw();
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);

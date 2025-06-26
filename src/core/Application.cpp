@@ -60,8 +60,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetDatabasePath(m_global_options.database_path);
         command->SetFolderPath(m_global_options.folder_path);
         command->SetModelKeyTagList(m_potential_display_options.model_key_tag_list);
-        command->SetRefModelKeyTagList("no_charge", m_potential_display_options.sim_no_charge_key_tag_list);
-        command->SetRefModelKeyTagList("with_charge", m_potential_display_options.sim_with_charge_key_tag_list);
+        command->SetRefModelKeyTagListMap(m_potential_display_options.ref_model_key_tag_list);
         command->SetPickChainID(m_atom_selector_options.pick_chain_id);
         command->SetPickResidueType(m_atom_selector_options.pick_residue);
         command->SetPickElementType(m_atom_selector_options.pick_element);
@@ -187,11 +186,8 @@ void Application::RegisterPotentialDisplayCommand(void)
         "-k,--model-keylist", m_potential_display_options.model_key_tag_list,
         "List of model key tag to be display")->required();
     m_potential_display_cmd->add_option(
-        "--sim-no-charge-keylist", m_potential_display_options.sim_no_charge_key_tag_list,
-        "List of simulated (no charge) model key tag to be display")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--sim-with-charge-keylist", m_potential_display_options.sim_with_charge_key_tag_list,
-        "List of simulated (with charge) model key tag to be display")->default_val("");
+        "-r,--ref-model-keylist", m_potential_display_options.ref_model_key_tag_list,
+        "List of reference model key tag to be display")->default_val("");
     m_potential_display_cmd->add_option(
         "-d,--database", m_global_options.database_path,
         "Database file path")->default_val("database.sqlite");

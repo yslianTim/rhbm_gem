@@ -48,8 +48,7 @@ class Application
     {
         int painter_choice;
         std::string model_key_tag_list;
-        std::string sim_no_charge_key_tag_list;
-        std::string sim_with_charge_key_tag_list;
+        std::string ref_model_key_tag_list;
     } m_potential_display_options;
 
     struct ResultDumpOptions

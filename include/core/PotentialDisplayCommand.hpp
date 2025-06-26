@@ -26,9 +26,7 @@ public:
     void SetDatabasePath(const std::string & path) { m_database_path = path; }
     void SetFolderPath(const std::string & path) { m_folder_path = path; }
     void SetModelKeyTagList(const std::string & value);
-    void SetRefModelKeyTagList(const std::string & map_key, const std::string & value);
-    void LoadModelObjects(DataObjectManager * data_manager);
-    void LoadRefModelObjects(DataObjectManager * data_manager);
+    void SetRefModelKeyTagListMap(const std::string & value);
     void SetPickChainID(const std::string & value);
     void SetPickResidueType(const std::string & value);
     void SetPickElementType(const std::string & value);
@@ -39,6 +37,7 @@ public:
     void SetVetoRemotenessType(const std::string & value);
 
 private:
-    void LoadAdditionalReferenceModelObjects(DataObjectManager * data_manager);
+    void LoadModelObjects(DataObjectManager * data_manager);
+    void LoadRefModelObjects(DataObjectManager * data_manager);
 
 };
