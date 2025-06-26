@@ -1,13 +1,11 @@
 #include "MapSimulationCommand.hpp"
-#include "AtomSelector.hpp"
 #include "DataObjectManager.hpp"
 #include "MapSimulationVisitor.hpp"
 
 #include <iostream>
 #include <sstream>
 
-MapSimulationCommand::MapSimulationCommand(void) :
-    m_atom_selector{ std::make_unique<AtomSelector>() }
+MapSimulationCommand::MapSimulationCommand(void)
 {
 
 }
@@ -26,9 +24,7 @@ void MapSimulationCommand::Execute(void)
     auto data_manager{ std::make_unique<DataObjectManager>() };
     data_manager->ProcessFile(m_model_file_path, "model");
 
-    m_atom_selector->Print();
-
-    auto analyzer{ std::make_unique<MapSimulationVisitor>(m_atom_selector.get()) };
+    auto analyzer{ std::make_unique<MapSimulationVisitor>() };
     analyzer->SetModelObjectKeyTag("model");
     analyzer->SetFolderPath(m_folder_path);
     analyzer->SetThreadSize(static_cast<unsigned int>(m_thread_size));
@@ -50,44 +46,4 @@ void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
         if (segment == "") continue;
         m_blurring_width_list.emplace_back(std::stod(segment));
     }
-}
-
-void MapSimulationCommand::SetPickChainID(const std::string & value)
-{
-    m_atom_selector->PickChainID(value);
-}
-
-void MapSimulationCommand::SetPickResidueType(const std::string & value)
-{
-    m_atom_selector->PickResidueType(value);
-}
-
-void MapSimulationCommand::SetPickElementType(const std::string & value)
-{
-    m_atom_selector->PickElementType(value);
-}
-
-void MapSimulationCommand::SetPickRemotenessType(const std::string & value)
-{
-    m_atom_selector->PickRemotenessType(value);
-}
-
-void MapSimulationCommand::SetVetoChainID(const std::string & value)
-{
-    m_atom_selector->VetoChainID(value);
-}
-
-void MapSimulationCommand::SetVetoResidueType(const std::string & value)
-{
-    m_atom_selector->VetoResidueType(value);
-}
-
-void MapSimulationCommand::SetVetoElementType(const std::string & value)
-{
-    m_atom_selector->VetoElementType(value);
-}
-
-void MapSimulationCommand::SetVetoRemotenessType(const std::string & value)
-{
-    m_atom_selector->VetoRemotenessType(value);
 }

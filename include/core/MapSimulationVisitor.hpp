@@ -17,11 +17,10 @@ class MapSimulationVisitor : public DataObjectVisitorBase
     float m_grid_spacing;
     std::string m_model_key_tag, m_folder_path, m_pdb_id, m_map_file_name;
     std::vector<double> m_blurring_width_list;
-    AtomSelector * m_atom_selector;
     std::vector<AtomObject *> m_selected_atom_list;
 
 public:
-    MapSimulationVisitor(AtomSelector * atom_selector);
+    MapSimulationVisitor(void);
     ~MapSimulationVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;

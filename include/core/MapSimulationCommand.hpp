@@ -5,8 +5,6 @@
 #include <vector>
 #include "CommandBase.hpp"
 
-class AtomSelector;
-
 class MapSimulationCommand : public CommandBase
 {
     int m_thread_size;
@@ -16,7 +14,6 @@ class MapSimulationCommand : public CommandBase
     double m_grid_spacing;
     std::string m_model_file_path, m_folder_path, m_map_file_name;
     std::vector<double> m_blurring_width_list;
-    std::unique_ptr<AtomSelector> m_atom_selector;
     
 public:
     MapSimulationCommand(void);
@@ -32,13 +29,5 @@ public:
     void SetMapFileName(const std::string & value) { m_map_file_name = value; }
     void SetGridSpacing(double value) { m_grid_spacing = value; }
     void SetBlurringWidthList(const std::string & value);
-    void SetPickChainID(const std::string & value);
-    void SetPickResidueType(const std::string & value);
-    void SetPickElementType(const std::string & value);
-    void SetPickRemotenessType(const std::string & value);
-    void SetVetoChainID(const std::string & value);
-    void SetVetoResidueType(const std::string & value);
-    void SetVetoElementType(const std::string & value);
-    void SetVetoRemotenessType(const std::string & value);
 
 };

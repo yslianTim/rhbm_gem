@@ -3,7 +3,6 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
-#include "AtomSelector.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
 #include "ElectricPotential.hpp"
@@ -13,9 +12,8 @@
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
 
-MapSimulationVisitor::MapSimulationVisitor(AtomSelector * atom_selector) :
-    m_thread_size{ 1 },
-    m_atom_selector{ atom_selector }
+MapSimulationVisitor::MapSimulationVisitor(void) :
+    m_thread_size{ 1 }
 {
 
 }
@@ -27,16 +25,7 @@ MapSimulationVisitor::~MapSimulationVisitor()
 
 void MapSimulationVisitor::VisitAtomObject(AtomObject * data_object)
 {
-    bool selected_flag
-    {
-        m_atom_selector->GetSelectionFlag(
-            data_object->GetChainID(),
-            data_object->GetResidue(),
-            data_object->GetElement(),
-            data_object->GetRemoteness()
-        )
-    };
-    data_object->SetSelectedFlag(selected_flag);
+    data_object->SetSelectedFlag(true);
 }
 
 void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
@@ -48,7 +37,6 @@ void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
     m_selected_atom_list.reserve(selected_atom_size);
     for (auto & atom : atom_list)
     {
-        if (atom->GetSelectedFlag() == false) continue;
         if (atom->IsUnknownAtom() == true)
         {
             std::cout <<"Warning: Unknown atom found in the model object. "

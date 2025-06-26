@@ -93,14 +93,6 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetCutoffDistance(m_map_simulation_options.cutoff_distance);
         command->SetGridSpacing(m_map_simulation_options.grid_spacing);
         command->SetBlurringWidthList(m_map_simulation_options.blurring_width_list);
-        command->SetPickChainID(m_atom_selector_options.pick_chain_id);
-        command->SetPickResidueType(m_atom_selector_options.pick_residue);
-        command->SetPickElementType(m_atom_selector_options.pick_element);
-        command->SetPickRemotenessType(m_atom_selector_options.pick_remoteness);
-        command->SetVetoChainID(m_atom_selector_options.veto_chain_id);
-        command->SetVetoResidueType(m_atom_selector_options.veto_residue);
-        command->SetVetoElementType(m_atom_selector_options.veto_element);
-        command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
         return command;
     }
     else
@@ -280,30 +272,6 @@ void Application::RegisterMapSimulationCommand(void)
     m_map_simulation_cmd->add_option(
         "--blurring-width", m_map_simulation_options.blurring_width_list,
         "Blurring width (list) setting")->default_val("0.55");
-    m_map_simulation_cmd->add_option(
-        "--pick-chain", m_atom_selector_options.pick_chain_id,
-        "Pick chain ID")->default_val("");
-    m_map_simulation_cmd->add_option(
-        "--pick-residue", m_atom_selector_options.pick_residue,
-        "Pick residue type")->default_val("");
-    m_map_simulation_cmd->add_option(
-        "--pick-element", m_atom_selector_options.pick_element,
-        "Pick element type")->default_val("");
-    m_map_simulation_cmd->add_option(
-        "--pick-remoteness", m_atom_selector_options.pick_remoteness,
-        "Pick remoteness type")->default_val("");
-    m_map_simulation_cmd->add_option(
-        "--veto-chain", m_atom_selector_options.veto_chain_id,
-        "Veto chain ID")->default_val("");
-    m_map_simulation_cmd->add_option(
-        "--veto-residue", m_atom_selector_options.veto_residue,
-        "Veto residue type")->default_val("");
-    m_map_simulation_cmd->add_option(
-        "--veto-element", m_atom_selector_options.veto_element,
-        "Veto element type")->default_val("");
-    m_map_simulation_cmd->add_option(
-        "--veto-remoteness", m_atom_selector_options.veto_remoteness,
-        "Veto remoteness type")->default_val("");
 
     m_map_simulation_cmd->callback([&]()
     {
