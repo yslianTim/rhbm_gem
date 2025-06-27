@@ -10,11 +10,6 @@ MapSimulationCommand::MapSimulationCommand(void)
 
 }
 
-MapSimulationCommand::~MapSimulationCommand()
-{
-
-}
-
 void MapSimulationCommand::Execute(void)
 {
     std::cout << "MapSimulationCommand::Execute() called." << std::endl;

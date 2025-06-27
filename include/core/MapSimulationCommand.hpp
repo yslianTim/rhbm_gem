@@ -17,7 +17,7 @@ class MapSimulationCommand : public CommandBase
     
 public:
     MapSimulationCommand(void);
-    ~MapSimulationCommand();
+    ~MapSimulationCommand() = default;
     void Execute(void) override;
 
     void SetThreadSize(int value) { m_thread_size = value; }

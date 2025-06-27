@@ -22,11 +22,6 @@ ResultDumpVisitor::ResultDumpVisitor() :
 
 }
 
-ResultDumpVisitor::~ResultDumpVisitor()
-{
-
-}
-
 void ResultDumpVisitor::VisitAtomObject(AtomObject * data_object)
 {
     if (data_object == nullptr) return;

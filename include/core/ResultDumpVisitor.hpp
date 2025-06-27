@@ -16,8 +16,8 @@ class ResultDumpVisitor : public DataObjectVisitorBase
     std::unordered_map<std::string, std::vector<AtomObject *>> m_selected_atom_list_map;
 
 public:
-    ResultDumpVisitor();
-    ~ResultDumpVisitor();
+    ResultDumpVisitor(void);
+    ~ResultDumpVisitor() = default;
 
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;

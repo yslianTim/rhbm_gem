@@ -13,7 +13,7 @@ class ResultDumpCommand : public CommandBase
 
 public:
     ResultDumpCommand(void);
-    ~ResultDumpCommand();
+    ~ResultDumpCommand() = default;
     void Execute(void) override;
 
     void SetPrinterChoice(int value) { m_printer_choice = value; }

@@ -20,7 +20,7 @@ class PotentialAnalysisVisitor : public DataObjectVisitorBase
 
 public:
     PotentialAnalysisVisitor(SphereSampler * sphere_sampler);
-    ~PotentialAnalysisVisitor();
+    ~PotentialAnalysisVisitor() = default;
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;

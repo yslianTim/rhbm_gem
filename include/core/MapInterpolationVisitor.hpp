@@ -17,7 +17,7 @@ class MapInterpolationVisitor : public DataObjectVisitorBase
 public:
     MapInterpolationVisitor(const std::vector<std::tuple<float, std::array<float, 3>>> & sampling_points);
     MapInterpolationVisitor(SphereSampler * sphere_sampler);
-    ~MapInterpolationVisitor();
+    ~MapInterpolationVisitor() = default;
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;

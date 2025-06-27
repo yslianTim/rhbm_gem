@@ -10,11 +10,6 @@ ResultDumpCommand::ResultDumpCommand(void)
 
 }
 
-ResultDumpCommand::~ResultDumpCommand()
-{
-
-}
-
 void ResultDumpCommand::Execute(void)
 {
     std::cout << "ResultDumpCommand::Execute() called." << std::endl;

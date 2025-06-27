@@ -19,11 +19,6 @@ MapInterpolationVisitor::MapInterpolationVisitor(SphereSampler * sphere_sampler)
 
 }
 
-MapInterpolationVisitor::~MapInterpolationVisitor()
-{
-
-}
-
 void MapInterpolationVisitor::VisitAtomObject(AtomObject * data_object)
 {
     if (data_object == nullptr) return;

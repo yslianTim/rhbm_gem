@@ -29,11 +29,6 @@ PotentialAnalysisVisitor::PotentialAnalysisVisitor(
 
 }
 
-PotentialAnalysisVisitor::~PotentialAnalysisVisitor()
-{
-
-}
-
 void PotentialAnalysisVisitor::VisitAtomObject(AtomObject * data_object)
 {
     if (data_object == nullptr) return;
