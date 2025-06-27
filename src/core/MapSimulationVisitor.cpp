@@ -108,21 +108,17 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
     #endif
     for (size_t i = 0; i < voxel_size; i++)
     {
-        #ifdef USE_OPENMP
-        static thread_local AtomObject query_atom;
-        #else
-        AtomObject query_atom;
-        #endif
-        query_atom.SetPosition(map_object->GetGridPosition(i));
+        auto query_atom{ std::make_unique<AtomObject>() };
+        query_atom->SetPosition(map_object->GetGridPosition(i));
         auto in_range_atom_list{
             KDTreeAlgorithm<AtomObject>::RangeSearch(
-                kd_tree_root.get(), &query_atom, m_cutoff_distance)
+                kd_tree_root.get(), query_atom.get(), m_cutoff_distance)
         };
 
         for (const auto & atom : in_range_atom_list)
         {
             auto distance{
-                ArrayStats<float>::ComputeNorm(query_atom.GetPosition(), atom->GetPosition())
+                ArrayStats<float>::ComputeNorm(query_atom->GetPosition(), atom->GetPosition())
             };
             auto charge{ 0.0 };
             switch (m_partial_charge_choice)

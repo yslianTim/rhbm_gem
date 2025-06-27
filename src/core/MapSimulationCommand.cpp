@@ -22,6 +22,7 @@ void MapSimulationCommand::Execute(void)
     auto analyzer{ std::make_unique<MapSimulationVisitor>() };
     analyzer->SetModelObjectKeyTag("model");
     analyzer->SetFolderPath(m_folder_path);
+    analyzer->SetMapFileName(m_map_file_name);
     analyzer->SetThreadSize(static_cast<unsigned int>(m_thread_size));
     analyzer->SetPotentialModelChoice(m_potential_model_choice);
     analyzer->SetPartialChargeChoice(m_partial_charge_choice);
