@@ -152,11 +152,11 @@ void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
     }
 }
 
-const std::unique_ptr<DataObjectBase> & DataObjectManager::GetDataObjectRef(const std::string & key_tag)
+DataObjectBase * DataObjectManager::GetDataObjectRef(const std::string & key_tag)
 {
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
     {
         throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
     }
-    return m_data_object_map.at(key_tag);
+    return m_data_object_map.at(key_tag).get();
 }

@@ -30,7 +30,7 @@ void PotentialAnalysisCommand::Execute(void)
         if (m_is_simulation == true)
         {
             auto model_object{
-                dynamic_cast<ModelObject *>(data_manager->GetDataObjectRef("model").get()) };
+                dynamic_cast<ModelObject *>(data_manager->GetDataObjectRef("model")) };
             if (model_object == nullptr)
             {
                 throw std::runtime_error(

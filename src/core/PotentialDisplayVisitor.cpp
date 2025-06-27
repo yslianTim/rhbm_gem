@@ -100,8 +100,8 @@ void PotentialDisplayVisitor::AddAtomObjectToPainter(
 {
     for (auto & key_tag : m_model_key_tag_list)
     {
-        auto & data_object{ data_manager->GetDataObjectRef(key_tag) };
-        auto model_object{ dynamic_cast<ModelObject *>(data_object.get()) };
+        auto data_object{ data_manager->GetDataObjectRef(key_tag) };
+        auto model_object{ dynamic_cast<ModelObject *>(data_object) };
         if (model_object == nullptr)
         {
             throw std::runtime_error(
@@ -121,8 +121,8 @@ void PotentialDisplayVisitor::AddModelObjectToPainter(
 {
     for (auto & key_tag : m_model_key_tag_list)
     {
-        auto & data_object{ data_manager->GetDataObjectRef(key_tag) };
-        painter->AddDataObject(data_object.get());
+        auto data_object{ data_manager->GetDataObjectRef(key_tag) };
+        painter->AddDataObject(data_object);
     }
 }
 
@@ -133,8 +133,8 @@ void PotentialDisplayVisitor::AddReferenceModelObjectToPainter(
     {
         for (auto & key_tag : key_tag_list)
         {
-            auto & data_object{ data_manager->GetDataObjectRef(key_tag) };
-            painter->AddReferenceDataObject(data_object.get(), class_key);
+            auto data_object{ data_manager->GetDataObjectRef(key_tag) };
+            painter->AddReferenceDataObject(data_object, class_key);
         }
     }
 }

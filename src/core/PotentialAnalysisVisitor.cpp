@@ -76,13 +76,13 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
     std::cout <<"- Analysis..." << std::endl;
     try
     {
-        const auto & model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
+        auto model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
         model_object->Accept(this);
 
-        const auto & map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
+        auto map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
         map_object->Accept(this);
 
-        auto model_obj_ptr{ dynamic_cast<ModelObject*>(model_object.get()) };
+        auto model_obj_ptr{ dynamic_cast<ModelObject*>(model_object) };
         if (model_obj_ptr == nullptr)
         {
             throw std::runtime_error(

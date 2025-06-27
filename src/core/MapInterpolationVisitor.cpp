@@ -4,6 +4,8 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 
+#include <algorithm>
+
 MapInterpolationVisitor::MapInterpolationVisitor(
     const std::vector<std::tuple<float, std::array<float, 3>>> & sampling_points) :
     m_sphere_sampler{ nullptr }, m_position{ 0.0, 0.0, 0.0 }, m_sampling_point_list{ sampling_points }
@@ -87,6 +89,7 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
 
     // Collect 64 points for interpolation
     std::array<std::array<std::array<float, 4>, 4>, 4> values;
+    const auto grid_size{ data_object->GetGridSize() };
     for (int i = -1; i < 3; ++i)
     {
         for (int j = -1; j < 3; ++j)
@@ -96,7 +99,10 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
                 size_t i_next{ static_cast<size_t>(i + 1) };
                 size_t j_next{ static_cast<size_t>(j + 1) };
                 size_t k_next{ static_cast<size_t>(k + 1) };
-                values[i_next][j_next][k_next] = data_object->GetMapValue(index.at(0) + i, index.at(1) + j, index.at(2) + k);
+                int xi{ std::clamp(index.at(0) + i, 0, grid_size.at(0) - 1) };
+                int yj{ std::clamp(index.at(1) + j, 0, grid_size.at(1) - 1) };
+                int zk{ std::clamp(index.at(2) + k, 0, grid_size.at(2) - 1) };
+                values[i_next][j_next][k_next] = data_object->GetMapValue(xi, yj, zk);
             }
         }
     }
