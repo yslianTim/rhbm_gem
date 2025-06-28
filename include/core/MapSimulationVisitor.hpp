@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <unordered_map>
 #include "DataObjectVisitorBase.hpp"
+#include "KDTreeAlgorithm.hpp"
 
 class AtomSelector;
 
@@ -18,6 +20,8 @@ class MapSimulationVisitor : public DataObjectVisitorBase
     std::string m_model_key_tag, m_folder_path, m_pdb_id, m_map_file_name;
     std::vector<double> m_blurring_width_list;
     std::vector<AtomObject *> m_selected_atom_list;
+    std::unordered_map<int, double> m_atom_charge_map;
+    std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
 
 public:
     MapSimulationVisitor(void);

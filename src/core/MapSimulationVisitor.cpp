@@ -12,15 +12,17 @@
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
 
+#include <algorithm>
+
 MapSimulationVisitor::MapSimulationVisitor(void) :
-    m_thread_size{ 1 }
+    m_thread_size{ 1 }, m_kd_tree_root{ nullptr }
 {
 
 }
 
 MapSimulationVisitor::~MapSimulationVisitor()
 {
-
+    m_kd_tree_root.reset();
 }
 
 void MapSimulationVisitor::VisitAtomObject(AtomObject * data_object)
@@ -35,6 +37,8 @@ void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
     const auto & atom_list{ data_object->GetComponentsList() };
     m_selected_atom_list.clear();
     m_selected_atom_list.reserve(selected_atom_size);
+    m_atom_charge_map.clear();
+    m_atom_charge_map.reserve(selected_atom_size);
     for (auto & atom : atom_list)
     {
         if (atom->IsUnknownAtom() == true)
@@ -44,7 +48,35 @@ void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
             continue;
         }
         m_selected_atom_list.emplace_back(atom.get());
+        auto charge{ 0.0 };
+        switch (m_partial_charge_choice)
+        {
+            case 0: // Neutral
+                charge = 0.0;
+                break;
+            case 1: // Partial Charge
+                charge = AminoAcidInfoHelper::GetPartialCharge(
+                    atom->GetResidue(),
+                    atom->GetElement(),
+                    atom->GetRemoteness(),
+                    atom->GetBranch(),
+                    atom->GetStructure());
+                break;
+            case 2: // Partial Charge (AMBER table)
+                charge = AminoAcidInfoHelper::GetPartialCharge(
+                    atom->GetResidue(),
+                    atom->GetElement(),
+                    atom->GetRemoteness(),
+                    atom->GetBranch(),
+                    atom->GetStructure(), true);
+                break;
+            default:
+                std::cerr << "Error: Invalid partial charge choice." << std::endl;
+                break;
+        }
+        m_atom_charge_map.emplace(atom->GetSerialID(), charge);
     }
+    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(m_selected_atom_list, 0);
     m_pdb_id = data_object->GetPdbID();
     std::cout <<" Number of selected atoms to be simulated = "
               << m_selected_atom_list.size() <<" / "<< atom_list.size() << std::endl;
@@ -91,8 +123,6 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
     auto electric_potential{ std::make_unique<ElectricPotential>() };
     electric_potential->SetBlurringWidth(blurring_width);
     electric_potential->SetModelChoice(m_potential_model_choice);
-
-    auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(m_selected_atom_list, 0) };
     
     std::array<float, 3> grid_spacing{ m_grid_spacing, m_grid_spacing, m_grid_spacing };
     std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
@@ -101,6 +131,7 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
 
     auto voxel_size{ map_object->GetMapValueArraySize() };
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
+    std::fill_n(map_value_array.get(), voxel_size, 0.0f);
 
     std::cout <<"  - Start map value array production ..."<< std::endl;
     #ifdef USE_OPENMP
@@ -108,43 +139,22 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
     #endif
     for (size_t i = 0; i < voxel_size; i++)
     {
-        auto query_atom{ std::make_unique<AtomObject>() };
-        query_atom->SetPosition(map_object->GetGridPosition(i));
+        AtomObject query_atom;
+        query_atom.SetPosition(map_object->GetGridPosition(i));
         auto in_range_atom_list{
             KDTreeAlgorithm<AtomObject>::RangeSearch(
-                kd_tree_root.get(), query_atom.get(), m_cutoff_distance)
+                m_kd_tree_root.get(), &query_atom, m_cutoff_distance)
         };
 
         for (const auto & atom : in_range_atom_list)
         {
             auto distance{
-                ArrayStats<float>::ComputeNorm(query_atom->GetPosition(), atom->GetPosition())
+                ArrayStats<float>::ComputeNorm(query_atom.GetPosition(), atom->GetPosition())
             };
             auto charge{ 0.0 };
-            switch (m_partial_charge_choice)
+            if (m_atom_charge_map.find(atom->GetSerialID()) != m_atom_charge_map.end())
             {
-                case 0: // Neutral
-                    charge = 0.0;
-                    break;
-                case 1: // Partial Charge
-                    charge = AminoAcidInfoHelper::GetPartialCharge(
-                        atom->GetResidue(),
-                        atom->GetElement(),
-                        atom->GetRemoteness(),
-                        atom->GetBranch(),
-                        atom->GetStructure());
-                    break;
-                case 2: // Partial Charge (AMBER table)
-                    charge = AminoAcidInfoHelper::GetPartialCharge(
-                        atom->GetResidue(),
-                        atom->GetElement(),
-                        atom->GetRemoteness(),
-                        atom->GetBranch(),
-                        atom->GetStructure(), true);
-                    break;
-                default:
-                    std::cerr << "Error: Invalid partial charge choice." << std::endl;
-                    break;
+                charge = m_atom_charge_map.at(atom->GetSerialID());
             }
             map_value_array[i] += static_cast<float>(
                 electric_potential->GetPotentialValue(atom->GetElement(), distance, charge)
