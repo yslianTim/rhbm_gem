@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include "DataObjectDAOBase.hpp"
 
 class SQLiteWrapper;
@@ -13,6 +14,7 @@ class GroupPotentialEntry;
 class ModelObjectDAO : public DataObjectDAOBase
 {
     SQLiteWrapper * m_database;
+    std::unordered_set<std::string> m_table_cache;
 
 public:
     ModelObjectDAO(SQLiteWrapper * db_manager);

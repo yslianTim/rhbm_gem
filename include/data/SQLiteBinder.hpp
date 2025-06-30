@@ -47,8 +47,8 @@ struct SQLiteBinder<std::string>
 {
     static int Bind(sqlite3_stmt * stmt, int index, const std::string & value)
     {
-        // SQLITE_TRANSIENT or SQLITE_STATIC
-        return sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_STATIC);
+        // Use SQLITE_TRANSIENT so SQLite makes its own copy of the string
+        return sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_TRANSIENT);
     }
 };
 
@@ -59,7 +59,7 @@ struct SQLiteBinder<std::string_view>
     static int Bind(sqlite3_stmt * stmt, int index, std::string_view value)
     {
         return sqlite3_bind_text(stmt, index, value.data(),
-                                 static_cast<int>(value.size()), SQLITE_STATIC);
+                                 static_cast<int>(value.size()), SQLITE_TRANSIENT);
     }
 };
 

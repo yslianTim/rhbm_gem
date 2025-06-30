@@ -13,7 +13,7 @@
 #include <stdexcept>
 
 ModelObjectDAO::ModelObjectDAO(SQLiteWrapper * database) :
-    m_database{ database }
+    m_database{ database }, m_table_cache{}
 {
 
 }
@@ -601,11 +601,21 @@ void ModelObjectDAO::LoadGroupPotentialEntrySubList(
 
 bool ModelObjectDAO::TableExists(const std::string & table_name) const
 {
+    if (m_table_cache.find(table_name) != m_table_cache.end())
+    {
+        return true;
+    }
+
     std::stringstream sql;
     sql << "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;";
     m_database->Prepare(sql.str());
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, table_name);
     auto rc{ m_database->StepNext() };
-    return rc == SQLiteWrapper::StepRow();
+    bool exists{ rc == SQLiteWrapper::StepRow() };
+    if (exists)
+    {
+        const_cast<ModelObjectDAO *>(this)->m_table_cache.insert(table_name);
+    }
+    return exists;
 }
