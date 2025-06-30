@@ -14,7 +14,10 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_saved_key_tag{ "model" },
     m_sphere_sampler{ std::make_unique<SphereSampler>() }
 {
-
+    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(m_thread_size));
+    m_sphere_sampler->SetSamplingSize(1500);
+    m_sphere_sampler->SetDistanceRangeMinimum(0.0);
+    m_sphere_sampler->SetDistanceRangeMaximum(1.5);
 }
 
 PotentialAnalysisCommand::~PotentialAnalysisCommand()
