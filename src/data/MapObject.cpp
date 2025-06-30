@@ -12,7 +12,7 @@ MapObject::MapObject(
     const std::array<int, 3> & grid_size,
     const std::array<float, 3> & grid_spacing,
     const std::array<float, 3> & origin) :
-    m_key_tag{ "" }, m_thread_size{ 4 },
+    m_key_tag{ "" }, m_thread_size{ 1 },
     m_voxel_size{ static_cast<size_t>(grid_size.at(0) * grid_size.at(1) * grid_size.at(2)) },
     m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
     m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
@@ -34,7 +34,7 @@ MapObject::MapObject(
     const std::array<float, 3> & grid_spacing,
     const std::array<float, 3> & origin,
     std::unique_ptr<float[]> map_value_array) :
-    m_key_tag{ "" }, m_thread_size{ 4 },
+    m_key_tag{ "" }, m_thread_size{ 1 },
     m_voxel_size{ static_cast<size_t>(grid_size.at(0) * grid_size.at(1) * grid_size.at(2)) },
     m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
     m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },

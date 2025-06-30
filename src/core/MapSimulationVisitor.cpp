@@ -13,6 +13,7 @@
 #include "GlobalEnumClass.hpp"
 
 #include <algorithm>
+#include <limits>
 
 MapSimulationVisitor::MapSimulationVisitor(void) :
     m_thread_size{ 1 }, m_kd_tree_root{ nullptr }
@@ -128,23 +129,23 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
     std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
     std::array<int, 3> grid_size{ CalculateGridSize(grid_spacing, origin) };
     auto map_object{ std::make_unique<MapObject>(grid_size, grid_spacing, origin) };
+    map_object->SetThreadSize(static_cast<int>(m_thread_size));
 
     auto voxel_size{ map_object->GetMapValueArraySize() };
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
     std::fill_n(map_value_array.get(), voxel_size, 0.0f);
 
     std::cout <<"  - Start map value array production ..."<< std::endl;
+    std::vector<AtomObject*> in_range_atom_list;
     #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(m_thread_size)
+    #pragma omp parallel for num_threads(m_thread_size) private(in_range_atom_list)
     #endif
     for (size_t i = 0; i < voxel_size; i++)
     {
         AtomObject query_atom;
         query_atom.SetPosition(map_object->GetGridPosition(i));
-        auto in_range_atom_list{
-            KDTreeAlgorithm<AtomObject>::RangeSearch(
-                m_kd_tree_root.get(), &query_atom, m_cutoff_distance)
-        };
+        KDTreeAlgorithm<AtomObject>::RangeSearch(
+            m_kd_tree_root.get(), &query_atom, m_cutoff_distance, in_range_atom_list);
 
         for (const auto & atom : in_range_atom_list)
         {
@@ -152,10 +153,8 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
                 ArrayStats<float>::ComputeNorm(query_atom.GetPosition(), atom->GetPosition())
             };
             auto charge{ 0.0 };
-            if (m_atom_charge_map.find(atom->GetSerialID()) != m_atom_charge_map.end())
-            {
-                charge = m_atom_charge_map.at(atom->GetSerialID());
-            }
+            auto iter{ m_atom_charge_map.find(atom->GetSerialID()) };
+            if (iter != m_atom_charge_map.end()) charge = iter->second;
             map_value_array[i] += static_cast<float>(
                 electric_potential->GetPotentialValue(atom->GetElement(), distance, charge)
             );
@@ -177,20 +176,21 @@ std::array<int, 3> MapSimulationVisitor::CalculateGridSize(
         std::cout <<"Warning: no atoms selected. Grid size is set to [1,1,1]."<< std::endl;
         return std::array{ 1, 1, 1 };
     }
-    std::array<float, 3> atom_range_max;
-    std::vector<float> x_list, y_list, z_list;
-    x_list.reserve(selected_atom_size);
-    y_list.reserve(selected_atom_size);
-    z_list.reserve(selected_atom_size);
+    std::array<float, 3> atom_range_max{
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest()
+    };
     for (auto & atom : m_selected_atom_list)
     {
-        x_list.emplace_back(atom->GetPosition().at(0));
-        y_list.emplace_back(atom->GetPosition().at(1));
-        z_list.emplace_back(atom->GetPosition().at(2));
+        const auto & pos{ atom->GetPositionRef() };
+        atom_range_max.at(0) = std::max(atom_range_max.at(0), pos.at(0));
+        atom_range_max.at(1) = std::max(atom_range_max.at(1), pos.at(1));
+        atom_range_max.at(2) = std::max(atom_range_max.at(2), pos.at(2));
     }
-    atom_range_max.at(0) = ArrayStats<float>::ComputeMax(x_list.data(), selected_atom_size) + static_cast<float>(m_cutoff_distance);
-    atom_range_max.at(1) = ArrayStats<float>::ComputeMax(y_list.data(), selected_atom_size) + static_cast<float>(m_cutoff_distance);
-    atom_range_max.at(2) = ArrayStats<float>::ComputeMax(z_list.data(), selected_atom_size) + static_cast<float>(m_cutoff_distance);
+    atom_range_max.at(0) += static_cast<float>(m_cutoff_distance);
+    atom_range_max.at(1) += static_cast<float>(m_cutoff_distance);
+    atom_range_max.at(2) += static_cast<float>(m_cutoff_distance);
 
     auto grid_size_x{ static_cast<int>(std::ceil((atom_range_max.at(0) - origin.at(0)) / grid_spacing.at(0))) };
     auto grid_size_y{ static_cast<int>(std::ceil((atom_range_max.at(1) - origin.at(1)) / grid_spacing.at(1))) };

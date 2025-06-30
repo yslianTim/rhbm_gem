@@ -74,6 +74,14 @@ public:
         return knn_list;
     }
 
+    static void RangeSearch(
+        const KDNode<NodeType> * root_kd_node, const NodeType * query_node, double range,
+        std::vector<NodeType *> & knn_list)
+    {
+        knn_list.clear();
+        RangeSearchHelper(root_kd_node, query_node, range, knn_list);
+    }
+
 private:
     static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
         typename std::vector<NodeType *>::iterator begin,
