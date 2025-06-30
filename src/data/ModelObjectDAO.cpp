@@ -470,8 +470,11 @@ ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
                   double, double, double, double>(sql.str())
     };
 
+    const auto row_count{ row_list.size() };
+
     auto serial_id{ 0 };
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
+    atomic_potential_entry_map.reserve(row_count);
     for (auto & row : row_list)
     {
         auto atomic_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
