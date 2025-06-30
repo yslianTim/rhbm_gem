@@ -7,7 +7,11 @@
 #include <iostream>
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
+    m_thread_size{ 1 }, m_is_asymmetry{ false }, m_is_simulation{ false },
+    m_fit_range_min{ 0.0 }, m_fit_range_max{ 1.0 }, m_alpha_r{ 0.1 }, m_alpha_g{ 0.2 },
     m_simulated_map_resolution{ 0.0 },
+    m_database_path{ "database.sqlite" }, m_model_file_path{ "" }, m_map_file_path{ "" },
+    m_saved_key_tag{ "model" },
     m_sphere_sampler{ std::make_unique<SphereSampler>() }
 {
 

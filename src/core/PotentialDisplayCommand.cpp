@@ -7,6 +7,8 @@
 #include <sstream>
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
+    m_painter_choice{ 1 }, m_database_path{ "database.sqlite" },
+    m_folder_path{ "" },
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 
@@ -37,6 +39,7 @@ void PotentialDisplayCommand::Execute(void)
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
+    m_model_key_tag_list.clear();
     std::stringstream ss(value);
     std::string segment;
     while (std::getline(ss, segment, ','))
@@ -48,6 +51,7 @@ void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 
 void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value)
 {
+    m_ref_model_key_tag_list_map.clear();
     size_t pos{ 0 };
     size_t len{ value.size() };
 

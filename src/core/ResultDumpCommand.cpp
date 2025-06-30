@@ -5,7 +5,9 @@
 #include <iostream>
 #include <sstream>
 
-ResultDumpCommand::ResultDumpCommand(void)
+ResultDumpCommand::ResultDumpCommand(void) :
+    m_printer_choice{ 2 }, m_database_path{ "database.sqlite" },
+    m_folder_path{ "" }, m_map_file_path{ "" }
 {
 
 }
@@ -44,6 +46,7 @@ void ResultDumpCommand::Execute(void)
 
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
+    m_model_key_tag_list.clear();
     std::stringstream ss(value);
     std::string segment;
     while (std::getline(ss, segment, ','))

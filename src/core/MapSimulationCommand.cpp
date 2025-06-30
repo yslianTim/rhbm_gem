@@ -5,7 +5,12 @@
 #include <iostream>
 #include <sstream>
 
-MapSimulationCommand::MapSimulationCommand(void)
+MapSimulationCommand::MapSimulationCommand(void) :
+    m_thread_size{ 1 }, m_potential_model_choice{ 1 },
+    m_partial_charge_choice{ 1 }, m_cutoff_distance{ 5.0 },
+    m_grid_spacing{ 0.5 }, m_model_file_path{ "" },
+    m_folder_path{ "" }, m_map_file_name{ "sim_map" },
+    m_blurring_width_list{ 0.50 }
 {
 
 }
@@ -35,6 +40,7 @@ void MapSimulationCommand::Execute(void)
 
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
+    m_blurring_width_list.clear();
     std::stringstream ss(value);
     std::string segment;
     while (std::getline(ss, segment, ','))

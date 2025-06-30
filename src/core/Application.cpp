@@ -271,7 +271,7 @@ void Application::RegisterMapSimulationCommand(void)
         "Grid spacing")->default_val(0.5);
     m_map_simulation_cmd->add_option(
         "--blurring-width", m_map_simulation_options.blurring_width_list,
-        "Blurring width (list) setting")->default_val("0.55");
+        "Blurring width (list) setting")->default_val("0.50");
 
     m_map_simulation_cmd->callback([&]()
     {
