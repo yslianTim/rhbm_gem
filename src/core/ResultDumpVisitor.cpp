@@ -39,7 +39,11 @@ void ResultDumpVisitor::VisitMapObject(MapObject * data_object)
 
 void ResultDumpVisitor::Analysis(DataObjectManager * data_manager)
 {
-    if (data_manager == nullptr) return;
+    if (data_manager == nullptr)
+    {
+        std::cout <<"[Warning] Data manager is null, please check the input."<< std::endl;
+        return;
+    }
     BuildSelectedAtomList(data_manager);
     
     switch (m_printer_choice)
