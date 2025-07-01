@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -47,15 +48,23 @@ public:
             m_db.Execute("BEGIN TRANSACTION;");
         }
 
-        ~TransactionGuard()
+        ~TransactionGuard() noexcept
         {
-            if (std::uncaught_exceptions() > m_exception_count)
+            try
             {
-                m_db.Execute("ROLLBACK;");
+                if (std::uncaught_exceptions() > m_exception_count)
+                {
+                    m_db.Execute("ROLLBACK;");
+                }
+                else
+                {
+                    m_db.Execute("COMMIT;");
+                }
             }
-            else
+            catch (...)
             {
-                m_db.Execute("COMMIT;");
+                std::cout << "TransactionGuard: Failed to commit or rollback transaction: "
+                          << m_db.ErrorMessage() << std::endl;
             }
         }
 
@@ -67,13 +76,12 @@ public:
     class QueryIterator
     {
         SQLiteWrapper & m_db;
-        std::unique_ptr<StatementGuard> m_guard;
+        StatementGuard m_guard;
 
     public:
-        QueryIterator(SQLiteWrapper & db, const std::string & sql) : m_db{ db }
+        QueryIterator(SQLiteWrapper & db, const std::string & sql) : m_db{ db }, m_guard{ db }
         {
             m_db.Prepare(sql);
-            m_guard = std::make_unique<StatementGuard>(m_db);
         }
 
         bool Next(std::tuple<Ts...> & row)

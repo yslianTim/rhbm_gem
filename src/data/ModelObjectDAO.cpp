@@ -598,6 +598,10 @@ bool ModelObjectDAO::TableExists(const std::string & table_name) const
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, table_name);
     auto rc{ m_database->StepNext() };
+    if (rc != SQLiteWrapper::StepRow() && rc != SQLiteWrapper::StepDone())
+    {
+        throw std::runtime_error(m_database->ErrorMessage());
+    }
     bool exists{ rc == SQLiteWrapper::StepRow() };
     if (exists)
     {
