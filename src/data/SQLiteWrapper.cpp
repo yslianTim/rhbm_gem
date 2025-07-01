@@ -2,10 +2,6 @@
 
 #include <stdexcept>
 
-using std::vector;
-using std::tuple;
-using std::string;
-
 SQLiteWrapper::SQLiteWrapper(const std::filesystem::path & database_path) :
     m_database_ptr{ nullptr }, m_statement_ptr{ nullptr }
 {
@@ -39,22 +35,19 @@ SQLiteWrapper::~SQLiteWrapper()
     }
 }
 
-int SQLiteWrapper::StepDone(void) { return SQLITE_DONE; }
-int SQLiteWrapper::StepRow(void) { return SQLITE_ROW; }
-
-void SQLiteWrapper::Execute(const string & sql)
+void SQLiteWrapper::Execute(const std::string & sql)
 {
     char * error_message{ nullptr };
     auto return_code{ sqlite3_exec(m_database_ptr, sql.c_str(), nullptr, nullptr, &error_message) };
     if (return_code != SQLITE_OK)
     {
-        string msg{ (error_message ? error_message : "Unknown error") };
+        std::string msg{ (error_message ? error_message : "Unknown error") };
         sqlite3_free(error_message);
         throw std::runtime_error("Execute SQL failed: " + msg);
     }
 }
 
-void SQLiteWrapper::Prepare(const string & sql)
+void SQLiteWrapper::Prepare(const std::string & sql)
 {
     Finalize();
     auto return_code{ sqlite3_prepare_v2(m_database_ptr, sql.c_str(), -1, &m_statement_ptr, nullptr) };
@@ -93,9 +86,9 @@ void SQLiteWrapper::Finalize(void)
     m_statement_ptr = nullptr;
 }
 
-string SQLiteWrapper::ErrorMessage(void) const
+std::string SQLiteWrapper::ErrorMessage(void) const
 {
-    return string(sqlite3_errmsg(m_database_ptr));
+    return std::string(sqlite3_errmsg(m_database_ptr));
 }
 
 void SQLiteWrapper::BeginTransaction(void)

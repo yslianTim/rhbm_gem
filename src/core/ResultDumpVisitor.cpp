@@ -9,6 +9,7 @@
 #include "ArrayStats.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "PotentialEntryIterator.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "KeyPacker.hpp"
 
@@ -236,12 +237,14 @@ void ResultDumpVisitor::RunGroupGausEstimatesDumping(DataObjectManager * data_ma
     ScopeTimer timer("ResultDumpVisitor::RunGroupGausEstimatesDumping");
     if (data_manager == nullptr) return;
 
+    auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
+
     for (auto & key_tag : m_model_key_tag_list)
     {
         auto data_object{ data_manager->GetDataObjectRef(key_tag) };
         auto model_object{ dynamic_cast<ModelObject *>(data_object) };
         if (model_object == nullptr) continue;
-        auto entry{ model_object->GetGroupPotentialEntry("residue_class") };
+        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
         std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };
         std::string output_path{ m_folder_path + file_name };
@@ -265,12 +268,13 @@ void ResultDumpVisitor::RunGroupGausEstimatesDumping(DataObjectManager * data_ma
                     {
                         auto branch_name{ AtomicInfoHelper::GetLabel(branch) };
                         auto group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
+                        if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
                         outfile << residue_name <<','
                                 << element_name <<','
                                 << remoteness_name <<','
                                 << branch_name <<','
-                                << entry->GetGausEstimatePrior(group_key, 0) <<','
-                                << entry->GetGausEstimatePrior(group_key, 1) <<'\n';
+                                << entry_iter->GetGausEstimatePrior(group_key, class_key, 0) <<','
+                                << entry_iter->GetGausEstimatePrior(group_key, class_key, 1) <<'\n';
                     }
                 }
             }

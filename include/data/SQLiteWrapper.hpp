@@ -5,6 +5,7 @@
 #include <vector>
 #include <tuple>
 #include <utility>
+#include <memory>
 #include <exception>
 #include <filesystem>
 #include "SQLiteBinder.hpp"
@@ -69,8 +70,8 @@ public:
     SQLiteWrapper(const SQLiteWrapper &) = delete;
     SQLiteWrapper & operator=(const SQLiteWrapper &) = delete;
 
-    static int StepDone(void);
-    static int StepRow(void);
+    static int StepDone(void) { return SQLITE_DONE; }
+    static int StepRow(void) { return SQLITE_ROW; }
 
     void Execute(const std::string & sql);
     void Prepare(const std::string & sql);
