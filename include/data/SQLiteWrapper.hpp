@@ -61,10 +61,10 @@ public:
                     m_db.Execute("COMMIT;");
                 }
             }
-            catch (...)
+            catch (const std::exception & e)
             {
-                std::cout << "TransactionGuard: Failed to commit or rollback transaction: "
-                          << m_db.ErrorMessage() << std::endl;
+                std::cerr << "TransactionGuard: Failed to commit or rollback transaction: "
+                          << e.what() << std::endl;
             }
         }
 
@@ -155,9 +155,26 @@ public:
 
     static int StepDone(void) { return SQLITE_DONE; }
     static int StepRow(void) { return SQLITE_ROW; }
-    void Reset(void) { sqlite3_reset(m_statement_ptr); }
-    int StepNext(void) { return sqlite3_step(m_statement_ptr); }
     std::string ErrorMessage(void) const { return std::string(sqlite3_errmsg(m_database_ptr)); }
+
+    void Reset(void)
+    {
+        if (m_statement_ptr == nullptr)
+        {
+            throw std::runtime_error("Reset called but statement pointer is null!");
+        }
+        sqlite3_reset(m_statement_ptr);
+        sqlite3_clear_bindings(m_statement_ptr);
+    }
+
+    int StepNext(void)
+    {
+        if (m_statement_ptr == nullptr)
+        {
+            throw std::runtime_error("StepNext called but statement pointer is null!");
+        }
+        return sqlite3_step(m_statement_ptr);
+    }
 
     void Execute(const std::string & sql)
     {
@@ -183,6 +200,10 @@ public:
 
     void StepOnce(void)
     {
+        if (m_statement_ptr == nullptr)
+        {
+            throw std::runtime_error("StepOnce called but statement pointer is null!");
+        }
         auto return_code{ sqlite3_step(m_statement_ptr) };
         if (return_code != SQLITE_DONE)
         {

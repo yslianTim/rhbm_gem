@@ -209,7 +209,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     
     // Save model object list
     auto model_list_table_name{ "model_list" };
-    CreateModelObjectListTable(model_list_table_name);
+    m_database->Execute(FormatSQL(CREATE_MODEL_TABLE_SQL, model_list_table_name));
     m_database->Prepare(FormatSQL(INSERT_MODEL_LIST_SQL, model_list_table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, model_obj->GetKeyTag());
@@ -222,14 +222,12 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
 
     // Save atom object list
     auto atom_list_table_name{ "atom_list_in_" + sanitized_key_tag };
-    CreateAtomObjectListTable(atom_list_table_name);
     SaveAtomObjectList(model_obj, atom_list_table_name);
 
     // Save atomic potential entries
     if (model_obj->GetGroupPotentialEntryMap().empty() == false)
     {
         auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
-        CreateAtomicPotentialEntryListTable(atomic_potential_entry_table_name);
         SaveAtomicPotentialEntryList(model_obj, atomic_potential_entry_table_name);
 
         auto group_potential_entry_table_name{ "group_potential_entry_in_" + sanitized_key_tag };
@@ -237,9 +235,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
         {
             auto group_table_name{ class_key + "_" + group_potential_entry_table_name };
             auto atom_table_name{ class_key + "_" + atomic_potential_entry_table_name };
-            CreateAtomicPotentialEntrySubListTable(atom_table_name);
             SaveAtomicPotentialEntrySubList(model_obj, atom_table_name, class_key);
-            CreateGroupPotentialEntryListTable(group_table_name);
             SaveGroupPotentialEntryList(group_entry.get(), group_table_name);
         }
     }
@@ -292,34 +288,10 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     return model_object;
 }
 
-void ModelObjectDAO::CreateModelObjectListTable(const std::string & table_name)
-{
-    m_database->Execute(FormatSQL(CREATE_MODEL_TABLE_SQL, table_name));
-}
-
-void ModelObjectDAO::CreateAtomObjectListTable(const std::string & table_name)
-{
-    m_database->Execute(FormatSQL(CREATE_ATOM_TABLE_SQL, table_name));
-}
-
-void ModelObjectDAO::CreateAtomicPotentialEntryListTable(const std::string & table_name)
-{
-    m_database->Execute(FormatSQL(CREATE_ATOMIC_ENTRY_TABLE_SQL, table_name));
-}
-
-void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(const std::string & table_name)
-{
-    m_database->Execute(FormatSQL(CREATE_ATOMIC_SUBLIST_TABLE_SQL, table_name));
-}
-
-void ModelObjectDAO::CreateGroupPotentialEntryListTable(const std::string & table_name)
-{
-    m_database->Execute(FormatSQL(CREATE_GROUP_ENTRY_TABLE_SQL, table_name));
-}
-
 void ModelObjectDAO::SaveAtomObjectList(
     const ModelObject * model_obj, const std::string & table_name)
 {
+    m_database->Execute(FormatSQL(CREATE_ATOM_TABLE_SQL, table_name));
     m_database->ClearTable(table_name);
     m_database->Prepare(FormatSQL(INSERT_ATOM_LIST_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
@@ -350,6 +322,7 @@ void ModelObjectDAO::SaveAtomObjectList(
 void ModelObjectDAO::SaveAtomicPotentialEntryList(
     const ModelObject * model_obj, const std::string & table_name)
 {
+    m_database->Execute(FormatSQL(CREATE_ATOMIC_ENTRY_TABLE_SQL, table_name));
     m_database->ClearTable(table_name);
     m_database->Prepare(FormatSQL(INSERT_ATOMIC_ENTRY_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
@@ -375,6 +348,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
 void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
 {
+    m_database->Execute(FormatSQL(CREATE_ATOMIC_SUBLIST_TABLE_SQL, table_name));
     m_database->ClearTable(table_name);
     m_database->Prepare(FormatSQL(INSERT_ATOMIC_SUBLIST_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
@@ -397,6 +371,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
 void ModelObjectDAO::SaveGroupPotentialEntryList(
     const GroupPotentialEntry * group_entry, const std::string & table_name)
 {
+    m_database->Execute(FormatSQL(CREATE_GROUP_ENTRY_TABLE_SQL, table_name));
     m_database->ClearTable(table_name);
     m_database->Prepare(FormatSQL(INSERT_GROUP_ENTRY_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
@@ -422,8 +397,17 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
 {
     auto sanitized_key_tag{ SanitizeTableName(key_tag) };
     auto atom_list_table_name{ "atom_list_in_" + sanitized_key_tag };
+    if (TableExists(atom_list_table_name) == false)
+    {
+        throw std::runtime_error("Required table not found: " + atom_list_table_name);
+    }
 
     auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
+    if (TableExists(atomic_potential_entry_table_name) == false)
+    {
+        throw std::runtime_error("Required table not found: " + atomic_potential_entry_table_name);
+    }
+
     auto atomic_potential_entry_map{ LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name) };
 
     std::vector<std::unique_ptr<AtomObject>> atom_object_list;

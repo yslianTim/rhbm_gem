@@ -74,7 +74,7 @@ struct SQLiteBinder<std::vector<float>>
             index,
             reinterpret_cast<const void*>(value.data()),
             static_cast<int>(value.size() * sizeof(float)),
-            SQLITE_STATIC
+            SQLITE_TRANSIENT
         );
     }
 };
@@ -90,7 +90,7 @@ struct SQLiteBinder<std::vector<double>>
             index,
             reinterpret_cast<const void*>(value.data()),
             static_cast<int>(value.size() * sizeof(double)),
-            SQLITE_STATIC
+            SQLITE_TRANSIENT
         );
     }
 };

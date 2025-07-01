@@ -24,12 +24,6 @@ public:
     std::unique_ptr<DataObjectBase> Load(const std::string & key_tag) override;
     
 private:
-    void CreateModelObjectListTable(const std::string & table_name);
-    void CreateAtomObjectListTable(const std::string & table_name);
-    void CreateAtomicPotentialEntryListTable(const std::string & table_name);
-    void CreateAtomicPotentialEntrySubListTable(const std::string & table_name);
-    void CreateGroupPotentialEntryListTable(const std::string & table_name);
-
     void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
     std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & key_tag);
 
