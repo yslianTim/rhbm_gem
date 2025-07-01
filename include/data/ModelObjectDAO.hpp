@@ -43,5 +43,6 @@ private:
     void LoadGroupPotentialEntrySubList(ModelObject * model_obj, const std::string & class_key);
 
     bool TableExists(const std::string & table_name) const;
+    std::string SanitizeTableName(const std::string & key_tag) const;
     
 };

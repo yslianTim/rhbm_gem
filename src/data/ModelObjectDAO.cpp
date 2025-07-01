@@ -9,6 +9,7 @@
 #include "KeyPacker.hpp"
 
 #include <iostream>
+#include <cctype>
 #include <sstream>
 #include <stdexcept>
 
@@ -32,6 +33,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     }
 
     auto key_tag{ model_obj->GetKeyTag() };
+    auto sanitized_key_tag{ SanitizeTableName(key_tag) };
     
     // Save model object list
     auto model_list_table_name{ "model_list" };
@@ -61,18 +63,18 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     m_database->StepOnce();
 
     // Save atom object list
-    auto atom_list_table_name{ "atom_list_in_" + key_tag };
+    auto atom_list_table_name{ "atom_list_in_" + sanitized_key_tag };
     CreateAtomObjectListTable(atom_list_table_name);
     SaveAtomObjectList(model_obj, atom_list_table_name);
 
     // Save atomic potential entries
     if (model_obj->GetGroupPotentialEntryMap().empty() == false)
     {
-        auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + key_tag };
+        auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
         CreateAtomicPotentialEntryListTable(atomic_potential_entry_table_name);
         SaveAtomicPotentialEntryList(model_obj, atomic_potential_entry_table_name);
 
-        auto group_potential_entry_table_name{ "group_potential_entry_in_" + key_tag };
+        auto group_potential_entry_table_name{ "group_potential_entry_in_" + sanitized_key_tag };
         for (auto & [class_key, group_entry] : model_obj->GetGroupPotentialEntryMap())
         {
             auto group_table_name{ class_key + "_" + group_potential_entry_table_name };
@@ -87,7 +89,8 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
 
 std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag)
 {
-    auto atom_object_list{ LoadAtomObjectList(key_tag) };
+    auto sanitized_key_tag{ SanitizeTableName(key_tag) };
+    auto atom_object_list{ LoadAtomObjectList(sanitized_key_tag) };
     auto model_object{ std::make_unique<ModelObject>(std::move(atom_object_list)) };
 
     std::string model_table_name{ "model_list" };
@@ -128,7 +131,7 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     {
         auto group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
         // Load potential entry
-        auto potential_table_name{ group_class_key + "_group_potential_entry_in_" + key_tag };
+        auto potential_table_name{ group_class_key + "_group_potential_entry_in_" + sanitized_key_tag };
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
         model_object->AddGroupPotentialEntry(group_class_key, group_potential_entry);
         LoadGroupPotentialEntryList(model_object.get(), group_class_key, potential_table_name);
@@ -382,9 +385,10 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
 std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     const std::string & key_tag)
 {
-    auto atom_list_table_name{ "atom_list_in_" + key_tag };
+    auto sanitized_key_tag{ SanitizeTableName(key_tag) };
+    auto atom_list_table_name{ "atom_list_in_" + sanitized_key_tag };
 
-    auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + key_tag };
+    auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
     auto atomic_potential_entry_map{ LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name) };
 
     std::stringstream sql;
@@ -613,4 +617,22 @@ bool ModelObjectDAO::TableExists(const std::string & table_name) const
         const_cast<ModelObjectDAO *>(this)->m_table_cache.insert(table_name);
     }
     return exists;
+}
+
+std::string ModelObjectDAO::SanitizeTableName(const std::string & key_tag) const
+{
+    std::string sanitized_key_tag;
+    sanitized_key_tag.reserve(key_tag.size());
+    for (char ch : key_tag)
+    {
+        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')
+        {
+            sanitized_key_tag.push_back(ch);
+        }
+        else
+        {
+            sanitized_key_tag.push_back('_');
+        }
+    }
+    return sanitized_key_tag;
 }

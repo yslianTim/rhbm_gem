@@ -9,8 +9,15 @@ using std::string;
 SQLiteWrapper::SQLiteWrapper(const std::filesystem::path & database_path) :
     m_database_ptr{ nullptr }, m_statement_ptr{ nullptr }
 {
-    auto utf8_path{ database_path.u8string() };
-    auto return_code{ sqlite3_open(utf8_path.c_str(), &m_database_ptr) };
+#ifdef _WIN32
+    std::wstring wpath{ database_path.wstring() };
+    auto return_code{ sqlite3_open16(wpath.c_str(), &m_database_ptr) };
+#else
+    std::string path_utf8{ database_path.u8string() };
+    auto return_code{ sqlite3_open_v2(path_utf8.c_str(), &m_database_ptr,
+                                      SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                                      nullptr) };
+#endif
     if (return_code != SQLITE_OK)
     {
         sqlite3_close(m_database_ptr);
