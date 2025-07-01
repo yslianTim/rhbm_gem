@@ -5,6 +5,8 @@
 #include <vector>
 #include <tuple>
 #include <utility>
+#include <exception>
+#include <filesystem>
 #include "SQLiteBinder.hpp"
 #include "SQLiteColumnReader.hpp"
 
@@ -29,8 +31,39 @@ public:
         StatementGuard & operator=(const StatementGuard &) = delete;
     };
 
+    /**
+     * @brief Helper class to manage transactions using RAII.
+     */
+    class TransactionGuard
+    {
+        SQLiteWrapper & m_db;
+        int m_exception_count;
+
+    public:
+        explicit TransactionGuard(SQLiteWrapper & db) :
+            m_db{ db }, m_exception_count{ std::uncaught_exceptions() }
+        {
+            m_db.BeginTransaction();
+        }
+
+        ~TransactionGuard()
+        {
+            if (std::uncaught_exceptions() > m_exception_count)
+            {
+                m_db.RollbackTransaction();
+            }
+            else
+            {
+                m_db.CommitTransaction();
+            }
+        }
+
+        TransactionGuard(const TransactionGuard &) = delete;
+        TransactionGuard & operator=(const TransactionGuard &) = delete;
+    };
+
 public:
-    explicit SQLiteWrapper(const std::string & database_path);
+    explicit SQLiteWrapper(const std::filesystem::path & database_path);
     ~SQLiteWrapper();
 
     SQLiteWrapper(const SQLiteWrapper &) = delete;

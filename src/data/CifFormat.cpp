@@ -152,6 +152,8 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
     auto found_resolution_method{ false };
     while (std::getline(infile, line))
     {
+        StringHelper::StripCarriageReturn(line);
+        StringHelper::StripCarriageReturn(line);
         if (line.find("_em_3d_reconstruction.resolution ") != std::string::npos)
         {
             std::istringstream iss(line);
@@ -317,6 +319,7 @@ void CifFormat::ParseLoopBlock(
     std::unordered_map<std::string, size_t> column_index_map;
     while (std::getline(infile, line))
     {
+        StringHelper::StripCarriageReturn(line);
         if (header_parsed == false)
         {
             if (line.rfind(data_block_prefix, 0) == 0)
@@ -354,6 +357,7 @@ void CifFormat::ParseLoopBlock(
             std::string next_line;
             while (token_list.size() < expected_column_size && std::getline(infile, next_line))
             {
+                StringHelper::StripCarriageReturn(line);
                 if (next_line.empty() == true) continue;
                 if (in_multiline == false && next_line[0] == ';')
                 {

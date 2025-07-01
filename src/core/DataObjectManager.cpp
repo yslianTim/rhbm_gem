@@ -13,7 +13,7 @@ DataObjectManager::DataObjectManager(void) :
 
 }
 
-DataObjectManager::DataObjectManager(const std::string & dbname) :
+DataObjectManager::DataObjectManager(const std::filesystem::path & dbname) :
     m_db_manager{ std::make_unique<DatabaseManager>(dbname) }
 {
 

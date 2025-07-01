@@ -5,11 +5,11 @@
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
 
-DatabaseManager::DatabaseManager(const std::string & database_path) :
+DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
     m_database_path{ database_path },
     m_database{ nullptr }
 {
-    if (m_database_path == "") m_database_path = "database.sqlite";
+    if (m_database_path.empty()) m_database_path = "database.sqlite";
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
 }
 

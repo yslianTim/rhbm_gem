@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <filesystem>
 #include <unordered_map>
 
 class DatabaseManager;
@@ -16,7 +17,7 @@ class DataObjectManager
 
 public:
     DataObjectManager(void);
-    DataObjectManager(const std::string & dbname);
+    DataObjectManager(const std::filesystem::path & dbname);
     ~DataObjectManager();
     void ProcessFile(const std::string & filename, const std::string & key_tag);
     void ProduceFile(const std::string & filename, const std::string & key_tag);

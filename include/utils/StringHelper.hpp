@@ -34,6 +34,14 @@ public:
         return result;
     }
 
+    static void StripCarriageReturn(std::string & line)
+    {
+        if (!line.empty() && line.back() == '\r')
+        {
+            line.pop_back();
+        }
+    }
+
     static std::vector<std::string> SplitStringLineAsTokens(
         const std::string & line, size_t token_count, char group_delimiter='\'')
     {

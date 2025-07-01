@@ -234,7 +234,7 @@ void ModelObjectDAO::CreateGroupPotentialEntryListTable(const std::string & tabl
 void ModelObjectDAO::SaveAtomObjectList(
     const ModelObject * model_obj, const std::string & table_name)
 {
-    m_database->BeginTransaction();
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->ClearTable(table_name);
 
     std::stringstream sql;
@@ -272,14 +272,12 @@ void ModelObjectDAO::SaveAtomObjectList(
         m_database->StepOnce();
         m_database->Reset();
     }
-
-    m_database->CommitTransaction();
 }
 
 void ModelObjectDAO::SaveAtomicPotentialEntryList(
     const ModelObject * model_obj, const std::string & table_name)
 {
-    m_database->BeginTransaction();
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->ClearTable(table_name);
 
     std::stringstream sql;
@@ -310,14 +308,12 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
         m_database->StepOnce();
         m_database->Reset();
     }
-
-    m_database->CommitTransaction();
 }
 
 void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
 {
-    m_database->BeginTransaction();
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->ClearTable(table_name);
 
     std::stringstream sql;
@@ -345,14 +341,12 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
         m_database->StepOnce();
         m_database->Reset();
     }
-
-    m_database->CommitTransaction();
 }
 
 void ModelObjectDAO::SaveGroupPotentialEntryList(
     const GroupPotentialEntry * group_entry, const std::string & table_name)
 {
-    m_database->BeginTransaction();
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->ClearTable(table_name);
     
     std::stringstream sql;
@@ -383,8 +377,6 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
         m_database->StepOnce();
         m_database->Reset();
     }
-
-    m_database->CommitTransaction();
 }
 
 std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(

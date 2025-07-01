@@ -6,10 +6,11 @@ using std::vector;
 using std::tuple;
 using std::string;
 
-SQLiteWrapper::SQLiteWrapper(const string & database_path) :
+SQLiteWrapper::SQLiteWrapper(const std::filesystem::path & database_path) :
     m_database_ptr{ nullptr }, m_statement_ptr{ nullptr }
 {
-    auto return_code{ sqlite3_open(database_path.c_str(), &m_database_ptr) };
+    auto utf8_path{ database_path.u8string() };
+    auto return_code{ sqlite3_open(utf8_path.c_str(), &m_database_ptr) };
     if (return_code != SQLITE_OK)
     {
         sqlite3_close(m_database_ptr);

@@ -53,6 +53,7 @@ void PdbFormat::LoadAtomSiteData(const std::string & filename)
     auto model_number{ 1 };
     while (std::getline(infile, line))
     {
+        StringHelper::StripCarriageReturn(line);
         char * buffer{ line.data() };
         std::string header_str{ line.substr(0, static_cast<size_t>(header_string_length)) };
         if (header_str == "ENDMDL") model_number++;
