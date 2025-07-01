@@ -14,7 +14,7 @@ class GroupPotentialEntry;
 class ModelObjectDAO : public DataObjectDAOBase
 {
     SQLiteWrapper * m_database;
-    std::unordered_set<std::string> m_table_cache;
+    mutable std::unordered_set<std::string> m_table_cache;
 
 public:
     ModelObjectDAO(SQLiteWrapper * db_manager);

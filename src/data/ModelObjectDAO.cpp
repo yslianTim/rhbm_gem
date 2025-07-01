@@ -34,6 +34,8 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
 
     auto key_tag{ model_obj->GetKeyTag() };
     auto sanitized_key_tag{ SanitizeTableName(key_tag) };
+
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
     
     // Save model object list
     auto model_list_table_name{ "model_list" };
@@ -237,7 +239,6 @@ void ModelObjectDAO::CreateGroupPotentialEntryListTable(const std::string & tabl
 void ModelObjectDAO::SaveAtomObjectList(
     const ModelObject * model_obj, const std::string & table_name)
 {
-    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->ClearTable(table_name);
 
     std::stringstream sql;
@@ -280,7 +281,6 @@ void ModelObjectDAO::SaveAtomObjectList(
 void ModelObjectDAO::SaveAtomicPotentialEntryList(
     const ModelObject * model_obj, const std::string & table_name)
 {
-    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->ClearTable(table_name);
 
     std::stringstream sql;
@@ -316,7 +316,6 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
 void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
 {
-    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->ClearTable(table_name);
 
     std::stringstream sql;
@@ -349,7 +348,6 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
 void ModelObjectDAO::SaveGroupPotentialEntryList(
     const GroupPotentialEntry * group_entry, const std::string & table_name)
 {
-    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->ClearTable(table_name);
     
     std::stringstream sql;
@@ -603,7 +601,7 @@ bool ModelObjectDAO::TableExists(const std::string & table_name) const
     bool exists{ rc == SQLiteWrapper::StepRow() };
     if (exists)
     {
-        const_cast<ModelObjectDAO *>(this)->m_table_cache.insert(table_name);
+        m_table_cache.insert(table_name);
     }
     return exists;
 }
