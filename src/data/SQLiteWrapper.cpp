@@ -57,11 +57,6 @@ void SQLiteWrapper::Prepare(const std::string & sql)
     }
 }
 
-int SQLiteWrapper::StepNext(void)
-{
-    return sqlite3_step(m_statement_ptr);
-}
-
 void SQLiteWrapper::StepOnce(void)
 {
     auto return_code{ sqlite3_step(m_statement_ptr) };
@@ -72,11 +67,6 @@ void SQLiteWrapper::StepOnce(void)
     }
 }
 
-void SQLiteWrapper::Reset(void)
-{
-    sqlite3_reset(m_statement_ptr);
-}
-
 void SQLiteWrapper::Finalize(void)
 {
     if (m_statement_ptr)
@@ -84,26 +74,6 @@ void SQLiteWrapper::Finalize(void)
         sqlite3_finalize(m_statement_ptr);
     }
     m_statement_ptr = nullptr;
-}
-
-std::string SQLiteWrapper::ErrorMessage(void) const
-{
-    return std::string(sqlite3_errmsg(m_database_ptr));
-}
-
-void SQLiteWrapper::BeginTransaction(void)
-{
-    this->Execute("BEGIN TRANSACTION;");
-}
-
-void SQLiteWrapper::CommitTransaction(void)
-{
-    this->Execute("COMMIT;");
-}
-
-void SQLiteWrapper::RollbackTransaction(void)
-{
-    this->Execute("ROLLBACK;");
 }
 
 void SQLiteWrapper::ClearTable(const std::string & table_name)

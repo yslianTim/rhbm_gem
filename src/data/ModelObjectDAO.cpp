@@ -399,16 +399,14 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             structure, is_special_atom,
             position_x, position_y, position_z
         )"<<" FROM "<< atom_list_table_name <<";";
-    
-    auto row_list
-    {
-        m_database->Query<int, int, std::string, std::string,
-                  double, double, int, int, int, int, int, int, double, double, double>(sql.str())
-    };
 
     std::vector<std::unique_ptr<AtomObject>> atom_object_list;
-    atom_object_list.reserve(row_list.size());
-    for (auto & row : row_list)
+    auto iter{
+        m_database->IterateQuery<int, int, std::string, std::string,
+                double, double, int, int, int, int, int, int, double, double, double>(sql.str()) };
+    std::tuple<int, int, std::string, std::string,
+               double, double, int, int, int, int, int, int, double, double, double> row;
+    while (iter.Next(row))
     {
         auto atom_object{ std::make_unique<AtomObject>() };
         atom_object->SetSerialID(std::get<0>(row));
@@ -459,19 +457,13 @@ ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
             amplitude_estimate_ols, width_estimate_ols,
             amplitude_estimate_mdpde, width_estimate_mdpde
         )"<<" FROM "<< table_name <<";";
-    
-    auto row_list
-    {
-        m_database->Query<int, int, std::vector<std::tuple<float, float>>,
-                  double, double, double, double>(sql.str())
-    };
-
-    const auto row_count{ row_list.size() };
 
     auto serial_id{ 0 };
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
-    atomic_potential_entry_map.reserve(row_count);
-    for (auto & row : row_list)
+    auto iter{
+        m_database->IterateQuery<int, int, std::vector<std::tuple<float, float>>, double, double, double, double>(sql.str()) };
+    std::tuple<int, int, std::vector<std::tuple<float, float>>, double, double, double, double> row;
+    while (iter.Next(row))
     {
         auto atomic_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
         serial_id = std::get<0>(row);
@@ -500,14 +492,11 @@ void ModelObjectDAO::LoadAtomicPotentialEntrySubList(
             amplitude_variance_posterior, width_variance_posterior,
             outlier_tag, statistical_distance
         )"<<" FROM "<< table_name <<";";
-    
-    auto row_list
-    {
-        m_database->Query<int, double, double, double, double, int, double>(sql.str())
-    };
 
     auto serial_id{ 0 };
-    for (auto & row : row_list)
+    auto iter{ m_database->IterateQuery<int, double, double, double, double, int, double>(sql.str()) };
+    std::tuple<int, double, double, double, double, int, double> row;
+    while (iter.Next(row))
     {
         serial_id = std::get<0>(row);
         if (entry_map.find(serial_id) == entry_map.end()) continue;
@@ -531,16 +520,16 @@ void ModelObjectDAO::LoadGroupPotentialEntryList(
             amplitude_estimate_prior, width_estimate_prior,
             amplitude_variance_prior, width_variance_prior
         )"<<" FROM "<< table_name <<";";
-    
-    auto row_list
-    {
-        m_database->Query<int64_t, int,
-                          double, double, double, double,
-                          double, double, double, double>(sql.str())
-    };
 
     auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
-    for (auto & row : row_list)
+    auto iter{
+        m_database->IterateQuery<int64_t, int,
+                                 double, double, double, double,
+                                 double, double, double, double>(sql.str()) };
+    std::tuple<int64_t, int,
+               double, double, double, double,
+               double, double, double, double> row;
+    while (iter.Next(row))
     {
         auto group_key{ static_cast<uint64_t>(std::get<0>(row)) };
         group_entry->InsertGroupKey(group_key);

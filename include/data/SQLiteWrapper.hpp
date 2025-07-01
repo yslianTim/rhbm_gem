@@ -44,23 +44,58 @@ public:
         explicit TransactionGuard(SQLiteWrapper & db) :
             m_db{ db }, m_exception_count{ std::uncaught_exceptions() }
         {
-            m_db.BeginTransaction();
+            m_db.Execute("BEGIN TRANSACTION;");
         }
 
         ~TransactionGuard()
         {
             if (std::uncaught_exceptions() > m_exception_count)
             {
-                m_db.RollbackTransaction();
+                m_db.Execute("ROLLBACK;");
             }
             else
             {
-                m_db.CommitTransaction();
+                m_db.Execute("COMMIT;");
             }
         }
 
         TransactionGuard(const TransactionGuard &) = delete;
         TransactionGuard & operator=(const TransactionGuard &) = delete;
+    };
+
+    template<typename... Ts>
+    class QueryIterator
+    {
+        SQLiteWrapper & m_db;
+        std::unique_ptr<StatementGuard> m_guard;
+
+    public:
+        QueryIterator(SQLiteWrapper & db, const std::string & sql) : m_db{ db }
+        {
+            m_db.Prepare(sql);
+            m_guard = std::make_unique<StatementGuard>(m_db);
+        }
+
+        bool Next(std::tuple<Ts...> & row)
+        {
+            auto rc{ m_db.StepNext() };
+            if (rc == StepRow())
+            {
+                row = m_db.ReadRow<Ts...>(m_db, std::make_index_sequence<sizeof...(Ts)>{});
+                return true;
+            }
+            else if (rc == StepDone())
+            {
+                return false;
+            }
+            else
+            {
+                throw std::runtime_error("Query step failed: " + m_db.ErrorMessage());
+            }
+        }
+
+        QueryIterator(const QueryIterator &) = delete;
+        QueryIterator & operator=(const QueryIterator &) = delete;
     };
 
 public:
@@ -75,14 +110,11 @@ public:
 
     void Execute(const std::string & sql);
     void Prepare(const std::string & sql);
-    int StepNext(void);
+    int StepNext(void) { return sqlite3_step(m_statement_ptr); }
     void StepOnce(void);
-    void Reset(void);
+    void Reset(void) { sqlite3_reset(m_statement_ptr); }
     void Finalize(void);
-    std::string ErrorMessage(void) const;
-    void BeginTransaction(void);
-    void CommitTransaction(void);
-    void RollbackTransaction(void);
+    std::string ErrorMessage(void) const { return std::string(sqlite3_errmsg(m_database_ptr)); }
     void ClearTable(const std::string & table_name);
 
     template<typename... Ts>
@@ -109,6 +141,12 @@ public:
             }
         }
         return results;
+    }
+
+    template<typename... Ts>
+    QueryIterator<Ts...> IterateQuery(const std::string & sql)
+    {
+        return QueryIterator<Ts...>(*this, sql);
     }
 
     template<typename T>
