@@ -135,7 +135,17 @@ public:
         }
         if (m_database_ptr)
         {
-            sqlite3_close(m_database_ptr);
+            int rc{ sqlite3_close(m_database_ptr) };
+            if (rc == SQLITE_BUSY)
+            {
+                Finalize();
+                rc = sqlite3_close(m_database_ptr);
+            }
+            if (rc != SQLITE_OK)
+            {
+                std::cerr << "Failed to close database: " << sqlite3_errstr(rc)
+                          << std::endl;
+            }
             m_database_ptr = nullptr;
         }
     }
