@@ -8,10 +8,180 @@
 #include "GroupPotentialEntry.hpp"
 #include "KeyPacker.hpp"
 
-#include <iostream>
 #include <cctype>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <string_view>
+
+namespace
+{
+    std::string FormatSQL(std::string_view templates, const std::string & table)
+    {
+        auto pos{ templates.find("{}") };
+        if (pos == std::string_view::npos)
+        {
+            return std::string(templates);
+        }
+        std::string result;
+        result.reserve(templates.size() - 2 + table.size());
+        result.append(templates.substr(0, pos));
+        result.append(table);
+        result.append(templates.substr(pos + 2));
+        return result;
+    }
+
+    constexpr std::string_view INSERT_MODEL_LIST_SQL = R"sql(
+        INSERT INTO {} (
+            key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(key_tag)
+        DO UPDATE SET
+            key_tag = excluded.key_tag,
+            atom_size = excluded.atom_size,
+            pdb_id  = excluded.pdb_id,
+            emd_id  = excluded.emd_id,
+            map_resolution = excluded.map_resolution,
+            resolution_method = excluded.resolution_method
+        )sql";
+
+    constexpr std::string_view SELECT_MODEL_LIST_SQL = R"sql(
+        SELECT
+            key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
+        FROM {} WHERE key_tag = ? LIMIT 1; )sql";
+
+    constexpr std::string_view CREATE_MODEL_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            key_tag           TEXT PRIMARY KEY,
+            atom_size         INTEGER,
+            pdb_id            TEXT,
+            emd_id            TEXT,
+            map_resolution    DOUBLE,
+            resolution_method TEXT
+        ) )sql";
+
+    constexpr std::string_view CREATE_ATOM_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            serial_id INTEGER PRIMARY KEY,
+            residue_id INTEGER,
+            chain_id TEXT,
+            indicator TEXT,
+            occupancy DOUBLE,
+            temperature DOUBLE,
+            residue_type INTEGER,
+            element_type INTEGER,
+            remoteness_type INTEGER,
+            branch_type INTEGER,
+            structure INTEGER,
+            is_special_atom INTEGER,
+            position_x DOUBLE,
+            position_y DOUBLE,
+            position_z DOUBLE
+        ) )sql";
+
+    constexpr std::string_view CREATE_ATOMIC_ENTRY_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            serial_id INTEGER PRIMARY KEY,
+            sampling_size INTEGER,
+            distance_and_map_value_list BLOB,
+            amplitude_estimate_ols DOUBLE,
+            width_estimate_ols DOUBLE,
+            amplitude_estimate_mdpde DOUBLE,
+            width_estimate_mdpde DOUBLE
+        ) )sql";
+
+    constexpr std::string_view CREATE_ATOMIC_SUBLIST_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            serial_id INTEGER PRIMARY KEY,
+            amplitude_estimate_posterior DOUBLE,
+            width_estimate_posterior DOUBLE,
+            amplitude_variance_posterior DOUBLE,
+            width_variance_posterior DOUBLE,
+            outlier_tag INTEGER,
+            statistical_distance DOUBLE
+        ) )sql";
+
+    constexpr std::string_view CREATE_GROUP_ENTRY_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            key_id INTEGER PRIMARY KEY,
+            atom_size INTEGER,
+            amplitude_estimate_mean DOUBLE,
+            width_estimate_mean DOUBLE,
+            amplitude_estimate_mdpde DOUBLE,
+            width_estimate_mdpde DOUBLE,
+            amplitude_estimate_prior DOUBLE,
+            width_estimate_prior DOUBLE,
+            amplitude_variance_prior DOUBLE,
+            width_variance_prior DOUBLE
+        ) )sql";
+
+    constexpr std::string_view INSERT_ATOM_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            serial_id, residue_id, chain_id, indicator,
+            occupancy, temperature, residue_type,
+            element_type, remoteness_type, branch_type,
+            structure, is_special_atom,
+            position_x, position_y, position_z
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); )sql";
+
+    constexpr std::string_view INSERT_ATOMIC_ENTRY_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            serial_id, sampling_size, distance_and_map_value_list,
+            amplitude_estimate_ols, width_estimate_ols,
+            amplitude_estimate_mdpde, width_estimate_mdpde
+        ) VALUES (?, ?, ?, ?, ?, ?, ?); )sql";
+
+    constexpr std::string_view INSERT_ATOMIC_SUBLIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
+            amplitude_variance_posterior, width_variance_posterior,
+            outlier_tag, statistical_distance
+        ) VALUES (?, ?, ?, ?, ?, ?, ?); )sql";
+
+    constexpr std::string_view INSERT_GROUP_ENTRY_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            key_id, atom_size,
+            amplitude_estimate_mean, width_estimate_mean,
+            amplitude_estimate_mdpde, width_estimate_mdpde,
+            amplitude_estimate_prior, width_estimate_prior,
+            amplitude_variance_prior, width_variance_prior
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?); )sql";
+
+    constexpr std::string_view SELECT_ATOM_LIST_SQL = R"sql(
+        SELECT
+            serial_id, residue_id, chain_id, indicator,
+            occupancy, temperature, residue_type,
+            element_type, remoteness_type, branch_type,
+            structure, is_special_atom,
+            position_x, position_y, position_z
+        FROM {}; )sql";
+
+    constexpr std::string_view SELECT_ATOMIC_ENTRY_SQL = R"sql(
+        SELECT
+            serial_id, sampling_size, distance_and_map_value_list,
+            amplitude_estimate_ols, width_estimate_ols,
+            amplitude_estimate_mdpde, width_estimate_mdpde
+        FROM {}; )sql";
+
+    constexpr std::string_view SELECT_ATOMIC_SUBLIST_SQL = R"sql(
+        SELECT
+            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
+            amplitude_variance_posterior, width_variance_posterior,
+            outlier_tag, statistical_distance
+        FROM {}; )sql";
+
+    constexpr std::string_view SELECT_GROUP_ENTRY_SQL = R"sql(
+        SELECT
+            key_id, atom_size,
+            amplitude_estimate_mean, width_estimate_mean,
+            amplitude_estimate_mdpde, width_estimate_mdpde,
+            amplitude_estimate_prior, width_estimate_prior,
+            amplitude_variance_prior, width_variance_prior
+        FROM {}; )sql";
+
+    constexpr std::string_view TABLE_EXISTS_SQL =
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;";
+}
 
 ModelObjectDAO::ModelObjectDAO(SQLiteWrapper * database) :
     m_database{ database }, m_table_cache{}
@@ -40,21 +210,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     // Save model object list
     auto model_list_table_name{ "model_list" };
     CreateModelObjectListTable(model_list_table_name);
-    std::stringstream sql;
-    sql <<"INSERT INTO "<< model_list_table_name << R"(
-        (
-            key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
-        ) VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(key_tag)
-        DO UPDATE SET
-            key_tag = excluded.key_tag,
-            atom_size = excluded.atom_size,
-            pdb_id  = excluded.pdb_id,
-            emd_id  = excluded.emd_id,
-            map_resolution = excluded.map_resolution,
-            resolution_method = excluded.resolution_method
-    )";
-    m_database->Prepare(sql.str());
+    m_database->Prepare(FormatSQL(INSERT_MODEL_LIST_SQL, model_list_table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, model_obj->GetKeyTag());
     m_database->Bind<int>(2, static_cast<int>(model_obj->GetNumberOfAtom()));
@@ -96,12 +252,7 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     auto model_object{ std::make_unique<ModelObject>(std::move(atom_object_list)) };
 
     std::string model_table_name{ "model_list" };
-    std::stringstream sql;
-    sql <<"SELECT "<< R"(
-            key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
-    )"<<" FROM "<< model_table_name << " WHERE key_tag = ? LIMIT 1;";
-
-    m_database->Prepare(sql.str());
+    m_database->Prepare(FormatSQL(SELECT_MODEL_LIST_SQL, model_table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
     auto return_code{ m_database->StepNext() };
@@ -143,116 +294,34 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
 
 void ModelObjectDAO::CreateModelObjectListTable(const std::string & table_name)
 {
-    std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
-        (
-            key_tag           TEXT PRIMARY KEY,
-            atom_size         INTEGER,
-            pdb_id            TEXT,
-            emd_id            TEXT,
-            map_resolution    DOUBLE,
-            resolution_method TEXT
-        )
-    )";
-    m_database->Execute(sql.str());
+    m_database->Execute(FormatSQL(CREATE_MODEL_TABLE_SQL, table_name));
 }
 
 void ModelObjectDAO::CreateAtomObjectListTable(const std::string & table_name)
 {
-    std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
-        (
-            serial_id INTEGER PRIMARY KEY,
-            residue_id INTEGER,
-            chain_id TEXT,
-            indicator TEXT,
-            occupancy DOUBLE,
-            temperature DOUBLE,
-            residue_type INTEGER,
-            element_type INTEGER,
-            remoteness_type INTEGER,
-            branch_type INTEGER,
-            structure INTEGER,
-            is_special_atom INTEGER,
-            position_x DOUBLE,
-            position_y DOUBLE,
-            position_z DOUBLE
-        )
-    )";
-    m_database->Execute(sql.str());
+    m_database->Execute(FormatSQL(CREATE_ATOM_TABLE_SQL, table_name));
 }
 
 void ModelObjectDAO::CreateAtomicPotentialEntryListTable(const std::string & table_name)
 {
-    std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
-        (
-            serial_id INTEGER PRIMARY KEY,
-            sampling_size INTEGER,
-            distance_and_map_value_list BLOB,
-            amplitude_estimate_ols DOUBLE,
-            width_estimate_ols DOUBLE,
-            amplitude_estimate_mdpde DOUBLE,
-            width_estimate_mdpde DOUBLE
-        )
-    )";
-    m_database->Execute(sql.str());
+    m_database->Execute(FormatSQL(CREATE_ATOMIC_ENTRY_TABLE_SQL, table_name));
 }
 
 void ModelObjectDAO::CreateAtomicPotentialEntrySubListTable(const std::string & table_name)
 {
-    std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
-        (
-            serial_id INTEGER PRIMARY KEY,
-            amplitude_estimate_posterior DOUBLE,
-            width_estimate_posterior DOUBLE,
-            amplitude_variance_posterior DOUBLE,
-            width_variance_posterior DOUBLE,
-            outlier_tag INTEGER,
-            statistical_distance DOUBLE
-        )
-    )";
-    m_database->Execute(sql.str());
+    m_database->Execute(FormatSQL(CREATE_ATOMIC_SUBLIST_TABLE_SQL, table_name));
 }
 
 void ModelObjectDAO::CreateGroupPotentialEntryListTable(const std::string & table_name)
 {
-    std::stringstream sql;
-    sql <<"CREATE TABLE IF NOT EXISTS "<< table_name << R"(
-        (
-            key_id INTEGER PRIMARY KEY,
-            atom_size INTEGER,
-            amplitude_estimate_mean DOUBLE,
-            width_estimate_mean DOUBLE,
-            amplitude_estimate_mdpde DOUBLE,
-            width_estimate_mdpde DOUBLE,
-            amplitude_estimate_prior DOUBLE,
-            width_estimate_prior DOUBLE,
-            amplitude_variance_prior DOUBLE,
-            width_variance_prior DOUBLE
-        )
-    )";
-    m_database->Execute(sql.str());
+    m_database->Execute(FormatSQL(CREATE_GROUP_ENTRY_TABLE_SQL, table_name));
 }
 
 void ModelObjectDAO::SaveAtomObjectList(
     const ModelObject * model_obj, const std::string & table_name)
 {
     m_database->ClearTable(table_name);
-
-    std::stringstream sql;
-    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
-        (
-            serial_id, residue_id, chain_id, indicator,
-            occupancy, temperature, residue_type,
-            element_type, remoteness_type, branch_type,
-            structure, is_special_atom,
-            position_x, position_y, position_z
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    )";
-
-    m_database->Prepare(sql.str());
+    m_database->Prepare(FormatSQL(INSERT_ATOM_LIST_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
     for (auto & atom_object : model_obj->GetComponentsList())
@@ -282,17 +351,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
     const ModelObject * model_obj, const std::string & table_name)
 {
     m_database->ClearTable(table_name);
-
-    std::stringstream sql;
-    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
-        (
-            serial_id, sampling_size, distance_and_map_value_list,
-            amplitude_estimate_ols, width_estimate_ols,
-            amplitude_estimate_mdpde, width_estimate_mdpde
-        ) VALUES (?, ?, ?, ?, ?, ?, ?);
-    )";
-
-    m_database->Prepare(sql.str());
+    m_database->Prepare(FormatSQL(INSERT_ATOMIC_ENTRY_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
     for (auto & atom_object : model_obj->GetComponentsList())
@@ -317,17 +376,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
 {
     m_database->ClearTable(table_name);
-
-    std::stringstream sql;
-    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
-        (
-            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
-            amplitude_variance_posterior, width_variance_posterior,
-            outlier_tag, statistical_distance
-        ) VALUES (?, ?, ?, ?, ?, ?, ?);
-    )";
-
-    m_database->Prepare(sql.str());
+    m_database->Prepare(FormatSQL(INSERT_ATOMIC_SUBLIST_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
     for (auto & atom_object : model_obj->GetComponentsList())
     {
@@ -349,19 +398,7 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
     const GroupPotentialEntry * group_entry, const std::string & table_name)
 {
     m_database->ClearTable(table_name);
-    
-    std::stringstream sql;
-    sql <<"INSERT OR REPLACE INTO "<< table_name << R"(
-        (
-            key_id, atom_size,
-            amplitude_estimate_mean, width_estimate_mean,
-            amplitude_estimate_mdpde, width_estimate_mdpde,
-            amplitude_estimate_prior, width_estimate_prior,
-            amplitude_variance_prior, width_variance_prior
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    )";
-
-    m_database->Prepare(sql.str());
+    m_database->Prepare(FormatSQL(INSERT_GROUP_ENTRY_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
     for (auto & group_key : group_entry->GetGroupKeySet())
     {
@@ -389,19 +426,11 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
     auto atomic_potential_entry_map{ LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name) };
 
-    std::stringstream sql;
-    sql <<"SELECT "<< R"(
-            serial_id, residue_id, chain_id, indicator,
-            occupancy, temperature, residue_type,
-            element_type, remoteness_type, branch_type,
-            structure, is_special_atom,
-            position_x, position_y, position_z
-        )"<<" FROM "<< atom_list_table_name <<";";
-
     std::vector<std::unique_ptr<AtomObject>> atom_object_list;
     auto iter{
         m_database->IterateQuery<int, int, std::string, std::string,
-                double, double, int, int, int, int, int, int, double, double, double>(sql.str()) };
+                double, double, int, int, int, int, int, int, double, double, double>(
+            FormatSQL(SELECT_ATOM_LIST_SQL, atom_list_table_name)) };
     std::tuple<int, int, std::string, std::string,
                double, double, int, int, int, int, int, int, double, double, double> row;
     while (iter.Next(row))
@@ -449,17 +478,11 @@ std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>>
 ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
 {
     if (TableExists(table_name) == false) return {};
-    std::stringstream sql;
-    sql <<"SELECT "<< R"(
-            serial_id, sampling_size, distance_and_map_value_list,
-            amplitude_estimate_ols, width_estimate_ols,
-            amplitude_estimate_mdpde, width_estimate_mdpde
-        )"<<" FROM "<< table_name <<";";
-
     auto serial_id{ 0 };
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
     auto iter{
-        m_database->IterateQuery<int, int, std::vector<std::tuple<float, float>>, double, double, double, double>(sql.str()) };
+        m_database->IterateQuery<int, int, std::vector<std::tuple<float, float>>, double, double, double, double>(
+            FormatSQL(SELECT_ATOMIC_ENTRY_SQL, table_name)) };
     std::tuple<int, int, std::vector<std::tuple<float, float>>, double, double, double, double> row;
     while (iter.Next(row))
     {
@@ -484,15 +507,9 @@ void ModelObjectDAO::LoadAtomicPotentialEntrySubList(
     const std::string & table_name, const std::string & class_key,
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map)
 {
-    std::stringstream sql;
-    sql <<"SELECT "<< R"(
-            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
-            amplitude_variance_posterior, width_variance_posterior,
-            outlier_tag, statistical_distance
-        )"<<" FROM "<< table_name <<";";
-
     auto serial_id{ 0 };
-    auto iter{ m_database->IterateQuery<int, double, double, double, double, int, double>(sql.str()) };
+    auto iter{ m_database->IterateQuery<int, double, double, double, double, int, double>(
+            FormatSQL(SELECT_ATOMIC_SUBLIST_SQL, table_name)) };
     std::tuple<int, double, double, double, double, int, double> row;
     while (iter.Next(row))
     {
@@ -510,20 +527,12 @@ void ModelObjectDAO::LoadGroupPotentialEntryList(
     ModelObject * model_obj, const std::string & class_key, const std::string & table_name)
 {
     if (TableExists(table_name) == false) return;
-    std::stringstream sql;
-    sql <<"SELECT "<< R"(
-            key_id, atom_size,
-            amplitude_estimate_mean, width_estimate_mean,
-            amplitude_estimate_mdpde, width_estimate_mdpde,
-            amplitude_estimate_prior, width_estimate_prior,
-            amplitude_variance_prior, width_variance_prior
-        )"<<" FROM "<< table_name <<";";
-
     auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
     auto iter{
         m_database->IterateQuery<int64_t, int,
                                  double, double, double, double,
-                                 double, double, double, double>(sql.str()) };
+                                 double, double, double, double>(
+            FormatSQL(SELECT_GROUP_ENTRY_SQL, table_name)) };
     std::tuple<int64_t, int,
                double, double, double, double,
                double, double, double, double> row;
@@ -592,9 +601,7 @@ bool ModelObjectDAO::TableExists(const std::string & table_name) const
         return true;
     }
 
-    std::stringstream sql;
-    sql << "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;";
-    m_database->Prepare(sql.str());
+    m_database->Prepare(TABLE_EXISTS_SQL.data());
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, table_name);
     auto rc{ m_database->StepNext() };
