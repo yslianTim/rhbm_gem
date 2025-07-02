@@ -66,13 +66,15 @@ class MrcFormat : public MapFileFormatBase
         int   label_size;         // Number of labels being used
         char  label[HEAD::NUM_LABEL][HEAD::SIZE_LABEL];  // 10 80-character text labels
     };
+    static_assert(sizeof(MrcHeader) == HEAD::SIZE_HEADER,
+                  "MrcHeader size mismatch: check HEAD::SIZE_HEADER");
 
     MrcHeader m_header;
     std::unique_ptr<float[]> m_data_array;
 
 public:
     MrcFormat(void);
-    ~MrcFormat();
+    ~MrcFormat() = default;
     void InitHeader(void) override;
     void LoadHeader(std::istream & stream) override;
     void SaveHeader(std::ostream & stream) override;

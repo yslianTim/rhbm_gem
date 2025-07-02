@@ -55,13 +55,15 @@ class CCP4Format : public MapFileFormatBase
         int   label_size;         // Number of labels being used
         char  label[HEAD::NUM_LABEL][HEAD::SIZE_LABEL];  // 10 80-character text labels
     };
+    static_assert(sizeof(CCP4Header) == HEAD::SIZE_HEADER,
+                  "CCP4Header size mismatch: check HEAD::SIZE_HEADER");
 
     CCP4Header m_header;
     std::unique_ptr<float[]> m_data_array;
 
 public:
     CCP4Format(void);
-    ~CCP4Format();
+    ~CCP4Format() = default;
     void InitHeader(void) override;
     void LoadHeader(std::istream & stream) override;
     void SaveHeader(std::ostream & stream) override;

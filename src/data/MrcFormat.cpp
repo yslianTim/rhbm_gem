@@ -4,15 +4,11 @@
 #include <iostream>
 #include <cstring>
 #include <stdexcept>
+#include <algorithm>
 
 MrcFormat::MrcFormat(void)
 {
     InitHeader();
-}
-
-MrcFormat::~MrcFormat()
-{
-
 }
 
 void MrcFormat::InitHeader(void)
@@ -42,7 +38,7 @@ void MrcFormat::InitHeader(void)
     m_header.mean_density = 0.0f;
     m_header.space_group = 0;
     m_header.extra_size = 0;
-    for (int i = 0; i < HEAD::SIZE_WORD; i++) m_header.extra[i] = '0';
+    std::fill_n(m_header.extra, HEAD::SIZE_WORD, '\0');
     m_header.imodStamp = 0;
     m_header.imodFlags = 0;
     m_header.idtype = 0;
@@ -61,15 +57,10 @@ void MrcFormat::InitHeader(void)
     m_header.map[1] = 'A';
     m_header.map[2] = 'P';
     m_header.map[3] = '\0';
-    m_header.stamp[0] = '0';
-    m_header.stamp[1] = '0';
-    m_header.stamp[2] = '0';
-    m_header.stamp[3] = '\0';
+    std::fill_n(m_header.stamp, 4, '\0');
     m_header.rms = 0.0f;
     m_header.label_size = 0;
-    for (int i = 0; i < HEAD::NUM_LABEL; i++)
-        for (int j = 0; j <HEAD::SIZE_LABEL; j++)
-            m_header.label[i][j] = '0';
+    std::fill_n(&m_header.label[0][0], HEAD::NUM_LABEL * HEAD::SIZE_LABEL, '\0');
 }
 
 void MrcFormat::LoadHeader(std::istream & stream)
@@ -163,6 +154,14 @@ void MrcFormat::LoadDataArray(std::istream & stream)
 
 void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
+    size_t expected_voxels{ static_cast<size_t>(m_header.array_size[0]) *
+                            static_cast<size_t>(m_header.array_size[1]) *
+                            static_cast<size_t>(m_header.array_size[2]) };
+    if (size != expected_voxels)
+    {
+        throw std::runtime_error("SaveDataArray: voxel count does not match header");
+    }
+
     std::streamoff data_offset{ HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.extra_size) };
     stream.seekp(data_offset, std::ios::beg);
     if (!stream)
@@ -196,6 +195,10 @@ std::array<int, 3> MrcFormat::GetGridSize(void)
 
 std::array<float, 3> MrcFormat::GetGridSpacing(void)
 {
+    if (m_header.grid_size[0] == 0 || m_header.grid_size[1] == 0 || m_header.grid_size[2] == 0)
+    {
+        throw std::runtime_error("GetGridSpacing: grid_size has zero dimension");
+    }
     std::array<float, 3> grid_spacing;
     grid_spacing.at(0) = m_header.cell_dimension[0] / static_cast<float>(m_header.grid_size[0]);
     grid_spacing.at(1) = m_header.cell_dimension[1] / static_cast<float>(m_header.grid_size[1]);

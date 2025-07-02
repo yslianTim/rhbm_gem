@@ -4,15 +4,11 @@
 #include <iostream>
 #include <cstring>
 #include <stdexcept>
+#include <algorithm>
 
 CCP4Format::CCP4Format(void)
 {
     InitHeader();
-}
-
-CCP4Format::~CCP4Format()
-{
-
 }
 
 void CCP4Format::InitHeader(void)
@@ -50,15 +46,10 @@ void CCP4Format::InitHeader(void)
     m_header.map_format_id[1] = 'A';
     m_header.map_format_id[2] = 'P';
     m_header.map_format_id[3] = '\0';
-    m_header.machine_stamp[0] = '0';
-    m_header.machine_stamp[1] = '0';
-    m_header.machine_stamp[2] = '0';
-    m_header.machine_stamp[3] = '\0';
+    std::fill_n(m_header.machine_stamp, 4, '\0');
     m_header.rms = 0.0f;
     m_header.label_size = 0;
-    for (int i = 0; i < HEAD::NUM_LABEL; i++)
-        for (int j = 0; j <HEAD::SIZE_LABEL; j++)
-            m_header.label[i][j] = '0';
+    std::fill_n(&m_header.label[0][0], HEAD::NUM_LABEL * HEAD::SIZE_LABEL, '\0');
 }
 
 void CCP4Format::LoadHeader(std::istream & stream)
@@ -142,6 +133,14 @@ void CCP4Format::LoadDataArray(std::istream & stream)
 
 void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
+    size_t expected_voxels{ static_cast<size_t>(m_header.array_size[0]) *
+                            static_cast<size_t>(m_header.array_size[1]) *
+                            static_cast<size_t>(m_header.array_size[2]) };
+    if (size != expected_voxels)
+    {
+        throw std::runtime_error("SaveDataArray: voxel count does not match header");
+    }
+
     const std::streamoff data_offset{
         HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.symmetry_table_size)
     };
@@ -188,6 +187,10 @@ std::array<int, 3> CCP4Format::GetGridSize(void)
 
 std::array<float, 3> CCP4Format::GetGridSpacing(void)
 {
+    if (m_header.grid_size[0] == 0 || m_header.grid_size[1] == 0 || m_header.grid_size[2] == 0)
+    {
+        throw std::runtime_error("GetGridSpacing: grid_size has zero dimension");
+    }
     std::array<float, 3> grid_spacing;
     grid_spacing.at(0) = m_header.map_length[0] / static_cast<float>(m_header.grid_size[0]);
     grid_spacing.at(1) = m_header.map_length[1] / static_cast<float>(m_header.grid_size[1]);
