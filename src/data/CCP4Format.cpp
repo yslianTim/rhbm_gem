@@ -14,22 +14,12 @@ CCP4Format::CCP4Format(void)
 void CCP4Format::InitHeader(void)
 {
     std::memset(&m_header, 0, sizeof(m_header));
-    m_header.array_size[0] = 1;
-    m_header.array_size[1] = 1;
-    m_header.array_size[2] = 1;
+    std::fill_n(m_header.array_size,        3, 1);
     m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
-    m_header.location_index[0] = 0;
-    m_header.location_index[1] = 0;
-    m_header.location_index[2] = 0;
-    m_header.grid_size[0] = 1;
-    m_header.grid_size[1] = 1;
-    m_header.grid_size[2] = 1;
-    m_header.map_length[0] = 1.0f;
-    m_header.map_length[1] = 1.0f;
-    m_header.map_length[2] = 1.0f;
-    m_header.cell_angle[0] = 90.0f;
-    m_header.cell_angle[1] = 90.0f;
-    m_header.cell_angle[2] = 90.0f;
+    std::fill_n(m_header.location_index,    3, 0);
+    std::fill_n(m_header.grid_size,         3, 1);
+    std::fill_n(m_header.map_length,        3, 1.0f);
+    std::fill_n(m_header.cell_angle,        3, 90.0f);
     m_header.axis[0] = 1;
     m_header.axis[1] = 2;
     m_header.axis[2] = 3;
@@ -39,9 +29,9 @@ void CCP4Format::InitHeader(void)
     m_header.space_group = 0;
     m_header.symmetry_table_size = 0;
     m_header.skew_matrix_flag = 0;
-    for (int i = 0; i < 9; i++) m_header.skew_matrix[i] = 0.0f;
-    for (int i = 0; i < 3; i++) m_header.skew_translation[i] = 0.0f;
-    for (int i = 0; i < 15; i++) m_header.extra[i] = 0.0f;
+    std::fill_n(m_header.skew_matrix,        9,  0.0f);
+    std::fill_n(m_header.skew_translation,   3,  0.0f);
+    std::fill_n(m_header.extra,             15,  0.0f);
     m_header.map_format_id[0] = 'M';
     m_header.map_format_id[1] = 'A';
     m_header.map_format_id[2] = 'P';

@@ -14,22 +14,12 @@ MrcFormat::MrcFormat(void)
 void MrcFormat::InitHeader(void)
 {
     std::memset(&m_header, 0, sizeof(m_header));
-    m_header.array_size[0] = 1;
-    m_header.array_size[1] = 1;
-    m_header.array_size[2] = 1;
+    std::fill_n(m_header.array_size,        3, 1);
     m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
-    m_header.location_index[0] = 0;
-    m_header.location_index[1] = 0;
-    m_header.location_index[2] = 0;
-    m_header.grid_size[0] = 1;
-    m_header.grid_size[1] = 1;
-    m_header.grid_size[2] = 1;
-    m_header.cell_dimension[0] = 1.0f;
-    m_header.cell_dimension[1] = 1.0f;
-    m_header.cell_dimension[2] = 1.0f;
-    m_header.cell_angle[0] = 90.0f;
-    m_header.cell_angle[1] = 90.0f;
-    m_header.cell_angle[2] = 90.0f;
+    std::fill_n(m_header.location_index,    3, 0);
+    std::fill_n(m_header.grid_size,         3, 1);
+    std::fill_n(m_header.cell_dimension,    3, 1.0f);
+    std::fill_n(m_header.cell_angle,        3, 90.0f);
     m_header.axis[0] = 1;
     m_header.axis[1] = 2;
     m_header.axis[2] = 3;
@@ -47,12 +37,7 @@ void MrcFormat::InitHeader(void)
     m_header.nd2 = 0;
     m_header.vd1 = 0;
     m_header.vd2 = 0;
-    m_header.tiltangles[0] = 0.0f;
-    m_header.tiltangles[1] = 0.0f;
-    m_header.tiltangles[2] = 0.0f;
-    m_header.tiltangles[3] = 0.0f;
-    m_header.tiltangles[4] = 0.0f;
-    m_header.tiltangles[5] = 0.0f;
+    std::fill_n(m_header.tiltangles, 6, 0.0f);
     m_header.map[0] = 'M';
     m_header.map[1] = 'A';
     m_header.map[2] = 'P';
