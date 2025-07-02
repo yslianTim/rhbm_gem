@@ -179,6 +179,9 @@ namespace
             amplitude_variance_prior, width_variance_prior
         FROM {}; )sql";
 
+    constexpr std::string_view SELECT_ROW_COUNT_SQL =
+        "SELECT COUNT(*) FROM {};";
+
     constexpr std::string_view TABLE_EXISTS_SQL =
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;";
 }
@@ -402,6 +405,9 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
         throw std::runtime_error("Required table not found: " + atom_list_table_name);
     }
 
+    auto count_row_vec{ m_database->Query<int>(FormatSQL(SELECT_ROW_COUNT_SQL, atom_list_table_name)) };
+    auto atom_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
+
     auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
     if (TableExists(atomic_potential_entry_table_name) == false)
     {
@@ -411,6 +417,7 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     auto atomic_potential_entry_map{ LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name) };
 
     std::vector<std::unique_ptr<AtomObject>> atom_object_list;
+    atom_object_list.reserve(static_cast<size_t>(atom_count));
     auto iter{
         m_database->IterateQuery<int, int, std::string, std::string,
                 double, double, int, int, int, int, int, int, double, double, double>(
@@ -462,10 +469,14 @@ std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>>
 ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
 {
     if (TableExists(table_name) == false) return {};
+    auto count_row_vec{ m_database->Query<int>(FormatSQL(SELECT_ROW_COUNT_SQL, table_name)) };
+    auto entry_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
     auto serial_id{ 0 };
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
+    atomic_potential_entry_map.reserve(static_cast<size_t>(entry_count));
     auto iter{
-        m_database->IterateQuery<int, int, std::vector<std::tuple<float, float>>, double, double, double, double>(
+        m_database->IterateQuery<
+            int, int, std::vector<std::tuple<float, float>>, double, double, double, double>(
             FormatSQL(SELECT_ATOMIC_ENTRY_SQL, table_name)) };
     std::tuple<int, int, std::vector<std::tuple<float, float>>, double, double, double, double> row;
     while (iter.Next(row))
