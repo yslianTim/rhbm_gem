@@ -227,8 +227,18 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     auto atom_list_table_name{ "atom_list_in_" + sanitized_key_tag };
     SaveAtomObjectList(model_obj, atom_list_table_name);
 
-    // Save atomic potential entries
-    if (model_obj->GetGroupPotentialEntryMap().empty() == false)
+    // Save atomic potential entries if any atom contains them
+    bool has_atomic_potential_entry{ false };
+    for (auto & atom_object : model_obj->GetComponentsList())
+    {
+        if (atom_object->GetAtomicPotentialEntry() != nullptr)
+        {
+            has_atomic_potential_entry = true;
+            break;
+        }
+    }
+
+    if (has_atomic_potential_entry == true)
     {
         auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
         SaveAtomicPotentialEntryList(model_obj, atomic_potential_entry_table_name);
@@ -409,12 +419,11 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     auto atom_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
 
     auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
-    if (TableExists(atomic_potential_entry_table_name) == false)
+    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
+    if (TableExists(atomic_potential_entry_table_name))
     {
-        throw std::runtime_error("Required table not found: " + atomic_potential_entry_table_name);
+        atomic_potential_entry_map = LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name);
     }
-
-    auto atomic_potential_entry_map{ LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name) };
 
     std::vector<std::unique_ptr<AtomObject>> atom_object_list;
     atom_object_list.reserve(static_cast<size_t>(atom_count));
