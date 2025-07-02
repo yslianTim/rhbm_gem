@@ -19,7 +19,7 @@ public:
     ModelFileReader(const std::string & filename);
     ~ModelFileReader();
     void Read(void) override;
-    bool IsSuccessfullyRead(void) override { return m_successfully_read_file; }
+    bool IsSuccessfullyRead(void) const override { return m_successfully_read_file; }
 
     AtomicModelDataBlock * GetDataBlockPtr(void);
 

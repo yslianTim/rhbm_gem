@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <istream>
 #include <array>
 
 class MapFileFormatBase
@@ -10,10 +11,10 @@ class MapFileFormatBase
 public:
     virtual ~MapFileFormatBase() = default;
     virtual void InitHeader(void) = 0;
-    virtual void LoadHeader(const std::string & filename) = 0;
+    virtual void LoadHeader(std::istream & stream) = 0;
     virtual void SaveHeader(const std::string & filename) = 0;
     virtual void PrintHeader(void) const = 0;
-    virtual void LoadDataArray(const std::string & filename) = 0;
+    virtual void LoadDataArray(std::istream & stream) = 0;
     virtual void SaveDataArray(const std::string & filename) = 0;
     virtual std::unique_ptr<float[]> GetDataArray(void) = 0;
     virtual std::array<int, 3> GetGridSize(void) = 0;

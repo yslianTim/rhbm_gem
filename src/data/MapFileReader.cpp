@@ -6,11 +6,16 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
+#include <cctype>
 
 MapFileReader::MapFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }
 {
     auto file_extension{ FilePathHelper::GetExtension(filename) };
+    std::transform(file_extension.begin(), file_extension.end(),
+                   file_extension.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if      (file_extension == ".mrc")
     {
         m_file_format_helper = std::make_unique<MrcFormat>();
@@ -32,36 +37,43 @@ MapFileReader::~MapFileReader()
 
 void MapFileReader::Read(void)
 {
-    ReadHeader();
-    ReadMapValueArray();
+    std::ifstream file{ m_file_path, std::ios::binary };
+    if (!file)
+    {
+        std::cerr << "Cannot open the file: " << m_file_path << std::endl;
+        m_successfully_read_file = false;
+        return;
+    }
+    bool header_success{ ReadHeader(file) };
+    bool data_success{ ReadMapValueArray(file) };
+    m_successfully_read_file = header_success && data_success;
 }
 
-void MapFileReader::ReadHeader(void)
+bool MapFileReader::ReadHeader(std::ifstream & stream)
 {
     try
     {
-        m_file_format_helper->LoadHeader(m_file_path);
-        m_file_format_helper->PrintHeader();
-        m_successfully_read_file = true;
+        m_file_format_helper->LoadHeader(stream);
+        return true;
     }
     catch (const std::exception & ex)
     {
         std::cerr << ex.what() << std::endl;
-        m_successfully_read_file = false;
+        return false;
     }
 }
 
-void MapFileReader::ReadMapValueArray(void)
+bool MapFileReader::ReadMapValueArray(std::ifstream & stream)
 {
     try
     {
-        m_file_format_helper->LoadDataArray(m_file_path);
-        m_successfully_read_file = true;
+        m_file_format_helper->LoadDataArray(stream);
+        return true;
     }
     catch (const std::exception & ex)
     {
         std::cerr << ex.what() << std::endl;
-        m_successfully_read_file = false;
+        return false;
     }
 }
 
@@ -71,19 +83,19 @@ std::unique_ptr<float[]> MapFileReader::GetMapValueArray(void)
     return m_file_format_helper->GetDataArray();
 }
 
-std::array<int, 3> MapFileReader::GetGridSizeArray(void)
+std::array<int, 3> MapFileReader::GetGridSizeArray(void) const
 {
     if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
     return m_file_format_helper->GetGridSize();
 }
 
-std::array<float, 3> MapFileReader::GetGridSpacingArray(void)
+std::array<float, 3> MapFileReader::GetGridSpacingArray(void) const
 {
     if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
     return m_file_format_helper->GetGridSpacing();
 }
 
-std::array<float, 3> MapFileReader::GetOriginArray(void)
+std::array<float, 3> MapFileReader::GetOriginArray(void) const
 {
     if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
     return m_file_format_helper->GetOrigin();

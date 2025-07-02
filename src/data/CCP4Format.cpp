@@ -61,17 +61,11 @@ void CCP4Format::InitHeader(void)
             m_header.label[i][j] = '0';
 }
 
-void CCP4Format::LoadHeader(const std::string & filename)
+void CCP4Format::LoadHeader(std::istream & stream)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadHeader failed!");
-    }
-    
-    infile.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
-    if (!infile)
+    stream.seekg(0, std::ios::beg);
+    stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
+    if (!stream)
     {
         throw std::runtime_error("LoadHeader failed!");
     }
@@ -123,16 +117,10 @@ size_t CCP4Format::GetElementSize(void) const
     }
 }
 
-void CCP4Format::LoadDataArray(const std::string & filename)
+void CCP4Format::LoadDataArray(std::istream & stream)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        throw std::runtime_error("Cannot open the file: " + filename);
-    }
-    
-    // Skip header (1024 bytes)
-    infile.seekg(HEAD::SIZE_HEADER, std::ios::beg);
+    // Position stream at start of data section
+    stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
     size_t num_voxels{ static_cast<size_t>(m_header.array_size[0]) *
                        static_cast<size_t>(m_header.array_size[1]) *
@@ -142,8 +130,8 @@ void CCP4Format::LoadDataArray(const std::string & filename)
     size_t total_bytes{ num_voxels * element_size };
     
     auto blob_buffer{ std::make_unique<char[]>(total_bytes) };
-    infile.read(blob_buffer.get(), static_cast<long>(total_bytes));
-    if (!infile)
+    stream.read(blob_buffer.get(), static_cast<long>(total_bytes));
+    if (!stream)
     {
         throw std::runtime_error("Failed to read blob data from file");
     }

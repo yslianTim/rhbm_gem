@@ -72,17 +72,11 @@ void MrcFormat::InitHeader(void)
             m_header.label[i][j] = '0';
 }
 
-void MrcFormat::LoadHeader(const std::string & filename)
+void MrcFormat::LoadHeader(std::istream & stream)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("LoadHeader failed!");
-    }
-    
-    infile.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
-    if (!infile)
+    stream.seekg(0, std::ios::beg);
+    stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
+    if (!stream)
     {
         throw std::runtime_error("LoadHeader failed!");
     }
@@ -138,21 +132,15 @@ size_t MrcFormat::GetElementSize(void) const
     }
 }
 
-void MrcFormat::LoadDataArray(const std::string & filename)
+void MrcFormat::LoadDataArray(std::istream & stream)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        throw std::runtime_error("Cannot open the file: " + filename);
-    }
-    
-    // Skip header (1024 bytes)
-    infile.seekg(HEAD::SIZE_HEADER, std::ios::beg);
+    // Ensure we start reading data from the beginning of the file
+    stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
     // Skip if extra header is exist（extra_size > 0)
     if (m_header.extra_size > 0)
     {
-        infile.seekg(m_header.extra_size, std::ios::cur);
+        stream.seekg(m_header.extra_size, std::ios::cur);
     }
     
     size_t num_voxels{ static_cast<size_t>(m_header.array_size[0]) *
@@ -167,8 +155,8 @@ void MrcFormat::LoadDataArray(const std::string & filename)
     {
         case MODE::SIGNED_FLOAT32:
             // Data already stored as float32, so read directly into the array
-            infile.read(reinterpret_cast<char*>(data_array.get()), static_cast<std::streamsize>(total_bytes));
-            if (!infile)
+            stream.read(reinterpret_cast<char*>(data_array.get()), static_cast<std::streamsize>(total_bytes));
+            if (!stream)
             {
                 throw std::runtime_error("Failed to read voxel data from file");
             }
@@ -178,8 +166,8 @@ void MrcFormat::LoadDataArray(const std::string & filename)
             // For other modes read raw bytes then convert element by element
             {
                 auto blob_buffer{ std::make_unique<char[]>(total_bytes) };
-                infile.read(blob_buffer.get(), static_cast<std::streamsize>(total_bytes));
-                if (!infile)
+                stream.read(blob_buffer.get(), static_cast<std::streamsize>(total_bytes));
+                if (!stream)
                 {
                     throw std::runtime_error("Failed to read blob data from file");
                 }

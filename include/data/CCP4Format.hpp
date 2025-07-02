@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <vector>
+#include <istream>
 #include "MapFileFormatBase.hpp"
 
 class CCP4Format : public MapFileFormatBase
@@ -61,10 +62,10 @@ public:
     CCP4Format(void);
     ~CCP4Format();
     void InitHeader(void) override;
-    void LoadHeader(const std::string & filename) override;
+    void LoadHeader(std::istream & stream) override;
     void SaveHeader(const std::string & filename) override;
     void PrintHeader(void) const override;
-    void LoadDataArray(const std::string & filename) override;
+    void LoadDataArray(std::istream & stream) override;
     void SaveDataArray(const std::string & filename) override;
     std::unique_ptr<float[]> GetDataArray(void) override;
     std::array<int, 3> GetGridSize(void) override;
