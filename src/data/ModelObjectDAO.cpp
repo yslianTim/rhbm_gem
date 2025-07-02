@@ -377,7 +377,7 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
     SQLiteWrapper::StatementGuard guard(*m_database);
     for (auto & group_key : group_entry->GetGroupKeySet())
     {
-        m_database->Bind<int64_t>(1, static_cast<int64_t>(group_key));
+        m_database->Bind<uint64_t>(1, group_key);
         m_database->Bind<int>(2, group_entry->GetAtomObjectPtrListSize(group_key));
         m_database->Bind<double>(3, std::get<0>(group_entry->GetGausEstimateMean(group_key)));
         m_database->Bind<double>(4, std::get<1>(group_entry->GetGausEstimateMean(group_key)));
@@ -513,16 +513,16 @@ void ModelObjectDAO::LoadGroupPotentialEntryList(
     if (TableExists(table_name) == false) return;
     auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
     auto iter{
-        m_database->IterateQuery<int64_t, int,
+        m_database->IterateQuery<uint64_t, int,
                                  double, double, double, double,
                                  double, double, double, double>(
             FormatSQL(SELECT_GROUP_ENTRY_SQL, table_name)) };
-    std::tuple<int64_t, int,
+    std::tuple<uint64_t, int,
                double, double, double, double,
                double, double, double, double> row;
     while (iter.Next(row))
     {
-        auto group_key{ static_cast<uint64_t>(std::get<0>(row)) };
+        auto group_key{ std::get<0>(row) };
         group_entry->InsertGroupKey(group_key);
         group_entry->ReserveAtomObjectPtrList(group_key, std::get<1>(row));
         group_entry->AddGausEstimateMean(group_key, std::get<2>(row), std::get<3>(row));

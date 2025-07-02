@@ -33,6 +33,15 @@ struct SQLiteColumnReader<int64_t>
     }
 };
 
+template<>
+struct SQLiteColumnReader<uint64_t>
+{
+    static uint64_t Get(sqlite3_stmt * stmt, int index)
+    {
+        return static_cast<uint64_t>(sqlite3_column_int64(stmt, index));
+    }
+};
+
 // double specialization
 template<>
 struct SQLiteColumnReader<double>
