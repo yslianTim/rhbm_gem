@@ -5,8 +5,8 @@
 #include <array>
 #include <ostream>
 #include "FileWriterBase.hpp"
+#include "MapFileFormatBase.hpp"
 
-class MapFileFormatBase;
 class MapObject;
 
 class MapFileWriter : public FileWriterBase
@@ -16,8 +16,8 @@ class MapFileWriter : public FileWriterBase
     const MapObject * m_map_object;
 
 public:
-    MapFileWriter(const std::string & filename, const MapObject * map_object);
-    ~MapFileWriter();
+    explicit MapFileWriter(const std::string & filename, const MapObject * map_object);
+    ~MapFileWriter() = default;
     void Write(void) override;
 
 private:

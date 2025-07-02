@@ -5,8 +5,7 @@
 #include <array>
 #include <fstream>
 #include "FileReaderBase.hpp"
-
-class MapFileFormatBase;
+#include "MapFileFormatBase.hpp"
 
 class MapFileReader : public FileReaderBase
 {
@@ -15,8 +14,8 @@ class MapFileReader : public FileReaderBase
     std::unique_ptr<MapFileFormatBase> m_file_format_helper;
 
 public:
-    MapFileReader(const std::string & filename);
-    ~MapFileReader();
+    explicit MapFileReader(const std::string & filename);
+    ~MapFileReader() = default;
     void Read(void) override;
     bool IsSuccessfullyRead(void) const override { return m_successfully_read_file; }
 

@@ -179,7 +179,7 @@ void MrcFormat::LoadDataArray(std::istream & stream)
     }
 }
 
-void MrcFormat::SaveDataArray(std::ostream & stream)
+void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
     std::streamoff data_offset{ HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.extra_size) };
     stream.seekp(data_offset, std::ios::beg);
@@ -188,16 +188,10 @@ void MrcFormat::SaveDataArray(std::ostream & stream)
         throw std::runtime_error("Failed to seek to data offset");
     }
 
-    const size_t num_voxels{
-        static_cast<size_t>(m_header.array_size[0]) *
-        static_cast<size_t>(m_header.array_size[1]) *
-        static_cast<size_t>(m_header.array_size[2])
-    };
-
     const size_t element_size{ GetElementSize() };
-    const size_t total_bytes{ num_voxels * element_size };
-    stream.write(reinterpret_cast<const char*>(m_data_array.get()),
-                 static_cast<std::streamsize>(total_bytes));
+    const size_t total_bytes{ size * element_size };
+
+    stream.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(total_bytes));
     if (!stream)
     {
         throw std::runtime_error("Failed to write data array to file");
@@ -234,12 +228,6 @@ std::array<float, 3> MrcFormat::GetOrigin(void)
     origin.at(1) = m_header.origin[1];
     origin.at(2) = m_header.origin[2];
     return origin;
-}
-
-void MrcFormat::SetDataArray(size_t array_size, const float * data_array)
-{
-    m_data_array = std::make_unique<float[]>(array_size);
-    std::memcpy(m_data_array.get(), data_array, array_size * sizeof(float));
 }
 
 void MrcFormat::SetGridSize(const std::array<int, 3> & grid_size)

@@ -30,11 +30,6 @@ MapFileReader::MapFileReader(const std::string & filename) :
     }
 }
 
-MapFileReader::~MapFileReader()
-{
-
-}
-
 void MapFileReader::Read(void)
 {
     std::ifstream file{ m_file_path, std::ios::binary };

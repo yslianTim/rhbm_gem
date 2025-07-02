@@ -36,18 +36,13 @@ MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map
     }
 }
 
-MapFileWriter::~MapFileWriter()
-{
-
-}
-
 void MapFileWriter::Write(void)
 {
     if (m_map_object == nullptr)
     {
         throw std::invalid_argument("MapFileWriter::Write(): map_object is null");
     }
-    std::fstream file{ m_file_path, std::ios::out | std::ios::binary | std::ios::trunc };
+    std::ofstream file{ m_file_path, std::ios::binary | std::ios::trunc };
     if (!file)
     {
         std::cerr << "Cannot open the file: " << m_file_path << std::endl;
@@ -77,10 +72,10 @@ void MapFileWriter::WriteMapValueArray(std::ostream & stream)
 {
     try
     {
-        m_file_format_helper->SetDataArray(
+        m_file_format_helper->SaveDataArray(
+            m_map_object->GetMapValueArray(),
             m_map_object->GetMapValueArraySize(),
-            m_map_object->GetMapValueArray());
-        m_file_format_helper->SaveDataArray(stream);
+            stream);
     }
     catch (const std::exception & ex)
     {

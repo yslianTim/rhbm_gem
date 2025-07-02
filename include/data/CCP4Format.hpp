@@ -67,12 +67,11 @@ public:
     void SaveHeader(std::ostream & stream) override;
     void PrintHeader(void) const override;
     void LoadDataArray(std::istream & stream) override;
-    void SaveDataArray(std::ostream & stream) override;
+    void SaveDataArray(const float * data, size_t size, std::ostream & stream) override;
     std::unique_ptr<float[]> GetDataArray(void) override;
     std::array<int, 3> GetGridSize(void) override;
     std::array<float, 3> GetGridSpacing(void) override;
     std::array<float, 3> GetOrigin(void) override;
-    void SetDataArray(size_t array_size, const float * data_array) override;
     void SetGridSize(const std::array<int, 3> & grid_size) override;
     void SetGridSpacing(const std::array<float, 3> & grid_spacing) override;
     void SetOrigin(const std::array<float, 3> & origin) override;

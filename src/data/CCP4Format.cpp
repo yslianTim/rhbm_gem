@@ -124,12 +124,12 @@ void CCP4Format::LoadDataArray(std::istream & stream)
     size_t total_bytes{ num_voxels * element_size };
     
     auto blob_buffer{ std::make_unique<char[]>(total_bytes) };
-    stream.read(blob_buffer.get(), static_cast<long>(total_bytes));
+    stream.read(blob_buffer.get(), static_cast<std::streamsize>(total_bytes));
     if (!stream)
     {
         throw std::runtime_error("Failed to read blob data from file");
     }
-    
+
     auto data_array{ std::make_unique<float[]>(num_voxels) };
     switch (static_cast<MODE>(m_header.mode))
     {
@@ -148,13 +148,8 @@ void CCP4Format::LoadDataArray(std::istream & stream)
     }
 }
 
-void CCP4Format::SaveDataArray(std::ostream & stream)
+void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
-    if (!m_data_array)
-    {
-        throw std::runtime_error("SaveDataArray: data array is empty");
-    }
-
     const std::streamoff data_offset{
         HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.symmetry_table_size)
     };
@@ -165,22 +160,14 @@ void CCP4Format::SaveDataArray(std::ostream & stream)
         throw std::runtime_error("SaveDataArray: failed to seek to data section");
     }
 
-    // Calculate payload size
-    const size_t num_voxels{
-        static_cast<size_t>(m_header.array_size[0]) *
-        static_cast<size_t>(m_header.array_size[1]) *
-        static_cast<size_t>(m_header.array_size[2])
-    };
-
     const size_t element_size{ GetElementSize() };
-    const size_t total_bytes{ num_voxels * element_size };
+    const size_t total_bytes{ size * element_size };
 
     switch (static_cast<MODE>(m_header.mode))
     {
         case MODE::SIGNED_FLOAT32:
         {
-            stream.write(reinterpret_cast<const char*>(m_data_array.get()),
-                         static_cast<std::streamsize>(total_bytes));
+            stream.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(total_bytes));
             break;
         }
         default:
@@ -223,12 +210,6 @@ std::array<float, 3> CCP4Format::GetOrigin(void)
     origin.at(1) = 0.0f;
     origin.at(2) = 0.0f;
     return origin;
-}
-
-void CCP4Format::SetDataArray(size_t array_size, const float * data_array)
-{
-    m_data_array = std::make_unique<float[]>(array_size);
-    std::memcpy(m_data_array.get(), data_array, array_size * sizeof(float));
 }
 
 void CCP4Format::SetGridSize(const std::array<int, 3> & grid_size)
