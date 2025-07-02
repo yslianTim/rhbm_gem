@@ -148,8 +148,8 @@ void MrcFormat::LoadDataArray(std::istream & stream)
     switch (static_cast<MODE>(m_header.mode))
     {
         case MODE::SIGNED_FLOAT32:
-            // Data already stored as float32, so read directly into the array
-            stream.read(reinterpret_cast<char*>(data_array.get()), static_cast<std::streamsize>(total_bytes));
+            stream.read(reinterpret_cast<char*>(data_array.get()),
+                        static_cast<std::streamsize>(total_bytes));
             if (!stream)
             {
                 throw std::runtime_error("Failed to read voxel data from file");
@@ -157,25 +157,7 @@ void MrcFormat::LoadDataArray(std::istream & stream)
             m_data_array = std::move(data_array);
             break;
         default:
-            // For other modes read raw bytes then convert element by element
-            {
-                auto blob_buffer{ std::make_unique<char[]>(total_bytes) };
-                stream.read(blob_buffer.get(), static_cast<std::streamsize>(total_bytes));
-                if (!stream)
-                {
-                    throw std::runtime_error("Failed to read blob data from file");
-                }
-
-                #ifdef USE_OPENMP
-                #pragma omp parallel for num_threads(4)
-                #endif
-                for (size_t v = 0; v < num_voxels; v++)
-                {
-                    std::memcpy(&data_array[v], blob_buffer.get() + v * element_size, sizeof(float));
-                }
-                m_data_array = std::move(data_array);
-            }
-            break;
+            throw std::runtime_error("Unsupported MODE in LoadDataArray");
     }
 }
 
