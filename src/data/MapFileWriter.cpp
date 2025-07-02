@@ -6,11 +6,22 @@
 #include "MapObject.hpp"
 
 #include <iostream>
+#include <fstream>
+#include <stdexcept>
+#include <algorithm>
+#include <cctype>
 
 MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map_object) :
     m_file_path{ filename }, m_map_object{ map_object }
 {
+    if (m_map_object == nullptr)
+    {
+        throw std::invalid_argument("MapFileWriter: map_object is null");
+    }
     auto file_extension{ FilePathHelper::GetExtension(filename) };
+    std::transform(file_extension.begin(), file_extension.end(),
+                   file_extension.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if      (file_extension == ".mrc")
     {
         m_file_format_helper = std::make_unique<MrcFormat>();
@@ -32,18 +43,28 @@ MapFileWriter::~MapFileWriter()
 
 void MapFileWriter::Write(void)
 {
-    WriteHeader();
-    WriteMapValueArray();
+    if (m_map_object == nullptr)
+    {
+        throw std::invalid_argument("MapFileWriter::Write(): map_object is null");
+    }
+    std::fstream file{ m_file_path, std::ios::out | std::ios::binary | std::ios::trunc };
+    if (!file)
+    {
+        std::cerr << "Cannot open the file: " << m_file_path << std::endl;
+        return;
+    }
+    WriteHeader(file);
+    WriteMapValueArray(file);
 }
 
-void MapFileWriter::WriteHeader(void)
+void MapFileWriter::WriteHeader(std::ostream & stream)
 {
     try
     {
         m_file_format_helper->SetGridSize(m_map_object->GetGridSize());
         m_file_format_helper->SetGridSpacing(m_map_object->GetGridSpacing());
         m_file_format_helper->SetOrigin(m_map_object->GetOrigin());
-        m_file_format_helper->SaveHeader(m_file_path);
+        m_file_format_helper->SaveHeader(stream);
         m_file_format_helper->PrintHeader();
     }
     catch (const std::exception & ex)
@@ -52,14 +73,14 @@ void MapFileWriter::WriteHeader(void)
     }
 }
 
-void MapFileWriter::WriteMapValueArray(void)
+void MapFileWriter::WriteMapValueArray(std::ostream & stream)
 {
     try
     {
         m_file_format_helper->SetDataArray(
             m_map_object->GetMapValueArraySize(),
             m_map_object->GetMapValueArray());
-        m_file_format_helper->SaveDataArray(m_file_path);
+        m_file_format_helper->SaveDataArray(stream);
     }
     catch (const std::exception & ex)
     {

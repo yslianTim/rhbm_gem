@@ -82,17 +82,11 @@ void MrcFormat::LoadHeader(std::istream & stream)
     }
 }
 
-void MrcFormat::SaveHeader(const std::string & filename)
+void MrcFormat::SaveHeader(std::ostream & stream)
 {
-    std::ofstream outfile{ filename, std::ios::binary };
-    if (!outfile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("SaveHeader failed!");
-    }
-    
-    outfile.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
-    if (!outfile)
+    stream.seekp(0, std::ios::beg);
+    stream.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
+    if (!stream)
     {
         throw std::runtime_error("SaveHeader failed!");
     }
@@ -177,7 +171,7 @@ void MrcFormat::LoadDataArray(std::istream & stream)
                 #endif
                 for (size_t v = 0; v < num_voxels; v++)
                 {
-                    data_array[v] = *reinterpret_cast<const float*>(blob_buffer.get() + v * element_size);
+                    std::memcpy(&data_array[v], blob_buffer.get() + v * element_size, sizeof(float));
                 }
                 m_data_array = std::move(data_array);
             }
@@ -185,17 +179,11 @@ void MrcFormat::LoadDataArray(std::istream & stream)
     }
 }
 
-void MrcFormat::SaveDataArray(const std::string & filename)
+void MrcFormat::SaveDataArray(std::ostream & stream)
 {
-    std::fstream file{ filename, std::ios::in | std::ios::out | std::ios::binary };
-    if (!file)
-    {
-        throw std::runtime_error("Cannot open the file: " + filename);
-    }
-
     std::streamoff data_offset{ HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.extra_size) };
-    file.seekp(data_offset, std::ios::beg);
-    if (!file)
+    stream.seekp(data_offset, std::ios::beg);
+    if (!stream)
     {
         throw std::runtime_error("Failed to seek to data offset");
     }
@@ -208,9 +196,9 @@ void MrcFormat::SaveDataArray(const std::string & filename)
 
     const size_t element_size{ GetElementSize() };
     const size_t total_bytes{ num_voxels * element_size };
-    file.write(reinterpret_cast<const char*>(m_data_array.get()),
-               static_cast<std::streamsize>(total_bytes));
-    if (!file)
+    stream.write(reinterpret_cast<const char*>(m_data_array.get()),
+                 static_cast<std::streamsize>(total_bytes));
+    if (!stream)
     {
         throw std::runtime_error("Failed to write data array to file");
     }

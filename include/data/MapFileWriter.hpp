@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <array>
+#include <ostream>
 #include "FileWriterBase.hpp"
 
 class MapFileFormatBase;
@@ -20,7 +21,7 @@ public:
     void Write(void) override;
 
 private:
-    void WriteHeader(void);
-    void WriteMapValueArray(void);
+    void WriteHeader(std::ostream & stream);
+    void WriteMapValueArray(std::ostream & stream);
 
 };

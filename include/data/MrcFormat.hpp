@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <vector>
 #include <istream>
+#include <ostream>
 #include "MapFileFormatBase.hpp"
 
 class MrcFormat : public MapFileFormatBase
@@ -74,10 +75,10 @@ public:
     ~MrcFormat();
     void InitHeader(void) override;
     void LoadHeader(std::istream & stream) override;
-    void SaveHeader(const std::string & filename) override;
+    void SaveHeader(std::ostream & stream) override;
     void PrintHeader(void) const override;
     void LoadDataArray(std::istream & stream) override;
-    void SaveDataArray(const std::string & filename) override;
+    void SaveDataArray(std::ostream & stream) override;
     std::unique_ptr<float[]> GetDataArray(void) override;
     std::array<int, 3> GetGridSize(void) override;
     std::array<float, 3> GetGridSpacing(void) override;

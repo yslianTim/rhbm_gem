@@ -19,6 +19,14 @@ public:
     ~MapFileReader();
     void Read(void) override;
     bool IsSuccessfullyRead(void) const override { return m_successfully_read_file; }
+
+    /**
+     * @brief  Obtain the map value array read from file.
+     *
+     * Ownership of the returned pointer is transferred to the caller.
+     * After a successful call the reader no longer stores the voxel data
+     * and subsequent calls will return an empty pointer.
+     */
     std::unique_ptr<float[]> GetMapValueArray(void);
     std::array<int, 3> GetGridSizeArray(void) const;
     std::array<float, 3> GetGridSpacingArray(void) const;

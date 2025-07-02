@@ -45,7 +45,11 @@ void MapFileReader::Read(void)
         return;
     }
     bool header_success{ ReadHeader(file) };
-    bool data_success{ ReadMapValueArray(file) };
+    bool data_success{ false };
+    if (header_success == true)
+    {
+        data_success = ReadMapValueArray(file);
+    }
     m_successfully_read_file = header_success && data_success;
 }
 

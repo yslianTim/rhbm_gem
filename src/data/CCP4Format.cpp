@@ -71,17 +71,11 @@ void CCP4Format::LoadHeader(std::istream & stream)
     }
 }
 
-void CCP4Format::SaveHeader(const std::string & filename)
+void CCP4Format::SaveHeader(std::ostream & stream)
 {
-    std::ofstream outfile{ filename, std::ios::binary };
-    if (!outfile)
-    {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
-        throw std::runtime_error("SaveHeader failed!");
-    }
-    
-    outfile.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
-    if (!outfile)
+    stream.seekp(0, std::ios::beg);
+    stream.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
+    if (!stream)
     {
         throw std::runtime_error("SaveHeader failed!");
     }
@@ -145,7 +139,7 @@ void CCP4Format::LoadDataArray(std::istream & stream)
             #endif
             for (size_t v = 0; v < num_voxels; v++)
             {
-                data_array[v] = *reinterpret_cast<const float*>(blob_buffer.get() + v * element_size);
+                std::memcpy(&data_array[v], blob_buffer.get() + v * element_size, sizeof(float));
             }
             m_data_array = std::move(data_array);
             break;
@@ -154,26 +148,19 @@ void CCP4Format::LoadDataArray(std::istream & stream)
     }
 }
 
-void CCP4Format::SaveDataArray(const std::string & filename)
+void CCP4Format::SaveDataArray(std::ostream & stream)
 {
     if (!m_data_array)
     {
         throw std::runtime_error("SaveDataArray: data array is empty");
     }
 
-    // Open existing file for update -- do NOT truncate header we just saved.
-    std::fstream file{ filename, std::ios::in | std::ios::out | std::ios::binary };
-    if (!file)
-    {
-        throw std::runtime_error("Cannot open file for updating: " + filename);
-    }
-
     const std::streamoff data_offset{
         HEAD::SIZE_HEADER + static_cast<std::streamoff>(m_header.symmetry_table_size)
     };
 
-    file.seekp(data_offset, std::ios::beg);
-    if (!file)
+    stream.seekp(data_offset, std::ios::beg);
+    if (!stream)
     {
         throw std::runtime_error("SaveDataArray: failed to seek to data section");
     }
@@ -192,15 +179,15 @@ void CCP4Format::SaveDataArray(const std::string & filename)
     {
         case MODE::SIGNED_FLOAT32:
         {
-            file.write(reinterpret_cast<const char*>(m_data_array.get()),
-                       static_cast<std::streamsize>(total_bytes));
+            stream.write(reinterpret_cast<const char*>(m_data_array.get()),
+                         static_cast<std::streamsize>(total_bytes));
             break;
         }
         default:
             throw std::runtime_error("SaveDataArray: unsupported MODE");
     }
 
-    if (!file)
+    if (!stream)
     {
         throw std::runtime_error("SaveDataArray: failed to write voxel data");
     }
