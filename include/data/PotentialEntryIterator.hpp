@@ -63,8 +63,10 @@ public:
     std::unique_ptr<TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(uint64_t group_key, const std::string & class_key, double range=5.0, int par_id=0);
     std::unique_ptr<TGraphErrors> CreateCOMDistanceToGausEstimateGraph(uint64_t group_key, const std::string & class_key, int par_id=0);
     std::unique_ptr<TGraphErrors> CreateXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
+    std::unordered_map<size_t, std::unique_ptr<TGraphErrors>> CreateXYPositionTomographyGraphMap(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
     std::unique_ptr<TGraphErrors> CreateXYPositionTomographyGraph(std::vector<uint64_t> & group_key_list, const std::string & class_key, double normalized_z_pos=0.5, double z_ratio_window=0.1);
     std::unique_ptr<TGraph2DErrors> CreateXYPositionTomographyToGausEstimateGraph2D(std::vector<uint64_t> & group_key_list, const std::string & class_key, double normalized_z_pos=0.5, double z_ratio_window=0.1, int par_id=0);
+    std::unordered_map<size_t, std::unique_ptr<TGraph2DErrors>> CreateXYPositionTomographyToGausEstimateGraph2DMap(double normalized_z_pos=0.5, double z_ratio_window=0.1, int par_id=0, bool com_center=false);
     std::unique_ptr<TF1> CreateGroupGausFunctionPrior(uint64_t group_key, const std::string & class_key) const;
     #endif
 

@@ -740,6 +740,45 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomography
     return graph;
 }
 
+std::unordered_map<size_t, std::unique_ptr<TGraphErrors>>
+PotentialEntryIterator::CreateXYPositionTomographyGraphMap(
+    double normalized_z_pos, double z_ratio_window, bool com_center)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return {};
+    }
+
+    auto com_pos{ com_center ? m_model_object->GetCenterOfMassPosition() : std::array<float, 3>{0.0, 0.0, 0.0} };
+    auto z_pos{ m_model_object->GetModelPosition(2, normalized_z_pos) };
+    auto window_width{ 0.5 * m_model_object->GetModelLength(2) * z_ratio_window };
+    auto z_window_min{ z_pos - window_width };
+    auto z_window_max{ z_pos + window_width };
+    
+    std::unordered_map<size_t, std::unique_ptr<TGraphErrors>> graph_map;
+    std::unordered_map<size_t, int> count_map;
+    size_t current_id{ 0 };
+    for (auto & atom : m_model_object->GetComponentsList())
+    {
+        if (atom->GetSpecialAtomFlag() == true) continue;
+        if (AtomClassifier::IsMainChainMember(atom->GetElement(), atom->GetRemoteness(), current_id) == false) continue;
+
+        auto position{ atom->GetPosition() };
+        if (position.at(2) < z_window_min || position.at(2) >= z_window_max) continue;
+        if (graph_map.find(current_id) == graph_map.end())
+        {
+            graph_map[current_id] = ROOTHelper::CreateGraphErrors();
+            count_map[current_id] = 0;
+        }
+        graph_map[current_id]->SetPoint(
+            count_map[current_id],
+            position.at(0) - com_pos.at(0),
+            position.at(1) - com_pos.at(1));
+        count_map[current_id]++;
+    }
+    return graph_map;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomographyGraph(
     std::vector<uint64_t> & group_key_list, const std::string & class_key, double normalized_z_pos, double z_ratio_window)
 {
@@ -810,6 +849,49 @@ std::unique_ptr<TGraph2DErrors> PotentialEntryIterator::CreateXYPositionTomograp
         }
     }
     return graph;
+}
+
+std::unordered_map<size_t, std::unique_ptr<TGraph2DErrors>>
+PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2DMap(
+    double normalized_z_pos, double z_ratio_window, int par_id, bool com_center)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return {};
+    }
+
+    auto com_pos{ com_center ? m_model_object->GetCenterOfMassPosition() : std::array<float, 3>{0.0, 0.0, 0.0} };
+    auto z_range_tuple{ m_model_object->GetModelPositionRange(2) };
+    auto z_pos_min{ std::get<0>(z_range_tuple) };
+    auto z_pos_max{ std::get<1>(z_range_tuple) };
+    auto z_range{ z_pos_max - z_pos_min };
+    auto window_width{ 0.5 * z_range * z_ratio_window };
+    auto z_window_min{ z_pos_min + normalized_z_pos * z_range - window_width };
+    auto z_window_max{ z_pos_min + normalized_z_pos * z_range + window_width };
+    
+    std::unordered_map<size_t, std::unique_ptr<TGraph2DErrors>> graph_map;
+    std::unordered_map<size_t, int> count_map;
+    size_t current_id{ 0 };
+    for (auto & atom : m_model_object->GetSelectedAtomList())
+    {
+        if (atom->GetSpecialAtomFlag() == true) continue;
+        if (AtomClassifier::IsMainChainMember(atom->GetElement(), atom->GetRemoteness(), current_id) == false) continue;
+        auto position{ atom->GetPosition() };
+        if (position.at(2) < z_window_min || position.at(2) >= z_window_max) continue;
+        if (graph_map.find(current_id) == graph_map.end())
+        {
+            graph_map[current_id] = ROOTHelper::CreateGraph2DErrors();
+            count_map[current_id] = 0;
+        }
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        graph_map[current_id]->SetPoint(
+            count_map[current_id],
+            position.at(0) - com_pos.at(0),
+            position.at(1) - com_pos.at(1),
+            entry->GetGausEstimateMDPDE(par_id));
+        count_map[current_id]++;
+    }
+    return graph_map;
 }
 
 std::unique_ptr<TF1> PotentialEntryIterator::CreateGroupGausFunctionPrior(
