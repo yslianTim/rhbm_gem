@@ -223,7 +223,7 @@ void DemoPainter::PaintAtomMapValueExample(
     ROOTHelper::SetLineAttribute(frame.get(), 1, 0);
     frame->SetStats(0);
     frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
-    frame->GetYaxis()->SetTitle("Normalized Map Value");
+    frame->GetYaxis()->SetTitle("Map Value");
     frame->Draw();
 
     for (auto & graph : map_value_graph_list) graph->Draw("L X0");
@@ -249,7 +249,7 @@ void DemoPainter::PaintAtomMapValueExample(
     legend->AddEntry(gaus_function.get(),
         "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
     legend->AddEntry(map_value_graph_list.at(0).get(),
-        "Degenerated Map Value", "l");
+        "Map Value", "l");
     legend->Draw();
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);

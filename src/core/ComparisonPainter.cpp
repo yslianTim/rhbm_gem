@@ -394,8 +394,8 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     ROOTHelper::SetLegendDefaultStyle(legend.get());
     ROOTHelper::SetTextAttribute(legend.get(), 55.0f, 133, 12);
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    legend->AddEntry(sim_with_charge_graph[0][0].get(), "A. Thomas #font[2]{et al.}", "l");
-    legend->AddEntry(sim_additional_graph[0][0].get(), "W. D. Cornell #font[2]{et al.}", "l");
+    legend->AddEntry(sim_with_charge_graph[0][0].get(), "Thomas #font[2]{et al.}", "l");
+    legend->AddEntry(sim_additional_graph[0][0].get(), "Cornell #font[2]{et al.}", "l");
     legend->AddEntry(sim_no_charge_graph[0][0].get(), "All Neutral #alpha = 0", "l");
     legend->Draw();
 
@@ -554,8 +554,8 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
         ROOTHelper::SetLegendDefaultStyle(legend.get());
         ROOTHelper::SetTextAttribute(legend.get(), 55.0f, 133, 12);
         ROOTHelper::SetFillAttribute(legend.get(), 4000);
-        legend->AddEntry(sim_with_charge_graph_map[k].at(Residue::ALA).get(), "A. Thomas #font[2]{et al.}", "l");
-        legend->AddEntry(sim_additional_graph_map[k].at(Residue::ALA).get(), "W. D. Cornell #font[2]{et al.}", "l");
+        legend->AddEntry(sim_with_charge_graph_map[k].at(Residue::ALA).get(), "Thomas #font[2]{et al.}", "l");
+        legend->AddEntry(sim_additional_graph_map[k].at(Residue::ALA).get(), "Cornell #font[2]{et al.}", "l");
         legend->AddEntry(sim_no_charge_graph_map[k].at(Residue::ALA).get(), "All Neutral #alpha = 0", "l");
         legend->Draw();
 
