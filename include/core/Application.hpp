@@ -86,5 +86,6 @@ private:
     void RegisterPotentialDisplayCommand(void);
     void RegisterResultDumpCommand(void);
     void RegisterMapSimulationCommand(void);
+    void RegisterGlobalOptions(CLI::App * command);
 
 };

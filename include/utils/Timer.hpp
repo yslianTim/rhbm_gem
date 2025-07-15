@@ -6,6 +6,8 @@
 #include <memory>
 #include <type_traits>
 
+#include "Logger.hpp"
+
 template<typename DurationUnit = std::chrono::microseconds>
 class Timer final
 {

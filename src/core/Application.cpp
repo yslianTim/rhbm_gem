@@ -126,17 +126,8 @@ void Application::RegisterPotentialAnalysisCommand(void)
         "-r,--sim-resolution", m_potential_analysis_options.resolution_simulation,
         "Set simulated map's resolution (blurring width)")->default_val(0.0);
     m_potential_analysis_cmd->add_option(
-        "-d,--database", m_global_options.database_path,
-        "Database file path")->default_val("database.sqlite");
-    m_potential_analysis_cmd->add_option(
         "-k,--save-key", m_potential_analysis_options.saved_key_tag,
         "New key tag for saving ModelObject results into database")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "-j,--jobs", m_global_options.thread_size,
-        "Number of threads")->default_val(1);
-    m_potential_analysis_cmd->add_option(
-        "-v,--verbose", m_global_options.verbose_level,
-        "Verbose level")->default_val(1);
     m_potential_analysis_cmd->add_option(
         "--asymmetry", m_potential_analysis_options.is_asymmetry,
         "Turn On/Off asymmetry flag")->default_val(false);
@@ -161,6 +152,7 @@ void Application::RegisterPotentialAnalysisCommand(void)
     m_potential_analysis_cmd->add_option(
         "--alpha-g", m_potential_analysis_options.alpha_g,
         "Alpha value for G")->default_val(0.2);
+    RegisterGlobalOptions(m_potential_analysis_cmd);
     
     m_cli_app->callback([&]()
     {
@@ -180,12 +172,6 @@ void Application::RegisterPotentialDisplayCommand(void)
     m_potential_display_cmd->add_option(
         "-r,--ref-model-keylist", m_potential_display_options.ref_model_key_tag_list,
         "List of reference model key tag to be display")->default_val("");
-    m_potential_display_cmd->add_option(
-        "-d,--database", m_global_options.database_path,
-        "Database file path")->default_val("database.sqlite");
-    m_potential_display_cmd->add_option(
-        "-o,--folder", m_global_options.folder_path,
-        "folder path for output files")->default_val("");
     m_potential_display_cmd->add_option(
         "--pick-chain", m_atom_selector_options.pick_chain_id,
         "Pick chain ID")->default_val("");
@@ -210,6 +196,7 @@ void Application::RegisterPotentialDisplayCommand(void)
     m_potential_display_cmd->add_option(
         "--veto-remoteness", m_atom_selector_options.veto_remoteness,
         "Veto remoteness type")->default_val("");
+    RegisterGlobalOptions(m_potential_display_cmd);
 
     m_cli_app->callback([&]()
     {
@@ -227,14 +214,9 @@ void Application::RegisterResultDumpCommand(void)
         "-k,--model-keylist", m_result_dump_options.model_key_tag_list,
         "List of model key tag to be display")->required();
     m_result_dump_cmd->add_option(
-        "-d,--database", m_global_options.database_path,
-        "Database file path")->default_val("database.sqlite");
-    m_result_dump_cmd->add_option(
-        "-o,--folder", m_global_options.folder_path,
-        "folder path for output files")->default_val("");
-    m_result_dump_cmd->add_option(
         "-m,--map", m_result_dump_options.map_file_path,
         "Map file path")->default_val("");
+    RegisterGlobalOptions(m_result_dump_cmd);
 
     m_cli_app->callback([&]()
     {
@@ -249,14 +231,8 @@ void Application::RegisterMapSimulationCommand(void)
         "-a,--model", m_map_simulation_options.model_file_path,
         "Model file path")->required();
     m_map_simulation_cmd->add_option(
-        "-o,--folder", m_global_options.folder_path,
-        "folder path for output map files")->default_val("");
-    m_map_simulation_cmd->add_option(
         "-n,--name", m_map_simulation_options.map_file_name,
         "File name for output map files")->default_val("sim_map");
-    m_map_simulation_cmd->add_option(
-        "-j,--jobs", m_global_options.thread_size,
-        "Number of threads")->default_val(1);
     m_map_simulation_cmd->add_option(
         "--potential-model", m_map_simulation_options.potential_model_choice,
         "Atomic potential model option")->default_val(1);
@@ -272,9 +248,26 @@ void Application::RegisterMapSimulationCommand(void)
     m_map_simulation_cmd->add_option(
         "--blurring-width", m_map_simulation_options.blurring_width_list,
         "Blurring width (list) setting")->default_val("0.50");
+    RegisterGlobalOptions(m_map_simulation_cmd);
 
     m_map_simulation_cmd->callback([&]()
     {
         m_selected_command = "map_simulation";
     });
+}
+
+void Application::RegisterGlobalOptions(CLI::App * command)
+{
+    command->add_option(
+        "-d,--database", m_global_options.database_path,
+        "Database file path")->default_val("database.sqlite");
+    command->add_option(
+        "-o,--folder", m_global_options.folder_path,
+        "folder path for output files")->default_val("");
+    command->add_option(
+        "-j,--jobs", m_global_options.thread_size,
+        "Number of threads")->default_val(1);
+    command->add_option(
+        "-v,--verbose", m_global_options.verbose_level,
+        "Verbose level")->default_val(2);
 }
