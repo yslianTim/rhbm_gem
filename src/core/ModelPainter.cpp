@@ -807,7 +807,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     legend->AddEntry(gaus_function[0].get(),
         "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
     legend->AddEntry(map_value_graph_list[0].at(0).get(),
-        "Degenerated Map Value", "l");
+        "Map Value", "l");
     legend->Draw();
 
     canvas->cd();
@@ -1156,7 +1156,7 @@ void ModelPainter::PaintAtomGausToXYPosition(
             ROOTHelper::SetMarkerAttribute(graph_pos_map.at(element_id).get(), 24, 0.8f, kRed);
             graph_gaus_map.at(element_id)->SetNpx(100);
             graph_gaus_map.at(element_id)->SetNpy(100);
-            graph_gaus_map.at(element_id)->Draw("COL SAME");
+            graph_gaus_map.at(element_id)->Draw("COLZ SAME");
             graph_pos_map.at(element_id)->Draw("P X0");
 
             if (j == row_size - 1)

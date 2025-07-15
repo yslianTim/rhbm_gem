@@ -79,8 +79,8 @@ void ComparisonPainter::Painting(void)
     if (m_ref_model_object_list_map.find("with_charge") != m_ref_model_object_list_map.end() &&
         m_ref_model_object_list_map.find("no_charge") != m_ref_model_object_list_map.end())
     {
-        PaintGroupGausEstimateComparison("figure_3.pdf");
-        PaintGausEstimateResidueClassDenseComparison("figure_3_sup.pdf");
+        PaintGroupGausEstimateComparison("figure_4_ab.pdf");
+        PaintGausEstimateResidueClassDenseComparison("figure_4_sup.pdf");
     }
 
     for (auto & model_object : m_model_object_list)

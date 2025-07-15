@@ -145,9 +145,9 @@ void DemoPainter::Painting(void)
     PaintGroupGausMainChainSummary(demo_model_list, "figure_1_b.pdf");
     PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_c1.pdf", 0);
 
-    PaintGroupGausToFSC(demo_fsc_model_list, "figure_4_a.pdf");
-    PaintAtomWidthScatterPlotSingle(demo_model_object, "figure_4_b.pdf", true);
-    PaintGroupWidthScatterPlot(demo_model_list, "figure_4_c.pdf", 1, true);
+    PaintGroupGausToFSC(demo_fsc_model_list, "figure_3_a.pdf");
+    PaintAtomWidthScatterPlotSingle(demo_model_object, "figure_3_b.pdf", true);
+    PaintGroupWidthScatterPlot(demo_model_list, "figure_3_c.pdf", 1, true);
     
     for (auto & [key, model_list] : m_ref_model_object_list_map)
     {
