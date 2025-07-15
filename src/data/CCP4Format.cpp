@@ -1,7 +1,7 @@
 #include "CCP4Format.hpp"
+#include "Logger.hpp"
 
 #include <fstream>
-#include <iostream>
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>
@@ -64,13 +64,14 @@ void CCP4Format::SaveHeader(std::ostream & stream)
 
 void CCP4Format::PrintHeader(void) const
 {
-    std::cout << "CCP4 Header Info:" << std::endl;
-    std::cout << "Array Size: " << m_header.array_size[0] << " x "
-              << m_header.array_size[1] << " x " << m_header.array_size[2] << std::endl;
-    std::cout << "Grid Size: " << m_header.grid_size[0] << " x "
-              << m_header.grid_size[1] << " x " << m_header.grid_size[2] << std::endl;
-    std::cout << "Map Length: " << m_header.map_length[0] << ", "
-              << m_header.map_length[1] << ", " << m_header.map_length[2] << std::endl;
+    Logger::Log(LogLevel::Info,
+                "CCP4 Header Information:\n"
+                "Grid Size: " + std::to_string(m_header.grid_size[0]) + " x "
+                + std::to_string(m_header.grid_size[1]) + " x "
+                + std::to_string(m_header.grid_size[2]) + "\n"
+                "Map Length: " + std::to_string(m_header.map_length[0]) + ", "
+                + std::to_string(m_header.map_length[1]) + ", "
+                + std::to_string(m_header.map_length[2]) + "\n");
 }
 
 size_t CCP4Format::GetElementSize(void) const

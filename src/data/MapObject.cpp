@@ -1,8 +1,8 @@
 #include "MapObject.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "ArrayStats.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <cstring>
 #include <cmath>
 #include <algorithm>
@@ -78,31 +78,34 @@ std::unique_ptr<DataObjectBase> MapObject::Clone() const
 
 void MapObject::Display(void) const
 {
-    std::cout <<" o=====================================================o\n";
-    std::cout <<" |  Map Object  |   X-axis   |   Y-axis   |   Z-axis   |\n";
-    std::cout <<" o=====================================================o\n";
-    std::cout <<" | Grid size    | ";
-    std::cout << std::setw(10) << m_grid_size.at(0) <<" | "
-              << std::setw(10) << m_grid_size.at(1) <<" | "
-              << std::setw(10) << m_grid_size.at(2) <<" |\n";
-    std::cout <<" | Grid Spacing | ";
-    std::cout << std::setw(10) << m_grid_spacing.at(0) <<" | "
-              << std::setw(10) << m_grid_spacing.at(1) <<" | "
-              << std::setw(10) << m_grid_spacing.at(2) <<" |\n";
-    std::cout <<" | Origin (A)   | ";
-    std::cout << std::setw(10) << m_origin.at(0) <<" | "
-              << std::setw(10) << m_origin.at(1) <<" | "
-              << std::setw(10) << m_origin.at(2) <<" |\n";
-    std::cout <<" | Map Length(A)| ";
-    std::cout << std::setw(10) << m_map_length.at(0) <<" | "
-              << std::setw(10) << m_map_length.at(1) <<" | "
-              << std::setw(10) << m_map_length.at(2) <<" |\n";
-    std::cout <<" |-----------------------------------------------------|\n";
-    std::cout <<" | Map value min  | "<< std::setw(34) << m_map_value_min <<" |\n";
-    std::cout <<" | Map value max  | "<< std::setw(34) << m_map_value_max <<" |\n";
-    std::cout <<" | Map value mean | "<< std::setw(34) << m_map_value_mean <<" |\n";
-    std::cout <<" | Map value s.d. | "<< std::setw(34) << m_map_value_sd <<" |\n";
-    std::cout <<" o=====================================================o\n";
+    std::ostringstream oss;
+    oss << "MapObject Display:\n";
+    oss <<" o=====================================================o\n";
+    oss <<" |  Map Object  |   X-axis   |   Y-axis   |   Z-axis   |\n";
+    oss <<" o=====================================================o\n";
+    oss <<" | Grid size    | ";
+    oss << std::setw(10) << m_grid_size.at(0) <<" | "
+        << std::setw(10) << m_grid_size.at(1) <<" | "
+        << std::setw(10) << m_grid_size.at(2) <<" |\n";
+    oss <<" | Grid Spacing | ";
+    oss << std::setw(10) << m_grid_spacing.at(0) <<" | "
+        << std::setw(10) << m_grid_spacing.at(1) <<" | "
+        << std::setw(10) << m_grid_spacing.at(2) <<" |\n";
+    oss <<" | Origin (A)   | ";
+    oss << std::setw(10) << m_origin.at(0) <<" | "
+        << std::setw(10) << m_origin.at(1) <<" | "
+        << std::setw(10) << m_origin.at(2) <<" |\n";
+    oss <<" | Map Length(A)| ";
+    oss << std::setw(10) << m_map_length.at(0) <<" | "
+        << std::setw(10) << m_map_length.at(1) <<" | "
+        << std::setw(10) << m_map_length.at(2) <<" |\n";
+    oss <<" |-----------------------------------------------------|\n";
+    oss <<" | Map value min  | "<< std::setw(34) << m_map_value_min <<" |\n";
+    oss <<" | Map value max  | "<< std::setw(34) << m_map_value_max <<" |\n";
+    oss <<" | Map value mean | "<< std::setw(34) << m_map_value_mean <<" |\n";
+    oss <<" | Map value s.d. | "<< std::setw(34) << m_map_value_sd <<" |\n";
+    oss <<" o=====================================================o\n";
+    Logger::Log(LogLevel::Info, oss.str());
 }
 
 void MapObject::Update(void)
@@ -122,8 +125,10 @@ void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
 {
     if (m_map_value_array != nullptr && m_map_value_mean != 0.0f)
     {
-        std::cout <<"[Warning] MapObject::SetMapValueArray - MapObject already has a map value array."
-                  <<" The map value array will be replaced by new inserted data."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    "MapObject::SetMapValueArray - "
+                    "MapObject already has a map value array. "
+                    "The map value array will be replaced by new inserted data.");
     }
     m_map_value_array = std::move(map_value_array);
     Update();
@@ -177,7 +182,7 @@ std::array<int, 3> MapObject::GetIndexFromPosition(const std::array<float, 3> & 
     }
     catch (const std::out_of_range & exception)
     {
-        std::cerr << exception.what() << std::endl;
+        Logger::Log(LogLevel::Error, exception.what());
         return std::array<int, 3>{-1, -1, -1};
     }
     auto x{ (position.at(0) - m_origin.at(0)) / m_grid_spacing.at(0) };
@@ -202,7 +207,7 @@ float MapObject::GetMapValue(int index_x, int index_y, int index_z) const
     }
     catch(const std::out_of_range & exception)
     {
-        std::cerr << exception.what() << '\n';
+        Logger::Log(LogLevel::Error, exception.what());
         return 0.0f;
     }
     return m_map_value_array[GetGlobalIndex(index_x, index_y, index_z)];
@@ -261,8 +266,9 @@ void MapObject::MapValueArrayNormalization(void)
 {
     if (m_map_value_sd == 0.0f)
     {
-        std::cout <<"[Warning] The standard deviation of map value array is zero,"
-                  <<" skip normalization."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    "MapObject::MapValueArrayNormalization - "
+                    "The standard deviation of map value array is zero, skip normalization.");
         return;
     }
     for (size_t i = 0; i < static_cast<size_t>(m_voxel_size); i++)

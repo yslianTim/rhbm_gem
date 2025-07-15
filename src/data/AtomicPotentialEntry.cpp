@@ -1,7 +1,7 @@
 #include "AtomicPotentialEntry.hpp"
 #include "Constants.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <cmath>
 
 AtomicPotentialEntry::AtomicPotentialEntry(void)
@@ -67,7 +67,7 @@ double AtomicPotentialEntry::GetGausEstimateOLS(int par_id) const
         case 1: return GetWidthEstimateOLS();
         case 2: return GetIntensityEstimateOLS();
         default:
-            std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
+            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
             return 0.0;
     }
 }
@@ -95,7 +95,7 @@ double AtomicPotentialEntry::GetGausEstimateMDPDE(int par_id) const
         case 1: return GetWidthEstimateMDPDE();
         case 2: return GetIntensityEstimateMDPDE();
         default:
-            std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
+            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
             return 0.0;
     }
 }
@@ -123,7 +123,7 @@ double AtomicPotentialEntry::GetGausEstimatePosterior(const std::string & key, i
         case 1: return GetWidthEstimatePosterior(key);
         case 2: return GetIntensityEstimatePosterior(key);
         default:
-            std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
+            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
             return 0.0;
     }
 }
@@ -152,7 +152,7 @@ double AtomicPotentialEntry::GetGausVariancePosterior(const std::string & key, i
         case 1: return GetWidthVariancePosterior(key);
         case 2: return GetIntensityVariancePosterior(key);
         default:
-            std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
+            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
             return 0.0;
     }
 }

@@ -1,8 +1,9 @@
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <algorithm>
+#include <stdexcept>
 
 const std::vector<std::string> AtomicInfoHelper::m_group_class_key_list
 {
@@ -274,8 +275,8 @@ Residue AtomicInfoHelper::GetResidueFromString(const std::string & name)
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
-            std::cout <<"[Warning] AtomicInfoHelper::GetResidueFromString - Unknown string : "
-                    << name << std::endl;
+            Logger::Log(LogLevel::Warning, 
+                        "AtomicInfoHelper::GetResidueFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -294,8 +295,8 @@ Element AtomicInfoHelper::GetElementFromString(const std::string & name)
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
-            std::cout <<"[Warning] AtomicInfoHelper::GetElementFromString - Unknown string : "
-                    << name << std::endl;
+            Logger::Log(LogLevel::Warning, 
+                        "AtomicInfoHelper::GetElementFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -314,8 +315,8 @@ Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
-            std::cout <<"[Warning] AtomicInfoHelper::GetRemotenessFromString - Unknown string : "
-                    << name << std::endl;
+            Logger::Log(LogLevel::Warning, 
+                        "AtomicInfoHelper::GetRemotenessFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -334,8 +335,8 @@ Branch AtomicInfoHelper::GetBranchFromString(const std::string & name)
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
-            std::cout <<"[Warning] AtomicInfoHelper::GetBranchFromString - Unknown string : "
-                    << name << std::endl;
+            Logger::Log(LogLevel::Warning, 
+                        "AtomicInfoHelper::GetBranchFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -354,8 +355,8 @@ Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
-            std::cout <<"[Warning] AtomicInfoHelper::GetStructureFromString - Unknown string : "
-                    << name << std::endl;
+            Logger::Log(LogLevel::Warning, 
+                        "AtomicInfoHelper::GetStructureFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -374,8 +375,8 @@ Entity AtomicInfoHelper::GetEntityFromString(const std::string & name)
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
-            std::cout <<"[Warning] AtomicInfoHelper::GetEntityFromString - Unknown string : "
-                    << name << std::endl;
+            Logger::Log(LogLevel::Warning, 
+                        "AtomicInfoHelper::GetEntityFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -392,8 +393,9 @@ const std::string & AtomicInfoHelper::GetLabel(Residue residue)
     static std::string unk_label{"?"};
     if (m_residue_label_map.find(residue) == m_residue_label_map.end())
     {
-        std::cout <<"[Warning] AtomicInfoHelper::GetLabel - Unknown Residue : "
-                  << static_cast<int>(residue) << std::endl;
+        Logger::Log(LogLevel::Warning, 
+                    "AtomicInfoHelper::GetLabel - Unknown Residue: "
+                    + std::to_string(static_cast<int>(residue)));
         return unk_label;
     }
     return m_residue_label_map.at(residue);
@@ -404,8 +406,9 @@ const std::string & AtomicInfoHelper::GetLabel(Element element)
     static std::string unk_label{"?"};
     if (m_element_label_map.find(element) == m_element_label_map.end())
     {
-        std::cout <<"[Warning] AtomicInfoHelper::GetLabel - Unknown Residue : "
-                  << static_cast<int>(element) << std::endl;
+        Logger::Log(LogLevel::Warning, 
+                    "AtomicInfoHelper::GetLabel - Unknown Element: "
+                    + std::to_string(static_cast<int>(element)));
         return unk_label;
     }
     return m_element_label_map.at(element);
@@ -416,8 +419,9 @@ const std::string & AtomicInfoHelper::GetLabel(Remoteness remoteness)
     static std::string unk_label{"?"};
     if (m_remoteness_label_map.find(remoteness) == m_remoteness_label_map.end())
     {
-        std::cout <<"[Warning] AtomicInfoHelper::GetLabel - Unknown Residue : "
-                  << static_cast<int>(remoteness) << std::endl;
+        Logger::Log(LogLevel::Warning, 
+                    "AtomicInfoHelper::GetLabel - Unknown Remoteness: "
+                    + std::to_string(static_cast<int>(remoteness)));
         return unk_label;
     }
     return m_remoteness_label_map.at(remoteness);
@@ -428,8 +432,9 @@ const std::string & AtomicInfoHelper::GetLabel(Branch branch)
     static std::string unk_label{"?"};
     if (m_branch_label_map.find(branch) == m_branch_label_map.end())
     {
-        std::cout <<"[Warning] AtomicInfoHelper::GetLabel - Unknown Residue : "
-                  << static_cast<int>(branch) << std::endl;
+        Logger::Log(LogLevel::Warning, 
+                    "AtomicInfoHelper::GetLabel - Unknown Branch: "
+                    + std::to_string(static_cast<int>(branch)));
         return unk_label;
     }
     return m_branch_label_map.at(branch);

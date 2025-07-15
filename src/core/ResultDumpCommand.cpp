@@ -1,8 +1,8 @@
 #include "ResultDumpCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "ResultDumpVisitor.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <sstream>
 
 ResultDumpCommand::ResultDumpCommand(void) :
@@ -14,9 +14,9 @@ ResultDumpCommand::ResultDumpCommand(void) :
 
 void ResultDumpCommand::Execute(void)
 {
-    std::cout << "ResultDumpCommand::Execute() called." << std::endl;
-    std::cout << "Total number of model object sets to be print: "
-              << m_model_key_tag_list.size() << std::endl;
+    Logger::Log(LogLevel::Info, "ResultDumpCommand::Execute() called.");
+    Logger::Log(LogLevel::Info, "Total number of model object sets to be print: "
+                + std::to_string(m_model_key_tag_list.size()));
 
     auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
     try
@@ -32,7 +32,7 @@ void ResultDumpCommand::Execute(void)
     }
     catch (const std::exception & e)
     {
-        std::cerr << e.what() << '\n';
+        Logger::Log(LogLevel::Error, e.what());
         return;
     }
 

@@ -2,8 +2,8 @@
 #include "DataObjectManager.hpp"
 #include "PotentialDisplayVisitor.hpp"
 #include "AtomSelector.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <sstream>
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
@@ -21,9 +21,9 @@ PotentialDisplayCommand::~PotentialDisplayCommand()
 
 void PotentialDisplayCommand::Execute(void)
 {
-    std::cout << "PotentialDisplayCommand::Execute() called." << std::endl;
-    std::cout << "Total number of model object sets to be display: "
-              << m_model_key_tag_list.size() << std::endl;
+    Logger::Log(LogLevel::Info, "PotentialDisplayCommand::Execute() called.");
+    Logger::Log(LogLevel::Info, "Total number of model object sets to be display: "
+                + std::to_string(m_model_key_tag_list.size()));
 
     auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
     LoadModelObjects(data_manager.get());
@@ -93,15 +93,15 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
     }
 
     // Print the parsed model key tag list
-    std::cout << "Parsed reference model key tag list: " << std::endl;
+    Logger::Log(LogLevel::Debug, "Parsed reference model key tag list:");
     for (const auto & [group_name, key_tags] : m_ref_model_key_tag_list_map)
     {
-        std::cout << "Group: [" << group_name << "] -> ";
+        std::string message{ "Group: [" + group_name + "] -> " };
         for (const auto & key_tag : key_tags)
         {
-            std::cout << key_tag << " ";
+            message += key_tag + " ";
         }
-        std::cout << std::endl;
+        Logger::Log(LogLevel::Debug, message);
     }
 }
 

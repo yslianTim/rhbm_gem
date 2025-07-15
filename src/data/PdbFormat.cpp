@@ -3,9 +3,9 @@
 #include "AtomObject.hpp"
 #include "StringHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
+#include "Logger.hpp"
 
 #include <fstream>
-#include <iostream>
 #include <cstring>
 #include <stdexcept>
 
@@ -25,7 +25,7 @@ void PdbFormat::LoadHeader(const std::string & filename)
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
+        Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
         throw std::runtime_error("LoadHeader failed!");
     }
 }
@@ -45,7 +45,7 @@ void PdbFormat::LoadAtomSiteData(const std::string & filename)
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
+        Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
         throw std::runtime_error("LoadAtomSiteData failed!");
     }
 
@@ -123,7 +123,8 @@ PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const
     }
     catch(const std::exception & except)
     {
-        std::cerr << except.what() << std::endl;
+        Logger::Log(LogLevel::Error, "Failed to map header type: " + name);
+        Logger::Log(LogLevel::Error, "Exception: " + std::string(except.what()));
         return PDB_HEADER::UNK;
     }
 }

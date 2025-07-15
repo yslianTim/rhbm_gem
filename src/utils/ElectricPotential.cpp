@@ -1,6 +1,7 @@
 #include "ElectricPotential.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
+#include "Logger.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -127,7 +128,7 @@ double ElectricPotential::GetPotentialValue(
         case ModelChoice::SINGLE_GAUS_USER:
             return CalculateSingleGausUserModel(distance, amplitude, width);
         default:
-            std::cout << "ElectricPotential::GetPotentialValue: ModelChoice not set" << std::endl;
+            Logger::Log(LogLevel::Warning, "ElectricPotential::GetPotentialValue: ModelChoice not set.");
             return 0.0;
     }
 }

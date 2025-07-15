@@ -11,6 +11,7 @@
 #include "ArrayStats.hpp"
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
+#include "Logger.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -44,8 +45,10 @@ void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
     {
         if (atom->IsUnknownAtom() == true)
         {
-            std::cout <<"Warning: Unknown atom found in the model object. "
-                      << "This atom will be ignored in the simulation." << std::endl;
+            Logger::Log(LogLevel::Warning,
+                        "Unknown atom found in the model object: Serial-ID = "
+                        + std::to_string(atom->GetSerialID()) +
+                        ", this atom will be ignored in the simulation.");
             continue;
         }
         m_selected_atom_list.emplace_back(atom.get());
@@ -72,15 +75,19 @@ void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
                     atom->GetStructure(), true);
                 break;
             default:
-                std::cerr << "Error: Invalid partial charge choice." << std::endl;
+                Logger::Log(LogLevel::Error,
+                            "Invalid partial charge choice: "
+                            + std::to_string(m_partial_charge_choice));
                 break;
         }
         m_atom_charge_map.emplace(atom->GetSerialID(), charge);
     }
     m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(m_selected_atom_list, 0);
     m_pdb_id = data_object->GetPdbID();
-    std::cout <<" Number of selected atoms to be simulated = "
-              << m_selected_atom_list.size() <<" / "<< atom_list.size() << std::endl;
+    Logger::Log(LogLevel::Info,
+                "Number of selected atoms to be simulated = "
+                + std::to_string(m_selected_atom_list.size()) +" / "+
+                std::to_string(atom_list.size()) + " atoms.");
 }
 
 void MapSimulationVisitor::VisitMapObject(MapObject * data_object)
@@ -90,7 +97,7 @@ void MapSimulationVisitor::VisitMapObject(MapObject * data_object)
 
 void MapSimulationVisitor::Analysis(DataObjectManager * data_manager)
 {
-    std::cout <<"- Analysis..." << std::endl;
+    Logger::Log(LogLevel::Info, "- MapSimulationVisitor::Analysis");
     try
     {
         auto model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
@@ -112,14 +119,16 @@ void MapSimulationVisitor::Analysis(DataObjectManager * data_manager)
     }
     catch(const std::exception & e)
     {
-        std::cerr << e.what() << std::endl;
+        Logger::Log(LogLevel::Error, e.what());
     }
 }
 
 std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double blurring_width)
 {
     ScopeTimer timer("MapSimulationVisitor::CreateSimulatedMapObject");
-    std::cout <<"  - Create simulated map object with blurring width = "<< blurring_width << std::endl;
+    Logger::Log(LogLevel::Info,
+                std::string("  - Create simulated map object with blurring width = ") +
+                StringHelper::ToStringWithPrecision<double>(blurring_width, 2));
 
     auto electric_potential{ std::make_unique<ElectricPotential>() };
     electric_potential->SetBlurringWidth(blurring_width);
@@ -135,7 +144,7 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
     std::fill_n(map_value_array.get(), voxel_size, 0.0f);
 
-    std::cout <<"  - Start map value array production ..."<< std::endl;
+    Logger::Log(LogLevel::Info, "  - Start map value array production ...");
     std::vector<AtomObject*> in_range_atom_list;
     #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(m_thread_size) private(in_range_atom_list)
@@ -160,7 +169,7 @@ std::unique_ptr<MapObject> MapSimulationVisitor::CreateSimulatedMapObject(double
             );
         }
     }
-    std::cout <<"  - End map value array production."<< std::endl;
+    Logger::Log(LogLevel::Info, "  - End map value array production.");
     map_object->SetMapValueArray(std::move(map_value_array));
     map_object->Display();
 
@@ -173,7 +182,7 @@ std::array<int, 3> MapSimulationVisitor::CalculateGridSize(
     auto selected_atom_size{ m_selected_atom_list.size() };
     if (selected_atom_size == 0)
     {
-        std::cout <<"Warning: no atoms selected. Grid size is set to [1,1,1]."<< std::endl;
+        Logger::Log(LogLevel::Warning, "Warning: no atoms selected. Grid size is set to [1,1,1].");
         return std::array{ 1, 1, 1 };
     }
     std::array<float, 3> atom_range_max{
@@ -195,6 +204,9 @@ std::array<int, 3> MapSimulationVisitor::CalculateGridSize(
     auto grid_size_x{ static_cast<int>(std::ceil((atom_range_max.at(0) - origin.at(0)) / grid_spacing.at(0))) };
     auto grid_size_y{ static_cast<int>(std::ceil((atom_range_max.at(1) - origin.at(1)) / grid_spacing.at(1))) };
     auto grid_size_z{ static_cast<int>(std::ceil((atom_range_max.at(2) - origin.at(2)) / grid_spacing.at(2))) };
-    std::cout <<"Grid size = ["<< grid_size_x << "," << grid_size_y << "," << grid_size_z << "]" << std::endl;
+    Logger::Log(LogLevel::Info,
+                "Grid size = [" + std::to_string(grid_size_x) + "," +
+                std::to_string(grid_size_y) + "," +
+                std::to_string(grid_size_z) + "]");
     return std::array{ grid_size_x, grid_size_y, grid_size_z };
 }

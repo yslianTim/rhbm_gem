@@ -6,8 +6,7 @@
 #include "DatabaseManager.hpp"
 #include "ModelObject.hpp"
 #include "ScopeTimer.hpp"
-
-#include <iostream>
+#include "Logger.hpp"
 
 DataObjectManager::DataObjectManager(void) :
     m_db_manager{ nullptr }
@@ -57,8 +56,9 @@ void DataObjectManager::ProcessFile(const std::string & filename, const std::str
 
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
-        std::cout <<"The key tag: ["<< key_tag <<"] already presented"
-                  <<", this data object will be replaced."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    "The key tag: [" + key_tag + "] already presented in the data object map, "
+                    "this data object will be replaced.");
     }
     m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
 }
@@ -68,8 +68,9 @@ void DataObjectManager::ProduceFile(const std::string & filename, const std::str
     ScopeTimer timer("DataObjectManager::ProduceFile");
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
     {
-        std::cout <<"The data object with key tag: ["<< key_tag <<"] is not exists"
-                  <<", no file will be produced."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    "The data object with key tag: [" + key_tag + "] isn't presented, "
+                    "no file will be produced.");
         return;
     }
     auto data_object{ m_data_object_map.at(key_tag).get() };
@@ -83,8 +84,9 @@ void DataObjectManager::AddDataObject(
 {
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
-        std::cout <<"[Warning] The key tag: ["<< key_tag <<"] already presented in the data object map"
-                  <<", this data object will be replaced."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    "The key tag: [" + key_tag + "] already presented in the data object map, "
+                    "this data object will be replaced.");
     }
     m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
 }
@@ -98,8 +100,9 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
     }
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
-        std::cout <<"The key tag: ["<< key_tag <<"] already presented"
-                  <<", this data object will be replaced."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    "The key tag: [" + key_tag + "] already presented, "
+                    "this data object will be replaced.");
     }
     auto data_object{ m_db_manager->LoadDataObject(key_tag) };
     m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
@@ -115,22 +118,25 @@ void DataObjectManager::SaveDataObject(
     }
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
     {
-        std::cout <<"The key tag: ["<< key_tag <<"] isn't presented"
-                  <<", skip saving data object."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    "The data object with key tag: [" + key_tag + "] isn't presented, "
+                    "skip saving data object.");
         return;
     }
 
     if (renamed_key_tag != "")
     {
-        std::cout <<"The key tag of data object will be renamed as: "
-                  <<"["<< renamed_key_tag <<"]"
-                  <<" and saved into database: "<< m_db_manager->GetDatabasePath() << std::endl;
+        Logger::Log(LogLevel::Info,
+                    "The data object with key tag: [" + key_tag + "] will be renamed to: [" +
+                    renamed_key_tag + "] and saved into database: " +
+                    m_db_manager->GetDatabasePath().string());
         m_data_object_map.at(key_tag)->SetKeyTag(renamed_key_tag);
     }
     else
     {
-        std::cout <<"The data object ["<< key_tag <<"] will be saved into database: "
-                  << m_db_manager->GetDatabasePath() << std::endl;
+        Logger::Log(LogLevel::Info, 
+                    "The data object with key tag: [" + key_tag + "] will be saved into database: " +
+                    m_db_manager->GetDatabasePath().string());
     }
 
     m_db_manager->SaveDataObject(m_data_object_map.at(key_tag).get());
@@ -150,7 +156,7 @@ void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
     }
     catch (const std::exception & ex)
     {
-        std::cerr << ex.what() << std::endl;
+        Logger::Log(LogLevel::Warning, ex.what());
     }
 }
 

@@ -5,8 +5,7 @@
 #include "CifFormat.hpp"
 #include "AtomObject.hpp"
 #include "AtomicModelDataBlock.hpp"
-
-#include <iostream>
+#include "Logger.hpp"
 
 ModelFileReader::ModelFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }
@@ -47,7 +46,7 @@ void ModelFileReader::ReadHeader(void)
     }
     catch (const std::exception & ex)
     {
-        std::cerr << ex.what() << std::endl;
+        Logger::Log(LogLevel::Error, ex.what());
         m_successfully_read_file = false;
     }
 }
@@ -61,7 +60,7 @@ void ModelFileReader::ReadDataArray(void)
     }
     catch (const std::exception & ex)
     {
-        std::cerr << ex.what() << std::endl;
+        Logger::Log(LogLevel::Error, ex.what());
         m_successfully_read_file = false;
     }
 }

@@ -1,7 +1,8 @@
 #include "MrcFormat.hpp"
+#include "Logger.hpp"
 
+#include <sstream>
 #include <fstream>
-#include <iostream>
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>
@@ -70,13 +71,13 @@ void MrcFormat::SaveHeader(std::ostream & stream)
 
 void MrcFormat::PrintHeader(void) const
 {
-    std::cout << "MRC Header Info:" << std::endl;
-    std::cout << "Array Size: " << m_header.array_size[0] << " x "
-              << m_header.array_size[1] << " x " << m_header.array_size[2] << std::endl;
-    std::cout << "Grid Size: " << m_header.grid_size[0] << " x "
-              << m_header.grid_size[1] << " x " << m_header.grid_size[2] << std::endl;
-    std::cout << "Cell Dimensions: " << m_header.cell_dimension[0] << ", "
-              << m_header.cell_dimension[1] << ", " << m_header.cell_dimension[2] << std::endl;
+    std::ostringstream oss;
+    oss << "MRC Header Information:\n";
+    oss << "Grid Size: " << m_header.grid_size[0] << " x "
+              << m_header.grid_size[1] << " x " << m_header.grid_size[2] <<"\n";
+    oss << "Cell Dimensions: " << m_header.cell_dimension[0] << ", "
+              << m_header.cell_dimension[1] << ", " << m_header.cell_dimension[2] <<"\n";
+    Logger::Log(LogLevel::Info, oss.str());
 }
 
 size_t MrcFormat::GetElementSize(void) const

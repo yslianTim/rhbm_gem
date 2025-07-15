@@ -1,5 +1,6 @@
 #include "HRLModelHelper.hpp"
 #include "EigenMatrixUtility.hpp"
+#include "Logger.hpp"
 
 #include <cmath>
 
@@ -129,8 +130,9 @@ void HRLModelHelper::AlgorithmBetaMDPDE(double alpha_r)
             if ((m_beta_iter_array.col(i) - beta_in_previous_iter).squaredNorm() < m_tolerance) break;
             if (iter == m_maximum_iteration - 1)
             {
-                std::cout <<"Reach maximum iterations (Beta MDPDE) before achieving tolerance...";
-                std::cout << m_member_info_list.at(static_cast<size_t>(i)) << std::endl;
+                Logger::Log(LogLevel::Warning,
+                            "Reach maximum iterations (Beta MDPDE) before achieving tolerance for member: "
+                            + m_member_info_list.at(static_cast<size_t>(i)));
             }
         } //=== End of iteration loop
         m_beta_MDPDE_array.col(i) = m_beta_iter_array.col(i);
@@ -165,8 +167,9 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
         if ((m_mu_iter - mu_in_previous_iter).squaredNorm() < m_tolerance) break;
         if (iter == m_maximum_iteration - 1)
         {
-            std::cout <<"Reach maximum iterations (Mu MDPDE) before achieving tolerance...";
-            std::cout << m_member_info_list.at(0) << std::endl;
+            Logger::Log(LogLevel::Warning,
+                        "Reach maximum iterations (Mu MDPDE) before achieving tolerance for member: "
+                        + m_member_info_list.at(0));
         }
     } //=== End of iteration loop
 

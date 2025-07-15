@@ -4,8 +4,8 @@
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <sstream>
@@ -28,7 +28,7 @@ void CifFormat::LoadHeader(const std::string & filename)
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
+        Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
         throw std::runtime_error("LoadHeader failed!");
     }
 
@@ -52,29 +52,32 @@ void CifFormat::LoadHeader(const std::string & filename)
 
 void CifFormat::PrintHeader(void) const
 {
-    std::cout <<"#Entities = "<< m_data_block->GetEntityTypeMap().size() << std::endl;
+    std::ostringstream oss;
+    oss << "CIF Header Information:\n";
+    oss <<"#Entities = "<< m_data_block->GetEntityTypeMap().size() << "\n";
     for (auto & [entity_id, chain_id] : m_data_block->GetChainIDListMap())
     {
-        std::cout <<"[" << entity_id <<"] : ";
+        oss <<"[" << entity_id <<"] : ";
         for (size_t i = 0; i < chain_id.size(); i++)
         {
-            std::cout << chain_id.at(i);
-            if (i < chain_id.size() - 1) std::cout << ",";
+            oss << chain_id.at(i);
+            if (i < chain_id.size() - 1) oss << ",";
         }
-        std::cout << std::endl;
+        oss << "\n";
     }
 
     auto element_size{ m_data_block->GetElementTypeList().size() };
-    std::cout <<"#Elementry types = "<< element_size << std::endl;
-    std::cout <<"Element type list : ";
+    oss <<"#Elementry types = "<< element_size << "\n";
+    oss <<"Element type list : ";
     size_t count{ 0 };
     for (auto element : m_data_block->GetElementTypeList())
     {
-        std::cout << AtomicInfoHelper::GetLabel(element);
-        if (count < element_size - 1) std::cout << ",";
+        oss << AtomicInfoHelper::GetLabel(element);
+        if (count < element_size - 1) oss << ",";
         count++;
     }
-    std::cout << std::endl;
+    oss << "\n";
+    Logger::Log(LogLevel::Info, oss.str());
 }
 
 void CifFormat::LoadDataArray(const std::string & filename)
@@ -82,7 +85,7 @@ void CifFormat::LoadDataArray(const std::string & filename)
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
-        std::cerr << "Cannot open the file: " << filename << std::endl;
+        Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
         throw std::runtime_error("LoadDataArray failed!");
     }
     LoadAtomSiteData(infile);
@@ -125,7 +128,7 @@ void CifFormat::LoadEntityInfo(std::ifstream & infile)
             }
             catch(const std::exception& e)
             {
-                std::cerr << e.what() <<": "<< molecules_size_string << '\n';
+                Logger::Log(LogLevel::Error, "Invalid molecules size: " + molecules_size_string);
             }
             
             m_data_block->AddEntityTypeInEntityMap(
@@ -292,7 +295,7 @@ void CifFormat::LoadAtomSiteData(std::ifstream & infile)
             {
                 if (last_atom_object == nullptr)
                 {
-                    std::cout <<"CifFormat::LoadAtomSiteData() atom_object is missing."<< std::endl;
+                    Logger::Log(LogLevel::Error, "CifFormat::LoadAtomSiteData() atom_object is missing.");
                     return;
                 }
                 last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});

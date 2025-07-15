@@ -1,8 +1,8 @@
 #include "AminoAcidInfoHelper.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <stdexcept>
 #include <mutex>
 
@@ -395,7 +395,7 @@ double AminoAcidInfoHelper::GetPartialCharge(
     }
     catch(const std::exception & except)
     {
-        if (verbose == true) std::cout << except.what() << std::endl;
+        Logger::Log(LogLevel::Error, except.what());
         return 0.0;
     }
     
@@ -405,7 +405,10 @@ double AminoAcidInfoHelper::GetPartialCharge(
         return residue_cache.at(key);
     }
 
-    if (verbose == true) std::cout << "No partial charge data for this atom." << std::endl;
+    if (verbose == true)
+    {
+        Logger::Log(LogLevel::Warning, "No partial charge data for this atom.");
+    }
     return 0.0;
 }
 

@@ -1,7 +1,8 @@
 #include "SphereSampler.hpp"
 #include "Constants.hpp"
+#include "StringHelper.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <random>
 
 #ifdef USE_OPENMP
@@ -16,8 +17,13 @@ SphereSampler::SphereSampler(void) :
 
 void SphereSampler::Print(void) const
 {
-    std::cout <<"Sampling size = "<< m_sampling_size << std::endl;
-    std::cout <<"Sampling distance from "<< m_distance_min << " to " << m_distance_max <<" A"<< std::endl;
+    Logger::Log(LogLevel::Info,
+                "SphereSampler Configuration:\n"
+                " - Thread size: " + std::to_string(m_thread_size) + "\n"
+                " - Sampling size: " + std::to_string(m_sampling_size) + "\n"
+                " - Distance range: ["
+                + StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) + ", "
+                + StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) + "] Angstrom.");
 }
 
 std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamplingPoints(

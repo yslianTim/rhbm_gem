@@ -5,6 +5,7 @@
 #include "FilePathHelper.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "ArrayStats.hpp"
+#include "Logger.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -22,7 +23,6 @@
 #include <TF1.h>
 #endif
 
-#include <iostream>
 #include <vector>
 #include <tuple>
 
@@ -67,9 +67,10 @@ void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std
 
 void AtomPainter::Painting(void)
 {
-    std::cout <<"- AtomPainter::Painting"<<std::endl;
-    std::cout <<"  Folder path: "<< m_folder_path << std::endl;
-    std::cout <<"  Number of atom objects to be painted: "<< m_atom_object_list.size() << std::endl;
+    Logger::Log(LogLevel::Info, "AtomPainter::Painting() called.");
+    Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
+    Logger::Log(LogLevel::Info, "Number of atom objects to be painted: "
+                + std::to_string(m_atom_object_list.size()));
     
     PaintDemoPlot("demo_plot.pdf");
 }

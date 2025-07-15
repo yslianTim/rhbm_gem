@@ -1,7 +1,7 @@
 #include "AtomSelector.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <sstream>
 
 AtomSelector::AtomSelector(void)
@@ -11,24 +11,26 @@ AtomSelector::AtomSelector(void)
 
 void AtomSelector::Print(void) const
 {
-    std::cout <<"Atomic Picking List:" << std::endl;
-    std::cout <<" - chain set: ";
-    for (auto & chain : pick_chain_set) std::cout << chain <<", ";
-    std::cout << std::endl << " - residue set: ";
-    for (auto & residue : pick_residue_set) std::cout << AtomicInfoHelper::GetLabel(residue) <<", ";
-    std::cout << std::endl << " - element set: ";
-    for (auto & element : pick_element_set) std::cout << AtomicInfoHelper::GetLabel(element) <<", ";
-    std::cout << std::endl;
+    std::ostringstream oss;
+    oss<<"Atomic Picking List:\n";
+    oss <<" - Chain set: ";
+    for (auto & chain : pick_chain_set) oss << chain <<", ";
+    oss <<"\n - Residue set: ";
+    for (auto & residue : pick_residue_set) oss << AtomicInfoHelper::GetLabel(residue) <<", ";
+    oss <<"\n - Element set: ";
+    for (auto & element : pick_element_set) oss << AtomicInfoHelper::GetLabel(element) <<", ";
+    oss <<"\n";
 
+    oss <<"Atomic Vetoing List:\n";
+    oss <<" - Chain set: ";
+    for (auto & chain : veto_chain_set) oss << chain <<", ";
+    oss <<"\n - Residue set: ";
+    for (auto & residue : veto_residue_set) oss << AtomicInfoHelper::GetLabel(residue) <<", ";
+    oss <<"\n - Element set: ";
+    for (auto & element : veto_element_set) oss << AtomicInfoHelper::GetLabel(element) <<", ";
+    oss <<"\n";
 
-    std::cout <<"Atomic Vetoing List:" << std::endl;
-    std::cout <<" - chain set: ";
-    for (auto & chain : veto_chain_set) std::cout << chain <<", ";
-    std::cout << std::endl << " - residue set: ";
-    for (auto & residue : veto_residue_set) std::cout << AtomicInfoHelper::GetLabel(residue) <<", ";
-    std::cout << std::endl << " - element set: ";
-    for (auto & element : veto_element_set) std::cout << AtomicInfoHelper::GetLabel(element) <<", ";
-    std::cout << std::endl;
+    Logger::Log(LogLevel::Info, oss.str());
 }
 
 bool AtomSelector::GetSelectionFlag(

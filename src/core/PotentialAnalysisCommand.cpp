@@ -3,8 +3,7 @@
 #include "PotentialAnalysisVisitor.hpp"
 #include "SphereSampler.hpp"
 #include "ModelObject.hpp"
-
-#include <iostream>
+#include "Logger.hpp"
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_thread_size{ 1 }, m_is_asymmetry{ false }, m_is_simulation{ false },
@@ -27,7 +26,7 @@ PotentialAnalysisCommand::~PotentialAnalysisCommand()
 
 void PotentialAnalysisCommand::Execute(void)
 {
-    std::cout << "PotentialAnalysisCommand::Execute() called." << std::endl;
+    Logger::Log(LogLevel::Info, "PotentialAnalysisCommand::Execute() called.");
 
     auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
     try
@@ -48,7 +47,7 @@ void PotentialAnalysisCommand::Execute(void)
     }
     catch (const std::exception & e)
     {
-        std::cerr << e.what() << '\n';
+        Logger::Log(LogLevel::Error, e.what());
         return;
     }
 
@@ -91,9 +90,10 @@ void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * mode
     if (model_object == nullptr) return;
     if (m_simulated_map_resolution == 0.0)
     {
-        std::cout <<"[Warning] The resolution of input simulated map hasn't been set.\n";
-        std::cout <<"          Please give the corresponding resolution value for this map.\n";
-        std::cout <<"          (-r, --sim-resolution)"<< std::endl;
+        Logger::Log(LogLevel::Warning,
+            "[Warning] The resolution of input simulated map hasn't been set.\n"
+            "          Please give the corresponding resolution value for this map.\n"
+            "          (-r, --sim-resolution)");
     }
     model_object->SetEmdID("Simulation");
     model_object->SetResolution(m_simulated_map_resolution);

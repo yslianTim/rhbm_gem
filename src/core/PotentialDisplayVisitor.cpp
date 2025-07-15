@@ -12,8 +12,8 @@
 #include "DemoPainter.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <memory>
 
 PotentialDisplayVisitor::PotentialDisplayVisitor(AtomSelector * atom_selector) :
@@ -54,7 +54,7 @@ void PotentialDisplayVisitor::VisitMapObject(MapObject * data_object)
 
 void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
 {
-    std::cout <<"- PotentialDisplayVisitor::Analysis" << std::endl;
+    Logger::Log(LogLevel::Info, "- PotentialDisplayVisitor::Analysis");
     if (data_manager == nullptr) return;
 
     std::unique_ptr<PainterBase> painter{ nullptr };
@@ -82,12 +82,14 @@ void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
             AddReferenceModelObjectToPainter(data_manager, painter.get());
             break;
         default:
-            std::cout <<"[Warning] Invalid painter choice input : ["<< m_painter_choice <<"]"<< std::endl;
-            std::cout <<" * Available Painter Choices : "<< std::endl;
-            std::cout <<"   - [0] AtomPainter : "<< std::endl;
-            std::cout <<"   - [1] ModelPainter : "<< std::endl;
-            std::cout <<"   - [2] ComparisonPainter : "<< std::endl;
-            std::cout <<"   - [3] DemoPainter : "<< std::endl;
+            Logger::Log(LogLevel::Warning,
+                        "Invalid painter choice input: [" + std::to_string(m_painter_choice) + "]");
+            Logger::Log(LogLevel::Warning,
+                        "Available Painter Choices:\n"
+                        "  [0] AtomPainter\n"
+                        "  [1] ModelPainter\n"
+                        "  [2] ComparisonPainter\n"
+                        "  [3] DemoPainter");
             break;
     }
 

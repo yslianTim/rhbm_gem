@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -11,6 +10,7 @@
 #include <filesystem>
 #include "SQLiteBinder.hpp"
 #include "SQLiteColumnReader.hpp"
+#include "Logger.hpp"
 
 class SQLiteWrapper
 {
@@ -63,8 +63,9 @@ public:
             }
             catch (const std::exception & e)
             {
-                std::cerr << "TransactionGuard: Failed to commit or rollback transaction: "
-                          << e.what() << std::endl;
+                Logger::Log(LogLevel::Error,
+                            "TransactionGuard: Failed to commit or rollback transaction: "
+                            + std::string(e.what()));
             }
         }
 
@@ -143,8 +144,9 @@ public:
             }
             if (rc != SQLITE_OK)
             {
-                std::cerr << "Failed to close database: " << sqlite3_errstr(rc)
-                          << std::endl;
+                Logger::Log(LogLevel::Error,
+                            "SQLiteWrapper: Failed to close database: "
+                            + std::string(sqlite3_errstr(rc)));
             }
             m_database_ptr = nullptr;
         }

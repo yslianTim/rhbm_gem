@@ -1,8 +1,8 @@
 #include "GroupPotentialEntry.hpp"
 #include "AtomObject.hpp"
 #include "Constants.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <cmath>
 
 GroupPotentialEntry::GroupPotentialEntry(void)
@@ -115,7 +115,7 @@ double GroupPotentialEntry::GetGausEstimateFromTuple(
         case 1: return std::get<1>(estimate);
         case 2: return CalculateIntensityEstimate(estimate);
         default:
-            std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
+            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
             return 0.0;
     }
 }
@@ -130,7 +130,7 @@ double GroupPotentialEntry::GetGausVarianceFromTuple(
         case 1: return std::get<1>(variance);
         case 2: return CalculateIntensityVariance(estimate, variance);
         default:
-            std::cerr <<"Invalid parameter index: "<< par_id << std::endl;
+            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
             return 0.0;
     }
 }

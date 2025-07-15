@@ -4,8 +4,8 @@
 #include "MrcFormat.hpp"
 #include "CCP4Format.hpp"
 #include "MapObject.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <fstream>
 #include <stdexcept>
 #include <algorithm>
@@ -45,7 +45,7 @@ void MapFileWriter::Write(void)
     std::ofstream file{ m_file_path, std::ios::binary | std::ios::trunc };
     if (!file)
     {
-        std::cerr << "Cannot open the file: " << m_file_path << std::endl;
+        Logger::Log(LogLevel::Error, "Cannot open the file: " + m_file_path);
         return;
     }
     WriteHeader(file);
@@ -64,7 +64,7 @@ void MapFileWriter::WriteHeader(std::ostream & stream)
     }
     catch (const std::exception & ex)
     {
-        std::cerr << ex.what() << std::endl;
+        Logger::Log(LogLevel::Error, ex.what());
     }
 }
 
@@ -79,6 +79,6 @@ void MapFileWriter::WriteMapValueArray(std::ostream & stream)
     }
     catch (const std::exception & ex)
     {
-        std::cerr << ex.what() << std::endl;
+        Logger::Log(LogLevel::Error, ex.what());
     }
 }

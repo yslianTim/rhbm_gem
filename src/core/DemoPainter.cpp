@@ -9,6 +9,7 @@
 #include "ArrayStats.hpp"
 #include "KeyPacker.hpp"
 #include "GlobalEnumClass.hpp"
+#include "Logger.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -28,7 +29,6 @@
 #include <TEllipse.h>
 #endif
 
-#include <iostream>
 #include <vector>
 #include <tuple>
 
@@ -72,8 +72,8 @@ void DemoPainter::AddReferenceDataObject(DataObjectBase * data_object, const std
 
 void DemoPainter::Painting(void)
 {
-    std::cout <<"- DemoPainter::Painting"<<std::endl;
-    std::cout <<"  Folder path: "<< m_folder_path << std::endl;
+    Logger::Log(LogLevel::Info, "DemoPainter::Painting() called.");
+    Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
 
     for (auto & model : m_model_object_list)
     {
@@ -165,7 +165,7 @@ void DemoPainter::PaintAtomMapValueExample(
 {
     auto file_path{ m_folder_path + name };
     auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
-    std::cout <<"- DemoPainter::PaintAtomMapValueExample"<< std::endl;
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomMapValueExample");
 
     if (model_object == nullptr) return;
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -254,7 +254,7 @@ void DemoPainter::PaintAtomMapValueExample(
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -263,7 +263,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
 {
     auto file_path{ m_folder_path + name };
     auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
-    std::cout <<"- DemoPainter::PaintGroupGausMainChainSummary"<< std::endl;
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSummary");
 
     for (auto & model : model_list) if (model == nullptr) return;
 
@@ -408,7 +408,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -417,7 +417,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
 {
     auto file_path{ m_folder_path + name };
     auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
-    std::cout <<"- DemoPainter::PaintGroupGausMainChainSingle"<< std::endl;
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSingle");
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
@@ -565,7 +565,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -573,12 +573,13 @@ void DemoPainter::PaintGroupGausToFSC(
     const std::vector<ModelObject *> & model_list, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- DemoPainter::PaintGroupGausToFSC"<< std::endl;
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausToFSC");
 
     for (auto & model : model_list)
     {
         if (model == nullptr) return;
-        std::cout <<"find model " << model->GetPdbID() << std::endl;
+        Logger::Log(LogLevel::Debug, "Find Model : "+ model->GetPdbID());
+        
     }
 
     #ifdef HAVE_ROOT
@@ -713,7 +714,7 @@ void DemoPainter::PaintGroupGausToFSC(
     bottom_title_text->Draw();
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -721,7 +722,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     ModelObject * model_object, const std::string & name, bool draw_box_plot)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ModelPainter::PaintAtomWidthScatterPlotSingle"<< std::endl;
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomWidthScatterPlotSingle");
     auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
 
     if (model_object == nullptr) return;
@@ -920,7 +921,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -929,7 +930,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     int par_id, bool draw_box_plot)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- DemoPainter::PaintGroupWidthScatterPlot"<< std::endl;
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupWidthScatterPlot");
     auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
 
     for (auto & model : model_list) if (model == nullptr) return;
@@ -1108,7 +1109,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     bottom_title_text->Draw();
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
 
     canvas->cd();
     auto pad_extra2{ ROOTHelper::CreatePad("pad_extra2","", 0.96, 0.10, 1.00, 0.90) };
@@ -1126,7 +1127,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     right_title_text->Draw();
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -1134,7 +1135,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     ModelObject * model_object1, ModelObject * model_object2, const std::string & name, int par_id)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- DemoPainter::PaintAtomGausMainChainDemo"<< std::endl;
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomGausMainChainDemo");
     
     if (model_object1 == nullptr || model_object2 == nullptr) return;
     auto entry_iter1{ std::make_unique<PotentialEntryIterator>(model_object1) };
@@ -1229,7 +1230,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -1237,7 +1238,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     ModelObject * model_object, const std::string & name, int par_id)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- DemoPainter::PaintAtomGausMainChainDemoSingle"<< std::endl;
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomGausMainChainDemoSingle");
     
     if (model_object == nullptr) return;
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -1332,7 +1333,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 

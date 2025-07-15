@@ -14,8 +14,8 @@
 #include "ArrayStats.hpp"
 #include "AtomClassifier.hpp"
 #include "GausLinearTransformHelper.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <tuple>
 #include <fstream>
 #include <unordered_set>
@@ -47,7 +47,8 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
         auto atom_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
         atom->AddAtomicPotentialEntry(std::move(atom_potential_entry));
     }
-    std::cout <<" Number of selected atom = "<< m_selected_atom_list.size() << std::endl;
+    Logger::Log(LogLevel::Info, " Number of selected atom = "
+                + std::to_string(m_selected_atom_list.size()));
 }
 
 void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
@@ -68,7 +69,7 @@ void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
 
 void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
 {
-    std::cout <<"- Analysis..." << std::endl;
+    Logger::Log(LogLevel::Info, "- PotentialAnalysisVisitor::Analysis...");
     try
     {
         auto model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
@@ -87,7 +88,7 @@ void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
     }
     catch(const std::exception & e)
     {
-        std::cerr << e.what() << std::endl;
+        Logger::Log(LogLevel::Error, e.what());
     }
 }
 

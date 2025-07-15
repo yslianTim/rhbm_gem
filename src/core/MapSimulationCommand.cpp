@@ -1,8 +1,8 @@
 #include "MapSimulationCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "MapSimulationVisitor.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <sstream>
 
 MapSimulationCommand::MapSimulationCommand(void) :
@@ -17,9 +17,9 @@ MapSimulationCommand::MapSimulationCommand(void) :
 
 void MapSimulationCommand::Execute(void)
 {
-    std::cout << "MapSimulationCommand::Execute() called." << std::endl;
-    std::cout << "Total number of blurring width sets to be simulated: "
-              << m_blurring_width_list.size() << std::endl;
+    Logger::Log(LogLevel::Info, "MapSimulationCommand::Execute() called.");
+    Logger::Log(LogLevel::Info, "Total number of blurring width sets to be simulated: "
+                + std::to_string(m_blurring_width_list.size()));
 
     auto data_manager{ std::make_unique<DataObjectManager>() };
     data_manager->ProcessFile(m_model_file_path, "model");

@@ -12,8 +12,8 @@
 #include "PotentialEntryIterator.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "KeyPacker.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <memory>
 #include <fstream>
 
@@ -42,7 +42,7 @@ void ResultDumpVisitor::Analysis(DataObjectManager * data_manager)
 {
     if (data_manager == nullptr)
     {
-        std::cout <<"[Warning] Data manager is null, please check the input."<< std::endl;
+        Logger::Log(LogLevel::Warning, "[Warning] Data manager is null, please check the input.");
         return;
     }
     BuildSelectedAtomList(data_manager);
@@ -60,11 +60,13 @@ void ResultDumpVisitor::Analysis(DataObjectManager * data_manager)
             RunGausEstimatesDumping(data_manager);
             break;
         default:
-            std::cout <<"[Warning] Invalid printer choice input : ["<< m_printer_choice <<"]"<< std::endl;
-            std::cout <<" * Available Printer Choices : "<< std::endl;
-            std::cout <<"   - [0] AtomPositionDumping : "<< std::endl;
-            std::cout <<"   - [1] MapValueDumping : "<< std::endl;
-            std::cout <<"   - [2] GausEstimatesDumping : "<< std::endl;
+            Logger::Log(LogLevel::Warning,
+                        "Invalid printer choice input : [" + std::to_string(m_printer_choice) + "]");
+            Logger::Log(LogLevel::Warning,
+                        "Available Printer Choices:\n"
+                        "  [0] AtomPositionDumping\n"
+                        "  [1] MapValueDumping\n"
+                        "  [2] GausEstimatesDumping");
             break;
     }
 }
@@ -87,9 +89,9 @@ void ResultDumpVisitor::BuildSelectedAtomList(DataObjectManager * data_manager)
             if (atom->GetAtomicPotentialEntry() == nullptr) continue;
             m_selected_atom_list_map[key_tag].emplace_back(atom.get());
         }
-        std::cout <<" - Number of selected atoms for output: \n";
-        std::cout <<"   ["<< key_tag <<"] "
-                  << m_selected_atom_list_map.at(key_tag).size() <<" atoms."<< std::endl;
+        Logger::Log(LogLevel::Info,
+                    "Selected atoms for key tag [" + key_tag + "]: "
+                    + std::to_string(m_selected_atom_list_map[key_tag].size()));
     }
 }
 
@@ -108,7 +110,8 @@ void ResultDumpVisitor::RunAtomPositionDumping(DataObjectManager * data_manager)
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
-            std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
+            Logger::Log(LogLevel::Error,
+                        "[Error]: Could not open file " + output_path + " for writing.\n");
             return;
         }
         outfile << "SerialID,X,Y,Z\n";
@@ -120,7 +123,7 @@ void ResultDumpVisitor::RunAtomPositionDumping(DataObjectManager * data_manager)
                     << atom->GetPosition().at(2) <<'\n';
         }
         outfile.close();
-        std::cout <<"Output file: "<< output_path << std::endl;
+        Logger::Log(LogLevel::Info, "Output file: " + output_path);
     }
 }
 
@@ -137,8 +140,8 @@ void ResultDumpVisitor::RunMapValueDumping(DataObjectManager * data_manager)
     }
     catch (const std::exception & e)
     {
-        std::cerr << e.what() << '\n';
-        std::cout <<"[Warning] Please give the path of map file via -m option."<< std::endl;
+        Logger::Log(LogLevel::Error, e.what());
+        Logger::Log(LogLevel::Error, "[Error] Please give the path of map file via -m option.");
         return;
     }
     if (map_object == nullptr) return;
@@ -175,7 +178,8 @@ void ResultDumpVisitor::RunMapValueDumping(DataObjectManager * data_manager)
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
-            std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
+            Logger::Log(LogLevel::Error,
+                        "[Error]: Could not open file " + output_path + " for writing.\n");
             return;
         }
         outfile << "GridID,X,Y,Z,MapValue\n";
@@ -196,8 +200,9 @@ void ResultDumpVisitor::RunMapValueDumping(DataObjectManager * data_manager)
                     << map_value <<'\n';
             count++;
         }
-        std::cout <<" Selected map grid size = "<< count
-                  <<" / "<< map_object->GetMapValueArraySize() << std::endl;
+        Logger::Log(LogLevel::Info,
+                    " Selected map grid size = " + std::to_string(count) +
+                    " / " + std::to_string(map_object->GetMapValueArraySize()));
     }
 }
 
@@ -216,7 +221,8 @@ void ResultDumpVisitor::RunGausEstimatesDumping(DataObjectManager * data_manager
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
-            std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
+            Logger::Log(LogLevel::Error,
+                        "[Error]: Could not open file " + output_path + " for writing.\n");
             return;
         }
         outfile << "SerialID,Amplitude,Width\n";
@@ -228,7 +234,7 @@ void ResultDumpVisitor::RunGausEstimatesDumping(DataObjectManager * data_manager
                     << entry->GetWidthEstimateMDPDE() <<'\n';
         }
         outfile.close();
-        std::cout <<"Output file: "<< output_path << std::endl;
+        Logger::Log(LogLevel::Info, "Output file: " + output_path);
     }
 }
 
@@ -251,7 +257,8 @@ void ResultDumpVisitor::RunGroupGausEstimatesDumping(DataObjectManager * data_ma
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
-            std::cerr << "Error: Could not open file " << output_path << " for writing.\n";
+            Logger::Log(LogLevel::Error,
+                        "[Error]: Could not open file " + output_path + " for writing.\n");
             return;
         }
         outfile << "Residue,Element,Remoteness,Branch,Amplitude,Width\n";
@@ -281,6 +288,6 @@ void ResultDumpVisitor::RunGroupGausEstimatesDumping(DataObjectManager * data_ma
         }
 
         outfile.close();
-        std::cout <<"Output file: "<< output_path << std::endl;
+        Logger::Log(LogLevel::Info, "Output file: " + output_path);
     }
 }

@@ -10,9 +10,10 @@
 #include "Constants.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
+#include "Logger.hpp"
 
+#include <sstream>
 #include <cmath>
-#include <iostream>
 
 #ifdef HAVE_ROOT
 #include <TGraphErrors.h>
@@ -216,7 +217,7 @@ bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
 {
     if (m_atom_object == nullptr)
     {
-        std::cerr << "Atom object is not available." << std::endl;
+        Logger::Log(LogLevel::Error, "Atom object is not available.");
         return false;
     }
     return true;
@@ -226,7 +227,7 @@ bool PotentialEntryIterator::IsAtomicEntryAvailable(void) const
 {
     if (m_atomic_entry == nullptr)
     {
-        std::cerr << "Atomic entry is not available." << std::endl;
+        Logger::Log(LogLevel::Error, "Atomic entry is not available.");
         return false;
     }
     return true;
@@ -236,7 +237,7 @@ bool PotentialEntryIterator::IsModelObjectAvailable(void) const
 {
     if (m_model_object == nullptr)
     {
-        std::cerr << "Model object is not available." << std::endl;
+        Logger::Log(LogLevel::Error, "Model object is not available.");
         return false;
     }
     return true;
@@ -247,37 +248,39 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
     const auto & group_key_set{ m_model_object->GetGroupPotentialEntry(class_key)->GetGroupKeySet() };
     if (group_key_set.find(group_key) == group_key_set.end())
     {
+        std::ostringstream oss;
         if (verbose == true)
         {
             if (class_key == AtomicInfoHelper::GetElementClassKey())
             {
                 auto unpack_key{ KeyPackerElementClass::Unpack(group_key) };
-                std::cout <<"Elelemt class group key :" << std::boolalpha
-                          << static_cast<int>(std::get<0>(unpack_key)) <<", "
-                          << static_cast<int>(std::get<1>(unpack_key)) <<", "
-                          << std::get<2>(unpack_key) <<" not found." << std::endl;
+                oss <<"Elelemt class group key :" << std::boolalpha
+                    << static_cast<int>(std::get<0>(unpack_key)) <<", "
+                    << static_cast<int>(std::get<1>(unpack_key)) <<", "
+                    << std::get<2>(unpack_key) <<" not found." << std::endl;
             }
             else if (class_key == AtomicInfoHelper::GetResidueClassKey())
             {
                 auto unpack_key{ KeyPackerResidueClass::Unpack(group_key) };
-                std::cout <<"Residue class group key : tuple<" << std::boolalpha
-                          << static_cast<int>(std::get<0>(unpack_key)) <<", "
-                          << static_cast<int>(std::get<1>(unpack_key)) <<", "
-                          << static_cast<int>(std::get<2>(unpack_key)) <<", "
-                          << static_cast<int>(std::get<3>(unpack_key)) <<", "
-                          << std::get<4>(unpack_key) <<"> not found." << std::endl;
+                oss <<"Residue class group key : tuple<" << std::boolalpha
+                    << static_cast<int>(std::get<0>(unpack_key)) <<", "
+                    << static_cast<int>(std::get<1>(unpack_key)) <<", "
+                    << static_cast<int>(std::get<2>(unpack_key)) <<", "
+                    << static_cast<int>(std::get<3>(unpack_key)) <<", "
+                    << std::get<4>(unpack_key) <<"> not found." << std::endl;
             }
             else if (class_key == AtomicInfoHelper::GetStructureClassKey())
             {
                 auto unpack_key{ KeyPackerStructureClass::Unpack(group_key) };
-                std::cout <<"Structure class group key : tuple<" << std::boolalpha
-                          << static_cast<int>(std::get<0>(unpack_key)) <<", "
-                          << static_cast<int>(std::get<1>(unpack_key)) <<", "
-                          << static_cast<int>(std::get<2>(unpack_key)) <<", "
-                          << static_cast<int>(std::get<3>(unpack_key)) <<", "
-                          << static_cast<int>(std::get<4>(unpack_key)) <<", "
-                          << std::get<5>(unpack_key) <<"> not found." << std::endl;
+                oss <<"Structure class group key : tuple<" << std::boolalpha
+                    << static_cast<int>(std::get<0>(unpack_key)) <<", "
+                    << static_cast<int>(std::get<1>(unpack_key)) <<", "
+                    << static_cast<int>(std::get<2>(unpack_key)) <<", "
+                    << static_cast<int>(std::get<3>(unpack_key)) <<", "
+                    << static_cast<int>(std::get<4>(unpack_key)) <<", "
+                    << std::get<5>(unpack_key) <<"> not found." << std::endl;
             }
+            Logger::Log(LogLevel::Error, oss.str());
         }
         return false;
     }
@@ -289,7 +292,7 @@ Residue PotentialEntryIterator::GetResidueFromGroupKey(
 {
     if (class_key == AtomicInfoHelper::GetElementClassKey())
     {
-        std::cout <<"Element class group key is not recording Residue info."<< std::endl;
+        Logger::Log(LogLevel::Error, "Element class group key is not recording Residue info.");
         return Residue::UNK;
     }
     else if (class_key == AtomicInfoHelper::GetResidueClassKey())
@@ -381,7 +384,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAmplitudeRatioToWidt
     auto element_size{ AtomClassifier::GetMainChainMemberCount() };
     if (target_id >= element_size || reference_id >= element_size)
     {
-        std::cerr << "Error: target or reference ID exceeds the number of main chain elements." << std::endl;
+        Logger::Log(LogLevel::Error, "Target or reference ID exceeds the number of main chain elements.");
         return nullptr;
     }
     std::unordered_map<int, std::tuple<double, double>> gaus_estimate_map[4];
@@ -468,7 +471,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
     }
     if (IsAvailableGroupKey(group_key, class_key) == false)
     {
-        std::cerr << "Group key is not available." << std::endl;
+        Logger::Log(LogLevel::Error, "Group key is not available.");
         return nullptr;
     }
     auto graph{ ROOTHelper::CreateGraphErrors() };
@@ -601,7 +604,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     }
     if (IsAvailableGroupKey(group_key1, class_key) == false || IsAvailableGroupKey(group_key2, class_key) == false)
     {
-        std::cerr << "Group key is not available." << std::endl;
+        Logger::Log(LogLevel::Error, "Group key is not available.");
         return nullptr;
     }
     auto graph{ ROOTHelper::CreateGraphErrors() };
@@ -672,7 +675,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
     auto kd_tree_root{ m_model_object->GetKDTreeRoot() };
     if (kd_tree_root == nullptr)
     {
-        std::cerr << "KDTree is not available." << std::endl;
+        Logger::Log(LogLevel::Error, "KDTree is not available for the model object.");
         return nullptr;
     }
 

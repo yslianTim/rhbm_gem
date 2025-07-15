@@ -6,8 +6,9 @@
 #endif
 
 #include <algorithm>
-#include <iostream>
 #include <Eigen/Dense>
+
+#include "Logger.hpp"
 
 namespace EigenMatrixUtility
 {
@@ -19,7 +20,8 @@ typename Derived::Scalar GetMedian(Eigen::DenseBase<Derived>& d)
     auto array_size{ array.size() };
     if (array_size == 0)
     {
-        std::cout <<"[Warning] 'EigenMatrixUtility::GetMedian' The input data size is zero, return 0..."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    " [EigenMatrixUtility::GetMedian] The input data size is zero, return 0...");
         return 0.0;
     }
     std::sort(array.begin(), array.end());
@@ -40,7 +42,8 @@ typename Derived::Scalar GetStandardDeviation(Eigen::DenseBase<Derived>& d)
     auto array_size{ array.size() };
     if (array_size == 0)
     {
-        std::cout <<"[Warning] 'EigenMatrixUtility::GetStandardDeviation' The input data size is zero, return 0..."<< std::endl;
+        Logger::Log(LogLevel::Warning,
+                    " [EigenMatrixUtility::GetStandardDeviation] The input data size is zero, return 0...");
         return 0.0;
     }
     if (array_size <= 1) return 0.0f;

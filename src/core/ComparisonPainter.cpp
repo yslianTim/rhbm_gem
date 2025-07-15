@@ -10,6 +10,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "DataObjectManager.hpp"
+#include "Logger.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -28,7 +29,6 @@
 #include <TLine.h>
 #endif
 
-#include <iostream>
 #include <tuple>
 
 ComparisonPainter::ComparisonPainter(void) :
@@ -72,9 +72,10 @@ void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, con
 
 void ComparisonPainter::Painting(void)
 {
-    std::cout <<"- ComparisonPainter::Painting"<<std::endl;
-    std::cout <<"  Folder path: "<< m_folder_path << std::endl;
-    std::cout <<"  Number of model objects to be painted: "<< m_model_object_list.size() << std::endl;
+    Logger::Log(LogLevel::Info, "ComparisonPainter::Painting() called.");
+    Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
+    Logger::Log(LogLevel::Info, "Number of atom objects to be painted: "
+                + std::to_string(m_model_object_list.size()));
 
     if (m_ref_model_object_list_map.find("with_charge") != m_ref_model_object_list_map.end() &&
         m_ref_model_object_list_map.find("no_charge") != m_ref_model_object_list_map.end())
@@ -98,7 +99,7 @@ void ComparisonPainter::Painting(void)
 void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ComparisonPainter::PaintGroupGausEstimateComparison"<< std::endl;
+    Logger::Log(LogLevel::Info, "- ComparisonPainter::PaintGroupGausEstimateComparison");
 
     auto sim_with_charge_model_object_list{ m_ref_model_object_list_map.at("with_charge")};
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
@@ -422,14 +423,14 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
 void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ComparisonPainter::PaintGausEstimateResidueClassDenseComparison"<< std::endl;
+    Logger::Log(LogLevel::Info, " ComparisonPainter::PaintGausEstimateResidueClassDenseComparison");
 
     auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
     
@@ -614,7 +615,7 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     }
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -624,7 +625,7 @@ void ComparisonPainter::PainMapValueComparison(
     const std::vector<ModelObject *> & ref_model_object_list)
 {
     auto file_path{ m_folder_path + name };
-    std::cout <<"- ComparisonPainter::PainMapValueComparison"<< std::endl;
+    Logger::Log(LogLevel::Info, " ComparisonPainter::PainMapValueComparison");
 
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
@@ -757,7 +758,7 @@ void ComparisonPainter::PainMapValueComparison(
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     }
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    std::cout <<"  Output file: "<< file_path << std::endl;
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
 }
 
@@ -841,7 +842,7 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
             std::string label;
             if (model_count > 11)
             {
-                std::cout <<"Warning: Data label size exceeds 12, label switch to numbers."<< std::endl;
+                Logger::Log(LogLevel::Warning, "Data label size exceeds 12, label switch to numbers.");
                 label = std::to_string(model_count);
             }
             else

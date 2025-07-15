@@ -4,8 +4,9 @@
 #include "AtomicPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
+#include <stdexcept>
 
 AtomObject::AtomObject(void) :
     m_key_tag{ "" },
@@ -48,12 +49,12 @@ std::unique_ptr<DataObjectBase> AtomObject::Clone() const
 
 void AtomObject::Display(void) const
 {
-    std::cout << "This is AtomObject." << std::endl;
+    Logger::Log(LogLevel::Info, "AtomObject Display: " + GetInfo());
 }
 
 void AtomObject::Update(void)
 {
-    std::cout << "Do AtomObject Update." << std::endl;
+    Logger::Log(LogLevel::Info, "AtomObject Update: " + GetInfo());
 }
 
 void AtomObject::Accept(DataObjectVisitorBase * visitor)

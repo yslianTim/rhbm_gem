@@ -3,8 +3,7 @@
 #include "DataObjectVisitorBase.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "ArrayStats.hpp"
-
-#include <iostream>
+#include "Logger.hpp"
 
 ModelObject::ModelObject(void) :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr }
@@ -44,8 +43,9 @@ std::unique_ptr<DataObjectBase> ModelObject::Clone() const
 
 void ModelObject::Display(void) const
 {
-    std::cout << "This is ModelObject."
-              << " It contains: "<< m_atom_list.size() << " atoms." << std::endl;
+    Logger::Log(LogLevel::Info, "ModelObject Display: " + GetKeyTag());
+    Logger::Log(LogLevel::Info, "This is ModelObject, it contains: "
+                + std::to_string(m_atom_list.size()) + " atoms.");
 }
 
 void ModelObject::Update(void)
@@ -76,7 +76,8 @@ void ModelObject::AddGroupPotentialEntry(
 void ModelObject::BuildKDTreeRoot(void)
 {
     if (m_kd_tree_root != nullptr) return;
-    std::cout <<" ModelObject::BuildKDTreeRoot , #atom = "<< m_atom_list.size()<< std::endl;
+    Logger::Log(LogLevel::Debug, "Building KDTree for ModelObject..., including"
+                + std::to_string(m_atom_list.size()) + " atoms.");
     std::vector<AtomObject *> atom_ptr_list;
     atom_ptr_list.reserve(m_atom_list.size());
     for (auto & atom : m_atom_list)

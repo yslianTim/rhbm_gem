@@ -3,8 +3,9 @@
 #include "GlobalEnumClass.hpp"
 #include "KeyPacker.hpp"
 #include "AtomObject.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
+#include <stdexcept>
 
 const std::vector<short> AtomClassifier::m_main_chain_member_color_list
 {   // [Color defined in ROOT style]
@@ -82,7 +83,7 @@ bool AtomClassifier::IsValidMainChainMemberID(size_t id)
 {
     if (id >= m_main_chain_member_count)
     {
-        std::cerr << "Invalid id: " << id << std::endl;
+        Logger::Log(LogLevel::Error, "Invalid main chain member ID: " + std::to_string(id));
         return false;
     }
     return true;

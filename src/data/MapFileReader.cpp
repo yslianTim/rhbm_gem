@@ -3,8 +3,8 @@
 #include "MapFileFormatBase.hpp"
 #include "MrcFormat.hpp"
 #include "CCP4Format.hpp"
+#include "Logger.hpp"
 
-#include <iostream>
 #include <stdexcept>
 #include <algorithm>
 #include <cctype>
@@ -35,7 +35,7 @@ void MapFileReader::Read(void)
     std::ifstream file{ m_file_path, std::ios::binary };
     if (!file)
     {
-        std::cerr << "Cannot open the file: " << m_file_path << std::endl;
+        Logger::Log(LogLevel::Error, "Cannot open the file: " + m_file_path);
         m_successfully_read_file = false;
         return;
     }
@@ -57,7 +57,7 @@ bool MapFileReader::ReadHeader(std::ifstream & stream)
     }
     catch (const std::exception & ex)
     {
-        std::cerr << ex.what() << std::endl;
+        Logger::Log(LogLevel::Error, ex.what());
         return false;
     }
 }
@@ -71,7 +71,7 @@ bool MapFileReader::ReadMapValueArray(std::ifstream & stream)
     }
     catch (const std::exception & ex)
     {
-        std::cerr << ex.what() << std::endl;
+        Logger::Log(LogLevel::Error, ex.what());
         return false;
     }
 }
