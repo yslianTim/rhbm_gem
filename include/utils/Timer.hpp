@@ -75,13 +75,3 @@ public:
         std::cout << std::endl;
     }
 };
-
-class TimedComponent
-{
-protected:
-    Timer<> m_timer;
-
-public:
-    void ResetTimer(void) { m_timer.Reset(); }
-    void PrintTimer(const std::string & label) const { m_timer.PrintFormatted(label); }
-};

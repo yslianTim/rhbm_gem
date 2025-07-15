@@ -6,13 +6,6 @@
 
 #include <algorithm>
 
-MapInterpolationVisitor::MapInterpolationVisitor(
-    const std::vector<std::tuple<float, std::array<float, 3>>> & sampling_points) :
-    m_sphere_sampler{ nullptr }, m_position{ 0.0, 0.0, 0.0 }, m_sampling_point_list{ sampling_points }
-{
-
-}
-
 MapInterpolationVisitor::MapInterpolationVisitor(SphereSampler * sphere_sampler) :
     m_sphere_sampler{ sphere_sampler }, m_position{ 0.0, 0.0, 0.0 }
 {
