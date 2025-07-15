@@ -24,6 +24,7 @@ Application::Application(CLI::App * app) :
 void Application::Run(void)
 {
     ScopeTimer timer("Application::Run");
+    Logger::SetLogLevel(m_global_options.verbose_level);
     std::unique_ptr<CommandBase> command{ CreateCommand() };
     if (command)
     {

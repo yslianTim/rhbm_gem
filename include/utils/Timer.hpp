@@ -2,7 +2,7 @@
 
 #include <chrono>
 #include <string>
-#include <iostream>
+#include <sstream>
 #include <memory>
 #include <type_traits>
 
@@ -20,7 +20,9 @@ public:
 
     void Print(const std::string & text) const
     {
-        std::cout << text << " took " << Elapsed() << " " << UnitString() << std::endl;
+        std::ostringstream oss;
+        oss << text << " took " << Elapsed() << " " << UnitString();
+        Logger::Log(LogLevel::Info, oss.str());
     }
 
     double Elapsed(void) const
@@ -54,26 +56,27 @@ public:
         auto microseconds_part{ std::chrono::duration_cast<std::chrono::microseconds>(elapsed_time) };
 
         auto printed_any{ false };
-        std::cout << text << " took ";
+        std::ostringstream oss;
+        oss << text << " took ";
         if (minutes_part.count() != 0)
         {
-            std::cout << minutes_part.count() << " min " << seconds_part.count() << " s";
+            oss << minutes_part.count() << " min " << seconds_part.count() << " s";
             printed_any = true;
         }
         if (seconds_part.count() != 0 && printed_any == false)
         {
-            std::cout << seconds_part.count() << "." << milliseconds_part.count() << " s";
+            oss << seconds_part.count() << '.' << milliseconds_part.count() << " s";
             printed_any = true;
         }
         if (milliseconds_part.count() != 0 && printed_any == false)
         {
-            std::cout << milliseconds_part.count() << "." << microseconds_part.count() << " ms";
+            oss << milliseconds_part.count() << '.' << microseconds_part.count() << " ms";
             printed_any = true;
         }
         if (printed_any == false)
         {
-            std::cout << microseconds_part.count() << " us";
+            oss << microseconds_part.count() << " us";
         }
-        std::cout << std::endl;
+        Logger::Log(LogLevel::Info, oss.str());
     }
 };

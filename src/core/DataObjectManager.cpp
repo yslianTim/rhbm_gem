@@ -7,6 +7,8 @@
 #include "ModelObject.hpp"
 #include "ScopeTimer.hpp"
 
+#include <iostream>
+
 DataObjectManager::DataObjectManager(void) :
     m_db_manager{ nullptr }
 {
