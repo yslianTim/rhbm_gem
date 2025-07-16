@@ -22,7 +22,7 @@ public:
     {
         std::ostringstream oss;
         oss << text << " took " << Elapsed() << " " << UnitString();
-        Logger::Log(LogLevel::Info, oss.str());
+        Logger::Log(LogLevel::Notice, oss.str());
     }
 
     double Elapsed(void) const
@@ -77,6 +77,6 @@ public:
         {
             oss << microseconds_part.count() << " us";
         }
-        Logger::Log(LogLevel::Info, oss.str());
+        Logger::Log(LogLevel::Notice, oss.str());
     }
 };

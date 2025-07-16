@@ -21,6 +21,9 @@ void Logger::Log(LogLevel level, const std::string & message)
             case LogLevel::Warning:
                 std::cerr << "[Warning] " << message << std::endl;
                 break;
+            case LogLevel::Notice:
+                std::cout << "[Notice] " << message << std::endl;
+                break;
             case LogLevel::Info:
                 std::cout << message << std::endl;
                 break;

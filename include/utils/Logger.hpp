@@ -6,8 +6,9 @@ enum class LogLevel : int
 {
     Error   = 0,   // [Error]   Only error messages are shown.
     Warning = 1,   // [Warning] Warnings and errors are shown.
-    Info    = 2,   // [Info]    Informational messages are shown.
-    Debug   = 3    // [Debug]   Detailed debug output.
+    Notice  = 2,   // [Notice]  Notice messages are shown.
+    Info    = 3,   // [Info]    Informational messages are shown.
+    Debug   = 4    // [Debug]   Detailed debug output.
 };
 
 class Logger
