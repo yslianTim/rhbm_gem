@@ -18,23 +18,11 @@ class Application
     CLI::App * m_result_dump_cmd;
     CLI::App * m_map_simulation_cmd;
 
-    struct AtomSelectorOptions
-    {
-        std::string pick_chain_id, veto_chain_id;
-        std::string pick_residue, veto_residue;
-        std::string pick_element, veto_element;
-        std::string pick_remoteness, veto_remoteness;
-    } m_atom_selector_options;
-
-    struct SphereSamplerOptions
-    {
-        int sampling_size;
-        double sampling_range_min, sampling_range_max;
-    } m_sphere_sampler_options;
-
     struct PotentialAnalysisOptions
     {
         bool is_asymmetry, is_simulation;
+        int sampling_size;
+        double sampling_range_min, sampling_range_max;
         double fit_range_min, fit_range_max;
         double alpha_r, alpha_g;
         double resolution_simulation;
@@ -48,6 +36,10 @@ class Application
         int painter_choice;
         std::string model_key_tag_list;
         std::string ref_model_key_tag_list;
+        std::string pick_chain_id, veto_chain_id;
+        std::string pick_residue, veto_residue;
+        std::string pick_element, veto_element;
+        std::string pick_remoteness, veto_remoteness;
     } m_potential_display_options;
 
     struct ResultDumpOptions

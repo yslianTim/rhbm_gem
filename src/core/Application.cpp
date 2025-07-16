@@ -33,14 +33,14 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
     {
         auto command{ std::make_unique<PotentialAnalysisCommand>() };
         command->SetThreadSize(m_global_options.thread_size);
+        command->SetDatabasePath(m_global_options.database_path);
         command->SetAsymmetryFlag(m_potential_analysis_options.is_asymmetry);
         command->SetSimulationFlag(m_potential_analysis_options.is_simulation);
         command->SetSimulatedMapResolution(m_potential_analysis_options.resolution_simulation);
         command->SetSavedKeyTag(m_potential_analysis_options.saved_key_tag);
-        command->SetSamplingSize(m_sphere_sampler_options.sampling_size);
-        command->SetSamplingRangeMinimum(m_sphere_sampler_options.sampling_range_min);
-        command->SetSamplingRangeMaximum(m_sphere_sampler_options.sampling_range_max);
-        command->SetDatabasePath(m_global_options.database_path);
+        command->SetSamplingSize(m_potential_analysis_options.sampling_size);
+        command->SetSamplingRangeMinimum(m_potential_analysis_options.sampling_range_min);
+        command->SetSamplingRangeMaximum(m_potential_analysis_options.sampling_range_max);
         command->SetModelFilePath(m_potential_analysis_options.model_file_path);
         command->SetMapFilePath(m_potential_analysis_options.map_file_path);
         command->SetFitRangeMinimum(m_potential_analysis_options.fit_range_min);
@@ -57,14 +57,14 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetFolderPath(m_global_options.folder_path);
         command->SetModelKeyTagList(m_potential_display_options.model_key_tag_list);
         command->SetRefModelKeyTagListMap(m_potential_display_options.ref_model_key_tag_list);
-        command->SetPickChainID(m_atom_selector_options.pick_chain_id);
-        command->SetPickResidueType(m_atom_selector_options.pick_residue);
-        command->SetPickElementType(m_atom_selector_options.pick_element);
-        command->SetPickRemotenessType(m_atom_selector_options.pick_remoteness);
-        command->SetVetoChainID(m_atom_selector_options.veto_chain_id);
-        command->SetVetoResidueType(m_atom_selector_options.veto_residue);
-        command->SetVetoElementType(m_atom_selector_options.veto_element);
-        command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
+        command->SetPickChainID(m_potential_display_options.pick_chain_id);
+        command->SetPickResidueType(m_potential_display_options.pick_residue);
+        command->SetPickElementType(m_potential_display_options.pick_element);
+        command->SetPickRemotenessType(m_potential_display_options.pick_remoteness);
+        command->SetVetoChainID(m_potential_display_options.veto_chain_id);
+        command->SetVetoResidueType(m_potential_display_options.veto_residue);
+        command->SetVetoElementType(m_potential_display_options.veto_element);
+        command->SetVetoRemotenessType(m_potential_display_options.veto_remoteness);
         return command;
     }
     else if (m_cli_app.got_subcommand(m_result_dump_cmd))
@@ -128,13 +128,13 @@ void Application::RegisterPotentialAnalysisCommand(void)
         "--asymmetry", m_potential_analysis_options.is_asymmetry,
         "Turn On/Off asymmetry flag")->default_val(false);
     m_potential_analysis_cmd->add_option(
-        "-s,--sampling", m_sphere_sampler_options.sampling_size,
+        "-s,--sampling", m_potential_analysis_options.sampling_size,
         "Number of sampling points per atom")->default_val(1500);
     m_potential_analysis_cmd->add_option(
-        "--sampling-min", m_sphere_sampler_options.sampling_range_min,
+        "--sampling-min", m_potential_analysis_options.sampling_range_min,
         "Minimum sampling range")->default_val(0.0);
     m_potential_analysis_cmd->add_option(
-        "--sampling-max", m_sphere_sampler_options.sampling_range_max,
+        "--sampling-max", m_potential_analysis_options.sampling_range_max,
         "Maximum sampling range")->default_val(1.5);
     m_potential_analysis_cmd->add_option(
         "--fit-min", m_potential_analysis_options.fit_range_min,
@@ -164,28 +164,28 @@ void Application::RegisterPotentialDisplayCommand(void)
         "-r,--ref-model-keylist", m_potential_display_options.ref_model_key_tag_list,
         "List of reference model key tag to be display")->default_val("");
     m_potential_display_cmd->add_option(
-        "--pick-chain", m_atom_selector_options.pick_chain_id,
+        "--pick-chain", m_potential_display_options.pick_chain_id,
         "Pick chain ID")->default_val("");
     m_potential_display_cmd->add_option(
-        "--pick-residue", m_atom_selector_options.pick_residue,
+        "--pick-residue", m_potential_display_options.pick_residue,
         "Pick residue type")->default_val("");
     m_potential_display_cmd->add_option(
-        "--pick-element", m_atom_selector_options.pick_element,
+        "--pick-element", m_potential_display_options.pick_element,
         "Pick element type")->default_val("");
     m_potential_display_cmd->add_option(
-        "--pick-remoteness", m_atom_selector_options.pick_remoteness,
+        "--pick-remoteness", m_potential_display_options.pick_remoteness,
         "Pick remoteness type")->default_val("");
     m_potential_display_cmd->add_option(
-        "--veto-chain", m_atom_selector_options.veto_chain_id,
+        "--veto-chain", m_potential_display_options.veto_chain_id,
         "Veto chain ID")->default_val("");
     m_potential_display_cmd->add_option(
-        "--veto-residue", m_atom_selector_options.veto_residue,
+        "--veto-residue", m_potential_display_options.veto_residue,
         "Veto residue type")->default_val("");
     m_potential_display_cmd->add_option(
-        "--veto-element", m_atom_selector_options.veto_element,
+        "--veto-element", m_potential_display_options.veto_element,
         "Veto element type")->default_val("");
     m_potential_display_cmd->add_option(
-        "--veto-remoteness", m_atom_selector_options.veto_remoteness,
+        "--veto-remoteness", m_potential_display_options.veto_remoteness,
         "Veto remoteness type")->default_val("");
     RegisterGlobalOptions(m_potential_display_cmd);
 }
