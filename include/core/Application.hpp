@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <string>
+#include <functional>
+#include <unordered_map>
 
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
@@ -19,11 +21,7 @@ class CommandBase;
 class Application
 {
     CLI::App & m_cli_app;
-    CLI::App * m_potential_analysis_cmd;
-    CLI::App * m_potential_display_cmd;
-    CLI::App * m_result_dump_cmd;
-    CLI::App * m_map_simulation_cmd;
-
+    std::unordered_map<CLI::App *, std::function<std::unique_ptr<CommandBase>()>> m_command_map;
     PotentialAnalysisCommand::Options m_potential_analysis_options{};
     PotentialDisplayCommand::Options  m_potential_display_options{};
     ResultDumpCommand::Options        m_result_dump_options{};
