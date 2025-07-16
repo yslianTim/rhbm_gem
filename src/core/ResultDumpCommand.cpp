@@ -12,6 +12,16 @@ ResultDumpCommand::ResultDumpCommand(void) :
 
 }
 
+ResultDumpCommand::ResultDumpCommand(
+    const Options & options, const GlobalOptions & globals) :
+    m_printer_choice{ options.printer_choice },
+    m_database_path{ globals.database_path },
+    m_folder_path{ globals.folder_path },
+    m_map_file_path{ options.map_file_path }
+{
+    SetModelKeyTagList(options.model_key_tag_list);
+}
+
 void ResultDumpCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "ResultDumpCommand::Execute() called.");

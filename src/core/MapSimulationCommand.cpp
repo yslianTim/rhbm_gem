@@ -15,6 +15,20 @@ MapSimulationCommand::MapSimulationCommand(void) :
 
 }
 
+MapSimulationCommand::MapSimulationCommand(
+    const Options & options, const GlobalOptions & globals) :
+    m_thread_size{ globals.thread_size },
+    m_potential_model_choice{ options.potential_model_choice },
+    m_partial_charge_choice{ options.partial_charge_choice },
+    m_cutoff_distance{ options.cutoff_distance },
+    m_grid_spacing{ options.grid_spacing },
+    m_model_file_path{ options.model_file_path },
+    m_folder_path{ globals.folder_path },
+    m_map_file_name{ options.map_file_name }
+{
+    SetBlurringWidthList(options.blurring_width_list);
+}
+
 void MapSimulationCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "MapSimulationCommand::Execute() called.");

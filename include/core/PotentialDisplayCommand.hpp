@@ -5,6 +5,7 @@
 #include <memory>
 #include <unordered_map>
 #include "CommandBase.hpp"
+#include "GlobalOptions.hpp"
 
 class DataObjectManager;
 class AtomSelector;
@@ -18,7 +19,22 @@ class PotentialDisplayCommand : public CommandBase
     std::unique_ptr<AtomSelector> m_atom_selector;
 
 public:
+    struct Options
+    {
+        int painter_choice{ 1 };
+        std::string model_key_tag_list;
+        std::string ref_model_key_tag_list;
+        std::string pick_chain_id;
+        std::string veto_chain_id;
+        std::string pick_residue;
+        std::string veto_residue;
+        std::string pick_element;
+        std::string veto_element;
+        std::string pick_remoteness;
+        std::string veto_remoteness;
+    };
     PotentialDisplayCommand(void);
+    PotentialDisplayCommand(const Options & options, const GlobalOptions & globals);
     ~PotentialDisplayCommand();
     void Execute(void) override;
 

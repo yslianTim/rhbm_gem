@@ -19,6 +19,28 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_sphere_sampler->SetDistanceRangeMaximum(1.5);
 }
 
+PotentialAnalysisCommand::PotentialAnalysisCommand(
+    const Options & options, const GlobalOptions & globals) :
+    m_thread_size{ globals.thread_size },
+    m_is_asymmetry{ options.is_asymmetry },
+    m_is_simulation{ options.is_simulation },
+    m_fit_range_min{ options.fit_range_min },
+    m_fit_range_max{ options.fit_range_max },
+    m_alpha_r{ options.alpha_r },
+    m_alpha_g{ options.alpha_g },
+    m_simulated_map_resolution{ options.resolution_simulation },
+    m_database_path{ globals.database_path },
+    m_model_file_path{ options.model_file_path },
+    m_map_file_path{ options.map_file_path },
+    m_saved_key_tag{ options.saved_key_tag },
+    m_sphere_sampler{ std::make_unique<SphereSampler>() }
+{
+    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(globals.thread_size));
+    m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(options.sampling_size));
+    m_sphere_sampler->SetDistanceRangeMinimum(options.sampling_range_min);
+    m_sphere_sampler->SetDistanceRangeMaximum(options.sampling_range_max);
+}
+
 PotentialAnalysisCommand::~PotentialAnalysisCommand()
 {
     

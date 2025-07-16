@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "CommandBase.hpp"
+#include "GlobalOptions.hpp"
 
 class MapSimulationCommand : public CommandBase
 {
@@ -16,7 +17,18 @@ class MapSimulationCommand : public CommandBase
     std::vector<double> m_blurring_width_list;
     
 public:
+    struct Options
+    {
+        std::string model_file_path;
+        std::string map_file_name{"sim_map"};
+        int potential_model_choice{ 1 };
+        int partial_charge_choice{ 1 };
+        double cutoff_distance{ 5.0 };
+        double grid_spacing{ 0.5 };
+        std::string blurring_width_list{"0.50"};
+    };
     MapSimulationCommand(void);
+    MapSimulationCommand(const Options & options, const GlobalOptions & globals);
     ~MapSimulationCommand() = default;
     void Execute(void) override;
 

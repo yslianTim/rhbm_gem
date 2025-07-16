@@ -1,9 +1,5 @@
 #include "Application.hpp"
 #include "CommandBase.hpp"
-#include "PotentialAnalysisCommand.hpp"
-#include "PotentialDisplayCommand.hpp"
-#include "ResultDumpCommand.hpp"
-#include "MapSimulationCommand.hpp"
 #include "ScopeTimer.hpp"
 
 #include <CLI/CLI.hpp>
@@ -31,64 +27,34 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
 {
     if (m_cli_app.got_subcommand(m_potential_analysis_cmd))
     {
-        auto command{ std::make_unique<PotentialAnalysisCommand>() };
-        command->SetThreadSize(m_global_options.thread_size);
-        command->SetDatabasePath(m_global_options.database_path);
-        command->SetAsymmetryFlag(m_potential_analysis_options.is_asymmetry);
-        command->SetSimulationFlag(m_potential_analysis_options.is_simulation);
-        command->SetSimulatedMapResolution(m_potential_analysis_options.resolution_simulation);
-        command->SetSavedKeyTag(m_potential_analysis_options.saved_key_tag);
-        command->SetSamplingSize(m_potential_analysis_options.sampling_size);
-        command->SetSamplingRangeMinimum(m_potential_analysis_options.sampling_range_min);
-        command->SetSamplingRangeMaximum(m_potential_analysis_options.sampling_range_max);
-        command->SetModelFilePath(m_potential_analysis_options.model_file_path);
-        command->SetMapFilePath(m_potential_analysis_options.map_file_path);
-        command->SetFitRangeMinimum(m_potential_analysis_options.fit_range_min);
-        command->SetFitRangeMaximum(m_potential_analysis_options.fit_range_max);
-        command->SetAlphaR(m_potential_analysis_options.alpha_r);
-        command->SetAlphaG(m_potential_analysis_options.alpha_g);
+        auto command
+        {
+            std::make_unique<PotentialAnalysisCommand>(m_potential_analysis_options, m_global_options)
+        };
         return command;
     }
     else if (m_cli_app.got_subcommand(m_potential_display_cmd))
     {
-        auto command{ std::make_unique<PotentialDisplayCommand>() };
-        command->SetPainterChoice(m_potential_display_options.painter_choice);
-        command->SetDatabasePath(m_global_options.database_path);
-        command->SetFolderPath(m_global_options.folder_path);
-        command->SetModelKeyTagList(m_potential_display_options.model_key_tag_list);
-        command->SetRefModelKeyTagListMap(m_potential_display_options.ref_model_key_tag_list);
-        command->SetPickChainID(m_potential_display_options.pick_chain_id);
-        command->SetPickResidueType(m_potential_display_options.pick_residue);
-        command->SetPickElementType(m_potential_display_options.pick_element);
-        command->SetPickRemotenessType(m_potential_display_options.pick_remoteness);
-        command->SetVetoChainID(m_potential_display_options.veto_chain_id);
-        command->SetVetoResidueType(m_potential_display_options.veto_residue);
-        command->SetVetoElementType(m_potential_display_options.veto_element);
-        command->SetVetoRemotenessType(m_potential_display_options.veto_remoteness);
+        auto command
+        {
+            std::make_unique<PotentialDisplayCommand>(m_potential_display_options, m_global_options)
+        };
         return command;
     }
     else if (m_cli_app.got_subcommand(m_result_dump_cmd))
     {
-        auto command{ std::make_unique<ResultDumpCommand>() };
-        command->SetPrinterChoice(m_result_dump_options.printer_choice);
-        command->SetModelKeyTagList(m_result_dump_options.model_key_tag_list);
-        command->SetMapFilePath(m_result_dump_options.map_file_path);
-        command->SetDatabasePath(m_global_options.database_path);
-        command->SetFolderPath(m_global_options.folder_path);
+        auto command
+        {
+            std::make_unique<ResultDumpCommand>(m_result_dump_options, m_global_options)
+        };
         return command;
     }
     else if (m_cli_app.got_subcommand(m_map_simulation_cmd))
     {
-        auto command{ std::make_unique<MapSimulationCommand>() };
-        command->SetModelFilePath(m_map_simulation_options.model_file_path);
-        command->SetMapFileName(m_map_simulation_options.map_file_name);
-        command->SetFolderPath(m_global_options.folder_path);
-        command->SetThreadSize(m_global_options.thread_size);
-        command->SetPotentialModelChoice(m_map_simulation_options.potential_model_choice);
-        command->SetPartialChargeChoice(m_map_simulation_options.partial_charge_choice);
-        command->SetCutoffDistance(m_map_simulation_options.cutoff_distance);
-        command->SetGridSpacing(m_map_simulation_options.grid_spacing);
-        command->SetBlurringWidthList(m_map_simulation_options.blurring_width_list);
+        auto command
+        {
+            std::make_unique<MapSimulationCommand>(m_map_simulation_options, m_global_options)
+        };
         return command;
     }
     else

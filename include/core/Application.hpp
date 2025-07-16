@@ -3,6 +3,12 @@
 #include <memory>
 #include <string>
 
+#include "PotentialAnalysisCommand.hpp"
+#include "PotentialDisplayCommand.hpp"
+#include "ResultDumpCommand.hpp"
+#include "MapSimulationCommand.hpp"
+#include "GlobalOptions.hpp"
+
 namespace CLI
 {
     class App;
@@ -18,52 +24,11 @@ class Application
     CLI::App * m_result_dump_cmd;
     CLI::App * m_map_simulation_cmd;
 
-    struct PotentialAnalysisOptions
-    {
-        bool is_asymmetry, is_simulation;
-        int sampling_size;
-        double sampling_range_min, sampling_range_max;
-        double fit_range_min, fit_range_max;
-        double alpha_r, alpha_g;
-        double resolution_simulation;
-        std::string model_file_path;
-        std::string map_file_path;
-        std::string saved_key_tag;
-    } m_potential_analysis_options;
-
-    struct PotentialDisplayOptions
-    {
-        int painter_choice;
-        std::string model_key_tag_list;
-        std::string ref_model_key_tag_list;
-        std::string pick_chain_id, veto_chain_id;
-        std::string pick_residue, veto_residue;
-        std::string pick_element, veto_element;
-        std::string pick_remoteness, veto_remoteness;
-    } m_potential_display_options;
-
-    struct ResultDumpOptions
-    {
-        int printer_choice;
-        std::string model_key_tag_list;
-        std::string map_file_path;
-    } m_result_dump_options;
-
-    struct MapSimulationOptions
-    {
-        std::string model_file_path, map_file_name;
-        int potential_model_choice;
-        int partial_charge_choice;
-        double cutoff_distance;
-        double grid_spacing;
-        std::string blurring_width_list;
-    } m_map_simulation_options;
-
-    struct GlobalOptions
-    {
-        int thread_size, verbose_level;
-        std::string database_path, folder_path;
-    } m_global_options;
+    PotentialAnalysisCommand::Options m_potential_analysis_options{};
+    PotentialDisplayCommand::Options  m_potential_display_options{};
+    ResultDumpCommand::Options        m_result_dump_options{};
+    MapSimulationCommand::Options     m_map_simulation_options{};
+    GlobalOptions m_global_options{};
 
 public:
     Application(CLI::App & app);

@@ -14,6 +14,25 @@ PotentialDisplayCommand::PotentialDisplayCommand(void) :
 
 }
 
+PotentialDisplayCommand::PotentialDisplayCommand(
+    const Options & options, const GlobalOptions & globals) :
+    m_painter_choice{ options.painter_choice },
+    m_database_path{ globals.database_path },
+    m_folder_path{ globals.folder_path },
+    m_atom_selector{ std::make_unique<AtomSelector>() }
+{
+    SetModelKeyTagList(options.model_key_tag_list);
+    SetRefModelKeyTagListMap(options.ref_model_key_tag_list);
+    SetPickChainID(options.pick_chain_id);
+    SetPickResidueType(options.pick_residue);
+    SetPickElementType(options.pick_element);
+    SetPickRemotenessType(options.pick_remoteness);
+    SetVetoChainID(options.veto_chain_id);
+    SetVetoResidueType(options.veto_residue);
+    SetVetoElementType(options.veto_element);
+    SetVetoRemotenessType(options.veto_remoteness);
+}
+
 PotentialDisplayCommand::~PotentialDisplayCommand()
 {
 

@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include "CommandBase.hpp"
+#include "GlobalOptions.hpp"
 
 class SphereSampler;
 class ModelObject;
@@ -18,7 +19,24 @@ class PotentialAnalysisCommand : public CommandBase
     std::unique_ptr<SphereSampler> m_sphere_sampler;
 
 public:
+    struct Options
+    {
+        bool is_asymmetry{ false };
+        bool is_simulation{ false };
+        int sampling_size{ 1500 };
+        double sampling_range_min{ 0.0 };
+        double sampling_range_max{ 1.5 };
+        double fit_range_min{ 0.0 };
+        double fit_range_max{ 1.0 };
+        double alpha_r{ 0.1 };
+        double alpha_g{ 0.2 };
+        double resolution_simulation{ 0.0 };
+        std::string model_file_path;
+        std::string map_file_path;
+        std::string saved_key_tag{"model"};
+    };
     PotentialAnalysisCommand(void);
+    PotentialAnalysisCommand(const Options & options, const GlobalOptions & globals);
     ~PotentialAnalysisCommand();
     void Execute(void) override;
 

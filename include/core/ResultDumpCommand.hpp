@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "CommandBase.hpp"
+#include "GlobalOptions.hpp"
 
 class ResultDumpCommand : public CommandBase
 {
@@ -12,7 +13,14 @@ class ResultDumpCommand : public CommandBase
     std::vector<std::string> m_model_key_tag_list;
 
 public:
+    struct Options
+    {
+        int printer_choice{ 2 };
+        std::string model_key_tag_list;
+        std::string map_file_path;
+    };
     ResultDumpCommand(void);
+    ResultDumpCommand(const Options & options, const GlobalOptions & globals);
     ~ResultDumpCommand() = default;
     void Execute(void) override;
 
