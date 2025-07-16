@@ -12,12 +12,11 @@ class CommandBase;
 
 class Application
 {
-    CLI::App * m_cli_app;
+    CLI::App & m_cli_app;
     CLI::App * m_potential_analysis_cmd;
     CLI::App * m_potential_display_cmd;
     CLI::App * m_result_dump_cmd;
     CLI::App * m_map_simulation_cmd;
-    std::string m_selected_command;
 
     struct AtomSelectorOptions
     {
@@ -75,7 +74,7 @@ class Application
     } m_global_options;
 
 public:
-    Application(CLI::App * app);
+    Application(CLI::App & app);
     ~Application() = default;
     void Run(void);
 

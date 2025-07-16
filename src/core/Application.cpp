@@ -8,16 +8,11 @@
 
 #include <CLI/CLI.hpp>
 
-Application::Application(CLI::App * app) :
+Application::Application(CLI::App & app) :
     m_cli_app{ app }, m_potential_analysis_cmd{ nullptr },
     m_potential_display_cmd{ nullptr }, m_result_dump_cmd{ nullptr },
-    m_map_simulation_cmd{ nullptr },
-    m_selected_command{ "" }
+    m_map_simulation_cmd{ nullptr }
 {
-    if (m_cli_app == nullptr)
-    {
-        throw std::runtime_error("Application::Application() failed: CLI::App instance is nullptr.");
-    }
     RegisterCommands();
 }
 
@@ -34,7 +29,7 @@ void Application::Run(void)
 
 std::unique_ptr<CommandBase> Application::CreateCommand(void)
 {
-    if (m_cli_app->got_subcommand(m_potential_analysis_cmd))
+    if (m_cli_app.got_subcommand(m_potential_analysis_cmd))
     {
         auto command{ std::make_unique<PotentialAnalysisCommand>() };
         command->SetThreadSize(m_global_options.thread_size);
@@ -54,7 +49,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetAlphaG(m_potential_analysis_options.alpha_g);
         return command;
     }
-    else if (m_cli_app->got_subcommand(m_potential_display_cmd))
+    else if (m_cli_app.got_subcommand(m_potential_display_cmd))
     {
         auto command{ std::make_unique<PotentialDisplayCommand>() };
         command->SetPainterChoice(m_potential_display_options.painter_choice);
@@ -72,7 +67,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetVetoRemotenessType(m_atom_selector_options.veto_remoteness);
         return command;
     }
-    else if (m_cli_app->got_subcommand(m_result_dump_cmd))
+    else if (m_cli_app.got_subcommand(m_result_dump_cmd))
     {
         auto command{ std::make_unique<ResultDumpCommand>() };
         command->SetPrinterChoice(m_result_dump_options.printer_choice);
@@ -82,7 +77,7 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         command->SetFolderPath(m_global_options.folder_path);
         return command;
     }
-    else if (m_cli_app->got_subcommand(m_map_simulation_cmd))
+    else if (m_cli_app.got_subcommand(m_map_simulation_cmd))
     {
         auto command{ std::make_unique<MapSimulationCommand>() };
         command->SetModelFilePath(m_map_simulation_options.model_file_path);
@@ -113,7 +108,7 @@ void Application::RegisterCommands(void)
 
 void Application::RegisterPotentialAnalysisCommand(void)
 {
-    m_potential_analysis_cmd = m_cli_app->add_subcommand("potential_analysis", "Run potential analysis");
+    m_potential_analysis_cmd = m_cli_app.add_subcommand("potential_analysis", "Run potential analysis");
     m_potential_analysis_cmd->add_option(
         "-a,--model", m_potential_analysis_options.model_file_path,
         "Model file path")->required();
@@ -154,16 +149,11 @@ void Application::RegisterPotentialAnalysisCommand(void)
         "--alpha-g", m_potential_analysis_options.alpha_g,
         "Alpha value for G")->default_val(0.2);
     RegisterGlobalOptions(m_potential_analysis_cmd);
-    
-    m_cli_app->callback([&]()
-    {
-        m_selected_command = "potential_analysis";
-    });
 }
 
 void Application::RegisterPotentialDisplayCommand(void)
 {
-    m_potential_display_cmd = m_cli_app->add_subcommand("potential_display", "Run potential display");
+    m_potential_display_cmd = m_cli_app.add_subcommand("potential_display", "Run potential display");
     m_potential_display_cmd->add_option(
         "-p,--painter", m_potential_display_options.painter_choice,
         "Painter choice")->required();
@@ -198,16 +188,11 @@ void Application::RegisterPotentialDisplayCommand(void)
         "--veto-remoteness", m_atom_selector_options.veto_remoteness,
         "Veto remoteness type")->default_val("");
     RegisterGlobalOptions(m_potential_display_cmd);
-
-    m_cli_app->callback([&]()
-    {
-        m_selected_command = "potential_display";
-    });
 }
 
 void Application::RegisterResultDumpCommand(void)
 {
-    m_result_dump_cmd = m_cli_app->add_subcommand("result_dump", "Run result dump");
+    m_result_dump_cmd = m_cli_app.add_subcommand("result_dump", "Run result dump");
     m_result_dump_cmd->add_option(
         "-p,--printer", m_result_dump_options.printer_choice,
         "Printer choice")->required();
@@ -218,16 +203,11 @@ void Application::RegisterResultDumpCommand(void)
         "-m,--map", m_result_dump_options.map_file_path,
         "Map file path")->default_val("");
     RegisterGlobalOptions(m_result_dump_cmd);
-
-    m_cli_app->callback([&]()
-    {
-        m_selected_command = "result_dump";
-    });
 }
 
 void Application::RegisterMapSimulationCommand(void)
 {
-    m_map_simulation_cmd = m_cli_app->add_subcommand("map_simulation", "Run map simulation command");
+    m_map_simulation_cmd = m_cli_app.add_subcommand("map_simulation", "Run map simulation command");
     m_map_simulation_cmd->add_option(
         "-a,--model", m_map_simulation_options.model_file_path,
         "Model file path")->required();
@@ -250,11 +230,6 @@ void Application::RegisterMapSimulationCommand(void)
         "--blurring-width", m_map_simulation_options.blurring_width_list,
         "Blurring width (list) setting")->default_val("0.50");
     RegisterGlobalOptions(m_map_simulation_cmd);
-
-    m_map_simulation_cmd->callback([&]()
-    {
-        m_selected_command = "map_simulation";
-    });
 }
 
 void Application::RegisterGlobalOptions(CLI::App * command)
@@ -270,5 +245,5 @@ void Application::RegisterGlobalOptions(CLI::App * command)
         "Number of threads")->default_val(1);
     command->add_option(
         "-v,--verbose", m_global_options.verbose_level,
-        "Verbose level")->default_val(2);
+        "Verbose level")->default_val(3);
 }
