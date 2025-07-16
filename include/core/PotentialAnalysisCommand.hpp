@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <string>
+#include <CLI/CLI.hpp>
+
 #include "CommandBase.hpp"
 #include "GlobalOptions.hpp"
 
@@ -40,6 +42,7 @@ public:
     ~PotentialAnalysisCommand();
     void Execute(void) override;
 
+    static void RegisterCLIOptions(CLI::App * cmd, Options & options);
     void SetAsymmetryFlag(bool value) { m_is_asymmetry = value; }
     void SetSimulationFlag(bool value) { m_is_simulation = value; }
     void SetSimulatedMapResolution(double value) { m_simulated_map_resolution = value; }

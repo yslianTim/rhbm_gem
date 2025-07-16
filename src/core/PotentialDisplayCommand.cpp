@@ -38,6 +38,32 @@ PotentialDisplayCommand::~PotentialDisplayCommand()
 
 }
 
+void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd, Options & options)
+{
+    cmd->add_option("-p,--painter", options.painter_choice,
+        "Painter choice")->required();
+    cmd->add_option("-k,--model-keylist", options.model_key_tag_list,
+        "List of model key tag to be display")->required();
+    cmd->add_option("-r,--ref-model-keylist", options.ref_model_key_tag_list,
+        "List of reference model key tag to be display")->default_val("");
+    cmd->add_option("--pick-chain", options.pick_chain_id,
+        "Pick chain ID")->default_val("");
+    cmd->add_option("--pick-residue", options.pick_residue,
+        "Pick residue type")->default_val("");
+    cmd->add_option("--pick-element", options.pick_element,
+        "Pick element type")->default_val("");
+    cmd->add_option("--pick-remoteness", options.pick_remoteness,
+        "Pick remoteness type")->default_val("");
+    cmd->add_option("--veto-chain", options.veto_chain_id,
+        "Veto chain ID")->default_val("");
+    cmd->add_option("--veto-residue", options.veto_residue,
+        "Veto residue type")->default_val("");
+    cmd->add_option("--veto-element", options.veto_element,
+        "Veto element type")->default_val("");
+    cmd->add_option("--veto-remoteness", options.veto_remoteness,
+        "Veto remoteness type")->default_val("");
+}
+
 void PotentialDisplayCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "PotentialDisplayCommand::Execute() called.");

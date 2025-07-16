@@ -29,6 +29,24 @@ MapSimulationCommand::MapSimulationCommand(
     SetBlurringWidthList(options.blurring_width_list);
 }
 
+void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd, Options & options)
+{
+    cmd->add_option("-a,--model", options.model_file_path,
+        "Model file path")->required();
+    cmd->add_option("-n,--name", options.map_file_name,
+        "File name for output map files")->default_val("sim_map");
+    cmd->add_option("--potential-model", options.potential_model_choice,
+        "Atomic potential model option")->default_val(1);
+    cmd->add_option("--charge", options.partial_charge_choice,
+        "Partial charge table option")->default_val(1);
+    cmd->add_option("-c,--cut-off", options.cutoff_distance,
+        "Cutoff distance")->default_val(5.0);
+    cmd->add_option("-g,--grid-spacing", options.grid_spacing,
+        "Grid spacing")->default_val(0.5);
+    cmd->add_option("--blurring-width", options.blurring_width_list,
+        "Blurring width (list) setting")->default_val("0.50");
+}
+
 void MapSimulationCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "MapSimulationCommand::Execute() called.");

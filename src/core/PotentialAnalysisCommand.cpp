@@ -46,6 +46,36 @@ PotentialAnalysisCommand::~PotentialAnalysisCommand()
     
 }
 
+void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd, Options & options)
+{
+    cmd->add_option("-a,--model", options.model_file_path,
+        "Model file path")->required();
+    cmd->add_option("-m,--map", options.map_file_path,
+        "Map file path")->required();
+    cmd->add_option("--simulation", options.is_simulation,
+        "Simulation flag")->default_val(false);
+    cmd->add_option("-r,--sim-resolution", options.resolution_simulation,
+        "Set simulated map's resolution (blurring width)")->default_val(0.0);
+    cmd->add_option("-k,--save-key", options.saved_key_tag,
+        "New key tag for saving ModelObject results into database")->default_val("");
+    cmd->add_option("--asymmetry", options.is_asymmetry,
+        "Turn On/Off asymmetry flag")->default_val(false);
+    cmd->add_option("-s,--sampling", options.sampling_size,
+        "Number of sampling points per atom")->default_val(1500);
+    cmd->add_option("--sampling-min", options.sampling_range_min,
+        "Minimum sampling range")->default_val(0.0);
+    cmd->add_option("--sampling-max", options.sampling_range_max,
+        "Maximum sampling range")->default_val(1.5);
+    cmd->add_option("--fit-min", options.fit_range_min,
+        "Minimum fitting range")->default_val(0.0);
+    cmd->add_option("--fit-max", options.fit_range_max,
+        "Maximum fitting range")->default_val(1.0);
+    cmd->add_option("--alpha-r", options.alpha_r,
+        "Alpha value for R")->default_val(0.1);
+    cmd->add_option("--alpha-g", options.alpha_g,
+        "Alpha value for G")->default_val(0.2);
+}
+
 void PotentialAnalysisCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "PotentialAnalysisCommand::Execute() called.");

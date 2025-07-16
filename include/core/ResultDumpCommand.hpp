@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <CLI/CLI.hpp>
+
 #include "CommandBase.hpp"
 #include "GlobalOptions.hpp"
 
@@ -24,6 +26,7 @@ public:
     ~ResultDumpCommand() = default;
     void Execute(void) override;
 
+    static void RegisterCLIOptions(CLI::App * cmd, Options & options);
     void SetPrinterChoice(int value) { m_printer_choice = value; }
     void SetDatabasePath(const std::string & path) { m_database_path = path; }
     void SetFolderPath(const std::string & path) { m_folder_path = path; }

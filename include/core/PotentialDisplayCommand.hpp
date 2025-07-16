@@ -4,6 +4,8 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <CLI/CLI.hpp>
+
 #include "CommandBase.hpp"
 #include "GlobalOptions.hpp"
 
@@ -38,6 +40,7 @@ public:
     ~PotentialDisplayCommand();
     void Execute(void) override;
 
+    static void RegisterCLIOptions(CLI::App * cmd, Options & options);
     void SetPainterChoice(int value) { m_painter_choice = value; }
     void SetDatabasePath(const std::string & path) { m_database_path = path; }
     void SetFolderPath(const std::string & path) { m_folder_path = path; }

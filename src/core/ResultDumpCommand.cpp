@@ -22,6 +22,16 @@ ResultDumpCommand::ResultDumpCommand(
     SetModelKeyTagList(options.model_key_tag_list);
 }
 
+void ResultDumpCommand::RegisterCLIOptions(CLI::App * cmd, Options & options)
+{
+    cmd->add_option("-p,--printer", options.printer_choice,
+        "Printer choice")->required();
+    cmd->add_option("-k,--model-keylist", options.model_key_tag_list,
+        "List of model key tag to be display")->required();
+    cmd->add_option("-m,--map", options.map_file_path,
+        "Map file path")->default_val("");
+}
+
 void ResultDumpCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "ResultDumpCommand::Execute() called.");

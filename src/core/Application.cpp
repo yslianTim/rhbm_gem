@@ -75,126 +75,28 @@ void Application::RegisterCommands(void)
 void Application::RegisterPotentialAnalysisCommand(void)
 {
     m_potential_analysis_cmd = m_cli_app.add_subcommand("potential_analysis", "Run potential analysis");
-    m_potential_analysis_cmd->add_option(
-        "-a,--model", m_potential_analysis_options.model_file_path,
-        "Model file path")->required();
-    m_potential_analysis_cmd->add_option(
-        "-m,--map", m_potential_analysis_options.map_file_path,
-        "Map file path")->required();
-    m_potential_analysis_cmd->add_option(
-        "--simulation", m_potential_analysis_options.is_simulation,
-        "Simulation flag")->default_val(false);
-    m_potential_analysis_cmd->add_option(
-        "-r,--sim-resolution", m_potential_analysis_options.resolution_simulation,
-        "Set simulated map's resolution (blurring width)")->default_val(0.0);
-    m_potential_analysis_cmd->add_option(
-        "-k,--save-key", m_potential_analysis_options.saved_key_tag,
-        "New key tag for saving ModelObject results into database")->default_val("");
-    m_potential_analysis_cmd->add_option(
-        "--asymmetry", m_potential_analysis_options.is_asymmetry,
-        "Turn On/Off asymmetry flag")->default_val(false);
-    m_potential_analysis_cmd->add_option(
-        "-s,--sampling", m_potential_analysis_options.sampling_size,
-        "Number of sampling points per atom")->default_val(1500);
-    m_potential_analysis_cmd->add_option(
-        "--sampling-min", m_potential_analysis_options.sampling_range_min,
-        "Minimum sampling range")->default_val(0.0);
-    m_potential_analysis_cmd->add_option(
-        "--sampling-max", m_potential_analysis_options.sampling_range_max,
-        "Maximum sampling range")->default_val(1.5);
-    m_potential_analysis_cmd->add_option(
-        "--fit-min", m_potential_analysis_options.fit_range_min,
-        "Minimum fitting range")->default_val(0.0);
-    m_potential_analysis_cmd->add_option(
-        "--fit-max", m_potential_analysis_options.fit_range_max,
-        "Maximum fitting range")->default_val(1.0);
-    m_potential_analysis_cmd->add_option(
-        "--alpha-r", m_potential_analysis_options.alpha_r,
-        "Alpha value for R")->default_val(0.1);
-    m_potential_analysis_cmd->add_option(
-        "--alpha-g", m_potential_analysis_options.alpha_g,
-        "Alpha value for G")->default_val(0.2);
+    PotentialAnalysisCommand::RegisterCLIOptions(m_potential_analysis_cmd, m_potential_analysis_options);
     RegisterGlobalOptions(m_potential_analysis_cmd);
 }
 
 void Application::RegisterPotentialDisplayCommand(void)
 {
     m_potential_display_cmd = m_cli_app.add_subcommand("potential_display", "Run potential display");
-    m_potential_display_cmd->add_option(
-        "-p,--painter", m_potential_display_options.painter_choice,
-        "Painter choice")->required();
-    m_potential_display_cmd->add_option(
-        "-k,--model-keylist", m_potential_display_options.model_key_tag_list,
-        "List of model key tag to be display")->required();
-    m_potential_display_cmd->add_option(
-        "-r,--ref-model-keylist", m_potential_display_options.ref_model_key_tag_list,
-        "List of reference model key tag to be display")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--pick-chain", m_potential_display_options.pick_chain_id,
-        "Pick chain ID")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--pick-residue", m_potential_display_options.pick_residue,
-        "Pick residue type")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--pick-element", m_potential_display_options.pick_element,
-        "Pick element type")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--pick-remoteness", m_potential_display_options.pick_remoteness,
-        "Pick remoteness type")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--veto-chain", m_potential_display_options.veto_chain_id,
-        "Veto chain ID")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--veto-residue", m_potential_display_options.veto_residue,
-        "Veto residue type")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--veto-element", m_potential_display_options.veto_element,
-        "Veto element type")->default_val("");
-    m_potential_display_cmd->add_option(
-        "--veto-remoteness", m_potential_display_options.veto_remoteness,
-        "Veto remoteness type")->default_val("");
+    PotentialDisplayCommand::RegisterCLIOptions(m_potential_display_cmd, m_potential_display_options);
     RegisterGlobalOptions(m_potential_display_cmd);
 }
 
 void Application::RegisterResultDumpCommand(void)
 {
     m_result_dump_cmd = m_cli_app.add_subcommand("result_dump", "Run result dump");
-    m_result_dump_cmd->add_option(
-        "-p,--printer", m_result_dump_options.printer_choice,
-        "Printer choice")->required();
-    m_result_dump_cmd->add_option(
-        "-k,--model-keylist", m_result_dump_options.model_key_tag_list,
-        "List of model key tag to be display")->required();
-    m_result_dump_cmd->add_option(
-        "-m,--map", m_result_dump_options.map_file_path,
-        "Map file path")->default_val("");
+    ResultDumpCommand::RegisterCLIOptions(m_result_dump_cmd, m_result_dump_options);
     RegisterGlobalOptions(m_result_dump_cmd);
 }
 
 void Application::RegisterMapSimulationCommand(void)
 {
     m_map_simulation_cmd = m_cli_app.add_subcommand("map_simulation", "Run map simulation command");
-    m_map_simulation_cmd->add_option(
-        "-a,--model", m_map_simulation_options.model_file_path,
-        "Model file path")->required();
-    m_map_simulation_cmd->add_option(
-        "-n,--name", m_map_simulation_options.map_file_name,
-        "File name for output map files")->default_val("sim_map");
-    m_map_simulation_cmd->add_option(
-        "--potential-model", m_map_simulation_options.potential_model_choice,
-        "Atomic potential model option")->default_val(1);
-    m_map_simulation_cmd->add_option(
-        "--charge", m_map_simulation_options.partial_charge_choice,
-        "Partial charge table option")->default_val(1);
-    m_map_simulation_cmd->add_option(
-        "-c,--cut-off", m_map_simulation_options.cutoff_distance,
-        "Cutoff distance")->default_val(5.0);
-    m_map_simulation_cmd->add_option(
-        "-g,--grid-spacing", m_map_simulation_options.grid_spacing,
-        "Grid spacing")->default_val(0.5);
-    m_map_simulation_cmd->add_option(
-        "--blurring-width", m_map_simulation_options.blurring_width_list,
-        "Blurring width (list) setting")->default_val("0.50");
+    MapSimulationCommand::RegisterCLIOptions(m_map_simulation_cmd, m_map_simulation_options);
     RegisterGlobalOptions(m_map_simulation_cmd);
 }
 

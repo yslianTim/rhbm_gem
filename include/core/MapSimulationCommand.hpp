@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <CLI/CLI.hpp>
+
 #include "CommandBase.hpp"
 #include "GlobalOptions.hpp"
 
@@ -32,6 +34,7 @@ public:
     ~MapSimulationCommand() = default;
     void Execute(void) override;
 
+    static void RegisterCLIOptions(CLI::App * cmd, Options & options);
     void SetThreadSize(int value) { m_thread_size = value; }
     void SetPotentialModelChoice(int value) { m_potential_model_choice = value; }
     void SetPartialChargeChoice(int value) { m_partial_charge_choice = value; }
