@@ -10,10 +10,6 @@
 
 class ResultDumpCommand : public CommandBase
 {
-    int m_printer_choice;
-    std::string m_database_path, m_folder_path, m_map_file_path;
-    std::vector<std::string> m_model_key_tag_list;
-
 public:
     struct Options
     {
@@ -21,16 +17,23 @@ public:
         std::string model_key_tag_list;
         std::string map_file_path;
     };
+
+private:
+    Options m_options{};
+    GlobalOptions m_globals{};
+    std::vector<std::string> m_model_key_tag_list;
+
+public:
     ResultDumpCommand(void);
-    ResultDumpCommand(const Options & options, const GlobalOptions & globals);
     ~ResultDumpCommand() = default;
     void Execute(void) override;
+    void RegisterCLIOptions(CLI::App * cmd) override;
+    void SetGlobalOptions(const GlobalOptions & globals) override { m_globals = globals; }
 
-    static void RegisterCLIOptions(CLI::App * cmd, Options & options);
-    void SetPrinterChoice(int value) { m_printer_choice = value; }
-    void SetDatabasePath(const std::string & path) { m_database_path = path; }
-    void SetFolderPath(const std::string & path) { m_folder_path = path; }
-    void SetMapFilePath(const std::string & path) { m_map_file_path = path; }
+    void SetPrinterChoice(int value) { m_options.printer_choice = value; }
+    void SetDatabasePath(const std::string & path) { m_globals.database_path = path; }
+    void SetFolderPath(const std::string & path) { m_globals.folder_path = path; }
+    void SetMapFilePath(const std::string & path) { m_options.map_file_path = path; }
     void SetModelKeyTagList(const std::string & value);
 
 };

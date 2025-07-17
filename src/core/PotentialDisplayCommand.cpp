@@ -6,30 +6,9 @@
 #include "Logger.hpp"
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
-    m_painter_choice{ 1 }, m_database_path{ "database.sqlite" },
-    m_folder_path{ "" },
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 
-}
-
-PotentialDisplayCommand::PotentialDisplayCommand(
-    const Options & options, const GlobalOptions & globals) :
-    m_painter_choice{ options.painter_choice },
-    m_database_path{ globals.database_path },
-    m_folder_path{ globals.folder_path },
-    m_atom_selector{ std::make_unique<AtomSelector>() }
-{
-    SetModelKeyTagList(options.model_key_tag_list);
-    SetRefModelKeyTagListMap(options.ref_model_key_tag_list);
-    SetPickChainID(options.pick_chain_id);
-    SetPickResidueType(options.pick_residue);
-    SetPickElementType(options.pick_element);
-    SetPickRemotenessType(options.pick_remoteness);
-    SetVetoChainID(options.veto_chain_id);
-    SetVetoResidueType(options.veto_residue);
-    SetVetoElementType(options.veto_element);
-    SetVetoRemotenessType(options.veto_remoteness);
 }
 
 PotentialDisplayCommand::~PotentialDisplayCommand()
@@ -37,47 +16,57 @@ PotentialDisplayCommand::~PotentialDisplayCommand()
 
 }
 
-void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd, Options & options)
+void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
 {
-    cmd->add_option("-p,--painter", options.painter_choice,
+    cmd->add_option("-p,--painter", m_options.painter_choice,
         "Painter choice")->required();
-    cmd->add_option("-k,--model-keylist", options.model_key_tag_list,
+    cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
         "List of model key tag to be display")->required();
-    cmd->add_option("-r,--ref-model-keylist", options.ref_model_key_tag_list,
+    cmd->add_option("-r,--ref-model-keylist", m_options.ref_model_key_tag_list,
         "List of reference model key tag to be display")->default_val("");
-    cmd->add_option("--pick-chain", options.pick_chain_id,
+    cmd->add_option("--pick-chain", m_options.pick_chain_id,
         "Pick chain ID")->default_val("");
-    cmd->add_option("--pick-residue", options.pick_residue,
+    cmd->add_option("--pick-residue", m_options.pick_residue,
         "Pick residue type")->default_val("");
-    cmd->add_option("--pick-element", options.pick_element,
+    cmd->add_option("--pick-element", m_options.pick_element,
         "Pick element type")->default_val("");
-    cmd->add_option("--pick-remoteness", options.pick_remoteness,
+    cmd->add_option("--pick-remoteness", m_options.pick_remoteness,
         "Pick remoteness type")->default_val("");
-    cmd->add_option("--veto-chain", options.veto_chain_id,
+    cmd->add_option("--veto-chain", m_options.veto_chain_id,
         "Veto chain ID")->default_val("");
-    cmd->add_option("--veto-residue", options.veto_residue,
+    cmd->add_option("--veto-residue", m_options.veto_residue,
         "Veto residue type")->default_val("");
-    cmd->add_option("--veto-element", options.veto_element,
+    cmd->add_option("--veto-element", m_options.veto_element,
         "Veto element type")->default_val("");
-    cmd->add_option("--veto-remoteness", options.veto_remoteness,
+    cmd->add_option("--veto-remoteness", m_options.veto_remoteness,
         "Veto remoteness type")->default_val("");
 }
 
 void PotentialDisplayCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "PotentialDisplayCommand::Execute() called.");
+    SetModelKeyTagList(m_options.model_key_tag_list);
+    SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
+    SetPickChainID(m_options.pick_chain_id);
+    SetPickResidueType(m_options.pick_residue);
+    SetPickElementType(m_options.pick_element);
+    SetPickRemotenessType(m_options.pick_remoteness);
+    SetVetoChainID(m_options.veto_chain_id);
+    SetVetoResidueType(m_options.veto_residue);
+    SetVetoElementType(m_options.veto_element);
+    SetVetoRemotenessType(m_options.veto_remoteness);
     Logger::Log(LogLevel::Info, "Total number of model object sets to be display: "
                 + std::to_string(m_model_key_tag_list.size()));
 
-    auto data_manager{ std::make_unique<DataObjectManager>(m_database_path) };
+    auto data_manager{ std::make_unique<DataObjectManager>(m_globals.database_path) };
     LoadModelObjects(data_manager.get());
     LoadRefModelObjects(data_manager.get());
 
     auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
     model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);
     model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
-    model_displayer->SetFolderPath(m_folder_path);
-    model_displayer->SetPainterChoice(m_painter_choice);
+    model_displayer->SetFolderPath(m_globals.folder_path);
+    model_displayer->SetPainterChoice(m_options.painter_choice);
     data_manager->Accept(model_displayer.get());
 }
 

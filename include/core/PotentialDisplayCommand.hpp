@@ -14,12 +14,6 @@ class AtomSelector;
 
 class PotentialDisplayCommand : public CommandBase
 {
-    int m_painter_choice;
-    std::string m_database_path, m_folder_path;
-    std::vector<std::string> m_model_key_tag_list;
-    std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
-    std::unique_ptr<AtomSelector> m_atom_selector;
-
 public:
     struct Options
     {
@@ -35,15 +29,24 @@ public:
         std::string pick_remoteness;
         std::string veto_remoteness;
     };
+
+private:
+    Options m_options{};
+    GlobalOptions m_globals{};
+    std::vector<std::string> m_model_key_tag_list;
+    std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
+    std::unique_ptr<AtomSelector> m_atom_selector;
+
+public:
     PotentialDisplayCommand(void);
-    PotentialDisplayCommand(const Options & options, const GlobalOptions & globals);
     ~PotentialDisplayCommand();
     void Execute(void) override;
+    void RegisterCLIOptions(CLI::App * cmd) override;
+    void SetGlobalOptions(const GlobalOptions & globals) override { m_globals = globals; }
 
-    static void RegisterCLIOptions(CLI::App * cmd, Options & options);
-    void SetPainterChoice(int value) { m_painter_choice = value; }
-    void SetDatabasePath(const std::string & path) { m_database_path = path; }
-    void SetFolderPath(const std::string & path) { m_folder_path = path; }
+    void SetPainterChoice(int value) { m_options.painter_choice = value; }
+    void SetDatabasePath(const std::string & path) { m_globals.database_path = path; }
+    void SetFolderPath(const std::string & path) { m_globals.folder_path = path; }
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
     void SetPickChainID(const std::string & value);
