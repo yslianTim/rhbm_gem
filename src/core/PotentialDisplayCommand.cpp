@@ -2,9 +2,8 @@
 #include "DataObjectManager.hpp"
 #include "PotentialDisplayVisitor.hpp"
 #include "AtomSelector.hpp"
+#include "StringHelper.hpp"
 #include "Logger.hpp"
-
-#include <sstream>
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
     m_painter_choice{ 1 }, m_database_path{ "database.sqlite" },
@@ -85,12 +84,9 @@ void PotentialDisplayCommand::Execute(void)
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
     m_model_key_tag_list.clear();
-    std::stringstream ss(value);
-    std::string segment;
-    while (std::getline(ss, segment, ','))
+    for (const auto & token : StringHelper::SplitStringLineFromDelimiter(value, ','))
     {
-        if (segment == "") continue;
-        m_model_key_tag_list.emplace_back(segment);
+        m_model_key_tag_list.emplace_back(token);
     }
 }
 
@@ -103,12 +99,14 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
     while (pos < len)
     {
         // Find '[' for start of group name
-        if (value[pos] != '[') {
+        if (value[pos] != '[')
+        {
             throw std::runtime_error("Parser Error : expect '['");
         }
         // Find ']' for end of group name
         size_t end_name{ value.find(']', pos+1) };
-        if (end_name == std::string::npos) {
+        if (end_name == std::string::npos)
+        {
             throw std::runtime_error("Parser Error : expect ']'");
         }
         std::string group_name{ value.substr(pos+1, end_name - (pos+1)) };
@@ -116,22 +114,15 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
         // Find the start of members after ']'
         size_t start_members{ end_name + 1 };
         size_t end_block{ value.find(';', start_members) };
-        if (end_block == std::string::npos) {
+        if (end_block == std::string::npos)
+        {
             end_block = len;
         }
-        std::string members_str{ value.substr(start_members, end_block - start_members) };
+        std::string members_string{ value.substr(start_members, end_block - start_members) };
 
-        // Segment members_str by commas
-        std::vector<std::string> members;
-        std::istringstream iss(members_str);
-        std::string member_token;
-        while (std::getline(iss, member_token, ',')) {
-            if (!member_token.empty()) {
-                members.push_back(member_token);
-            }
-        }
-
-        m_ref_model_key_tag_list_map.emplace(std::move(group_name), std::move(members));
+        m_ref_model_key_tag_list_map.emplace(
+            std::move(group_name),
+            StringHelper::SplitStringLineFromDelimiter(members_string, ','));
 
         // Jump to the next block, which is after the semicolon
         pos = end_block + 1;

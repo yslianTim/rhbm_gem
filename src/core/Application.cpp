@@ -32,10 +32,11 @@ std::unique_ptr<CommandBase> Application::CreateCommand(void)
         return nullptr;
     }
 
-    auto it{ m_command_map.find(selected_command[0]) };
+    auto command_name{ selected_command[0]->get_name() };
+    auto it{ m_command_map.find(command_name) };
     if (it != m_command_map.end())
     {
-        Logger::Log(LogLevel::Info, "Subcommand found: " + selected_command[0]->get_name());
+        Logger::Log(LogLevel::Info, "Subcommand found: " + command_name);
         return it->second();
     }
 
@@ -64,7 +65,7 @@ void Application::RegisterCommand(
     CLI::App * command{ m_cli_app.add_subcommand(name, description) };
     Type::RegisterCLIOptions(command, options);
     RegisterGlobalOptions(command);
-    m_command_map.emplace(command, [this, &options]() {
+    m_command_map.emplace(name, [this, &options]() {
         return std::make_unique<Type>(options, m_global_options);
     });
 }

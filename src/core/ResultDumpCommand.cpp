@@ -1,9 +1,8 @@
 #include "ResultDumpCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "ResultDumpVisitor.hpp"
+#include "StringHelper.hpp"
 #include "Logger.hpp"
-
-#include <sstream>
 
 ResultDumpCommand::ResultDumpCommand(void) :
     m_printer_choice{ 2 }, m_database_path{ "database.sqlite" },
@@ -67,11 +66,8 @@ void ResultDumpCommand::Execute(void)
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
     m_model_key_tag_list.clear();
-    std::stringstream ss(value);
-    std::string segment;
-    while (std::getline(ss, segment, ','))
+    for (const auto & token : StringHelper::SplitStringLineFromDelimiter(value, ','))
     {
-        if (segment == "") continue;
-        m_model_key_tag_list.emplace_back(segment);
+        m_model_key_tag_list.emplace_back(token);
     }
 }

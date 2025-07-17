@@ -41,8 +41,24 @@ public:
         }
     }
 
+    static std::vector<std::string> SplitStringLineFromDelimiter(
+        const std::string & text, char delimiter=',')
+    {
+        std::vector<std::string> token_list;
+        std::stringstream ss(text);
+        std::string token;
+        while (std::getline(ss, token, delimiter))
+        {
+            if (!token.empty())
+            {
+                token_list.emplace_back(token);
+            }
+        }
+        return token_list;
+    }
+
     static std::vector<std::string> SplitStringLineAsTokens(
-        const std::string & line, size_t token_count, char group_delimiter='\'')
+        const std::string & line, size_t token_count, char delimiter='\'')
     {
         std::vector<std::string> token_list;
         token_list.reserve(token_count);
@@ -50,11 +66,11 @@ public:
         {
             while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
             if (pos >= line.size()) break;
-            if (line[pos] == group_delimiter)
+            if (line[pos] == delimiter)
             {
                 ++pos;
                 auto start{ pos };
-                while (pos < line.size() && line[pos] != group_delimiter) ++pos;
+                while (pos < line.size() && line[pos] != delimiter) ++pos;
                 token_list.emplace_back(line.substr(start, pos - start));
                 if (pos < line.size()) ++pos;
             }

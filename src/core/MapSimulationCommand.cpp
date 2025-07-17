@@ -1,9 +1,8 @@
 #include "MapSimulationCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "MapSimulationVisitor.hpp"
+#include "StringHelper.hpp"
 #include "Logger.hpp"
-
-#include <sstream>
 
 MapSimulationCommand::MapSimulationCommand(void) :
     m_thread_size{ 1 }, m_potential_model_choice{ 1 },
@@ -73,11 +72,8 @@ void MapSimulationCommand::Execute(void)
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
     m_blurring_width_list.clear();
-    std::stringstream ss(value);
-    std::string segment;
-    while (std::getline(ss, segment, ','))
+    for (const auto & token : StringHelper::SplitStringLineFromDelimiter(value, ','))
     {
-        if (segment == "") continue;
-        m_blurring_width_list.emplace_back(std::stod(segment));
+        m_blurring_width_list.emplace_back(std::stod(token));
     }
 }
