@@ -11,7 +11,7 @@ class ModelObject;
 class PotentialAnalysisCommand : public CommandBase
 {
 public:
-    struct Options
+    struct Options : public CommandOptions
     {
         bool is_asymmetry{ false };
         bool is_simulation{ false };
@@ -35,9 +35,9 @@ private:
 public:
     PotentialAnalysisCommand(void);
     ~PotentialAnalysisCommand() = default;
-    void Execute(void) override;
+    bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
-    void SetGlobalOptions(const GlobalOptions & globals) override;
+    CommandOptions & GetOptions(void) override { return m_options; }
 
     void SetAsymmetryFlag(bool value) { m_options.is_asymmetry = value; }
     void SetSimulationFlag(bool value) { m_options.is_simulation = value; }
@@ -46,7 +46,7 @@ public:
     void SetFitRangeMaximum(double value) { m_options.fit_range_max = value; }
     void SetAlphaR(double value) { m_options.alpha_r = value; }
     void SetAlphaG(double value) { m_options.alpha_g = value; }
-    void SetDatabasePath(const std::string & path) { m_globals.database_path = path; }
+    void SetDatabasePath(const std::string & path) { m_options.database_path = path; }
     void SetModelFilePath(const std::string & path) { m_options.model_file_path = path; }
     void SetMapFilePath(const std::string & path) { m_options.map_file_path = path; }
     void SetSavedKeyTag(const std::string & tag) { m_options.saved_key_tag = tag; }

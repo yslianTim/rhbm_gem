@@ -2,7 +2,7 @@
 
 #include <string>
 
-struct GlobalOptions
+struct CommandOptions
 {
     int thread_size{ 1 };
     int verbose_level{ 3 };

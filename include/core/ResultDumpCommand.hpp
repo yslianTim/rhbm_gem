@@ -10,7 +10,7 @@
 class ResultDumpCommand : public CommandBase
 {
 public:
-    struct Options
+    struct Options : public CommandOptions
     {
         int printer_choice{ 2 };
         std::string model_key_tag_list;
@@ -24,12 +24,13 @@ private:
 public:
     ResultDumpCommand(void);
     ~ResultDumpCommand() = default;
-    void Execute(void) override;
+    bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
+    CommandOptions & GetOptions(void) override { return m_options; }
 
     void SetPrinterChoice(int value) { m_options.printer_choice = value; }
-    void SetDatabasePath(const std::string & path) { m_globals.database_path = path; }
-    void SetFolderPath(const std::string & path) { m_globals.folder_path = path; }
+    void SetDatabasePath(const std::string & path) { m_options.database_path = path; }
+    void SetFolderPath(const std::string & path) { m_options.folder_path = path; }
     void SetMapFilePath(const std::string & path) { m_options.map_file_path = path; }
     void SetModelKeyTagList(const std::string & value);
 

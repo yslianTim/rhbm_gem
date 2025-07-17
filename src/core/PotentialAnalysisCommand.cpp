@@ -7,16 +7,10 @@
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_sphere_sampler{ std::make_unique<SphereSampler>() }
 {
-    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(m_globals.thread_size));
+    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
     m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
     m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
     m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
-}
-
-void PotentialAnalysisCommand::SetGlobalOptions(const GlobalOptions & globals)
-{
-    m_globals = globals;
-    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(m_globals.thread_size));
 }
 
 void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd)
@@ -47,13 +41,14 @@ void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd)
         "Alpha value for R")->default_val(0.1);
     cmd->add_option("--alpha-g", m_options.alpha_g,
         "Alpha value for G")->default_val(0.2);
+    RegisterCommandOptions(cmd, m_options);
 }
 
-void PotentialAnalysisCommand::Execute(void)
+bool PotentialAnalysisCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "PotentialAnalysisCommand::Execute() called.");
 
-    auto data_manager{ std::make_unique<DataObjectManager>(m_globals.database_path) };
+    auto data_manager{ std::make_unique<DataObjectManager>(m_options.database_path) };
     try
     {
         data_manager->ProcessFile(m_options.model_file_path, "model");
@@ -73,12 +68,12 @@ void PotentialAnalysisCommand::Execute(void)
     catch (const std::exception & e)
     {
         Logger::Log(LogLevel::Error, e.what());
-        return;
+        return false;
     }
 
     auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_sphere_sampler.get()) };
     analyzer->SetAsymmetryFlag(m_options.is_asymmetry);
-    analyzer->SetThreadSize(static_cast<unsigned int>(m_globals.thread_size));
+    analyzer->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
     analyzer->SetModelObjectKeyTag("model");
     analyzer->SetMapObjectKeyTag("map");
     analyzer->SetFitRange(m_options.fit_range_min, m_options.fit_range_max);
@@ -87,11 +82,12 @@ void PotentialAnalysisCommand::Execute(void)
 
     data_manager->Accept(analyzer.get());
     data_manager->SaveDataObject("model", m_options.saved_key_tag);
+    return true;
 }
 
 void PotentialAnalysisCommand::SetThreadSize(int value)
 {
-    m_globals.thread_size = value;
+    m_options.thread_size = value;
     m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(value));
 }
 

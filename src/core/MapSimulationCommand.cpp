@@ -25,30 +25,40 @@ void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)
         "Grid spacing")->default_val(0.5);
     cmd->add_option("--blurring-width", m_options.blurring_width_list,
         "Blurring width (list) setting")->default_val("0.50");
+    RegisterCommandOptions(cmd, m_options);
 }
 
-void MapSimulationCommand::Execute(void)
+bool MapSimulationCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "MapSimulationCommand::Execute() called.");
-    SetBlurringWidthList(m_options.blurring_width_list);
-    Logger::Log(LogLevel::Info, "Total number of blurring width sets to be simulated: "
-                + std::to_string(m_blurring_width_list.size()));
+    try
+    {
+        SetBlurringWidthList(m_options.blurring_width_list);
+        Logger::Log(LogLevel::Info, "Total number of blurring width sets to be simulated: "
+                    + std::to_string(m_blurring_width_list.size()));
 
-    auto data_manager{ std::make_unique<DataObjectManager>() };
-    data_manager->ProcessFile(m_options.model_file_path, "model");
+        auto data_manager{ std::make_unique<DataObjectManager>() };
+        data_manager->ProcessFile(m_options.model_file_path, "model");
 
-    auto analyzer{ std::make_unique<MapSimulationVisitor>() };
-    analyzer->SetModelObjectKeyTag("model");
-    analyzer->SetFolderPath(m_globals.folder_path);
-    analyzer->SetMapFileName(m_options.map_file_name);
-    analyzer->SetThreadSize(static_cast<unsigned int>(m_globals.thread_size));
-    analyzer->SetPotentialModelChoice(m_options.potential_model_choice);
-    analyzer->SetPartialChargeChoice(m_options.partial_charge_choice);
-    analyzer->SetCutoffDistance(m_options.cutoff_distance);
-    analyzer->SetGridSpacing(m_options.grid_spacing);
-    analyzer->SetBlurringWidthList(m_blurring_width_list);
+        auto analyzer{ std::make_unique<MapSimulationVisitor>() };
+        analyzer->SetModelObjectKeyTag("model");
+        analyzer->SetFolderPath(m_options.folder_path);
+        analyzer->SetMapFileName(m_options.map_file_name);
+        analyzer->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
+        analyzer->SetPotentialModelChoice(m_options.potential_model_choice);
+        analyzer->SetPartialChargeChoice(m_options.partial_charge_choice);
+        analyzer->SetCutoffDistance(m_options.cutoff_distance);
+        analyzer->SetGridSpacing(m_options.grid_spacing);
+        analyzer->SetBlurringWidthList(m_blurring_width_list);
 
-    data_manager->Accept(analyzer.get());
+        data_manager->Accept(analyzer.get());
+    }
+    catch(const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error, e.what());
+        return false;
+    }
+    return true;
 }
 
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)

@@ -34,34 +34,45 @@ void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
         "Veto element type")->default_val("");
     cmd->add_option("--veto-remoteness", m_options.veto_remoteness,
         "Veto remoteness type")->default_val("");
+    RegisterCommandOptions(cmd, m_options);
 }
 
-void PotentialDisplayCommand::Execute(void)
+bool PotentialDisplayCommand::Execute(void)
 {
     Logger::Log(LogLevel::Info, "PotentialDisplayCommand::Execute() called.");
-    SetModelKeyTagList(m_options.model_key_tag_list);
-    SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
-    SetPickChainID(m_options.pick_chain_id);
-    SetPickResidueType(m_options.pick_residue);
-    SetPickElementType(m_options.pick_element);
-    SetPickRemotenessType(m_options.pick_remoteness);
-    SetVetoChainID(m_options.veto_chain_id);
-    SetVetoResidueType(m_options.veto_residue);
-    SetVetoElementType(m_options.veto_element);
-    SetVetoRemotenessType(m_options.veto_remoteness);
-    Logger::Log(LogLevel::Info, "Total number of model object sets to be display: "
-                + std::to_string(m_model_key_tag_list.size()));
+    try
+    {
+        SetModelKeyTagList(m_options.model_key_tag_list);
+        SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
+        SetPickChainID(m_options.pick_chain_id);
+        SetPickResidueType(m_options.pick_residue);
+        SetPickElementType(m_options.pick_element);
+        SetPickRemotenessType(m_options.pick_remoteness);
+        SetVetoChainID(m_options.veto_chain_id);
+        SetVetoResidueType(m_options.veto_residue);
+        SetVetoElementType(m_options.veto_element);
+        SetVetoRemotenessType(m_options.veto_remoteness);
+        Logger::Log(LogLevel::Info, "Total number of model object sets to be display: "
+                    + std::to_string(m_model_key_tag_list.size()));
 
-    auto data_manager{ std::make_unique<DataObjectManager>(m_globals.database_path) };
-    LoadModelObjects(data_manager.get());
-    LoadRefModelObjects(data_manager.get());
+        auto data_manager{ std::make_unique<DataObjectManager>(m_options.database_path) };
+        LoadModelObjects(data_manager.get());
+        LoadRefModelObjects(data_manager.get());
 
-    auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
-    model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);
-    model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
-    model_displayer->SetFolderPath(m_globals.folder_path);
-    model_displayer->SetPainterChoice(m_options.painter_choice);
-    data_manager->Accept(model_displayer.get());
+        auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
+        model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);
+        model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
+        model_displayer->SetFolderPath(m_options.folder_path);
+        model_displayer->SetPainterChoice(m_options.painter_choice);
+
+        data_manager->Accept(model_displayer.get());
+    }
+    catch(const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error, e.what());
+        return false;
+    }
+    return true;
 }
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)

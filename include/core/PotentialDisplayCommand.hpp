@@ -14,7 +14,7 @@ class DataObjectManager;
 class PotentialDisplayCommand : public CommandBase
 {
 public:
-    struct Options
+    struct Options : public CommandOptions
     {
         int painter_choice{ 1 };
         std::string model_key_tag_list;
@@ -38,12 +38,13 @@ private:
 public:
     PotentialDisplayCommand(void);
     ~PotentialDisplayCommand() = default;
-    void Execute(void) override;
+    bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
+    CommandOptions & GetOptions(void) override { return m_options; }
 
     void SetPainterChoice(int value) { m_options.painter_choice = value; }
-    void SetDatabasePath(const std::string & path) { m_globals.database_path = path; }
-    void SetFolderPath(const std::string & path) { m_globals.folder_path = path; }
+    void SetDatabasePath(const std::string & path) { m_options.database_path = path; }
+    void SetFolderPath(const std::string & path) { m_options.folder_path = path; }
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
     void SetPickChainID(const std::string & value);

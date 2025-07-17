@@ -7,6 +7,7 @@
 #include "ScopeTimer.hpp"
 #include "Logger.hpp"
 
+#include <memory>
 #include <CLI/CLI.hpp>
 
 Application::Application(CLI::App & app) :
@@ -31,27 +32,17 @@ void Application::RegisterAllCommands(void)
 template<typename Type>
 void Application::RegisterCommand(const std::string & name, const std::string & description)
 {
-    auto command_object{ std::make_shared<Type>() };
+    auto command_object{ std::make_unique<Type>() };
     CLI::App * command{ m_cli_app.add_subcommand(name, description) };
     command_object->RegisterCLIOptions(command);
-    RegisterGlobalOptions(command);
 
-    command->callback([this, cmd = command_object]() {
+    auto shared_cmd{ std::shared_ptr<Type>(std::move(command_object)) };
+    command->callback([cmd = std::move(shared_cmd)]() {
         ScopeTimer timer("Command in Application");
-        Logger::SetLogLevel(m_global_options.verbose_level);
-        cmd->SetGlobalOptions(m_global_options);
-        cmd->Execute();
+        Logger::SetLogLevel(cmd->GetOptions().verbose_level);
+        if (!cmd->Execute())
+        {
+            Logger::Log(LogLevel::Error, "Command execution failed");
+        }
     });
-}
-
-void Application::RegisterGlobalOptions(CLI::App * command)
-{
-    command->add_option("-d,--database", m_global_options.database_path,
-        "Database file path")->default_val("database.sqlite");
-    command->add_option("-o,--folder", m_global_options.folder_path,
-        "folder path for output files")->default_val("");
-    command->add_option("-j,--jobs", m_global_options.thread_size,
-        "Number of threads")->default_val(1);
-    command->add_option("-v,--verbose", m_global_options.verbose_level,
-        "Verbose level")->default_val(3);
 }

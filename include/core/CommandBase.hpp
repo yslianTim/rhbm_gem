@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GlobalOptions.hpp"
+#include "CommandOptions.hpp"
 
 namespace CLI
 {
@@ -9,12 +9,12 @@ namespace CLI
 
 class CommandBase
 {
-protected:
-    GlobalOptions m_globals{};
-
 public:
     virtual ~CommandBase() = default;
-    virtual void Execute(void) = 0;
+    virtual bool Execute(void) = 0;
     virtual void RegisterCLIOptions(CLI::App * command) = 0;
-    virtual void SetGlobalOptions(const GlobalOptions & globals) { m_globals = globals; }
+    virtual CommandOptions & GetOptions(void) = 0;
+
+protected:
+    static void RegisterCommandOptions(CLI::App * command, CommandOptions & options);
 };
