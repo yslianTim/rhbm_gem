@@ -14,8 +14,6 @@ namespace CLI
     class App;
 }
 
-class CommandBase;
-
 class Application
 {
     CLI::App & m_cli_app;
@@ -28,7 +26,6 @@ class Application
 public:
     Application(CLI::App & app);
     ~Application() = default;
-    void Run(void);
 
 private:
     void RegisterAllCommands(void);

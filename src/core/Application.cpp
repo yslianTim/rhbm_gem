@@ -12,11 +12,6 @@ Application::Application(CLI::App & app) :
     RegisterAllCommands();
 }
 
-void Application::Run(void)
-{
-    Logger::SetLogLevel(m_global_options.verbose_level);
-}
-
 void Application::RegisterAllCommands(void)
 {
     RegisterCommand<PotentialAnalysisCommand>("potential_analysis",
@@ -41,6 +36,7 @@ void Application::RegisterCommand(
 
     command->callback([this, &options]() {
         ScopeTimer timer("Command in Application");
+        Logger::SetLogLevel(m_global_options.verbose_level);
         Type command_object(options, m_global_options);
         command_object.Execute();
     });
