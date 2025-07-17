@@ -3,10 +3,6 @@
 #include <memory>
 #include <string>
 
-#include "PotentialAnalysisCommand.hpp"
-#include "PotentialDisplayCommand.hpp"
-#include "ResultDumpCommand.hpp"
-#include "MapSimulationCommand.hpp"
 #include "GlobalOptions.hpp"
 
 namespace CLI
@@ -17,10 +13,6 @@ namespace CLI
 class Application
 {
     CLI::App & m_cli_app;
-    PotentialAnalysisCommand::Options m_potential_analysis_options{};
-    PotentialDisplayCommand::Options  m_potential_display_options{};
-    ResultDumpCommand::Options        m_result_dump_options{};
-    MapSimulationCommand::Options     m_map_simulation_options{};
     GlobalOptions m_global_options{};
 
 public:
@@ -30,9 +22,7 @@ public:
 private:
     void RegisterAllCommands(void);
     template<typename Type>
-    void RegisterCommand(const std::string & name,
-                         const std::string & description,
-                         typename Type::Options & options);
+    void RegisterCommand(const std::string & name, const std::string & description);
     void RegisterGlobalOptions(CLI::App * command);
 
 };
