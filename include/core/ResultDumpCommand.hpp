@@ -6,7 +6,6 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
-#include "GlobalOptions.hpp"
 
 class ResultDumpCommand : public CommandBase
 {
@@ -20,7 +19,6 @@ public:
 
 private:
     Options m_options{};
-    GlobalOptions m_globals{};
     std::vector<std::string> m_model_key_tag_list;
 
 public:
@@ -28,7 +26,6 @@ public:
     ~ResultDumpCommand() = default;
     void Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
-    void SetGlobalOptions(const GlobalOptions & globals) override { m_globals = globals; }
 
     void SetPrinterChoice(int value) { m_options.printer_choice = value; }
     void SetDatabasePath(const std::string & path) { m_globals.database_path = path; }

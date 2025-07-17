@@ -6,7 +6,6 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
-#include "GlobalOptions.hpp"
 
 class MapSimulationCommand : public CommandBase
 {
@@ -24,7 +23,6 @@ public:
 
 private:
     Options m_options{};
-    GlobalOptions m_globals{};
     std::vector<double> m_blurring_width_list;
 
 public:
@@ -32,7 +30,6 @@ public:
     ~MapSimulationCommand() = default;
     void Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
-    void SetGlobalOptions(const GlobalOptions & globals) override { m_globals = globals; }
 
     void SetThreadSize(int value) { m_globals.thread_size = value; }
     void SetPotentialModelChoice(int value) { m_options.potential_model_choice = value; }

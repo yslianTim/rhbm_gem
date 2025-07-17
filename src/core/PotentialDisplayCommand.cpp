@@ -1,17 +1,11 @@
 #include "PotentialDisplayCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "PotentialDisplayVisitor.hpp"
-#include "AtomSelector.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
     m_atom_selector{ std::make_unique<AtomSelector>() }
-{
-
-}
-
-PotentialDisplayCommand::~PotentialDisplayCommand()
 {
 
 }

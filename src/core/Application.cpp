@@ -16,11 +16,6 @@ Application::Application(CLI::App & app) :
     RegisterAllCommands();
 }
 
-Application::~Application()
-{
-
-}
-
 void Application::RegisterAllCommands(void)
 {
     RegisterCommand<PotentialAnalysisCommand>("potential_analysis",
@@ -36,18 +31,17 @@ void Application::RegisterAllCommands(void)
 template<typename Type>
 void Application::RegisterCommand(const std::string & name, const std::string & description)
 {
-    auto command_object{ std::make_unique<Type>() };
+    auto command_object{ std::make_shared<Type>() };
     CLI::App * command{ m_cli_app.add_subcommand(name, description) };
     command_object->RegisterCLIOptions(command);
     RegisterGlobalOptions(command);
 
-    command->callback([this, cmd = command_object.get()]() {
+    command->callback([this, cmd = command_object]() {
         ScopeTimer timer("Command in Application");
         Logger::SetLogLevel(m_global_options.verbose_level);
         cmd->SetGlobalOptions(m_global_options);
         cmd->Execute();
     });
-    m_commands.emplace_back(std::move(command_object));
 }
 
 void Application::RegisterGlobalOptions(CLI::App * command)

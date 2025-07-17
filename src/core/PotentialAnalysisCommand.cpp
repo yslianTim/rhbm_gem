@@ -1,7 +1,6 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "PotentialAnalysisVisitor.hpp"
-#include "SphereSampler.hpp"
 #include "ModelObject.hpp"
 #include "Logger.hpp"
 
@@ -12,11 +11,6 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
     m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
     m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
-}
-
-PotentialAnalysisCommand::~PotentialAnalysisCommand()
-{
-    
 }
 
 void PotentialAnalysisCommand::SetGlobalOptions(const GlobalOptions & globals)

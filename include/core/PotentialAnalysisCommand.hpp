@@ -5,9 +5,8 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
-#include "GlobalOptions.hpp"
+#include "SphereSampler.hpp"
 
-class SphereSampler;
 class ModelObject;
 class PotentialAnalysisCommand : public CommandBase
 {
@@ -31,12 +30,11 @@ public:
 
 private:
     Options m_options{};
-    GlobalOptions m_globals{};
     std::unique_ptr<SphereSampler> m_sphere_sampler;
 
 public:
     PotentialAnalysisCommand(void);
-    ~PotentialAnalysisCommand();
+    ~PotentialAnalysisCommand() = default;
     void Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
     void SetGlobalOptions(const GlobalOptions & globals) override;

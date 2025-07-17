@@ -7,10 +7,9 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
-#include "GlobalOptions.hpp"
+#include "AtomSelector.hpp"
 
 class DataObjectManager;
-class AtomSelector;
 
 class PotentialDisplayCommand : public CommandBase
 {
@@ -32,17 +31,15 @@ public:
 
 private:
     Options m_options{};
-    GlobalOptions m_globals{};
     std::vector<std::string> m_model_key_tag_list;
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     std::unique_ptr<AtomSelector> m_atom_selector;
 
 public:
     PotentialDisplayCommand(void);
-    ~PotentialDisplayCommand();
+    ~PotentialDisplayCommand() = default;
     void Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
-    void SetGlobalOptions(const GlobalOptions & globals) override { m_globals = globals; }
 
     void SetPainterChoice(int value) { m_options.painter_choice = value; }
     void SetDatabasePath(const std::string & path) { m_globals.database_path = path; }
