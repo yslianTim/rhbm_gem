@@ -14,34 +14,7 @@ Application::Application(CLI::App & app) :
 
 void Application::Run(void)
 {
-    ScopeTimer timer("Application::Run");
     Logger::SetLogLevel(m_global_options.verbose_level);
-    std::unique_ptr<CommandBase> command{ CreateCommand() };
-    if (command)
-    {
-        command->Execute();
-    }
-}
-
-std::unique_ptr<CommandBase> Application::CreateCommand(void)
-{
-    auto selected_command{ m_cli_app.get_subcommands() };
-    if (selected_command.size() != 1)
-    {
-        Logger::Log(LogLevel::Error, "No valid subcommand provided.");
-        return nullptr;
-    }
-
-    auto command_name{ selected_command[0]->get_name() };
-    auto it{ m_command_map.find(command_name) };
-    if (it != m_command_map.end())
-    {
-        Logger::Log(LogLevel::Info, "Subcommand found: " + command_name);
-        return it->second();
-    }
-
-    Logger::Log(LogLevel::Error, "No valid subcommand provided.");
-    return nullptr;
 }
 
 void Application::RegisterAllCommands(void)
@@ -65,8 +38,11 @@ void Application::RegisterCommand(
     CLI::App * command{ m_cli_app.add_subcommand(name, description) };
     Type::RegisterCLIOptions(command, options);
     RegisterGlobalOptions(command);
-    m_command_map.emplace(name, [this, &options]() {
-        return std::make_unique<Type>(options, m_global_options);
+
+    command->callback([this, &options]() {
+        ScopeTimer timer("Command in Application");
+        Type command_object(options, m_global_options);
+        command_object.Execute();
     });
 }
 

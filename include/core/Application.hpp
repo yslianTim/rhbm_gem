@@ -2,8 +2,6 @@
 
 #include <memory>
 #include <string>
-#include <functional>
-#include <unordered_map>
 
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
@@ -21,7 +19,6 @@ class CommandBase;
 class Application
 {
     CLI::App & m_cli_app;
-    std::unordered_map<std::string, std::function<std::unique_ptr<CommandBase>()>> m_command_map;
     PotentialAnalysisCommand::Options m_potential_analysis_options{};
     PotentialDisplayCommand::Options  m_potential_display_options{};
     ResultDumpCommand::Options        m_result_dump_options{};
@@ -34,7 +31,6 @@ public:
     void Run(void);
 
 private:
-    std::unique_ptr<CommandBase> CreateCommand(void);
     void RegisterAllCommands(void);
     template<typename Type>
     void RegisterCommand(const std::string & name,
