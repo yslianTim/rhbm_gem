@@ -35,11 +35,11 @@ public:
 
 private:
     std::unique_ptr<CommandBase> CreateCommand(void);
-    void RegisterCommands(void);
-    void RegisterPotentialAnalysisCommand(void);
-    void RegisterPotentialDisplayCommand(void);
-    void RegisterResultDumpCommand(void);
-    void RegisterMapSimulationCommand(void);
+    void RegisterAllCommands(void);
+    template<typename Type>
+    void RegisterCommand(const std::string & name,
+                         const std::string & description,
+                         typename Type::Options & options);
     void RegisterGlobalOptions(CLI::App * command);
 
 };

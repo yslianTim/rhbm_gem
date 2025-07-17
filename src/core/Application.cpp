@@ -9,7 +9,7 @@ Application::Application(CLI::App & app) :
     m_cli_app{ app }
 {
     m_cli_app.require_subcommand(1);
-    RegisterCommands();
+    RegisterAllCommands();
 }
 
 void Application::Run(void)
@@ -25,64 +25,47 @@ void Application::Run(void)
 
 std::unique_ptr<CommandBase> Application::CreateCommand(void)
 {
-    for (const auto & [command, factory] : m_command_map)
+    auto selected_command{ m_cli_app.get_subcommands() };
+    if (selected_command.size() != 1)
     {
-        if (m_cli_app.got_subcommand(command))
-        {
-            Logger::Log(LogLevel::Info, "Subcommand found: " + command->get_name());
-            return factory();
-        }
+        Logger::Log(LogLevel::Error, "No valid subcommand provided.");
+        return nullptr;
     }
-    // If no subcommand was found, log an error and return nullptr
+
+    auto it{ m_command_map.find(selected_command[0]) };
+    if (it != m_command_map.end())
+    {
+        Logger::Log(LogLevel::Info, "Subcommand found: " + selected_command[0]->get_name());
+        return it->second();
+    }
+
     Logger::Log(LogLevel::Error, "No valid subcommand provided.");
     return nullptr;
 }
 
-void Application::RegisterCommands(void)
+void Application::RegisterAllCommands(void)
 {
-    RegisterPotentialAnalysisCommand();
-    RegisterPotentialDisplayCommand();
-    RegisterResultDumpCommand();
-    RegisterMapSimulationCommand();
+    RegisterCommand<PotentialAnalysisCommand>("potential_analysis",
+        "Run potential analysis", m_potential_analysis_options);
+    RegisterCommand<PotentialDisplayCommand>("potential_display",
+        "Run potential display", m_potential_display_options);
+    RegisterCommand<ResultDumpCommand>("result_dump",
+        "Run result dump", m_result_dump_options);
+    RegisterCommand<MapSimulationCommand>("map_simulation",
+        "Run map simulation command", m_map_simulation_options);
 }
 
-void Application::RegisterPotentialAnalysisCommand(void)
+template<typename Type>
+void Application::RegisterCommand(
+    const std::string & name,
+    const std::string & description,
+    typename Type::Options & options)
 {
-    CLI::App * command{ m_cli_app.add_subcommand("potential_analysis", "Run potential analysis") };
-    PotentialAnalysisCommand::RegisterCLIOptions(command, m_potential_analysis_options);
+    CLI::App * command{ m_cli_app.add_subcommand(name, description) };
+    Type::RegisterCLIOptions(command, options);
     RegisterGlobalOptions(command);
-    m_command_map.emplace(command, [this]() {
-        return std::make_unique<PotentialAnalysisCommand>(m_potential_analysis_options, m_global_options);
-    });
-}
-
-void Application::RegisterPotentialDisplayCommand(void)
-{
-    CLI::App * command{ m_cli_app.add_subcommand("potential_display", "Run potential display") };
-    PotentialDisplayCommand::RegisterCLIOptions(command, m_potential_display_options);
-    RegisterGlobalOptions(command);
-    m_command_map.emplace(command, [this]() {
-        return std::make_unique<PotentialDisplayCommand>(m_potential_display_options, m_global_options);
-    });
-}
-
-void Application::RegisterResultDumpCommand(void)
-{
-    CLI::App * command{ m_cli_app.add_subcommand("result_dump", "Run result dump") };
-    ResultDumpCommand::RegisterCLIOptions(command, m_result_dump_options);
-    RegisterGlobalOptions(command);
-    m_command_map.emplace(command, [this]() {
-        return std::make_unique<ResultDumpCommand>(m_result_dump_options, m_global_options);
-    });
-}
-
-void Application::RegisterMapSimulationCommand(void)
-{
-    CLI::App * command{ m_cli_app.add_subcommand("map_simulation", "Run map simulation command") };
-    MapSimulationCommand::RegisterCLIOptions(command, m_map_simulation_options);
-    RegisterGlobalOptions(command);
-    m_command_map.emplace(command, [this]() {
-        return std::make_unique<MapSimulationCommand>(m_map_simulation_options, m_global_options);
+    m_command_map.emplace(command, [this, &options]() {
+        return std::make_unique<Type>(options, m_global_options);
     });
 }
 
