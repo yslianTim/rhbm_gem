@@ -20,28 +20,28 @@ void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd)
     cmd->add_option("-m,--map", m_options.map_file_path,
         "Map file path")->required();
     cmd->add_option("--simulation", m_options.is_simulation,
-        "Simulation flag")->default_val(false);
+        "Simulation flag")->default_val(m_options.is_simulation);
     cmd->add_option("-r,--sim-resolution", m_options.resolution_simulation,
-        "Set simulated map's resolution (blurring width)")->default_val(0.0);
+        "Set simulated map's resolution (blurring width)")->default_val(m_options.resolution_simulation);
     cmd->add_option("-k,--save-key", m_options.saved_key_tag,
-        "New key tag for saving ModelObject results into database")->default_val("");
+        "New key tag for saving ModelObject results into database")->default_val(m_options.saved_key_tag);
     cmd->add_option("--asymmetry", m_options.is_asymmetry,
-        "Turn On/Off asymmetry flag")->default_val(false);
+        "Turn On/Off asymmetry flag")->default_val(m_options.is_asymmetry);
     cmd->add_option("-s,--sampling", m_options.sampling_size,
-        "Number of sampling points per atom")->default_val(1500);
+        "Number of sampling points per atom")->default_val(m_options.sampling_size);
     cmd->add_option("--sampling-min", m_options.sampling_range_min,
-        "Minimum sampling range")->default_val(0.0);
+        "Minimum sampling range")->default_val(m_options.sampling_range_min);
     cmd->add_option("--sampling-max", m_options.sampling_range_max,
-        "Maximum sampling range")->default_val(1.5);
+        "Maximum sampling range")->default_val(m_options.sampling_range_max);
     cmd->add_option("--fit-min", m_options.fit_range_min,
-        "Minimum fitting range")->default_val(0.0);
+        "Minimum fitting range")->default_val(m_options.fit_range_min);
     cmd->add_option("--fit-max", m_options.fit_range_max,
-        "Maximum fitting range")->default_val(1.0);
+        "Maximum fitting range")->default_val(m_options.fit_range_max);
     cmd->add_option("--alpha-r", m_options.alpha_r,
-        "Alpha value for R")->default_val(0.1);
+        "Alpha value for R")->default_val(m_options.alpha_r);
     cmd->add_option("--alpha-g", m_options.alpha_g,
-        "Alpha value for G")->default_val(0.2);
-    RegisterCommandOptions(cmd, m_options);
+        "Alpha value for G")->default_val(m_options.alpha_g);
+    RegisterCommandOptions(cmd);
 }
 
 bool PotentialAnalysisCommand::Execute(void)

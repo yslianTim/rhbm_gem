@@ -17,24 +17,24 @@ void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
         "List of model key tag to be display")->required();
     cmd->add_option("-r,--ref-model-keylist", m_options.ref_model_key_tag_list,
-        "List of reference model key tag to be display")->default_val("");
+        "List of reference model key tag to be display")->default_val(m_options.ref_model_key_tag_list);
     cmd->add_option("--pick-chain", m_options.pick_chain_id,
-        "Pick chain ID")->default_val("");
+        "Pick chain ID")->default_val(m_options.pick_chain_id);
     cmd->add_option("--pick-residue", m_options.pick_residue,
-        "Pick residue type")->default_val("");
+        "Pick residue type")->default_val(m_options.pick_residue);
     cmd->add_option("--pick-element", m_options.pick_element,
-        "Pick element type")->default_val("");
+        "Pick element type")->default_val(m_options.pick_element);
     cmd->add_option("--pick-remoteness", m_options.pick_remoteness,
-        "Pick remoteness type")->default_val("");
+        "Pick remoteness type")->default_val(m_options.pick_remoteness);
     cmd->add_option("--veto-chain", m_options.veto_chain_id,
-        "Veto chain ID")->default_val("");
+        "Veto chain ID")->default_val(m_options.veto_chain_id);
     cmd->add_option("--veto-residue", m_options.veto_residue,
-        "Veto residue type")->default_val("");
+        "Veto residue type")->default_val(m_options.veto_residue);
     cmd->add_option("--veto-element", m_options.veto_element,
-        "Veto element type")->default_val("");
+        "Veto element type")->default_val(m_options.veto_element);
     cmd->add_option("--veto-remoteness", m_options.veto_remoteness,
-        "Veto remoteness type")->default_val("");
-    RegisterCommandOptions(cmd, m_options);
+        "Veto remoteness type")->default_val(m_options.veto_remoteness);
+    RegisterCommandOptions(cmd);
 }
 
 bool PotentialDisplayCommand::Execute(void)

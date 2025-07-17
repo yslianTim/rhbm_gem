@@ -16,5 +16,5 @@ public:
     virtual CommandOptions & GetOptions(void) = 0;
 
 protected:
-    static void RegisterCommandOptions(CLI::App * command, CommandOptions & options);
+    void RegisterCommandOptions(CLI::App * command);
 };

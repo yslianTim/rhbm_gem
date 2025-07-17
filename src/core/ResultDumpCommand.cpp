@@ -16,8 +16,8 @@ void ResultDumpCommand::RegisterCLIOptions(CLI::App * cmd)
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
         "List of model key tag to be display")->required();
     cmd->add_option("-m,--map", m_options.map_file_path,
-        "Map file path")->default_val("");
-    RegisterCommandOptions(cmd, m_options);
+        "Map file path")->default_val(m_options.map_file_path);
+    RegisterCommandOptions(cmd);
 }
 
 bool ResultDumpCommand::Execute(void)

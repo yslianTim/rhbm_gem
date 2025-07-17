@@ -14,18 +14,18 @@ void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)
     cmd->add_option("-a,--model", m_options.model_file_path,
         "Model file path")->required();
     cmd->add_option("-n,--name", m_options.map_file_name,
-        "File name for output map files")->default_val("sim_map");
+        "File name for output map files")->default_val(m_options.map_file_name);
     cmd->add_option("--potential-model", m_options.potential_model_choice,
-        "Atomic potential model option")->default_val(1);
+        "Atomic potential model option")->default_val(m_options.potential_model_choice);
     cmd->add_option("--charge", m_options.partial_charge_choice,
-        "Partial charge table option")->default_val(1);
+        "Partial charge table option")->default_val(m_options.partial_charge_choice);
     cmd->add_option("-c,--cut-off", m_options.cutoff_distance,
-        "Cutoff distance")->default_val(5.0);
+        "Cutoff distance")->default_val(m_options.cutoff_distance);
     cmd->add_option("-g,--grid-spacing", m_options.grid_spacing,
-        "Grid spacing")->default_val(0.5);
+        "Grid spacing")->default_val(m_options.grid_spacing);
     cmd->add_option("--blurring-width", m_options.blurring_width_list,
-        "Blurring width (list) setting")->default_val("0.50");
-    RegisterCommandOptions(cmd, m_options);
+        "Blurring width (list) setting")->default_val(m_options.blurring_width_list);
+    RegisterCommandOptions(cmd);
 }
 
 bool MapSimulationCommand::Execute(void)

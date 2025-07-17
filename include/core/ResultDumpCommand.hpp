@@ -14,7 +14,7 @@ public:
     {
         int printer_choice{ 2 };
         std::string model_key_tag_list;
-        std::string map_file_path;
+        std::string map_file_path{ "" };
     };
 
 private:
