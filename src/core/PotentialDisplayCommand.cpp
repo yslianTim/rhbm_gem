@@ -3,6 +3,9 @@
 #include "PotentialDisplayVisitor.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
+#include "CommandRegistry.hpp"
+
+REGISTER_COMMAND(PotentialDisplayCommand, "potential_display", "Run potential display");
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
     m_atom_selector{ std::make_unique<AtomSelector>() }

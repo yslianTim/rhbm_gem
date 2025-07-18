@@ -3,6 +3,9 @@
 #include "MapSimulationVisitor.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
+#include "CommandRegistry.hpp"
+
+REGISTER_COMMAND(MapSimulationCommand, "map_simulation", "Run map simulation command");
 
 MapSimulationCommand::MapSimulationCommand(void)
 {

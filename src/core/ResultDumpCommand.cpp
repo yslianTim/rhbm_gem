@@ -3,6 +3,9 @@
 #include "ResultDumpVisitor.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
+#include "CommandRegistry.hpp"
+
+REGISTER_COMMAND(ResultDumpCommand, "result_dump", "Run result dump");
 
 ResultDumpCommand::ResultDumpCommand(void)
 {

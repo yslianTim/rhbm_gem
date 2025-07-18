@@ -3,6 +3,9 @@
 #include "PotentialAnalysisVisitor.hpp"
 #include "ModelObject.hpp"
 #include "Logger.hpp"
+#include "CommandRegistry.hpp"
+
+REGISTER_COMMAND(PotentialAnalysisCommand, "potential_analysis", "Run potential analysis");
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_sphere_sampler{ std::make_unique<SphereSampler>() }

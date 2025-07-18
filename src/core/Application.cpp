@@ -1,9 +1,5 @@
 #include "Application.hpp"
 #include "CommandBase.hpp"
-#include "PotentialAnalysisCommand.hpp"
-#include "PotentialDisplayCommand.hpp"
-#include "ResultDumpCommand.hpp"
-#include "MapSimulationCommand.hpp"
 #include "ScopeTimer.hpp"
 #include "Logger.hpp"
 
@@ -19,24 +15,23 @@ Application::Application(CLI::App & app) :
 
 void Application::RegisterAllCommands(void)
 {
-    RegisterCommand<PotentialAnalysisCommand>("potential_analysis",
-        "Run potential analysis");
-    RegisterCommand<PotentialDisplayCommand>("potential_display",
-        "Run potential display");
-    RegisterCommand<ResultDumpCommand>("result_dump",
-        "Run result dump");
-    RegisterCommand<MapSimulationCommand>("map_simulation",
-        "Run map simulation command");
+    const auto & commands{ CommandRegistry::Instance().GetCommands() };
+    for (const auto & info : commands)
+    {
+        RegisterCommand(info.name, info.description, info.factory);
+    }
 }
 
-template<typename Type>
-void Application::RegisterCommand(const std::string & name, const std::string & description)
+void Application::RegisterCommand(
+    const std::string & name,
+    const std::string & description,
+    CommandRegistry::FactoryFunc factory)
 {
-    auto command_object{ std::make_unique<Type>() };
+    auto command_object{ factory() };
     CLI::App * command{ m_cli_app.add_subcommand(name, description) };
     command_object->RegisterCLIOptions(command);
 
-    auto shared_cmd{ std::shared_ptr<Type>(std::move(command_object)) };
+    auto shared_cmd{ std::shared_ptr<CommandBase>(std::move(command_object)) };
     command->callback([cmd = std::move(shared_cmd)]() {
         ScopeTimer timer("Command in Application");
         Logger::SetLogLevel(cmd->GetOptions().verbose_level);

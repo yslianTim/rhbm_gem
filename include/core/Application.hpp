@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "CommandRegistry.hpp"
 
 namespace CLI
 {
@@ -17,7 +18,7 @@ public:
 
 private:
     void RegisterAllCommands(void);
-    template<typename Type>
-    void RegisterCommand(const std::string & name, const std::string & description);
+    void RegisterCommand(const std::string & name, const std::string & description,
+                         CommandRegistry::FactoryFunc factory);
 
 };
