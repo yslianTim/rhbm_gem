@@ -5,7 +5,11 @@
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
-REGISTER_COMMAND(PotentialAnalysisCommand, "potential_analysis", "Run potential analysis");
+namespace {
+CommandRegistrar<PotentialAnalysisCommand> registrar_potential_analysis{
+    "potential_analysis",
+    "Run potential analysis"};
+}
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_sphere_sampler{ std::make_unique<SphereSampler>() }

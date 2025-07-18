@@ -30,10 +30,15 @@ private:
     std::unordered_map<std::string, CommandInfo> m_commands;
 };
 
-#define REGISTER_COMMAND(command_type, name, description) \
-    namespace { \
-        const bool registered_##command_type = \
-            CommandRegistry::Instance().RegisterCommand(name, description, [](){ \
-                return std::make_unique<command_type>(); \
-            }); \
+template <typename CommandType>
+class CommandRegistrar
+{
+public:
+    CommandRegistrar(const std::string & name, const std::string & description)
+    {
+        CommandRegistry::Instance().RegisterCommand(
+            name,
+            description,
+            [](){ return std::make_unique<CommandType>(); });
     }
+};

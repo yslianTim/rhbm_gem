@@ -5,7 +5,11 @@
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
-REGISTER_COMMAND(ResultDumpCommand, "result_dump", "Run result dump");
+namespace {
+CommandRegistrar<ResultDumpCommand> registrar_result_dump{
+    "result_dump",
+    "Run result dump"};
+}
 
 ResultDumpCommand::ResultDumpCommand(void)
 {

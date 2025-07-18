@@ -5,7 +5,11 @@
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
-REGISTER_COMMAND(MapSimulationCommand, "map_simulation", "Run map simulation command");
+namespace {
+CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
+    "map_simulation",
+    "Run map simulation command"};
+}
 
 MapSimulationCommand::MapSimulationCommand(void)
 {
