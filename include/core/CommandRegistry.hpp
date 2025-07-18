@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <vector>
+#include <unordered_map>
 
 class CommandBase;
 
@@ -24,10 +24,10 @@ public:
                          const std::string & description,
                          FactoryFunc factory);
 
-    const std::vector<CommandInfo> & GetCommands(void) const { return m_commands; }
+    const std::unordered_map<std::string, CommandInfo> & GetCommands(void) const { return m_commands; }
 
 private:
-    std::vector<CommandInfo> m_commands;
+    std::unordered_map<std::string, CommandInfo> m_commands;
 };
 
 #define REGISTER_COMMAND(command_type, name, description) \

@@ -1,5 +1,6 @@
 #include "CommandRegistry.hpp"
 #include "CommandBase.hpp"
+#include "Logger.hpp"
 
 CommandRegistry & CommandRegistry::Instance()
 {
@@ -11,6 +12,12 @@ bool CommandRegistry::RegisterCommand(const std::string & name,
                                       const std::string & description,
                                       FactoryFunc factory)
 {
-    m_commands.push_back({name, description, std::move(factory)});
+    if (m_commands.find(name) != m_commands.end())
+    {
+        Logger::Log(LogLevel::Error, "Command [" + name + "] is already registered.");
+        return false;
+    }
+
+    m_commands.emplace(name, CommandInfo{name, description, std::move(factory)});
     return true;
 }

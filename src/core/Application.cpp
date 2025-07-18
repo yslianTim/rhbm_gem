@@ -16,7 +16,7 @@ Application::Application(CLI::App & app) :
 void Application::RegisterAllCommands(void)
 {
     const auto & commands{ CommandRegistry::Instance().GetCommands() };
-    for (const auto & info : commands)
+    for (const auto & [name, info] : commands)
     {
         RegisterCommand(info.name, info.description, info.factory);
     }
