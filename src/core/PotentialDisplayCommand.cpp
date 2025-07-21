@@ -22,7 +22,7 @@ void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
     cmd->add_option("-p,--painter", m_options.painter_choice,
         "Painter choice")->required();
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
-        "List of model key tag to be display")->required();
+        "List of model key tag to be display")->required()->delimiter(',');
     cmd->add_option("-r,--ref-model-keylist", m_options.ref_model_key_tag_list,
         "List of reference model key tag to be display")->default_val(m_options.ref_model_key_tag_list);
     cmd->add_option("--pick-chain", m_options.pick_chain_id,
@@ -49,7 +49,6 @@ bool PotentialDisplayCommand::Execute(void)
     Logger::Log(LogLevel::Info, "PotentialDisplayCommand::Execute() called.");
     try
     {
-        SetModelKeyTagList(m_options.model_key_tag_list);
         SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
         SetPickChainID(m_options.pick_chain_id);
         SetPickResidueType(m_options.pick_residue);
@@ -60,14 +59,14 @@ bool PotentialDisplayCommand::Execute(void)
         SetVetoElementType(m_options.veto_element);
         SetVetoRemotenessType(m_options.veto_remoteness);
         Logger::Log(LogLevel::Info, "Total number of model object sets to be display: "
-                    + std::to_string(m_model_key_tag_list.size()));
+                    + std::to_string(m_options.model_key_tag_list.size()));
 
         auto data_manager{ std::make_unique<DataObjectManager>(m_options.database_path) };
         LoadModelObjects(data_manager.get());
         LoadRefModelObjects(data_manager.get());
 
         auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
-        model_displayer->SetModelObjectKeyTagList(m_model_key_tag_list);
+        model_displayer->SetModelObjectKeyTagList(m_options.model_key_tag_list);
         model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
         model_displayer->SetFolderPath(m_options.folder_path);
         model_displayer->SetPainterChoice(m_options.painter_choice);
@@ -84,10 +83,10 @@ bool PotentialDisplayCommand::Execute(void)
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
-    m_model_key_tag_list.clear();
+    m_options.model_key_tag_list.clear();
     for (const auto & token : StringHelper::SplitStringLineFromDelimiter(value, ','))
     {
-        m_model_key_tag_list.emplace_back(token);
+        m_options.model_key_tag_list.emplace_back(token);
     }
 }
 
@@ -144,7 +143,7 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
 
 void PotentialDisplayCommand::LoadModelObjects(DataObjectManager * data_manager)
 {
-    for (auto & key : m_model_key_tag_list)
+    for (auto & key : m_options.model_key_tag_list)
     {
         data_manager->LoadDataObject(key);
     }

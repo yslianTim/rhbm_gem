@@ -17,7 +17,7 @@ public:
     struct Options : public CommandOptions
     {
         int painter_choice{ 1 };
-        std::string model_key_tag_list{ "" };
+        std::vector<std::string> model_key_tag_list{};
         std::string ref_model_key_tag_list{ "" };
         std::string pick_chain_id{ "" };
         std::string veto_chain_id{ "" };
@@ -31,7 +31,6 @@ public:
 
 private:
     Options m_options{};
-    std::vector<std::string> m_model_key_tag_list;
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     std::unique_ptr<AtomSelector> m_atom_selector;
 

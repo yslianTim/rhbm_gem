@@ -395,7 +395,7 @@ double AminoAcidInfoHelper::GetPartialCharge(
     }
     catch(const std::exception & except)
     {
-        Logger::Log(LogLevel::Error, except.what());
+        Logger::Log(LogLevel::Error, "AminoAcidInfoHelper::GetPartialCharge ‑ " + std::string(except.what()));
         return 0.0;
     }
     

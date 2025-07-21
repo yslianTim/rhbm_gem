@@ -13,13 +13,12 @@ public:
     struct Options : public CommandOptions
     {
         int printer_choice{ 2 };
-        std::string model_key_tag_list;
+        std::vector<std::string> model_key_tag_list{};
         std::string map_file_path{ "" };
     };
 
 private:
     Options m_options{};
-    std::vector<std::string> m_model_key_tag_list;
 
 public:
     ResultDumpCommand(void);

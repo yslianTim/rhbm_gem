@@ -13,7 +13,7 @@ CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
 
 MapSimulationCommand::MapSimulationCommand(void)
 {
-    SetBlurringWidthList(m_options.blurring_width_list);
+
 }
 
 void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)
@@ -31,7 +31,7 @@ void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)
     cmd->add_option("-g,--grid-spacing", m_options.grid_spacing,
         "Grid spacing")->default_val(m_options.grid_spacing);
     cmd->add_option("--blurring-width", m_options.blurring_width_list,
-        "Blurring width (list) setting")->default_val(m_options.blurring_width_list);
+        "Blurring width (list) setting")->default_val(m_options.blurring_width_list)->delimiter(',');
     RegisterCommandOptions(cmd);
 }
 
@@ -40,9 +40,8 @@ bool MapSimulationCommand::Execute(void)
     Logger::Log(LogLevel::Info, "MapSimulationCommand::Execute() called.");
     try
     {
-        SetBlurringWidthList(m_options.blurring_width_list);
         Logger::Log(LogLevel::Info, "Total number of blurring width sets to be simulated: "
-                    + std::to_string(m_blurring_width_list.size()));
+                    + std::to_string(m_options.blurring_width_list.size()));
 
         auto data_manager{ std::make_unique<DataObjectManager>() };
         data_manager->ProcessFile(m_options.model_file_path, "model");
@@ -56,7 +55,7 @@ bool MapSimulationCommand::Execute(void)
         analyzer->SetPartialChargeChoice(m_options.partial_charge_choice);
         analyzer->SetCutoffDistance(m_options.cutoff_distance);
         analyzer->SetGridSpacing(m_options.grid_spacing);
-        analyzer->SetBlurringWidthList(m_blurring_width_list);
+        analyzer->SetBlurringWidthList(m_options.blurring_width_list);
 
         data_manager->Accept(analyzer.get());
     }
@@ -70,9 +69,9 @@ bool MapSimulationCommand::Execute(void)
 
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
-    m_blurring_width_list.clear();
+    m_options.blurring_width_list.clear();
     for (const auto & token : StringHelper::SplitStringLineFromDelimiter(value, ','))
     {
-        m_blurring_width_list.emplace_back(std::stod(token));
+        m_options.blurring_width_list.emplace_back(std::stod(token));
     }
 }

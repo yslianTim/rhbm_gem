@@ -18,12 +18,11 @@ public:
         int partial_charge_choice{ 1 };
         double cutoff_distance{ 5.0 };
         double grid_spacing{ 0.5 };
-        std::string blurring_width_list{"0.50"};
+        std::vector<double> blurring_width_list{ {0.50} };
     };
 
 private:
     Options m_options{};
-    std::vector<double> m_blurring_width_list;
 
 public:
     MapSimulationCommand(void);
