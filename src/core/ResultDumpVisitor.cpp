@@ -42,7 +42,7 @@ void ResultDumpVisitor::Analysis(DataObjectManager * data_manager)
 {
     if (data_manager == nullptr)
     {
-        Logger::Log(LogLevel::Warning, "[Warning] Data manager is null, please check the input.");
+        Logger::Log(LogLevel::Warning, "Data manager is null, please check the input.");
         return;
     }
     BuildSelectedAtomList(data_manager);
@@ -111,7 +111,7 @@ void ResultDumpVisitor::RunAtomPositionDumping(DataObjectManager * data_manager)
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "[Error]: Could not open file " + output_path + " for writing.\n");
+                        "Could not open file " + output_path + " for writing.\n");
             return;
         }
         outfile << "SerialID,X,Y,Z\n";
@@ -141,7 +141,7 @@ void ResultDumpVisitor::RunMapValueDumping(DataObjectManager * data_manager)
     catch (const std::exception & e)
     {
         Logger::Log(LogLevel::Error, e.what());
-        Logger::Log(LogLevel::Error, "[Error] Please give the path of map file via -m option.");
+        Logger::Log(LogLevel::Error, "Please give the path of map file via -m option.");
         return;
     }
     if (map_object == nullptr) return;
@@ -179,7 +179,7 @@ void ResultDumpVisitor::RunMapValueDumping(DataObjectManager * data_manager)
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "[Error]: Could not open file " + output_path + " for writing.\n");
+                        "Could not open file " + output_path + " for writing.\n");
             return;
         }
         outfile << "GridID,X,Y,Z,MapValue\n";
@@ -222,7 +222,7 @@ void ResultDumpVisitor::RunGausEstimatesDumping(DataObjectManager * data_manager
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "[Error]: Could not open file " + output_path + " for writing.\n");
+                        "Could not open file " + output_path + " for writing.\n");
             return;
         }
         outfile << "SerialID,Amplitude,Width\n";
@@ -258,7 +258,7 @@ void ResultDumpVisitor::RunGroupGausEstimatesDumping(DataObjectManager * data_ma
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "[Error]: Could not open file " + output_path + " for writing.\n");
+                        "Could not open file " + output_path + " for writing.\n");
             return;
         }
         outfile << "Residue,Element,Remoteness,Branch,Amplitude,Width\n";
