@@ -4,12 +4,12 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
-#include "DataObjectVisitorAdapter.hpp"
+#include "DataObjectVisitorBase.hpp"
 #include "PotentialAnalysisCommand.hpp"
 
 class SphereSampler;
 
-class PotentialAnalysisVisitor : public DataObjectVisitorAdapter
+class PotentialAnalysisVisitor : public DataObjectVisitorBase
 {
     bool m_is_asymmetry;
     unsigned int m_thread_size;

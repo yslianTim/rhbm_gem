@@ -3,12 +3,12 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include "DataObjectVisitorAdapter.hpp"
+#include "DataObjectVisitorBase.hpp"
 #include "ResultDumpCommand.hpp"
 
 class DataObjectBase;
 
-class ResultDumpVisitor : public DataObjectVisitorAdapter
+class ResultDumpVisitor : public DataObjectVisitorBase
 {
     int m_printer_choice;
     std::string m_folder_path;

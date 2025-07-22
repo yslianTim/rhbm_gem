@@ -5,13 +5,13 @@
 #include <vector>
 #include <array>
 #include <unordered_map>
-#include "DataObjectVisitorAdapter.hpp"
+#include "DataObjectVisitorBase.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "MapSimulationCommand.hpp"
 
 class AtomSelector;
 
-class MapSimulationVisitor : public DataObjectVisitorAdapter
+class MapSimulationVisitor : public DataObjectVisitorBase
 {
     unsigned int m_thread_size;
     int m_potential_model_choice;

@@ -54,13 +54,7 @@ void DataObjectManager::ProcessFile(const std::string & filename, const std::str
     data_object->SetKeyTag(key_tag);
     data_object->Display();
 
-    if (m_data_object_map.find(key_tag) != m_data_object_map.end())
-    {
-        Logger::Log(LogLevel::Warning,
-                    "The key tag: [" + key_tag + "] already presented in the data object map, "
-                    "this data object will be replaced.");
-    }
-    m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
+    AddDataObject(key_tag, std::move(data_object));
 }
 
 void DataObjectManager::ProduceFile(const std::string & filename, const std::string & key_tag)
@@ -98,14 +92,8 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
     {
         throw std::runtime_error("Database manager is not initialized.");
     }
-    if (m_data_object_map.find(key_tag) != m_data_object_map.end())
-    {
-        Logger::Log(LogLevel::Warning,
-                    "The key tag: [" + key_tag + "] already presented, "
-                    "this data object will be replaced.");
-    }
     auto data_object{ m_db_manager->LoadDataObject(key_tag) };
-    m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
+    AddDataObject(key_tag, std::move(data_object));
 }
 
 void DataObjectManager::SaveDataObject(

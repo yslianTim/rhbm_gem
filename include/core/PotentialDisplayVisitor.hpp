@@ -3,14 +3,14 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include "DataObjectVisitorAdapter.hpp"
+#include "DataObjectVisitorBase.hpp"
 #include "PotentialDisplayCommand.hpp"
 
 class DataObjectBase;
 class AtomSelector;
 class PainterBase;
 
-class PotentialDisplayVisitor : public DataObjectVisitorAdapter
+class PotentialDisplayVisitor : public DataObjectVisitorBase
 {
     int m_painter_choice;
     std::string m_folder_path;

@@ -3,11 +3,11 @@
 #include <vector>
 #include <array>
 #include <tuple>
-#include "DataObjectVisitorAdapter.hpp"
+#include "DataObjectVisitorBase.hpp"
 
 class SphereSampler;
 
-class MapInterpolationVisitor : public DataObjectVisitorAdapter
+class MapInterpolationVisitor : public DataObjectVisitorBase
 {
     SphereSampler * m_sphere_sampler;
     std::array<float, 3> m_position;
