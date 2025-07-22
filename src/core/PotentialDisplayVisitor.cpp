@@ -16,7 +16,11 @@
 
 #include <memory>
 
-PotentialDisplayVisitor::PotentialDisplayVisitor(AtomSelector * atom_selector) :
+PotentialDisplayVisitor::PotentialDisplayVisitor(
+    AtomSelector * atom_selector, const PotentialDisplayCommand::Options & options) :
+    m_painter_choice{ options.painter_choice },
+    m_folder_path{ options.folder_path },
+    m_model_key_tag_list{ options.model_key_tag_list },
     m_atom_selector{ atom_selector }
 {
 

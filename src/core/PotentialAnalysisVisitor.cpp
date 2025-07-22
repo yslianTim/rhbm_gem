@@ -21,9 +21,13 @@
 #include <unordered_set>
 
 PotentialAnalysisVisitor::PotentialAnalysisVisitor(
-    SphereSampler * sphere_sampler) :
-    m_thread_size{ 1 },
-    m_alpha_r{ 0.0 }, m_alpha_g{ 0.0 }, m_x_min{ 0.0 }, m_x_max{ 0.0 },
+    SphereSampler * sphere_sampler,
+    const PotentialAnalysisCommand::Options & options) :
+    m_is_asymmetry{ options.is_asymmetry },
+    m_thread_size{ static_cast<unsigned int>(options.thread_size) },
+    m_alpha_r{ options.alpha_r }, m_alpha_g{ options.alpha_g },
+    m_x_min{ options.fit_range_min }, m_x_max{ options.fit_range_max },
+    m_map_key_tag{ "map" }, m_model_key_tag{ "model" },
     m_sphere_sampler{ sphere_sampler }
 {
 
@@ -184,40 +188,4 @@ void PotentialAnalysisVisitor::RunPotentialFitting(ModelObject * model_object)
         }
         model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
     }
-}
-
-void PotentialAnalysisVisitor::SetAsymmetryFlag(bool value)
-{
-    m_is_asymmetry = value;
-}
-
-void PotentialAnalysisVisitor::SetThreadSize(unsigned int thread_size)
-{
-    m_thread_size = thread_size;
-}
-
-void PotentialAnalysisVisitor::SetFitRange(double x_min, double x_max)
-{
-    m_x_min = x_min;
-    m_x_max = x_max;
-}
-
-void PotentialAnalysisVisitor::SetAlphaR(double alpha_r)
-{
-    m_alpha_r = alpha_r;
-}
-
-void PotentialAnalysisVisitor::SetAlphaG(double alpha_g)
-{
-    m_alpha_g = alpha_g;
-}
-
-void PotentialAnalysisVisitor::SetMapObjectKeyTag(const std::string & value)
-{
-    m_map_key_tag = value;
-}
-
-void PotentialAnalysisVisitor::SetModelObjectKeyTag(const std::string & value)
-{
-    m_model_key_tag = value;
 }

@@ -73,15 +73,7 @@ bool PotentialAnalysisCommand::Execute(void)
         return false;
     }
 
-    auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_sphere_sampler.get()) };
-    analyzer->SetAsymmetryFlag(m_options.is_asymmetry);
-    analyzer->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
-    analyzer->SetModelObjectKeyTag("model");
-    analyzer->SetMapObjectKeyTag("map");
-    analyzer->SetFitRange(m_options.fit_range_min, m_options.fit_range_max);
-    analyzer->SetAlphaR(m_options.alpha_r);
-    analyzer->SetAlphaG(m_options.alpha_g);
-
+    auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_sphere_sampler.get(), m_options) };
     data_manager->Accept(analyzer.get());
     data_manager->SaveDataObject("model", m_options.saved_key_tag);
     return true;

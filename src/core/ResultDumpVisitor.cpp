@@ -17,8 +17,11 @@
 #include <memory>
 #include <fstream>
 
-ResultDumpVisitor::ResultDumpVisitor() :
-    m_printer_choice{ 0 }
+ResultDumpVisitor::ResultDumpVisitor(const ResultDumpCommand::Options & options) :
+    m_printer_choice{ options.printer_choice },
+    m_folder_path{ FilePathHelper::EnsureTrailingSlash(options.folder_path) },
+    m_map_key_tag{ "map" },
+    m_model_key_tag_list{ options.model_key_tag_list }
 {
 
 }
@@ -54,11 +57,6 @@ void ResultDumpVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
                         "  [2] GausEstimatesDumping");
             break;
     }
-}
-
-void ResultDumpVisitor::SetFolderPath(const std::string & value)
-{
-    m_folder_path = FilePathHelper::EnsureTrailingSlash(value);
 }
 
 void ResultDumpVisitor::BuildSelectedAtomList(DataObjectManager * data_manager)

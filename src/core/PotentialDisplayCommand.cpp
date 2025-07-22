@@ -66,12 +66,8 @@ bool PotentialDisplayCommand::Execute(void)
         LoadModelObjects(data_manager.get());
         LoadRefModelObjects(data_manager.get());
 
-        auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get()) };
-        model_displayer->SetModelObjectKeyTagList(m_options.model_key_tag_list);
+        auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get(), m_options) };
         model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
-        model_displayer->SetFolderPath(m_options.folder_path);
-        model_displayer->SetPainterChoice(m_options.painter_choice);
-
         data_manager->Accept(model_displayer.get());
     }
     catch(const std::exception & e)

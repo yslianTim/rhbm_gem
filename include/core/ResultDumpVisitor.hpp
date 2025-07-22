@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include "DataObjectVisitorAdapter.hpp"
+#include "ResultDumpCommand.hpp"
 
 class DataObjectBase;
 
@@ -16,14 +17,9 @@ class ResultDumpVisitor : public DataObjectVisitorAdapter
     std::unordered_map<std::string, std::vector<AtomObject *>> m_selected_atom_list_map;
 
 public:
-    ResultDumpVisitor(void);
+    explicit ResultDumpVisitor(const ResultDumpCommand::Options & options);
     ~ResultDumpVisitor() = default;
     void VisitDataObjectManager(DataObjectManager * data_manager) override;
-
-    void SetMapObjectKeyTag(const std::string & value) { m_map_key_tag = value; }
-    void SetModelObjectKeyTagList(const std::vector<std::string> & value) { m_model_key_tag_list = value; }
-    void SetFolderPath(const std::string & value);
-    void SetPrinterChoice(int value) { m_printer_choice = value; }
 
 private:
     void BuildSelectedAtomList(DataObjectManager * data_manager);

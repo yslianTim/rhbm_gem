@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include "DataObjectVisitorAdapter.hpp"
 #include "KDTreeAlgorithm.hpp"
+#include "MapSimulationCommand.hpp"
 
 class AtomSelector;
 
@@ -24,21 +25,11 @@ class MapSimulationVisitor : public DataObjectVisitorAdapter
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
 
 public:
-    MapSimulationVisitor(void);
+    explicit MapSimulationVisitor(const MapSimulationCommand::Options & options);
     ~MapSimulationVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitDataObjectManager(DataObjectManager * data_manager) override;
-
-    void SetFolderPath(const std::string & path) { m_folder_path = path; }
-    void SetMapFileName(const std::string & value) { m_map_file_name = value; }
-    void SetThreadSize(unsigned int thread_size) { m_thread_size = thread_size; }
-    void SetPotentialModelChoice(int value) { m_potential_model_choice = value; }
-    void SetPartialChargeChoice(int value) { m_partial_charge_choice = value; }
-    void SetCutoffDistance(double value) { m_cutoff_distance = value; }
-    void SetGridSpacing(double value) { m_grid_spacing = static_cast<float>(value); }
-    void SetBlurringWidthList(const std::vector<double> & value) { m_blurring_width_list = value; }
-    void SetModelObjectKeyTag(const std::string & value) { m_model_key_tag = value; }
 
 private:
     std::unique_ptr<MapObject> CreateSimulatedMapObject(double blurring_width);

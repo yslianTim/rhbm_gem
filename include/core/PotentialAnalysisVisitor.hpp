@@ -5,6 +5,7 @@
 #include <vector>
 #include <unordered_map>
 #include "DataObjectVisitorAdapter.hpp"
+#include "PotentialAnalysisCommand.hpp"
 
 class SphereSampler;
 
@@ -19,20 +20,12 @@ class PotentialAnalysisVisitor : public DataObjectVisitorAdapter
     std::vector<AtomObject *> m_selected_atom_list;
 
 public:
-    PotentialAnalysisVisitor(SphereSampler * sphere_sampler);
+    PotentialAnalysisVisitor(SphereSampler * sphere_sampler, const PotentialAnalysisCommand::Options & options);
     ~PotentialAnalysisVisitor() = default;
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;
     void VisitDataObjectManager(DataObjectManager * data_manager) override;
-
-    void SetAsymmetryFlag(bool value);
-    void SetThreadSize(unsigned int thread_size);
-    void SetFitRange(double x_min, double x_max);
-    void SetAlphaR(double alpha_r);
-    void SetAlphaG(double alpha_g);
-    void SetMapObjectKeyTag(const std::string & value);
-    void SetModelObjectKeyTag(const std::string & value);
 
 private:
     void RunPotentialFitting(ModelObject * model_object);

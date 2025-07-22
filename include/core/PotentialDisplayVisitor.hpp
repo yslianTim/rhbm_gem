@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include "DataObjectVisitorAdapter.hpp"
+#include "PotentialDisplayCommand.hpp"
 
 class DataObjectBase;
 class AtomSelector;
@@ -18,15 +19,12 @@ class PotentialDisplayVisitor : public DataObjectVisitorAdapter
     AtomSelector * m_atom_selector;
 
 public:
-    PotentialDisplayVisitor(AtomSelector * atom_selector);
+    PotentialDisplayVisitor(AtomSelector * atom_selector, const PotentialDisplayCommand::Options & options);
     ~PotentialDisplayVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
-    void SetModelObjectKeyTagList(const std::vector<std::string> & value) { m_model_key_tag_list = value; }
     void SetRefModelObjectKeyTagListMap(const std::unordered_map<std::string, std::vector<std::string>> & value) { m_ref_model_key_tag_list_map = value; }
-    void SetFolderPath(const std::string & value) { m_folder_path = value; }
-    void SetPainterChoice(int value) { m_painter_choice = value; }
 
 private:
     void AddAtomObjectToPainter(DataObjectManager * data_manager, PainterBase * painter);

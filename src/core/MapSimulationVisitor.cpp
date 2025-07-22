@@ -16,8 +16,18 @@
 #include <algorithm>
 #include <limits>
 
-MapSimulationVisitor::MapSimulationVisitor(void) :
-    m_thread_size{ 1 }, m_kd_tree_root{ nullptr }
+MapSimulationVisitor::MapSimulationVisitor(
+    const MapSimulationCommand::Options & options) :
+    m_thread_size{ static_cast<unsigned int>(options.thread_size) },
+    m_potential_model_choice{ options.potential_model_choice },
+    m_partial_charge_choice{ options.partial_charge_choice },
+    m_cutoff_distance{ options.cutoff_distance },
+    m_grid_spacing{ static_cast<float>(options.grid_spacing) },
+    m_model_key_tag{ "model" },
+    m_folder_path{ options.folder_path },
+    m_map_file_name{ options.map_file_name },
+    m_blurring_width_list{ options.blurring_width_list },
+    m_kd_tree_root{ nullptr }
 {
 
 }

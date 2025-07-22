@@ -52,11 +52,7 @@ bool ResultDumpCommand::Execute(void)
         return false;
     }
 
-    auto result_dump{ std::make_unique<ResultDumpVisitor>() };
-    result_dump->SetMapObjectKeyTag("map");
-    result_dump->SetModelObjectKeyTagList(m_options.model_key_tag_list);
-    result_dump->SetFolderPath(m_options.folder_path);
-    result_dump->SetPrinterChoice(m_options.printer_choice);
+    auto result_dump{ std::make_unique<ResultDumpVisitor>(m_options) };
     data_manager->Accept(result_dump.get());
     return true;
 }

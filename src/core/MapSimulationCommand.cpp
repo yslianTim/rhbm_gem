@@ -47,17 +47,7 @@ bool MapSimulationCommand::Execute(void)
         auto data_manager{ std::make_unique<DataObjectManager>() };
         data_manager->ProcessFile(m_options.model_file_path, "model");
 
-        auto analyzer{ std::make_unique<MapSimulationVisitor>() };
-        analyzer->SetModelObjectKeyTag("model");
-        analyzer->SetFolderPath(m_options.folder_path);
-        analyzer->SetMapFileName(m_options.map_file_name);
-        analyzer->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
-        analyzer->SetPotentialModelChoice(m_options.potential_model_choice);
-        analyzer->SetPartialChargeChoice(m_options.partial_charge_choice);
-        analyzer->SetCutoffDistance(m_options.cutoff_distance);
-        analyzer->SetGridSpacing(m_options.grid_spacing);
-        analyzer->SetBlurringWidthList(m_options.blurring_width_list);
-
+        auto analyzer{ std::make_unique<MapSimulationVisitor>(m_options) };
         data_manager->Accept(analyzer.get());
     }
     catch(const std::exception & e)
