@@ -29,7 +29,6 @@ public:
     ~MapSimulationVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
-    void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
 private:
     std::unique_ptr<MapObject> CreateSimulatedMapObject(double blurring_width);

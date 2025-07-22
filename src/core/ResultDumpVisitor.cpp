@@ -2,7 +2,6 @@
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
-#include "DataObjectManager.hpp"
 #include "DataObjectBase.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
@@ -21,31 +20,26 @@ ResultDumpVisitor::ResultDumpVisitor(const ResultDumpCommand::Options & options)
     m_printer_choice{ options.printer_choice },
     m_folder_path{ FilePathHelper::EnsureTrailingSlash(options.folder_path) },
     m_map_key_tag{ "map" },
-    m_model_key_tag_list{ options.model_key_tag_list }
+    m_model_key_tag_list{ options.model_key_tag_list }, m_map_object{ nullptr }
 {
 
 }
 
-void ResultDumpVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
+ResultDumpVisitor::~ResultDumpVisitor()
 {
-    if (data_manager == nullptr)
-    {
-        Logger::Log(LogLevel::Warning, "Data manager is null, please check the input.");
-        return;
-    }
-    BuildSelectedAtomList(data_manager);
+    BuildSelectedAtomList();
     
     switch (m_printer_choice)
     {
         case 0:
-            RunAtomPositionDumping(data_manager);
+            RunAtomPositionDumping();
             break;
         case 1:
-            RunMapValueDumping(data_manager);
+            RunMapValueDumping();
             break;
         case 2:
-            RunGroupGausEstimatesDumping(data_manager);
-            RunGausEstimatesDumping(data_manager);
+            RunGroupGausEstimatesDumping();
+            RunGausEstimatesDumping();
             break;
         default:
             Logger::Log(LogLevel::Warning,
@@ -59,12 +53,33 @@ void ResultDumpVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
     }
 }
 
-void ResultDumpVisitor::BuildSelectedAtomList(DataObjectManager * data_manager)
+void ResultDumpVisitor::VisitModelObject(ModelObject * data_object)
 {
-    if (data_manager == nullptr) return;
-    for (auto & key_tag : m_model_key_tag_list)
+    if (data_object == nullptr) return;
+    for (auto & key : m_model_key_tag_list)
     {
-        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key_tag) };
+        if (data_object->GetKeyTag() == key)
+        {
+            m_model_object_list.emplace_back(data_object);
+            return;
+        }
+    }
+}
+
+void ResultDumpVisitor::VisitMapObject(MapObject * data_object)
+{
+    if (data_object == nullptr) return;
+    if (data_object->GetKeyTag() == m_map_key_tag)
+    {
+        m_map_object = data_object;
+    }
+}
+
+void ResultDumpVisitor::BuildSelectedAtomList(void)
+{
+    for (auto * model_object : m_model_object_list)
+    {
+        auto key_tag{ model_object->GetKeyTag() };
         for (auto & atom : model_object->GetComponentsList())
         {
             if (atom->GetAtomicPotentialEntry() == nullptr) continue;
@@ -76,14 +91,13 @@ void ResultDumpVisitor::BuildSelectedAtomList(DataObjectManager * data_manager)
     }
 }
 
-void ResultDumpVisitor::RunAtomPositionDumping(DataObjectManager * data_manager)
+void ResultDumpVisitor::RunAtomPositionDumping(void)
 {
     ScopeTimer timer("ResultDumpVisitor::RunAtomPositionDumping");
-    if (data_manager == nullptr) return;
 
-    for (auto & key_tag : m_model_key_tag_list)
+    for (auto * model_object : m_model_object_list)
     {
-        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key_tag) };
+        auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_position_list_"+ model_object->GetPdbID() +".csv" };
         std::string output_path{ m_folder_path + file_name };
         std::ofstream outfile(output_path);
@@ -106,28 +120,21 @@ void ResultDumpVisitor::RunAtomPositionDumping(DataObjectManager * data_manager)
     }
 }
 
-void ResultDumpVisitor::RunMapValueDumping(DataObjectManager * data_manager)
+void ResultDumpVisitor::RunMapValueDumping(void)
 {
     ScopeTimer timer("ResultDumpVisitor::RunMapValueDumping");
-    if (data_manager == nullptr) return;
-
-    MapObject * map_object{ nullptr };
-    try
+    if (m_map_object == nullptr)
     {
-        map_object = data_manager->GetTypedDataObjectPtr<MapObject>(m_map_key_tag);
-    }
-    catch (const std::exception & e)
-    {
-        Logger::Log(LogLevel::Error, e.what());
         Logger::Log(LogLevel::Error, "Please give the path of map file via -m option.");
         return;
     }
+    MapObject * map_object{ m_map_object };
 
     auto margin{ 3.0f };
 
-    for (auto & key_tag : m_model_key_tag_list)
+    for (auto * model_object : m_model_object_list)
     {
-        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key_tag) };
+        auto key_tag{ model_object->GetKeyTag() };
         auto atom_size{ m_selected_atom_list_map.at(key_tag).size() };
         std::array<float, 3> atom_range_min, atom_range_max;
         std::vector<float> x_list, y_list, z_list;
@@ -181,14 +188,13 @@ void ResultDumpVisitor::RunMapValueDumping(DataObjectManager * data_manager)
     }
 }
 
-void ResultDumpVisitor::RunGausEstimatesDumping(DataObjectManager * data_manager)
+void ResultDumpVisitor::RunGausEstimatesDumping(void)
 {
     ScopeTimer timer("ResultDumpVisitor::RunGausEstimatesDumping");
-    if (data_manager == nullptr) return;
 
-    for (auto & key_tag : m_model_key_tag_list)
+    for (auto * model_object : m_model_object_list)
     {
-        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key_tag) };
+        auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_gaus_list_"+ model_object->GetPdbID() +".csv" };
         std::string output_path{ m_folder_path + file_name };
         std::ofstream outfile(output_path);
@@ -211,16 +217,15 @@ void ResultDumpVisitor::RunGausEstimatesDumping(DataObjectManager * data_manager
     }
 }
 
-void ResultDumpVisitor::RunGroupGausEstimatesDumping(DataObjectManager * data_manager)
+void ResultDumpVisitor::RunGroupGausEstimatesDumping(void)
 {
     ScopeTimer timer("ResultDumpVisitor::RunGroupGausEstimatesDumping");
-    if (data_manager == nullptr) return;
 
     auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
 
-    for (auto & key_tag : m_model_key_tag_list)
+    for (auto * model_object : m_model_object_list)
     {
-        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key_tag) };
+        auto key_tag{ model_object->GetKeyTag() };
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
         std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };

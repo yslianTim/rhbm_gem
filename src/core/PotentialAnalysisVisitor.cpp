@@ -2,7 +2,6 @@
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
-#include "DataObjectManager.hpp"
 #include "SphereSampler.hpp"
 #include "MapInterpolationVisitor.hpp"
 #include "HRLModelHelper.hpp"
@@ -28,9 +27,16 @@ PotentialAnalysisVisitor::PotentialAnalysisVisitor(
     m_alpha_r{ options.alpha_r }, m_alpha_g{ options.alpha_g },
     m_x_min{ options.fit_range_min }, m_x_max{ options.fit_range_max },
     m_map_key_tag{ "map" }, m_model_key_tag{ "model" },
-    m_sphere_sampler{ sphere_sampler }
+    m_sphere_sampler{ sphere_sampler }, m_model_object{ nullptr }, m_map_object{ nullptr }
 {
 
+}
+
+PotentialAnalysisVisitor::~PotentialAnalysisVisitor()
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisVisitor::~PotentialAnalysisVisitor() called.");
+    RunMapValueSampling();
+    RunPotentialFitting();
 }
 
 void PotentialAnalysisVisitor::VisitAtomObject(AtomObject * data_object)
@@ -43,6 +49,8 @@ void PotentialAnalysisVisitor::VisitModelObject(ModelObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitModelObject");
     if (data_object == nullptr) return;
+    if (data_object->GetKeyTag() != m_model_key_tag) return;
+    m_model_object = data_object;
     data_object->FilterAtomFromSymmetry(m_is_asymmetry);
     data_object->Update();
     m_selected_atom_list = data_object->GetSelectedAtomList();
@@ -59,40 +67,30 @@ void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::VisitMapObject");
     if (data_object == nullptr) return;
+    if (data_object->GetKeyTag() != m_map_key_tag) return;
+    m_map_object = data_object;
     data_object->MapValueArrayNormalization();
+}
+
+void PotentialAnalysisVisitor::RunMapValueSampling(void)
+{
+    ScopeTimer timer("PotentialAnalysisVisitor::RunMapValueSampling");
+    if (m_map_object == nullptr) return;
     m_sphere_sampler->Print();
     MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler };
     for (auto & atom : m_selected_atom_list)
     {
         auto entry{ atom->GetAtomicPotentialEntry() };
         interpolation_visitor.SetPosition(atom->GetPosition());
-        data_object->Accept(&interpolation_visitor);
+        m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
     }
 }
 
-void PotentialAnalysisVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
-{
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisVisitor::VisitDataObjectManager() called");
-    try
-    {
-        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(m_model_key_tag) };
-        model_object->Accept(this);
-
-        auto map_object{ data_manager->GetTypedDataObjectPtr<MapObject>(m_map_key_tag) };
-        map_object->Accept(this);
-
-        RunPotentialFitting(model_object);
-    }
-    catch(const std::exception & e)
-    {
-        Logger::Log(LogLevel::Error, e.what());
-    }
-}
-
-void PotentialAnalysisVisitor::RunPotentialFitting(ModelObject * model_object)
+void PotentialAnalysisVisitor::RunPotentialFitting(void)
 {
     ScopeTimer timer("PotentialAnalysisVisitor::RunPotentialFitting");
+    if (m_model_object == nullptr) return;
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
     {
         const auto & class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
@@ -186,6 +184,6 @@ void PotentialAnalysisVisitor::RunPotentialFitting(ModelObject * model_object)
                 count++;
             }
         }
-        model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
+        m_model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
     }
 }

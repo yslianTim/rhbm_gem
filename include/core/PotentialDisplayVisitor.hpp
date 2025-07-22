@@ -9,6 +9,7 @@
 class DataObjectBase;
 class AtomSelector;
 class PainterBase;
+class ModelObject;
 
 class PotentialDisplayVisitor : public DataObjectVisitorBase
 {
@@ -17,18 +18,21 @@ class PotentialDisplayVisitor : public DataObjectVisitorBase
     std::vector<std::string> m_model_key_tag_list;
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     AtomSelector * m_atom_selector;
+    std::vector<ModelObject *> m_model_object_list;
+    std::vector<ModelObject *> m_ordered_model_object_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ordered_ref_model_object_list_map;
 
 public:
     PotentialDisplayVisitor(AtomSelector * atom_selector, const PotentialDisplayCommand::Options & options);
     ~PotentialDisplayVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
-    void VisitDataObjectManager(DataObjectManager * data_manager) override;
+    void VisitModelObject(ModelObject * data_object) override;
 
     void SetRefModelObjectKeyTagListMap(const std::unordered_map<std::string, std::vector<std::string>> & value) { m_ref_model_key_tag_list_map = value; }
 
 private:
-    void AddAtomObjectToPainter(DataObjectManager * data_manager, PainterBase * painter);
-    void AddModelObjectToPainter(DataObjectManager * data_manager, PainterBase * painter);
-    void AddReferenceModelObjectToPainter(DataObjectManager * data_manager, PainterBase * painter);
+    void BuildOrderedModelObjectList(void);
+    void BuildOrderedRefModelObjectListMap(void);
 
 };

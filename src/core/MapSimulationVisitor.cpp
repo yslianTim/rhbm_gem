@@ -2,7 +2,7 @@
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
-#include "DataObjectManager.hpp"
+#include "MapFileWriter.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
 #include "ElectricPotential.hpp"
@@ -98,33 +98,18 @@ void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
                 "Number of selected atoms to be simulated = "
                 + std::to_string(m_selected_atom_list.size()) +" / "+
                 std::to_string(atom_list.size()) + " atoms.");
-}
 
-void MapSimulationVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
-{
-    Logger::Log(LogLevel::Debug, "MapSimulationVisitor::VisitDataObjectManager() called");
-    try
+    for (auto & blurring_width : m_blurring_width_list)
     {
-        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(m_model_key_tag) };
-        model_object->Accept(this);
-
-        for (auto & blurring_width : m_blurring_width_list)
-        {
-            auto map_key_tag{
-                m_pdb_id + "_bw" +
-                StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
-            };
-            data_manager->AddDataObject(map_key_tag, CreateSimulatedMapObject(blurring_width));
-
-            auto extension{ std::string(".map") };
-            auto file_name{ m_map_file_name +"_"+ map_key_tag + extension };
-            auto output_file_name{ FilePathHelper::EnsureTrailingSlash(m_folder_path) + file_name };
-            data_manager->ProduceFile(output_file_name, map_key_tag);
-        }
-    }
-    catch(const std::exception & e)
-    {
-        Logger::Log(LogLevel::Error, e.what());
+        auto map_key_tag{
+            m_pdb_id + "_bw" +
+            StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
+        };
+        auto map_object{ CreateSimulatedMapObject(blurring_width) };
+        std::string file_name{ m_map_file_name + "_" + map_key_tag + ".map" };
+        std::string output_file_name{ FilePathHelper::EnsureTrailingSlash(m_folder_path) + file_name };
+        MapFileWriter writer{ output_file_name, map_object.get() };
+        writer.Write();
     }
 }
 

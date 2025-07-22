@@ -133,7 +133,13 @@ void DataObjectManager::SaveDataObject(
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
 {
     ScopeTimer timer("DataObjectManager::Accept");
-    visitor->VisitDataObjectManager(this);
+    for (auto & [key, object] : m_data_object_map)
+    {
+        if (object)
+        {
+            object->Accept(visitor);
+        }
+    }
 }
 
 void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const

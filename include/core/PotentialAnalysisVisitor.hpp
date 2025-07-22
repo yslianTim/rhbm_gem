@@ -18,16 +18,18 @@ class PotentialAnalysisVisitor : public DataObjectVisitorBase
     std::string m_map_key_tag, m_model_key_tag;
     SphereSampler * m_sphere_sampler;
     std::vector<AtomObject *> m_selected_atom_list;
+    ModelObject * m_model_object;
+    MapObject * m_map_object;
 
 public:
     PotentialAnalysisVisitor(SphereSampler * sphere_sampler, const PotentialAnalysisCommand::Options & options);
-    ~PotentialAnalysisVisitor() = default;
+    ~PotentialAnalysisVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;
-    void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
 private:
-    void RunPotentialFitting(ModelObject * model_object);
+    void RunMapValueSampling(void);
+    void RunPotentialFitting(void);
 
 };
