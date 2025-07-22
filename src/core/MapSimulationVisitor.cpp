@@ -95,7 +95,7 @@ void MapSimulationVisitor::VisitDataObjectManager(DataObjectManager * data_manag
     Logger::Log(LogLevel::Debug, "MapSimulationVisitor::VisitDataObjectManager() called");
     try
     {
-        auto model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
+        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(m_model_key_tag) };
         model_object->Accept(this);
 
         for (auto & blurring_width : m_blurring_width_list)

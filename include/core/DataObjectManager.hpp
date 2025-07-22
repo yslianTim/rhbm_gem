@@ -4,6 +4,7 @@
 #include <string>
 #include <filesystem>
 #include <unordered_map>
+#include <stdexcept>
 
 class DatabaseManager;
 class FileProcessFactoryBase;
@@ -26,7 +27,15 @@ public:
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(DataObjectVisitorBase * visitor);
     void PrintDataObjectInfo(const std::string & key_tag) const;
-    DataObjectBase * GetDataObjectRef(const std::string & key_tag);
+    DataObjectBase * GetDataObjectPtr(const std::string & key_tag);
+    template <typename TypedDataObject>
+    TypedDataObject * GetTypedDataObjectPtr(const std::string & key_tag)
+    {
+        auto base_object{ GetDataObjectPtr(key_tag) };
+        auto typed_object{ dynamic_cast<TypedDataObject *>(base_object) };
+        if (!typed_object) throw std::runtime_error("Invalid data type for " + key_tag);
+        return typed_object;
+    }
     const std::unordered_map<std::string, std::unique_ptr<DataObjectBase>> & GetDataObjectMap(void) { return m_data_object_map; }
 
 private:

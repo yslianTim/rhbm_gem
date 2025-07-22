@@ -63,13 +63,7 @@ bool PotentialAnalysisCommand::Execute(void)
         data_manager->ProcessFile(m_options.map_file_path, "map");
         if (m_options.is_simulation == true)
         {
-            auto model_object{
-                dynamic_cast<ModelObject *>(data_manager->GetDataObjectRef("model")) };
-            if (model_object == nullptr)
-            {
-                throw std::runtime_error(
-                    "PotentialAnalysisCommand::Execute(): invalid model object");
-            }
+            auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>("model") };
             UpdateModelObjectForSimulation(model_object);
         }
     }

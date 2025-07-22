@@ -72,19 +72,13 @@ void PotentialAnalysisVisitor::VisitDataObjectManager(DataObjectManager * data_m
     Logger::Log(LogLevel::Debug, "PotentialAnalysisVisitor::VisitDataObjectManager() called");
     try
     {
-        auto model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };
+        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>(m_model_key_tag) };
         model_object->Accept(this);
 
-        auto map_object{ data_manager->GetDataObjectRef(m_map_key_tag) };
+        auto map_object{ data_manager->GetTypedDataObjectPtr<MapObject>(m_map_key_tag) };
         map_object->Accept(this);
 
-        auto model_obj_ptr{ dynamic_cast<ModelObject*>(model_object) };
-        if (model_obj_ptr == nullptr)
-        {
-            throw std::runtime_error(
-                "PotentialAnalysisVisitor::Visit(): invalid model object");
-        }
-        RunPotentialFitting(model_obj_ptr);
+        RunPotentialFitting(model_object);
     }
     catch(const std::exception & e)
     {
