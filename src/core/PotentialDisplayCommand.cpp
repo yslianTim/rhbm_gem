@@ -69,6 +69,7 @@ bool PotentialDisplayCommand::Execute(void)
         auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get(), m_options) };
         model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
         data_manager->Accept(model_displayer.get());
+        model_displayer->Finalize();
     }
     catch(const std::exception & e)
     {

@@ -25,6 +25,8 @@ public:
     ~ResultDumpVisitor();
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;
+    
+    void Finalize(void);
 
 private:
     void BuildSelectedAtomList(void);

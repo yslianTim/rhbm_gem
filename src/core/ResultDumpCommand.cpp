@@ -54,6 +54,7 @@ bool ResultDumpCommand::Execute(void)
 
     auto result_dump{ std::make_unique<ResultDumpVisitor>(m_options) };
     data_manager->Accept(result_dump.get());
+    result_dump->Finalize();
     return true;
 }
 

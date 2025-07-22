@@ -35,6 +35,11 @@ PotentialAnalysisVisitor::PotentialAnalysisVisitor(
 PotentialAnalysisVisitor::~PotentialAnalysisVisitor()
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisVisitor::~PotentialAnalysisVisitor() called.");
+}
+
+void PotentialAnalysisVisitor::Finalize(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisVisitor::Finalize() called.");
     RunMapValueSampling();
     RunPotentialFitting();
 }

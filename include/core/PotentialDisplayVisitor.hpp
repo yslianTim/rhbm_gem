@@ -29,6 +29,7 @@ public:
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
 
+    void Finalize(void);
     void SetRefModelObjectKeyTagListMap(const std::unordered_map<std::string, std::vector<std::string>> & value) { m_ref_model_key_tag_list_map = value; }
 
 private:

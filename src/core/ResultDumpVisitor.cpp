@@ -27,8 +27,12 @@ ResultDumpVisitor::ResultDumpVisitor(const ResultDumpCommand::Options & options)
 
 ResultDumpVisitor::~ResultDumpVisitor()
 {
+    Logger::Log(LogLevel::Debug, "ResultDumpVisitor::~ResultDumpVisitor() called.");
+}
+
+void ResultDumpVisitor::Finalize()
+{
     BuildSelectedAtomList();
-    
     switch (m_printer_choice)
     {
         case 0:

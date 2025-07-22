@@ -27,6 +27,11 @@ PotentialDisplayVisitor::PotentialDisplayVisitor(
 
 PotentialDisplayVisitor::~PotentialDisplayVisitor()
 {
+    Logger::Log(LogLevel::Debug, "PotentialDisplayVisitor::~PotentialDisplayVisitor() called.");
+}
+
+void PotentialDisplayVisitor::Finalize(void)
+{
     BuildOrderedModelObjectList();
     BuildOrderedRefModelObjectListMap();
     std::unique_ptr<PainterBase> painter{ nullptr };

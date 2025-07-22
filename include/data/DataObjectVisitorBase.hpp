@@ -3,7 +3,6 @@
 class AtomObject;
 class ModelObject;
 class MapObject;
-class DataObjectManager;
 
 class DataObjectVisitorBase
 {
