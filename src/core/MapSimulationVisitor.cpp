@@ -90,11 +90,6 @@ void MapSimulationVisitor::VisitModelObject(ModelObject * data_object)
                 std::to_string(atom_list.size()) + " atoms.");
 }
 
-void MapSimulationVisitor::VisitMapObject(MapObject * data_object)
-{
-    (void) data_object;
-}
-
 void MapSimulationVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
 {
     Logger::Log(LogLevel::Debug, "MapSimulationVisitor::VisitDataObjectManager() called");

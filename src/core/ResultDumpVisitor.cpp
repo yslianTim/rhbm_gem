@@ -23,21 +23,6 @@ ResultDumpVisitor::ResultDumpVisitor() :
 
 }
 
-void ResultDumpVisitor::VisitAtomObject(AtomObject * data_object)
-{
-    if (data_object == nullptr) return;
-}
-
-void ResultDumpVisitor::VisitModelObject(ModelObject * data_object)
-{
-    if (data_object == nullptr) return;
-}
-
-void ResultDumpVisitor::VisitMapObject(MapObject * data_object)
-{
-    if (data_object == nullptr) return;
-}
-
 void ResultDumpVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
 {
     if (data_manager == nullptr)

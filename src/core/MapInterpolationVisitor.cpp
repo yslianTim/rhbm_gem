@@ -12,16 +12,6 @@ MapInterpolationVisitor::MapInterpolationVisitor(SphereSampler * sphere_sampler)
 
 }
 
-void MapInterpolationVisitor::VisitAtomObject(AtomObject * data_object)
-{
-    if (data_object == nullptr) return;
-}
-
-void MapInterpolationVisitor::VisitModelObject(ModelObject * data_object)
-{
-    if (data_object == nullptr) return;
-}
-
 void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 {
     if (data_object == nullptr) return;
@@ -45,11 +35,6 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
             m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
         }
     }
-}
-
-void MapInterpolationVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
-{
-    if (data_manager == nullptr) return;
 }
 
 float MapInterpolationVisitor::MakeInterpolationInMapObject(

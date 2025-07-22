@@ -3,11 +3,11 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitorAdapter.hpp"
 
 class DataObjectBase;
 
-class ResultDumpVisitor : public DataObjectVisitorBase
+class ResultDumpVisitor : public DataObjectVisitorAdapter
 {
     int m_printer_choice;
     std::string m_folder_path;
@@ -18,10 +18,6 @@ class ResultDumpVisitor : public DataObjectVisitorBase
 public:
     ResultDumpVisitor(void);
     ~ResultDumpVisitor() = default;
-
-    void VisitAtomObject(AtomObject * data_object) override;
-    void VisitModelObject(ModelObject * data_object) override;
-    void VisitMapObject(MapObject * data_object) override;
     void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetMapObjectKeyTag(const std::string & value) { m_map_key_tag = value; }

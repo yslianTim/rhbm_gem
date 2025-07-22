@@ -5,12 +5,12 @@
 #include <vector>
 #include <array>
 #include <unordered_map>
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitorAdapter.hpp"
 #include "KDTreeAlgorithm.hpp"
 
 class AtomSelector;
 
-class MapSimulationVisitor : public DataObjectVisitorBase
+class MapSimulationVisitor : public DataObjectVisitorAdapter
 {
     unsigned int m_thread_size;
     int m_potential_model_choice;
@@ -28,7 +28,6 @@ public:
     ~MapSimulationVisitor();
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
-    void VisitMapObject(MapObject * data_object) override;
     void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetFolderPath(const std::string & path) { m_folder_path = path; }

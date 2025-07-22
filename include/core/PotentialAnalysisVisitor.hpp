@@ -4,11 +4,11 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitorAdapter.hpp"
 
 class SphereSampler;
 
-class PotentialAnalysisVisitor : public DataObjectVisitorBase
+class PotentialAnalysisVisitor : public DataObjectVisitorAdapter
 {
     bool m_is_asymmetry;
     unsigned int m_thread_size;

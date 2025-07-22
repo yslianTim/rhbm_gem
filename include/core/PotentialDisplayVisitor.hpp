@@ -3,13 +3,13 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitorAdapter.hpp"
 
 class DataObjectBase;
 class AtomSelector;
 class PainterBase;
 
-class PotentialDisplayVisitor : public DataObjectVisitorBase
+class PotentialDisplayVisitor : public DataObjectVisitorAdapter
 {
     int m_painter_choice;
     std::string m_folder_path;
@@ -20,10 +20,7 @@ class PotentialDisplayVisitor : public DataObjectVisitorBase
 public:
     PotentialDisplayVisitor(AtomSelector * atom_selector);
     ~PotentialDisplayVisitor();
-
     void VisitAtomObject(AtomObject * data_object) override;
-    void VisitModelObject(ModelObject * data_object) override;
-    void VisitMapObject(MapObject * data_object) override;
     void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetModelObjectKeyTagList(const std::vector<std::string> & value) { m_model_key_tag_list = value; }

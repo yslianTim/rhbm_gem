@@ -48,7 +48,7 @@ bool ResultDumpCommand::Execute(void)
     }
     catch (const std::exception & e)
     {
-        Logger::Log(LogLevel::Error, e.what());
+        Logger::Log(LogLevel::Error, "ResultDumpCommand::Execute() : " + std::string(e.what()));
         return false;
     }
 

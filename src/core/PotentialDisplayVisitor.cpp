@@ -42,16 +42,6 @@ void PotentialDisplayVisitor::VisitAtomObject(AtomObject * data_object)
     data_object->SetSelectedFlag(selected_flag);
 }
 
-void PotentialDisplayVisitor::VisitModelObject(ModelObject * data_object)
-{
-    if (data_object == nullptr) return;
-}
-
-void PotentialDisplayVisitor::VisitMapObject(MapObject * data_object)
-{
-    if (data_object == nullptr) return;
-}
-
 void PotentialDisplayVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayVisitor::VisitDataObjectManager() called");

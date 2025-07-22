@@ -3,11 +3,11 @@
 #include <vector>
 #include <array>
 #include <tuple>
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitorAdapter.hpp"
 
 class SphereSampler;
 
-class MapInterpolationVisitor : public DataObjectVisitorBase
+class MapInterpolationVisitor : public DataObjectVisitorAdapter
 {
     SphereSampler * m_sphere_sampler;
     std::array<float, 3> m_position;
@@ -17,10 +17,7 @@ class MapInterpolationVisitor : public DataObjectVisitorBase
 public:
     MapInterpolationVisitor(SphereSampler * sphere_sampler);
     ~MapInterpolationVisitor() = default;
-    void VisitAtomObject(AtomObject * data_object) override;
-    void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;
-    void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetPosition(const std::array<float, 3> & position) { m_position = position; };
     const std::vector<std::tuple<float, float>> & GetSamplingDataList(void) const { return m_sampling_data_list; }
