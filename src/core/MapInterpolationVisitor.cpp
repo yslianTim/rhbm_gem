@@ -53,7 +53,7 @@ void MapInterpolationVisitor::Analysis(DataObjectManager * data_manager)
 }
 
 float MapInterpolationVisitor::MakeInterpolationInMapObject(
-    MapObject * data_object, std::array<float, 3> position)
+    MapObject * data_object, const std::array<float, 3> & position)
 {
     auto index{ data_object->GetIndexFromPosition(position) };
     auto origin{ data_object->GetOrigin() };
@@ -66,7 +66,7 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     }
 
     // Helper function for cubic interpolation
-    auto cubicInterpolate = [](float p0, float p1, float p2, float p3, float t)
+    auto cubic_interpolate = [](float p0, float p1, float p2, float p3, float t)
     {
         float a0 = p1;
         float a1 = 0.5f * (p2 - p0);
@@ -100,7 +100,7 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     {
         for (size_t k = 0; k < 4; ++k)
         {
-            tempY[j][k] = cubicInterpolate(values[0][j][k], values[1][j][k], values[2][j][k], values[3][j][k], local.at(0));
+            tempY[j][k] = cubic_interpolate(values[0][j][k], values[1][j][k], values[2][j][k], values[3][j][k], local.at(0));
         }
     }
 
@@ -108,9 +108,9 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     std::array<float, 4> tempZ;
     for (size_t k = 0; k < 4; ++k)
     {
-        tempZ[k] = cubicInterpolate(tempY[0][k], tempY[1][k], tempY[2][k], tempY[3][k], local.at(1));
+        tempZ[k] = cubic_interpolate(tempY[0][k], tempY[1][k], tempY[2][k], tempY[3][k], local.at(1));
     }
 
     // Interpolate along z direction
-    return cubicInterpolate(tempZ[0], tempZ[1], tempZ[2], tempZ[3], local.at(2));
+    return cubic_interpolate(tempZ[0], tempZ[1], tempZ[2], tempZ[3], local.at(2));
 }
