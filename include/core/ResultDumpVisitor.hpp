@@ -22,7 +22,7 @@ public:
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;
-    void Analysis(DataObjectManager * data_manager) override;
+    void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetMapObjectKeyTag(const std::string & value) { m_map_key_tag = value; }
     void SetModelObjectKeyTagList(const std::vector<std::string> & value) { m_model_key_tag_list = std::move(value); }

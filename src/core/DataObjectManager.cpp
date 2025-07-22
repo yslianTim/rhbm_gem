@@ -145,7 +145,7 @@ void DataObjectManager::SaveDataObject(
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
 {
     ScopeTimer timer("DataObjectManager::Accept");
-    visitor->Analysis(this);
+    visitor->VisitDataObjectManager(this);
 }
 
 void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const

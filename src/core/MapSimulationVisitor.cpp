@@ -95,9 +95,9 @@ void MapSimulationVisitor::VisitMapObject(MapObject * data_object)
     (void) data_object;
 }
 
-void MapSimulationVisitor::Analysis(DataObjectManager * data_manager)
+void MapSimulationVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
 {
-    Logger::Log(LogLevel::Info, "- MapSimulationVisitor::Analysis");
+    Logger::Log(LogLevel::Debug, "MapSimulationVisitor::VisitDataObjectManager() called");
     try
     {
         auto model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };

@@ -29,7 +29,7 @@ public:
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;
-    void Analysis(DataObjectManager * data_manager) override;
+    void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetFolderPath(const std::string & path) { m_folder_path = path; }
     void SetMapFileName(const std::string & value) { m_map_file_name = value; }

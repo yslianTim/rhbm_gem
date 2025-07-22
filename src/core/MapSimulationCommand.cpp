@@ -18,6 +18,7 @@ MapSimulationCommand::MapSimulationCommand(void)
 
 void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)
 {
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RegisterCLIOptions() called.");
     cmd->add_option("-a,--model", m_options.model_file_path,
         "Model file path")->required();
     cmd->add_option("-n,--name", m_options.map_file_name,
@@ -37,7 +38,7 @@ void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)
 
 bool MapSimulationCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Info, "MapSimulationCommand::Execute() called.");
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::Execute() called.");
     try
     {
         Logger::Log(LogLevel::Info, "Total number of blurring width sets to be simulated: "

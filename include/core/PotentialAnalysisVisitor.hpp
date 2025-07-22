@@ -24,7 +24,7 @@ public:
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;
-    void Analysis(DataObjectManager * data_manager) override;
+    void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetAsymmetryFlag(bool value);
     void SetThreadSize(unsigned int thread_size);

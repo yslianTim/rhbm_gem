@@ -19,6 +19,7 @@ PotentialDisplayCommand::PotentialDisplayCommand(void) :
 
 void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
 {
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RegisterCLIOptions() called.");
     cmd->add_option("-p,--painter", m_options.painter_choice,
         "Painter choice")->required();
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
@@ -46,7 +47,7 @@ void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
 
 bool PotentialDisplayCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Info, "PotentialDisplayCommand::Execute() called.");
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::Execute() called.");
     try
     {
         SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
@@ -143,6 +144,7 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
 
 void PotentialDisplayCommand::LoadModelObjects(DataObjectManager * data_manager)
 {
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::LoadModelObjects() called.");
     for (auto & key : m_options.model_key_tag_list)
     {
         data_manager->LoadDataObject(key);
@@ -151,6 +153,7 @@ void PotentialDisplayCommand::LoadModelObjects(DataObjectManager * data_manager)
 
 void PotentialDisplayCommand::LoadRefModelObjects(DataObjectManager * data_manager)
 {
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::LoadRefModelObjects() called.");
     for (auto & [map_key, key_tag_list] : m_ref_model_key_tag_list_map)
     {
         for (auto & key_tag : key_tag_list)

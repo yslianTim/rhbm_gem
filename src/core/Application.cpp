@@ -15,6 +15,7 @@ Application::Application(CLI::App & app) :
 
 void Application::RegisterAllCommands(void)
 {
+    Logger::Log(LogLevel::Debug, "Application::RegisterAllCommands() called");
     const auto & commands{ CommandRegistry::Instance().GetCommands() };
     for (const auto & [name, info] : commands)
     {
@@ -27,6 +28,7 @@ void Application::RegisterCommand(
     const std::string & description,
     CommandRegistry::FactoryFunc factory)
 {
+    Logger::Log(LogLevel::Debug, "Application::RegisterCommand() called");
     auto command_object{ factory() };
     CLI::App * command{ m_cli_app.add_subcommand(name, description) };
     command_object->RegisterCLIOptions(command);

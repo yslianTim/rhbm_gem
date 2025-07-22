@@ -22,6 +22,7 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
 
 void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd)
 {
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RegisterCLIOptions() called.");
     cmd->add_option("-a,--model", m_options.model_file_path,
         "Model file path")->required();
     cmd->add_option("-m,--map", m_options.map_file_path,
@@ -53,7 +54,7 @@ void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd)
 
 bool PotentialAnalysisCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Info, "PotentialAnalysisCommand::Execute() called.");
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::Execute() called.");
 
     auto data_manager{ std::make_unique<DataObjectManager>(m_options.database_path) };
     try
@@ -118,6 +119,7 @@ void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
 
 void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * model_object)
 {
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::UpdateModelObjectForSimulation() called.");
     if (model_object == nullptr) return;
     if (m_options.resolution_simulation == 0.0)
     {

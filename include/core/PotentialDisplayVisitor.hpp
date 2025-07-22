@@ -24,7 +24,7 @@ public:
     void VisitAtomObject(AtomObject * data_object) override;
     void VisitModelObject(ModelObject * data_object) override;
     void VisitMapObject(MapObject * data_object) override;
-    void Analysis(DataObjectManager * data_manager) override;
+    void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetModelObjectKeyTagList(const std::vector<std::string> & value) { m_model_key_tag_list = value; }
     void SetRefModelObjectKeyTagListMap(const std::unordered_map<std::string, std::vector<std::string>> & value) { m_ref_model_key_tag_list_map = value; }

@@ -67,9 +67,9 @@ void PotentialAnalysisVisitor::VisitMapObject(MapObject * data_object)
     }
 }
 
-void PotentialAnalysisVisitor::Analysis(DataObjectManager * data_manager)
+void PotentialAnalysisVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
 {
-    Logger::Log(LogLevel::Info, "- PotentialAnalysisVisitor::Analysis...");
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisVisitor::VisitDataObjectManager() called");
     try
     {
         auto model_object{ data_manager->GetDataObjectRef(m_model_key_tag) };

@@ -18,6 +18,7 @@ ResultDumpCommand::ResultDumpCommand(void)
 
 void ResultDumpCommand::RegisterCLIOptions(CLI::App * cmd)
 {
+    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RegisterCLIOptions() called.");
     cmd->add_option("-p,--printer", m_options.printer_choice,
         "Printer choice")->required();
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
@@ -29,7 +30,7 @@ void ResultDumpCommand::RegisterCLIOptions(CLI::App * cmd)
 
 bool ResultDumpCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Info, "ResultDumpCommand::Execute() called.");
+    Logger::Log(LogLevel::Debug, "ResultDumpCommand::Execute() called.");
     Logger::Log(LogLevel::Info, "Total number of model object sets to be print: "
                 + std::to_string(m_options.model_key_tag_list.size()));
 

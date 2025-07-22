@@ -52,9 +52,9 @@ void PotentialDisplayVisitor::VisitMapObject(MapObject * data_object)
     if (data_object == nullptr) return;
 }
 
-void PotentialDisplayVisitor::Analysis(DataObjectManager * data_manager)
+void PotentialDisplayVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
 {
-    Logger::Log(LogLevel::Info, "- PotentialDisplayVisitor::Analysis");
+    Logger::Log(LogLevel::Debug, "PotentialDisplayVisitor::VisitDataObjectManager() called");
     if (data_manager == nullptr) return;
 
     std::unique_ptr<PainterBase> painter{ nullptr };

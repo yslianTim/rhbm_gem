@@ -38,7 +38,7 @@ void ResultDumpVisitor::VisitMapObject(MapObject * data_object)
     if (data_object == nullptr) return;
 }
 
-void ResultDumpVisitor::Analysis(DataObjectManager * data_manager)
+void ResultDumpVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
 {
     if (data_manager == nullptr)
     {

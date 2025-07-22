@@ -47,7 +47,7 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
     }
 }
 
-void MapInterpolationVisitor::Analysis(DataObjectManager * data_manager)
+void MapInterpolationVisitor::VisitDataObjectManager(DataObjectManager * data_manager)
 {
     if (data_manager == nullptr) return;
 }
