@@ -53,16 +53,17 @@ bool ResultDumpCommand::Execute(void)
     }
 
     auto result_dump{ std::make_unique<ResultDumpVisitor>(m_options) };
-    data_manager->Accept(result_dump.get());
+    std::vector<std::string> key_list{ m_options.model_key_tag_list };
+    if (m_options.map_file_path != "")
+    {
+        key_list.emplace_back("map");
+    }
+    data_manager->Accept(result_dump.get(), key_list);
     result_dump->Finalize();
     return true;
 }
 
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
-    m_options.model_key_tag_list.clear();
-    for (const auto & token : StringHelper::SplitStringLineFromDelimiter(value, ','))
-    {
-        m_options.model_key_tag_list.emplace_back(token);
-    }
+    m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
 }

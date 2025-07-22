@@ -133,11 +133,30 @@ void DataObjectManager::SaveDataObject(
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
 {
     ScopeTimer timer("DataObjectManager::Accept");
-    for (auto & [key, object] : m_data_object_map)
+    for (auto & [key, data_object] : m_data_object_map)
     {
-        if (object)
+        if (data_object)
         {
-            object->Accept(visitor);
+            data_object->Accept(visitor);
+        }
+    }
+}
+
+void DataObjectManager::Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_list)
+{
+    ScopeTimer timer("DataObjectManager::Accept");
+    for (const auto & key : key_list)
+    {
+        auto iter{ m_data_object_map.find(key) };
+        if (iter == m_data_object_map.end())
+        {
+            Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
+            continue;
+        }
+        auto & data_object{ iter->second };
+        if (data_object)
+        {
+            data_object->Accept(visitor);
         }
     }
 }

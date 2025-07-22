@@ -74,7 +74,7 @@ bool PotentialAnalysisCommand::Execute(void)
     }
 
     auto analyzer{ std::make_unique<PotentialAnalysisVisitor>(m_sphere_sampler.get(), m_options) };
-    data_manager->Accept(analyzer.get());
+    data_manager->Accept(analyzer.get(), {"model", "map"});
     analyzer->Finalize();
     data_manager->SaveDataObject("model", m_options.saved_key_tag);
     return true;

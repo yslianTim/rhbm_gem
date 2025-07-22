@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <unordered_map>
 #include <stdexcept>
+#include <vector>
 
 class DatabaseManager;
 class FileProcessFactoryBase;
@@ -26,6 +27,7 @@ public:
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(DataObjectVisitorBase * visitor);
+    void Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_list);
     void PrintDataObjectInfo(const std::string & key_tag) const;
     DataObjectBase * GetDataObjectPtr(const std::string & key_tag);
     template <typename TypedDataObject>

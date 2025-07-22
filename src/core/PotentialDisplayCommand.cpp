@@ -68,7 +68,12 @@ bool PotentialDisplayCommand::Execute(void)
 
         auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get(), m_options) };
         model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
-        data_manager->Accept(model_displayer.get());
+        std::vector<std::string> key_list{ m_options.model_key_tag_list };
+        for (auto & [map_key, tag_list] : m_ref_model_key_tag_list_map)
+        {
+            key_list.insert(key_list.end(), tag_list.begin(), tag_list.end());
+        }
+        data_manager->Accept(model_displayer.get(), key_list);
         model_displayer->Finalize();
     }
     catch(const std::exception & e)
@@ -81,11 +86,7 @@ bool PotentialDisplayCommand::Execute(void)
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
-    m_options.model_key_tag_list.clear();
-    for (const auto & token : StringHelper::SplitStringLineFromDelimiter(value, ','))
-    {
-        m_options.model_key_tag_list.emplace_back(token);
-    }
+    m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
 }
 
 void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value)

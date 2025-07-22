@@ -48,7 +48,7 @@ bool MapSimulationCommand::Execute(void)
         data_manager->ProcessFile(m_options.model_file_path, "model");
 
         auto analyzer{ std::make_unique<MapSimulationVisitor>(m_options) };
-        data_manager->Accept(analyzer.get());
+        data_manager->Accept(analyzer.get(), {"model"});
     }
     catch(const std::exception & e)
     {
@@ -60,9 +60,5 @@ bool MapSimulationCommand::Execute(void)
 
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
-    m_options.blurring_width_list.clear();
-    for (const auto & token : StringHelper::SplitStringLineFromDelimiter(value, ','))
-    {
-        m_options.blurring_width_list.emplace_back(std::stod(token));
-    }
+    m_options.blurring_width_list = StringHelper::ParseListOption<double>(value, ',');
 }

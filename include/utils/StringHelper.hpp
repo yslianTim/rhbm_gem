@@ -5,6 +5,7 @@
 #include <vector>
 #include <sstream>
 #include <cctype>
+#include <type_traits>
 
 class StringHelper
 {
@@ -55,6 +56,24 @@ public:
             }
         }
         return token_list;
+    }
+
+    template <typename Type>
+    static std::vector<Type> ParseListOption(const std::string & text, char delimiter=',')
+    {
+        std::vector<Type> values;
+        for (const auto & token : SplitStringLineFromDelimiter(text, delimiter))
+        {
+            if constexpr (std::is_same_v<Type, double>)
+            {
+                values.emplace_back(std::stod(token));
+            }
+            else
+            {
+                values.emplace_back(token);
+            }
+        }
+        return values;
     }
 
     static std::vector<std::string> SplitStringLineAsTokens(
