@@ -25,7 +25,7 @@ public:
     void VisitDataObjectManager(DataObjectManager * data_manager) override;
 
     void SetMapObjectKeyTag(const std::string & value) { m_map_key_tag = value; }
-    void SetModelObjectKeyTagList(const std::vector<std::string> & value) { m_model_key_tag_list = std::move(value); }
+    void SetModelObjectKeyTagList(const std::vector<std::string> & value) { m_model_key_tag_list = value; }
     void SetFolderPath(const std::string & value);
     void SetPrinterChoice(int value) { m_printer_choice = value; }
 
