@@ -42,6 +42,7 @@ public:
     bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
+    CommandOptions & GetOptions(void) override { return m_options; }
 
     void SetAsymmetryFlag(bool value) { m_options.is_asymmetry = value; }
     void SetSimulationFlag(bool value) { m_options.is_simulation = value; }

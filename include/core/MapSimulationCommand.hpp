@@ -43,6 +43,7 @@ public:
     bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
+    CommandOptions & GetOptions(void) override { return m_options; }
 
     void SetThreadSize(int value) { m_options.thread_size = value; }
     void SetPotentialModelChoice(PotentialModel value) { m_options.potential_model_choice = value; }

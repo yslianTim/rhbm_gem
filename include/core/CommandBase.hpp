@@ -16,10 +16,7 @@ public:
     void RegisterCLIOptions(CLI::App * command);
     virtual void RegisterCLIOptionsExtend(CLI::App * command) = 0;
     virtual const CommandOptions & GetOptions(void) const = 0;
-    virtual CommandOptions & GetOptions(void)
-    {
-        return const_cast<CommandOptions &>(static_cast<const CommandBase &>(*this).GetOptions());
-    }
+    virtual CommandOptions & GetOptions(void) = 0;
 
 protected:
     void RegisterCLIOptionsBasic(CLI::App * command);

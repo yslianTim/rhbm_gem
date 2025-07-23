@@ -1,10 +1,10 @@
 #include "DataObjectManager.hpp"
 #include "FileProcessFactoryBase.hpp"
+#include "FileProcessFactoryRegistry.hpp"
 #include "FilePathHelper.hpp"
 #include "DataObjectBase.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "DatabaseManager.hpp"
-#include "ModelObject.hpp"
 #include "ScopeTimer.hpp"
 #include "Logger.hpp"
 
@@ -29,31 +29,13 @@ DataObjectManager::~DataObjectManager()
     Logger::Log(LogLevel::Debug, "DataObjectManager::~DataObjectManager() called");
 }
 
-std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFactory(
-    const std::string & file_extension)
-{
-    Logger::Log(LogLevel::Debug, "DataObjectManager::CreateFactory() called");
-    if (file_extension == ".pdb" || file_extension == ".cif")
-    {
-        return std::make_unique<ModelObjectFactory>();
-    }
-    else if (file_extension == ".mrc" || file_extension == ".map")
-    {
-        return std::make_unique<MapObjectFactory>();
-    }
-    else
-    {
-        throw std::runtime_error("Unsupported file format");
-    }
-}
-
 void DataObjectManager::ProcessFile(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::ProcessFile() called");
     ScopeTimer timer("DataObjectManager::ProcessFile");
     auto file_extension{ FilePathHelper::GetExtension(filename.string()) };
-    auto factory{ CreateFactory(file_extension) };
+    auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(file_extension) };
     auto data_object{ factory->CreateDataObject(filename) };
     if (data_object == nullptr)
     {
@@ -79,7 +61,7 @@ void DataObjectManager::ProduceFile(
     }
     auto data_object{ m_data_object_map.at(key_tag).get() };
     auto file_extension{ FilePathHelper::GetExtension(filename.string()) };
-    auto factory{ CreateFactory(file_extension) };
+    auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(file_extension) };
     factory->OutputDataObject(filename, data_object);
 };
 
@@ -87,6 +69,11 @@ void DataObjectManager::AddDataObject(
     const std::string & key_tag, std::unique_ptr<DataObjectBase> data_object)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::AddDataObject() called");
+    if (!data_object)
+    {
+        Logger::Log(LogLevel::Error, "AddDataObject(): nullptr provided for key tag: " + key_tag);
+        return;
+    }
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
         Logger::Log(LogLevel::Warning,
@@ -189,7 +176,7 @@ void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
     }
 }
 
-DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag)
+DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag) const
 {
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
     {

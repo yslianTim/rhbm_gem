@@ -38,6 +38,7 @@ public:
     bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
+    CommandOptions & GetOptions(void) override { return m_options; }
 
     void SetPrinterChoice(PrinterType value) { m_options.printer_choice = value; }
     void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }

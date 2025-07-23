@@ -29,7 +29,7 @@ public:
     void Accept(DataObjectVisitorBase * visitor);
     void Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_list);
     void PrintDataObjectInfo(const std::string & key_tag) const;
-    DataObjectBase * GetDataObjectPtr(const std::string & key_tag);
+    DataObjectBase * GetDataObjectPtr(const std::string & key_tag) const;
     template <typename TypedDataObject>
     TypedDataObject * GetTypedDataObjectPtr(const std::string & key_tag)
     {
@@ -38,8 +38,6 @@ public:
         if (!typed_object) throw std::runtime_error("Invalid data type for " + key_tag);
         return typed_object;
     }
-    const std::unordered_map<std::string, std::unique_ptr<DataObjectBase>> & GetDataObjectMap(void) { return m_data_object_map; }
+    const std::unordered_map<std::string, std::unique_ptr<DataObjectBase>> & GetDataObjectMap(void) const { return m_data_object_map; }
 
-private:
-    std::unique_ptr<FileProcessFactoryBase> CreateFactory(const std::string & file_extension);
 };
