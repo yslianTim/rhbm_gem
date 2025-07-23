@@ -159,7 +159,7 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
         auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_position_list_"+ model_object->GetPdbID() +".csv" };
         std::string output_path{
-            FilePathHelper::EnsureTrailingSlash(m_options.folder_path.string()) + file_name
+            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
         };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
@@ -219,7 +219,7 @@ void ResultDumpCommand::RunMapValueDumping(void)
             "map_value_list_"+ model_object->GetEmdID() +"_"+ model_object->GetPdbID() +".csv"
         };
         std::string output_path{
-            FilePathHelper::EnsureTrailingSlash(m_options.folder_path.string()) + file_name
+            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
         };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())

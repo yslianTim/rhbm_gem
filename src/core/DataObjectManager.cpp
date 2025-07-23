@@ -34,7 +34,7 @@ void DataObjectManager::ProcessFile(
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::ProcessFile() called");
     ScopeTimer timer("DataObjectManager::ProcessFile");
-    auto file_extension{ FilePathHelper::GetExtension(filename.string()) };
+    auto file_extension{ FilePathHelper::GetExtension(filename) };
     auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(file_extension) };
     auto data_object{ factory->CreateDataObject(filename) };
     if (data_object == nullptr)
@@ -60,7 +60,7 @@ void DataObjectManager::ProduceFile(
         return;
     }
     auto data_object{ m_data_object_map.at(key_tag).get() };
-    auto file_extension{ FilePathHelper::GetExtension(filename.string()) };
+    auto file_extension{ FilePathHelper::GetExtension(filename) };
     auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(file_extension) };
     factory->OutputDataObject(filename, data_object);
 };

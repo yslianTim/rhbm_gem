@@ -2,17 +2,14 @@
 #include "Logger.hpp"
 
 #include <algorithm>
-#include <filesystem>
 
-std::string FilePathHelper::GetExtension(std::string_view file_path)
+std::string FilePathHelper::GetExtension(const std::filesystem::path & path)
 {
-    const std::filesystem::path path{ file_path };
     return (path.has_extension()) ? path.extension().string() : std::string("");
 }
 
-std::string FilePathHelper::GetDirectory(std::string_view file_path)
+std::string FilePathHelper::GetDirectory(const std::filesystem::path & path)
 {
-    const std::filesystem::path path{ file_path };
     auto parent{ path.parent_path() };
     if (parent.empty()) return {};
     
@@ -24,14 +21,14 @@ std::string FilePathHelper::GetDirectory(std::string_view file_path)
     return dir;
 }
 
-std::string FilePathHelper::GetFileName(std::string_view file_path)
+std::string FilePathHelper::GetFileName(const std::filesystem::path & path)
 {
-    return std::filesystem::path(file_path).filename().string();
+    return path.filename().string();
 }
 
-std::string FilePathHelper::EnsureTrailingSlash(std::string_view path)
+std::string FilePathHelper::EnsureTrailingSlash(const std::filesystem::path & path)
 {
-    std::string result(path);
+    std::string result(path.string());
     if (!result.empty() && IsEndedWithSeparator(result) == false)
     {
         result.push_back(std::filesystem::path::preferred_separator);
