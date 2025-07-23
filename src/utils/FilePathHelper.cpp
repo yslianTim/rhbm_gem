@@ -1,4 +1,5 @@
 #include "FilePathHelper.hpp"
+#include "Logger.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -36,6 +37,17 @@ std::string FilePathHelper::EnsureTrailingSlash(std::string_view path)
         result.push_back(std::filesystem::path::preferred_separator);
     }
     return result;
+}
+
+bool FilePathHelper::EnsureFileExists(const std::filesystem::path & path,
+                                      const std::string & log_prefix)
+{
+    if (std::filesystem::exists(path))
+    {
+        return true;
+    }
+    Logger::Log(LogLevel::Error, log_prefix + " does not exist: " + path.string());
+    return false;
 }
 
 constexpr bool FilePathHelper::IsEndedWithSeparator(std::string_view file_path)

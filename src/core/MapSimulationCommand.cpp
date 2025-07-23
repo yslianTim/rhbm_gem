@@ -93,10 +93,8 @@ bool MapSimulationCommand::Execute(void)
 bool MapSimulationCommand::ValidateOptions(void) const
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::ValidateOptions() called");
-    if (!std::filesystem::exists(m_options.model_file_path))
+    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
     {
-        Logger::Log(LogLevel::Error,
-                    "Model file does not exist: " + m_options.model_file_path.string());
         return false;
     }
     if (m_options.cutoff_distance <= 0.0)

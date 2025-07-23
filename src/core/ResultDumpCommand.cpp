@@ -118,10 +118,9 @@ bool ResultDumpCommand::ValidateOptions(void) const
         Logger::Log(LogLevel::Error, "Model key list cannot be empty");
         return false;
     }
-    if (!m_options.map_file_path.empty() && !std::filesystem::exists(m_options.map_file_path))
+    if (!m_options.map_file_path.empty() &&
+        !FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
     {
-        Logger::Log(LogLevel::Error,
-                    "Map file does not exist: " + m_options.map_file_path.string());
         return false;
     }
     return true;

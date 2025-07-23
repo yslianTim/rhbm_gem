@@ -6,6 +6,7 @@
 #include "MapInterpolationVisitor.hpp"
 #include "HRLModelHelper.hpp"
 #include "ScopeTimer.hpp"
+#include "FilePathHelper.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "AtomicInfoHelper.hpp"
@@ -116,16 +117,12 @@ bool PotentialAnalysisCommand::Execute(void)
 bool PotentialAnalysisCommand::ValidateOptions(void) const
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::ValidateOptions() called");
-    if (!std::filesystem::exists(m_options.model_file_path))
+    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
     {
-        Logger::Log(LogLevel::Error,
-                    "Model file does not exist: " + m_options.model_file_path.string());
         return false;
     }
-    if (!std::filesystem::exists(m_options.map_file_path))
+    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
     {
-        Logger::Log(LogLevel::Error,
-                    "Map file does not exist: " + m_options.map_file_path.string());
         return false;
     }
     if (m_options.sampling_size <= 0)
