@@ -30,16 +30,15 @@ ResultDumpCommand::ResultDumpCommand(void) :
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::ResultDumpCommand() called");
 }
 
-void ResultDumpCommand::RegisterCLIOptions(CLI::App * cmd)
+void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RegisterCLIOptions() called");
+    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RegisterCLIOptionsExtend() called");
     cmd->add_option("-p,--printer", m_options.printer_choice,
         "Printer choice")->required();
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
         "List of model key tag to be display")->required()->delimiter(',');
     cmd->add_option("-m,--map", m_options.map_file_path,
         "Map file path")->default_val(m_options.map_file_path.string());
-    RegisterCommandOptions(cmd);
 }
 
 bool ResultDumpCommand::Execute(void)

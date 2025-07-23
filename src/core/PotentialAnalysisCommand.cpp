@@ -39,9 +39,9 @@ PotentialAnalysisCommand::~PotentialAnalysisCommand()
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::~PotentialAnalysisCommand() called.");
 }
 
-void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd)
+void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RegisterCLIOptions() called.");
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RegisterCLIOptionsExtend() called.");
     cmd->add_option("-a,--model", m_options.model_file_path,
         "Model file path")->required();
     cmd->add_option("-m,--map", m_options.map_file_path,
@@ -68,7 +68,6 @@ void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd)
         "Alpha value for R")->default_val(m_options.alpha_r);
     cmd->add_option("--alpha-g", m_options.alpha_g,
         "Alpha value for G")->default_val(m_options.alpha_g);
-    RegisterCommandOptions(cmd);
 }
 
 bool PotentialAnalysisCommand::Execute(void)

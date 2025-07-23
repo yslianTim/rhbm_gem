@@ -39,7 +39,7 @@ public:
     MapSimulationCommand(void);
     ~MapSimulationCommand();
     bool Execute(void) override;
-    void RegisterCLIOptions(CLI::App * cmd) override;
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
 
     void SetThreadSize(int value) { m_options.thread_size = value; }

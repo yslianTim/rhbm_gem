@@ -39,7 +39,7 @@ public:
     PotentialAnalysisCommand(void);
     ~PotentialAnalysisCommand();
     bool Execute(void) override;
-    void RegisterCLIOptions(CLI::App * cmd) override;
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
 
     void SetAsymmetryFlag(bool value) { m_options.is_asymmetry = value; }

@@ -44,7 +44,7 @@ public:
     PotentialDisplayCommand(void);
     ~PotentialDisplayCommand();
     bool Execute(void) override;
-    void RegisterCLIOptions(CLI::App * cmd) override;
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
 
     void SetPainterChoice(int value) { m_options.painter_choice = value; }

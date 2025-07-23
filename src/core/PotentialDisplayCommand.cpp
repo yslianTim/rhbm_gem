@@ -30,9 +30,9 @@ PotentialDisplayCommand::~PotentialDisplayCommand()
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::~PotentialDisplayCommand() called");
 }
 
-void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
+void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RegisterCLIOptions() called");
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RegisterCLIOptionsExtend() called");
     cmd->add_option("-p,--painter", m_options.painter_choice,
         "Painter choice")->required();
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
@@ -55,7 +55,6 @@ void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
         "Veto element type")->default_val(m_options.veto_element);
     cmd->add_option("--veto-remoteness", m_options.veto_remoteness,
         "Veto remoteness type")->default_val(m_options.veto_remoteness);
-    RegisterCommandOptions(cmd);
 }
 
 bool PotentialDisplayCommand::Execute(void)

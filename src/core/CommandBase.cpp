@@ -2,7 +2,7 @@
 
 #include <CLI/CLI.hpp>
 
-void CommandBase::RegisterCommandOptions(CLI::App * command)
+void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
 {
     auto & options{ GetOptions() };
     command->add_option("-d,--database", options.database_path,
@@ -13,4 +13,10 @@ void CommandBase::RegisterCommandOptions(CLI::App * command)
         "Number of threads")->default_val(options.thread_size);
     command->add_option("-v,--verbose", options.verbose_level,
         "Verbose level")->default_val(options.verbose_level);
+}
+
+void CommandBase::RegisterCLIOptions(CLI::App * command)
+{
+    RegisterCLIOptionsExtend(command);
+    RegisterCLIOptionsBasic(command);
 }

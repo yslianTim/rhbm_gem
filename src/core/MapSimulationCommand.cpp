@@ -33,9 +33,9 @@ MapSimulationCommand::~MapSimulationCommand()
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::~MapSimulationCommand() called");
 }
 
-void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)
+void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RegisterCLIOptions() called");
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RegisterCLIOptionsExtend() called");
     cmd->add_option("-a,--model", m_options.model_file_path,
         "Model file path")->required();
     cmd->add_option("-n,--name", m_options.map_file_name,
@@ -50,7 +50,6 @@ void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)
         "Grid spacing")->default_val(m_options.grid_spacing);
     cmd->add_option("--blurring-width", m_options.blurring_width_list,
         "Blurring width (list) setting")->default_val(m_options.blurring_width_list)->delimiter(',');
-    RegisterCommandOptions(cmd);
 }
 
 bool MapSimulationCommand::Execute(void)
