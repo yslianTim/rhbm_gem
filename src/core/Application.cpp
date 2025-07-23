@@ -9,6 +9,7 @@
 Application::Application(CLI::App & app) :
     m_cli_app{ app }
 {
+    Logger::Log(LogLevel::Debug, "Application::Application() called");
     m_cli_app.require_subcommand(1);
     RegisterAllCommands();
 }

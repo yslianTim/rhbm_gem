@@ -3,9 +3,16 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <array>
+#include <unordered_map>
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
+
+class ModelObject;
+class MapObject;
+class AtomObject;
+template <typename T> class KDNode;
 
 class MapSimulationCommand : public CommandBase
 {
@@ -23,10 +30,13 @@ public:
 
 private:
     Options m_options{};
+    std::vector<AtomObject *> m_selected_atom_list;
+    std::unordered_map<int, double> m_atom_charge_map;
+    std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
 
 public:
     MapSimulationCommand(void);
-    ~MapSimulationCommand() = default;
+    ~MapSimulationCommand();
     bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
     CommandOptions & GetOptions(void) override { return m_options; }
@@ -40,5 +50,11 @@ public:
     void SetMapFileName(const std::string & value) { m_options.map_file_name = value; }
     void SetGridSpacing(double value) { m_options.grid_spacing = value; }
     void SetBlurringWidthList(const std::string & value);
+
+private:
+    void RunMapSimulation(ModelObject * model_object);
+    std::unique_ptr<MapObject> CreateSimulatedMapObject(double blurring_width);
+    std::array<int, 3> CalculateGridSize(
+        const std::array<float, 3> & grid_spacing, const std::array<float, 3> & origin);
 
 };

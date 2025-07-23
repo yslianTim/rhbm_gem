@@ -7,9 +7,10 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
-#include "AtomSelector.hpp"
 
 class DataObjectManager;
+class ModelObject;
+class AtomSelector;
 
 class PotentialDisplayCommand : public CommandBase
 {
@@ -33,10 +34,14 @@ private:
     Options m_options{};
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     std::unique_ptr<AtomSelector> m_atom_selector;
+    std::vector<ModelObject *> m_model_object_list;
+    std::vector<ModelObject *> m_ordered_model_object_list;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
+    std::unordered_map<std::string, std::vector<ModelObject *>> m_ordered_ref_model_object_list_map;
 
 public:
     PotentialDisplayCommand(void);
-    ~PotentialDisplayCommand() = default;
+    ~PotentialDisplayCommand();
     bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
     CommandOptions & GetOptions(void) override { return m_options; }
@@ -58,5 +63,8 @@ public:
 private:
     void LoadModelObjects(DataObjectManager * data_manager);
     void LoadRefModelObjects(DataObjectManager * data_manager);
+    void BuildOrderedModelObjectList(void);
+    void BuildOrderedRefModelObjectListMap(void);
+    void RunDisplay(void);
 
 };

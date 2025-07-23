@@ -1,7 +1,15 @@
 #include "PotentialDisplayCommand.hpp"
 #include "DataObjectManager.hpp"
-#include "PotentialDisplayVisitor.hpp"
+#include "AtomObject.hpp"
+#include "ModelObject.hpp"
+#include "MapObject.hpp"
+#include "PainterBase.hpp"
+#include "AtomPainter.hpp"
+#include "ModelPainter.hpp"
+#include "ComparisonPainter.hpp"
+#include "DemoPainter.hpp"
 #include "StringHelper.hpp"
+#include "AtomSelector.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
@@ -14,12 +22,18 @@ CommandRegistrar<PotentialDisplayCommand> registrar_potential_display{
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::PotentialDisplayCommand() called");
+}
 
+PotentialDisplayCommand::~PotentialDisplayCommand()
+{
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::~PotentialDisplayCommand() called");
+    m_atom_selector.reset();
 }
 
 void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RegisterCLIOptions() called.");
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RegisterCLIOptions() called");
     cmd->add_option("-p,--painter", m_options.painter_choice,
         "Painter choice")->required();
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
@@ -47,7 +61,7 @@ void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)
 
 bool PotentialDisplayCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::Execute() called.");
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::Execute() called");
     try
     {
         SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
@@ -66,15 +80,38 @@ bool PotentialDisplayCommand::Execute(void)
         LoadModelObjects(data_manager.get());
         LoadRefModelObjects(data_manager.get());
 
-        auto model_displayer{ std::make_unique<PotentialDisplayVisitor>(m_atom_selector.get(), m_options) };
-        model_displayer->SetRefModelObjectKeyTagListMap(m_ref_model_key_tag_list_map);
-        std::vector<std::string> key_list{ m_options.model_key_tag_list };
-        for (auto & [map_key, tag_list] : m_ref_model_key_tag_list_map)
+        for (auto & key : m_options.model_key_tag_list)
         {
-            key_list.insert(key_list.end(), tag_list.begin(), tag_list.end());
+            auto object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key) };
+            m_model_object_list.emplace_back(object);
         }
-        data_manager->Accept(model_displayer.get(), key_list);
-        model_displayer->Finalize();
+
+        for (auto & [class_key, tag_list] : m_ref_model_key_tag_list_map)
+        {
+            for (auto & tag : tag_list)
+            {
+                auto object{ data_manager->GetTypedDataObjectPtr<ModelObject>(tag) };
+                m_ref_model_object_list_map[class_key].emplace_back(object);
+            }
+        }
+
+        for (auto * model_object : m_model_object_list)
+        {
+            for (auto & atom : model_object->GetComponentsList())
+            {
+                bool selected_flag{
+                    m_atom_selector->GetSelectionFlag(
+                        atom->GetChainID(),
+                        atom->GetResidue(),
+                        atom->GetElement(),
+                        atom->GetRemoteness())
+                };
+                atom->SetSelectedFlag(selected_flag);
+            }
+        }
+        BuildOrderedModelObjectList();
+        BuildOrderedRefModelObjectListMap();
+        RunDisplay();
     }
     catch(const std::exception & e)
     {
@@ -142,7 +179,7 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
 
 void PotentialDisplayCommand::LoadModelObjects(DataObjectManager * data_manager)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::LoadModelObjects() called.");
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::LoadModelObjects() called");
     for (auto & key : m_options.model_key_tag_list)
     {
         data_manager->LoadDataObject(key);
@@ -151,7 +188,7 @@ void PotentialDisplayCommand::LoadModelObjects(DataObjectManager * data_manager)
 
 void PotentialDisplayCommand::LoadRefModelObjects(DataObjectManager * data_manager)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::LoadRefModelObjects() called.");
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::LoadRefModelObjects() called");
     for (auto & [map_key, key_tag_list] : m_ref_model_key_tag_list_map)
     {
         for (auto & key_tag : key_tag_list)
@@ -199,4 +236,126 @@ void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
 void PotentialDisplayCommand::SetVetoRemotenessType(const std::string & value)
 {
     m_atom_selector->VetoRemotenessType(value);
+}
+
+void PotentialDisplayCommand::BuildOrderedModelObjectList(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::BuildOrderedModelObjectList() called");
+    m_ordered_model_object_list.clear();
+    for (const auto & key : m_options.model_key_tag_list)
+    {
+        for (auto * model_object : m_model_object_list)
+        {
+            if (model_object->GetKeyTag() == key)
+            {
+                m_ordered_model_object_list.emplace_back(model_object);
+                break;
+            }
+        }
+    }
+}
+
+void PotentialDisplayCommand::BuildOrderedRefModelObjectListMap(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::BuildOrderedRefModelObjectListMap() called");
+    m_ordered_ref_model_object_list_map.clear();
+    for (auto & [class_key, ordered_key_list] : m_ref_model_key_tag_list_map)
+    {
+        auto it{ m_ref_model_object_list_map.find(class_key) };
+        if (it == m_ref_model_object_list_map.end()) continue;
+        auto & model_object_list{ it->second };
+        std::vector<ModelObject *> ordered_model_object_list;
+        for (const auto & key : ordered_key_list)
+        {
+            for (auto * model_object : model_object_list)
+            {
+                if (model_object->GetKeyTag() == key)
+                {
+                    ordered_model_object_list.emplace_back(model_object);
+                    break;
+                }
+            }
+        }
+
+        m_ordered_ref_model_object_list_map[class_key] = std::move(ordered_model_object_list);
+    }
+}
+
+void PotentialDisplayCommand::RunDisplay(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RunDisplay() called");
+    std::unique_ptr<PainterBase> painter{ nullptr };
+    switch (m_options.painter_choice)
+    {
+        case 0:
+            painter = std::make_unique<AtomPainter>();
+            for (auto * model_object : m_ordered_model_object_list)
+            {
+                for (auto & atom : model_object->GetComponentsList())
+                {
+                    if (atom->GetSelectedFlag() == false) continue;
+                    painter->AddDataObject(atom.get());
+                }
+            }
+            m_atom_selector->Print();
+            break;
+        case 1:
+            painter = std::make_unique<ModelPainter>();
+            for (auto * model_object : m_ordered_model_object_list)
+            {
+                painter->AddDataObject(model_object);
+            }
+            for (auto & [class_key, obj_list] : m_ordered_ref_model_object_list_map)
+            {
+                for (auto * obj : obj_list)
+                {
+                    painter->AddReferenceDataObject(obj, class_key);
+                }
+            }
+            break;
+        case 2:
+            painter = std::make_unique<ComparisonPainter>();
+            for (auto * model_object : m_ordered_model_object_list)
+            {
+                painter->AddDataObject(model_object);
+            }
+            for (auto & [class_key, obj_list] : m_ordered_ref_model_object_list_map)
+            {
+                for (auto * obj : obj_list)
+                {
+                    painter->AddReferenceDataObject(obj, class_key);
+                }
+            }
+            break;
+        case 3:
+            painter = std::make_unique<DemoPainter>();
+            for (auto * model_object : m_ordered_model_object_list)
+            {
+                painter->AddDataObject(model_object);
+            }
+            for (auto & [class_key, obj_list] : m_ordered_ref_model_object_list_map)
+            {
+                for (auto * obj : obj_list)
+                {
+                    painter->AddReferenceDataObject(obj, class_key);
+                }
+            }
+            break;
+        default:
+            Logger::Log(LogLevel::Warning,
+                        "Invalid painter choice input: ["
+                        + std::to_string(m_options.painter_choice) + "]");
+            Logger::Log(LogLevel::Warning,
+                        "Available Painter Choices:\n"
+                        "  [0] AtomPainter\n"
+                        "  [1] ModelPainter\n"
+                        "  [2] ComparisonPainter\n"
+                        "  [3] DemoPainter");
+            break;
+    }
+    if (painter)
+    {
+        painter->SetFolder(m_options.folder_path);
+        painter->Painting();
+    }
 }

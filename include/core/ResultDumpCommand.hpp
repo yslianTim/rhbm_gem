@@ -3,9 +3,14 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
+
+class AtomObject;
+class ModelObject;
+class MapObject;
 
 class ResultDumpCommand : public CommandBase
 {
@@ -19,6 +24,10 @@ public:
 
 private:
     Options m_options{};
+    std::string m_map_key_tag;
+    std::unordered_map<std::string, std::vector<AtomObject *>> m_selected_atom_list_map;
+    std::vector<ModelObject *> m_model_object_list;
+    MapObject * m_map_object;
 
 public:
     ResultDumpCommand(void);
@@ -32,5 +41,12 @@ public:
     void SetFolderPath(const std::string & path) { m_options.folder_path = path; }
     void SetMapFilePath(const std::string & path) { m_options.map_file_path = path; }
     void SetModelKeyTagList(const std::string & value);
+
+private:
+    void BuildSelectedAtomList(void);
+    void RunAtomPositionDumping(void);
+    void RunMapValueDumping(void);
+    void RunGausEstimatesDumping(void);
+    void RunGroupGausEstimatesDumping(void);
 
 };

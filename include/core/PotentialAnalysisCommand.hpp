@@ -5,9 +5,11 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
-#include "SphereSampler.hpp"
 
 class ModelObject;
+class MapObject;
+class SphereSampler;
+
 class PotentialAnalysisCommand : public CommandBase
 {
 public:
@@ -34,7 +36,7 @@ private:
 
 public:
     PotentialAnalysisCommand(void);
-    ~PotentialAnalysisCommand() = default;
+    ~PotentialAnalysisCommand();
     bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
     CommandOptions & GetOptions(void) override { return m_options; }
@@ -57,5 +59,7 @@ public:
 
 private:
     void UpdateModelObjectForSimulation(ModelObject * model_object);
+    void RunMapValueSampling(ModelObject * model_object, MapObject * map_object);
+    void RunPotentialFitting(ModelObject * model_object);
 
 };
