@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <filesystem>
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
@@ -25,8 +26,8 @@ public:
         double alpha_r{ 0.1 };
         double alpha_g{ 0.2 };
         double resolution_simulation{ 0.0 };
-        std::string model_file_path;
-        std::string map_file_path;
+        std::filesystem::path model_file_path;
+        std::filesystem::path map_file_path;
         std::string saved_key_tag{"model"};
     };
 
@@ -48,9 +49,9 @@ public:
     void SetFitRangeMaximum(double value) { m_options.fit_range_max = value; }
     void SetAlphaR(double value) { m_options.alpha_r = value; }
     void SetAlphaG(double value) { m_options.alpha_g = value; }
-    void SetDatabasePath(const std::string & path) { m_options.database_path = path; }
-    void SetModelFilePath(const std::string & path) { m_options.model_file_path = path; }
-    void SetMapFilePath(const std::string & path) { m_options.map_file_path = path; }
+    void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }
+    void SetModelFilePath(const std::filesystem::path & path) { m_options.model_file_path = path; }
+    void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
     void SetSavedKeyTag(const std::string & tag) { m_options.saved_key_tag = tag; }
     void SetThreadSize(int value);
     void SetSamplingSize(int value);

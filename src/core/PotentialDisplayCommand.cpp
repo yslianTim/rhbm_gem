@@ -354,7 +354,7 @@ void PotentialDisplayCommand::RunDisplay(void)
     }
     if (painter)
     {
-        painter->SetFolder(m_options.folder_path);
+        painter->SetFolder(m_options.folder_path.string());
         painter->Painting();
     }
 }

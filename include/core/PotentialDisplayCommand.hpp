@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <filesystem>
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
@@ -47,8 +48,8 @@ public:
     const CommandOptions & GetOptions(void) const override { return m_options; }
 
     void SetPainterChoice(int value) { m_options.painter_choice = value; }
-    void SetDatabasePath(const std::string & path) { m_options.database_path = path; }
-    void SetFolderPath(const std::string & path) { m_options.folder_path = path; }
+    void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }
+    void SetFolderPath(const std::filesystem::path & path) { m_options.folder_path = path; }
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
     void SetPickChainID(const std::string & value);

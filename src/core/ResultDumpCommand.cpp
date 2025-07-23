@@ -38,7 +38,7 @@ void ResultDumpCommand::RegisterCLIOptions(CLI::App * cmd)
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
         "List of model key tag to be display")->required()->delimiter(',');
     cmd->add_option("-m,--map", m_options.map_file_path,
-        "Map file path")->default_val(m_options.map_file_path);
+        "Map file path")->default_val(m_options.map_file_path.string());
     RegisterCommandOptions(cmd);
 }
 
@@ -51,7 +51,7 @@ bool ResultDumpCommand::Execute(void)
     auto data_manager{ std::make_unique<DataObjectManager>(m_options.database_path) };
     try
     {
-        if (m_options.map_file_path != "")
+        if (!m_options.map_file_path.empty())
         {
             data_manager->ProcessFile(m_options.map_file_path, "map");
         }
@@ -71,7 +71,7 @@ bool ResultDumpCommand::Execute(void)
         auto object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key) };
         m_model_object_list.emplace_back(object);
     }
-    if (m_options.map_file_path != "")
+    if (!m_options.map_file_path.empty())
     {
         m_map_object = data_manager->GetTypedDataObjectPtr<MapObject>("map");
     }
@@ -135,7 +135,9 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_position_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{ FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name };
+        std::string output_path{
+            FilePathHelper::EnsureTrailingSlash(m_options.folder_path.string()) + file_name
+        };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -190,8 +192,12 @@ void ResultDumpCommand::RunMapValueDumping(void)
         atom_range_max.at(1) = ArrayStats<float>::ComputeMax(y_list.data(), atom_size) + margin;
         atom_range_max.at(2) = ArrayStats<float>::ComputeMax(z_list.data(), atom_size) + margin;
 
-        std::string file_name{ "map_value_list_"+ model_object->GetEmdID() +"_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{ FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name };
+        std::string file_name{
+            "map_value_list_"+ model_object->GetEmdID() +"_"+ model_object->GetPdbID() +".csv"
+        };
+        std::string output_path{
+            FilePathHelper::EnsureTrailingSlash(m_options.folder_path.string()) + file_name
+        };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -232,7 +238,7 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{ m_options.folder_path + file_name };
+        std::string output_path{ m_options.folder_path.string() + file_name };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -266,7 +272,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
         std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{ m_options.folder_path + file_name };
+        std::string output_path{ m_options.folder_path.string() + file_name };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -287,7 +293,9 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
                     for (auto & branch : AtomicInfoHelper::GetStandardBranchList())
                     {
                         auto branch_name{ AtomicInfoHelper::GetLabel(branch) };
-                        auto group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
+                        auto group_key{
+                            KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false)
+                        };
                         if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
                         outfile << residue_name <<','
                                 << element_name <<','

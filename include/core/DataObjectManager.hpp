@@ -21,8 +21,8 @@ public:
     DataObjectManager(void);
     DataObjectManager(const std::filesystem::path & dbname);
     ~DataObjectManager();
-    void ProcessFile(const std::string & filename, const std::string & key_tag);
-    void ProduceFile(const std::string & filename, const std::string & key_tag);
+    void ProcessFile(const std::filesystem::path & filename, const std::string & key_tag);
+    void ProduceFile(const std::filesystem::path & filename, const std::string & key_tag);
     void AddDataObject(const std::string & key_tag, std::unique_ptr<DataObjectBase> data_object);
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;

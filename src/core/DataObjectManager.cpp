@@ -25,7 +25,8 @@ DataObjectManager::~DataObjectManager()
 
 }
 
-std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFactory(const std::string & file_extension)
+std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFactory(
+    const std::string & file_extension)
 {
     if (file_extension == ".pdb" || file_extension == ".cif")
     {
@@ -41,10 +42,11 @@ std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFactory(const s
     }
 }
 
-void DataObjectManager::ProcessFile(const std::string & filename, const std::string & key_tag)
+void DataObjectManager::ProcessFile(
+    const std::filesystem::path & filename, const std::string & key_tag)
 {
     ScopeTimer timer("DataObjectManager::ProcessFile");
-    auto file_extension{ FilePathHelper::GetExtension(filename) };
+    auto file_extension{ FilePathHelper::GetExtension(filename.string()) };
     auto factory{ CreateFactory(file_extension) };
     auto data_object{ factory->CreateDataObject(filename) };
     if (data_object == nullptr)
@@ -57,7 +59,8 @@ void DataObjectManager::ProcessFile(const std::string & filename, const std::str
     AddDataObject(key_tag, std::move(data_object));
 }
 
-void DataObjectManager::ProduceFile(const std::string & filename, const std::string & key_tag)
+void DataObjectManager::ProduceFile(
+    const std::filesystem::path & filename, const std::string & key_tag)
 {
     ScopeTimer timer("DataObjectManager::ProduceFile");
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
@@ -68,7 +71,7 @@ void DataObjectManager::ProduceFile(const std::string & filename, const std::str
         return;
     }
     auto data_object{ m_data_object_map.at(key_tag).get() };
-    auto file_extension{ FilePathHelper::GetExtension(filename) };
+    auto file_extension{ FilePathHelper::GetExtension(filename.string()) };
     auto factory{ CreateFactory(file_extension) };
     factory->OutputDataObject(filename, data_object);
 };

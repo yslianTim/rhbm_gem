@@ -1,4 +1,5 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/stl/filesystem.h>
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
 #include "ResultDumpCommand.hpp"
