@@ -128,6 +128,17 @@ bool PotentialDisplayCommand::Execute(void)
     return true;
 }
 
+bool PotentialDisplayCommand::ValidateOptions(void) const
+{
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::ValidateOptions() called");
+    if (m_options.model_key_tag_list.empty())
+    {
+        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
+        return false;
+    }
+    return true;
+}
+
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');

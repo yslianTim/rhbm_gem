@@ -90,6 +90,36 @@ bool MapSimulationCommand::Execute(void)
     return true;
 }
 
+bool MapSimulationCommand::ValidateOptions(void) const
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::ValidateOptions() called");
+    if (!std::filesystem::exists(m_options.model_file_path))
+    {
+        Logger::Log(LogLevel::Error,
+                    "Model file does not exist: " + m_options.model_file_path.string());
+        return false;
+    }
+    if (m_options.cutoff_distance <= 0.0)
+    {
+        Logger::Log(LogLevel::Error, "Cutoff distance must be positive");
+        return false;
+    }
+    if (m_options.grid_spacing <= 0.0)
+    {
+        Logger::Log(LogLevel::Error, "Grid spacing must be positive");
+        return false;
+    }
+    for (auto width : m_options.blurring_width_list)
+    {
+        if (width <= 0.0)
+        {
+            Logger::Log(LogLevel::Error, "Blurring width must be positive");
+            return false;
+        }
+    }
+    return true;
+}
+
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
     m_options.blurring_width_list = StringHelper::ParseListOption<double>(value, ',');

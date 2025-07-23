@@ -39,7 +39,12 @@ void Application::RegisterCommand(
         ScopeTimer timer("Command in Application");
         const auto & options{ cmd->GetOptions() };
         Logger::SetLogLevel(options.verbose_level);
-        if (!cmd->Execute())
+        if (cmd->ValidateOptions() == false)
+        {
+            Logger::Log(LogLevel::Error, "Invalid command options");
+            return;
+        }
+        if (cmd->Execute() == false)
         {
             Logger::Log(LogLevel::Error, "Command execution failed");
         }

@@ -45,6 +45,7 @@ public:
     PotentialDisplayCommand(void);
     ~PotentialDisplayCommand();
     bool Execute(void) override;
+    bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
 

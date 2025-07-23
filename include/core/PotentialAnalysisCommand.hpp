@@ -39,6 +39,7 @@ public:
     PotentialAnalysisCommand(void);
     ~PotentialAnalysisCommand();
     bool Execute(void) override;
+    bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
 

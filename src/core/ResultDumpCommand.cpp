@@ -60,7 +60,6 @@ bool ResultDumpCommand::Execute(void)
     {
         if (!m_options.map_file_path.empty())
         {
-            // TO DO : Check if the map file exists before processing
             data_manager->ProcessFile(m_options.map_file_path, "map");
         }
         for (auto & key : m_options.model_key_tag_list)
@@ -107,6 +106,23 @@ bool ResultDumpCommand::Execute(void)
                         "  [1] MapValueDumping\n"
                         "  [2] GausEstimatesDumping");
             break;
+    }
+    return true;
+}
+
+bool ResultDumpCommand::ValidateOptions(void) const
+{
+    Logger::Log(LogLevel::Debug, "ResultDumpCommand::ValidateOptions() called");
+    if (m_options.model_key_tag_list.empty())
+    {
+        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
+        return false;
+    }
+    if (!m_options.map_file_path.empty() && !std::filesystem::exists(m_options.map_file_path))
+    {
+        Logger::Log(LogLevel::Error,
+                    "Map file does not exist: " + m_options.map_file_path.string());
+        return false;
     }
     return true;
 }

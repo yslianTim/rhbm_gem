@@ -113,6 +113,39 @@ bool PotentialAnalysisCommand::Execute(void)
     return true;
 }
 
+bool PotentialAnalysisCommand::ValidateOptions(void) const
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::ValidateOptions() called");
+    if (!std::filesystem::exists(m_options.model_file_path))
+    {
+        Logger::Log(LogLevel::Error,
+                    "Model file does not exist: " + m_options.model_file_path.string());
+        return false;
+    }
+    if (!std::filesystem::exists(m_options.map_file_path))
+    {
+        Logger::Log(LogLevel::Error,
+                    "Map file does not exist: " + m_options.map_file_path.string());
+        return false;
+    }
+    if (m_options.sampling_size <= 0)
+    {
+        Logger::Log(LogLevel::Error, "Sampling size must be positive");
+        return false;
+    }
+    if (m_options.sampling_range_min >= m_options.sampling_range_max)
+    {
+        Logger::Log(LogLevel::Error, "Invalid sampling range");
+        return false;
+    }
+    if (m_options.fit_range_min >= m_options.fit_range_max)
+    {
+        Logger::Log(LogLevel::Error, "Invalid fitting range");
+        return false;
+    }
+    return true;
+}
+
 void PotentialAnalysisCommand::SetThreadSize(int value)
 {
     m_options.thread_size = value;
