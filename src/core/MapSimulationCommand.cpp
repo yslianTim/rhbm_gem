@@ -97,6 +97,7 @@ void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 
 void MapSimulationCommand::RunMapSimulation(ModelObject * model_object)
 {
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RunMapSimulation() called");
     ScopeTimer timer("MapSimulationCommand::RunMapSimulation");
     m_selected_atom_list.clear();
     m_selected_atom_list.reserve(model_object->GetNumberOfAtom());

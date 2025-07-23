@@ -60,6 +60,7 @@ bool ResultDumpCommand::Execute(void)
     {
         if (!m_options.map_file_path.empty())
         {
+            // TO DO : Check if the map file exists before processing
             data_manager->ProcessFile(m_options.map_file_path, "map");
         }
         for (auto & key : m_options.model_key_tag_list)

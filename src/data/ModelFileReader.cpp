@@ -10,6 +10,7 @@
 ModelFileReader::ModelFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }
 {
+    Logger::Log(LogLevel::Debug, "ModelFileReader::ModelFileReader() called");
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     if      (file_extension == ".pdb")
     {
@@ -27,17 +28,19 @@ ModelFileReader::ModelFileReader(const std::string & filename) :
 
 ModelFileReader::~ModelFileReader()
 {
-
+    Logger::Log(LogLevel::Debug, "ModelFileReader::~ModelFileReader() called");
 }
 
 void ModelFileReader::Read(void)
 {
+    Logger::Log(LogLevel::Debug, "ModelFileReader::Read() called");
     ReadHeader();
     ReadDataArray();
 }
 
 void ModelFileReader::ReadHeader(void)
 {
+    Logger::Log(LogLevel::Debug, "ModelFileReader::ReadHeader() called");
     try
     {
         m_file_object->LoadHeader(m_file_path);
@@ -46,13 +49,14 @@ void ModelFileReader::ReadHeader(void)
     }
     catch (const std::exception & ex)
     {
-        Logger::Log(LogLevel::Error, ex.what());
+        Logger::Log(LogLevel::Error, "ModelFileReader::ReadHeader() : " + std::string(ex.what()));
         m_successfully_read_file = false;
     }
 }
 
 void ModelFileReader::ReadDataArray(void)
 {
+    Logger::Log(LogLevel::Debug, "ModelFileReader::ReadDataArray() called");
     try
     {
         m_file_object->LoadDataArray(m_file_path);
@@ -60,7 +64,7 @@ void ModelFileReader::ReadDataArray(void)
     }
     catch (const std::exception & ex)
     {
-        Logger::Log(LogLevel::Error, ex.what());
+        Logger::Log(LogLevel::Error, "ModelFileReader::ReadDataArray()" + std::string(ex.what()));
         m_successfully_read_file = false;
     }
 }

@@ -11,23 +11,28 @@
 DataObjectManager::DataObjectManager(void) :
     m_db_manager{ nullptr }
 {
-
+    Logger::Log(LogLevel::Debug, "DataObjectManager::DataObjectManager() called");
 }
 
 DataObjectManager::DataObjectManager(const std::filesystem::path & dbname) :
     m_db_manager{ std::make_unique<DatabaseManager>(dbname) }
 {
-
+    Logger::Log(LogLevel::Debug, "DataObjectManager::DataObjectManager() with database path called");
+    if (!m_db_manager->GetDatabase())
+    {
+        throw std::runtime_error("Failed to initialize database manager with path: " + dbname.string());
+    }
 }
 
 DataObjectManager::~DataObjectManager()
 {
-
+    Logger::Log(LogLevel::Debug, "DataObjectManager::~DataObjectManager() called");
 }
 
 std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFactory(
     const std::string & file_extension)
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::CreateFactory() called");
     if (file_extension == ".pdb" || file_extension == ".cif")
     {
         return std::make_unique<ModelObjectFactory>();
@@ -45,6 +50,7 @@ std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFactory(
 void DataObjectManager::ProcessFile(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::ProcessFile() called");
     ScopeTimer timer("DataObjectManager::ProcessFile");
     auto file_extension{ FilePathHelper::GetExtension(filename.string()) };
     auto factory{ CreateFactory(file_extension) };
@@ -62,6 +68,7 @@ void DataObjectManager::ProcessFile(
 void DataObjectManager::ProduceFile(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::ProduceFile() called");
     ScopeTimer timer("DataObjectManager::ProduceFile");
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
     {
@@ -79,6 +86,7 @@ void DataObjectManager::ProduceFile(
 void DataObjectManager::AddDataObject(
     const std::string & key_tag, std::unique_ptr<DataObjectBase> data_object)
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::AddDataObject() called");
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
         Logger::Log(LogLevel::Warning,
@@ -90,6 +98,7 @@ void DataObjectManager::AddDataObject(
 
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::LoadDataObject() called");
     ScopeTimer timer("DataObjectManager::LoadDataObject");
     if (m_db_manager == nullptr)
     {
@@ -102,6 +111,7 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
 void DataObjectManager::SaveDataObject(
     const std::string & key_tag, const std::string & renamed_key_tag) const
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::SaveDataObject() called");
     ScopeTimer timer("DataObjectManager::SaveDataObject");
     if (m_db_manager == nullptr)
     {
@@ -135,6 +145,7 @@ void DataObjectManager::SaveDataObject(
 
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::Accept() called");
     ScopeTimer timer("DataObjectManager::Accept");
     for (auto & [key, data_object] : m_data_object_map)
     {
@@ -147,6 +158,7 @@ void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
 
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_list)
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::Accept() with key list called");
     ScopeTimer timer("DataObjectManager::Accept");
     for (const auto & key : key_list)
     {
@@ -166,6 +178,7 @@ void DataObjectManager::Accept(DataObjectVisitorBase * visitor, const std::vecto
 
 void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
 {
+    Logger::Log(LogLevel::Debug, "DataObjectManager::PrintDataObjectInfo() called");
     try
     {
         m_data_object_map.at(key_tag)->Display();

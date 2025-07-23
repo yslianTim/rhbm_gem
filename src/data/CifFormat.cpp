@@ -15,16 +15,17 @@
 CifFormat::CifFormat(void) :
     m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
-
+    Logger::Log(LogLevel::Debug, "CifFormat::CifFormat() called");
 }
 
 CifFormat::~CifFormat()
 {
-
+    Logger::Log(LogLevel::Debug, "CifFormat::~CifFormat() called");
 }
 
 void CifFormat::LoadHeader(const std::string & filename)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadHeader() called");
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
@@ -52,6 +53,7 @@ void CifFormat::LoadHeader(const std::string & filename)
 
 void CifFormat::PrintHeader(void) const
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::PrintHeader() called");
     std::ostringstream oss;
     oss << "CIF Header Information:\n";
     oss <<"#Entities = "<< m_data_block->GetEntityTypeMap().size() << "\n";
@@ -82,6 +84,7 @@ void CifFormat::PrintHeader(void) const
 
 void CifFormat::LoadDataArray(const std::string & filename)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadDataArray() called");
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
@@ -93,6 +96,7 @@ void CifFormat::LoadDataArray(const std::string & filename)
 
 void CifFormat::LoadDatabaseInfo(std::ifstream & infile)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadDatabaseInfo() called");
     ParseLoopBlock(infile, "_database_2.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -114,6 +118,7 @@ void CifFormat::LoadDatabaseInfo(std::ifstream & infile)
 
 void CifFormat::LoadEntityInfo(std::ifstream & infile)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadEntityInfo() called");
     ParseLoopBlock(infile, "_entity.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -150,6 +155,7 @@ void CifFormat::LoadEntityInfo(std::ifstream & infile)
 
 void CifFormat::LoadPdbxData(std::ifstream & infile)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadPdbxData() called");
     std::string line, header, resolution, resolution_method;
     auto found_resolution{ false };
     auto found_resolution_method{ false };
@@ -178,6 +184,7 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
 
 void CifFormat::LoadElementTypeList(std::ifstream & infile)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadElementTypeList() called");
     ParseLoopBlock(infile, "_atom_type.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -191,6 +198,7 @@ void CifFormat::LoadElementTypeList(std::ifstream & infile)
 
 void CifFormat::LoadStructHelixInfo(std::ifstream & infile)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructHelixInfo() called");
     ParseLoopBlock(infile, "_struct_conf.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -210,6 +218,7 @@ void CifFormat::LoadStructHelixInfo(std::ifstream & infile)
 
 void CifFormat::LoadStructSheetInfo(std::ifstream & infile)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructSheetInfo() called");
     ParseLoopBlock(infile, "_struct_sheet.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -240,6 +249,7 @@ void CifFormat::LoadStructSheetInfo(std::ifstream & infile)
 
 void CifFormat::LoadAtomSiteData(std::ifstream & infile)
 {
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomSiteData() called");
     ParseLoopBlock(infile, "_atom_site.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)

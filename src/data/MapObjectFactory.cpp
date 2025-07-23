@@ -2,11 +2,13 @@
 #include "MapFileReader.hpp"
 #include "MapFileWriter.hpp"
 #include "MapObject.hpp"
+#include "Logger.hpp"
 
 #include <stdexcept>
 
 std::unique_ptr<DataObjectBase> MapObjectFactory::CreateDataObject(const std::string & filename)
 {
+    Logger::Log(LogLevel::Debug, "MapObjectFactory::CreateDataObject() called");
     auto file_reader{ std::make_unique<MapFileReader>(filename) };
     file_reader->Read();
     if (file_reader->IsSuccessfullyRead() == false) return nullptr;
@@ -20,6 +22,7 @@ std::unique_ptr<DataObjectBase> MapObjectFactory::CreateDataObject(const std::st
 
 void MapObjectFactory::OutputDataObject(const std::string & filename, DataObjectBase * data_object)
 {
+    Logger::Log(LogLevel::Debug, "MapObjectFactory::OutputDataObject() called");
     auto map_object{ dynamic_cast<MapObject *>(data_object) };
     if (map_object == nullptr)
     {

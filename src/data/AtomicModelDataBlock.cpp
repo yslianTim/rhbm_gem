@@ -2,15 +2,16 @@
 #include "AtomObject.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "Logger.hpp"
 
 AtomicModelDataBlock::AtomicModelDataBlock(void)
 {
-
+    Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::AtomicModelDataBlock() called");
 }
 
 AtomicModelDataBlock::~AtomicModelDataBlock()
 {
-
+    Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::~AtomicModelDataBlock() called");
 }
 
 void AtomicModelDataBlock::AddAtomObject(
@@ -114,7 +115,19 @@ const std::string & AtomicModelDataBlock::GetEmdID(void) const
 
 double AtomicModelDataBlock::GetResolution(void) const
 {
-    return std::stod(m_resolution);
+    double resolution_value;
+    try
+    {
+        resolution_value = std::stod(m_resolution);
+    }
+    catch (const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error, "AtomicModelDataBlock::GetResolution()" + std::string(e.what()));
+        Logger::Log(LogLevel::Error, "Invalid resolution value: " + m_resolution
+                    + ". Setting resolution to -1.0");
+        resolution_value = -1.0;
+    }
+    return resolution_value;
 }
 
 const std::string & AtomicModelDataBlock::GetResolutionMethod(void) const
