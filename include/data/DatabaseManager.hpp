@@ -17,7 +17,7 @@ public:
     explicit DatabaseManager(const std::filesystem::path & database_path);
     ~DatabaseManager();
 
-    void SaveDataObject(const DataObjectBase * obj);
+    void SaveDataObject(const DataObjectBase * obj, const std::string & key_tag);
     std::unique_ptr<DataObjectBase> LoadDataObject(const std::string & key_tag);
 
     const std::filesystem::path & GetDatabasePath(void) const { return m_database_path; }

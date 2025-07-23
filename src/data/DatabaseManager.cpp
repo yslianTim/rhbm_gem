@@ -18,10 +18,10 @@ DatabaseManager::~DatabaseManager()
 
 }
 
-void DatabaseManager::SaveDataObject(const DataObjectBase * data_object)
+void DatabaseManager::SaveDataObject(const DataObjectBase * data_object, const std::string & key_tag)
 {
     auto dao{ CreateDataObjectDAO(data_object) };
-    dao->Save(data_object);
+    dao->Save(data_object, key_tag);
 }
 
 std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(const std::string & key_tag)

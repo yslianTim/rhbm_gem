@@ -44,7 +44,12 @@ void DataObjectManager::ProcessFile(
     data_object->SetKeyTag(key_tag);
     data_object->Display();
 
-    AddDataObject(key_tag, std::move(data_object));
+    bool inserted{ AddDataObject(key_tag, std::move(data_object)) };
+    if (inserted == false)
+    {
+        Logger::Log(LogLevel::Warning,
+                    "Data object with key tag: [" + key_tag + "] overwritten or insertion failed.");
+    }
 }
 
 void DataObjectManager::ProduceFile(
@@ -65,14 +70,14 @@ void DataObjectManager::ProduceFile(
     factory->OutputDataObject(filename, data_object);
 };
 
-void DataObjectManager::AddDataObject(
+bool DataObjectManager::AddDataObject(
     const std::string & key_tag, std::unique_ptr<DataObjectBase> data_object)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::AddDataObject() called");
     if (!data_object)
     {
         Logger::Log(LogLevel::Error, "AddDataObject(): nullptr provided for key tag: " + key_tag);
-        return;
+        return false;
     }
     if (m_data_object_map.find(key_tag) != m_data_object_map.end())
     {
@@ -80,7 +85,8 @@ void DataObjectManager::AddDataObject(
                     "The key tag: [" + key_tag + "] already presented in the data object map, "
                     "this data object will be replaced.");
     }
-    m_data_object_map.insert_or_assign(key_tag, std::move(data_object));
+    auto result{ m_data_object_map.insert_or_assign(key_tag, std::move(data_object)) };
+    return result.second;
 }
 
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
@@ -92,7 +98,12 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
         throw std::runtime_error("Database manager is not initialized.");
     }
     auto data_object{ m_db_manager->LoadDataObject(key_tag) };
-    AddDataObject(key_tag, std::move(data_object));
+    bool inserted{ AddDataObject(key_tag, std::move(data_object)) };
+    if (inserted == false)
+    {
+        Logger::Log(LogLevel::Warning,
+                    "Data object with key tag: [" + key_tag + "] overwritten or insertion failed.");
+    }
 }
 
 void DataObjectManager::SaveDataObject(
@@ -112,22 +123,22 @@ void DataObjectManager::SaveDataObject(
         return;
     }
 
+    auto saved_key_tag{ renamed_key_tag.empty() ? key_tag : renamed_key_tag };
     if (renamed_key_tag != "")
     {
         Logger::Log(LogLevel::Info,
                     "The data object with key tag: [" + key_tag + "] will be renamed to: [" +
                     renamed_key_tag + "] and saved into database: " +
                     m_db_manager->GetDatabasePath().string());
-        m_data_object_map.at(key_tag)->SetKeyTag(renamed_key_tag);
     }
     else
     {
-        Logger::Log(LogLevel::Info, 
+        Logger::Log(LogLevel::Info,
                     "The data object with key tag: [" + key_tag + "] will be saved into database: " +
                     m_db_manager->GetDatabasePath().string());
     }
 
-    m_db_manager->SaveDataObject(m_data_object_map.at(key_tag).get());
+    m_db_manager->SaveDataObject(m_data_object_map.at(key_tag).get(), saved_key_tag);
 }
 
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
@@ -176,7 +187,16 @@ void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
     }
 }
 
-DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag) const
+DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag)
+{
+    if (m_data_object_map.find(key_tag) == m_data_object_map.end())
+    {
+        throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
+    }
+    return m_data_object_map.at(key_tag).get();
+}
+
+const DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag) const
 {
     if (m_data_object_map.find(key_tag) == m_data_object_map.end())
     {

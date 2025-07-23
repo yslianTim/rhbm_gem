@@ -197,7 +197,7 @@ ModelObjectDAO::~ModelObjectDAO()
 
 }
 
-void ModelObjectDAO::Save(const DataObjectBase * obj)
+void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_tag)
 {
     auto model_obj{ dynamic_cast<const ModelObject *>(obj) };
     if (!model_obj)
@@ -205,7 +205,6 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
         throw std::runtime_error("ModelObjectDAO::Save() failed: object is not a ModelObject instance.");
     }
 
-    auto key_tag{ model_obj->GetKeyTag() };
     auto sanitized_key_tag{ SanitizeTableName(key_tag) };
 
     SQLiteWrapper::TransactionGuard transaction(*m_database);
@@ -215,7 +214,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj)
     m_database->Execute(FormatSQL(CREATE_MODEL_TABLE_SQL, model_list_table_name));
     m_database->Prepare(FormatSQL(INSERT_MODEL_LIST_SQL, model_list_table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
-    m_database->Bind<std::string>(1, model_obj->GetKeyTag());
+    m_database->Bind<std::string>(1, key_tag);
     m_database->Bind<int>(2, static_cast<int>(model_obj->GetNumberOfAtom()));
     m_database->Bind<std::string>(3, model_obj->GetPdbID());
     m_database->Bind<std::string>(4, model_obj->GetEmdID());

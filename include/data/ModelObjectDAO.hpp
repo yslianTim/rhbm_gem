@@ -20,7 +20,7 @@ public:
     ModelObjectDAO(SQLiteWrapper * db_manager);
     ~ModelObjectDAO();
 
-    void Save(const DataObjectBase * obj) override;
+    void Save(const DataObjectBase * obj, const std::string & key_tag) override;
     std::unique_ptr<DataObjectBase> Load(const std::string & key_tag) override;
     
 private:
