@@ -4,6 +4,7 @@
 #include "PotentialDisplayCommand.hpp"
 #include "ResultDumpCommand.hpp"
 #include "MapSimulationCommand.hpp"
+#include "OptionEnumClass.hpp"
 
 PYBIND11_MODULE(cpp_module, m)
 {

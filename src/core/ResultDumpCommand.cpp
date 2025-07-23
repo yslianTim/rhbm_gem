@@ -33,8 +33,16 @@ ResultDumpCommand::ResultDumpCommand(void) :
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RegisterCLIOptionsExtend() called");
+    std::map<std::string, PrinterType> printer_map
+    {
+        {"0", PrinterType::ATOM_POSITION},  {"atom", PrinterType::ATOM_POSITION},
+        {"1", PrinterType::MAP_VALUE},      {"map",  PrinterType::MAP_VALUE},
+        {"2", PrinterType::GAUS_ESTIMATES}, {"gaus", PrinterType::GAUS_ESTIMATES}
+    };
     cmd->add_option("-p,--printer", m_options.printer_choice,
-        "Printer choice")->required();
+        "Printer choice")
+        ->required()
+        ->transform(CLI::CheckedTransformer(printer_map, CLI::ignore_case));
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
         "List of model key tag to be display")->required()->delimiter(',');
     cmd->add_option("-m,--map", m_options.map_file_path,
@@ -78,20 +86,20 @@ bool ResultDumpCommand::Execute(void)
     BuildSelectedAtomList();
     switch (m_options.printer_choice)
     {
-        case 0:
+        case PrinterType::ATOM_POSITION:
             RunAtomPositionDumping();
             break;
-        case 1:
+        case PrinterType::MAP_VALUE:
             RunMapValueDumping();
             break;
-        case 2:
+        case PrinterType::GAUS_ESTIMATES:
             RunGroupGausEstimatesDumping();
             RunGausEstimatesDumping();
             break;
         default:
             Logger::Log(LogLevel::Warning,
                         "Invalid printer choice input : ["
-                        + std::to_string(m_options.printer_choice) + "]");
+                        + std::to_string(static_cast<int>(m_options.printer_choice)) + "]");
             Logger::Log(LogLevel::Warning,
                         "Available Printer Choices:\n"
                         "  [0] AtomPositionDumping\n"

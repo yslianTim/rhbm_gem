@@ -8,6 +8,7 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
+#include "OptionEnumClass.hpp"
 
 class AtomObject;
 class ModelObject;
@@ -18,7 +19,7 @@ class ResultDumpCommand : public CommandBase
 public:
     struct Options : public CommandOptions
     {
-        int printer_choice{ 2 };
+        PrinterType printer_choice{ PrinterType::GAUS_ESTIMATES };
         std::vector<std::string> model_key_tag_list{};
         std::filesystem::path map_file_path{ "" };
     };
@@ -37,7 +38,7 @@ public:
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
 
-    void SetPrinterChoice(int value) { m_options.printer_choice = value; }
+    void SetPrinterChoice(PrinterType value) { m_options.printer_choice = value; }
     void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }
     void SetFolderPath(const std::filesystem::path & path) { m_options.folder_path = path; }
     void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }

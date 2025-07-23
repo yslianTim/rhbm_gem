@@ -33,8 +33,17 @@ PotentialDisplayCommand::~PotentialDisplayCommand()
 void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RegisterCLIOptionsExtend() called");
+    std::map<std::string, PainterType> painter_map
+    {
+        {"0", PainterType::ATOM},       {"atom",       PainterType::ATOM},
+        {"1", PainterType::MODEL},      {"model",      PainterType::MODEL},
+        {"2", PainterType::COMPARISON}, {"comparison", PainterType::COMPARISON},
+        {"3", PainterType::DEMO},       {"demo",       PainterType::DEMO}
+    };
     cmd->add_option("-p,--painter", m_options.painter_choice,
-        "Painter choice")->required();
+        "Painter choice")
+        ->required()
+        ->transform(CLI::CheckedTransformer(painter_map, CLI::ignore_case));
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
         "List of model key tag to be display")->required()->delimiter(',');
     cmd->add_option("-r,--ref-model-keylist", m_options.ref_model_key_tag_list,
@@ -285,7 +294,7 @@ void PotentialDisplayCommand::RunDisplay(void)
     std::unique_ptr<PainterBase> painter{ nullptr };
     switch (m_options.painter_choice)
     {
-        case 0:
+        case PainterType::ATOM:
             painter = std::make_unique<AtomPainter>();
             for (auto * model_object : m_ordered_model_object_list)
             {
@@ -297,7 +306,7 @@ void PotentialDisplayCommand::RunDisplay(void)
             }
             m_atom_selector->Print();
             break;
-        case 1:
+        case PainterType::MODEL:
             painter = std::make_unique<ModelPainter>();
             for (auto * model_object : m_ordered_model_object_list)
             {
@@ -311,7 +320,7 @@ void PotentialDisplayCommand::RunDisplay(void)
                 }
             }
             break;
-        case 2:
+        case PainterType::COMPARISON:
             painter = std::make_unique<ComparisonPainter>();
             for (auto * model_object : m_ordered_model_object_list)
             {
@@ -325,7 +334,7 @@ void PotentialDisplayCommand::RunDisplay(void)
                 }
             }
             break;
-        case 3:
+        case PainterType::DEMO:
             painter = std::make_unique<DemoPainter>();
             for (auto * model_object : m_ordered_model_object_list)
             {
@@ -342,7 +351,7 @@ void PotentialDisplayCommand::RunDisplay(void)
         default:
             Logger::Log(LogLevel::Warning,
                         "Invalid painter choice input: ["
-                        + std::to_string(m_options.painter_choice) + "]");
+                        + std::to_string(static_cast<int>(m_options.painter_choice)) + "]");
             Logger::Log(LogLevel::Warning,
                         "Available Painter Choices:\n"
                         "  [0] AtomPainter\n"

@@ -1,0 +1,32 @@
+#pragma once
+
+#include <cstdint>
+
+enum class PainterType : int
+{
+    ATOM       = 0,
+    MODEL      = 1,
+    COMPARISON = 2,
+    DEMO       = 3
+};
+
+enum class PrinterType : int
+{
+    ATOM_POSITION  = 0,
+    MAP_VALUE      = 1,
+    GAUS_ESTIMATES = 2
+};
+
+enum class PotentialModel : int
+{
+    SINGLE_GAUS      = 0,
+    FIVE_GAUS_CHARGE = 1,
+    SINGLE_GAUS_USER = 2
+};
+
+enum class PartialCharge : int
+{
+    NEUTRAL = 0,
+    PARTIAL = 1,
+    AMBER   = 2
+};

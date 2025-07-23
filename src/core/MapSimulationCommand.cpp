@@ -40,10 +40,26 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Model file path")->required();
     cmd->add_option("-n,--name", m_options.map_file_name,
         "File name for output map files")->default_val(m_options.map_file_name);
+    std::map<std::string, PotentialModel> model_map
+    {
+        {"0", PotentialModel::SINGLE_GAUS},      {"single", PotentialModel::SINGLE_GAUS},
+        {"1", PotentialModel::FIVE_GAUS_CHARGE}, {"five",   PotentialModel::FIVE_GAUS_CHARGE},
+        {"2", PotentialModel::SINGLE_GAUS_USER}, {"user",   PotentialModel::SINGLE_GAUS_USER}
+    };
     cmd->add_option("--potential-model", m_options.potential_model_choice,
-        "Atomic potential model option")->default_val(m_options.potential_model_choice);
+        "Atomic potential model option")
+        ->default_val("1")
+        ->transform(CLI::CheckedTransformer(model_map, CLI::ignore_case));
+    std::map<std::string, PartialCharge> charge_map
+    {
+        {"0", PartialCharge::NEUTRAL}, {"neutral", PartialCharge::NEUTRAL},
+        {"1", PartialCharge::PARTIAL}, {"partial", PartialCharge::PARTIAL},
+        {"2", PartialCharge::AMBER},   {"amber",   PartialCharge::AMBER}
+    };
     cmd->add_option("--charge", m_options.partial_charge_choice,
-        "Partial charge table option")->default_val(m_options.partial_charge_choice);
+        "Partial charge table option")
+        ->default_val("1")
+        ->transform(CLI::CheckedTransformer(charge_map, CLI::ignore_case));
     cmd->add_option("-c,--cut-off", m_options.cutoff_distance,
         "Cutoff distance")->default_val(m_options.cutoff_distance);
     cmd->add_option("-g,--grid-spacing", m_options.grid_spacing,
@@ -100,10 +116,10 @@ void MapSimulationCommand::RunMapSimulation(ModelObject * model_object)
         auto charge{ 0.0 };
         switch (m_options.partial_charge_choice)
         {
-            case 0: // Neutral
+            case PartialCharge::NEUTRAL:
                 charge = 0.0;
                 break;
-            case 1: // Partial Charge
+            case PartialCharge::PARTIAL:
                 charge = AminoAcidInfoHelper::GetPartialCharge(
                     atom->GetResidue(),
                     atom->GetElement(),
@@ -111,7 +127,7 @@ void MapSimulationCommand::RunMapSimulation(ModelObject * model_object)
                     atom->GetBranch(),
                     atom->GetStructure());
                 break;
-            case 2: // Partial Charge (AMBER table)
+            case PartialCharge::AMBER:
                 charge = AminoAcidInfoHelper::GetPartialCharge(
                     atom->GetResidue(),
                     atom->GetElement(),
@@ -122,7 +138,7 @@ void MapSimulationCommand::RunMapSimulation(ModelObject * model_object)
             default:
                 Logger::Log(LogLevel::Error,
                             "Invalid partial charge choice: "
-                            + std::to_string(m_options.partial_charge_choice));
+                            + std::to_string(static_cast<int>(m_options.partial_charge_choice)));
                 break;
         }
         m_atom_charge_map.emplace(atom->GetSerialID(), charge);
@@ -158,7 +174,7 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateSimulatedMapObject(double
 
     auto electric_potential{ std::make_unique<ElectricPotential>() };
     electric_potential->SetBlurringWidth(blurring_width);
-    electric_potential->SetModelChoice(m_options.potential_model_choice);
+    electric_potential->SetModelChoice(static_cast<int>(m_options.potential_model_choice));
     
     std::array<float, 3> grid_spacing{
         static_cast<float>(m_options.grid_spacing),

@@ -9,6 +9,7 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
+#include "OptionEnumClass.hpp"
 
 class ModelObject;
 class MapObject;
@@ -22,8 +23,8 @@ public:
     {
         std::filesystem::path model_file_path;
         std::string map_file_name{"sim_map"};
-        int potential_model_choice{ 1 };
-        int partial_charge_choice{ 1 };
+        PotentialModel potential_model_choice{ PotentialModel::FIVE_GAUS_CHARGE };
+        PartialCharge partial_charge_choice{ PartialCharge::PARTIAL };
         double cutoff_distance{ 5.0 };
         double grid_spacing{ 0.5 };
         std::vector<double> blurring_width_list{ {0.50} };
@@ -43,8 +44,8 @@ public:
     const CommandOptions & GetOptions(void) const override { return m_options; }
 
     void SetThreadSize(int value) { m_options.thread_size = value; }
-    void SetPotentialModelChoice(int value) { m_options.potential_model_choice = value; }
-    void SetPartialChargeChoice(int value) { m_options.partial_charge_choice = value; }
+    void SetPotentialModelChoice(PotentialModel value) { m_options.potential_model_choice = value; }
+    void SetPartialChargeChoice(PartialCharge value) { m_options.partial_charge_choice = value; }
     void SetCutoffDistance(double value) { m_options.cutoff_distance = value; }
     void SetModelFilePath(const std::filesystem::path & value) { m_options.model_file_path = value; }
     void SetFolderPath(const std::filesystem::path & path) { m_options.folder_path = path; }

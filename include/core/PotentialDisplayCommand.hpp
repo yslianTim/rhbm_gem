@@ -8,6 +8,7 @@
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
+#include "OptionEnumClass.hpp"
 
 class DataObjectManager;
 class ModelObject;
@@ -18,7 +19,7 @@ class PotentialDisplayCommand : public CommandBase
 public:
     struct Options : public CommandOptions
     {
-        int painter_choice{ 1 };
+        PainterType painter_choice{ PainterType::MODEL };
         std::vector<std::string> model_key_tag_list{};
         std::string ref_model_key_tag_list{ "" };
         std::string pick_chain_id{ "" };
@@ -47,7 +48,7 @@ public:
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
 
-    void SetPainterChoice(int value) { m_options.painter_choice = value; }
+    void SetPainterChoice(PainterType value) { m_options.painter_choice = value; }
     void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }
     void SetFolderPath(const std::filesystem::path & path) { m_options.folder_path = path; }
     void SetModelKeyTagList(const std::string & value);
