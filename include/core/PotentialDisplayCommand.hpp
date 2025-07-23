@@ -44,7 +44,7 @@ public:
     ~PotentialDisplayCommand();
     bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions(void) const override { return m_options; }
 
     void SetPainterChoice(int value) { m_options.painter_choice = value; }
     void SetDatabasePath(const std::string & path) { m_options.database_path = path; }

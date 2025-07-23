@@ -37,7 +37,8 @@ void Application::RegisterCommand(
     auto shared_cmd{ std::shared_ptr<CommandBase>(std::move(command_object)) };
     command->callback([cmd = std::move(shared_cmd)]() {
         ScopeTimer timer("Command in Application");
-        Logger::SetLogLevel(cmd->GetOptions().verbose_level);
+        const auto & options{ cmd->GetOptions() };
+        Logger::SetLogLevel(options.verbose_level);
         if (!cmd->Execute())
         {
             Logger::Log(LogLevel::Error, "Command execution failed");

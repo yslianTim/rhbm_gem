@@ -28,7 +28,6 @@ PotentialDisplayCommand::PotentialDisplayCommand(void) :
 PotentialDisplayCommand::~PotentialDisplayCommand()
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::~PotentialDisplayCommand() called");
-    m_atom_selector.reset();
 }
 
 void PotentialDisplayCommand::RegisterCLIOptions(CLI::App * cmd)

@@ -37,7 +37,6 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
 PotentialAnalysisCommand::~PotentialAnalysisCommand()
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::~PotentialAnalysisCommand() called.");
-    m_sphere_sampler.reset();
 }
 
 void PotentialAnalysisCommand::RegisterCLIOptions(CLI::App * cmd)

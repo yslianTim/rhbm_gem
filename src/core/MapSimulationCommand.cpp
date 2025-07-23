@@ -31,7 +31,6 @@ MapSimulationCommand::MapSimulationCommand(void)
 MapSimulationCommand::~MapSimulationCommand()
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::~MapSimulationCommand() called");
-    m_kd_tree_root.reset();
 }
 
 void MapSimulationCommand::RegisterCLIOptions(CLI::App * cmd)

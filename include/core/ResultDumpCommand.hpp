@@ -34,7 +34,7 @@ public:
     ~ResultDumpCommand() = default;
     bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions(void) const override { return m_options; }
 
     void SetPrinterChoice(int value) { m_options.printer_choice = value; }
     void SetDatabasePath(const std::string & path) { m_options.database_path = path; }

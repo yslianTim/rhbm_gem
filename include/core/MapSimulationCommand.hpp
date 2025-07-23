@@ -39,7 +39,7 @@ public:
     ~MapSimulationCommand();
     bool Execute(void) override;
     void RegisterCLIOptions(CLI::App * cmd) override;
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions(void) const override { return m_options; }
 
     void SetThreadSize(int value) { m_options.thread_size = value; }
     void SetPotentialModelChoice(int value) { m_options.potential_model_choice = value; }
