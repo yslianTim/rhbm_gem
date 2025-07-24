@@ -12,11 +12,19 @@ void CommandBase::SetDataManager(std::unique_ptr<DataObjectManager> manager)
 
 DataObjectManager * CommandBase::GetDataManagerPtr(void)
 {
+    if (!m_data_manager)
+    {
+        m_data_manager = std::make_unique<DataObjectManager>();
+    }
     return m_data_manager.get();
 }
 
 const DataObjectManager * CommandBase::GetDataManagerPtr(void) const
 {
+    if (!m_data_manager)
+    {
+        m_data_manager = std::make_unique<DataObjectManager>();
+    }
     return m_data_manager.get();
 }
 

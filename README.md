@@ -21,4 +21,5 @@ Passing a larger value to `--verbose` enables all lower levels as well.
 
 Commands rely on `DataObjectManager` to load and store data objects.
 The manager instance is now owned by `CommandBase` and shared with derived commands.
-A command will lazily create the manager using the configured database path the first time it is needed.
+A command lazily creates a `DataObjectManager` and assigns a `DatabaseManager` using the configured database path.
+If the option changes later on, the same `DataObjectManager` updates its `DatabaseManager` through a setter.

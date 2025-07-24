@@ -28,7 +28,6 @@ PotentialDisplayCommand::PotentialDisplayCommand(void) :
 PotentialDisplayCommand::~PotentialDisplayCommand()
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::~PotentialDisplayCommand() called");
-    m_data_manager.reset();
 }
 
 void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
@@ -84,11 +83,8 @@ bool PotentialDisplayCommand::Execute(void)
         Logger::Log(LogLevel::Info, "Total number of model object sets to be display: "
                     + std::to_string(m_options.model_key_tag_list.size()));
 
-        if (!m_data_manager)
-        {
-            m_data_manager = std::make_unique<DataObjectManager>(m_options.database_path);
-        }
         auto data_manager{ GetDataManagerPtr() };
+        data_manager->SetDatabaseManager(m_options.database_path);
         LoadModelObjects(data_manager);
         LoadRefModelObjects(data_manager);
 

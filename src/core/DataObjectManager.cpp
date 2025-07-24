@@ -14,19 +14,19 @@ DataObjectManager::DataObjectManager(void) :
     Logger::Log(LogLevel::Debug, "DataObjectManager::DataObjectManager() called");
 }
 
-DataObjectManager::DataObjectManager(const std::filesystem::path & dbname) :
-    m_db_manager{ std::make_unique<DatabaseManager>(dbname) }
+DataObjectManager::~DataObjectManager()
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::DataObjectManager() with database path called");
+    Logger::Log(LogLevel::Debug, "DataObjectManager::~DataObjectManager() called");
+}
+
+void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
+{
+    Logger::Log(LogLevel::Debug, "DataObjectManager::SetDatabaseManager() called");
+    m_db_manager = std::make_unique<DatabaseManager>(dbname);
     if (!m_db_manager->GetDatabase())
     {
         throw std::runtime_error("Failed to initialize database manager with path: " + dbname.string());
     }
-}
-
-DataObjectManager::~DataObjectManager()
-{
-    Logger::Log(LogLevel::Debug, "DataObjectManager::~DataObjectManager() called");
 }
 
 void DataObjectManager::ProcessFile(
@@ -79,13 +79,13 @@ bool DataObjectManager::AddDataObject(
         Logger::Log(LogLevel::Error, "AddDataObject(): nullptr provided for key tag: " + key_tag);
         return false;
     }
-    if (HasDataObject(key_tag) == true)
+    auto result{ m_data_object_map.insert_or_assign(key_tag, std::move(data_object)) };
+    if (!result.second)
     {
         Logger::Log(LogLevel::Warning,
                     "The key tag: [" + key_tag + "] already presented in the data object map, "
-                    "this data object will be replaced.");
+                    "the data object has been replaced.");
     }
-    auto result{ m_data_object_map.insert_or_assign(key_tag, std::move(data_object)) };
     return result.second;
 }
 

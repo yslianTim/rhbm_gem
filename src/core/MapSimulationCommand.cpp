@@ -26,16 +26,11 @@ CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
 MapSimulationCommand::MapSimulationCommand(void)
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::MapSimulationCommand() called");
-    if (!m_data_manager)
-    {
-        m_data_manager = std::make_unique<DataObjectManager>();
-    }
 }
 
 MapSimulationCommand::~MapSimulationCommand()
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::~MapSimulationCommand() called");
-    m_data_manager.reset();
 }
 
 void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
