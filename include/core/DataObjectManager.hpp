@@ -28,6 +28,8 @@ public:
     void ProcessFile(const std::filesystem::path & filename, const std::string & key_tag);
     void ProduceFile(const std::filesystem::path & filename, const std::string & key_tag);
     bool AddDataObject(const std::string & key_tag, std::unique_ptr<DataObjectBase> data_object);
+    bool HasDataObject(const std::string & key_tag) const;
+    void RemoveDataObject(const std::string & key_tag);
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(DataObjectVisitorBase * visitor);

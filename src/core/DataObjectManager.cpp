@@ -57,14 +57,14 @@ void DataObjectManager::ProduceFile(
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::ProduceFile() called");
     ScopeTimer timer("DataObjectManager::ProduceFile");
-    if (m_data_object_map.find(key_tag) == m_data_object_map.end())
+    if (HasDataObject(key_tag) == false)
     {
         Logger::Log(LogLevel::Warning,
                     "The data object with key tag: [" + key_tag + "] isn't presented, "
                     "no file will be produced.");
         return;
     }
-    auto data_object{ m_data_object_map.at(key_tag).get() };
+    auto data_object{ GetDataObjectPtr(key_tag) };
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(file_extension) };
     factory->OutputDataObject(filename, data_object);
@@ -79,7 +79,7 @@ bool DataObjectManager::AddDataObject(
         Logger::Log(LogLevel::Error, "AddDataObject(): nullptr provided for key tag: " + key_tag);
         return false;
     }
-    if (m_data_object_map.find(key_tag) != m_data_object_map.end())
+    if (HasDataObject(key_tag) == true)
     {
         Logger::Log(LogLevel::Warning,
                     "The key tag: [" + key_tag + "] already presented in the data object map, "
@@ -87,6 +87,16 @@ bool DataObjectManager::AddDataObject(
     }
     auto result{ m_data_object_map.insert_or_assign(key_tag, std::move(data_object)) };
     return result.second;
+}
+
+bool DataObjectManager::HasDataObject(const std::string & key_tag) const
+{
+    return m_data_object_map.find(key_tag) != m_data_object_map.end();
+}
+
+void DataObjectManager::RemoveDataObject(const std::string & key_tag)
+{
+    m_data_object_map.erase(key_tag);
 }
 
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
@@ -115,7 +125,7 @@ void DataObjectManager::SaveDataObject(
     {
         throw std::runtime_error("Database manager is not initialized.");
     }
-    if (m_data_object_map.find(key_tag) == m_data_object_map.end())
+    if (HasDataObject(key_tag) == false)
     {
         Logger::Log(LogLevel::Warning,
                     "The data object with key tag: [" + key_tag + "] isn't presented, "
@@ -138,7 +148,7 @@ void DataObjectManager::SaveDataObject(
                     m_db_manager->GetDatabasePath().string());
     }
 
-    m_db_manager->SaveDataObject(m_data_object_map.at(key_tag).get(), saved_key_tag);
+    m_db_manager->SaveDataObject(GetDataObjectPtr(key_tag), saved_key_tag);
 }
 
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
@@ -160,13 +170,12 @@ void DataObjectManager::Accept(DataObjectVisitorBase * visitor, const std::vecto
     ScopeTimer timer("DataObjectManager::Accept");
     for (const auto & key : key_list)
     {
-        auto iter{ m_data_object_map.find(key) };
-        if (iter == m_data_object_map.end())
+        if (HasDataObject(key) == false)
         {
             Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
             continue;
         }
-        auto & data_object{ iter->second };
+        auto data_object{ GetDataObjectPtr(key) };
         if (data_object)
         {
             data_object->Accept(visitor);
@@ -179,7 +188,7 @@ void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
     Logger::Log(LogLevel::Debug, "DataObjectManager::PrintDataObjectInfo() called");
     try
     {
-        m_data_object_map.at(key_tag)->Display();
+        GetDataObjectPtr(key_tag)->Display();
     }
     catch (const std::exception & ex)
     {
@@ -189,7 +198,7 @@ void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
 
 DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag)
 {
-    if (m_data_object_map.find(key_tag) == m_data_object_map.end())
+    if (HasDataObject(key_tag) == false)
     {
         throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
     }
@@ -198,7 +207,7 @@ DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag
 
 const DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag) const
 {
-    if (m_data_object_map.find(key_tag) == m_data_object_map.end())
+    if (HasDataObject(key_tag) == false)
     {
         throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
     }
