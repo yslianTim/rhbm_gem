@@ -1,11 +1,8 @@
 #include "DatabaseManager.hpp"
 #include "SQLiteWrapper.hpp"
 #include "DataObjectDAOBase.hpp"
-#include "ModelObjectDAO.hpp"
-#include "MapObjectDAO.hpp"
+#include "DataObjectDAOFactoryRegistry.hpp"
 #include "ModelObject.hpp"
-#include "MapObject.hpp"
-#include "AtomObject.hpp"
 #include "Logger.hpp"
 
 DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
@@ -44,16 +41,10 @@ std::unique_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
     const DataObjectBase * data_object)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::CreateDataObjectDAO() called");
-    if (dynamic_cast<const ModelObject *>(data_object))
+    if (data_object == nullptr)
     {
-        return std::make_unique<ModelObjectDAO>(m_database.get());
+        throw std::runtime_error("Null data object pointer provided.");
     }
-    else if (dynamic_cast<const MapObject *>(data_object))
-    {
-        return std::make_unique<MapObjectDAO>(m_database.get());
-    }
-    else
-    {
-        throw std::runtime_error("Unsupported data object type.");
-    }
+    auto type{ std::type_index(typeid(*data_object)) };
+    return DataObjectDAOFactoryRegistry::Instance().CreateDAO(type, m_database.get());
 }

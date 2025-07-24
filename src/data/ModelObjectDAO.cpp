@@ -6,6 +6,7 @@
 #include "AtomObject.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "DataObjectDAOFactoryRegistry.hpp"
 #include "KeyPacker.hpp"
 
 #include <cctype>
@@ -13,6 +14,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+namespace { DataObjectDAORegistrar<ModelObject, ModelObjectDAO> registrar_model_dao; }
 
 namespace
 {

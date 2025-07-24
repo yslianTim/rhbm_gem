@@ -2,11 +2,14 @@
 #include "SQLiteWrapper.hpp"
 #include "MapObject.hpp"
 #include "DataObjectBase.hpp"
+#include "DataObjectDAOFactoryRegistry.hpp"
 #include "Logger.hpp"
 
 #include <stdexcept>
 #include <vector>
 #include <cstring>
+
+namespace { DataObjectDAORegistrar<MapObject, MapObjectDAO> registrar_map_dao; }
 
 namespace
 {
