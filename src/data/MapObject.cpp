@@ -8,6 +8,18 @@
 #include <algorithm>
 #include <iomanip>
 
+MapObject::MapObject(void) :
+    m_key_tag{ "" }, m_thread_size{ 1 },
+    m_voxel_size{ 1 },
+    m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
+    m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
+    m_grid_size{ 1, 1, 1 }, m_grid_spacing{ 1.0f, 1.0f, 1.0f }, m_origin{ 0.0f, 0.0f, 0.0f },
+    m_map_length{}, m_overflow{}, m_underflow{ m_origin }, m_upper_bound{}, m_lower_bound{},
+    m_map_value_array{ nullptr }
+{
+    Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
+}
+
 MapObject::MapObject(
     const std::array<int, 3> & grid_size,
     const std::array<float, 3> & grid_spacing,
@@ -20,6 +32,7 @@ MapObject::MapObject(
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
     m_map_value_array{ std::make_unique<float[]>(m_voxel_size) }
 {
+    Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
     for (size_t i = 0; i < 3; i++)
     {
         m_map_length.at(i) = static_cast<float>(m_grid_size.at(i)) * m_grid_spacing.at(i);
@@ -42,6 +55,7 @@ MapObject::MapObject(
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
     m_map_value_array{ std::move(map_value_array) }
 {
+    Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
     for (size_t i = 0; i < 3; i++)
     {
         m_map_length.at(i) = static_cast<float>(m_grid_size.at(i)) * m_grid_spacing.at(i);

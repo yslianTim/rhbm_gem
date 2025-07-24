@@ -3,6 +3,7 @@
 #include "DataObjectDAOBase.hpp"
 #include "DataObjectDAOFactoryRegistry.hpp"
 #include "ModelObject.hpp"
+#include "MapObject.hpp"
 #include "Logger.hpp"
 
 DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
@@ -31,10 +32,67 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::LoadDataObject() called");
-    // To-Do : Implement case for MapObject type case
-    auto model_object{ std::make_unique<ModelObject>() };
-    auto dao{ CreateDataObjectDAO(model_object.get()) };
-    return dao->Load(key_tag);
+    auto table_exists = [this](const std::string & table_name) {
+        m_database->Prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;");
+        SQLiteWrapper::StatementGuard guard(*m_database);
+        m_database->Bind<std::string>(1, table_name);
+        auto rc{ m_database->StepNext() };
+        if (rc == SQLiteWrapper::StepRow())
+        {
+            return true;
+        }
+        else if (rc == SQLiteWrapper::StepDone())
+        {
+            return false;
+        }
+        else
+        {
+            throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
+        }
+    };
+
+    auto has_entry = [this](const std::string & table, const std::string & key) {
+        m_database->Prepare("SELECT key_tag FROM " + table + " WHERE key_tag = ? LIMIT 1;");
+        SQLiteWrapper::StatementGuard guard(*m_database);
+        m_database->Bind<std::string>(1, key);
+        auto rc{ m_database->StepNext() };
+        if (rc == SQLiteWrapper::StepRow()) return true;
+        if (rc == SQLiteWrapper::StepDone()) return false;
+        throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
+    };
+
+    bool is_map{ false };
+    bool is_model{ false };
+    if (table_exists("map_list") && has_entry("map_list", key_tag))
+    {
+        is_map = true;
+    }
+    else if (table_exists("model_list") && has_entry("model_list", key_tag))
+    {
+        is_model = true;
+    }
+    else
+    {
+        throw std::runtime_error("Cannot find the row with key_tag = " + key_tag);
+    }
+
+    if (is_map)
+    {
+        auto map_object{ std::make_unique<MapObject>() };
+        auto dao{ CreateDataObjectDAO(map_object.get()) };
+        return dao->Load(key_tag);
+    }
+    else if (is_model)
+    {
+        auto model_object{ std::make_unique<ModelObject>() };
+        auto dao{ CreateDataObjectDAO(model_object.get()) };
+        return dao->Load(key_tag);
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(

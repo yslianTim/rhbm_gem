@@ -18,6 +18,7 @@ class MapObject : public DataObjectBase
     std::unique_ptr<float[]> m_map_value_array;
 
 public:
+    MapObject(void);
     MapObject(const std::array<int, 3> & grid_size,
               const std::array<float, 3> & grid_spacing,
               const std::array<float, 3> & origin);
