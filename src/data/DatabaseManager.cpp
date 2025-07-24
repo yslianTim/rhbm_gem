@@ -37,7 +37,7 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     return dao->Load(key_tag);
 }
 
-std::unique_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
+DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(
     const DataObjectBase * data_object)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::CreateDataObjectDAO() called");
@@ -46,5 +46,14 @@ std::unique_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
         throw std::runtime_error("Null data object pointer provided.");
     }
     auto type{ std::type_index(typeid(*data_object)) };
-    return DataObjectDAOFactoryRegistry::Instance().CreateDAO(type, m_database.get());
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto iter{ m_dao_cache.find(type) };
+    if (iter != m_dao_cache.end())
+    {
+        return iter->second.get();
+    }
+    auto dao{ DataObjectDAOFactoryRegistry::Instance().CreateDAO(type, m_database.get()) };
+    auto dao_ptr{ dao.get() };
+    m_dao_cache.emplace(type, std::move(dao));
+    return dao_ptr;
 }
