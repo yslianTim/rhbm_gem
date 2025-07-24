@@ -22,6 +22,13 @@ DataObjectManager::~DataObjectManager()
 void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::SetDatabaseManager() called");
+    if (m_db_manager && m_db_manager->GetDatabasePath() == dbname)
+    {
+        Logger::Log(LogLevel::Warning,
+                    "Database already existed in the path: " + dbname.string()
+                    + ", skip re-allocation of DatabaseManager.");
+        return;
+    }
     m_db_manager = std::make_unique<DatabaseManager>(dbname);
     if (!m_db_manager->GetDatabase())
     {
@@ -212,4 +219,14 @@ const DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & k
         throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
     }
     return m_data_object_map.at(key_tag).get();
+}
+
+DatabaseManager * DataObjectManager::GetDatabaseManagerPtr(void)
+{
+    return m_db_manager.get();
+}
+
+const DatabaseManager * DataObjectManager::GetDatabaseManagerPtr(void) const
+{
+    return m_db_manager.get();
 }

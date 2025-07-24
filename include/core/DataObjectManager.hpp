@@ -37,6 +37,8 @@ public:
     void PrintDataObjectInfo(const std::string & key_tag) const;
     DataObjectBase * GetDataObjectPtr(const std::string & key_tag);
     const DataObjectBase * GetDataObjectPtr(const std::string & key_tag) const;
+    DatabaseManager * GetDatabaseManagerPtr(void);
+    const DatabaseManager * GetDatabaseManagerPtr(void) const;
     template <typename TypedDataObject>
     TypedDataObject * GetTypedDataObjectPtr(const std::string & key_tag)
     {
