@@ -20,6 +20,7 @@ CommandRegistrar<PotentialDisplayCommand> registrar_potential_display{
 }
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
+    CommandBase(),
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::PotentialDisplayCommand() called");

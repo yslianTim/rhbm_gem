@@ -26,7 +26,8 @@ public:
     const DataObjectManager * GetDataManagerPtr(void) const;
 
 protected:
-    mutable std::unique_ptr<DataObjectManager> m_data_manager;
+    CommandBase(void);
+    std::unique_ptr<DataObjectManager> m_data_manager;
     void RegisterCLIOptionsBasic(CLI::App * command);
 
 };

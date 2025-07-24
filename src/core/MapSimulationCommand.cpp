@@ -23,7 +23,8 @@ CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
     "Run map simulation command"};
 }
 
-MapSimulationCommand::MapSimulationCommand(void)
+MapSimulationCommand::MapSimulationCommand(void) :
+    CommandBase()
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::MapSimulationCommand() called");
 }

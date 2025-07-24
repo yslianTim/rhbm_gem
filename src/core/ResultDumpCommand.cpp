@@ -25,6 +25,7 @@ CommandRegistrar<ResultDumpCommand> registrar_result_dump{
 }
 
 ResultDumpCommand::ResultDumpCommand(void) :
+    CommandBase(),
     m_map_key_tag{"map"}, m_map_object{ nullptr }
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::ResultDumpCommand() called");

@@ -26,6 +26,7 @@ CommandRegistrar<PotentialAnalysisCommand> registrar_potential_analysis{
 }
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
+    CommandBase(),
     m_sphere_sampler{ std::make_unique<SphereSampler>() }
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::PotentialAnalysisCommand() called.");
