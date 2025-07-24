@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <array>
+
 #include "DataObjectBase.hpp"
 
 class MapObject : public DataObjectBase

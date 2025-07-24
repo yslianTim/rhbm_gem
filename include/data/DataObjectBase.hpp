@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 
+class DataObjectVisitorBase;
+
 class DataObjectBase
 {
 public:
