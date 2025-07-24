@@ -10,6 +10,7 @@
 #include "GroupPotentialEntry.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "GlobalEnumClass.hpp"
 #include "KeyPacker.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
@@ -268,7 +269,9 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{ m_options.folder_path.string() + file_name };
+        std::string output_path{
+            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
+        };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -302,7 +305,9 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
         std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{ m_options.folder_path.string() + file_name };
+        std::string output_path{
+            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
+        };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -316,9 +321,11 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
             auto residue_name{ AtomicInfoHelper::GetLabel(residue) };
             for (auto & element : AtomicInfoHelper::GetStandardElementList())
             {
+                //if (element == Element::OXYGEN) continue; // TEST
                 auto element_name{ AtomicInfoHelper::GetLabel(element) };
                 for (auto & remoteness : AtomicInfoHelper::GetStandardRemotenessList())
                 {
+                    //if (remoteness != Remoteness::NONE && remoteness != Remoteness::ALPHA) continue; // TEST
                     auto remoteness_name{ AtomicInfoHelper::GetLabel(remoteness) };
                     for (auto & branch : AtomicInfoHelper::GetStandardBranchList())
                     {

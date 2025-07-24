@@ -23,3 +23,4 @@ Commands rely on `DataObjectManager` to load and store data objects.
 The manager instance is now owned by `CommandBase` and shared with derived commands.
 A command lazily creates a `DataObjectManager` and assigns a `DatabaseManager` using the configured database path.
 If the option changes later on, the same `DataObjectManager` updates its `DatabaseManager` through a setter.
+`DataObjectManager` is thread-safe. All operations that access the internal data object map are synchronized using a mutex so commands may share the manager safely across threads.
