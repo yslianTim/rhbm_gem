@@ -33,7 +33,7 @@ private:
 
 public:
     ResultDumpCommand(void);
-    ~ResultDumpCommand() = default;
+    ~ResultDumpCommand();
     bool Execute(void) override;
     bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;

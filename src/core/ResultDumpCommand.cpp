@@ -30,6 +30,12 @@ ResultDumpCommand::ResultDumpCommand(void) :
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::ResultDumpCommand() called");
 }
 
+ResultDumpCommand::~ResultDumpCommand()
+{
+    Logger::Log(LogLevel::Debug, "ResultDumpCommand::~ResultDumpCommand() called");
+    m_data_manager.reset();
+}
+
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RegisterCLIOptionsExtend() called");
@@ -55,7 +61,11 @@ bool ResultDumpCommand::Execute(void)
     Logger::Log(LogLevel::Info, "Total number of model object sets to be print: "
                 + std::to_string(m_options.model_key_tag_list.size()));
 
-    auto data_manager{ std::make_unique<DataObjectManager>(m_options.database_path) };
+    if (!m_data_manager)
+    {
+        m_data_manager = std::make_unique<DataObjectManager>(m_options.database_path);
+    }
+    auto data_manager{ GetDataManagerPtr() };
     try
     {
         if (!m_options.map_file_path.empty())

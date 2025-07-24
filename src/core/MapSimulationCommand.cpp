@@ -26,11 +26,16 @@ CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
 MapSimulationCommand::MapSimulationCommand(void)
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::MapSimulationCommand() called");
+    if (!m_data_manager)
+    {
+        m_data_manager = std::make_unique<DataObjectManager>();
+    }
 }
 
 MapSimulationCommand::~MapSimulationCommand()
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::~MapSimulationCommand() called");
+    m_data_manager.reset();
 }
 
 void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
@@ -76,7 +81,7 @@ bool MapSimulationCommand::Execute(void)
         Logger::Log(LogLevel::Info, "Total number of blurring width sets to be simulated: "
                     + std::to_string(m_options.blurring_width_list.size()));
 
-        auto data_manager{ std::make_unique<DataObjectManager>() };
+        auto data_manager{ GetDataManagerPtr() };
         data_manager->ProcessFile(m_options.model_file_path, "model");
 
         auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>("model") };

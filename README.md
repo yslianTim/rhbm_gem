@@ -14,3 +14,11 @@ The logger supports five levels:
 | 4     | Debug   | Detailed debug output.            |
 
 Passing a larger value to `--verbose` enables all lower levels as well.
+
+
+
+## Data Object Manager
+
+Commands rely on `DataObjectManager` to load and store data objects.
+The manager instance is now owned by `CommandBase` and shared with derived commands.
+A command will lazily create the manager using the configured database path the first time it is needed.

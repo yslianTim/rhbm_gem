@@ -38,6 +38,7 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
 PotentialAnalysisCommand::~PotentialAnalysisCommand()
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::~PotentialAnalysisCommand() called.");
+    m_data_manager.reset();
 }
 
 void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
@@ -75,7 +76,11 @@ bool PotentialAnalysisCommand::Execute(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::Execute() called.");
 
-    auto data_manager{ std::make_unique<DataObjectManager>(m_options.database_path) };
+    if (!m_data_manager)
+    {
+        m_data_manager = std::make_unique<DataObjectManager>(m_options.database_path);
+    }
+    auto data_manager{ GetDataManagerPtr() };
     try
     {
         data_manager->ProcessFile(m_options.model_file_path, "model");
