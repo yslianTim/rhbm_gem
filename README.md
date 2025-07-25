@@ -26,3 +26,11 @@ Commands rely on `DataObjectManager` to load and store data objects. The manager
 The manager stores objects as `std::shared_ptr`. Functions such as `GetTypedDataObject` return shared pointers, ensuring the objects remain valid as long as callers keep a reference. File loading and writing are delegated to `FileIOManager`, which simplifies the class and improves testability. `DatabaseManager` caches DataObject DAO objects using `std::shared_ptr`; callers should simply hold the returned pointers without managing lifetime themselves.
 
 `DatabaseManager` is safe for concurrent use. Operations like `SaveDataObject` and `LoadDataObject` lock an internal mutex so multiple threads can access the database simultaneously without interference.
+
+### File IO and persistence work through cooperating managers:
+
+- **FileIOManager** selects a reader or writer based on file extension. It uses `FileProcessFactoryRegistry` to instantiate the appropriate factory and owns no persistent state.
+- **DatabaseManager** wraps the SQLite database. DAO objects are created via `DataObjectDAOFactoryRegistry` and cached for reuse.
+- **DataObjectManager** coordinates the above helpers. Commands load and save objects through it, delegating file operations to `FileIOManager` and database access to `DatabaseManager`.
+
+Together these managers keep data loading and persistence separate from command logic.
