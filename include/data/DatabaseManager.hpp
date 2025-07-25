@@ -15,7 +15,7 @@ class DatabaseManager
 {
     std::filesystem::path m_database_path;
     std::unique_ptr<SQLiteWrapper> m_database;
-    std::unordered_map<std::type_index, std::unique_ptr<DataObjectDAOBase>> m_dao_cache;
+    std::unordered_map<std::type_index, std::shared_ptr<DataObjectDAOBase>> m_dao_cache;
     mutable std::mutex m_mutex;
 
 public:
@@ -27,7 +27,7 @@ public:
 
     const std::filesystem::path & GetDatabasePath(void) const { return m_database_path; }
     SQLiteWrapper * GetDatabase(void) { return m_database.get(); }
-    DataObjectDAOBase * CreateDataObjectDAO(const DataObjectBase * data_object);
-    DataObjectDAOBase * CreateDataObjectDAO(const std::string & object_type);
+    std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const DataObjectBase * data_object);
+    std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const std::string & object_type);
     
 };

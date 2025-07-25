@@ -24,3 +24,4 @@ The manager instance is now owned by `CommandBase` and shared with derived comma
 A command lazily creates a `DataObjectManager` and assigns a `DatabaseManager` using the configured database path.
 If the option changes later on, the same `DataObjectManager` updates its `DatabaseManager` through a setter.
 `DataObjectManager` is thread-safe. All operations that access the internal data object map are synchronized using a mutex so commands may share the manager safely across threads.
+`DatabaseManager` caches DataObject DAO objects using `std::shared_ptr`. The `CreateDataObjectDAO` method returns a shared pointer that shares ownership with the cache so callers should simply hold the returned `shared_ptr` without attempting to manage lifetime themselves.

@@ -66,7 +66,8 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     return dao->Load(key_tag);
 }
 
-DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(const DataObjectBase * data_object)
+std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
+    const DataObjectBase * data_object)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::CreateDataObjectDAO() called");
     if (data_object == nullptr)
@@ -77,7 +78,8 @@ DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(const DataObjectBase * 
     return CreateDataObjectDAO(DataObjectDAOFactoryRegistry::Instance().GetTypeName(type));
 }
 
-DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(const std::string & object_type)
+std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
+    const std::string & object_type)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::CreateDataObjectDAO() called");
     auto type{ DataObjectDAOFactoryRegistry::Instance().GetTypeIndex(object_type) };
@@ -85,10 +87,10 @@ DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(const std::string & obj
     auto iter{ m_dao_cache.find(type) };
     if (iter != m_dao_cache.end())
     {
-        return iter->second.get();
+        return iter->second;
     }
-    auto dao{ DataObjectDAOFactoryRegistry::Instance().CreateDAO(type, m_database.get()) };
-    auto dao_ptr{ dao.get() };
-    m_dao_cache.emplace(type, std::move(dao));
-    return dao_ptr;
+    auto dao_unique{ DataObjectDAOFactoryRegistry::Instance().CreateDAO(type, m_database.get()) };
+    std::shared_ptr<DataObjectDAOBase> dao{ std::move(dao_unique) };
+    m_dao_cache.emplace(type, dao);
+    return dao;
 }
