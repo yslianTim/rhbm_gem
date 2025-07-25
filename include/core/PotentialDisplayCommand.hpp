@@ -36,10 +36,10 @@ private:
     Options m_options{};
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     std::unique_ptr<AtomSelector> m_atom_selector;
-    std::vector<ModelObject *> m_model_object_list;
-    std::vector<ModelObject *> m_ordered_model_object_list;
-    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
-    std::unordered_map<std::string, std::vector<ModelObject *>> m_ordered_ref_model_object_list_map;
+    std::vector<std::shared_ptr<ModelObject>> m_model_object_list;
+    std::vector<std::shared_ptr<ModelObject>> m_ordered_model_object_list;
+    std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;
+    std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ordered_ref_model_object_list_map;
 
 public:
     PotentialDisplayCommand(void);

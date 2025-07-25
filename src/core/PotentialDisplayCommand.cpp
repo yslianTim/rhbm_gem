@@ -91,7 +91,7 @@ bool PotentialDisplayCommand::Execute(void)
 
         for (auto & key : m_options.model_key_tag_list)
         {
-            auto object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key) };
+            auto object{ data_manager->GetTypedDataObject<ModelObject>(key) };
             m_model_object_list.emplace_back(object);
         }
 
@@ -99,12 +99,12 @@ bool PotentialDisplayCommand::Execute(void)
         {
             for (auto & tag : tag_list)
             {
-                auto object{ data_manager->GetTypedDataObjectPtr<ModelObject>(tag) };
+                auto object{ data_manager->GetTypedDataObject<ModelObject>(tag) };
                 m_ref_model_object_list_map[class_key].emplace_back(object);
             }
         }
 
-        for (auto * model_object : m_model_object_list)
+        for (const auto & model_object : m_model_object_list)
         {
             for (auto & atom : model_object->GetComponentsList())
             {
@@ -264,7 +264,7 @@ void PotentialDisplayCommand::BuildOrderedModelObjectList(void)
     m_ordered_model_object_list.clear();
     for (const auto & key : m_options.model_key_tag_list)
     {
-        for (auto * model_object : m_model_object_list)
+        for (const auto & model_object : m_model_object_list)
         {
             if (model_object->GetKeyTag() == key)
             {
@@ -284,10 +284,10 @@ void PotentialDisplayCommand::BuildOrderedRefModelObjectListMap(void)
         auto it{ m_ref_model_object_list_map.find(class_key) };
         if (it == m_ref_model_object_list_map.end()) continue;
         auto & model_object_list{ it->second };
-        std::vector<ModelObject *> ordered_model_object_list;
+        std::vector<std::shared_ptr<ModelObject>> ordered_model_object_list;
         for (const auto & key : ordered_key_list)
         {
-            for (auto * model_object : model_object_list)
+            for (const auto & model_object : model_object_list)
             {
                 if (model_object->GetKeyTag() == key)
                 {
@@ -309,7 +309,7 @@ void PotentialDisplayCommand::RunDisplay(void)
     {
         case PainterType::ATOM:
             painter = std::make_unique<AtomPainter>();
-            for (auto * model_object : m_ordered_model_object_list)
+            for (const auto & model_object : m_ordered_model_object_list)
             {
                 for (auto & atom : model_object->GetComponentsList())
                 {
@@ -321,43 +321,43 @@ void PotentialDisplayCommand::RunDisplay(void)
             break;
         case PainterType::MODEL:
             painter = std::make_unique<ModelPainter>();
-            for (auto * model_object : m_ordered_model_object_list)
+            for (const auto & model_object : m_ordered_model_object_list)
             {
-                painter->AddDataObject(model_object);
+                painter->AddDataObject(model_object.get());
             }
-            for (auto & [class_key, obj_list] : m_ordered_ref_model_object_list_map)
+            for (auto & [class_key, model_object_list] : m_ordered_ref_model_object_list_map)
             {
-                for (auto * obj : obj_list)
+                for (const auto & model_object : model_object_list)
                 {
-                    painter->AddReferenceDataObject(obj, class_key);
+                    painter->AddReferenceDataObject(model_object.get(), class_key);
                 }
             }
             break;
         case PainterType::COMPARISON:
             painter = std::make_unique<ComparisonPainter>();
-            for (auto * model_object : m_ordered_model_object_list)
+            for (const auto & model_object : m_ordered_model_object_list)
             {
-                painter->AddDataObject(model_object);
+                painter->AddDataObject(model_object.get());
             }
-            for (auto & [class_key, obj_list] : m_ordered_ref_model_object_list_map)
+            for (auto & [class_key, model_object_list] : m_ordered_ref_model_object_list_map)
             {
-                for (auto * obj : obj_list)
+                for (const auto & model_object : model_object_list)
                 {
-                    painter->AddReferenceDataObject(obj, class_key);
+                    painter->AddReferenceDataObject(model_object.get(), class_key);
                 }
             }
             break;
         case PainterType::DEMO:
             painter = std::make_unique<DemoPainter>();
-            for (auto * model_object : m_ordered_model_object_list)
+            for (const auto & model_object : m_ordered_model_object_list)
             {
-                painter->AddDataObject(model_object);
+                painter->AddDataObject(model_object.get());
             }
-            for (auto & [class_key, obj_list] : m_ordered_ref_model_object_list_map)
+            for (auto & [class_key, model_object_list] : m_ordered_ref_model_object_list_map)
             {
-                for (auto * obj : obj_list)
+                for (const auto & model_object : model_object_list)
                 {
-                    painter->AddReferenceDataObject(obj, class_key);
+                    painter->AddReferenceDataObject(model_object.get(), class_key);
                 }
             }
             break;

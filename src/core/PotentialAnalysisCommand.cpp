@@ -80,8 +80,8 @@ bool PotentialAnalysisCommand::Execute(void)
         data_manager->ProcessFile(m_options.map_file_path, "map");
         if (m_options.is_simulation == true)
         {
-            auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>("model") };
-            UpdateModelObjectForSimulation(model_object);
+            auto model_object{ data_manager->GetTypedDataObject<ModelObject>("model") };
+            UpdateModelObjectForSimulation(model_object.get());
         }
     }
     catch (const std::exception & e)
@@ -90,8 +90,8 @@ bool PotentialAnalysisCommand::Execute(void)
         return false;
     }
 
-    auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>("model") };
-    auto map_object{ data_manager->GetTypedDataObjectPtr<MapObject>("map") };
+    auto model_object{ data_manager->GetTypedDataObject<ModelObject>("model") };
+    auto map_object{ data_manager->GetTypedDataObject<MapObject>("map") };
     map_object->MapValueArrayNormalization();
     for (auto & atom : model_object->GetComponentsList())
     {
@@ -106,8 +106,8 @@ bool PotentialAnalysisCommand::Execute(void)
     }
     Logger::Log(LogLevel::Info, "Number of selected atom = "
                 + std::to_string(model_object->GetNumberOfSelectedAtom()));
-    RunMapValueSampling(model_object, map_object);
-    RunPotentialFitting(model_object);
+    RunMapValueSampling(model_object.get(), map_object.get());
+    RunPotentialFitting(model_object.get());
     data_manager->SaveDataObject("model", m_options.saved_key_tag);
     return true;
 }

@@ -80,8 +80,8 @@ bool MapSimulationCommand::Execute(void)
         auto data_manager{ GetDataManagerPtr() };
         data_manager->ProcessFile(m_options.model_file_path, "model");
 
-        auto model_object{ data_manager->GetTypedDataObjectPtr<ModelObject>("model") };
-        RunMapSimulation(model_object);
+        auto model_object{ data_manager->GetTypedDataObject<ModelObject>("model") };
+        RunMapSimulation(model_object.get());
     }
     catch(const std::exception & e)
     {

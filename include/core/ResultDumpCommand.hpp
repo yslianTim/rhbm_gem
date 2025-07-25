@@ -28,8 +28,8 @@ private:
     Options m_options{};
     std::string m_map_key_tag;
     std::unordered_map<std::string, std::vector<AtomObject *>> m_selected_atom_list_map;
-    std::vector<ModelObject *> m_model_object_list;
-    MapObject * m_map_object;
+    std::vector<std::shared_ptr<ModelObject>> m_model_object_list;
+    std::shared_ptr<MapObject> m_map_object;
 
 public:
     ResultDumpCommand(void);

@@ -83,12 +83,12 @@ bool ResultDumpCommand::Execute(void)
 
     for (auto & key : m_options.model_key_tag_list)
     {
-        auto object{ data_manager->GetTypedDataObjectPtr<ModelObject>(key) };
+        auto object{ data_manager->GetTypedDataObject<ModelObject>(key) };
         m_model_object_list.emplace_back(object);
     }
     if (!m_options.map_file_path.empty())
     {
-        m_map_object = data_manager->GetTypedDataObjectPtr<MapObject>("map");
+        m_map_object = data_manager->GetTypedDataObject<MapObject>("map");
     }
 
     BuildSelectedAtomList();
@@ -143,7 +143,7 @@ void ResultDumpCommand::BuildSelectedAtomList(void)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::BuildSelectedAtomList() called");
     m_selected_atom_list_map.clear();
-    for (auto * model_object : m_model_object_list)
+    for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
         for (auto & atom : model_object->GetComponentsList())
@@ -162,7 +162,7 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunAtomPositionDumping() called");
     ScopeTimer timer("ResultDumpVisitor::RunAtomPositionDumping");
 
-    for (auto * model_object : m_model_object_list)
+    for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_position_list_"+ model_object->GetPdbID() +".csv" };
@@ -201,7 +201,7 @@ void ResultDumpCommand::RunMapValueDumping(void)
 
     auto margin{ 3.0f };
 
-    for (auto * model_object : m_model_object_list)
+    for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
         auto atom_size{ m_selected_atom_list_map.at(key_tag).size() };
@@ -265,7 +265,7 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunGausEstimatesDumping() called");
     ScopeTimer timer("ResultDumpCommand::RunGausEstimatesDumping");
 
-    for (auto * model_object : m_model_object_list)
+    for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_gaus_list_"+ model_object->GetPdbID() +".csv" };
@@ -299,10 +299,10 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
 
     auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
 
-    for (auto * model_object : m_model_object_list)
+    for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
-        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object.get()) };
 
         std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };
         std::string output_path{

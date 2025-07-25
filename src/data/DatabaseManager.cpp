@@ -13,6 +13,8 @@ DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
     Logger::Log(LogLevel::Debug, "DatabaseManager::DatabaseManager() called");
     if (m_database_path.empty()) m_database_path = "database.sqlite";
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
+    m_database->Execute(
+        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
 }
 
 DatabaseManager::~DatabaseManager()
@@ -31,8 +33,6 @@ void DatabaseManager::SaveDataObject(
     std::string type_name{
         DataObjectDAOFactoryRegistry::Instance().GetTypeName(std::type_index(typeid(*data_object)))
     };
-    m_database->Execute(
-        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
     m_database->Prepare(
         "INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?) "
         "ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;");
@@ -47,8 +47,6 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::LoadDataObject() called");
     SQLiteWrapper::TransactionGuard transaction(*m_database);
-    m_database->Execute(
-        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
     m_database->Prepare(
         "SELECT object_type FROM object_metadata WHERE key_tag = ? LIMIT 1;");
     SQLiteWrapper::StatementGuard guard(*m_database);
