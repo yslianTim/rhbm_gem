@@ -41,6 +41,11 @@ void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
 void DataObjectManager::SetDatabaseManager(std::shared_ptr<DatabaseManager> manager)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::SetDatabaseManager() called");
+    if (!manager)
+    {
+        Logger::Log(LogLevel::Error, "SetDatabaseManager(): nullptr provided");
+        throw std::invalid_argument("DatabaseManager pointer cannot be null");
+    }
     std::unique_lock<std::shared_mutex> lock(m_mutex);
     m_db_manager = std::move(manager);
 }

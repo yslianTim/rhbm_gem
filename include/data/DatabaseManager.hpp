@@ -16,7 +16,8 @@ class DatabaseManager
     std::filesystem::path m_database_path;
     std::unique_ptr<SQLiteWrapper> m_database;
     std::unordered_map<std::type_index, std::shared_ptr<DataObjectDAOBase>> m_dao_cache;
-    mutable std::mutex m_mutex;
+    mutable std::mutex m_mutex;     // Protects m_dao_cache
+    mutable std::mutex m_db_mutex;  // Protects database operations
 
 public:
     explicit DatabaseManager(const std::filesystem::path & database_path);

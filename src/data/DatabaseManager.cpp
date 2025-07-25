@@ -26,6 +26,7 @@ void DatabaseManager::SaveDataObject(
     const DataObjectBase * data_object, const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::SaveDataObject() called");
+    std::lock_guard<std::mutex> lock(m_db_mutex);
     auto dao{ CreateDataObjectDAO(data_object) };
     dao->Save(data_object, key_tag);
 
@@ -46,6 +47,7 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::LoadDataObject() called");
+    std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->Prepare(
         "SELECT object_type FROM object_metadata WHERE key_tag = ? LIMIT 1;");
