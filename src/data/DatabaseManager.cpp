@@ -27,6 +27,7 @@ void DatabaseManager::SaveDataObject(
     auto dao{ CreateDataObjectDAO(data_object) };
     dao->Save(data_object, key_tag);
 
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
     std::string type_name{
         DataObjectDAOFactoryRegistry::Instance().GetTypeName(std::type_index(typeid(*data_object)))
     };
@@ -45,6 +46,7 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::LoadDataObject() called");
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->Execute(
         "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
     m_database->Prepare(
