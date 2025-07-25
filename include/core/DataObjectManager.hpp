@@ -28,12 +28,9 @@ public:
     DataObjectManager(DataObjectManager &&) noexcept = default;
     DataObjectManager & operator=(DataObjectManager &&) noexcept = default;
     void SetDatabaseManager(const std::filesystem::path & dbname);
-    void SetDatabaseManager(std::shared_ptr<DatabaseManager> manager);
     void ProcessFile(const std::filesystem::path & filename, const std::string & key_tag);
     void ProduceFile(const std::filesystem::path & filename, const std::string & key_tag);
-    bool AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object);
     bool HasDataObject(const std::string & key_tag) const;
-    void RemoveDataObject(const std::string & key_tag);
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(DataObjectVisitorBase * visitor);
@@ -41,7 +38,6 @@ public:
     void PrintDataObjectInfo(const std::string & key_tag) const;
     std::shared_ptr<DataObjectBase> GetDataObject(const std::string & key_tag);
     std::shared_ptr<const DataObjectBase> GetDataObject(const std::string & key_tag) const;
-    std::shared_ptr<DatabaseManager> GetDatabaseManager(void);
     std::shared_ptr<DatabaseManager> GetDatabaseManager(void) const;
     template <typename TypedDataObject>
     std::shared_ptr<TypedDataObject> GetTypedDataObject(const std::string & key_tag)
@@ -60,5 +56,9 @@ public:
         return typed_object;
     }
     const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> & GetDataObjectMap(void) const;
+
+private:
+    bool AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object);
+    void RemoveDataObject(const std::string & key_tag);
 
 };

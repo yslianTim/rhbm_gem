@@ -38,18 +38,6 @@ void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
     }
 }
 
-void DataObjectManager::SetDatabaseManager(std::shared_ptr<DatabaseManager> manager)
-{
-    Logger::Log(LogLevel::Debug, "DataObjectManager::SetDatabaseManager() called");
-    if (!manager)
-    {
-        Logger::Log(LogLevel::Error, "SetDatabaseManager(): nullptr provided");
-        throw std::invalid_argument("DatabaseManager pointer cannot be null");
-    }
-    std::unique_lock<std::shared_mutex> lock(m_db_mutex);
-    m_db_manager = std::move(manager);
-}
-
 void DataObjectManager::ProcessFile(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
@@ -62,7 +50,7 @@ void DataObjectManager::ProcessFile(
         if (inserted == false)
         {
             Logger::Log(LogLevel::Warning,
-                        "Data object with key tag: [" + key_tag + "] overwritten or insertion failed.");
+                        "Data object with key tag: [" + key_tag + "] already existed and was overwritten.");
         }
     }
     catch (const std::exception & ex)
@@ -279,12 +267,6 @@ std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(const std
         throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
     }
     return iter->second;
-}
-
-std::shared_ptr<DatabaseManager> DataObjectManager::GetDatabaseManager(void)
-{
-    std::shared_lock<std::shared_mutex> lock(m_db_mutex);
-    return m_db_manager;
 }
 
 std::shared_ptr<DatabaseManager> DataObjectManager::GetDatabaseManager(void) const

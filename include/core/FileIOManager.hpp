@@ -9,8 +9,8 @@ class DataObjectBase;
 class FileIOManager
 {
 public:
-    FileIOManager(void) = default;
-    ~FileIOManager() = default;
+    FileIOManager(void) = delete;
+    ~FileIOManager() = delete;
 
     static std::shared_ptr<DataObjectBase> LoadDataObject(const std::filesystem::path & filename,
                                                           const std::string & key_tag);
