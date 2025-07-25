@@ -86,7 +86,7 @@ bool DataObjectManager::AddDataObject(
         Logger::Log(LogLevel::Error, "AddDataObject(): nullptr provided for key tag: " + key_tag);
         return false;
     }
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
     auto result{ m_data_object_map.insert_or_assign(key_tag, std::move(data_object)) };
     if (!result.second)
     {
@@ -99,13 +99,13 @@ bool DataObjectManager::AddDataObject(
 
 bool DataObjectManager::HasDataObject(const std::string & key_tag) const
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
     return m_data_object_map.find(key_tag) != m_data_object_map.end();
 }
 
 void DataObjectManager::RemoveDataObject(const std::string & key_tag)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
     m_data_object_map.erase(key_tag);
 }
 
@@ -165,7 +165,7 @@ void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::Accept() called");
     ScopeTimer timer("DataObjectManager::Accept");
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
     for (auto & [key, data_object] : m_data_object_map)
     {
         if (data_object)
@@ -179,17 +179,18 @@ void DataObjectManager::Accept(DataObjectVisitorBase * visitor, const std::vecto
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::Accept() with key list called");
     ScopeTimer timer("DataObjectManager::Accept");
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
     for (const auto & key : key_list)
     {
-        if (HasDataObject(key) == false)
+        auto iter{ m_data_object_map.find(key) };
+        if (iter == m_data_object_map.end())
         {
             Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
             continue;
         }
-        auto data_object{ GetDataObjectPtr(key) };
-        if (data_object)
+        if (iter->second)
         {
-            data_object->Accept(visitor);
+            iter->second->Accept(visitor);
         }
     }
 }
@@ -209,7 +210,7 @@ void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
 
 DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
     auto iter{ m_data_object_map.find(key_tag) };
     if (iter == m_data_object_map.end())
     {
@@ -220,7 +221,7 @@ DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag
 
 const DataObjectBase * DataObjectManager::GetDataObjectPtr(const std::string & key_tag) const
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
     auto iter{ m_data_object_map.find(key_tag) };
     if (iter == m_data_object_map.end())
     {

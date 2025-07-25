@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <stdexcept>
 #include <vector>
-#include <mutex>
+#include <shared_mutex>
 
 class DatabaseManager;
 class FileProcessFactoryBase;
@@ -17,7 +17,7 @@ class DataObjectManager
 {
     std::unique_ptr<DatabaseManager> m_db_manager;
     std::unordered_map<std::string, std::unique_ptr<DataObjectBase>> m_data_object_map;
-    mutable std::mutex m_mutex; // Protects access to m_data_object_map for thread safety
+    mutable std::shared_mutex m_mutex; // Protects access to m_data_object_map for thread safety
 
 public:
     DataObjectManager(void);
