@@ -13,6 +13,7 @@ class FileProcessFactoryRegistry
 
 public:
     static FileProcessFactoryRegistry & Instance(void);
+    void RegisterDefaultFactories(void);
     void RegisterFactory(const std::string & extension, std::function<std::unique_ptr<FileProcessFactoryBase>()> creator);
     std::unique_ptr<FileProcessFactoryBase> CreateFactory(const std::string & extension) const;
 

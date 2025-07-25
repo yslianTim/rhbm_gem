@@ -165,12 +165,19 @@ void DataObjectManager::SaveDataObject(
         }
         db = m_db_manager;
     }
-    if (HasDataObject(key_tag) == false)
+
+    std::shared_ptr<DataObjectBase> data_object;
     {
-        Logger::Log(LogLevel::Warning,
-                    "The data object with key tag: [" + key_tag + "] isn't presented, "
-                    "skip saving data object.");
-        return;
+        std::shared_lock<std::shared_mutex> lock(m_map_mutex);
+        auto iter{ m_data_object_map.find(key_tag) };
+        if (iter == m_data_object_map.end())
+        {
+            Logger::Log(LogLevel::Warning,
+                        "The data object with key tag: [" + key_tag + "] isn't presented, "
+                        "skip saving data object.");
+            return;
+        }
+        data_object = iter->second;
     }
 
     auto saved_key_tag{ renamed_key_tag.empty() ? key_tag : renamed_key_tag };
@@ -188,7 +195,7 @@ void DataObjectManager::SaveDataObject(
                     db->GetDatabasePath().string());
     }
 
-    db->SaveDataObject(GetDataObject(key_tag).get(), saved_key_tag);
+    db->SaveDataObject(data_object.get(), saved_key_tag);
 }
 
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
@@ -286,15 +293,8 @@ std::shared_ptr<DatabaseManager> DataObjectManager::GetDatabaseManager(void) con
     return m_db_manager;
 }
 
-std::unordered_map<std::string, std::shared_ptr<const DataObjectBase>>
+const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> &
 DataObjectManager::GetDataObjectMap(void) const
 {
-    std::shared_lock<std::shared_mutex> lock(m_map_mutex);
-    std::unordered_map<std::string, std::shared_ptr<const DataObjectBase>> copy_map;
-    copy_map.reserve(m_data_object_map.size());
-    for (const auto & [key, obj] : m_data_object_map)
-    {
-        copy_map.emplace(key, obj);
-    }
-    return copy_map;
+    return m_data_object_map;
 }

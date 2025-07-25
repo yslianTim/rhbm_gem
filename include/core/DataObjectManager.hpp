@@ -59,6 +59,6 @@ public:
         if (!typed_object) throw std::runtime_error("Invalid data type for " + key_tag);
         return typed_object;
     }
-    std::unordered_map<std::string, std::shared_ptr<const DataObjectBase>> GetDataObjectMap(void) const;
+    const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> & GetDataObjectMap(void) const;
 
 };

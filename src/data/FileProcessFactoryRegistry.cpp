@@ -8,16 +8,16 @@ FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance(void)
 {
     Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::Instance() called");
     static FileProcessFactoryRegistry instance;
-    static bool initialized{ false };
-    if (initialized == false)
-    {
-        instance.RegisterFactory(".pdb", []() { return std::make_unique<ModelObjectFactory>(); });
-        instance.RegisterFactory(".cif", []() { return std::make_unique<ModelObjectFactory>(); });
-        instance.RegisterFactory(".mrc", []() { return std::make_unique<MapObjectFactory>(); });
-        instance.RegisterFactory(".map", []() { return std::make_unique<MapObjectFactory>(); });
-        initialized = true;
-    }
     return instance;
+}
+
+void FileProcessFactoryRegistry::RegisterDefaultFactories(void)
+{
+    Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::RegisterDefaultFactories() called");
+    RegisterFactory(".pdb", []() { return std::make_unique<ModelObjectFactory>(); });
+    RegisterFactory(".cif", []() { return std::make_unique<ModelObjectFactory>(); });
+    RegisterFactory(".mrc", []() { return std::make_unique<MapObjectFactory>(); });
+    RegisterFactory(".map", []() { return std::make_unique<MapObjectFactory>(); });
 }
 
 void FileProcessFactoryRegistry::RegisterFactory(
