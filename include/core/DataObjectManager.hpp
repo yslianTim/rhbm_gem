@@ -15,7 +15,7 @@ class DataObjectVisitorBase;
 
 class DataObjectManager
 {
-    std::unique_ptr<DatabaseManager> m_db_manager;
+    std::shared_ptr<DatabaseManager> m_db_manager;
     std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> m_data_object_map;
     mutable std::shared_mutex m_mutex; // Protects m_data_object_map and m_db_manager
 
@@ -27,6 +27,7 @@ public:
     DataObjectManager(DataObjectManager &&) noexcept = default;
     DataObjectManager & operator=(DataObjectManager &&) noexcept = default;
     void SetDatabaseManager(const std::filesystem::path & dbname);
+    void SetDatabaseManager(std::shared_ptr<DatabaseManager> manager);
     void ProcessFile(const std::filesystem::path & filename, const std::string & key_tag);
     void ProduceFile(const std::filesystem::path & filename, const std::string & key_tag);
     bool AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object);
@@ -57,6 +58,6 @@ public:
         if (!typed_object) throw std::runtime_error("Invalid data type for " + key_tag);
         return typed_object;
     }
-    const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> & GetDataObjectMap(void) const { return m_data_object_map; }
+    std::unordered_map<std::string, std::shared_ptr<const DataObjectBase>> GetDataObjectMap(void) const;
 
 };

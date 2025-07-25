@@ -1,4 +1,5 @@
 #include "DataObjectManager.hpp"
+#include "FileIOManager.hpp"
 #include "FileProcessFactoryBase.hpp"
 #include "FileProcessFactoryRegistry.hpp"
 #include "FilePathHelper.hpp"
@@ -30,11 +31,18 @@ void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
                     + ", skip re-allocation of DatabaseManager.");
         return;
     }
-    m_db_manager = std::make_unique<DatabaseManager>(dbname);
+    m_db_manager = std::make_shared<DatabaseManager>(dbname);
     if (!m_db_manager->GetDatabase())
     {
         throw std::runtime_error("Failed to initialize database manager with path: " + dbname.string());
     }
+}
+
+void DataObjectManager::SetDatabaseManager(std::shared_ptr<DatabaseManager> manager)
+{
+    Logger::Log(LogLevel::Debug, "DataObjectManager::SetDatabaseManager() called");
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
+    m_db_manager = std::move(manager);
 }
 
 void DataObjectManager::ProcessFile(
@@ -42,17 +50,7 @@ void DataObjectManager::ProcessFile(
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::ProcessFile() called");
     ScopeTimer timer("DataObjectManager::ProcessFile");
-    auto file_extension{ FilePathHelper::GetExtension(filename) };
-    auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(file_extension) };
-    auto data_object{ factory->CreateDataObject(filename) };
-    if (data_object == nullptr)
-    {
-        throw std::runtime_error("Failed to create data object");
-    }
-    data_object->SetKeyTag(key_tag);
-    data_object->Display();
-
-    std::shared_ptr<DataObjectBase> shared_object{ std::move(data_object) };
+    auto shared_object{ FileIOManager::LoadDataObject(filename, key_tag) };
     bool inserted{ AddDataObject(key_tag, std::move(shared_object)) };
     if (inserted == false)
     {
@@ -74,9 +72,7 @@ void DataObjectManager::ProduceFile(
         return;
     }
     auto data_object{ GetDataObject(key_tag) };
-    auto file_extension{ FilePathHelper::GetExtension(filename) };
-    auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(file_extension) };
-    factory->OutputDataObject(filename, data_object.get());
+    FileIOManager::WriteDataObject(filename, data_object.get());
 };
 
 bool DataObjectManager::AddDataObject(
@@ -88,7 +84,7 @@ bool DataObjectManager::AddDataObject(
         Logger::Log(LogLevel::Error, "AddDataObject(): nullptr provided for key tag: " + key_tag);
         return false;
     }
-    std::shared_lock<std::shared_mutex> lock(m_mutex);
+    std::unique_lock<std::shared_mutex> lock(m_mutex);
     auto result{ m_data_object_map.insert_or_assign(key_tag, std::move(data_object)) };
     if (!result.second)
     {
@@ -257,4 +253,16 @@ const DatabaseManager * DataObjectManager::GetDatabaseManagerPtr(void) const
 {
     std::shared_lock<std::shared_mutex> lock(m_mutex);
     return m_db_manager.get();
+}
+
+std::unordered_map<std::string, std::shared_ptr<const DataObjectBase>> DataObjectManager::GetDataObjectMap(void) const
+{
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
+    std::unordered_map<std::string, std::shared_ptr<const DataObjectBase>> copy_map;
+    copy_map.reserve(m_data_object_map.size());
+    for (const auto & [key, obj] : m_data_object_map)
+    {
+        copy_map.emplace(key, obj);
+    }
+    return copy_map;
 }
