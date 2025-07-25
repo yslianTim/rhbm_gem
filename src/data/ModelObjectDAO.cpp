@@ -15,7 +15,7 @@
 #include <string>
 #include <string_view>
 
-namespace { DataObjectDAORegistrar<ModelObject, ModelObjectDAO> registrar_model_dao; }
+namespace { DataObjectDAORegistrar<ModelObject, ModelObjectDAO> registrar_model_dao("model"); }
 
 namespace
 {

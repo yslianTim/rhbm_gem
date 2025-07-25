@@ -9,7 +9,7 @@
 #include <vector>
 #include <cstring>
 
-namespace { DataObjectDAORegistrar<MapObject, MapObjectDAO> registrar_map_dao; }
+namespace { DataObjectDAORegistrar<MapObject, MapObjectDAO> registrar_map_dao("map"); }
 
 namespace
 {

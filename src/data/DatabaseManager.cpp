@@ -26,77 +26,47 @@ void DatabaseManager::SaveDataObject(
     Logger::Log(LogLevel::Debug, "DatabaseManager::SaveDataObject() called");
     auto dao{ CreateDataObjectDAO(data_object) };
     dao->Save(data_object, key_tag);
+
+    std::string type_name{
+        DataObjectDAOFactoryRegistry::Instance().GetTypeName(std::type_index(typeid(*data_object)))
+    };
+    m_database->Execute(
+        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
+    m_database->Prepare(
+        "INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?) "
+        "ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;");
+    SQLiteWrapper::StatementGuard guard(*m_database);
+    m_database->Bind<std::string>(1, key_tag);
+    m_database->Bind<std::string>(2, type_name);
+    m_database->StepOnce();
 }
 
 std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::LoadDataObject() called");
-    auto table_exists = [this](const std::string & table_name) {
-        m_database->Prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;");
-        SQLiteWrapper::StatementGuard guard(*m_database);
-        m_database->Bind<std::string>(1, table_name);
-        auto rc{ m_database->StepNext() };
-        if (rc == SQLiteWrapper::StepRow())
-        {
-            return true;
-        }
-        else if (rc == SQLiteWrapper::StepDone())
-        {
-            return false;
-        }
-        else
-        {
-            throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
-        }
-    };
-
-    auto has_entry = [this](const std::string & table, const std::string & key) {
-        m_database->Prepare("SELECT key_tag FROM " + table + " WHERE key_tag = ? LIMIT 1;");
-        SQLiteWrapper::StatementGuard guard(*m_database);
-        m_database->Bind<std::string>(1, key);
-        auto rc{ m_database->StepNext() };
-        if (rc == SQLiteWrapper::StepRow()) return true;
-        if (rc == SQLiteWrapper::StepDone()) return false;
-        throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
-    };
-
-    bool is_map{ false };
-    bool is_model{ false };
-    if (table_exists("map_list") && has_entry("map_list", key_tag))
-    {
-        is_map = true;
-    }
-    else if (table_exists("model_list") && has_entry("model_list", key_tag))
-    {
-        is_model = true;
-    }
-    else
+    m_database->Execute(
+        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
+    m_database->Prepare(
+        "SELECT object_type FROM object_metadata WHERE key_tag = ? LIMIT 1;");
+    SQLiteWrapper::StatementGuard guard(*m_database);
+    m_database->Bind<std::string>(1, key_tag);
+    auto rc{ m_database->StepNext() };
+    if (rc == SQLiteWrapper::StepDone())
     {
         throw std::runtime_error("Cannot find the row with key_tag = " + key_tag);
     }
+    else if (rc != SQLiteWrapper::StepRow())
+    {
+        throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
+    }
 
-    if (is_map)
-    {
-        auto map_object{ std::make_unique<MapObject>() };
-        auto dao{ CreateDataObjectDAO(map_object.get()) };
-        return dao->Load(key_tag);
-    }
-    else if (is_model)
-    {
-        auto model_object{ std::make_unique<ModelObject>() };
-        auto dao{ CreateDataObjectDAO(model_object.get()) };
-        return dao->Load(key_tag);
-    }
-    else
-    {
-        return nullptr;
-    }
+    auto type_name{ m_database->GetColumn<std::string>(0) };
+    auto dao{ CreateDataObjectDAO(type_name) };
+    return dao->Load(key_tag);
 }
 
-DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(
-    const DataObjectBase * data_object)
+DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(const DataObjectBase * data_object)
 {
     Logger::Log(LogLevel::Debug, "DatabaseManager::CreateDataObjectDAO() called");
     if (data_object == nullptr)
@@ -104,6 +74,13 @@ DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(
         throw std::runtime_error("Null data object pointer provided.");
     }
     auto type{ std::type_index(typeid(*data_object)) };
+    return CreateDataObjectDAO(DataObjectDAOFactoryRegistry::Instance().GetTypeName(type));
+}
+
+DataObjectDAOBase * DatabaseManager::CreateDataObjectDAO(const std::string & object_type)
+{
+    Logger::Log(LogLevel::Debug, "DatabaseManager::CreateDataObjectDAO() called");
+    auto type{ DataObjectDAOFactoryRegistry::Instance().GetTypeIndex(object_type) };
     std::lock_guard<std::mutex> lock(m_mutex);
     auto iter{ m_dao_cache.find(type) };
     if (iter != m_dao_cache.end())

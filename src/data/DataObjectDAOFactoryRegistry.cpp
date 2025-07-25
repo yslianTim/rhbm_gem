@@ -10,11 +10,13 @@ DataObjectDAOFactoryRegistry & DataObjectDAOFactoryRegistry::Instance(void)
 }
 
 bool DataObjectDAOFactoryRegistry::RegisterFactory(
-    std::type_index type,
+    std::type_index type, const std::string & name,
     std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)> factory)
 {
     Logger::Log(LogLevel::Debug, "DataObjectDAOFactoryRegistry::RegisterFactory() called");
-    m_factory_map[type] = std::move(factory);
+    FactoryInfo info{ name, std::move(factory) };
+    m_factory_map[type] = std::move(info);
+    m_name_map.emplace(name, type);
     return true;
 }
 
@@ -27,5 +29,37 @@ std::unique_ptr<DataObjectDAOBase> DataObjectDAOFactoryRegistry::CreateDAO(
     {
         throw std::runtime_error("Unsupported data object type.");
     }
-    return (iter->second)(db);
+    return (iter->second.factory)(db);
+}
+
+std::unique_ptr<DataObjectDAOBase> DataObjectDAOFactoryRegistry::CreateDAO(
+    const std::string & name, SQLiteWrapper * db) const
+{
+    Logger::Log(LogLevel::Debug, "DataObjectDAOFactoryRegistry::CreateDAO() called");
+    auto iter{ m_name_map.find(name) };
+    if (iter == m_name_map.end())
+    {
+        throw std::runtime_error("Unsupported data object type: " + name);
+    }
+    return CreateDAO(iter->second, db);
+}
+
+std::string DataObjectDAOFactoryRegistry::GetTypeName(std::type_index type) const
+{
+    auto iter{ m_factory_map.find(type) };
+    if (iter == m_factory_map.end())
+    {
+        throw std::runtime_error("Unsupported data object type.");
+    }
+    return iter->second.name;
+}
+
+std::type_index DataObjectDAOFactoryRegistry::GetTypeIndex(const std::string & name) const
+{
+    auto iter{ m_name_map.find(name) };
+    if (iter == m_name_map.end())
+    {
+        throw std::runtime_error("Unsupported data object type: " + name);
+    }
+    return iter->second;
 }

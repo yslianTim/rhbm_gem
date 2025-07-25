@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <typeindex>
 #include <unordered_map>
 
@@ -10,25 +11,34 @@ class DataObjectDAOBase;
 
 class DataObjectDAOFactoryRegistry
 {
+    struct FactoryInfo
+    {
+        std::string name;
+        std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)> factory;
+    };
+
+    std::unordered_map<std::type_index, FactoryInfo> m_factory_map;
+    std::unordered_map<std::string, std::type_index> m_name_map;
+
 public:
     static DataObjectDAOFactoryRegistry & Instance(void);
-    bool RegisterFactory(std::type_index type,
+    bool RegisterFactory(std::type_index type, const std::string & name,
                          std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)> factory);
     std::unique_ptr<DataObjectDAOBase> CreateDAO(std::type_index type, SQLiteWrapper * db) const;
+    std::unique_ptr<DataObjectDAOBase> CreateDAO(const std::string & name, SQLiteWrapper * db) const;
+    std::string GetTypeName(std::type_index type) const;
+    std::type_index GetTypeIndex(const std::string & name) const;
 
-private:
-    std::unordered_map<std::type_index,
-        std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)>> m_factory_map;
 };
 
 template <typename DataObjectType, typename DAOType>
 class DataObjectDAORegistrar
 {
 public:
-    DataObjectDAORegistrar()
+    explicit DataObjectDAORegistrar(const std::string & name)
     {
         DataObjectDAOFactoryRegistry::Instance().RegisterFactory(
-            typeid(DataObjectType),
+            typeid(DataObjectType), name,
             [](SQLiteWrapper* db){ return std::make_unique<DAOType>(db); });
     }
 };

@@ -28,5 +28,6 @@ public:
     const std::filesystem::path & GetDatabasePath(void) const { return m_database_path; }
     SQLiteWrapper * GetDatabase(void) { return m_database.get(); }
     DataObjectDAOBase * CreateDataObjectDAO(const DataObjectBase * data_object);
+    DataObjectDAOBase * CreateDataObjectDAO(const std::string & object_type);
     
 };

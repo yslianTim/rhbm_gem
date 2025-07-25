@@ -30,10 +30,6 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     m_sphere_sampler{ std::make_unique<SphereSampler>() }
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::PotentialAnalysisCommand() called.");
-    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
-    m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
-    m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
-    m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
 }
 
 PotentialAnalysisCommand::~PotentialAnalysisCommand()
@@ -189,6 +185,10 @@ void PotentialAnalysisCommand::RunMapValueSampling(ModelObject * model_object, M
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunMapValueSampling() called");
     if (map_object == nullptr) return;
+    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
+    m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
+    m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
+    m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
     m_sphere_sampler->Print();
     MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
     for (auto & atom : model_object->GetSelectedAtomList())
