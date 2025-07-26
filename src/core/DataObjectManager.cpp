@@ -102,12 +102,6 @@ bool DataObjectManager::HasDataObject(const std::string & key_tag) const
     return m_data_object_map.find(key_tag) != m_data_object_map.end();
 }
 
-void DataObjectManager::RemoveDataObject(const std::string & key_tag)
-{
-    std::unique_lock<std::shared_mutex> lock(m_map_mutex);
-    m_data_object_map.erase(key_tag);
-}
-
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::LoadDataObject() called");

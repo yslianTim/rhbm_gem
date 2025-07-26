@@ -59,6 +59,4 @@ public:
 
 private:
     bool AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object);
-    void RemoveDataObject(const std::string & key_tag);
-
 };

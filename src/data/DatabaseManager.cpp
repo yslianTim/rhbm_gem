@@ -2,8 +2,7 @@
 #include "SQLiteWrapper.hpp"
 #include "DataObjectDAOBase.hpp"
 #include "DataObjectDAOFactoryRegistry.hpp"
-#include "ModelObject.hpp"
-#include "MapObject.hpp"
+#include "DataObjectBase.hpp"
 #include "Logger.hpp"
 
 DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
