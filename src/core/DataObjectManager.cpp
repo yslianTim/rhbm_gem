@@ -79,7 +79,7 @@ void DataObjectManager::ProduceFile(
     auto extension{ FilePathHelper::GetExtension(filename) };
     auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(extension) };
     factory->OutputDataObject(filename, data_object.get());
-};
+}
 
 bool DataObjectManager::AddDataObject(
     const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object)
