@@ -22,6 +22,10 @@ class DatabaseManager
 public:
     explicit DatabaseManager(const std::filesystem::path & database_path);
     ~DatabaseManager();
+    DatabaseManager(const DatabaseManager &) = delete;
+    DatabaseManager & operator=(const DatabaseManager &) = delete;
+    DatabaseManager(DatabaseManager &&) noexcept = default;
+    DatabaseManager & operator=(DatabaseManager &&) noexcept = default;
 
     void SaveDataObject(const DataObjectBase * data_object, const std::string & key_tag);
     std::unique_ptr<DataObjectBase> LoadDataObject(const std::string & key_tag);

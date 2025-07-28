@@ -30,7 +30,7 @@ void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
                     + ", skip re-allocation of DatabaseManager.");
         return;
     }
-    m_db_manager = std::make_shared<DatabaseManager>(dbname);
+    m_db_manager = std::make_unique<DatabaseManager>(dbname);
     if (!m_db_manager->GetDatabase())
     {
         throw std::runtime_error("Failed to initialize database manager with path: " + dbname.string());
@@ -111,18 +111,17 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::LoadDataObject() called");
     ScopeTimer timer("DataObjectManager::LoadDataObject");
-    std::shared_ptr<DatabaseManager> db;
+    std::unique_ptr<DataObjectBase> data_object;
     {
         std::shared_lock<std::shared_mutex> lock(m_db_mutex);
         if (m_db_manager == nullptr)
         {
             throw std::runtime_error("Database manager is not initialized.");
         }
-        db = m_db_manager;
+        data_object = m_db_manager->LoadDataObject(key_tag);
     }
     try
     {
-        auto data_object{ db->LoadDataObject(key_tag) };
         std::shared_ptr<DataObjectBase> shared_object{ std::move(data_object) };
         bool inserted{ AddDataObject(key_tag, std::move(shared_object)) };
         if (inserted == false)
@@ -143,14 +142,10 @@ void DataObjectManager::SaveDataObject(
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::SaveDataObject() called");
     ScopeTimer timer("DataObjectManager::SaveDataObject");
-    std::shared_ptr<DatabaseManager> db;
+    std::shared_lock<std::shared_mutex> db_lock(m_db_mutex);
+    if (m_db_manager == nullptr)
     {
-        std::shared_lock<std::shared_mutex> lock(m_db_mutex);
-        if (m_db_manager == nullptr)
-        {
-            throw std::runtime_error("Database manager is not initialized.");
-        }
-        db = m_db_manager;
+        throw std::runtime_error("Database manager is not initialized.");
     }
 
     std::shared_ptr<DataObjectBase> data_object;
@@ -173,16 +168,16 @@ void DataObjectManager::SaveDataObject(
         Logger::Log(LogLevel::Info,
                     "The data object with key tag: [" + key_tag + "] will be renamed to: [" +
                     renamed_key_tag + "] and saved into database: " +
-                    db->GetDatabasePath().string());
+                    m_db_manager->GetDatabasePath().string());
     }
     else
     {
         Logger::Log(LogLevel::Info,
                     "The data object with key tag: [" + key_tag + "] will be saved into database: " +
-                    db->GetDatabasePath().string());
+                    m_db_manager->GetDatabasePath().string());
     }
 
-    db->SaveDataObject(data_object.get(), saved_key_tag);
+    m_db_manager->SaveDataObject(data_object.get(), saved_key_tag);
 }
 
 void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
@@ -268,10 +263,10 @@ std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(const std
     return iter->second;
 }
 
-std::shared_ptr<DatabaseManager> DataObjectManager::GetDatabaseManager(void) const
+DatabaseManager * DataObjectManager::GetDatabaseManager(void) const
 {
     std::shared_lock<std::shared_mutex> lock(m_db_mutex);
-    return m_db_manager;
+    return m_db_manager.get();
 }
 
 const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> &

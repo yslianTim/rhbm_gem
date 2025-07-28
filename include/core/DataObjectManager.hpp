@@ -15,7 +15,7 @@ class DataObjectVisitorBase;
 
 class DataObjectManager
 {
-    std::shared_ptr<DatabaseManager> m_db_manager;
+    std::unique_ptr<DatabaseManager> m_db_manager;
     std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> m_data_object_map;
     mutable std::shared_mutex m_map_mutex; // protects m_data_object_map
     mutable std::shared_mutex m_db_mutex;  // protects m_db_manager
@@ -38,7 +38,7 @@ public:
     void PrintDataObjectInfo(const std::string & key_tag) const;
     std::shared_ptr<DataObjectBase> GetDataObject(const std::string & key_tag);
     std::shared_ptr<const DataObjectBase> GetDataObject(const std::string & key_tag) const;
-    std::shared_ptr<DatabaseManager> GetDatabaseManager(void) const;
+    DatabaseManager * GetDatabaseManager(void) const;
     template <typename TypedDataObject>
     std::shared_ptr<TypedDataObject> GetTypedDataObject(const std::string & key_tag)
     {
