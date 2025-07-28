@@ -8,6 +8,8 @@
 #include "ScopeTimer.hpp"
 #include "Logger.hpp"
 
+#include <utility>
+
 DataObjectManager::DataObjectManager(void) :
     m_db_manager{ nullptr }
 {
@@ -243,13 +245,8 @@ void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
 
 std::shared_ptr<DataObjectBase> DataObjectManager::GetDataObject(const std::string & key_tag)
 {
-    std::shared_lock<std::shared_mutex> lock(m_map_mutex);
-    auto iter{ m_data_object_map.find(key_tag) };
-    if (iter == m_data_object_map.end())
-    {
-        throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
-    }
-    return iter->second;
+    auto const_ptr{ std::as_const(*this).GetDataObject(key_tag) };
+    return std::const_pointer_cast<DataObjectBase>(const_ptr);
 }
 
 std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(const std::string & key_tag) const
