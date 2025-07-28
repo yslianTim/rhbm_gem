@@ -1,5 +1,4 @@
 #include "DataObjectManager.hpp"
-#include "FileIOManager.hpp"
 #include "FileProcessFactoryBase.hpp"
 #include "FileProcessFactoryRegistry.hpp"
 #include "FilePathHelper.hpp"
@@ -45,13 +44,17 @@ void DataObjectManager::ProcessFile(
     ScopeTimer timer("DataObjectManager::ProcessFile");
     try
     {
-        auto shared_object{ FileIOManager::LoadDataObject(filename, key_tag) };
-        bool inserted{ AddDataObject(key_tag, std::move(shared_object)) };
-        if (inserted == false)
+        auto extension{ FilePathHelper::GetExtension(filename) };
+        auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(extension) };
+        auto data_object{ factory->CreateDataObject(filename) };
+        if (!data_object)
         {
-            Logger::Log(LogLevel::Warning,
-                        "Data object with key tag: [" + key_tag + "] already existed and was overwritten.");
+            throw std::runtime_error("Failed to create data object");
         }
+        data_object->SetKeyTag(key_tag);
+        data_object->Display();
+        std::shared_ptr<DataObjectBase> shared_object{ std::move(data_object) };
+        AddDataObject(key_tag, std::move(shared_object));
     }
     catch (const std::exception & ex)
     {
@@ -73,7 +76,9 @@ void DataObjectManager::ProduceFile(
         return;
     }
     auto data_object{ GetDataObject(key_tag) };
-    FileIOManager::WriteDataObject(filename, data_object.get());
+    auto extension{ FilePathHelper::GetExtension(filename) };
+    auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(extension) };
+    factory->OutputDataObject(filename, data_object.get());
 };
 
 bool DataObjectManager::AddDataObject(
