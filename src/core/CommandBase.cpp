@@ -1,29 +1,15 @@
 #include "CommandBase.hpp"
-#include "DataObjectManager.hpp"
 
 #include <CLI/CLI.hpp>
 
-CommandBase::CommandBase(void) :
-    m_data_manager{ std::make_unique<DataObjectManager>() }
-{
-
-}
-
-CommandBase::~CommandBase() = default;
-
-void CommandBase::SetDataManager(std::unique_ptr<DataObjectManager> manager)
-{
-    m_data_manager = std::move(manager);
-}
-
 DataObjectManager * CommandBase::GetDataManagerPtr(void)
 {
-    return m_data_manager.get();
+    return &m_data_manager;
 }
 
 const DataObjectManager * CommandBase::GetDataManagerPtr(void) const
 {
-    return m_data_manager.get();
+    return &m_data_manager;
 }
 
 void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
