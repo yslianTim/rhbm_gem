@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <stdexcept>
 #include <vector>
-#include <shared_mutex>
+#include <mutex>
 
 class DatabaseManager;
 class FileProcessFactoryBase;
@@ -17,8 +17,8 @@ class DataObjectManager
 {
     std::unique_ptr<DatabaseManager> m_db_manager;
     std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> m_data_object_map;
-    mutable std::shared_mutex m_map_mutex; // protects m_data_object_map
-    mutable std::shared_mutex m_db_mutex;  // protects m_db_manager
+    mutable std::mutex m_map_mutex; // protects m_data_object_map
+    mutable std::mutex m_db_mutex;  // protects m_db_manager
 
 public:
     DataObjectManager(void);
@@ -33,9 +33,7 @@ public:
     bool HasDataObject(const std::string & key_tag) const;
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
-    void Accept(DataObjectVisitorBase * visitor);
-    void Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_list);
-    void PrintDataObjectInfo(const std::string & key_tag) const;
+    void Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list={});
     std::shared_ptr<DataObjectBase> GetDataObject(const std::string & key_tag);
     std::shared_ptr<const DataObjectBase> GetDataObject(const std::string & key_tag) const;
     DatabaseManager * GetDatabaseManager(void) const;

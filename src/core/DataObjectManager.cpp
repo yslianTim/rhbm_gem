@@ -24,7 +24,7 @@ DataObjectManager::~DataObjectManager()
 void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::SetDatabaseManager() called");
-    std::unique_lock<std::shared_mutex> lock(m_db_mutex);
+    std::lock_guard<std::mutex> lock(m_db_mutex);
     if (m_db_manager && m_db_manager->GetDatabasePath() == dbname)
     {
         Logger::Log(LogLevel::Warning,
@@ -92,7 +92,7 @@ bool DataObjectManager::AddDataObject(
         Logger::Log(LogLevel::Error, "AddDataObject(): nullptr provided for key tag: " + key_tag);
         return false;
     }
-    std::unique_lock<std::shared_mutex> lock(m_map_mutex);
+    std::lock_guard<std::mutex> lock(m_map_mutex);
     auto result{ m_data_object_map.insert_or_assign(key_tag, std::move(data_object)) };
     if (!result.second)
     {
@@ -105,7 +105,7 @@ bool DataObjectManager::AddDataObject(
 
 bool DataObjectManager::HasDataObject(const std::string & key_tag) const
 {
-    std::shared_lock<std::shared_mutex> lock(m_map_mutex);
+    std::lock_guard<std::mutex> lock(m_map_mutex);
     return m_data_object_map.find(key_tag) != m_data_object_map.end();
 }
 
@@ -115,7 +115,7 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
     ScopeTimer timer("DataObjectManager::LoadDataObject");
     std::unique_ptr<DataObjectBase> data_object;
     {
-        std::shared_lock<std::shared_mutex> lock(m_db_mutex);
+        std::lock_guard<std::mutex> lock(m_db_mutex);
         if (m_db_manager == nullptr)
         {
             throw std::runtime_error("Database manager is not initialized.");
@@ -144,7 +144,7 @@ void DataObjectManager::SaveDataObject(
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::SaveDataObject() called");
     ScopeTimer timer("DataObjectManager::SaveDataObject");
-    std::shared_lock<std::shared_mutex> db_lock(m_db_mutex);
+    std::lock_guard<std::mutex> db_lock(m_db_mutex);
     if (m_db_manager == nullptr)
     {
         throw std::runtime_error("Database manager is not initialized.");
@@ -152,7 +152,7 @@ void DataObjectManager::SaveDataObject(
 
     std::shared_ptr<DataObjectBase> data_object;
     {
-        std::shared_lock<std::shared_mutex> lock(m_map_mutex);
+        std::lock_guard<std::mutex> lock(m_map_mutex);
         auto iter{ m_data_object_map.find(key_tag) };
         if (iter == m_data_object_map.end())
         {
@@ -182,18 +182,38 @@ void DataObjectManager::SaveDataObject(
     m_db_manager->SaveDataObject(data_object.get(), saved_key_tag);
 }
 
-void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
+void DataObjectManager::Accept(
+    DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::Accept() called");
     ScopeTimer timer("DataObjectManager::Accept");
     std::vector<DataObjectBase *> data_object_list;
     {
-        std::shared_lock<std::shared_mutex> lock(m_map_mutex);
-        for (auto & [key, data_object] : m_data_object_map)
+        std::lock_guard<std::mutex> lock(m_map_mutex);
+        if (key_tag_list.empty())
         {
-            if (data_object)
+            for (auto & [key, data_object] : m_data_object_map)
             {
-                data_object_list.push_back(data_object.get());
+                if (data_object)
+                {
+                    data_object_list.push_back(data_object.get());
+                }
+            }
+        }
+        else
+        {
+            for (const auto & key : key_tag_list)
+            {
+                auto iter{ m_data_object_map.find(key) };
+                if (iter == m_data_object_map.end())
+                {
+                    Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
+                    continue;
+                }
+                if (iter->second)
+                {
+                    data_object_list.push_back(iter->second.get());
+                }
             }
         }
     }
@@ -203,55 +223,17 @@ void DataObjectManager::Accept(DataObjectVisitorBase * visitor)
     }
 }
 
-void DataObjectManager::Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_list)
-{
-    Logger::Log(LogLevel::Debug, "DataObjectManager::Accept() with key list called");
-    ScopeTimer timer("DataObjectManager::Accept");
-    std::vector<DataObjectBase *> data_object_list;
-    {
-        std::shared_lock<std::shared_mutex> lock(m_map_mutex);
-        for (const auto & key : key_list)
-        {
-            auto iter{ m_data_object_map.find(key) };
-            if (iter == m_data_object_map.end())
-            {
-                Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
-                continue;
-            }
-            if (iter->second)
-            {
-                data_object_list.push_back(iter->second.get());
-            }
-        }
-    }
-    for (auto * data_object : data_object_list)
-    {
-        data_object->Accept(visitor);
-    }
-}
-
-void DataObjectManager::PrintDataObjectInfo(const std::string & key_tag) const
-{
-    Logger::Log(LogLevel::Debug, "DataObjectManager::PrintDataObjectInfo() called");
-    try
-    {
-        GetDataObject(key_tag)->Display();
-    }
-    catch (const std::exception & ex)
-    {
-        Logger::Log(LogLevel::Warning, ex.what());
-    }
-}
-
-std::shared_ptr<DataObjectBase> DataObjectManager::GetDataObject(const std::string & key_tag)
+std::shared_ptr<DataObjectBase> DataObjectManager::GetDataObject(
+    const std::string & key_tag)
 {
     auto const_ptr{ std::as_const(*this).GetDataObject(key_tag) };
     return std::const_pointer_cast<DataObjectBase>(const_ptr);
 }
 
-std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(const std::string & key_tag) const
+std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(
+    const std::string & key_tag) const
 {
-    std::shared_lock<std::shared_mutex> lock(m_map_mutex);
+    std::lock_guard<std::mutex> lock(m_map_mutex);
     auto iter{ m_data_object_map.find(key_tag) };
     if (iter == m_data_object_map.end())
     {
@@ -262,7 +244,7 @@ std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(const std
 
 DatabaseManager * DataObjectManager::GetDatabaseManager(void) const
 {
-    std::shared_lock<std::shared_mutex> lock(m_db_mutex);
+    std::lock_guard<std::mutex> lock(m_db_mutex);
     return m_db_manager.get();
 }
 

@@ -25,7 +25,7 @@ Passing a larger value to `--verbose` enables all lower levels as well.
 
 Commands rely on `DataObjectManager` to load and store data objects. The manager instance is owned by `CommandBase` and shared with derived commands. A command lazily creates a `DataObjectManager` and initializes it with a database path via `SetDatabaseManager`.
 
-`DataObjectManager` is thread-safe. The database pointer and the internal data map are protected by separate `std::shared_mutex` instances. Read-only operations acquire a `std::shared_lock` so multiple threads can query concurrently. When an operation needs both locks, the database mutex is taken before the map mutex to avoid deadlock.
+`DataObjectManager` is not accessed concurrently. The database pointer and the internal data map are guarded by simple `std::mutex` members to keep the implementation straightforward.
 
 `DatabaseManager` is safe for concurrent use. Operations like `SaveDataObject` and `LoadDataObject` lock an internal mutex so multiple threads can access the database simultaneously without interference.
 
