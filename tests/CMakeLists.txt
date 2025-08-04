@@ -3,7 +3,14 @@ include(GoogleTest)
 
 function(add_project_test name src)
     add_executable(${name} ${src})
-    target_link_libraries(${name} PRIVATE core utils data CompilerFlags GTest::gtest_main)
+    target_link_libraries(${name} PRIVATE
+        core
+        utils
+        data
+        CompilerFlags
+        GTest::gtest_main
+        GTest::gmock
+    )
     set_target_properties(${name} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"

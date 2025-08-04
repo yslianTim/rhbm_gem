@@ -43,7 +43,10 @@ endif()
 if(NOT HAVE_EIGEN3)
     # Disable Eigen's own tests to avoid policy warnings
     set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests" FORCE)
+    # Temporarily disable global testing to avoid Eigen's test configuration
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
     add_subdirectory(third_party/eigen)
+    set(BUILD_TESTING ON CACHE BOOL "" FORCE)
 endif()
 
 # Locate CLI11 package
@@ -99,8 +102,6 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 # -------------------------------------------------
 option(BUILD_TESTING "Build unit tests" ON)
 
-#include_directories(${CMAKE_SOURCE_DIR}/include)
-
 add_subdirectory(src)
 add_subdirectory(bindings)
 
@@ -116,6 +117,11 @@ if(BUILD_TESTING)
         if (GTest_FOUND)
             message(STATUS "Using system GTest")
             set(HAVE_GTEST TRUE)
+            if(DEFINED GTest_SOURCE_DIR)
+                set(GTEST_SOURCE_DIR "${GTest_SOURCE_DIR}")
+            elseif(DEFINED gtest_SOURCE_DIR)
+                set(GTEST_SOURCE_DIR "${gtest_SOURCE_DIR}")
+            endif()
         else()
             message(STATUS "System GTest not found, will use FetchContent")
         endif()
@@ -126,7 +132,7 @@ if(BUILD_TESTING)
             message(STATUS "Using bundled GoogleTest")
             set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
             add_subdirectory(third_party/googletest)
-            #list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/googletest/cmake")
+            set(GTEST_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/googletest/googletest")
             set(HAVE_GTEST TRUE)
         else()
             message(STATUS "Fetching GoogleTest")
@@ -138,8 +144,13 @@ if(BUILD_TESTING)
             )
             set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
             FetchContent_MakeAvailable(googletest)
-            #list(APPEND CMAKE_MODULE_PATH "${googletest_SOURCE_DIR}/googletest/cmake")
+            set(GTEST_SOURCE_DIR "${googletest_SOURCE_DIR}/googletest")
+            set(HAVE_GTEST TRUE)
         endif()
+    endif()
+
+    if(DEFINED GTEST_SOURCE_DIR)
+        list(APPEND CMAKE_MODULE_PATH "${GTEST_SOURCE_DIR}/cmake")
     endif()
 
     add_subdirectory(tests)    # all test sources live here
