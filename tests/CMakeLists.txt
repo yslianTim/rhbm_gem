@@ -1,5 +1,8 @@
 ## Top-level CMake configuration for the test suite
-include(GoogleTest)
+include(GoogleTest OPTIONAL RESULT_VARIABLE GTEST_CMAKE)
+if(GTEST_CMAKE STREQUAL "NOTFOUND")
+    message(FATAL_ERROR "GoogleTest.cmake not found. Ensure GTest is installed and GTest_DIR is set correctly.")
+endif()
 
 function(add_project_test name src)
     add_executable(${name} ${src})
@@ -21,7 +24,7 @@ endfunction()
 
 # Automatically add each test subdirectory containing a CMakeLists.txt
 # New test modules can simply create a subdirectory with its own CMakeLists.txt
-file(GLOB CONFIGURE_DEPENDS CHILD_DIRS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} */CMakeLists.txt)
+file(GLOB CHILD_DIRS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS */CMakeLists.txt)
 foreach(child ${CHILD_DIRS})
     get_filename_component(dir ${child} DIRECTORY)
     add_subdirectory(${dir})
