@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <limits>
+#include <stdexcept>
 
 #include "StringHelper.hpp"
 
@@ -66,6 +67,12 @@ TEST(StringHelperTest, ConvertCharArrayToStringEmptyArrayReturnsEmpty)
 {
     const char data[]{ "" };
     EXPECT_EQ("", StringHelper::ConvertCharArrayToString(data));
+}
+
+TEST(StringHelperTest, ConvertCharArrayToStringPreservesTabs)
+{
+    const char data[]{ "A\tB\n" };
+    EXPECT_EQ("A\tB\n", StringHelper::ConvertCharArrayToString(data));
 }
 
 TEST(StringHelperTest, StripCarriageReturnRemovesTrailingCR)
@@ -149,6 +156,23 @@ TEST(StringHelperTest, SplitStringTrailingDelimiterIgnored)
     EXPECT_EQ("b", tokens[1]);
 }
 
+TEST(StringHelperTest, SplitStringLeadingDelimiterIgnored)
+{
+    std::string line{ ",a,b" };
+    auto tokens{ StringHelper::SplitStringLineFromDelimiter(line) };
+    ASSERT_EQ(2u, tokens.size());
+    EXPECT_EQ("a", tokens[0]);
+    EXPECT_EQ("b", tokens[1]);
+}
+
+TEST(StringHelperTest, SplitStringWithoutDelimiterReturnsWholeString)
+{
+    std::string line{ "abc" };
+    auto tokens{ StringHelper::SplitStringLineFromDelimiter(line) };
+    ASSERT_EQ(1u, tokens.size());
+    EXPECT_EQ("abc", tokens[0]);
+}
+
 TEST(StringHelperTest, ParseListOptionParsesDoubles)
 {
     const std::string input{ "1.0,2.5" };
@@ -190,6 +214,19 @@ TEST(StringHelperTest, ParseListOptionParsesDoublesWithWhitespace)
     EXPECT_EQ(expected, StringHelper::ParseListOption<double>(input));
 }
 
+TEST(StringHelperTest, ParseListOptionStringsWithWhitespace)
+{
+    const std::string input{ "a, b" };
+    const std::vector<std::string> expected{"a", " b"};
+    EXPECT_EQ(expected, StringHelper::ParseListOption<std::string>(input));
+}
+
+TEST(StringHelperTest, ParseListOptionInvalidDoubleThrows)
+{
+    const std::string input{ "1,a" };
+    EXPECT_THROW(StringHelper::ParseListOption<double>(input), std::invalid_argument);
+}
+
 TEST(StringHelperTest, SplitStringLineAsTokensHandlesQuotedStrings)
 {
     std::string line{ "one 'two words' three" };
@@ -220,6 +257,20 @@ TEST(StringHelperTest, SplitStringLineAsTokensUnclosedQuoteReturnsRemaining)
     EXPECT_EQ("two three", tokens[1]);
 }
 
+TEST(StringHelperTest, SplitStringLineAsTokensEmptyInputReturnsEmptyVector)
+{
+    std::string line{ "" };
+    auto tokens{ StringHelper::SplitStringLineAsTokens(line, 3) };
+    EXPECT_TRUE(tokens.empty());
+}
+
+TEST(StringHelperTest, SplitStringLineAsTokensHandlesEmptyQuotedToken)
+{
+    std::string line{ "one '' three" };
+    std::vector<std::string> expected{"one", "", "three"};
+    EXPECT_EQ(expected, StringHelper::SplitStringLineAsTokens(line, 3));
+}
+
 TEST(StringHelperTest, ToStringWithPrecisionUsesDefaultPrecision)
 {
     double value{ 123.456789 };
@@ -242,4 +293,10 @@ TEST(StringHelperTest, ToStringWithPrecisionNegativeUsesCustomPrecision)
 {
     double value{ -123.456789 };
     EXPECT_EQ("-123.46", StringHelper::ToStringWithPrecision(value, 2));
+}
+
+TEST(StringHelperTest, ToStringWithPrecisionZeroPrecision)
+{
+    double value{ 123.456 };
+    EXPECT_EQ("123", StringHelper::ToStringWithPrecision(value, 0));
 }
