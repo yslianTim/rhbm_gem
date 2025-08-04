@@ -1,31 +1,29 @@
 ## Top-level CMake configuration for the test suite
 include(GoogleTest OPTIONAL RESULT_VARIABLE GTEST_CMAKE)
-if(GTEST_CMAKE STREQUAL "NOTFOUND")
+if(NOT GTEST_CMAKE OR GTEST_CMAKE STREQUAL "GTEST_CMAKE-NOTFOUND")
     message(FATAL_ERROR "GoogleTest.cmake not found. Ensure GTest is installed and GTest_DIR is set correctly.")
 endif()
 
-function(add_project_test name src)
-    add_executable(${name} ${src})
-    target_link_libraries(${name} PRIVATE
-        core
-        utils
-        data
-        CompilerFlags
-        GTest::gtest_main
-        GTest::gmock
-    )
-    set_target_properties(${name} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    )
-    gtest_discover_tests(${name})
-endfunction()
+file(GLOB TEST_SOURCES *.cpp)
 
-# Automatically add each test subdirectory containing a CMakeLists.txt
-# New test modules can simply create a subdirectory with its own CMakeLists.txt
-file(GLOB CHILD_DIRS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS */CMakeLists.txt)
-foreach(child ${CHILD_DIRS})
-    get_filename_component(dir ${child} DIRECTORY)
-    add_subdirectory(${dir})
-endforeach()
+set(TEST_BINARY ${CMAKE_PROJECT_NAME}_test)
+
+add_executable(${TEST_BINARY} ${TEST_SOURCES})
+
+target_link_libraries(${TEST_BINARY} PRIVATE
+    core
+    utils
+    data
+    CompilerFlags
+    GTest::gtest
+    GTest::gtest_main
+    GTest::gmock_main
+)
+
+set_target_properties(${TEST_BINARY} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
+gtest_discover_tests(${TEST_BINARY})
