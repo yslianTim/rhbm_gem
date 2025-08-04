@@ -122,15 +122,24 @@ if(BUILD_TESTING)
     endif()
 
     if (NOT HAVE_GTEST)
-        include(FetchContent)
-        FetchContent_Declare(
-            googletest
-            GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG        v1.17.0
-        )
-        # Use the same runtime library on MSVC
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-        FetchContent_MakeAvailable(googletest)
+        if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/googletest/CMakeLists.txt")
+            message(STATUS "Using bundled GoogleTest")
+            set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+            add_subdirectory(third_party/googletest)
+            #list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/googletest/cmake")
+            set(HAVE_GTEST TRUE)
+        else()
+            message(STATUS "Fetching GoogleTest")
+            include(FetchContent)
+            FetchContent_Declare(
+                googletest
+                GIT_REPOSITORY https://github.com/google/googletest.git
+                GIT_TAG        v1.17.0
+            )
+            set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+            FetchContent_MakeAvailable(googletest)
+            #list(APPEND CMAKE_MODULE_PATH "${googletest_SOURCE_DIR}/googletest/cmake")
+        endif()
     endif()
 
     add_subdirectory(tests)    # all test sources live here

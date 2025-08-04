@@ -14,7 +14,7 @@ endfunction()
 
 # Automatically add each test subdirectory containing a CMakeLists.txt
 # New test modules can simply create a subdirectory with its own CMakeLists.txt
-file(GLOB CHILD_DIRS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} */CMakeLists.txt)
+file(GLOB CONFIGURE_DEPENDS CHILD_DIRS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} */CMakeLists.txt)
 foreach(child ${CHILD_DIRS})
     get_filename_component(dir ${child} DIRECTORY)
     add_subdirectory(${dir})
