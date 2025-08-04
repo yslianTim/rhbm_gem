@@ -4,7 +4,7 @@
 #include "Application.hpp"
 #include "FileProcessFactoryRegistry.hpp"
 
-int main(int argc, char* argv[])
+int main(int argc, char * argv[])
 {
     CLI::App app{"App with subcommands"};
 

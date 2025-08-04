@@ -23,18 +23,20 @@ void FileProcessFactoryRegistry::RegisterDefaultFactories(void)
 void FileProcessFactoryRegistry::RegisterFactory(
     const std::string & extension, std::function<std::unique_ptr<FileProcessFactoryBase>()> creator)
 {
-    Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::RegisterFactory() called for extension: " + extension);
+    Logger::Log(LogLevel::Debug,
+        "FileProcessFactoryRegistry::RegisterFactory() called for extension: " + extension);
     m_factory_map[extension] = std::move(creator);
 }
 
 std::unique_ptr<FileProcessFactoryBase> FileProcessFactoryRegistry::CreateFactory(
     const std::string & extension) const
 {
-    Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::CreateFactory() called for extension: " + extension);
+    Logger::Log(LogLevel::Debug,
+        "FileProcessFactoryRegistry::CreateFactory() called for extension: " + extension);
     auto iter{ m_factory_map.find(extension) };
     if (iter == m_factory_map.end())
     {
-        throw std::runtime_error("Unsupported file format");
+        throw std::runtime_error("Unsupported file format: " + extension);
     }
     return (iter->second)();
 }
