@@ -24,6 +24,7 @@ target_compile_options(CompilerFlags INTERFACE
 )
 
 option(USE_SYSTEM_LIBS "Use system-installed libraries" ON)
+option(USE_SYSTEM_GTEST "Use system-installed GoogleTest" ${USE_SYSTEM_LIBS})
 
 # Locate Eigen package
 if(USE_SYSTEM_LIBS)
@@ -105,22 +106,33 @@ add_subdirectory(src)
 add_subdirectory(bindings)
 
 # -------------------------------------------------
-# Unit tests (GoogleTest via FetchContent)
+# Unit tests (GoogleTest via system or FetchContent)
 # -------------------------------------------------
 if (ENABLE_TESTS)
     include(CTest)
     enable_testing()
 
-    include(FetchContent)
-    FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG        v1.17.0
-    )
-    # Use the same runtime library on MSVC
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
+    if (USE_SYSTEM_GTEST)
+        find_package(GTest QUIET)
+    endif()
 
-    add_subdirectory(tests)    # all test sources live here
+    if (GTest_FOUND)
+        message(STATUS "Using system GTest")
+        set(HAVE_GTEST TRUE)
+    else()
+        message(STATUS "Fetching GoogleTest from upstream")
+        include(FetchContent)
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG        v1.17.0
+        )
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+        set(HAVE_GTEST TRUE)
+    endif()
+
+    if (HAVE_GTEST)
+        add_subdirectory(tests)    # all test sources live here
+    endif()
 endif ()
-
