@@ -43,10 +43,24 @@ endif()
 if(NOT HAVE_EIGEN3)
     # Disable Eigen's own tests to avoid policy warnings
     set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests" FORCE)
-    # Temporarily disable global testing to avoid Eigen's test configuration
+    # Temporarily store the original BUILD_TESTING value and turn it off to
+    # avoid Eigen's test configuration interfering with ours.
+    if(DEFINED BUILD_TESTING)
+        set(_ORIG_BUILD_TESTING "${BUILD_TESTING}")
+    else()
+        unset(_ORIG_BUILD_TESTING)
+    endif()
     set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
     add_subdirectory(third_party/eigen)
-    set(BUILD_TESTING ON CACHE BOOL "" FORCE)
+    # Restore BUILD_TESTING to its original state.  If it was originally
+    # undefined, remove it from the cache so that later calls such as
+    # include(CTest) or option(BUILD_TESTING ...) can define it without being
+    # forced to our temporary value.
+    if(DEFINED _ORIG_BUILD_TESTING)
+        set(BUILD_TESTING "${_ORIG_BUILD_TESTING}" CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_TESTING CACHE)
+    endif()
 endif()
 
 # Locate CLI11 package
