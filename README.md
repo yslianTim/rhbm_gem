@@ -35,3 +35,9 @@ Commands rely on `DataObjectManager` to load and store data objects. The manager
 - **DatabaseManager** wraps the SQLite database. DAO objects are created via `DataObjectDAOFactoryRegistry` and cached for reuse.
 
 Together these managers keep data loading and persistence separate from command logic.
+
+
+
+## Tests
+
+The test suite automatically includes any immediate subdirectory of `tests/` containing a `CMakeLists.txt`. To add a new set of tests, create a new folder under `tests` with its own `CMakeLists.txt`.

@@ -41,8 +41,8 @@ else()
 endif()
 
 if(NOT HAVE_EIGEN3)
-    # Disable Eigen tests to avoid policy warnings
-    set(BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests" FORCE)
+    # Disable Eigen's own tests to avoid policy warnings
+    set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests" FORCE)
     add_subdirectory(third_party/eigen)
 endif()
 
@@ -97,9 +97,9 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 # -------------------------------------------------
 # Unit‑test build option
 # -------------------------------------------------
-option(ENABLE_TESTS "Build unit tests (requires GoogleTest)" ON)
+option(BUILD_TESTING "Build unit tests" ON)
 
-include_directories(${CMAKE_SOURCE_DIR}/include)
+#include_directories(${CMAKE_SOURCE_DIR}/include)
 
 add_subdirectory(src)
 add_subdirectory(bindings)
@@ -107,19 +107,31 @@ add_subdirectory(bindings)
 # -------------------------------------------------
 # Unit tests (GoogleTest via FetchContent)
 # -------------------------------------------------
-if (ENABLE_TESTS)
+if(BUILD_TESTING)
     include(CTest)
     enable_testing()
+    set(HAVE_GTEST FALSE)
+    if (USE_SYSTEM_LIBS)
+        find_package(GTest CONFIG QUIET)
+        if (GTest_FOUND)
+            message(STATUS "Using system GTest")
+            set(HAVE_GTEST TRUE)
+        else()
+            message(STATUS "System GTest not found, will use FetchContent")
+        endif()
+    endif()
 
-    include(FetchContent)
-    FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG        v1.17.0
-    )
-    # Use the same runtime library on MSVC
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
+    if (NOT HAVE_GTEST)
+        include(FetchContent)
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG        v1.17.0
+        )
+        # Use the same runtime library on MSVC
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    endif()
 
     add_subdirectory(tests)    # all test sources live here
-endif ()
+endif()
