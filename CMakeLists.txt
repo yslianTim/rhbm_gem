@@ -94,7 +94,33 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 # 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
+# -------------------------------------------------
+# Unit‑test build option
+# -------------------------------------------------
+option(ENABLE_TESTS "Build unit tests (requires GoogleTest)" ON)
+
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 add_subdirectory(src)
 add_subdirectory(bindings)
+
+# -------------------------------------------------
+# Unit tests (GoogleTest via FetchContent)
+# -------------------------------------------------
+if (ENABLE_TESTS)
+    include(CTest)
+    enable_testing()
+
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        v1.17.0
+    )
+    # Use the same runtime library on MSVC
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
+    add_subdirectory(tests)    # all test sources live here
+endif ()
+
