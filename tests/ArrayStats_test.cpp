@@ -7,23 +7,49 @@
 
 #include "ArrayStats.hpp"
 
-TEST(ArrayStatsTest, ComputeMinMax)
+TEST(ArrayStatsTest, ComputeMin)
 {
     const std::array<double, 5> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
-
     EXPECT_DOUBLE_EQ(1.0, ArrayStats<double>::ComputeMin(data.data(), data.size()));
-    EXPECT_DOUBLE_EQ(5.0, ArrayStats<double>::ComputeMax(data.data(), data.size()));
-
     EXPECT_TRUE(std::isnan(ArrayStats<double>::ComputeMin(nullptr, 0)));
+}
+
+TEST(ArrayStatsTest, ComputeMinWithThreadSize)
+{
+    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
+    auto min_single{ ArrayStats<double>::ComputeMin(data.data(), data.size(), 1) };
+    auto min_multi{ ArrayStats<double>::ComputeMin(data.data(), data.size(), 4) };
+    EXPECT_DOUBLE_EQ(min_single, min_multi);
+}
+
+TEST(ArrayStatsTest, ComputeMax)
+{
+    const std::array<double, 5> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
+    EXPECT_DOUBLE_EQ(5.0, ArrayStats<double>::ComputeMax(data.data(), data.size()));
     EXPECT_TRUE(std::isnan(ArrayStats<double>::ComputeMax(nullptr, 0)));
+}
+
+TEST(ArrayStatsTest, ComputeMaxWithThreadSize)
+{
+    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
+    auto max_single{ ArrayStats<double>::ComputeMax(data.data(), data.size(), 1) };
+    auto max_multi{ ArrayStats<double>::ComputeMax(data.data(), data.size(), 4) };
+    EXPECT_DOUBLE_EQ(max_single, max_multi);
 }
 
 TEST(ArrayStatsTest, ComputeMean)
 {
     const std::array<double, 4> data{ 1.0, 2.0, 3.0, 4.0 };
-
     EXPECT_DOUBLE_EQ(2.5, ArrayStats<double>::ComputeMean(data.data(), data.size()));
     EXPECT_DOUBLE_EQ(0.0, ArrayStats<double>::ComputeMean(nullptr, 0));
+}
+
+TEST(ArrayStatsTest, ComputeMeanWithThreadSize)
+{
+    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
+    auto mean_single{ ArrayStats<double>::ComputeMean(data.data(), data.size(), 1) };
+    auto mean_multi{ ArrayStats<double>::ComputeMean(data.data(), data.size(), 4) };
+    EXPECT_DOUBLE_EQ(mean_single, mean_multi);
 }
 
 TEST(ArrayStatsTest, ComputeStandardDeviation)
@@ -37,6 +63,20 @@ TEST(ArrayStatsTest, ComputeStandardDeviation)
     const double single_value{ 2.0 };
     EXPECT_DOUBLE_EQ(0.0, ArrayStats<double>::ComputeStandardDeviation(&single_value, 1, single_value));
     EXPECT_DOUBLE_EQ(0.0, ArrayStats<double>::ComputeStandardDeviation(nullptr, 0, 0.0));
+}
+
+TEST(ArrayStatsTest, ComputeStandardDeviationWithThreadSize)
+{
+    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
+    auto mean_single{ ArrayStats<double>::ComputeMean(data.data(), data.size(), 1) };
+    auto mean_multi{ ArrayStats<double>::ComputeMean(data.data(), data.size(), 4) };
+    auto std_single{ ArrayStats<double>::ComputeStandardDeviation(
+        data.data(), data.size(), mean_single, 1)
+    };
+    auto std_multi{ ArrayStats<double>::ComputeStandardDeviation(
+        data.data(), data.size(), mean_multi, 4)
+    };
+    EXPECT_DOUBLE_EQ(std_single, std_multi);
 }
 
 TEST(ArrayStatsTest, ComputePercentileBounds)
@@ -112,6 +152,15 @@ TEST(ArrayStatsTest, ComputeRangeTupleReturnsExpectedMinMax)
     auto range{ ArrayStats<double>::ComputeRangeTuple(data) };
     EXPECT_DOUBLE_EQ(-1.0, std::get<0>(range));
     EXPECT_DOUBLE_EQ(5.0, std::get<1>(range));
+}
+
+TEST(ArrayStatsTest, ComputeRangeTupleWithThreadSize)
+{
+    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
+    auto range_single{ ArrayStats<double>::ComputeRangeTuple(data, 1) };
+    auto range_multi{ ArrayStats<double>::ComputeRangeTuple(data, 4) };
+    EXPECT_DOUBLE_EQ(std::get<0>(range_single), std::get<0>(range_multi));
+    EXPECT_DOUBLE_EQ(std::get<1>(range_single), std::get<1>(range_multi));
 }
 
 TEST(ArrayStatsTest, ComputeScalingRangeTupleExtendsRangeSymmetrically)
@@ -204,34 +253,4 @@ TEST(ArrayStatsTest, ComputeRankIndexOutOfRangeThrows)
 {
     std::array<double, 3> values{ 3.0, 1.0, 2.0 };
     EXPECT_THROW(ArrayStats<double>::ComputeRank(values, 3), std::out_of_range);
-}
-
-TEST(ArrayStatsTest, ComputeWithThreadSize)
-{
-    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
-
-    auto min_single{ ArrayStats<double>::ComputeMin(data.data(), data.size(), 1) };
-    auto min_multi{ ArrayStats<double>::ComputeMin(data.data(), data.size(), 4) };
-    EXPECT_DOUBLE_EQ(min_single, min_multi);
-
-    auto max_single{ ArrayStats<double>::ComputeMax(data.data(), data.size(), 1) };
-    auto max_multi{ ArrayStats<double>::ComputeMax(data.data(), data.size(), 4) };
-    EXPECT_DOUBLE_EQ(max_single, max_multi);
-
-    auto mean_single{ ArrayStats<double>::ComputeMean(data.data(), data.size(), 1) };
-    auto mean_multi{ ArrayStats<double>::ComputeMean(data.data(), data.size(), 4) };
-    EXPECT_DOUBLE_EQ(mean_single, mean_multi);
-
-    auto std_single{ ArrayStats<double>::ComputeStandardDeviation(
-        data.data(), data.size(), mean_single, 1)
-    };
-    auto std_multi{ ArrayStats<double>::ComputeStandardDeviation(
-        data.data(), data.size(), mean_multi, 4)
-    };
-    EXPECT_DOUBLE_EQ(std_single, std_multi);
-
-    auto range_single{ ArrayStats<double>::ComputeRangeTuple(data, 1) };
-    auto range_multi{ ArrayStats<double>::ComputeRangeTuple(data, 4) };
-    EXPECT_DOUBLE_EQ(std::get<0>(range_single), std::get<0>(range_multi));
-    EXPECT_DOUBLE_EQ(std::get<1>(range_single), std::get<1>(range_multi));
 }

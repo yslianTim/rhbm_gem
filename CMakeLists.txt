@@ -13,6 +13,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Unit‑test build option
+option(BUILD_TESTING "Build unit tests" ON)
+
+# Option to enable coverage instrumentation
+option(ENABLE_COVERAGE "Enable coverage reporting" ON)
+
 # Specify the C++ standard (Use interface libraries)
 add_library(CompilerFlags INTERFACE)
 target_compile_features(CompilerFlags INTERFACE cxx_std_17)
@@ -111,10 +117,11 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 # 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
-# -------------------------------------------------
-# Unit‑test build option
-# -------------------------------------------------
-option(BUILD_TESTING "Build unit tests" ON)
+# When enabled and using GCC/Clang, add coverage compile and link options
+if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(--coverage -O0 -g)
+    add_link_options(--coverage)
+endif()
 
 add_subdirectory(src)
 add_subdirectory(bindings)
@@ -150,4 +157,14 @@ if(BUILD_TESTING)
 
     include(GoogleTest)
     add_subdirectory(tests)    # all test sources live here
+endif()
+
+# Custom target to generate coverage report
+if(ENABLE_COVERAGE AND BUILD_TESTING)
+    add_custom_target(coverage
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        COMMAND lcov --capture --directory ${CMAKE_BINARY_DIR} --output-file ${CMAKE_BINARY_DIR}/coverage.info
+        COMMAND genhtml ${CMAKE_BINARY_DIR}/coverage.info --output-directory ${CMAKE_BINARY_DIR}/coverage
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
 endif()
