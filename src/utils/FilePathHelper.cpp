@@ -5,6 +5,11 @@
 
 std::string FilePathHelper::GetExtension(const std::filesystem::path & path)
 {
+    const std::string filename{ path.filename().string() };
+    if (!filename.empty() && filename.front() == '.' && filename.find('.', 1) == std::string::npos)
+    {
+        return filename;
+    }
     return (path.has_extension()) ? path.extension().string() : std::string("");
 }
 

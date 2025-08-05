@@ -22,6 +22,12 @@ TEST(FilePathHelperTest, PathWithMultipleExtensionsReturnsLastExtension)
     EXPECT_EQ(".gz", FilePathHelper::GetExtension(path));
 }
 
+TEST(FilePathHelperTest, HiddenFileReturnsFullNameAsExtension)
+{
+    std::filesystem::path path{ ".gitignore" };
+    EXPECT_EQ(".gitignore", FilePathHelper::GetExtension(path));
+}
+
 TEST(FilePathHelperTest, NestedDirectoriesReturnDirectoryWithTrailingSeparator)
 {
     std::filesystem::path path{ std::filesystem::path("nested") / "dir" / "file.txt" };
@@ -35,9 +41,21 @@ TEST(FilePathHelperTest, PathWithoutParentDirectoryReturnsEmptyString)
     EXPECT_EQ("", FilePathHelper::GetDirectory("file.txt"));
 }
 
+TEST(FilePathHelperTest, EmptyPathReturnsEmptyString)
+{
+    EXPECT_EQ("", FilePathHelper::GetDirectory(std::filesystem::path{}));
+}
+
 TEST(FilePathHelperTest, RootDirectoryPathReturnsSlash)
 {
     EXPECT_EQ("/", FilePathHelper::GetDirectory(std::filesystem::path("/")));
+}
+
+TEST(FilePathHelperTest, DirectoryPathEndingWithSeparatorReturnsSamePath)
+{
+    std::string dir_path{ (std::filesystem::path("some") / "dir").string() };
+    dir_path.push_back(std::filesystem::path::preferred_separator);
+    EXPECT_EQ(dir_path, FilePathHelper::GetDirectory(std::filesystem::path{ dir_path }));
 }
 
 TEST(FilePathHelperTest, DirectoryPathReturnsFileNameOnly)
@@ -50,6 +68,20 @@ TEST(FilePathHelperTest, PathEndingWithSeparatorReturnsEmptyString)
 {
     std::filesystem::path path{"/foo/bar/"};
     EXPECT_TRUE(FilePathHelper::GetFileName(path).empty());
+}
+
+TEST(FilePathHelperTest, RootPathReturnsSlash)
+{
+    const std::filesystem::path root{ "/" };
+    const std::string expected{ root.filename().string() };
+    EXPECT_EQ(expected, FilePathHelper::GetFileName(root));
+}
+
+TEST(FilePathHelperTest, DefaultConstructedPathReturnsDefaultFileName)
+{
+    const std::filesystem::path empty{};
+    const std::string expected{ empty.filename().string() };
+    EXPECT_EQ(expected, FilePathHelper::GetFileName(empty));
 }
 
 TEST(FilePathHelperTest, PathWithoutTrailingSlashAppendsSeparator)
@@ -68,6 +100,18 @@ TEST(FilePathHelperTest, PathWithTrailingSeparatorRemainsUnchanged)
     EXPECT_EQ(path_with_sep, FilePathHelper::EnsureTrailingSlash(input));
 }
 
+TEST(FilePathHelperTest, RootPathRemainsSingleSlash)
+{
+    const std::filesystem::path input{ "/" };
+    EXPECT_EQ("/", FilePathHelper::EnsureTrailingSlash(input));
+}
+
+TEST(FilePathHelperTest, PathEndingWithBackslashRemainsUnchanged)
+{
+    const std::filesystem::path input{ R"(C:\temp\)" };
+    EXPECT_EQ(R"(C:\temp\)", FilePathHelper::EnsureTrailingSlash(input));
+}
+
 TEST(FilePathHelperTest, EmptyPathRemainsEmpty)
 {
     const std::filesystem::path input{};
@@ -77,37 +121,53 @@ TEST(FilePathHelperTest, EmptyPathRemainsEmpty)
 TEST(FilePathHelperTest, EnsureFileExistsReturnsTrueForExistingFile)
 {
     const auto temp_file{
-        std::filesystem::temp_directory_path() /
-        "FilePathHelperExisting.tmp"
+        std::filesystem::temp_directory_path() / "FilePathHelperExisting.tmp"
     };
 
     {
         std::ofstream ofs(temp_file);
         ofs << "test";
     }
-
     EXPECT_TRUE(FilePathHelper::EnsureFileExists(temp_file, "Temp file"));
-
     std::filesystem::remove(temp_file);
 }
 
 TEST(FilePathHelperTest, EnsureFileExistsLogsErrorForMissingFile)
 {
     const auto missing_file{
-        std::filesystem::temp_directory_path() /
-        "FilePathHelperMissing.tmp"
+        std::filesystem::temp_directory_path() / "FilePathHelperMissing.tmp"
     };
 
     std::filesystem::remove(missing_file);
-
     testing::internal::CaptureStderr();
-    const bool exists{
-        FilePathHelper::EnsureFileExists(missing_file, "Missing file")
-    };
+    const bool exists{ FilePathHelper::EnsureFileExists(missing_file, "Missing file") };
     const std::string output{ testing::internal::GetCapturedStderr() };
 
     EXPECT_FALSE(exists);
     EXPECT_NE(output.find("[Error] Missing file does not exist: " +
-                      missing_file.string()),
-              std::string::npos);
+              missing_file.string()), std::string::npos);
+}
+
+TEST(FilePathHelperTest, EnsureFileExistsReturnsTrueForExistingDirectory)
+{
+    const auto temp_dir{ std::filesystem::temp_directory_path() };
+
+    testing::internal::CaptureStderr();
+    const bool exists{ FilePathHelper::EnsureFileExists(temp_dir, "Temp dir") };
+    const std::string output{ testing::internal::GetCapturedStderr() };
+
+    EXPECT_TRUE(exists);
+    EXPECT_TRUE(output.empty());
+}
+
+TEST(FilePathHelperTest, EnsureFileExistsLogsErrorForEmptyPath)
+{
+    const std::filesystem::path empty_path{};
+
+    testing::internal::CaptureStderr();
+    const bool exists{ FilePathHelper::EnsureFileExists(empty_path, "Empty path") };
+    const std::string output{ testing::internal::GetCapturedStderr() };
+
+    EXPECT_FALSE(exists);
+    EXPECT_NE(output.find("[Error] Empty path does not exist: "), std::string::npos);
 }
