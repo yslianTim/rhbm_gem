@@ -38,6 +38,6 @@ Together these managers keep data loading and persistence separate from command 
 
 
 
-## Tests
+## Unit Tests (via GoogleTest v1.17.0)
 
 The test suite automatically includes any immediate subdirectory of `tests/` containing a `CMakeLists.txt`. To add a new set of tests, create a new folder under `tests` with its own `CMakeLists.txt`.

@@ -5,6 +5,7 @@
 #include <vector>
 #include <sstream>
 #include <cctype>
+#include <stdexcept>
 #include <type_traits>
 
 class StringHelper
@@ -66,7 +67,17 @@ public:
         {
             if constexpr (std::is_same_v<Type, double>)
             {
-                values.emplace_back(std::stod(token));
+                size_t pos{};
+                const double value{ std::stod(token, &pos) };
+                while (pos < token.size() && std::isspace(static_cast<unsigned char>(token[pos])))
+                {
+                    ++pos;
+                }
+                if (pos != token.size())
+                {
+                    throw std::invalid_argument("Invalid double: " + token);
+                }
+                values.emplace_back(value);
             }
             else
             {

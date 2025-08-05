@@ -17,6 +17,12 @@ TEST(StringHelperTest, ExtractCharAtZeroReturnsFirstChar)
     EXPECT_EQ("A", StringHelper::ExtractCharAsString(input, 0));
 }
 
+TEST(StringHelperTest, ExtractCharAtLastIndex)
+{
+    std::string input{ "ABC" };
+    EXPECT_EQ("C", StringHelper::ExtractCharAsString(input, input.size()-1));
+}
+
 TEST(StringHelperTest, ExtractCharOutOfBoundsReturnsSpace)
 {
     std::string input{ "ABC" };
@@ -76,6 +82,12 @@ TEST(StringHelperTest, ConvertCharArrayToStringPreservesTabs)
     EXPECT_EQ("A\tB\n", StringHelper::ConvertCharArrayToString(data));
 }
 
+TEST(StringHelperTest, ConvertCharArrayToStringStopsAtNullChar)
+{
+    const char data[]{ "AB\0CD" };
+    EXPECT_EQ("AB", StringHelper::ConvertCharArrayToString(data));
+}
+
 TEST(StringHelperTest, StripCarriageReturnRemovesTrailingCR)
 {
     std::string line{ "abc\r" };
@@ -95,6 +107,13 @@ TEST(StringHelperTest, StripCarriageReturnInMiddleNoChange)
     std::string line{ "ab\rcd" };
     StringHelper::StripCarriageReturn(line);
     EXPECT_EQ("ab\rcd", line);
+}
+
+TEST(StringHelperTest, StripCarriageReturnDoesNotRemoveCRBeforeLF)
+{
+    std::string line{ "abc\r\n" };
+    StringHelper::StripCarriageReturn(line);
+    EXPECT_EQ("abc\r\n", line);
 }
 
 TEST(StringHelperTest, StripCarriageReturnRemovesOnlyOneTrailingCR)
@@ -181,6 +200,16 @@ TEST(StringHelperTest, SplitStringPreservesWhitespaceInsideTokens)
     EXPECT_EQ("a", tokens[0]);
     EXPECT_EQ(" b ", tokens[1]);
     EXPECT_EQ("c", tokens[2]);
+}
+
+TEST(StringHelperTest, SplitStringWhitespaceOnlyToken)
+{
+    std::string line{ "a, ,b" };
+    auto tokens{ StringHelper::SplitStringLineFromDelimiter(line) };
+    ASSERT_EQ(3u, tokens.size());
+    EXPECT_EQ("a", tokens[0]);
+    EXPECT_EQ(" ", tokens[1]);
+    EXPECT_EQ("b", tokens[2]);
 }
 
 TEST(StringHelperTest, SplitStringWithoutDelimiterReturnsWholeString)
@@ -274,9 +303,21 @@ TEST(StringHelperTest, ParseListOptionStringsWithWhitespace)
     EXPECT_EQ(expected, StringHelper::ParseListOption<std::string>(input));
 }
 
+TEST(StringHelperTest, ParseListOptionWhitespaceTokenThrows)
+{
+    const std::string input{ "1, ,2" };
+    EXPECT_THROW(StringHelper::ParseListOption<double>(input), std::invalid_argument);
+}
+
 TEST(StringHelperTest, ParseListOptionInvalidDoubleThrows)
 {
     const std::string input{ "1,a" };
+    EXPECT_THROW(StringHelper::ParseListOption<double>(input), std::invalid_argument);
+}
+
+TEST(StringHelperTest, ParseListOptionPartialDoubleThrows)
+{
+    const std::string input{ "1.0a,2.0" };
     EXPECT_THROW(StringHelper::ParseListOption<double>(input), std::invalid_argument);
 }
 
@@ -307,6 +348,13 @@ TEST(StringHelperTest, SplitStringLineAsTokensHandlesQuotedStrings)
 {
     std::string line{ "one 'two words' three" };
     std::vector<std::string> expected{"one", "two words", "three"};
+    EXPECT_EQ(expected, StringHelper::SplitStringLineAsTokens(line, 3));
+}
+
+TEST(StringHelperTest, SplitStringLineAsTokensHandlesQuotedCommas)
+{
+    std::string line{ "one 'two,three' four" };
+    std::vector<std::string> expected{"one", "two,three", "four"};
     EXPECT_EQ(expected, StringHelper::SplitStringLineAsTokens(line, 3));
 }
 
@@ -396,4 +444,18 @@ TEST(StringHelperTest, ToStringWithPrecisionZeroPrecision)
 {
     double value{ 123.456 };
     EXPECT_EQ("123", StringHelper::ToStringWithPrecision(value, 0));
+}
+
+TEST(StringHelperTest, ToStringWithPrecisionHandlesInfinity)
+{
+    const double pos_inf{ std::numeric_limits<double>::infinity() };
+    const double neg_inf{ -std::numeric_limits<double>::infinity() };
+    EXPECT_EQ("inf", StringHelper::ToStringWithPrecision(pos_inf));
+    EXPECT_EQ("-inf", StringHelper::ToStringWithPrecision(neg_inf));
+}
+
+TEST(StringHelperTest, ToStringWithPrecisionHandlesNaN)
+{
+    const double nan_val{ std::numeric_limits<double>::quiet_NaN() };
+    EXPECT_EQ("nan", StringHelper::ToStringWithPrecision(nan_val));
 }
