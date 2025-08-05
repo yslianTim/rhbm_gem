@@ -12,6 +12,7 @@ TEST(ArrayStatsTest, ComputeMin)
     const std::array<double, 5> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
     EXPECT_DOUBLE_EQ(1.0, ArrayStats<double>::ComputeMin(data.data(), data.size()));
     EXPECT_TRUE(std::isnan(ArrayStats<double>::ComputeMin(nullptr, 0)));
+    EXPECT_TRUE(std::isnan(ArrayStats<double>::ComputeMin(data.data(), 0)));
 }
 
 TEST(ArrayStatsTest, ComputeMinWithThreadSize)
@@ -27,6 +28,7 @@ TEST(ArrayStatsTest, ComputeMax)
     const std::array<double, 5> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
     EXPECT_DOUBLE_EQ(5.0, ArrayStats<double>::ComputeMax(data.data(), data.size()));
     EXPECT_TRUE(std::isnan(ArrayStats<double>::ComputeMax(nullptr, 0)));
+    EXPECT_TRUE(std::isnan(ArrayStats<double>::ComputeMax(data.data(), 0)));
 }
 
 TEST(ArrayStatsTest, ComputeMaxWithThreadSize)
@@ -35,6 +37,13 @@ TEST(ArrayStatsTest, ComputeMaxWithThreadSize)
     auto max_single{ ArrayStats<double>::ComputeMax(data.data(), data.size(), 1) };
     auto max_multi{ ArrayStats<double>::ComputeMax(data.data(), data.size(), 4) };
     EXPECT_DOUBLE_EQ(max_single, max_multi);
+}
+
+TEST(ArrayStatsTest, ComputeMinMaxNegativeValues)
+{
+    const std::array<double, 6> data{ -3.0, -1.0, -7.0, 2.0, 5.0, -2.0 };
+    EXPECT_DOUBLE_EQ(-7.0, ArrayStats<double>::ComputeMin(data.data(), data.size()));
+    EXPECT_DOUBLE_EQ(5.0, ArrayStats<double>::ComputeMax(data.data(), data.size()));
 }
 
 TEST(ArrayStatsTest, ComputeMean)
@@ -108,6 +117,23 @@ TEST(ArrayStatsTest, ComputePercentileEdgeCases)
     EXPECT_DOUBLE_EQ(1.75, ArrayStats<double>::ComputePercentile(unsorted, 0.25));
 }
 
+TEST(ArrayStatsTest, ComputePercentileSingleElement)
+{
+    std::vector<double> data{ 42.0 };
+    for (double p : {0.1, 0.5, 0.9})
+    {
+        EXPECT_DOUBLE_EQ(42.0, ArrayStats<double>::ComputePercentile(data, p));
+    }
+}
+
+TEST(ArrayStatsTest, ComputePercentileWithDuplicates)
+{
+    std::vector<double> data{ 1.0, 2.0, 2.0, 3.0 };
+    EXPECT_DOUBLE_EQ(2.0, ArrayStats<double>::ComputePercentile(data, 0.5));
+    EXPECT_DOUBLE_EQ(1.75, ArrayStats<double>::ComputePercentile(data, 0.25));
+    EXPECT_DOUBLE_EQ(2.25, ArrayStats<double>::ComputePercentile(data, 0.75));
+}
+
 TEST(ArrayStatsTest, ComputeMedianOddSizedDataset)
 {
     std::vector<double> data{ 3.0, 1.0, 2.0 };
@@ -129,7 +155,7 @@ TEST(ArrayStatsTest, ComputeMedianEmptyInput)
 TEST(ArrayStatsTest, ComputePercentileRangeTupleReturnsExpectedPercentiles)
 {
     std::vector<double> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
-    auto [min_value, max_value] = ArrayStats<double>::ComputePercentileRangeTuple(data, 0.2, 0.8);
+    auto [min_value, max_value]{ ArrayStats<double>::ComputePercentileRangeTuple(data, 0.2, 0.8) };
     EXPECT_NEAR(1.8, min_value, 1e-9);
     EXPECT_NEAR(4.2, max_value, 1e-9);
 }
@@ -137,13 +163,26 @@ TEST(ArrayStatsTest, ComputePercentileRangeTupleReturnsExpectedPercentiles)
 TEST(ArrayStatsTest, ComputeScalingPercentileRangeTupleExtendsSymmetrically)
 {
     std::vector<double> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
-    auto scaled = ArrayStats<double>::ComputeScalingPercentileRangeTuple(data, 0.5, 0.2, 0.8);
+    auto scaled{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(data, 0.5, 0.2, 0.8) };
     EXPECT_NEAR(0.6, std::get<0>(scaled), 1e-9);
     EXPECT_NEAR(5.4, std::get<1>(scaled), 1e-9);
 
     auto base{ ArrayStats<double>::ComputePercentileRangeTuple(data, 0.2, 0.8) };
     EXPECT_NEAR(std::get<0>(base) - std::get<0>(scaled),
                 std::get<1>(scaled) - std::get<1>(base), 1e-9);
+}
+
+TEST(ArrayStatsTest, ComputeScalingPercentileRangeTupleContractsSymmetrically)
+{
+    std::vector<double> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
+    auto scaled{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(data, -0.25, 0.2, 0.8) };
+    EXPECT_NEAR(2.4, std::get<0>(scaled), 1e-9);
+    EXPECT_NEAR(3.6, std::get<1>(scaled), 1e-9);
+
+    auto base{ ArrayStats<double>::ComputePercentileRangeTuple(data, 0.2, 0.8) };
+    EXPECT_NEAR(std::get<0>(scaled) - std::get<0>(base),
+                std::get<1>(base) - std::get<1>(scaled), 1e-9);
+    EXPECT_LE(std::get<0>(scaled), std::get<1>(scaled));
 }
 
 TEST(ArrayStatsTest, ComputeRangeTupleReturnsExpectedMinMax)
@@ -173,6 +212,19 @@ TEST(ArrayStatsTest, ComputeScalingRangeTupleExtendsRangeSymmetrically)
     auto base{ ArrayStats<double>::ComputeRangeTuple(data) };
     EXPECT_DOUBLE_EQ(std::get<0>(base) - std::get<0>(scaled),
                      std::get<1>(scaled) - std::get<1>(base));
+}
+
+TEST(ArrayStatsTest, ComputeScalingRangeTupleContractsRangeSymmetrically)
+{
+    std::vector<double> data{ 3.0, 1.0, 4.0, -1.0, 5.0 };
+    auto scaled{ ArrayStats<double>::ComputeScalingRangeTuple(data, -0.25) };
+    EXPECT_DOUBLE_EQ(0.5, std::get<0>(scaled));
+    EXPECT_DOUBLE_EQ(3.5, std::get<1>(scaled));
+
+    auto base{ ArrayStats<double>::ComputeRangeTuple(data) };
+    EXPECT_DOUBLE_EQ(std::get<0>(scaled) - std::get<0>(base),
+                     std::get<1>(base) - std::get<1>(scaled));
+    EXPECT_LE(std::get<0>(scaled), std::get<1>(scaled));
 }
 
 TEST(ArrayStatsTest, ScalingRangeDefaultAndEmpty)
@@ -230,11 +282,34 @@ TEST(ArrayStatsTest, ComputeNormEuclideanDistance)
     EXPECT_DOUBLE_EQ(5.0, distance);
 }
 
+TEST(ArrayStatsTest, ComputeNormWithNegativeComponents)
+{
+    std::array<double, 3> v1{ -1.0, -2.0, -3.0 };
+    std::array<double, 3> v2{ -4.0, -6.0, -3.0 };
+    auto distance{ ArrayStats<double>::ComputeNorm(v1, v2) };
+    EXPECT_DOUBLE_EQ(5.0, distance);
+}
+
+TEST(ArrayStatsTest, ComputeNormZeroDistanceForIdenticalVectors)
+{
+    std::array<double, 3> v1{ 1.0, 2.0, 3.0 };
+    auto distance{ ArrayStats<double>::ComputeNorm(v1, v1) };
+    EXPECT_DOUBLE_EQ(0.0, distance);
+}
+
 TEST(ArrayStatsTest, ComputeRankReturnsExpectedPosition)
 {
     std::array<double, 3> values{ 3.0, 1.0, 2.0 };
     auto rank{ ArrayStats<double>::ComputeRank(values, 1) };
     EXPECT_EQ(1, rank);
+}
+
+TEST(ArrayStatsTest, ComputeRankWithNegativeValues)
+{
+    std::array<double, 3> values{ -3.0, 2.0, -1.0 };
+    EXPECT_EQ(1, ArrayStats<double>::ComputeRank(values, 0));
+    EXPECT_EQ(3, ArrayStats<double>::ComputeRank(values, 1));
+    EXPECT_EQ(2, ArrayStats<double>::ComputeRank(values, 2));
 }
 
 TEST(ArrayStatsTest, ComputeRankWithDuplicates)
