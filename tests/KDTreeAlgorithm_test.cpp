@@ -39,6 +39,18 @@ TEST(KDTreeAlgorithmTest, BuildKDTreeReturnsNullOnEmpty)
     EXPECT_EQ(root, nullptr);
 }
 
+TEST(KDTreeAlgorithmTest, BuildKDTreeSingleNode)
+{
+    TestNode node{ 1.0, 2.0, 3.0 };
+    std::vector<TestNode *> node_ptr_list{ &node };
+    auto root{ KDTreeAlgorithm<TestNode>::BuildKDTree(node_ptr_list) };
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(0u, root->m_axis);
+    EXPECT_EQ(nullptr, root->m_left);
+    EXPECT_EQ(nullptr, root->m_right);
+    EXPECT_EQ(&node, root->m_node);
+}
+
 TEST(KDTreeAlgorithmTest, KNearestNeighborsAscendingOrder)
 {
     std::vector<std::unique_ptr<TestNode>> storage;
@@ -103,6 +115,15 @@ TEST(KDTreeAlgorithmTest, NullRootReturnsEmpty)
     storage.emplace_back(std::make_unique<TestNode>(0.0, 0.0, 0.0));
     auto result{ KDTreeAlgorithm<TestNode>::KNearestNeighbors(nullptr, storage[0].get(), 3) };
     EXPECT_TRUE(result.empty());
+}
+
+
+TEST(KDTreeAlgorithmTest, KNearestNeighborsZeroKReturnsEmpty)
+{
+    std::vector<std::unique_ptr<TestNode>> storage;
+    auto root{ BuildSimpleTree(storage) };
+    auto knn{ KDTreeAlgorithm<TestNode>::KNearestNeighbors(root.get(), storage[0].get(), 0) };
+    EXPECT_TRUE(knn.empty());
 }
 
 TEST(KDTreeAlgorithmTest, KNearestNeighborsExternalQuery)
