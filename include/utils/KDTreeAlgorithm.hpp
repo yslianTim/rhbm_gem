@@ -49,7 +49,7 @@ public:
     static std::vector<NodeType *> KNearestNeighbors(
         const KDNode<NodeType> * root_kd_node, const NodeType * query_node, size_t k_size)
     {
-        if (root_kd_node == nullptr || k_size == 0) return {};
+        if (root_kd_node == nullptr || query_node == nullptr || k_size == 0) return {};
 
         std::priority_queue<DistNode, std::vector<DistNode>, DistNodeComparator> max_heap;
         KNearestNeighborsHelper(root_kd_node, query_node, static_cast<int>(k_size), max_heap);
@@ -68,6 +68,10 @@ public:
     static std::vector<NodeType *> RangeSearch(
         const KDNode<NodeType> * root_kd_node, const NodeType * query_node, double range)
     {
+        if (range < 0.0 || root_kd_node == nullptr || query_node == nullptr)
+        {
+            return {};
+        }
         std::vector<NodeType *> knn_list;
         knn_list.reserve(64);
         RangeSearchHelper(root_kd_node, query_node, range, knn_list);
@@ -78,6 +82,11 @@ public:
         const KDNode<NodeType> * root_kd_node, const NodeType * query_node, double range,
         std::vector<NodeType *> & knn_list)
     {
+        if (range < 0.0 || root_kd_node == nullptr || query_node == nullptr)
+        {
+            knn_list = {};
+            return;
+        }
         knn_list.clear();
         RangeSearchHelper(root_kd_node, query_node, range, knn_list);
     }

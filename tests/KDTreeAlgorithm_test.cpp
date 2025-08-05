@@ -117,6 +117,13 @@ TEST(KDTreeAlgorithmTest, NullRootReturnsEmpty)
     EXPECT_TRUE(result.empty());
 }
 
+TEST(KDTreeAlgorithmTest, NullQueryReturnsEmpty)
+{
+    std::vector<std::unique_ptr<TestNode>> storage;
+    auto root{ BuildSimpleTree(storage) };
+    auto result{ KDTreeAlgorithm<TestNode>::KNearestNeighbors(root.get(), nullptr, 3) };
+    EXPECT_TRUE(result.empty());
+}
 
 TEST(KDTreeAlgorithmTest, KNearestNeighborsZeroKReturnsEmpty)
 {
@@ -164,6 +171,43 @@ TEST(KDTreeAlgorithmTest, KNearestNeighborsTieDistances)
     EXPECT_NE(all.end(), std::find(all.begin(), all.end(), &node_list[1]));
     EXPECT_NE(all.end(), std::find(all.begin(), all.end(), &node_list[2]));
     EXPECT_NE(all.end(), std::find(all.begin(), all.end(), &node_list[3]));
+}
+
+TEST(KDTreeAlgorithmTest, KNearestNeighborsPrunesFarSubtree)
+{
+    struct TrackingNode
+    {
+        std::array<double, 3> m_position;
+        mutable bool m_visited{ false };
+        TrackingNode(double x, double y, double z) : m_position{ x, y, z } {}
+        const std::array<double, 3> & GetPosition(void) const
+        {
+            m_visited = true;
+            return m_position;
+        }
+        void Reset(void) { m_visited = false; }
+    };
+
+    std::vector<TrackingNode> node_list{
+        {0.0, 0.0, 0.0},
+        {1.0, 0.0, 0.0},
+        {100.0, 0.0, 0.0},
+        {101.0, 0.0, 0.0},
+        {102.0, 0.0, 0.0}
+    };
+    auto root{ BuildSampleTree(node_list) };
+    for (auto & node : node_list) node.Reset();
+
+    TrackingNode query{ 0.0, 0.0, 0.0 };
+    auto knn{ KDTreeAlgorithm<TrackingNode>::KNearestNeighbors(root.get(), &query, 1) };
+    ASSERT_EQ(1u, knn.size());
+    EXPECT_EQ(&node_list[0], knn[0]);
+
+    EXPECT_TRUE(node_list[0].m_visited);
+    EXPECT_TRUE(node_list[1].m_visited);
+    EXPECT_TRUE(node_list[2].m_visited);
+    EXPECT_FALSE(node_list[3].m_visited);
+    EXPECT_FALSE(node_list[4].m_visited);
 }
 
 TEST(KDTreeAlgorithmTest, RangeSearchIncludesBoundary)
@@ -228,6 +272,20 @@ TEST(KDTreeAlgorithmTest, RangeSearchNullRoot)
     EXPECT_TRUE(out.empty());
 }
 
+TEST(KDTreeAlgorithmTest, RangeSearchNullQuery)
+{
+    std::vector<TestNode> node_list{
+        {0.0, 0.0, 0.0},
+        {1.0, 0.0, 0.0},
+    };
+    auto root{ BuildSampleTree(node_list) };
+    auto results{ KDTreeAlgorithm<TestNode>::RangeSearch(root.get(), nullptr, 1.0) };
+    EXPECT_TRUE(results.empty());
+    std::vector<TestNode *> out{ &node_list[0] };
+    KDTreeAlgorithm<TestNode>::RangeSearch(root.get(), nullptr, 1.0, out);
+    EXPECT_TRUE(out.empty());
+}
+
 TEST(KDTreeAlgorithmTest, RangeSearchDirectionalPruning)
 {
     struct TrackingNode
@@ -289,4 +347,60 @@ TEST(KDTreeAlgorithmTest, RangeSearchZeroRange)
     auto results{ KDTreeAlgorithm<TestNode>::RangeSearch(root.get(), &query, 0.0) };
     ASSERT_EQ(1u, results.size());
     EXPECT_EQ(&node_list[1], results[0]);
+}
+
+TEST(KDTreeAlgorithmTest, RangeSearchNegativeRangeReturnsEmpty)
+{
+    std::vector<TestNode> node_list{
+        {0.0, 0.0, 0.0},
+        {1.0, 0.0, 0.0},
+    };
+    auto root{ BuildSampleTree(node_list) };
+
+    TestNode query{ 0.0, 0.0, 0.0 };
+    auto results{ KDTreeAlgorithm<TestNode>::RangeSearch(root.get(), &query, -1.0) };
+    EXPECT_TRUE(results.empty());
+
+    std::vector<TestNode *> out{ &node_list[1] };
+    KDTreeAlgorithm<TestNode>::RangeSearch(root.get(), &query, -1.0, out);
+    EXPECT_TRUE(out.empty());
+}
+
+TEST(KDTreeAlgorithmTest, RangeSearchLargeRangeReturnsAllNodes)
+{
+    std::vector<TestNode> node_list{
+        {0.0, 0.0, 0.0},
+        {1.0, 1.0, 1.0},
+        {2.0, 2.0, 2.0},
+        {-1.0, -1.0, -1.0},
+        {3.0, 0.0, 0.0}
+    };
+    auto root{ BuildSampleTree(node_list) };
+
+    double max_dist{ 0.0 };
+    for (size_t i = 0; i < node_list.size(); i++)
+    {
+        for (size_t j = i + 1; j < node_list.size(); j++)
+        {
+            const auto & a{ node_list[i].GetPosition() };
+            const auto & b{ node_list[j].GetPosition() };
+            double dist{ 0.0 };
+            for (size_t axis = 0; axis < a.size(); axis++)
+            {
+                auto diff{ a[axis] - b[axis] };
+                dist += diff * diff;
+            }
+            dist = std::sqrt(dist);
+            max_dist = std::max(max_dist, dist);
+        }
+    }
+
+    auto results{
+        KDTreeAlgorithm<TestNode>::RangeSearch(root.get(), root->m_node, max_dist + 1.0)
+    };
+    ASSERT_EQ(node_list.size(), results.size());
+    for (auto & node : node_list)
+    {
+        EXPECT_NE(results.end(), std::find(results.begin(), results.end(), &node));
+    }
 }
