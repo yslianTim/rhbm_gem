@@ -49,10 +49,10 @@ public:
     static std::vector<NodeType *> KNearestNeighbors(
         const KDNode<NodeType> * root_kd_node, const NodeType * query_node, size_t k_size)
     {
-        if (k_size <= 0) return {};
+        if (root_kd_node == nullptr || k_size == 0) return {};
 
         std::priority_queue<DistNode, std::vector<DistNode>, DistNodeComparator> max_heap;
-        KNearestNeighborsHelper(root_kd_node, query_node, k_size, max_heap);
+        KNearestNeighborsHelper(root_kd_node, query_node, static_cast<int>(k_size), max_heap);
         std::vector<NodeType *> knn_list;
         knn_list.reserve(max_heap.size());
         while (!max_heap.empty())
