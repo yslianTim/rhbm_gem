@@ -1,6 +1,6 @@
 file(GLOB TEST_SOURCES *.cpp)
 
-set(TEST_EXEC_NAME ${CMAKE_PROJECT_NAME}_test)
+set(TEST_EXEC_NAME unit_tests)
 add_executable(${TEST_EXEC_NAME} ${TEST_SOURCES})
 
 target_link_libraries(${TEST_EXEC_NAME} PRIVATE

@@ -22,14 +22,8 @@ class DatabaseManager
 public:
     explicit DatabaseManager(const std::filesystem::path & database_path);
     ~DatabaseManager();
-    DatabaseManager(const DatabaseManager &) = delete;
-    DatabaseManager & operator=(const DatabaseManager &) = delete;
-    DatabaseManager(DatabaseManager &&) noexcept = default;
-    DatabaseManager & operator=(DatabaseManager &&) noexcept = default;
-
     void SaveDataObject(const DataObjectBase * data_object, const std::string & key_tag);
     std::unique_ptr<DataObjectBase> LoadDataObject(const std::string & key_tag);
-
     const std::filesystem::path & GetDatabasePath(void) const { return m_database_path; }
     SQLiteWrapper * GetDatabase(void) { return m_database.get(); }
     std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const DataObjectBase * data_object);

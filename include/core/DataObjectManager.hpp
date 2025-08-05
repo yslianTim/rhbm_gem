@@ -23,10 +23,6 @@ class DataObjectManager
 public:
     DataObjectManager(void);
     ~DataObjectManager();
-    DataObjectManager(const DataObjectManager &) = delete;
-    DataObjectManager & operator=(const DataObjectManager &) = delete;
-    DataObjectManager(DataObjectManager &&) noexcept = default;
-    DataObjectManager & operator=(DataObjectManager &&) noexcept = default;
     void SetDatabaseManager(const std::filesystem::path & dbname);
     void ProcessFile(const std::filesystem::path & filename, const std::string & key_tag);
     void ProduceFile(const std::filesystem::path & filename, const std::string & key_tag);

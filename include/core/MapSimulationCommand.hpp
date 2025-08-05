@@ -14,7 +14,7 @@
 class ModelObject;
 class MapObject;
 class AtomObject;
-template <typename T> class KDNode;
+template <typename T> struct KDNode;
 
 class MapSimulationCommand : public CommandBase
 {
@@ -27,7 +27,7 @@ public:
         PartialCharge partial_charge_choice{ PartialCharge::PARTIAL };
         double cutoff_distance{ 5.0 };
         double grid_spacing{ 0.5 };
-        std::vector<double> blurring_width_list{ {0.50} };
+        std::vector<double> blurring_width_list{ 0.50 };
     };
 
 private:

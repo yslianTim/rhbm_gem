@@ -4,6 +4,8 @@
 #include "Logger.hpp"
 
 #include <cstring>
+#include <string>
+#include <sstream>
 #include <cmath>
 #include <algorithm>
 #include <iomanip>

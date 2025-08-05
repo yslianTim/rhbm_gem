@@ -17,13 +17,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_TESTING "Build unit tests" ON)
 
 # Option to enable coverage instrumentation
-option(ENABLE_COVERAGE "Enable coverage reporting" ON)
+#option(ENABLE_COVERAGE "Enable coverage reporting" ON)
 
 # Include coverage helper module when coverage is enabled
-if(ENABLE_COVERAGE)
-    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11/cmake")
-    include(CodeCoverage)
-endif()
+#if(ENABLE_COVERAGE)
+#    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11/cmake")
+#    include(CodeCoverage)
+#endif()
 
 # Specify the C++ standard (Use interface libraries)
 add_library(CompilerFlags INTERFACE)
@@ -36,9 +36,9 @@ target_compile_options(CompilerFlags INTERFACE
 )
 
 # Apply coverage flags via helper when requested
-if(ENABLE_COVERAGE AND BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    append_coverage_compiler_flags()
-endif()
+#if(ENABLE_COVERAGE AND BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+#   append_coverage_compiler_flags()
+#endif()
 
 option(USE_SYSTEM_LIBS "Use system-installed libraries" ON)
 
@@ -165,25 +165,31 @@ if(BUILD_TESTING)
 endif()
 
 # Custom target to generate coverage report
-if(ENABLE_COVERAGE AND BUILD_TESTING)
-    find_program(LCOV_EXECUTABLE lcov)
-    find_program(GENHTML_EXECUTABLE genhtml)
+#if(ENABLE_COVERAGE AND BUILD_TESTING)
+#    find_program(LCOV_EXECUTABLE lcov)
+#    find_program(GENHTML_EXECUTABLE genhtml)
 
-    if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
-        find_program(LLVM_COV llvm-cov)
-        if(LLVM_COV)
-            set(GCOV_PATH ${LLVM_COV})
-        endif()
+#    if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
+#        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+#            find_program(GCOV_PATH llvm-cov)
+#       else()
+#            find_program(GCOV_PATH gcov)
+#        endif()
 
-        setup_target_for_coverage_lcov(
-            NAME coverage
-            EXECUTABLE ${CMAKE_CTEST_COMMAND}
-            EXECUTABLE_ARGS --output-on-failure
-            DEPENDENCIES ${CMAKE_PROJECT_NAME}_test
-            EXCLUDE "${PROJECT_SOURCE_DIR}/third_party/*"
-            LCOV_ARGS ${LCOV_GCOV_TOOL}
-        )
-    else()
-        message(WARNING "lcov and/or genhtml not found; coverage target will not be generated")
-    endif()
-endif()
+#        setup_target_for_coverage_lcov(
+#            NAME coverage
+#            EXECUTABLE ${CMAKE_CTEST_COMMAND}
+#            EXECUTABLE_ARGS --output-on-failure
+#            DEPENDENCIES unit_tests
+#            ALL
+#            EXCLUDE
+#                "${PROJECT_SOURCE_DIR}/third_party/*"
+#                "${PROJECT_BINARY_DIR}/*"
+#            LCOV_ARGS
+#                "--gcov-tool=${GCOV_PATH}"
+#                "--rc" "lcov_branch_coverage=1"
+#        )
+#    else()
+#        message(WARNING "lcov and/or genhtml not found; coverage target will not be generated")
+#    endif()
+#endif()
