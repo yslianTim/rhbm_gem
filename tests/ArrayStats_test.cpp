@@ -52,6 +52,22 @@ TEST(ArrayStatsTest, ComputePercentileInterpolation)
     EXPECT_DOUBLE_EQ(2.5, ArrayStats<double>::ComputePercentile(data, 0.5));
 }
 
+TEST(ArrayStatsTest, ComputePercentileEdgeCases)
+{
+    // Empty data returns 0 regardless of percentile within (0, 1)
+    std::vector<double> empty_data{};
+    EXPECT_DOUBLE_EQ(0.0, ArrayStats<double>::ComputePercentile(empty_data, 0.5));
+
+    // Percentile less than 0 returns 0, greater than 1 returns max value
+    std::vector<double> data{ 1.0, 2.0, 3.0 };
+    EXPECT_DOUBLE_EQ(0.0, ArrayStats<double>::ComputePercentile(data, -0.1));
+    EXPECT_DOUBLE_EQ(3.0, ArrayStats<double>::ComputePercentile(data, 1.5));
+
+    // Unsorted data uses interpolation for percentile
+    std::vector<double> unsorted{ 3.0, 1.0, 4.0, 2.0 };
+    EXPECT_DOUBLE_EQ(1.75, ArrayStats<double>::ComputePercentile(unsorted, 0.25));
+}
+
 TEST(ArrayStatsTest, ComputeMedianOddSizedDataset)
 {
     std::vector<double> data{ 3.0, 1.0, 2.0 };
@@ -110,6 +126,53 @@ TEST(ArrayStatsTest, ComputeScalingRangeTupleExtendsRangeSymmetrically)
                      std::get<1>(scaled) - std::get<1>(base));
 }
 
+TEST(ArrayStatsTest, ScalingRangeDefaultAndEmpty)
+{
+    std::vector<double> data{ 1.0, 2.0, 3.0, 4.0, 5.0 };
+
+    auto scaled_percentile{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(data, 0.0) };
+    auto base_percentile{ ArrayStats<double>::ComputePercentileRangeTuple(data) };
+    EXPECT_DOUBLE_EQ(std::get<0>(base_percentile), std::get<0>(scaled_percentile));
+    EXPECT_DOUBLE_EQ(std::get<1>(base_percentile), std::get<1>(scaled_percentile));
+
+    auto scaled_range{ ArrayStats<double>::ComputeScalingRangeTuple(data, 0.0) };
+    auto base_range{ ArrayStats<double>::ComputeRangeTuple(data) };
+    EXPECT_DOUBLE_EQ(std::get<0>(base_range), std::get<0>(scaled_range));
+    EXPECT_DOUBLE_EQ(std::get<1>(base_range), std::get<1>(scaled_range));
+
+    std::vector<double> empty{};
+    auto empty_percentile{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(empty, 0.0) };
+    EXPECT_DOUBLE_EQ(0.0, std::get<0>(empty_percentile));
+    EXPECT_DOUBLE_EQ(0.0, std::get<1>(empty_percentile));
+
+    auto empty_range{ ArrayStats<double>::ComputeScalingRangeTuple(empty, 0.0) };
+    EXPECT_DOUBLE_EQ(0.0, std::get<0>(empty_range));
+    EXPECT_DOUBLE_EQ(0.0, std::get<1>(empty_range));
+}
+
+TEST(ArrayStatsTest, RangeFunctionsEmptyInput)
+{
+    std::vector<double> data{};
+
+    auto percentile_range{ ArrayStats<double>::ComputePercentileRangeTuple(data) };
+    EXPECT_DOUBLE_EQ(0.0, std::get<0>(percentile_range));
+    EXPECT_DOUBLE_EQ(0.0, std::get<1>(percentile_range));
+
+    auto scaling_percentile_range{
+        ArrayStats<double>::ComputeScalingPercentileRangeTuple(data, 0.5)
+    };
+    EXPECT_DOUBLE_EQ(0.0, std::get<0>(scaling_percentile_range));
+    EXPECT_DOUBLE_EQ(0.0, std::get<1>(scaling_percentile_range));
+
+    auto range{ ArrayStats<double>::ComputeRangeTuple(data) };
+    EXPECT_DOUBLE_EQ(0.0, std::get<0>(range));
+    EXPECT_DOUBLE_EQ(0.0, std::get<1>(range));
+
+    auto scaling_range{ ArrayStats<double>::ComputeScalingRangeTuple(data, 0.5) };
+    EXPECT_DOUBLE_EQ(0.0, std::get<0>(scaling_range));
+    EXPECT_DOUBLE_EQ(0.0, std::get<1>(scaling_range));
+}
+
 TEST(ArrayStatsTest, ComputeNormEuclideanDistance)
 {
     std::array<double, 3> v1{ 0.0, 0.0, 0.0 };
@@ -125,8 +188,50 @@ TEST(ArrayStatsTest, ComputeRankReturnsExpectedPosition)
     EXPECT_EQ(1, rank);
 }
 
+TEST(ArrayStatsTest, ComputeRankWithDuplicates)
+{
+    std::array<double, 4> values{ 2.0, 3.0, 3.0, 4.0 };
+    auto rank_index1{ ArrayStats<double>::ComputeRank(values, 1) };
+    auto rank_index2{ ArrayStats<double>::ComputeRank(values, 2) };
+
+    EXPECT_EQ(rank_index1, rank_index2);
+    EXPECT_EQ(2, rank_index1);
+    EXPECT_EQ(1, ArrayStats<double>::ComputeRank(values, 0));
+    EXPECT_EQ(4, ArrayStats<double>::ComputeRank(values, 3));
+}
+
 TEST(ArrayStatsTest, ComputeRankIndexOutOfRangeThrows)
 {
     std::array<double, 3> values{ 3.0, 1.0, 2.0 };
     EXPECT_THROW(ArrayStats<double>::ComputeRank(values, 3), std::out_of_range);
+}
+
+TEST(ArrayStatsTest, ComputeWithThreadSize)
+{
+    const std::vector<double> data{ 1.0, 2.0, 3.0, 4.0 };
+
+    auto min_single{ ArrayStats<double>::ComputeMin(data.data(), data.size(), 1) };
+    auto min_multi{ ArrayStats<double>::ComputeMin(data.data(), data.size(), 4) };
+    EXPECT_DOUBLE_EQ(min_single, min_multi);
+
+    auto max_single{ ArrayStats<double>::ComputeMax(data.data(), data.size(), 1) };
+    auto max_multi{ ArrayStats<double>::ComputeMax(data.data(), data.size(), 4) };
+    EXPECT_DOUBLE_EQ(max_single, max_multi);
+
+    auto mean_single{ ArrayStats<double>::ComputeMean(data.data(), data.size(), 1) };
+    auto mean_multi{ ArrayStats<double>::ComputeMean(data.data(), data.size(), 4) };
+    EXPECT_DOUBLE_EQ(mean_single, mean_multi);
+
+    auto std_single{ ArrayStats<double>::ComputeStandardDeviation(
+        data.data(), data.size(), mean_single, 1)
+    };
+    auto std_multi{ ArrayStats<double>::ComputeStandardDeviation(
+        data.data(), data.size(), mean_multi, 4)
+    };
+    EXPECT_DOUBLE_EQ(std_single, std_multi);
+
+    auto range_single{ ArrayStats<double>::ComputeRangeTuple(data, 1) };
+    auto range_multi{ ArrayStats<double>::ComputeRangeTuple(data, 4) };
+    EXPECT_DOUBLE_EQ(std::get<0>(range_single), std::get<0>(range_multi));
+    EXPECT_DOUBLE_EQ(std::get<1>(range_single), std::get<1>(range_multi));
 }
