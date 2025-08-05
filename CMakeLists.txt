@@ -167,13 +167,20 @@ endif()
 
 # Custom target to generate coverage report
 if(ENABLE_COVERAGE AND BUILD_TESTING)
-    add_custom_target(coverage
-        DEPENDS ${CMAKE_PROJECT_NAME}_test
-        COMMAND lcov --directory ${CMAKE_BINARY_DIR} --zerocounters
-        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        COMMAND lcov --capture --directory ${CMAKE_BINARY_DIR} --output-file coverage.info
-        COMMAND lcov --remove coverage.info "/usr/*" "${PROJECT_SOURCE_DIR}/tests/*" "${PROJECT_SOURCE_DIR}/third_party/*" --output-file coverage.info
-        COMMAND genhtml coverage.info --output-directory coverage
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    )
+    find_program(LCOV_EXECUTABLE lcov)
+    find_program(GENHTML_EXECUTABLE genhtml)
+
+    if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
+        add_custom_target(coverage
+            DEPENDS ${CMAKE_PROJECT_NAME}_test
+            COMMAND ${LCOV_EXECUTABLE} --directory ${CMAKE_BINARY_DIR} --zerocounters
+            COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+            COMMAND ${LCOV_EXECUTABLE} --capture --directory ${CMAKE_BINARY_DIR} --output-file coverage.info
+            COMMAND ${LCOV_EXECUTABLE} --remove coverage.info "/usr/*" "${PROJECT_SOURCE_DIR}/tests/*" "${PROJECT_SOURCE_DIR}/third_party/*" --output-file coverage.info
+            COMMAND ${GENHTML_EXECUTABLE} coverage.info --output-directory coverage
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        )
+    else()
+        message(WARNING "lcov and/or genhtml not found; coverage target will not be generated")
+    endif()
 endif()
