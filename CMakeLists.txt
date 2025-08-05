@@ -35,10 +35,9 @@ target_compile_options(CompilerFlags INTERFACE
     "$<${msvc_cxx}:$<BUILD_INTERFACE:-W3;/Zc:__cplusplus>>"
 )
 
-# Apply coverage flags via interface library when requested
+# Apply coverage flags via helper when requested
 if(ENABLE_COVERAGE AND BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(CompilerFlags INTERFACE -O0 -g --coverage -fprofile-arcs -ftest-coverage)
-    target_link_options(CompilerFlags INTERFACE --coverage -fprofile-arcs -ftest-coverage)
+    append_coverage_compiler_flags()
 endif()
 
 option(USE_SYSTEM_LIBS "Use system-installed libraries" ON)
@@ -171,17 +170,9 @@ if(ENABLE_COVERAGE AND BUILD_TESTING)
     find_program(GENHTML_EXECUTABLE genhtml)
 
     if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
-        set(LCOV_GCOV_TOOL "")
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-            find_program(LLVM_PROFDATA llvm-profdata)
-            if(LLVM_PROFDATA)
-                set(LCOV_GCOV_TOOL --gcov-tool ${LLVM_PROFDATA})
-            else()
-                find_program(LLVM_COV llvm-cov)
-                if(LLVM_COV)
-                    set(LCOV_GCOV_TOOL --gcov-tool ${LLVM_COV} gcov)
-                endif()
-            endif()
+        find_program(LLVM_COV llvm-cov)
+        if(LLVM_COV)
+            set(GCOV_PATH ${LLVM_COV})
         endif()
 
         setup_target_for_coverage_lcov(
@@ -190,6 +181,7 @@ if(ENABLE_COVERAGE AND BUILD_TESTING)
             EXECUTABLE_ARGS --output-on-failure
             DEPENDENCIES ${CMAKE_PROJECT_NAME}_test
             EXCLUDE "${PROJECT_SOURCE_DIR}/third_party/*"
+            LCOV_ARGS ${LCOV_GCOV_TOOL}
         )
     else()
         message(WARNING "lcov and/or genhtml not found; coverage target will not be generated")
