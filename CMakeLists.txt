@@ -19,6 +19,12 @@ option(BUILD_TESTING "Build unit tests" ON)
 # Option to enable coverage instrumentation
 option(ENABLE_COVERAGE "Enable coverage reporting" ON)
 
+# Include coverage helper module when coverage is enabled
+if(ENABLE_COVERAGE)
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11/cmake")
+    include(CodeCoverage)
+endif()
+
 # Specify the C++ standard (Use interface libraries)
 add_library(CompilerFlags INTERFACE)
 target_compile_features(CompilerFlags INTERFACE cxx_std_17)
@@ -28,6 +34,12 @@ target_compile_options(CompilerFlags INTERFACE
     "$<${gcc_like_cxx}:$<BUILD_INTERFACE:-Wall;-Wextra;-Wshadow;-Wformat=2;-Wpedantic;-Wconversion;-Wsign-conversion;-Wunused;-Wcast-align;-Wold-style-cast;-Wstrict-overflow;-Wno-psabi>>"
     "$<${msvc_cxx}:$<BUILD_INTERFACE:-W3;/Zc:__cplusplus>>"
 )
+
+# Apply coverage flags via interface library when requested
+if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(CompilerFlags INTERFACE -O0 -g --coverage)
+    target_link_options(CompilerFlags INTERFACE --coverage)
+endif()
 
 option(USE_SYSTEM_LIBS "Use system-installed libraries" ON)
 
@@ -117,12 +129,6 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 # 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
-# When enabled and using GCC/Clang, add coverage compile and link options
-if(ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(--coverage -O0 -g)
-    add_link_options(--coverage)
-endif()
-
 add_subdirectory(src)
 add_subdirectory(bindings)
 
@@ -162,9 +168,12 @@ endif()
 # Custom target to generate coverage report
 if(ENABLE_COVERAGE AND BUILD_TESTING)
     add_custom_target(coverage
+        DEPENDS ${CMAKE_PROJECT_NAME}_test
+        COMMAND lcov --directory ${CMAKE_BINARY_DIR} --zerocounters
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        COMMAND lcov --capture --directory ${CMAKE_BINARY_DIR} --output-file ${CMAKE_BINARY_DIR}/coverage.info
-        COMMAND genhtml ${CMAKE_BINARY_DIR}/coverage.info --output-directory ${CMAKE_BINARY_DIR}/coverage
+        COMMAND lcov --capture --directory ${CMAKE_BINARY_DIR} --output-file coverage.info
+        COMMAND lcov --remove coverage.info "/usr/*" "${PROJECT_SOURCE_DIR}/tests/*" "${PROJECT_SOURCE_DIR}/third_party/*" --output-file coverage.info
+        COMMAND genhtml coverage.info --output-directory coverage
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
 endif()
