@@ -7,8 +7,10 @@
 
 TEST(KeyPackerElementClass, PackUnpackRoundTrip)
 {
-    const std::vector<Element> elements{ Element::CARBON, Element::NITROGEN, Element::OXYGEN };
-    const std::vector<Remoteness> remotenesses{ Remoteness::ALPHA, Remoteness::BETA, Remoteness::GAMMA };
+    const std::vector<Element> elements{
+        Element::CARBON, Element::NITROGEN, Element::OXYGEN, Element::ZINC, Element::UNK };
+    const std::vector<Remoteness> remotenesses{
+        Remoteness::ALPHA, Remoteness::BETA, Remoteness::GAMMA, Remoteness::ZETA, Remoteness::UNK };
 
     for (auto element : elements)
     {
@@ -69,10 +71,14 @@ TEST(KeyPackerElementClass, UniqueKeys)
 
 TEST(KeyPackerResidueClass, PackUnpackRoundTrip)
 {
-    const std::vector<Residue> residues{ Residue::ALA, Residue::GLY };
-    const std::vector<Element> elements{ Element::CARBON, Element::NITROGEN };
-    const std::vector<Remoteness> remotenesses{ Remoteness::ALPHA, Remoteness::BETA };
-    const std::vector<Branch> branches{ Branch::ONE, Branch::TWO };
+    const std::vector<Residue> residues{
+        Residue::ALA, Residue::GLY, Residue::ZN, Residue::UNK };
+    const std::vector<Element> elements{
+        Element::CARBON, Element::NITROGEN, Element::ZINC, Element::UNK };
+    const std::vector<Remoteness> remotenesses{
+        Remoteness::ALPHA, Remoteness::BETA, Remoteness::ZETA, Remoteness::UNK };
+    const std::vector<Branch> branches{
+        Branch::ONE, Branch::TWO, Branch::TERMINAL, Branch::UNK };
     for (auto residue : residues)
     {
         for (auto element : elements)
@@ -164,11 +170,16 @@ TEST(KeyPackerResidueClass, UniqueKeys)
 
 TEST(KeyPackerStructureClass, PackUnpackRoundTrip)
 {
-    const std::vector<Structure> structures{ Structure::FREE, Structure::HELX_P, Structure::SHEET };
-    const std::vector<Residue> residues{ Residue::ALA, Residue::GLY };
-    const std::vector<Element> elements{ Element::CARBON, Element::NITROGEN };
-    const std::vector<Remoteness> remotenesses{ Remoteness::ALPHA, Remoteness::BETA };
-    const std::vector<Branch> branches{ Branch::NONE, Branch::ONE };
+    const std::vector<Structure> structures{
+        Structure::FREE, Structure::BEND, Structure::HELX_P, Structure::SHEET, Structure::UNK };
+    const std::vector<Residue> residues{
+        Residue::ALA, Residue::GLY, Residue::ZN, Residue::UNK };
+    const std::vector<Element> elements{
+        Element::CARBON, Element::NITROGEN, Element::ZINC, Element::UNK };
+    const std::vector<Remoteness> remotenesses{
+        Remoteness::ALPHA, Remoteness::BETA, Remoteness::ZETA, Remoteness::UNK };
+    const std::vector<Branch> branches{
+        Branch::NONE, Branch::ONE, Branch::TERMINAL, Branch::UNK };
     for (auto structure : structures)
     {
         for (auto residue : residues)
@@ -235,4 +246,85 @@ TEST(KeyPackerStructureClass, BoundaryValues)
     EXPECT_EQ(remoteness1, remoteness);
     EXPECT_EQ(branch1, branch);
     EXPECT_TRUE(flag1);
+}
+
+TEST(KeyPackerStructureClass, UniqueKeys)
+{
+    const std::array structures{ Structure::FREE, Structure::HELX_P };
+    const std::array residues{ Residue::ALA, Residue::GLY };
+    const std::array elements{ Element::CARBON, Element::NITROGEN };
+    const std::array remotenesses{ Remoteness::ALPHA, Remoteness::BETA };
+    const std::array branches{ Branch::NONE, Branch::ONE };
+    std::unordered_set<uint64_t> keys;
+
+    for (auto s : structures)
+    {
+        for (auto res : residues)
+        {
+            for (auto elem : elements)
+            {
+                for (auto rem : remotenesses)
+                {
+                    for (auto br : branches)
+                    {
+                        for (bool flag : { false, true })
+                        {
+                            keys.insert(KeyPackerStructureClass::Pack(
+                                s, res, elem, rem, br, flag));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    EXPECT_EQ(keys.size(),
+        structures.size() * residues.size() * elements.size() * remotenesses.size() * branches.size() * 2u);
+}
+
+TEST(KeyPackerStructureClass, EdgeCases)
+{
+    auto structure{Structure::UNK};
+    auto residue{Residue::UNK};
+    auto element{Element::UNK};
+    auto remoteness{Remoteness::UNK};
+    auto branch{Branch::TERMINAL};
+
+    {
+        bool flag{true};
+        auto key{KeyPackerStructureClass::Pack(structure, residue, element, remoteness, branch, flag)};
+        EXPECT_EQ(key & 0xFF, static_cast<uint64_t>(structure));
+        EXPECT_EQ((key >> 8) & 0xFFFF, static_cast<uint64_t>(residue));
+        EXPECT_EQ((key >> 24) & 0xFFFF, static_cast<uint64_t>(element));
+        EXPECT_EQ((key >> 40) & 0xFF, static_cast<uint64_t>(remoteness));
+        EXPECT_EQ((key >> 48) & 0xFF, static_cast<uint64_t>(branch));
+        EXPECT_EQ((key >> 56) & 0x1, 1u);
+
+        auto [structure_u, residue_u, element_u, remoteness_u, branch_u, flag_u]{ KeyPackerStructureClass::Unpack(key) };
+        EXPECT_EQ(structure_u, structure);
+        EXPECT_EQ(residue_u, residue);
+        EXPECT_EQ(element_u, element);
+        EXPECT_EQ(remoteness_u, remoteness);
+        EXPECT_EQ(branch_u, branch);
+        EXPECT_TRUE(flag_u);
+    }
+
+    {
+        bool flag{ false };
+        auto key{ KeyPackerStructureClass::Pack(structure, residue, element, remoteness, branch, flag) };
+        EXPECT_EQ(key & 0xFF, static_cast<uint64_t>(structure));
+        EXPECT_EQ((key >> 8) & 0xFFFF, static_cast<uint64_t>(residue));
+        EXPECT_EQ((key >> 24) & 0xFFFF, static_cast<uint64_t>(element));
+        EXPECT_EQ((key >> 40) & 0xFF, static_cast<uint64_t>(remoteness));
+        EXPECT_EQ((key >> 48) & 0xFF, static_cast<uint64_t>(branch));
+        EXPECT_EQ((key >> 56) & 0x1, 0u);
+
+        auto [structure_u, residue_u, element_u, remoteness_u, branch_u, flag_u]{KeyPackerStructureClass::Unpack(key)};
+        EXPECT_EQ(structure_u, structure);
+        EXPECT_EQ(residue_u, residue);
+        EXPECT_EQ(element_u, element);
+        EXPECT_EQ(remoteness_u, remoteness);
+        EXPECT_EQ(branch_u, branch);
+        EXPECT_FALSE(flag_u);
+    }
 }
