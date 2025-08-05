@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <cmath>
 #include <string>
+#include <stdexcept>
 
 #include "SphereSampler.hpp"
 
@@ -15,6 +16,19 @@ TEST(SphereSamplerTest, DefaultConfiguration)
         EXPECT_GE(radius, 0.0f);
         EXPECT_LE(radius, 1.0f);
     }
+}
+
+TEST(SphereSamplerTest, PrintOutputsDefaultConfiguration)
+{
+    SphereSampler sampler;
+
+    testing::internal::CaptureStdout();
+    sampler.Print();
+    std::string output{ testing::internal::GetCapturedStdout() };
+
+    EXPECT_NE(output.find("Thread size: 1"), std::string::npos);
+    EXPECT_NE(output.find("Sampling size: 10"), std::string::npos);
+    EXPECT_NE(output.find("Distance range: [0.0, 1.0] Angstrom."), std::string::npos);
 }
 
 TEST(SphereSamplerTest, PrintOutputsConfiguration)
@@ -83,10 +97,25 @@ TEST(SphereSamplerTest, PositionMath)
     }
 }
 
-TEST(SphereSamplerTest, ThreadSize)
+TEST(SphereSamplerTest, ValidThreadSize)
 {
     SphereSampler sampler;
     sampler.SetThreadSize(4);
+    sampler.SetSamplingSize(5);
+    auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
+    ASSERT_EQ(5u, samples.size());
+}
+
+TEST(SphereSamplerTest, ZeroThreadSizeClampedToOne)
+{
+    SphereSampler sampler;
+    sampler.SetThreadSize(0);
+
+    testing::internal::CaptureStdout();
+    sampler.Print();
+    std::string output{ testing::internal::GetCapturedStdout() };
+    EXPECT_NE(output.find("Thread size: 1"), std::string::npos);
+
     sampler.SetSamplingSize(5);
     auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
     ASSERT_EQ(5u, samples.size());
@@ -132,5 +161,36 @@ TEST(SphereSamplerTest, ThreadSizeDoesNotAffectOutput)
         float radius{ std::get<0>(sample) };
         EXPECT_GE(radius, 0.5f);
         EXPECT_LE(radius, 1.0f);
+    }
+}
+
+TEST(SphereSamplerTest, ThrowsWhenMinGreaterThanMax)
+{
+    SphereSampler sampler;
+    sampler.SetDistanceRangeMinimum(2.0);
+    sampler.SetDistanceRangeMaximum(1.0);
+    EXPECT_THROW(sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}), std::invalid_argument);
+}
+
+TEST(SphereSamplerTest, ThrowsWhenMinNegative)
+{
+    SphereSampler sampler;
+    sampler.SetDistanceRangeMinimum(-0.1);
+    sampler.SetDistanceRangeMaximum(1.0);
+    EXPECT_THROW(sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}), std::invalid_argument);
+}
+
+TEST(SphereSamplerTest, ValidRangeProducesSamples)
+{
+    SphereSampler sampler;
+    sampler.SetDistanceRangeMinimum(0.2);
+    sampler.SetDistanceRangeMaximum(0.4);
+    auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
+    ASSERT_EQ(10u, samples.size());
+    for (const auto & sample : samples)
+    {
+        float radius{ std::get<0>(sample) };
+        EXPECT_GE(radius, 0.2f);
+        EXPECT_LE(radius, 0.4f);
     }
 }

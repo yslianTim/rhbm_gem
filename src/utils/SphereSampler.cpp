@@ -4,6 +4,7 @@
 #include "Logger.hpp"
 
 #include <random>
+#include <stdexcept>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -29,6 +30,15 @@ void SphereSampler::Print(void) const
 std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamplingPoints(
     const std::array<float, 3> & position) const
 {
+    if (m_distance_min > m_distance_max)
+    {
+        throw std::invalid_argument("SphereSampler: distance minimum greater than maximum");
+    }
+    if (m_distance_min < 0.0 || m_distance_max < 0.0)
+    {
+        throw std::invalid_argument("SphereSampler: distance range cannot be negative");
+    }
+    
     std::vector<std::tuple<float, std::array<float, 3>>> sampling_position_list;
     sampling_position_list.resize(m_sampling_size);
 
