@@ -31,6 +31,17 @@ TEST(SphereSamplerTest, PrintOutputsDefaultConfiguration)
     EXPECT_NE(output.find("Distance range: [0.0, 1.0] Angstrom."), std::string::npos);
 }
 
+TEST(SphereSamplerTest, PrintOutputsHeader)
+{
+    SphereSampler sampler;
+
+    testing::internal::CaptureStdout();
+    sampler.Print();
+    std::string output{ testing::internal::GetCapturedStdout() };
+
+    EXPECT_NE(output.find("SphereSampler Configuration:"), std::string::npos);
+}
+
 TEST(SphereSamplerTest, PrintOutputsConfiguration)
 {
     SphereSampler sampler;
@@ -133,6 +144,18 @@ TEST(SphereSamplerTest, ZeroThreadSizeClampedToOne)
     ASSERT_EQ(5u, samples.size());
 }
 
+TEST(SphereSamplerTest, ThreadSizeUpdatedAfterZero)
+{
+    SphereSampler sampler;
+    sampler.SetThreadSize(0);
+    sampler.SetThreadSize(3);
+
+    testing::internal::CaptureStdout();
+    sampler.Print();
+    std::string output{ testing::internal::GetCapturedStdout() };
+    EXPECT_NE(output.find("Thread size: 3"), std::string::npos);
+}
+
 TEST(SphereSamplerTest, ZeroSamplingSizeReturnsEmptyVector)
 {
     SphereSampler sampler;
@@ -179,6 +202,15 @@ TEST(SphereSamplerTest, ThreadSizeDoesNotAffectOutput)
 TEST(SphereSamplerTest, ThrowsWhenMinGreaterThanMax)
 {
     SphereSampler sampler;
+    sampler.SetDistanceRangeMinimum(2.0);
+    sampler.SetDistanceRangeMaximum(1.0);
+    EXPECT_THROW(sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}), std::invalid_argument);
+}
+
+TEST(SphereSamplerTest, ZeroSamplingSizeWithInvalidRangeThrows)
+{
+    SphereSampler sampler;
+    sampler.SetSamplingSize(0);
     sampler.SetDistanceRangeMinimum(2.0);
     sampler.SetDistanceRangeMaximum(1.0);
     EXPECT_THROW(sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}), std::invalid_argument);

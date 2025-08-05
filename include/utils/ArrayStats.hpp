@@ -64,11 +64,19 @@ public:
         auto idx{ static_cast<size_t>(std::floor(pos)) };
         double frac{ pos - static_cast<double>(idx) };
 
-        std::nth_element(buffer.begin(), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx), buffer.end());
+        std::nth_element(
+            buffer.begin(),
+            buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx),
+            buffer.end()
+        );
         Type lower{ buffer[idx] };
         if (idx + 1 < n)
         {
-            std::nth_element(buffer.begin(), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx + 1), buffer.end());
+            std::nth_element(
+                buffer.begin(),
+                buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(idx + 1),
+                buffer.end()
+            );
             Type upper{ buffer[idx + 1] };
             return static_cast<Type>(lower * (1 - frac) + upper * frac);
         }
@@ -126,7 +134,11 @@ public:
         size_t n{ buffer.size() };
         size_t mid{ n / 2 };
 
-        std::nth_element(buffer.begin(), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid), buffer.end());
+        std::nth_element(
+            buffer.begin(),
+            buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid),
+            buffer.end()
+        );
         Type upper_mid{ buffer[mid] };
         if (n % 2 == 1)
         {
@@ -134,7 +146,11 @@ public:
         }
         else
         {
-            std::nth_element(buffer.begin(), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid - 1), buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid));
+            std::nth_element(
+                buffer.begin(),
+                buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid - 1),
+                buffer.begin() + static_cast<typename std::vector<Type>::difference_type>(mid)
+            );
             Type lower_mid{ buffer[mid - 1] };
             return static_cast<Type>((lower_mid + upper_mid) / 2.0);
         }
