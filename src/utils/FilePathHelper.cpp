@@ -28,7 +28,9 @@ std::string FilePathHelper::GetDirectory(const std::filesystem::path & path)
 
 std::string FilePathHelper::GetFileName(const std::filesystem::path & path)
 {
-    return path.filename().string();
+    std::string normalized{ path.string() };
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    return std::filesystem::path{ normalized }.filename().string();
 }
 
 std::string FilePathHelper::EnsureTrailingSlash(const std::filesystem::path & path)

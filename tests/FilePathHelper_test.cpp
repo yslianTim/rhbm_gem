@@ -22,10 +22,22 @@ TEST(FilePathHelperTest, PathWithMultipleExtensionsReturnsLastExtension)
     EXPECT_EQ(".gz", FilePathHelper::GetExtension(path));
 }
 
+TEST(FilePathHelperTest, PathEndingWithDotReturnsDot)
+{
+    std::filesystem::path path{ "file." };
+    EXPECT_EQ(".", FilePathHelper::GetExtension(path));
+}
+
 TEST(FilePathHelperTest, HiddenFileReturnsFullNameAsExtension)
 {
     std::filesystem::path path{ ".gitignore" };
     EXPECT_EQ(".gitignore", FilePathHelper::GetExtension(path));
+}
+
+TEST(FilePathHelperTest, HiddenFileWithExtensionReturnsExtension)
+{
+    std::filesystem::path path{ ".bashrc.backup" };
+    EXPECT_EQ(".backup", FilePathHelper::GetExtension(path));
 }
 
 TEST(FilePathHelperTest, NestedDirectoriesReturnDirectoryWithTrailingSeparator)
@@ -41,6 +53,11 @@ TEST(FilePathHelperTest, PathWithoutParentDirectoryReturnsEmptyString)
     EXPECT_EQ("", FilePathHelper::GetDirectory("file.txt"));
 }
 
+TEST(FilePathHelperTest, PathWithCurrentDirectoryReturnsDotSlash)
+{
+    EXPECT_EQ("./", FilePathHelper::GetDirectory("./file.txt"));
+}
+
 TEST(FilePathHelperTest, EmptyPathReturnsEmptyString)
 {
     EXPECT_EQ("", FilePathHelper::GetDirectory(std::filesystem::path{}));
@@ -49,6 +66,11 @@ TEST(FilePathHelperTest, EmptyPathReturnsEmptyString)
 TEST(FilePathHelperTest, RootDirectoryPathReturnsSlash)
 {
     EXPECT_EQ("/", FilePathHelper::GetDirectory(std::filesystem::path("/")));
+}
+
+TEST(FilePathHelperTest, FileInRootDirectoryReturnsSlash)
+{
+    EXPECT_EQ("/", FilePathHelper::GetDirectory(std::filesystem::path("/file.txt")));
 }
 
 TEST(FilePathHelperTest, DirectoryPathEndingWithSeparatorReturnsSamePath)
@@ -62,6 +84,12 @@ TEST(FilePathHelperTest, DirectoryPathReturnsFileNameOnly)
 {
     std::filesystem::path path{"/foo/bar/baz.txt"};
     EXPECT_EQ("baz.txt", FilePathHelper::GetFileName(path));
+}
+
+TEST(FilePathHelperTest, WindowsPathReturnsFileNameOnly)
+{
+    std::filesystem::path path{R"(C:\temp\file.txt)"};
+    EXPECT_EQ("file.txt", FilePathHelper::GetFileName(path));
 }
 
 TEST(FilePathHelperTest, PathEndingWithSeparatorReturnsEmptyString)
