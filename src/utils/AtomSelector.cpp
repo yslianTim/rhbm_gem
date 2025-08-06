@@ -19,6 +19,8 @@ void AtomSelector::Print(void) const
     for (auto & residue : pick_residue_set) oss << AtomicInfoHelper::GetLabel(residue) <<", ";
     oss <<"\n - Element set: ";
     for (auto & element : pick_element_set) oss << AtomicInfoHelper::GetLabel(element) <<", ";
+    oss <<"\n - Remoteness set: ";
+    for (auto & remoteness : pick_remoteness_set) oss << AtomicInfoHelper::GetLabel(remoteness) <<", ";
     oss <<"\n";
 
     oss <<"Atomic Vetoing List:\n";
@@ -28,6 +30,8 @@ void AtomSelector::Print(void) const
     for (auto & residue : veto_residue_set) oss << AtomicInfoHelper::GetLabel(residue) <<", ";
     oss <<"\n - Element set: ";
     for (auto & element : veto_element_set) oss << AtomicInfoHelper::GetLabel(element) <<", ";
+    oss <<"\n - Remoteness set: ";
+    for (auto & remoteness : veto_remoteness_set) oss << AtomicInfoHelper::GetLabel(remoteness) <<", ";
     oss <<"\n";
 
     Logger::Log(LogLevel::Info, oss.str());
