@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <utility>
 
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
@@ -23,10 +24,6 @@ protected:
 
 TEST_F(AtomicInfoHelperTest, BasicChecks)
 {
-    EXPECT_EQ(1, AtomicInfoHelper::GetAtomicNumber(Element::HYDROGEN));
-    EXPECT_EQ(30, AtomicInfoHelper::GetAtomicNumber(Element::ZINC));
-    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(Element::UNK));
-    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(static_cast<Element>(999)));
     EXPECT_EQ(3U, AtomicInfoHelper::GetGroupClassCount());
     EXPECT_EQ(AtomicInfoHelper::GetStandardResidueList().size(),
               AtomicInfoHelper::GetStandardResidueCount());
@@ -34,6 +31,59 @@ TEST_F(AtomicInfoHelperTest, BasicChecks)
     EXPECT_EQ("element_class", AtomicInfoHelper::GetGroupClassKey(0));
     EXPECT_EQ("residue_class", AtomicInfoHelper::GetGroupClassKey(1));
     EXPECT_EQ("structure_class", AtomicInfoHelper::GetGroupClassKey(2));
+}
+
+using ElementAtomicPair = std::pair<Element, int>;
+
+class AtomicInfoHelperAtomicNumberTest : public AtomicInfoHelperTest,
+                                         public ::testing::WithParamInterface<ElementAtomicPair>
+{
+};
+
+TEST_P(AtomicInfoHelperAtomicNumberTest, ReturnsExpectedAtomicNumber)
+{
+    const auto [element, atomic_number]{ GetParam() };
+    EXPECT_EQ(atomic_number, AtomicInfoHelper::GetAtomicNumber(element));
+}
+
+INSTANTIATE_TEST_SUITE_P(AtomicNumberPairs, AtomicInfoHelperAtomicNumberTest,
+    ::testing::Values(
+        ElementAtomicPair{ Element::HYDROGEN,   1 },
+        ElementAtomicPair{ Element::HELIUM,     2 },
+        ElementAtomicPair{ Element::LITHIUM,    3 },
+        ElementAtomicPair{ Element::BERYLLIUM,  4 },
+        ElementAtomicPair{ Element::BORON,      5 },
+        ElementAtomicPair{ Element::CARBON,     6 },
+        ElementAtomicPair{ Element::NITROGEN,   7 },
+        ElementAtomicPair{ Element::OXYGEN,     8 },
+        ElementAtomicPair{ Element::FLUORINE,   9 },
+        ElementAtomicPair{ Element::NEON,      10 },
+        ElementAtomicPair{ Element::SODIUM,    11 },
+        ElementAtomicPair{ Element::MAGNESIUM, 12 },
+        ElementAtomicPair{ Element::ALUMINUM,  13 },
+        ElementAtomicPair{ Element::SILICON,   14 },
+        ElementAtomicPair{ Element::PHOSPHORUS,15 },
+        ElementAtomicPair{ Element::SULFUR,    16 },
+        ElementAtomicPair{ Element::CHLORINE,  17 },
+        ElementAtomicPair{ Element::ARGON,     18 },
+        ElementAtomicPair{ Element::POTASSIUM, 19 },
+        ElementAtomicPair{ Element::CALCIUM,   20 },
+        ElementAtomicPair{ Element::SCANDIUM,  21 },
+        ElementAtomicPair{ Element::TITANIUM,  22 },
+        ElementAtomicPair{ Element::VANADIUM,  23 },
+        ElementAtomicPair{ Element::CHROMIUM,  24 },
+        ElementAtomicPair{ Element::MANGANESE, 25 },
+        ElementAtomicPair{ Element::IRON,      26 },
+        ElementAtomicPair{ Element::COBALT,    27 },
+        ElementAtomicPair{ Element::NICKEL,    28 },
+        ElementAtomicPair{ Element::COPPER,    29 },
+        ElementAtomicPair{ Element::ZINC,      30 })
+);
+
+TEST_F(AtomicInfoHelperTest, InvalidElementReturnsZero)
+{
+    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(static_cast<Element>(999)));
+    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(Element::UNK));
 }
 
 TEST_F(AtomicInfoHelperTest, ExplicitClassKeyGetters)
@@ -81,14 +131,23 @@ TEST_F(AtomicInfoHelperTest, ElementLabelMapIncludesHydrogen)
 
 TEST_F(AtomicInfoHelperTest, IsStandardElement)
 {
-    EXPECT_TRUE(AtomicInfoHelper::IsStandardElement(Element::OXYGEN));
+    for (auto element : AtomicInfoHelper::GetStandardElementList())
+    {
+        EXPECT_TRUE(AtomicInfoHelper::IsStandardElement(element)) << static_cast<int>(element);
+    }
     EXPECT_FALSE(AtomicInfoHelper::IsStandardElement(Element::ZINC));
+    EXPECT_FALSE(AtomicInfoHelper::IsStandardElement(Element::PHOSPHORUS));
 }
 
 TEST_F(AtomicInfoHelperTest, IsStandardResidue)
 {
-    EXPECT_TRUE(AtomicInfoHelper::IsStandardResidue(Residue::ALA));
+    for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+    {
+        EXPECT_TRUE(AtomicInfoHelper::IsStandardResidue(residue))
+            << static_cast<int>(residue);
+    }
     EXPECT_FALSE(AtomicInfoHelper::IsStandardResidue(Residue::HOH));
+    EXPECT_FALSE(AtomicInfoHelper::IsStandardResidue(Residue::ZN));
 }
 
 TEST_F(AtomicInfoHelperTest, MapsKnownStringsToEnums)
