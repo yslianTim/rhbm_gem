@@ -50,6 +50,26 @@ TEST(KeyPackerElementClass, BoundaryValues)
     EXPECT_TRUE(flag1);
 }
 
+TEST(KeyPackerElementClass, MinValues)
+{
+    Element element{ static_cast<Element>(0) };
+    Remoteness remoteness{ Remoteness::NONE };
+
+    auto key_false{ KeyPackerElementClass::Pack(element, remoteness, false) };
+    EXPECT_EQ(key_false, 0u);
+    auto [element0, remoteness0, flag0]{ KeyPackerElementClass::Unpack(key_false) };
+    EXPECT_EQ(element0, element);
+    EXPECT_EQ(remoteness0, remoteness);
+    EXPECT_FALSE(flag0);
+
+    auto key_true{ KeyPackerElementClass::Pack(element, remoteness, true) };
+    EXPECT_EQ(key_true, 1ULL << 24);
+    auto [element1, remoteness1, flag1]{ KeyPackerElementClass::Unpack(key_true) };
+    EXPECT_EQ(element1, element);
+    EXPECT_EQ(remoteness1, remoteness);
+    EXPECT_TRUE(flag1);
+}
+
 TEST(KeyPackerElementClass, UniqueKeys)
 {
     const std::array elements{ Element::HYDROGEN, Element::CARBON, Element::NITROGEN };
@@ -65,8 +85,19 @@ TEST(KeyPackerElementClass, UniqueKeys)
             }
         }
     }
-
     EXPECT_EQ(keys.size(), elements.size() * remotenesses.size() * 2u);
+}
+
+TEST(KeyPackerElementClass, HandlesUnknownValues)
+{
+    auto element{ static_cast<Element>(0x1234) };
+    auto remoteness{ static_cast<Remoteness>(0xAB) };
+    bool flag{ true };
+    auto key{ KeyPackerElementClass::Pack(element, remoteness, flag) };
+    auto [element_out, remoteness_out, flag_out]{ KeyPackerElementClass::Unpack(key) };
+    EXPECT_EQ(element_out, element);
+    EXPECT_EQ(remoteness_out, remoteness);
+    EXPECT_EQ(flag_out, flag);
 }
 
 TEST(KeyPackerResidueClass, PackUnpackRoundTrip)
@@ -103,6 +134,37 @@ TEST(KeyPackerResidueClass, PackUnpackRoundTrip)
             }
         }
     }
+}
+
+TEST(KeyPackerResidueClass, BoundaryValues)
+{
+    auto residue{ Residue::UNK };
+    auto element{ Element::UNK };
+    auto remoteness{ Remoteness::UNK };
+    auto branch{ Branch::UNK };
+
+    auto key_false{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
+    auto expected_false{ static_cast<uint64_t>(residue)
+        | (static_cast<uint64_t>(element)      << 16)
+        | (static_cast<uint64_t>(remoteness)   << 32)
+        | (static_cast<uint64_t>(branch)       << 40) };
+    EXPECT_EQ(key_false, expected_false);
+    auto [residue0, element0, remoteness0, branch0, flag0]{ KeyPackerResidueClass::Unpack(key_false) };
+    EXPECT_EQ(residue0, residue);
+    EXPECT_EQ(element0, element);
+    EXPECT_EQ(remoteness0, remoteness);
+    EXPECT_EQ(branch0, branch);
+    EXPECT_FALSE(flag0);
+
+    auto key_true{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, true) };
+    auto expected_true{ expected_false | (1ULL << 48) };
+    EXPECT_EQ(key_true, expected_true);
+    auto [residue1, element1, remoteness1, branch1, flag1]{ KeyPackerResidueClass::Unpack(key_true) };
+    EXPECT_EQ(residue1, residue);
+    EXPECT_EQ(element1, element);
+    EXPECT_EQ(remoteness1, remoteness);
+    EXPECT_EQ(branch1, branch);
+    EXPECT_TRUE(flag1);
 }
 
 TEST(KeyPackerResidueClass, EdgeCases)
@@ -166,6 +228,22 @@ TEST(KeyPackerResidueClass, UniqueKeys)
     }
 
     EXPECT_EQ(keys.size(), residues.size() * elements.size() * remotenesses.size() * branches.size() * 2u);
+}
+
+TEST(KeyPackerResidueClass, HandlesUnknownValues)
+{
+    auto residue{ static_cast<Residue>(0x1234) };
+    auto element{ static_cast<Element>(0x5678) };
+    auto remoteness{ static_cast<Remoteness>(0x9A) };
+    auto branch{ static_cast<Branch>(0xAB) };
+    bool flag{ false };
+    auto key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, flag) };
+    auto [residue_u, element_u, remoteness_u, branch_u, flag_u]{ KeyPackerResidueClass::Unpack(key) };
+    EXPECT_EQ(residue_u, residue);
+    EXPECT_EQ(element_u, element);
+    EXPECT_EQ(remoteness_u, remoteness);
+    EXPECT_EQ(branch_u, branch);
+    EXPECT_EQ(flag_u, flag);
 }
 
 TEST(KeyPackerStructureClass, PackUnpackRoundTrip)
@@ -327,4 +405,24 @@ TEST(KeyPackerStructureClass, EdgeCases)
         EXPECT_EQ(branch_u, branch);
         EXPECT_FALSE(flag_u);
     }
+}
+
+TEST(KeyPackerStructureClass, HandlesUnknownValues)
+{
+    auto structure{ static_cast<Structure>(0xCD) };
+    auto residue{ static_cast<Residue>(0x1234) };
+    auto element{ static_cast<Element>(0x5678) };
+    auto remoteness{ static_cast<Remoteness>(0x9A) };
+    auto branch{ static_cast<Branch>(0xBC) };
+    bool flag{ true };
+
+    auto key{ KeyPackerStructureClass::Pack(structure, residue, element, remoteness, branch, flag) };
+    auto [structure_u, residue_u, element_u, remoteness_u, branch_u, flag_u]{
+        KeyPackerStructureClass::Unpack(key) };
+    EXPECT_EQ(structure_u, structure);
+    EXPECT_EQ(residue_u, residue);
+    EXPECT_EQ(element_u, element);
+    EXPECT_EQ(remoteness_u, remoteness);
+    EXPECT_EQ(branch_u, branch);
+    EXPECT_EQ(flag_u, flag);
 }
