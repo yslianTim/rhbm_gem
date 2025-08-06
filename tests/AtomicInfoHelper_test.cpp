@@ -17,6 +17,13 @@ TEST(AtomicInfoHelperTest, BasicChecks)
     EXPECT_EQ("structure_class", AtomicInfoHelper::GetGroupClassKey(2));
 }
 
+TEST(AtomicInfoHelperTest, ExplicitClassKeyGetters)
+{
+    EXPECT_EQ("element_class", AtomicInfoHelper::GetElementClassKey());
+    EXPECT_EQ("residue_class", AtomicInfoHelper::GetResidueClassKey());
+    EXPECT_EQ("structure_class", AtomicInfoHelper::GetStructureClassKey());
+}
+
 TEST(AtomicInfoHelperTest, StandardResidueList)
 {
     const auto & residue_list{ AtomicInfoHelper::GetStandardResidueList() };
@@ -110,12 +117,21 @@ TEST(AtomicInfoHelperTest, RemotenessUNKReturnsLabel)
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::UNK), "UNK");
 }
 
+TEST(AtomicInfoHelperTest, BranchLabel)
+{
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Branch::ONE), "1");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Branch::UNK), "UNK");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Branch>(253)), "?");
+}
+
 TEST(AtomicInfoHelperTest, ElementDisplayAttributes)
 {
     EXPECT_NE(1, AtomicInfoHelper::GetDisplayColor(Element::CARBON));
     EXPECT_NE(1, AtomicInfoHelper::GetDisplayMarker(Element::CARBON));
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayColor(Element::UNK));
+    EXPECT_EQ(1, AtomicInfoHelper::GetDisplayMarker(Element::UNK));
     const Element invalid_element{ static_cast<Element>(999) };
+    EXPECT_EQ(1, AtomicInfoHelper::GetDisplayColor(invalid_element));
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayMarker(invalid_element));
 }
 
@@ -150,4 +166,10 @@ TEST(AtomicInfoHelperTest, ConversionHelpersReturnUnkForUnknownStrings)
     EXPECT_EQ(Structure::UNK, AtomicInfoHelper::GetStructureFromString(unknown));
     EXPECT_EQ(Entity::UNK, AtomicInfoHelper::GetEntityFromString(unknown));
     EXPECT_EQ(Entity::UNK, AtomicInfoHelper::GetEntityFromString(unknown));
+}
+
+TEST(AtomicInfoHelperTest, RemotenessLabelVariants)
+{
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::ALPHA), "#alpha");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Remoteness>(253)), "?");
 }

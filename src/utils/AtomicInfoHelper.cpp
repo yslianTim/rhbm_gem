@@ -174,7 +174,7 @@ const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
     {Element::OXYGEN,   59}, {Element::PHOSPHORUS,44},
     {Element::SULFUR,   27}, {Element::CALCIUM,   28},
     {Element::ZINC,     30}, {Element::SODIUM,    31}, {Element::MAGNESIUM, 32},
-    {Element::IRON,     35}, {Element::CHLORINE,  36}, {Element::UNK,       37}
+    {Element::IRON,     35}, {Element::CHLORINE,  36}, {Element::UNK,        1}
 };
 
 const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
