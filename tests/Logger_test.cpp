@@ -97,6 +97,13 @@ TEST(LoggerTest, SetLogLevelIntWithinRangeSetsLevel)
     Logger::SetLogLevel(LogLevel::Info);
 }
 
+TEST(LoggerTest, SetLogLevelEnumOutOfRangeDefaultsToInfo)
+{
+    Logger::SetLogLevel(LogLevel::Debug);
+    Logger::SetLogLevel(static_cast<LogLevel>(-1));
+    EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
+}
+
 TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
 {
     const auto bogus_level{ static_cast<LogLevel>(-1) };
@@ -107,6 +114,41 @@ TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
     const std::string stderr_output{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(stdout_output.empty());
     EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output);
+}
+
+TEST(LoggerTest, SuppressesLogLevelAboveRange)
+{
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    Logger::Log(static_cast<LogLevel>(100), "msg");
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    const std::string err{ testing::internal::GetCapturedStderr() };
+    EXPECT_TRUE(out.empty());
+    EXPECT_TRUE(err.empty());
+}
+
+TEST(LoggerTest, InfoLogsAppearOnSeparateLines)
+{
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    Logger::Log(LogLevel::Info, "first");
+    Logger::Log(LogLevel::Info, "second");
+    const std::string stdout_output{ testing::internal::GetCapturedStdout() };
+    EXPECT_EQ(std::string("first\nsecond\n"), stdout_output);
+    Logger::SetLogLevel(LogLevel::Info);
+}
+
+TEST(LoggerTest, UnknownPositiveLevelSuppressed)
+{
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    Logger::Log(static_cast<LogLevel>(100), "msg");
+    const std::string stdout_output{ testing::internal::GetCapturedStdout() };
+    const std::string stderr_output{ testing::internal::GetCapturedStderr() };
+    EXPECT_TRUE(stdout_output.empty());
+    EXPECT_TRUE(stderr_output.empty());
 }
 
 struct LoggerOutputTestCase

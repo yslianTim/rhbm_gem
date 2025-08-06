@@ -17,6 +17,11 @@ void Logger::SetLogLevel(int level)
 
 void Logger::SetLogLevel(LogLevel level)
 {
+    if (level < LogLevel::Error || level > LogLevel::Debug)
+    {
+        m_current_level = LogLevel::Info;
+        return;
+    }
     m_current_level = level;
 }
 
