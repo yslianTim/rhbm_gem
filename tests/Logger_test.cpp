@@ -2,6 +2,39 @@
 
 #include "Logger.hpp"
 
+class LoggerLogLevelTest : public ::testing::TestWithParam<LogLevel>
+{
+protected:
+    void TearDown(void) override
+    {
+        Logger::SetLogLevel(LogLevel::Info);
+    }
+};
+
+INSTANTIATE_TEST_SUITE_P(AllLogLevels, LoggerLogLevelTest,
+                         ::testing::Values(LogLevel::Error, LogLevel::Warning,
+                                           LogLevel::Notice, LogLevel::Info,
+                                           LogLevel::Debug));
+
+TEST_P(LoggerLogLevelTest, SetAndGetEnum)
+{
+    const auto level{ GetParam() };
+    Logger::SetLogLevel(level);
+    EXPECT_EQ(level, Logger::GetLogLevel());
+}
+
+TEST_P(LoggerLogLevelTest, SetAndGetInt)
+{
+    const auto level{GetParam()};
+    Logger::SetLogLevel(static_cast<int>(level));
+    EXPECT_EQ(level, Logger::GetLogLevel());
+}
+
+TEST(LoggerTest, DefaultLogLevelIsInfo)
+{
+    EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
+}
+
 TEST(LoggerTest, InfoMessageIsSuppressedWhenLevelIsWarning)
 {
     Logger::SetLogLevel(LogLevel::Warning);
@@ -20,6 +53,30 @@ TEST(LoggerTest, DebugMessageIsSuppressedWhenLevelIsWarning)
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
     Logger::Log(LogLevel::Debug, "msg");
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    const std::string err{ testing::internal::GetCapturedStderr() };
+    EXPECT_TRUE(out.empty());
+    EXPECT_TRUE(err.empty());
+}
+
+TEST(LoggerTest, NoticeMessageIsSuppressedWhenLevelIsWarning)
+{
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    Logger::Log(LogLevel::Notice, "msg");
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    const std::string err{ testing::internal::GetCapturedStderr() };
+    EXPECT_TRUE(out.empty());
+    EXPECT_TRUE(err.empty());
+}
+
+TEST(LoggerTest, WarningMessageIsSuppressedWhenLevelIsError)
+{
+    Logger::SetLogLevel(LogLevel::Error);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    Logger::Log(LogLevel::Warning, "msg");
     const std::string out{ testing::internal::GetCapturedStdout() };
     const std::string err{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(out.empty());
