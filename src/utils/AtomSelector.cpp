@@ -2,6 +2,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "Logger.hpp"
 
+#include <iostream>
 #include <sstream>
 
 AtomSelector::AtomSelector(void)
@@ -34,7 +35,7 @@ void AtomSelector::Print(void) const
     for (auto & remoteness : veto_remoteness_set) oss << AtomicInfoHelper::GetLabel(remoteness) <<", ";
     oss <<"\n";
 
-    Logger::Log(LogLevel::Info, oss.str());
+    std::cout << oss.str() << std::endl;
 }
 
 bool AtomSelector::GetSelectionFlag(

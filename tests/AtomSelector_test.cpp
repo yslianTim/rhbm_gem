@@ -3,8 +3,25 @@
 
 #include "AtomSelector.hpp"
 #include "GlobalEnumClass.hpp"
+#include "Logger.hpp"
 
-TEST(AtomSelectorTest, PrintOutputsPopulatedSets)
+class AtomSelectorTest : public ::testing::Test
+{
+protected:
+    LogLevel m_prev_level{};
+    void SetUp(void) override
+    {
+        m_prev_level = Logger::GetLogLevel();
+        Logger::SetLogLevel(LogLevel::Error);
+    }
+
+    void TearDown(void) override
+    {
+        Logger::SetLogLevel(m_prev_level);
+    }
+};
+
+TEST_F(AtomSelectorTest, PrintOutputsPopulatedSets)
 {
     AtomSelector selector;
     selector.PickChainID("A");
@@ -32,7 +49,7 @@ TEST(AtomSelectorTest, PrintOutputsPopulatedSets)
     EXPECT_NE(output.find(" - Remoteness set: #beta, "), std::string::npos);
 }
 
-TEST(AtomSelectorTest, PrintOutputsHeadersWithEmptySets)
+TEST_F(AtomSelectorTest, PrintOutputsHeadersWithEmptySets)
 {
     AtomSelector selector;
 
@@ -48,14 +65,14 @@ TEST(AtomSelectorTest, PrintOutputsHeadersWithEmptySets)
     EXPECT_NE(output.find(" - Remoteness set: \n"), std::string::npos);
 }
 
-TEST(AtomSelectorTest, DefaultSelectionIsTrue)
+TEST_F(AtomSelectorTest, DefaultSelectionIsTrue)
 {
     AtomSelector selector;
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
     EXPECT_TRUE(selector.GetSelectionFlag("B", Residue::GLY, Element::OXYGEN, Remoteness::BETA));
 }
 
-TEST(AtomSelectorTest, VetoChainID)
+TEST_F(AtomSelectorTest, VetoChainID)
 {
     AtomSelector selector;
     selector.VetoChainID("A,B");
@@ -64,7 +81,7 @@ TEST(AtomSelectorTest, VetoChainID)
     EXPECT_TRUE(selector.GetSelectionFlag("C", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoResidueType)
+TEST_F(AtomSelectorTest, VetoResidueType)
 {
     AtomSelector selector;
     selector.VetoResidueType("ALA,GLY");
@@ -73,7 +90,7 @@ TEST(AtomSelectorTest, VetoResidueType)
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::LYS, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoElementType)
+TEST_F(AtomSelectorTest, VetoElementType)
 {
     AtomSelector selector;
     selector.VetoElementType("C,N");
@@ -82,7 +99,7 @@ TEST(AtomSelectorTest, VetoElementType)
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::ALA, Element::OXYGEN, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoRemotenessType)
+TEST_F(AtomSelectorTest, VetoRemotenessType)
 {
     AtomSelector selector;
     selector.VetoRemotenessType("A,B");
@@ -91,7 +108,7 @@ TEST(AtomSelectorTest, VetoRemotenessType)
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::GAMMA));
 }
 
-TEST(AtomSelectorTest, PickChainID)
+TEST_F(AtomSelectorTest, PickChainID)
 {
     AtomSelector selector;
     selector.PickChainID("A,B");
@@ -100,7 +117,7 @@ TEST(AtomSelectorTest, PickChainID)
     EXPECT_FALSE(selector.GetSelectionFlag("C", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickResidueType)
+TEST_F(AtomSelectorTest, PickResidueType)
 {
     AtomSelector selector;
     selector.PickResidueType("ALA,GLY");
@@ -109,7 +126,7 @@ TEST(AtomSelectorTest, PickResidueType)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::LYS, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickChainIDAndResidueType)
+TEST_F(AtomSelectorTest, PickChainIDAndResidueType)
 {
     AtomSelector selector;
     selector.PickChainID("A");
@@ -119,7 +136,7 @@ TEST(AtomSelectorTest, PickChainIDAndResidueType)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::GLY, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickElementType)
+TEST_F(AtomSelectorTest, PickElementType)
 {
     AtomSelector selector;
     selector.PickElementType("C,N");
@@ -128,7 +145,7 @@ TEST(AtomSelectorTest, PickElementType)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::OXYGEN, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickRemotenessType)
+TEST_F(AtomSelectorTest, PickRemotenessType)
 {
     AtomSelector selector;
     selector.PickRemotenessType("A,B");
@@ -137,7 +154,7 @@ TEST(AtomSelectorTest, PickRemotenessType)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::GAMMA));
 }
 
-TEST(AtomSelectorTest, VetoPrecedenceOverPick)
+TEST_F(AtomSelectorTest, VetoPrecedenceOverPick)
 {
     AtomSelector selector;
     selector.PickChainID("A,B");
@@ -146,7 +163,7 @@ TEST(AtomSelectorTest, VetoPrecedenceOverPick)
     EXPECT_TRUE(selector.GetSelectionFlag("B", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoResiduePrecedenceOverPick)
+TEST_F(AtomSelectorTest, VetoResiduePrecedenceOverPick)
 {
     AtomSelector selector;
     selector.PickResidueType("ALA");
@@ -154,7 +171,7 @@ TEST(AtomSelectorTest, VetoResiduePrecedenceOverPick)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoElementPrecedenceOverPick)
+TEST_F(AtomSelectorTest, VetoElementPrecedenceOverPick)
 {
     AtomSelector selector;
     selector.PickElementType("C");
@@ -162,7 +179,7 @@ TEST(AtomSelectorTest, VetoElementPrecedenceOverPick)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoRemotenessPrecedenceOverPick)
+TEST_F(AtomSelectorTest, VetoRemotenessPrecedenceOverPick)
 {
     AtomSelector selector;
     selector.PickRemotenessType("A");
@@ -170,7 +187,7 @@ TEST(AtomSelectorTest, VetoRemotenessPrecedenceOverPick)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoUnknownResidueHandledAsUNK)
+TEST_F(AtomSelectorTest, VetoUnknownResidueHandledAsUNK)
 {
     AtomSelector selector;
     selector.VetoResidueType("XYZ");
@@ -178,7 +195,7 @@ TEST(AtomSelectorTest, VetoUnknownResidueHandledAsUNK)
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickUnknownResidueHandledAsUNK)
+TEST_F(AtomSelectorTest, PickUnknownResidueHandledAsUNK)
 {
     AtomSelector selector;
     selector.PickResidueType("XXX");
@@ -186,7 +203,7 @@ TEST(AtomSelectorTest, PickUnknownResidueHandledAsUNK)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickUnknownElementHandledAsUNK)
+TEST_F(AtomSelectorTest, PickUnknownElementHandledAsUNK)
 {
     AtomSelector selector;
     selector.PickElementType("XX");
@@ -194,7 +211,7 @@ TEST(AtomSelectorTest, PickUnknownElementHandledAsUNK)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoUnknownElementHandledAsUNK)
+TEST_F(AtomSelectorTest, VetoUnknownElementHandledAsUNK)
 {
     AtomSelector selector;
     selector.VetoElementType("XX");
@@ -202,7 +219,7 @@ TEST(AtomSelectorTest, VetoUnknownElementHandledAsUNK)
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoUnknownRemotenessHandledAsUNK)
+TEST_F(AtomSelectorTest, VetoUnknownRemotenessHandledAsUNK)
 {
     AtomSelector selector;
     selector.VetoRemotenessType("Y");
@@ -210,7 +227,7 @@ TEST(AtomSelectorTest, VetoUnknownRemotenessHandledAsUNK)
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickUnknownRemotenessHandledAsUNK)
+TEST_F(AtomSelectorTest, PickUnknownRemotenessHandledAsUNK)
 {
     AtomSelector selector;
     selector.PickRemotenessType("Y");
@@ -218,7 +235,7 @@ TEST(AtomSelectorTest, PickUnknownRemotenessHandledAsUNK)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickChainIDHandlesDuplicatesAndWhitespace)
+TEST_F(AtomSelectorTest, PickChainIDHandlesDuplicatesAndWhitespace)
 {
     AtomSelector selector;
     selector.PickChainID("A,B,B, ,");
@@ -227,7 +244,7 @@ TEST(AtomSelectorTest, PickChainIDHandlesDuplicatesAndWhitespace)
     EXPECT_FALSE(selector.GetSelectionFlag("C", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoChainIDHandlesDuplicatesAndWhitespace)
+TEST_F(AtomSelectorTest, VetoChainIDHandlesDuplicatesAndWhitespace)
 {
     AtomSelector selector;
     selector.VetoChainID(" A,A,B,B,");
@@ -236,7 +253,7 @@ TEST(AtomSelectorTest, VetoChainIDHandlesDuplicatesAndWhitespace)
     EXPECT_TRUE(selector.GetSelectionFlag("C", Residue::ALA, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickResidueTypeHandlesDuplicatesAndWhitespace)
+TEST_F(AtomSelectorTest, PickResidueTypeHandlesDuplicatesAndWhitespace)
 {
     AtomSelector selector;
     selector.PickResidueType("ALA,GLY,GLY, ,");
@@ -245,7 +262,7 @@ TEST(AtomSelectorTest, PickResidueTypeHandlesDuplicatesAndWhitespace)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::PHE, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoResidueTypeHandlesDuplicatesAndWhitespace)
+TEST_F(AtomSelectorTest, VetoResidueTypeHandlesDuplicatesAndWhitespace)
 {
     AtomSelector selector;
     selector.VetoResidueType(" ALA,ALA,GLY,GLY,");
@@ -254,7 +271,7 @@ TEST(AtomSelectorTest, VetoResidueTypeHandlesDuplicatesAndWhitespace)
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::PHE, Element::CARBON, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickElementTypeHandlesDuplicatesAndWhitespace)
+TEST_F(AtomSelectorTest, PickElementTypeHandlesDuplicatesAndWhitespace)
 {
     AtomSelector selector;
     selector.PickElementType("C,N,N, ,");
@@ -263,7 +280,7 @@ TEST(AtomSelectorTest, PickElementTypeHandlesDuplicatesAndWhitespace)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::OXYGEN, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, VetoElementTypeHandlesDuplicatesAndWhitespace)
+TEST_F(AtomSelectorTest, VetoElementTypeHandlesDuplicatesAndWhitespace)
 {
     AtomSelector selector;
     selector.VetoElementType(" C,C,N,N,");
@@ -272,7 +289,7 @@ TEST(AtomSelectorTest, VetoElementTypeHandlesDuplicatesAndWhitespace)
     EXPECT_TRUE(selector.GetSelectionFlag("A", Residue::ALA, Element::OXYGEN, Remoteness::ALPHA));
 }
 
-TEST(AtomSelectorTest, PickRemotenessTypeHandlesDuplicatesAndWhitespace)
+TEST_F(AtomSelectorTest, PickRemotenessTypeHandlesDuplicatesAndWhitespace)
 {
     AtomSelector selector;
     selector.PickRemotenessType("A,B,B, ,");
@@ -281,7 +298,7 @@ TEST(AtomSelectorTest, PickRemotenessTypeHandlesDuplicatesAndWhitespace)
     EXPECT_FALSE(selector.GetSelectionFlag("A", Residue::ALA, Element::CARBON, Remoteness::GAMMA));
 }
 
-TEST(AtomSelectorTest, VetoRemotenessTypeHandlesDuplicatesAndWhitespace)
+TEST_F(AtomSelectorTest, VetoRemotenessTypeHandlesDuplicatesAndWhitespace)
 {
     AtomSelector selector;
     selector.VetoRemotenessType(" A,A,B,B,");
