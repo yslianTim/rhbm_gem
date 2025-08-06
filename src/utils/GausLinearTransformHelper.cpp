@@ -41,6 +41,10 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> GausLinearTransformHelper::BuildGau
     {
         throw std::invalid_argument("covariance_matrix must be 2x2");
     }
+    if (!covariance_matrix.isApprox(covariance_matrix.transpose()))
+    {
+        throw std::invalid_argument("covariance_matrix must be symmetric");
+    }
 
     gaus_model = BuildGausModel(linear_model);
     auto beta0{ linear_model(0) };

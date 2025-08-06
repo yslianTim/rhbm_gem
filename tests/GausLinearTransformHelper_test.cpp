@@ -39,6 +39,17 @@ TEST(GausLinearTransformHelperTest, BuildLinearModelDataVectorZeroX)
     EXPECT_DOUBLE_EQ(std::log(gaus_y), result(2));
 }
 
+TEST(GausLinearTransformHelperTest, BuildLinearModelDataVectorSmallPositiveY)
+{
+    const double gaus_x{ 1.0 };
+    const double gaus_y{ 1e-10 };
+    auto result{ GausLinearTransformHelper::BuildLinearModelDataVector(gaus_x, gaus_y) };
+    ASSERT_EQ(3, result.size());
+    EXPECT_DOUBLE_EQ(1.0, result(0));
+    EXPECT_DOUBLE_EQ(-0.5 * gaus_x * gaus_x, result(1));
+    EXPECT_DOUBLE_EQ(std::log(1e-10), result(2));
+}
+
 TEST(GausLinearTransformHelperTest, BuildLinearModelDataVectorThrowsForNonPositiveY)
 {
     const double gaus_x{ 1.0 };
@@ -176,6 +187,19 @@ TEST(GausLinearTransformHelperTest, BuildGausModelWithVarianceThrowsForNon2x2Cov
     );
 }
 
+TEST(GausLinearTransformHelperTest, BuildGausModelWithVarianceNonSymmetric)
+{
+    Eigen::VectorXd linear_model(2);
+    linear_model << 0.5, 2.0;
+    Eigen::MatrixXd covariance_matrix(2, 2);
+    covariance_matrix << 0.1, 0.2,
+                         0.3, 0.4;
+    EXPECT_THROW(
+        GausLinearTransformHelper::BuildGausModelWithVariance(linear_model, covariance_matrix),
+        std::invalid_argument
+    );
+}
+
 TEST(GausLinearTransformHelperTest, BuildGausModelWithVarianceZeroCovariance)
 {
     // Example linear model with positive beta1 so BuildGausModel returns non-zero values
@@ -217,4 +241,31 @@ TEST(GausLinearTransformHelperTest, BuildGausModelWithVarianceNegativeVariance)
     EXPECT_DOUBLE_EQ(expected_gaus_model(1), gaus_model(1));
     EXPECT_TRUE(std::isnan(gaus_model_variance(0)));
     EXPECT_TRUE(std::isnan(gaus_model_variance(1)));
+}
+
+TEST(GausLinearTransformHelperTest, BuildGausModelWithVarianceLargeCovariance)
+{
+    // Linear model with positive beta1
+    const double beta0{ 0.5 };
+    const double beta1{ 2.0 };
+    Eigen::VectorXd linear_model(2);
+    linear_model << beta0, beta1;
+
+    // Covariance matrix with large off-diagonal covariance leading to negative amplitude variance
+    const double var_beta0{ 0.1 };
+    const double var_beta1{ 0.2 };
+    const double cov_beta0_beta1{ 0.8 };
+    Eigen::MatrixXd covariance_matrix(2, 2);
+    covariance_matrix << var_beta0, cov_beta0_beta1,
+                         cov_beta0_beta1, var_beta1;
+
+    auto [gaus_model, gaus_model_variance]{
+        GausLinearTransformHelper::BuildGausModelWithVariance(linear_model, covariance_matrix)
+    };
+    auto expected_gaus_model{ GausLinearTransformHelper::BuildGausModel(linear_model) };
+    EXPECT_DOUBLE_EQ(expected_gaus_model(0), gaus_model(0));
+    EXPECT_DOUBLE_EQ(expected_gaus_model(1), gaus_model(1));
+    EXPECT_TRUE(std::isnan(gaus_model_variance(0)));
+    const double expected_sd_width{ std::sqrt(0.25 * std::pow(beta1, -3) * var_beta1) };
+    EXPECT_DOUBLE_EQ(expected_sd_width, gaus_model_variance(1));
 }
