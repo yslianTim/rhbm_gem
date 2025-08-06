@@ -1,6 +1,8 @@
 #include "GausLinearTransformHelper.hpp"
 #include "Constants.hpp"
 
+#include <stdexcept>
+
 Eigen::VectorXd GausLinearTransformHelper::BuildLinearModelDataVector(double gaus_x, double gaus_y)
 {
     auto linear_model_data_vector_basis{ 2 + 1 };
@@ -35,11 +37,19 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> GausLinearTransformHelper::BuildGau
 {
     Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
     Eigen::VectorXd gaus_model_variance{ Eigen::VectorXd::Zero(2) };
+    if (covariance_matrix.rows() != 2 || covariance_matrix.cols() != 2)
+    {
+        throw std::invalid_argument("covariance_matrix must be 2x2");
+    }
 
     gaus_model = BuildGausModel(linear_model);
-
     auto beta0{ linear_model(0) };
     auto beta1{ linear_model(1) };
+    if (beta1 <= 0.0)
+    {
+        return std::make_tuple(gaus_model, gaus_model_variance);
+    }
+
     auto var_beta0{ covariance_matrix(0, 0) };
     auto var_beta1{ covariance_matrix(1, 1) };
     auto cov{ covariance_matrix(0, 1) };
