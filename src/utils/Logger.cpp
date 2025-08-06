@@ -6,6 +6,12 @@ LogLevel Logger::m_current_level{ LogLevel::Info };
 
 void Logger::SetLogLevel(int level)
 {
+    if (level < static_cast<int>(LogLevel::Error) ||
+        level > static_cast<int>(LogLevel::Debug))
+    {
+        m_current_level = LogLevel::Info;
+        return;
+    }
     m_current_level = static_cast<LogLevel>(level);
 }
 
@@ -22,7 +28,7 @@ LogLevel Logger::GetLogLevel(void)
 void Logger::Log(LogLevel level, const std::string & message)
 {
     if (level > m_current_level) return;
-    
+
     switch (level)
     {
         case LogLevel::Error:
