@@ -176,13 +176,14 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
                         "Could not open file " + output_path + " for writing.\n");
             return;
         }
-        outfile << "SerialID,X,Y,Z\n";
+        outfile << "SerialID,X,Y,Z,Residue\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
             outfile << atom->GetSerialID() <<','
                     << atom->GetPosition().at(0) <<','
                     << atom->GetPosition().at(1) <<','
-                    << atom->GetPosition().at(2) <<'\n';
+                    << atom->GetPosition().at(2) <<','
+                    << AtomicInfoHelper::GetLabel(atom->GetResidue()) << '\n';
         }
         outfile.close();
         Logger::Log(LogLevel::Info, "Output file: " + output_path);

@@ -24,7 +24,9 @@ protected:
 TEST_F(AtomicInfoHelperTest, BasicChecks)
 {
     EXPECT_EQ(1, AtomicInfoHelper::GetAtomicNumber(Element::HYDROGEN));
+    EXPECT_EQ(30, AtomicInfoHelper::GetAtomicNumber(Element::ZINC));
     EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(Element::UNK));
+    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(static_cast<Element>(999)));
     EXPECT_EQ(3U, AtomicInfoHelper::GetGroupClassCount());
     EXPECT_EQ(AtomicInfoHelper::GetStandardResidueList().size(),
               AtomicInfoHelper::GetStandardResidueCount());
@@ -119,6 +121,11 @@ TEST_F(AtomicInfoHelperTest, KnownElementReturnsLabel)
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Element::CARBON), "C");
 }
 
+TEST_F(AtomicInfoHelperTest, ResidueUNKReturnsLabel)
+{
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Residue::UNK), "UNK");
+}
+
 TEST_F(AtomicInfoHelperTest, UnknownResidueReturnsQuestionMark)
 {
     EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Residue>(999)), "?");
@@ -127,6 +134,7 @@ TEST_F(AtomicInfoHelperTest, UnknownResidueReturnsQuestionMark)
 TEST_F(AtomicInfoHelperTest, UnknownElementReturnsQuestionMark)
 {
     EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Element>(999)), "?");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Element::UNK), "?");
 }
 
 TEST_F(AtomicInfoHelperTest, RemotenessUNKReturnsLabel)
@@ -137,6 +145,7 @@ TEST_F(AtomicInfoHelperTest, RemotenessUNKReturnsLabel)
 TEST_F(AtomicInfoHelperTest, BranchLabel)
 {
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Branch::ONE), "1");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Branch::TERMINAL), "T");
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Branch::UNK), "UNK");
     EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Branch>(253)), "?");
 }
@@ -187,6 +196,8 @@ TEST_F(AtomicInfoHelperTest, ConversionHelpersReturnUnkForUnknownStrings)
 
 TEST_F(AtomicInfoHelperTest, RemotenessLabelVariants)
 {
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::NONE), "");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::ONE), "1");
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::ALPHA), "#alpha");
     EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Remoteness>(253)), "?");
 }
