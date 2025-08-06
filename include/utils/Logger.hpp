@@ -13,9 +13,11 @@ enum class LogLevel : int
 
 class Logger
 {
-    static int m_current_level;
+    static LogLevel m_current_level;
 
 public:
     static void SetLogLevel(int level);
+    static void SetLogLevel(LogLevel level);
+    static LogLevel GetLogLevel(void);
     static void Log(LogLevel level, const std::string & message);
 };
