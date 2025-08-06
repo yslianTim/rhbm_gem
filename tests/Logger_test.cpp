@@ -35,48 +35,41 @@ TEST(LoggerTest, DefaultLogLevelIsInfo)
     EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
 }
 
-TEST(LoggerTest, InfoMessageIsSuppressedWhenLevelIsWarning)
+struct LoggerSuppressionTestCase
 {
-    Logger::SetLogLevel(LogLevel::Warning);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    Logger::Log(LogLevel::Info, "msg");
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    const std::string err{ testing::internal::GetCapturedStderr() };
-    EXPECT_TRUE(out.empty());
-    EXPECT_TRUE(err.empty());
-}
+    LogLevel current_level;
+    LogLevel message_level;
+};
 
-TEST(LoggerTest, DebugMessageIsSuppressedWhenLevelIsWarning)
+class LoggerSuppressionTest : public ::testing::TestWithParam<LoggerSuppressionTestCase>
 {
-    Logger::SetLogLevel(LogLevel::Warning);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    Logger::Log(LogLevel::Debug, "msg");
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    const std::string err{ testing::internal::GetCapturedStderr() };
-    EXPECT_TRUE(out.empty());
-    EXPECT_TRUE(err.empty());
-}
+protected:
+    void TearDown(void) override
+    {
+        Logger::SetLogLevel(LogLevel::Info);
+    }
+};
 
-TEST(LoggerTest, NoticeMessageIsSuppressedWhenLevelIsWarning)
-{
-    Logger::SetLogLevel(LogLevel::Warning);
-    testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    Logger::Log(LogLevel::Notice, "msg");
-    const std::string out{ testing::internal::GetCapturedStdout() };
-    const std::string err{ testing::internal::GetCapturedStderr() };
-    EXPECT_TRUE(out.empty());
-    EXPECT_TRUE(err.empty());
-}
+INSTANTIATE_TEST_SUITE_P(SuppressedPairs, LoggerSuppressionTest,
+                         ::testing::Values(
+                             LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Warning },
+                             LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Notice  },
+                             LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Info    },
+                             LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Debug   },
+                             LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Notice  },
+                             LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Info    },
+                             LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Debug   },
+                             LoggerSuppressionTestCase{ LogLevel::Notice,  LogLevel::Info    },
+                             LoggerSuppressionTestCase{ LogLevel::Notice,  LogLevel::Debug   },
+                             LoggerSuppressionTestCase{ LogLevel::Info,    LogLevel::Debug   }));
 
-TEST(LoggerTest, WarningMessageIsSuppressedWhenLevelIsError)
+TEST_P(LoggerSuppressionTest, SuppressesOutput)
 {
-    Logger::SetLogLevel(LogLevel::Error);
+    const auto tc{ GetParam() };
+    Logger::SetLogLevel(tc.current_level);
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
-    Logger::Log(LogLevel::Warning, "msg");
+    Logger::Log(tc.message_level, "msg");
     const std::string out{ testing::internal::GetCapturedStdout() };
     const std::string err{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(out.empty());
@@ -102,6 +95,18 @@ TEST(LoggerTest, SetLogLevelIntWithinRangeSetsLevel)
     Logger::SetLogLevel(static_cast<int>(LogLevel::Debug));
     EXPECT_EQ(LogLevel::Debug, Logger::GetLogLevel());
     Logger::SetLogLevel(LogLevel::Info);
+}
+
+TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
+{
+    const auto bogus_level{ static_cast<LogLevel>(-1) };
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    Logger::Log(bogus_level, "msg");
+    const std::string stdout_output{ testing::internal::GetCapturedStdout() };
+    const std::string stderr_output{ testing::internal::GetCapturedStderr() };
+    EXPECT_TRUE(stdout_output.empty());
+    EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output);
 }
 
 struct LoggerOutputTestCase
@@ -134,6 +139,60 @@ TEST_P(LoggerOutputTest, LogsToCorrectStreamWithPrefix)
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
     Logger::Log(tc.level, "msg");
+    const std::string stdout_output{ testing::internal::GetCapturedStdout() };
+    const std::string stderr_output{ testing::internal::GetCapturedStderr() };
+    const std::string expected{ std::string(tc.prefix) + "msg\n" };
+    if (tc.to_stderr)
+    {
+        EXPECT_EQ(expected, stderr_output);
+        EXPECT_TRUE(stdout_output.empty());
+    }
+    else
+    {
+        EXPECT_EQ(expected, stdout_output);
+        EXPECT_TRUE(stderr_output.empty());
+    }
+}
+
+struct LoggerLevelPairTestCase
+{
+    LogLevel current_level;
+    LogLevel message_level;
+    const char * prefix;
+    bool to_stderr;
+};
+
+class LoggerLevelPairTest : public ::testing::TestWithParam<LoggerLevelPairTestCase>
+{
+protected:
+    void TearDown(void) override
+    {
+        Logger::SetLogLevel(LogLevel::Info);
+    }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    CurrentGreaterThanMessage,
+    LoggerLevelPairTest,
+    ::testing::Values(
+        LoggerLevelPairTestCase{ LogLevel::Warning, LogLevel::Error,   "[Error] ",   true  },
+        LoggerLevelPairTestCase{ LogLevel::Notice,  LogLevel::Error,   "[Error] ",   true  },
+        LoggerLevelPairTestCase{ LogLevel::Notice,  LogLevel::Warning, "[Warning] ", true  },
+        LoggerLevelPairTestCase{ LogLevel::Info,    LogLevel::Error,   "[Error] ",   true  },
+        LoggerLevelPairTestCase{ LogLevel::Info,    LogLevel::Warning, "[Warning] ", true  },
+        LoggerLevelPairTestCase{ LogLevel::Info,    LogLevel::Notice,  "[Notice] ",  false },
+        LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Error,   "[Error] ",   true  },
+        LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Warning, "[Warning] ", true  },
+        LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Notice,  "[Notice] ",  false },
+        LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Info,    "",           false }));
+
+TEST_P(LoggerLevelPairTest, LogsMessageWithCorrectPrefixAndStream)
+{
+    const auto tc{ GetParam() };
+    Logger::SetLogLevel(tc.current_level);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    Logger::Log(tc.message_level, "msg");
     const std::string stdout_output{ testing::internal::GetCapturedStdout() };
     const std::string stderr_output{ testing::internal::GetCapturedStderr() };
     const std::string expected{ std::string(tc.prefix) + "msg\n" };

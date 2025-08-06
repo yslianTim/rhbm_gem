@@ -46,5 +46,8 @@ void Logger::Log(LogLevel level, const std::string & message)
         case LogLevel::Debug:
             std::cout << "[Debug] " << message << std::endl;
             break;
+        default:
+            std::cerr << "[Unknown] " << message << std::endl;
+            break;
     }
 }
