@@ -109,6 +109,12 @@ TEST(HRLModelHelperTest, ThrowsWhenSampleVectorSizeMismatch)
     EXPECT_THROW(helper.SetDataArray(data_array), std::runtime_error);
 }
 
+TEST(HRLModelHelperTest, ThrowsWhenDataArrayNotSet)
+{
+    HRLModelHelper helper{ 1, 1 };
+    EXPECT_THROW(helper.RunEstimation(0.0, 0.0), std::out_of_range);
+}
+
 TEST(HRLModelHelperTest, EstimationOnSmallSyntheticData)
 {
     auto member0{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 6.0}}, "member_0") };
