@@ -28,6 +28,18 @@ DataTuple CreateMember(const std::vector<std::pair<double, double>>& xy, const s
 
 }
 
+TEST(HRLModelHelperTest, ThrowsOnNonPositiveBasisSize)
+{
+    EXPECT_THROW(HRLModelHelper(0, 1), std::invalid_argument);
+    EXPECT_THROW(HRLModelHelper(-1, 1), std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, ThrowsOnNonPositiveMemberSize)
+{
+    EXPECT_THROW(HRLModelHelper(1, 0), std::invalid_argument);
+    EXPECT_THROW(HRLModelHelper(1, -1), std::invalid_argument);
+}
+
 TEST(HRLModelHelperTest, DefaultInitializationValues)
 {
     const int basis_size{ 2 };
@@ -112,7 +124,19 @@ TEST(HRLModelHelperTest, ThrowsWhenSampleVectorSizeMismatch)
 TEST(HRLModelHelperTest, ThrowsWhenDataArrayNotSet)
 {
     HRLModelHelper helper{ 1, 1 };
-    EXPECT_THROW(helper.RunEstimation(0.0, 0.0), std::out_of_range);
+    EXPECT_THROW(helper.RunEstimation(0.0, 0.0), std::runtime_error);
+}
+
+TEST(HRLModelHelperTest, ThrowsWhenAlphaRIsNegative)
+{
+    HRLModelHelper helper{ 1, 1 };
+    EXPECT_THROW(helper.RunEstimation(-0.1, 0.0), std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, ThrowsWhenAlphaGIsNegative)
+{
+    HRLModelHelper helper{ 1, 1 };
+    EXPECT_THROW(helper.RunEstimation(0.0, -0.1), std::invalid_argument);
 }
 
 TEST(HRLModelHelperTest, EstimationOnSmallSyntheticData)

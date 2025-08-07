@@ -3,6 +3,7 @@
 #include "Logger.hpp"
 
 #include <cmath>
+#include <stdexcept>
 
 using std::string;
 using std::vector;
@@ -18,21 +19,27 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_basis_size{ basis_size }, m_member_size{ member_size },
     m_maximum_iteration{ 100 }, m_tolerance{ 1.0e-5 },
     m_omega_sum{ 0.0 }, m_omega_h{ 0.0 },
-    m_weight_data_min{ 1.0e-8 }, m_weight_member_min{ 1.0e-2/member_size },
-    m_sigma_square_array{ ArrayXd::Ones(member_size) },
-    m_omega_array{ ArrayXd::Ones(member_size) },
-    m_statistical_distance_array{ ArrayXd::Zero(member_size) },
-    m_outlier_flag_array{ ArrayXb::Constant(member_size, false) },
-    m_capital_lambda{ MatrixXd::Identity(basis_size, basis_size) },
-    m_mu_iter{ VectorXd::Ones(basis_size) },
-    m_mu_MDPDE{ VectorXd::Ones(basis_size) },
-    m_mu_prior{ VectorXd::Ones(basis_size) },
-    m_mu_mean{ VectorXd::Ones(basis_size) },
-    m_beta_iter_array{ MatrixXd::Ones(basis_size, member_size) },
-    m_beta_OLS_array{ MatrixXd::Ones(basis_size, member_size) },
-    m_beta_MDPDE_array{ MatrixXd::Ones(basis_size, member_size) },
-    m_beta_posterior_array{ MatrixXd::Ones(basis_size, member_size) }
+    m_weight_data_min{ 1.0e-8 },
+    m_weight_member_min{ (member_size <= 0) ? 0.0 : 1.0e-2 / member_size },
+    m_sigma_square_array{ ArrayXd::Ones(member_size > 0 ? member_size : 1) },
+    m_omega_array{ ArrayXd::Ones(member_size > 0 ? member_size : 1) },
+    m_statistical_distance_array{ ArrayXd::Zero(member_size > 0 ? member_size : 1) },
+    m_outlier_flag_array{ ArrayXb::Constant(member_size > 0 ? member_size : 1, false) },
+    m_capital_lambda{ MatrixXd::Identity(basis_size > 0 ? basis_size : 1, basis_size > 0 ? basis_size : 1) },
+    m_mu_iter{ VectorXd::Ones(basis_size > 0 ? basis_size : 1) },
+    m_mu_MDPDE{ VectorXd::Ones(basis_size > 0 ? basis_size : 1) },
+    m_mu_prior{ VectorXd::Ones(basis_size > 0 ? basis_size : 1) },
+    m_mu_mean{ VectorXd::Ones(basis_size > 0 ? basis_size : 1) },
+    m_beta_iter_array{ MatrixXd::Ones(basis_size > 0 ? basis_size : 1, member_size > 0 ? member_size : 1) },
+    m_beta_OLS_array{ MatrixXd::Ones(basis_size > 0 ? basis_size : 1, member_size > 0 ? member_size : 1) },
+    m_beta_MDPDE_array{ MatrixXd::Ones(basis_size > 0 ? basis_size : 1, member_size > 0 ? member_size : 1) },
+    m_beta_posterior_array{ MatrixXd::Ones(basis_size > 0 ? basis_size : 1, member_size > 0 ? member_size : 1) }
 {
+    if (basis_size <= 0 || member_size <= 0)
+    {
+        throw std::invalid_argument("basis_size and member_size must be positive values");
+    }
+
     m_data_size_list.reserve(static_cast<size_t>(m_member_size));
     m_member_info_list.reserve(static_cast<size_t>(m_member_size));
     m_X_list.reserve(static_cast<size_t>(m_member_size));
@@ -82,6 +89,16 @@ void HRLModelHelper::SetDataArray(
 
 void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
 {
+    if (alpha_r < 0.0 || alpha_g < 0.0)
+    {
+        throw std::invalid_argument("Alpha parameters must be non-negative.");
+    }
+
+    if (m_data_size_list.size() != static_cast<size_t>(m_member_size))
+    {
+        throw std::runtime_error("Data array not set");
+    }
+
     Initialization();
     AlgorithmBetaMDPDE(alpha_r);
     AlgorithmMuMDPDE(alpha_g);
@@ -303,9 +320,9 @@ void HRLModelHelper::CalculateStatisticalDistance(void)
     }
     else
     {
+        auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(m_capital_lambda) };
         for (int i = 0; i < m_member_size; i++)
         {
-            auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(m_capital_lambda) };
             m_statistical_distance_array(i) = error_array.col(i).transpose() * inv_capital_lambda * error_array.col(i);
         }
     }
