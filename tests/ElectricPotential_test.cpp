@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <cmath>
 #include <array>
+#include <tuple>
 #include <stdexcept>
 
 #include "ElectricPotential.hpp"
@@ -221,6 +222,28 @@ TEST(ElectricPotentialTest, SetModelChoiceThrowsOnInvalidValue)
     EXPECT_THROW(potential.SetModelChoice(3), std::out_of_range);
 }
 
+TEST(ElectricPotentialTest, FiveGausChargeInterpolatesWithCharge)
+{
+    ElectricPotential potential;
+    potential.SetModelChoice(1); // ModelChoice::FIVE_GAUS_CHARGE
+    constexpr double blurring_width{ 0.2 };
+    potential.SetBlurringWidth(blurring_width);
+    const Element element{ Element::CARBON };
+    constexpr double distance{ 1.0 };
+    const double actual_neutral{ potential.GetPotentialValue(element, distance, 0.0) };
+    const double actual_half{ potential.GetPotentialValue(element, distance, 0.5) };
+    const double expected_neutral{
+        ComputeFiveGausChargeIntrinsicTerm(potential, element, distance, 0, blurring_width)
+    };
+    const double expected_positive{
+        ComputeFiveGausChargeIntrinsicTerm(potential, element, distance, 1, blurring_width) +
+        ComputeFiveGausChargeDeltaTerm(distance, 1.0, blurring_width)
+    };
+    const double expected_half{ expected_neutral + 0.5 * (expected_positive - expected_neutral) };
+    EXPECT_NEAR(expected_neutral, actual_neutral, 1e-12);
+    EXPECT_NEAR(expected_half, actual_half, 1e-12);
+}
+
 TEST(ElectricPotentialTest, NegativeChargeFiveGaus)
 {
     ElectricPotential potential;
@@ -235,22 +258,76 @@ TEST(ElectricPotentialTest, NegativeChargeFiveGaus)
     EXPECT_DOUBLE_EQ(expected, actual);
 }
 
-using FiveGausChargeDeltaTermPair = std::pair<double, double>;
+TEST(ElectricPotentialTest, NeutralChargeFiveGausBlurringWidth)
+{
+    ElectricPotential potential;
+    potential.SetModelChoice(1); // ModelChoice::FIVE_GAUS_CHARGE
+
+    const Element element{ Element::CARBON };
+    constexpr double distance{ 1.0 };
+    potential.SetBlurringWidth(0.0);
+    const double neutral_no_blur{ potential.GetPotentialValue(element, distance, 0.0) };
+    potential.SetBlurringWidth(0.5);
+    const double neutral_with_blur{ potential.GetPotentialValue(element, distance, 0.0) };
+    const double expected_no_blur{
+        ComputeFiveGausChargeIntrinsicTerm(potential, element, distance, 0, 0.0)
+    };
+    const double expected_with_blur{
+        ComputeFiveGausChargeIntrinsicTerm(potential, element, distance, 0, 0.5)
+    };
+
+    const double actual_diff{ neutral_with_blur - neutral_no_blur };
+    const double expected_diff{ expected_with_blur - expected_no_blur };
+    EXPECT_NEAR(expected_no_blur, neutral_no_blur, 1e-12);
+    EXPECT_NEAR(expected_with_blur, neutral_with_blur, 1e-12);
+    EXPECT_NEAR(expected_diff, actual_diff, 1e-12);
+    EXPECT_NE(0.0, actual_diff);
+}
+
+using AmplitudeWidthPair = std::pair<double, double>;
+
+class SingleGausUserModelTest : public ::testing::Test,
+                                public ::testing::WithParamInterface<AmplitudeWidthPair>
+{
+};
+
+TEST_P(SingleGausUserModelTest, ComputesExpectedPotential)
+{
+    const auto [amplitude, width]{ GetParam() };
+    ElectricPotential potential;
+    potential.SetModelChoice(2); // ModelChoice::SINGLE_GAUS_USER
+    constexpr double distance{ 1.0 };
+    const double expected{ ComputeSingleGausUser(distance, amplitude, width) };
+    const double actual{
+        potential.GetPotentialValue(Element::CARBON, distance, 0.0, amplitude, width)
+    };
+    EXPECT_NEAR(expected, actual, 1e-12);
+}
+
+INSTANTIATE_TEST_SUITE_P(SingleGausUserCases, SingleGausUserModelTest,
+    ::testing::Values(
+        AmplitudeWidthPair{ 1.0, 1.0 },
+        AmplitudeWidthPair{ 0.5, 0.2 },
+        AmplitudeWidthPair{ 2.0, 0.8 },
+        AmplitudeWidthPair{ 1.5, 1.5 }
+    )
+);
+
+using FiveGausChargeDeltaTermCase = std::tuple<double, double, double>;
 
 class FiveGausChargeDeltaTermTest : public ::testing::Test,
-                                   public ::testing::WithParamInterface<FiveGausChargeDeltaTermPair>
+                                   public ::testing::WithParamInterface<FiveGausChargeDeltaTermCase>
 {
 };
 
 TEST_P(FiveGausChargeDeltaTermTest, ComputesExpectedDeltaTerm)
 {
-    const auto [blurring_width, distance]{ GetParam() };
+    const auto [blurring_width, distance, charge]{ GetParam() };
     ElectricPotential potential;
     potential.SetModelChoice(1); // FIVE_GAUS_CHARGE
     potential.SetBlurringWidth(blurring_width);
 
     const Element element{ Element::CARBON };
-    constexpr double charge{ 1.0 };
 
     const double expected{
         ComputeFiveGausChargeDeltaTerm(distance, charge, blurring_width)
@@ -269,19 +346,27 @@ TEST_P(FiveGausChargeDeltaTermTest, ComputesExpectedDeltaTerm)
     const double intrinsic_0{
         ComputeFiveGausChargeIntrinsicTerm(potential, element, distance, 0, blurring_width)
     };
+    const double intrinsic_n{
+        ComputeFiveGausChargeIntrinsicTerm(potential, element, distance, -1, blurring_width)
+    };
+
+    const double intrinsic_delta{
+        charge >= 0.0 ? (intrinsic_p - intrinsic_0) : -(intrinsic_0 - intrinsic_n)
+    };
 
     const double delta_actual{
-        (with_charge - without_charge) - (intrinsic_p - intrinsic_0)
+        (with_charge - without_charge) - intrinsic_delta
     };
     EXPECT_NEAR(expected, delta_actual, 1e-12);
 }
 
 INSTANTIATE_TEST_SUITE_P(FiveGausChargeDeltaTermCases, FiveGausChargeDeltaTermTest,
     ::testing::Values(
-        FiveGausChargeDeltaTermPair{ 0.0,     1.0 },     // blurring_width == 0
-        FiveGausChargeDeltaTermPair{ 1.0e-6,  1.0 },     // blurring_width <= 1e-5
-        FiveGausChargeDeltaTermPair{ 0.5,     4.0 },     // distance > 3.0
-        FiveGausChargeDeltaTermPair{ 0.5,     1.0e-6 },  // distance < 1e-5
-        FiveGausChargeDeltaTermPair{ 0.5,     1.0 }      // general case
+        FiveGausChargeDeltaTermCase{ 0.0,     1.0,     1.0 },    // blurring_width == 0
+        FiveGausChargeDeltaTermCase{ 1.0e-6,  1.0,     1.0 },    // blurring_width <= 1e-5
+        FiveGausChargeDeltaTermCase{ 0.5,     4.0,     1.0 },    // distance > 3.0
+        FiveGausChargeDeltaTermCase{ 0.5,     1.0e-6,  1.0 },    // distance < 1e-5
+        FiveGausChargeDeltaTermCase{ 0.5,     1.0,     1.0 },    // general case
+        FiveGausChargeDeltaTermCase{ 0.5,     1.0,    -1.0 }     // negative charge
     )
 );
