@@ -16,8 +16,8 @@ class Logger
     static LogLevel m_current_level;
 
 public:
+    static LogLevel GetLogLevel(void) { return m_current_level; }
     static void SetLogLevel(int level);
     static void SetLogLevel(LogLevel level);
-    static LogLevel GetLogLevel(void);
     static void Log(LogLevel level, const std::string & message);
 };

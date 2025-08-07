@@ -111,6 +111,13 @@ TEST(LoggerTest, SetLogLevelEnumOutOfRangeDefaultsToInfo)
     EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
 }
 
+TEST(LoggerTest, SetLogLevelEnumAboveRangeDefaultsToInfo)
+{
+    Logger::SetLogLevel(LogLevel::Error);
+    Logger::SetLogLevel(static_cast<LogLevel>(5));
+    EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
+}
+
 TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
 {
     const auto bogus_level{ static_cast<LogLevel>(-1) };
@@ -123,12 +130,13 @@ TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
     EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output);
 }
 
-TEST(LoggerTest, SuppressesLogLevelAboveRange)
+TEST(LoggerTest, SuppressesLogLevelGreaterThanDebug)
 {
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
-    Logger::Log(static_cast<LogLevel>(100), "msg");
+    const auto level_above_debug{ static_cast<LogLevel>(static_cast<int>(LogLevel::Debug) + 1) };
+    Logger::Log(level_above_debug, "msg");
     const std::string out{ testing::internal::GetCapturedStdout() };
     const std::string err{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(out.empty());
@@ -146,16 +154,17 @@ TEST(LoggerTest, InfoLogsAppearOnSeparateLines)
     Logger::SetLogLevel(LogLevel::Info);
 }
 
-TEST(LoggerTest, UnknownPositiveLevelSuppressed)
+TEST(LoggerTest, UnknownNegativeLevelLogsAtError)
 {
-    Logger::SetLogLevel(LogLevel::Info);
+    Logger::SetLogLevel(LogLevel::Error);
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
-    Logger::Log(static_cast<LogLevel>(100), "msg");
+    Logger::Log(static_cast<LogLevel>(-1), "msg");
     const std::string stdout_output{ testing::internal::GetCapturedStdout() };
     const std::string stderr_output{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(stdout_output.empty());
-    EXPECT_TRUE(stderr_output.empty());
+    EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output);
+    Logger::SetLogLevel(LogLevel::Info);
 }
 
 struct LoggerOutputTestCase
@@ -203,6 +212,32 @@ TEST_P(LoggerOutputTest, LogsToCorrectStreamWithPrefix)
     {
         EXPECT_EQ(expected, stdout_output);
         EXPECT_TRUE(stderr_output.empty());
+    }
+}
+
+TEST_P(LoggerOutputTest, MessagesAppearOnSeparateLines)
+{
+    const auto tc{ GetParam() };
+    Logger::SetLogLevel(tc.level);
+    const std::string expected{
+        std::string(tc.prefix) + "msg1\n" +
+        std::string(tc.prefix) + "msg2\n"
+    };
+    if (tc.to_stderr)
+    {
+        testing::internal::CaptureStderr();
+        Logger::Log(tc.level, "msg1");
+        Logger::Log(tc.level, "msg2");
+        const std::string stderr_output{ testing::internal::GetCapturedStderr() };
+        EXPECT_EQ(expected, stderr_output);
+    }
+    else
+    {
+        testing::internal::CaptureStdout();
+        Logger::Log(tc.level, "msg1");
+        Logger::Log(tc.level, "msg2");
+        const std::string stdout_output{ testing::internal::GetCapturedStdout() };
+        EXPECT_EQ(expected, stdout_output);
     }
 }
 
