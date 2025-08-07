@@ -14,6 +14,7 @@ DataObjectManager::DataObjectManager(void) :
     m_db_manager{ nullptr }
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::DataObjectManager() called");
+    FileProcessFactoryRegistry::Instance().RegisterDefaultFactories();
 }
 
 DataObjectManager::~DataObjectManager()
