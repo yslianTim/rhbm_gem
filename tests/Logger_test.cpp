@@ -12,9 +12,14 @@ protected:
 };
 
 INSTANTIATE_TEST_SUITE_P(AllLogLevels, LoggerLogLevelTest,
-                         ::testing::Values(LogLevel::Error, LogLevel::Warning,
-                                           LogLevel::Notice, LogLevel::Info,
-                                           LogLevel::Debug));
+    ::testing::Values(
+        LogLevel::Error,
+        LogLevel::Warning,
+        LogLevel::Notice,
+        LogLevel::Info,
+        LogLevel::Debug
+    )
+);
 
 TEST_P(LoggerLogLevelTest, SetAndGetEnum)
 {
@@ -51,17 +56,19 @@ protected:
 };
 
 INSTANTIATE_TEST_SUITE_P(SuppressedPairs, LoggerSuppressionTest,
-                         ::testing::Values(
-                             LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Warning },
-                             LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Notice  },
-                             LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Info    },
-                             LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Debug   },
-                             LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Notice  },
-                             LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Info    },
-                             LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Debug   },
-                             LoggerSuppressionTestCase{ LogLevel::Notice,  LogLevel::Info    },
-                             LoggerSuppressionTestCase{ LogLevel::Notice,  LogLevel::Debug   },
-                             LoggerSuppressionTestCase{ LogLevel::Info,    LogLevel::Debug   }));
+    ::testing::Values(
+        LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Warning },
+        LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Notice  },
+        LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Info    },
+        LoggerSuppressionTestCase{ LogLevel::Error,   LogLevel::Debug   },
+        LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Notice  },
+        LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Info    },
+        LoggerSuppressionTestCase{ LogLevel::Warning, LogLevel::Debug   },
+        LoggerSuppressionTestCase{ LogLevel::Notice,  LogLevel::Info    },
+        LoggerSuppressionTestCase{ LogLevel::Notice,  LogLevel::Debug   },
+        LoggerSuppressionTestCase{ LogLevel::Info,    LogLevel::Debug   }
+    )
+);
 
 TEST_P(LoggerSuppressionTest, SuppressesOutput)
 {
@@ -168,11 +175,14 @@ protected:
 };
 
 INSTANTIATE_TEST_SUITE_P(AllLogLevelsOutput, LoggerOutputTest,
-                         ::testing::Values(LoggerOutputTestCase{ LogLevel::Error,   "[Error] ",   true  },
-                                           LoggerOutputTestCase{ LogLevel::Warning, "[Warning] ", true  },
-                                           LoggerOutputTestCase{ LogLevel::Notice,  "[Notice] ",  false },
-                                           LoggerOutputTestCase{ LogLevel::Info,    "",           false },
-                                           LoggerOutputTestCase{ LogLevel::Debug,   "[Debug] ",   false }));
+    ::testing::Values(
+        LoggerOutputTestCase{ LogLevel::Error,   "[Error] ",   true  },
+        LoggerOutputTestCase{ LogLevel::Warning, "[Warning] ", true  },
+        LoggerOutputTestCase{ LogLevel::Notice,  "[Notice] ",  false },
+        LoggerOutputTestCase{ LogLevel::Info,    "",           false },
+        LoggerOutputTestCase{ LogLevel::Debug,   "[Debug] ",   false }
+    )
+);
 
 TEST_P(LoggerOutputTest, LogsToCorrectStreamWithPrefix)
 {
@@ -214,8 +224,7 @@ protected:
 };
 
 INSTANTIATE_TEST_SUITE_P(
-    CurrentGreaterThanMessage,
-    LoggerLevelPairTest,
+    CurrentGreaterThanMessage, LoggerLevelPairTest,
     ::testing::Values(
         LoggerLevelPairTestCase{ LogLevel::Warning, LogLevel::Error,   "[Error] ",   true  },
         LoggerLevelPairTestCase{ LogLevel::Notice,  LogLevel::Error,   "[Error] ",   true  },
@@ -226,7 +235,9 @@ INSTANTIATE_TEST_SUITE_P(
         LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Error,   "[Error] ",   true  },
         LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Warning, "[Warning] ", true  },
         LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Notice,  "[Notice] ",  false },
-        LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Info,    "",           false }));
+        LoggerLevelPairTestCase{ LogLevel::Debug,   LogLevel::Info,    "",           false }
+    )
+);
 
 TEST_P(LoggerLevelPairTest, LogsMessageWithCorrectPrefixAndStream)
 {

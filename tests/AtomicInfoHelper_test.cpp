@@ -77,7 +77,8 @@ INSTANTIATE_TEST_SUITE_P(AtomicNumberPairs, AtomicInfoHelperAtomicNumberTest,
         ElementAtomicPair{ Element::COBALT,    27 },
         ElementAtomicPair{ Element::NICKEL,    28 },
         ElementAtomicPair{ Element::COPPER,    29 },
-        ElementAtomicPair{ Element::ZINC,      30 })
+        ElementAtomicPair{ Element::ZINC,      30 }
+    )
 );
 
 TEST_F(AtomicInfoHelperTest, InvalidElementReturnsZero)
