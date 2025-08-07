@@ -2,52 +2,55 @@
 
 #include <iostream>
 
-LogLevel Logger::m_current_level{ LogLevel::Info };
+std::atomic<LogLevel> Logger::m_current_level{ LogLevel::Info };
+std::mutex Logger::m_stream_mutex{};
+
+LogLevel Logger::NormalizeLevel(LogLevel level)
+{
+    if (level < LogLevel::Error || level > LogLevel::Debug)
+    {
+        return LogLevel::Info;
+    }
+    return level;
+}
 
 void Logger::SetLogLevel(int level)
 {
-    if (level < static_cast<int>(LogLevel::Error) ||
-        level > static_cast<int>(LogLevel::Debug))
-    {
-        m_current_level = LogLevel::Info;
-        return;
-    }
-    m_current_level = static_cast<LogLevel>(level);
+    m_current_level = NormalizeLevel(static_cast<LogLevel>(level));
 }
 
 void Logger::SetLogLevel(LogLevel level)
 {
-    if (level < LogLevel::Error || level > LogLevel::Debug)
-    {
-        m_current_level = LogLevel::Info;
-        return;
-    }
-    m_current_level = level;
+    m_current_level = NormalizeLevel(level);
 }
 
 void Logger::Log(LogLevel level, const std::string & message)
 {
-    if (level > m_current_level) return;
+    if (level < LogLevel::Error || level > LogLevel::Debug)
+    {
+        std::cerr << "[Unknown] " << message << std::endl;
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(m_stream_mutex);
+    if (level > m_current_level.load()) return;
 
     switch (level)
     {
         case LogLevel::Error:
-            std::cerr << "[Error] " << message << std::endl;
+            std::cerr << "[Error] " << message << '\n' << std::flush;
             break;
         case LogLevel::Warning:
-            std::cerr << "[Warning] " << message << std::endl;
+            std::cerr << "[Warning] " << message << '\n' << std::flush;
             break;
         case LogLevel::Notice:
-            std::cout << "[Notice] " << message << std::endl;
+            std::cout << "[Notice] " << message << '\n';
             break;
         case LogLevel::Info:
-            std::cout << message << std::endl;
+            std::cout << message << '\n';
             break;
         case LogLevel::Debug:
-            std::cout << "[Debug] " << message << std::endl;
-            break;
-        default:
-            std::cerr << "[Unknown] " << message << std::endl;
+            std::cout << "[Debug] " << message << '\n';
             break;
     }
 }

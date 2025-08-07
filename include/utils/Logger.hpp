@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <atomic>
+#include <mutex>
 
 enum class LogLevel : int
 {
@@ -13,11 +15,15 @@ enum class LogLevel : int
 
 class Logger
 {
-    static LogLevel m_current_level;
+    static std::atomic<LogLevel> m_current_level;
+    static std::mutex m_stream_mutex;
 
 public:
-    static LogLevel GetLogLevel(void) { return m_current_level; }
+    static LogLevel GetLogLevel(void) { return m_current_level.load(); }
     static void SetLogLevel(int level);
     static void SetLogLevel(LogLevel level);
     static void Log(LogLevel level, const std::string & message);
+
+private:
+    static LogLevel NormalizeLevel(LogLevel level);
 };

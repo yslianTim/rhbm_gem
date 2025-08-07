@@ -1,4 +1,7 @@
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <thread>
+#include <vector>
 
 #include "Logger.hpp"
 
@@ -37,6 +40,31 @@ TEST_P(LoggerLogLevelTest, SetAndGetInt)
 
 TEST(LoggerTest, DefaultLogLevelIsInfo)
 {
+    EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
+}
+
+TEST(LoggerTest, ThreadedLoggingAndLevelChanges)
+{
+    const int num_threads{4};
+    const int messages_per_thread{50};
+    testing::internal::CaptureStdout();
+    std::vector<std::thread> threads;
+    threads.reserve(num_threads);
+    for (int i = 0; i < num_threads; i++)
+    {
+        threads.emplace_back([messages_per_thread]() {
+            for (int j = 0; j < messages_per_thread; j++)
+            {
+                Logger::SetLogLevel(LogLevel::Debug);
+                Logger::Log(LogLevel::Info, "msg");
+            }
+            Logger::SetLogLevel(LogLevel::Info);
+        });
+    }
+    for (auto & t : threads) t.join();
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    const auto line_count{ std::count(out.begin(), out.end(), '\n') };
+    EXPECT_EQ(static_cast<std::size_t>(num_threads * messages_per_thread), line_count);
     EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
 }
 
@@ -130,7 +158,7 @@ TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
     EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output);
 }
 
-TEST(LoggerTest, SuppressesLogLevelGreaterThanDebug)
+TEST(LoggerTest, LogsUnknownLevelAboveDebug)
 {
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
@@ -140,7 +168,7 @@ TEST(LoggerTest, SuppressesLogLevelGreaterThanDebug)
     const std::string out{ testing::internal::GetCapturedStdout() };
     const std::string err{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(out.empty());
-    EXPECT_TRUE(err.empty());
+    EXPECT_EQ(std::string("[Unknown] msg\n"), err);
 }
 
 TEST(LoggerTest, InfoLogsAppearOnSeparateLines)
