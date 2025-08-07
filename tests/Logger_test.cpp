@@ -68,6 +68,31 @@ TEST(LoggerTest, ThreadedLoggingAndLevelChanges)
     EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
 }
 
+TEST(LoggerTest, ThreadedErrorLoggingAndLevelChanges)
+{
+    const int num_threads{4};
+    const int messages_per_thread{50};
+    testing::internal::CaptureStderr();
+    std::vector<std::thread> threads;
+    threads.reserve(num_threads);
+    for (int i = 0; i < num_threads; i++)
+    {
+        threads.emplace_back([messages_per_thread]() {
+            for (int j = 0; j < messages_per_thread; j++)
+            {
+                Logger::SetLogLevel(LogLevel::Debug);
+                Logger::Log(LogLevel::Error, "msg");
+            }
+            Logger::SetLogLevel(LogLevel::Info);
+        });
+    }
+    for (auto & t : threads) t.join();
+    const std::string err{ testing::internal::GetCapturedStderr() };
+    const auto line_count{ std::count(err.begin(), err.end(), '\n') };
+    EXPECT_EQ(static_cast<std::size_t>(num_threads * messages_per_thread), line_count);
+    EXPECT_EQ(LogLevel::Info, Logger::GetLogLevel());
+}
+
 struct LoggerSuppressionTestCase
 {
     LogLevel current_level;
@@ -158,13 +183,33 @@ TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
     EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output);
 }
 
-TEST(LoggerTest, LogsUnknownLevelAboveDebug)
+class LoggerUnknownLevelAboveDebugTest : public ::testing::TestWithParam<LogLevel>
 {
-    Logger::SetLogLevel(LogLevel::Info);
+    protected:
+    void TearDown(void) override
+    {
+        Logger::SetLogLevel(LogLevel::Info);
+    }
+};
+
+INSTANTIATE_TEST_SUITE_P(AllLogLevels, LoggerUnknownLevelAboveDebugTest,
+    ::testing::Values(
+        LogLevel::Error,
+        LogLevel::Warning,
+        LogLevel::Notice,
+        LogLevel::Info,
+        LogLevel::Debug
+    )
+);
+
+TEST_P(LoggerUnknownLevelAboveDebugTest, LogsUnknownLevelAboveDebug)
+{
+    const auto level{ GetParam() };
+    Logger::SetLogLevel(level);
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
-    const auto level_above_debug{ static_cast<LogLevel>(static_cast<int>(LogLevel::Debug) + 1) };
-    Logger::Log(level_above_debug, "msg");
+    const auto unknown_level{ static_cast<LogLevel>(static_cast<int>(LogLevel::Debug) + 1) };
+    Logger::Log(unknown_level, "msg");
     const std::string out{ testing::internal::GetCapturedStdout() };
     const std::string err{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(out.empty());
@@ -190,6 +235,16 @@ TEST(LoggerTest, LogAcceptsStringView)
     Logger::Log(LogLevel::Info, msg);
     const std::string out{ testing::internal::GetCapturedStdout() };
     EXPECT_EQ(std::string("sv_msg\n"), out);
+}
+
+TEST(LoggerTest, LogAcceptsStdString)
+{
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    std::string msg{ "std_msg" };
+    Logger::Log(LogLevel::Info, msg);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    EXPECT_EQ(std::string("std_msg\n"), out);
 }
 
 TEST(LoggerTest, UnknownNegativeLevelOutputsUnknownAtAllLevels)

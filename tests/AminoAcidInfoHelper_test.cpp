@@ -37,17 +37,28 @@ TEST_F(AminoAcidInfoHelperTest, GetAtomCountInt)
 
 TEST_F(AminoAcidInfoHelperTest, GetPartialChargeListReturnsExpected)
 {
-    const auto & free_list{ AminoAcidInfoHelper::GetPartialChargeList(Residue::ALA, Structure::FREE) };
+    const auto & free_list{
+        AminoAcidInfoHelper::GetPartialChargeList(Residue::ALA, Structure::FREE)
+    };
     ASSERT_GE(free_list.size(), 1u);
     EXPECT_NEAR(0.560, free_list.front(), 1e-3);
 
-    const auto &sheet_list{ AminoAcidInfoHelper::GetPartialChargeList(Residue::ALA, Structure::SHEET) };
+    const auto &sheet_list{
+        AminoAcidInfoHelper::GetPartialChargeList(Residue::ALA, Structure::SHEET)
+    };
     ASSERT_GE(sheet_list.size(), 1u);
     EXPECT_NEAR(-0.380, sheet_list.back(), 1e-3);
 
-    const auto & helix_list{ AminoAcidInfoHelper::GetPartialChargeList(Residue::ALA, Structure::HELX_P) };
+    const auto & helix_list{
+        AminoAcidInfoHelper::GetPartialChargeList(Residue::ALA, Structure::HELX_P)
+    };
     ASSERT_GE(helix_list.size(), 1u);
     EXPECT_NEAR(0.559, helix_list.front(), 1e-3);
+
+    const auto & helix_pp_list{
+        AminoAcidInfoHelper::GetPartialChargeList(Residue::ALA, Structure::HELX_RH_PP_P)
+    };
+    EXPECT_EQ(helix_list, helix_pp_list);
 
     EXPECT_THROW(
         AminoAcidInfoHelper::GetPartialChargeList(Residue::ALA, Structure::BEND),
@@ -68,6 +79,13 @@ TEST_F(AminoAcidInfoHelperTest, GetPartialChargeListAmberMatchesTable)
     }
 }
 
+TEST_F(AminoAcidInfoHelperTest, GetPartialChargeListAmberUnknownResidueThrows)
+{
+    EXPECT_THROW(
+        AminoAcidInfoHelper::GetPartialChargeListAmber(Residue::UNK),
+        std::out_of_range);
+}
+
 TEST_F(AminoAcidInfoHelperTest, GetPartialChargeValidAndCached)
 {
     const double q1{
@@ -79,4 +97,36 @@ TEST_F(AminoAcidInfoHelperTest, GetPartialChargeValidAndCached)
         AminoAcidInfoHelper::GetPartialCharge(
         Residue::ALA, Element::CARBON, Remoteness::BETA, Branch::NONE, Structure::FREE)};
     EXPECT_NEAR(-0.392, q2, 1e-3);
+}
+
+TEST_F(AminoAcidInfoHelperTest, GetPartialChargeAmberTable)
+{
+    const auto & list{ AminoAcidInfoHelper::GetPartialChargeListAmber(Residue::ARG) };
+    ASSERT_GT(list.size(), 8u);
+    const double expected{ list[8] };
+    const double charge{
+        AminoAcidInfoHelper::GetPartialCharge(
+            Residue::ARG, Element::CARBON, Remoteness::ZETA, Branch::NONE, Structure::FREE, true)
+    };
+    EXPECT_NEAR(expected, charge, 1e-3);
+}
+
+TEST_F(AminoAcidInfoHelperTest, GetPartialChargeMissingAtomReturnsZeroAndWarns)
+{
+    const double q1{
+        AminoAcidInfoHelper::GetPartialCharge(
+            Residue::ALA, Element::SULFUR, Remoteness::BETA, Branch::NONE, Structure::FREE)
+    };
+    EXPECT_DOUBLE_EQ(0.0, q1);
+
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
+    const double q2{
+        AminoAcidInfoHelper::GetPartialCharge(
+            Residue::ALA, Element::SULFUR, Remoteness::BETA, Branch::NONE, Structure::FREE,
+            false, true)
+    };
+    const std::string err{ testing::internal::GetCapturedStderr() };
+    EXPECT_DOUBLE_EQ(0.0, q2);
+    EXPECT_NE(std::string::npos, err.find("No partial charge data for this atom."));
 }
