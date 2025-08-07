@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <atomic>
 #include <mutex>
 
@@ -23,6 +24,8 @@ public:
     static void SetLogLevel(int level);
     static void SetLogLevel(LogLevel level);
     static void Log(LogLevel level, const std::string & message);
+    static void Log(LogLevel level, std::string_view message);
+    static void Log(LogLevel level, const char * message);
 
 private:
     static LogLevel NormalizeLevel(LogLevel level);

@@ -27,17 +27,18 @@ void Logger::SetLogLevel(LogLevel level)
 void Logger::Log(LogLevel level, const std::string & message)
 {
     const auto normalized_level{ NormalizeLevel(level) };
-    std::lock_guard<std::mutex> lock(m_stream_mutex);
+    const auto current_level{ m_current_level.load() };
 
     if (normalized_level != level)
     {
-        if (normalized_level > m_current_level.load()) return;
+        std::lock_guard<std::mutex> lock(m_stream_mutex);
         std::cerr << "[Unknown] " << message << '\n' << std::flush;
         return;
     }
 
-    if (normalized_level > m_current_level.load()) return;
+    if (normalized_level > current_level) return;
 
+    std::lock_guard<std::mutex> lock(m_stream_mutex);
     switch (normalized_level)
     {
         case LogLevel::Error:
@@ -56,4 +57,14 @@ void Logger::Log(LogLevel level, const std::string & message)
             std::cout << "[Debug] " << message << '\n' << std::flush;
             break;
     }
+}
+
+void Logger::Log(LogLevel level, std::string_view message)
+{
+    Log(level, std::string{ message });
+}
+
+void Logger::Log(LogLevel level, const char * message)
+{
+    Log(level, std::string_view{ message });
 }

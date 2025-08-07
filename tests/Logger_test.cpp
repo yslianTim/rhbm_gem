@@ -182,20 +182,34 @@ TEST(LoggerTest, InfoLogsAppearOnSeparateLines)
     Logger::SetLogLevel(LogLevel::Info);
 }
 
-TEST(LoggerTest, UnknownNegativeLevelSuppressedAtError)
+TEST(LoggerTest, LogAcceptsStringView)
 {
-    Logger::SetLogLevel(LogLevel::Error);
+    Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
-    testing::internal::CaptureStderr();
-    Logger::Log(static_cast<LogLevel>(-1), "msg");
-    const std::string stdout_output{ testing::internal::GetCapturedStdout() };
-    const std::string stderr_output{ testing::internal::GetCapturedStderr() };
-    EXPECT_TRUE(stdout_output.empty());
-    EXPECT_TRUE(stderr_output.empty());
+    std::string_view msg{ "sv_msg" };
+    Logger::Log(LogLevel::Info, msg);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    EXPECT_EQ(std::string("sv_msg\n"), out);
+}
+
+TEST(LoggerTest, UnknownNegativeLevelOutputsUnknownAtAllLevels)
+{
+    for (auto level :
+         { LogLevel::Error, LogLevel::Warning, LogLevel::Notice, LogLevel::Info, LogLevel::Debug })
+    {
+        Logger::SetLogLevel(level);
+        testing::internal::CaptureStdout();
+        testing::internal::CaptureStderr();
+        Logger::Log(static_cast<LogLevel>(-1), "msg");
+        const std::string stdout_output{ testing::internal::GetCapturedStdout() };
+        const std::string stderr_output{ testing::internal::GetCapturedStderr() };
+        EXPECT_TRUE(stdout_output.empty());
+        EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output);
+    }
     Logger::SetLogLevel(LogLevel::Info);
 }
 
-TEST(LoggerTest, UnknownLevelRespectsCurrentLevel)
+TEST(LoggerTest, UnknownLevelAlwaysLogs)
 {
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
@@ -213,7 +227,7 @@ TEST(LoggerTest, UnknownLevelRespectsCurrentLevel)
     const std::string stdout_output2{ testing::internal::GetCapturedStdout() };
     const std::string stderr_output2{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(stdout_output2.empty());
-    EXPECT_TRUE(stderr_output2.empty());
+    EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output2);
     Logger::SetLogLevel(LogLevel::Info);
 }
 
