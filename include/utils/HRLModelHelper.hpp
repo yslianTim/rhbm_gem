@@ -140,18 +140,18 @@ public:
 
     void SetDataArray(const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array);
     void RunEstimation(double alpha_r, double alpha_g);
-    void SetMaximumIteration(unsigned int size) { m_maximum_iteration = static_cast<int>(size); }
-    void SetTolerance(double value) { m_tolerance = value; }
-    bool GetOutlierFlag(int id) const { return m_outlier_flag_array(id); }
-    double GetStatisticalDistance(int id) const { return m_statistical_distance_array(id); }
-    const Eigen::MatrixXd & GetCapitalSigmaMatrixPosterior(int id) const { return m_capital_sigma_posterior_list.at(static_cast<size_t>(id)); }
+    void SetMaximumIteration(unsigned int size);
+    void SetTolerance(double value);
+    bool GetOutlierFlag(int id) const;
+    double GetStatisticalDistance(int id) const;
+    const Eigen::MatrixXd & GetCapitalSigmaMatrixPosterior(int id) const;
     const Eigen::MatrixXd & GetCapitalLambdaMatrix(void) const { return m_capital_lambda; }
     const Eigen::VectorXd & GetMuVectorPrior(void) const { return m_mu_prior; }
     const Eigen::VectorXd & GetMuVectorMDPDE(void) const { return m_mu_MDPDE; }
     const Eigen::VectorXd & GetMuVectorMean(void) const { return m_mu_mean; }
-    Eigen::VectorXd GetBetaMatrixPosterior(int id) const { return m_beta_posterior_array.col(id); }
-    Eigen::VectorXd GetBetaMatrixMDPDE(int id) const { return m_beta_MDPDE_array.col(id); }
-    Eigen::VectorXd GetBetaMatrixOLS(int id) const { return m_beta_OLS_array.col(id); }
+    Eigen::VectorXd GetBetaMatrixPosterior(int id) const;
+    Eigen::VectorXd GetBetaMatrixMDPDE(int id) const;
+    Eigen::VectorXd GetBetaMatrixOLS(int id) const;
 
 private:
     void Initialization(void);

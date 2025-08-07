@@ -56,7 +56,7 @@ void HRLModelHelper::SetDataArray(
     int data_array_size{ static_cast<int>(data_array.size()) };
     if (data_array_size != m_member_size)
     {
-        throw std::runtime_error("The input size of data list isn't consistent with member size.");
+        throw std::invalid_argument("The input size of data list isn't consistent with member size.");
     }
 
     m_data_size_list.clear();
@@ -66,13 +66,17 @@ void HRLModelHelper::SetDataArray(
     for (auto & [member_data, member_info] : data_array)
     {
         auto data_size{ static_cast<int>(member_data.size()) };
+        if (data_size == 0)
+        {
+            throw std::invalid_argument("Member dataset must not be empty.");
+        }
         MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
         VectorXd y_data_vector{ VectorXd::Zero(data_size) };
         for (int i = 0; i < data_size; i++)
         {
             if (member_data.at(static_cast<size_t>(i)).size() != m_basis_size + 1)
             {
-                throw std::runtime_error("The input data size isn't consistent with basis size.");
+                throw std::invalid_argument("The input data size isn't consistent with basis size.");
             }
             for (int j = 0; j < m_basis_size; j++)
             {
@@ -87,11 +91,29 @@ void HRLModelHelper::SetDataArray(
     }
 }
 
+void HRLModelHelper::SetMaximumIteration(unsigned int size)
+{
+    if (size == 0)
+    {
+        throw std::invalid_argument("size must be greater than 0");
+    }
+    m_maximum_iteration = static_cast<int>(size);
+}
+
+void HRLModelHelper::SetTolerance(double value)
+{
+    if (value < 0.0)
+    {
+        throw std::invalid_argument("tolerance must be non-negative");
+    }
+    m_tolerance = value;
+}
+
 void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
 {
-    if (alpha_r < 0.0 || alpha_g < 0.0)
+    if (!std::isfinite(alpha_r) || !std::isfinite(alpha_g) || alpha_r < 0.0 || alpha_g < 0.0)
     {
-        throw std::invalid_argument("Alpha parameters must be non-negative.");
+        throw std::invalid_argument("Alpha parameters must be finite and non-negative.");
     }
 
     if (m_data_size_list.size() != static_cast<size_t>(m_member_size))
@@ -109,6 +131,15 @@ void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
 
 void HRLModelHelper::Initialization(void)
 {
+    // Reset scalars and arrays to their default values
+    m_capital_lambda = MatrixXd::Identity(m_basis_size, m_basis_size);
+    m_omega_sum = 0.0;
+    m_omega_h = 0.0;
+    m_sigma_square_array = ArrayXd::Ones(m_member_size);
+    m_omega_array = ArrayXd::Ones(m_member_size);
+    m_statistical_distance_array = ArrayXd::Zero(m_member_size);
+    m_outlier_flag_array = ArrayXb::Constant(m_member_size, false);
+
     // Empty the containers of matrix objects
     m_W_list.clear();
     m_capital_sigma_list.clear();
@@ -334,4 +365,58 @@ void HRLModelHelper::LabelOutlierMember(void)
     m_outlier_flag_array = (m_statistical_distance_array > quantile);
 
     //m_outlier_flag_array = ((m_omega_array/m_omega_sum) < 0.05/static_cast<double>(m_member_size));
+}
+
+bool HRLModelHelper::GetOutlierFlag(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_outlier_flag_array(id); 
+}
+
+double HRLModelHelper::GetStatisticalDistance(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_statistical_distance_array(id);
+}
+
+const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_capital_sigma_posterior_list.at(static_cast<size_t>(id));
+}
+
+Eigen::VectorXd HRLModelHelper::GetBetaMatrixPosterior(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_beta_posterior_array.col(id);
+}
+
+Eigen::VectorXd HRLModelHelper::GetBetaMatrixMDPDE(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_beta_MDPDE_array.col(id);
+}
+
+Eigen::VectorXd HRLModelHelper::GetBetaMatrixOLS(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_beta_OLS_array.col(id);
 }

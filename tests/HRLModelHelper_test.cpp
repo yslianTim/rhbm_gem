@@ -4,6 +4,7 @@
 #include <vector>
 #include <tuple>
 #include <cmath>
+#include <limits>
 
 #include "HRLModelHelper.hpp"
 #include "Logger.hpp"
@@ -38,6 +39,18 @@ TEST(HRLModelHelperTest, ThrowsOnNonPositiveMemberSize)
 {
     EXPECT_THROW(HRLModelHelper(1, 0), std::invalid_argument);
     EXPECT_THROW(HRLModelHelper(1, -1), std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, SetMaximumIterationRejectsZero)
+{
+    HRLModelHelper helper{ 1, 1 };
+    EXPECT_THROW(helper.SetMaximumIteration(0), std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, ThrowsOnNegativeTolerance)
+{
+    HRLModelHelper helper{1, 1};
+    EXPECT_THROW(helper.SetTolerance(-1.0), std::invalid_argument);
 }
 
 TEST(HRLModelHelperTest, DefaultInitializationValues)
@@ -106,7 +119,7 @@ TEST(HRLModelHelperTest, ThrowsWhenMemberSizeMismatch)
     data_array.emplace_back(member1, "m1");
     data_array.emplace_back(member2, "m2");
 
-    EXPECT_THROW(helper.SetDataArray(data_array), std::runtime_error);
+    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
 }
 
 TEST(HRLModelHelperTest, ThrowsWhenSampleVectorSizeMismatch)
@@ -118,7 +131,16 @@ TEST(HRLModelHelperTest, ThrowsWhenSampleVectorSizeMismatch)
     std::vector<Eigen::VectorXd> member{ bad_sample };
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(member, "member1");
-    EXPECT_THROW(helper.SetDataArray(data_array), std::runtime_error);
+    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, ThrowsWhenMemberDataEmpty)
+{
+    HRLModelHelper helper{ 1, 1 };
+    std::vector<Eigen::VectorXd> empty_member;
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
+    data_array.emplace_back(empty_member, "member1");
+    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
 }
 
 TEST(HRLModelHelperTest, ThrowsWhenDataArrayNotSet)
@@ -137,6 +159,38 @@ TEST(HRLModelHelperTest, ThrowsWhenAlphaGIsNegative)
 {
     HRLModelHelper helper{ 1, 1 };
     EXPECT_THROW(helper.RunEstimation(0.0, -0.1), std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, ThrowsWhenAlphaRIsNotFinite)
+{
+    HRLModelHelper helper{ 1, 1 };
+    EXPECT_THROW(helper.RunEstimation(std::numeric_limits<double>::infinity(), 0.0),
+                 std::invalid_argument);
+    EXPECT_THROW(helper.RunEstimation(std::numeric_limits<double>::quiet_NaN(), 0.0),
+                 std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, GettersThrowOnInvalidId)
+{
+    const int basis_size{ 1 };
+    const int member_size{ 1 };
+    HRLModelHelper helper{ basis_size, member_size };
+
+    const int invalid_id{ member_size };
+    EXPECT_THROW(helper.GetOutlierFlag(invalid_id), std::out_of_range);
+    EXPECT_THROW(helper.GetStatisticalDistance(invalid_id), std::out_of_range);
+    EXPECT_THROW(helper.GetCapitalSigmaMatrixPosterior(invalid_id), std::out_of_range);
+    EXPECT_THROW(helper.GetBetaMatrixPosterior(invalid_id), std::out_of_range);
+    EXPECT_THROW(helper.GetBetaMatrixMDPDE(invalid_id), std::out_of_range);
+    EXPECT_THROW(helper.GetBetaMatrixOLS(invalid_id), std::out_of_range);
+
+    const int negative_id{ -1 };
+    EXPECT_THROW(helper.GetOutlierFlag(negative_id), std::out_of_range);
+    EXPECT_THROW(helper.GetStatisticalDistance(negative_id), std::out_of_range);
+    EXPECT_THROW(helper.GetCapitalSigmaMatrixPosterior(negative_id), std::out_of_range);
+    EXPECT_THROW(helper.GetBetaMatrixPosterior(negative_id), std::out_of_range);
+    EXPECT_THROW(helper.GetBetaMatrixMDPDE(negative_id), std::out_of_range);
+    EXPECT_THROW(helper.GetBetaMatrixOLS(negative_id), std::out_of_range);
 }
 
 TEST(HRLModelHelperTest, EstimationOnSmallSyntheticData)
