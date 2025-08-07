@@ -67,6 +67,7 @@ TEST(HRLModelHelperTest, AcceptsProperlySizedData)
     data_array.emplace_back(member_data, "member1");
     ASSERT_NO_THROW(helper.SetDataArray(data_array));
     helper.RunEstimation(0.0, 0.0);
+    EXPECT_TRUE(helper.GetCapitalLambdaMatrix().isApprox(Eigen::MatrixXd::Zero(1, 1)));
 
     Eigen::VectorXd beta{ helper.GetBetaMatrixMDPDE(0) };
     ASSERT_EQ(beta.size(), 1);
@@ -75,6 +76,7 @@ TEST(HRLModelHelperTest, AcceptsProperlySizedData)
     Eigen::VectorXd mu{ helper.GetMuVectorMDPDE() };
     ASSERT_EQ(mu.size(), 1);
     EXPECT_NEAR(mu(0), 2.4, 1e-9);
+    EXPECT_TRUE(mu.isApprox(beta));
 
     Eigen::VectorXd mu_prior{ helper.GetMuVectorPrior() };
     ASSERT_EQ(mu_prior.size(), 1);
@@ -146,6 +148,29 @@ TEST(HRLModelHelperTest, EstimationOnSmallSyntheticData)
     ASSERT_NEAR(expected(1), mu_mean(1), 1.0e-6);
 }
 
+TEST(HRLModelHelperTest, PosteriorSigmaMatrixIsSymmetricPositive)
+{
+    auto member0{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 6.0}}, "member_0") };
+    auto member1{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 6.0}}, "member_1") };
+    std::vector<DataTuple> data_array{ member0, member1 };
+    const int basis_size{ 2 };
+    const int member_size{ 2 };
+    HRLModelHelper helper(basis_size, member_size);
+    helper.SetDataArray(data_array);
+    helper.RunEstimation(0.0, 0.0);
+    for (int i = 0; i < member_size; ++i)
+    {
+        const auto & sigma{ helper.GetCapitalSigmaMatrixPosterior(i) };
+        ASSERT_EQ(basis_size, sigma.rows());
+        ASSERT_EQ(basis_size, sigma.cols());
+        EXPECT_TRUE(sigma.isApprox(sigma.transpose()));
+        for (int j = 0; j < basis_size; ++j)
+        {
+            EXPECT_GT(sigma(j, j), 0.0);
+        }
+    }
+}
+
 TEST(HRLModelHelperTest, OutlierFlagsWithDivergentData)
 {
     auto member0{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 6.0}}, "member_0") };
@@ -191,6 +216,27 @@ TEST(HRLModelHelperTest, OutlierFlagsWithDivergentData)
         EXPECT_TRUE(std::isfinite(helper.GetStatisticalDistance(i)));
         EXPECT_FALSE(helper.GetOutlierFlag(i));
     }
+}
+
+TEST(HRLModelHelperTest, AlphaGReweightsOutliers)
+{
+    auto inlier0{ CreateMember({{0.0, 1.0}, {1.0, 2.0}, {2.0, 3.0}}, "inlier_0") };
+    auto inlier1{ CreateMember({{0.0, 1.0}, {1.0, 2.0}, {2.0, 3.0}}, "inlier_1") };
+    auto outlier{ CreateMember({{0.0, 10.0}, {1.0, 20.0}, {2.0, 30.0}}, "outlier") };
+    std::vector<DataTuple> data_array{inlier0, inlier1, outlier};
+
+    HRLModelHelper helper(2, 3);
+    helper.SetDataArray(data_array);
+    helper.RunEstimation(0.0, 0.0);
+    Eigen::VectorXd mu_prior_initial{ helper.GetMuVectorPrior() };
+    helper.RunEstimation(0.0, 0.5);
+    Eigen::VectorXd mu_prior_reweighted{ helper.GetMuVectorPrior() };
+    Eigen::VectorXd inlier_mean(2);
+    inlier_mean << 1.0, 1.0;
+
+    double dist_initial{ (mu_prior_initial - inlier_mean).norm() };
+    double dist_reweighted{ (mu_prior_reweighted - inlier_mean).norm() };
+    EXPECT_LT(dist_reweighted, dist_initial);
 }
 
 class HRLModelHelperFixture : public ::testing::Test
