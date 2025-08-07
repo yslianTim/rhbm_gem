@@ -75,6 +75,16 @@ double ComputeSingleGausUser(double distance, double amplitude, double width)
     return amplitude * std::pow(2.0 * PI * sigma_square, -1.5) *
            std::exp(exp_index);
 }
+
+double ComputeFiveGausChargeDeltaTerm(double distance, double charge, double blurring_width)
+{
+    double bw{ blurring_width };
+    if (bw == 0.0) return F_1 * charge / distance;
+    if (bw <= 1.0e-5) bw = 1.0e-5;
+    if (distance > 3.0) return 0.0;
+    if (distance < 1.0e-5) return F_1 * charge * std::sqrt(2.0 / PI) / bw;
+    return F_1 * charge / distance * std::erf(distance / bw / std::sqrt(2.0));
+}
 } // namespace
 
 TEST(ElectricPotentialTest, SetModelChoiceSelectsModel)
@@ -112,6 +122,29 @@ TEST(ElectricPotentialTest, SetModelChoiceSelectsModel)
     EXPECT_DOUBLE_EQ(expected_single_gaus_user, actual_single_gaus_user);
 }
 
+TEST(ElectricPotentialTest, DefaultConstructorSetsExpectedState)
+{
+    ElectricPotential potential; // uses default SINGLE_GAUS model and blurring width 0.5
+
+    constexpr double distance{ 1.0 };
+    const Element element{ Element::CARBON };
+
+    // Value calculated by the model under test using defaults
+    double computed{ potential.GetPotentialValue(element, distance, 0.0) };
+
+    // Expected value computed independently using blurring width 0.5
+    int atomic_number{ AtomicInfoHelper::GetAtomicNumber(element) };
+    double inv_atomic_number{ 1.0 / static_cast<double>(atomic_number) };
+    double sigma_total_square{ inv_atomic_number * inv_atomic_number + 0.5 * 0.5 };
+    double distance_square{ distance * distance };
+    double exp_index{ -distance_square / (2.0 * sigma_total_square) };
+    double expected{
+        std::pow(2.0 * M_PI * sigma_total_square, -1.5) * std::exp(exp_index)
+    };
+
+    EXPECT_NEAR(expected, computed, 1e-12);
+}
+
 TEST(ElectricPotentialTest, SingleGaussianCarbon)
 {
     ElectricPotential potential;
@@ -140,7 +173,6 @@ TEST(ElectricPotentialTest, SingleGaussianCarbon)
 TEST(ElectricPotentialTest, ReturnsKnownParameterListsForCarbon)
 {
     ElectricPotential ep;
-
     const std::array<double, 5> expected_a0{ 0.0489, 0.2091, 0.7537, 1.1420, 0.3555 };
     EXPECT_EQ(expected_a0, ep.GetModelParameterAList(Element::CARBON, 0));
 
@@ -167,6 +199,15 @@ TEST(ElectricPotentialTest, UnsupportedElementThrows)
     EXPECT_THROW(ep.GetModelParameterBList(Element::ALUMINUM, 0), std::out_of_range);
 }
 
+TEST(ElectricPotentialTest, UnsupportedElementPositiveNegativeThrows)
+{
+    ElectricPotential ep;
+    EXPECT_THROW(ep.GetModelParameterAList(Element::ALUMINUM, 1), std::out_of_range);
+    EXPECT_THROW(ep.GetModelParameterBList(Element::ALUMINUM, 1), std::out_of_range);
+    EXPECT_THROW(ep.GetModelParameterAList(Element::ALUMINUM, -1), std::out_of_range);
+    EXPECT_THROW(ep.GetModelParameterBList(Element::ALUMINUM, -1), std::out_of_range);
+}
+
 TEST(ElectricPotentialTest, InvalidDeltaZThrows)
 {
     ElectricPotential ep;
@@ -179,3 +220,68 @@ TEST(ElectricPotentialTest, SetModelChoiceThrowsOnInvalidValue)
     ElectricPotential potential;
     EXPECT_THROW(potential.SetModelChoice(3), std::out_of_range);
 }
+
+TEST(ElectricPotentialTest, NegativeChargeFiveGaus)
+{
+    ElectricPotential potential;
+    potential.SetBlurringWidth(0.0);
+    potential.SetModelChoice(1); // ModelChoice::FIVE_GAUS_CHARGE
+    const double expected{
+        ComputeFiveGausCharge(potential, Element::CARBON, 1.0, -1.0, 0.0)
+    };
+    const double actual{
+        potential.GetPotentialValue(Element::CARBON, 1.0, -1.0)
+    };
+    EXPECT_DOUBLE_EQ(expected, actual);
+}
+
+using FiveGausChargeDeltaTermPair = std::pair<double, double>;
+
+class FiveGausChargeDeltaTermTest : public ::testing::Test,
+                                   public ::testing::WithParamInterface<FiveGausChargeDeltaTermPair>
+{
+};
+
+TEST_P(FiveGausChargeDeltaTermTest, ComputesExpectedDeltaTerm)
+{
+    const auto [blurring_width, distance]{ GetParam() };
+    ElectricPotential potential;
+    potential.SetModelChoice(1); // FIVE_GAUS_CHARGE
+    potential.SetBlurringWidth(blurring_width);
+
+    const Element element{ Element::CARBON };
+    constexpr double charge{ 1.0 };
+
+    const double expected{
+        ComputeFiveGausChargeDeltaTerm(distance, charge, blurring_width)
+    };
+
+    const double with_charge{
+        potential.GetPotentialValue(element, distance, charge)
+    };
+    const double without_charge{
+        potential.GetPotentialValue(element, distance, 0.0)
+    };
+
+    const double intrinsic_p{
+        ComputeFiveGausChargeIntrinsicTerm(potential, element, distance, 1, blurring_width)
+    };
+    const double intrinsic_0{
+        ComputeFiveGausChargeIntrinsicTerm(potential, element, distance, 0, blurring_width)
+    };
+
+    const double delta_actual{
+        (with_charge - without_charge) - (intrinsic_p - intrinsic_0)
+    };
+    EXPECT_NEAR(expected, delta_actual, 1e-12);
+}
+
+INSTANTIATE_TEST_SUITE_P(FiveGausChargeDeltaTermCases, FiveGausChargeDeltaTermTest,
+    ::testing::Values(
+        FiveGausChargeDeltaTermPair{ 0.0,     1.0 },     // blurring_width == 0
+        FiveGausChargeDeltaTermPair{ 1.0e-6,  1.0 },     // blurring_width <= 1e-5
+        FiveGausChargeDeltaTermPair{ 0.5,     4.0 },     // distance > 3.0
+        FiveGausChargeDeltaTermPair{ 0.5,     1.0e-6 },  // distance < 1e-5
+        FiveGausChargeDeltaTermPair{ 0.5,     1.0 }      // general case
+    )
+);
