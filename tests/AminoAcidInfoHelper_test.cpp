@@ -13,7 +13,10 @@ protected:
         m_prev_level = Logger::GetLogLevel();
         Logger::SetLogLevel(LogLevel::Error);
     }
-    void TearDown(void) override { Logger::SetLogLevel(m_prev_level); }
+    void TearDown(void) override
+    {
+        Logger::SetLogLevel(m_prev_level);
+    }
 };
 
 TEST_F(AminoAcidInfoHelperTest, GetAtomCountResidue)

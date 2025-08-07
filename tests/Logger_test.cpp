@@ -182,7 +182,7 @@ TEST(LoggerTest, InfoLogsAppearOnSeparateLines)
     Logger::SetLogLevel(LogLevel::Info);
 }
 
-TEST(LoggerTest, UnknownNegativeLevelLogsAtError)
+TEST(LoggerTest, UnknownNegativeLevelSuppressedAtError)
 {
     Logger::SetLogLevel(LogLevel::Error);
     testing::internal::CaptureStdout();
@@ -191,7 +191,29 @@ TEST(LoggerTest, UnknownNegativeLevelLogsAtError)
     const std::string stdout_output{ testing::internal::GetCapturedStdout() };
     const std::string stderr_output{ testing::internal::GetCapturedStderr() };
     EXPECT_TRUE(stdout_output.empty());
+    EXPECT_TRUE(stderr_output.empty());
+    Logger::SetLogLevel(LogLevel::Info);
+}
+
+TEST(LoggerTest, UnknownLevelRespectsCurrentLevel)
+{
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    Logger::Log(static_cast<LogLevel>(-1), "msg");
+    const std::string stdout_output{ testing::internal::GetCapturedStdout() };
+    const std::string stderr_output{ testing::internal::GetCapturedStderr() };
+    EXPECT_TRUE(stdout_output.empty());
     EXPECT_EQ(std::string("[Unknown] msg\n"), stderr_output);
+
+    Logger::SetLogLevel(LogLevel::Error);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    Logger::Log(static_cast<LogLevel>(-1), "msg");
+    const std::string stdout_output2{ testing::internal::GetCapturedStdout() };
+    const std::string stderr_output2{ testing::internal::GetCapturedStderr() };
+    EXPECT_TRUE(stdout_output2.empty());
+    EXPECT_TRUE(stderr_output2.empty());
     Logger::SetLogLevel(LogLevel::Info);
 }
 

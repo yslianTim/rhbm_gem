@@ -26,16 +26,19 @@ void Logger::SetLogLevel(LogLevel level)
 
 void Logger::Log(LogLevel level, const std::string & message)
 {
-    if (level < LogLevel::Error || level > LogLevel::Debug)
+    const auto normalized_level{ NormalizeLevel(level) };
+    std::lock_guard<std::mutex> lock(m_stream_mutex);
+
+    if (normalized_level != level)
     {
-        std::cerr << "[Unknown] " << message << std::endl;
+        if (normalized_level > m_current_level.load()) return;
+        std::cerr << "[Unknown] " << message << '\n' << std::flush;
         return;
     }
 
-    std::lock_guard<std::mutex> lock(m_stream_mutex);
-    if (level > m_current_level.load()) return;
+    if (normalized_level > m_current_level.load()) return;
 
-    switch (level)
+    switch (normalized_level)
     {
         case LogLevel::Error:
             std::cerr << "[Error] " << message << '\n' << std::flush;
@@ -44,13 +47,13 @@ void Logger::Log(LogLevel level, const std::string & message)
             std::cerr << "[Warning] " << message << '\n' << std::flush;
             break;
         case LogLevel::Notice:
-            std::cout << "[Notice] " << message << '\n';
+            std::cout << "[Notice] " << message << '\n' << std::flush;
             break;
         case LogLevel::Info:
-            std::cout << message << '\n';
+            std::cout << message << '\n' << std::flush;
             break;
         case LogLevel::Debug:
-            std::cout << "[Debug] " << message << '\n';
+            std::cout << "[Debug] " << message << '\n' << std::flush;
             break;
     }
 }
