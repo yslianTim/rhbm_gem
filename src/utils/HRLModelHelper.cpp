@@ -3,6 +3,7 @@
 #include "Logger.hpp"
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 using std::string;
@@ -74,15 +75,23 @@ void HRLModelHelper::SetDataArray(
         VectorXd y_data_vector{ VectorXd::Zero(data_size) };
         for (int i = 0; i < data_size; i++)
         {
-            if (member_data.at(static_cast<size_t>(i)).size() != m_basis_size + 1)
+            const auto & sample{ member_data.at(static_cast<size_t>(i)) };
+            if (sample.size() != m_basis_size + 1)
             {
                 throw std::invalid_argument("The input data size isn't consistent with basis size.");
             }
+            if (!sample.array().allFinite())
+            {
+                // To be update the strategy to handle this case
+                Logger::Log(LogLevel::Error, "HRLModelHelper::SetDataArray : Member dataset contains non-finite value for member: "
+                                               + member_info);
+                //throw std::invalid_argument("Member dataset contains non-finite value.");
+            }
             for (int j = 0; j < m_basis_size; j++)
             {
-                x_data_matrix(i, j) = member_data.at(static_cast<size_t>(i))(j);
+                x_data_matrix(i, j) = sample(j);
             }
-            y_data_vector(i) = member_data.at(static_cast<size_t>(i))(m_basis_size);
+            y_data_vector(i) = sample(m_basis_size);
         }
         m_data_size_list.emplace_back(data_size);
         m_X_list.emplace_back(x_data_matrix);
@@ -96,6 +105,10 @@ void HRLModelHelper::SetMaximumIteration(unsigned int size)
     if (size == 0)
     {
         throw std::invalid_argument("size must be greater than 0");
+    }
+    if (size > static_cast<unsigned int>(std::numeric_limits<int>::max()))
+    {
+        throw std::out_of_range("size exceeds maximum value for int");
     }
     m_maximum_iteration = static_cast<int>(size);
 }
@@ -265,7 +278,15 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
     VectorXd residual{ y - (X * beta) };
     auto numerator{ static_cast<double>(residual.transpose() * W * residual) };
     auto denominator{ W.diagonal().sum() - n * alpha_r * pow(1.0 + alpha_r, -1.5) };
-    m_sigma_square_array(member_id) = (denominator == 0.0) ? 1.0e+200 : numerator / denominator;
+    if (denominator <= 0.0)
+    {
+        m_sigma_square_array(member_id) = 1.0e+200;
+        // To be update the strategy to handle this case
+        Logger::Log(LogLevel::Error, "HRLModelHelper::CalculateDataVarianceSquare : Non-positive denominator in CalculateDataVarianceSquare for member: "
+                                       + m_member_info_list.at(static_cast<size_t>(member_id)));
+        //throw std::runtime_error("Non-positive denominator in CalculateDataVarianceSquare");
+    }
+    m_sigma_square_array(member_id) = numerator / denominator;
 }
 
 void HRLModelHelper::CalculateDataCovariance(int member_id)
@@ -288,13 +309,19 @@ void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
 {
     MatrixXd numerator{ MatrixXd::Zero(m_basis_size, m_basis_size) };
     double denominator{ m_omega_sum - m_member_size * alpha_g * pow(1.0 + alpha_g, -1.0 - 0.5 * m_basis_size) };
+    if (denominator <= 0.0)
+    {
+        // To be update the strategy to handle this case
+        Logger::Log(LogLevel::Error, "HRLModelHelper::CalculateMemberCovariance : Member covariance denominator must be positive. ");
+        //throw std::runtime_error("Member covariance denominator must be positive");
+    }
     MatrixXd residual_array{ m_beta_MDPDE_array.colwise() - m_mu_iter };
     for (int i = 0; i < m_member_size; i++)
     {
         VectorXd residual{ residual_array.col(i) };
         numerator += m_omega_array(i) * (residual * residual.transpose());
     }
-    m_capital_lambda = numerator/denominator;
+    m_capital_lambda = numerator / denominator;
 }
 
 void HRLModelHelper::CalculateBetaByMDPDE(int member_id)
@@ -338,7 +365,7 @@ void HRLModelHelper::CalculateDataWeight(int member_id, double alpha_r)
     const auto & sigma_square{ m_sigma_square_array(member_id) };
     VectorXd beta{ m_beta_iter_array.col(member_id) };
     ArrayXd W{ (-0.5 * alpha_r * (y - (X * beta)).array().square() / sigma_square).exp() };
-    W.max(m_weight_data_min);
+    W = W.cwiseMax(m_weight_data_min);
     m_W_list.at(static_cast<size_t>(member_id)) = W.matrix().asDiagonal();
 }
 

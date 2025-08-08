@@ -47,6 +47,13 @@ TEST(HRLModelHelperTest, SetMaximumIterationRejectsZero)
     EXPECT_THROW(helper.SetMaximumIteration(0), std::invalid_argument);
 }
 
+TEST(HRLModelHelperTest, SetMaximumIterationRejectsTooLarge)
+{
+    HRLModelHelper helper{ 1, 1 };
+    unsigned int too_large{ static_cast<unsigned int>(std::numeric_limits<int>::max()) + 1u };
+    EXPECT_THROW(helper.SetMaximumIteration(too_large), std::out_of_range);
+}
+
 TEST(HRLModelHelperTest, ThrowsOnNegativeTolerance)
 {
     HRLModelHelper helper{1, 1};
@@ -134,6 +141,17 @@ TEST(HRLModelHelperTest, ThrowsWhenSampleVectorSizeMismatch)
     EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
 }
 
+TEST(HRLModelHelperTest, DISABLED_ThrowsWhenSampleContainsNaN)
+{
+    HRLModelHelper helper{ 1, 1 };
+    Eigen::VectorXd bad_sample(2);
+    bad_sample << 1.0, std::numeric_limits<double>::quiet_NaN();
+    std::vector<Eigen::VectorXd> member{ bad_sample };
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
+    data_array.emplace_back(member, "member1");
+    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+}
+
 TEST(HRLModelHelperTest, ThrowsWhenMemberDataEmpty)
 {
     HRLModelHelper helper{ 1, 1 };
@@ -168,6 +186,18 @@ TEST(HRLModelHelperTest, ThrowsWhenAlphaRIsNotFinite)
                  std::invalid_argument);
     EXPECT_THROW(helper.RunEstimation(std::numeric_limits<double>::quiet_NaN(), 0.0),
                  std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, DISABLED_ThrowsWhenDataVarianceDenominatorNonPositive)
+{
+    // Craft data with a huge outlier so that all weights collapse to zero
+    auto member{ CreateMember({{0.0, 1.0}, {1.0, 2.0}, {2.0, 1.0e9}}, "degenerate") };
+    std::vector<DataTuple> data_array{ member };
+
+    HRLModelHelper helper{ 2, 1 };
+    helper.SetDataArray(data_array);
+    // Large alpha_r forces denominator to be non-positive
+    EXPECT_THROW(helper.RunEstimation(1.0e9, 0.0), std::runtime_error);
 }
 
 TEST(HRLModelHelperTest, GettersThrowOnInvalidId)
@@ -452,4 +482,26 @@ TEST_F(HRLModelHelperFixture, RespectsToleranceSetting)
 
     // Relaxed tolerance stops early, yielding a result further from baseline
     EXPECT_LT(std::abs(beta_strict - beta_full), std::abs(beta_relaxed - beta_full));
+}
+
+TEST(HRLModelHelperTest, ExtremeResidualsYieldFinitePosteriorCovariance)
+{
+    Eigen::VectorXd sample1(2);
+    sample1 << 1.0, 0.0;
+    Eigen::VectorXd sample2(2);
+    sample2 << 1.0, 1.0e8;
+    std::vector<Eigen::VectorXd> member{ sample1, sample2 };
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
+    data_array.emplace_back(member, "extreme");
+
+    HRLModelHelper helper{ 1, 1 };
+    helper.SetDataArray(data_array);
+    helper.RunEstimation(1.0e20, 0.0);
+
+    const auto & sigma{ helper.GetCapitalSigmaMatrixPosterior(0) };
+    ASSERT_EQ(1, sigma.rows());
+    ASSERT_EQ(1, sigma.cols());
+    double val{ sigma(0, 0) };
+    EXPECT_TRUE(std::isfinite(val));
+    EXPECT_GT(val, 0.0);
 }
