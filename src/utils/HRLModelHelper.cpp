@@ -83,8 +83,9 @@ void HRLModelHelper::SetDataArray(
             if (!sample.array().allFinite())
             {
                 // To be update the strategy to handle this case
-                Logger::Log(LogLevel::Error, "HRLModelHelper::SetDataArray : Member dataset contains non-finite value for member: "
-                                               + member_info);
+                Logger::Log(LogLevel::Error,
+                    "HRLModelHelper::SetDataArray : Member dataset contains non-finite value for member: "
+                    + member_info);
                 //throw std::invalid_argument("Member dataset contains non-finite value.");
             }
             for (int j = 0; j < m_basis_size; j++)
@@ -115,6 +116,10 @@ void HRLModelHelper::SetMaximumIteration(unsigned int size)
 
 void HRLModelHelper::SetTolerance(double value)
 {
+    if (!std::isfinite(value))
+    {
+        throw std::invalid_argument("tolerance must be finite");
+    }
     if (value < 0.0)
     {
         throw std::invalid_argument("tolerance must be non-negative");
@@ -207,6 +212,8 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
 {
     if (m_member_size == 1)
     {
+        Logger::Log(LogLevel::Info,
+                    "HRLModelHelper::AlgorithmMuMDPDE : Only one member is present, using OLS estimate for Mu MDPDE.");
         m_mu_MDPDE = m_beta_MDPDE_array.col(0);
         m_capital_lambda = MatrixXd::Zero(m_basis_size, m_basis_size);
         m_capital_lambda_list.at(0) = m_capital_lambda;
@@ -264,7 +271,12 @@ void HRLModelHelper::AlgorithmWEB(void)
     }
     MatrixXd inv_denominator{ EigenMatrixUtility::GetInverseMatrix(denominator) };
     m_mu_prior = inv_denominator * numerator;
-    if (m_member_size == 1) m_mu_prior = m_beta_MDPDE_array.col(0);
+    if (m_member_size == 1)
+    {
+        Logger::Log(LogLevel::Info,
+                    "HRLModelHelper::AlgorithmWEB : Only one member is present, using MDPDE estimate for Mu prior.");
+        m_mu_prior = m_beta_MDPDE_array.col(0);
+    }
     if (m_member_size == 2) m_mu_prior = m_mu_MDPDE;
 }
 
@@ -278,13 +290,13 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
     VectorXd residual{ y - (X * beta) };
     auto numerator{ static_cast<double>(residual.transpose() * W * residual) };
     auto denominator{ W.diagonal().sum() - n * alpha_r * pow(1.0 + alpha_r, -1.5) };
-    if (denominator <= 0.0)
+    if (denominator == 0.0)
     {
         m_sigma_square_array(member_id) = 1.0e+200;
-        // To be update the strategy to handle this case
-        Logger::Log(LogLevel::Error, "HRLModelHelper::CalculateDataVarianceSquare : Non-positive denominator in CalculateDataVarianceSquare for member: "
-                                       + m_member_info_list.at(static_cast<size_t>(member_id)));
-        //throw std::runtime_error("Non-positive denominator in CalculateDataVarianceSquare");
+        Logger::Log(LogLevel::Info,
+            "HRLModelHelper::CalculateDataVarianceSquare : Zero denominator in CalculateDataVarianceSquare for member: "
+            + m_member_info_list.at(static_cast<size_t>(member_id)));
+        return;
     }
     m_sigma_square_array(member_id) = numerator / denominator;
 }
@@ -309,11 +321,11 @@ void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
 {
     MatrixXd numerator{ MatrixXd::Zero(m_basis_size, m_basis_size) };
     double denominator{ m_omega_sum - m_member_size * alpha_g * pow(1.0 + alpha_g, -1.0 - 0.5 * m_basis_size) };
-    if (denominator <= 0.0)
+    if (denominator == 0.0)
     {
-        // To be update the strategy to handle this case
-        Logger::Log(LogLevel::Error, "HRLModelHelper::CalculateMemberCovariance : Member covariance denominator must be positive. ");
-        //throw std::runtime_error("Member covariance denominator must be positive");
+        denominator = 1.0e-10; // Avoid division by zero
+        Logger::Log(LogLevel::Info,
+            "HRLModelHelper::CalculateMemberCovariance : Member covariance denominator is zero.");
     }
     MatrixXd residual_array{ m_beta_MDPDE_array.colwise() - m_mu_iter };
     for (int i = 0; i < m_member_size; i++)

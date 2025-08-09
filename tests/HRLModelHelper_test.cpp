@@ -60,6 +60,15 @@ TEST(HRLModelHelperTest, ThrowsOnNegativeTolerance)
     EXPECT_THROW(helper.SetTolerance(-1.0), std::invalid_argument);
 }
 
+TEST(HRLModelHelperTest, SetToleranceRejectsNonFinite)
+{
+    HRLModelHelper helper{1, 1};
+    EXPECT_THROW(helper.SetTolerance(std::numeric_limits<double>::infinity()),
+                 std::invalid_argument);
+    EXPECT_THROW(helper.SetTolerance(std::numeric_limits<double>::quiet_NaN()),
+                 std::invalid_argument);
+}
+
 TEST(HRLModelHelperTest, DefaultInitializationValues)
 {
     const int basis_size{ 2 };
@@ -185,6 +194,15 @@ TEST(HRLModelHelperTest, ThrowsWhenAlphaRIsNotFinite)
     EXPECT_THROW(helper.RunEstimation(std::numeric_limits<double>::infinity(), 0.0),
                  std::invalid_argument);
     EXPECT_THROW(helper.RunEstimation(std::numeric_limits<double>::quiet_NaN(), 0.0),
+                 std::invalid_argument);
+}
+
+TEST(HRLModelHelperTest, ThrowsWhenAlphaGIsNotFinite)
+{
+    HRLModelHelper helper{ 1, 1 };
+    EXPECT_THROW(helper.RunEstimation(0.0, std::numeric_limits<double>::infinity()),
+                 std::invalid_argument);
+    EXPECT_THROW(helper.RunEstimation(0.0, std::numeric_limits<double>::quiet_NaN()),
                  std::invalid_argument);
 }
 
