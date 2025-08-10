@@ -124,6 +124,31 @@ TEST(HRLModelHelperTest, AcceptsProperlySizedData)
     EXPECT_NEAR(mu_prior(0), 2.4, 1e-9);
 }
 
+TEST(HRLModelHelperTest, SingleMemberDoesNotInvertCovariance)
+{
+    HRLModelHelper helper{ 1, 1 };
+    std::vector<Eigen::VectorXd> member_data;
+    Eigen::VectorXd sample1(2);
+    sample1 << 1.0, 2.0;
+    Eigen::VectorXd sample2(2);
+    sample2 << 2.0, 5.0;
+    member_data.emplace_back(sample1);
+    member_data.emplace_back(sample2);
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
+    data_array.emplace_back(member_data, "member1");
+    ASSERT_NO_THROW(helper.SetDataArray(data_array));
+
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    helper.RunEstimation(0.0, 0.0);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    const std::string err{ testing::internal::GetCapturedStderr() };
+
+    EXPECT_NE(std::string::npos, out.find("Only one member is present"));
+    EXPECT_EQ(std::string::npos, err.find("[Warning]"));
+    EXPECT_EQ(std::string::npos, err.find("[Error]"));
+}
+
 TEST(HRLModelHelperTest, ThrowsWhenMemberSizeMismatch)
 {
     HRLModelHelper helper{ 1, 1 };
@@ -249,8 +274,6 @@ TEST(HRLModelHelperTest, EstimationOnSmallSyntheticData)
 
     HRLModelHelper helper(2, 2);
     helper.SetDataArray(data_array);
-    helper.SetMaximumIteration(500);
-    helper.SetTolerance(0.0);
     helper.SetMaximumIteration(500);
     helper.SetTolerance(0.0);
     helper.RunEstimation(0.0, 0.0);

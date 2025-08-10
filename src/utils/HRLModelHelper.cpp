@@ -258,26 +258,38 @@ void HRLModelHelper::AlgorithmWEB(void)
         const auto & X{ m_X_list.at(i) };
         const auto & y{ m_y_list.at(i) };
         auto inv_capital_sigma{ EigenMatrixUtility::GetInverseDiagonalMatrix(m_capital_sigma_list.at(i)) };
-        auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(m_capital_lambda_list.at(i)) };
-        if (m_member_size == 1) inv_capital_lambda = MatrixXd::Zero(m_basis_size, m_basis_size);
+        MatrixXd inv_capital_lambda;
+        if (m_member_size == 1)
+        {
+            inv_capital_lambda = MatrixXd::Zero(m_basis_size, m_basis_size);
+        }
+        else
+        {
+            inv_capital_lambda = EigenMatrixUtility::GetInverseMatrix(m_capital_lambda_list.at(i));
+        }
         MatrixXd gram_matrix{ X.transpose() * inv_capital_sigma * X };
         VectorXd moment_matrix{ X.transpose() * inv_capital_sigma * y };
         MatrixXd inv_capital_sigma_posterior{ gram_matrix + inv_capital_lambda };
         m_capital_sigma_posterior_list.at(i) = EigenMatrixUtility::GetInverseMatrix(inv_capital_sigma_posterior);
         const auto & capital_sigma_posterior{ m_capital_sigma_posterior_list.at(i) };
-        m_beta_posterior_array.col(static_cast<int>(i)) = capital_sigma_posterior * (moment_matrix + inv_capital_lambda * m_mu_MDPDE);
+        m_beta_posterior_array.col(static_cast<int>(i)) =
+            capital_sigma_posterior * (moment_matrix + inv_capital_lambda * m_mu_MDPDE);
         numerator += inv_capital_lambda * capital_sigma_posterior * moment_matrix;
         denominator += inv_capital_lambda * capital_sigma_posterior * gram_matrix;
     }
-    MatrixXd inv_denominator{ EigenMatrixUtility::GetInverseMatrix(denominator) };
-    m_mu_prior = inv_denominator * numerator;
+    
     if (m_member_size == 1)
     {
         Logger::Log(LogLevel::Info,
                     "HRLModelHelper::AlgorithmWEB : Only one member is present, using MDPDE estimate for Mu prior.");
         m_mu_prior = m_beta_MDPDE_array.col(0);
     }
-    if (m_member_size == 2) m_mu_prior = m_mu_MDPDE;
+    else
+    {
+        MatrixXd inv_denominator{ EigenMatrixUtility::GetInverseMatrix(denominator) };
+        m_mu_prior = inv_denominator * numerator;
+        if (m_member_size == 2) m_mu_prior = m_mu_MDPDE;
+    }
 }
 
 void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
