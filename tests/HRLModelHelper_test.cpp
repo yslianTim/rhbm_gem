@@ -114,12 +114,12 @@ TEST(HRLModelHelperTest, DefaultInitializationValues)
     Eigen::MatrixXd expected_lambda{ Eigen::MatrixXd::Identity(basis_size, basis_size) };
     EXPECT_TRUE(helper.GetCapitalLambdaMatrix().isApprox(expected_lambda));
 
-    Eigen::VectorXd expected_mu{ Eigen::VectorXd::Ones(basis_size) };
+    Eigen::VectorXd expected_mu{ Eigen::VectorXd::Zero(basis_size) };
     EXPECT_TRUE(helper.GetMuVectorPrior().isApprox(expected_mu));
     EXPECT_TRUE(helper.GetMuVectorMDPDE().isApprox(expected_mu));
     EXPECT_TRUE(helper.GetMuVectorMean().isApprox(expected_mu));
 
-    Eigen::VectorXd expected_beta{ Eigen::VectorXd::Ones(basis_size) };
+    Eigen::VectorXd expected_beta{ Eigen::VectorXd::Zero(basis_size) };
     for (int member = 0; member < member_size; member++)
     {
         EXPECT_TRUE(helper.GetBetaMatrixOLS(member).isApprox(expected_beta));
@@ -741,6 +741,36 @@ TEST(HRLModelHelperTest, ExtremeResidualsYieldFinitePosteriorCovariance)
     double val{ sigma(0, 0) };
     EXPECT_TRUE(std::isfinite(val));
     EXPECT_GT(val, 0.0);
+}
+
+TEST(HRLModelHelperTest, LargeResidualsClampMemberWeights)
+{
+    // Two members: one normal, one with extremely large response producing
+    // overflow in residual magnitude for member weights.
+    std::vector<Eigen::VectorXd> normal;
+    Eigen::VectorXd n0(2); n0 << 0.0, 0.0; normal.emplace_back(n0);
+    Eigen::VectorXd n1(2); n1 << 1.0, 1.0; normal.emplace_back(n1);
+    std::vector<Eigen::VectorXd> extreme;
+    Eigen::VectorXd e0(2); e0 << 0.0, 0.0; extreme.emplace_back(e0);
+    Eigen::VectorXd e1(2); e1 << 1.0, 1.0e155; extreme.emplace_back(e1);
+    std::vector<DataTuple> data_array;
+    data_array.emplace_back(normal, "normal");
+    data_array.emplace_back(extreme, "extreme");
+    HRLModelHelper helper{1, 2};
+    helper.SetDataArray(data_array);
+    auto prev_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
+    helper.RunEstimation(0.0, 1.0);
+    const std::string err{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(prev_level);
+    EXPECT_NE(std::string::npos, err.find("non-finite exponent index"));
+    for (int i = 0; i < 2; ++i)
+    {
+        double w{ helper.GetMemberWeight(i) };
+        EXPECT_TRUE(std::isfinite(w));
+        EXPECT_GT(w, 0.0);
+    }
 }
 
 TEST(HRLModelHelperTest, ZeroResidualProducesFiniteWeightsAndPosterior)

@@ -40,14 +40,14 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_statistical_distance_array{ ArrayXd::Zero(m_member_size) },
     m_outlier_flag_array{ ArrayXb::Constant(m_member_size, false) },
     m_capital_lambda{ MatrixXd::Identity(m_basis_size, m_basis_size) },
-    m_mu_iter{ VectorXd::Ones(m_basis_size) },
-    m_mu_MDPDE{ VectorXd::Ones(m_basis_size) },
-    m_mu_prior{ VectorXd::Ones(m_basis_size) },
-    m_mu_mean{ VectorXd::Ones(m_basis_size) },
-    m_beta_iter_array{ MatrixXd::Ones(m_basis_size, m_member_size) },
-    m_beta_OLS_array{ MatrixXd::Ones(m_basis_size, m_member_size) },
-    m_beta_MDPDE_array{ MatrixXd::Ones(m_basis_size, m_member_size) },
-    m_beta_posterior_array{ MatrixXd::Ones(m_basis_size, m_member_size) }
+    m_mu_iter{ VectorXd::Zero(m_basis_size) },
+    m_mu_MDPDE{ VectorXd::Zero(m_basis_size) },
+    m_mu_prior{ VectorXd::Zero(m_basis_size) },
+    m_mu_mean{ VectorXd::Zero(m_basis_size) },
+    m_beta_iter_array{ MatrixXd::Zero(m_basis_size, m_member_size) },
+    m_beta_OLS_array{ MatrixXd::Zero(m_basis_size, m_member_size) },
+    m_beta_MDPDE_array{ MatrixXd::Zero(m_basis_size, m_member_size) },
+    m_beta_posterior_array{ MatrixXd::Zero(m_basis_size, m_member_size) }
 {
     m_data_size_list.reserve(static_cast<size_t>(m_member_size));
     m_member_info_list.reserve(static_cast<size_t>(m_member_size));
@@ -175,23 +175,23 @@ void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
 void HRLModelHelper::Initialization(void)
 {
     // Reset scalars and arrays to their default values
-    m_capital_lambda = MatrixXd::Identity(m_basis_size, m_basis_size);
+    m_capital_lambda.setIdentity();
     m_omega_sum = 0.0;
     m_omega_h = 0.0;
-    m_sigma_square_array = ArrayXd::Ones(m_member_size);
-    m_omega_array = ArrayXd::Ones(m_member_size);
-    m_statistical_distance_array = ArrayXd::Zero(m_member_size);
-    m_outlier_flag_array = ArrayXb::Constant(m_member_size, false);
+    m_sigma_square_array.setOnes();
+    m_omega_array.setOnes();
+    m_statistical_distance_array.setZero();
+    m_outlier_flag_array.setConstant(false);
 
     // Reset member-wise parameter estimates
-    m_beta_iter_array      = MatrixXd::Zero(m_basis_size, m_member_size);
-    m_beta_OLS_array       = MatrixXd::Zero(m_basis_size, m_member_size);
-    m_beta_MDPDE_array     = MatrixXd::Zero(m_basis_size, m_member_size);
-    m_beta_posterior_array = MatrixXd::Zero(m_basis_size, m_member_size);
-    m_mu_iter  = VectorXd::Zero(m_basis_size);
-    m_mu_MDPDE = VectorXd::Zero(m_basis_size);
-    m_mu_prior = VectorXd::Zero(m_basis_size);
-    m_mu_mean  = VectorXd::Zero(m_basis_size);
+    m_beta_iter_array.setZero();
+    m_beta_OLS_array.setZero();
+    m_beta_MDPDE_array.setZero();
+    m_beta_posterior_array.setZero();
+    m_mu_iter.setZero();
+    m_mu_MDPDE.setZero();
+    m_mu_prior.setZero();
+    m_mu_mean.setZero();
 
     // Empty the containers of matrix objects
     m_W_list.clear();
@@ -446,8 +446,17 @@ void HRLModelHelper::CalculateMemberWeight(double alpha_g)
     {
         VectorXd residual{ residual_array.col(i) };
         auto exp_index{ static_cast<double>(residual.transpose() * inverse_capital_lambda * residual) };
-        m_omega_array(i) = exp(-0.5 * alpha_g * exp_index);
-        if (m_omega_array(i) < m_weight_member_min) m_omega_array(i) = m_weight_member_min;
+        if (!std::isfinite(exp_index))
+        {
+            Logger::Log(LogLevel::Warning,
+                        "HRLModelHelper::CalculateMemberWeight : non-finite exponent index");
+            m_omega_array(i) = m_weight_member_min;
+        }
+        else
+        {
+            m_omega_array(i) = std::exp(-0.5 * alpha_g * exp_index);
+            if (m_omega_array(i) < m_weight_member_min) m_omega_array(i) = m_weight_member_min;
+        }
         omega_inverse_sum += (m_omega_array(i) == 0.0) ? 0.0 : 1.0 / m_omega_array(i);
     }
     m_omega_sum = m_omega_array.sum();
@@ -541,6 +550,15 @@ double HRLModelHelper::GetSigmaSquare(int id) const
         throw std::out_of_range("member id out of range");
     }
     return m_sigma_square_array(id);
+}
+
+double HRLModelHelper::GetMemberWeight(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_omega_array(id);
 }
 
 const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) const
