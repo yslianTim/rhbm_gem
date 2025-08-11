@@ -48,6 +48,20 @@ const std::unordered_map<Element, int> AtomicInfoHelper::m_atomic_number_map
     {Element::NICKEL,    28}, {Element::COPPER,   29}, {Element::ZINC,       30}
 };
 
+const std::unordered_map<int, Element> AtomicInfoHelper::m_atomic_number_to_element_map
+{
+    { 1, Element::HYDROGEN},  { 2, Element::HELIUM},   { 3, Element::LITHIUM},
+    { 4, Element::BERYLLIUM}, { 5, Element::BORON},    { 6, Element::CARBON},
+    { 7, Element::NITROGEN},  { 8, Element::OXYGEN},   { 9, Element::FLUORINE},
+    {10, Element::NEON},      {11, Element::SODIUM},   {12, Element::MAGNESIUM},
+    {13, Element::ALUMINUM},  {14, Element::SILICON},  {15, Element::PHOSPHORUS},
+    {16, Element::SULFUR},    {17, Element::CHLORINE}, {18, Element::ARGON},
+    {19, Element::POTASSIUM}, {20, Element::CALCIUM},  {21, Element::SCANDIUM},
+    {22, Element::TITANIUM},  {23, Element::VANADIUM}, {24, Element::CHROMIUM},
+    {25, Element::MANGANESE}, {26, Element::IRON},     {27, Element::COBALT},
+    {28, Element::NICKEL},    {29, Element::COPPER},   {30, Element::ZINC}
+};
+
 const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_map
 {
     {"ALA", Residue::ALA}, {"ARG", Residue::ARG}, {"ASN", Residue::ASN}, {"ASP", Residue::ASP},
@@ -170,11 +184,17 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_color_map
 
 const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
 {
-    {Element::HYDROGEN,  5}, {Element::CARBON,    53}, {Element::NITROGEN,  55},
-    {Element::OXYGEN,   59}, {Element::PHOSPHORUS,44},
-    {Element::SULFUR,   27}, {Element::CALCIUM,   28},
-    {Element::ZINC,     30}, {Element::SODIUM,    31}, {Element::MAGNESIUM, 32},
-    {Element::IRON,     35}, {Element::CHLORINE,  36}, {Element::UNK,        1}
+    {Element::HYDROGEN,   5}, {Element::HELIUM,    2}, {Element::LITHIUM,     3},
+    {Element::BERYLLIUM, 30}, {Element::BORON,    28}, {Element::CARBON,     53},
+    {Element::NITROGEN,  55}, {Element::OXYGEN,   59}, {Element::FLUORINE,   35},
+    {Element::NEON,      36}, {Element::SODIUM,   29}, {Element::MAGNESIUM,  22},
+    {Element::ALUMINUM,  34}, {Element::SILICON,  41}, {Element::PHOSPHORUS, 21},
+    {Element::SULFUR,    33}, {Element::CHLORINE, 39}, {Element::ARGON,      20},
+    {Element::POTASSIUM, 31}, {Element::CALCIUM,  45}, {Element::SCANDIUM,   36},
+    {Element::TITANIUM,  37}, {Element::VANADIUM, 38}, {Element::CHROMIUM,   40},
+    {Element::MANGANESE, 43}, {Element::IRON,     47}, {Element::COBALT,     44},
+    {Element::NICKEL,    46}, {Element::COPPER,   49}, {Element::ZINC,       48},
+    {Element::UNK,        1}
 };
 
 const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
@@ -306,6 +326,27 @@ Element AtomicInfoHelper::GetElementFromString(const std::string & name)
         return Element::UNK;
     }
     return m_element_map.at(name);
+}
+
+Element AtomicInfoHelper::GetElementFromAtomicNumber(int atomic_number)
+{
+    thread_local static std::unordered_map<int, int> unknown_atomic_number_count_list;
+    if (m_atomic_number_to_element_map.find(atomic_number) == m_atomic_number_to_element_map.end())
+    {
+        if (unknown_atomic_number_count_list.find(atomic_number) == unknown_atomic_number_count_list.end())
+        {
+            Logger::Log(LogLevel::Warning, 
+                        "AtomicInfoHelper::GetElementFromAtomicNumber - Unknown atomic number: "
+                        + std::to_string(atomic_number));
+            unknown_atomic_number_count_list[atomic_number] = 1;
+        }
+        else
+        {
+            unknown_atomic_number_count_list[atomic_number]++;
+        }
+        return Element::UNK;
+    }
+    return m_atomic_number_to_element_map.at(atomic_number);
 }
 
 Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)

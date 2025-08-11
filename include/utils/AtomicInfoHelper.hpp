@@ -23,6 +23,7 @@ class AtomicInfoHelper
     static const std::vector<Branch> m_standard_branch_list;
 
     static const std::unordered_map<Element, int> m_atomic_number_map;
+    static const std::unordered_map<int, Element> m_atomic_number_to_element_map;
     static const std::unordered_map<std::string_view, Residue> m_residue_map;
     static const std::unordered_map<std::string_view, Element> m_element_map;
     static const std::unordered_map<std::string_view, Remoteness> m_remoteness_map;
@@ -61,6 +62,7 @@ public:
 
     static Residue GetResidueFromString(const std::string & name);
     static Element GetElementFromString(const std::string & name);
+    static Element GetElementFromAtomicNumber(int atomic_number);
     static Remoteness GetRemotenessFromString(const std::string & name);
     static Branch GetBranchFromString(const std::string & name);
     static Structure GetStructureFromString(const std::string & name);

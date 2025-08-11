@@ -39,7 +39,7 @@ private:
     void PaintGroupWidthScatterPlot(ModelObject * model_object, const std::string & name, int par_id=0, bool draw_box_plot=false);
     void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
     void PaintAtomGausToXYPosition(ModelObject * model_object, const std::string & name);
-    void PaintAtomGausScatter(ModelObject * model_object, const std::string & name, bool do_normalize=false);
+    void PaintAtomGausScatterPlot(ModelObject * model_object, const std::string & name, bool do_normalize=false);
     void PaintAtomGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomRankMainChain(ModelObject * model_object, const std::string & name);
 
