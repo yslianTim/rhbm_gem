@@ -189,6 +189,41 @@ TEST(HRLModelHelperTest, SingleMemberDoesNotInvertCovariance)
     EXPECT_EQ(std::string::npos, err.find("[Error]"));
 }
 
+TEST(HRLModelHelperTest, RunEstimationUsesNewDataset)
+{
+    HRLModelHelper helper{1, 1};
+
+    // First dataset yields slope 2.4
+    std::vector<Eigen::VectorXd> member1;
+    Eigen::VectorXd s1(2);
+    s1 << 1.0, 2.0;
+    Eigen::VectorXd s2(2);
+    s2 << 2.0, 5.0;
+    member1.emplace_back(s1);
+    member1.emplace_back(s2);
+    std::vector<DataTuple> data1;
+    data1.emplace_back(member1, "member");
+    helper.SetDataArray(data1);
+    helper.RunEstimation(0.0, 0.0);
+    EXPECT_NEAR(helper.GetMuVectorMDPDE()(0), 2.4, 1e-9);
+
+    // Second dataset yields slope 1.0; results should update
+    std::vector<Eigen::VectorXd> member2;
+    Eigen::VectorXd t1(2);
+    t1 << 1.0, 1.0;
+    Eigen::VectorXd t2(2);
+    t2 << 2.0, 2.0;
+    member2.emplace_back(t1);
+    member2.emplace_back(t2);
+    std::vector<DataTuple> data2;
+    data2.emplace_back(member2, "member");
+    helper.SetDataArray(data2);
+    helper.RunEstimation(0.0, 0.0);
+
+    EXPECT_NEAR(helper.GetMuVectorMDPDE()(0), 1.0, 1e-9);
+    EXPECT_NEAR(helper.GetBetaMatrixMDPDE(0)(0), 1.0, 1e-9);
+}
+
 TEST(HRLModelHelperTest, ThrowsWhenMemberSizeMismatch)
 {
     HRLModelHelper helper{ 1, 1 };
@@ -260,6 +295,34 @@ TEST(HRLModelHelperTest, SetDataArrayThrowsOnOversizedMemberData)
     }
 }
 
+TEST(HRLModelHelperTest, SetDataArrayFailureDoesNotModifyExistingData)
+{
+    HRLModelHelper helper{ 1, 1 };
+    // Load valid data
+    std::vector<Eigen::VectorXd> member_data;
+    Eigen::VectorXd sample1(2);
+    sample1 << 1.0, 2.0;
+    Eigen::VectorXd sample2(2);
+    sample2 << 2.0, 5.0;
+    member_data.emplace_back(sample1);
+    member_data.emplace_back(sample2);
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> valid_data;
+    valid_data.emplace_back(member_data, "member1");
+    helper.SetDataArray(valid_data);
+
+    // Attempt to replace with invalid data (member size mismatch)
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> invalid_data;
+    invalid_data.emplace_back(member_data, "member1");
+    invalid_data.emplace_back(member_data, "member2");
+    EXPECT_THROW(helper.SetDataArray(invalid_data), std::invalid_argument);
+
+    // Ensure original data remain intact
+    ASSERT_NO_THROW(helper.RunEstimation(0.0, 0.0));
+    const auto & beta{ helper.GetBetaMatrixMDPDE(0) };
+    ASSERT_EQ(beta.size(), 1);
+    EXPECT_NEAR(beta(0), 2.4, 1e-9);
+}
+
 TEST(HRLModelHelperTest, ThrowsWhenDataArrayNotSet)
 {
     HRLModelHelper helper{ 1, 1 };
@@ -307,6 +370,28 @@ TEST(HRLModelHelperTest, HandlesDataVarianceDenominatorNonPositive)
     // Large alpha_r forces denominator to be non-positive
     EXPECT_NO_THROW(helper.RunEstimation(1.0e9, 0.0));
     EXPECT_TRUE(std::isfinite(helper.GetSigmaSquare(0)));
+}
+
+TEST(HRLModelHelperTest, HandlesNonFiniteDataVarianceSquare)
+{
+    // Data with extremely large residuals causing overflow in variance calculation
+    auto member{ CreateMember({{0.0, 0.0}, {1.0, 1.0e155}, {2.0, -1.0e155}}, "extreme") };
+    std::vector<DataTuple> data_array{ member };
+
+    HRLModelHelper helper{ 2, 1 };
+    helper.SetDataArray(data_array);
+
+    auto prev_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
+    EXPECT_NO_THROW(helper.RunEstimation(1.0e-12, 0.0));
+    const std::string err{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(prev_level);
+
+    EXPECT_NE(std::string::npos, err.find("Non-finite variance"));
+    double sigma{ helper.GetSigmaSquare(0) };
+    EXPECT_TRUE(std::isfinite(sigma));
+    EXPECT_GT(sigma, 0.0);
 }
 
 TEST(HRLModelHelperTest, HandlesMemberCovarianceDenominatorNonPositive)

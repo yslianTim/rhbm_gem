@@ -16,31 +16,39 @@ using Eigen::MatrixXd;
 using DMatrixXd = Eigen::DiagonalMatrix<double, Eigen::Dynamic>;
 using ArrayXb = Eigen::Array<bool, Eigen::Dynamic, 1>;
 
+namespace
+{
+int ValidatePositive(int value, const char * name)
+{
+    if (value <= 0)
+    {
+        throw std::invalid_argument(std::string(name) + " must be positive value");
+    }
+    return value;
+}
+} // namespace
+
 HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
-    m_basis_size{ basis_size }, m_member_size{ member_size },
+    m_basis_size{ ValidatePositive(basis_size, "basis_size") },
+    m_member_size{ ValidatePositive(member_size, "member_size") },
     m_maximum_iteration{ 100 }, m_tolerance{ 1.0e-5 },
     m_omega_sum{ 0.0 }, m_omega_h{ 0.0 },
     m_weight_data_min{ 1.0e-8 },
-    m_weight_member_min{ (member_size <= 0) ? 0.0 : 1.0e-2 / member_size },
-    m_sigma_square_array{ ArrayXd::Ones(member_size > 0 ? member_size : 1) },
-    m_omega_array{ ArrayXd::Ones(member_size > 0 ? member_size : 1) },
-    m_statistical_distance_array{ ArrayXd::Zero(member_size > 0 ? member_size : 1) },
-    m_outlier_flag_array{ ArrayXb::Constant(member_size > 0 ? member_size : 1, false) },
-    m_capital_lambda{ MatrixXd::Identity(basis_size > 0 ? basis_size : 1, basis_size > 0 ? basis_size : 1) },
-    m_mu_iter{ VectorXd::Ones(basis_size > 0 ? basis_size : 1) },
-    m_mu_MDPDE{ VectorXd::Ones(basis_size > 0 ? basis_size : 1) },
-    m_mu_prior{ VectorXd::Ones(basis_size > 0 ? basis_size : 1) },
-    m_mu_mean{ VectorXd::Ones(basis_size > 0 ? basis_size : 1) },
-    m_beta_iter_array{ MatrixXd::Ones(basis_size > 0 ? basis_size : 1, member_size > 0 ? member_size : 1) },
-    m_beta_OLS_array{ MatrixXd::Ones(basis_size > 0 ? basis_size : 1, member_size > 0 ? member_size : 1) },
-    m_beta_MDPDE_array{ MatrixXd::Ones(basis_size > 0 ? basis_size : 1, member_size > 0 ? member_size : 1) },
-    m_beta_posterior_array{ MatrixXd::Ones(basis_size > 0 ? basis_size : 1, member_size > 0 ? member_size : 1) }
+    m_weight_member_min{ 1.0e-2 / m_member_size },
+    m_sigma_square_array{ ArrayXd::Ones(m_member_size) },
+    m_omega_array{ ArrayXd::Ones(m_member_size) },
+    m_statistical_distance_array{ ArrayXd::Zero(m_member_size) },
+    m_outlier_flag_array{ ArrayXb::Constant(m_member_size, false) },
+    m_capital_lambda{ MatrixXd::Identity(m_basis_size, m_basis_size) },
+    m_mu_iter{ VectorXd::Ones(m_basis_size) },
+    m_mu_MDPDE{ VectorXd::Ones(m_basis_size) },
+    m_mu_prior{ VectorXd::Ones(m_basis_size) },
+    m_mu_mean{ VectorXd::Ones(m_basis_size) },
+    m_beta_iter_array{ MatrixXd::Ones(m_basis_size, m_member_size) },
+    m_beta_OLS_array{ MatrixXd::Ones(m_basis_size, m_member_size) },
+    m_beta_MDPDE_array{ MatrixXd::Ones(m_basis_size, m_member_size) },
+    m_beta_posterior_array{ MatrixXd::Ones(m_basis_size, m_member_size) }
 {
-    if (basis_size <= 0 || member_size <= 0)
-    {
-        throw std::invalid_argument("basis_size and member_size must be positive values");
-    }
-
     m_data_size_list.reserve(static_cast<size_t>(m_member_size));
     m_member_info_list.reserve(static_cast<size_t>(m_member_size));
     m_X_list.reserve(static_cast<size_t>(m_member_size));
@@ -64,10 +72,17 @@ void HRLModelHelper::SetDataArray(
         throw std::invalid_argument("The input size of data list isn't consistent with member size.");
     }
 
-    m_data_size_list.clear();
-    m_member_info_list.clear();
-    m_X_list.clear();
-    m_y_list.clear();
+    // Build new data structures locally so existing member data remains
+    // untouched if validation fails midway through the process.
+    std::vector<int> data_size_list;
+    std::vector<std::string> member_info_list;
+    std::vector<MatrixXd> X_list;
+    std::vector<VectorXd> y_list;
+    data_size_list.reserve(static_cast<size_t>(m_member_size));
+    member_info_list.reserve(static_cast<size_t>(m_member_size));
+    X_list.reserve(static_cast<size_t>(m_member_size));
+    y_list.reserve(static_cast<size_t>(m_member_size));
+
     for (auto & [member_data, member_info] : data_array)
     {
         if (member_data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
@@ -98,11 +113,17 @@ void HRLModelHelper::SetDataArray(
             }
             y_data_vector(i) = sample(m_basis_size);
         }
-        m_data_size_list.emplace_back(data_size);
-        m_X_list.emplace_back(x_data_matrix);
-        m_y_list.emplace_back(y_data_vector);
-        m_member_info_list.emplace_back(member_info);
+        data_size_list.emplace_back(data_size);
+        X_list.emplace_back(std::move(x_data_matrix));
+        y_list.emplace_back(std::move(y_data_vector));
+        member_info_list.emplace_back(member_info);
     }
+
+    // All validation and transformations succeeded, swap into member variables.
+    std::swap(m_data_size_list, data_size_list);
+    std::swap(m_X_list, X_list);
+    std::swap(m_y_list, y_list);
+    std::swap(m_member_info_list, member_info_list);
 }
 
 void HRLModelHelper::SetMaximumIteration(unsigned int size)
@@ -161,6 +182,16 @@ void HRLModelHelper::Initialization(void)
     m_omega_array = ArrayXd::Ones(m_member_size);
     m_statistical_distance_array = ArrayXd::Zero(m_member_size);
     m_outlier_flag_array = ArrayXb::Constant(m_member_size, false);
+
+    // Reset member-wise parameter estimates
+    m_beta_iter_array      = MatrixXd::Zero(m_basis_size, m_member_size);
+    m_beta_OLS_array       = MatrixXd::Zero(m_basis_size, m_member_size);
+    m_beta_MDPDE_array     = MatrixXd::Zero(m_basis_size, m_member_size);
+    m_beta_posterior_array = MatrixXd::Zero(m_basis_size, m_member_size);
+    m_mu_iter  = VectorXd::Zero(m_basis_size);
+    m_mu_MDPDE = VectorXd::Zero(m_basis_size);
+    m_mu_prior = VectorXd::Zero(m_basis_size);
+    m_mu_mean  = VectorXd::Zero(m_basis_size);
 
     // Empty the containers of matrix objects
     m_W_list.clear();
@@ -325,13 +356,16 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
         denominator = 1.0e-10; // avoid division by zero
     }
     auto sigma_square{ numerator / denominator };
-    if (!std::isfinite(sigma_square))
+    if (!std::isfinite(sigma_square) || sigma_square <= 0.0)
     {
         Logger::Log(
             LogLevel::Warning,
             "Non-finite variance in CalculateDataVarianceSquare for member -> "
-            + m_member_info_list.at(static_cast<size_t>(member_id)));
-        return;
+            + m_member_info_list.at(static_cast<size_t>(member_id))
+            + ", using fallback value");
+        sigma_square = (std::isfinite(m_weight_data_min) && m_weight_data_min > 0.0)
+            ? m_weight_data_min
+            : std::numeric_limits<double>::max();
     }
     m_sigma_square_array(member_id) = sigma_square;
 }
