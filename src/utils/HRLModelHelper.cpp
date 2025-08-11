@@ -181,7 +181,9 @@ void HRLModelHelper::AlgorithmBetaMDPDE(double alpha_r)
         auto inverse_gram_matrix{ EigenMatrixUtility::GetInverseMatrix(gram_matrix) };
         m_beta_OLS_array.col(i) = inverse_gram_matrix * (X.transpose() * y);
         m_beta_iter_array.col(i) = m_beta_OLS_array.col(i);
-        m_sigma_square_array(i) = (n < 2) ? 1.0e+200 : (y - (X * m_beta_iter_array.col(i))).squaredNorm() / (n-1);
+        m_sigma_square_array(i) = (n < 2) ?
+            std::numeric_limits<double>::max() :
+            (y - (X * m_beta_iter_array.col(i))).squaredNorm() / (n-1);
         VectorXd beta_in_previous_iter;
         for (int iter = 0; iter < m_maximum_iteration; iter++)
         { //=== Begin of iteration loop
@@ -243,7 +245,7 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
     for (int i = 0; i < m_member_size; i++)
     {
         m_capital_lambda_list.at(static_cast<size_t>(i)) =
-            m_member_size * m_omega_h / m_omega_array(i) * m_capital_lambda.array();
+            (m_member_size * m_omega_h / m_omega_array(i)) * m_capital_lambda;
     }
 
 }
@@ -307,12 +309,10 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
     auto denominator{ W.diagonal().sum() - n * alpha_r * pow(1.0 + alpha_r, -1.5) };
     if (denominator <= 0.0)
     {
-        m_sigma_square_array(member_id) = 1.0e+200;
-        Logger::Log(LogLevel::Info,
-            "HRLModelHelper::CalculateDataVarianceSquare : "
+        //m_sigma_square_array(member_id) = 1.0e+200;
+        throw std::runtime_error(
             "Non-positive denominator in CalculateDataVarianceSquare for member -> "
             + m_member_info_list.at(static_cast<size_t>(member_id)));
-        return;
     }
     m_sigma_square_array(member_id) = numerator / denominator;
 }
