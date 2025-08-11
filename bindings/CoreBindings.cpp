@@ -14,12 +14,24 @@ PYBIND11_MODULE(cpp_module, m)
         .value("COMPARISON", PainterType::COMPARISON)
         .value("DEMO",       PainterType::DEMO);
     pybind11::implicitly_convertible<int, PainterType>();
-    
+
     pybind11::enum_<PrinterType>(m, "PrinterType")
         .value("ATOM_POSITION",  PrinterType::ATOM_POSITION)
         .value("MAP_VALUE",      PrinterType::MAP_VALUE)
         .value("GAUS_ESTIMATES", PrinterType::GAUS_ESTIMATES);
     pybind11::implicitly_convertible<int, PrinterType>();
+
+    pybind11::enum_<PotentialModel>(m, "PotentialModel")
+        .value("SINGLE_GAUS",      PotentialModel::SINGLE_GAUS)
+        .value("FIVE_GAUS_CHARGE", PotentialModel::FIVE_GAUS_CHARGE)
+        .value("SINGLE_GAUS_USER", PotentialModel::SINGLE_GAUS_USER);
+    pybind11::implicitly_convertible<int, PotentialModel>();
+
+    pybind11::enum_<PartialCharge>(m, "PartialCharge")
+        .value("NEUTRAL", PartialCharge::NEUTRAL)
+        .value("PARTIAL", PartialCharge::PARTIAL)
+        .value("AMBER",   PartialCharge::AMBER);
+    pybind11::implicitly_convertible<int, PartialCharge>();
 
     pybind11::class_<PotentialAnalysisCommand>(m, "PotentialAnalysisCommand")
         .def(pybind11::init<>())
