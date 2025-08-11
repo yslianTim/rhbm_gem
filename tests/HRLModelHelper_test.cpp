@@ -5,6 +5,7 @@
 #include <tuple>
 #include <cmath>
 #include <limits>
+#include <cstdint>
 
 #include "HRLModelHelper.hpp"
 #include "Logger.hpp"
@@ -13,6 +14,41 @@ namespace {
 
 using Eigen::VectorXd;
 using DataTuple = std::tuple<std::vector<Eigen::VectorXd>, std::string>;
+
+template <typename Vec>
+class OversizedVectorGuard
+{
+public:
+    explicit OversizedVectorGuard(Vec & vec) : m_vec{ vec }
+    {
+        m_hack = reinterpret_cast<Hack*>(&m_vec);
+        m_orig_finish = m_hack->finish;
+        m_orig_end = m_hack->end;
+        auto start_addr{ reinterpret_cast<std::uintptr_t>(m_hack->start) };
+        constexpr std::size_t too_big{ static_cast<std::size_t>(std::numeric_limits<int>::max()) + 1 };
+        auto finish_addr{ start_addr + too_big * sizeof(typename Vec::value_type) };
+        m_hack->finish = reinterpret_cast<typename Vec::pointer>(finish_addr);
+        m_hack->end = m_hack->finish;
+    }
+
+    ~OversizedVectorGuard()
+    {
+        m_hack->finish = m_orig_finish;
+        m_hack->end = m_orig_end;
+    }
+
+private:
+    Vec & m_vec;
+    struct Hack
+    {
+        typename Vec::pointer start;
+        typename Vec::pointer finish;
+        typename Vec::pointer end;
+    };
+    Hack * m_hack;
+    typename Vec::pointer m_orig_finish;
+    typename Vec::pointer m_orig_end;
+};
 
 DataTuple CreateMember(const std::vector<std::pair<double, double>>& xy, const std::string& name)
 {
@@ -122,6 +158,7 @@ TEST(HRLModelHelperTest, AcceptsProperlySizedData)
     Eigen::VectorXd mu_prior{ helper.GetMuVectorPrior() };
     ASSERT_EQ(mu_prior.size(), 1);
     EXPECT_NEAR(mu_prior(0), 2.4, 1e-9);
+    EXPECT_DOUBLE_EQ(0.0, helper.GetStatisticalDistance(0));
 }
 
 TEST(HRLModelHelperTest, SingleMemberDoesNotInvertCovariance)
@@ -198,6 +235,31 @@ TEST(HRLModelHelperTest, ThrowsWhenMemberDataEmpty)
     EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
 }
 
+TEST(HRLModelHelperTest, SetDataArrayThrowsOnOversizedDataArray)
+{
+    HRLModelHelper helper{ 1, 1 };
+    std::vector<DataTuple> data;
+    data.emplace_back(std::vector<Eigen::VectorXd>{}, "member1");
+    {
+        OversizedVectorGuard<std::vector<DataTuple>> guard(data);
+        EXPECT_THROW(helper.SetDataArray(data), std::overflow_error);
+    }
+}
+
+TEST(HRLModelHelperTest, SetDataArrayThrowsOnOversizedMemberData)
+{
+    HRLModelHelper helper{ 1, 1 };
+    std::vector<Eigen::VectorXd> member;
+    member.emplace_back(Eigen::VectorXd::Zero(2));
+    std::vector<DataTuple> data;
+    data.emplace_back(member, "member1");
+    auto & member_ref{ std::get<0>(data[0]) };
+    {
+        OversizedVectorGuard<std::vector<Eigen::VectorXd>> guard(member_ref);
+        EXPECT_THROW(helper.SetDataArray(data), std::overflow_error);
+    }
+}
+
 TEST(HRLModelHelperTest, ThrowsWhenDataArrayNotSet)
 {
     HRLModelHelper helper{ 1, 1 };
@@ -244,6 +306,21 @@ TEST(HRLModelHelperTest, ThrowsWhenDataVarianceDenominatorNonPositive)
     helper.SetDataArray(data_array);
     // Large alpha_r forces denominator to be non-positive
     EXPECT_THROW(helper.RunEstimation(1.0e9, 0.0), std::runtime_error);
+}
+
+TEST(HRLModelHelperTest, ThrowsWhenMemberCovarianceDenominatorNonPositive)
+{
+    // Two members with vastly different intercepts force member weights to minimum
+    auto member0{ CreateMember({{0.0, 0.0}, {1.0, 0.1}, {2.0, -0.1}}, "member_0") };
+    auto member1{ CreateMember({{0.0, 1000.0}, {1.0, 1000.1}, {2.0, 999.9}}, "member_1") };
+    std::vector<DataTuple> data_array{ member0, member1 };
+
+    HRLModelHelper helper{ 2, 2 };
+    helper.SetDataArray(data_array);
+    // alpha_g chosen slightly above the theoretical root to make the
+    // denominator of CalculateMemberCovariance non-positive
+    const double alpha_g{ 0.005050733883341149 };
+    EXPECT_THROW(helper.RunEstimation(0.0, alpha_g), std::runtime_error);
 }
 
 TEST(HRLModelHelperTest, GettersThrowOnInvalidId)
@@ -375,7 +452,9 @@ TEST(HRLModelHelperTest, OutlierFlagsWithDivergentData)
 
     for (int i = 0; i < 2; ++i)
     {
-        EXPECT_TRUE(std::isfinite(helper.GetStatisticalDistance(i)));
+        double dist{ helper.GetStatisticalDistance(i) };
+        EXPECT_TRUE(std::isfinite(dist));
+        EXPECT_GT(dist, 0.0);
         EXPECT_FALSE(helper.GetOutlierFlag(i));
     }
 }
@@ -436,6 +515,22 @@ TEST(HRLModelHelperTest, RobustEstimationDownweightsOutlier)
     double diff_ols{ (outlier_beta_ols - majority_beta).norm() };
     double diff_robust{ (outlier_beta_robust - majority_beta).norm() };
     EXPECT_LT(diff_robust, diff_ols);
+}
+
+TEST(HRLModelHelperTest, DetectsTrueOutlier)
+{
+    auto inlier0{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 5.0}, {3.0, 7.0}}, "inlier_0") };
+    auto inlier1{ CreateMember({{0.0, 1.2}, {1.0, 3.2}, {2.0, 5.2}, {3.0, 7.2}}, "inlier_1") };
+    auto outlier{ CreateMember({{0.0, 30.0}, {1.0, 60.0}, {2.0, 90.0}, {3.0, 120.0}}, "outlier") };
+    std::vector<DataTuple> data_array{ inlier0, inlier1, outlier };
+    HRLModelHelper helper(2, 3);
+    helper.SetDataArray(data_array);
+    helper.SetMaximumIteration(1000);
+    helper.SetTolerance(1.0e-6);
+    helper.RunEstimation(0.0, 1.0);
+    EXPECT_FALSE(helper.GetOutlierFlag(0));
+    EXPECT_FALSE(helper.GetOutlierFlag(1));
+    EXPECT_TRUE(helper.GetOutlierFlag(2));
 }
 
 class HRLModelHelperFixture : public ::testing::Test
@@ -559,4 +654,20 @@ TEST(HRLModelHelperTest, ExtremeResidualsYieldFinitePosteriorCovariance)
     double val{ sigma(0, 0) };
     EXPECT_TRUE(std::isfinite(val));
     EXPECT_GT(val, 0.0);
+}
+
+TEST(HRLModelHelperTest, ZeroResidualProducesFiniteWeightsAndPosterior)
+{
+    auto member{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 5.0}}, "perfect") };
+    std::vector<DataTuple> data_array{ member };
+
+    HRLModelHelper helper(2, 1);
+    helper.SetDataArray(data_array);
+    helper.RunEstimation(0.0, 0.0);
+
+    const auto & sigma{ helper.GetCapitalSigmaMatrixPosterior(0) };
+    EXPECT_TRUE(sigma.array().isFinite().all());
+
+    auto beta{ helper.GetBetaMatrixPosterior(0) };
+    EXPECT_TRUE(beta.array().isFinite().all());
 }

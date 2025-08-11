@@ -54,6 +54,10 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
 void HRLModelHelper::SetDataArray(
     const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array)
 {
+    if (data_array.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        throw std::overflow_error("data_array size exceeds maximum int");
+    }
     int data_array_size{ static_cast<int>(data_array.size()) };
     if (data_array_size != m_member_size)
     {
@@ -66,6 +70,10 @@ void HRLModelHelper::SetDataArray(
     m_y_list.clear();
     for (auto & [member_data, member_info] : data_array)
     {
+        if (member_data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+        {
+            throw std::overflow_error("member_data size exceeds maximum int");
+        }
         auto data_size{ static_cast<int>(member_data.size()) };
         if (data_size == 0)
         {
@@ -339,11 +347,12 @@ void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
     double denominator{
         m_omega_sum - m_member_size * alpha_g * pow(1.0 + alpha_g, -1.0 - 0.5 * m_basis_size)
     };
-    if (denominator == 0.0)
+    if (denominator <= 0.0)
     {
-        denominator = 1.0e-10; // Avoid division by zero
-        Logger::Log(LogLevel::Info,
-            "HRLModelHelper::CalculateMemberCovariance : Member covariance denominator is zero.");
+        //denominator = 1.0e-10; // Avoid division by zero
+        throw std::runtime_error(
+            "HRLModelHelper::CalculateMemberCovariance : "
+            "Member covariance denominator is non-positive.");
     }
     MatrixXd residual_array{ m_beta_MDPDE_array.colwise() - m_mu_iter };
     for (int i = 0; i < m_member_size; i++)
@@ -392,7 +401,16 @@ void HRLModelHelper::CalculateDataWeight(int member_id, double alpha_r)
 {
     const auto & X{ m_X_list.at(static_cast<size_t>(member_id)) };
     const auto & y{ m_y_list.at(static_cast<size_t>(member_id)) };
-    const auto & sigma_square{ m_sigma_square_array(member_id) };
+    auto sigma_square{ m_sigma_square_array(member_id) };
+    if (!std::isfinite(sigma_square) || sigma_square <= 0.0)
+    {
+        if (!std::isfinite(m_weight_data_min) || m_weight_data_min <= 0.0)
+        {
+            throw std::runtime_error(
+                "HRLModelHelper::CalculateDataWeight : invalid sigma square and weight min");
+        }
+        sigma_square = m_weight_data_min;
+    }
     VectorXd beta{ m_beta_iter_array.col(member_id) };
     ArrayXd W{ (-0.5 * alpha_r * (y - (X * beta)).array().square() / sigma_square).exp() };
     W = W.cwiseMax(m_weight_data_min);
@@ -402,24 +420,40 @@ void HRLModelHelper::CalculateDataWeight(int member_id, double alpha_r)
 void HRLModelHelper::CalculateStatisticalDistance(void)
 {
     MatrixXd error_array{ m_beta_posterior_array.colwise() - m_mu_prior };
-    if (error_array.cols() <= 2)
+    if (m_member_size == 1)
     {
-        for (int i = 0; i < m_member_size; i++) m_statistical_distance_array(i) = 1.0e-5;
+        m_statistical_distance_array.setZero();
+        return;
     }
-    else
+    
+    auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(m_capital_lambda) };
+    for (int i = 0; i < m_member_size; i++)
     {
-        auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(m_capital_lambda) };
-        for (int i = 0; i < m_member_size; i++)
-        {
-            m_statistical_distance_array(i) =
-                error_array.col(i).transpose() * inv_capital_lambda * error_array.col(i);
-        }
+        m_statistical_distance_array(i) =
+            error_array.col(i).transpose() * inv_capital_lambda * error_array.col(i);
     }
 }
 
 void HRLModelHelper::LabelOutlierMember(void)
 {
-    auto quantile{ 9.21 };
+    auto chi_square_quantile = [](int df) {
+        switch (df)
+        {
+        case 1: return 6.63;  // 99th percentile
+        case 2: return 9.21;
+        case 3: return 11.34;
+        case 4: return 13.28;
+        case 5: return 15.09;
+        case 6: return 16.81;
+        case 7: return 18.48;
+        case 8: return 20.09;
+        case 9: return 21.67;
+        case 10: return 23.21;
+        default:
+            return 0.0; // Default case for unsupported degrees of freedom
+        }
+    };
+    const auto quantile{ chi_square_quantile(m_basis_size) };
     m_outlier_flag_array = (m_statistical_distance_array > quantile);
 
     //m_outlier_flag_array = ((m_omega_array/m_omega_sum) < 0.05/static_cast<double>(m_member_size));
