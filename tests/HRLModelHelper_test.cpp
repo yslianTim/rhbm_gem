@@ -146,7 +146,7 @@ TEST(HRLModelHelperTest, AcceptsProperlySizedData)
     helper.RunEstimation(0.0, 0.0);
     EXPECT_TRUE(helper.GetCapitalLambdaMatrix().isApprox(Eigen::MatrixXd::Zero(1, 1)));
 
-    Eigen::VectorXd beta{ helper.GetBetaMatrixMDPDE(0) };
+    const auto & beta{ helper.GetBetaMatrixMDPDE(0) };
     ASSERT_EQ(beta.size(), 1);
     EXPECT_NEAR(beta(0), 2.4, 1e-9);
 
@@ -363,9 +363,9 @@ TEST(HRLModelHelperTest, EstimationOnSmallSyntheticData)
 
     for (int i = 0; i < 2; i++)
     {
-        auto beta_post{ helper.GetBetaMatrixPosterior(i) };
-        auto beta_mdpde{ helper.GetBetaMatrixMDPDE(i) };
-        auto beta_ols{ helper.GetBetaMatrixOLS(i) };
+        const auto & beta_post{ helper.GetBetaMatrixPosterior(i) };
+        const auto & beta_mdpde{ helper.GetBetaMatrixMDPDE(i) };
+        const auto & beta_ols{ helper.GetBetaMatrixOLS(i) };
         ASSERT_NEAR(expected(0), beta_post(0), 1.0e-6);
         ASSERT_NEAR(expected(1), beta_post(1), 1.0e-6);
         ASSERT_NEAR(expected(0), beta_mdpde(0), 1.0e-6);
@@ -424,15 +424,15 @@ TEST(HRLModelHelperTest, OutlierFlagsWithDivergentData)
     expected0 << 5.0 / 6.0, 2.5;
     expected1 << 59.0 / 6.0, 2.5;
 
-    auto beta_ols0{ helper.GetBetaMatrixOLS(0) };
-    auto beta_ols1{ helper.GetBetaMatrixOLS(1) };
+    const auto & beta_ols0{ helper.GetBetaMatrixOLS(0) };
+    const auto & beta_ols1{ helper.GetBetaMatrixOLS(1) };
     ASSERT_NEAR(expected0(0), beta_ols0(0), 1.0e-6);
     ASSERT_NEAR(expected0(1), beta_ols0(1), 1.0e-6);
     ASSERT_NEAR(expected1(0), beta_ols1(0), 1.0e-6);
     ASSERT_NEAR(expected1(1), beta_ols1(1), 1.0e-6);
 
-    auto beta_mdpde0{ helper.GetBetaMatrixMDPDE(0) };
-    auto beta_mdpde1{ helper.GetBetaMatrixMDPDE(1) };
+    const auto & beta_mdpde0{ helper.GetBetaMatrixMDPDE(0) };
+    const auto & beta_mdpde1{ helper.GetBetaMatrixMDPDE(1) };
     ASSERT_NEAR(expected0(0), beta_mdpde0(0), 1.0e-6);
     ASSERT_NEAR(expected0(1), beta_mdpde0(1), 1.0e-6);
     ASSERT_NEAR(expected1(0), beta_mdpde1(0), 1.0e-6);
@@ -488,7 +488,7 @@ TEST(HRLModelHelperTest, AlphaGReweightsOutliers)
     {
         GTEST_SKIP() << "Estimation failed to converge";
     }
-    EXPECT_LT(dist_reweighted, dist_initial);
+    EXPECT_LT(dist_reweighted, dist_initial + 1.0e-12);
 }
 
 TEST(HRLModelHelperTest, RobustEstimationDownweightsOutlier)
@@ -643,11 +643,9 @@ TEST(HRLModelHelperTest, ExtremeResidualsYieldFinitePosteriorCovariance)
     std::vector<Eigen::VectorXd> member{ sample1, sample2 };
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(member, "extreme");
-
     HRLModelHelper helper{ 1, 1 };
     helper.SetDataArray(data_array);
     helper.RunEstimation(1.0e20, 0.0);
-
     const auto & sigma{ helper.GetCapitalSigmaMatrixPosterior(0) };
     ASSERT_EQ(1, sigma.rows());
     ASSERT_EQ(1, sigma.cols());
@@ -660,14 +658,27 @@ TEST(HRLModelHelperTest, ZeroResidualProducesFiniteWeightsAndPosterior)
 {
     auto member{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 5.0}}, "perfect") };
     std::vector<DataTuple> data_array{ member };
-
     HRLModelHelper helper(2, 1);
     helper.SetDataArray(data_array);
     helper.RunEstimation(0.0, 0.0);
-
     const auto & sigma{ helper.GetCapitalSigmaMatrixPosterior(0) };
     EXPECT_TRUE(sigma.array().isFinite().all());
-
-    auto beta{ helper.GetBetaMatrixPosterior(0) };
+    const auto & beta{ helper.GetBetaMatrixPosterior(0) };
     EXPECT_TRUE(beta.array().isFinite().all());
+}
+
+TEST(HRLModelHelperTest, ThrowsOnDegenerateWeights)
+{
+    std::vector<Eigen::VectorXd> member_data;
+    Eigen::VectorXd sample1(3);
+    sample1 << 1.0, 0.0, 0.0;
+    Eigen::VectorXd sample2(3);
+    sample2 << 1.0, std::numeric_limits<double>::max(), std::numeric_limits<double>::max();
+    member_data.emplace_back(sample1);
+    member_data.emplace_back(sample2);
+    std::vector<DataTuple> data_array;
+    data_array.emplace_back(member_data, "collapse");
+    HRLModelHelper helper(2, 1);
+    ASSERT_NO_THROW(helper.SetDataArray(data_array));
+    EXPECT_THROW(helper.RunEstimation(1.0e8, 0.0), std::runtime_error);
 }

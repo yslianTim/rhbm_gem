@@ -331,6 +331,11 @@ void HRLModelHelper::CalculateDataCovariance(int member_id)
     const auto & sigma_square{ m_sigma_square_array(member_id) };
     VectorXd data_weight_array{ W.diagonal() };
     const auto W_inverse_trace{ EigenMatrixUtility::GetInverseDiagonalMatrix(W).diagonal().sum() };
+    if (!std::isfinite(W_inverse_trace) || W_inverse_trace <= 0.0)
+    {
+        throw std::runtime_error(
+            "HRLModelHelper::CalculateDataCovariance : degenerate weights");
+    }
     const auto data_size{ m_data_size_list.at(static_cast<size_t>(member_id)) };
     VectorXd capital_sigma{ VectorXd::Zero(data_size) };
     for (int j = 0; j < data_size; j++)
@@ -486,29 +491,29 @@ const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) c
     return m_capital_sigma_posterior_list.at(static_cast<size_t>(id));
 }
 
-Eigen::VectorXd HRLModelHelper::GetBetaMatrixPosterior(int id) const
+Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixPosterior(int id) const
 {
     if (id < 0 || id >= m_member_size)
     {
         throw std::out_of_range("member id out of range");
     }
-    return m_beta_posterior_array.col(id);
+    return Eigen::Ref<const Eigen::VectorXd>(m_beta_posterior_array.col(id));
 }
 
-Eigen::VectorXd HRLModelHelper::GetBetaMatrixMDPDE(int id) const
+Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixMDPDE(int id) const
 {
     if (id < 0 || id >= m_member_size)
     {
         throw std::out_of_range("member id out of range");
     }
-    return m_beta_MDPDE_array.col(id);
+    return Eigen::Ref<const Eigen::VectorXd>(m_beta_MDPDE_array.col(id));
 }
 
-Eigen::VectorXd HRLModelHelper::GetBetaMatrixOLS(int id) const
+Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixOLS(int id) const
 {
     if (id < 0 || id >= m_member_size)
     {
         throw std::out_of_range("member id out of range");
     }
-    return m_beta_OLS_array.col(id);
+    return Eigen::Ref<const Eigen::VectorXd>(m_beta_OLS_array.col(id));
 }

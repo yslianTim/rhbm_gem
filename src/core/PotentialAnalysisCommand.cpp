@@ -274,15 +274,15 @@ void PotentialAnalysisCommand::RunPotentialFitting(ModelObject * model_object)
             for (auto atom : atom_list)
             {
                 auto atom_entry{ atom->GetAtomicPotentialEntry() };
-                Eigen::VectorXd beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
+                const auto & beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
                 auto gaus_ols{ GausLinearTransformHelper::BuildGausModel(beta_vector_ols) };
                 atom_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
 
-                Eigen::VectorXd beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
+                const auto & beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
                 auto gaus_mdpde{ GausLinearTransformHelper::BuildGausModel(beta_vector_mdpde) };
                 atom_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
 
-                Eigen::VectorXd beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
+                const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
                 auto gaus_posterior{
                     GausLinearTransformHelper::BuildGausModelWithVariance(
