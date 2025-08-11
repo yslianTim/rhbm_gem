@@ -570,6 +570,15 @@ double HRLModelHelper::GetMemberWeight(int id) const
     return m_omega_array(id);
 }
 
+const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & HRLModelHelper::GetDataWeightMatrix(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_W_list.at(static_cast<size_t>(id));
+}
+
 const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) const
 {
     if (id < 0 || id >= m_member_size)

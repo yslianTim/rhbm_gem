@@ -146,6 +146,7 @@ public:
     double GetStatisticalDistance(int id) const;
     double GetSigmaSquare(int id) const;
     double GetMemberWeight(int id) const;
+    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataWeightMatrix(int id) const;
     const Eigen::MatrixXd & GetCapitalSigmaMatrixPosterior(int id) const;
     const Eigen::MatrixXd & GetCapitalLambdaMatrix(void) const { return m_capital_lambda; }
     const Eigen::VectorXd & GetMuVectorPrior(void) const { return m_mu_prior; }
