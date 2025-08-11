@@ -137,11 +137,13 @@ TEST_F(HRLModelHelperTest, DefaultInitializationValues)
     EXPECT_TRUE(helper.GetMuVectorMean().isApprox(expected_mu));
 
     Eigen::VectorXd expected_beta{ Eigen::VectorXd::Zero(basis_size) };
+    Eigen::MatrixXd expected_sigma{ Eigen::MatrixXd::Identity(basis_size, basis_size) };
     for (int member = 0; member < member_size; member++)
     {
         EXPECT_TRUE(helper.GetBetaMatrixOLS(member).isApprox(expected_beta));
         EXPECT_TRUE(helper.GetBetaMatrixMDPDE(member).isApprox(expected_beta));
         EXPECT_TRUE(helper.GetBetaMatrixPosterior(member).isApprox(expected_beta));
+        EXPECT_TRUE(helper.GetCapitalSigmaMatrixPosterior(member).isApprox(expected_sigma));
         EXPECT_DOUBLE_EQ(0.0, helper.GetStatisticalDistance(member));
         EXPECT_FALSE(helper.GetOutlierFlag(member));
     }
@@ -278,6 +280,24 @@ TEST_F(HRLModelHelperTest, ThrowsWhenSampleContainsNaN)
     EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
 }
 
+TEST_F(HRLModelHelperTest, ThrowsWhenSampleContainsInfinity)
+{
+    HRLModelHelper helper{ 1, 1 };
+    Eigen::VectorXd pos_inf_sample(2);
+    pos_inf_sample << 1.0, std::numeric_limits<double>::infinity();
+    std::vector<Eigen::VectorXd> member{ pos_inf_sample };
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
+    data_array.emplace_back(member, "member1");
+    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+
+    Eigen::VectorXd neg_inf_sample(2);
+    neg_inf_sample << 1.0, -std::numeric_limits<double>::infinity();
+    member[0] = neg_inf_sample;
+    data_array.clear();
+    data_array.emplace_back(member, "member1");
+    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+}
+
 TEST_F(HRLModelHelperTest, ThrowsWhenMemberDataEmpty)
 {
     HRLModelHelper helper{ 1, 1 };
@@ -356,6 +376,20 @@ TEST_F(HRLModelHelperTest, ThrowsWhenAlphaGIsNegative)
 {
     HRLModelHelper helper{ 1, 1 };
     EXPECT_THROW(helper.RunEstimation(0.0, -0.1), std::invalid_argument);
+}
+
+TEST_F(HRLModelHelperTest, ThrowsWhenAlphaRIsTooLarge)
+{
+    HRLModelHelper helper{ 1, 1 };
+    EXPECT_THROW(helper.RunEstimation(std::numeric_limits<double>::max(), 0.0),
+                 std::overflow_error);
+}
+
+TEST_F(HRLModelHelperTest, ThrowsWhenAlphaGIsTooLarge)
+{
+    HRLModelHelper helper{ 1, 1 };
+    EXPECT_THROW(helper.RunEstimation(0.0, std::numeric_limits<double>::max()),
+                 std::overflow_error);
 }
 
 TEST_F(HRLModelHelperTest, ThrowsWhenAlphaRIsNotFinite)

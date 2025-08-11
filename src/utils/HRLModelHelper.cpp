@@ -57,6 +57,12 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_capital_sigma_list.reserve(static_cast<size_t>(m_member_size));
     m_capital_sigma_posterior_list.reserve(static_cast<size_t>(m_member_size));
     m_capital_lambda_list.reserve(static_cast<size_t>(m_member_size));
+
+    for (int i = 0; i < m_member_size; i++)
+    {
+        m_capital_sigma_posterior_list.emplace_back(MatrixXd::Identity(m_basis_size, m_basis_size));
+        m_capital_lambda_list.emplace_back(MatrixXd::Identity(m_basis_size, m_basis_size));
+    }
 }
 
 void HRLModelHelper::SetDataArray(
@@ -107,10 +113,7 @@ void HRLModelHelper::SetDataArray(
             {
                 throw std::invalid_argument("Member dataset contains non-finite value.");
             }
-            for (int j = 0; j < m_basis_size; j++)
-            {
-                x_data_matrix(i, j) = sample(j);
-            }
+            x_data_matrix.row(i) = sample.head(m_basis_size);
             y_data_vector(i) = sample(m_basis_size);
         }
         data_size_list.emplace_back(data_size);
@@ -159,6 +162,12 @@ void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
         throw std::invalid_argument("Alpha parameters must be finite and non-negative.");
     }
 
+    const double alpha_limit{ std::sqrt(std::numeric_limits<double>::max()) };
+    if (alpha_r > alpha_limit || alpha_g > alpha_limit)
+    {
+        throw std::overflow_error("Alpha parameters are too large and may overflow calculations.");
+    }
+
     if (m_data_size_list.size() != static_cast<size_t>(m_member_size))
     {
         throw std::runtime_error("Data array not set");
@@ -193,19 +202,19 @@ void HRLModelHelper::Initialization(void)
     m_mu_prior.setZero();
     m_mu_mean.setZero();
 
-    // Empty the containers of matrix objects
+    // Reset the containers of matrix objects
     m_W_list.clear();
     m_capital_sigma_list.clear();
-    m_capital_sigma_posterior_list.clear();
-    m_capital_lambda_list.clear();
+    m_capital_sigma_posterior_list.assign(static_cast<size_t>(m_member_size),
+                                          MatrixXd::Identity(m_basis_size, m_basis_size));
+    m_capital_lambda_list.assign(static_cast<size_t>(m_member_size),
+                                 MatrixXd::Identity(m_basis_size, m_basis_size));
 
     for (int i = 0; i < m_member_size; i++)
     { //=== Begin of member ID loop (0 ... I-1)
         const auto & data_size{ m_data_size_list.at(static_cast<size_t>(i)) };
         m_W_list.emplace_back(MatrixXd::Identity(data_size, data_size).diagonal());
         m_capital_sigma_list.emplace_back(MatrixXd::Identity(data_size, data_size).diagonal());
-        m_capital_sigma_posterior_list.emplace_back(MatrixXd::Identity(m_basis_size, m_basis_size));
-        m_capital_lambda_list.emplace_back(MatrixXd::Identity(m_basis_size, m_basis_size));
     } //=== End of member ID loop
 }
 
