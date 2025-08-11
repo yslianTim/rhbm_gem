@@ -82,11 +82,7 @@ void HRLModelHelper::SetDataArray(
             }
             if (!sample.array().allFinite())
             {
-                // To be update the strategy to handle this case
-                Logger::Log(LogLevel::Error,
-                    "HRLModelHelper::SetDataArray : Member dataset contains non-finite value for member: "
-                    + member_info);
-                //throw std::invalid_argument("Member dataset contains non-finite value.");
+                throw std::invalid_argument("Member dataset contains non-finite value.");
             }
             for (int j = 0; j < m_basis_size; j++)
             {
@@ -197,7 +193,8 @@ void HRLModelHelper::AlgorithmBetaMDPDE(double alpha_r)
             if (iter == m_maximum_iteration - 1)
             {
                 Logger::Log(LogLevel::Warning,
-                            "Reach maximum iterations (Beta MDPDE) before achieving tolerance for member: "
+                            "HRLModelHelper::AlgorithmBetaMDPDE : "
+                            "Reach maximum iterations before achieving tolerance for member -> "
                             + m_member_info_list.at(static_cast<size_t>(i)));
             }
         } //=== End of iteration loop
@@ -212,8 +209,9 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
 {
     if (m_member_size == 1)
     {
-        Logger::Log(LogLevel::Info,
-                    "HRLModelHelper::AlgorithmMuMDPDE : Only one member is present, using OLS estimate for Mu MDPDE.");
+        Logger::Log(LogLevel::Debug,
+                    "HRLModelHelper::AlgorithmMuMDPDE : "
+                    "Only one member is present, using OLS estimate for Mu MDPDE.");
         m_mu_MDPDE = m_beta_MDPDE_array.col(0);
         m_capital_lambda = MatrixXd::Zero(m_basis_size, m_basis_size);
         m_capital_lambda_list.at(0) = m_capital_lambda;
@@ -244,7 +242,8 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
     m_mu_MDPDE = m_mu_iter;
     for (int i = 0; i < m_member_size; i++)
     {
-        m_capital_lambda_list.at(static_cast<size_t>(i)) = m_member_size * m_omega_h / m_omega_array(i) * m_capital_lambda.array();
+        m_capital_lambda_list.at(static_cast<size_t>(i)) =
+            m_member_size * m_omega_h / m_omega_array(i) * m_capital_lambda.array();
     }
 
 }
@@ -257,7 +256,9 @@ void HRLModelHelper::AlgorithmWEB(void)
     {
         const auto & X{ m_X_list.at(i) };
         const auto & y{ m_y_list.at(i) };
-        auto inv_capital_sigma{ EigenMatrixUtility::GetInverseDiagonalMatrix(m_capital_sigma_list.at(i)) };
+        auto inv_capital_sigma{
+            EigenMatrixUtility::GetInverseDiagonalMatrix(m_capital_sigma_list.at(i))
+        };
         MatrixXd inv_capital_lambda;
         if (m_member_size == 1)
         {
@@ -270,7 +271,8 @@ void HRLModelHelper::AlgorithmWEB(void)
         MatrixXd gram_matrix{ X.transpose() * inv_capital_sigma * X };
         VectorXd moment_matrix{ X.transpose() * inv_capital_sigma * y };
         MatrixXd inv_capital_sigma_posterior{ gram_matrix + inv_capital_lambda };
-        m_capital_sigma_posterior_list.at(i) = EigenMatrixUtility::GetInverseMatrix(inv_capital_sigma_posterior);
+        m_capital_sigma_posterior_list.at(i) =
+            EigenMatrixUtility::GetInverseMatrix(inv_capital_sigma_posterior);
         const auto & capital_sigma_posterior{ m_capital_sigma_posterior_list.at(i) };
         m_beta_posterior_array.col(static_cast<int>(i)) =
             capital_sigma_posterior * (moment_matrix + inv_capital_lambda * m_mu_MDPDE);
@@ -280,8 +282,9 @@ void HRLModelHelper::AlgorithmWEB(void)
     
     if (m_member_size == 1)
     {
-        Logger::Log(LogLevel::Info,
-                    "HRLModelHelper::AlgorithmWEB : Only one member is present, using MDPDE estimate for Mu prior.");
+        Logger::Log(LogLevel::Debug,
+                    "HRLModelHelper::AlgorithmWEB : "
+                    "Only one member is present, using MDPDE estimate for Mu prior.");
         m_mu_prior = m_beta_MDPDE_array.col(0);
     }
     else
@@ -302,11 +305,12 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
     VectorXd residual{ y - (X * beta) };
     auto numerator{ static_cast<double>(residual.transpose() * W * residual) };
     auto denominator{ W.diagonal().sum() - n * alpha_r * pow(1.0 + alpha_r, -1.5) };
-    if (denominator == 0.0)
+    if (denominator <= 0.0)
     {
         m_sigma_square_array(member_id) = 1.0e+200;
         Logger::Log(LogLevel::Info,
-            "HRLModelHelper::CalculateDataVarianceSquare : Zero denominator in CalculateDataVarianceSquare for member: "
+            "HRLModelHelper::CalculateDataVarianceSquare : "
+            "Non-positive denominator in CalculateDataVarianceSquare for member -> "
             + m_member_info_list.at(static_cast<size_t>(member_id)));
         return;
     }
@@ -332,7 +336,9 @@ void HRLModelHelper::CalculateDataCovariance(int member_id)
 void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
 {
     MatrixXd numerator{ MatrixXd::Zero(m_basis_size, m_basis_size) };
-    double denominator{ m_omega_sum - m_member_size * alpha_g * pow(1.0 + alpha_g, -1.0 - 0.5 * m_basis_size) };
+    double denominator{
+        m_omega_sum - m_member_size * alpha_g * pow(1.0 + alpha_g, -1.0 - 0.5 * m_basis_size)
+    };
     if (denominator == 0.0)
     {
         denominator = 1.0e-10; // Avoid division by zero
@@ -405,7 +411,8 @@ void HRLModelHelper::CalculateStatisticalDistance(void)
         auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(m_capital_lambda) };
         for (int i = 0; i < m_member_size; i++)
         {
-            m_statistical_distance_array(i) = error_array.col(i).transpose() * inv_capital_lambda * error_array.col(i);
+            m_statistical_distance_array(i) =
+                error_array.col(i).transpose() * inv_capital_lambda * error_array.col(i);
         }
     }
 }
