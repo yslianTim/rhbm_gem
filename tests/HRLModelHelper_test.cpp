@@ -308,7 +308,7 @@ TEST(HRLModelHelperTest, ThrowsWhenDataVarianceDenominatorNonPositive)
     EXPECT_THROW(helper.RunEstimation(1.0e9, 0.0), std::runtime_error);
 }
 
-TEST(HRLModelHelperTest, ThrowsWhenMemberCovarianceDenominatorNonPositive)
+TEST(HRLModelHelperTest, HandlesMemberCovarianceDenominatorNonPositive)
 {
     // Two members with vastly different intercepts force member weights to minimum
     auto member0{ CreateMember({{0.0, 0.0}, {1.0, 0.1}, {2.0, -0.1}}, "member_0") };
@@ -320,7 +320,10 @@ TEST(HRLModelHelperTest, ThrowsWhenMemberCovarianceDenominatorNonPositive)
     // alpha_g chosen slightly above the theoretical root to make the
     // denominator of CalculateMemberCovariance non-positive
     const double alpha_g{ 0.005050733883341149 };
-    EXPECT_THROW(helper.RunEstimation(0.0, alpha_g), std::runtime_error);
+    EXPECT_NO_THROW(helper.RunEstimation(0.0, alpha_g));
+
+    const auto & lambda{ helper.GetCapitalLambdaMatrix() };
+    ASSERT_TRUE(lambda.array().allFinite());
 }
 
 TEST(HRLModelHelperTest, GettersThrowOnInvalidId)

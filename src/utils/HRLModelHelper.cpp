@@ -354,10 +354,10 @@ void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
     };
     if (denominator <= 0.0)
     {
-        //denominator = 1.0e-10; // Avoid division by zero
-        throw std::runtime_error(
+        Logger::Log(LogLevel::Warning,
             "HRLModelHelper::CalculateMemberCovariance : "
-            "Member covariance denominator is non-positive.");
+            "Member covariance denominator is non-positive; using previous value.");
+        return; // Leave m_capital_lambda unchanged
     }
     MatrixXd residual_array{ m_beta_MDPDE_array.colwise() - m_mu_iter };
     for (int i = 0; i < m_member_size; i++)
@@ -366,6 +366,13 @@ void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
         numerator += m_omega_array(i) * (residual * residual.transpose());
     }
     m_capital_lambda = numerator / denominator;
+    if (!m_capital_lambda.array().allFinite())
+    {
+        Logger::Log(LogLevel::Warning,
+            "HRLModelHelper::CalculateMemberCovariance : "
+            "Resulting covariance has non-finite entries; resetting to identity.");
+        m_capital_lambda = MatrixXd::Identity(m_basis_size, m_basis_size);
+    }
 }
 
 void HRLModelHelper::CalculateBetaByMDPDE(int member_id)

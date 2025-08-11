@@ -8,6 +8,19 @@
 
 PYBIND11_MODULE(cpp_module, m)
 {
+    pybind11::enum_<PainterType>(m, "PainterType")
+        .value("ATOM",       PainterType::ATOM)
+        .value("MODEL",      PainterType::MODEL)
+        .value("COMPARISON", PainterType::COMPARISON)
+        .value("DEMO",       PainterType::DEMO);
+    pybind11::implicitly_convertible<int, PainterType>();
+    
+    pybind11::enum_<PrinterType>(m, "PrinterType")
+        .value("ATOM_POSITION",  PrinterType::ATOM_POSITION)
+        .value("MAP_VALUE",      PrinterType::MAP_VALUE)
+        .value("GAUS_ESTIMATES", PrinterType::GAUS_ESTIMATES);
+    pybind11::implicitly_convertible<int, PrinterType>();
+
     pybind11::class_<PotentialAnalysisCommand>(m, "PotentialAnalysisCommand")
         .def(pybind11::init<>())
         .def("Execute",                 &PotentialAnalysisCommand::Execute)
