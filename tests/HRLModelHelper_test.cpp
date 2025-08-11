@@ -296,7 +296,7 @@ TEST(HRLModelHelperTest, ThrowsWhenAlphaGIsNotFinite)
                  std::invalid_argument);
 }
 
-TEST(HRLModelHelperTest, ThrowsWhenDataVarianceDenominatorNonPositive)
+TEST(HRLModelHelperTest, HandlesDataVarianceDenominatorNonPositive)
 {
     // Craft data with a huge outlier so that all weights collapse to zero
     auto member{ CreateMember({{0.0, 1.0}, {1.0, 2.0}, {2.0, 1.0e9}}, "degenerate") };
@@ -305,7 +305,8 @@ TEST(HRLModelHelperTest, ThrowsWhenDataVarianceDenominatorNonPositive)
     HRLModelHelper helper{ 2, 1 };
     helper.SetDataArray(data_array);
     // Large alpha_r forces denominator to be non-positive
-    EXPECT_THROW(helper.RunEstimation(1.0e9, 0.0), std::runtime_error);
+    EXPECT_NO_THROW(helper.RunEstimation(1.0e9, 0.0));
+    EXPECT_TRUE(std::isfinite(helper.GetSigmaSquare(0)));
 }
 
 TEST(HRLModelHelperTest, HandlesMemberCovarianceDenominatorNonPositive)

@@ -317,12 +317,23 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
     auto denominator{ W.diagonal().sum() - n * alpha_r * pow(1.0 + alpha_r, -1.5) };
     if (denominator <= 0.0)
     {
-        //m_sigma_square_array(member_id) = 1.0e+200;
-        throw std::runtime_error(
+        Logger::Log(
+            LogLevel::Warning,
             "Non-positive denominator in CalculateDataVarianceSquare for member -> "
-            + m_member_info_list.at(static_cast<size_t>(member_id)));
+            + m_member_info_list.at(static_cast<size_t>(member_id))
+            + ", using small positive value");
+        denominator = 1.0e-10; // avoid division by zero
     }
-    m_sigma_square_array(member_id) = numerator / denominator;
+    auto sigma_square{ numerator / denominator };
+    if (!std::isfinite(sigma_square))
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Non-finite variance in CalculateDataVarianceSquare for member -> "
+            + m_member_info_list.at(static_cast<size_t>(member_id)));
+        return;
+    }
+    m_sigma_square_array(member_id) = sigma_square;
 }
 
 void HRLModelHelper::CalculateDataCovariance(int member_id)
@@ -487,6 +498,15 @@ double HRLModelHelper::GetStatisticalDistance(int id) const
         throw std::out_of_range("member id out of range");
     }
     return m_statistical_distance_array(id);
+}
+
+double HRLModelHelper::GetSigmaSquare(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_sigma_square_array(id);
 }
 
 const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) const
