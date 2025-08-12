@@ -1,10 +1,13 @@
 #include "HRLModelTestCommand.hpp"
 #include "HRLModelHelper.hpp"
 #include "ROOTHelper.hpp"
+#include "ScopeTimer.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
 #include <random>
+#include <memory>
+#include <vector>
 
 namespace {
 CommandRegistrar<HRLModelTestCommand> registrar_model_test{
@@ -21,6 +24,17 @@ HRLModelTestCommand::HRLModelTestCommand(void) :
 void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RegisterCLIOptionsExtend() called.");
+    std::map<std::string, TesterType> tester_map
+    {
+        {"1", TesterType::DATA_OUTLIER},      {"data_outlier",   TesterType::DATA_OUTLIER},
+        {"2", TesterType::MEMBER_OUTLIER},    {"member_outlier", TesterType::MEMBER_OUTLIER},
+        {"3", TesterType::MODEL_ALPHA_DATA},  {"alpha_data",     TesterType::MODEL_ALPHA_DATA},
+        {"4", TesterType::MODEL_ALPHA_MEMBER},{"alpha_member",   TesterType::MODEL_ALPHA_MEMBER}
+    };
+    cmd->add_option("-t,--tester", m_options.tester_choice,
+        "Tester choice")
+        ->required()
+        ->transform(CLI::CheckedTransformer(tester_map, CLI::ignore_case));
     cmd->add_option("--fit-min", m_options.fit_range_min,
         "Minimum fitting range")->default_val(m_options.fit_range_min);
     cmd->add_option("--fit-max", m_options.fit_range_max,
@@ -34,7 +48,32 @@ void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 bool HRLModelTestCommand::Execute(void)
 {
     Logger::Log(LogLevel::Debug, "HRLModelTestCommand::Execute() called.");
-
+    switch (m_options.tester_choice)
+    {
+        case TesterType::DATA_OUTLIER:
+            RunSimulationTestOnDataOutlier();
+            break;
+        case TesterType::MEMBER_OUTLIER:
+            RunSimulationTestOnMemberOutlier();
+            break;
+        case TesterType::MODEL_ALPHA_DATA:
+            RunSimulationTestOnModelAlphaData();
+            break;
+        case TesterType::MODEL_ALPHA_MEMBER:
+            RunSimulationTestOnModelAlphaMember();
+            break;
+        default:
+            Logger::Log(LogLevel::Warning,
+                        "Invalid tester choice input : ["
+                        + std::to_string(static_cast<int>(m_options.tester_choice)) + "]");
+            Logger::Log(LogLevel::Warning,
+                        "Available Tester Choices:\n"
+                        "  [1] Simulation Test on Data Outlier\n"
+                        "  [2] Simulation Test on Member Outlier\n"
+                        "  [3] Simulation Test on Model alpha_data\n"
+                        "  [4] Simulation Test on Model alpha_member");
+            break;
+    }
     return true;
 }
 
@@ -47,4 +86,32 @@ bool HRLModelTestCommand::ValidateOptions(void) const
         return false;
     }
     return true;
+}
+
+void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)
+{
+    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnDataOutlier() called");
+    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnDataOutlier");
+
+}
+
+void HRLModelTestCommand::RunSimulationTestOnMemberOutlier(void)
+{
+    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnMemberOutlier() called");
+    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnMemberOutlier");
+
+}
+
+void HRLModelTestCommand::RunSimulationTestOnModelAlphaData(void)
+{
+    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnModelAlphaData() called");
+    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
+
+}
+
+void HRLModelTestCommand::RunSimulationTestOnModelAlphaMember(void)
+{
+    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnModelAlphaMember() called");
+    ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
+
 }

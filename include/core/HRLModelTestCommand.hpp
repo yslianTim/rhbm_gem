@@ -1,14 +1,17 @@
 #pragma once
 
 #include <CLI/CLI.hpp>
+#include <filesystem>
 
 #include "CommandBase.hpp"
+#include "OptionEnumClass.hpp"
 
 class HRLModelTestCommand : public CommandBase
 {
 public:
     struct Options : public CommandOptions
     {
+        TesterType tester_choice{ TesterType::DATA_OUTLIER };
         double fit_range_min{ 0.0 };
         double fit_range_max{ 1.0 };
         double alpha_r{ 0.1 };
@@ -27,12 +30,18 @@ public:
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
+    void SetThreadSize(int value) { m_options.thread_size = value; }
+    void SetPrinterChoice(TesterType value) { m_options.tester_choice = value; }
+    void SetFolderPath(const std::filesystem::path & path) { m_options.folder_path = path; }
     void SetFitRangeMinimum(double value) { m_options.fit_range_min = value; }
     void SetFitRangeMaximum(double value) { m_options.fit_range_max = value; }
     void SetAlphaR(double value) { m_options.alpha_r = value; }
     void SetAlphaG(double value) { m_options.alpha_g = value; }
-    void SetThreadSize(int value) { m_options.thread_size = value; }
 
 private:
+    void RunSimulationTestOnDataOutlier(void);
+    void RunSimulationTestOnMemberOutlier(void);
+    void RunSimulationTestOnModelAlphaData(void);
+    void RunSimulationTestOnModelAlphaMember(void);
 
 };

@@ -30,3 +30,11 @@ enum class PartialCharge : int
     PARTIAL = 1,
     AMBER   = 2
 };
+
+enum class TesterType : int
+{
+    DATA_OUTLIER = 1,
+    MEMBER_OUTLIER = 2,
+    MODEL_ALPHA_DATA = 3,
+    MODEL_ALPHA_MEMBER = 4
+};
