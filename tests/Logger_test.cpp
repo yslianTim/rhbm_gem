@@ -52,7 +52,7 @@ TEST(LoggerTest, ThreadedLoggingAndLevelChanges)
     threads.reserve(num_threads);
     for (int i = 0; i < num_threads; i++)
     {
-        threads.emplace_back([messages_per_thread]() {
+        threads.emplace_back([&]() {
             for (int j = 0; j < messages_per_thread; j++)
             {
                 Logger::SetLogLevel(LogLevel::Debug);
@@ -77,7 +77,7 @@ TEST(LoggerTest, ThreadedErrorLoggingAndLevelChanges)
     threads.reserve(num_threads);
     for (int i = 0; i < num_threads; i++)
     {
-        threads.emplace_back([messages_per_thread]() {
+        threads.emplace_back([&]() {
             for (int j = 0; j < messages_per_thread; j++)
             {
                 Logger::SetLogLevel(LogLevel::Debug);

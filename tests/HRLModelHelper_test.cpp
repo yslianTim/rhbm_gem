@@ -271,9 +271,25 @@ TEST_F(HRLModelHelperTest, RunEstimationUsesNewDataset)
     EXPECT_NEAR(helper.GetBetaMatrixMDPDE(0)(0), 1.0, 1e-9);
 }
 
+TEST_F(HRLModelHelperTest, MuVectorMatchesWeightedMean)
+{
+    HRLModelHelper helper{ 2, 2 };
+    auto member1{ CreateMember({{1.0, 2.0}, {2.0, 5.0}}, "m1") };
+    auto member2{ CreateMember({{1.0, 1.0}, {2.0, 2.0}}, "m2") };
+    std::vector<DataTuple> data{ member1, member2 };
+    helper.SetDataArray(data);
+    helper.RunEstimation(0.0, 0.5);
+    const double beta0{ helper.GetBetaMatrixMDPDE(0)(0) };
+    const double beta1{ helper.GetBetaMatrixMDPDE(1)(0) };
+    const double w0{ helper.GetMemberWeight(0) };
+    const double w1{ helper.GetMemberWeight(1) };
+    const double expected_mu{ (beta0 * w0 + beta1 * w1) / (w0 + w1) };
+    EXPECT_NEAR(helper.GetMuVectorMDPDE()(0), expected_mu, 1e-9);
+}
+
 TEST_F(HRLModelHelperTest, RunEstimationUpdatesWeightsWithNewDataset)
 {
-    HRLModelHelper helper{1, 1};
+    HRLModelHelper helper{ 1, 1 };
 
     // Dataset A: two samples that produce non-identity weights
     std::vector<Eigen::VectorXd> member_a;

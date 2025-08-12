@@ -347,6 +347,14 @@ void HRLModelHelper::AlgorithmWEB(void)
 
 void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
 {
+    double alpha_r_pow{ std::pow(1.0 + alpha_r, -1.5) };
+    if (!std::isfinite(alpha_r_pow))
+    {
+        Logger::Log(LogLevel::Warning,
+            "HRLModelHelper::AlgorithmBetaMDPDE : "
+            "non-finite alpha_r power term; using 0.0");
+        alpha_r_pow = 0.0;
+    }
     const auto & X{ m_X_list.at(static_cast<size_t>(member_id)) };
     const auto & y{ m_y_list.at(static_cast<size_t>(member_id)) };
     const auto & W{ m_W_list.at(static_cast<size_t>(member_id)) };
@@ -354,7 +362,7 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha_r)
     VectorXd beta{ m_beta_iter_array.col(member_id) };
     VectorXd residual{ y - (X * beta) };
     auto numerator{ static_cast<double>(residual.transpose() * W * residual) };
-    auto denominator{ W.diagonal().sum() - n * alpha_r * pow(1.0 + alpha_r, -1.5) };
+    auto denominator{ W.diagonal().sum() - n * alpha_r * alpha_r_pow };
     if (denominator <= 0.0)
     {
         Logger::Log(
@@ -414,10 +422,17 @@ void HRLModelHelper::CalculateDataCovariance(int member_id)
 
 void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
 {
+    double alpha_g_pow{ std::pow(1.0 + alpha_g, -1.0 - 0.5 * m_basis_size) };
+    if (!std::isfinite(alpha_g_pow))
+    {
+        Logger::Log(LogLevel::Warning,
+            "HRLModelHelper::CalculateMemberCovariance : "
+            "non-finite alpha_g power term; using 0.0");
+        alpha_g_pow = 0.0;
+    }
+
     MatrixXd numerator{ MatrixXd::Zero(m_basis_size, m_basis_size) };
-    double denominator{
-        m_omega_sum - m_member_size * alpha_g * pow(1.0 + alpha_g, -1.0 - 0.5 * m_basis_size)
-    };
+    double denominator{ m_omega_sum - m_member_size * alpha_g * alpha_g_pow };
     if (denominator <= 0.0)
     {
         Logger::Log(LogLevel::Warning,
@@ -453,9 +468,13 @@ void HRLModelHelper::CalculateBetaByMDPDE(int member_id)
 
 void HRLModelHelper::CalculateMuByMDPDE(void)
 {
+    // Method 1
     MatrixXd numerator{ m_beta_MDPDE_array.array() / m_omega_sum };
     for (int i = 0; i < m_member_size; i++) numerator.col(i) *= m_omega_array(i);
     m_mu_iter = numerator.rowwise().sum();
+
+    // Method 2 (To be checked the consistency with Method 1)
+    //m_mu_iter = (m_beta_MDPDE_array * m_omega_array.matrix()) / m_omega_sum;
 }
 
 void HRLModelHelper::CalculateMemberWeight(double alpha_g)
@@ -606,36 +625,36 @@ const Eigen::DiagonalMatrix<double, Eigen::Dynamic> &
 HRLModelHelper::GetDataWeightMatrix(int id) const
 {
     ValidateMemberId(id);
-    return m_W_list.at(static_cast<size_t>(id));
+    return m_W_list[static_cast<size_t>(id)];
 }
 
 const Eigen::DiagonalMatrix<double, Eigen::Dynamic> &
 HRLModelHelper::GetDataCovarianceMatrix(int id) const
 {
     ValidateMemberId(id);
-    return m_capital_sigma_list.at(static_cast<size_t>(id));
+    return m_capital_sigma_list[static_cast<size_t>(id)];
 }
 
 const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) const
 {
     ValidateMemberId(id);
-    return m_capital_sigma_posterior_list.at(static_cast<size_t>(id));
+    return m_capital_sigma_posterior_list[static_cast<size_t>(id)];
 }
 
 Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixPosterior(int id) const
 {
     ValidateMemberId(id);
-    return Eigen::Ref<const Eigen::VectorXd>(m_beta_posterior_array.col(id));
+    return Eigen::Ref<const Eigen::VectorXd>(m_beta_posterior_array.col(static_cast<Eigen::Index>(id)));
 }
 
 Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixMDPDE(int id) const
 {
     ValidateMemberId(id);
-    return Eigen::Ref<const Eigen::VectorXd>(m_beta_MDPDE_array.col(id));
+    return Eigen::Ref<const Eigen::VectorXd>(m_beta_MDPDE_array.col(static_cast<Eigen::Index>(id)));
 }
 
 Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixOLS(int id) const
 {
     ValidateMemberId(id);
-    return Eigen::Ref<const Eigen::VectorXd>(m_beta_OLS_array.col(id));
+    return Eigen::Ref<const Eigen::VectorXd>(m_beta_OLS_array.col(static_cast<Eigen::Index>(id)));
 }
