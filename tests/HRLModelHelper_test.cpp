@@ -9,6 +9,7 @@
 
 #include "HRLModelHelper.hpp"
 #include "Logger.hpp"
+#include "EigenMatrixUtility.hpp"
 
 namespace {
 
@@ -497,22 +498,31 @@ TEST_F(HRLModelHelperTest, HandlesNonFiniteDataVarianceSquare)
     EXPECT_GT(sigma, 0.0);
 }
 
-TEST_F(HRLModelHelperTest, HandlesMemberCovarianceDenominatorNonPositive)
+TEST_F(HRLModelHelperTest, MemberCovarianceDenominatorNonPositiveKeepsLambdaUnchanged)
 {
-    // Two members with vastly different intercepts force member weights to minimum
-    auto member0{ CreateMember({{0.0, 0.0}, {1.0, 0.1}, {2.0, -0.1}}, "member_0") };
-    auto member1{ CreateMember({{0.0, 1000.0}, {1.0, 1000.1}, {2.0, 999.9}}, "member_1") };
+    // Two members with noticeably different intercepts yield extreme residuals
+    auto member0{ CreateMember({{0.0, 0.0}, {1.0, 1.0}, {2.0, 2.0}}, "member_0") };
+    auto member1{ CreateMember({{0.0, 5.0}, {1.0, 6.0}, {2.0, 7.0}}, "member_1") };
     std::vector<DataTuple> data_array{ member0, member1 };
 
     HRLModelHelper helper{ 2, 2 };
     helper.SetDataArray(data_array);
-    // alpha_g chosen slightly above the theoretical root to make the
-    // denominator of CalculateMemberCovariance non-positive
-    const double alpha_g{ 0.005050733883341149 };
-    EXPECT_NO_THROW(helper.RunEstimation(0.0, alpha_g));
+    // Capital lambda should start as the identity matrix
+    Eigen::MatrixXd lambda_before{ helper.GetCapitalLambdaMatrix() };
+    EXPECT_TRUE(lambda_before.isApprox(Eigen::MatrixXd::Identity(2, 2)));
 
-    const auto & lambda{ helper.GetCapitalLambdaMatrix() };
-    ASSERT_TRUE(lambda.array().allFinite());
+    // Use a large alpha_g so that CalculateMemberCovariance has non-positive denominator
+    const double alpha_g{ 100.0 };
+    auto prev_level{ Logger::GetLogLevel() };
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStderr();
+    EXPECT_NO_THROW(helper.RunEstimation(0.0, alpha_g));
+    const std::string err{ testing::internal::GetCapturedStderr() };
+    Logger::SetLogLevel(prev_level);
+    EXPECT_NE(std::string::npos, err.find("Member covariance denominator is non-positive"));
+
+    Eigen::MatrixXd lambda_after{ helper.GetCapitalLambdaMatrix() };
+    EXPECT_TRUE(lambda_after.isApprox(lambda_before));
 }
 
 TEST_F(HRLModelHelperTest, MemberWeightsClampedToMinimum)
@@ -553,6 +563,7 @@ TEST_F(HRLModelHelperTest, GettersThrowOnInvalidId)
     EXPECT_THROW(helper.GetBetaMatrixOLS(invalid_id), std::out_of_range);
     EXPECT_THROW(helper.GetSigmaSquare(invalid_id), std::out_of_range);
     EXPECT_THROW(helper.GetMemberWeight(invalid_id), std::out_of_range);
+    EXPECT_THROW(helper.GetDataWeightMatrix(invalid_id), std::out_of_range);
 
     const int negative_id{ -1 };
     EXPECT_THROW(helper.GetOutlierFlag(negative_id), std::out_of_range);
@@ -563,6 +574,7 @@ TEST_F(HRLModelHelperTest, GettersThrowOnInvalidId)
     EXPECT_THROW(helper.GetBetaMatrixOLS(negative_id), std::out_of_range);
     EXPECT_THROW(helper.GetSigmaSquare(negative_id), std::out_of_range);
     EXPECT_THROW(helper.GetMemberWeight(negative_id), std::out_of_range);
+    EXPECT_THROW(helper.GetDataWeightMatrix(negative_id), std::out_of_range);
 }
 
 TEST_F(HRLModelHelperTest, EstimationOnSmallSyntheticData)
@@ -702,6 +714,74 @@ TEST_F(HRLModelHelperTest, OutlierFlagsWithDivergentData)
         EXPECT_GT(dist, 0.0);
         EXPECT_FALSE(helper.GetOutlierFlag(i));
     }
+}
+
+TEST_F(HRLModelHelperTest, MuPriorEqualsMuMDPDEForTwoMembers)
+{
+    auto member0{ CreateMember({{0.0,  0.0}, {1.0,  1.0}, {2.0,  2.0}}, "member_0") };
+    auto member1{ CreateMember({{0.0, 10.0}, {1.0, 12.0}, {2.0, 14.0}}, "member_1") };
+    std::vector<DataTuple> data_array{ member0, member1 };
+    HRLModelHelper helper(2, 2);
+    helper.SetDataArray(data_array);
+    helper.SetMaximumIteration(1000);
+    helper.SetTolerance(1.0e-6);
+    helper.RunEstimation(0.0, 0.0);
+    const auto & mu_prior{ helper.GetMuVectorPrior() };
+    const auto & mu_mdpde{ helper.GetMuVectorMDPDE() };
+    EXPECT_TRUE(mu_prior.isApprox(mu_mdpde));
+
+    const auto & data0{ std::get<0>(member0) };
+    const auto & data1{ std::get<0>(member1) };
+    const int n0{ static_cast<int>(data0.size()) };
+    const int n1{ static_cast<int>(data1.size()) };
+    Eigen::MatrixXd X0(n0, 2), X1(n1, 2);
+    Eigen::VectorXd y0(n0), y1(n1);
+    for (int i = 0; i < n0; i++)
+    {
+        X0.row(i) = data0[static_cast<size_t>(i)].head(2);
+        y0(i) = data0[static_cast<size_t>(i)](2);
+    }
+    for (int i = 0; i < n1; i++)
+    {
+        X1.row(i) = data1[static_cast<size_t>(i)].head(2);
+        y1(i) = data1[static_cast<size_t>(i)](2);
+    }
+
+    Eigen::VectorXd w0{ helper.GetDataWeightMatrix(0).diagonal() };
+    Eigen::VectorXd w1{ helper.GetDataWeightMatrix(1).diagonal() };
+    double sigma0{ helper.GetSigmaSquare(0) };
+    double sigma1{ helper.GetSigmaSquare(1) };
+    double inv_trace0{ w0.array().inverse().sum() };
+    double inv_trace1{ w1.array().inverse().sum() };
+    Eigen::VectorXd cap_sigma_diag0(n0);
+    Eigen::VectorXd cap_sigma_diag1(n1);
+    for (int j = 0; j < n0; ++j) cap_sigma_diag0(j) = n0 * sigma0 / w0(j) / inv_trace0;
+    for (int j = 0; j < n1; ++j) cap_sigma_diag1(j) = n1 * sigma1 / w1(j) / inv_trace1;
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> cap_sigma0(cap_sigma_diag0);
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> cap_sigma1(cap_sigma_diag1);
+    auto inv_cap_sigma0{ EigenMatrixUtility::GetInverseDiagonalMatrix(cap_sigma0) };
+    auto inv_cap_sigma1{ EigenMatrixUtility::GetInverseDiagonalMatrix(cap_sigma1) };
+    Eigen::MatrixXd gram0{ X0.transpose() * inv_cap_sigma0 * X0 };
+    Eigen::MatrixXd gram1{ X1.transpose() * inv_cap_sigma1 * X1 };
+    Eigen::VectorXd moment0{ X0.transpose() * inv_cap_sigma0 * y0 };
+    Eigen::VectorXd moment1{ X1.transpose() * inv_cap_sigma1 * y1 };
+    double omega0{ helper.GetMemberWeight(0) };
+    double omega1{ helper.GetMemberWeight(1) };
+    double omega_h{ 1.0 / (1.0 / omega0 + 1.0 / omega1) };
+    Eigen::MatrixXd capital_lambda{ helper.GetCapitalLambdaMatrix() };
+    Eigen::MatrixXd lambda0{ (2.0 * omega_h / omega0) * capital_lambda };
+    Eigen::MatrixXd lambda1{ (2.0 * omega_h / omega1) * capital_lambda };
+    auto inv_lambda0{ EigenMatrixUtility::GetInverseMatrix(lambda0) };
+    auto inv_lambda1{ EigenMatrixUtility::GetInverseMatrix(lambda1) };
+    Eigen::MatrixXd inv_sigma_post0{ gram0 + inv_lambda0 };
+    Eigen::MatrixXd inv_sigma_post1{ gram1 + inv_lambda1 };
+    Eigen::MatrixXd sigma_post0{ EigenMatrixUtility::GetInverseMatrix(inv_sigma_post0) };
+    Eigen::MatrixXd sigma_post1{ EigenMatrixUtility::GetInverseMatrix(inv_sigma_post1) };
+    Eigen::VectorXd numerator{ inv_lambda0 * sigma_post0 * moment0 + inv_lambda1 * sigma_post1 * moment1 };
+    Eigen::MatrixXd denominator{ inv_lambda0 * sigma_post0 * gram0 + inv_lambda1 * sigma_post1 * gram1 };
+    Eigen::VectorXd mu_prior_general{ EigenMatrixUtility::GetInverseMatrix(denominator) * numerator };
+    EXPECT_FALSE(mu_prior.isApprox(mu_prior_general));
+    EXPECT_FALSE(mu_mdpde.isApprox(mu_prior_general));
 }
 
 TEST_F(HRLModelHelperTest, AlphaGReweightsOutliers)
@@ -1039,4 +1119,52 @@ TEST_F(HRLModelHelperTest, CovarianceOverflowResetsToIdentity)
               err.find("Resulting covariance has non-finite entries"));
     EXPECT_TRUE(helper.GetCapitalLambdaMatrix()
                     .isApprox(Eigen::MatrixXd::Identity(1, 1)));
+}
+
+TEST_F(HRLModelHelperTest, OutlierFlagsAllWhenBasisSizeTooLarge)
+{
+    const int basis_size{ 11 };
+    const int member_size{ 2 };
+    HRLModelHelper helper{ basis_size, member_size };
+
+    // Member 0 data uses basis indices 0 and 1
+    std::vector<Eigen::VectorXd> member0;
+    Eigen::VectorXd m0s1(basis_size + 1);
+    m0s1 << 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0;
+    Eigen::VectorXd m0s2(basis_size + 1);
+    m0s2 << 1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0;
+    member0.emplace_back(m0s1);
+    member0.emplace_back(m0s2);
+
+    // Member 1 data uses basis indices 0 and 2
+    std::vector<Eigen::VectorXd> member1;
+    Eigen::VectorXd m1s1(basis_size + 1);
+    m1s1 << 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0;
+    Eigen::VectorXd m1s2(basis_size + 1);
+    m1s2 << 1.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0;
+    member1.emplace_back(m1s1);
+    member1.emplace_back(m1s2);
+
+    std::vector<DataTuple> data;
+    data.emplace_back(member0, "m0");
+    data.emplace_back(member1, "m1");
+    helper.SetDataArray(data);
+    helper.RunEstimation(0.0, 0.0);
+
+    for (int i = 0; i < member_size; ++i)
+    {
+        EXPECT_TRUE(helper.GetOutlierFlag(i));
+        EXPECT_GT(helper.GetStatisticalDistance(i), 0.0);
+        EXPECT_TRUE(std::isfinite(helper.GetSigmaSquare(i)));
+        EXPECT_TRUE(std::isfinite(helper.GetMemberWeight(i)));
+        EXPECT_TRUE(helper.GetBetaMatrixOLS(i).array().isFinite().all());
+        EXPECT_TRUE(helper.GetBetaMatrixMDPDE(i).array().isFinite().all());
+        EXPECT_TRUE(helper.GetBetaMatrixPosterior(i).array().isFinite().all());
+        EXPECT_TRUE(helper.GetCapitalSigmaMatrixPosterior(i).array().isFinite().all());
+        EXPECT_TRUE(helper.GetDataWeightMatrix(i).diagonal().array().isFinite().all());
+    }
+    EXPECT_TRUE(helper.GetCapitalLambdaMatrix().array().isFinite().all());
+    EXPECT_TRUE(helper.GetMuVectorPrior().array().isFinite().all());
+    EXPECT_TRUE(helper.GetMuVectorMDPDE().array().isFinite().all());
+    EXPECT_TRUE(helper.GetMuVectorMean().array().isFinite().all());
 }
