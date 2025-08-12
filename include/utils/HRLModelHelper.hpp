@@ -134,6 +134,11 @@ class HRLModelHelper
     Eigen::MatrixXd m_beta_OLS_array, m_beta_MDPDE_array, m_beta_posterior_array; // [basis_size x member_size]
 
 public:
+    static constexpr int DEFAULT_MAXIMUM_ITERATION{ 100 };
+    static constexpr double DEFAULT_TOLERANCE{ 1.0e-5 };
+    static constexpr double DEFAULT_WEIGHT_DATA_MIN{ 1.0e-8 };
+    static constexpr double DEFAULT_WEIGHT_MEMBER_MIN{ 1.0e-2 };
+    
     HRLModelHelper(void) = delete;
     HRLModelHelper(int basis_size, int member_size);
     ~HRLModelHelper() = default;
@@ -158,6 +163,7 @@ public:
     Eigen::Ref<const Eigen::VectorXd> GetBetaMatrixOLS(int id) const;
 
 private:
+    void ValidateMemberId(int id) const;
     void Initialization(void);
     void AlgorithmBetaMDPDE(double alpha_r);
     void AlgorithmMuMDPDE(double alpha_g);

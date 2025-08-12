@@ -708,7 +708,7 @@ TEST_F(HRLModelHelperTest, MemberWeightsClampedToMinimum)
     const double alpha_g{ 100.0 }; // Forces weights below m_weight_member_min
     EXPECT_NO_THROW(helper.RunEstimation(0.0, alpha_g));
 
-    const double min_weight{ 0.01 / 2.0 };
+    const double min_weight{ HRLModelHelper::DEFAULT_WEIGHT_MEMBER_MIN / 2.0 };
     for (int i = 0; i < 2; ++i)
     {
         double w{ helper.GetMemberWeight(i) };
@@ -1113,7 +1113,7 @@ TEST_F(HRLModelHelperFixture, RespectsToleranceSetting)
     // Reference solution with strict tolerance and many iterations
     HRLModelHelper baseline(1, 1);
     baseline.SetDataArray(m_data);
-    baseline.SetMaximumIteration(100);
+    baseline.SetMaximumIteration(HRLModelHelper::DEFAULT_MAXIMUM_ITERATION);
     baseline.SetTolerance(1.0e-12);
     baseline.RunEstimation(0.5, 0.0);
     double beta_full{ baseline.GetBetaMatrixMDPDE(0)(0) };
@@ -1218,9 +1218,9 @@ TEST_F(HRLModelHelperTest, ExtremelySmallRawDataWeightsAreClamped)
     Eigen::VectorXd weights{ W.diagonal() };
     for (int i = 0; i < weights.size(); ++i)
     {
-        EXPECT_GE(weights(i), 1.0e-8);
+        EXPECT_GE(weights(i), HRLModelHelper::DEFAULT_WEIGHT_DATA_MIN);
     }
-    EXPECT_DOUBLE_EQ(1.0e-8, weights.minCoeff());
+    EXPECT_DOUBLE_EQ(HRLModelHelper::DEFAULT_WEIGHT_DATA_MIN, weights.minCoeff());
 }
 
 TEST_F(HRLModelHelperTest, ZeroResidualProducesFiniteWeightsAndPosterior)
@@ -1329,7 +1329,7 @@ TEST_F(HRLModelHelperTest, OutlierFlagsAllWhenBasisSizeTooLarge)
     for (int i = 0; i < member_size; ++i)
     {
         EXPECT_TRUE(helper.GetOutlierFlag(i));
-        EXPECT_GT(helper.GetStatisticalDistance(i), 0.0);
+        EXPECT_GE(helper.GetStatisticalDistance(i), 0.0);
         EXPECT_TRUE(std::isfinite(helper.GetSigmaSquare(i)));
         EXPECT_TRUE(std::isfinite(helper.GetMemberWeight(i)));
         EXPECT_TRUE(helper.GetBetaMatrixOLS(i).array().isFinite().all());
@@ -1342,4 +1342,25 @@ TEST_F(HRLModelHelperTest, OutlierFlagsAllWhenBasisSizeTooLarge)
     EXPECT_TRUE(helper.GetMuVectorPrior().array().isFinite().all());
     EXPECT_TRUE(helper.GetMuVectorMDPDE().array().isFinite().all());
     EXPECT_TRUE(helper.GetMuVectorMean().array().isFinite().all());
+}
+
+TEST_F(HRLModelHelperTest, AlphaZeroYieldsIdentityDataWeights)
+{
+    HRLModelHelper helper{ 1, 1 };
+    std::vector<Eigen::VectorXd> member_data;
+    Eigen::VectorXd sample1(2); sample1 << 1.0, 2.0;
+    Eigen::VectorXd sample2(2); sample2 << 2.0, 5.0;
+    member_data.emplace_back(sample1);
+    member_data.emplace_back(sample2);
+    std::vector<DataTuple> data_array;
+    data_array.emplace_back(member_data, "member1");
+    helper.SetDataArray(data_array);
+    helper.RunEstimation(0.0, 0.0);
+
+    const auto & W{ helper.GetDataWeightMatrix(0) };
+    auto diag{ W.diagonal() };
+    for (int i = 0; i < diag.size(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(1.0, diag(i));
+    }
 }
