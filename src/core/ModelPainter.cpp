@@ -1230,10 +1230,16 @@ void ModelPainter::PaintAtomGausScatterPlot(
             entry_iter->CreateNormalizedGausEstimateScatterGraph(element_type, amplitude_min) :
             entry_iter->CreateGausEstimateScatterGraph(element_type)
         };
-        auto marker_size{ (AtomicInfoHelper::IsStandardElement(element_type)) ? 1.5f : 2.0f };
+        //auto marker_size{ (AtomicInfoHelper::IsStandardElement(element_type)) ? 1.5f : 2.0f };
+        auto atomic_number{ AtomicInfoHelper::GetAtomicNumber(element_type) };
+        auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
+        short marker_color{ (AtomicInfoHelper::IsStandardElement(element_type)) ?
+            AtomicInfoHelper::GetDisplayColor(element_type) : static_cast<short>(kRed)
+        };
+        auto transparency{ (atomic_number <= 8) ? 0.2f : 1.0f };
         ROOTHelper::SetMarkerAttribute(graph.get(),
             AtomicInfoHelper::GetDisplayMarker(element_type), marker_size,
-            AtomicInfoHelper::GetDisplayColor(element_type));
+            marker_color, transparency);
         for (int p = 0; p < graph->GetN(); p++)
         {
             auto x{ graph->GetPointX(p) };
