@@ -6,6 +6,7 @@
 #include <cmath>
 #include <limits>
 #include <cstdint>
+#include <type_traits>
 
 #include "HRLModelHelper.hpp"
 #include "Logger.hpp"
@@ -15,6 +16,11 @@ namespace {
 
 using Eigen::VectorXd;
 using DataTuple = std::tuple<std::vector<Eigen::VectorXd>, std::string>;
+
+static_assert(!std::is_convertible_v<int, HRLModelHelper>,
+              "HRLModelHelper should not be implicitly constructible from a single int");
+static_assert(!std::is_convertible_v<int[2], HRLModelHelper>,
+              "HRLModelHelper should not be implicitly constructible from an int array");
 
 template <typename Vec>
 class OversizedVectorGuard
@@ -101,11 +107,10 @@ TEST_F(HRLModelHelperTest, SetMaximumIterationRejectsZero)
     EXPECT_THROW(helper.SetMaximumIteration(0), std::invalid_argument);
 }
 
-TEST_F(HRLModelHelperTest, SetMaximumIterationRejectsTooLarge)
+TEST_F(HRLModelHelperTest, SetMaximumIterationRejectsNegative)
 {
     HRLModelHelper helper{ 1, 1 };
-    unsigned int too_large{ static_cast<unsigned int>(std::numeric_limits<int>::max()) + 1u };
-    EXPECT_THROW(helper.SetMaximumIteration(too_large), std::out_of_range);
+    EXPECT_THROW(helper.SetMaximumIteration(-1), std::invalid_argument);
 }
 
 TEST_F(HRLModelHelperTest, ThrowsOnNegativeTolerance)
@@ -1221,6 +1226,38 @@ TEST_F(HRLModelHelperTest, ExtremelySmallRawDataWeightsAreClamped)
         EXPECT_GE(weights(i), HRLModelHelper::DEFAULT_WEIGHT_DATA_MIN);
     }
     EXPECT_DOUBLE_EQ(HRLModelHelper::DEFAULT_WEIGHT_DATA_MIN, weights.minCoeff());
+}
+
+TEST_F(HRLModelHelperTest, NonFiniteExponentFallsBackToMinimum)
+{
+    std::vector<Eigen::VectorXd> samples;
+    Eigen::VectorXd normal(2);
+    normal << 1.0, 0.0;
+    samples.emplace_back(normal);
+    Eigen::VectorXd outlier(2);
+    outlier << 1.0, std::numeric_limits<double>::max();
+    samples.emplace_back(outlier);
+    std::vector<DataTuple> data_array;
+    data_array.emplace_back(samples, "extreme");
+    constexpr double alpha_r{ 0.5 };
+    HRLModelHelper helper{ 1, 1 };
+    helper.SetDataArray(data_array);
+    helper.RunEstimation(alpha_r, 0.0);
+
+    const auto & W{ helper.GetDataWeightMatrix(0) };
+    Eigen::VectorXd weights{ W.diagonal() };
+    for (int i = 0; i < weights.size(); ++i)
+    {
+        EXPECT_TRUE(std::isfinite(weights(i)));
+        EXPECT_GE(weights(i), HRLModelHelper::DEFAULT_WEIGHT_DATA_MIN);
+        EXPECT_LE(weights(i), 1.0);
+    }
+    EXPECT_DOUBLE_EQ(HRLModelHelper::DEFAULT_WEIGHT_DATA_MIN, weights.minCoeff());
+
+    double beta{ helper.GetBetaMatrixMDPDE(0)(0) };
+    double sigma{ helper.GetSigmaSquare(0) };
+    double exponent{ -0.5 * alpha_r * std::pow(outlier(1) - beta, 2) / sigma };
+    EXPECT_FALSE(std::isfinite(exponent));
 }
 
 TEST_F(HRLModelHelperTest, ZeroResidualProducesFiniteWeightsAndPosterior)

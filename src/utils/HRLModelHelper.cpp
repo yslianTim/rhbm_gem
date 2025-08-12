@@ -89,7 +89,7 @@ void HRLModelHelper::SetDataArray(
     X_list.reserve(static_cast<size_t>(m_member_size));
     y_list.reserve(static_cast<size_t>(m_member_size));
 
-    for (auto & [member_data, member_info] : data_array)
+    for (const auto & [member_data, member_info] : data_array)
     {
         if (member_data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
         {
@@ -129,17 +129,13 @@ void HRLModelHelper::SetDataArray(
     std::swap(m_member_info_list, member_info_list);
 }
 
-void HRLModelHelper::SetMaximumIteration(unsigned int size)
+void HRLModelHelper::SetMaximumIteration(int size)
 {
-    if (size == 0)
+    if (size <= 0)
     {
         throw std::invalid_argument("size must be greater than 0");
     }
-    if (size > static_cast<unsigned int>(std::numeric_limits<int>::max()))
-    {
-        throw std::out_of_range("size exceeds maximum value for int");
-    }
-    m_maximum_iteration = static_cast<int>(size);
+    m_maximum_iteration = size;
 }
 
 void HRLModelHelper::SetTolerance(double value)
@@ -511,13 +507,12 @@ void HRLModelHelper::CalculateDataWeight(int member_id, double alpha_r)
         return;
     }
 
-    static const double kMaxLog{ std::log(std::numeric_limits<double>::max()) };
-    static const double kFallbackWeight{ 1.0 / m_weight_data_min };
-
+    const double max_log{ std::log(std::numeric_limits<double>::max()) };
+    const double fallback_weight{ m_weight_data_min };
     ArrayXd exponent{ -0.5 * alpha_r * (y - (X * beta)).array().square() / sigma_square };
-    exponent = exponent.cwiseMin(kMaxLog);
+    exponent = exponent.cwiseMin(max_log);
     ArrayXd W{ exponent.exp() };
-    W = W.unaryExpr([&](double w) { return std::isfinite(w) ? w : kFallbackWeight; });
+    W = W.unaryExpr([&](double w) { return (std::isfinite(w)) ? w : fallback_weight; });
     W = W.cwiseMax(m_weight_data_min);
     m_W_list.at(static_cast<size_t>(member_id)) = W.matrix().asDiagonal();
 }

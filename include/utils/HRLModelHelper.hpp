@@ -138,14 +138,14 @@ public:
     static constexpr double DEFAULT_TOLERANCE{ 1.0e-5 };
     static constexpr double DEFAULT_WEIGHT_DATA_MIN{ 1.0e-8 };
     static constexpr double DEFAULT_WEIGHT_MEMBER_MIN{ 1.0e-2 };
-    
+
     HRLModelHelper(void) = delete;
-    HRLModelHelper(int basis_size, int member_size);
+    explicit HRLModelHelper(int basis_size, int member_size);
     ~HRLModelHelper() = default;
 
     void SetDataArray(const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array);
     void RunEstimation(double alpha_r, double alpha_g);
-    void SetMaximumIteration(unsigned int size);
+    void SetMaximumIteration(int size);
     void SetTolerance(double value);
     bool GetOutlierFlag(int id) const;
     double GetStatisticalDistance(int id) const;
