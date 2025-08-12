@@ -1236,7 +1236,7 @@ TEST_F(HRLModelHelperTest, ZeroResidualProducesFiniteWeightsAndPosterior)
     EXPECT_TRUE(beta.array().isFinite().all());
 }
 
-TEST_F(HRLModelHelperTest, ThrowsOnDegenerateWeights)
+TEST_F(HRLModelHelperTest, DegenerateWeightsUseFallbackCovariance)
 {
     std::vector<Eigen::VectorXd> member_data;
     Eigen::VectorXd sample1(3);
@@ -1249,7 +1249,12 @@ TEST_F(HRLModelHelperTest, ThrowsOnDegenerateWeights)
     data_array.emplace_back(member_data, "collapse");
     HRLModelHelper helper(2, 1);
     ASSERT_NO_THROW(helper.SetDataArray(data_array));
-    EXPECT_THROW(helper.RunEstimation(1.0e8, 0.0), std::runtime_error);
+    EXPECT_NO_THROW(helper.RunEstimation(1.0e8, 0.0));
+    const auto & sigma{ helper.GetDataCovarianceMatrix(0) };
+    EXPECT_TRUE(sigma.diagonal().array().isFinite().all());
+    EXPECT_GT(sigma.diagonal().minCoeff(), 0.0);
+    Eigen::VectorXd weights{ helper.GetDataWeightMatrix(0).diagonal() };
+    EXPECT_TRUE(weights.array().isFinite().all());
 }
 
 TEST_F(HRLModelHelperTest, CovarianceOverflowResetsToIdentity)

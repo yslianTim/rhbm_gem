@@ -213,8 +213,12 @@ void HRLModelHelper::Initialization(void)
     for (int i = 0; i < m_member_size; i++)
     { //=== Begin of member ID loop (0 ... I-1)
         const auto & data_size{ m_data_size_list.at(static_cast<size_t>(i)) };
-        m_W_list.emplace_back(MatrixXd::Identity(data_size, data_size).diagonal());
-        m_capital_sigma_list.emplace_back(MatrixXd::Identity(data_size, data_size).diagonal());
+        DMatrixXd w{ data_size };
+        w.setIdentity();
+        m_W_list.emplace_back(std::move(w));
+        DMatrixXd sigma{ data_size };
+        sigma.setIdentity();
+        m_capital_sigma_list.emplace_back(std::move(sigma));
     } //=== End of member ID loop
 }
 
@@ -384,18 +388,30 @@ void HRLModelHelper::CalculateDataCovariance(int member_id)
     const auto & W{ m_W_list.at(static_cast<size_t>(member_id)) };
     const auto & sigma_square{ m_sigma_square_array(member_id) };
     VectorXd data_weight_array{ W.diagonal() };
+    const auto data_size{ m_data_size_list.at(static_cast<size_t>(member_id)) };
     const auto W_inverse_trace{ EigenMatrixUtility::GetInverseDiagonalMatrix(W).diagonal().sum() };
     if (!std::isfinite(W_inverse_trace) || W_inverse_trace <= 0.0)
     {
-        throw std::runtime_error(
-            "HRLModelHelper::CalculateDataCovariance : degenerate weights");
+        Logger::Log(LogLevel::Warning,
+            "HRLModelHelper::CalculateDataCovariance : "
+            "degenerate weights; using fallback covariance");
+        auto & capital_sigma_matrix{ m_capital_sigma_list.at(static_cast<size_t>(member_id)) };
+        if (capital_sigma_matrix.diagonal().size() != data_size)
+        {
+            capital_sigma_matrix.setIdentity(data_size);
+        }
+        return;
     }
-    const auto data_size{ m_data_size_list.at(static_cast<size_t>(member_id)) };
+    
     VectorXd capital_sigma{ VectorXd::Zero(data_size) };
     for (int j = 0; j < data_size; j++)
     {
         if (data_weight_array(j) == 0.0 || W_inverse_trace == 0.0) continue;
         capital_sigma(j) = data_size * sigma_square / data_weight_array(j) / W_inverse_trace;
+        if (!std::isfinite(capital_sigma(j)) || capital_sigma(j) <= 0.0)
+        {
+            capital_sigma(j) = 1.0;
+        }
     }
     m_capital_sigma_list.at(static_cast<size_t>(member_id)) = capital_sigma.asDiagonal();
 }
@@ -487,7 +503,12 @@ void HRLModelHelper::CalculateDataWeight(int member_id, double alpha_r)
         sigma_square = m_weight_data_min;
     }
     VectorXd beta{ m_beta_iter_array.col(member_id) };
-    ArrayXd W{ (-0.5 * alpha_r * (y - (X * beta)).array().square() / sigma_square).exp() };
+    ArrayXd exponent{ -0.5 * alpha_r * (y - (X * beta)).array().square() / sigma_square };
+    const double cap{ std::log(std::numeric_limits<double>::max()) };
+    exponent = exponent.cwiseMin(cap);
+    ArrayXd W{ exponent.exp() };
+    const double fallback{ 1.0 / m_weight_data_min };
+    W = W.unaryExpr([fallback](double w) { return std::isfinite(w) ? w : fallback; });
     W = W.cwiseMax(m_weight_data_min);
     m_W_list.at(static_cast<size_t>(member_id)) = W.matrix().asDiagonal();
 }
@@ -525,7 +546,11 @@ void HRLModelHelper::LabelOutlierMember(void)
         case 9: return 21.67;
         case 10: return 23.21;
         default:
-            return 0.0; // Default case for unsupported degrees of freedom
+            // Wilson-Hilferty approximation
+            const double z{ 2.3263478740408408 }; // standard normal 0.99 quantile
+            const double d{ static_cast<double>(df) };
+            const double term{ 1.0 - 2.0 / (9.0 * d) + z * std::sqrt(2.0 / (9.0 * d)) };
+            return d * term * term * term;
         }
     };
     const auto quantile{ chi_square_quantile(m_basis_size) };
@@ -570,13 +595,24 @@ double HRLModelHelper::GetMemberWeight(int id) const
     return m_omega_array(id);
 }
 
-const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & HRLModelHelper::GetDataWeightMatrix(int id) const
+const Eigen::DiagonalMatrix<double, Eigen::Dynamic> &
+HRLModelHelper::GetDataWeightMatrix(int id) const
 {
     if (id < 0 || id >= m_member_size)
     {
         throw std::out_of_range("member id out of range");
     }
     return m_W_list.at(static_cast<size_t>(id));
+}
+
+const Eigen::DiagonalMatrix<double, Eigen::Dynamic> &
+HRLModelHelper::GetDataCovarianceMatrix(int id) const
+{
+    if (id < 0 || id >= m_member_size)
+    {
+        throw std::out_of_range("member id out of range");
+    }
+    return m_capital_sigma_list.at(static_cast<size_t>(id));
 }
 
 const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) const
