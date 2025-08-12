@@ -123,6 +123,26 @@ TEST_F(HRLModelHelperTest, SetToleranceRejectsNonFinite)
                  std::invalid_argument);
 }
 
+TEST_F(HRLModelHelperTest, SetToleranceAcceptsZero)
+{
+    HRLModelHelper helper{1, 1};
+    ASSERT_NO_THROW(helper.SetTolerance(0.0));
+
+    // Minimal dataset to ensure RunEstimation still converges
+    std::vector<Eigen::VectorXd> member_data;
+    Eigen::VectorXd sample1(2);
+    sample1 << 1.0, 2.0;
+    Eigen::VectorXd sample2(2);
+    sample2 << 2.0, 5.0;
+    member_data.emplace_back(sample1);
+    member_data.emplace_back(sample2);
+    std::vector<DataTuple> data_array;
+    data_array.emplace_back(member_data, "member1");
+    ASSERT_NO_THROW(helper.SetDataArray(data_array));
+    EXPECT_NO_THROW(helper.RunEstimation(0.0, 0.5));
+    EXPECT_NEAR(helper.GetMuVectorMDPDE()(0), 2.4, 1e-9);
+}
+
 TEST_F(HRLModelHelperTest, DefaultInitializationValues)
 {
     const int basis_size{ 2 };
@@ -246,6 +266,43 @@ TEST_F(HRLModelHelperTest, RunEstimationUsesNewDataset)
     EXPECT_NEAR(helper.GetBetaMatrixMDPDE(0)(0), 1.0, 1e-9);
 }
 
+TEST_F(HRLModelHelperTest, RunEstimationUpdatesWeightsWithNewDataset)
+{
+    HRLModelHelper helper{1, 1};
+
+    // Dataset A: two samples that produce non-identity weights
+    std::vector<Eigen::VectorXd> member_a;
+    Eigen::VectorXd a1(2); a1 << 1.0, 1.0;
+    Eigen::VectorXd a2(2); a2 << 2.0, 10.0;
+    member_a.emplace_back(a1);
+    member_a.emplace_back(a2);
+    std::vector<DataTuple> data_a;
+    data_a.emplace_back(member_a, "member");
+    helper.SetDataArray(data_a);
+    helper.RunEstimation(0.5, 0.0);
+    Eigen::VectorXd w_a{ helper.GetDataWeightMatrix(0).diagonal() };
+    ASSERT_EQ(w_a.size(), 2);
+    EXPECT_FALSE(w_a.isApprox(Eigen::VectorXd::Ones(2)));
+
+    // Dataset B: different sample count; perfect fit yields unit weights
+    std::vector<Eigen::VectorXd> member_b;
+    Eigen::VectorXd b1(2); b1 << 1.0, 1.0;
+    Eigen::VectorXd b2(2); b2 << 2.0, 2.0;
+    Eigen::VectorXd b3(2); b3 << 3.0, 3.0;
+    member_b.emplace_back(b1);
+    member_b.emplace_back(b2);
+    member_b.emplace_back(b3);
+    std::vector<DataTuple> data_b;
+    data_b.emplace_back(member_b, "member");
+    helper.SetDataArray(data_b);
+    helper.RunEstimation(0.5, 0.0);
+    Eigen::VectorXd w_b{ helper.GetDataWeightMatrix(0).diagonal() };
+
+    ASSERT_EQ(w_b.size(), 3);
+    EXPECT_TRUE(w_b.isApprox(Eigen::VectorXd::Ones(3)));
+    EXPECT_FALSE(w_b.head(2).isApprox(w_a));
+}
+
 TEST_F(HRLModelHelperTest, RunEstimationRecomputesForDifferentAlphas)
 {
     HRLModelHelper helper{1, 1};
@@ -274,6 +331,75 @@ TEST_F(HRLModelHelperTest, RunEstimationRecomputesForDifferentAlphas)
 
     EXPECT_NE(beta_initial, beta_second);
     EXPECT_NE(sigma_initial, sigma_second);
+}
+
+TEST_F(HRLModelHelperTest, LabelsOutlierMemberWhenDfIsThree)
+{
+    const int basis_size{ 3 };
+    const int member_size{ 3 };
+    HRLModelHelper helper{ basis_size, member_size };
+
+    // Members 0 and 1: similar coefficients (intercept 0, slopes 1)
+    std::vector<Eigen::VectorXd> member0;
+    std::vector<Eigen::VectorXd> member1;
+    Eigen::VectorXd a1(4); a1 << 1.0, 0.0, 0.0, 0.0;
+    Eigen::VectorXd a2(4); a2 << 1.0, 1.0, 0.0, 1.0;
+    Eigen::VectorXd a3(4); a3 << 1.0, 0.0, 1.0, 1.0;
+    member0.emplace_back(a1);
+    member0.emplace_back(a2);
+    member0.emplace_back(a3);
+    member1 = member0; // identical to member0
+
+    // Member 2: extreme coefficients to trigger outlier detection
+    std::vector<Eigen::VectorXd> member2;
+    Eigen::VectorXd c1(4); c1 << 1.0, 0.0, 0.0, 100.0;
+    Eigen::VectorXd c2(4); c2 << 1.0, 1.0, 0.0, 200.0;
+    Eigen::VectorXd c3(4); c3 << 1.0, 0.0, 1.0, 200.0;
+    member2.emplace_back(c1);
+    member2.emplace_back(c2);
+    member2.emplace_back(c3);
+
+    std::vector<DataTuple> data;
+    data.emplace_back(member0, "member0");
+    data.emplace_back(member1, "member1");
+    data.emplace_back(member2, "member2");
+    helper.SetDataArray(data);
+
+    helper.RunEstimation(0.0, 1.0);
+    EXPECT_LT(helper.GetStatisticalDistance(0), 11.34);
+    EXPECT_FALSE(helper.GetOutlierFlag(0));
+    EXPECT_LT(helper.GetStatisticalDistance(1), 11.34);
+    EXPECT_FALSE(helper.GetOutlierFlag(1));
+    EXPECT_GT(helper.GetStatisticalDistance(2), 11.34);
+    EXPECT_TRUE(helper.GetOutlierFlag(2));
+}
+
+TEST_F(HRLModelHelperTest, CapitalLambdaMatchesManualComputation)
+{
+    const int basis_size{ 2 };
+    const int member_size{ 2 };
+    HRLModelHelper helper{ basis_size, member_size };
+
+    auto member1{ CreateMember({{0.0, 0.0}, {1.0, 1.0}}, "m1") };
+    auto member2{ CreateMember({{0.0, 0.0}, {1.0, 2.0}}, "m2") };
+    std::vector<DataTuple> data{ member1, member2 };
+    helper.SetDataArray(data);
+    helper.RunEstimation(0.0, 0.0);
+    Eigen::VectorXd mu{ helper.GetMuVectorMDPDE() };
+    Eigen::VectorXd beta0{ helper.GetBetaMatrixMDPDE(0) };
+    Eigen::VectorXd beta1{ helper.GetBetaMatrixMDPDE(1) };
+    const double w0{ helper.GetMemberWeight(0) };
+    const double w1{ helper.GetMemberWeight(1) };
+
+    Eigen::MatrixXd numerator{
+        w0 * (beta0 - mu) * (beta0 - mu).transpose()
+      + w1 * (beta1 - mu) * (beta1 - mu).transpose()
+    };
+    const double denominator{ w0 + w1 };
+    ASSERT_GT(denominator, 0.0);
+    Eigen::MatrixXd expected{ numerator / denominator };
+
+    EXPECT_TRUE(helper.GetCapitalLambdaMatrix().isApprox(expected));
 }
 
 TEST_F(HRLModelHelperTest, ThrowsWhenMemberSizeMismatch)
@@ -523,6 +649,50 @@ TEST_F(HRLModelHelperTest, MemberCovarianceDenominatorNonPositiveKeepsLambdaUnch
 
     Eigen::MatrixXd lambda_after{ helper.GetCapitalLambdaMatrix() };
     EXPECT_TRUE(lambda_after.isApprox(lambda_before));
+}
+
+TEST_F(HRLModelHelperTest, MemberWeightMatchesAnalyticFormula)
+{
+    const double slope_mag{ 0.8231614670716226 };
+    std::vector<Eigen::VectorXd> member0;
+    Eigen::VectorXd m0_s1(2); m0_s1 << 1.0, -slope_mag;
+    Eigen::VectorXd m0_s2(2); m0_s2 << 2.0, -2.0 * slope_mag;
+    member0.emplace_back(m0_s1);
+    member0.emplace_back(m0_s2);
+
+    std::vector<Eigen::VectorXd> member1;
+    Eigen::VectorXd m1_s1(2); m1_s1 << 1.0, slope_mag;
+    Eigen::VectorXd m1_s2(2); m1_s2 << 2.0, 2.0 * slope_mag;
+    member1.emplace_back(m1_s1);
+    member1.emplace_back(m1_s2);
+
+    std::vector<DataTuple> data_array;
+    data_array.emplace_back(member0, "member0");
+    data_array.emplace_back(member1, "member1");
+
+    HRLModelHelper helper{ 1, 2 };
+    helper.SetDataArray(data_array);
+
+    const double alpha_r{ 0.0 };
+    const double alpha_g{ 0.5 };
+    helper.RunEstimation(alpha_r, alpha_g);
+
+    Eigen::VectorXd mu{ helper.GetMuVectorMDPDE() };
+    Eigen::MatrixXd lambda{ helper.GetCapitalLambdaMatrix() };
+    ASSERT_EQ(mu.size(), 1);
+    ASSERT_EQ(lambda.rows(), 1);
+    ASSERT_EQ(lambda.cols(), 1);
+    EXPECT_NEAR(mu(0), 0.0, 1.0e-9);
+    EXPECT_NEAR(lambda(0, 0), 1.0, 1.0e-9);
+
+    const double inv_lambda{ 1.0 / lambda(0, 0) };
+    std::vector<double> slopes{ -slope_mag, slope_mag };
+    for (int i = 0; i < 2; ++i)
+    {
+        double residual{ slopes[static_cast<size_t>(i)] - mu(0) };
+        double expected_weight{ std::exp(-0.5 * alpha_g * residual * inv_lambda * residual) };
+        EXPECT_NEAR(expected_weight, helper.GetMemberWeight(i), 1.0e-9);
+    }
 }
 
 TEST_F(HRLModelHelperTest, MemberWeightsClampedToMinimum)
