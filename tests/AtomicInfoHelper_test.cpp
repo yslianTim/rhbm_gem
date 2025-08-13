@@ -27,7 +27,7 @@ TEST_F(AtomicInfoHelperTest, BasicChecks)
     EXPECT_EQ(3U, AtomicInfoHelper::GetGroupClassCount());
     EXPECT_EQ(AtomicInfoHelper::GetStandardResidueList().size(),
               AtomicInfoHelper::GetStandardResidueCount());
-    EXPECT_EQ(30U, AtomicInfoHelper::GetElementCount());
+    EXPECT_EQ(31U, AtomicInfoHelper::GetElementCount());
     EXPECT_EQ("element_class", AtomicInfoHelper::GetGroupClassKey(0));
     EXPECT_EQ("residue_class", AtomicInfoHelper::GetGroupClassKey(1));
     EXPECT_EQ("structure_class", AtomicInfoHelper::GetGroupClassKey(2));
@@ -194,7 +194,7 @@ TEST_F(AtomicInfoHelperTest, UnknownResidueReturnsQuestionMark)
 TEST_F(AtomicInfoHelperTest, UnknownElementReturnsQuestionMark)
 {
     EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Element>(999)), "?");
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(Element::UNK), "?");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(Element::UNK), "UNK");
 }
 
 TEST_F(AtomicInfoHelperTest, RemotenessUNKReturnsLabel)

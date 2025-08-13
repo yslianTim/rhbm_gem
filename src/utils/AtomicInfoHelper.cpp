@@ -45,7 +45,9 @@ const std::unordered_map<Element, int> AtomicInfoHelper::m_atomic_number_map
     {Element::POTASSIUM, 19}, {Element::CALCIUM,  20}, {Element::SCANDIUM,   21},
     {Element::TITANIUM,  22}, {Element::VANADIUM, 23}, {Element::CHROMIUM,   24},
     {Element::MANGANESE, 25}, {Element::IRON,     26}, {Element::COBALT,     27},
-    {Element::NICKEL,    28}, {Element::COPPER,   29}, {Element::ZINC,       30}
+    {Element::NICKEL,    28}, {Element::COPPER,   29}, {Element::ZINC,       30},
+
+    {Element::CADMIUM,   48}
 };
 
 const std::unordered_map<int, Element> AtomicInfoHelper::m_atomic_number_to_element_map
@@ -59,7 +61,9 @@ const std::unordered_map<int, Element> AtomicInfoHelper::m_atomic_number_to_elem
     {19, Element::POTASSIUM}, {20, Element::CALCIUM},  {21, Element::SCANDIUM},
     {22, Element::TITANIUM},  {23, Element::VANADIUM}, {24, Element::CHROMIUM},
     {25, Element::MANGANESE}, {26, Element::IRON},     {27, Element::COBALT},
-    {28, Element::NICKEL},    {29, Element::COPPER},   {30, Element::ZINC}
+    {28, Element::NICKEL},    {29, Element::COPPER},   {30, Element::ZINC},
+
+    {48, Element::CADMIUM}
 };
 
 const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_map
@@ -85,7 +89,9 @@ const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_
     {"K",  Element::POTASSIUM}, {"CA", Element::CALCIUM},  {"SC", Element::SCANDIUM},
     {"TI", Element::TITANIUM},  {"V",  Element::VANADIUM}, {"CR", Element::CHROMIUM},
     {"MN", Element::MANGANESE}, {"FE", Element::IRON},     {"CO", Element::COBALT},
-    {"NI", Element::NICKEL},    {"CU", Element::COPPER},   {"ZN", Element::ZINC}
+    {"NI", Element::NICKEL},    {"CU", Element::COPPER},   {"ZN", Element::ZINC},
+
+    {"CD", Element::CADMIUM}
 };
 
 const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remoteness_map
@@ -143,7 +149,10 @@ const std::unordered_map<Element, std::string> AtomicInfoHelper::m_element_label
     {Element::POTASSIUM, "K" }, {Element::CALCIUM,  "Ca"}, {Element::SCANDIUM,   "Sc"},
     {Element::TITANIUM,  "Ti"}, {Element::VANADIUM, "V" }, {Element::CHROMIUM,   "Cr"},
     {Element::MANGANESE, "Mn"}, {Element::IRON,     "Fe"}, {Element::COBALT,     "Co"},
-    {Element::NICKEL,    "Ni"}, {Element::COPPER,   "Cu"}, {Element::ZINC,       "Zn"}
+    {Element::NICKEL,    "Ni"}, {Element::COPPER,   "Cu"}, {Element::ZINC,       "Zn"},
+
+    {Element::CADMIUM,   "Cd"},
+    {Element::UNK,      "UNK"}
 };
 
 const std::unordered_map<Remoteness, std::string> AtomicInfoHelper::m_remoteness_label_map
@@ -194,6 +203,7 @@ const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
     {Element::TITANIUM,  37}, {Element::VANADIUM, 38}, {Element::CHROMIUM,   40},
     {Element::MANGANESE, 43}, {Element::IRON,     47}, {Element::COBALT,     44},
     {Element::NICKEL,    46}, {Element::COPPER,   49}, {Element::ZINC,       48},
+    {Element::CADMIUM,   49},
     {Element::UNK,        1}
 };
 

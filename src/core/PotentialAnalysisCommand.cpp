@@ -86,7 +86,8 @@ bool PotentialAnalysisCommand::Execute(void)
     }
     catch (const std::exception & e)
     {
-        Logger::Log(LogLevel::Error, "PotentialAnalysisCommand::Execute() : " + std::string(e.what()));
+        Logger::Log(LogLevel::Error,
+            "PotentialAnalysisCommand::Execute() : " + std::string(e.what()));
         return false;
     }
 

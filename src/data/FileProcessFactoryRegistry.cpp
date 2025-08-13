@@ -14,10 +14,11 @@ FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance(void)
 void FileProcessFactoryRegistry::RegisterDefaultFactories(void)
 {
     Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::RegisterDefaultFactories() called");
-    RegisterFactory(".pdb", []() { return std::make_unique<ModelObjectFactory>(); });
-    RegisterFactory(".cif", []() { return std::make_unique<ModelObjectFactory>(); });
-    RegisterFactory(".mrc", []() { return std::make_unique<MapObjectFactory>(); });
-    RegisterFactory(".map", []() { return std::make_unique<MapObjectFactory>(); });
+    RegisterFactory(".pdb",  []() { return std::make_unique<ModelObjectFactory>(); });
+    RegisterFactory(".cif",  []() { return std::make_unique<ModelObjectFactory>(); });
+    RegisterFactory(".mrc",  []() { return std::make_unique<MapObjectFactory>(); });
+    RegisterFactory(".map",  []() { return std::make_unique<MapObjectFactory>(); });
+    RegisterFactory(".ccp4", []() { return std::make_unique<MapObjectFactory>(); });
 }
 
 void FileProcessFactoryRegistry::RegisterFactory(

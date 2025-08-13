@@ -32,6 +32,8 @@ enum class Element : uint16_t
     SULFUR   = 16, CHLORINE  = 17, ARGON    = 18, POTASSIUM = 19, CALCIUM    = 20,
     SCANDIUM = 21, TITANIUM  = 22, VANADIUM = 23, CHROMIUM  = 24, MANGANESE  = 25,
     IRON     = 26, COBALT    = 27, NICKEL   = 28, COPPER    = 29, ZINC       = 30,
+
+    CADMIUM  = 48,
     UNK = UINT16_MAX
 };
 
