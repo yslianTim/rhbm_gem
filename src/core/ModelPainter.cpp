@@ -1278,7 +1278,7 @@ void ModelPainter::PaintAtomGausScatterPlot(
     ROOTHelper::SetLegendDefaultStyle(legend.get());
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12);
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    for (int i = 1; i <= 30; i++)
+    for (int i = 1; i <= 90; i++)
     {
         auto element{ AtomicInfoHelper::GetElementFromAtomicNumber(i) };
         if (graph_map.find(element) == graph_map.end()) continue;
@@ -1735,7 +1735,7 @@ void ModelPainter::PrintWidthSummaryPad(TPad * pad, TH2 * hist)
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
 
-    int color[4]   { kRed+1, kOrange+1, kGreen+2, kAzure+2 };
+    int color[4]   { kRed+1, kViolet+1, kGreen+2, kAzure+2 };
     const char * label_name[4]{ "C_{#alpha}", "C", "N", "O" };
     for (int i = 0; i < 4; i++)
     {

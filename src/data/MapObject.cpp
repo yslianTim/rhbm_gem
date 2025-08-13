@@ -250,7 +250,17 @@ void MapObject::CheckPosition(const std::array<float, 3> & position) const
         position.at(1) < m_lower_bound.at(1) ||
         position.at(2) < m_lower_bound.at(2))
     {
-        throw std::out_of_range("Position is out of map boundary.");
+        throw std::out_of_range(
+            "Position is out of map boundary."
+            " Position: (" + std::to_string(position.at(0)) + ", "
+            + std::to_string(position.at(1)) + ", "
+            + std::to_string(position.at(2)) + ")"
+            " Upper bound: (" + std::to_string(m_upper_bound.at(0)) + ", "
+            + std::to_string(m_upper_bound.at(1)) + ", "
+            + std::to_string(m_upper_bound.at(2)) + ")"
+            " Lower bound: (" + std::to_string(m_lower_bound.at(0)) + ", "
+            + std::to_string(m_lower_bound.at(1)) + ", "
+            + std::to_string(m_lower_bound.at(2)) + ")");
     }
 }
 
