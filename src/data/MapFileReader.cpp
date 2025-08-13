@@ -20,7 +20,7 @@ MapFileReader::MapFileReader(const std::string & filename) :
     {
         m_file_format_helper = std::make_unique<MrcFormat>();
     }
-    else if (file_extension == ".map")
+    else if (file_extension == ".map" || file_extension == ".ccp4")
     {
         m_file_format_helper = std::make_unique<CCP4Format>();
     }
