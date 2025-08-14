@@ -82,5 +82,6 @@ public:
     
 private:
     size_t GetElementSize(void) const;
+    void ReorderedAxisRelatedParameters(void);
     
 };

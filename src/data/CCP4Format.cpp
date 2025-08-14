@@ -44,6 +44,7 @@ void CCP4Format::InitHeader(void)
 
 void CCP4Format::LoadHeader(std::istream & stream)
 {
+    Logger::Log(LogLevel::Debug, "CCP4Format::LoadHeader called");
     stream.seekg(0, std::ios::beg);
     stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
     PrintHeader();
@@ -147,6 +148,7 @@ size_t CCP4Format::GetElementSize(void) const
 
 void CCP4Format::LoadDataArray(std::istream & stream)
 {
+    Logger::Log(LogLevel::Debug, "CCP4Format::LoadDataArray called");
     // Position stream at start of data section
     stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
@@ -157,21 +159,66 @@ void CCP4Format::LoadDataArray(std::istream & stream)
     size_t element_size{ GetElementSize() };
     size_t total_bytes{ num_voxels * element_size };
 
-    auto data_array{ std::make_unique<float[]>(num_voxels) };
+    // Read raw data into temporary buffer first
+    auto raw_data{ std::make_unique<float[]>(num_voxels) };
     switch (static_cast<MODE>(m_header.mode))
     {
         case MODE::SIGNED_FLOAT32:
-            stream.read(reinterpret_cast<char*>(data_array.get()),
+            stream.read(reinterpret_cast<char*>(raw_data.get()),
                         static_cast<std::streamsize>(total_bytes));
             if (!stream)
             {
                 throw std::runtime_error("Failed to read voxel data from file");
             }
-            m_data_array = std::move(data_array);
             break;
         default:
             throw std::runtime_error("Unsupported MODE in LoadDataArray");
     }
+
+    // Build mapping from X/Y/Z axis to column/row/section positions
+    int axis_to_index[3];
+    for (int i = 0; i < 3; i++)
+    {
+        // axis values are 1-based, convert to 0-based indices
+        axis_to_index[m_header.axis[i] - 1] = i;
+    }
+
+    // Determine dimension sizes in canonical X,Y,Z order
+    size_t dims[3];
+    dims[0] = static_cast<size_t>(m_header.array_size[axis_to_index[0]]);
+    dims[1] = static_cast<size_t>(m_header.array_size[axis_to_index[1]]);
+    dims[2] = static_cast<size_t>(m_header.array_size[axis_to_index[2]]);
+
+    // Compute strides for each axis in the source buffer
+    size_t src_stride[3];
+    size_t stride_acc{ 1 };
+    for (int i = 0; i < 3; ++i)
+    {
+        src_stride[m_header.axis[i] - 1] = stride_acc;
+        stride_acc *= static_cast<size_t>(m_header.array_size[i]);
+    }
+
+    // Allocate destination array and reorder data into X->Y->Z order
+    auto reordered_array{ std::make_unique<float[]>(num_voxels) };
+    for (size_t z = 0; z < dims[2]; z++)
+    {
+        size_t src_off_z{ z * src_stride[2] };
+        size_t dst_off_z{ z * dims[0] * dims[1] };
+        for (size_t y = 0; y < dims[1]; y++)
+        {
+            size_t src_off_y{ src_off_z + y * src_stride[1] };
+            size_t dst_off_y{ dst_off_z + y * dims[0] };
+            for (size_t x = 0; x < dims[0]; x++)
+            {
+                reordered_array[dst_off_y + x] = raw_data[src_off_y + x * src_stride[0]];
+            }
+        }
+    }
+
+    // Update header to reflect canonical axis order and dimensions
+    ReorderedAxisRelatedParameters();
+    
+    m_data_array = std::move(reordered_array);
 }
 
 void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & stream)
@@ -221,10 +268,11 @@ std::unique_ptr<float[]> CCP4Format::GetDataArray(void)
 
 std::array<int, 3> CCP4Format::GetGridSize(void)
 {
+    // Return data array size in X, Y, Z order (CCP4Header::array_size)
     std::array<int, 3> grid_size;
-    grid_size.at(0) = m_header.grid_size[0];
-    grid_size.at(1) = m_header.grid_size[1];
-    grid_size.at(2) = m_header.grid_size[2];
+    grid_size.at(0) = m_header.array_size[0];
+    grid_size.at(1) = m_header.array_size[1];
+    grid_size.at(2) = m_header.array_size[2];
     return grid_size;
 }
 
@@ -271,4 +319,55 @@ void CCP4Format::SetOrigin(const std::array<float, 3> & origin)
     {
         throw std::runtime_error("CCP4 format does not support setting origin");
     }
+}
+
+void CCP4Format::ReorderedAxisRelatedParameters(void)
+{
+    Logger::Log(LogLevel::Debug, "CCP4Format::ReorderedAxisRelatedParameters called");
+    if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
+    {
+        Logger::Log(LogLevel::Debug,
+            "CCP4Format::ReorderedAxisRelatedParameters : "
+            "Axis already in X->Y->Z order, no need to reorder."
+        );
+        return;
+    }
+
+    int axis_to_index[3];
+    for (int i = 0; i < 3; i++)
+    {
+        // axis values are 1-based, convert to 0-based indices
+        axis_to_index[m_header.axis[i] - 1] = i;
+    }
+
+    int array_size[3]{
+        m_header.array_size[0], m_header.array_size[1], m_header.array_size[2]
+    };
+    int location_index[3]{
+        m_header.location_index[0], m_header.location_index[1], m_header.location_index[2]
+    };
+    int grid_size[3]{
+        m_header.grid_size[0], m_header.grid_size[1], m_header.grid_size[2]
+    };
+    float map_length[3]{
+        m_header.map_length[0], m_header.map_length[1], m_header.map_length[2]
+    };
+    float cell_angle[3]{
+        m_header.cell_angle[0], m_header.cell_angle[1], m_header.cell_angle[2]
+    };
+
+    // Reorder parameters based on current axis mapping
+    for (int i = 0; i < 3; i++)
+    {
+        m_header.array_size[i] = array_size[axis_to_index[i]];
+        m_header.location_index[i] = location_index[axis_to_index[i]];
+        m_header.grid_size[i] = grid_size[axis_to_index[i]];
+        m_header.map_length[i] = map_length[axis_to_index[i]];
+        m_header.cell_angle[i] = cell_angle[axis_to_index[i]];
+    }
+
+    // Update axis to canonical X->Y->Z order
+    m_header.axis[0] = 1;
+    m_header.axis[1] = 2;
+    m_header.axis[2] = 3;
 }
