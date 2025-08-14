@@ -14,12 +14,12 @@ CCP4Format::CCP4Format(void)
 void CCP4Format::InitHeader(void)
 {
     std::memset(&m_header, 0, sizeof(m_header));
-    std::fill_n(m_header.array_size,        3, 1);
+    std::fill_n(m_header.array_size, 3, 1);
     m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
-    std::fill_n(m_header.location_index,    3, 0);
-    std::fill_n(m_header.grid_size,         3, 1);
-    std::fill_n(m_header.map_length,        3, 1.0f);
-    std::fill_n(m_header.cell_angle,        3, 90.0f);
+    std::fill_n(m_header.location_index, 3, 0);
+    std::fill_n(m_header.grid_size, 3, 1);
+    std::fill_n(m_header.map_length, 3, 1.0f);
+    std::fill_n(m_header.cell_angle, 3, 90.0f);
     m_header.axis[0] = 1;
     m_header.axis[1] = 2;
     m_header.axis[2] = 3;
@@ -29,9 +29,9 @@ void CCP4Format::InitHeader(void)
     m_header.space_group = 0;
     m_header.symmetry_table_size = 0;
     m_header.skew_matrix_flag = 0;
-    std::fill_n(m_header.skew_matrix,        9,  0.0f);
-    std::fill_n(m_header.skew_translation,   3,  0.0f);
-    std::fill_n(m_header.extra,             15,  0.0f);
+    std::fill_n(m_header.skew_matrix, 9, 0.0f);
+    std::fill_n(m_header.skew_translation, 3, 0.0f);
+    std::fill_n(m_header.extra, 15,  0.0f);
     m_header.map_format_id[0] = 'M';
     m_header.map_format_id[1] = 'A';
     m_header.map_format_id[2] = 'P';
@@ -152,9 +152,11 @@ void CCP4Format::LoadDataArray(std::istream & stream)
     // Position stream at start of data section
     stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
-    size_t num_voxels{ static_cast<size_t>(m_header.array_size[0]) *
-                       static_cast<size_t>(m_header.array_size[1]) *
-                       static_cast<size_t>(m_header.array_size[2]) };
+    size_t num_voxels{
+        static_cast<size_t>(m_header.array_size[0]) *
+        static_cast<size_t>(m_header.array_size[1]) *
+        static_cast<size_t>(m_header.array_size[2])
+    };
     
     size_t element_size{ GetElementSize() };
     size_t total_bytes{ num_voxels * element_size };
@@ -175,6 +177,13 @@ void CCP4Format::LoadDataArray(std::istream & stream)
             throw std::runtime_error("Unsupported MODE in LoadDataArray");
     }
 
+    if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
+    {
+        // Data is already in X->Y->Z order, no reordering needed
+        m_data_array = std::move(raw_data);
+        return;
+    }
+
     // Build mapping from X/Y/Z axis to column/row/section positions
     int axis_to_index[3];
     for (int i = 0; i < 3; i++)
@@ -184,10 +193,11 @@ void CCP4Format::LoadDataArray(std::istream & stream)
     }
 
     // Determine dimension sizes in canonical X,Y,Z order
-    size_t dims[3];
-    dims[0] = static_cast<size_t>(m_header.array_size[axis_to_index[0]]);
-    dims[1] = static_cast<size_t>(m_header.array_size[axis_to_index[1]]);
-    dims[2] = static_cast<size_t>(m_header.array_size[axis_to_index[2]]);
+    size_t dims[3]{
+        static_cast<size_t>(m_header.array_size[axis_to_index[0]]),
+        static_cast<size_t>(m_header.array_size[axis_to_index[1]]),
+        static_cast<size_t>(m_header.array_size[axis_to_index[2]])
+    };
 
     // Compute strides for each axis in the source buffer
     size_t src_stride[3];
@@ -223,9 +233,11 @@ void CCP4Format::LoadDataArray(std::istream & stream)
 
 void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
-    size_t expected_voxels{ static_cast<size_t>(m_header.array_size[0]) *
-                            static_cast<size_t>(m_header.array_size[1]) *
-                            static_cast<size_t>(m_header.array_size[2]) };
+    size_t expected_voxels{
+        static_cast<size_t>(m_header.array_size[0]) *
+        static_cast<size_t>(m_header.array_size[1]) *
+        static_cast<size_t>(m_header.array_size[2])
+    };
     if (size != expected_voxels)
     {
         throw std::runtime_error("SaveDataArray: voxel count does not match header");
@@ -269,10 +281,11 @@ std::unique_ptr<float[]> CCP4Format::GetDataArray(void)
 std::array<int, 3> CCP4Format::GetGridSize(void)
 {
     // Return data array size in X, Y, Z order (CCP4Header::array_size)
-    std::array<int, 3> grid_size;
-    grid_size.at(0) = m_header.array_size[0];
-    grid_size.at(1) = m_header.array_size[1];
-    grid_size.at(2) = m_header.array_size[2];
+    std::array<int, 3> grid_size{
+        m_header.array_size[0],
+        m_header.array_size[1],
+        m_header.array_size[2]
+    };
     return grid_size;
 }
 
@@ -282,10 +295,11 @@ std::array<float, 3> CCP4Format::GetGridSpacing(void)
     {
         throw std::runtime_error("GetGridSpacing: grid_size has zero dimension");
     }
-    std::array<float, 3> grid_spacing;
-    grid_spacing.at(0) = m_header.map_length[0] / static_cast<float>(m_header.grid_size[0]);
-    grid_spacing.at(1) = m_header.map_length[1] / static_cast<float>(m_header.grid_size[1]);
-    grid_spacing.at(2) = m_header.map_length[2] / static_cast<float>(m_header.grid_size[2]);
+    std::array<float, 3> grid_spacing{
+        m_header.map_length[0] / static_cast<float>(m_header.grid_size[0]),
+        m_header.map_length[1] / static_cast<float>(m_header.grid_size[1]),
+        m_header.map_length[2] / static_cast<float>(m_header.grid_size[2])
+    };
     return grid_spacing;
 }
 
