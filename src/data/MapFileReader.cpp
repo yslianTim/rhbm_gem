@@ -57,7 +57,11 @@ bool MapFileReader::ReadHeader(std::ifstream & stream)
     }
     catch (const std::exception & ex)
     {
-        Logger::Log(LogLevel::Error, ex.what());
+        Logger::Log(LogLevel::Error,
+            "MapFileReader::ReadHeader : "
+            "Failed to read header from file '" + m_file_path + "' -> " +
+            ex.what()
+        );
         return false;
     }
 }
@@ -71,31 +75,63 @@ bool MapFileReader::ReadMapValueArray(std::ifstream & stream)
     }
     catch (const std::exception & ex)
     {
-        Logger::Log(LogLevel::Error, ex.what());
+        Logger::Log(LogLevel::Error,
+            "MapFileReader::ReadMapValueArray : "
+            "Failed to read map value array from file '" + m_file_path + "' -> " +
+            ex.what()
+        );
         return false;
     }
 }
 
 std::unique_ptr<float[]> MapFileReader::GetMapValueArray(void)
 {
-    if (m_file_format_helper == nullptr || m_successfully_read_file == false) return nullptr;
+    if (m_file_format_helper == nullptr || m_successfully_read_file == false)
+    {
+        Logger::Log(LogLevel::Error,
+            "MapFileReader::GetMapValueArray : "
+            "no data available or read failed."
+        );
+        return nullptr;
+    }
     return m_file_format_helper->GetDataArray();
 }
 
 std::array<int, 3> MapFileReader::GetGridSizeArray(void) const
 {
-    if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
+    if (m_file_format_helper == nullptr || m_successfully_read_file == false)
+    {
+        Logger::Log(LogLevel::Error,
+            "MapFileReader::GetGridSizeArray : "
+            "no grid size available or read failed."
+        );
+        return {};
+    }
     return m_file_format_helper->GetGridSize();
 }
 
 std::array<float, 3> MapFileReader::GetGridSpacingArray(void) const
 {
-    if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
+    if (m_file_format_helper == nullptr || m_successfully_read_file == false)
+    {
+        Logger::Log(LogLevel::Error,
+            "MapFileReader::GetGridSpacingArray : "
+            "no grid spacing available or read failed."
+        );
+        return {};
+    }
     return m_file_format_helper->GetGridSpacing();
 }
 
 std::array<float, 3> MapFileReader::GetOriginArray(void) const
 {
-    if (m_file_format_helper == nullptr || m_successfully_read_file == false) return {};
+    if (m_file_format_helper == nullptr || m_successfully_read_file == false)
+    {
+        Logger::Log(LogLevel::Error,
+            "MapFileReader::GetOriginArray : "
+            "no origin available or read failed."
+        );
+        return {};
+    }
     return m_file_format_helper->GetOrigin();
 }

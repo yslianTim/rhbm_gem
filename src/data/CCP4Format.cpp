@@ -46,6 +46,7 @@ void CCP4Format::LoadHeader(std::istream & stream)
 {
     stream.seekg(0, std::ios::beg);
     stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
+    PrintHeader();
     if (!stream)
     {
         throw std::runtime_error("LoadHeader failed!");
@@ -64,14 +65,65 @@ void CCP4Format::SaveHeader(std::ostream & stream)
 
 void CCP4Format::PrintHeader(void) const
 {
-    Logger::Log(LogLevel::Info,
-                "CCP4 Header Information:\n"
-                "Grid Size: " + std::to_string(m_header.grid_size[0]) + " x "
-                + std::to_string(m_header.grid_size[1]) + " x "
-                + std::to_string(m_header.grid_size[2]) + "\n"
-                "Map Length: " + std::to_string(m_header.map_length[0]) + ", "
-                + std::to_string(m_header.map_length[1]) + ", "
-                + std::to_string(m_header.map_length[2]) + "\n");
+    Logger::Log(LogLevel::Debug,
+        "CCP4 Header Information:\n"
+        "Array Size: " + std::to_string(m_header.array_size[0]) + " x "
+        + std::to_string(m_header.array_size[1]) + " x "
+        + std::to_string(m_header.array_size[2]) + "\n"
+        "Mode: " + std::to_string(m_header.mode) + "\n"
+        "Location Index: " + std::to_string(m_header.location_index[0]) + " x "
+        + std::to_string(m_header.location_index[1]) + " x "
+        + std::to_string(m_header.location_index[2]) + "\n"
+        "Grid Size: " + std::to_string(m_header.grid_size[0]) + " x "
+        + std::to_string(m_header.grid_size[1]) + " x "
+        + std::to_string(m_header.grid_size[2]) + "\n"
+        "Map Length: " + std::to_string(m_header.map_length[0]) + ", "
+        + std::to_string(m_header.map_length[1]) + ", "
+        + std::to_string(m_header.map_length[2]) + "\n"
+        "Cell Angles: " + std::to_string(m_header.cell_angle[0]) + ", "
+        + std::to_string(m_header.cell_angle[1]) + ", "
+        + std::to_string(m_header.cell_angle[2]) + "\n"
+        "Axis: " + std::to_string(m_header.axis[0]) + ", "
+        + std::to_string(m_header.axis[1]) + ", "
+        + std::to_string(m_header.axis[2]) + "\n"
+        "Min Density: " + std::to_string(m_header.min_density) + "\n"
+        "Max Density: " + std::to_string(m_header.max_density) + "\n"
+        "Mean Density: " + std::to_string(m_header.mean_density) + "\n"
+        "Space Group: " + std::to_string(m_header.space_group) + "\n"
+        "Symmetry Table Size: " + std::to_string(m_header.symmetry_table_size) + "\n"
+        "Skew Matrix Flag: " + std::to_string(m_header.skew_matrix_flag) + "\n"
+        "Skew Matrix: " + std::to_string(m_header.skew_matrix[0]) + ", "
+        + std::to_string(m_header.skew_matrix[1]) + ", "
+        + std::to_string(m_header.skew_matrix[2]) + ", "
+        + std::to_string(m_header.skew_matrix[3]) + ", "
+        + std::to_string(m_header.skew_matrix[4]) + ", "
+        + std::to_string(m_header.skew_matrix[5]) + ", "
+        + std::to_string(m_header.skew_matrix[6]) + ", "
+        + std::to_string(m_header.skew_matrix[7]) + ", "
+        + std::to_string(m_header.skew_matrix[8]) + "\n"
+        "Skew Translation: " + std::to_string(m_header.skew_translation[0]) + ", "
+        + std::to_string(m_header.skew_translation[1]) + ", "
+        + std::to_string(m_header.skew_translation[2]) + "\n"
+        "Extra: " + std::to_string(m_header.extra[0]) + ", "
+        + std::to_string(m_header.extra[1]) + ", "
+        + std::to_string(m_header.extra[2]) + ", "
+        + std::to_string(m_header.extra[3]) + ", "
+        + std::to_string(m_header.extra[4]) + ", "
+        + std::to_string(m_header.extra[5]) + ", "
+        + std::to_string(m_header.extra[6]) + ", "
+        + std::to_string(m_header.extra[7]) + ", "
+        + std::to_string(m_header.extra[8]) + ", "
+        + std::to_string(m_header.extra[9]) + ", "
+        + std::to_string(m_header.extra[10]) + ", " 
+        + std::to_string(m_header.extra[11]) + ", "
+        + std::to_string(m_header.extra[12]) + ", "
+        + std::to_string(m_header.extra[13]) + ", "
+        + std::to_string(m_header.extra[14]) + "\n"
+        "Map Format ID: " + std::string(m_header.map_format_id) + "\n"
+        "Machine Stamp: " + std::string(m_header.machine_stamp) + "\n"
+        "RMS: " + std::to_string(m_header.rms) + "\n"
+        "Label Size: " + std::to_string(m_header.label_size) + "\n"
+    );
 }
 
 size_t CCP4Format::GetElementSize(void) const
@@ -191,10 +243,12 @@ std::array<float, 3> CCP4Format::GetGridSpacing(void)
 
 std::array<float, 3> CCP4Format::GetOrigin(void)
 {
-    std::array<float, 3> origin;
-    origin.at(0) = 0.0f;
-    origin.at(1) = 0.0f;
-    origin.at(2) = 0.0f;
+    auto grid_spacing{ GetGridSpacing() };
+    std::array<float, 3> origin{
+        static_cast<float>(m_header.location_index[0]) * grid_spacing.at(0),
+        static_cast<float>(m_header.location_index[1]) * grid_spacing.at(1),
+        static_cast<float>(m_header.location_index[2]) * grid_spacing.at(2)
+    };
     return origin;
 }
 

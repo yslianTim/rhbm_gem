@@ -11,7 +11,13 @@ std::unique_ptr<DataObjectBase> MapObjectFactory::CreateDataObject(const std::st
     Logger::Log(LogLevel::Debug, "MapObjectFactory::CreateDataObject() called");
     auto file_reader{ std::make_unique<MapFileReader>(filename) };
     file_reader->Read();
-    if (file_reader->IsSuccessfullyRead() == false) return nullptr;
+    if (file_reader->IsSuccessfullyRead() == false)
+    {
+        Logger::Log(LogLevel::Error,
+            "MapObjectFactory::CreateDataObject : "
+            "Failed to read map file: " + filename);
+        return nullptr;
+    }
     return std::make_unique<MapObject>(
         file_reader->GetGridSizeArray(),
         file_reader->GetGridSpacingArray(),
@@ -27,7 +33,7 @@ void MapObjectFactory::OutputDataObject(const std::string & filename, DataObject
     if (map_object == nullptr)
     {
         throw std::runtime_error(
-            "MapObjectFactory::OutputDataObject(): invalid data_object type");
+            "MapObjectFactory::OutputDataObject : invalid data_object type");
     }
     auto file_writer{ std::make_unique<MapFileWriter>(filename, map_object) };
     file_writer->Write();
