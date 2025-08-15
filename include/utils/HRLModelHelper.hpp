@@ -163,7 +163,7 @@ public:
     Eigen::Ref<const Eigen::VectorXd> GetBetaMatrixOLS(int id) const;
 
 private:
-    bool ValidateMemberId(int id) const;
+    void ValidateMemberId(int id) const;
     void Initialization(void);
     void AlgorithmBetaMDPDE(double alpha_r);
     void AlgorithmMuMDPDE(double alpha_g);
