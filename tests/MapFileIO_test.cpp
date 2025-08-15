@@ -10,13 +10,11 @@
 
 TEST(MapFileIOTest, ReadWriteMapAndCCP4)
 {
-    std::array<int, 3> grid_size{2, 2, 2};
-    std::array<float, 3> grid_spacing{1.0f, 1.0f, 1.0f};
-    std::array<float, 3> origin{0.0f, 0.0f, 0.0f};
-    size_t voxel_size{
-        static_cast<size_t>(grid_size[0] * grid_size[1] * grid_size[2])
-    };
-    auto values = std::make_unique<float[]>(voxel_size);
+    std::array<int, 3> grid_size{ 4, 4, 4 };
+    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
+    std::array<float, 3> origin{ 1.0f, 2.0f, 3.0f };
+    size_t voxel_size{ static_cast<size_t>(grid_size[0] * grid_size[1] * grid_size[2]) };
+    auto values{ std::make_unique<float[]>(voxel_size) };
     for (size_t i = 0; i < voxel_size; i++)
     {
         values[i] = static_cast<float>(i);

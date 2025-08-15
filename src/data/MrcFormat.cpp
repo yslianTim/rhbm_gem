@@ -9,11 +9,13 @@
 
 MrcFormat::MrcFormat(void)
 {
+    Logger::Log(LogLevel::Debug, "MrcFormat::MrcFormat() called");
     InitHeader();
 }
 
 void MrcFormat::InitHeader(void)
 {
+    Logger::Log(LogLevel::Debug, "MrcFormat::InitHeader() called");
     std::memset(&m_header, 0, sizeof(m_header));
     std::fill_n(m_header.array_size,        3, 1);
     m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
@@ -39,11 +41,11 @@ void MrcFormat::InitHeader(void)
     m_header.vd1 = 0;
     m_header.vd2 = 0;
     std::fill_n(m_header.tiltangles, 6, 0.0f);
-    m_header.map[0] = 'M';
-    m_header.map[1] = 'A';
-    m_header.map[2] = 'P';
-    m_header.map[3] = '\0';
-    std::fill_n(m_header.stamp, 4, '\0');
+    m_header.map_format_id[0] = 'M';
+    m_header.map_format_id[1] = 'A';
+    m_header.map_format_id[2] = 'P';
+    m_header.map_format_id[3] = '\0';
+    std::fill_n(m_header.machine_stamp, 4, '\0');
     m_header.rms = 0.0f;
     m_header.label_size = 0;
     std::fill_n(&m_header.label[0][0], HEAD::NUM_LABEL * HEAD::SIZE_LABEL, '\0');
@@ -51,6 +53,7 @@ void MrcFormat::InitHeader(void)
 
 void MrcFormat::LoadHeader(std::istream & stream)
 {
+    Logger::Log(LogLevel::Debug, "MrcFormat::LoadHeader() called");
     stream.seekg(0, std::ios::beg);
     stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
     if (!stream)
@@ -61,6 +64,7 @@ void MrcFormat::LoadHeader(std::istream & stream)
 
 void MrcFormat::SaveHeader(std::ostream & stream)
 {
+    Logger::Log(LogLevel::Debug, "MrcFormat::SaveHeader() called");
     stream.seekp(0, std::ios::beg);
     stream.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
     if (!stream)
@@ -71,13 +75,46 @@ void MrcFormat::SaveHeader(std::ostream & stream)
 
 void MrcFormat::PrintHeader(void) const
 {
-    std::ostringstream oss;
-    oss << "MRC Header Information:\n";
-    oss << "Grid Size: " << m_header.grid_size[0] << " x "
-              << m_header.grid_size[1] << " x " << m_header.grid_size[2] <<"\n";
-    oss << "Cell Dimensions: " << m_header.cell_dimension[0] << ", "
-              << m_header.cell_dimension[1] << ", " << m_header.cell_dimension[2] <<"\n";
-    Logger::Log(LogLevel::Info, oss.str());
+    Logger::Log(LogLevel::Debug,
+        "MRC Header Information:\n"
+        "Array Size: " + std::to_string(m_header.array_size[0]) + " x "
+        + std::to_string(m_header.array_size[1]) + " x "
+        + std::to_string(m_header.array_size[2]) + "\n"
+        "Mode: " + std::to_string(m_header.mode) + "\n"
+        "Location Index: " + std::to_string(m_header.location_index[0]) + " x "
+        + std::to_string(m_header.location_index[1]) + " x "
+        + std::to_string(m_header.location_index[2]) + "\n"
+        "Grid Size: " + std::to_string(m_header.grid_size[0]) + " x "
+        + std::to_string(m_header.grid_size[1]) + " x "
+        + std::to_string(m_header.grid_size[2]) + "\n"
+        "Map Length: " + std::to_string(m_header.cell_dimension[0]) + ", "
+        + std::to_string(m_header.cell_dimension[1]) + ", "
+        + std::to_string(m_header.cell_dimension[2]) + "\n"
+        "Cell Angles: " + std::to_string(m_header.cell_angle[0]) + ", "
+        + std::to_string(m_header.cell_angle[1]) + ", "
+        + std::to_string(m_header.cell_angle[2]) + "\n"
+        "Axis: " + std::to_string(m_header.axis[0]) + ", "
+        + std::to_string(m_header.axis[1]) + ", "
+        + std::to_string(m_header.axis[2]) + "\n"
+        "Min Density: " + std::to_string(m_header.min_density) + "\n"
+        "Max Density: " + std::to_string(m_header.max_density) + "\n"
+        "Mean Density: " + std::to_string(m_header.mean_density) + "\n"
+        "Space Group: " + std::to_string(m_header.space_group) + "\n"
+        "Extra Size: " + std::to_string(m_header.extra_size) + "\n"
+        "Tilt angles: " + std::to_string(m_header.tiltangles[0]) + ", "
+        + std::to_string(m_header.tiltangles[1]) + ", "
+        + std::to_string(m_header.tiltangles[2]) + ", "
+        + std::to_string(m_header.tiltangles[3]) + ", "
+        + std::to_string(m_header.tiltangles[4]) + ", "
+        + std::to_string(m_header.tiltangles[5]) + "\n"
+        "Origin: " + std::to_string(m_header.origin[0]) + ", "
+        + std::to_string(m_header.origin[1]) + ", "
+        + std::to_string(m_header.origin[2]) + "\n"
+        "Map Format ID: " + std::string(m_header.map_format_id) + "\n"
+        "Machine Stamp: " + std::string(m_header.machine_stamp) + "\n"
+        "RMS: " + std::to_string(m_header.rms) + "\n"
+        "Label Size: " + std::to_string(m_header.label_size) + "\n"
+    );
 }
 
 size_t MrcFormat::GetElementSize(void) const
@@ -105,6 +142,7 @@ size_t MrcFormat::GetElementSize(void) const
 
 void MrcFormat::LoadDataArray(std::istream & stream)
 {
+    Logger::Log(LogLevel::Debug, "MrcFormat::LoadDataArray() called");
     // Ensure we start reading data from the beginning of the file
     stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
@@ -114,32 +152,88 @@ void MrcFormat::LoadDataArray(std::istream & stream)
         stream.seekg(m_header.extra_size, std::ios::cur);
     }
     
-    size_t num_voxels{ static_cast<size_t>(m_header.array_size[0]) *
-                       static_cast<size_t>(m_header.array_size[1]) *
-                       static_cast<size_t>(m_header.array_size[2]) };
+    size_t num_voxels{
+        static_cast<size_t>(m_header.array_size[0]) *
+        static_cast<size_t>(m_header.array_size[1]) *
+        static_cast<size_t>(m_header.array_size[2])
+    };
     
     size_t element_size{ GetElementSize() };
     size_t total_bytes{ num_voxels * element_size };
     
-    auto data_array{ std::make_unique<float[]>(num_voxels) };
+    // Read raw data into temporary buffer first
+    auto raw_data{ std::make_unique<float[]>(num_voxels) };
     switch (static_cast<MODE>(m_header.mode))
     {
         case MODE::SIGNED_FLOAT32:
-            stream.read(reinterpret_cast<char*>(data_array.get()),
+            stream.read(reinterpret_cast<char*>(raw_data.get()),
                         static_cast<std::streamsize>(total_bytes));
             if (!stream)
             {
                 throw std::runtime_error("Failed to read voxel data from file");
             }
-            m_data_array = std::move(data_array);
             break;
         default:
             throw std::runtime_error("Unsupported MODE in LoadDataArray");
     }
+
+    if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
+    {
+        // Data is already in X->Y->Z order, no reordering needed
+        m_data_array = std::move(raw_data);
+        return;
+    }
+
+    // Build mapping from X/Y/Z axis to column/row/section positions
+    int axis_to_index[3];
+    for (int i = 0; i < 3; i++)
+    {
+        // axis values are 1-based, convert to 0-based indices
+        axis_to_index[m_header.axis[i] - 1] = i;
+    }
+
+    // Determine dimension sizes in canonical X,Y,Z order
+    size_t dims[3]{
+        static_cast<size_t>(m_header.array_size[axis_to_index[0]]),
+        static_cast<size_t>(m_header.array_size[axis_to_index[1]]),
+        static_cast<size_t>(m_header.array_size[axis_to_index[2]])
+    };
+
+    // Compute strides for each axis in the source buffer
+    size_t src_stride[3];
+    size_t stride_acc{ 1 };
+    for (int i = 0; i < 3; ++i)
+    {
+        src_stride[m_header.axis[i] - 1] = stride_acc;
+        stride_acc *= static_cast<size_t>(m_header.array_size[i]);
+    }
+
+    // Allocate destination array and reorder data into X->Y->Z order
+    auto reordered_array{ std::make_unique<float[]>(num_voxels) };
+    for (size_t z = 0; z < dims[2]; z++)
+    {
+        size_t src_off_z{ z * src_stride[2] };
+        size_t dst_off_z{ z * dims[0] * dims[1] };
+        for (size_t y = 0; y < dims[1]; y++)
+        {
+            size_t src_off_y{ src_off_z + y * src_stride[1] };
+            size_t dst_off_y{ dst_off_z + y * dims[0] };
+            for (size_t x = 0; x < dims[0]; x++)
+            {
+                reordered_array[dst_off_y + x] = raw_data[src_off_y + x * src_stride[0]];
+            }
+        }
+    }
+
+    // Update header to reflect canonical axis order and dimensions
+    ReorderedAxisRelatedParameters();
+    
+    m_data_array = std::move(reordered_array);
 }
 
 void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
+    Logger::Log(LogLevel::Debug, "MrcFormat::SaveDataArray() called");
     size_t expected_voxels{ static_cast<size_t>(m_header.array_size[0]) *
                             static_cast<size_t>(m_header.array_size[1]) *
                             static_cast<size_t>(m_header.array_size[2]) };
@@ -172,10 +266,11 @@ std::unique_ptr<float[]> MrcFormat::GetDataArray(void)
 
 std::array<int, 3> MrcFormat::GetGridSize(void)
 {
-    std::array<int, 3> grid_size;
-    grid_size.at(0) = m_header.grid_size[0];
-    grid_size.at(1) = m_header.grid_size[1];
-    grid_size.at(2) = m_header.grid_size[2];
+    std::array<int, 3> grid_size{
+        m_header.array_size[0],
+        m_header.array_size[1],
+        m_header.array_size[2]
+    };
     return grid_size;
 }
 
@@ -185,36 +280,98 @@ std::array<float, 3> MrcFormat::GetGridSpacing(void)
     {
         throw std::runtime_error("GetGridSpacing: grid_size has zero dimension");
     }
-    std::array<float, 3> grid_spacing;
-    grid_spacing.at(0) = m_header.cell_dimension[0] / static_cast<float>(m_header.grid_size[0]);
-    grid_spacing.at(1) = m_header.cell_dimension[1] / static_cast<float>(m_header.grid_size[1]);
-    grid_spacing.at(2) = m_header.cell_dimension[2] / static_cast<float>(m_header.grid_size[2]);
+    std::array<float, 3> grid_spacing{
+        m_header.cell_dimension[0] / static_cast<float>(m_header.grid_size[0]),
+        m_header.cell_dimension[1] / static_cast<float>(m_header.grid_size[1]),
+        m_header.cell_dimension[2] / static_cast<float>(m_header.grid_size[2])
+    };
     return grid_spacing;
 }
 
 std::array<float, 3> MrcFormat::GetOrigin(void)
 {
-    std::array<float, 3> origin;
-    origin.at(0) = m_header.origin[0];
-    origin.at(1) = m_header.origin[1];
-    origin.at(2) = m_header.origin[2];
+    std::array<float, 3> origin{
+        m_header.origin[0],
+        m_header.origin[1],
+        m_header.origin[2]
+    };
     return origin;
 }
 
-void MrcFormat::SetGridSize(const std::array<int, 3> & grid_size)
+void MrcFormat::SetHeader(const std::array<int, 3> & grid_size,
+                          const std::array<float, 3> & grid_spacing,
+                          const std::array<float, 3> & origin)
 {
+    if (grid_size[0] <= 0 || grid_size[1] <= 0 || grid_size[2] <= 0)
+    {
+        throw std::runtime_error("SetHeader: grid_size must be positive");
+    }
+    if (grid_spacing[0] <= 0.0f || grid_spacing[1] <= 0.0f || grid_spacing[2] <= 0.0f)
+    {
+        throw std::runtime_error("SetHeader: grid_spacing must be positive");
+    }
+
     std::memcpy(m_header.array_size, grid_size.data(), sizeof(m_header.array_size));
     std::memcpy(m_header.grid_size, grid_size.data(), sizeof(m_header.grid_size));
-}
 
-void MrcFormat::SetGridSpacing(const std::array<float, 3> & grid_spacing)
-{
-    m_header.cell_dimension[0] = grid_spacing.at(0) * static_cast<float>(m_header.grid_size[0]);
-    m_header.cell_dimension[1] = grid_spacing.at(1) * static_cast<float>(m_header.grid_size[1]);
-    m_header.cell_dimension[2] = grid_spacing.at(2) * static_cast<float>(m_header.grid_size[2]);
-}
+    m_header.cell_dimension[0] = grid_spacing[0] * static_cast<float>(m_header.grid_size[0]);
+    m_header.cell_dimension[1] = grid_spacing[1] * static_cast<float>(m_header.grid_size[1]);
+    m_header.cell_dimension[2] = grid_spacing[2] * static_cast<float>(m_header.grid_size[2]);
 
-void MrcFormat::SetOrigin(const std::array<float, 3> & origin)
-{
     std::memcpy(m_header.origin, origin.data(), sizeof(m_header.origin));
+}
+
+void MrcFormat::ReorderedAxisRelatedParameters(void)
+{
+    Logger::Log(LogLevel::Debug, "MrcFormat::ReorderedAxisRelatedParameters() called");
+    if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
+    {
+        Logger::Log(LogLevel::Debug,
+            "MrcFormat::ReorderedAxisRelatedParameters : "
+            "Axis already in X->Y->Z order, no need to reorder."
+        );
+        return;
+    }
+
+    int axis_to_index[3];
+    for (int i = 0; i < 3; i++)
+    {
+        // axis values are 1-based, convert to 0-based indices
+        axis_to_index[m_header.axis[i] - 1] = i;
+    }
+
+    int array_size[3]{
+        m_header.array_size[0], m_header.array_size[1], m_header.array_size[2]
+    };
+    int location_index[3]{
+        m_header.location_index[0], m_header.location_index[1], m_header.location_index[2]
+    };
+    int grid_size[3]{
+        m_header.grid_size[0], m_header.grid_size[1], m_header.grid_size[2]
+    };
+    float cell_dimension[3]{
+        m_header.cell_dimension[0], m_header.cell_dimension[1], m_header.cell_dimension[2]
+    };
+    float cell_angle[3]{
+        m_header.cell_angle[0], m_header.cell_angle[1], m_header.cell_angle[2]
+    };
+    float origin[3]{
+        m_header.origin[0], m_header.origin[1], m_header.origin[2]
+    };
+
+    // Reorder parameters based on current axis mapping
+    for (int i = 0; i < 3; i++)
+    {
+        m_header.array_size[i] = array_size[axis_to_index[i]];
+        m_header.location_index[i] = location_index[axis_to_index[i]];
+        m_header.grid_size[i] = grid_size[axis_to_index[i]];
+        m_header.cell_dimension[i] = cell_dimension[axis_to_index[i]];
+        m_header.cell_angle[i] = cell_angle[axis_to_index[i]];
+        m_header.origin[i] = origin[axis_to_index[i]];
+    }
+
+    // Update axis to canonical X->Y->Z order
+    m_header.axis[0] = 1;
+    m_header.axis[1] = 2;
+    m_header.axis[2] = 3;
 }

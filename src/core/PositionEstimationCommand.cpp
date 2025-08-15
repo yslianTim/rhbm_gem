@@ -1,6 +1,7 @@
 #include "PositionEstimationCommand.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
+#include "KDTreeAlgorithm.hpp"
 #include "ScopeTimer.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"

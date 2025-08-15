@@ -31,7 +31,8 @@ public:
     virtual std::array<int, 3> GetGridSize(void) = 0;
     virtual std::array<float, 3> GetGridSpacing(void) = 0;
     virtual std::array<float, 3> GetOrigin(void) = 0;
-    virtual void SetGridSize(const std::array<int, 3> & grid_size) = 0;
-    virtual void SetGridSpacing(const std::array<float, 3> & grid_spacing) = 0;
-    virtual void SetOrigin(const std::array<float, 3> & origin) = 0;
+    virtual void SetHeader(const std::array<int, 3> & grid_size,
+                           const std::array<float, 3> & grid_spacing,
+                           const std::array<float, 3> & origin) = 0;
+
 };

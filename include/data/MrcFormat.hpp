@@ -60,8 +60,8 @@ class MrcFormat : public MapFileFormatBase
         short vd2;
         float tiltangles[6];      // 0,1,2 = original:  3,4,5 = current
         float origin[3];          // Phase origin or origin of subvolume
-        char  map[4];             // Character string 'MAP' to identify file type
-        char  stamp[4];           // Machine stamp encoding byte ordering of data
+        char  map_format_id[4];   // Character string 'MAP' to identify file type
+        char  machine_stamp[4];   // Machine stamp encoding byte ordering of data
         float rms;                // RMS deviation of map from mean density
         int   label_size;         // Number of labels being used
         char  label[HEAD::NUM_LABEL][HEAD::SIZE_LABEL];  // 10 80-character text labels
@@ -85,13 +85,14 @@ public:
     std::array<int, 3> GetGridSize(void) override;
     std::array<float, 3> GetGridSpacing(void) override;
     std::array<float, 3> GetOrigin(void) override;
-    void SetGridSize(const std::array<int, 3> & grid_size) override;
-    void SetGridSpacing(const std::array<float, 3> & grid_spacing) override;
-    void SetOrigin(const std::array<float, 3> & origin) override;
+    void SetHeader(const std::array<int, 3> & grid_size,
+                   const std::array<float, 3> & grid_spacing,
+                   const std::array<float, 3> & origin) override;
 
     const MrcHeader & GetHeader(void) const { return m_header; }
     
 private:
     size_t GetElementSize(void) const;
+    void ReorderedAxisRelatedParameters(void);
     
 };

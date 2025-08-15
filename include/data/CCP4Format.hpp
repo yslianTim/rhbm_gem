@@ -74,9 +74,9 @@ public:
     std::array<int, 3> GetGridSize(void) override;
     std::array<float, 3> GetGridSpacing(void) override;
     std::array<float, 3> GetOrigin(void) override;
-    void SetGridSize(const std::array<int, 3> & grid_size) override;
-    void SetGridSpacing(const std::array<float, 3> & grid_spacing) override;
-    void SetOrigin(const std::array<float, 3> & origin) override;
+    void SetHeader(const std::array<int, 3> & grid_size,
+                   const std::array<float, 3> & grid_spacing,
+                   const std::array<float, 3> & origin) override;
 
     const CCP4Header & GetHeader(void) const { return m_header; }
     

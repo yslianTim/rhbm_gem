@@ -56,9 +56,11 @@ void MapFileWriter::WriteHeader(std::ostream & stream)
 {
     try
     {
-        m_file_format_helper->SetGridSize(m_map_object->GetGridSize());
-        m_file_format_helper->SetGridSpacing(m_map_object->GetGridSpacing());
-        m_file_format_helper->SetOrigin(m_map_object->GetOrigin());
+        m_file_format_helper->SetHeader(
+            m_map_object->GetGridSize(),
+            m_map_object->GetGridSpacing(),
+            m_map_object->GetOrigin()
+        );
         m_file_format_helper->SaveHeader(stream);
         m_file_format_helper->PrintHeader();
     }

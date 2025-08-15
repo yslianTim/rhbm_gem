@@ -5,14 +5,17 @@
 #include <cstring>
 #include <stdexcept>
 #include <algorithm>
+#include <cmath>
 
 CCP4Format::CCP4Format(void)
 {
+    Logger::Log(LogLevel::Debug, "CCP4Format::CCP4Format() called");
     InitHeader();
 }
 
 void CCP4Format::InitHeader(void)
 {
+    Logger::Log(LogLevel::Debug, "CCP4Format::InitHeader() called");
     std::memset(&m_header, 0, sizeof(m_header));
     std::fill_n(m_header.array_size, 3, 1);
     m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
@@ -44,7 +47,7 @@ void CCP4Format::InitHeader(void)
 
 void CCP4Format::LoadHeader(std::istream & stream)
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::LoadHeader called");
+    Logger::Log(LogLevel::Debug, "CCP4Format::LoadHeader() called");
     stream.seekg(0, std::ios::beg);
     stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
     PrintHeader();
@@ -56,6 +59,7 @@ void CCP4Format::LoadHeader(std::istream & stream)
 
 void CCP4Format::SaveHeader(std::ostream & stream)
 {
+    Logger::Log(LogLevel::Debug, "CCP4Format::SaveHeader() called");
     stream.seekp(0, std::ios::beg);
     stream.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
     if (!stream)
@@ -148,7 +152,7 @@ size_t CCP4Format::GetElementSize(void) const
 
 void CCP4Format::LoadDataArray(std::istream & stream)
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::LoadDataArray called");
+    Logger::Log(LogLevel::Debug, "CCP4Format::LoadDataArray() called");
     // Position stream at start of data section
     stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
@@ -233,6 +237,7 @@ void CCP4Format::LoadDataArray(std::istream & stream)
 
 void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
+    Logger::Log(LogLevel::Debug, "CCP4Format::SaveDataArray() called");
     size_t expected_voxels{
         static_cast<size_t>(m_header.array_size[0]) *
         static_cast<size_t>(m_header.array_size[1]) *
@@ -307,37 +312,39 @@ std::array<float, 3> CCP4Format::GetOrigin(void)
 {
     auto grid_spacing{ GetGridSpacing() };
     std::array<float, 3> origin{
-        static_cast<float>(m_header.location_index[0]) * grid_spacing.at(0),
-        static_cast<float>(m_header.location_index[1]) * grid_spacing.at(1),
-        static_cast<float>(m_header.location_index[2]) * grid_spacing.at(2)
+        static_cast<float>(m_header.location_index[0]) * grid_spacing[0],
+        static_cast<float>(m_header.location_index[1]) * grid_spacing[1],
+        static_cast<float>(m_header.location_index[2]) * grid_spacing[2]
     };
     return origin;
 }
 
-void CCP4Format::SetGridSize(const std::array<int, 3> & grid_size)
+void CCP4Format::SetHeader(const std::array<int, 3> & grid_size,
+                           const std::array<float, 3> & grid_spacing,
+                           const std::array<float, 3> & origin)
 {
+    if (grid_size[0] <= 0 || grid_size[1] <= 0 || grid_size[2] <= 0)
+    {
+        throw std::runtime_error("SetHeader: grid_size must be positive");
+    }
+    if (grid_spacing[0] <= 0.0f || grid_spacing[1] <= 0.0f || grid_spacing[2] <= 0.0f)
+    {
+        throw std::runtime_error("SetHeader: grid_spacing must be positive");
+    }
+
     std::memcpy(m_header.array_size, grid_size.data(), sizeof(m_header.array_size));
     std::memcpy(m_header.grid_size, grid_size.data(), sizeof(m_header.grid_size));
-}
 
-void CCP4Format::SetGridSpacing(const std::array<float, 3> & grid_spacing)
-{
-    m_header.map_length[0] = grid_spacing.at(0) * static_cast<float>(m_header.grid_size[0]);
-    m_header.map_length[1] = grid_spacing.at(1) * static_cast<float>(m_header.grid_size[1]);
-    m_header.map_length[2] = grid_spacing.at(2) * static_cast<float>(m_header.grid_size[2]);
-}
-
-void CCP4Format::SetOrigin(const std::array<float, 3> & origin)
-{
-    if (origin.at(0) != 0.0f || origin.at(1) != 0.0f || origin.at(2) != 0.0f)
+    for (size_t i = 0; i < 3; i++)
     {
-        throw std::runtime_error("CCP4 format does not support setting origin");
+        m_header.map_length[i] = grid_spacing[i] * static_cast<float>(m_header.grid_size[i]);
+        m_header.location_index[i] = static_cast<int>(std::lround(origin[i] / grid_spacing[i]));
     }
 }
 
 void CCP4Format::ReorderedAxisRelatedParameters(void)
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::ReorderedAxisRelatedParameters called");
+    Logger::Log(LogLevel::Debug, "CCP4Format::ReorderedAxisRelatedParameters() called");
     if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
     {
         Logger::Log(LogLevel::Debug,
