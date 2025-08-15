@@ -108,7 +108,16 @@ void AtomObject::SetPosition(float x, float y, float z)
 
 std::string AtomObject::GetInfo(void) const
 {
-    return "";
+    return "[Serial ID] " + std::to_string(m_serial_id) + " " +
+           "[Residue ID] " + std::to_string(m_residue_id) + " " +
+           "[Chain ID] " + m_chain_id + " " +
+           AtomicInfoHelper::GetLabel(m_residue) + " " +
+           AtomicInfoHelper::GetLabel(m_element) + " " +
+           m_indicator + " " +
+           "Position = (" +
+           std::to_string(m_position.at(0)) + ", " +
+           std::to_string(m_position.at(1)) + ", " +
+           std::to_string(m_position.at(2)) + ")";
 }
 
 void AtomObject::AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry)

@@ -98,7 +98,10 @@ void HRLModelHelper::SetDataArray(
         auto data_size{ static_cast<int>(member_data.size()) };
         if (data_size == 0)
         {
-            throw std::invalid_argument("Member dataset must not be empty.");
+            Logger::Log(LogLevel::Warning,
+                "HRLModelHelper::SetDataArray : "
+                "Member dataset is empty, skipping this member -> " + member_info);
+            continue; // Skip empty datasets
         }
         MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
         VectorXd y_data_vector{ VectorXd::Zero(data_size) };
@@ -164,9 +167,26 @@ void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
         throw std::overflow_error("Alpha parameters are too large and may overflow calculations.");
     }
 
-    if (m_data_size_list.size() != static_cast<size_t>(m_member_size))
+    if (m_data_size_list.size() < static_cast<size_t>(m_member_size))
     {
-        throw std::runtime_error("Data array not set");
+        Logger::Log(LogLevel::Info,
+                    "HRLModelHelper::RunEstimation : "
+                    "Valid member size is smaller than expected member size -> "
+                    + std::to_string(m_member_size) + ", "
+                    "reassigning member size to -> "
+                    + std::to_string(m_data_size_list.size()));
+        m_member_size = static_cast<int>(m_data_size_list.size());
+        m_weight_member_min = DEFAULT_WEIGHT_MEMBER_MIN / m_member_size;
+        m_sigma_square_array.resize(m_member_size);
+        m_omega_array.resize(m_member_size);
+        m_statistical_distance_array.resize(m_member_size);
+        m_outlier_flag_array.resize(m_member_size);
+        m_beta_iter_array.resize(m_basis_size, m_member_size);
+        m_beta_OLS_array.resize(m_basis_size, m_member_size);
+        m_beta_MDPDE_array.resize(m_basis_size, m_member_size);
+        m_capital_sigma_posterior_list.resize(static_cast<size_t>(m_member_size));
+        m_capital_lambda_list.resize(static_cast<size_t>(m_member_size));
+        m_W_list.resize(static_cast<size_t>(m_member_size));
     }
 
     Initialization();
@@ -589,72 +609,78 @@ void HRLModelHelper::LabelOutlierMember(void)
     //m_outlier_flag_array = ((m_omega_array/m_omega_sum) < 0.05/static_cast<double>(m_member_size));
 }
 
-void HRLModelHelper::ValidateMemberId(int id) const
+bool HRLModelHelper::ValidateMemberId(int id) const
 {
-    if (id < 0 || id >= m_member_size)
+    if (id < 0)
     {
-        throw std::out_of_range("member id out of range");
+        throw std::out_of_range("HRLModelHelper::ValidateMemberId : member ID must be non-negative");
     }
+
+    if (id >= m_member_size)
+    {
+        return false;
+    }
+    return true;
 }
 
 bool HRLModelHelper::GetOutlierFlag(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return true;
     return m_outlier_flag_array(id); 
 }
 
 double HRLModelHelper::GetStatisticalDistance(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return std::numeric_limits<double>::max();
     return m_statistical_distance_array(id);
 }
 
 double HRLModelHelper::GetSigmaSquare(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return std::numeric_limits<double>::max();
     return m_sigma_square_array(id);
 }
 
 double HRLModelHelper::GetMemberWeight(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return m_weight_member_min;
     return m_omega_array(id);
 }
 
 const Eigen::DiagonalMatrix<double, Eigen::Dynamic> &
 HRLModelHelper::GetDataWeightMatrix(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return m_W_list[0];
     return m_W_list[static_cast<size_t>(id)];
 }
 
 const Eigen::DiagonalMatrix<double, Eigen::Dynamic> &
 HRLModelHelper::GetDataCovarianceMatrix(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return m_capital_sigma_list[0];
     return m_capital_sigma_list[static_cast<size_t>(id)];
 }
 
 const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return m_capital_sigma_posterior_list[0];
     return m_capital_sigma_posterior_list[static_cast<size_t>(id)];
 }
 
 Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixPosterior(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return m_beta_posterior_array.col(0);
     return Eigen::Ref<const Eigen::VectorXd>(m_beta_posterior_array.col(static_cast<Eigen::Index>(id)));
 }
 
 Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixMDPDE(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return m_beta_MDPDE_array.col(0);
     return Eigen::Ref<const Eigen::VectorXd>(m_beta_MDPDE_array.col(static_cast<Eigen::Index>(id)));
 }
 
 Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixOLS(int id) const
 {
-    ValidateMemberId(id);
+    if (ValidateMemberId(id) == false) return m_beta_OLS_array.col(0);
     return Eigen::Ref<const Eigen::VectorXd>(m_beta_OLS_array.col(static_cast<Eigen::Index>(id)));
 }

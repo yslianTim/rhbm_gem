@@ -14,7 +14,7 @@
 class HRLModelHelper
 {
     const int m_basis_size;
-    const int m_member_size; ///< The size of atomic member (number of members)  \f$ I \f$
+    int m_member_size; ///< The size of atomic member (number of members)  \f$ I \f$
     int m_maximum_iteration; ///< The upper limit of iteration (default = 100)
     double m_tolerance; ///< The tolerance for algorithms (default = \f$ 10^{-5} \f$)
     double m_omega_sum; ///< The sum of member weights \f$ \Omega^{(t)} = \sum_{0}^{I-1}\omega_{i}^{(t)} \f$
@@ -163,7 +163,7 @@ public:
     Eigen::Ref<const Eigen::VectorXd> GetBetaMatrixOLS(int id) const;
 
 private:
-    void ValidateMemberId(int id) const;
+    bool ValidateMemberId(int id) const;
     void Initialization(void);
     void AlgorithmBetaMDPDE(double alpha_r);
     void AlgorithmMuMDPDE(double alpha_g);

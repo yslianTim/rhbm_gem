@@ -218,7 +218,7 @@ TEST_F(AtomicInfoHelperTest, ElementDisplayAttributes)
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayMarker(Element::UNK));
     const Element invalid_element{ static_cast<Element>(999) };
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayColor(invalid_element));
-    EXPECT_EQ(1, AtomicInfoHelper::GetDisplayMarker(invalid_element));
+    EXPECT_EQ(121, AtomicInfoHelper::GetDisplayMarker(invalid_element));
 }
 
 TEST_F(AtomicInfoHelperTest, ResidueDisplayAttributes)

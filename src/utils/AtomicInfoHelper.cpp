@@ -577,7 +577,7 @@ short AtomicInfoHelper::GetDisplayColor(Residue residue)
 
 short AtomicInfoHelper::GetDisplayMarker(Element element)
 {
-    if (m_element_marker_map.find(element) == m_element_marker_map.end()) return 1;
+    if (m_element_marker_map.find(element) == m_element_marker_map.end()) return 121;
     return static_cast<short>(m_element_marker_map.at(element));
 }
 
