@@ -46,6 +46,18 @@ public:
         return BuildKDTree(node_list.begin(), node_list.end(), depth);
     }
 
+    static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
+        std::vector<NodeType> & node_list, int depth = 0)
+    {
+        std::vector<NodeType *> node_ptr_list;
+        node_ptr_list.reserve(node_list.size());
+        for (auto & node : node_list)
+        {
+            node_ptr_list.emplace_back(&node);
+        }
+        return BuildKDTree(node_ptr_list, depth);
+    }
+
     static std::vector<NodeType *> KNearestNeighbors(
         const KDNode<NodeType> * root_kd_node, const NodeType * query_node, size_t k_size)
     {

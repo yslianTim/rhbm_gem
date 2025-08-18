@@ -10,6 +10,10 @@
 #include <memory>
 #include <vector>
 
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace {
 CommandRegistrar<PositionEstimationCommand> registrar_model_test{
     "position_estimation",
@@ -73,9 +77,9 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunMapValueConvergence() called");
     map_object->Display();
 
-    for (int i = 0; i < m_options.iteration_count; i++)
+    for (int t = 0; t < m_options.iteration_count; t++)
     {
-        Logger::Log(LogLevel::Debug, "Iteration: " + std::to_string(i + 1));
+        Logger::Log(LogLevel::Debug, "Iteration: " + std::to_string(t + 1));
     }
 }
 
@@ -84,14 +88,7 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildVoxelList() called");
     ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
     m_selected_voxel_list.clear();
-    size_t positive_count{
-        static_cast<size_t>(std::count_if(
-            map_object->GetMapValueArray(),
-            map_object->GetMapValueArray() + map_object->GetMapValueArraySize(),
-            [](float v) { return v > 0.0f; })
-        )
-    };
-    m_selected_voxel_list.reserve(positive_count);
+    m_selected_voxel_list.reserve(map_object->GetMapValueArraySize());
 
     for (size_t i = 0; i < map_object->GetMapValueArraySize(); i++)
     {
@@ -100,7 +97,11 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
         if (value <= 0.0f) continue; // Skip negative values
         m_selected_voxel_list.emplace_back(position, value);
     }
-    m_selected_voxel_list.shrink_to_fit();
+
+    if (m_selected_voxel_list.size() < m_selected_voxel_list.capacity())
+    {
+        m_selected_voxel_list.shrink_to_fit();
+    }
 
     Logger::Log(LogLevel::Info,
         "Number of selected voxels to be estimated = "
@@ -108,12 +109,5 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
         + std::to_string(map_object->GetMapValueArraySize()) + " voxels."
     );
 
-    std::vector<VoxelNode *> voxel_ptrs;
-    voxel_ptrs.reserve(m_selected_voxel_list.size());
-    for (auto & voxel : m_selected_voxel_list)
-    {
-        voxel_ptrs.emplace_back(&voxel);
-    }
-
-    m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(voxel_ptrs, 0);
+    m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(m_selected_voxel_list, 0);
 }
