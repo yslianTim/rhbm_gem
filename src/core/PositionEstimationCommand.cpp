@@ -3,6 +3,7 @@
 #include "DataObjectManager.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "ScopeTimer.hpp"
+#include "ArrayStats.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
@@ -86,7 +87,7 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
         UpdateVoxelPosition(voxel_list);
     }
     DegenerateVoxelList(voxel_list);
-    DisplayVoxelList(voxel_list);
+    //DisplayVoxelList(voxel_list);
 }
 
 void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
@@ -214,10 +215,34 @@ void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & vox
 void PositionEstimationCommand::DegenerateVoxelList(std::vector<VoxelNode> & voxel_list)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DegenerateVoxelList() called");
+    ScopeTimer timer("PositionEstimationCommand::DegenerateVoxelList");
+    if (voxel_list.empty())
+    {
+        Logger::Log(LogLevel::Warning, "Voxel list is empty. Nothing to degenerate.");
+        return;
+    }
     auto voxel_size_origin{ voxel_list.size() };
-    auto torerance{ 1.0e-6f };
+    auto tolerance{ 1.0e-2f };
+    std::size_t removed_count{ 0 };
+    for (std::size_t i = 0; i < voxel_list.size(); i++)
+    {
+        auto position_i{ voxel_list[i].GetPosition() };
+        for (std::size_t j = i + 1; j < voxel_list.size(); j++)
+        {
+            auto position_j{ voxel_list[j].GetPosition() };
+            if (ArrayStats<float>::ComputeNorm(position_i, position_j) < tolerance)
+            {
+                voxel_list.erase(voxel_list.begin() + j);
+                removed_count++;
+                j--; // Adjust index after removal
+            }
+        }
+    }
 
-    
+    Logger::Log(LogLevel::Info,
+        "Number of removed voxels = "
+        + std::to_string(removed_count) +" / "+ std::to_string(voxel_size_origin) +
+        ", remaining voxels = " + std::to_string(voxel_list.size()));
 }
 
 void PositionEstimationCommand::DisplayVoxelList(const std::vector<VoxelNode> & voxel_list) const
