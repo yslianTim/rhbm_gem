@@ -147,20 +147,23 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
 void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & voxel_list)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::UpdateVoxelPosition() called");
-
+    ScopeTimer timer("PositionEstimationCommand::UpdateVoxelPosition");
     auto kd_tree_root{ KDTreeAlgorithm<VoxelNode>::BuildKDTree(voxel_list, 0) };
+    auto * kd_tree_root_ptr{ kd_tree_root.get() };
 
+#ifdef USE_OPENMP
+#pragma omp parallel for schedule(static)
     for (size_t i = 0; i < voxel_list.size(); i++)
     {
         auto & voxel{ voxel_list[i] };
-        auto knn_list{
-            KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
-                kd_tree_root.get(), &voxel, static_cast<size_t>(m_options.knn_size))
-        };
-
         auto voxel_position_origin{ m_selected_voxel_list[i].GetPosition() };
         std::array<float, 3> voxel_position_update{ 0.0f, 0.0f, 0.0f };
         float weight_sum{ 0.0f };
+        auto knn_list{
+            KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
+                kd_tree_root_ptr, &voxel, static_cast<size_t>(m_options.knn_size))
+        };
+
         for (auto neighbor_voxel : knn_list)
         {
             float K{
@@ -177,4 +180,33 @@ void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & vox
 
         voxel.SetPosition(voxel_position_update);
     }
+#else
+    for (size_t i = 0; i < voxel_list.size(); i++)
+    {
+        auto & voxel{ voxel_list[i] };
+        auto voxel_position_origin{ m_selected_voxel_list[i].GetPosition() };
+        std::array<float, 3> voxel_position_update{ 0.0f, 0.0f, 0.0f };
+        float weight_sum{ 0.0f };
+        auto knn_list{
+            KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
+                kd_tree_root_ptr, &voxel, static_cast<size_t>(m_options.knn_size))
+        };
+
+        for (auto neighbor_voxel : knn_list)
+        {
+            float K{
+                std::exp(static_cast<float>(m_options.alpha) * std::log(neighbor_voxel->GetValue()))
+            };
+            voxel_position_update[0] += K * voxel_position_origin[0];
+            voxel_position_update[1] += K * voxel_position_origin[1];
+            voxel_position_update[2] += K * voxel_position_origin[2];
+            weight_sum += K;
+        }
+        voxel_position_update[0] /= weight_sum;
+        voxel_position_update[1] /= weight_sum;
+        voxel_position_update[2] /= weight_sum;
+
+        voxel.SetPosition(voxel_position_update);
+    }
+#endif
 }
