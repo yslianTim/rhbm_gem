@@ -9,9 +9,6 @@
 #include "CommandBase.hpp"
 #include "MapObject.hpp"
 
-class VoxelNode;
-template <typename T> struct KDNode;
-
 class PositionEstimationCommand : public CommandBase
 {
 public:
@@ -27,7 +24,6 @@ public:
 private:
     Options m_options;
     std::vector<VoxelNode> m_selected_voxel_list;
-    std::unique_ptr<KDNode<VoxelNode>> m_kd_tree_root;
 
 public:
     PositionEstimationCommand(void);
@@ -49,5 +45,6 @@ public:
 private:
     void RunMapValueConvergence(MapObject * map_object);
     void BuildVoxelList(MapObject * map_object);
+    void UpdateVoxelPosition(std::vector<VoxelNode> & voxel_list);
 
 };

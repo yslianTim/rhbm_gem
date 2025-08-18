@@ -17,6 +17,7 @@ public:
         m_position{ position }, m_value{ value } {}
     const std::array<float, 3> & GetPosition(void) const { return m_position; }
     float GetValue(void) const { return m_value; }
+    void SetPosition(const std::array<float, 3> & position) { m_position = position; }
 };
 
 class MapObject : public DataObjectBase
