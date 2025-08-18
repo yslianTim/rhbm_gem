@@ -8,6 +8,8 @@
 #include "CommandBase.hpp"
 
 class MapObject;
+class VoxelNode;
+template <typename T> struct KDNode;
 
 class PositionEstimationCommand : public CommandBase
 {
@@ -23,6 +25,8 @@ public:
 
 private:
     Options m_options;
+    std::vector<VoxelNode *> m_selected_voxel_list;
+    std::unique_ptr<KDNode<VoxelNode>> m_kd_tree_root;
 
 public:
     PositionEstimationCommand(void);
@@ -37,8 +41,12 @@ public:
     void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
     void SetSavedKeyTag(const std::string & tag) { m_options.saved_key_tag = tag; }
     void SetThreadSize(int value) { m_options.thread_size = value; }
+    void SetIterationCount(int value) { m_options.iteration_count = value; }
+    void SetKNNSize(int value) { m_options.knn_size = value; }
+    void SetAlpha(double value) { m_options.alpha = value; }
 
 private:
     void RunMapValueConvergence(MapObject * map_object);
+    void BuildVoxelList(MapObject * map_object);
 
 };

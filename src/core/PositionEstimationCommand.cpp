@@ -17,7 +17,7 @@ CommandRegistrar<PositionEstimationCommand> registrar_model_test{
 }
 
 PositionEstimationCommand::PositionEstimationCommand(void) :
-    CommandBase(), m_options{}
+    CommandBase(), m_options{}, m_kd_tree_root{ nullptr }
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::PositionEstimationCommand() called.");
 }
@@ -54,6 +54,7 @@ bool PositionEstimationCommand::Execute(void)
     auto map_object{ data_manager->GetTypedDataObject<MapObject>("map") };
     map_object->MapValueArrayNormalization();
 
+    BuildVoxelList(map_object.get());
     RunMapValueConvergence(map_object.get());
 
     //data_manager->SaveDataObject("map", m_options.saved_key_tag);
@@ -76,4 +77,27 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
     {
         Logger::Log(LogLevel::Debug, "Iteration: " + std::to_string(i + 1));
     }
+}
+
+void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
+{
+    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildVoxelList() called");
+    m_selected_voxel_list.clear();
+    m_selected_voxel_list.reserve(map_object->GetMapValueArraySize());
+
+    for (size_t i = 0; i < map_object->GetMapValueArraySize(); i++)
+    {
+        auto position{ map_object->GetGridPosition(i) };
+        float value{ map_object->GetMapValue(i) };
+        if (value <= 0.0f) continue; // Skip negative values
+        m_selected_voxel_list.emplace_back(new VoxelNode(position, value));
+    }
+
+    Logger::Log(LogLevel::Info,
+        "Number of selected voxels to be estimated = "
+        + std::to_string(m_selected_voxel_list.size()) + " / "
+        + std::to_string(map_object->GetMapValueArraySize()) + " voxels."
+    );
+
+    m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(m_selected_voxel_list, 0);
 }

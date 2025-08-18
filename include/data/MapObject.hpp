@@ -7,6 +7,18 @@
 
 #include "DataObjectBase.hpp"
 
+class VoxelNode
+{
+    std::array<float, 3> m_position;
+    float m_value;
+
+public:
+    VoxelNode(const std::array<float, 3> & position, float value) :
+        m_position{ position }, m_value{ value } {}
+    const std::array<float, 3> & GetPosition(void) const { return m_position; }
+    float GetValue(void) const { return m_value; }
+};
+
 class MapObject : public DataObjectBase
 {
     std::string m_key_tag;
