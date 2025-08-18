@@ -82,16 +82,25 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
 void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildVoxelList() called");
+    ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
     m_selected_voxel_list.clear();
-    m_selected_voxel_list.reserve(map_object->GetMapValueArraySize());
+    size_t positive_count{
+        static_cast<size_t>(std::count_if(
+            map_object->GetMapValueArray(),
+            map_object->GetMapValueArray() + map_object->GetMapValueArraySize(),
+            [](float v) { return v > 0.0f; })
+        )
+    };
+    m_selected_voxel_list.reserve(positive_count);
 
     for (size_t i = 0; i < map_object->GetMapValueArraySize(); i++)
     {
         auto position{ map_object->GetGridPosition(i) };
         float value{ map_object->GetMapValue(i) };
         if (value <= 0.0f) continue; // Skip negative values
-        m_selected_voxel_list.emplace_back(new VoxelNode(position, value));
+        m_selected_voxel_list.emplace_back(position, value);
     }
+    m_selected_voxel_list.shrink_to_fit();
 
     Logger::Log(LogLevel::Info,
         "Number of selected voxels to be estimated = "
@@ -99,5 +108,12 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
         + std::to_string(map_object->GetMapValueArraySize()) + " voxels."
     );
 
-    m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(m_selected_voxel_list, 0);
+    std::vector<VoxelNode *> voxel_ptrs;
+    voxel_ptrs.reserve(m_selected_voxel_list.size());
+    for (auto & voxel : m_selected_voxel_list)
+    {
+        voxel_ptrs.emplace_back(&voxel);
+    }
+
+    m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(voxel_ptrs, 0);
 }

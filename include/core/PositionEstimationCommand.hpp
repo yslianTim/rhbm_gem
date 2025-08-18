@@ -2,12 +2,13 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 #include <filesystem>
 #include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
+#include "MapObject.hpp"
 
-class MapObject;
 class VoxelNode;
 template <typename T> struct KDNode;
 
@@ -25,7 +26,7 @@ public:
 
 private:
     Options m_options;
-    std::vector<VoxelNode *> m_selected_voxel_list;
+    std::vector<VoxelNode> m_selected_voxel_list;
     std::unique_ptr<KDNode<VoxelNode>> m_kd_tree_root;
 
 public:
