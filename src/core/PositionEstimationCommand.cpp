@@ -83,10 +83,10 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
     for (int t = 0; t < m_options.iteration_count; t++)
     {
         Logger::Log(LogLevel::Info, "Iteration: " + std::to_string(t + 1));
-
         UpdateVoxelPosition(voxel_list);
-        
     }
+    DegenerateVoxelList(voxel_list);
+    DisplayVoxelList(voxel_list);
 }
 
 void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
@@ -209,4 +209,35 @@ void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & vox
         voxel.SetPosition(voxel_position_update);
     }
 #endif
+}
+
+void PositionEstimationCommand::DegenerateVoxelList(std::vector<VoxelNode> & voxel_list)
+{
+    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DegenerateVoxelList() called");
+    auto voxel_size_origin{ voxel_list.size() };
+    auto torerance{ 1.0e-6f };
+
+    
+}
+
+void PositionEstimationCommand::DisplayVoxelList(const std::vector<VoxelNode> & voxel_list) const
+{
+    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DisplayVoxelList() called");
+    if (voxel_list.empty())
+    {
+        Logger::Log(LogLevel::Warning, "No voxels to display.");
+        return;
+    }
+    Logger::Log(LogLevel::Info,
+        "Displaying voxel position list: " + std::to_string(voxel_list.size()) + " voxels.");
+    for (const auto & voxel : voxel_list)
+    {
+        const auto & position{ voxel.GetPosition() };
+        Logger::Log(LogLevel::Info,
+            "Voxel Position: ["
+            + std::to_string(position[0]) + ", "
+            + std::to_string(position[1]) + ", "
+            + std::to_string(position[2]) + "]"
+        );
+    }
 }

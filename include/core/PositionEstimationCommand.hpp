@@ -46,5 +46,7 @@ private:
     void RunMapValueConvergence(MapObject * map_object);
     void BuildVoxelList(MapObject * map_object);
     void UpdateVoxelPosition(std::vector<VoxelNode> & voxel_list);
+    void DegenerateVoxelList(std::vector<VoxelNode> & voxel_list);
+    void DisplayVoxelList(const std::vector<VoxelNode> & voxel_list) const;
 
 };
