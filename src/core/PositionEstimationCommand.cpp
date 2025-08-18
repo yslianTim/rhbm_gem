@@ -17,7 +17,7 @@ CommandRegistrar<PositionEstimationCommand> registrar_model_test{
 }
 
 PositionEstimationCommand::PositionEstimationCommand(void) :
-    CommandBase()
+    CommandBase(), m_options{}
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::PositionEstimationCommand() called.");
 }

@@ -117,7 +117,9 @@ private:
             }
         );
 
-        std::unique_ptr<KDNode<NodeType>> kd_node{ std::make_unique<KDNode<NodeType>>(*mid_iter, axis) };
+        std::unique_ptr<KDNode<NodeType>> kd_node{
+            std::make_unique<KDNode<NodeType>>(*mid_iter, axis)
+        };
 
         kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1);
         kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1);
@@ -130,7 +132,7 @@ private:
     {
         auto position_a{ node_a->GetPosition() };
         auto position_b{ node_b->GetPosition() };
-        auto dimension{ static_cast<size_t>(position_a.size()) };
+        auto dimension{ position_a.size() };
         auto squared_norm{ 0.0 };
         for (size_t i = 0; i < dimension; i++)
         {
@@ -144,7 +146,7 @@ private:
     {
         auto position_a{ node_a->GetPosition() };
         auto position_b{ node_b->GetPosition() };
-        return position_a.at(static_cast<size_t>(axis)) - position_b.at(static_cast<size_t>(axis));
+        return position_a.at(axis) - position_b.at(axis);
     }
 
     static void KNearestNeighborsHelper(
@@ -167,8 +169,12 @@ private:
         auto axis{ kd_node->m_axis };
         auto diff{ ComputeNodeDifference(query_node, kd_node->m_node, axis) };
 
-        const KDNode<NodeType> * next_branch{ (diff < 0.0) ? kd_node->m_left.get() : kd_node->m_right.get() };
-        const KDNode<NodeType> * other_branch{ (diff < 0.0) ? kd_node->m_right.get() : kd_node->m_left.get() };
+        const KDNode<NodeType> * next_branch{
+            (diff < 0.0) ? kd_node->m_left.get() : kd_node->m_right.get()
+        };
+        const KDNode<NodeType> * other_branch{
+            (diff < 0.0) ? kd_node->m_right.get() : kd_node->m_left.get()
+        };
 
         KNearestNeighborsHelper(next_branch, query_node, k, max_heap);
 

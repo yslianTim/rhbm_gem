@@ -22,7 +22,7 @@ public:
     };
 
 private:
-    Options m_options{};
+    Options m_options;
 
 public:
     PositionEstimationCommand(void);
