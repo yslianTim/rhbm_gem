@@ -24,7 +24,16 @@ CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
 }
 
 MapSimulationCommand::MapSimulationCommand(void) :
-    CommandBase()
+    CommandBase(), m_options{}, m_selected_atom_list{}, m_atom_charge_map{},
+    m_kd_tree_root{ nullptr },
+    m_atom_range_minimum{
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max() },
+    m_atom_range_maximum{
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest() }
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::MapSimulationCommand() called");
 }
@@ -128,57 +137,8 @@ void MapSimulationCommand::RunMapSimulation(ModelObject * model_object)
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::RunMapSimulation() called");
     ScopeTimer timer("MapSimulationCommand::RunMapSimulation");
-    m_selected_atom_list.clear();
-    m_selected_atom_list.reserve(model_object->GetNumberOfAtom());
-    m_atom_charge_map.clear();
-
-    for (auto & atom : model_object->GetComponentsList())
-    {
-        if (atom->IsUnknownAtom() == true)
-        {
-            Logger::Log(LogLevel::Warning,
-                        "Unknown atom found in the model object: Serial-ID = "
-                        + std::to_string(atom->GetSerialID()) +
-                        ", this atom will be ignored in the simulation.");
-            continue;
-        }
-        m_selected_atom_list.emplace_back(atom.get());
-        auto charge{ 0.0 };
-        switch (m_options.partial_charge_choice)
-        {
-            case PartialCharge::NEUTRAL:
-                charge = 0.0;
-                break;
-            case PartialCharge::PARTIAL:
-                charge = AminoAcidInfoHelper::GetPartialCharge(
-                    atom->GetResidue(),
-                    atom->GetElement(),
-                    atom->GetRemoteness(),
-                    atom->GetBranch(),
-                    atom->GetStructure());
-                break;
-            case PartialCharge::AMBER:
-                charge = AminoAcidInfoHelper::GetPartialCharge(
-                    atom->GetResidue(),
-                    atom->GetElement(),
-                    atom->GetRemoteness(),
-                    atom->GetBranch(),
-                    atom->GetStructure(), true);
-                break;
-            default:
-                Logger::Log(LogLevel::Error,
-                            "Invalid partial charge choice: "
-                            + std::to_string(static_cast<int>(m_options.partial_charge_choice)));
-                break;
-        }
-        m_atom_charge_map.emplace(atom->GetSerialID(), charge);
-    }
-    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(m_selected_atom_list, 0);
-    Logger::Log(LogLevel::Info,
-                "Number of selected atoms to be simulated = "
-                + std::to_string(m_selected_atom_list.size()) +" / "
-                + std::to_string(model_object->GetNumberOfAtom()) + " atoms.");
-
+    BuildAtomList(model_object);
+    CalculateAtomRange();
     for (auto & blurring_width : m_options.blurring_width_list)
     {
         auto map_key_tag{
@@ -193,6 +153,91 @@ void MapSimulationCommand::RunMapSimulation(ModelObject * model_object)
         MapFileWriter writer{ output_file_name, map_object.get() };
         writer.Write();
     }
+}
+
+void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::BuildAtomList() called");
+    m_selected_atom_list.clear();
+    m_selected_atom_list.reserve(model_object->GetNumberOfAtom());
+    m_atom_charge_map.clear();
+    for (auto & atom : model_object->GetComponentsList())
+    {
+        if (atom->IsUnknownAtom() == true)
+        {
+            Logger::Log(LogLevel::Warning,
+                "Unknown atom found in the model object: Serial-ID = "
+                + std::to_string(atom->GetSerialID()) +
+                ", this atom will be ignored in the simulation.");
+            continue;
+        }
+        m_selected_atom_list.emplace_back(atom.get());
+        m_atom_charge_map.emplace(atom->GetSerialID(), CalculateAtomCharge(atom.get()));
+    }
+
+    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(m_selected_atom_list, 0);
+    Logger::Log(LogLevel::Info,
+        "Number of selected atoms to be simulated = "
+        + std::to_string(m_selected_atom_list.size()) +" / "
+        + std::to_string(model_object->GetNumberOfAtom()) + " atoms.");
+}
+
+double MapSimulationCommand::CalculateAtomCharge(AtomObject * atom) const
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::CalculateAtomCharge() called");
+    switch (m_options.partial_charge_choice)
+    {
+        case PartialCharge::NEUTRAL:
+            return 0.0;
+        case PartialCharge::PARTIAL:
+            return AminoAcidInfoHelper::GetPartialCharge(
+                atom->GetResidue(),
+                atom->GetElement(),
+                atom->GetRemoteness(),
+                atom->GetBranch(),
+                atom->GetStructure());
+        case PartialCharge::AMBER:
+            return AminoAcidInfoHelper::GetPartialCharge(
+                atom->GetResidue(),
+                atom->GetElement(),
+                atom->GetRemoteness(),
+                atom->GetBranch(),
+                atom->GetStructure(), true);
+        default:
+            Logger::Log(LogLevel::Error,
+                "Invalid partial charge choice: "
+                + std::to_string(static_cast<int>(m_options.partial_charge_choice)));
+            break;
+    }
+    return 0.0;
+}
+
+void MapSimulationCommand::CalculateAtomRange(void)
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::CalculateAtomRange() called");
+    if (m_selected_atom_list.empty())
+    {
+        Logger::Log(LogLevel::Warning, "No atoms selected. Atom range cannot be calculated.");
+        return;
+    }
+
+    for (const auto & atom : m_selected_atom_list)
+    {
+        const auto & atom_position{ atom->GetPositionRef() };
+        m_atom_range_minimum[0] = std::min(m_atom_range_minimum[0], atom_position[0]);
+        m_atom_range_minimum[1] = std::min(m_atom_range_minimum[1], atom_position[1]);
+        m_atom_range_minimum[2] = std::min(m_atom_range_minimum[2], atom_position[2]);
+        m_atom_range_maximum[0] = std::max(m_atom_range_maximum[0], atom_position[0]);
+        m_atom_range_maximum[1] = std::max(m_atom_range_maximum[1], atom_position[1]);
+        m_atom_range_maximum[2] = std::max(m_atom_range_maximum[2], atom_position[2]);
+    }
+
+    m_atom_range_minimum[0] -= static_cast<float>(m_options.cutoff_distance);
+    m_atom_range_minimum[1] -= static_cast<float>(m_options.cutoff_distance);
+    m_atom_range_minimum[2] -= static_cast<float>(m_options.cutoff_distance);
+    m_atom_range_maximum[0] += static_cast<float>(m_options.cutoff_distance);
+    m_atom_range_maximum[1] += static_cast<float>(m_options.cutoff_distance);
+    m_atom_range_maximum[2] += static_cast<float>(m_options.cutoff_distance);
 }
 
 std::unique_ptr<MapObject> MapSimulationCommand::CreateSimulatedMapObject(double blurring_width)
@@ -211,8 +256,9 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateSimulatedMapObject(double
         static_cast<float>(m_options.grid_spacing),
         static_cast<float>(m_options.grid_spacing)
     };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    std::array<int, 3> grid_size{ CalculateGridSize(grid_spacing, origin) };
+
+    auto origin{ CalculateOrigin(grid_spacing) };
+    auto grid_size{ CalculateGridSize(grid_spacing) };
     auto map_object{ std::make_unique<MapObject>(grid_size, grid_spacing, origin) };
     map_object->SetThreadSize(static_cast<int>(m_options.thread_size));
 
@@ -253,36 +299,32 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateSimulatedMapObject(double
 }
 
 std::array<int, 3> MapSimulationCommand::CalculateGridSize(
-    const std::array<float, 3> & grid_spacing, const std::array<float, 3> & origin)
+    const std::array<float, 3> & grid_spacing) const
 {
     auto selected_atom_size{ m_selected_atom_list.size() };
     if (selected_atom_size == 0)
     {
         Logger::Log(LogLevel::Warning, "No atoms selected. Grid size is set to [1,1,1].");
-        return std::array{ 1, 1, 1 };
+        return { 1, 1, 1 };
     }
-    std::array<float, 3> atom_range_max{
-        std::numeric_limits<float>::lowest(),
-        std::numeric_limits<float>::lowest(),
-        std::numeric_limits<float>::lowest()
-    };
-    for (auto & atom : m_selected_atom_list)
-    {
-        const auto & pos{ atom->GetPositionRef() };
-        atom_range_max.at(0) = std::max(atom_range_max.at(0), pos.at(0));
-        atom_range_max.at(1) = std::max(atom_range_max.at(1), pos.at(1));
-        atom_range_max.at(2) = std::max(atom_range_max.at(2), pos.at(2));
-    }
-    atom_range_max.at(0) += static_cast<float>(m_options.cutoff_distance);
-    atom_range_max.at(1) += static_cast<float>(m_options.cutoff_distance);
-    atom_range_max.at(2) += static_cast<float>(m_options.cutoff_distance);
 
-    auto grid_size_x{ static_cast<int>(std::ceil((atom_range_max.at(0) - origin.at(0)) / grid_spacing.at(0))) };
-    auto grid_size_y{ static_cast<int>(std::ceil((atom_range_max.at(1) - origin.at(1)) / grid_spacing.at(1))) };
-    auto grid_size_z{ static_cast<int>(std::ceil((atom_range_max.at(2) - origin.at(2)) / grid_spacing.at(2))) };
-    Logger::Log(LogLevel::Info,
-                "Grid size = [" + std::to_string(grid_size_x) + "," +
-                std::to_string(grid_size_y) + "," +
-                std::to_string(grid_size_z) + "]");
-    return std::array{ grid_size_x, grid_size_y, grid_size_z };
+    return {
+        static_cast<int>(
+            std::ceil((m_atom_range_maximum[0] - m_atom_range_minimum[0]) / grid_spacing[0])),
+        static_cast<int>(
+            std::ceil((m_atom_range_maximum[1] - m_atom_range_minimum[1]) / grid_spacing[1])),
+        static_cast<int>(
+            std::ceil((m_atom_range_maximum[2] - m_atom_range_minimum[2]) / grid_spacing[2]))
+    };
+}
+
+std::array<float, 3> MapSimulationCommand::CalculateOrigin(
+    const std::array<float, 3> & grid_spacing) const
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::CalculateOrigin() called");
+    return {
+        std::floor(m_atom_range_minimum[0] / grid_spacing[0]) * grid_spacing[0],
+        std::floor(m_atom_range_minimum[1] / grid_spacing[1]) * grid_spacing[1],
+        std::floor(m_atom_range_minimum[2] / grid_spacing[2]) * grid_spacing[2]
+    };
 }
