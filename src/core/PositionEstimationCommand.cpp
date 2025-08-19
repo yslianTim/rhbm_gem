@@ -86,7 +86,8 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
         Logger::Log(LogLevel::Info, "Iteration: " + std::to_string(t + 1));
         UpdateVoxelPosition(voxel_list);
     }
-    DegenerateVoxelList(voxel_list);
+    DisplayVoxelPositionChange(voxel_list);
+    //DegenerateVoxelList(voxel_list);
     //DisplayVoxelList(voxel_list);
 }
 
@@ -263,6 +264,32 @@ void PositionEstimationCommand::DisplayVoxelList(const std::vector<VoxelNode> & 
             + std::to_string(position[0]) + ", "
             + std::to_string(position[1]) + ", "
             + std::to_string(position[2]) + "]"
+        );
+    }
+}
+
+void PositionEstimationCommand::DisplayVoxelPositionChange(
+    const std::vector<VoxelNode> & voxel_list) const
+{
+    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DisplayVoxelPositionChange() called");
+    if (voxel_list.size() != m_selected_voxel_list.size())
+    {
+        Logger::Log(LogLevel::Error,
+            "Voxel list size mismatch: "
+            + std::to_string(voxel_list.size()) + " vs "
+            + std::to_string(m_selected_voxel_list.size()));
+        return;
+    }
+
+    for (size_t i = 0; i < voxel_list.size(); i++)
+    {
+        const auto & new_position{ voxel_list[i].GetPosition() };
+        const auto & old_position{ m_selected_voxel_list[i].GetPosition() };
+        Logger::Log(LogLevel::Info,
+            "Voxel " + std::to_string(i) + " Position Change: ["
+            + std::to_string(new_position[0] - old_position[0]) + ", "
+            + std::to_string(new_position[1] - old_position[1]) + ", "
+            + std::to_string(new_position[2] - old_position[2]) + "]"
         );
     }
 }
