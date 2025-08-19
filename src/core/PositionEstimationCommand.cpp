@@ -12,6 +12,9 @@
 #include <random>
 #include <memory>
 #include <vector>
+#include <array>
+#include <unordered_set>
+#include <cmath>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -88,9 +91,12 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
         Logger::Log(LogLevel::Info, "Iteration: " + std::to_string(t + 1));
         UpdateVoxelPosition(query_point_list);
     }
-    DegenerateVoxelList(query_point_list);
-    //DisplayVoxelList(query_point_list);
-    OutputVoxelList(query_point_list);
+    
+    std::vector<std::array<float, 3>> position_list;
+    position_list.reserve(query_point_list.size());
+    DegenerateVoxelList(query_point_list, position_list);
+    //DisplayVoxelList(position_list);
+    OutputVoxelList(position_list);
 }
 
 void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
@@ -155,8 +161,6 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
 void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & query_point_list)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::UpdateVoxelPosition() called");
-    ScopeTimer timer("PositionEstimationCommand::UpdateVoxelPosition");
-
     std::vector<std::array<float, 3>> updated_position_list;
     updated_position_list.resize(query_point_list.size(), {0.0f, 0.0f, 0.0f});
     auto update_voxel_position = [&](size_t index)
@@ -197,7 +201,9 @@ void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & que
     }
 }
 
-void PositionEstimationCommand::DegenerateVoxelList(std::vector<VoxelNode> & voxel_list)
+void PositionEstimationCommand::DegenerateVoxelList(
+    const std::vector<VoxelNode> & voxel_list,
+    std::vector<std::array<float, 3>> & position_list)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DegenerateVoxelList() called");
     ScopeTimer timer("PositionEstimationCommand::DegenerateVoxelList");
@@ -206,43 +212,70 @@ void PositionEstimationCommand::DegenerateVoxelList(std::vector<VoxelNode> & vox
         Logger::Log(LogLevel::Warning, "Voxel list is empty. Nothing to degenerate.");
         return;
     }
+
+    struct Key
+    {
+        int x;
+        int y;
+        int z;
+        bool operator==(const Key & other) const noexcept
+        {
+            return x == other.x && y == other.y && z == other.z;
+        }
+    };
+
+    struct KeyHash
+    {
+        std::size_t operator()(const Key & k) const noexcept
+        {
+            return (static_cast<std::size_t>(k.x) * 73856093) ^
+                   (static_cast<std::size_t>(k.y) * 19349663) ^
+                   (static_cast<std::size_t>(k.z) * 83492791);
+        }
+    };
+
     auto voxel_size_origin{ voxel_list.size() };
     auto tolerance{ 1.0e-2f };
+    auto inv_tol{ 1.0f / tolerance };
+    std::unordered_set<Key, KeyHash> seen;
+    seen.reserve(voxel_list.size());
     std::size_t removed_count{ 0 };
-    for (std::size_t i = 0; i < voxel_list.size(); i++)
+    
+    for (const auto & voxel : voxel_list)
     {
-        auto position_i{ voxel_list[i].GetPosition() };
-        for (std::size_t j = i + 1; j < voxel_list.size(); j++)
+        const auto & position{ voxel.GetPosition() };
+        Key key{ static_cast<int>(std::floor(position[0] * inv_tol)),
+                 static_cast<int>(std::floor(position[1] * inv_tol)),
+                 static_cast<int>(std::floor(position[2] * inv_tol)) };
+        if (seen.emplace(key).second)
         {
-            auto position_j{ voxel_list[j].GetPosition() };
-            if (ArrayStats<float>::ComputeNorm(position_i, position_j) < tolerance)
-            {
-                voxel_list.erase(voxel_list.begin() + static_cast<std::vector<VoxelNode>::difference_type>(j));
-                removed_count++;
-                j--; // Adjust index after removal
-            }
+            position_list.emplace_back(position);
+        }
+        else
+        {
+            removed_count++;
         }
     }
 
     Logger::Log(LogLevel::Info,
         "Number of removed voxels = "
         + std::to_string(removed_count) +" / "+ std::to_string(voxel_size_origin) +
-        ", remaining voxels = " + std::to_string(voxel_list.size()));
+        ", remaining voxels = " + std::to_string(position_list.size()));
 }
 
-void PositionEstimationCommand::DisplayVoxelList(const std::vector<VoxelNode> & voxel_list) const
+void PositionEstimationCommand::DisplayVoxelList(
+    const std::vector<std::array<float, 3>> & position_list) const
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DisplayVoxelList() called");
-    if (voxel_list.empty())
+    if (position_list.empty())
     {
         Logger::Log(LogLevel::Warning, "No voxels to display.");
         return;
     }
     Logger::Log(LogLevel::Info,
-        "Displaying voxel position list: " + std::to_string(voxel_list.size()) + " voxels.");
-    for (const auto & voxel : voxel_list)
+        "Displaying voxel position list: " + std::to_string(position_list.size()) + " voxels.");
+    for (const auto & position : position_list)
     {
-        const auto & position{ voxel.GetPosition() };
         Logger::Log(LogLevel::Info,
             "Voxel Position: ["
             + std::to_string(position[0]) + ", "
@@ -252,23 +285,17 @@ void PositionEstimationCommand::DisplayVoxelList(const std::vector<VoxelNode> & 
     }
 }
 
-void PositionEstimationCommand::OutputVoxelList(const std::vector<VoxelNode> & voxel_list) const
+void PositionEstimationCommand::OutputVoxelList(
+    const std::vector<std::array<float, 3>> & position_list) const
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::OutputVoxelList() called");
-    if (voxel_list.empty())
+    if (position_list.empty())
     {
         Logger::Log(LogLevel::Warning, "No voxels to output.");
         return;
     }
     Logger::Log(LogLevel::Info,
-        "Outputting voxel position list: " + std::to_string(voxel_list.size()) + " voxels.");
-    
-    std::vector<std::array<float, 3>> position_list;
-    position_list.reserve(voxel_list.size());
-    for (const auto & voxel : voxel_list)
-    {
-        position_list.emplace_back(voxel.GetPosition());
-    }
+        "Outputting voxel position list: " + std::to_string(position_list.size()) + " voxels.");
 
     chimerax::write_points_auto(position_list,
         FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + "points.cmm", 0.05f);

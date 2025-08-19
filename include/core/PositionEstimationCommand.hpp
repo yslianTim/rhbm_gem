@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <array>
 #include <filesystem>
 #include <CLI/CLI.hpp>
 
@@ -49,8 +50,10 @@ private:
     void RunMapValueConvergence(MapObject * map_object);
     void BuildVoxelList(MapObject * map_object);
     void UpdateVoxelPosition(std::vector<VoxelNode> & query_point_list);
-    void DegenerateVoxelList(std::vector<VoxelNode> & query_point_list);
-    void DisplayVoxelList(const std::vector<VoxelNode> & voxel_list) const;
-    void OutputVoxelList(const std::vector<VoxelNode> & voxel_list) const;
+    void DegenerateVoxelList(
+        const std::vector<VoxelNode> & voxel_list,
+        std::vector<std::array<float, 3>> & position_list);
+    void DisplayVoxelList(const std::vector<std::array<float, 3>> & position_list) const;
+    void OutputVoxelList(const std::vector<std::array<float, 3>> & position_list) const;
 
 };
