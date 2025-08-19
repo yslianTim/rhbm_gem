@@ -9,14 +9,16 @@
 #include "CommandBase.hpp"
 #include "MapObject.hpp"
 
+template <typename T> struct KDNode;
+
 class PositionEstimationCommand : public CommandBase
 {
 public:
     struct Options : public CommandOptions
     {
         int iteration_count{ 15 };
-        int knn_size{ 20 };
-        double alpha{ 2.0 };
+        size_t knn_size{ 20 };
+        float alpha{ 2.0 };
         std::filesystem::path map_file_path;
         std::string saved_key_tag{"map"};
     };
@@ -24,6 +26,7 @@ public:
 private:
     Options m_options;
     std::vector<VoxelNode> m_selected_voxel_list;
+    std::unique_ptr<KDNode<VoxelNode>> m_kd_tree_root;
 
 public:
     PositionEstimationCommand(void);
@@ -39,15 +42,14 @@ public:
     void SetSavedKeyTag(const std::string & tag) { m_options.saved_key_tag = tag; }
     void SetThreadSize(int value) { m_options.thread_size = value; }
     void SetIterationCount(int value) { m_options.iteration_count = value; }
-    void SetKNNSize(int value) { m_options.knn_size = value; }
-    void SetAlpha(double value) { m_options.alpha = value; }
+    void SetKNNSize(int value) { m_options.knn_size = static_cast<size_t>(value); }
+    void SetAlpha(double value) { m_options.alpha = static_cast<float>(value); }
 
 private:
     void RunMapValueConvergence(MapObject * map_object);
     void BuildVoxelList(MapObject * map_object);
-    void UpdateVoxelPosition(std::vector<VoxelNode> & voxel_list);
-    void DegenerateVoxelList(std::vector<VoxelNode> & voxel_list);
+    void UpdateVoxelPosition(std::vector<VoxelNode> & query_point_list);
+    void DegenerateVoxelList(std::vector<VoxelNode> & query_point_list);
     void DisplayVoxelList(const std::vector<VoxelNode> & voxel_list) const;
-    void DisplayVoxelPositionChange(const std::vector<VoxelNode> & voxel_list) const;
 
 };

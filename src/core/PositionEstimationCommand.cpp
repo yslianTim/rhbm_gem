@@ -22,7 +22,7 @@ CommandRegistrar<PositionEstimationCommand> registrar_model_test{
 }
 
 PositionEstimationCommand::PositionEstimationCommand(void) :
-    CommandBase(), m_options{}, m_selected_voxel_list{}
+    CommandBase(), m_options{}, m_selected_voxel_list{}, m_kd_tree_root{ nullptr }
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::PositionEstimationCommand() called.");
 }
@@ -36,7 +36,7 @@ void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Alpha value for robust regression")->default_val(m_options.alpha);
     cmd->add_option("--iter", m_options.iteration_count,
         "Iteration count for estimation")->default_val(m_options.iteration_count);
-    cmd->add_option("-k,--knn", m_options.knn_size,
+    cmd->add_option("--knn", m_options.knn_size,
         "KNN size for estimation")->default_val(m_options.knn_size);
 }
 
@@ -80,15 +80,14 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
 
     BuildVoxelList(map_object);
 
-    std::vector<VoxelNode> voxel_list{ m_selected_voxel_list };
+    std::vector<VoxelNode> query_point_list(m_selected_voxel_list);
     for (int t = 0; t < m_options.iteration_count; t++)
     {
         Logger::Log(LogLevel::Info, "Iteration: " + std::to_string(t + 1));
-        UpdateVoxelPosition(voxel_list);
+        UpdateVoxelPosition(query_point_list);
     }
-    DisplayVoxelPositionChange(voxel_list);
-    //DegenerateVoxelList(voxel_list);
-    //DisplayVoxelList(voxel_list);
+    DegenerateVoxelList(query_point_list);
+    DisplayVoxelList(query_point_list);
 }
 
 void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
@@ -103,12 +102,12 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
     auto threahold{ map_value_max * 0.01f };
 
 #ifdef USE_OPENMP
-#pragma omp parallel
+    #pragma omp parallel
     {
         std::vector<VoxelNode> thread_local_list;
         thread_local_list.reserve(array_size / static_cast<size_t>(omp_get_num_threads()) + 1);
 
-#pragma omp for schedule(static)
+        #pragma omp for schedule(static)
         for (size_t i = 0; i < array_size; i++)
         {
             auto position{ map_object->GetGridPosition(i) };
@@ -117,14 +116,14 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
             thread_local_list.emplace_back(position, value);
         }
 
-#pragma omp critical
+        #pragma omp critical
         {
             m_selected_voxel_list.insert(
                 m_selected_voxel_list.end(),
                 thread_local_list.begin(), thread_local_list.end());
         }
     }
-#else
+    #else
     for (size_t i = 0; i < array_size; i++)
     {
         auto position{ map_object->GetGridPosition(i) };
@@ -139,6 +138,8 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
         m_selected_voxel_list.shrink_to_fit();
     }
 
+    m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(m_selected_voxel_list);
+
     Logger::Log(LogLevel::Info,
         "Number of selected voxels to be estimated from map = "
         + std::to_string(m_selected_voxel_list.size()) + " / "
@@ -146,71 +147,50 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
     );
 }
 
-void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & voxel_list)
+void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & query_point_list)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::UpdateVoxelPosition() called");
     ScopeTimer timer("PositionEstimationCommand::UpdateVoxelPosition");
-    auto kd_tree_root{ KDTreeAlgorithm<VoxelNode>::BuildKDTree(voxel_list, 0) };
-    auto * kd_tree_root_ptr{ kd_tree_root.get() };
+
+    std::vector<std::array<float, 3>> updated_position_list;
+    updated_position_list.resize(query_point_list.size(), {0.0f, 0.0f, 0.0f});
+    auto update_voxel_position = [&](size_t index)
+    {
+        auto knn_list{
+            KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
+                m_kd_tree_root.get(), &query_point_list[index], m_options.knn_size)
+        };
+
+        std::vector<float> weight_list;
+        weight_list.resize(m_options.knn_size, 0.0f);
+        float weight_sum{ 0.0f };
+        for (size_t j = 0; j < m_options.knn_size; j++)
+        {
+            float K{ std::exp(m_options.alpha * std::log(knn_list[j]->GetValue())) };
+            weight_list[j] = K;
+            weight_sum += K;
+        }
+        
+        std::array<float, 3> voxel_position_update{ 0.0f, 0.0f, 0.0f };
+        for (size_t j = 0; j < m_options.knn_size; j++)
+        {
+            auto & query_voxel_position{ knn_list[j]->GetPosition() };
+            voxel_position_update[0] += weight_list[j] * query_voxel_position[0] / weight_sum;
+            voxel_position_update[1] += weight_list[j] * query_voxel_position[1] / weight_sum;
+            voxel_position_update[2] += weight_list[j] * query_voxel_position[2] / weight_sum;
+        }
+        updated_position_list[index] = voxel_position_update;
+        query_point_list[index].SetPosition(updated_position_list[index]);
+    };
 
 #ifdef USE_OPENMP
-#pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < voxel_list.size(); i++)
-    {
-        auto & voxel{ voxel_list[i] };
-        auto voxel_position_origin{ m_selected_voxel_list[i].GetPosition() };
-        std::array<float, 3> voxel_position_update{ 0.0f, 0.0f, 0.0f };
-        float weight_sum{ 0.0f };
-        auto knn_list{
-            KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
-                kd_tree_root_ptr, &voxel, static_cast<size_t>(m_options.knn_size))
-        };
-
-        for (auto neighbor_voxel : knn_list)
-        {
-            float K{
-                std::exp(static_cast<float>(m_options.alpha) * std::log(neighbor_voxel->GetValue()))
-            };
-            voxel_position_update[0] += K * voxel_position_origin[0];
-            voxel_position_update[1] += K * voxel_position_origin[1];
-            voxel_position_update[2] += K * voxel_position_origin[2];
-            weight_sum += K;
-        }
-        voxel_position_update[0] /= weight_sum;
-        voxel_position_update[1] /= weight_sum;
-        voxel_position_update[2] /= weight_sum;
-
-        voxel.SetPosition(voxel_position_update);
-    }
-#else
-    for (size_t i = 0; i < voxel_list.size(); i++)
-    {
-        auto & voxel{ voxel_list[i] };
-        auto voxel_position_origin{ m_selected_voxel_list[i].GetPosition() };
-        std::array<float, 3> voxel_position_update{ 0.0f, 0.0f, 0.0f };
-        float weight_sum{ 0.0f };
-        auto knn_list{
-            KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
-                kd_tree_root_ptr, &voxel, static_cast<size_t>(m_options.knn_size))
-        };
-
-        for (auto neighbor_voxel : knn_list)
-        {
-            float K{
-                std::exp(static_cast<float>(m_options.alpha) * std::log(neighbor_voxel->GetValue()))
-            };
-            voxel_position_update[0] += K * voxel_position_origin[0];
-            voxel_position_update[1] += K * voxel_position_origin[1];
-            voxel_position_update[2] += K * voxel_position_origin[2];
-            weight_sum += K;
-        }
-        voxel_position_update[0] /= weight_sum;
-        voxel_position_update[1] /= weight_sum;
-        voxel_position_update[2] /= weight_sum;
-
-        voxel.SetPosition(voxel_position_update);
-    }
+    //#pragma omp parallel for schedule(static)
+    #pragma omp parallel for num_threads(m_options.thread_size)
 #endif
+    for (size_t i = 0; i < query_point_list.size(); i++)
+    {
+        update_voxel_position(i);
+    }
 }
 
 void PositionEstimationCommand::DegenerateVoxelList(std::vector<VoxelNode> & voxel_list)
@@ -264,32 +244,6 @@ void PositionEstimationCommand::DisplayVoxelList(const std::vector<VoxelNode> & 
             + std::to_string(position[0]) + ", "
             + std::to_string(position[1]) + ", "
             + std::to_string(position[2]) + "]"
-        );
-    }
-}
-
-void PositionEstimationCommand::DisplayVoxelPositionChange(
-    const std::vector<VoxelNode> & voxel_list) const
-{
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DisplayVoxelPositionChange() called");
-    if (voxel_list.size() != m_selected_voxel_list.size())
-    {
-        Logger::Log(LogLevel::Error,
-            "Voxel list size mismatch: "
-            + std::to_string(voxel_list.size()) + " vs "
-            + std::to_string(m_selected_voxel_list.size()));
-        return;
-    }
-
-    for (size_t i = 0; i < voxel_list.size(); i++)
-    {
-        const auto & new_position{ voxel_list[i].GetPosition() };
-        const auto & old_position{ m_selected_voxel_list[i].GetPosition() };
-        Logger::Log(LogLevel::Info,
-            "Voxel " + std::to_string(i) + " Position Change: ["
-            + std::to_string(new_position[0] - old_position[0]) + ", "
-            + std::to_string(new_position[1] - old_position[1]) + ", "
-            + std::to_string(new_position[2] - old_position[2]) + "]"
         );
     }
 }
