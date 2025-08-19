@@ -112,6 +112,10 @@ void CifFormat::LoadDatabaseInfo(std::ifstream & infile)
             {
                 m_data_block->SetEmdID(data_map.at("EMDB"));
             }
+            else
+            {
+                m_data_block->SetEmdID("X-RAY DIFF");
+            }
         }
     );
 }
@@ -170,6 +174,14 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
             m_data_block->SetResolution(resolution);
             found_resolution = true;
         }
+        if (line.find("_refine.ls_d_res_high ") != std::string::npos && !found_resolution)
+        {
+            std::istringstream iss(line);
+            iss >> header >> resolution;
+            m_data_block->SetResolution(resolution);
+            found_resolution = true;
+        }
+
         if (line.find("_em_3d_reconstruction.resolution_method ") != std::string::npos)
         {
             std::istringstream iss(line);
@@ -178,6 +190,15 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
             m_data_block->SetResolutionMethod(resolution_method);
             found_resolution_method = true;
         }
+        if (line.find("_refine.pdbx_refine_id ") != std::string::npos && !found_resolution_method)
+        {
+            std::istringstream iss(line);
+            iss >> header;
+            iss >> std::quoted(resolution_method, '\'');
+            m_data_block->SetResolutionMethod(resolution_method);
+            found_resolution_method = true;
+        }
+
         if (found_resolution && found_resolution_method) break;
     }
 }

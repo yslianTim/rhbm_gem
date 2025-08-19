@@ -51,5 +51,6 @@ private:
     void UpdateVoxelPosition(std::vector<VoxelNode> & query_point_list);
     void DegenerateVoxelList(std::vector<VoxelNode> & query_point_list);
     void DisplayVoxelList(const std::vector<VoxelNode> & voxel_list) const;
+    void OutputVoxelList(const std::vector<VoxelNode> & voxel_list) const;
 
 };

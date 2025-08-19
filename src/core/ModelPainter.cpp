@@ -1251,11 +1251,11 @@ void ModelPainter::PaintAtomGausScatterPlot(
         graph_map.emplace(element_type, std::move(graph));
     }
 
-    auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array, 0.2) };
+    auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array, 0.2, 0.005, 0.995) };
     double x_min{ std::get<0>(x_range) };
     double x_max{ std::get<1>(x_range) };
 
-    auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.2) };
+    auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.2, 0.005, 0.995) };
     double y_min{ std::get<0>(y_range) };
     double y_max{ std::get<1>(y_range) };
 

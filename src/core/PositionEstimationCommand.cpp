@@ -6,6 +6,8 @@
 #include "ArrayStats.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
+#include "ChimeraXHelper.hpp"
+#include "FilePathHelper.hpp"
 
 #include <random>
 #include <memory>
@@ -87,7 +89,8 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
         UpdateVoxelPosition(query_point_list);
     }
     DegenerateVoxelList(query_point_list);
-    DisplayVoxelList(query_point_list);
+    //DisplayVoxelList(query_point_list);
+    OutputVoxelList(query_point_list);
 }
 
 void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
@@ -99,21 +102,26 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
     m_selected_voxel_list.reserve(array_size);
 
     auto map_value_max{ map_object->GetMapValueMax() };
-    auto threahold{ map_value_max * 0.01f };
+    auto threshold{ map_value_max * 0.01f };
+
+    auto process_voxel = [&](size_t index, std::vector<VoxelNode> & list)
+    {
+        auto position{ map_object->GetGridPosition(index) };
+        float value{ map_object->GetMapValue(index) };
+        if (value <= threshold) return; // Skip negative values & keep first 99% of map values
+        list.emplace_back(position, value);
+    };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel
+    #pragma omp parallel num_threads(m_options.thread_size)
     {
         std::vector<VoxelNode> thread_local_list;
-        thread_local_list.reserve(array_size / static_cast<size_t>(omp_get_num_threads()) + 1);
+        thread_local_list.reserve(array_size / static_cast<size_t>(m_options.thread_size) + 1);
 
         #pragma omp for schedule(static)
         for (size_t i = 0; i < array_size; i++)
         {
-            auto position{ map_object->GetGridPosition(i) };
-            float value{ map_object->GetMapValue(i) };
-            if (value <= threahold) continue; // Skip negative values & keep first 99% of map values
-            thread_local_list.emplace_back(position, value);
+            process_voxel(i, thread_local_list);
         }
 
         #pragma omp critical
@@ -126,10 +134,7 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
     #else
     for (size_t i = 0; i < array_size; i++)
     {
-        auto position{ map_object->GetGridPosition(i) };
-        float value{ map_object->GetMapValue(i) };
-        if (value <= threahold) continue; // Skip negative values & keep first 99% of map values
-        m_selected_voxel_list.emplace_back(position, value);
+        process_voxel(i, m_selected_voxel_list);
     }
 #endif
 
@@ -184,7 +189,6 @@ void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & que
     };
 
 #ifdef USE_OPENMP
-    //#pragma omp parallel for schedule(static)
     #pragma omp parallel for num_threads(m_options.thread_size)
 #endif
     for (size_t i = 0; i < query_point_list.size(); i++)
@@ -213,7 +217,7 @@ void PositionEstimationCommand::DegenerateVoxelList(std::vector<VoxelNode> & vox
             auto position_j{ voxel_list[j].GetPosition() };
             if (ArrayStats<float>::ComputeNorm(position_i, position_j) < tolerance)
             {
-                voxel_list.erase(voxel_list.begin() + j);
+                voxel_list.erase(voxel_list.begin() + static_cast<std::vector<VoxelNode>::difference_type>(j));
                 removed_count++;
                 j--; // Adjust index after removal
             }
@@ -246,4 +250,26 @@ void PositionEstimationCommand::DisplayVoxelList(const std::vector<VoxelNode> & 
             + std::to_string(position[2]) + "]"
         );
     }
+}
+
+void PositionEstimationCommand::OutputVoxelList(const std::vector<VoxelNode> & voxel_list) const
+{
+    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::OutputVoxelList() called");
+    if (voxel_list.empty())
+    {
+        Logger::Log(LogLevel::Warning, "No voxels to output.");
+        return;
+    }
+    Logger::Log(LogLevel::Info,
+        "Outputting voxel position list: " + std::to_string(voxel_list.size()) + " voxels.");
+    
+    std::vector<std::array<float, 3>> position_list;
+    position_list.reserve(voxel_list.size());
+    for (const auto & voxel : voxel_list)
+    {
+        position_list.emplace_back(voxel.GetPosition());
+    }
+
+    chimerax::write_points_auto(position_list,
+        FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + "points.cmm", 0.05f);
 }
