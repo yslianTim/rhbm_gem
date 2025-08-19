@@ -297,6 +297,6 @@ void PositionEstimationCommand::OutputVoxelList(
     Logger::Log(LogLevel::Info,
         "Outputting voxel position list: " + std::to_string(position_list.size()) + " voxels.");
 
-    chimerax::write_points_auto(position_list,
+    ChimeraXHelper::WritePointsAuto(position_list,
         FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + "points.cmm", 0.05f);
 }
