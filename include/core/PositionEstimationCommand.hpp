@@ -22,7 +22,6 @@ public:
         float alpha{ 2.0 };
         float threshold_ratio{ 0.01f };
         std::filesystem::path map_file_path;
-        std::string saved_key_tag{"map"};
     };
 
 private:
@@ -42,7 +41,6 @@ public:
 
     void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }
     void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
-    void SetSavedKeyTag(const std::string & tag) { m_options.saved_key_tag = tag; }
     void SetThreadSize(int value) { m_options.thread_size = value; }
     void SetIterationCount(int value) { m_options.iteration_count = value; }
     void SetKNNSize(int value) { m_options.knn_size = static_cast<size_t>(value); }

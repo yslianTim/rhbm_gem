@@ -112,7 +112,7 @@ bool PositionEstimationCommand::ValidateOptions(void) const
 void PositionEstimationCommand::RunMapValueConvergence(const MapObject * map_object)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunMapValueConvergence() called");
-    map_object->Display();
+    ScopeTimer timer("PositionEstimationCommand::RunMapValueConvergence");
 
     if (!BuildVoxelList(map_object))
     {
@@ -152,9 +152,7 @@ bool PositionEstimationCommand::BuildVoxelList(const MapObject * map_object)
     m_selected_voxel_list.clear();
     auto array_size{ map_object->GetMapValueArraySize() };
     m_selected_voxel_list.reserve(array_size);
-
-    auto map_value_max{ map_object->GetMapValueMax() };
-    auto threshold{ map_value_max * m_options.threshold_ratio };
+    auto threshold{ map_object->GetMapValueMax() * m_options.threshold_ratio };
 
     auto process_voxel = [&](size_t index, std::vector<VoxelNode> & list)
     {
@@ -233,16 +231,26 @@ void PositionEstimationCommand::UpdatePointList(std::vector<VoxelNode> & query_p
             return;
         }
 
+        const auto alpha{ m_options.alpha };
         float weight_sum{ 0.0f };
         std::array<float, 3> point_position_update{ 0.0f, 0.0f, 0.0f };
         for (size_t j = 0; j < knn_count; j++)
         {
-            auto w{ std::exp(m_options.alpha * std::log(knn_list[j]->GetValue())) };
+            //auto w{ std::exp(alpha * std::log(knn_list[j]->GetValue())) };
+            if (knn_list[j]->GetValue() <= 0.0f) continue;
+            auto w{ std::pow(knn_list[j]->GetValue(), alpha) };
             auto & query_point_position{ knn_list[j]->GetPosition() };
             point_position_update[0] += w * query_point_position[0];
             point_position_update[1] += w * query_point_position[1];
             point_position_update[2] += w * query_point_position[2];
             weight_sum += w;
+        }
+        if (weight_sum == 0.0f)
+        {
+            Logger::Log(LogLevel::Warning,
+                "Weight sum is non-positive for point index "
+                + std::to_string(index) + ". Skipping update to avoid division by zero.");
+            return;
         }
         point_position_update[0] /= weight_sum;
         point_position_update[1] /= weight_sum;
