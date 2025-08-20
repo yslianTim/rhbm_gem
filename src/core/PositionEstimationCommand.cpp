@@ -15,6 +15,7 @@
 #include <array>
 #include <unordered_set>
 #include <cmath>
+#include <cstdint>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -167,24 +168,20 @@ void PositionEstimationCommand::UpdatePointList(std::vector<VoxelNode> & query_p
                 m_kd_tree_root.get(), &query_point_list[index], m_options.knn_size)
         };
 
-        std::vector<float> weight_list;
-        weight_list.resize(m_options.knn_size, 0.0f);
         float weight_sum{ 0.0f };
-        for (size_t j = 0; j < m_options.knn_size; j++)
-        {
-            float K{ std::exp(m_options.alpha * std::log(knn_list[j]->GetValue())) };
-            weight_list[j] = K;
-            weight_sum += K;
-        }
-        
         std::array<float, 3> point_position_update{ 0.0f, 0.0f, 0.0f };
         for (size_t j = 0; j < m_options.knn_size; j++)
         {
+            auto w{ std::exp(m_options.alpha * std::log(knn_list[j]->GetValue())) };
             auto & query_point_position{ knn_list[j]->GetPosition() };
-            point_position_update[0] += weight_list[j] * query_point_position[0] / weight_sum;
-            point_position_update[1] += weight_list[j] * query_point_position[1] / weight_sum;
-            point_position_update[2] += weight_list[j] * query_point_position[2] / weight_sum;
+            point_position_update[0] += w * query_point_position[0];
+            point_position_update[1] += w * query_point_position[1];
+            point_position_update[2] += w * query_point_position[2];
+            weight_sum += w;
         }
+        point_position_update[0] /= weight_sum;
+        point_position_update[1] /= weight_sum;
+        point_position_update[2] /= weight_sum;
         updated_position_list[index] = point_position_update;
         query_point_list[index].SetPosition(updated_position_list[index]);
     };
@@ -210,51 +207,45 @@ void PositionEstimationCommand::BuildUniquePointList(const std::vector<VoxelNode
     m_position_list.clear();
     m_position_list.reserve(point_list.size());
 
-    struct Key
+    auto pack_key = [](int x, int y, int z) noexcept -> uint64_t
     {
-        int x;
-        int y;
-        int z;
-        bool operator==(const Key & other) const noexcept
-        {
-            return x == other.x && y == other.y && z == other.z;
-        }
-    };
-
-    struct KeyHash
-    {
-        std::size_t operator()(const Key & k) const noexcept
-        {
-            return (static_cast<std::size_t>(k.x) * 73856093) ^
-                   (static_cast<std::size_t>(k.y) * 19349663) ^
-                   (static_cast<std::size_t>(k.z) * 83492791);
-        }
+        // Pack three signed 21-bit values into a single 64-bit integer.
+        // Layout: [63..42] X, [41..21] Y, [20..0] Z.
+        constexpr uint64_t mask{ (1ULL << 21) - 1ULL };
+        constexpr uint64_t offset{ 1ULL << 20 }; // allow negative values
+        uint64_t ux{
+            static_cast<uint64_t>(static_cast<int64_t>(x) + static_cast<int64_t>(offset)) & mask
+        };
+        uint64_t uy{
+            static_cast<uint64_t>(static_cast<int64_t>(y) + static_cast<int64_t>(offset)) & mask
+        };
+        uint64_t uz{
+            static_cast<uint64_t>(static_cast<int64_t>(z) + static_cast<int64_t>(offset)) & mask
+        };
+        return (ux << 42) | (uy << 21) | uz;
     };
 
     auto point_size_origin{ point_list.size() };
     auto tolerance{ 1.0e-2f };
     auto inv_tolerance{ 1.0f / tolerance };
-    std::unordered_set<Key, KeyHash> seen;
+    std::unordered_set<uint64_t> seen;
     seen.reserve(point_list.size());
-    std::size_t removed_count{ 0 };
     for (const auto & point : point_list)
     {
         const auto & position{ point.GetPosition() };
-        Key key{
-            static_cast<int>(std::floor(position[0] * inv_tolerance)),
-            static_cast<int>(std::floor(position[1] * inv_tolerance)),
-            static_cast<int>(std::floor(position[2] * inv_tolerance))
+        uint64_t key{
+            pack_key(
+                static_cast<int>(std::floor(position[0] * inv_tolerance)),
+                static_cast<int>(std::floor(position[1] * inv_tolerance)),
+                static_cast<int>(std::floor(position[2] * inv_tolerance)))
         };
         if (seen.emplace(key).second)
         {
             m_position_list.emplace_back(position);
         }
-        else
-        {
-            removed_count++;
-        }
     }
 
+    auto removed_count{ point_size_origin - m_position_list.size() };
     Logger::Log(LogLevel::Info,
         "Number of removed points = "
         + std::to_string(removed_count) +" / "+ std::to_string(point_size_origin) +
@@ -276,6 +267,6 @@ void PositionEstimationCommand::OutputPointList(void) const
     auto output_file{
         FilePathHelper::EnsureTrailingSlash(m_options.folder_path)
         + "point_list_" + map_file_name + ".cmm" };
-    ChimeraXHelper::WritePointsAuto(m_position_list, output_file, 0.05f);
+    ChimeraXHelper::WriteCMMPoints(m_position_list, output_file, 0.05f);
     Logger::Log(LogLevel::Info, "Output file: " + output_file);
 }

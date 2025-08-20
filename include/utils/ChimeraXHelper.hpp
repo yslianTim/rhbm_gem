@@ -85,49 +85,4 @@ inline bool WriteCMMPoints(
     return true;
 }
 
-inline bool WriteXYZPoints(
-    const std::vector<std::array<float,3>> & point_list,
-    const std::string & path,
-    const std::string & element = "C",
-    const std::string & comment = "points")
-{
-    std::ofstream file(path, std::ios::binary);
-    if (!file) return false;
-
-    file.setf(std::ios::fixed, std::ios::floatfield);
-    file << std::setprecision(6);
-
-    file << point_list.size() << "\n" << comment << "\n";
-    for (const auto & point : point_list)
-    {
-        file << element << ' ' << point[0] << ' ' << point[1] << ' ' << point[2] << '\n';
-    }
-    return true;
-}
-
-inline bool WritePointsAuto(
-    const std::vector<std::array<float,3>> & point_list,
-    const std::string & path,
-    float radius = 1.0f,
-    RGB color = {},
-    const std::string & marker_set_name = "points",
-    const std::string & element = "C",
-    const std::string & comment = "points")
-{
-    std::string extension{ FilePathHelper::GetExtension(path) };
-    std::transform(extension.begin(), extension.end(), extension.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); }
-    );
-
-    if (extension == ".cmm")
-    {
-        return WriteCMMPoints(point_list, path, radius, color, marker_set_name);
-    }
-    else if (extension == ".xyz")
-    {
-        return WriteXYZPoints(point_list, path, element, comment);
-    }
-    return false;
-}
-
 } // namespace ChimeraXHelper

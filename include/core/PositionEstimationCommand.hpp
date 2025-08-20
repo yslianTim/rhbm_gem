@@ -20,7 +20,7 @@ public:
         int iteration_count{ 15 };
         size_t knn_size{ 20 };
         float alpha{ 2.0 };
-        float threshold_ratio{ 0.1f };
+        float threshold_ratio{ 0.01f };
         std::filesystem::path map_file_path;
         std::string saved_key_tag{"map"};
     };
