@@ -50,8 +50,8 @@ public:
     void SetThresholdRatio(double value) { m_options.threshold_ratio = static_cast<float>(value); }
 
 private:
-    void RunMapValueConvergence(MapObject * map_object);
-    void BuildVoxelList(MapObject * map_object);
+    void RunMapValueConvergence(const MapObject * map_object);
+    bool BuildVoxelList(const MapObject * map_object);
     void UpdatePointList(std::vector<VoxelNode> & query_point_list);
     void BuildUniquePointList(const std::vector<VoxelNode> & point_list);
     void OutputPointList(void) const;

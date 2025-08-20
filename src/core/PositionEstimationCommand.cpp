@@ -77,15 +77,63 @@ bool PositionEstimationCommand::ValidateOptions(void) const
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::ValidateOptions() called");
 
+    if (m_options.iteration_count <= 0)
+    {
+        Logger::Log(LogLevel::Error, "Iteration count must be positive");
+        return false;
+    }
+    if (m_options.knn_size == 0)
+    {
+        Logger::Log(LogLevel::Error, "KNN size must be positive");
+        return false;
+    }
+    if (m_options.alpha <= 0.0f)
+    {
+        Logger::Log(LogLevel::Error, "Alpha must be positive");
+        return false;
+    }
+    if (m_options.threshold_ratio <= 0.0f || m_options.threshold_ratio > 1.0f)
+    {
+        Logger::Log(LogLevel::Error, "Threshold ratio must be in (0, 1]");
+        return false;
+    }
+    if (m_options.thread_size <= 0)
+    {
+        Logger::Log(LogLevel::Error, "Thread size must be positive");
+        return false;
+    }
+    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
+    {
+        return false;
+    }
+
     return true;
 }
 
-void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
+void PositionEstimationCommand::RunMapValueConvergence(const MapObject * map_object)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunMapValueConvergence() called");
     map_object->Display();
 
-    BuildVoxelList(map_object);
+    if (!BuildVoxelList(map_object))
+    {
+        Logger::Log(LogLevel::Warning, "No voxels selected. Skip map value convergence.");
+        return;
+    }
+
+    if (m_selected_voxel_list.size() < m_options.knn_size)
+    {
+        if (m_selected_voxel_list.empty())
+        {
+            Logger::Log(LogLevel::Error, "No voxels available for position estimation.");
+            return;
+        }
+        Logger::Log(LogLevel::Warning,
+            "Selected voxel count (" + std::to_string(m_selected_voxel_list.size()) +
+            ") is less than knn_size (" + std::to_string(m_options.knn_size) +
+            "). Adjusting knn_size accordingly.");
+        m_options.knn_size = m_selected_voxel_list.size();
+    }
 
     std::vector<VoxelNode> query_point_list(m_selected_voxel_list);
     for (int t = 0; t < m_options.iteration_count; t++)
@@ -97,7 +145,7 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
     BuildUniquePointList(query_point_list);
 }
 
-void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
+bool PositionEstimationCommand::BuildVoxelList(const MapObject * map_object)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildVoxelList() called");
     ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
@@ -147,6 +195,12 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
         m_selected_voxel_list.shrink_to_fit();
     }
 
+    if (m_selected_voxel_list.empty())
+    {
+        Logger::Log(LogLevel::Warning, "No voxels were selected from the map.");
+        return false;
+    }
+
     m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(m_selected_voxel_list);
 
     Logger::Log(LogLevel::Info,
@@ -154,23 +208,34 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
         + std::to_string(m_selected_voxel_list.size()) + " / "
         + std::to_string(array_size) + " voxels."
     );
+    return true;
 }
 
 void PositionEstimationCommand::UpdatePointList(std::vector<VoxelNode> & query_point_list)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::UpdatePointList() called");
-    std::vector<std::array<float, 3>> updated_position_list;
-    updated_position_list.resize(query_point_list.size(), {0.0f, 0.0f, 0.0f});
     auto update_point_position = [&](size_t index)
     {
         auto knn_list{
             KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
                 m_kd_tree_root.get(), &query_point_list[index], m_options.knn_size)
         };
+        size_t knn_count{ knn_list.size() };
+        if (knn_count < m_options.knn_size)
+        {
+            Logger::Log(LogLevel::Warning,
+                "KNN search returned " + std::to_string(knn_count) +
+                " neighbors, less than requested " +
+                std::to_string(m_options.knn_size) + ".");
+        }
+        if (knn_count == 0)
+        {
+            return;
+        }
 
         float weight_sum{ 0.0f };
         std::array<float, 3> point_position_update{ 0.0f, 0.0f, 0.0f };
-        for (size_t j = 0; j < m_options.knn_size; j++)
+        for (size_t j = 0; j < knn_count; j++)
         {
             auto w{ std::exp(m_options.alpha * std::log(knn_list[j]->GetValue())) };
             auto & query_point_position{ knn_list[j]->GetPosition() };
@@ -182,8 +247,7 @@ void PositionEstimationCommand::UpdatePointList(std::vector<VoxelNode> & query_p
         point_position_update[0] /= weight_sum;
         point_position_update[1] /= weight_sum;
         point_position_update[2] /= weight_sum;
-        updated_position_list[index] = point_position_update;
-        query_point_list[index].SetPosition(updated_position_list[index]);
+        query_point_list[index].SetPosition(point_position_update);
     };
 
 #ifdef USE_OPENMP
