@@ -27,7 +27,8 @@ CommandRegistrar<PositionEstimationCommand> registrar_model_test{
 }
 
 PositionEstimationCommand::PositionEstimationCommand(void) :
-    CommandBase(), m_options{}, m_selected_voxel_list{}, m_kd_tree_root{ nullptr }
+    CommandBase(), m_options{}, m_selected_voxel_list{}, m_position_list{},
+    m_kd_tree_root{ nullptr }
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::PositionEstimationCommand() called.");
 }
@@ -43,6 +44,8 @@ void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Iteration count for estimation")->default_val(m_options.iteration_count);
     cmd->add_option("--knn", m_options.knn_size,
         "KNN size for estimation")->default_val(m_options.knn_size);
+    cmd->add_option("--threshold", m_options.threshold_ratio,
+        "Ratio of threshold of map values")->default_val(m_options.threshold_ratio);
 }
 
 bool PositionEstimationCommand::Execute(void)
@@ -63,11 +66,9 @@ bool PositionEstimationCommand::Execute(void)
 
     auto map_object{ data_manager->GetTypedDataObject<MapObject>("map") };
     map_object->MapValueArrayNormalization();
-
     
     RunMapValueConvergence(map_object.get());
-
-    //data_manager->SaveDataObject("map", m_options.saved_key_tag);
+    OutputPointList();
     return true;
 }
 
@@ -89,14 +90,10 @@ void PositionEstimationCommand::RunMapValueConvergence(MapObject * map_object)
     for (int t = 0; t < m_options.iteration_count; t++)
     {
         Logger::Log(LogLevel::Info, "Iteration: " + std::to_string(t + 1));
-        UpdateVoxelPosition(query_point_list);
+        UpdatePointList(query_point_list);
     }
     
-    std::vector<std::array<float, 3>> position_list;
-    position_list.reserve(query_point_list.size());
-    DegenerateVoxelList(query_point_list, position_list);
-    //DisplayVoxelList(position_list);
-    OutputVoxelList(position_list);
+    BuildUniquePointList(query_point_list);
 }
 
 void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
@@ -108,13 +105,13 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
     m_selected_voxel_list.reserve(array_size);
 
     auto map_value_max{ map_object->GetMapValueMax() };
-    auto threshold{ map_value_max * 0.01f };
+    auto threshold{ map_value_max * m_options.threshold_ratio };
 
     auto process_voxel = [&](size_t index, std::vector<VoxelNode> & list)
     {
         auto position{ map_object->GetGridPosition(index) };
         float value{ map_object->GetMapValue(index) };
-        if (value <= threshold) return; // Skip negative values & keep first 99% of map values
+        if (value <= threshold) return;
         list.emplace_back(position, value);
     };
 
@@ -158,12 +155,12 @@ void PositionEstimationCommand::BuildVoxelList(MapObject * map_object)
     );
 }
 
-void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & query_point_list)
+void PositionEstimationCommand::UpdatePointList(std::vector<VoxelNode> & query_point_list)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::UpdateVoxelPosition() called");
+    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::UpdatePointList() called");
     std::vector<std::array<float, 3>> updated_position_list;
     updated_position_list.resize(query_point_list.size(), {0.0f, 0.0f, 0.0f});
-    auto update_voxel_position = [&](size_t index)
+    auto update_point_position = [&](size_t index)
     {
         auto knn_list{
             KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
@@ -180,15 +177,15 @@ void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & que
             weight_sum += K;
         }
         
-        std::array<float, 3> voxel_position_update{ 0.0f, 0.0f, 0.0f };
+        std::array<float, 3> point_position_update{ 0.0f, 0.0f, 0.0f };
         for (size_t j = 0; j < m_options.knn_size; j++)
         {
-            auto & query_voxel_position{ knn_list[j]->GetPosition() };
-            voxel_position_update[0] += weight_list[j] * query_voxel_position[0] / weight_sum;
-            voxel_position_update[1] += weight_list[j] * query_voxel_position[1] / weight_sum;
-            voxel_position_update[2] += weight_list[j] * query_voxel_position[2] / weight_sum;
+            auto & query_point_position{ knn_list[j]->GetPosition() };
+            point_position_update[0] += weight_list[j] * query_point_position[0] / weight_sum;
+            point_position_update[1] += weight_list[j] * query_point_position[1] / weight_sum;
+            point_position_update[2] += weight_list[j] * query_point_position[2] / weight_sum;
         }
-        updated_position_list[index] = voxel_position_update;
+        updated_position_list[index] = point_position_update;
         query_point_list[index].SetPosition(updated_position_list[index]);
     };
 
@@ -197,21 +194,21 @@ void PositionEstimationCommand::UpdateVoxelPosition(std::vector<VoxelNode> & que
 #endif
     for (size_t i = 0; i < query_point_list.size(); i++)
     {
-        update_voxel_position(i);
+        update_point_position(i);
     }
 }
 
-void PositionEstimationCommand::DegenerateVoxelList(
-    const std::vector<VoxelNode> & voxel_list,
-    std::vector<std::array<float, 3>> & position_list)
+void PositionEstimationCommand::BuildUniquePointList(const std::vector<VoxelNode> & point_list)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DegenerateVoxelList() called");
-    ScopeTimer timer("PositionEstimationCommand::DegenerateVoxelList");
-    if (voxel_list.empty())
+    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildUniquePointList() called");
+    ScopeTimer timer("PositionEstimationCommand::BuildUniquePointList");
+    if (point_list.empty())
     {
-        Logger::Log(LogLevel::Warning, "Voxel list is empty. Nothing to degenerate.");
+        Logger::Log(LogLevel::Warning, "Point list is empty. Nothing to degenerate.");
         return;
     }
+    m_position_list.clear();
+    m_position_list.reserve(point_list.size());
 
     struct Key
     {
@@ -234,22 +231,23 @@ void PositionEstimationCommand::DegenerateVoxelList(
         }
     };
 
-    auto voxel_size_origin{ voxel_list.size() };
+    auto point_size_origin{ point_list.size() };
     auto tolerance{ 1.0e-2f };
-    auto inv_tol{ 1.0f / tolerance };
+    auto inv_tolerance{ 1.0f / tolerance };
     std::unordered_set<Key, KeyHash> seen;
-    seen.reserve(voxel_list.size());
+    seen.reserve(point_list.size());
     std::size_t removed_count{ 0 };
-    
-    for (const auto & voxel : voxel_list)
+    for (const auto & point : point_list)
     {
-        const auto & position{ voxel.GetPosition() };
-        Key key{ static_cast<int>(std::floor(position[0] * inv_tol)),
-                 static_cast<int>(std::floor(position[1] * inv_tol)),
-                 static_cast<int>(std::floor(position[2] * inv_tol)) };
+        const auto & position{ point.GetPosition() };
+        Key key{
+            static_cast<int>(std::floor(position[0] * inv_tolerance)),
+            static_cast<int>(std::floor(position[1] * inv_tolerance)),
+            static_cast<int>(std::floor(position[2] * inv_tolerance))
+        };
         if (seen.emplace(key).second)
         {
-            position_list.emplace_back(position);
+            m_position_list.emplace_back(position);
         }
         else
         {
@@ -258,45 +256,26 @@ void PositionEstimationCommand::DegenerateVoxelList(
     }
 
     Logger::Log(LogLevel::Info,
-        "Number of removed voxels = "
-        + std::to_string(removed_count) +" / "+ std::to_string(voxel_size_origin) +
-        ", remaining voxels = " + std::to_string(position_list.size()));
+        "Number of removed points = "
+        + std::to_string(removed_count) +" / "+ std::to_string(point_size_origin) +
+        ", remaining number of unique points = " + std::to_string(m_position_list.size()));
 }
 
-void PositionEstimationCommand::DisplayVoxelList(
-    const std::vector<std::array<float, 3>> & position_list) const
+void PositionEstimationCommand::OutputPointList(void) const
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::DisplayVoxelList() called");
-    if (position_list.empty())
+    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::OutputPointList() called");
+    if (m_position_list.empty())
     {
-        Logger::Log(LogLevel::Warning, "No voxels to display.");
+        Logger::Log(LogLevel::Warning, "No points to output.");
         return;
     }
     Logger::Log(LogLevel::Info,
-        "Displaying voxel position list: " + std::to_string(position_list.size()) + " voxels.");
-    for (const auto & position : position_list)
-    {
-        Logger::Log(LogLevel::Info,
-            "Voxel Position: ["
-            + std::to_string(position[0]) + ", "
-            + std::to_string(position[1]) + ", "
-            + std::to_string(position[2]) + "]"
-        );
-    }
-}
+        "Outputting point position list: " + std::to_string(m_position_list.size()) + " points.");
 
-void PositionEstimationCommand::OutputVoxelList(
-    const std::vector<std::array<float, 3>> & position_list) const
-{
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::OutputVoxelList() called");
-    if (position_list.empty())
-    {
-        Logger::Log(LogLevel::Warning, "No voxels to output.");
-        return;
-    }
-    Logger::Log(LogLevel::Info,
-        "Outputting voxel position list: " + std::to_string(position_list.size()) + " voxels.");
-
-    ChimeraXHelper::WritePointsAuto(position_list,
-        FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + "points.cmm", 0.05f);
+    auto map_file_name{ FilePathHelper::GetFileName(m_options.map_file_path, false) };
+    auto output_file{
+        FilePathHelper::EnsureTrailingSlash(m_options.folder_path)
+        + "point_list_" + map_file_name + ".cmm" };
+    ChimeraXHelper::WritePointsAuto(m_position_list, output_file, 0.05f);
+    Logger::Log(LogLevel::Info, "Output file: " + output_file);
 }

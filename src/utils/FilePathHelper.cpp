@@ -26,10 +26,19 @@ std::string FilePathHelper::GetDirectory(const std::filesystem::path & path)
     return dir;
 }
 
-std::string FilePathHelper::GetFileName(const std::filesystem::path & path)
+std::string FilePathHelper::GetFileName(
+    const std::filesystem::path & path, bool include_extension)
 {
     std::string normalized{ path.string() };
     std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    if (include_extension == false)
+    {
+        auto pos{ normalized.find_last_of('.') };
+        if (pos != std::string::npos)
+        {
+            normalized.erase(pos);
+        }
+    }
     return std::filesystem::path{ normalized }.filename().string();
 }
 

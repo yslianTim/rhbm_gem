@@ -20,6 +20,7 @@ public:
         int iteration_count{ 15 };
         size_t knn_size{ 20 };
         float alpha{ 2.0 };
+        float threshold_ratio{ 0.1f };
         std::filesystem::path map_file_path;
         std::string saved_key_tag{"map"};
     };
@@ -27,6 +28,7 @@ public:
 private:
     Options m_options;
     std::vector<VoxelNode> m_selected_voxel_list;
+    std::vector<std::array<float, 3>> m_position_list;
     std::unique_ptr<KDNode<VoxelNode>> m_kd_tree_root;
 
 public:
@@ -45,15 +47,13 @@ public:
     void SetIterationCount(int value) { m_options.iteration_count = value; }
     void SetKNNSize(int value) { m_options.knn_size = static_cast<size_t>(value); }
     void SetAlpha(double value) { m_options.alpha = static_cast<float>(value); }
+    void SetThresholdRatio(double value) { m_options.threshold_ratio = static_cast<float>(value); }
 
 private:
     void RunMapValueConvergence(MapObject * map_object);
     void BuildVoxelList(MapObject * map_object);
-    void UpdateVoxelPosition(std::vector<VoxelNode> & query_point_list);
-    void DegenerateVoxelList(
-        const std::vector<VoxelNode> & voxel_list,
-        std::vector<std::array<float, 3>> & position_list);
-    void DisplayVoxelList(const std::vector<std::array<float, 3>> & position_list) const;
-    void OutputVoxelList(const std::vector<std::array<float, 3>> & position_list) const;
+    void UpdatePointList(std::vector<VoxelNode> & query_point_list);
+    void BuildUniquePointList(const std::vector<VoxelNode> & point_list);
+    void OutputPointList(void) const;
 
 };
