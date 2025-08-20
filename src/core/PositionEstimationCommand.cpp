@@ -15,7 +15,6 @@
 #include <array>
 #include <unordered_set>
 #include <cmath>
-#include <cstdint>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -271,37 +270,37 @@ void PositionEstimationCommand::BuildUniquePointList(const std::vector<VoxelNode
     m_position_list.clear();
     m_position_list.reserve(point_list.size());
 
-    auto pack_key = [](int x, int y, int z) noexcept -> uint64_t
+    struct Int3
     {
-        // Pack three signed 21-bit values into a single 64-bit integer.
-        // Layout: [63..42] X, [41..21] Y, [20..0] Z.
-        constexpr uint64_t mask{ (1ULL << 21) - 1ULL };
-        constexpr uint64_t offset{ 1ULL << 20 }; // allow negative values
-        uint64_t ux{
-            static_cast<uint64_t>(static_cast<int64_t>(x) + static_cast<int64_t>(offset)) & mask
-        };
-        uint64_t uy{
-            static_cast<uint64_t>(static_cast<int64_t>(y) + static_cast<int64_t>(offset)) & mask
-        };
-        uint64_t uz{
-            static_cast<uint64_t>(static_cast<int64_t>(z) + static_cast<int64_t>(offset)) & mask
-        };
-        return (ux << 42) | (uy << 21) | uz;
+        int x, y, z;
+        bool operator==(const Int3 & other) const noexcept
+        {
+            return x == other.x && y == other.y && z == other.z;
+        }
+    };
+    struct Int3Hash
+    {
+        std::size_t operator()(const Int3 & p) const noexcept
+        {
+            std::size_t h1{ std::hash<int>{}(p.x) };
+            std::size_t h2{ std::hash<int>{}(p.y) };
+            std::size_t h3{ std::hash<int>{}(p.z) };
+            return h1 ^ (h2 << 1) ^ (h3 << 2);
+        }
     };
 
     auto point_size_origin{ point_list.size() };
     auto tolerance{ 1.0e-2f };
     auto inv_tolerance{ 1.0f / tolerance };
-    std::unordered_set<uint64_t> seen;
+    std::unordered_set<Int3, Int3Hash> seen;
     seen.reserve(point_list.size());
     for (const auto & point : point_list)
     {
         const auto & position{ point.GetPosition() };
-        uint64_t key{
-            pack_key(
-                static_cast<int>(std::floor(position[0] * inv_tolerance)),
-                static_cast<int>(std::floor(position[1] * inv_tolerance)),
-                static_cast<int>(std::floor(position[2] * inv_tolerance)))
+        Int3 key{
+            static_cast<int>(std::floor(position[0] * inv_tolerance)),
+            static_cast<int>(std::floor(position[1] * inv_tolerance)),
+            static_cast<int>(std::floor(position[2] * inv_tolerance))
         };
         if (seen.emplace(key).second)
         {
