@@ -137,7 +137,8 @@ void PositionEstimationCommand::RunMapValueConvergence(const MapObject * map_obj
     std::vector<VoxelNode> query_point_list(m_selected_voxel_list);
     for (int t = 0; t < m_options.iteration_count; t++)
     {
-        Logger::Log(LogLevel::Info, "Iteration: " + std::to_string(t + 1));
+        Logger::ProgressBar(static_cast<std::size_t>(t + 1),
+            static_cast<std::size_t>(m_options.iteration_count), 50);
         UpdatePointList(query_point_list);
     }
     

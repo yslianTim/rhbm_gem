@@ -414,3 +414,19 @@ TEST_P(LoggerLevelPairTest, LogsMessageWithCorrectPrefixAndStream)
         EXPECT_TRUE(stderr_output.empty());
     }
 }
+
+TEST(LoggerTest, ProgressBarUpdatesAndFinishes)
+{
+    testing::internal::CaptureStdout();
+    size_t bar_width{ 10 };
+    Logger::ProgressBar(1, 10, bar_width);
+    Logger::ProgressBar(4, 10, bar_width);
+    Logger::ProgressBar(10, 10, bar_width);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    EXPECT_NE(out.find("[=>........] 10% (1/10)"), std::string::npos);
+    EXPECT_NE(out.find("[====>.....] 40% (4/10)"), std::string::npos);
+    EXPECT_NE(out.find("[==========] 100% (10/10)"), std::string::npos);
+    EXPECT_EQ('\n', out.back());
+    const auto newline_count{ std::count(out.begin(), out.end(), '\n') };
+    EXPECT_EQ(static_cast<std::size_t>(1), newline_count);
+}
