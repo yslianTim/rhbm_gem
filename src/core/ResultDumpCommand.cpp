@@ -13,7 +13,7 @@
 #include "GlobalEnumClass.hpp"
 #include "KeyPacker.hpp"
 #include "StringHelper.hpp"
-#include "ChimeraXHelper.hpp"
+#include "ModelFileWriter.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
@@ -63,6 +63,8 @@ bool ResultDumpCommand::Execute(void)
     Logger::Log(LogLevel::Info, "Total number of model object sets to be print: "
                 + std::to_string(m_options.model_key_tag_list.size()));
 
+    m_options.folder_path =
+        std::filesystem::path(FilePathHelper::EnsureTrailingSlash(m_options.folder_path));
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
     try
@@ -294,6 +296,25 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
         }
         outfile.close();
         Logger::Log(LogLevel::Info, "Output file: " + output_csv_file);
+
+        // Output result to mmCIF file
+        std::string amplitude_file_name{ model_object->GetPdbID() +"_gaus_amplitude.cif" };
+        std::string output_amplitude_cif_file{ m_options.folder_path.string() + amplitude_file_name };
+        ModelFileWriter amplitude_writer{ output_amplitude_cif_file, model_object.get(), 0 };
+        amplitude_writer.Write();
+        Logger::Log(LogLevel::Info, "Output file: " + output_amplitude_cif_file);
+
+        std::string width_file_name{ model_object->GetPdbID() +"_gaus_width.cif" };
+        std::string output_width_cif_file{ m_options.folder_path.string() + width_file_name };
+        ModelFileWriter width_writer{ output_width_cif_file, model_object.get(), 1 };
+        width_writer.Write();
+        Logger::Log(LogLevel::Info, "Output file: " + output_width_cif_file);
+
+        std::string intensity_file_name{ model_object->GetPdbID() +"_gaus_intensity.cif" };
+        std::string output_intensity_cif_file{ m_options.folder_path.string() + intensity_file_name };
+        ModelFileWriter intensity_writer{ output_intensity_cif_file, model_object.get(), 2 };
+        intensity_writer.Write();
+        Logger::Log(LogLevel::Info, "Output file: " + output_intensity_cif_file);
     }
 }
 

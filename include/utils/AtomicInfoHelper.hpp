@@ -34,7 +34,9 @@ class AtomicInfoHelper
     static const std::unordered_map<Residue, std::string> m_residue_label_map;
     static const std::unordered_map<Element, std::string> m_element_label_map;
     static const std::unordered_map<Remoteness, std::string> m_remoteness_label_map;
+    static const std::unordered_map<Remoteness, char> m_remoteness_char_map;
     static const std::unordered_map<Branch, std::string> m_branch_label_map;
+    static const std::unordered_map<Branch, char> m_branch_char_map;
 
     static const std::unordered_map<Element, int> m_element_color_map;
     static const std::unordered_map<Residue, int> m_residue_color_map;
@@ -72,6 +74,8 @@ public:
     static const std::string & GetLabel(Element element);
     static const std::string & GetLabel(Remoteness remoteness);
     static const std::string & GetLabel(Branch branch);
+    static char GetChar(Remoteness remoteness);
+    static char GetChar(Branch branch);
 
     static short GetDisplayColor(Element element);
     static short GetDisplayColor(Residue residue);

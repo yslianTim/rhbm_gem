@@ -84,6 +84,9 @@ public:
     float GetTemperature(void) const { return m_temperature; }
     std::array<float, 3> GetPosition(void) const { return m_position; }
     const std::array<float, 3> & GetPositionRef(void) const { return m_position; }
+    const std::unordered_map<std::string, std::array<float, 3>> & GetAlternatePositions(void) const;
+    const std::unordered_map<std::string, float> & GetAlternateOccupancies(void) const;
+    const std::unordered_map<std::string, float> & GetAlternateTemperatures(void) const;
     AtomicPotentialEntry * GetAtomicPotentialEntry(void) const { return m_atomic_potential_entry.get(); }
     
 };

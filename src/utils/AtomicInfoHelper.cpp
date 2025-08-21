@@ -239,10 +239,28 @@ const std::unordered_map<Remoteness, std::string> AtomicInfoHelper::m_remoteness
     {Remoteness::UNK, "UNK"}
 };
 
+const std::unordered_map<Remoteness, char> AtomicInfoHelper::m_remoteness_char_map
+{
+    {Remoteness::NONE, ' '}, {Remoteness::ALPHA, 'A'},
+    {Remoteness::BETA, 'B'}, {Remoteness::GAMMA, 'G'},
+    {Remoteness::DELTA, 'D'}, {Remoteness::EPSILON, 'E'},
+    {Remoteness::ZETA, 'Z'}, {Remoteness::ETA, 'H'},
+    {Remoteness::ONE, '1'}, {Remoteness::TWO, '2'},
+    {Remoteness::THREE, '3'}, {Remoteness::FOUR, '4'},
+    {Remoteness::FIVE, '5'}, {Remoteness::EXTRA, 'X'},
+    {Remoteness::UNK, '?'}
+};
+
 const std::unordered_map<Branch, std::string> AtomicInfoHelper::m_branch_label_map
 {
     {Branch::NONE, ""}, {Branch::ONE, "1"}, {Branch::TWO, "2"}, {Branch::THREE, "3"},
     {Branch::TERMINAL, "T"}, {Branch::UNK, "UNK"}
+};
+
+const std::unordered_map<Branch, char> AtomicInfoHelper::m_branch_char_map
+{
+    {Branch::NONE, ' '}, {Branch::ONE, '1'}, {Branch::TWO, '2'}, {Branch::THREE, '3'},
+    {Branch::TERMINAL, 'T'}, {Branch::UNK, '?'}
 };
 
 const std::unordered_map<Element, int> AtomicInfoHelper::m_element_color_map
@@ -561,6 +579,32 @@ const std::string & AtomicInfoHelper::GetLabel(Branch branch)
         return unk_label;
     }
     return m_branch_label_map.at(branch);
+}
+
+char AtomicInfoHelper::GetChar(Remoteness remoteness)
+{
+    static char unk_char{'?'};
+    if (m_remoteness_char_map.find(remoteness) == m_remoteness_char_map.end())
+    {
+        Logger::Log(LogLevel::Warning, 
+                    "AtomicInfoHelper::GetChar - Unknown Remoteness: "
+                    + std::to_string(static_cast<int>(remoteness)));
+        return unk_char;
+    }
+    return m_remoteness_char_map.at(remoteness);
+}
+
+char AtomicInfoHelper::GetChar(Branch branch)
+{
+    static char unk_char{'?'};
+    if (m_branch_char_map.find(branch) == m_branch_char_map.end())
+    {
+        Logger::Log(LogLevel::Warning, 
+                    "AtomicInfoHelper::GetChar - Unknown Branch: "
+                    + std::to_string(static_cast<int>(branch)));
+        return unk_char;
+    }
+    return m_branch_char_map.at(branch);
 }
 
 short AtomicInfoHelper::GetDisplayColor(Element element)

@@ -1,9 +1,11 @@
 #include "CifFormat.hpp"
 #include "AtomObject.hpp"
+#include "ModelObject.hpp"
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
+#include "AtomicPotentialEntry.hpp"
 #include "Logger.hpp"
 
 #include <iomanip>
@@ -11,6 +13,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <cctype>
+#include <ostream>
 
 CifFormat::CifFormat(void) :
     m_data_block{ std::make_unique<AtomicModelDataBlock>() }
@@ -340,6 +343,115 @@ void CifFormat::LoadAtomSiteData(std::ifstream & infile)
 AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
 {
     return m_data_block.get();
+}
+
+void CifFormat::SaveHeader(const ModelObject * model_object, std::ostream & stream)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::SaveHeader() called");
+    if (model_object == nullptr) return;
+    stream << "data_" << model_object->GetKeyTag() << '\n';
+    stream << "#\n";
+}
+
+void CifFormat::SaveDataArray(
+    const ModelObject * model_object, std::ostream & stream, int model_par)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::SaveDataArray() called");
+    if (model_object == nullptr) return;
+
+    SaveAtomSiteData(model_object, stream, model_par);
+}
+
+void CifFormat::SaveAtomSiteData(
+    const ModelObject * model_object, std::ostream & stream, int model_par)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::SaveAtomSiteData() called");
+    stream << "loop_\n";
+    stream << "_atom_site.group_PDB\n";
+    stream << "_atom_site.id\n";
+    stream << "_atom_site.type_symbol\n";
+    stream << "_atom_site.label_atom_id\n";
+    stream << "_atom_site.label_alt_id\n";
+    stream << "_atom_site.label_comp_id\n";
+    stream << "_atom_site.label_asym_id\n";
+    stream << "_atom_site.label_seq_id\n";
+    stream << "_atom_site.Cartn_x\n";
+    stream << "_atom_site.Cartn_y\n";
+    stream << "_atom_site.Cartn_z\n";
+    stream << "_atom_site.occupancy\n";
+    stream << "_atom_site.B_iso_or_equiv\n";
+    stream << "_atom_site.pdbx_PDB_model_num\n";
+
+    const int model_number{ 1 };
+    for (const auto & atom_ptr : model_object->GetComponentsList())
+    {
+        const AtomObject * atom{ atom_ptr.get() };
+        if (atom->GetAtomicPotentialEntry() == nullptr) continue;
+        auto model_entry{ atom->GetAtomicPotentialEntry() };
+        auto gaus_estimate{ model_entry->GetGausEstimateMDPDE(model_par) };
+        auto position{ atom->GetPosition() };
+        WriteAtomSiteBlock(
+            atom, position, atom->GetIndicator(), atom->GetOccupancy(),
+            gaus_estimate, model_number, stream
+        );
+
+        /*
+        const auto & alt_pos_map{ atom->GetAlternatePositions() };
+        if (!alt_pos_map.empty())
+        {
+            const auto & alt_occ_map{ atom->GetAlternateOccupancies() };
+            const auto & alt_temp_map{ atom->GetAlternateTemperatures() };
+            for (const auto & [alt_id, alt_pos] : alt_pos_map)
+            {
+                float occ{ atom->GetOccupancy() };
+                auto occ_it{ alt_occ_map.find(alt_id) };
+                if (occ_it != alt_occ_map.end()) occ = occ_it->second;
+
+                float temp{ atom->GetTemperature() };
+                auto temp_it{ alt_temp_map.find(alt_id) };
+                if (temp_it != alt_temp_map.end()) temp = temp_it->second;
+
+                WriteAtomSiteBlock(atom, alt_pos, alt_id, occ, temp,model_number, stream);
+            }
+        }*/
+    }
+    stream << "#\n";
+}
+
+void CifFormat::WriteAtomSiteBlock(
+    const AtomObject * atom,
+    const std::array<float, 3> & position,
+    const std::string & alt_id,
+    float occupancy,
+    float temperature,
+    int model_number,
+    std::ostream & stream)
+{
+    std::string group_PDB{ atom->GetSpecialAtomFlag() ? "HETATM" : "ATOM" };
+    std::string type_symbol{ AtomicInfoHelper::GetLabel(atom->GetElement()) };
+    std::string label_atom_id{ type_symbol };
+    label_atom_id += AtomicInfoHelper::GetChar(atom->GetRemoteness());
+    label_atom_id += AtomicInfoHelper::GetChar(atom->GetBranch());
+
+    std::string label_alt_id{ alt_id.empty() ? "." : alt_id };
+    std::string label_comp_id{ AtomicInfoHelper::GetLabel(atom->GetResidue()) };
+    std::string label_asym_id{ atom->GetChainID() };
+    std::string label_seq_id{
+        (atom->GetResidueID() == -1) ? "." : std::to_string(atom->GetResidueID())
+    };
+
+    stream << group_PDB << ' '
+           << atom->GetSerialID() << ' '
+           << type_symbol << ' '
+           << label_atom_id << ' '
+           << label_alt_id << ' '
+           << label_comp_id << ' '
+           << label_asym_id << ' '
+           << label_seq_id << ' '
+           << std::fixed << std::setprecision(3)
+           << position[0] << ' ' << position[1] << ' ' << position[2] << ' '
+           << occupancy << ' ' << temperature << ' '
+           << model_number << '\n';
 }
 
 void CifFormat::ParseLoopBlock(

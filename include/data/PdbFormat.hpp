@@ -91,6 +91,8 @@ public:
     void LoadHeader(const std::string & filename) override;
     void PrintHeader(void) const override;
     void LoadDataArray(const std::string & filename) override;
+    void SaveHeader(const ModelObject * model_object, std::ostream & stream) override;
+    void SaveDataArray(const ModelObject * model_object, std::ostream & stream, int par) override;
     AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:

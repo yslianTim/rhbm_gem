@@ -8,10 +8,13 @@
 #include <functional>
 #include <unordered_map>
 #include <fstream>
+#include <array>
 #include "ModelFileFormatBase.hpp"
 
 enum class Element : uint16_t;
 class AtomicModelDataBlock;
+class ModelObject;
+class AtomObject;
 
 class CifFormat : public ModelFileFormatBase
 {
@@ -23,6 +26,8 @@ public:
     void LoadHeader(const std::string & filename) override;
     void PrintHeader(void) const override;
     void LoadDataArray(const std::string & filename) override;
+    void SaveHeader(const ModelObject * model_object, std::ostream & stream) override;
+    void SaveDataArray(const ModelObject * model_object, std::ostream & stream, int par) override;
     AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
@@ -37,5 +42,13 @@ private:
         std::string_view data_block_prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,
                                  const std::vector<std::string> &)> & row_handler);
+    void SaveAtomSiteData(const ModelObject * model_object, std::ostream & stream, int model_par);
+    void WriteAtomSiteBlock(const AtomObject * atom,
+        const std::array<float, 3> & position,
+        const std::string & alt_id,
+        float occupancy,
+        float temperature,
+        int model_number,
+        std::ostream & stream);
 
 };

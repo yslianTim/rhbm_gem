@@ -149,6 +149,24 @@ Remoteness AtomObject::GetRemoteness(void) const { return m_remoteness; }
 Branch AtomObject::GetBranch(void) const { return m_branch; }
 Structure AtomObject::GetStructure(void) const { return m_structure; }
 
+const std::unordered_map<std::string, std::array<float, 3>> &
+AtomObject::GetAlternatePositions(void) const
+{
+    return m_alternate_position_map;
+}
+
+const std::unordered_map<std::string, float> &
+AtomObject::GetAlternateOccupancies(void) const
+{
+    return m_alternate_occupancy_map;
+}
+
+const std::unordered_map<std::string, float> &
+AtomObject::GetAlternateTemperatures(void) const
+{
+    return m_alternate_temperature_map;
+}
+
 bool AtomObject::IsUnknownAtom(void) const
 {
     auto element{ GetElement() };

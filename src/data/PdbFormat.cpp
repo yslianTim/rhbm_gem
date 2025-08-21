@@ -115,6 +115,19 @@ AtomicModelDataBlock * PdbFormat::GetDataBlockPtr(void)
     return m_data_block.get();
 }
 
+void PdbFormat::SaveHeader(const ModelObject * model_object, std::ostream & stream)
+{
+    (void)model_object;
+    (void)stream;
+}
+
+void PdbFormat::SaveDataArray(const ModelObject * model_object, std::ostream & stream, int par)
+{
+    (void)model_object;
+    (void)stream;
+    (void)par;
+}
+
 PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const
 {
     try
