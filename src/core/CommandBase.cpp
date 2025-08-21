@@ -17,7 +17,8 @@ void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
     auto & options{ GetOptions() };
     command->add_option("-d,--database", options.database_path,
         "Database file path")->default_val(options.database_path.string());
-    command->add_option("-o,--folder", options.folder_path,
+    command->add_option_function<std::string>("-o,--folder",
+        [&options](const std::string & val) { options.SetFolderPath(val); },
         "folder path for output files")->default_val(options.folder_path.string());
     command->add_option("-j,--jobs", options.thread_size,
         "Number of threads")->default_val(options.thread_size);

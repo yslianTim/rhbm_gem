@@ -63,8 +63,6 @@ bool ResultDumpCommand::Execute(void)
     Logger::Log(LogLevel::Info, "Total number of model object sets to be print: "
                 + std::to_string(m_options.model_key_tag_list.size()));
 
-    m_options.folder_path =
-        std::filesystem::path(FilePathHelper::EnsureTrailingSlash(m_options.folder_path));
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
     try
@@ -137,11 +135,6 @@ bool ResultDumpCommand::ValidateOptions(void) const
     return true;
 }
 
-void ResultDumpCommand::SetFolderPath(const std::filesystem::path & path)
-{
-    m_options.folder_path = FilePathHelper::EnsureTrailingSlash(path);
-}
-
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
@@ -174,12 +167,12 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_position_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{ m_options.folder_path.string() + file_name };
+        std::filesystem::path output_path{ m_options.folder_path / file_name };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "Could not open file " + output_path + " for writing.\n");
+                        "Could not open file " + output_path.string() + " for writing.\n");
             return;
         }
         outfile << "SerialID,X,Y,Z,Residue,Element,Remoteness,Branch\n";
@@ -195,7 +188,7 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
                     << AtomicInfoHelper::GetLabel(atom->GetBranch()) <<'\n';
         }
         outfile.close();
-        Logger::Log(LogLevel::Info, "Output file: " + output_path);
+        Logger::Log(LogLevel::Info, "Output file: " + output_path.string());
     }
 }
 
@@ -236,12 +229,12 @@ void ResultDumpCommand::RunMapValueDumping(void)
         std::string file_name{
             "map_value_list_"+ model_object->GetEmdID() +"_"+ model_object->GetPdbID() +".csv"
         };
-        std::string output_path{ m_options.folder_path.string() + file_name };
+        std::filesystem::path output_path{ m_options.folder_path / file_name };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "Could not open file " + output_path + " for writing.\n");
+                        "Could not open file " + output_path.string() + " for writing.\n");
             return;
         }
         outfile << "GridID,X,Y,Z,MapValue\n";
@@ -277,12 +270,12 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::string csv_file_name{ "atom_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_csv_file{ m_options.folder_path.string() + csv_file_name };
+        std::filesystem::path output_csv_file{ m_options.folder_path / csv_file_name };
         std::ofstream outfile(output_csv_file);
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "Could not open file " + output_csv_file + " for writing.\n");
+                        "Could not open file " + output_csv_file.string() + " for writing.\n");
             return;
         }
 
@@ -302,26 +295,26 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
                     << AtomicInfoHelper::GetLabel(atom->GetBranch()) <<'\n';
         }
         outfile.close();
-        Logger::Log(LogLevel::Info, "Output file: " + output_csv_file);
+        Logger::Log(LogLevel::Info, "Output file: " + output_csv_file.string());
 
         // Output result to mmCIF file
         std::string amplitude_file_name{ model_object->GetPdbID() +"_gaus_amplitude.cif" };
-        std::string output_amplitude_cif_file{ m_options.folder_path.string() + amplitude_file_name };
-        ModelFileWriter amplitude_writer{ output_amplitude_cif_file, model_object.get(), 0 };
+        std::filesystem::path output_amplitude_cif_file{ m_options.folder_path / amplitude_file_name };
+        ModelFileWriter amplitude_writer{ output_amplitude_cif_file.string(), model_object.get(), 0 };
         amplitude_writer.Write();
-        Logger::Log(LogLevel::Info, "Output file: " + output_amplitude_cif_file);
+        Logger::Log(LogLevel::Info, "Output file: " + output_amplitude_cif_file.string());
 
         std::string width_file_name{ model_object->GetPdbID() +"_gaus_width.cif" };
-        std::string output_width_cif_file{ m_options.folder_path.string() + width_file_name };
-        ModelFileWriter width_writer{ output_width_cif_file, model_object.get(), 1 };
+        std::filesystem::path output_width_cif_file{ m_options.folder_path / width_file_name };
+        ModelFileWriter width_writer{ output_width_cif_file.string(), model_object.get(), 1 };
         width_writer.Write();
-        Logger::Log(LogLevel::Info, "Output file: " + output_width_cif_file);
+        Logger::Log(LogLevel::Info, "Output file: " + output_width_cif_file.string());
 
         std::string intensity_file_name{ model_object->GetPdbID() +"_gaus_intensity.cif" };
-        std::string output_intensity_cif_file{ m_options.folder_path.string() + intensity_file_name };
-        ModelFileWriter intensity_writer{ output_intensity_cif_file, model_object.get(), 2 };
+        std::filesystem::path output_intensity_cif_file{ m_options.folder_path / intensity_file_name };
+        ModelFileWriter intensity_writer{ output_intensity_cif_file.string(), model_object.get(), 2 };
         intensity_writer.Write();
-        Logger::Log(LogLevel::Info, "Output file: " + output_intensity_cif_file);
+        Logger::Log(LogLevel::Info, "Output file: " + output_intensity_cif_file.string());
     }
 }
 
@@ -338,12 +331,12 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object.get()) };
 
         std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{ m_options.folder_path.string() + file_name };
+        std::filesystem::path output_path{ m_options.folder_path / file_name };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "Could not open file " + output_path + " for writing.\n");
+                        "Could not open file " + output_path.string() + " for writing.\n");
             return;
         }
         outfile << "Residue,Element,Remoteness,Branch,Amplitude,Width\n";
@@ -377,6 +370,6 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
         }
 
         outfile.close();
-        Logger::Log(LogLevel::Info, "Output file: " + output_path);
+        Logger::Log(LogLevel::Info, "Output file: " + output_path.string());
     }
 }

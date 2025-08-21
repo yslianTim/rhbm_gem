@@ -147,10 +147,8 @@ void MapSimulationCommand::RunMapSimulation(ModelObject * model_object)
         };
         auto map_object{ CreateSimulatedMapObject(blurring_width) };
         std::string file_name{ m_options.map_file_name + "_" + map_key_tag + ".map" };
-        std::string output_file_name{
-            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
-        };
-        MapFileWriter writer{ output_file_name, map_object.get() };
+        std::filesystem::path output_file_name{ m_options.folder_path / file_name };
+        MapFileWriter writer{ output_file_name.string(), map_object.get() };
         writer.Write();
     }
 }

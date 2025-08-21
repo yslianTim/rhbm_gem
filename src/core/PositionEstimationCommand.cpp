@@ -335,10 +335,9 @@ void PositionEstimationCommand::OutputPointList(void) const
     Logger::Log(LogLevel::Info,
         "Outputting point position list: " + std::to_string(m_position_list.size()) + " points.");
 
-    auto map_file_name{ FilePathHelper::GetFileName(m_options.map_file_path, false) };
-    auto output_file{
-        FilePathHelper::EnsureTrailingSlash(m_options.folder_path)
-        + "point_list_" + map_file_name + ".cmm" };
+    auto map_file_name{
+        "point_list_" + FilePathHelper::GetFileName(m_options.map_file_path, false) + ".cmm" };
+    auto output_file{ m_options.folder_path / map_file_name };
     ChimeraXHelper::WriteCMMPoints(m_position_list, output_file, 0.05f);
-    Logger::Log(LogLevel::Info, "Output file: " + output_file);
+    Logger::Log(LogLevel::Info, "Output file: " + output_file.string());
 }
