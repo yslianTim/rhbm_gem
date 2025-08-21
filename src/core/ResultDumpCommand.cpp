@@ -286,13 +286,20 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
             return;
         }
 
-        outfile << "SerialID,Amplitude,Width\n";
+        outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Remoteness,Branch\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
             auto entry{ atom->GetAtomicPotentialEntry() };
             outfile << atom->GetSerialID() <<','
                     << entry->GetAmplitudeEstimateMDPDE() <<','
-                    << entry->GetWidthEstimateMDPDE() <<'\n';
+                    << entry->GetWidthEstimateMDPDE() <<','
+                    << atom->GetPosition().at(0) <<','
+                    << atom->GetPosition().at(1) <<','
+                    << atom->GetPosition().at(2) <<','
+                    << AtomicInfoHelper::GetLabel(atom->GetResidue()) <<','
+                    << AtomicInfoHelper::GetLabel(atom->GetElement()) <<','
+                    << AtomicInfoHelper::GetLabel(atom->GetRemoteness()) <<','
+                    << AtomicInfoHelper::GetLabel(atom->GetBranch()) <<'\n';
         }
         outfile.close();
         Logger::Log(LogLevel::Info, "Output file: " + output_csv_file);
