@@ -155,7 +155,7 @@ struct QuantileColormapOptions
     Colormap cmap = Colormap::Sequential; // Sequential or symmetric diverging around 0
     float q_low  = 0.02f;                 // lower quantile in [0,1]
     float q_high = 0.98f;                 // upper quantile in [0,1]
-    float default_radius = 1.0f;          // Å
+    float default_radius = 1.0f;
     std::string marker_set_name = "points";
 };
 

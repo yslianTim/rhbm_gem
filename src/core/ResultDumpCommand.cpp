@@ -13,6 +13,7 @@
 #include "GlobalEnumClass.hpp"
 #include "KeyPacker.hpp"
 #include "StringHelper.hpp"
+#include "ChimeraXHelper.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
@@ -134,6 +135,11 @@ bool ResultDumpCommand::ValidateOptions(void) const
     return true;
 }
 
+void ResultDumpCommand::SetFolderPath(const std::filesystem::path & path)
+{
+    m_options.folder_path = FilePathHelper::EnsureTrailingSlash(path);
+}
+
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
@@ -166,9 +172,7 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::string file_name{ "atom_position_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{
-            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
-        };
+        std::string output_path{ m_options.folder_path.string() + file_name };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -230,9 +234,7 @@ void ResultDumpCommand::RunMapValueDumping(void)
         std::string file_name{
             "map_value_list_"+ model_object->GetEmdID() +"_"+ model_object->GetPdbID() +".csv"
         };
-        std::string output_path{
-            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
-        };
+        std::string output_path{ m_options.folder_path.string() + file_name };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -272,17 +274,16 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
     for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
-        std::string file_name{ "atom_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{
-            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
-        };
-        std::ofstream outfile(output_path);
+        std::string csv_file_name{ "atom_gaus_list_"+ model_object->GetPdbID() +".csv" };
+        std::string output_csv_file{ m_options.folder_path.string() + csv_file_name };
+        std::ofstream outfile(output_csv_file);
         if (!outfile.is_open())
         {
             Logger::Log(LogLevel::Error,
-                        "Could not open file " + output_path + " for writing.\n");
+                        "Could not open file " + output_csv_file + " for writing.\n");
             return;
         }
+
         outfile << "SerialID,Amplitude,Width\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
@@ -292,7 +293,7 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
                     << entry->GetWidthEstimateMDPDE() <<'\n';
         }
         outfile.close();
-        Logger::Log(LogLevel::Info, "Output file: " + output_path);
+        Logger::Log(LogLevel::Info, "Output file: " + output_csv_file);
     }
 }
 
@@ -309,9 +310,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object.get()) };
 
         std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::string output_path{
-            FilePathHelper::EnsureTrailingSlash(m_options.folder_path) + file_name
-        };
+        std::string output_path{ m_options.folder_path.string() + file_name };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
