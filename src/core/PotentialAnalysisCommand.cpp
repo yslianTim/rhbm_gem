@@ -47,9 +47,11 @@ void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
     cmd->add_option("--simulation", m_options.is_simulation,
         "Simulation flag")->default_val(m_options.is_simulation);
     cmd->add_option("-r,--sim-resolution", m_options.resolution_simulation,
-        "Set simulated map's resolution (blurring width)")->default_val(m_options.resolution_simulation);
+        "Set simulated map's resolution (blurring width)")
+        ->default_val(m_options.resolution_simulation);
     cmd->add_option("-k,--save-key", m_options.saved_key_tag,
-        "New key tag for saving ModelObject results into database")->default_val(m_options.saved_key_tag);
+        "New key tag for saving ModelObject results into database")
+        ->default_val(m_options.saved_key_tag);
     cmd->add_option("--asymmetry", m_options.is_asymmetry,
         "Turn On/Off asymmetry flag")->default_val(m_options.is_asymmetry);
     cmd->add_option("-s,--sampling", m_options.sampling_size,
@@ -208,6 +210,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(ModelObject * model_object)
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
     {
         const auto & class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
         // Atom Classification
         std::unordered_set<uint64_t> group_key_set;
@@ -221,8 +224,11 @@ void PotentialAnalysisCommand::RunPotentialFitting(ModelObject * model_object)
         }
 
         // Group Potential Fitting
+        auto group_key_size{ group_key_set.size() };
+        size_t key_count{ 1 };
         for (const auto & group_key : group_key_set)
         {
+            Logger::ProgressBar(key_count, group_key_size);
             auto atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
             auto group_size{ atom_list.size() };
             std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
@@ -297,6 +303,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(ModelObject * model_object)
                 atom_entry->AddStatisticalDistance(class_key, model_estimator->GetStatisticalDistance(count));
                 count++;
             }
+            key_count++;
         }
         model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
     }

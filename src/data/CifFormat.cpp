@@ -392,28 +392,8 @@ void CifFormat::SaveAtomSiteData(
         auto position{ atom->GetPosition() };
         WriteAtomSiteBlock(
             atom, position, atom->GetIndicator(), atom->GetOccupancy(),
-            gaus_estimate, model_number, stream
+            static_cast<float>(gaus_estimate), model_number, stream
         );
-
-        /*
-        const auto & alt_pos_map{ atom->GetAlternatePositions() };
-        if (!alt_pos_map.empty())
-        {
-            const auto & alt_occ_map{ atom->GetAlternateOccupancies() };
-            const auto & alt_temp_map{ atom->GetAlternateTemperatures() };
-            for (const auto & [alt_id, alt_pos] : alt_pos_map)
-            {
-                float occ{ atom->GetOccupancy() };
-                auto occ_it{ alt_occ_map.find(alt_id) };
-                if (occ_it != alt_occ_map.end()) occ = occ_it->second;
-
-                float temp{ atom->GetTemperature() };
-                auto temp_it{ alt_temp_map.find(alt_id) };
-                if (temp_it != alt_temp_map.end()) temp = temp_it->second;
-
-                WriteAtomSiteBlock(atom, alt_pos, alt_id, occ, temp,model_number, stream);
-            }
-        }*/
     }
     stream << "#\n";
 }
