@@ -33,13 +33,11 @@ public:
     };
 
 private:
-    Options m_options{};
+    Options m_options;
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     std::unique_ptr<AtomSelector> m_atom_selector;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;
-    std::vector<std::shared_ptr<ModelObject>> m_ordered_model_object_list;
     std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;
-    std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ordered_ref_model_object_list_map;
 
 public:
     PotentialDisplayCommand(void);
@@ -55,20 +53,18 @@ public:
     void SetFolderPath(const std::filesystem::path & path) { m_options.SetFolderPath(path); }
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
-    void SetPickChainID(const std::string & value);
-    void SetPickResidueType(const std::string & value);
-    void SetPickElementType(const std::string & value);
-    void SetPickRemotenessType(const std::string & value);
-    void SetVetoChainID(const std::string & value);
-    void SetVetoResidueType(const std::string & value);
-    void SetVetoElementType(const std::string & value);
-    void SetVetoRemotenessType(const std::string & value);
+    void SetPickChainID(const std::string & value) { m_options.pick_chain_id = value; }
+    void SetVetoChainID(const std::string & value) { m_options.veto_chain_id = value; }
+    void SetPickResidueType(const std::string & value) { m_options.pick_residue = value; }
+    void SetVetoResidueType(const std::string & value) { m_options.veto_residue = value; }
+    void SetPickElementType(const std::string & value) { m_options.pick_element = value; }
+    void SetVetoElementType(const std::string & value) { m_options.veto_element = value; }
+    void SetPickRemotenessType(const std::string & value) { m_options.pick_remoteness = value; }
+    void SetVetoRemotenessType(const std::string & value) { m_options.veto_remoteness = value; }
 
 private:
-    void LoadModelObjects(DataObjectManager * data_manager);
-    void LoadRefModelObjects(DataObjectManager * data_manager);
-    void BuildOrderedModelObjectList(void);
-    void BuildOrderedRefModelObjectListMap(void);
+    bool BuildDataObject(void);
+    void RunDataObjectSelection(void);
     void RunDisplay(void);
 
 };

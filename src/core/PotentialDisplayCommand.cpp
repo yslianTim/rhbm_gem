@@ -11,6 +11,7 @@
 #include "StringHelper.hpp"
 #include "AtomSelector.hpp"
 #include "Logger.hpp"
+#include "ScopeTimer.hpp"
 #include "CommandRegistry.hpp"
 
 namespace {
@@ -20,7 +21,7 @@ CommandRegistrar<PotentialDisplayCommand> registrar_potential_display{
 }
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
-    CommandBase(),
+    CommandBase(), m_options{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::PotentialDisplayCommand() called");
@@ -48,7 +49,8 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
     cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
         "List of model key tag to be display")->required()->delimiter(',');
     cmd->add_option("-r,--ref-model-keylist", m_options.ref_model_key_tag_list,
-        "List of reference model key tag to be display")->default_val(m_options.ref_model_key_tag_list);
+        "List of reference model key tag to be display")
+        ->default_val(m_options.ref_model_key_tag_list);
     cmd->add_option("--pick-chain", m_options.pick_chain_id,
         "Pick chain ID")->default_val(m_options.pick_chain_id);
     cmd->add_option("--pick-residue", m_options.pick_residue,
@@ -70,69 +72,19 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 bool PotentialDisplayCommand::Execute(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::Execute() called");
-    try
-    {
-        SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
-        SetPickChainID(m_options.pick_chain_id);
-        SetPickResidueType(m_options.pick_residue);
-        SetPickElementType(m_options.pick_element);
-        SetPickRemotenessType(m_options.pick_remoteness);
-        SetVetoChainID(m_options.veto_chain_id);
-        SetVetoResidueType(m_options.veto_residue);
-        SetVetoElementType(m_options.veto_element);
-        SetVetoRemotenessType(m_options.veto_remoteness);
-        Logger::Log(LogLevel::Info, "Total number of model object sets to be display: "
-                    + std::to_string(m_options.model_key_tag_list.size()));
-
-        auto data_manager{ GetDataManagerPtr() };
-        data_manager->SetDatabaseManager(m_options.database_path);
-        LoadModelObjects(data_manager);
-        LoadRefModelObjects(data_manager);
-
-        for (auto & key : m_options.model_key_tag_list)
-        {
-            auto object{ data_manager->GetTypedDataObject<ModelObject>(key) };
-            m_model_object_list.emplace_back(object);
-        }
-
-        for (auto & [class_key, tag_list] : m_ref_model_key_tag_list_map)
-        {
-            for (auto & tag : tag_list)
-            {
-                auto object{ data_manager->GetTypedDataObject<ModelObject>(tag) };
-                m_ref_model_object_list_map[class_key].emplace_back(object);
-            }
-        }
-
-        for (const auto & model_object : m_model_object_list)
-        {
-            for (auto & atom : model_object->GetComponentsList())
-            {
-                bool selected_flag{
-                    m_atom_selector->GetSelectionFlag(
-                        atom->GetChainID(),
-                        atom->GetResidue(),
-                        atom->GetElement(),
-                        atom->GetRemoteness())
-                };
-                atom->SetSelectedFlag(selected_flag);
-            }
-        }
-        BuildOrderedModelObjectList();
-        BuildOrderedRefModelObjectListMap();
-        RunDisplay();
-    }
-    catch(const std::exception & e)
-    {
-        Logger::Log(LogLevel::Error, e.what());
-        return false;
-    }
+    if (BuildDataObject() == false) return false;
+    RunDataObjectSelection();
+    RunDisplay();
     return true;
 }
 
 bool PotentialDisplayCommand::ValidateOptions(void) const
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::ValidateOptions() called");
+    if (!FilePathHelper::EnsureFileExists(m_options.database_path, "Database file"))
+    {
+        return false;
+    }
     if (m_options.model_key_tag_list.empty())
     {
         Logger::Log(LogLevel::Error, "Model key list cannot be empty");
@@ -197,119 +149,92 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
     }
 }
 
-void PotentialDisplayCommand::LoadModelObjects(DataObjectManager * data_manager)
+bool PotentialDisplayCommand::BuildDataObject(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::LoadModelObjects() called");
-    for (auto & key : m_options.model_key_tag_list)
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::BuildDataObject() called");
+    ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
+    try
     {
-        data_manager->LoadDataObject(key);
-    }
-}
-
-void PotentialDisplayCommand::LoadRefModelObjects(DataObjectManager * data_manager)
-{
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::LoadRefModelObjects() called");
-    for (auto & [map_key, key_tag_list] : m_ref_model_key_tag_list_map)
-    {
-        for (auto & key_tag : key_tag_list)
+        SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
+        auto data_manager{ GetDataManagerPtr() };
+        data_manager->SetDatabaseManager(m_options.database_path);
+        auto model_size{ m_options.model_key_tag_list.size() };
+        size_t model_count{ 1 };
+        Logger::Log(LogLevel::Info, "Load model object list:");
+        for (auto & key : m_options.model_key_tag_list)
         {
-            data_manager->LoadDataObject(key_tag);
+            Logger::ProgressBar(model_count, model_size);
+            data_manager->LoadDataObject(key);
+            m_model_object_list.emplace_back(data_manager->GetTypedDataObject<ModelObject>(key));
+            model_count++;
         }
-    }
-}
-
-void PotentialDisplayCommand::SetPickChainID(const std::string & value)
-{
-    m_atom_selector->PickChainID(value);
-}
-
-void PotentialDisplayCommand::SetPickResidueType(const std::string & value)
-{
-    m_atom_selector->PickResidueType(value);
-}
-
-void PotentialDisplayCommand::SetPickElementType(const std::string & value)
-{
-    m_atom_selector->PickElementType(value);
-}
-
-void PotentialDisplayCommand::SetPickRemotenessType(const std::string & value)
-{
-    m_atom_selector->PickRemotenessType(value);
-}
-
-void PotentialDisplayCommand::SetVetoChainID(const std::string & value)
-{
-    m_atom_selector->VetoChainID(value);
-}
-
-void PotentialDisplayCommand::SetVetoResidueType(const std::string & value)
-{
-    m_atom_selector->VetoResidueType(value);
-}
-
-void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
-{
-    m_atom_selector->VetoElementType(value);
-}
-
-void PotentialDisplayCommand::SetVetoRemotenessType(const std::string & value)
-{
-    m_atom_selector->VetoRemotenessType(value);
-}
-
-void PotentialDisplayCommand::BuildOrderedModelObjectList(void)
-{
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::BuildOrderedModelObjectList() called");
-    m_ordered_model_object_list.clear();
-    for (const auto & key : m_options.model_key_tag_list)
-    {
-        for (const auto & model_object : m_model_object_list)
+        for (auto & [map_key, key_tag_list] : m_ref_model_key_tag_list_map)
         {
-            if (model_object->GetKeyTag() == key)
+            auto ref_model_size{ key_tag_list.size() };
+            size_t ref_model_count{ 1 };
+            Logger::Log(LogLevel::Info, "Load ["+ map_key +"] reference model object list:");
+            for (auto & key_tag : key_tag_list)
             {
-                m_ordered_model_object_list.emplace_back(model_object);
-                break;
+                Logger::ProgressBar(ref_model_count, ref_model_size);
+                data_manager->LoadDataObject(key_tag);
+                m_ref_model_object_list_map[map_key].emplace_back(
+                    data_manager->GetTypedDataObject<ModelObject>(key_tag)
+                );
+                ref_model_count++;
             }
         }
+        Logger::Log(LogLevel::Info,
+            "Total number of model object sets to be display: "
+            + std::to_string(m_options.model_key_tag_list.size()));
     }
+    catch(const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error,
+            "PotentialDisplayCommand::BuildDataObject : " + std::string(e.what()));
+        return false;
+    }
+    return true;
 }
 
-void PotentialDisplayCommand::BuildOrderedRefModelObjectListMap(void)
+void PotentialDisplayCommand::RunDataObjectSelection(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::BuildOrderedRefModelObjectListMap() called");
-    m_ordered_ref_model_object_list_map.clear();
-    for (auto & [class_key, ordered_key_list] : m_ref_model_key_tag_list_map)
-    {
-        auto it{ m_ref_model_object_list_map.find(class_key) };
-        if (it == m_ref_model_object_list_map.end()) continue;
-        auto & model_object_list{ it->second };
-        std::vector<std::shared_ptr<ModelObject>> ordered_model_object_list;
-        for (const auto & key : ordered_key_list)
-        {
-            for (const auto & model_object : model_object_list)
-            {
-                if (model_object->GetKeyTag() == key)
-                {
-                    ordered_model_object_list.emplace_back(model_object);
-                    break;
-                }
-            }
-        }
+    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RunDataObjectSelection() called");
+    ScopeTimer timer{ "PotentialDisplayCommand::RunDataObjectSelection" };
+    if (m_atom_selector == nullptr) return;
+    m_atom_selector->PickChainID(m_options.pick_chain_id);
+    m_atom_selector->PickResidueType(m_options.pick_residue);
+    m_atom_selector->PickElementType(m_options.pick_element);
+    m_atom_selector->PickRemotenessType(m_options.pick_remoteness);
+    m_atom_selector->VetoChainID(m_options.veto_chain_id);
+    m_atom_selector->VetoResidueType(m_options.veto_residue);
+    m_atom_selector->VetoElementType(m_options.veto_element);
+    m_atom_selector->VetoRemotenessType(m_options.veto_remoteness);
 
-        m_ordered_ref_model_object_list_map[class_key] = std::move(ordered_model_object_list);
+    for (const auto & model_object : m_model_object_list)
+    {
+        for (auto & atom : model_object->GetComponentsList())
+        {
+            atom->SetSelectedFlag(
+                m_atom_selector->GetSelectionFlag(
+                    atom->GetChainID(),
+                    atom->GetResidue(),
+                    atom->GetElement(),
+                    atom->GetRemoteness())
+            );
+        }
     }
 }
 
 void PotentialDisplayCommand::RunDisplay(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RunDisplay() called");
+    ScopeTimer timer{ "PotentialDisplayCommand::RunDisplay" };
     std::unique_ptr<PainterBase> painter{ nullptr };
     switch (m_options.painter_choice)
     {
         case PainterType::ATOM:
             painter = std::make_unique<AtomPainter>();
-            for (const auto & model_object : m_ordered_model_object_list)
+            for (const auto & model_object : m_model_object_list)
             {
                 for (auto & atom : model_object->GetComponentsList())
                 {
@@ -321,11 +246,11 @@ void PotentialDisplayCommand::RunDisplay(void)
             break;
         case PainterType::MODEL:
             painter = std::make_unique<ModelPainter>();
-            for (const auto & model_object : m_ordered_model_object_list)
+            for (const auto & model_object : m_model_object_list)
             {
                 painter->AddDataObject(model_object.get());
             }
-            for (auto & [class_key, model_object_list] : m_ordered_ref_model_object_list_map)
+            for (auto & [class_key, model_object_list] : m_ref_model_object_list_map)
             {
                 for (const auto & model_object : model_object_list)
                 {
@@ -335,11 +260,11 @@ void PotentialDisplayCommand::RunDisplay(void)
             break;
         case PainterType::COMPARISON:
             painter = std::make_unique<ComparisonPainter>();
-            for (const auto & model_object : m_ordered_model_object_list)
+            for (const auto & model_object : m_model_object_list)
             {
                 painter->AddDataObject(model_object.get());
             }
-            for (auto & [class_key, model_object_list] : m_ordered_ref_model_object_list_map)
+            for (auto & [class_key, model_object_list] : m_ref_model_object_list_map)
             {
                 for (const auto & model_object : model_object_list)
                 {
@@ -349,11 +274,11 @@ void PotentialDisplayCommand::RunDisplay(void)
             break;
         case PainterType::DEMO:
             painter = std::make_unique<DemoPainter>();
-            for (const auto & model_object : m_ordered_model_object_list)
+            for (const auto & model_object : m_model_object_list)
             {
                 painter->AddDataObject(model_object.get());
             }
-            for (auto & [class_key, model_object_list] : m_ordered_ref_model_object_list_map)
+            for (auto & [class_key, model_object_list] : m_ref_model_object_list_map)
             {
                 for (const auto & model_object : model_object_list)
                 {

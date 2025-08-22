@@ -76,6 +76,10 @@ bool PositionEstimationCommand::ValidateOptions(void) const
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::ValidateOptions() called");
 
+    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
+    {
+        return false;
+    }
     if (m_options.iteration_count <= 0)
     {
         Logger::Log(LogLevel::Error, "Iteration count must be positive");
@@ -99,10 +103,6 @@ bool PositionEstimationCommand::ValidateOptions(void) const
     if (m_options.thread_size <= 0)
     {
         Logger::Log(LogLevel::Error, "Thread size must be positive");
-        return false;
-    }
-    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
         return false;
     }
 
