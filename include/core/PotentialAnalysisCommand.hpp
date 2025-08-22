@@ -58,10 +58,10 @@ public:
     void SetModelFilePath(const std::filesystem::path & path) { m_options.model_file_path = path; }
     void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
     void SetSavedKeyTag(const std::string & tag) { m_options.saved_key_tag = tag; }
-    void SetThreadSize(int value);
-    void SetSamplingSize(int value);
-    void SetSamplingRangeMinimum(double value);
-    void SetSamplingRangeMaximum(double value);
+    void SetThreadSize(int value) { m_options.thread_size = value; }
+    void SetSamplingSize(int value) { m_options.sampling_size = value; }
+    void SetSamplingRangeMinimum(double value) { m_options.sampling_range_min = value; }
+    void SetSamplingRangeMaximum(double value) { m_options.sampling_range_max = value; }
 
 private:
     bool BuildDataObject(void);

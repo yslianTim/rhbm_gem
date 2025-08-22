@@ -111,30 +111,6 @@ bool PotentialAnalysisCommand::ValidateOptions(void) const
     return true;
 }
 
-void PotentialAnalysisCommand::SetThreadSize(int value)
-{
-    m_options.thread_size = value;
-    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(value));
-}
-
-void PotentialAnalysisCommand::SetSamplingSize(int value)
-{
-    m_options.sampling_size = value;
-    m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(value));
-}
-
-void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)
-{
-    m_options.sampling_range_min = value;
-    m_sphere_sampler->SetDistanceRangeMinimum(value);
-}
-
-void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
-{
-    m_options.sampling_range_max = value;
-    m_sphere_sampler->SetDistanceRangeMaximum(value);
-}
-
 bool PotentialAnalysisCommand::BuildDataObject(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::BuildDataObject() called");
