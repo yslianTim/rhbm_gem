@@ -35,6 +35,7 @@ private:
     std::vector<AtomObject *> m_selected_atom_list;
     std::unordered_map<int, double> m_atom_charge_map;
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
+    std::shared_ptr<ModelObject> m_model_object;
     std::array<float, 3> m_atom_range_minimum, m_atom_range_maximum;
 
 public:
@@ -57,7 +58,8 @@ public:
     void SetBlurringWidthList(const std::string & value);
 
 private:
-    void RunMapSimulation(ModelObject * model_object);
+    bool BuildDataObject(void);
+    void RunMapSimulation(void);
     void BuildAtomList(ModelObject * model_object);
     double CalculateAtomCharge(AtomObject * atom) const;
     void CalculateAtomRange(void);

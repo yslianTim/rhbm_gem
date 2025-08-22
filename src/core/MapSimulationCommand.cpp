@@ -25,7 +25,7 @@ CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
 
 MapSimulationCommand::MapSimulationCommand(void) :
     CommandBase(), m_options{}, m_selected_atom_list{}, m_atom_charge_map{},
-    m_kd_tree_root{ nullptr },
+    m_kd_tree_root{ nullptr }, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),
         std::numeric_limits<float>::max(),
@@ -75,28 +75,16 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
     cmd->add_option("-g,--grid-spacing", m_options.grid_spacing,
         "Grid spacing")->default_val(m_options.grid_spacing);
     cmd->add_option("--blurring-width", m_options.blurring_width_list,
-        "Blurring width (list) setting")->default_val(m_options.blurring_width_list)->delimiter(',');
+        "Blurring width (list) setting")
+        ->default_val(m_options.blurring_width_list)->delimiter(',');
 }
 
 bool MapSimulationCommand::Execute(void)
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::Execute() called");
-    try
-    {
-        Logger::Log(LogLevel::Info, "Total number of blurring width sets to be simulated: "
-                    + std::to_string(m_options.blurring_width_list.size()));
-
-        auto data_manager{ GetDataManagerPtr() };
-        data_manager->ProcessFile(m_options.model_file_path, "model");
-
-        auto model_object{ data_manager->GetTypedDataObject<ModelObject>("model") };
-        RunMapSimulation(model_object.get());
-    }
-    catch(const std::exception & e)
-    {
-        Logger::Log(LogLevel::Error, "MapSimulationCommand::Execute() : " + std::string(e.what()));
-        return false;
-    }
+    if (BuildDataObject() == false) return false;
+    CalculateAtomRange();
+    RunMapSimulation();
     return true;
 }
 
@@ -133,16 +121,39 @@ void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
     m_options.blurring_width_list = StringHelper::ParseListOption<double>(value, ',');
 }
 
-void MapSimulationCommand::RunMapSimulation(ModelObject * model_object)
+bool MapSimulationCommand::BuildDataObject(void)
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::BuildDataObject() called");
+    ScopeTimer timer("MapSimulationCommand::BuildDataObject");
+    try
+    {
+        auto data_manager{ GetDataManagerPtr() };
+        data_manager->ProcessFile(m_options.model_file_path, "model");
+        m_model_object = data_manager->GetTypedDataObject<ModelObject>("model");
+        BuildAtomList(m_model_object.get());
+    }
+    catch(const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error,
+            "MapSimulationCommand::BuildDataObject : " + std::string(e.what()));
+        return false;
+    }
+    return true;
+}
+
+void MapSimulationCommand::RunMapSimulation(void)
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::RunMapSimulation() called");
     ScopeTimer timer("MapSimulationCommand::RunMapSimulation");
-    BuildAtomList(model_object);
-    CalculateAtomRange();
+    
+    Logger::Log(LogLevel::Info,
+        "Total number of blurring width sets to be simulated: "
+        + std::to_string(m_options.blurring_width_list.size()));
+    
     for (auto & blurring_width : m_options.blurring_width_list)
     {
         auto map_key_tag{
-            model_object->GetPdbID() + "_bw" +
+            m_model_object->GetPdbID() + "_bw" +
             StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
         };
         auto map_object{ CreateSimulatedMapObject(blurring_width) };
@@ -242,8 +253,8 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateSimulatedMapObject(double
 {
     ScopeTimer timer("MapSimulationCommand::CreateSimulatedMapObject");
     Logger::Log(LogLevel::Info,
-                std::string("  - Create simulated map object with blurring width = ") +
-                StringHelper::ToStringWithPrecision<double>(blurring_width, 2));
+        std::string("  - Create simulated map object with blurring width = ") +
+        StringHelper::ToStringWithPrecision<double>(blurring_width, 2));
 
     auto electric_potential{ std::make_unique<ElectricPotential>() };
     electric_potential->SetBlurringWidth(blurring_width);
