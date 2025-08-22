@@ -27,8 +27,10 @@ public:
 private:
     Options m_options;
     std::vector<VoxelNode> m_selected_voxel_list;
+    std::vector<VoxelNode> m_query_point_list;
     std::vector<std::array<float, 3>> m_position_list;
     std::unique_ptr<KDNode<VoxelNode>> m_kd_tree_root;
+    std::shared_ptr<MapObject> m_map_object;
 
 public:
     PositionEstimationCommand(void);
@@ -49,10 +51,11 @@ public:
     void SetThresholdRatio(double value) { m_options.threshold_ratio = static_cast<float>(value); }
 
 private:
-    void RunMapValueConvergence(const MapObject * map_object);
-    bool BuildVoxelList(const MapObject * map_object);
-    void UpdatePointList(std::vector<VoxelNode> & query_point_list);
-    void BuildUniquePointList(const std::vector<VoxelNode> & point_list);
+    bool BuildDataObject(void);
+    bool BuildVoxelList(void);
+    void RunMapValueConvergence(void);
+    void UpdatePointList(void);
+    void RunUniquePointList(void);
     void OutputPointList(void) const;
 
 };

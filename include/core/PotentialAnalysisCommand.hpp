@@ -32,7 +32,7 @@ public:
     };
 
 private:
-    Options m_options{};
+    Options m_options;
     std::string m_model_key_tag, m_map_key_tag;
     std::unique_ptr<SphereSampler> m_sphere_sampler;
     std::shared_ptr<MapObject> m_map_object;

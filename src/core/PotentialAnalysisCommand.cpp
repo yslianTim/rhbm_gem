@@ -26,7 +26,7 @@ CommandRegistrar<PotentialAnalysisCommand> registrar_potential_analysis{
 }
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
-    CommandBase(), m_model_key_tag{"model"}, m_map_key_tag{"map"},
+    CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
     m_sphere_sampler{ std::make_unique<SphereSampler>() },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
