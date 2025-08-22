@@ -33,7 +33,10 @@ public:
 
 private:
     Options m_options{};
+    std::string m_model_key_tag, m_map_key_tag;
     std::unique_ptr<SphereSampler> m_sphere_sampler;
+    std::shared_ptr<MapObject> m_map_object;
+    std::shared_ptr<ModelObject> m_model_object;
 
 public:
     PotentialAnalysisCommand(void);
@@ -61,8 +64,11 @@ public:
     void SetSamplingRangeMaximum(double value);
 
 private:
+    bool BuildDataObject(void);
     void UpdateModelObjectForSimulation(ModelObject * model_object);
-    void RunMapValueSampling(ModelObject * model_object, MapObject * map_object);
-    void RunPotentialFitting(ModelObject * model_object);
+    void RunMapObjectPreprocessing(void);
+    void RunModelObjectPreprocessing(void);
+    void RunMapValueSampling(void);
+    void RunPotentialFitting(void);
 
 };

@@ -26,8 +26,9 @@ CommandRegistrar<PotentialAnalysisCommand> registrar_potential_analysis{
 }
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
-    CommandBase(),
-    m_sphere_sampler{ std::make_unique<SphereSampler>() }
+    CommandBase(), m_model_key_tag{"model"}, m_map_key_tag{"map"},
+    m_sphere_sampler{ std::make_unique<SphereSampler>() },
+    m_map_object{ nullptr }, m_model_object{ nullptr }
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::PotentialAnalysisCommand() called.");
 }
@@ -73,45 +74,11 @@ void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 bool PotentialAnalysisCommand::Execute(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::Execute() called.");
-
-    auto data_manager{ GetDataManagerPtr() };
-    data_manager->SetDatabaseManager(m_options.database_path);
-    try
-    {
-        data_manager->ProcessFile(m_options.model_file_path, "model");
-        data_manager->ProcessFile(m_options.map_file_path, "map");
-        if (m_options.is_simulation == true)
-        {
-            auto model_object{ data_manager->GetTypedDataObject<ModelObject>("model") };
-            UpdateModelObjectForSimulation(model_object.get());
-        }
-    }
-    catch (const std::exception & e)
-    {
-        Logger::Log(LogLevel::Error,
-            "PotentialAnalysisCommand::Execute() : " + std::string(e.what()));
-        return false;
-    }
-
-    auto model_object{ data_manager->GetTypedDataObject<ModelObject>("model") };
-    auto map_object{ data_manager->GetTypedDataObject<MapObject>("map") };
-    map_object->MapValueArrayNormalization();
-    for (auto & atom : model_object->GetComponentsList())
-    {
-        atom->SetSelectedFlag(true);
-    }
-    model_object->FilterAtomFromSymmetry(m_options.is_asymmetry);
-    model_object->Update();
-    for (auto & atom : model_object->GetSelectedAtomList())
-    {
-        auto atom_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
-        atom->AddAtomicPotentialEntry(std::move(atom_potential_entry));
-    }
-    Logger::Log(LogLevel::Info, "Number of selected atom = "
-                + std::to_string(model_object->GetNumberOfSelectedAtom()));
-    RunMapValueSampling(model_object.get(), map_object.get());
-    RunPotentialFitting(model_object.get());
-    data_manager->SaveDataObject("model", m_options.saved_key_tag);
+    if (BuildDataObject() == false) return false;
+    RunMapObjectPreprocessing();
+    RunModelObjectPreprocessing();
+    RunMapValueSampling();
+    RunPotentialFitting();
     return true;
 }
 
@@ -168,6 +135,31 @@ void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
     m_sphere_sampler->SetDistanceRangeMaximum(value);
 }
 
+bool PotentialAnalysisCommand::BuildDataObject(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::BuildDataObject() called");
+    ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
+    auto data_manager{ GetDataManagerPtr() };
+    data_manager->SetDatabaseManager(m_options.database_path);
+    try
+    {
+        data_manager->ProcessFile(m_options.model_file_path, m_model_key_tag);
+        data_manager->ProcessFile(m_options.map_file_path, m_map_key_tag);
+        if (m_options.is_simulation == true)
+        {
+            auto model_object{ data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag) };
+            UpdateModelObjectForSimulation(model_object.get());
+        }
+    }
+    catch (const std::exception & e)
+    {
+        Logger::Log(LogLevel::Error,
+            "PotentialAnalysisCommand::Execute() : " + std::string(e.what()));
+        return false;
+    }
+    return true;
+}
+
 void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * model_object)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::UpdateModelObjectForSimulation() called");
@@ -184,29 +176,66 @@ void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * mode
     model_object->SetResolutionMethod("Blurring Width");
 }
 
-void PotentialAnalysisCommand::RunMapValueSampling(ModelObject * model_object, MapObject * map_object)
+void PotentialAnalysisCommand::RunMapObjectPreprocessing(void)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunMapValueSampling() called");
-    if (map_object == nullptr) return;
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunMapObjectPreprocessing() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
+    auto data_manager{ GetDataManagerPtr() };
+    m_map_object = data_manager->GetTypedDataObject<MapObject>(m_map_key_tag);
+    m_map_object->MapValueArrayNormalization();
+}
+
+void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunModelObjectPreprocessing() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
+    auto data_manager{ GetDataManagerPtr() };
+    m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
+    for (auto & atom : m_model_object->GetComponentsList())
+    {
+        atom->SetSelectedFlag(true);
+    }
+    m_model_object->FilterAtomFromSymmetry(m_options.is_asymmetry);
+    m_model_object->Update();
+    for (auto & atom : m_model_object->GetSelectedAtomList())
+    {
+        auto atom_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        atom->AddAtomicPotentialEntry(std::move(atom_potential_entry));
+    }
+    Logger::Log(LogLevel::Info,
+        "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
+}
+
+void PotentialAnalysisCommand::RunMapValueSampling(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunMapValueSampling() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunMapValueSampling");
+    if (m_map_object == nullptr || m_sphere_sampler == nullptr) return;
     m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
     m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
     m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
     m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
     m_sphere_sampler->Print();
     MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
-    for (auto & atom : model_object->GetSelectedAtomList())
+    
+    auto atom_size{ m_model_object->GetNumberOfSelectedAtom() };
+    size_t atom_count{ 1 };
+    for (auto & atom : m_model_object->GetSelectedAtomList())
     {
+        Logger::ProgressBar(atom_count, atom_size);
         auto entry{ atom->GetAtomicPotentialEntry() };
         interpolation_visitor.SetPosition(atom->GetPosition());
-        map_object->Accept(&interpolation_visitor);
+        m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+        atom_count++;
     }
 }
 
-void PotentialAnalysisCommand::RunPotentialFitting(ModelObject * model_object)
+void PotentialAnalysisCommand::RunPotentialFitting(void)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunPotentialFitting() called");
-    if (model_object == nullptr) return;
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunPotentialFitting() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunPotentialFitting");
+    if (m_model_object == nullptr) return;
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
     {
         const auto & class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
@@ -215,7 +244,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(ModelObject * model_object)
         // Atom Classification
         std::unordered_set<uint64_t> group_key_set;
         auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
-        for (auto atom : model_object->GetSelectedAtomList())
+        for (auto atom : m_model_object->GetSelectedAtomList())
         {
             auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
             group_potential_entry->AddAtomObjectPtr(group_key, atom);
@@ -305,6 +334,9 @@ void PotentialAnalysisCommand::RunPotentialFitting(ModelObject * model_object)
             }
             key_count++;
         }
-        model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
+        m_model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
     }
+
+    auto data_manager{ GetDataManagerPtr() };
+    data_manager->SaveDataObject(m_model_key_tag, m_options.saved_key_tag);
 }

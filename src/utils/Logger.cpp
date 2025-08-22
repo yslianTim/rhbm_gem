@@ -72,6 +72,7 @@ void Logger::Log(LogLevel level, const char * message)
 
 void Logger::ProgressBar(std::size_t current, std::size_t total, std::size_t bar_width)
 {
+    if (m_current_level.load() < LogLevel::Info) return;
     if (total == 0) return;
     auto ratio{ static_cast<double>(current) / static_cast<double>(total) };
     auto pos{ static_cast<std::size_t>(ratio * static_cast<double>(bar_width)) };

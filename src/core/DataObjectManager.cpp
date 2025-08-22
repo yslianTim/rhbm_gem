@@ -5,7 +5,6 @@
 #include "DataObjectBase.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "DatabaseManager.hpp"
-#include "ScopeTimer.hpp"
 #include "Logger.hpp"
 
 #include <utility>
@@ -44,7 +43,6 @@ void DataObjectManager::ProcessFile(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::ProcessFile() called");
-    ScopeTimer timer("DataObjectManager::ProcessFile");
     try
     {
         auto extension{ FilePathHelper::GetExtension(filename) };
@@ -70,7 +68,6 @@ void DataObjectManager::ProduceFile(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::ProduceFile() called");
-    ScopeTimer timer("DataObjectManager::ProduceFile");
     if (HasDataObject(key_tag) == false)
     {
         Logger::Log(LogLevel::Warning,
@@ -113,7 +110,6 @@ bool DataObjectManager::HasDataObject(const std::string & key_tag) const
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::LoadDataObject() called");
-    ScopeTimer timer("DataObjectManager::LoadDataObject");
     std::unique_ptr<DataObjectBase> data_object;
     {
         std::lock_guard<std::mutex> lock(m_db_mutex);
@@ -144,7 +140,6 @@ void DataObjectManager::SaveDataObject(
     const std::string & key_tag, const std::string & renamed_key_tag) const
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::SaveDataObject() called");
-    ScopeTimer timer("DataObjectManager::SaveDataObject");
     std::lock_guard<std::mutex> db_lock(m_db_mutex);
     if (m_db_manager == nullptr)
     {
@@ -187,7 +182,6 @@ void DataObjectManager::Accept(
     DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list)
 {
     Logger::Log(LogLevel::Debug, "DataObjectManager::Accept() called");
-    ScopeTimer timer("DataObjectManager::Accept");
     std::vector<DataObjectBase *> data_object_list;
     {
         std::lock_guard<std::mutex> lock(m_map_mutex);

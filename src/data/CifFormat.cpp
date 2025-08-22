@@ -329,7 +329,8 @@ void CifFormat::LoadAtomSiteData(std::ifstream & infile)
             {
                 if (last_atom_object == nullptr)
                 {
-                    Logger::Log(LogLevel::Error, "CifFormat::LoadAtomSiteData() atom_object is missing.");
+                    Logger::Log(LogLevel::Error,
+                        "CifFormat::LoadAtomSiteData() atom_object is missing.");
                     return;
                 }
                 last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});
