@@ -60,9 +60,35 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 bool ResultDumpCommand::Execute(void)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::Execute() called");
-    Logger::Log(LogLevel::Info, "Total number of model object sets to be print: "
-                + std::to_string(m_options.model_key_tag_list.size()));
+    if (BuildDataObjectList() == false) return false;
+    RunResultDump();
+    return true;
+}
 
+bool ResultDumpCommand::ValidateOptions(void) const
+{
+    Logger::Log(LogLevel::Debug, "ResultDumpCommand::ValidateOptions() called");
+    if (m_options.model_key_tag_list.empty())
+    {
+        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
+        return false;
+    }
+    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
+    {
+        return false;
+    }
+    return true;
+}
+
+void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
+{
+    m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+}
+
+bool ResultDumpCommand::BuildDataObjectList(void)
+{
+    Logger::Log(LogLevel::Debug, "ResultDumpCommand::BuildDataObjectList() called");
+    ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
     try
@@ -70,29 +96,40 @@ bool ResultDumpCommand::Execute(void)
         if (!m_options.map_file_path.empty())
         {
             data_manager->ProcessFile(m_options.map_file_path, "map");
+            m_map_object = data_manager->GetTypedDataObject<MapObject>("map");
         }
+        m_selected_atom_list_map.clear();
         for (auto & key : m_options.model_key_tag_list)
         {
             data_manager->LoadDataObject(key);
+            auto model_object{ data_manager->GetTypedDataObject<ModelObject>(key) };
+            m_model_object_list.emplace_back(model_object);
+            for (auto & atom : model_object->GetComponentsList())
+            {
+                if (atom->GetAtomicPotentialEntry() == nullptr) continue;
+                m_selected_atom_list_map[key].emplace_back(atom.get());
+            }
+            Logger::Log(LogLevel::Info,
+                "Selected atoms for key tag [" + key + "]: "
+                + std::to_string(m_selected_atom_list_map[key].size()));
         }
     }
     catch (const std::exception & e)
     {
-        Logger::Log(LogLevel::Error, "ResultDumpCommand::Execute() : " + std::string(e.what()));
+        Logger::Log(LogLevel::Error,
+            "ResultDumpCommand::BuildDataObjectList : " + std::string(e.what()));
         return false;
     }
+    return true;
+}
 
-    for (auto & key : m_options.model_key_tag_list)
-    {
-        auto object{ data_manager->GetTypedDataObject<ModelObject>(key) };
-        m_model_object_list.emplace_back(object);
-    }
-    if (!m_options.map_file_path.empty())
-    {
-        m_map_object = data_manager->GetTypedDataObject<MapObject>("map");
-    }
-
-    BuildSelectedAtomList();
+void ResultDumpCommand::RunResultDump(void)
+{
+    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunResultDump() called");
+    ScopeTimer timer("ResultDumpCommand::RunResultDump");
+    Logger::Log(LogLevel::Info,
+        "Total number of model object sets to be dump: "
+        + std::to_string(m_options.model_key_tag_list.size()));
     switch (m_options.printer_choice)
     {
         case PrinterType::ATOM_POSITION:
@@ -116,52 +153,11 @@ bool ResultDumpCommand::Execute(void)
                         "  [2] GausEstimatesDumping");
             break;
     }
-    return true;
-}
-
-bool ResultDumpCommand::ValidateOptions(void) const
-{
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::ValidateOptions() called");
-    if (m_options.model_key_tag_list.empty())
-    {
-        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
-        return false;
-    }
-    if (!m_options.map_file_path.empty() &&
-        !FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
-        return false;
-    }
-    return true;
-}
-
-void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
-{
-    m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-}
-
-void ResultDumpCommand::BuildSelectedAtomList(void)
-{
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::BuildSelectedAtomList() called");
-    m_selected_atom_list_map.clear();
-    for (const auto & model_object : m_model_object_list)
-    {
-        auto key_tag{ model_object->GetKeyTag() };
-        for (auto & atom : model_object->GetComponentsList())
-        {
-            if (atom->GetAtomicPotentialEntry() == nullptr) continue;
-            m_selected_atom_list_map[key_tag].emplace_back(atom.get());
-        }
-        Logger::Log(LogLevel::Info,
-                    "Selected atoms for key tag [" + key_tag + "]: "
-                    + std::to_string(m_selected_atom_list_map[key_tag].size()));
-    }
 }
 
 void ResultDumpCommand::RunAtomPositionDumping(void)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunAtomPositionDumping() called");
-    ScopeTimer timer("ResultDumpVisitor::RunAtomPositionDumping");
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -195,7 +191,6 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
 void ResultDumpCommand::RunMapValueDumping(void)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunMapValueDumping() called");
-    ScopeTimer timer("ResultDumpVisitor::RunMapValueDumping");
     if (m_map_object == nullptr)
     {
         Logger::Log(LogLevel::Error, "Please give the path of map file via -m option.");
@@ -264,7 +259,6 @@ void ResultDumpCommand::RunMapValueDumping(void)
 void ResultDumpCommand::RunGausEstimatesDumping(void)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunGausEstimatesDumping() called");
-    ScopeTimer timer("ResultDumpCommand::RunGausEstimatesDumping");
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -321,7 +315,6 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
 void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunGroupGausEstimatesDumping() called");
-    ScopeTimer timer("ResultDumpCommand::RunGroupGausEstimatesDumping");
 
     auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
 

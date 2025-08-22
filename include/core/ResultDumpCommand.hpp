@@ -47,7 +47,8 @@ public:
     void SetModelKeyTagList(const std::string & value);
 
 private:
-    void BuildSelectedAtomList(void);
+    bool BuildDataObjectList(void);
+    void RunResultDump(void);
     void RunAtomPositionDumping(void);
     void RunMapValueDumping(void);
     void RunGausEstimatesDumping(void);
