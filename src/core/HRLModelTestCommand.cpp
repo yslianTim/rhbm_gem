@@ -31,9 +31,10 @@ void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         {"3", TesterType::MODEL_ALPHA_DATA},  {"alpha_data",     TesterType::MODEL_ALPHA_DATA},
         {"4", TesterType::MODEL_ALPHA_MEMBER},{"alpha_member",   TesterType::MODEL_ALPHA_MEMBER}
     };
-    cmd->add_option("-t,--tester", m_options.tester_choice,
-        "Tester choice")
-        ->required()
+    cmd->add_option_function<TesterType>("-t,--tester",
+        [&](TesterType value) { SetTesterChoice(value); },
+        "Tester option")
+        ->default_val(TesterType::DATA_OUTLIER)
         ->transform(CLI::CheckedTransformer(tester_map, CLI::ignore_case));
     cmd->add_option_function<double>("--fit-min",
         [&](double value) { SetFitRangeMinimum(value); },

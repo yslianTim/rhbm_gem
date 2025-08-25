@@ -43,9 +43,9 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         {"2", PainterType::COMPARISON}, {"comparison", PainterType::COMPARISON},
         {"3", PainterType::DEMO},       {"demo",       PainterType::DEMO}
     };
-    cmd->add_option("-p,--painter", m_options.painter_choice,
-        "Painter choice")
-        ->required()
+    cmd->add_option_function<PainterType>("-p,--painter",
+        [&](PainterType value) { SetPainterChoice(value); },
+        "Painter choice")->required()
         ->transform(CLI::CheckedTransformer(painter_map, CLI::ignore_case));
     cmd->add_option_function<std::string>("-k,--model-keylist",
         [&](const std::string & value) { SetModelKeyTagList(value); },

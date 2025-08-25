@@ -58,8 +58,10 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         {"1", PotentialModel::FIVE_GAUS_CHARGE}, {"five",   PotentialModel::FIVE_GAUS_CHARGE},
         {"2", PotentialModel::SINGLE_GAUS_USER}, {"user",   PotentialModel::SINGLE_GAUS_USER}
     };
-    cmd->add_option("--potential-model", m_options.potential_model_choice,
-        "Atomic potential model option")->default_val("1")
+    cmd->add_option_function<PotentialModel>("--potential-model",
+        [&](PotentialModel value) { SetPotentialModelChoice(value); },
+        "Atomic potential model option")
+        ->default_val(PotentialModel::FIVE_GAUS_CHARGE)
         ->transform(CLI::CheckedTransformer(model_map, CLI::ignore_case));
     std::map<std::string, PartialCharge> charge_map
     {
@@ -67,8 +69,10 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         {"1", PartialCharge::PARTIAL}, {"partial", PartialCharge::PARTIAL},
         {"2", PartialCharge::AMBER},   {"amber",   PartialCharge::AMBER}
     };
-    cmd->add_option("--charge", m_options.partial_charge_choice,
-        "Partial charge table option")->default_val("1")
+    cmd->add_option_function<PartialCharge>("--charge",
+        [&](PartialCharge value) { SetPartialChargeChoice(value); },
+        "Partial charge table option")
+        ->default_val(PartialCharge::PARTIAL)
         ->transform(CLI::CheckedTransformer(charge_map, CLI::ignore_case));
     cmd->add_option_function<double>("-c,--cut-off",
         [&](double value) { SetCutoffDistance(value); },

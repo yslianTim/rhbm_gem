@@ -47,9 +47,9 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         {"1", PrinterType::MAP_VALUE},      {"map",  PrinterType::MAP_VALUE},
         {"2", PrinterType::GAUS_ESTIMATES}, {"gaus", PrinterType::GAUS_ESTIMATES}
     };
-    cmd->add_option("-p,--printer", m_options.printer_choice,
-        "Printer choice")
-        ->required()
+    cmd->add_option_function<PrinterType>("-p,--printer",
+        [&](PrinterType value) { SetPrinterChoice(value); },
+        "Printer choice")->required()
         ->transform(CLI::CheckedTransformer(printer_map, CLI::ignore_case));
     cmd->add_option_function<std::string>("-k,--model-keylist",
         [&](const std::string & value) { SetModelKeyTagList(value); },
