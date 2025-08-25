@@ -65,6 +65,18 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     }
 }
 
+void HRLModelHelper::SetThreadSize(int thread_size)
+{
+    if (thread_size <= 0)
+    {
+        Logger::Log(LogLevel::Warning,
+            "thread_size must be positive value, resetting to 1");
+        thread_size = 1;
+    }
+    Eigen::setNbThreads(thread_size);
+    Logger::Log(LogLevel::Debug, "Thread size = " + std::to_string(Eigen::nbThreads()));
+}
+
 void HRLModelHelper::SetDataArray(
     const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array)
 {
@@ -77,8 +89,6 @@ void HRLModelHelper::SetDataArray(
     {
         throw std::invalid_argument("The input size of data list isn't consistent with member size.");
     }
-    //Eigen::setNbThreads(1);
-    //Logger::Log(LogLevel::Info, "Thread size = " + std::to_string(Eigen::nbThreads()));
 
     // Build new data structures locally so existing member data remains
     // untouched if validation fails midway through the process.
