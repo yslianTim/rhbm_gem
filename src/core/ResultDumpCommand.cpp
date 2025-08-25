@@ -53,7 +53,7 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         ->transform(CLI::CheckedTransformer(printer_map, CLI::ignore_case));
     cmd->add_option_function<std::string>("-k,--model-keylist",
         [&](const std::string & value) { SetModelKeyTagList(value); },
-        "List of model key tag to be display")->required()->delimiter(',');
+        "List of model key tag to be display")->required();
     cmd->add_option_function<std::string>("-m,--map",
         [&](const std::string & value) { SetMapFilePath(value); },
         "Map file path")->default_val(m_options.map_file_path.string());
