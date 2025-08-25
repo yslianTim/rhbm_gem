@@ -7,8 +7,8 @@
 
 void CommandBase::RegisterCLIOptions(CLI::App * command)
 {
-    RegisterCLIOptionsExtend(command);
     RegisterCLIOptionsBasic(command);
+    RegisterCLIOptionsExtend(command);
 }
 
 DataObjectManager * CommandBase::GetDataManagerPtr(void)

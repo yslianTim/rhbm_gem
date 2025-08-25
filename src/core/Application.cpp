@@ -27,7 +27,7 @@ void Application::RegisterAllCommands(void)
 void Application::RegisterCommand(
     const std::string & name,
     const std::string & description,
-    CommandRegistry::FactoryFunc factory)
+    std::function<std::unique_ptr<CommandBase>()> factory)
 {
     Logger::Log(LogLevel::Debug, "Application::RegisterCommand() called");
     auto command_object{ factory() };

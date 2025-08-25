@@ -10,12 +10,11 @@ class CommandBase;
 class CommandRegistry
 {
 public:
-    using FactoryFunc = std::function<std::unique_ptr<CommandBase>()>;
     struct CommandInfo
     {
         std::string name;
         std::string description;
-        FactoryFunc factory;
+        std::function<std::unique_ptr<CommandBase>()> factory;
     };
 
     static CommandRegistry & Instance(void);
@@ -23,7 +22,7 @@ public:
     bool RegisterCommand(
         const std::string & name,
         const std::string & description,
-        FactoryFunc factory
+        std::function<std::unique_ptr<CommandBase>()> factory
     );
 
     const std::unordered_map<std::string, CommandInfo> &

@@ -18,7 +18,9 @@ public:
 
 private:
     void RegisterAllCommands(void);
-    void RegisterCommand(const std::string & name, const std::string & description,
-                         CommandRegistry::FactoryFunc factory);
+    void RegisterCommand(
+        const std::string & name,
+        const std::string & description,
+        std::function<std::unique_ptr<CommandBase>()> factory);
 
 };

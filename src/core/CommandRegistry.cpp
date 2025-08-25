@@ -11,7 +11,7 @@ CommandRegistry & CommandRegistry::Instance(void)
 bool CommandRegistry::RegisterCommand(
     const std::string & name,
     const std::string & description,
-    FactoryFunc factory)
+    std::function<std::unique_ptr<CommandBase>()> factory)
 {
     if (m_commands.find(name) != m_commands.end())
     {
