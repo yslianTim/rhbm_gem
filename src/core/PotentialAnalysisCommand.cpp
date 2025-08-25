@@ -18,6 +18,8 @@
 
 #include <unordered_set>
 #include <tuple>
+#include <vector>
+#include <atomic>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -309,11 +311,16 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
         }
 
         // Group Potential Fitting
-        auto group_key_size{ group_key_set.size() };
-        size_t key_count{ 1 };
-        for (const auto & group_key : group_key_set)
+        std::vector<uint64_t> group_keys(group_key_set.begin(), group_key_set.end());
+        auto group_key_size{ group_keys.size() };
+        std::atomic<size_t> key_count{ 0 };
+
+#ifdef USE_OPENMP
+        #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+        for (size_t idx = 0; idx < group_key_size; ++idx)
         {
-            Logger::ProgressBar(key_count, group_key_size);
+            auto group_key{ group_keys[idx] };
             auto atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
             auto group_size{ atom_list.size() };
             std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
@@ -343,16 +350,10 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
             auto gaus_group_mean{
                 GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMean())
             };
-            group_potential_entry->AddGausEstimateMean(
-                group_key, gaus_group_mean(0), gaus_group_mean(1)
-            );
 
             auto gaus_group_mdpde{
                 GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMDPDE())
             };
-            group_potential_entry->AddGausEstimateMDPDE(
-                group_key, gaus_group_mdpde(0), gaus_group_mdpde(1)
-            );
 
             auto gaus_prior{
                 GausLinearTransformHelper::BuildGausModelWithVariance(
@@ -360,8 +361,6 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
             };
             auto prior_estimate{ std::get<0>(gaus_prior) };
             auto prior_variance{ std::get<1>(gaus_prior) };
-            group_potential_entry->AddGausEstimatePrior(group_key, prior_estimate(0), prior_estimate(1));
-            group_potential_entry->AddGausVariancePrior(group_key, prior_variance(0), prior_variance(1));
 
             auto count{ 0 };
             for (auto atom : atom_list)
@@ -389,7 +388,26 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
                 atom_entry->AddStatisticalDistance(class_key, model_estimator->GetStatisticalDistance(count));
                 count++;
             }
-            key_count++;
+            
+#ifdef USE_OPENMP
+            #pragma omp critical
+#endif
+            {
+                group_potential_entry->AddGausEstimateMean(
+                    group_key, gaus_group_mean(0), gaus_group_mean(1)
+                );
+                group_potential_entry->AddGausEstimateMDPDE(
+                    group_key, gaus_group_mdpde(0), gaus_group_mdpde(1)
+                );
+                group_potential_entry->AddGausEstimatePrior(
+                    group_key, prior_estimate(0), prior_estimate(1)
+                );
+                group_potential_entry->AddGausVariancePrior(
+                    group_key, prior_variance(0), prior_variance(1)
+                );
+                key_count++;
+                Logger::ProgressBar(key_count, group_key_size);
+            }
         }
         m_model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
     }
