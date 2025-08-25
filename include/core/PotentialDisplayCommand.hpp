@@ -50,7 +50,6 @@ public:
 
     void SetPainterChoice(PainterType value) { m_options.painter_choice = value; }
     void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }
-    void SetFolderPath(const std::filesystem::path & path) { m_options.SetFolderPath(path); }
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
     void SetPickChainID(const std::string & value) { m_options.pick_chain_id = value; }

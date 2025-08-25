@@ -42,7 +42,6 @@ public:
 
     void SetPrinterChoice(PrinterType value) { m_options.printer_choice = value; }
     void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }
-    void SetFolderPath(const std::filesystem::path & path) { m_options.SetFolderPath(path); }
     void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
     void SetModelKeyTagList(const std::string & value);
 

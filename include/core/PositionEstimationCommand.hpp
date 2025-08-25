@@ -41,7 +41,6 @@ public:
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetFolderPath(const std::filesystem::path & path) { m_options.SetFolderPath(path); }
     void SetDatabasePath(const std::filesystem::path & path) { m_options.database_path = path; }
     void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
     void SetThreadSize(int value) { m_options.thread_size = value; }

@@ -2,15 +2,16 @@
 #include "CommandBase.hpp"
 #include "Logger.hpp"
 
-CommandRegistry & CommandRegistry::Instance()
+CommandRegistry & CommandRegistry::Instance(void)
 {
     static CommandRegistry instance;
     return instance;
 }
 
-bool CommandRegistry::RegisterCommand(const std::string & name,
-                                      const std::string & description,
-                                      FactoryFunc factory)
+bool CommandRegistry::RegisterCommand(
+    const std::string & name,
+    const std::string & description,
+    FactoryFunc factory)
 {
     if (m_commands.find(name) != m_commands.end())
     {

@@ -10,6 +10,7 @@
 #include "DemoPainter.hpp"
 #include "StringHelper.hpp"
 #include "AtomSelector.hpp"
+#include "FilePathHelper.hpp"
 #include "Logger.hpp"
 #include "ScopeTimer.hpp"
 #include "CommandRegistry.hpp"

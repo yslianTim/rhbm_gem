@@ -32,7 +32,6 @@ public:
 
     void SetThreadSize(int value) { m_options.thread_size = value; }
     void SetPrinterChoice(TesterType value) { m_options.tester_choice = value; }
-    void SetFolderPath(const std::filesystem::path & path) { m_options.SetFolderPath(path); }
     void SetFitRangeMinimum(double value) { m_options.fit_range_min = value; }
     void SetFitRangeMaximum(double value) { m_options.fit_range_max = value; }
     void SetAlphaR(double value) { m_options.alpha_r = value; }

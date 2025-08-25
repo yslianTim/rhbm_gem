@@ -52,7 +52,6 @@ public:
     void SetPartialChargeChoice(PartialCharge value) { m_options.partial_charge_choice = value; }
     void SetCutoffDistance(double value) { m_options.cutoff_distance = value; }
     void SetModelFilePath(const std::filesystem::path & value) { m_options.model_file_path = value; }
-    void SetFolderPath(const std::filesystem::path & path) { m_options.SetFolderPath(path); }
     void SetMapFileName(const std::string & value) { m_options.map_file_name = value; }
     void SetGridSpacing(double value) { m_options.grid_spacing = value; }
     void SetBlurringWidthList(const std::string & value);

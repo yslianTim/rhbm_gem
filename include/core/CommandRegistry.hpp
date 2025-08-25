@@ -20,11 +20,14 @@ public:
 
     static CommandRegistry & Instance(void);
 
-    bool RegisterCommand(const std::string & name,
-                         const std::string & description,
-                         FactoryFunc factory);
+    bool RegisterCommand(
+        const std::string & name,
+        const std::string & description,
+        FactoryFunc factory
+    );
 
-    const std::unordered_map<std::string, CommandInfo> & GetCommands(void) const { return m_commands; }
+    const std::unordered_map<std::string, CommandInfo> &
+    GetCommands(void) const { return m_commands; }
 
 private:
     std::unordered_map<std::string, CommandInfo> m_commands;
@@ -39,6 +42,7 @@ public:
         CommandRegistry::Instance().RegisterCommand(
             name,
             description,
-            [](){ return std::make_unique<CommandType>(); });
+            [](){ return std::make_unique<CommandType>(); }
+        );
     }
 };

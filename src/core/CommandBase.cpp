@@ -1,6 +1,13 @@
 #include "CommandBase.hpp"
+#include "FilePathHelper.hpp"
 
 #include <CLI/CLI.hpp>
+
+void CommandBase::RegisterCLIOptions(CLI::App * command)
+{
+    RegisterCLIOptionsExtend(command);
+    RegisterCLIOptionsBasic(command);
+}
 
 DataObjectManager * CommandBase::GetDataManagerPtr(void)
 {
@@ -18,7 +25,7 @@ void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
     command->add_option("-d,--database", options.database_path,
         "Database file path")->default_val(options.database_path.string());
     command->add_option_function<std::string>("-o,--folder",
-        [&options](const std::string & val) { options.SetFolderPath(val); },
+        [&](const std::string & value) { SetFolderPath(value); },
         "folder path for output files")->default_val(options.folder_path.string());
     command->add_option("-j,--jobs", options.thread_size,
         "Number of threads")->default_val(options.thread_size);
@@ -26,8 +33,8 @@ void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
         "Verbose level")->default_val(options.verbose_level);
 }
 
-void CommandBase::RegisterCLIOptions(CLI::App * command)
+void CommandBase::SetFolderPath(const std::filesystem::path & path)
 {
-    RegisterCLIOptionsExtend(command);
-    RegisterCLIOptionsBasic(command);
+    auto & options{ GetOptions() };
+    options.folder_path = std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
 }
