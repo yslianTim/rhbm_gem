@@ -75,7 +75,8 @@ void ResultDumpCommand::SetPrinterChoice(PrinterType value)
 void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)
 {
     m_options.map_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
+    if (!m_options.map_file_path.empty() &&
+        !FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
     {
         Logger::Log(LogLevel::Error,
             "Map file does not exist: " + m_options.map_file_path.string());
