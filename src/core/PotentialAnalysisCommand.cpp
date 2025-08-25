@@ -19,6 +19,10 @@
 #include <unordered_set>
 #include <tuple>
 
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace {
 CommandRegistrar<PotentialAnalysisCommand> registrar_potential_analysis{
     "potential_analysis",
@@ -257,18 +261,29 @@ void PotentialAnalysisCommand::RunMapValueSampling(void)
     m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
     m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
     m_sphere_sampler->Print();
-    MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
     
-    auto atom_size{ m_model_object->GetNumberOfSelectedAtom() };
-    size_t atom_count{ 1 };
-    for (auto & atom : m_model_object->GetSelectedAtomList())
+    const auto & atom_list{ m_model_object->GetSelectedAtomList() };
+    auto atom_size{ atom_list.size() };
+    size_t atom_count{ 0 };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(m_options.thread_size)
+#endif
+    for (size_t i = 0; i < atom_size; i++)
     {
-        Logger::ProgressBar(atom_count, atom_size);
+        MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
+        auto atom{ atom_list[i] };
         auto entry{ atom->GetAtomicPotentialEntry() };
         interpolation_visitor.SetPosition(atom->GetPosition());
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
-        atom_count++;
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressBar(atom_count, atom_size);
+        }
     }
 }
 
