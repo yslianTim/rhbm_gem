@@ -318,9 +318,9 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateSimulatedMapObject(double
 
     Logger::Log(LogLevel::Info, "  - Start map value array production ...");
     std::vector<AtomObject*> in_range_atom_list;
-    #ifdef USE_OPENMP
+#ifdef USE_OPENMP
     #pragma omp parallel for num_threads(m_options.thread_size) private(in_range_atom_list)
-    #endif
+#endif
     for (size_t i = 0; i < voxel_size; i++)
     {
         AtomObject query_atom;

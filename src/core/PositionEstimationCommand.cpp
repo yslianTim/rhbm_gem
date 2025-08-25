@@ -176,7 +176,7 @@ bool PositionEstimationCommand::BuildVoxelList(void)
                 thread_local_list.begin(), thread_local_list.end());
         }
     }
-    #else
+#else
     for (size_t i = 0; i < array_size; i++)
     {
         process_voxel(i, m_selected_voxel_list);
