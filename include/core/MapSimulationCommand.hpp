@@ -47,7 +47,6 @@ public:
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetThreadSize(int value) { m_options.thread_size = value; }
     void SetPotentialModelChoice(PotentialModel value) { m_options.potential_model_choice = value; }
     void SetPartialChargeChoice(PartialCharge value) { m_options.partial_charge_choice = value; }
     void SetCutoffDistance(double value) { m_options.cutoff_distance = value; }

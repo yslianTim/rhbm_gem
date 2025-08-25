@@ -30,7 +30,6 @@ public:
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetThreadSize(int value) { m_options.thread_size = value; }
     void SetPrinterChoice(TesterType value) { m_options.tester_choice = value; }
     void SetFitRangeMinimum(double value) { m_options.fit_range_min = value; }
     void SetFitRangeMaximum(double value) { m_options.fit_range_max = value; }

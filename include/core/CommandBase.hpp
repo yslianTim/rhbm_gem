@@ -28,6 +28,9 @@ public:
     virtual CommandOptions & GetOptions(void) = 0;
 
     void RegisterCLIOptions(CLI::App * command);
+    void SetThreadSize(int value);
+    void SetVerboseLevel(int value);
+    void SetDatabasePath(const std::filesystem::path & path);
     void SetFolderPath(const std::filesystem::path & path);
     DataObjectManager * GetDataManagerPtr(void);
     const DataObjectManager * GetDataManagerPtr(void) const;
