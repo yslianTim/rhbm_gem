@@ -253,7 +253,6 @@ void PotentialAnalysisCommand::RunMapValueSampling(void)
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunMapValueSampling() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunMapValueSampling");
     if (m_map_object == nullptr || m_sphere_sampler == nullptr) return;
-    m_sphere_sampler->SetThreadSize(static_cast<unsigned int>(m_options.thread_size));
     m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
     m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
     m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);

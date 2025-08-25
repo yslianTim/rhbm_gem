@@ -6,12 +6,8 @@
 #include <random>
 #include <stdexcept>
 
-#ifdef USE_OPENMP
-#include <omp.h>
-#endif
-
 SphereSampler::SphereSampler(void) :
-    m_thread_size{ 1 }, m_sampling_size{ 10 }, m_distance_min{ 0.0 }, m_distance_max{ 1.0 }
+    m_sampling_size{ 10 }, m_distance_min{ 0.0 }, m_distance_max{ 1.0 }
 {
 
 }
@@ -19,12 +15,11 @@ SphereSampler::SphereSampler(void) :
 void SphereSampler::Print(void) const
 {
     Logger::Log(LogLevel::Info,
-                "SphereSampler Configuration:\n"
-                " - Thread size: " + std::to_string(m_thread_size) + "\n"
-                " - Sampling size: " + std::to_string(m_sampling_size) + "\n"
-                " - Distance range: ["
-                + StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) + ", "
-                + StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) + "] Angstrom.");
+        "SphereSampler Configuration:\n"
+        " - Sampling size: " + std::to_string(m_sampling_size) + "\n"
+        " - Distance range: ["
+        + StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) + ", "
+        + StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) + "] Angstrom.");
 }
 
 std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamplingPoints(
@@ -42,9 +37,6 @@ std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamp
     std::vector<std::tuple<float, std::array<float, 3>>> sampling_position_list;
     sampling_position_list.resize(m_sampling_size);
 
-    #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(m_thread_size)
-    #endif
     for (unsigned int i = 0; i < m_sampling_size; i++)
     {
         static thread_local std::mt19937 engine{ std::random_device{}() };

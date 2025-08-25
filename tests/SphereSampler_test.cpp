@@ -26,7 +26,6 @@ TEST(SphereSamplerTest, PrintOutputsDefaultConfiguration)
     sampler.Print();
     std::string output{ testing::internal::GetCapturedStdout() };
 
-    EXPECT_NE(output.find("Thread size: 1"), std::string::npos);
     EXPECT_NE(output.find("Sampling size: 10"), std::string::npos);
     EXPECT_NE(output.find("Distance range: [0.0, 1.0] Angstrom."), std::string::npos);
 }
@@ -45,7 +44,6 @@ TEST(SphereSamplerTest, PrintOutputsHeader)
 TEST(SphereSamplerTest, PrintOutputsConfiguration)
 {
     SphereSampler sampler;
-    sampler.SetThreadSize(4);
     sampler.SetSamplingSize(20);
     sampler.SetDistanceRangeMinimum(0.5);
     sampler.SetDistanceRangeMaximum(2.0);
@@ -54,7 +52,6 @@ TEST(SphereSamplerTest, PrintOutputsConfiguration)
     sampler.Print();
     std::string output{ testing::internal::GetCapturedStdout() };
 
-    EXPECT_NE(output.find("Thread size: 4"), std::string::npos);
     EXPECT_NE(output.find("Sampling size: 20"), std::string::npos);
     EXPECT_NE(output.find("Distance range: [0.5, 2.0] Angstrom."), std::string::npos);
 }
@@ -120,42 +117,6 @@ TEST(SphereSamplerTest, PositionMath)
     }
 }
 
-TEST(SphereSamplerTest, ValidThreadSize)
-{
-    SphereSampler sampler;
-    sampler.SetThreadSize(4);
-    sampler.SetSamplingSize(5);
-    auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
-    ASSERT_EQ(5u, samples.size());
-}
-
-TEST(SphereSamplerTest, ZeroThreadSizeClampedToOne)
-{
-    SphereSampler sampler;
-    sampler.SetThreadSize(0);
-
-    testing::internal::CaptureStdout();
-    sampler.Print();
-    std::string output{ testing::internal::GetCapturedStdout() };
-    EXPECT_NE(output.find("Thread size: 1"), std::string::npos);
-
-    sampler.SetSamplingSize(5);
-    auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
-    ASSERT_EQ(5u, samples.size());
-}
-
-TEST(SphereSamplerTest, ThreadSizeUpdatedAfterZero)
-{
-    SphereSampler sampler;
-    sampler.SetThreadSize(0);
-    sampler.SetThreadSize(3);
-
-    testing::internal::CaptureStdout();
-    sampler.Print();
-    std::string output{ testing::internal::GetCapturedStdout() };
-    EXPECT_NE(output.find("Thread size: 3"), std::string::npos);
-}
-
 TEST(SphereSamplerTest, ZeroSamplingSizeReturnsEmptyVector)
 {
     SphereSampler sampler;
@@ -179,23 +140,6 @@ TEST(SphereSamplerTest, ZeroDistanceRange)
         EXPECT_FLOAT_EQ(center[0], pos[0]);
         EXPECT_FLOAT_EQ(center[1], pos[1]);
         EXPECT_FLOAT_EQ(center[2], pos[2]);
-    }
-}
-
-TEST(SphereSamplerTest, ThreadSizeDoesNotAffectOutput)
-{
-    SphereSampler sampler;
-    sampler.SetThreadSize(2);
-    sampler.SetSamplingSize(5);
-    sampler.SetDistanceRangeMinimum(0.5);
-    sampler.SetDistanceRangeMaximum(1.0);
-    auto samples{ sampler.GenerateSamplingPoints({0.f, 0.f, 0.f}) };
-    ASSERT_EQ(5u, samples.size());
-    for (const auto & sample : samples)
-    {
-        float radius{ std::get<0>(sample) };
-        EXPECT_GE(radius, 0.5f);
-        EXPECT_LE(radius, 1.0f);
     }
 }
 
