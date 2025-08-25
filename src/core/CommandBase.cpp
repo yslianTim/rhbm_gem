@@ -11,16 +11,6 @@ void CommandBase::RegisterCLIOptions(CLI::App * command)
     RegisterCLIOptionsExtend(command);
 }
 
-DataObjectManager * CommandBase::GetDataManagerPtr(void)
-{
-    return &m_data_manager;
-}
-
-const DataObjectManager * CommandBase::GetDataManagerPtr(void) const
-{
-    return &m_data_manager;
-}
-
 void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
 {
     auto & options{ GetOptions() };
@@ -84,6 +74,8 @@ void CommandBase::SetDatabasePath(const std::filesystem::path & path)
             Logger::Log(LogLevel::Error,
                 "Failed to create directory: " + parent_path.string() +
                 " error code = (" + error_code.message() + ")");
+            m_valiate_options = false;
+            return;
         }
     }
 }
@@ -102,6 +94,8 @@ void CommandBase::SetFolderPath(const std::filesystem::path & path)
             Logger::Log(LogLevel::Error,
                 "Failed to create directory: " + options.folder_path.string() +
                 " error code = (" + error_code.message() + ")");
+            m_valiate_options = false;
+            return;
         }
     }
 }

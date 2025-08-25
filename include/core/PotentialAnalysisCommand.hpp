@@ -42,24 +42,23 @@ public:
     PotentialAnalysisCommand(void);
     ~PotentialAnalysisCommand();
     bool Execute(void) override;
-    bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetAsymmetryFlag(bool value) { m_options.is_asymmetry = value; }
-    void SetSimulationFlag(bool value) { m_options.is_simulation = value; }
-    void SetSimulatedMapResolution(double value) { m_options.resolution_simulation = value; }
-    void SetFitRangeMinimum(double value) { m_options.fit_range_min = value; }
-    void SetFitRangeMaximum(double value) { m_options.fit_range_max = value; }
-    void SetAlphaR(double value) { m_options.alpha_r = value; }
-    void SetAlphaG(double value) { m_options.alpha_g = value; }
-    void SetModelFilePath(const std::filesystem::path & path) { m_options.model_file_path = path; }
-    void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
-    void SetSavedKeyTag(const std::string & tag) { m_options.saved_key_tag = tag; }
-    void SetSamplingSize(int value) { m_options.sampling_size = value; }
-    void SetSamplingRangeMinimum(double value) { m_options.sampling_range_min = value; }
-    void SetSamplingRangeMaximum(double value) { m_options.sampling_range_max = value; }
+    void SetAsymmetryFlag(bool value);
+    void SetSimulationFlag(bool value);
+    void SetSimulatedMapResolution(double value);
+    void SetFitRangeMinimum(double value);
+    void SetFitRangeMaximum(double value);
+    void SetAlphaR(double value);
+    void SetAlphaG(double value);
+    void SetModelFilePath(const std::filesystem::path & path);
+    void SetMapFilePath(const std::filesystem::path & path);
+    void SetSavedKeyTag(const std::string & tag);
+    void SetSamplingSize(int value);
+    void SetSamplingRangeMinimum(double value);
+    void SetSamplingRangeMaximum(double value);
 
 private:
     bool BuildDataObject(void);

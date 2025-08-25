@@ -36,15 +36,20 @@ PositionEstimationCommand::PositionEstimationCommand(void) :
 void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RegisterCLIOptionsExtend() called.");
-    cmd->add_option("-m,--map", m_options.map_file_path,
+    cmd->add_option_function<std::string>("-m,--map",
+        [&](const std::string & value) { SetMapFilePath(value); },
         "Map file path")->required();
-    cmd->add_option("--alpha", m_options.alpha,
-        "Alpha value for robust regression")->default_val(m_options.alpha);
-    cmd->add_option("--iter", m_options.iteration_count,
+    cmd->add_option_function<int>("--iter",
+        [&](int value) { SetIterationCount(value); },
         "Iteration count for estimation")->default_val(m_options.iteration_count);
-    cmd->add_option("--knn", m_options.knn_size,
+    cmd->add_option_function<int>("--knn",
+        [&](int value) { SetKNNSize(value); },
         "KNN size for estimation")->default_val(m_options.knn_size);
-    cmd->add_option("--threshold", m_options.threshold_ratio,
+    cmd->add_option_function<double>("--alpha",
+        [&](double value) { SetAlpha(value); },
+        "Alpha value for robust regression")->default_val(m_options.alpha);
+    cmd->add_option_function<double>("--threshold",
+        [&](double value) { SetThresholdRatio(value); },
         "Ratio of threshold of map values")->default_val(m_options.threshold_ratio);
 }
 
@@ -59,41 +64,59 @@ bool PositionEstimationCommand::Execute(void)
     return true;
 }
 
-bool PositionEstimationCommand::ValidateOptions(void) const
+void PositionEstimationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::ValidateOptions() called");
-
+    m_options.map_file_path = path;
     if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
     {
-        return false;
+        Logger::Log(LogLevel::Error,
+            "Map file does not exist: " + m_options.map_file_path.string());
+        m_valiate_options = false;
     }
+}
+
+void PositionEstimationCommand::SetIterationCount(int value)
+{
+    m_options.iteration_count = value;
     if (m_options.iteration_count <= 0)
     {
-        Logger::Log(LogLevel::Error, "Iteration count must be positive");
-        return false;
+        Logger::Log(LogLevel::Warning,
+            "Iteration count must be positive, reset to default 15");
+        m_options.iteration_count = 15;
     }
+}
+
+void PositionEstimationCommand::SetKNNSize(int value)
+{
+    m_options.knn_size = static_cast<size_t>(value);
     if (m_options.knn_size == 0)
     {
-        Logger::Log(LogLevel::Error, "KNN size must be positive");
-        return false;
+        Logger::Log(LogLevel::Warning,
+            "KNN size must be positive, reset to default 20");
+        m_options.knn_size = 20;
     }
+}
+
+void PositionEstimationCommand::SetAlpha(double value)
+{
+    m_options.alpha = static_cast<float>(value);
     if (m_options.alpha <= 0.0f)
     {
-        Logger::Log(LogLevel::Error, "Alpha must be positive");
-        return false;
+        Logger::Log(LogLevel::Warning,
+            "Alpha must be positive, reset to default 2.0");
+        m_options.alpha = 2.0f;
     }
+}
+
+void PositionEstimationCommand::SetThresholdRatio(double value)
+{
+    m_options.threshold_ratio = static_cast<float>(value);
     if (m_options.threshold_ratio <= 0.0f || m_options.threshold_ratio > 1.0f)
     {
-        Logger::Log(LogLevel::Error, "Threshold ratio must be in (0, 1]");
-        return false;
+        Logger::Log(LogLevel::Warning,
+            "Threshold ratio must be in (0, 1], reset to default 0.01");
+        m_options.threshold_ratio = 0.01f;
     }
-    if (m_options.thread_size <= 0)
-    {
-        Logger::Log(LogLevel::Error, "Thread size must be positive");
-        return false;
-    }
-
-    return true;
 }
 
 bool PositionEstimationCommand::BuildDataObject(void)

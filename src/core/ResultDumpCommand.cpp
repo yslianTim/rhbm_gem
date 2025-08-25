@@ -51,9 +51,11 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Printer choice")
         ->required()
         ->transform(CLI::CheckedTransformer(printer_map, CLI::ignore_case));
-    cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
+    cmd->add_option_function<std::string>("-k,--model-keylist",
+        [&](const std::string & value) { SetModelKeyTagList(value); },
         "List of model key tag to be display")->required()->delimiter(',');
-    cmd->add_option("-m,--map", m_options.map_file_path,
+    cmd->add_option_function<std::string>("-m,--map",
+        [&](const std::string & value) { SetMapFilePath(value); },
         "Map file path")->default_val(m_options.map_file_path.string());
 }
 
@@ -65,24 +67,30 @@ bool ResultDumpCommand::Execute(void)
     return true;
 }
 
-bool ResultDumpCommand::ValidateOptions(void) const
+void ResultDumpCommand::SetPrinterChoice(PrinterType value)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::ValidateOptions() called");
-    if (m_options.model_key_tag_list.empty())
-    {
-        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
-        return false;
-    }
+    m_options.printer_choice = value;
+}
+
+void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)
+{
+    m_options.map_file_path = path;
     if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
     {
-        return false;
+        Logger::Log(LogLevel::Error,
+            "Map file does not exist: " + m_options.map_file_path.string());
+        m_valiate_options = false;
     }
-    return true;
 }
 
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+    if (m_options.model_key_tag_list.empty())
+    {
+        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
+        m_valiate_options = false;
+    }
 }
 
 bool ResultDumpCommand::BuildDataObjectList(void)

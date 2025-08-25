@@ -16,7 +16,7 @@ CommandRegistrar<HRLModelTestCommand> registrar_model_test{
 }
 
 HRLModelTestCommand::HRLModelTestCommand(void) :
-    CommandBase()
+    CommandBase(), m_options{}
 {
     Logger::Log(LogLevel::Debug, "HRLModelTestCommand::HRLModelTestCommand() called.");
 }
@@ -35,13 +35,17 @@ void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Tester choice")
         ->required()
         ->transform(CLI::CheckedTransformer(tester_map, CLI::ignore_case));
-    cmd->add_option("--fit-min", m_options.fit_range_min,
+    cmd->add_option_function<double>("--fit-min",
+        [&](double value) { SetFitRangeMinimum(value); },
         "Minimum fitting range")->default_val(m_options.fit_range_min);
-    cmd->add_option("--fit-max", m_options.fit_range_max,
+    cmd->add_option_function<double>("--fit-max",
+        [&](double value) { SetFitRangeMaximum(value); },
         "Maximum fitting range")->default_val(m_options.fit_range_max);
-    cmd->add_option("--alpha-r", m_options.alpha_r,
+    cmd->add_option_function<double>("--alpha-r",
+        [&](double value) { SetAlphaR(value); },
         "Alpha value for R")->default_val(m_options.alpha_r);
-    cmd->add_option("--alpha-g", m_options.alpha_g,
+    cmd->add_option_function<double>("--alpha-g",
+        [&](double value) { SetAlphaG(value); },
         "Alpha value for G")->default_val(m_options.alpha_g);
 }
 
@@ -77,15 +81,29 @@ bool HRLModelTestCommand::Execute(void)
     return true;
 }
 
-bool HRLModelTestCommand::ValidateOptions(void) const
+void HRLModelTestCommand::SetTesterChoice(TesterType value)
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::ValidateOptions() called");
-    if (m_options.fit_range_min >= m_options.fit_range_max)
-    {
-        Logger::Log(LogLevel::Error, "Invalid fitting range");
-        return false;
-    }
-    return true;
+    m_options.tester_choice = value;
+}
+
+void HRLModelTestCommand::SetFitRangeMinimum(double value)
+{
+    m_options.fit_range_min = value;
+}
+
+void HRLModelTestCommand::SetFitRangeMaximum(double value)
+{
+    m_options.fit_range_max = value;
+}
+
+void HRLModelTestCommand::SetAlphaR(double value)
+{
+    m_options.alpha_r = value;
+}
+
+void HRLModelTestCommand::SetAlphaG(double value)
+{
+    m_options.alpha_g = value;
 }
 
 void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)

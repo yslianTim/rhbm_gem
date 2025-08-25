@@ -22,7 +22,6 @@ class CommandBase
 public:
     virtual ~CommandBase() = default;
     virtual bool Execute(void) = 0;
-    virtual bool ValidateOptions(void) const = 0;
     virtual void RegisterCLIOptionsExtend(CLI::App * command) = 0;
     virtual const CommandOptions & GetOptions(void) const = 0;
     virtual CommandOptions & GetOptions(void) = 0;
@@ -32,11 +31,13 @@ public:
     void SetVerboseLevel(int value);
     void SetDatabasePath(const std::filesystem::path & path);
     void SetFolderPath(const std::filesystem::path & path);
-    DataObjectManager * GetDataManagerPtr(void);
-    const DataObjectManager * GetDataManagerPtr(void) const;
+    bool IsValidateOptions(void) const { return m_valiate_options; }
+    DataObjectManager * GetDataManagerPtr(void) { return &m_data_manager; }
+    const DataObjectManager * GetDataManagerPtr(void) const { return &m_data_manager; }
 
 protected:
     DataObjectManager m_data_manager;
+    bool m_valiate_options{ true };
 
     CommandBase(void) = default;
     void RegisterCLIOptionsBasic(CLI::App * command);

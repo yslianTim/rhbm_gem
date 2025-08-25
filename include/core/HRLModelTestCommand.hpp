@@ -19,22 +19,21 @@ public:
     };
 
 private:
-    Options m_options{};
+    Options m_options;
 
 public:
     HRLModelTestCommand(void);
     ~HRLModelTestCommand() = default;
     bool Execute(void) override;
-    bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetPrinterChoice(TesterType value) { m_options.tester_choice = value; }
-    void SetFitRangeMinimum(double value) { m_options.fit_range_min = value; }
-    void SetFitRangeMaximum(double value) { m_options.fit_range_max = value; }
-    void SetAlphaR(double value) { m_options.alpha_r = value; }
-    void SetAlphaG(double value) { m_options.alpha_g = value; }
+    void SetTesterChoice(TesterType value);
+    void SetFitRangeMinimum(double value);
+    void SetFitRangeMaximum(double value);
+    void SetAlphaR(double value);
+    void SetAlphaG(double value);
 
 private:
     void RunSimulationTestOnDataOutlier(void);

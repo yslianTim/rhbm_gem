@@ -27,7 +27,7 @@ public:
         PartialCharge partial_charge_choice{ PartialCharge::PARTIAL };
         double cutoff_distance{ 5.0 };
         double grid_spacing{ 0.5 };
-        std::vector<double> blurring_width_list{ 0.50 };
+        std::vector<double> blurring_width_list{};
     };
 
 private:
@@ -42,17 +42,16 @@ public:
     MapSimulationCommand(void);
     ~MapSimulationCommand();
     bool Execute(void) override;
-    bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetPotentialModelChoice(PotentialModel value) { m_options.potential_model_choice = value; }
-    void SetPartialChargeChoice(PartialCharge value) { m_options.partial_charge_choice = value; }
-    void SetCutoffDistance(double value) { m_options.cutoff_distance = value; }
-    void SetModelFilePath(const std::filesystem::path & value) { m_options.model_file_path = value; }
-    void SetMapFileName(const std::string & value) { m_options.map_file_name = value; }
-    void SetGridSpacing(double value) { m_options.grid_spacing = value; }
+    void SetPotentialModelChoice(PotentialModel value);
+    void SetPartialChargeChoice(PartialCharge value);
+    void SetCutoffDistance(double value);
+    void SetModelFilePath(const std::filesystem::path & value);
+    void SetMapFileName(const std::string & value);
+    void SetGridSpacing(double value);
     void SetBlurringWidthList(const std::string & value);
 
 private:

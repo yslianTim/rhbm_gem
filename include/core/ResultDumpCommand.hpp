@@ -35,13 +35,12 @@ public:
     ResultDumpCommand(void);
     ~ResultDumpCommand();
     bool Execute(void) override;
-    bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetPrinterChoice(PrinterType value) { m_options.printer_choice = value; }
-    void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
+    void SetPrinterChoice(PrinterType value);
+    void SetMapFilePath(const std::filesystem::path & path);
     void SetModelKeyTagList(const std::string & value);
 
 private:

@@ -36,16 +36,15 @@ public:
     PositionEstimationCommand(void);
     ~PositionEstimationCommand() = default;
     bool Execute(void) override;
-    bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetMapFilePath(const std::filesystem::path & path) { m_options.map_file_path = path; }
-    void SetIterationCount(int value) { m_options.iteration_count = value; }
-    void SetKNNSize(int value) { m_options.knn_size = static_cast<size_t>(value); }
-    void SetAlpha(double value) { m_options.alpha = static_cast<float>(value); }
-    void SetThresholdRatio(double value) { m_options.threshold_ratio = static_cast<float>(value); }
+    void SetMapFilePath(const std::filesystem::path & path);
+    void SetIterationCount(int value);
+    void SetKNNSize(int value);
+    void SetAlpha(double value);
+    void SetThresholdRatio(double value);
 
 private:
     bool BuildDataObject(void);

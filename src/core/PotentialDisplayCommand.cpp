@@ -47,26 +47,36 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Painter choice")
         ->required()
         ->transform(CLI::CheckedTransformer(painter_map, CLI::ignore_case));
-    cmd->add_option("-k,--model-keylist", m_options.model_key_tag_list,
-        "List of model key tag to be display")->required()->delimiter(',');
-    cmd->add_option("-r,--ref-model-keylist", m_options.ref_model_key_tag_list,
+    cmd->add_option_function<std::string>("-k,--model-keylist",
+        [&](const std::string & value) { SetModelKeyTagList(value); },
+        "List of model key tag to be display")->required();
+    cmd->add_option_function<std::string>("-r,--ref-model-keylist",
+        [&](const std::string & value) { SetRefModelKeyTagListMap(value); },
         "List of reference model key tag to be display")
         ->default_val(m_options.ref_model_key_tag_list);
-    cmd->add_option("--pick-chain", m_options.pick_chain_id,
+    cmd->add_option_function<std::string>("--pick-chain",
+        [&](const std::string & value) { SetPickChainID(value); },
         "Pick chain ID")->default_val(m_options.pick_chain_id);
-    cmd->add_option("--pick-residue", m_options.pick_residue,
+    cmd->add_option_function<std::string>("--pick-residue",
+        [&](const std::string & value) { SetPickResidueType(value); },
         "Pick residue type")->default_val(m_options.pick_residue);
-    cmd->add_option("--pick-element", m_options.pick_element,
+    cmd->add_option_function<std::string>("--pick-element",
+        [&](const std::string & value) { SetPickElementType(value); },
         "Pick element type")->default_val(m_options.pick_element);
-    cmd->add_option("--pick-remoteness", m_options.pick_remoteness,
+    cmd->add_option_function<std::string>("--pick-remoteness",
+        [&](const std::string & value) { SetPickRemotenessType(value); },
         "Pick remoteness type")->default_val(m_options.pick_remoteness);
-    cmd->add_option("--veto-chain", m_options.veto_chain_id,
+    cmd->add_option_function<std::string>("--veto-chain",
+        [&](const std::string & value) { SetVetoChainID(value); },
         "Veto chain ID")->default_val(m_options.veto_chain_id);
-    cmd->add_option("--veto-residue", m_options.veto_residue,
+    cmd->add_option_function<std::string>("--veto-residue",
+        [&](const std::string & value) { SetVetoResidueType(value); },
         "Veto residue type")->default_val(m_options.veto_residue);
-    cmd->add_option("--veto-element", m_options.veto_element,
+    cmd->add_option_function<std::string>("--veto-element",
+        [&](const std::string & value) { SetVetoElementType(value); },
         "Veto element type")->default_val(m_options.veto_element);
-    cmd->add_option("--veto-remoteness", m_options.veto_remoteness,
+    cmd->add_option_function<std::string>("--veto-remoteness",
+        [&](const std::string & value) { SetVetoRemotenessType(value); },
         "Veto remoteness type")->default_val(m_options.veto_remoteness);
 }
 
@@ -79,24 +89,19 @@ bool PotentialDisplayCommand::Execute(void)
     return true;
 }
 
-bool PotentialDisplayCommand::ValidateOptions(void) const
+void PotentialDisplayCommand::SetPainterChoice(PainterType value)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::ValidateOptions() called");
-    if (!FilePathHelper::EnsureFileExists(m_options.database_path, "Database file"))
-    {
-        return false;
-    }
-    if (m_options.model_key_tag_list.empty())
-    {
-        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
-        return false;
-    }
-    return true;
+    m_options.painter_choice = value;
 }
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+    if (m_options.model_key_tag_list.empty())
+    {
+        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
+        m_valiate_options = false;
+    }
 }
 
 void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value)
@@ -150,13 +155,52 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
     }
 }
 
+void PotentialDisplayCommand::SetPickChainID(const std::string & value)
+{
+    m_options.pick_chain_id = value;
+}
+
+void PotentialDisplayCommand::SetVetoChainID(const std::string & value)
+{
+    m_options.veto_chain_id = value;
+}
+
+void PotentialDisplayCommand::SetPickResidueType(const std::string & value)
+{
+    m_options.pick_residue = value;
+}
+
+void PotentialDisplayCommand::SetVetoResidueType(const std::string & value)
+{
+    m_options.veto_residue = value;
+}
+
+void PotentialDisplayCommand::SetPickElementType(const std::string & value)
+{
+    m_options.pick_element = value;
+}
+
+void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
+{
+    m_options.veto_element = value;
+}
+
+void PotentialDisplayCommand::SetPickRemotenessType(const std::string & value)
+{
+    m_options.pick_remoteness = value;
+}
+
+void PotentialDisplayCommand::SetVetoRemotenessType(const std::string & value)
+{
+    m_options.veto_remoteness = value;
+}
+
 bool PotentialDisplayCommand::BuildDataObject(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::BuildDataObject() called");
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        SetRefModelKeyTagListMap(m_options.ref_model_key_tag_list);
         auto data_manager{ GetDataManagerPtr() };
         data_manager->SetDatabaseManager(m_options.database_path);
         auto model_size{ m_options.model_key_tag_list.size() };

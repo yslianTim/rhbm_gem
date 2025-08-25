@@ -39,14 +39,16 @@ void Application::RegisterCommand(
         ScopeTimer timer("Command in Application");
         const auto & options{ cmd->GetOptions() };
         Logger::SetLogLevel(options.verbose_level);
-        if (cmd->ValidateOptions() == false)
+        if (cmd->IsValidateOptions() == false)
         {
-            Logger::Log(LogLevel::Error, "Invalid command options");
+            Logger::Log(LogLevel::Error,
+                "Invalid command options detected. Aborting command execution.");
             return;
         }
         if (cmd->Execute() == false)
         {
-            Logger::Log(LogLevel::Error, "Command execution failed");
+            Logger::Log(LogLevel::Error,
+                "Command execution failed. Aborting command execution.");
         }
     });
 }

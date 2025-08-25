@@ -46,9 +46,11 @@ MapSimulationCommand::~MapSimulationCommand()
 void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::RegisterCLIOptionsExtend() called");
-    cmd->add_option("-a,--model", m_options.model_file_path,
+    cmd->add_option_function<std::string>("-a,--model",
+        [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
-    cmd->add_option("-n,--name", m_options.map_file_name,
+    cmd->add_option_function<std::string>("-n,--name",
+        [&](const std::string & value) { SetMapFileName(value); },
         "File name for output map files")->default_val(m_options.map_file_name);
     std::map<std::string, PotentialModel> model_map
     {
@@ -57,8 +59,7 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         {"2", PotentialModel::SINGLE_GAUS_USER}, {"user",   PotentialModel::SINGLE_GAUS_USER}
     };
     cmd->add_option("--potential-model", m_options.potential_model_choice,
-        "Atomic potential model option")
-        ->default_val("1")
+        "Atomic potential model option")->default_val("1")
         ->transform(CLI::CheckedTransformer(model_map, CLI::ignore_case));
     std::map<std::string, PartialCharge> charge_map
     {
@@ -67,16 +68,17 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         {"2", PartialCharge::AMBER},   {"amber",   PartialCharge::AMBER}
     };
     cmd->add_option("--charge", m_options.partial_charge_choice,
-        "Partial charge table option")
-        ->default_val("1")
+        "Partial charge table option")->default_val("1")
         ->transform(CLI::CheckedTransformer(charge_map, CLI::ignore_case));
-    cmd->add_option("-c,--cut-off", m_options.cutoff_distance,
+    cmd->add_option_function<double>("-c,--cut-off",
+        [&](double value) { SetCutoffDistance(value); },
         "Cutoff distance")->default_val(m_options.cutoff_distance);
-    cmd->add_option("-g,--grid-spacing", m_options.grid_spacing,
+    cmd->add_option_function<double>("-g,--grid-spacing",
+        [&](double value) { SetGridSpacing(value); },
         "Grid spacing")->default_val(m_options.grid_spacing);
-    cmd->add_option("--blurring-width", m_options.blurring_width_list,
-        "Blurring width (list) setting")
-        ->default_val(m_options.blurring_width_list)->delimiter(',');
+    cmd->add_option_function<std::string>("--blurring-width",
+        [&](const std::string & value) { SetBlurringWidthList(value); },
+        "Blurring width (list) setting")->default_val(m_options.blurring_width_list);
 }
 
 bool MapSimulationCommand::Execute(void)
@@ -88,37 +90,72 @@ bool MapSimulationCommand::Execute(void)
     return true;
 }
 
-bool MapSimulationCommand::ValidateOptions(void) const
+void MapSimulationCommand::SetPotentialModelChoice(PotentialModel value)
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::ValidateOptions() called");
-    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
-    {
-        return false;
-    }
+    m_options.potential_model_choice = value;
+}
+
+void MapSimulationCommand::SetPartialChargeChoice(PartialCharge value)
+{
+    m_options.partial_charge_choice = value;
+}
+
+void MapSimulationCommand::SetCutoffDistance(double value)
+{
+    m_options.cutoff_distance = value;
     if (m_options.cutoff_distance <= 0.0)
     {
-        Logger::Log(LogLevel::Error, "Cutoff distance must be positive");
-        return false;
+        Logger::Log(LogLevel::Warning,
+            "Cutoff distance must be positive, reset to default 5.0");
+        m_options.cutoff_distance = 5.0;
     }
+}
+
+void MapSimulationCommand::SetModelFilePath(const std::filesystem::path & value)
+{
+    m_options.model_file_path = value;
+    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
+    {
+        Logger::Log(LogLevel::Error,
+            "Model file does not exist: " + m_options.model_file_path.string());
+        m_valiate_options = false;
+    }
+}
+
+void MapSimulationCommand::SetMapFileName(const std::string & value)
+{
+    m_options.map_file_name = value;
+}
+
+void MapSimulationCommand::SetGridSpacing(double value)
+{
+    m_options.grid_spacing = value;
     if (m_options.grid_spacing <= 0.0)
     {
-        Logger::Log(LogLevel::Error, "Grid spacing must be positive");
-        return false;
+        Logger::Log(LogLevel::Warning,
+            "Grid spacing must be positive, reset to default 0.5");
+        m_options.grid_spacing = 0.5;
     }
-    for (auto width : m_options.blurring_width_list)
-    {
-        if (width <= 0.0)
-        {
-            Logger::Log(LogLevel::Error, "Blurring width must be positive");
-            return false;
-        }
-    }
-    return true;
 }
 
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
     m_options.blurring_width_list = StringHelper::ParseListOption<double>(value, ',');
+    for (auto width : m_options.blurring_width_list)
+    {
+        if (width <= 0.0)
+        {
+            Logger::Log(LogLevel::Warning,
+                "Blurring width must be positive, erase current setting : "
+                + std::to_string(width));
+            m_options.blurring_width_list.erase(
+                std::remove(
+                    m_options.blurring_width_list.begin(),
+                    m_options.blurring_width_list.end(), width),
+                m_options.blurring_width_list.end()
+            );
+        }
+    }
 }
 
 bool MapSimulationCommand::BuildDataObject(void)

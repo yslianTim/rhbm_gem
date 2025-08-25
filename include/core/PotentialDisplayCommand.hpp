@@ -43,22 +43,21 @@ public:
     PotentialDisplayCommand(void);
     ~PotentialDisplayCommand();
     bool Execute(void) override;
-    bool ValidateOptions(void) const override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
-    void SetPainterChoice(PainterType value) { m_options.painter_choice = value; }
+    void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
-    void SetPickChainID(const std::string & value) { m_options.pick_chain_id = value; }
-    void SetVetoChainID(const std::string & value) { m_options.veto_chain_id = value; }
-    void SetPickResidueType(const std::string & value) { m_options.pick_residue = value; }
-    void SetVetoResidueType(const std::string & value) { m_options.veto_residue = value; }
-    void SetPickElementType(const std::string & value) { m_options.pick_element = value; }
-    void SetVetoElementType(const std::string & value) { m_options.veto_element = value; }
-    void SetPickRemotenessType(const std::string & value) { m_options.pick_remoteness = value; }
-    void SetVetoRemotenessType(const std::string & value) { m_options.veto_remoteness = value; }
+    void SetPickChainID(const std::string & value);
+    void SetVetoChainID(const std::string & value);
+    void SetPickResidueType(const std::string & value);
+    void SetVetoResidueType(const std::string & value);
+    void SetPickElementType(const std::string & value);
+    void SetVetoElementType(const std::string & value);
+    void SetPickRemotenessType(const std::string & value);
+    void SetVetoRemotenessType(const std::string & value);
 
 private:
     bool BuildDataObject(void);

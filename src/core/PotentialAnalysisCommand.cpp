@@ -41,33 +41,46 @@ PotentialAnalysisCommand::~PotentialAnalysisCommand()
 void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RegisterCLIOptionsExtend() called.");
-    cmd->add_option("-a,--model", m_options.model_file_path,
+    cmd->add_option_function<std::string>("-a,--model",
+        [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
-    cmd->add_option("-m,--map", m_options.map_file_path,
+    cmd->add_option_function<std::string>("-m,--map",
+        [&](const std::string & value) { SetMapFilePath(value); },
         "Map file path")->required();
-    cmd->add_option("--simulation", m_options.is_simulation,
+    cmd->add_option_function<bool>("--simulation",
+        [&](bool value) { SetSimulationFlag(value); },
         "Simulation flag")->default_val(m_options.is_simulation);
-    cmd->add_option("-r,--sim-resolution", m_options.resolution_simulation,
+    cmd->add_option_function<double>("-r,--sim-resolution",
+        [&](double value) { SetSimulatedMapResolution(value); },
         "Set simulated map's resolution (blurring width)")
         ->default_val(m_options.resolution_simulation);
-    cmd->add_option("-k,--save-key", m_options.saved_key_tag,
+    cmd->add_option_function<std::string>("-k,--save-key",
+        [&](const std::string & value) { SetSavedKeyTag(value); },
         "New key tag for saving ModelObject results into database")
         ->default_val(m_options.saved_key_tag);
-    cmd->add_option("--asymmetry", m_options.is_asymmetry,
+    cmd->add_option_function<bool>("--asymmetry",
+        [&](bool value) { SetAsymmetryFlag(value); },
         "Turn On/Off asymmetry flag")->default_val(m_options.is_asymmetry);
-    cmd->add_option("-s,--sampling", m_options.sampling_size,
+    cmd->add_option_function<int>("-s,--sampling",
+        [&](int value) { SetSamplingSize(value); },
         "Number of sampling points per atom")->default_val(m_options.sampling_size);
-    cmd->add_option("--sampling-min", m_options.sampling_range_min,
+    cmd->add_option_function<double>("--sampling-min",
+        [&](double value) { SetSamplingRangeMinimum(value); },
         "Minimum sampling range")->default_val(m_options.sampling_range_min);
-    cmd->add_option("--sampling-max", m_options.sampling_range_max,
+    cmd->add_option_function<double>("--sampling-max",
+        [&](double value) { SetSamplingRangeMaximum(value); },
         "Maximum sampling range")->default_val(m_options.sampling_range_max);
-    cmd->add_option("--fit-min", m_options.fit_range_min,
+    cmd->add_option_function<double>("--fit-min",
+        [&](double value) { SetFitRangeMinimum(value); },
         "Minimum fitting range")->default_val(m_options.fit_range_min);
-    cmd->add_option("--fit-max", m_options.fit_range_max,
+    cmd->add_option_function<double>("--fit-max",
+        [&](double value) { SetFitRangeMaximum(value); },
         "Maximum fitting range")->default_val(m_options.fit_range_max);
-    cmd->add_option("--alpha-r", m_options.alpha_r,
+    cmd->add_option_function<double>("--alpha-r",
+        [&](double value) { SetAlphaR(value); },
         "Alpha value for R")->default_val(m_options.alpha_r);
-    cmd->add_option("--alpha-g", m_options.alpha_g,
+    cmd->add_option_function<double>("--alpha-g",
+        [&](double value) { SetAlphaG(value); },
         "Alpha value for G")->default_val(m_options.alpha_g);
 }
 
@@ -82,33 +95,86 @@ bool PotentialAnalysisCommand::Execute(void)
     return true;
 }
 
-bool PotentialAnalysisCommand::ValidateOptions(void) const
+void PotentialAnalysisCommand::SetAsymmetryFlag(bool value)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::ValidateOptions() called");
+    m_options.is_asymmetry = value; 
+}
+void PotentialAnalysisCommand::SetSimulationFlag(bool value)
+{
+    m_options.is_simulation = value;
+}
+
+void PotentialAnalysisCommand::SetSimulatedMapResolution(double value)
+{
+    m_options.resolution_simulation = value;
+}
+
+void PotentialAnalysisCommand::SetFitRangeMinimum(double value)
+{
+    m_options.fit_range_min = value;
+}
+
+void PotentialAnalysisCommand::SetFitRangeMaximum(double value)
+{
+    m_options.fit_range_max = value;
+}
+
+void PotentialAnalysisCommand::SetAlphaR(double value)
+{
+    m_options.alpha_r = value;
+}
+
+void PotentialAnalysisCommand::SetAlphaG(double value)
+{
+    m_options.alpha_g = value;
+}
+
+void PotentialAnalysisCommand::SetModelFilePath(const std::filesystem::path & path)
+{
+    m_options.model_file_path = path;
     if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
     {
-        return false;
+        Logger::Log(LogLevel::Error,
+            "Model file does not exist: " + m_options.model_file_path.string());
+        m_valiate_options = false;
     }
+}
+
+void PotentialAnalysisCommand::SetMapFilePath(const std::filesystem::path & path)
+{
+    m_options.map_file_path = path;
     if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
     {
-        return false;
+        Logger::Log(LogLevel::Error,
+            "Map file does not exist: " + m_options.map_file_path.string());
+        m_valiate_options = false;
     }
+}
+
+void PotentialAnalysisCommand::SetSavedKeyTag(const std::string & tag)
+{
+    m_options.saved_key_tag = tag;
+}
+
+void PotentialAnalysisCommand::SetSamplingSize(int value)
+{
+    m_options.sampling_size = value;
     if (m_options.sampling_size <= 0)
     {
-        Logger::Log(LogLevel::Error, "Sampling size must be positive");
-        return false;
+        Logger::Log(LogLevel::Warning,
+            "Sampling size must be positive, reset to default value = 1500");
+        m_options.sampling_size = 1500;
     }
-    if (m_options.sampling_range_min >= m_options.sampling_range_max)
-    {
-        Logger::Log(LogLevel::Error, "Invalid sampling range");
-        return false;
-    }
-    if (m_options.fit_range_min >= m_options.fit_range_max)
-    {
-        Logger::Log(LogLevel::Error, "Invalid fitting range");
-        return false;
-    }
-    return true;
+}
+
+void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)
+{
+    m_options.sampling_range_min = value;
+}
+
+void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
+{
+    m_options.sampling_range_max = value;
 }
 
 bool PotentialAnalysisCommand::BuildDataObject(void)
