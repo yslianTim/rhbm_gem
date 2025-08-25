@@ -77,6 +77,8 @@ void HRLModelHelper::SetDataArray(
     {
         throw std::invalid_argument("The input size of data list isn't consistent with member size.");
     }
+    //Eigen::setNbThreads(1);
+    //Logger::Log(LogLevel::Info, "Thread size = " + std::to_string(Eigen::nbThreads()));
 
     // Build new data structures locally so existing member data remains
     // untouched if validation fails midway through the process.
