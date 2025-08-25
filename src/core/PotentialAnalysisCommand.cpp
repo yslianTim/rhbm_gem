@@ -343,7 +343,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
                 data_array.emplace_back(std::make_tuple(sampling_entry_list, atom->GetInfo()));
             }
             auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
-            model_estimator->SetThreadSize(m_options.thread_size);
+            model_estimator->SetThreadSize(1);
             model_estimator->SetDataArray(data_array);
             model_estimator->RunEstimation(m_options.alpha_r, m_options.alpha_g);
 
