@@ -192,6 +192,9 @@ void MapSimulationCommand::RunMapSimulationMethod1(void)
         "Total number of blurring width sets to be simulated: "
         + std::to_string(m_options.blurring_width_list.size()));
 
+    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(
+        m_selected_atom_list, 0, m_options.thread_size);
+
     for (auto & blurring_width : m_options.blurring_width_list)
     {
         auto map_key_tag{
@@ -250,8 +253,6 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
         m_atom_charge_map.emplace(atom->GetSerialID(), CalculateAtomCharge(atom.get()));
     }
 
-    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(
-        m_selected_atom_list, 0, m_options.thread_size);
     Logger::Log(LogLevel::Info,
         "Number of selected atoms to be simulated = "
         + std::to_string(m_selected_atom_list.size()) +" / "
