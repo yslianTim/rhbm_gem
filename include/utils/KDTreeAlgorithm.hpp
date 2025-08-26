@@ -161,8 +161,35 @@ private:
             std::make_unique<KDNode<NodeType>>(*mid_iter, axis)
         };
 
+#ifdef USE_OPENMP
+        if (depth == 0)
+        {
+            #pragma omp parallel num_threads(thread_size)
+            #pragma omp single nowait
+            {
+                #pragma omp task shared(kd_node) if(thread_size > 1)
+                kd_node->m_left = BuildKDTree(begin, mid_iter, depth + 1, thread_size / 2);
+
+                #pragma omp task shared(kd_node) if(thread_size > 1)
+                kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size / 2);
+
+                #pragma omp taskwait
+            }
+        }
+        else
+        {
+            #pragma omp task shared(kd_node) if(thread_size > 1)
+            kd_node->m_left = BuildKDTree(begin, mid_iter, depth + 1, thread_size / 2);
+
+            #pragma omp task shared(kd_node) if(thread_size > 1)
+            kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size / 2);
+
+            #pragma omp taskwait
+        }
+#else
         kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1, thread_size);
         kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size);
+#endif
 
         return kd_node;
     }
