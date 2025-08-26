@@ -56,10 +56,13 @@ public:
 
 private:
     bool BuildDataObject(void);
-    void RunMapSimulation(void);
+    void RunMapSimulationMethod1(void);
+    void RunMapSimulationMethod2(void);
     void BuildAtomList(ModelObject * model_object);
     double CalculateAtomCharge(AtomObject * atom) const;
     void CalculateAtomRange(void);
+    std::unique_ptr<MapObject> CreateMapObject(void);
+    void PopulateMapValueArray(MapObject * map_object, double blurring_width);
     std::unique_ptr<MapObject> CreateSimulatedMapObject(double blurring_width);
     std::array<int, 3> CalculateGridSize(const std::array<float, 3> & grid_spacing) const;
     std::array<float, 3> CalculateOrigin(const std::array<float, 3> & grid_spacing) const;

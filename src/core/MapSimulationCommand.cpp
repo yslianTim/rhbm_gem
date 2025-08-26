@@ -90,7 +90,8 @@ bool MapSimulationCommand::Execute(void)
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::Execute() called");
     if (BuildDataObject() == false) return false;
     CalculateAtomRange();
-    RunMapSimulation();
+    RunMapSimulationMethod1();
+    //RunMapSimulationMethod2();
     return true;
 }
 
@@ -182,15 +183,15 @@ bool MapSimulationCommand::BuildDataObject(void)
     return true;
 }
 
-void MapSimulationCommand::RunMapSimulation(void)
+void MapSimulationCommand::RunMapSimulationMethod1(void)
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RunMapSimulation() called");
-    ScopeTimer timer("MapSimulationCommand::RunMapSimulation");
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RunMapSimulationMethod1() called");
+    ScopeTimer timer("MapSimulationCommand::RunMapSimulationMethod1");
     
     Logger::Log(LogLevel::Info,
         "Total number of blurring width sets to be simulated: "
         + std::to_string(m_options.blurring_width_list.size()));
-    
+
     for (auto & blurring_width : m_options.blurring_width_list)
     {
         auto map_key_tag{
@@ -198,6 +199,30 @@ void MapSimulationCommand::RunMapSimulation(void)
             StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
         };
         auto map_object{ CreateSimulatedMapObject(blurring_width) };
+        std::string file_name{ m_options.map_file_name + "_" + map_key_tag + ".map" };
+        std::filesystem::path output_file_name{ m_options.folder_path / file_name };
+        MapFileWriter writer{ output_file_name.string(), map_object.get() };
+        writer.Write();
+    }
+}
+
+void MapSimulationCommand::RunMapSimulationMethod2(void)
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RunMapSimulationMethod2() called");
+    ScopeTimer timer("MapSimulationCommand::RunMapSimulationMethod2");
+    
+    Logger::Log(LogLevel::Info,
+        "Total number of blurring width sets to be simulated: "
+        + std::to_string(m_options.blurring_width_list.size()));
+    
+    auto map_object{ CreateMapObject() };
+    for (auto & blurring_width : m_options.blurring_width_list)
+    {
+        auto map_key_tag{
+            m_model_object->GetPdbID() + "_bw" +
+            StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
+        };
+        PopulateMapValueArray(map_object.get(), blurring_width);
         std::string file_name{ m_options.map_file_name + "_" + map_key_tag + ".map" };
         std::filesystem::path output_file_name{ m_options.folder_path / file_name };
         MapFileWriter writer{ output_file_name.string(), map_object.get() };
@@ -288,6 +313,91 @@ void MapSimulationCommand::CalculateAtomRange(void)
     m_atom_range_maximum[0] += static_cast<float>(m_options.cutoff_distance);
     m_atom_range_maximum[1] += static_cast<float>(m_options.cutoff_distance);
     m_atom_range_maximum[2] += static_cast<float>(m_options.cutoff_distance);
+}
+
+std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject(void)
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::CreateMapObject() called");
+    ScopeTimer timer("MapSimulationCommand::CreateMapObject");
+    std::array<float, 3> grid_spacing{
+        static_cast<float>(m_options.grid_spacing),
+        static_cast<float>(m_options.grid_spacing),
+        static_cast<float>(m_options.grid_spacing)
+    };
+
+    auto origin{ CalculateOrigin(grid_spacing) };
+    auto grid_size{ CalculateGridSize(grid_spacing) };
+    auto map_object{ std::make_unique<MapObject>(grid_size, grid_spacing, origin) };
+    map_object->SetThreadSize(static_cast<int>(m_options.thread_size));
+
+    auto voxel_size{ map_object->GetMapValueArraySize() };
+    auto map_value_array{ std::make_unique<float[]>(voxel_size) };
+    std::fill_n(map_value_array.get(), voxel_size, 0.0f);
+    map_object->SetMapValueArray(std::move(map_value_array));
+    map_object->BuildKDTreeRoot();
+
+    return map_object;
+}
+
+void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double blurring_width)
+{
+    Logger::Log(LogLevel::Debug, "MapSimulationCommand::PopulateMapValueArray() called");
+    ScopeTimer timer("MapSimulationCommand::PopulateMapValueArray");
+    Logger::Log(LogLevel::Info,
+        "  - Start map value array production with blurring width = "+
+        StringHelper::ToStringWithPrecision<double>(blurring_width, 2));
+
+    auto electric_potential{ std::make_unique<ElectricPotential>() };
+    electric_potential->SetBlurringWidth(blurring_width);
+    electric_potential->SetModelChoice(static_cast<int>(m_options.potential_model_choice));
+
+    auto voxel_size{ map_object->GetMapValueArraySize() };
+    auto map_value_array{ std::make_unique<float[]>(voxel_size) };
+    std::fill_n(map_value_array.get(), voxel_size, 0.0f);
+
+    auto atom_size{ m_selected_atom_list.size() };
+    auto kd_tree_root{ map_object->GetKDTreeRoot() };
+    size_t atom_count{ 0 };
+    std::vector<GridNode*> in_range_grid_node_list;
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for num_threads(m_options.thread_size) private(in_range_grid_node_list)
+#endif
+    for (size_t i = 0; i < atom_size; i++)
+    {
+        auto atom{ m_selected_atom_list[i] };
+        auto atom_position{ atom->GetPosition() };
+        MapObject query_map_object({1, 1, 1}, {1.0, 1.0, 1.0}, atom_position);
+        GridNode query_node(0, &query_map_object);
+
+        KDTreeAlgorithm<GridNode>::RangeSearch(
+            kd_tree_root, &query_node, m_options.cutoff_distance, in_range_grid_node_list);
+        
+        for (auto & grid_node : in_range_grid_node_list)
+        {
+            auto distance{
+                ArrayStats<float>::ComputeNorm(atom_position, grid_node->GetPosition())
+            };
+            auto charge{ 0.0 };
+            auto iter{ m_atom_charge_map.find(atom->GetSerialID()) };
+            if (iter != m_atom_charge_map.end()) charge = iter->second;
+            map_value_array[grid_node->GetGridIndex()] += static_cast<float>(
+                electric_potential->GetPotentialValue(atom->GetElement(), distance, charge)
+            );
+        }
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            atom_count++;
+            Logger::ProgressBar(atom_count, atom_size);
+        }
+    }
+
+    map_object->SetMapValueArray(std::move(map_value_array));
+    map_object->Update();
+    map_object->Display();
 }
 
 std::unique_ptr<MapObject> MapSimulationCommand::CreateSimulatedMapObject(double blurring_width)

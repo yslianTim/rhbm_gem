@@ -338,8 +338,7 @@ void MapObject::BuildKDTreeRoot(void)
         #pragma omp critical
         {
             m_grid_node_list.insert(
-                m_grid_node_list.end(),
-                thread_local_list.begin(), thread_local_list.end());
+                m_grid_node_list.end(), thread_local_list.begin(), thread_local_list.end());
         }
     }
 #else
