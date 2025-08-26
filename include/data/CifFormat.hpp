@@ -34,6 +34,7 @@ private:
     void LoadDatabaseInfo(std::ifstream & infile);
     void LoadEntityInfo(std::ifstream & infile);
     void LoadPdbxData(std::ifstream & infile);
+    void LoadXRayResolutionInfo(std::ifstream & infile);
     void LoadElementTypeList(std::ifstream & infile);
     void LoadStructHelixInfo(std::ifstream & infile);
     void LoadStructSheetInfo(std::ifstream & infile);

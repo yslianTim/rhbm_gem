@@ -169,15 +169,8 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
     while (std::getline(infile, line))
     {
         StringHelper::StripCarriageReturn(line);
-        StringHelper::StripCarriageReturn(line);
+        //StringHelper::StripCarriageReturn(line);
         if (line.find("_em_3d_reconstruction.resolution ") != std::string::npos)
-        {
-            std::istringstream iss(line);
-            iss >> header >> resolution;
-            m_data_block->SetResolution(resolution);
-            found_resolution = true;
-        }
-        if (line.find("_refine.ls_d_res_high ") != std::string::npos && !found_resolution)
         {
             std::istringstream iss(line);
             iss >> header >> resolution;
@@ -193,6 +186,34 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
             m_data_block->SetResolutionMethod(resolution_method);
             found_resolution_method = true;
         }
+
+        if (found_resolution && found_resolution_method) break;
+    }
+    if (!found_resolution || !found_resolution_method)
+    {
+        infile.clear();
+        infile.seekg(0);
+        LoadXRayResolutionInfo(infile);
+    }
+}
+
+void CifFormat::LoadXRayResolutionInfo(std::ifstream & infile)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadXRayResolutionInfo() called");
+    std::string line, header, resolution, resolution_method;
+    auto found_resolution{ false };
+    auto found_resolution_method{ false };
+    while (std::getline(infile, line))
+    {
+        StringHelper::StripCarriageReturn(line);
+        if (line.find("_refine.ls_d_res_high ") != std::string::npos && !found_resolution)
+        {
+            std::istringstream iss(line);
+            iss >> header >> resolution;
+            m_data_block->SetResolution(resolution);
+            found_resolution = true;
+        }
+
         if (line.find("_refine.pdbx_refine_id ") != std::string::npos && !found_resolution_method)
         {
             std::istringstream iss(line);
