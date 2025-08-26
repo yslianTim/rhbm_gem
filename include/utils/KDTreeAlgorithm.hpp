@@ -145,6 +145,7 @@ private:
         constexpr int dimension{ 3 };
         auto axis{ static_cast<size_t>(depth % dimension) };
         auto count{ std::distance(begin, end) };
+        constexpr int PARALLEL_THRESHOLD{ 1024 };
         auto mid_iter{ begin + count / 2 };
 
         std::nth_element(
@@ -162,29 +163,36 @@ private:
         };
 
 #ifdef USE_OPENMP
-        if (depth == 0)
+        if (thread_size <= 1)
+        {
+            kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1, thread_size);
+            kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size);
+        }
+        else if (depth == 0)
         {
             #pragma omp parallel num_threads(thread_size)
             #pragma omp single nowait
             {
-                #pragma omp task shared(kd_node) if(thread_size > 1)
-                kd_node->m_left = BuildKDTree(begin, mid_iter, depth + 1, thread_size / 2);
+                #pragma omp taskgroup
+                {
+                    #pragma omp task shared(kd_node) depend(out: kd_node->m_left) if(thread_size > 1 && count >= PARALLEL_THRESHOLD)
+                    kd_node->m_left = BuildKDTree(begin, mid_iter, depth + 1, thread_size);
 
-                #pragma omp task shared(kd_node) if(thread_size > 1)
-                kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size / 2);
-
-                #pragma omp taskwait
+                    #pragma omp task shared(kd_node) depend(out: kd_node->m_right) if(thread_size > 1 && count >= PARALLEL_THRESHOLD)
+                    kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size);
+                }
             }
         }
         else
         {
-            #pragma omp task shared(kd_node) if(thread_size > 1)
-            kd_node->m_left = BuildKDTree(begin, mid_iter, depth + 1, thread_size / 2);
+            #pragma omp taskgroup
+            {
+                #pragma omp task shared(kd_node) depend(out: kd_node->m_left) if(thread_size > 1 && count >= PARALLEL_THRESHOLD)
+                kd_node->m_left = BuildKDTree(begin, mid_iter, depth + 1, thread_size);
 
-            #pragma omp task shared(kd_node) if(thread_size > 1)
-            kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size / 2);
-
-            #pragma omp taskwait
+                #pragma omp task shared(kd_node) depend(out: kd_node->m_right) if(thread_size > 1 && count >= PARALLEL_THRESHOLD)
+                kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size);
+            }
         }
 #else
         kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1, thread_size);
