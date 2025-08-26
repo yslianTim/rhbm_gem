@@ -2,6 +2,7 @@
 #include "AtomObject.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "KDTreeAlgorithm.hpp"
 #include "ArrayStats.hpp"
 #include "Logger.hpp"
 

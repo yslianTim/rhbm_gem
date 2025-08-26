@@ -9,6 +9,7 @@
 #include "KeyPacker.hpp"
 #include "Constants.hpp"
 #include "GlobalEnumClass.hpp"
+#include "KDTreeAlgorithm.hpp"
 #include "AtomClassifier.hpp"
 #include "Logger.hpp"
 

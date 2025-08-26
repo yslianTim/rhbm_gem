@@ -1,5 +1,7 @@
 #include "MapObject.hpp"
 #include "DataObjectVisitorBase.hpp"
+#include "KDTreeAlgorithm.hpp"
+#include "ScopeTimer.hpp"
 #include "ArrayStats.hpp"
 #include "Logger.hpp"
 
@@ -10,6 +12,10 @@
 #include <algorithm>
 #include <iomanip>
 
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 MapObject::MapObject(void) :
     m_key_tag{ "" }, m_thread_size{ 1 },
     m_voxel_size{ 1 },
@@ -17,7 +23,7 @@ MapObject::MapObject(void) :
     m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
     m_grid_size{ 1, 1, 1 }, m_grid_spacing{ 1.0f, 1.0f, 1.0f }, m_origin{ 0.0f, 0.0f, 0.0f },
     m_map_length{}, m_overflow{}, m_underflow{ m_origin }, m_upper_bound{}, m_lower_bound{},
-    m_map_value_array{ nullptr }
+    m_map_value_array{ nullptr }, m_kd_tree_root{ nullptr }, m_grid_node_list{}
 {
     Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
 }
@@ -32,7 +38,8 @@ MapObject::MapObject(
     m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
     m_grid_size{ grid_size }, m_grid_spacing{ grid_spacing }, m_origin{ origin },
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
-    m_map_value_array{ std::make_unique<float[]>(m_voxel_size) }
+    m_map_value_array{ std::make_unique<float[]>(m_voxel_size) },
+    m_kd_tree_root{ nullptr }, m_grid_node_list{}
 {
     Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
     for (size_t i = 0; i < 3; i++)
@@ -55,7 +62,8 @@ MapObject::MapObject(
     m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
     m_grid_size{ grid_size }, m_grid_spacing{ grid_spacing }, m_origin{ origin },
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
-    m_map_value_array{ std::move(map_value_array) }
+    m_map_value_array{ std::move(map_value_array) },
+    m_kd_tree_root{ nullptr }, m_grid_node_list{}
 {
     Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
     for (size_t i = 0; i < 3; i++)
@@ -81,7 +89,8 @@ MapObject::MapObject(const MapObject & other) :
     m_grid_size{ other.m_grid_size }, m_grid_spacing{ other.m_grid_spacing }, m_origin{ other.m_origin },
     m_map_length{ other.m_map_length }, m_overflow{ other.m_overflow }, m_underflow{ other.m_underflow },
     m_upper_bound{ other.m_upper_bound }, m_lower_bound{ other.m_lower_bound },
-    m_map_value_array{ std::make_unique<float[]>(other.m_voxel_size) }
+    m_map_value_array{ std::make_unique<float[]>(other.m_voxel_size) },
+    m_kd_tree_root{ nullptr }, m_grid_node_list{}
 {
     std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(float));
     Update();
@@ -290,6 +299,7 @@ void MapObject::CalculateMapValueSD(void)
 
 void MapObject::MapValueArrayNormalization(void)
 {
+    Logger::Log(LogLevel::Debug, "MapObject::MapValueArrayNormalization() called");
     if (m_map_value_sd == 0.0f)
     {
         Logger::Log(LogLevel::Warning,
@@ -302,4 +312,60 @@ void MapObject::MapValueArrayNormalization(void)
         m_map_value_array[i] /= m_map_value_sd;
     }
     Update();
+}
+
+void MapObject::BuildKDTreeRoot(void)
+{
+    Logger::Log(LogLevel::Debug, "MapObject::BuildKDTreeRoot() called");
+    ScopeTimer timer("MapObject::BuildKDTreeRoot");
+    if (m_kd_tree_root != nullptr) return;
+
+    m_grid_node_list.clear();
+    m_grid_node_list.reserve(m_voxel_size);
+
+#ifdef USE_OPENMP
+    #pragma omp parallel num_threads(m_thread_size)
+    {
+        std::vector<GridNode> thread_local_list;
+        thread_local_list.reserve(m_voxel_size / static_cast<size_t>(m_thread_size) + 1);
+
+        #pragma omp for schedule(static)
+        for (size_t i = 0; i < m_voxel_size; i++)
+        {
+            thread_local_list.emplace_back(i, this);
+        }
+
+        #pragma omp critical
+        {
+            m_grid_node_list.insert(
+                m_grid_node_list.end(),
+                thread_local_list.begin(), thread_local_list.end());
+        }
+    }
+#else
+    for (size_t i = 0; i < m_voxel_size; i++)
+    {
+        thread_local_list.emplace_back(i, this);
+    }
+#endif
+
+    if (m_grid_node_list.empty())
+    {
+        Logger::Log(LogLevel::Warning, "No grids were found from the map.");
+        return;
+    }
+
+    m_kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(m_grid_node_list);
+}
+
+KDNode<GridNode> * MapObject::GetKDTreeRoot(void) const
+{
+    if (m_kd_tree_root == nullptr)
+    {
+        Logger::Log(LogLevel::Error,
+            "MapObject::GetKDTreeRoot -> "
+            "KD-Tree root is not built yet. Call BuildKDTreeRoot() first.");
+        return nullptr;
+    }
+    return m_kd_tree_root.get();
 }

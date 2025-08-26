@@ -7,11 +7,13 @@
 #include <array>
 #include <tuple>
 #include <unordered_map>
+
 #include "DataObjectBase.hpp"
-#include "KDTreeAlgorithm.hpp"
 
 class AtomObject;
 class GroupPotentialEntry;
+template <typename T> struct KDNode;
+
 class ModelObject : public DataObjectBase
 {
     std::vector<std::unique_ptr<AtomObject>> m_atom_list;
@@ -42,8 +44,11 @@ public:
     void SetEmdID(const std::string & label) { m_emd_id = label; }
     void SetResolution(double value) { m_resolution = value; }
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
-    void SetChainIDListMap(const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
-    void AddGroupPotentialEntry(const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry);
+    void SetChainIDListMap(
+        const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
+    void AddGroupPotentialEntry(
+        const std::string & class_key,
+        std::unique_ptr<GroupPotentialEntry> & entry);
     void BuildKDTreeRoot(void);
     void FilterAtomFromSymmetry(bool is_asymmetry);
 
@@ -60,7 +65,8 @@ public:
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
     GroupPotentialEntry * GetGroupPotentialEntry(const std::string & class_key) const;
-    const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> & GetGroupPotentialEntryMap(void) const;
+    const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
+    GetGroupPotentialEntryMap(void) const;
     KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
 
 private:
