@@ -150,6 +150,23 @@ TEST(KDTreeAlgorithmTest, KNearestNeighborsExternalQuery)
     EXPECT_EQ(&node_list[2], knn[2]);
 }
 
+TEST(KDTreeAlgorithmTest, KNearestNeighborsBatchProcessesQueries)
+{
+    std::vector<std::unique_ptr<TestNode>> storage;
+    auto root{ BuildSimpleTree(storage) };
+
+    std::vector<TestNode *> queries{ storage[0].get(), storage[4].get() };
+    auto results{ KDTreeAlgorithm<TestNode>::KNearestNeighborsBatch(root.get(), queries, 2) };
+
+    ASSERT_EQ(queries.size(), results.size());
+    ASSERT_EQ(2u, results[0].size());
+    EXPECT_EQ(storage[0].get(), results[0][0]);
+    EXPECT_EQ(storage[1].get(), results[0][1]);
+    ASSERT_EQ(2u, results[1].size());
+    EXPECT_EQ(storage[4].get(), results[1][0]);
+    EXPECT_EQ(storage[3].get(), results[1][1]);
+}
+
 TEST(KDTreeAlgorithmTest, KNearestNeighborsTieDistances)
 {
     std::vector<TestNode> node_list{

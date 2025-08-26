@@ -90,8 +90,8 @@ bool MapSimulationCommand::Execute(void)
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::Execute() called");
     if (BuildDataObject() == false) return false;
     CalculateAtomRange();
-    RunMapSimulationMethod1();
-    //RunMapSimulationMethod2();
+    //RunMapSimulationMethod1();
+    RunMapSimulationMethod2();
     return true;
 }
 
@@ -250,7 +250,8 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
         m_atom_charge_map.emplace(atom->GetSerialID(), CalculateAtomCharge(atom.get()));
     }
 
-    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(m_selected_atom_list, 0);
+    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(
+        m_selected_atom_list, 0, m_options.thread_size);
     Logger::Log(LogLevel::Info,
         "Number of selected atoms to be simulated = "
         + std::to_string(m_selected_atom_list.size()) +" / "
@@ -366,6 +367,8 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     for (size_t i = 0; i < atom_size; i++)
     {
         auto atom{ m_selected_atom_list[i] };
+        auto charge{ m_atom_charge_map.at(atom->GetSerialID()) };
+        auto element{ atom->GetElement() };
         auto atom_position{ atom->GetPosition() };
         MapObject query_map_object({1, 1, 1}, {1.0, 1.0, 1.0}, atom_position);
         GridNode query_node(0, &query_map_object);
@@ -378,11 +381,8 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
             auto distance{
                 ArrayStats<float>::ComputeNorm(atom_position, grid_node->GetPosition())
             };
-            auto charge{ 0.0 };
-            auto iter{ m_atom_charge_map.find(atom->GetSerialID()) };
-            if (iter != m_atom_charge_map.end()) charge = iter->second;
             map_value_array[grid_node->GetGridIndex()] += static_cast<float>(
-                electric_potential->GetPotentialValue(atom->GetElement(), distance, charge)
+                electric_potential->GetPotentialValue(element, distance, charge)
             );
         }
 

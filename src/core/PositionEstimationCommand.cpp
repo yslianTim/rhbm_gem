@@ -194,7 +194,8 @@ bool PositionEstimationCommand::BuildVoxelList(void)
         return false;
     }
 
-    m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(m_selected_voxel_list);
+    m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(
+        m_selected_voxel_list, 0, m_options.thread_size);
 
     Logger::Log(LogLevel::Info,
         "Number of selected voxels to be estimated from map = "

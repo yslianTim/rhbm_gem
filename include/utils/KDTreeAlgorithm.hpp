@@ -7,6 +7,10 @@
 #include <queue>
 #include <cmath>
 
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
 template <typename NodeType>
 struct KDNode
 {
@@ -41,13 +45,13 @@ public:
     KDTreeAlgorithm(void) = default;
     ~KDTreeAlgorithm() {}
     static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
-        std::vector<NodeType *> & node_list, int depth = 0)
+        std::vector<NodeType *> & node_list, int depth = 0, int thread_size = 1)
     {
-        return BuildKDTree(node_list.begin(), node_list.end(), depth);
+        return BuildKDTree(node_list.begin(), node_list.end(), depth, thread_size);
     }
 
     static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
-        std::vector<NodeType> & node_list, int depth = 0)
+        std::vector<NodeType> & node_list, int depth = 0, int thread_size = 1)
     {
         std::vector<NodeType *> node_ptr_list;
         node_ptr_list.reserve(node_list.size());
@@ -55,11 +59,13 @@ public:
         {
             node_ptr_list.emplace_back(&node);
         }
-        return BuildKDTree(node_ptr_list, depth);
+        return BuildKDTree(node_ptr_list, depth, thread_size);
     }
 
     static std::vector<NodeType *> KNearestNeighbors(
-        const KDNode<NodeType> * root_kd_node, const NodeType * query_node, size_t k_size)
+        const KDNode<NodeType> * root_kd_node,
+        const NodeType * query_node,
+        size_t k_size)
     {
         if (root_kd_node == nullptr || query_node == nullptr || k_size == 0) return {};
 
@@ -77,8 +83,27 @@ public:
         return knn_list;
     }
 
+    static std::vector<std::vector<NodeType *>> KNearestNeighborsBatch(
+        const KDNode<NodeType> * root_kd_node,
+        const std::vector<NodeType *> & query_nodes,
+        size_t k_size, int thread_size = 1)
+    {
+        std::vector<std::vector<NodeType *>> results(query_nodes.size());
+
+#ifdef USE_OPENMP
+        #pragma omp parallel for num_threads(thread_size)
+#endif
+        for (size_t i = 0; i < query_nodes.size(); i++)
+        {
+            results[i] = KNearestNeighbors(root_kd_node, query_nodes[i], k_size);
+        }
+        return results;
+    }
+
     static std::vector<NodeType *> RangeSearch(
-        const KDNode<NodeType> * root_kd_node, const NodeType * query_node, double range)
+        const KDNode<NodeType> * root_kd_node,
+        const NodeType * query_node,
+        double range)
     {
         if (range < 0.0 || root_kd_node == nullptr || query_node == nullptr)
         {
@@ -91,7 +116,9 @@ public:
     }
 
     static void RangeSearch(
-        const KDNode<NodeType> * root_kd_node, const NodeType * query_node, double range,
+        const KDNode<NodeType> * root_kd_node,
+        const NodeType * query_node,
+        double range,
         std::vector<NodeType *> & knn_list)
     {
         if (range < 0.0 || root_kd_node == nullptr || query_node == nullptr)
@@ -107,7 +134,8 @@ private:
     static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
         typename std::vector<NodeType *>::iterator begin,
         typename std::vector<NodeType *>::iterator end,
-        int depth = 0)
+        int depth = 0,
+        int thread_size = 1)
     {
         if (begin == end)
         {
@@ -133,8 +161,8 @@ private:
             std::make_unique<KDNode<NodeType>>(*mid_iter, axis)
         };
 
-        kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1);
-        kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1);
+        kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1, thread_size);
+        kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size);
 
         return kd_node;
     }
@@ -162,7 +190,9 @@ private:
     }
 
     static void KNearestNeighborsHelper(
-        const KDNode<NodeType> * kd_node, const NodeType * query_node, int k,
+        const KDNode<NodeType> * kd_node,
+        const NodeType * query_node,
+        int k,
         std::priority_queue<DistNode, std::vector<DistNode>, DistNodeComparator> & max_heap)
     {
         if (kd_node == nullptr) return;
@@ -198,8 +228,10 @@ private:
     }
 
     static void RangeSearchHelper(
-        const KDNode<NodeType> * kd_node, const NodeType * query_node,
-        double range, std::vector<NodeType *> & results)
+        const KDNode<NodeType> * kd_node,
+        const NodeType * query_node,
+        double range,
+        std::vector<NodeType *> & results)
     {
         if (kd_node == nullptr) return;
 

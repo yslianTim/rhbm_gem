@@ -354,7 +354,7 @@ void MapObject::BuildKDTreeRoot(void)
         return;
     }
 
-    m_kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(m_grid_node_list);
+    m_kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(m_grid_node_list, 0, m_thread_size);
 }
 
 KDNode<GridNode> * MapObject::GetKDTreeRoot(void) const
