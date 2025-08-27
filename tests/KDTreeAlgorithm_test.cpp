@@ -65,6 +65,18 @@ TEST(KDTreeAlgorithmTest, KNearestNeighborsAscendingOrder)
     EXPECT_EQ(storage[2].get(), knn[2]);
 }
 
+TEST(KDTreeAlgorithmTest, KNearestNeighborsWithBuffer)
+{
+    std::vector<std::unique_ptr<TestNode>> storage;
+    auto root{ BuildSimpleTree(storage) };
+    std::vector<TestNode *> buffer;
+    KDTreeAlgorithm<TestNode>::KNearestNeighbors(root.get(), storage[0].get(), 3, buffer);
+    ASSERT_EQ(3u, buffer.size());
+    EXPECT_EQ(storage[0].get(), buffer[0]);
+    EXPECT_EQ(storage[1].get(), buffer[1]);
+    EXPECT_EQ(storage[2].get(), buffer[2]);
+}
+
 TEST(KDTreeAlgorithmTest, BuildKDTreeMultiAxisStructure)
 {
     std::vector<TestNode> node_list{

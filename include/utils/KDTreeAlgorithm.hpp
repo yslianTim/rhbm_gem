@@ -62,24 +62,34 @@ public:
         return BuildKDTree(node_ptr_list, depth, thread_size);
     }
 
-    static std::vector<NodeType *> KNearestNeighbors(
+    static void KNearestNeighbors(
         const KDNode<NodeType> * root_kd_node,
         const NodeType * query_node,
-        size_t k_size)
+        size_t k_size,
+        std::vector<NodeType *> & knn_list)
     {
-        if (root_kd_node == nullptr || query_node == nullptr || k_size == 0) return {};
+        knn_list.clear();
+        if (root_kd_node == nullptr || query_node == nullptr || k_size == 0) return;
 
+        if (knn_list.capacity() < k_size) knn_list.reserve(k_size);
         std::priority_queue<DistNode, std::vector<DistNode>, DistNodeComparator> max_heap;
         KNearestNeighborsHelper(root_kd_node, query_node, static_cast<int>(k_size), max_heap);
-        std::vector<NodeType *> knn_list;
-        knn_list.reserve(max_heap.size());
         while (!max_heap.empty())
         {
             knn_list.emplace_back(max_heap.top().m_node);
             max_heap.pop();
         }
         std::reverse(knn_list.begin(), knn_list.end());
+    }
 
+    static std::vector<NodeType *> KNearestNeighbors(
+        const KDNode<NodeType> * root_kd_node,
+        const NodeType * query_node,
+        size_t k_size)
+    {
+        std::vector<NodeType *> knn_list;
+        if (k_size > 0) knn_list.reserve(k_size);
+        KNearestNeighbors(root_kd_node, query_node, k_size, knn_list);
         return knn_list;
     }
 

@@ -21,6 +21,7 @@ public:
         size_t knn_size{ 20 };
         float alpha{ 2.0 };
         float threshold_ratio{ 0.01f };
+        float dedup_tolerance{ 1.0e-2f };
         std::filesystem::path map_file_path;
     };
 
@@ -45,13 +46,14 @@ public:
     void SetKNNSize(int value);
     void SetAlpha(double value);
     void SetThresholdRatio(double value);
+    void SetDedupTolerance(double value);
 
 private:
     bool BuildDataObject(void);
     bool BuildVoxelList(void);
     void RunMapValueConvergence(void);
-    void UpdatePointPosition(size_t index);
-    void RunUniquePointList(void);
+    void UpdatePointPosition(size_t index, size_t knn_size);
+    void RunUniquePointList(float tolerance);
     void OutputPointList(void) const;
 
 };

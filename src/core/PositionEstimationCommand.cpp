@@ -13,7 +13,7 @@
 #include <memory>
 #include <vector>
 #include <array>
-#include <unordered_set>
+#include <algorithm>
 #include <cmath>
 
 #ifdef USE_OPENMP
@@ -51,6 +51,9 @@ void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
     cmd->add_option_function<double>("--threshold",
         [&](double value) { SetThresholdRatio(value); },
         "Ratio of threshold of map values")->default_val(m_options.threshold_ratio);
+    cmd->add_option_function<double>("--dedup-tolerance",
+        [&](double value) { SetDedupTolerance(value); },
+        "Tolerance for deduplicating points")->default_val(m_options.dedup_tolerance);
 }
 
 bool PositionEstimationCommand::Execute(void)
@@ -59,7 +62,7 @@ bool PositionEstimationCommand::Execute(void)
     if (BuildDataObject() == false) return false;
     if (BuildVoxelList() == false) return false;
     RunMapValueConvergence();
-    RunUniquePointList();
+    RunUniquePointList(m_options.dedup_tolerance);
     OutputPointList();
     return true;
 }
@@ -88,13 +91,14 @@ void PositionEstimationCommand::SetIterationCount(int value)
 
 void PositionEstimationCommand::SetKNNSize(int value)
 {
-    m_options.knn_size = static_cast<size_t>(value);
-    if (m_options.knn_size == 0)
+    if (value <= 0)
     {
         Logger::Log(LogLevel::Warning,
             "KNN size must be positive, reset to default 20");
         m_options.knn_size = 20;
+        return;
     }
+    m_options.knn_size = static_cast<size_t>(value);
 }
 
 void PositionEstimationCommand::SetAlpha(double value)
@@ -116,6 +120,17 @@ void PositionEstimationCommand::SetThresholdRatio(double value)
         Logger::Log(LogLevel::Warning,
             "Threshold ratio must be in (0, 1], reset to default 0.01");
         m_options.threshold_ratio = 0.01f;
+    }
+}
+
+void PositionEstimationCommand::SetDedupTolerance(double value)
+{
+    m_options.dedup_tolerance = static_cast<float>(value);
+    if (m_options.dedup_tolerance <= 0.0f)
+    {
+        Logger::Log(LogLevel::Warning,
+            "Dedup tolerance must be positive, reset to default 0.01");
+        m_options.dedup_tolerance = 1.0e-2f;
     }
 }
 
@@ -146,8 +161,14 @@ bool PositionEstimationCommand::BuildVoxelList(void)
     ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
     m_selected_voxel_list.clear();
     auto array_size{ m_map_object->GetMapValueArraySize() };
-    m_selected_voxel_list.reserve(array_size);
     auto threshold{ m_map_object->GetMapValueMax() * m_options.threshold_ratio };
+
+    const float * map_values{ m_map_object->GetMapValueArray() };
+    auto selected_count{
+        static_cast<size_t>(std::count_if(map_values, map_values + array_size,
+            [threshold](float v) { return v > threshold; }))
+    };
+    m_selected_voxel_list.reserve(selected_count);
 
     auto process_voxel = [&](size_t index, std::vector<VoxelNode> & list)
     {
@@ -161,7 +182,7 @@ bool PositionEstimationCommand::BuildVoxelList(void)
     #pragma omp parallel num_threads(m_options.thread_size)
     {
         std::vector<VoxelNode> thread_local_list;
-        thread_local_list.reserve(array_size / static_cast<size_t>(m_options.thread_size) + 1);
+        thread_local_list.reserve(selected_count / static_cast<size_t>(m_options.thread_size) + 1);
 
         #pragma omp for schedule(static)
         for (size_t i = 0; i < array_size; i++)
@@ -182,11 +203,6 @@ bool PositionEstimationCommand::BuildVoxelList(void)
         process_voxel(i, m_selected_voxel_list);
     }
 #endif
-
-    if (m_selected_voxel_list.size() < m_selected_voxel_list.capacity())
-    {
-        m_selected_voxel_list.shrink_to_fit();
-    }
 
     if (m_selected_voxel_list.empty())
     {
@@ -210,7 +226,8 @@ void PositionEstimationCommand::RunMapValueConvergence(void)
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunMapValueConvergence() called");
     ScopeTimer timer("PositionEstimationCommand::RunMapValueConvergence");
 
-    if (m_selected_voxel_list.size() < m_options.knn_size)
+    auto knn_size{ m_options.knn_size };
+    if (m_selected_voxel_list.size() < knn_size)
     {
         if (m_selected_voxel_list.empty())
         {
@@ -219,39 +236,42 @@ void PositionEstimationCommand::RunMapValueConvergence(void)
         }
         Logger::Log(LogLevel::Warning,
             "Selected voxel count (" + std::to_string(m_selected_voxel_list.size()) +
-            ") is less than knn_size (" + std::to_string(m_options.knn_size) +
+            ") is less than knn_size (" + std::to_string(knn_size) +
             "). Adjusting knn_size accordingly.");
-        m_options.knn_size = m_selected_voxel_list.size();
+        knn_size = m_selected_voxel_list.size();
     }
 
     m_query_point_list = m_selected_voxel_list;
     auto iteration_size{ static_cast<std::size_t>(m_options.iteration_count) };
+    Logger::ProgressBar(0, iteration_size);
     for (size_t t = 1; t <= iteration_size; t++)
     {
-        Logger::ProgressBar(t, iteration_size);
-
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(m_options.thread_size)
 #endif
         for (size_t i = 0; i < m_query_point_list.size(); i++)
         {
-            UpdatePointPosition(i);
+            UpdatePointPosition(i, knn_size);
         }
+        Logger::ProgressBar(t, iteration_size);
     }
 }
 
-void PositionEstimationCommand::UpdatePointPosition(size_t index)
+void PositionEstimationCommand::UpdatePointPosition(size_t index, size_t knn_size)
 {
-    auto knn_list{
-        KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
-            m_kd_tree_root.get(), &m_query_point_list[index], m_options.knn_size)
-    };
+    static thread_local std::vector<VoxelNode *> knn_list;
+    if (knn_list.capacity() < knn_size)
+    {
+        knn_list.reserve(knn_size);
+    }
+    KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
+        m_kd_tree_root.get(), &m_query_point_list[index], knn_size, knn_list);
     size_t knn_count{ knn_list.size() };
-    if (knn_count < m_options.knn_size)
+    if (knn_count < knn_size)
     {
         Logger::Log(LogLevel::Warning,
             "KNN search returned " + std::to_string(knn_count) +
-            " neighbors, less than requested " + std::to_string(m_options.knn_size) + ".");
+            " neighbors, less than requested " + std::to_string(knn_size) + ".");
     }
     if (knn_count == 0)
     {
@@ -288,7 +308,7 @@ void PositionEstimationCommand::UpdatePointPosition(size_t index)
     m_query_point_list[index].SetPosition(point_position_update);
 }
 
-void PositionEstimationCommand::RunUniquePointList(void)
+void PositionEstimationCommand::RunUniquePointList(float tolerance)
 {
     Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunUniquePointList() called");
     ScopeTimer timer("PositionEstimationCommand::RunUniquePointList");
@@ -300,42 +320,29 @@ void PositionEstimationCommand::RunUniquePointList(void)
     m_position_list.clear();
     m_position_list.reserve(m_query_point_list.size());
 
-    struct Int3
-    {
-        int x, y, z;
-        bool operator==(const Int3 & other) const noexcept
-        {
-            return x == other.x && y == other.y && z == other.z;
-        }
-    };
-    struct Int3Hash
-    {
-        std::size_t operator()(const Int3 & p) const noexcept
-        {
-            std::size_t h1{ std::hash<int>{}(p.x) };
-            std::size_t h2{ std::hash<int>{}(p.y) };
-            std::size_t h3{ std::hash<int>{}(p.z) };
-            return h1 ^ (h2 << 1) ^ (h3 << 2);
-        }
-    };
-
     auto point_size_origin{ m_query_point_list.size() };
-    auto tolerance{ 1.0e-2f };
     auto inv_tolerance{ 1.0f / tolerance };
-    std::unordered_set<Int3, Int3Hash> seen;
-    seen.reserve(m_query_point_list.size());
+    std::vector<std::array<int, 3>> quantized_points;
+    quantized_points.reserve(m_query_point_list.size());
     for (const auto & point : m_query_point_list)
     {
         const auto & position{ point.GetPosition() };
-        Int3 key{
+        quantized_points.emplace_back(std::array<int, 3>{
             static_cast<int>(std::floor(position[0] * inv_tolerance)),
             static_cast<int>(std::floor(position[1] * inv_tolerance)),
             static_cast<int>(std::floor(position[2] * inv_tolerance))
-        };
-        if (seen.emplace(key).second)
-        {
-            m_position_list.emplace_back(position);
-        }
+        });
+    }
+
+    std::sort(quantized_points.begin(), quantized_points.end());
+    auto unique_end{ std::unique(quantized_points.begin(), quantized_points.end()) };
+    for (auto it = quantized_points.begin(); it != unique_end; it++)
+    {
+        m_position_list.emplace_back(std::array<float, 3>{
+            static_cast<float>((*it)[0]) * tolerance,
+            static_cast<float>((*it)[1]) * tolerance,
+            static_cast<float>((*it)[2]) * tolerance
+        });
     }
 
     auto removed_count{ point_size_origin - m_position_list.size() };
