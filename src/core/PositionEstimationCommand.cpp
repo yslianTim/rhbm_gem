@@ -15,6 +15,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -322,26 +323,27 @@ void PositionEstimationCommand::RunUniquePointList(float tolerance)
 
     auto point_size_origin{ m_query_point_list.size() };
     auto inv_tolerance{ 1.0f / tolerance };
-    std::vector<std::array<int, 3>> quantized_points;
+    std::vector<std::array<int64_t, 3>> quantized_points;
     quantized_points.reserve(m_query_point_list.size());
     for (const auto & point : m_query_point_list)
     {
         const auto & position{ point.GetPosition() };
-        quantized_points.emplace_back(std::array<int, 3>{
-            static_cast<int>(std::floor(position[0] * inv_tolerance)),
-            static_cast<int>(std::floor(position[1] * inv_tolerance)),
-            static_cast<int>(std::floor(position[2] * inv_tolerance))
+        quantized_points.emplace_back(std::array<int64_t, 3>{
+            static_cast<int64_t>(std::floor(position[0] * inv_tolerance)),
+            static_cast<int64_t>(std::floor(position[1] * inv_tolerance)),
+            static_cast<int64_t>(std::floor(position[2] * inv_tolerance))
         });
     }
 
     std::sort(quantized_points.begin(), quantized_points.end());
     auto unique_end{ std::unique(quantized_points.begin(), quantized_points.end()) };
-    for (auto it = quantized_points.begin(); it != unique_end; it++)
+    quantized_points.erase(unique_end, quantized_points.end());
+    for (const auto & q : quantized_points)
     {
         m_position_list.emplace_back(std::array<float, 3>{
-            static_cast<float>((*it)[0]) * tolerance,
-            static_cast<float>((*it)[1]) * tolerance,
-            static_cast<float>((*it)[2]) * tolerance
+            static_cast<float>(q[0]) * tolerance,
+            static_cast<float>(q[1]) * tolerance,
+            static_cast<float>(q[2]) * tolerance
         });
     }
 
@@ -353,7 +355,9 @@ void PositionEstimationCommand::RunUniquePointList(float tolerance)
     );
     
     m_selected_voxel_list.clear();
+    m_selected_voxel_list.shrink_to_fit();
     m_query_point_list.clear();
+    m_query_point_list.shrink_to_fit();
 }
 
 void PositionEstimationCommand::OutputPointList(void) const
