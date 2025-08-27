@@ -330,7 +330,7 @@ void MapObject::BuildKDTreeRoot(void)
     Logger::Log(LogLevel::Info,
         " - Building KD-Tree from "+ std::to_string(m_voxel_size) + " voxels..."
     );
-    m_kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(m_grid_node_list, 0, m_thread_size);
+    m_kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(m_grid_node_list, 0, m_thread_size, true);
 }
 
 void MapObject::BuildGridNodeList(void)

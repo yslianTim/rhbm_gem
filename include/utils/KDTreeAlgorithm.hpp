@@ -6,10 +6,13 @@
 #include <memory>
 #include <queue>
 #include <cmath>
+#include <atomic>
 
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
+
+#include "Logger.hpp"
 
 template <typename NodeType>
 struct KDNode
@@ -45,13 +48,28 @@ public:
     KDTreeAlgorithm(void) = default;
     ~KDTreeAlgorithm() {}
     static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
-        std::vector<NodeType *> & node_list, int depth = 0, int thread_size = 1)
+        std::vector<NodeType *> & node_list,
+        int depth = 0,
+        int thread_size = 1,
+        bool show_progress = false)
     {
-        return BuildKDTree(node_list.begin(), node_list.end(), depth, thread_size);
+        std::atomic<size_t> progress{ 0 };
+        auto total{ node_list.size() };
+        return BuildKDTree(
+            node_list.begin(),
+            node_list.end(),
+            depth,
+            thread_size,
+            show_progress ? &progress : nullptr,
+            total
+        );
     }
 
     static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
-        std::vector<NodeType> & node_list, int depth = 0, int thread_size = 1)
+        std::vector<NodeType> & node_list,
+        int depth = 0,
+        int thread_size = 1,
+        bool show_progress = false)
     {
         std::vector<NodeType *> node_ptr_list;
         node_ptr_list.reserve(node_list.size());
@@ -59,7 +77,7 @@ public:
         {
             node_ptr_list.emplace_back(&node);
         }
-        return BuildKDTree(node_ptr_list, depth, thread_size);
+        return BuildKDTree(node_ptr_list, depth, thread_size, show_progress);
     }
 
     static void KNearestNeighbors(
@@ -145,7 +163,9 @@ private:
         typename std::vector<NodeType *>::iterator begin,
         typename std::vector<NodeType *>::iterator end,
         int depth = 0,
-        int thread_size = 1)
+        int thread_size = 1,
+        std::atomic<std::size_t> * progress = nullptr,
+        std::size_t total = 0)
     {
         if (begin == end)
         {
@@ -172,6 +192,12 @@ private:
             std::make_unique<KDNode<NodeType>>(*mid_iter, axis)
         };
 
+        if (progress)
+        {
+            auto current{ (*progress)++ };
+            Logger::ProgressPercent(current, total);
+        }
+
 #ifdef USE_OPENMP
         if (thread_size > 1 && count >= parallel_threshold)
         {
@@ -184,11 +210,13 @@ private:
                 {
                     #pragma omp taskgroup
                     {
-                        #pragma omp task shared(kd_node) if(left_threads > 0)
-                        kd_node->m_left = BuildKDTree(begin, mid_iter, depth + 1, left_threads);
+                        #pragma omp task shared(kd_node, progress, total) if(left_threads > 0)
+                        kd_node->m_left = BuildKDTree(
+                            begin, mid_iter, depth + 1, left_threads, progress, total);
 
-                        #pragma omp task shared(kd_node) if(right_threads > 0)
-                        kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, right_threads);
+                        #pragma omp task shared(kd_node, progress, total) if(right_threads > 0)
+                        kd_node->m_right = BuildKDTree(
+                            mid_iter + 1, end, depth + 1, right_threads, progress, total);
                     }
                 }
             }
@@ -196,22 +224,24 @@ private:
             {
                 #pragma omp taskgroup
                 {
-                    #pragma omp task shared(kd_node) if(left_threads > 0)
-                    kd_node->m_left = BuildKDTree(begin, mid_iter, depth + 1, left_threads);
+                    #pragma omp task shared(kd_node, progress, total) if(left_threads > 0)
+                    kd_node->m_left = BuildKDTree(
+                        begin, mid_iter, depth + 1, left_threads, progress, total);
 
-                    #pragma omp task shared(kd_node) if(right_threads > 0)
-                    kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, right_threads);
+                    #pragma omp task shared(kd_node, progress, total) if(right_threads > 0)
+                    kd_node->m_right = BuildKDTree(
+                        mid_iter + 1, end, depth + 1, right_threads, progress, total);
                 }
             }
         }
         else
         {
-            kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1, 1);
-            kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, 1);
+            kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1, 1, progress, total);
+            kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, 1, progress, total);
         }
 #else
-        kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1, thread_size);
-        kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size);
+        kd_node->m_left  = BuildKDTree(begin, mid_iter, depth + 1, thread_size, progress, total);
+        kd_node->m_right = BuildKDTree(mid_iter + 1, end, depth + 1, thread_size, progress, total);
 #endif
 
         return kd_node;
