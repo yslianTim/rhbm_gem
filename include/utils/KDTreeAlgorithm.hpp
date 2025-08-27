@@ -145,7 +145,7 @@ private:
         constexpr int dimension{ 3 };
         auto axis{ static_cast<size_t>(depth % dimension) };
         auto count{ std::distance(begin, end) };
-        constexpr int PARALLEL_THRESHOLD{ 1024 };
+        constexpr int parallel_threshold{ 1024 };
         auto mid_iter{ begin + count / 2 };
 
         std::nth_element(
@@ -163,7 +163,7 @@ private:
         };
 
 #ifdef USE_OPENMP
-        if (thread_size > 1 && count >= PARALLEL_THRESHOLD)
+        if (thread_size > 1 && count >= parallel_threshold)
         {
             auto left_threads{ thread_size / 2 };
             auto right_threads{ thread_size - left_threads };

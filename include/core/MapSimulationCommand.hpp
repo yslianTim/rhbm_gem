@@ -34,7 +34,6 @@ private:
     Options m_options;
     std::vector<AtomObject *> m_selected_atom_list;
     std::unordered_map<int, double> m_atom_charge_map;
-    std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
     std::shared_ptr<ModelObject> m_model_object;
     std::array<float, 3> m_atom_range_minimum, m_atom_range_maximum;
 
@@ -56,14 +55,12 @@ public:
 
 private:
     bool BuildDataObject(void);
-    void RunMapSimulationMethod1(void);
-    void RunMapSimulationMethod2(void);
+    void RunMapSimulation(void);
     void BuildAtomList(ModelObject * model_object);
     double CalculateAtomCharge(AtomObject * atom) const;
     void CalculateAtomRange(void);
     std::unique_ptr<MapObject> CreateMapObject(void);
     void PopulateMapValueArray(MapObject * map_object, double blurring_width);
-    std::unique_ptr<MapObject> CreateSimulatedMapObject(double blurring_width);
     std::array<int, 3> CalculateGridSize(const std::array<float, 3> & grid_spacing) const;
     std::array<float, 3> CalculateOrigin(const std::array<float, 3> & grid_spacing) const;
 
