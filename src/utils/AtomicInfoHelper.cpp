@@ -111,7 +111,10 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_
     {"THR", Residue::THR}, {"TRP", Residue::TRP}, {"TYR", Residue::TYR}, {"VAL", Residue::VAL},
     {"HOH", Residue::HOH}, {"NA",  Residue::NA},  {"MG",  Residue::MG},  {"CA",  Residue::CA},
     {"ZN",  Residue::ZN},  {"FE",  Residue::FE},  {"FE2", Residue::FE2}, {"CSX", Residue::CSX},
-    {"CL",  Residue::CL}
+    {"CL",  Residue::CL},
+
+    {"A",   Residue::A},   {"G",   Residue::G},   {"C",   Residue::C},   {"U",   Residue::U},
+    {"T",   Residue::T}
 };
 
 const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
@@ -189,7 +192,10 @@ const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label
     {Residue::THR, "THR"}, {Residue::TRP, "TRP"}, {Residue::TYR, "TYR"}, {Residue::VAL, "VAL"},
     {Residue::HOH, "HOH"}, {Residue::NA,  "NA"},  {Residue::MG,  "MG"},  {Residue::CA,  "CA"},
     {Residue::ZN,  "ZN"},  {Residue::FE,  "FE"},  {Residue::FE2, "FE2"}, {Residue::CSX, "CSX"},
-    {Residue::CL,  "CL"},  {Residue::UNK, "UNK"}
+    {Residue::CL,  "CL"},
+    {Residue::A,   "A"  }, {Residue::G,   "G"  }, {Residue::C,   "C"  }, {Residue::U,   "U"  },
+    {Residue::T,   "T"  },
+    {Residue::UNK, "UNK"}
 };
 
 const std::unordered_map<Element, std::string> AtomicInfoHelper::m_element_label_map
@@ -278,7 +284,10 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_color_map
     {Residue::CYS, 800}, {Residue::GLN, 801}, {Residue::GLU, 802}, {Residue::GLY, 803},
     {Residue::HIS, 416}, {Residue::ILE, 417}, {Residue::LEU, 418}, {Residue::LYS, 419},
     {Residue::MET, 600}, {Residue::PHE, 601}, {Residue::PRO, 602}, {Residue::SER, 603},
-    {Residue::THR, 880}, {Residue::TRP, 881}, {Residue::TYR, 882}, {Residue::VAL, 883}
+    {Residue::THR, 880}, {Residue::TRP, 881}, {Residue::TYR, 882}, {Residue::VAL, 883},
+
+    {Residue::A,     2}, {Residue::G,     3}, {Residue::C,     4}, {Residue::U,     5},
+    {Residue::T,     6}
 };
 
 const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
@@ -303,7 +312,10 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
     {Residue::CYS, 24}, {Residue::GLN, 25}, {Residue::GLU, 26}, {Residue::GLY, 27},
     {Residue::HIS, 28}, {Residue::ILE, 29}, {Residue::LEU, 30}, {Residue::LYS, 31},
     {Residue::MET, 32}, {Residue::PHE, 33}, {Residue::PRO, 34}, {Residue::SER, 35},
-    {Residue::THR, 36}, {Residue::TRP, 37}, {Residue::TYR, 38}, {Residue::VAL, 39}
+    {Residue::THR, 36}, {Residue::TRP, 37}, {Residue::TYR, 38}, {Residue::VAL, 39},
+
+    {Residue::A,    2}, {Residue::G,    3}, {Residue::C,    4}, {Residue::U,    5},
+    {Residue::T,    6}
 };
 
 int AtomicInfoHelper::GetAtomicNumber(Element element)

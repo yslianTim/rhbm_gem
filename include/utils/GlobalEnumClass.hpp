@@ -21,6 +21,7 @@ enum class Residue : uint16_t
     CSX = 20,
     HOH = 99,
     NA = 911, MG = 912, CL = 917, CA = 920, FE = 926, FE2 = 826, ZN = 930,
+    A = 1000, G = 1001, C = 1002, U = 1003, T = 1004,
     UNK = UINT16_MAX
 };
 
