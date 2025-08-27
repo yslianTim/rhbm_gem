@@ -111,9 +111,7 @@ void HRLModelHelper::SetDataArray(
         if (data_size == 0)
         {
             Logger::Log(LogLevel::Warning,
-                "HRLModelHelper::SetDataArray : "
-                "Member dataset is empty, skipping this member -> " + member_info);
-            continue; // Skip empty datasets
+                "HRLModelHelper::SetDataArray : Member dataset is empty -> " + member_info);
         }
         MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
         VectorXd y_data_vector{ VectorXd::Zero(data_size) };
