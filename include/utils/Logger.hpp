@@ -26,7 +26,8 @@ public:
     static void Log(LogLevel level, const std::string & message);
     static void Log(LogLevel level, std::string_view message);
     static void Log(LogLevel level, const char * message);
-    static void ProgressBar(std::size_t current, std::size_t total, std::size_t bar_width = 50);
+    static void ProgressBar(size_t current, size_t total, size_t bar_width = 50);
+    static void ProgressPercent(size_t current, size_t total, size_t bar_width = 50);
 
 private:
     static LogLevel NormalizeLevel(LogLevel level);

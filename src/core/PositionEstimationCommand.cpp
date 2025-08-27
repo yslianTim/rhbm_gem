@@ -14,6 +14,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <unordered_set>
 #include <cmath>
 #include <cstdint>
 
@@ -22,10 +23,23 @@
 #endif
 
 namespace {
+
+struct QuantizedPointHash
+{
+    std::size_t operator()(const std::array<int64_t, 3> & a) const noexcept
+    {
+        std::size_t h1{ std::hash<int64_t>{}(a[0]) };
+        std::size_t h2{ std::hash<int64_t>{}(a[1]) };
+        std::size_t h3{ std::hash<int64_t>{}(a[2]) };
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};
+
 CommandRegistrar<PositionEstimationCommand> registrar_model_test{
     "position_estimation",
-    "Run atom position estimation"};
-}
+    "Run atom position estimation"
+};
+} // namespace
 
 PositionEstimationCommand::PositionEstimationCommand(void) :
     CommandBase(), m_options{}, m_selected_voxel_list{}, m_query_point_list{},
@@ -323,28 +337,25 @@ void PositionEstimationCommand::RunUniquePointList(float tolerance)
 
     auto point_size_origin{ m_query_point_list.size() };
     auto inv_tolerance{ 1.0f / tolerance };
-    std::vector<std::array<int64_t, 3>> quantized_points;
-    quantized_points.reserve(m_query_point_list.size());
+    std::unordered_set<std::array<int64_t, 3>, QuantizedPointHash> unique_points;
+    unique_points.reserve(m_query_point_list.size());
     for (const auto & point : m_query_point_list)
     {
         const auto & position{ point.GetPosition() };
-        quantized_points.emplace_back(std::array<int64_t, 3>{
+        std::array<int64_t, 3> q{
             static_cast<int64_t>(std::floor(position[0] * inv_tolerance)),
             static_cast<int64_t>(std::floor(position[1] * inv_tolerance)),
             static_cast<int64_t>(std::floor(position[2] * inv_tolerance))
-        });
-    }
-
-    std::sort(quantized_points.begin(), quantized_points.end());
-    auto unique_end{ std::unique(quantized_points.begin(), quantized_points.end()) };
-    quantized_points.erase(unique_end, quantized_points.end());
-    for (const auto & q : quantized_points)
-    {
-        m_position_list.emplace_back(std::array<float, 3>{
-            static_cast<float>(q[0]) * tolerance,
-            static_cast<float>(q[1]) * tolerance,
-            static_cast<float>(q[2]) * tolerance
-        });
+        };
+        auto result{ unique_points.insert(q) };
+        if (result.second)
+        {
+            m_position_list.emplace_back(std::array<float, 3>{
+                static_cast<float>(q[0]) * tolerance,
+                static_cast<float>(q[1]) * tolerance,
+                static_cast<float>(q[2]) * tolerance
+            });
+        }
     }
 
     auto removed_count{ point_size_origin - m_position_list.size() };

@@ -430,3 +430,22 @@ TEST(LoggerTest, ProgressBarUpdatesAndFinishes)
     const auto newline_count{ std::count(out.begin(), out.end(), '\n') };
     EXPECT_EQ(static_cast<std::size_t>(1), newline_count);
 }
+
+TEST(LoggerTest, ProgressPercentOnlyUpdatesOnChange)
+{
+    testing::internal::CaptureStdout();
+    size_t bar_width{ 10 };
+    Logger::ProgressPercent(1, 10, bar_width);  // 10%
+    Logger::ProgressPercent(1, 10, bar_width);  // still 10%, no output
+    Logger::ProgressPercent(2, 10, bar_width);  // 20%
+    Logger::ProgressPercent(10, 10, bar_width); // 100%
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    EXPECT_EQ(static_cast<std::size_t>(3), std::count(out.begin(), out.end(), '\r'));
+    EXPECT_NE(out.find("[=>........] 10%"), std::string::npos);
+    EXPECT_NE(out.find("[==>.......] 20%"), std::string::npos);
+    EXPECT_NE(out.find("[==========] 100%"), std::string::npos);
+    EXPECT_EQ(std::string::npos, out.find('('));
+    EXPECT_EQ('\n', out.back());
+    const auto newline_count{ std::count(out.begin(), out.end(), '\n') };
+    EXPECT_EQ(static_cast<std::size_t>(1), newline_count);
+}

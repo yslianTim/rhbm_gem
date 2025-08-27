@@ -320,6 +320,22 @@ void MapObject::BuildKDTreeRoot(void)
     ScopeTimer timer("MapObject::BuildKDTreeRoot");
     if (m_kd_tree_root != nullptr) return;
 
+    BuildGridNodeList();
+    if (m_grid_node_list.empty())
+    {
+        Logger::Log(LogLevel::Warning, "No grids were found from the map.");
+        return;
+    }
+
+    Logger::Log(LogLevel::Info,
+        " - Building KD-Tree from "+ std::to_string(m_voxel_size) + " voxels..."
+    );
+    m_kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(m_grid_node_list, 0, m_thread_size);
+}
+
+void MapObject::BuildGridNodeList(void)
+{
+    Logger::Log(LogLevel::Debug, "MapObject::BuildGridNodeList() called");
     m_grid_node_list.clear();
     m_grid_node_list.reserve(m_voxel_size);
 
@@ -347,14 +363,6 @@ void MapObject::BuildKDTreeRoot(void)
         thread_local_list.emplace_back(i, this);
     }
 #endif
-
-    if (m_grid_node_list.empty())
-    {
-        Logger::Log(LogLevel::Warning, "No grids were found from the map.");
-        return;
-    }
-
-    m_kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(m_grid_node_list, 0, m_thread_size);
 }
 
 KDNode<GridNode> * MapObject::GetKDTreeRoot(void) const

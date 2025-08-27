@@ -83,6 +83,7 @@ private:
     void CalculateMapValueMin(void);
     void CalculateMapValueMax(void);
     void CalculateMapValueSD(void);
+    void BuildGridNodeList(void);
 
 };
 

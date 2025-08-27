@@ -284,7 +284,7 @@ void PotentialAnalysisCommand::RunMapValueSampling(void)
 #endif
         {
             atom_count++;
-            Logger::ProgressBar(atom_count, atom_size);
+            Logger::ProgressPercent(atom_count, atom_size);
         }
     }
 }

@@ -70,15 +70,15 @@ void Logger::Log(LogLevel level, const char * message)
     Log(level, std::string_view{ message });
 }
 
-void Logger::ProgressBar(std::size_t current, std::size_t total, std::size_t bar_width)
+void Logger::ProgressBar(size_t current, size_t total, size_t bar_width)
 {
     if (m_current_level.load() < LogLevel::Info) return;
     if (total == 0) return;
     auto ratio{ static_cast<double>(current) / static_cast<double>(total) };
-    auto pos{ static_cast<std::size_t>(ratio * static_cast<double>(bar_width)) };
+    auto pos{ static_cast<size_t>(ratio * static_cast<double>(bar_width)) };
     std::ostringstream oss;
     oss << '[';
-    for (std::size_t i = 0; i < bar_width; i++)
+    for (size_t i = 0; i < bar_width; i++)
     {
         if (i < pos) oss << '=';
         else if (i == pos && current < total) oss << '>';
@@ -93,4 +93,33 @@ void Logger::ProgressBar(std::size_t current, std::size_t total, std::size_t bar
     {
         std::cout << std::endl;
     }
+}
+
+void Logger::ProgressPercent(size_t current, size_t total, size_t bar_width)
+{
+    if (m_current_level.load() < LogLevel::Info) return;
+    if (total == 0) return;
+    auto percent{ static_cast<int>(current * 100 / total) };
+    static thread_local int last{ -1 };
+    if (percent == last) return;
+    last = percent;
+    auto ratio{ static_cast<double>(current) / static_cast<double>(total) };
+    auto pos{ static_cast<size_t>(ratio * static_cast<double>(bar_width)) };
+    std::ostringstream oss;
+    oss << '[';
+    for (size_t i = 0; i < bar_width; i++)
+    {
+        if (i < pos) oss << '=';
+        else if (i == pos && current < total) oss << '>';
+        else oss << '.';
+    }
+    oss << "] " << percent << '%';
+    std::lock_guard<std::mutex> lock(m_stream_mutex);
+    std::cout << '\r' << oss.str();
+    if (current >= total)
+    {
+        std::cout << '\n';
+        last = -1;
+    }
+    std::cout << std::flush;
 }

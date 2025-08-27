@@ -320,7 +320,8 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     ScopeTimer timer("MapSimulationCommand::PopulateMapValueArray");
     Logger::Log(LogLevel::Info,
         "  - Start map value array production with blurring width = "+
-        StringHelper::ToStringWithPrecision<double>(blurring_width, 2));
+        StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
+    );
 
     auto electric_potential{ std::make_unique<ElectricPotential>() };
     electric_potential->SetBlurringWidth(blurring_width);
@@ -335,6 +336,9 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     size_t atom_count{ 0 };
     std::vector<GridNode*> in_range_grid_node_list;
 
+    Logger::Log(LogLevel::Info,
+        "  - Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms."
+    );
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(m_options.thread_size) private(in_range_grid_node_list)
 #endif
@@ -365,7 +369,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
 #endif
         {
             atom_count++;
-            Logger::ProgressBar(atom_count, atom_size);
+            Logger::ProgressPercent(atom_count, atom_size);
         }
     }
 
