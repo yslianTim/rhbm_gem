@@ -229,66 +229,63 @@ void PositionEstimationCommand::RunMapValueConvergence(void)
     for (size_t t = 1; t <= iteration_size; t++)
     {
         Logger::ProgressBar(t, iteration_size);
-        UpdatePointList();
+
+#ifdef USE_OPENMP
+        #pragma omp parallel for num_threads(m_options.thread_size)
+#endif
+        for (size_t i = 0; i < m_query_point_list.size(); i++)
+        {
+            UpdatePointPosition(i);
+        }
     }
 }
 
-void PositionEstimationCommand::UpdatePointList(void)
+void PositionEstimationCommand::UpdatePointPosition(size_t index)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::UpdatePointList() called");
-    auto update_point_position = [&](size_t index)
-    {
-        auto knn_list{
-            KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
-                m_kd_tree_root.get(), &m_query_point_list[index], m_options.knn_size)
-        };
-        size_t knn_count{ knn_list.size() };
-        if (knn_count < m_options.knn_size)
-        {
-            Logger::Log(LogLevel::Warning,
-                "KNN search returned " + std::to_string(knn_count) +
-                " neighbors, less than requested " +
-                std::to_string(m_options.knn_size) + ".");
-        }
-        if (knn_count == 0)
-        {
-            return;
-        }
-
-        const auto alpha{ m_options.alpha };
-        float weight_sum{ 0.0f };
-        std::array<float, 3> point_position_update{ 0.0f, 0.0f, 0.0f };
-        for (size_t j = 0; j < knn_count; j++)
-        {
-            //auto w{ std::exp(alpha * std::log(knn_list[j]->GetValue())) };
-            if (knn_list[j]->GetValue() <= 0.0f) continue;
-            auto w{ std::pow(knn_list[j]->GetValue(), alpha) };
-            auto & query_point_position{ knn_list[j]->GetPosition() };
-            point_position_update[0] += w * query_point_position[0];
-            point_position_update[1] += w * query_point_position[1];
-            point_position_update[2] += w * query_point_position[2];
-            weight_sum += w;
-        }
-        if (weight_sum == 0.0f)
-        {
-            Logger::Log(LogLevel::Warning,
-                "Weight sum is non-positive for point index "
-                + std::to_string(index) + ". Skipping update to avoid division by zero.");
-            return;
-        }
-        point_position_update[0] /= weight_sum;
-        point_position_update[1] /= weight_sum;
-        point_position_update[2] /= weight_sum;
-        m_query_point_list[index].SetPosition(point_position_update);
+    auto knn_list{
+        KDTreeAlgorithm<VoxelNode>::KNearestNeighbors(
+            m_kd_tree_root.get(), &m_query_point_list[index], m_options.knn_size)
     };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(m_options.thread_size)
-#endif
-    for (size_t i = 0; i < m_query_point_list.size(); i++)
+    size_t knn_count{ knn_list.size() };
+    if (knn_count < m_options.knn_size)
     {
-        update_point_position(i);
+        Logger::Log(LogLevel::Warning,
+            "KNN search returned " + std::to_string(knn_count) +
+            " neighbors, less than requested " + std::to_string(m_options.knn_size) + ".");
     }
+    if (knn_count == 0)
+    {
+        Logger::Log(LogLevel::Warning,
+            "KNN search returned zero neighbors for point index ["
+            + std::to_string(index) + "]. Skipping update.");
+        return;
+    }
+
+    const auto alpha{ m_options.alpha };
+    float weight_sum{ 0.0f };
+    std::array<float, 3> point_position_update{ 0.0f, 0.0f, 0.0f };
+    for (size_t j = 0; j < knn_count; j++)
+    {
+        //auto w{ std::exp(alpha * std::log(knn_list[j]->GetValue())) };
+        if (knn_list[j]->GetValue() <= 0.0f) continue;
+        auto w{ std::pow(knn_list[j]->GetValue(), alpha) };
+        auto & query_point_position{ knn_list[j]->GetPosition() };
+        point_position_update[0] += w * query_point_position[0];
+        point_position_update[1] += w * query_point_position[1];
+        point_position_update[2] += w * query_point_position[2];
+        weight_sum += w;
+    }
+    if (weight_sum == 0.0f)
+    {
+        Logger::Log(LogLevel::Warning,
+            "Weight sum is non-positive for point index "
+            + std::to_string(index) + ". Skipping update to avoid division by zero.");
+        return;
+    }
+    point_position_update[0] /= weight_sum;
+    point_position_update[1] /= weight_sum;
+    point_position_update[2] /= weight_sum;
+    m_query_point_list[index].SetPosition(point_position_update);
 }
 
 void PositionEstimationCommand::RunUniquePointList(void)

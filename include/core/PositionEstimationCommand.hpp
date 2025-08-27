@@ -50,7 +50,7 @@ private:
     bool BuildDataObject(void);
     bool BuildVoxelList(void);
     void RunMapValueConvergence(void);
-    void UpdatePointList(void);
+    void UpdatePointPosition(size_t index);
     void RunUniquePointList(void);
     void OutputPointList(void) const;
 
