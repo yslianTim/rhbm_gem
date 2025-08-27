@@ -95,7 +95,8 @@ void Logger::ProgressBar(size_t current, size_t total, size_t bar_width)
     }
 }
 
-void Logger::ProgressPercent(size_t current, size_t total, size_t bar_width)
+void Logger::ProgressPercent(
+    size_t current, size_t total, size_t bar_width, const std::string & message)
 {
     if (m_current_level.load() < LogLevel::Info) return;
     if (total == 0) return;
@@ -113,7 +114,7 @@ void Logger::ProgressPercent(size_t current, size_t total, size_t bar_width)
         else if (i == pos && current < total) oss << '>';
         else oss << '.';
     }
-    oss << "] " << percent << '%';
+    oss << "] " << percent << '%' << message;
     std::lock_guard<std::mutex> lock(m_stream_mutex);
     std::cout << '\r' << oss.str();
     if (current >= total)

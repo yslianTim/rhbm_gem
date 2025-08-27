@@ -225,8 +225,10 @@ bool PositionEstimationCommand::BuildVoxelList(void)
         return false;
     }
 
+    Logger::Log(LogLevel::Info,
+        " /- Building KD-Tree from "+ std::to_string(m_selected_voxel_list.size()) + " voxels...");
     m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(
-        m_selected_voxel_list, 0, m_options.thread_size);
+        m_selected_voxel_list, 0, m_options.thread_size, true);
 
     Logger::Log(LogLevel::Info,
         "Number of selected voxels to be estimated from map = "
@@ -258,17 +260,28 @@ void PositionEstimationCommand::RunMapValueConvergence(void)
 
     m_query_point_list = m_selected_voxel_list;
     auto iteration_size{ static_cast<std::size_t>(m_options.iteration_count) };
-    Logger::ProgressBar(0, iteration_size);
+    Logger::Log(LogLevel::Info, " /- Running map value convergence iteration...");
     for (size_t t = 1; t <= iteration_size; t++)
     {
+        auto progress_message{
+            " (" + std::to_string(t) + " / " + std::to_string(iteration_size) +")"
+        };
+        auto point_size{ m_query_point_list.size() };
+        size_t point_count{ 0 };
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(m_options.thread_size)
 #endif
         for (size_t i = 0; i < m_query_point_list.size(); i++)
         {
             UpdatePointPosition(i, knn_size);
+#ifdef USE_OPENMP
+            #pragma omp critical
+#endif
+            {
+                point_count++;
+                Logger::ProgressPercent(point_count, point_size, 50, progress_message);
+            }
         }
-        Logger::ProgressBar(t, iteration_size);
     }
 }
 

@@ -319,7 +319,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     Logger::Log(LogLevel::Debug, "MapSimulationCommand::PopulateMapValueArray() called");
     ScopeTimer timer("MapSimulationCommand::PopulateMapValueArray");
     Logger::Log(LogLevel::Info,
-        "  - Start map value array production with blurring width = "+
+        " /- Start map value array production with blurring width = "+
         StringHelper::ToStringWithPrecision<double>(blurring_width, 2)
     );
 
@@ -337,7 +337,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     std::vector<GridNode*> in_range_grid_node_list;
 
     Logger::Log(LogLevel::Info,
-        "  - Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms."
+        " /- Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms."
     );
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(m_options.thread_size) private(in_range_grid_node_list)

@@ -164,8 +164,8 @@ private:
         typename std::vector<NodeType *>::iterator end,
         int depth = 0,
         int thread_size = 1,
-        std::atomic<std::size_t> * progress = nullptr,
-        std::size_t total = 0)
+        std::atomic<size_t> * progress = nullptr,
+        size_t total = 0)
     {
         if (begin == end)
         {
@@ -194,7 +194,7 @@ private:
 
         if (progress)
         {
-            auto current{ (*progress)++ };
+            auto current{ progress->fetch_add(1) + 1 };
             Logger::ProgressPercent(current, total);
         }
 
