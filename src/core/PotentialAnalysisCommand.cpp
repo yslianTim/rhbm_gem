@@ -428,4 +428,13 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
 
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SaveDataObject(m_model_key_tag, m_options.saved_key_tag);
+
+    for (auto atom : m_model_object->GetSelectedAtomList())
+    {
+        auto entry{ atom->GetAtomicPotentialEntry() };
+        if (entry != nullptr)
+        {
+            entry->ClearDistanceAndMapValueList();
+        }
+    }
 }

@@ -22,6 +22,7 @@ public:
     ~AtomicPotentialEntry();
 
     void AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list);
+    void ClearDistanceAndMapValueList(void);
     void AddGausEstimateOLS(double v0, double v1);
     void AddGausEstimateMDPDE(double v0, double v1);
     void AddGausEstimatePosterior(const std::string & key, double v0, double v1);

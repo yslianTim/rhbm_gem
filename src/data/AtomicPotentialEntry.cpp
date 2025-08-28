@@ -19,6 +19,12 @@ void AtomicPotentialEntry::AddDistanceAndMapValueList(std::vector<std::tuple<flo
     m_distance_and_map_value_list = std::move(list);
 }
 
+void AtomicPotentialEntry::ClearDistanceAndMapValueList(void)
+{
+    m_distance_and_map_value_list.clear();
+    m_distance_and_map_value_list.shrink_to_fit();
+}
+
 void AtomicPotentialEntry::AddGausEstimateOLS(double v0, double v1)
 {
     m_gaus_estimate_ols = std::make_tuple(v0, v1);
