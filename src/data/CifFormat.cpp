@@ -36,13 +36,13 @@ void CifFormat::LoadHeader(const std::string & filename)
         throw std::runtime_error("LoadHeader failed!");
     }
 
-    LoadChemicalComponentInfo(infile);
-    LoadDatabaseInfo(infile);
-    LoadEntityInfo(infile);
+    LoadChemicalComponentBlock(infile);
+    LoadDatabaseBlock(infile);
+    LoadEntityBlock(infile);
     LoadPdbxData(infile);
-    LoadElementTypeList(infile);
-    LoadStructHelixInfo(infile);
-    LoadStructSheetInfo(infile);
+    LoadAtomTypeBlock(infile);
+    LoadStructureConformationBlock(infile);
+    LoadStructureSheetBlock(infile);
 }
 
 void CifFormat::PrintHeader(void) const
@@ -85,12 +85,12 @@ void CifFormat::LoadDataArray(const std::string & filename)
         Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
         throw std::runtime_error("LoadDataArray failed!");
     }
-    LoadAtomSiteData(infile);
+    LoadAtomSiteBlock(infile);
 }
 
-void CifFormat::LoadChemicalComponentInfo(std::ifstream & infile)
+void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentInfo() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentBlock() called");
     infile.clear();
     infile.seekg(0);
     ParseLoopBlock(infile, "_chem_comp.",
@@ -106,9 +106,9 @@ void CifFormat::LoadChemicalComponentInfo(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadDatabaseInfo(std::ifstream & infile)
+void CifFormat::LoadDatabaseBlock(std::ifstream & infile)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadDatabaseInfo() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadDatabaseBlock() called");
     infile.clear();
     infile.seekg(0);
     ParseLoopBlock(infile, "_database_2.",
@@ -134,9 +134,9 @@ void CifFormat::LoadDatabaseInfo(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadEntityInfo(std::ifstream & infile)
+void CifFormat::LoadEntityBlock(std::ifstream & infile)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadEntityInfo() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadEntityBlock() called");
     infile.clear();
     infile.seekg(0);
     ParseLoopBlock(infile, "_entity.",
@@ -242,9 +242,9 @@ void CifFormat::LoadXRayResolutionInfo(std::ifstream & infile)
     }
 }
 
-void CifFormat::LoadElementTypeList(std::ifstream & infile)
+void CifFormat::LoadAtomTypeBlock(std::ifstream & infile)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadElementTypeList() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomTypeBlock() called");
     infile.clear();
     infile.seekg(0);
     ParseLoopBlock(infile, "_atom_type.",
@@ -258,9 +258,9 @@ void CifFormat::LoadElementTypeList(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadStructHelixInfo(std::ifstream & infile)
+void CifFormat::LoadStructureConformationBlock(std::ifstream & infile)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructHelixInfo() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureConformationBlock() called");
     infile.clear();
     infile.seekg(0);
     ParseLoopBlock(infile, "_struct_conf.",
@@ -280,9 +280,9 @@ void CifFormat::LoadStructHelixInfo(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadStructSheetInfo(std::ifstream & infile)
+void CifFormat::LoadStructureSheetBlock(std::ifstream & infile)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructSheetInfo() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureSheetBlock() called");
     infile.clear();
     infile.seekg(0);
     ParseLoopBlock(infile, "_struct_sheet.",
@@ -313,9 +313,9 @@ void CifFormat::LoadStructSheetInfo(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadAtomSiteData(std::ifstream & infile)
+void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomSiteData() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomSiteBlock() called");
     infile.clear();
     infile.seekg(0);
     ParseLoopBlock(infile, "_atom_site.",
@@ -374,7 +374,7 @@ void CifFormat::LoadAtomSiteData(std::ifstream & infile)
                 if (last_atom_object == nullptr)
                 {
                     Logger::Log(LogLevel::Error,
-                        "CifFormat::LoadAtomSiteData() atom_object is missing.");
+                        "CifFormat::LoadAtomSiteBlock() atom_object is missing.");
                     return;
                 }
                 last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});
@@ -404,13 +404,13 @@ void CifFormat::SaveDataArray(
     Logger::Log(LogLevel::Debug, "CifFormat::SaveDataArray() called");
     if (model_object == nullptr) return;
 
-    SaveAtomSiteData(model_object, stream, model_par);
+    WriteAtomSiteBlock(model_object, stream, model_par);
 }
 
-void CifFormat::SaveAtomSiteData(
+void CifFormat::WriteAtomSiteBlock(
     const ModelObject * model_object, std::ostream & stream, int model_par)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::SaveAtomSiteData() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::WriteAtomSiteBlock() called");
     stream << "loop_\n";
     stream << "_atom_site.group_PDB\n";
     stream << "_atom_site.id\n";
@@ -435,7 +435,7 @@ void CifFormat::SaveAtomSiteData(
         auto model_entry{ atom->GetAtomicPotentialEntry() };
         auto gaus_estimate{ model_entry->GetGausEstimateMDPDE(model_par) };
         auto position{ atom->GetPosition() };
-        WriteAtomSiteBlock(
+        WriteAtomSiteBlockEntry(
             atom, position, atom->GetIndicator(), atom->GetOccupancy(),
             static_cast<float>(gaus_estimate), model_number, stream
         );
@@ -443,7 +443,7 @@ void CifFormat::SaveAtomSiteData(
     stream << "#\n";
 }
 
-void CifFormat::WriteAtomSiteBlock(
+void CifFormat::WriteAtomSiteBlockEntry(
     const AtomObject * atom,
     const std::array<float, 3> & position,
     const std::string & alt_id,

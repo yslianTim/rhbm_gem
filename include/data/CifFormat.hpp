@@ -31,21 +31,21 @@ public:
     AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
-    void LoadChemicalComponentInfo(std::ifstream & infile);
-    void LoadDatabaseInfo(std::ifstream & infile);
-    void LoadEntityInfo(std::ifstream & infile);
+    void LoadChemicalComponentBlock(std::ifstream & infile);
+    void LoadDatabaseBlock(std::ifstream & infile);
+    void LoadEntityBlock(std::ifstream & infile);
     void LoadPdbxData(std::ifstream & infile);
     void LoadXRayResolutionInfo(std::ifstream & infile);
-    void LoadElementTypeList(std::ifstream & infile);
-    void LoadStructHelixInfo(std::ifstream & infile);
-    void LoadStructSheetInfo(std::ifstream & infile);
-    void LoadAtomSiteData(std::ifstream & infile);
+    void LoadAtomTypeBlock(std::ifstream & infile);
+    void LoadStructureConformationBlock(std::ifstream & infile);
+    void LoadStructureSheetBlock(std::ifstream & infile);
+    void LoadAtomSiteBlock(std::ifstream & infile);
     void ParseLoopBlock(std::ifstream & infile,
         std::string_view data_block_prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,
                                  const std::vector<std::string> &)> & row_handler);
-    void SaveAtomSiteData(const ModelObject * model_object, std::ostream & stream, int model_par);
-    void WriteAtomSiteBlock(const AtomObject * atom,
+    void WriteAtomSiteBlock(const ModelObject * model_object, std::ostream & stream, int model_par);
+    void WriteAtomSiteBlockEntry(const AtomObject * atom,
         const std::array<float, 3> & position,
         const std::string & alt_id,
         float occupancy,
