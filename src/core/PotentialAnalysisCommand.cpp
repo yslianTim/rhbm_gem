@@ -43,6 +43,8 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
 PotentialAnalysisCommand::~PotentialAnalysisCommand()
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::~PotentialAnalysisCommand() called.");
+    m_map_object.reset();
+    m_model_object.reset();
 }
 
 void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
@@ -437,4 +439,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
             entry->ClearDistanceAndMapValueList();
         }
     }
+
+    m_map_object.reset();
+    m_model_object.reset();
 }
