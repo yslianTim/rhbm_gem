@@ -28,6 +28,9 @@ class AtomicModelDataBlock
     std::unordered_map<std::string, std::array<std::string, 4>> m_struct_sheet_range_map;
     std::vector<Element> m_element_type_list;
 
+    std::unordered_map<std::string, std::string> m_chemical_component_formula_map; // key : comp_id
+    std::unordered_map<std::string, std::string> m_chemical_component_name_map; // key : comp_id
+
 public:
     AtomicModelDataBlock(void);
     ~AtomicModelDataBlock();
@@ -40,6 +43,9 @@ public:
     void AddSheetRange(const std::string & composite_sheet_id, const std::array<std::string, 4> & range);
     void AddHelixRange(const std::string & helix_id, const std::array<std::string, 5> & range);
     void AddElementType(const Element & element);
+    void AddChemicalComponentFormula(const std::string & comp_id, const std::string & formula);
+    void AddChemicalComponentName(const std::string & comp_id, const std::string & name);
+
     void SetPdbID(const std::string & label) { m_model_id = label; }
     void SetEmdID(const std::string & label) { m_map_id = label; }
     void SetResolution(const std::string & value) { m_resolution = value; }

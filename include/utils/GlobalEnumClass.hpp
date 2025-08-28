@@ -19,9 +19,10 @@ enum class Residue : uint16_t
     LEU = 10, LYS = 11, MET = 12, PHE = 13, PRO = 14,
     SER = 15, THR = 16, TRP = 17, TYR = 18, VAL = 19,
     CSX = 20,
+    A   = 50, G   = 51, C   = 52, U   = 53, T   = 54,
     HOH = 99,
-    NA = 911, MG = 912, CL = 917, CA = 920, FE = 926, FE2 = 826, ZN = 930,
-    A = 1000, G = 1001, C = 1002, U = 1003, T = 1004,
+    NA = 911, MG = 912, CL = 917, CA = 920, FE = 926,
+    FE2 = 826, ZN = 930,
     UNK = UINT16_MAX
 };
 

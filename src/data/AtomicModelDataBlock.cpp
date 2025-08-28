@@ -62,6 +62,18 @@ void AtomicModelDataBlock::AddElementType(const Element & element)
     m_element_type_list.emplace_back(element);
 }
 
+void AtomicModelDataBlock::AddChemicalComponentFormula(
+    const std::string & comp_id, const std::string & formula)
+{
+    m_chemical_component_formula_map[comp_id] = formula;
+}
+
+void AtomicModelDataBlock::AddChemicalComponentName(
+    const std::string & comp_id, const std::string & name)
+{
+    m_chemical_component_name_map[comp_id] = name;
+}
+
 void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 {
     auto chain_id{ atom_object->GetChainID() };

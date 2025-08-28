@@ -31,6 +31,7 @@ public:
     AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
+    void LoadChemicalComponentInfo(std::ifstream & infile);
     void LoadDatabaseInfo(std::ifstream & infile);
     void LoadEntityInfo(std::ifstream & infile);
     void LoadPdbxData(std::ifstream & infile);

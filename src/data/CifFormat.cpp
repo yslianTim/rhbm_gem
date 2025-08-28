@@ -36,21 +36,12 @@ void CifFormat::LoadHeader(const std::string & filename)
         throw std::runtime_error("LoadHeader failed!");
     }
 
+    LoadChemicalComponentInfo(infile);
     LoadDatabaseInfo(infile);
-    infile.clear();
-    infile.seekg(0);
     LoadEntityInfo(infile);
-    infile.clear();
-    infile.seekg(0);
     LoadPdbxData(infile);
-    infile.clear();
-    infile.seekg(0);
     LoadElementTypeList(infile);
-    infile.clear();
-    infile.seekg(0);
     LoadStructHelixInfo(infile);
-    infile.clear();
-    infile.seekg(0);
     LoadStructSheetInfo(infile);
 }
 
@@ -97,9 +88,29 @@ void CifFormat::LoadDataArray(const std::string & filename)
     LoadAtomSiteData(infile);
 }
 
+void CifFormat::LoadChemicalComponentInfo(std::ifstream & infile)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentInfo() called");
+    infile.clear();
+    infile.seekg(0);
+    ParseLoopBlock(infile, "_chem_comp.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto comp_id{ token_list[index_map.at("id")] };
+            auto name{ token_list[index_map.at("name")] };
+            auto formula{ token_list[index_map.at("formula")] };
+            m_data_block->AddChemicalComponentName(comp_id, name);
+            m_data_block->AddChemicalComponentFormula(comp_id, formula);
+        }
+    );
+}
+
 void CifFormat::LoadDatabaseInfo(std::ifstream & infile)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadDatabaseInfo() called");
+    infile.clear();
+    infile.seekg(0);
     ParseLoopBlock(infile, "_database_2.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -126,6 +137,8 @@ void CifFormat::LoadDatabaseInfo(std::ifstream & infile)
 void CifFormat::LoadEntityInfo(std::ifstream & infile)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadEntityInfo() called");
+    infile.clear();
+    infile.seekg(0);
     ParseLoopBlock(infile, "_entity.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -163,6 +176,8 @@ void CifFormat::LoadEntityInfo(std::ifstream & infile)
 void CifFormat::LoadPdbxData(std::ifstream & infile)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadPdbxData() called");
+    infile.clear();
+    infile.seekg(0);
     std::string line, header, resolution, resolution_method;
     auto found_resolution{ false };
     auto found_resolution_method{ false };
@@ -191,8 +206,6 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
     }
     if (!found_resolution || !found_resolution_method)
     {
-        infile.clear();
-        infile.seekg(0);
         LoadXRayResolutionInfo(infile);
     }
 }
@@ -200,6 +213,8 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
 void CifFormat::LoadXRayResolutionInfo(std::ifstream & infile)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadXRayResolutionInfo() called");
+    infile.clear();
+    infile.seekg(0);
     std::string line, header, resolution, resolution_method;
     auto found_resolution{ false };
     auto found_resolution_method{ false };
@@ -230,6 +245,8 @@ void CifFormat::LoadXRayResolutionInfo(std::ifstream & infile)
 void CifFormat::LoadElementTypeList(std::ifstream & infile)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadElementTypeList() called");
+    infile.clear();
+    infile.seekg(0);
     ParseLoopBlock(infile, "_atom_type.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -244,6 +261,8 @@ void CifFormat::LoadElementTypeList(std::ifstream & infile)
 void CifFormat::LoadStructHelixInfo(std::ifstream & infile)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadStructHelixInfo() called");
+    infile.clear();
+    infile.seekg(0);
     ParseLoopBlock(infile, "_struct_conf.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -264,6 +283,8 @@ void CifFormat::LoadStructHelixInfo(std::ifstream & infile)
 void CifFormat::LoadStructSheetInfo(std::ifstream & infile)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadStructSheetInfo() called");
+    infile.clear();
+    infile.seekg(0);
     ParseLoopBlock(infile, "_struct_sheet.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
@@ -295,6 +316,8 @@ void CifFormat::LoadStructSheetInfo(std::ifstream & infile)
 void CifFormat::LoadAtomSiteData(std::ifstream & infile)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomSiteData() called");
+    infile.clear();
+    infile.seekg(0);
     ParseLoopBlock(infile, "_atom_site.",
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
