@@ -403,6 +403,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
                 atom_entry->AddStatisticalDistance(class_key, model_estimator->GetStatisticalDistance(count));
                 count++;
             }
+            model_estimator.reset();
             
 #ifdef USE_OPENMP
             #pragma omp critical

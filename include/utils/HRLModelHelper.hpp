@@ -178,5 +178,6 @@ private:
     void CalculateDataWeight(int member_id, double alpha_r);
     void CalculateStatisticalDistance(void);
     void LabelOutlierMember(void);
+    void Finalization(void);
 
 };

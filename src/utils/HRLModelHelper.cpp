@@ -206,6 +206,7 @@ void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
     AlgorithmWEB();
     CalculateStatisticalDistance();
     LabelOutlierMember();
+    Finalization();
 }
 
 void HRLModelHelper::Initialization(void)
@@ -618,6 +619,14 @@ void HRLModelHelper::LabelOutlierMember(void)
     }
 
     //m_outlier_flag_array = ((m_omega_array/m_omega_sum) < 0.05/static_cast<double>(m_member_size));
+}
+
+void HRLModelHelper::Finalization(void)
+{
+    m_X_list.clear();
+    m_X_list.shrink_to_fit();
+    m_y_list.clear();
+    m_y_list.shrink_to_fit();
 }
 
 void HRLModelHelper::ValidateMemberId(int id) const
