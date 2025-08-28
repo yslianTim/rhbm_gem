@@ -316,32 +316,31 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
         // Atom Classification
-        std::unordered_set<uint64_t> group_key_set;
         auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
         for (auto atom : m_model_object->GetSelectedAtomList())
         {
             auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
             group_potential_entry->AddAtomObjectPtr(group_key, atom);
             group_potential_entry->InsertGroupKey(group_key);
-            group_key_set.insert(group_key);
         }
 
         // Group Potential Fitting
-        std::vector<uint64_t> group_keys(group_key_set.begin(), group_key_set.end());
+        const auto & key_set{ group_potential_entry->GetGroupKeySet() };
+        std::vector<uint64_t> group_keys(key_set.begin(), key_set.end());
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 
 #ifdef USE_OPENMP
         #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
 #endif
-        for (size_t idx = 0; idx < group_key_size; ++idx)
+        for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            auto atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
+            const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
             auto group_size{ atom_list.size() };
             std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
             data_array.reserve(group_size);
-            for (auto atom : atom_list)
+            for (const auto & atom : atom_list)
             {
                 auto entry{ atom->GetAtomicPotentialEntry() };
                 std::vector<Eigen::VectorXd> sampling_entry_list;
@@ -356,7 +355,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
                         GausLinearTransformHelper::BuildLinearModelDataVector(gaus_x, gaus_y)
                     );
                 }
-                data_array.emplace_back(std::make_tuple(sampling_entry_list, atom->GetInfo()));
+                data_array.emplace_back(std::move(sampling_entry_list), atom->GetInfo());
             }
             auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
             model_estimator->SetThreadSize(1);
@@ -379,7 +378,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
             auto prior_variance{ std::get<1>(gaus_prior) };
 
             auto count{ 0 };
-            for (auto atom : atom_list)
+            for (const auto & atom : atom_list)
             {
                 auto atom_entry{ atom->GetAtomicPotentialEntry() };
                 const auto & beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
