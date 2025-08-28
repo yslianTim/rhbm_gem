@@ -5,6 +5,7 @@
 #include "MapObject.hpp"
 
 #include <algorithm>
+#include <utility>
 
 MapInterpolationVisitor::MapInterpolationVisitor(SphereSampler * sphere_sampler) :
     m_sphere_sampler{ sphere_sampler }, m_position{ 0.0, 0.0, 0.0 }
@@ -39,6 +40,11 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
             m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
         }
     }
+}
+
+std::vector<std::tuple<float, float>>&& MapInterpolationVisitor::TakeSamplingDataList(void)
+{
+    return std::move(m_sampling_data_list);
 }
 
 float MapInterpolationVisitor::MakeInterpolationInMapObject(

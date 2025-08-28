@@ -14,7 +14,7 @@ AtomicPotentialEntry::~AtomicPotentialEntry()
 
 }
 
-void AtomicPotentialEntry::AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> list)
+void AtomicPotentialEntry::AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list)
 {
     m_distance_and_map_value_list = std::move(list);
 }

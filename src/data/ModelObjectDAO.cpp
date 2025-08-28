@@ -494,7 +494,7 @@ ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
     {
         auto atomic_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
         serial_id = std::get<0>(row);
-        atomic_potential_entry->AddDistanceAndMapValueList(std::get<2>(row));
+        atomic_potential_entry->AddDistanceAndMapValueList(std::move(std::get<2>(row)));
         atomic_potential_entry->AddGausEstimateOLS(std::get<3>(row), std::get<4>(row));
         atomic_potential_entry->AddGausEstimateMDPDE(std::get<5>(row), std::get<6>(row));
         atomic_potential_entry_map[serial_id] = std::move(atomic_potential_entry);

@@ -280,7 +280,7 @@ void PotentialAnalysisCommand::RunMapValueSampling(void)
             auto entry{ atom->GetAtomicPotentialEntry() };
             interpolation_visitor.SetPosition(atom->GetPosition());
             m_map_object->Accept(&interpolation_visitor);
-            entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+            entry->AddDistanceAndMapValueList(interpolation_visitor.TakeSamplingDataList());
             #pragma omp critical
             {
                 atom_count++;

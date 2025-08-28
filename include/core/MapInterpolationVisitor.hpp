@@ -21,6 +21,7 @@ public:
 
     void SetPosition(const std::array<float, 3> & position) { m_position = position; };
     const std::vector<std::tuple<float, float>> & GetSamplingDataList(void) const { return m_sampling_data_list; }
+    std::vector<std::tuple<float, float>> && TakeSamplingDataList(void);
 
 private:
     float MakeInterpolationInMapObject(MapObject * data_object, const std::array<float, 3> & position);
