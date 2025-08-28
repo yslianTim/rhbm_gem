@@ -270,24 +270,37 @@ void PotentialAnalysisCommand::RunMapValueSampling(void)
     size_t atom_count{ 0 };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(m_options.thread_size)
-#endif
-    for (size_t i = 0; i < atom_size; i++)
+    #pragma omp parallel num_threads(m_options.thread_size)
     {
         MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
+        #pragma omp for
+        for (size_t i = 0; i < atom_size; i++)
+        {
+            auto atom{ atom_list[i] };
+            auto entry{ atom->GetAtomicPotentialEntry() };
+            interpolation_visitor.SetPosition(atom->GetPosition());
+            m_map_object->Accept(&interpolation_visitor);
+            entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+            #pragma omp critical
+            {
+                atom_count++;
+                Logger::ProgressPercent(atom_count, atom_size);
+            }
+        }
+    }
+#else
+    MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
+    for (size_t i = 0; i < atom_size; i++)
+    {
         auto atom{ atom_list[i] };
         auto entry{ atom->GetAtomicPotentialEntry() };
         interpolation_visitor.SetPosition(atom->GetPosition());
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, atom_size);
-        }
+        atom_count++
+        Logger::ProgressPercent(atom_count, atom_size);
     }
+#endif
 }
 
 void PotentialAnalysisCommand::RunPotentialFitting(void)

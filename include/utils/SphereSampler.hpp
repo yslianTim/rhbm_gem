@@ -14,8 +14,10 @@ public:
     ~SphereSampler() = default;
 
     void Print(void) const;
-    std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
-        const std::array<float, 3> & reference_position) const;
+    void GenerateSamplingPoints(
+        const std::array<float, 3> & reference_position,
+        std::vector<std::tuple<float, std::array<float, 3>>> & out) const;
+    unsigned int GetSamplingSize(void) const { return m_sampling_size; }
     void SetSamplingSize(unsigned int value) { m_sampling_size = value; }
     void SetDistanceRangeMinimum(double value) { m_distance_min = value; }
     void SetDistanceRangeMaximum(double value) { m_distance_max = value; }

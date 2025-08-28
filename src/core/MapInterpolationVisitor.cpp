@@ -18,9 +18,13 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
     m_sampling_data_list.clear();
     if (m_sphere_sampler != nullptr)
     {
-        const auto & sampling_position_list{ m_sphere_sampler->GenerateSamplingPoints(m_position) };
-        m_sampling_data_list.reserve(sampling_position_list.size());
-        for (auto & [distance, point] : sampling_position_list)
+        if (m_sampling_point_list.empty())
+        {
+            m_sampling_point_list.resize(m_sphere_sampler->GetSamplingSize());
+        }
+        m_sphere_sampler->GenerateSamplingPoints(m_position, m_sampling_point_list);
+        m_sampling_data_list.reserve(m_sampling_point_list.size());
+        for (auto & [distance, point] : m_sampling_point_list)
         {
             auto map_value{ MakeInterpolationInMapObject(data_object, point) };
             m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));

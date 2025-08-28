@@ -22,8 +22,9 @@ void SphereSampler::Print(void) const
         + StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) + "] Angstrom.");
 }
 
-std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamplingPoints(
-    const std::array<float, 3> & reference_position) const
+void SphereSampler::GenerateSamplingPoints(
+    const std::array<float, 3> & reference_position,
+    std::vector<std::tuple<float, std::array<float, 3>>> & out) const
 {
     if (m_distance_min > m_distance_max)
     {
@@ -34,8 +35,8 @@ std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamp
         throw std::invalid_argument("SphereSampler: distance range cannot be negative");
     }
 
-    std::vector<std::tuple<float, std::array<float, 3>>> sampling_position_list;
-    sampling_position_list.resize(m_sampling_size);
+    out.clear();
+    out.resize(m_sampling_size);
 
     for (unsigned int i = 0; i < m_sampling_size; i++)
     {
@@ -64,8 +65,6 @@ std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamp
             reference_position.at(2) + radius * direction_vector[2]
         };
 
-        sampling_position_list[i] = std::make_tuple(radius, sampling_position);
+        out[i] = std::make_tuple(radius, sampling_position);
     }
-
-    return sampling_position_list;
 }
