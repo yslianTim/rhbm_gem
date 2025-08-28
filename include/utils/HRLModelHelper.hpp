@@ -144,7 +144,7 @@ public:
     ~HRLModelHelper() = default;
 
     void SetThreadSize(int thread_size);
-    void SetDataArray(const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array);
+    void SetDataArray(std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> && data_array);
     void RunEstimation(double alpha_r, double alpha_g);
     void SetMaximumIteration(int size);
     void SetTolerance(double value);

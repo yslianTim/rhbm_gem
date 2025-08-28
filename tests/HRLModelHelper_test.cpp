@@ -143,7 +143,7 @@ TEST_F(HRLModelHelperTest, SetToleranceAcceptsZero)
     member_data.emplace_back(sample2);
     std::vector<DataTuple> data_array;
     data_array.emplace_back(member_data, "member1");
-    ASSERT_NO_THROW(helper.SetDataArray(data_array));
+    ASSERT_NO_THROW(helper.SetDataArray(std::move(data_array)));
     EXPECT_NO_THROW(helper.RunEstimation(0.0, 0.5));
     EXPECT_NEAR(helper.GetMuVectorMDPDE()(0), 2.4, 1e-9);
 }
@@ -189,7 +189,7 @@ TEST_F(HRLModelHelperTest, AcceptsProperlySizedData)
     member_data.emplace_back(sample2);
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(member_data, "member1");
-    ASSERT_NO_THROW(helper.SetDataArray(data_array));
+    ASSERT_NO_THROW(helper.SetDataArray(std::move(data_array)));
     helper.RunEstimation(0.0, 0.5);
     EXPECT_TRUE(helper.GetCapitalLambdaMatrix().isApprox(Eigen::MatrixXd::Zero(1, 1)));
 
@@ -220,7 +220,7 @@ TEST_F(HRLModelHelperTest, SingleMemberDoesNotInvertCovariance)
     member_data.emplace_back(sample2);
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(member_data, "member1");
-    ASSERT_NO_THROW(helper.SetDataArray(data_array));
+    ASSERT_NO_THROW(helper.SetDataArray(std::move(data_array)));
 
     auto prev_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Debug);
@@ -250,7 +250,7 @@ TEST_F(HRLModelHelperTest, RunEstimationUsesNewDataset)
     member1.emplace_back(s2);
     std::vector<DataTuple> data1;
     data1.emplace_back(member1, "member");
-    helper.SetDataArray(data1);
+    helper.SetDataArray(std::move(data1));
     helper.RunEstimation(0.0, 0.0);
     EXPECT_NEAR(helper.GetMuVectorMDPDE()(0), 2.4, 1e-9);
 
@@ -264,7 +264,7 @@ TEST_F(HRLModelHelperTest, RunEstimationUsesNewDataset)
     member2.emplace_back(t2);
     std::vector<DataTuple> data2;
     data2.emplace_back(member2, "member");
-    helper.SetDataArray(data2);
+    helper.SetDataArray(std::move(data2));
     helper.RunEstimation(0.0, 0.0);
 
     EXPECT_NEAR(helper.GetMuVectorMDPDE()(0), 1.0, 1e-9);
@@ -277,7 +277,7 @@ TEST_F(HRLModelHelperTest, MuVectorMatchesWeightedMean)
     auto member1{ CreateMember({{1.0, 2.0}, {2.0, 5.0}}, "m1") };
     auto member2{ CreateMember({{1.0, 1.0}, {2.0, 2.0}}, "m2") };
     std::vector<DataTuple> data{ member1, member2 };
-    helper.SetDataArray(data);
+    helper.SetDataArray(std::move(data));
     helper.RunEstimation(0.0, 0.5);
     const double beta0{ helper.GetBetaMatrixMDPDE(0)(0) };
     const double beta1{ helper.GetBetaMatrixMDPDE(1)(0) };
@@ -299,7 +299,7 @@ TEST_F(HRLModelHelperTest, RunEstimationUpdatesWeightsWithNewDataset)
     member_a.emplace_back(a2);
     std::vector<DataTuple> data_a;
     data_a.emplace_back(member_a, "member");
-    helper.SetDataArray(data_a);
+    helper.SetDataArray(std::move(data_a));
     helper.RunEstimation(0.5, 0.0);
     Eigen::VectorXd w_a{ helper.GetDataWeightMatrix(0).diagonal() };
     ASSERT_EQ(w_a.size(), 2);
@@ -315,7 +315,7 @@ TEST_F(HRLModelHelperTest, RunEstimationUpdatesWeightsWithNewDataset)
     member_b.emplace_back(b3);
     std::vector<DataTuple> data_b;
     data_b.emplace_back(member_b, "member");
-    helper.SetDataArray(data_b);
+    helper.SetDataArray(std::move(data_b));
     helper.RunEstimation(0.5, 0.0);
     Eigen::VectorXd w_b{ helper.GetDataWeightMatrix(0).diagonal() };
 
@@ -340,7 +340,7 @@ TEST_F(HRLModelHelperTest, RunEstimationRecomputesForDifferentAlphas)
     member.emplace_back(d4);
     std::vector<DataTuple> data;
     data.emplace_back(member, "member");
-    helper.SetDataArray(data);
+    helper.SetDataArray(std::move(data));
 
     helper.RunEstimation(0.0, 0.0);
     const double beta_initial{ helper.GetBetaMatrixMDPDE(0)(0) };
@@ -384,7 +384,7 @@ TEST_F(HRLModelHelperTest, LabelsOutlierMemberWhenDfIsThree)
     data.emplace_back(member0, "member0");
     data.emplace_back(member1, "member1");
     data.emplace_back(member2, "member2");
-    helper.SetDataArray(data);
+    helper.SetDataArray(std::move(data));
 
     helper.RunEstimation(0.0, 1.0);
     EXPECT_LT(helper.GetStatisticalDistance(0), 11.34);
@@ -404,7 +404,7 @@ TEST_F(HRLModelHelperTest, CapitalLambdaMatchesManualComputation)
     auto member1{ CreateMember({{0.0, 0.0}, {1.0, 1.0}}, "m1") };
     auto member2{ CreateMember({{0.0, 0.0}, {1.0, 2.0}}, "m2") };
     std::vector<DataTuple> data{ member1, member2 };
-    helper.SetDataArray(data);
+    helper.SetDataArray(std::move(data));
     helper.RunEstimation(0.0, 0.0);
     Eigen::VectorXd mu{ helper.GetMuVectorMDPDE() };
     Eigen::VectorXd beta0{ helper.GetBetaMatrixMDPDE(0) };
@@ -434,7 +434,7 @@ TEST_F(HRLModelHelperTest, ThrowsWhenMemberSizeMismatch)
     data_array.emplace_back(member1, "m1");
     data_array.emplace_back(member2, "m2");
 
-    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+    EXPECT_THROW(helper.SetDataArray(std::move(data_array)), std::invalid_argument);
 }
 
 TEST_F(HRLModelHelperTest, ThrowsWhenSampleVectorSizeMismatch)
@@ -446,7 +446,7 @@ TEST_F(HRLModelHelperTest, ThrowsWhenSampleVectorSizeMismatch)
     std::vector<Eigen::VectorXd> member{ bad_sample };
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(member, "member1");
-    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+    EXPECT_THROW(helper.SetDataArray(std::move(data_array)), std::invalid_argument);
 }
 
 TEST_F(HRLModelHelperTest, ThrowsWhenSampleContainsNaN)
@@ -457,7 +457,7 @@ TEST_F(HRLModelHelperTest, ThrowsWhenSampleContainsNaN)
     std::vector<Eigen::VectorXd> member{ bad_sample };
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(member, "member1");
-    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+    EXPECT_THROW(helper.SetDataArray(std::move(data_array)), std::invalid_argument);
 }
 
 TEST_F(HRLModelHelperTest, ThrowsWhenSampleContainsInfinity)
@@ -468,14 +468,14 @@ TEST_F(HRLModelHelperTest, ThrowsWhenSampleContainsInfinity)
     std::vector<Eigen::VectorXd> member{ pos_inf_sample };
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(member, "member1");
-    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+    EXPECT_THROW(helper.SetDataArray(std::move(data_array)), std::invalid_argument);
 
     Eigen::VectorXd neg_inf_sample(2);
     neg_inf_sample << 1.0, -std::numeric_limits<double>::infinity();
     member[0] = neg_inf_sample;
     data_array.clear();
     data_array.emplace_back(member, "member1");
-    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+    EXPECT_THROW(helper.SetDataArray(std::move(data_array)), std::invalid_argument);
 }
 
 TEST_F(HRLModelHelperTest, DISABLED_ThrowsWhenMemberDataEmpty)
@@ -484,7 +484,7 @@ TEST_F(HRLModelHelperTest, DISABLED_ThrowsWhenMemberDataEmpty)
     std::vector<Eigen::VectorXd> empty_member;
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(empty_member, "member1");
-    EXPECT_THROW(helper.SetDataArray(data_array), std::invalid_argument);
+    EXPECT_THROW(helper.SetDataArray(std::move(data_array)), std::invalid_argument);
 }
 
 TEST_F(HRLModelHelperTest, SetDataArrayThrowsOnOversizedDataArray)
@@ -494,7 +494,7 @@ TEST_F(HRLModelHelperTest, SetDataArrayThrowsOnOversizedDataArray)
     data.emplace_back(std::vector<Eigen::VectorXd>{}, "member1");
     {
         OversizedVectorGuard<std::vector<DataTuple>> guard(data);
-        EXPECT_THROW(helper.SetDataArray(data), std::overflow_error);
+        EXPECT_THROW(helper.SetDataArray(std::move(data)), std::overflow_error);
     }
 }
 
@@ -508,7 +508,7 @@ TEST_F(HRLModelHelperTest, SetDataArrayThrowsOnOversizedMemberData)
     auto & member_ref{ std::get<0>(data[0]) };
     {
         OversizedVectorGuard<std::vector<Eigen::VectorXd>> guard(member_ref);
-        EXPECT_THROW(helper.SetDataArray(data), std::overflow_error);
+        EXPECT_THROW(helper.SetDataArray(std::move(data)), std::overflow_error);
     }
 }
 
@@ -525,13 +525,13 @@ TEST_F(HRLModelHelperTest, SetDataArrayFailureDoesNotModifyExistingData)
     member_data.emplace_back(sample2);
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> valid_data;
     valid_data.emplace_back(member_data, "member1");
-    helper.SetDataArray(valid_data);
+    helper.SetDataArray(std::move(valid_data));
 
     // Attempt to replace with invalid data (member size mismatch)
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> invalid_data;
     invalid_data.emplace_back(member_data, "member1");
     invalid_data.emplace_back(member_data, "member2");
-    EXPECT_THROW(helper.SetDataArray(invalid_data), std::invalid_argument);
+    EXPECT_THROW(helper.SetDataArray(std::move(invalid_data)), std::invalid_argument);
 
     // Ensure original data remain intact
     ASSERT_NO_THROW(helper.RunEstimation(0.0, 0.0));
@@ -603,7 +603,7 @@ TEST_F(HRLModelHelperTest, HandlesMaximumFiniteAlpha)
     member_data.emplace_back(sample2);
     std::vector<DataTuple> data_array;
     data_array.emplace_back(member_data, "member1");
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
 
     // Use the largest finite alphas that avoid overflow
     const double alpha_limit{ std::sqrt(std::numeric_limits<double>::max()) };
@@ -617,7 +617,7 @@ TEST_F(HRLModelHelperTest, HandlesDataVarianceDenominatorNonPositive)
     std::vector<DataTuple> data_array{ member };
 
     HRLModelHelper helper{ 2, 1 };
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     // Large alpha_r forces denominator to be non-positive
     EXPECT_NO_THROW(helper.RunEstimation(1.0e9, 0.0));
     EXPECT_TRUE(std::isfinite(helper.GetSigmaSquare(0)));
@@ -630,7 +630,7 @@ TEST_F(HRLModelHelperTest, HandlesNonFiniteDataVarianceSquare)
     std::vector<DataTuple> data_array{ member };
 
     HRLModelHelper helper{ 2, 1 };
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
 
     auto prev_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Warning);
@@ -653,7 +653,7 @@ TEST_F(HRLModelHelperTest, MemberCovarianceDenominatorNonPositiveKeepsLambdaUnch
     std::vector<DataTuple> data_array{ member0, member1 };
 
     HRLModelHelper helper{ 2, 2 };
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     // Capital lambda should start as the identity matrix
     Eigen::MatrixXd lambda_before{ helper.GetCapitalLambdaMatrix() };
     EXPECT_TRUE(lambda_before.isApprox(Eigen::MatrixXd::Identity(2, 2)));
@@ -692,7 +692,7 @@ TEST_F(HRLModelHelperTest, MemberWeightMatchesAnalyticFormula)
     data_array.emplace_back(member1, "member1");
 
     HRLModelHelper helper{ 1, 2 };
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
 
     const double alpha_r{ 0.0 };
     const double alpha_g{ 0.5 };
@@ -724,7 +724,7 @@ TEST_F(HRLModelHelperTest, MemberWeightsClampedToMinimum)
     std::vector<DataTuple> data_array{ member0, member1 };
 
     HRLModelHelper helper{ 2, 2 };
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
 
     const double alpha_g{ 100.0 }; // Forces weights below m_weight_member_min
     EXPECT_NO_THROW(helper.RunEstimation(0.0, alpha_g));
@@ -764,7 +764,7 @@ TEST_F(HRLModelHelperTest, EstimationOnSmallSyntheticData)
     std::vector<DataTuple> data_array{member0, member1};
 
     HRLModelHelper helper(2, 2);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.SetMaximumIteration(1000);
     helper.SetTolerance(1.0e-6);
     helper.RunEstimation(0.0, 0.0);
@@ -806,7 +806,7 @@ TEST_F(HRLModelHelperTest, PosteriorSigmaMatrixIsSymmetricPositive)
     const int basis_size{ 2 };
     const int member_size{ 2 };
     HRLModelHelper helper(basis_size, member_size);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.RunEstimation(0.0, 0.0);
     for (int i = 0; i < member_size; ++i)
     {
@@ -829,7 +829,7 @@ TEST_F(HRLModelHelperTest, MuPriorDiffersWithDistinctMemberTrends)
     std::vector<DataTuple> data_array{ member0, member1, member2 };
 
     HRLModelHelper helper(2, 3);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.SetMaximumIteration(1000);
     helper.SetTolerance(1.0e-6);
     helper.RunEstimation(0.0, 0.0);
@@ -854,7 +854,7 @@ TEST_F(HRLModelHelperTest, OutlierFlagsWithDivergentData)
     std::vector<DataTuple> data_array{member0, member1};
 
     HRLModelHelper helper(2, 2);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.RunEstimation(0.0, 0.0);
 
     Eigen::Vector2d expected0, expected1;
@@ -902,7 +902,7 @@ TEST_F(HRLModelHelperTest, MuPriorEqualsMuMDPDEForTwoMembers)
     auto member1{ CreateMember({{0.0, 10.0}, {1.0, 12.0}, {2.0, 14.0}}, "member_1") };
     std::vector<DataTuple> data_array{ member0, member1 };
     HRLModelHelper helper(2, 2);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.SetMaximumIteration(1000);
     helper.SetTolerance(1.0e-6);
     helper.RunEstimation(0.0, 0.0);
@@ -972,14 +972,15 @@ TEST_F(HRLModelHelperTest, AlphaGReweightsOutliers)
     std::vector<DataTuple> data_array{inlier0, inlier1, outlier};
 
     HRLModelHelper baseline(2, 3);
-    baseline.SetDataArray(data_array);
+    auto baseline_data{ data_array };
+    baseline.SetDataArray(std::move(baseline_data));
     baseline.SetMaximumIteration(1000);
     baseline.SetTolerance(1.0e-6);
     baseline.RunEstimation(0.0, 0.0);
     Eigen::VectorXd mu_prior_initial{ baseline.GetMuVectorPrior() };
 
     HRLModelHelper reweighted(2, 3);
-    reweighted.SetDataArray(data_array);
+    reweighted.SetDataArray(std::move(data_array));
     reweighted.SetMaximumIteration(1000);
     reweighted.SetTolerance(1.0e-6);
     reweighted.RunEstimation(0.0, 0.5);
@@ -1005,7 +1006,7 @@ TEST_F(HRLModelHelperTest, RobustEstimationDownweightsOutlier)
     std::vector<DataTuple> data_array{ majority, outlier };
 
     HRLModelHelper helper(2, 2);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
 
     // First run with no robustness (alpha = 0)
     helper.RunEstimation(0.0, 0.0);
@@ -1029,7 +1030,7 @@ TEST_F(HRLModelHelperTest, DetectsTrueOutlier)
     auto outlier{ CreateMember({{0.0, 30.0}, {1.0, 60.0}, {2.0, 90.0}, {3.0, 120.0}}, "outlier") };
     std::vector<DataTuple> data_array{ inlier0, inlier1, outlier };
     HRLModelHelper helper(2, 3);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.SetMaximumIteration(1000);
     helper.SetTolerance(1.0e-6);
     helper.RunEstimation(0.0, 1.0);
@@ -1045,7 +1046,7 @@ TEST_F(HRLModelHelperTest, FlagsOnlyExtremePosteriorAsOutlier)
     auto extreme{ CreateMember({{0.0, 100.0}, {1.0, 200.0}, {2.0, 300.0}, {3.0, 400.0}}, "extreme") };
     std::vector<DataTuple> data_array{ member0, member1, extreme };
     HRLModelHelper helper(2, 3);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.SetMaximumIteration(1000);
     helper.SetTolerance(1.0e-6);
     helper.RunEstimation(0.0, 1.0);
@@ -1087,7 +1088,8 @@ TEST_F(HRLModelHelperFixture, HonorsMaximumIteration)
 {
     // Baseline with large iteration count for reference
     HRLModelHelper baseline(1, 1);
-    baseline.SetDataArray(m_data);
+    auto baseline_data{ m_data };
+    baseline.SetDataArray(std::move(baseline_data));
     baseline.SetMaximumIteration(50);
     baseline.SetTolerance(0.0);
     baseline.RunEstimation(0.5, 0.0);
@@ -1095,7 +1097,8 @@ TEST_F(HRLModelHelperFixture, HonorsMaximumIteration)
 
     // Run with single iteration
     HRLModelHelper limited1(1, 1);
-    limited1.SetDataArray(m_data);
+    auto limited1_data{ m_data };
+    limited1.SetDataArray(std::move(limited1_data));
     limited1.SetMaximumIteration(1);
     limited1.SetTolerance(0.0);
     Logger::SetLogLevel(LogLevel::Warning);
@@ -1108,7 +1111,8 @@ TEST_F(HRLModelHelperFixture, HonorsMaximumIteration)
 
     // Run with five iterations
     HRLModelHelper limited5(1, 1);
-    limited5.SetDataArray(m_data);
+    auto limited5_data{ m_data };
+    limited5.SetDataArray(std::move(limited5_data));
     limited5.SetMaximumIteration(5);
     limited5.SetTolerance(0.0);
     limited5.RunEstimation(0.5, 0.0);
@@ -1122,7 +1126,8 @@ TEST_F(HRLModelHelperFixture, RespectsToleranceSetting)
 {
     // Reference solution with strict tolerance and many iterations
     HRLModelHelper baseline(1, 1);
-    baseline.SetDataArray(m_data);
+    auto baseline_data{ m_data };
+    baseline.SetDataArray(std::move(baseline_data));
     baseline.SetMaximumIteration(HRLModelHelper::DEFAULT_MAXIMUM_ITERATION);
     baseline.SetTolerance(1.0e-12);
     baseline.RunEstimation(0.5, 0.0);
@@ -1130,7 +1135,8 @@ TEST_F(HRLModelHelperFixture, RespectsToleranceSetting)
 
     // Strict tolerance with limited iterations should hit maximum
     HRLModelHelper strict(1, 1);
-    strict.SetDataArray(m_data);
+    auto strict_data{ m_data };
+    strict.SetDataArray(std::move(strict_data));
     strict.SetMaximumIteration(5);
     strict.SetTolerance(1.0e-12);
     Logger::SetLogLevel(LogLevel::Warning);
@@ -1142,7 +1148,8 @@ TEST_F(HRLModelHelperFixture, RespectsToleranceSetting)
 
     // Relaxed tolerance should converge early and avoid warning
     HRLModelHelper relaxed(1, 1);
-    relaxed.SetDataArray(m_data);
+    auto relaxed_data{ m_data };
+    relaxed.SetDataArray(std::move(relaxed_data));
     relaxed.SetMaximumIteration(5);
     relaxed.SetTolerance(1.0e-1);
     testing::internal::CaptureStderr();
@@ -1166,7 +1173,7 @@ TEST_F(HRLModelHelperTest, ExtremeResidualsYieldFinitePosteriorCovariance)
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
     data_array.emplace_back(member, "extreme");
     HRLModelHelper helper{ 1, 1 };
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.RunEstimation(1.0e20, 0.0);
     const auto & sigma{ helper.GetCapitalSigmaMatrixPosterior(0) };
     ASSERT_EQ(1, sigma.rows());
@@ -1190,7 +1197,7 @@ TEST_F(HRLModelHelperTest, LargeResidualsClampMemberWeights)
     data_array.emplace_back(normal, "normal");
     data_array.emplace_back(extreme, "extreme");
     HRLModelHelper helper{1, 2};
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     auto prev_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Warning);
     testing::internal::CaptureStderr();
@@ -1222,7 +1229,7 @@ TEST_F(HRLModelHelperTest, ExtremelySmallRawDataWeightsAreClamped)
     std::vector<DataTuple> data_array;
     data_array.emplace_back(samples, "extreme");
     HRLModelHelper helper{ 1, 1 };
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.RunEstimation(0.01, 0.0);
     const auto & W{ helper.GetDataWeightMatrix(0) };
     Eigen::VectorXd weights{ W.diagonal() };
@@ -1246,7 +1253,7 @@ TEST_F(HRLModelHelperTest, NonFiniteExponentFallsBackToMinimum)
     data_array.emplace_back(samples, "extreme");
     constexpr double alpha_r{ 0.5 };
     HRLModelHelper helper{ 1, 1 };
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.RunEstimation(alpha_r, 0.0);
 
     const auto & W{ helper.GetDataWeightMatrix(0) };
@@ -1270,7 +1277,7 @@ TEST_F(HRLModelHelperTest, ZeroResidualProducesFiniteWeightsAndPosterior)
     auto member{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 5.0}}, "perfect") };
     std::vector<DataTuple> data_array{ member };
     HRLModelHelper helper(2, 1);
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.RunEstimation(0.0, 0.0);
     const auto & sigma{ helper.GetCapitalSigmaMatrixPosterior(0) };
     EXPECT_TRUE(sigma.array().isFinite().all());
@@ -1290,7 +1297,7 @@ TEST_F(HRLModelHelperTest, DegenerateWeightsUseFallbackCovariance)
     std::vector<DataTuple> data_array;
     data_array.emplace_back(member_data, "collapse");
     HRLModelHelper helper(2, 1);
-    ASSERT_NO_THROW(helper.SetDataArray(data_array));
+    ASSERT_NO_THROW(helper.SetDataArray(std::move(data_array)));
     EXPECT_NO_THROW(helper.RunEstimation(1.0e8, 0.0));
     const auto & sigma{ helper.GetDataCovarianceMatrix(0) };
     EXPECT_TRUE(sigma.diagonal().array().isFinite().all());
@@ -1323,7 +1330,7 @@ TEST_F(HRLModelHelperTest, CovarianceOverflowResetsToIdentity)
     data_array.emplace_back(member1, "member1");
     data_array.emplace_back(member2, "member2");
 
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
 
     auto prev_level{ Logger::GetLogLevel() };
     Logger::SetLogLevel(LogLevel::Warning);
@@ -1365,7 +1372,7 @@ TEST_F(HRLModelHelperTest, OutlierFlagsAllWhenBasisSizeTooLarge)
     std::vector<DataTuple> data;
     data.emplace_back(member0, "m0");
     data.emplace_back(member1, "m1");
-    helper.SetDataArray(data);
+    helper.SetDataArray(std::move(data));
     helper.RunEstimation(0.0, 0.0);
 
     for (int i = 0; i < member_size; ++i)
@@ -1396,7 +1403,7 @@ TEST_F(HRLModelHelperTest, AlphaZeroYieldsIdentityDataWeights)
     member_data.emplace_back(sample2);
     std::vector<DataTuple> data_array;
     data_array.emplace_back(member_data, "member1");
-    helper.SetDataArray(data_array);
+    helper.SetDataArray(std::move(data_array));
     helper.RunEstimation(0.0, 0.0);
 
     const auto & W{ helper.GetDataWeightMatrix(0) };

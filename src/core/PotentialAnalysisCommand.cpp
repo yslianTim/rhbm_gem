@@ -20,6 +20,7 @@
 #include <tuple>
 #include <vector>
 #include <atomic>
+#include <utility>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -344,7 +345,7 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
             }
             auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
             model_estimator->SetThreadSize(1);
-            model_estimator->SetDataArray(data_array);
+            model_estimator->SetDataArray(std::move(data_array));
             model_estimator->RunEstimation(m_options.alpha_r, m_options.alpha_g);
 
             auto gaus_group_mean{

@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <limits>
+#include <utility>
 #include <stdexcept>
 
 using std::string;
@@ -78,7 +79,7 @@ void HRLModelHelper::SetThreadSize(int thread_size)
 }
 
 void HRLModelHelper::SetDataArray(
-    const std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> & data_array)
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> && data_array)
 {
     if (data_array.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
     {
@@ -101,7 +102,7 @@ void HRLModelHelper::SetDataArray(
     X_list.reserve(static_cast<size_t>(m_member_size));
     y_list.reserve(static_cast<size_t>(m_member_size));
 
-    for (const auto & [member_data, member_info] : data_array)
+    for (auto & [member_data, member_info] : data_array)
     {
         if (member_data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
         {
@@ -132,14 +133,14 @@ void HRLModelHelper::SetDataArray(
         data_size_list.emplace_back(data_size);
         X_list.emplace_back(std::move(x_data_matrix));
         y_list.emplace_back(std::move(y_data_vector));
-        member_info_list.emplace_back(member_info);
+        member_info_list.emplace_back(std::move(member_info));
     }
 
-    // All validation and transformations succeeded, swap into member variables.
-    std::swap(m_data_size_list, data_size_list);
-    std::swap(m_X_list, X_list);
-    std::swap(m_y_list, y_list);
-    std::swap(m_member_info_list, member_info_list);
+    // All validation and transformations succeeded, move into member variables.
+    m_data_size_list = std::move(data_size_list);
+    m_X_list = std::move(X_list);
+    m_y_list = std::move(y_list);
+    m_member_info_list = std::move(member_info_list);
 }
 
 void HRLModelHelper::SetMaximumIteration(int size)
