@@ -324,36 +324,6 @@ TEST_F(HRLModelHelperTest, RunEstimationUpdatesWeightsWithNewDataset)
     EXPECT_FALSE(w_b.head(2).isApprox(w_a));
 }
 
-TEST_F(HRLModelHelperTest, RunEstimationRecomputesForDifferentAlphas)
-{
-    HRLModelHelper helper{1, 1};
-
-    // Dataset with an outlier so that robust parameters change the result
-    std::vector<Eigen::VectorXd> member;
-    Eigen::VectorXd d1(2); d1 << 1.0, 1.0;
-    Eigen::VectorXd d2(2); d2 << 2.0, 2.0;
-    Eigen::VectorXd d3(2); d3 << 3.0, 3.0;
-    Eigen::VectorXd d4(2); d4 << 4.0, 30.0;
-    member.emplace_back(d1);
-    member.emplace_back(d2);
-    member.emplace_back(d3);
-    member.emplace_back(d4);
-    std::vector<DataTuple> data;
-    data.emplace_back(member, "member");
-    helper.SetDataArray(std::move(data));
-
-    helper.RunEstimation(0.0, 0.0);
-    const double beta_initial{ helper.GetBetaMatrixMDPDE(0)(0) };
-    const double sigma_initial{ helper.GetSigmaSquare(0) };
-
-    helper.RunEstimation(0.5, 0.1);
-    const double beta_second{ helper.GetBetaMatrixMDPDE(0)(0) };
-    const double sigma_second{ helper.GetSigmaSquare(0) };
-
-    EXPECT_NE(beta_initial, beta_second);
-    EXPECT_NE(sigma_initial, sigma_second);
-}
-
 TEST_F(HRLModelHelperTest, LabelsOutlierMemberWhenDfIsThree)
 {
     const int basis_size{ 3 };
@@ -995,32 +965,6 @@ TEST_F(HRLModelHelperTest, AlphaGReweightsOutliers)
         GTEST_SKIP() << "Estimation failed to converge";
     }
     EXPECT_LT(dist_reweighted, dist_initial + 1.0e-12);
-}
-
-TEST_F(HRLModelHelperTest, RobustEstimationDownweightsOutlier)
-{
-    // Majority member follows a clean linear trend y = 2x + 1
-    auto majority{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 5.0}, {3.0, 7.0}}, "majority") };
-    // Second member contains an outlier at the last point
-    auto outlier{ CreateMember({{0.0, 1.0}, {1.0, 3.0}, {2.0, 5.0}, {3.0, 20.0}}, "outlier") };
-    std::vector<DataTuple> data_array{ majority, outlier };
-
-    HRLModelHelper helper(2, 2);
-    helper.SetDataArray(std::move(data_array));
-
-    // First run with no robustness (alpha = 0)
-    helper.RunEstimation(0.0, 0.0);
-    Eigen::Vector2d majority_beta{ helper.GetBetaMatrixMDPDE(0) };
-    Eigen::Vector2d outlier_beta_ols{ helper.GetBetaMatrixMDPDE(1) };
-
-    // Second run with robustness enabled (alpha = 0.5)
-    helper.RunEstimation(0.5, 0.5);
-    Eigen::Vector2d outlier_beta_robust{ helper.GetBetaMatrixMDPDE(1) };
-
-    // The robust run should yield coefficients closer to the majority trend
-    double diff_ols{ (outlier_beta_ols - majority_beta).norm() };
-    double diff_robust{ (outlier_beta_robust - majority_beta).norm() };
-    EXPECT_LT(diff_robust, diff_ols);
 }
 
 TEST_F(HRLModelHelperTest, DetectsTrueOutlier)

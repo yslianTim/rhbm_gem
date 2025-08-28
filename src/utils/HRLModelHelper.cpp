@@ -56,14 +56,10 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_y_list.reserve(static_cast<size_t>(m_member_size));
     m_W_list.reserve(static_cast<size_t>(m_member_size));
     m_capital_sigma_list.reserve(static_cast<size_t>(m_member_size));
-    m_capital_sigma_posterior_list.reserve(static_cast<size_t>(m_member_size));
-    m_capital_lambda_list.reserve(static_cast<size_t>(m_member_size));
-
-    for (int i = 0; i < m_member_size; i++)
-    {
-        m_capital_sigma_posterior_list.emplace_back(MatrixXd::Identity(m_basis_size, m_basis_size));
-        m_capital_lambda_list.emplace_back(MatrixXd::Identity(m_basis_size, m_basis_size));
-    }
+    m_capital_sigma_posterior_list.assign(
+        static_cast<size_t>(m_member_size), MatrixXd::Identity(m_basis_size, m_basis_size));
+    m_capital_lambda_list.assign(
+        static_cast<size_t>(m_member_size), MatrixXd::Identity(m_basis_size, m_basis_size));
 }
 
 void HRLModelHelper::SetThreadSize(int thread_size)
@@ -181,11 +177,11 @@ void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
     if (m_data_size_list.size() < static_cast<size_t>(m_member_size))
     {
         Logger::Log(LogLevel::Info,
-                    "HRLModelHelper::RunEstimation : "
-                    "Valid member size is smaller than expected member size -> "
-                    + std::to_string(m_member_size) + ", "
-                    "reassigning member size to -> "
-                    + std::to_string(m_data_size_list.size()));
+            "HRLModelHelper::RunEstimation : "
+            "Valid member size is smaller than expected member size -> "
+            + std::to_string(m_member_size) + ", "
+            "reassigning member size to -> "+ std::to_string(m_data_size_list.size())
+        );
         m_member_size = static_cast<int>(m_data_size_list.size());
         m_weight_member_min = DEFAULT_WEIGHT_MEMBER_MIN / m_member_size;
         m_sigma_square_array.resize(m_member_size);
@@ -196,8 +192,11 @@ void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
         m_beta_OLS_array.resize(m_basis_size, m_member_size);
         m_beta_MDPDE_array.resize(m_basis_size, m_member_size);
         m_capital_sigma_posterior_list.resize(static_cast<size_t>(m_member_size));
+        m_capital_sigma_posterior_list.shrink_to_fit();
         m_capital_lambda_list.resize(static_cast<size_t>(m_member_size));
+        m_capital_lambda_list.shrink_to_fit();
         m_W_list.resize(static_cast<size_t>(m_member_size));
+        m_W_list.shrink_to_fit();
     }
 
     Initialization();
@@ -233,10 +232,10 @@ void HRLModelHelper::Initialization(void)
     // Reset the containers of matrix objects
     m_W_list.clear();
     m_capital_sigma_list.clear();
-    m_capital_sigma_posterior_list.assign(static_cast<size_t>(m_member_size),
-                                          MatrixXd::Identity(m_basis_size, m_basis_size));
-    m_capital_lambda_list.assign(static_cast<size_t>(m_member_size),
-                                 MatrixXd::Identity(m_basis_size, m_basis_size));
+    m_capital_sigma_posterior_list.assign(
+        static_cast<size_t>(m_member_size), MatrixXd::Identity(m_basis_size, m_basis_size));
+    m_capital_lambda_list.assign(
+        static_cast<size_t>(m_member_size), MatrixXd::Identity(m_basis_size, m_basis_size));
 
     for (int i = 0; i < m_member_size; i++)
     { //=== Begin of member ID loop (0 ... I-1)
