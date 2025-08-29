@@ -18,7 +18,7 @@ class AtomObject : public DataObjectBase
     bool m_is_selected;
     bool m_is_special_atom;
     int m_serial_id, m_residue_id;
-    std::string m_chain_id, m_indicator;
+    std::string m_atom_id, m_chain_id, m_indicator;
     float m_occupancy, m_temperature;
     Residue m_residue;
     Element m_element;
@@ -47,6 +47,7 @@ public:
     void SetSpecialAtomFlag(bool value) { m_is_special_atom = value; }
     void SetSerialID(int value) { m_serial_id = value; }
     void SetResidueID(int value) { m_residue_id = value; }
+    void SetAtomID(const std::string & value) { m_atom_id = value; }
     void SetChainID(const std::string & value) { m_chain_id = value; }
     void SetIndicator(const std::string & value) { m_indicator = value; }
     void SetOccupancy(float value) { m_occupancy = value; }
@@ -78,6 +79,7 @@ public:
     bool GetSpecialAtomFlag(void) const { return m_is_special_atom; }
     int GetSerialID(void) const { return m_serial_id; }
     int GetResidueID(void) const { return m_residue_id; }
+    std::string GetAtomID(void) const { return m_atom_id; }
     std::string GetChainID(void) const { return m_chain_id; }
     std::string GetIndicator(void) const { return m_indicator; }
     float GetOccupancy(void) const { return m_occupancy; }

@@ -99,9 +99,71 @@ void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
         {
             auto comp_id{ token_list[index_map.at("id")] };
             auto name{ token_list[index_map.at("name")] };
+            auto type{ token_list[index_map.at("type")] };
             auto formula{ token_list[index_map.at("formula")] };
+            auto standard_flag_str{ token_list[index_map.at("mon_nstd_flag")] };
             m_data_block->AddChemicalComponentName(comp_id, name);
+            m_data_block->AddChemicalComponentType(comp_id, type);
             m_data_block->AddChemicalComponentFormula(comp_id, formula);
+            auto standard_flag{ false };
+            if      (standard_flag_str == "n" || standard_flag_str == "no") standard_flag = false;
+            else if (standard_flag_str == "y" || standard_flag_str == "yes") standard_flag = true;
+            m_data_block->AddChemicalComponentStandardFlag(comp_id, standard_flag);
+        }
+    );
+    LoadChemicalComponentAtomBlock(infile);
+    LoadChemicalComponentBondBlock(infile);
+}
+
+void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentAtomBlock() called");
+    infile.clear();
+    infile.seekg(0);
+    ParseLoopBlock(infile, "_chem_comp_atom.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto comp_id{ token_list[index_map.at("comp_id")] };
+            auto atom_id{ token_list[index_map.at("atom_id")] };
+            auto element_symbol{ token_list[index_map.at("type_symbol")] };
+            auto pdbx_aromatic_flag{ token_list[index_map.at("pdbx_aromatic_flag")] };
+            auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
+            auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
+
+            ChemCompAtom atom_info;
+            atom_info.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
+            atom_info.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
+            atom_info.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
+            atom_info.ordinal_index = std::stoi(pdbx_ordinal_index);
+            m_data_block->AddChemicalComponentAtom(comp_id, atom_id, atom_info);
+        }
+    );
+}
+
+void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentBondBlock() called");
+    infile.clear();
+    infile.seekg(0);
+    ParseLoopBlock(infile, "_chem_comp_bond.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto comp_id{ token_list[index_map.at("comp_id")] };
+            auto atom_id_1{ token_list[index_map.at("atom_id_1")] };
+            auto atom_id_2{ token_list[index_map.at("atom_id_2")] };
+            auto bond_order{ token_list[index_map.at("value_order")] };
+            auto pdbx_aromatic_flag{ token_list[index_map.at("pdbx_aromatic_flag")] };
+            auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
+            auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
+
+            ChemCompBond bond_info;
+            bond_info.bond_order = bond_order;
+            bond_info.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
+            bond_info.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
+            bond_info.ordinal_index = std::stoi(pdbx_ordinal_index);
+            m_data_block->AddChemicalComponentBond(comp_id, {atom_id_1, atom_id_2}, bond_info);
         }
     );
 }
@@ -184,7 +246,6 @@ void CifFormat::LoadPdbxData(std::ifstream & infile)
     while (std::getline(infile, line))
     {
         StringHelper::StripCarriageReturn(line);
-        //StringHelper::StripCarriageReturn(line);
         if (line.find("_em_3d_reconstruction.resolution ") != std::string::npos)
         {
             std::istringstream iss(line);
@@ -325,49 +386,48 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             static AtomObject * last_atom_object{ nullptr };
             auto group_type{ token_list[index_map.at("group_PDB")] };
             auto element_type{ token_list[index_map.at("type_symbol")] };
-            if (element_type == "H") return; // Skip hydrogen atom
-            auto is_special_atom{ (group_type == "HETATM") ? true : false };
-            auto atom_object{ std::make_unique<AtomObject>() };
-            atom_object->SetElement(element_type);
-            atom_object->SetRemoteness(
-                StringHelper::ExtractCharAsString(
-                    token_list[index_map.at("label_atom_id")],
-                    token_list[index_map.at("type_symbol")].size()
-                ));
-            atom_object->SetBranch(
-                StringHelper::ExtractCharAsString(
-                    token_list[index_map.at("label_atom_id")],
-                    token_list[index_map.at("type_symbol")].size() + 1
-                ));
-            atom_object->SetResidue(token_list[index_map.at("label_comp_id")]);
+            auto residue_type{ token_list[index_map.at("label_comp_id")] };
+            auto atom_id{ token_list[index_map.at("label_atom_id")] };
             auto indicator{ token_list[index_map.at("label_alt_id")] };
-            atom_object->SetIndicator(indicator);
             auto residue_id{ token_list[index_map.at("label_seq_id")] };
-            atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
-            atom_object->SetSerialID(std::stoi(token_list[index_map.at("id")]));
-            atom_object->SetChainID(token_list[index_map.at("label_asym_id")]);
-            
+            auto serial_id{ token_list[index_map.at("id")] };
+            auto chain_id{ token_list[index_map.at("label_asym_id")] };
             auto position_x{ std::stof(token_list[index_map.at("Cartn_x")]) };
             auto position_y{ std::stof(token_list[index_map.at("Cartn_y")]) };
             auto position_z{ std::stof(token_list[index_map.at("Cartn_z")]) };
             auto occupancy{ std::stof(token_list[index_map.at("occupancy")]) };
             auto temperature{ std::stof(token_list[index_map.at("B_iso_or_equiv")]) };
+            auto model_number{ token_list[index_map.at("pdbx_PDB_model_num")] };
+            if (element_type == "H") return; // Skip hydrogen atom
+            auto is_special_atom{ (group_type == "HETATM") ? true : false };
+            auto atom_object{ std::make_unique<AtomObject>() };
+            atom_object->SetAtomID(atom_id);
+            atom_object->SetElement(element_type);
+            atom_object->SetRemoteness(
+                StringHelper::ExtractCharAsString(atom_id, element_type.size()));
+            atom_object->SetBranch(
+                StringHelper::ExtractCharAsString(atom_id, element_type.size() + 1));
+            atom_object->SetResidue(residue_type);
+            atom_object->SetIndicator(indicator);
+            atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
+            atom_object->SetSerialID(std::stoi(serial_id));
+            atom_object->SetChainID(chain_id);
             atom_object->SetPosition(position_x, position_y, position_z);
             atom_object->SetOccupancy(occupancy);
             atom_object->SetTemperature(temperature);
             atom_object->SetSpecialAtomFlag(is_special_atom);
             m_data_block->SetStructureInfo(atom_object.get());
 
-            auto model_number{ std::stoi(token_list[index_map.at("pdbx_PDB_model_num")]) };
+            auto model_number_id{ std::stoi(model_number) };
             if (indicator == ".")
             {
                 last_atom_object = nullptr;
-                m_data_block->AddAtomObject(model_number, std::move(atom_object));
+                m_data_block->AddAtomObject(model_number_id, std::move(atom_object));
             }
             else if (indicator == "A")
             {
                 last_atom_object = atom_object.get();
-                m_data_block->AddAtomObject(model_number, std::move(atom_object));
+                m_data_block->AddAtomObject(model_number_id, std::move(atom_object));
             }
             else
             {

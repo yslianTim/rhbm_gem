@@ -32,6 +32,8 @@ public:
 
 private:
     void LoadChemicalComponentBlock(std::ifstream & infile);
+    void LoadChemicalComponentAtomBlock(std::ifstream & infile);
+    void LoadChemicalComponentBondBlock(std::ifstream & infile);
     void LoadDatabaseBlock(std::ifstream & infile);
     void LoadEntityBlock(std::ifstream & infile);
     void LoadPdbxData(std::ifstream & infile);
@@ -43,7 +45,8 @@ private:
     void ParseLoopBlock(std::ifstream & infile,
         std::string_view data_block_prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,
-                                 const std::vector<std::string> &)> & row_handler);
+                                 const std::vector<std::string> &)> & row_handler
+    );
     void WriteAtomSiteBlock(const ModelObject * model_object, std::ostream & stream, int model_par);
     void WriteAtomSiteBlockEntry(const AtomObject * atom,
         const std::array<float, 3> & position,
@@ -51,6 +54,7 @@ private:
         float occupancy,
         float temperature,
         int model_number,
-        std::ostream & stream);
+        std::ostream & stream
+    );
 
 };

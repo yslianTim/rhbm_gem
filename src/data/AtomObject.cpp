@@ -12,7 +12,7 @@ AtomObject::AtomObject(void) :
     m_key_tag{ "" },
     m_is_selected{ false }, m_is_special_atom{ false },
     m_serial_id{ 0 }, m_residue_id{ 0 },
-    m_chain_id{ "" }, m_indicator{ "" },
+    m_atom_id{ "" }, m_chain_id{ "" }, m_indicator{ "" },
     m_occupancy{ 0.0 }, m_temperature{ 0.0 },
     m_residue{ Residue::UNK }, m_element{ Element::UNK },
     m_remoteness{ Remoteness::UNK }, m_branch{ Branch::UNK },
@@ -32,7 +32,7 @@ AtomObject::AtomObject(const AtomObject & other) :
     m_key_tag{ other.m_key_tag },
     m_is_selected{ other.m_is_selected }, m_is_special_atom{ other.m_is_special_atom },
     m_serial_id{ other.m_serial_id }, m_residue_id{ other.m_residue_id },
-    m_chain_id{ other.m_chain_id }, m_indicator{ other.m_indicator },
+    m_atom_id{ other.m_atom_id }, m_chain_id{ other.m_chain_id }, m_indicator{ other.m_indicator },
     m_occupancy{ other.m_occupancy }, m_temperature{ other.m_temperature },
     m_residue{ other.m_residue }, m_element{ other.m_element },
     m_remoteness{ other.m_remoteness }, m_branch{ other.m_branch },
@@ -110,6 +110,7 @@ std::string AtomObject::GetInfo(void) const
 {
     return "[Serial ID] " + std::to_string(m_serial_id) + " " +
            "[Residue ID] " + std::to_string(m_residue_id) + " " +
+           "[Atom ID] " + m_atom_id + " " +
            "[Chain ID] " + m_chain_id + " " +
            AtomicInfoHelper::GetLabel(m_residue) + " " +
            AtomicInfoHelper::GetLabel(m_element) + " " +

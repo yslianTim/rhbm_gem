@@ -52,6 +52,9 @@ enum class Element : uint16_t
 enum class Remoteness : uint8_t
 {
     NONE = 0, ALPHA = 1, BETA = 2, GAMMA = 3, DELTA = 4, EPSILON = 5, ZETA = 6, ETA = 7,
+    ACID = 8,         // phosphoric acid
+    PENTOSE = 9,      // pentose sugar (Ribose, Deoxyribose)
+    BASE = 10,        // nucleotide base
     ONE = 11, TWO = 12, THREE = 13, FOUR = 14, FIVE = 15,
     EXTRA = 99,
     UNK = UINT8_MAX
@@ -59,7 +62,8 @@ enum class Remoteness : uint8_t
 
 enum class Branch : uint8_t
 {
-    NONE = 0, ONE = 1, TWO = 2, THREE = 3,
+    NONE = 0, ONE = 1, TWO = 2, THREE = 3, FOUR = 4,
+    FIVE = 5, SIX = 6, SEVEN = 7, EIGHT = 8, NINE = 9,
     TERMINAL = 254,
     UNK = UINT8_MAX
 };

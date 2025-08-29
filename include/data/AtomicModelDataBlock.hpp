@@ -4,12 +4,16 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <map>
+#include <utility>
 #include <unordered_map>
 
 enum class Element : uint16_t;
 enum class Entity : uint8_t;
 
 class AtomObject;
+struct ChemCompAtom;
+struct ChemCompBond;
 
 class AtomicModelDataBlock
 {
@@ -30,6 +34,10 @@ class AtomicModelDataBlock
 
     std::unordered_map<std::string, std::string> m_chemical_component_formula_map; // key : comp_id
     std::unordered_map<std::string, std::string> m_chemical_component_name_map; // key : comp_id
+    std::unordered_map<std::string, std::string> m_chemical_component_type_map; // key : comp_id
+    std::unordered_map<std::string, bool> m_chemical_component_standard_flag_map; // key : comp_id
+    std::unordered_map<std::string, std::map<std::string, ChemCompAtom>> m_chemical_component_atom_map; // key : comp_id
+    std::unordered_map<std::string, std::map<std::pair<std::string, std::string>, ChemCompBond>> m_chemical_component_bond_map; // key : comp_id
 
 public:
     AtomicModelDataBlock(void);
@@ -45,6 +53,18 @@ public:
     void AddElementType(const Element & element);
     void AddChemicalComponentFormula(const std::string & comp_id, const std::string & formula);
     void AddChemicalComponentName(const std::string & comp_id, const std::string & name);
+    void AddChemicalComponentType(const std::string & comp_id, const std::string & type);
+    void AddChemicalComponentStandardFlag(const std::string & comp_id, bool flag);
+    void AddChemicalComponentAtom(
+        const std::string & comp_id,
+        const std::string & atom_id,
+        const ChemCompAtom & atom_info
+    );
+    void AddChemicalComponentBond(
+        const std::string & comp_id,
+        const std::pair<std::string, std::string> & atom_id_pair,
+        const ChemCompBond & bond_info
+    );
 
     void SetPdbID(const std::string & label) { m_model_id = label; }
     void SetEmdID(const std::string & label) { m_map_id = label; }
@@ -63,4 +83,20 @@ public:
     const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap(void) const;
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
 
+};
+
+struct ChemCompAtom
+{
+    Element element_type;
+    bool aromatic_atom_flag;
+    char chiral_config; // 'N', 'R', 'S'
+    int ordinal_index;
+};
+
+struct ChemCompBond
+{
+    std::string bond_order;
+    bool aromatic_atom_flag;
+    char chiral_config; // 'N', 'R', 'S'
+    int ordinal_index;
 };

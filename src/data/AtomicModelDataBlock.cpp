@@ -74,6 +74,32 @@ void AtomicModelDataBlock::AddChemicalComponentName(
     m_chemical_component_name_map[comp_id] = name;
 }
 
+void AtomicModelDataBlock::AddChemicalComponentType(
+    const std::string & comp_id, const std::string & type)
+{
+    m_chemical_component_type_map[comp_id] = type;
+}
+
+void AtomicModelDataBlock::AddChemicalComponentStandardFlag(
+    const std::string & comp_id, bool flag)
+{
+    m_chemical_component_standard_flag_map[comp_id] = flag;
+}
+
+void AtomicModelDataBlock::AddChemicalComponentAtom(
+    const std::string & comp_id, const std::string & atom_id, const ChemCompAtom & atom_info)
+{
+    m_chemical_component_atom_map[comp_id][atom_id] = atom_info;
+}
+
+void AtomicModelDataBlock::AddChemicalComponentBond(
+    const std::string & comp_id,
+    const std::pair<std::string, std::string> & atom_id_pair,
+    const ChemCompBond & bond_info)
+{
+    m_chemical_component_bond_map[comp_id][atom_id_pair] = bond_info;
+}
+
 void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 {
     auto chain_id{ atom_object->GetChainID() };
