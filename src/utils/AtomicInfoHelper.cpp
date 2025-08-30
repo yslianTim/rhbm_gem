@@ -156,8 +156,8 @@ const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remot
     {" ", Remoteness::NONE}, {"A", Remoteness::ALPHA}, {"B", Remoteness::BETA},
     {"G", Remoteness::GAMMA},{"D", Remoteness::DELTA}, {"E", Remoteness::EPSILON},
     {"Z", Remoteness::ZETA}, {"H", Remoteness::ETA},
-    {"1", Remoteness::ONE},  {"2", Remoteness::TWO},   {"3", Remoteness::THREE},
-    {"4", Remoteness::FOUR}, {"5", Remoteness::FIVE},
+    //{"1", Remoteness::ONE},  {"2", Remoteness::TWO},   {"3", Remoteness::THREE},
+    //{"4", Remoteness::FOUR}, {"5", Remoteness::FIVE},
     {"X", Remoteness::EXTRA}
 };
 
@@ -398,6 +398,11 @@ bool AtomicInfoHelper::IsStandardResidue(Residue residue)
 {
     return std::find(m_standard_residue_list.begin(), m_standard_residue_list.end(), residue)
             != m_standard_residue_list.end();
+}
+
+bool AtomicInfoHelper::IsValidRemotenessString(const std::string & remoteness_str)
+{
+    return m_remoteness_map.find(remoteness_str) != m_remoteness_map.end();
 }
 
 Residue AtomicInfoHelper::GetResidueFromString(const std::string & name)

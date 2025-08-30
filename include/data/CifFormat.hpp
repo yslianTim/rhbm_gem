@@ -12,6 +12,8 @@
 #include "ModelFileFormatBase.hpp"
 
 enum class Element : uint16_t;
+enum class Remoteness : uint8_t;
+enum class Branch : uint8_t;
 class AtomicModelDataBlock;
 class ModelObject;
 class AtomObject;
@@ -46,6 +48,12 @@ private:
         std::string_view data_block_prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,
                                  const std::vector<std::string> &)> & row_handler
+    );
+    void ParseAtomID(
+        const std::string & atom_id,
+        const std::string & element_type,
+        Remoteness & remoteness,
+        Branch & branch
     );
     void WriteAtomSiteBlock(const ModelObject * model_object, std::ostream & stream, int model_par);
     void WriteAtomSiteBlockEntry(const AtomObject * atom,

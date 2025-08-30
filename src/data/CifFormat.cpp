@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <cctype>
 #include <ostream>
+#include <algorithm>
 
 CifFormat::CifFormat(void) :
     m_data_block{ std::make_unique<AtomicModelDataBlock>() }
@@ -400,13 +401,16 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             auto model_number{ token_list[index_map.at("pdbx_PDB_model_num")] };
             if (element_type == "H") return; // Skip hydrogen atom
             auto is_special_atom{ (group_type == "HETATM") ? true : false };
+            auto is_standard_component{ m_data_block->IsStandardChemicalComponent(residue_type) };
             auto atom_object{ std::make_unique<AtomObject>() };
+            Element element{ AtomicInfoHelper::GetElementFromString(element_type) };
+            Remoteness remoteness{ Remoteness::UNK };
+            Branch branch{ Branch::UNK };
+            if (is_standard_component) ParseAtomID(atom_id, element_type, remoteness, branch);
             atom_object->SetAtomID(atom_id);
-            atom_object->SetElement(element_type);
-            atom_object->SetRemoteness(
-                StringHelper::ExtractCharAsString(atom_id, element_type.size()));
-            atom_object->SetBranch(
-                StringHelper::ExtractCharAsString(atom_id, element_type.size() + 1));
+            atom_object->SetElement(element);
+            atom_object->SetRemoteness(remoteness);
+            atom_object->SetBranch(branch);
             atom_object->SetResidue(residue_type);
             atom_object->SetIndicator(indicator);
             atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
@@ -443,6 +447,50 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             }
         }
     );
+}
+
+void CifFormat::ParseAtomID(
+    const std::string & atom_id,
+    const std::string & element_type,
+    Remoteness & remoteness,
+    Branch & branch)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::ParseAtomID() called");
+    auto atom_id_remove_element{ atom_id.substr(element_type.size()) };
+
+    if (atom_id == "P" || atom_id_remove_element.find("P") != std::string::npos)
+    {
+        remoteness = Remoteness::ACID; // phosphoric acid
+        std::string acid_branch_str{ atom_id_remove_element.back() };
+        branch = AtomicInfoHelper::GetBranchFromString(acid_branch_str);
+        return;
+    }
+
+    if (atom_id.find("'") != std::string::npos)
+    {
+        remoteness = Remoteness::PENTOSE; // pentose sugar (Ribose, Deoxyribose)
+        auto pentose_branch_str{ atom_id_remove_element };
+        pentose_branch_str.erase(
+            std::remove(pentose_branch_str.begin(), pentose_branch_str.end(), '\''), pentose_branch_str.end());
+        branch = AtomicInfoHelper::GetBranchFromString(pentose_branch_str);
+        return;
+    }
+
+    auto remoteness_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 0) };
+    if (AtomicInfoHelper::IsValidRemotenessString(remoteness_str) == true)
+    {
+        remoteness = AtomicInfoHelper::GetRemotenessFromString(remoteness_str);
+        auto branch_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 1) };
+        branch = AtomicInfoHelper::GetBranchFromString(branch_str);
+        return;
+    }
+    else
+    {
+        remoteness = Remoteness::BASE; // nucleotide base
+        std::string base_branch_str{ atom_id_remove_element.back() };
+        branch = AtomicInfoHelper::GetBranchFromString(base_branch_str);
+        return;
+    }
 }
 
 AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)

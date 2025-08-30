@@ -61,6 +61,7 @@ public:
     static const std::unordered_map<Element, std::string> & GetElementLabelMap(void);
     static bool IsStandardElement(Element element);
     static bool IsStandardResidue(Residue residue);
+    static bool IsValidRemotenessString(const std::string & name);
 
     static Residue GetResidueFromString(const std::string & name);
     static Element GetElementFromString(const std::string & name);

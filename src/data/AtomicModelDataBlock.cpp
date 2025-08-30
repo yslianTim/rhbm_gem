@@ -201,3 +201,14 @@ AtomicModelDataBlock::GetChainIDListMap(void) const
 {
     return m_chain_id_list_map;
 }
+
+bool AtomicModelDataBlock::IsStandardChemicalComponent(const std::string & comp_id) const
+{
+    if (m_chemical_component_standard_flag_map.find(comp_id) == m_chemical_component_standard_flag_map.end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "Chemical component ID " + comp_id + " not found in chemical component map.");
+        return false;
+    }
+    return m_chemical_component_standard_flag_map.at(comp_id);
+}

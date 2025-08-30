@@ -82,6 +82,7 @@ public:
     const std::unordered_map<std::string, int> & GetMoleculesSizeMap(void) const;
     const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap(void) const;
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
+    bool IsStandardChemicalComponent(const std::string & comp_id) const;
 
 };
 
