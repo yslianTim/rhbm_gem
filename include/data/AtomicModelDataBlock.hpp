@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <map>
 #include <utility>
 #include <unordered_map>
 
@@ -12,8 +11,9 @@ enum class Element : uint16_t;
 enum class Entity : uint8_t;
 
 class AtomObject;
-struct ChemCompAtom;
-struct ChemCompBond;
+class ChemicalComponentEntry;
+struct ComponentAtomEntry;
+struct ComponentBondEntry;
 
 class AtomicModelDataBlock
 {
@@ -32,12 +32,7 @@ class AtomicModelDataBlock
     std::unordered_map<std::string, std::array<std::string, 4>> m_struct_sheet_range_map;
     std::vector<Element> m_element_type_list;
 
-    std::unordered_map<std::string, std::string> m_chemical_component_formula_map; // key : comp_id
-    std::unordered_map<std::string, std::string> m_chemical_component_name_map; // key : comp_id
-    std::unordered_map<std::string, std::string> m_chemical_component_type_map; // key : comp_id
-    std::unordered_map<std::string, bool> m_chemical_component_standard_flag_map; // key : comp_id
-    std::unordered_map<std::string, std::map<std::string, ChemCompAtom>> m_chemical_component_atom_map; // key : comp_id
-    std::unordered_map<std::string, std::map<std::pair<std::string, std::string>, ChemCompBond>> m_chemical_component_bond_map; // key : comp_id
+    std::unordered_map<std::string, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map; // key : comp_id
 
 public:
     AtomicModelDataBlock(void);
@@ -51,19 +46,16 @@ public:
     void AddSheetRange(const std::string & composite_sheet_id, const std::array<std::string, 4> & range);
     void AddHelixRange(const std::string & helix_id, const std::array<std::string, 5> & range);
     void AddElementType(const Element & element);
-    void AddChemicalComponentFormula(const std::string & comp_id, const std::string & formula);
-    void AddChemicalComponentName(const std::string & comp_id, const std::string & name);
-    void AddChemicalComponentType(const std::string & comp_id, const std::string & type);
-    void AddChemicalComponentStandardFlag(const std::string & comp_id, bool flag);
-    void AddChemicalComponentAtom(
+    void AddChemicalComponentEntry(const std::string & comp_id, std::unique_ptr<ChemicalComponentEntry> entry);
+    void AddComponentAtomEntry(
         const std::string & comp_id,
         const std::string & atom_id,
-        const ChemCompAtom & atom_info
+        const ComponentAtomEntry & atom_entry
     );
-    void AddChemicalComponentBond(
+    void AddComponentBondEntry(
         const std::string & comp_id,
         const std::pair<std::string, std::string> & atom_id_pair,
-        const ChemCompBond & bond_info
+        const ComponentBondEntry & bond_entry
     );
 
     void SetPdbID(const std::string & label) { m_model_id = label; }
@@ -82,22 +74,6 @@ public:
     const std::unordered_map<std::string, int> & GetMoleculesSizeMap(void) const;
     const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap(void) const;
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
-    bool IsStandardChemicalComponent(const std::string & comp_id) const;
+    bool IsStandardMonomer(const std::string & comp_id) const;
 
-};
-
-struct ChemCompAtom
-{
-    Element element_type;
-    bool aromatic_atom_flag;
-    char chiral_config; // 'N', 'R', 'S'
-    int ordinal_index;
-};
-
-struct ChemCompBond
-{
-    std::string bond_order;
-    bool aromatic_atom_flag;
-    char chiral_config; // 'N', 'R', 'S'
-    int ordinal_index;
 };

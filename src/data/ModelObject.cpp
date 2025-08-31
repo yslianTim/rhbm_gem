@@ -2,6 +2,7 @@
 #include "AtomObject.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "ChemicalComponentEntry.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "ArrayStats.hpp"
 #include "Logger.hpp"
@@ -72,6 +73,12 @@ void ModelObject::AddGroupPotentialEntry(
     const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
 {
     m_group_potential_entry_map[class_key] = std::move(entry);
+}
+
+void ModelObject::AddChemicalComponentEntry(
+    const std::string & comp_id, std::unique_ptr<ChemicalComponentEntry> & entry)
+{
+    m_chemical_component_entry_map[comp_id] = std::move(entry);
 }
 
 void ModelObject::BuildKDTreeRoot(void)
@@ -148,10 +155,21 @@ GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & cl
     return m_group_potential_entry_map.at(class_key).get();
 }
 
+ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(const std::string & comp_id) const
+{
+    return m_chemical_component_entry_map.at(comp_id).get();
+}
+
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
 ModelObject::GetGroupPotentialEntryMap(void) const
 {
     return m_group_potential_entry_map;
+}
+
+const std::unordered_map<std::string, std::unique_ptr<ChemicalComponentEntry>> &
+ModelObject::GetChemicalComponentEntryMap(void) const
+{
+    return m_chemical_component_entry_map;
 }
 
 void ModelObject::BuildSelectedAtomList(void)

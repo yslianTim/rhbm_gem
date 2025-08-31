@@ -2,6 +2,7 @@
 #include "AtomObject.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "ChemicalComponentEntry.hpp"
 #include "Logger.hpp"
 
 AtomicModelDataBlock::AtomicModelDataBlock(void)
@@ -62,42 +63,26 @@ void AtomicModelDataBlock::AddElementType(const Element & element)
     m_element_type_list.emplace_back(element);
 }
 
-void AtomicModelDataBlock::AddChemicalComponentFormula(
-    const std::string & comp_id, const std::string & formula)
+void AtomicModelDataBlock::AddChemicalComponentEntry(
+    const std::string & comp_id, std::unique_ptr<ChemicalComponentEntry> entry)
 {
-    m_chemical_component_formula_map[comp_id] = formula;
+    m_chemical_component_entry_map[comp_id] = std::move(entry);
 }
 
-void AtomicModelDataBlock::AddChemicalComponentName(
-    const std::string & comp_id, const std::string & name)
+void AtomicModelDataBlock::AddComponentAtomEntry(
+    const std::string & comp_id,
+    const std::string & atom_id,
+    const ComponentAtomEntry & atom_entry)
 {
-    m_chemical_component_name_map[comp_id] = name;
+    m_chemical_component_entry_map[comp_id]->AddComponentAtomEntry(atom_id, atom_entry);
 }
 
-void AtomicModelDataBlock::AddChemicalComponentType(
-    const std::string & comp_id, const std::string & type)
-{
-    m_chemical_component_type_map[comp_id] = type;
-}
-
-void AtomicModelDataBlock::AddChemicalComponentStandardFlag(
-    const std::string & comp_id, bool flag)
-{
-    m_chemical_component_standard_flag_map[comp_id] = flag;
-}
-
-void AtomicModelDataBlock::AddChemicalComponentAtom(
-    const std::string & comp_id, const std::string & atom_id, const ChemCompAtom & atom_info)
-{
-    m_chemical_component_atom_map[comp_id][atom_id] = atom_info;
-}
-
-void AtomicModelDataBlock::AddChemicalComponentBond(
+void AtomicModelDataBlock::AddComponentBondEntry(
     const std::string & comp_id,
     const std::pair<std::string, std::string> & atom_id_pair,
-    const ChemCompBond & bond_info)
+    const ComponentBondEntry & bond_entry)
 {
-    m_chemical_component_bond_map[comp_id][atom_id_pair] = bond_info;
+    m_chemical_component_entry_map[comp_id]->AddComponentBondEntry(atom_id_pair, bond_entry);
 }
 
 void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
@@ -202,13 +187,13 @@ AtomicModelDataBlock::GetChainIDListMap(void) const
     return m_chain_id_list_map;
 }
 
-bool AtomicModelDataBlock::IsStandardChemicalComponent(const std::string & comp_id) const
+bool AtomicModelDataBlock::IsStandardMonomer(const std::string & comp_id) const
 {
-    if (m_chemical_component_standard_flag_map.find(comp_id) == m_chemical_component_standard_flag_map.end())
+    if (m_chemical_component_entry_map.find(comp_id) == m_chemical_component_entry_map.end())
     {
         Logger::Log(LogLevel::Warning,
             "Chemical component ID " + comp_id + " not found in chemical component map.");
         return false;
     }
-    return m_chemical_component_standard_flag_map.at(comp_id);
+    return m_chemical_component_entry_map.at(comp_id)->IsStandardMonomer();
 }

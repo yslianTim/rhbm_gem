@@ -6,6 +6,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
 #include "AtomicPotentialEntry.hpp"
+#include "ChemicalComponentEntry.hpp"
 #include "Logger.hpp"
 
 #include <iomanip>
@@ -102,14 +103,29 @@ void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
             auto name{ token_list[index_map.at("name")] };
             auto type{ token_list[index_map.at("type")] };
             auto formula{ token_list[index_map.at("formula")] };
+            auto formula_weight_str{ token_list[index_map.at("formula_weight")] };
             auto standard_flag_str{ token_list[index_map.at("mon_nstd_flag")] };
-            m_data_block->AddChemicalComponentName(comp_id, name);
-            m_data_block->AddChemicalComponentType(comp_id, type);
-            m_data_block->AddChemicalComponentFormula(comp_id, formula);
+            auto formula_weight{ 0.0f };
+            try
+            {
+                formula_weight = std::stof(formula_weight_str);
+            }
+            catch (const std::exception & e)
+            {
+                formula_weight = 0.0f;
+            }
+            auto entry{ std::make_unique<ChemicalComponentEntry>() };
+            entry->SetComponentID(comp_id);
+            entry->SetComponentName(name);
+            entry->SetComponentType(type);
+            entry->SetComponentFormula(formula);
+            entry->SetComponentMolecularWeight(formula_weight);
             auto standard_flag{ false };
             if      (standard_flag_str == "n" || standard_flag_str == "no") standard_flag = false;
             else if (standard_flag_str == "y" || standard_flag_str == "yes") standard_flag = true;
-            m_data_block->AddChemicalComponentStandardFlag(comp_id, standard_flag);
+            else standard_flag = false;
+            entry->SetStandardMonomerFlag(standard_flag);
+            m_data_block->AddChemicalComponentEntry(comp_id, std::move(entry));
         }
     );
     LoadChemicalComponentAtomBlock(infile);
@@ -132,12 +148,12 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
             auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
 
-            ChemCompAtom atom_info;
-            atom_info.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
-            atom_info.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
-            atom_info.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
-            atom_info.ordinal_index = std::stoi(pdbx_ordinal_index);
-            m_data_block->AddChemicalComponentAtom(comp_id, atom_id, atom_info);
+            ComponentAtomEntry atom_entry;
+            atom_entry.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
+            atom_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
+            atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
+            atom_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
+            m_data_block->AddComponentAtomEntry(comp_id, atom_id, atom_entry);
         }
     );
 }
@@ -159,12 +175,12 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
             auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
 
-            ChemCompBond bond_info;
-            bond_info.bond_order = bond_order;
-            bond_info.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
-            bond_info.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
-            bond_info.ordinal_index = std::stoi(pdbx_ordinal_index);
-            m_data_block->AddChemicalComponentBond(comp_id, {atom_id_1, atom_id_2}, bond_info);
+            ComponentBondEntry bond_entry;
+            bond_entry.bond_order = bond_order;
+            bond_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
+            bond_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
+            bond_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
+            m_data_block->AddComponentBondEntry(comp_id, {atom_id_1, atom_id_2}, bond_entry);
         }
     );
 }
@@ -401,17 +417,22 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             auto model_number{ token_list[index_map.at("pdbx_PDB_model_num")] };
             if (element_type == "H") return; // Skip hydrogen atom
             auto is_special_atom{ (group_type == "HETATM") ? true : false };
-            auto is_standard_component{ m_data_block->IsStandardChemicalComponent(residue_type) };
+            auto is_standard_monomer{ m_data_block->IsStandardMonomer(residue_type) };
             auto atom_object{ std::make_unique<AtomObject>() };
             Element element{ AtomicInfoHelper::GetElementFromString(element_type) };
+            Residue residue{ Residue::UNK };
             Remoteness remoteness{ Remoteness::UNK };
             Branch branch{ Branch::UNK };
-            if (is_standard_component) ParseAtomID(atom_id, element_type, remoteness, branch);
+            if (is_standard_monomer)
+            {
+                residue = AtomicInfoHelper::GetResidueFromString(residue_type);
+                ParseAtomID(atom_id, element_type, remoteness, branch);
+            }
             atom_object->SetAtomID(atom_id);
             atom_object->SetElement(element);
             atom_object->SetRemoteness(remoteness);
             atom_object->SetBranch(branch);
-            atom_object->SetResidue(residue_type);
+            atom_object->SetResidue(residue);
             atom_object->SetIndicator(indicator);
             atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
             atom_object->SetSerialID(std::stoi(serial_id));
