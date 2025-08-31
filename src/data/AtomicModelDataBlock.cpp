@@ -3,6 +3,7 @@
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "ChemicalComponentEntry.hpp"
+#include "ComponentKeySystem.hpp"
 #include "Logger.hpp"
 
 AtomicModelDataBlock::AtomicModelDataBlock(void)
