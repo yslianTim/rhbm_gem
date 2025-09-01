@@ -383,6 +383,11 @@ const std::vector<Branch> & AtomicInfoHelper::GetStandardBranchList(void)
     return m_standard_branch_list;
 }
 
+const std::unordered_map<std::string_view, Residue> & AtomicInfoHelper::GetResidueMap(void)
+{
+    return m_residue_map;
+}
+
 const std::unordered_map<Element, std::string> & AtomicInfoHelper::GetElementLabelMap(void)
 {
     return m_element_label_map;

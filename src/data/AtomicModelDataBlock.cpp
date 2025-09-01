@@ -65,13 +65,13 @@ void AtomicModelDataBlock::AddElementType(const Element & element)
 }
 
 void AtomicModelDataBlock::AddChemicalComponentEntry(
-    const std::string & comp_id, std::unique_ptr<ChemicalComponentEntry> entry)
+    ComponentKey comp_id, std::unique_ptr<ChemicalComponentEntry> entry)
 {
     m_chemical_component_entry_map[comp_id] = std::move(entry);
 }
 
 void AtomicModelDataBlock::AddComponentAtomEntry(
-    const std::string & comp_id,
+    ComponentKey comp_id,
     const std::string & atom_id,
     const ComponentAtomEntry & atom_entry)
 {
@@ -79,7 +79,7 @@ void AtomicModelDataBlock::AddComponentAtomEntry(
 }
 
 void AtomicModelDataBlock::AddComponentBondEntry(
-    const std::string & comp_id,
+    ComponentKey comp_id,
     const std::pair<std::string, std::string> & atom_id_pair,
     const ComponentBondEntry & bond_entry)
 {
@@ -188,13 +188,14 @@ AtomicModelDataBlock::GetChainIDListMap(void) const
     return m_chain_id_list_map;
 }
 
-bool AtomicModelDataBlock::IsStandardMonomer(const std::string & comp_id) const
+bool AtomicModelDataBlock::IsStandardMonomer(ComponentKey key) const
 {
-    if (m_chemical_component_entry_map.find(comp_id) == m_chemical_component_entry_map.end())
+    auto comp_id{ ComponentKeySystem::Instance().GetComponentId(key) };
+    if (m_chemical_component_entry_map.find(key) == m_chemical_component_entry_map.end())
     {
         Logger::Log(LogLevel::Warning,
             "Chemical component ID " + comp_id + " not found in chemical component map.");
         return false;
     }
-    return m_chemical_component_entry_map.at(comp_id)->IsStandardMonomer();
+    return m_chemical_component_entry_map.at(key)->IsStandardMonomer();
 }

@@ -39,7 +39,7 @@ public:
     ChemicalComponentEntry(void);
     ~ChemicalComponentEntry();
 
-    void SetComponentID(const std::string & comp_id) { m_component_id = comp_id; }
+    void SetComponentId(const std::string & comp_id) { m_component_id = comp_id; }
     void SetComponentName(const std::string & name) { m_component_name = name; }
     void SetComponentType(const std::string & type) { m_component_type = type; }
     void SetComponentFormula(const std::string & formula) { m_component_formula = formula; }
@@ -50,7 +50,7 @@ public:
         const std::pair<std::string, std::string> & atom_id_pair,
         const ComponentBondEntry & bond_info);
 
-    std::string GetComponentID(void) const { return m_component_id; }
+    std::string GetComponentId(void) const { return m_component_id; }
     std::string GetComponentName(void) const { return m_component_name; }
     std::string GetComponentType(void) const { return m_component_type; }
     std::string GetComponentFormula(void) const { return m_component_formula; }

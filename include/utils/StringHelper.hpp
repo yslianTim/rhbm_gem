@@ -11,6 +11,14 @@
 class StringHelper
 {
 public:
+    static void ToUpperCase(std::string & text)
+    {
+        for (auto & ch : text)
+        {
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        }
+    }
+    
     static std::string ExtractCharAsString(const std::string & input, size_t index)
     {
         if (index < input.size())

@@ -7,6 +7,8 @@
 #include <utility>
 #include <unordered_map>
 
+#include "ComponentKeySystem.hpp"
+
 enum class Element : uint16_t;
 enum class Entity : uint8_t;
 
@@ -32,7 +34,7 @@ class AtomicModelDataBlock
     std::unordered_map<std::string, std::array<std::string, 4>> m_struct_sheet_range_map;
     std::vector<Element> m_element_type_list;
 
-    std::unordered_map<std::string, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map; // key : comp_id
+    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map; // key : comp_id
 
 public:
     AtomicModelDataBlock(void);
@@ -46,14 +48,14 @@ public:
     void AddSheetRange(const std::string & composite_sheet_id, const std::array<std::string, 4> & range);
     void AddHelixRange(const std::string & helix_id, const std::array<std::string, 5> & range);
     void AddElementType(const Element & element);
-    void AddChemicalComponentEntry(const std::string & comp_id, std::unique_ptr<ChemicalComponentEntry> entry);
+    void AddChemicalComponentEntry(ComponentKey comp_id, std::unique_ptr<ChemicalComponentEntry> entry);
     void AddComponentAtomEntry(
-        const std::string & comp_id,
+        ComponentKey comp_id,
         const std::string & atom_id,
         const ComponentAtomEntry & atom_entry
     );
     void AddComponentBondEntry(
-        const std::string & comp_id,
+        ComponentKey comp_id,
         const std::pair<std::string, std::string> & atom_id_pair,
         const ComponentBondEntry & bond_entry
     );
@@ -74,6 +76,6 @@ public:
     const std::unordered_map<std::string, int> & GetMoleculesSizeMap(void) const;
     const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap(void) const;
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
-    bool IsStandardMonomer(const std::string & comp_id) const;
+    bool IsStandardMonomer(ComponentKey key) const;
 
 };

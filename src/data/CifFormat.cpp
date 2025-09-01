@@ -7,6 +7,7 @@
 #include "AtomicModelDataBlock.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"
+#include "ComponentKeySystem.hpp"
 #include "Logger.hpp"
 
 #include <iomanip>
@@ -115,7 +116,7 @@ void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
                 formula_weight = 0.0f;
             }
             auto entry{ std::make_unique<ChemicalComponentEntry>() };
-            entry->SetComponentID(comp_id);
+            entry->SetComponentId(comp_id);
             entry->SetComponentName(name);
             entry->SetComponentType(type);
             entry->SetComponentFormula(formula);
@@ -125,7 +126,10 @@ void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
             else if (standard_flag_str == "y" || standard_flag_str == "yes") standard_flag = true;
             else standard_flag = false;
             entry->SetStandardMonomerFlag(standard_flag);
-            m_data_block->AddChemicalComponentEntry(comp_id, std::move(entry));
+
+            ComponentKeySystem::Instance().RegisterComponent(comp_id);
+            auto key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            m_data_block->AddChemicalComponentEntry(key, std::move(entry));
         }
     );
     LoadChemicalComponentAtomBlock(infile);
@@ -153,7 +157,9 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             atom_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
             atom_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
-            m_data_block->AddComponentAtomEntry(comp_id, atom_id, atom_entry);
+
+            auto key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            m_data_block->AddComponentAtomEntry(key, atom_id, atom_entry);
         }
     );
 }
@@ -180,7 +186,9 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             bond_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             bond_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
             bond_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
-            m_data_block->AddComponentBondEntry(comp_id, {atom_id_1, atom_id_2}, bond_entry);
+
+            auto key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            m_data_block->AddComponentBondEntry(key, {atom_id_1, atom_id_2}, bond_entry);
         }
     );
 }
@@ -403,7 +411,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             static AtomObject * last_atom_object{ nullptr };
             auto group_type{ token_list[index_map.at("group_PDB")] };
             auto element_type{ token_list[index_map.at("type_symbol")] };
-            auto residue_type{ token_list[index_map.at("label_comp_id")] };
+            auto comp_id{ token_list[index_map.at("label_comp_id")] };
             auto atom_id{ token_list[index_map.at("label_atom_id")] };
             auto indicator{ token_list[index_map.at("label_alt_id")] };
             auto residue_id{ token_list[index_map.at("label_seq_id")] };
@@ -417,7 +425,8 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             auto model_number{ token_list[index_map.at("pdbx_PDB_model_num")] };
             if (element_type == "H") return; // Skip hydrogen atom
             auto is_special_atom{ (group_type == "HETATM") ? true : false };
-            auto is_standard_monomer{ m_data_block->IsStandardMonomer(residue_type) };
+            auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            auto is_standard_monomer{ m_data_block->IsStandardMonomer(component_key) };
             auto atom_object{ std::make_unique<AtomObject>() };
             Element element{ AtomicInfoHelper::GetElementFromString(element_type) };
             Residue residue{ Residue::UNK };
@@ -425,10 +434,11 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             Branch branch{ Branch::UNK };
             if (is_standard_monomer)
             {
-                residue = AtomicInfoHelper::GetResidueFromString(residue_type);
+                residue = AtomicInfoHelper::GetResidueFromString(comp_id);
                 ParseAtomID(atom_id, element_type, remoteness, branch);
             }
             atom_object->SetAtomID(atom_id);
+            atom_object->SetComponentKey(component_key);
             atom_object->SetElement(element);
             atom_object->SetRemoteness(remoteness);
             atom_object->SetBranch(branch);

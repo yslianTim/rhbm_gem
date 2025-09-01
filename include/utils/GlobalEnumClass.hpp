@@ -28,6 +28,7 @@ enum class Residue : uint16_t
 
 enum class Element : uint16_t
 {
+    UNK = 0,
     HYDROGEN   =  1, HELIUM     =  2, LITHIUM    =  3, BERYLLIUM    =  4, BORON      =  5,
     CARBON     =  6, NITROGEN   =  7, OXYGEN     =  8, FLUORINE     =  9, NEON       = 10,
     SODIUM     = 11, MAGNESIUM  = 12, ALUMINUM   = 13, SILICON      = 14, PHOSPHORUS = 15,
@@ -45,8 +46,7 @@ enum class Element : uint16_t
     LUTETIUM   = 71, HAFNIUM    = 72, TANTALUM   = 73, TUNGSTEN     = 74, RHENIUM    = 75,
     OSMIUM     = 76, IRIDIUM    = 77, PLATINUM   = 78, GOLD         = 79, MERCURY    = 80,
     THALLIUM   = 81, LEAD       = 82, BISMUTH    = 83, POLONIUM     = 84, ASTATINE   = 85,
-    RADON      = 86, FRANCIUM   = 87, RADIUM     = 88, ACTINIUM     = 89, THORIUM    = 90,
-    UNK = UINT16_MAX
+    RADON      = 86, FRANCIUM   = 87, RADIUM     = 88, ACTINIUM     = 89, THORIUM    = 90
 };
 
 enum class Remoteness : uint8_t

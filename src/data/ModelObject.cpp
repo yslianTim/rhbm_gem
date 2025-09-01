@@ -76,9 +76,9 @@ void ModelObject::AddGroupPotentialEntry(
 }
 
 void ModelObject::AddChemicalComponentEntry(
-    const std::string & comp_id, std::unique_ptr<ChemicalComponentEntry> & entry)
+    ComponentKey key, std::unique_ptr<ChemicalComponentEntry> & entry)
 {
-    m_chemical_component_entry_map[comp_id] = std::move(entry);
+    m_chemical_component_entry_map[key] = std::move(entry);
 }
 
 void ModelObject::BuildKDTreeRoot(void)
@@ -155,9 +155,9 @@ GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & cl
     return m_group_potential_entry_map.at(class_key).get();
 }
 
-ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(const std::string & comp_id) const
+ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(ComponentKey key) const
 {
-    return m_chemical_component_entry_map.at(comp_id).get();
+    return m_chemical_component_entry_map.at(key).get();
 }
 
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
@@ -166,7 +166,7 @@ ModelObject::GetGroupPotentialEntryMap(void) const
     return m_group_potential_entry_map;
 }
 
-const std::unordered_map<std::string, std::unique_ptr<ChemicalComponentEntry>> &
+const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
 ModelObject::GetChemicalComponentEntryMap(void) const
 {
     return m_chemical_component_entry_map;

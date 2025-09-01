@@ -58,6 +58,7 @@ public:
     static const std::vector<Element> & GetStandardElementList(void);
     static const std::vector<Remoteness> & GetStandardRemotenessList(void);
     static const std::vector<Branch> & GetStandardBranchList(void);
+    static const std::unordered_map<std::string_view, Residue> & GetResidueMap(void);
     static const std::unordered_map<Element, std::string> & GetElementLabelMap(void);
     static bool IsStandardElement(Element element);
     static bool IsStandardResidue(Residue residue);

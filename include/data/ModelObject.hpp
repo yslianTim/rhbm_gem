@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "DataObjectBase.hpp"
+#include "ComponentKeySystem.hpp"
 
 class AtomObject;
 class ChemicalComponentEntry;
@@ -23,7 +24,7 @@ class ModelObject : public DataObjectBase
     std::string m_resolution_method;
     double m_resolution;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map; // key : entity_id
-    std::unordered_map<std::string, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map; // key : comp_id
+    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_group_potential_entry_map;
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
@@ -51,9 +52,7 @@ public:
     void AddGroupPotentialEntry(
         const std::string & class_key,
         std::unique_ptr<GroupPotentialEntry> & entry);
-    void AddChemicalComponentEntry(
-        const std::string & comp_id,
-        std::unique_ptr<ChemicalComponentEntry> & entry);
+    void AddChemicalComponentEntry(ComponentKey key, std::unique_ptr<ChemicalComponentEntry> & entry);
     void BuildKDTreeRoot(void);
     void FilterAtomFromSymmetry(bool is_asymmetry);
 
@@ -70,10 +69,10 @@ public:
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
     GroupPotentialEntry * GetGroupPotentialEntry(const std::string & class_key) const;
-    ChemicalComponentEntry * GetChemicalComponentEntry(const std::string & comp_id) const;
+    ChemicalComponentEntry * GetChemicalComponentEntry(ComponentKey key) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
     GetGroupPotentialEntryMap(void) const;
-    const std::unordered_map<std::string, std::unique_ptr<ChemicalComponentEntry>> &
+    const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
     GetChemicalComponentEntryMap(void) const;
     KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
 
