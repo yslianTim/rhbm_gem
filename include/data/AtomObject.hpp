@@ -6,6 +6,7 @@
 
 #include "DataObjectBase.hpp"
 #include "ComponentKeySystem.hpp"
+#include "AtomKeySystem.hpp"
 
 class AtomicPotentialEntry;
 enum class Residue : uint16_t;
@@ -23,6 +24,7 @@ class AtomObject : public DataObjectBase
     std::string m_atom_id, m_chain_id, m_indicator;
     float m_occupancy, m_temperature;
     ComponentKey m_component_key;
+    AtomKey m_atom_key;
     Residue m_residue;
     Element m_element;
     Remoteness m_remoteness;
@@ -56,6 +58,7 @@ public:
     void SetOccupancy(float value) { m_occupancy = value; }
     void SetTemperature(float value) { m_temperature = value; }
     void SetComponentKey(ComponentKey value) { m_component_key = value; }
+    void SetAtomKey(AtomKey value) { m_atom_key = value; }
     void SetResidue(Residue value);
     void SetElement(Element value);
     void SetRemoteness(Remoteness value);
@@ -74,6 +77,7 @@ public:
 
     std::string GetInfo(void) const;
     ComponentKey GetComponentKey(void) const { return m_component_key; }
+    AtomKey GetAtomKey(void) const { return m_atom_key; }
     Element GetElement(void) const;
     Residue GetResidue(void) const;
     Remoteness GetRemoteness(void) const;

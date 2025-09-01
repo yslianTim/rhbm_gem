@@ -128,8 +128,8 @@ void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
             entry->SetStandardMonomerFlag(standard_flag);
 
             ComponentKeySystem::Instance().RegisterComponent(comp_id);
-            auto key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
-            m_data_block->AddChemicalComponentEntry(key, std::move(entry));
+            auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            m_data_block->AddChemicalComponentEntry(component_key, std::move(entry));
         }
     );
     LoadChemicalComponentAtomBlock(infile);
@@ -153,13 +153,16 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
 
             ComponentAtomEntry atom_entry;
+            atom_entry.atom_id = atom_id;
             atom_entry.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
             atom_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
             atom_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
 
-            auto key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
-            m_data_block->AddComponentAtomEntry(key, atom_id, atom_entry);
+            AtomKeySystem::Instance().RegisterAtom(atom_id);
+            auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
+            m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
         }
     );
 }
@@ -182,13 +185,16 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
 
             ComponentBondEntry bond_entry;
+            bond_entry.atom_id_pair = {atom_id_1, atom_id_2};
             bond_entry.bond_order = bond_order;
             bond_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             bond_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
             bond_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
 
-            auto key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
-            m_data_block->AddComponentBondEntry(key, {atom_id_1, atom_id_2}, bond_entry);
+            auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            auto atom_key_1{ AtomKeySystem::Instance().GetAtomKey(atom_id_1) };
+            auto atom_key_2{ AtomKeySystem::Instance().GetAtomKey(atom_id_2) };
+            m_data_block->AddComponentBondEntry(component_key, {atom_key_1, atom_key_2}, bond_entry);
         }
     );
 }

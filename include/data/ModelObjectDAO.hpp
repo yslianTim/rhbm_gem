@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+
 #include "DataObjectDAOBase.hpp"
 
 class SQLiteWrapper;
@@ -11,6 +12,7 @@ class ModelObject;
 class AtomObject;
 class AtomicPotentialEntry;
 class GroupPotentialEntry;
+
 class ModelObjectDAO : public DataObjectDAOBase
 {
     SQLiteWrapper * m_database;
@@ -26,6 +28,11 @@ public:
 private:
     void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
     std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & key_tag);
+
+    void SaveChemicalComponentEntryList(const ModelObject * model_obj, const std::string & table_name);
+    void SaveComponentAtomEntryList(const ModelObject * model_obj, const std::string & table_name);
+    void SaveComponentBondEntryList(const ModelObject * model_obj, const std::string & table_name);
+    //void LoadChemicalComponentEntryList(ModelObject * model_obj);
 
     void SaveAtomicPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
     void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);

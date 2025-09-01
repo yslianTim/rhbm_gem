@@ -6,10 +6,13 @@
 #include <unordered_map>
 #include <map>
 
+#include "AtomKeySystem.hpp"
+
 enum class Element : uint16_t;
 
 struct ComponentAtomEntry
 {
+    std::string atom_id;
     Element element_type;
     bool aromatic_atom_flag;
     char chiral_config; // 'N', 'R', 'S'
@@ -18,6 +21,7 @@ struct ComponentAtomEntry
 
 struct ComponentBondEntry
 {
+    std::pair<std::string, std::string> atom_id_pair;
     std::string bond_order;
     bool aromatic_atom_flag;
     char chiral_config; // 'N', 'R', 'S'
@@ -32,8 +36,8 @@ class ChemicalComponentEntry
     std::string m_component_formula;
     float m_component_molecular_weight;
     bool m_standard_monomer_flag;
-    std::map<std::string, ComponentAtomEntry> m_component_atom_entry_map;
-    std::map<std::pair<std::string, std::string>, ComponentBondEntry> m_component_bond_entry_map;
+    std::map<AtomKey, ComponentAtomEntry> m_component_atom_entry_map;
+    std::map<std::pair<AtomKey, AtomKey>, ComponentBondEntry> m_component_bond_entry_map;
 
 public:
     ChemicalComponentEntry(void);
@@ -45,10 +49,11 @@ public:
     void SetComponentFormula(const std::string & formula) { m_component_formula = formula; }
     void SetComponentMolecularWeight(float weight) { m_component_molecular_weight = weight; }
     void SetStandardMonomerFlag(bool flag) { m_standard_monomer_flag = flag; }
-    void AddComponentAtomEntry(const std::string & atom_id, const ComponentAtomEntry & atom_info);
+    void AddComponentAtomEntry(AtomKey atom_key, const ComponentAtomEntry & atom_info);
     void AddComponentBondEntry(
-        const std::pair<std::string, std::string> & atom_id_pair,
-        const ComponentBondEntry & bond_info);
+        const std::pair<AtomKey, AtomKey> & atom_key_pair,
+        const ComponentBondEntry & bond_info
+    );
 
     std::string GetComponentId(void) const { return m_component_id; }
     std::string GetComponentName(void) const { return m_component_name; }
@@ -56,9 +61,9 @@ public:
     std::string GetComponentFormula(void) const { return m_component_formula; }
     float GetComponentMolecularWeight(void) const { return m_component_molecular_weight; }
     bool IsStandardMonomer(void) const { return m_standard_monomer_flag; }
-    const std::map<std::string, ComponentAtomEntry> &
+    const std::map<AtomKey, ComponentAtomEntry> &
     GetComponentAtomEntryMap(void) const { return m_component_atom_entry_map; }
-    const std::map<std::pair<std::string, std::string>, ComponentBondEntry> &
+    const std::map<std::pair<AtomKey, AtomKey>, ComponentBondEntry> &
     GetComponentBondEntryMap(void) const { return m_component_bond_entry_map; }
 
 private:

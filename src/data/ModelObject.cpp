@@ -75,10 +75,10 @@ void ModelObject::AddGroupPotentialEntry(
     m_group_potential_entry_map[class_key] = std::move(entry);
 }
 
-void ModelObject::AddChemicalComponentEntry(
-    ComponentKey key, std::unique_ptr<ChemicalComponentEntry> & entry)
+void ModelObject::SetChemicalComponentEntryMap(
+    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & entry_map)
 {
-    m_chemical_component_entry_map[key] = std::move(entry);
+    m_chemical_component_entry_map = std::move(entry_map);
 }
 
 void ModelObject::BuildKDTreeRoot(void)

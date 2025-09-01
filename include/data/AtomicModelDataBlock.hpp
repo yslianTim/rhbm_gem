@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "ComponentKeySystem.hpp"
+#include "AtomKeySystem.hpp"
 
 enum class Element : uint16_t;
 enum class Entity : uint8_t;
@@ -51,12 +52,12 @@ public:
     void AddChemicalComponentEntry(ComponentKey comp_id, std::unique_ptr<ChemicalComponentEntry> entry);
     void AddComponentAtomEntry(
         ComponentKey comp_id,
-        const std::string & atom_id,
+        AtomKey atom_id,
         const ComponentAtomEntry & atom_entry
     );
     void AddComponentBondEntry(
         ComponentKey comp_id,
-        const std::pair<std::string, std::string> & atom_id_pair,
+        const std::pair<AtomKey, AtomKey> & atom_id_pair,
         const ComponentBondEntry & bond_entry
     );
 
@@ -76,6 +77,7 @@ public:
     const std::unordered_map<std::string, int> & GetMoleculesSizeMap(void) const;
     const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap(void) const;
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
+    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
     bool IsStandardMonomer(ComponentKey key) const;
 
 };

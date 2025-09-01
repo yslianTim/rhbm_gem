@@ -6,6 +6,9 @@
 #include "AtomObject.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
+#include "ChemicalComponentEntry.hpp"
+#include "ComponentKeySystem.hpp"
+#include "AtomKeySystem.hpp"
 #include "DataObjectDAOFactoryRegistry.hpp"
 #include "KeyPacker.hpp"
 
@@ -15,7 +18,10 @@
 #include <string>
 #include <string_view>
 
-namespace { DataObjectDAORegistrar<ModelObject, ModelObjectDAO> registrar_model_dao("model"); }
+namespace
+{
+    DataObjectDAORegistrar<ModelObject, ModelObjectDAO> registrar_model_dao("model");
+}
 
 namespace
 {
@@ -82,6 +88,43 @@ namespace
             position_z DOUBLE
         ) )sql";
 
+    constexpr std::string_view CREATE_COMPONENT_ENTRY_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            component_key INTEGER PRIMARY KEY,
+            id TEXT,
+            name TEXT,
+            type TEXT,
+            formula TEXT,
+            molecular_weight DOUBLE,
+            is_standard_monomer INTEGER
+        ) )sql";
+    
+    constexpr std::string_view CREATE_COMPONENT_ATOM_ENTRY_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            component_key INTEGER,
+            atom_key INTEGER,
+            atom_id TEXT,
+            element_type INTEGER,
+            aromatic_atom_flag INTEGER,
+            chiral_config TEXT,
+            ordinal_index INTEGER,
+            PRIMARY KEY (component_key, atom_key)
+        ) )sql";
+
+    constexpr std::string_view CREATE_COMPONENT_BOND_ENTRY_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            component_key INTEGER,
+            atom_key_1 INTEGER,
+            atom_key_2 INTEGER,
+            atom_id_1 TEXT,
+            atom_id_2 TEXT,
+            bond_order TEXT,
+            aromatic_atom_flag INTEGER,
+            chiral_config TEXT,
+            ordinal_index INTEGER,
+            PRIMARY KEY (component_key, atom_key_1, atom_key_2)
+        ) )sql";
+
     constexpr std::string_view CREATE_ATOMIC_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
             serial_id INTEGER PRIMARY KEY,
@@ -126,6 +169,25 @@ namespace
             structure, is_special_atom,
             position_x, position_y, position_z
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); )sql";
+
+    constexpr std::string_view INSERT_COMPONENT_ENTRY_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            component_key, id, name, type, formula,
+            molecular_weight, is_standard_monomer
+        ) VALUES (?, ?, ?, ?, ?, ?, ?); )sql";
+
+    constexpr std::string_view INSERT_COMPONENT_ATOM_ENTRY_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            component_key, atom_key, atom_id,
+            element_type, aromatic_atom_flag, chiral_config, ordinal_index
+        ) VALUES (?, ?, ?, ?, ?, ?, ?); )sql";
+
+    constexpr std::string_view INSERT_COMPONENT_BOND_ENTRY_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            component_key, atom_key_1, atom_key_2,
+            atom_id_1, atom_id_2,
+            bond_order, aromatic_atom_flag, chiral_config, ordinal_index
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?); )sql";
 
     constexpr std::string_view INSERT_ATOMIC_ENTRY_SQL = R"sql(
         INSERT OR REPLACE INTO {} (
@@ -224,6 +286,18 @@ void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_ta
     m_database->Bind<double>(5, model_obj->GetResolution());
     m_database->Bind<std::string>(6, model_obj->GetResolutionMethod());
     m_database->StepOnce();
+
+    // Save chemical component entries
+    auto component_entry_table_name{ "component_entry_in_" + sanitized_key_tag };
+    SaveChemicalComponentEntryList(model_obj, component_entry_table_name);
+
+    // Save component atom entries
+    auto component_atom_entry_table_name{ "component_atom_entry_in_" + sanitized_key_tag };
+    SaveComponentAtomEntryList(model_obj, component_atom_entry_table_name);
+
+    // Save component bond entries
+    auto component_bond_entry_table_name{ "component_bond_entry_in_" + sanitized_key_tag };
+    SaveComponentBondEntryList(model_obj, component_bond_entry_table_name);
 
     // Save atom object list
     auto atom_list_table_name{ "atom_list_in_" + sanitized_key_tag };
@@ -331,6 +405,83 @@ void ModelObjectDAO::SaveAtomObjectList(
 
         m_database->StepOnce();
         m_database->Reset();
+    }
+}
+
+void ModelObjectDAO::SaveChemicalComponentEntryList(
+    const ModelObject * model_obj, const std::string & table_name)
+{
+    m_database->Execute(FormatSQL(CREATE_COMPONENT_ENTRY_TABLE_SQL, table_name));
+    m_database->ClearTable(table_name);
+    m_database->Prepare(FormatSQL(INSERT_COMPONENT_ENTRY_LIST_SQL, table_name));
+    SQLiteWrapper::StatementGuard guard(*m_database);
+
+    for (auto & [component_key, component_entry] : model_obj->GetChemicalComponentEntryMap())
+    {
+        m_database->Bind<ComponentKey>(1, component_key);
+        m_database->Bind<std::string>(2, component_entry->GetComponentId());
+        m_database->Bind<std::string>(3, component_entry->GetComponentName());
+        m_database->Bind<std::string>(4, component_entry->GetComponentType());
+        m_database->Bind<std::string>(5, component_entry->GetComponentFormula());
+        m_database->Bind<double>(6, static_cast<double>(component_entry->GetComponentMolecularWeight()));
+        m_database->Bind<int>(7, static_cast<int>(component_entry->IsStandardMonomer()));
+
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+}
+
+void ModelObjectDAO::SaveComponentAtomEntryList(
+    const ModelObject * model_obj, const std::string & table_name)
+{
+    m_database->Execute(FormatSQL(CREATE_COMPONENT_ATOM_ENTRY_TABLE_SQL, table_name));
+    m_database->ClearTable(table_name);
+    m_database->Prepare(FormatSQL(INSERT_COMPONENT_ATOM_ENTRY_LIST_SQL, table_name));
+    SQLiteWrapper::StatementGuard guard(*m_database);
+
+    for (auto & [component_key, component_entry] : model_obj->GetChemicalComponentEntryMap())
+    {
+        for (auto & [atom_key, atom_entry] : component_entry->GetComponentAtomEntryMap())
+        {
+            m_database->Bind<ComponentKey>(1, component_key);
+            m_database->Bind<AtomKey>(2, atom_key);
+            m_database->Bind<std::string>(3, atom_entry.atom_id);
+            m_database->Bind<int>(4, static_cast<int>(atom_entry.element_type));
+            m_database->Bind<int>(5, static_cast<int>(atom_entry.aromatic_atom_flag));
+            m_database->Bind<std::string>(6, std::string{atom_entry.chiral_config});
+            m_database->Bind<int>(7, atom_entry.ordinal_index);
+
+            m_database->StepOnce();
+            m_database->Reset();
+        }
+    }
+}
+
+void ModelObjectDAO::SaveComponentBondEntryList(
+    const ModelObject * model_obj, const std::string & table_name)
+{
+    m_database->Execute(FormatSQL(CREATE_COMPONENT_BOND_ENTRY_TABLE_SQL, table_name));
+    m_database->ClearTable(table_name);
+    m_database->Prepare(FormatSQL(INSERT_COMPONENT_BOND_ENTRY_LIST_SQL, table_name));
+    SQLiteWrapper::StatementGuard guard(*m_database);
+
+    for (auto & [component_key, component_entry] : model_obj->GetChemicalComponentEntryMap())
+    {
+        for (auto & [atom_key_pair, bond_entry] : component_entry->GetComponentBondEntryMap())
+        {
+            m_database->Bind<ComponentKey>(1, component_key);
+            m_database->Bind<AtomKey>(2, atom_key_pair.first);
+            m_database->Bind<AtomKey>(3, atom_key_pair.second);
+            m_database->Bind<std::string>(4, bond_entry.atom_id_pair.first);
+            m_database->Bind<std::string>(5, bond_entry.atom_id_pair.second);
+            m_database->Bind<std::string>(6, std::string{bond_entry.bond_order});
+            m_database->Bind<int>(7, static_cast<int>(bond_entry.aromatic_atom_flag));
+            m_database->Bind<std::string>(8, std::string{bond_entry.chiral_config});
+            m_database->Bind<int>(9, bond_entry.ordinal_index);
+
+            m_database->StepOnce();
+            m_database->Reset();
+        }
     }
 }
 

@@ -21,6 +21,15 @@ struct SQLiteBinder<int>
     }
 };
 
+template<>
+struct SQLiteBinder<uint16_t>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, uint16_t value)
+    {
+        return sqlite3_bind_int(stmt, index, static_cast<int>(value));
+    }
+};
+
 // int 64-bits specialization
 template<>
 struct SQLiteBinder<int64_t>

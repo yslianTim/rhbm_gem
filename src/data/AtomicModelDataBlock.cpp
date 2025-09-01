@@ -72,7 +72,7 @@ void AtomicModelDataBlock::AddChemicalComponentEntry(
 
 void AtomicModelDataBlock::AddComponentAtomEntry(
     ComponentKey comp_id,
-    const std::string & atom_id,
+    AtomKey atom_id,
     const ComponentAtomEntry & atom_entry)
 {
     m_chemical_component_entry_map[comp_id]->AddComponentAtomEntry(atom_id, atom_entry);
@@ -80,7 +80,7 @@ void AtomicModelDataBlock::AddComponentAtomEntry(
 
 void AtomicModelDataBlock::AddComponentBondEntry(
     ComponentKey comp_id,
-    const std::pair<std::string, std::string> & atom_id_pair,
+    const std::pair<AtomKey, AtomKey> & atom_id_pair,
     const ComponentBondEntry & bond_entry)
 {
     m_chemical_component_entry_map[comp_id]->AddComponentBondEntry(atom_id_pair, bond_entry);
@@ -186,6 +186,12 @@ const std::unordered_map<std::string, std::vector<std::string>> &
 AtomicModelDataBlock::GetChainIDListMap(void) const
 {
     return m_chain_id_list_map;
+}
+
+std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
+AtomicModelDataBlock::GetChemicalComponentEntryMap(void)
+{
+    return m_chemical_component_entry_map;
 }
 
 bool AtomicModelDataBlock::IsStandardMonomer(ComponentKey key) const

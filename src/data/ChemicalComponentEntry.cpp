@@ -13,14 +13,14 @@ ChemicalComponentEntry::~ChemicalComponentEntry()
 }
 
 void ChemicalComponentEntry::AddComponentAtomEntry(
-    const std::string & atom_id, const ComponentAtomEntry & atom_info)
+    AtomKey atom_key, const ComponentAtomEntry & atom_info)
 {
-    m_component_atom_entry_map[atom_id] = atom_info;
+    m_component_atom_entry_map[atom_key] = atom_info;
 }
 
 void ChemicalComponentEntry::AddComponentBondEntry(
-    const std::pair<std::string, std::string> & atom_id_pair,
+    const std::pair<AtomKey, AtomKey> & atom_key_pair,
     const ComponentBondEntry & bond_info)
 {
-    m_component_bond_entry_map[atom_id_pair] = bond_info;
+    m_component_bond_entry_map[atom_key_pair] = bond_info;
 }

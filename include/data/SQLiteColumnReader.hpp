@@ -23,6 +23,15 @@ struct SQLiteColumnReader<int>
     }
 };
 
+template<>
+struct SQLiteColumnReader<uint16_t>
+{
+    static uint16_t Get(sqlite3_stmt * stmt, int index)
+    {
+        return static_cast<uint16_t>(sqlite3_column_int(stmt, index));
+    }
+};
+
 // int 64-bits specialization
 template<>
 struct SQLiteColumnReader<int64_t>
