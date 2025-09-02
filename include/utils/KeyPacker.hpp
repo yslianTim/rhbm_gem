@@ -5,16 +5,20 @@
 #include <type_traits>
 
 #include "GlobalEnumClass.hpp"
+#include "ComponentKeySystem.hpp"
+#include "AtomKeySystem.hpp"
 
 static_assert(std::is_same_v<std::underlying_type_t<Residue>,    uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<Element>,    uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<Remoteness>, uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<Branch>,     uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<Structure>,  uint8_t>);
+static_assert(std::is_same_v<ComponentKey, uint8_t>);
+static_assert(std::is_same_v<AtomKey, uint32_t>);
 
 struct KeyPackerElementClass
 {
-    // Bits allocation
+    // Bits allocation (Type 1)
     // ┌─0~7─Element─┐┌─8~15─Remo.─┐┌─16─Flag─┐
     // | 8 bits      || 8 bits     || 1 bit   |
     static uint64_t Pack(Element element, Remoteness remoteness, bool flag)
@@ -29,22 +33,31 @@ struct KeyPackerElementClass
         constexpr uint64_t mask_8bit { 0xFF };
 
         auto element{    static_cast<Element>(   (key      ) & mask_8bit) };
-        auto remoteness{ static_cast<Remoteness>((key >>  8) & mask_8bit ) };
+        auto remoteness{ static_cast<Remoteness>((key >>  8) & mask_8bit) };
         bool flag{       static_cast<bool>(      (key >> 16) & 0x1) };
 
         return { element, remoteness, flag };
     }
+
+    // Bits allocation (Type 2)
+    // ┌─0~31─AtomKey─┐┌─32─Flag─┐
+    // | 32 bits      || 1 bit   |
+    static uint64_t Pack(AtomKey atom_key, bool flag)
+    {
+        return static_cast<uint64_t>(atom_key)
+            | (static_cast<uint64_t>(flag ? 1 : 0) << 32);
+    }
 };
 struct KeyPackerResidueClass
 {
-    // Bits allocation
+    // Bits allocation (Type 1)
     // ┌─0~7─Residue─┐┌─8~15─Element─┐┌─16~23─Remo.─┐┌─24~31─Branch─┐┌─32─Flag─┐
     // | 8 bits      || 8 bits       || 8 bits      || 8 bits       || 1 bit   |
     static uint64_t Pack(
         Residue residue, Element element, Remoteness remoteness, Branch branch, bool flag)
     {
         return static_cast<uint64_t>(residue)
-            | (static_cast<uint64_t>(element)      << 8)
+            | (static_cast<uint64_t>(element)      <<  8)
             | (static_cast<uint64_t>(remoteness)   << 16)
             | (static_cast<uint64_t>(branch)       << 24)
             | (static_cast<uint64_t>(flag ? 1 : 0) << 32);
@@ -56,17 +69,28 @@ struct KeyPackerResidueClass
 
         auto residue{    static_cast<Residue>(   (key      ) & mask_8bit) };
         auto element{    static_cast<Element>(   (key >>  8) & mask_8bit) };
-        auto remoteness{ static_cast<Remoteness>((key >> 16) & mask_8bit ) };
-        auto branch{     static_cast<Branch>(    (key >> 24) & mask_8bit ) };
+        auto remoteness{ static_cast<Remoteness>((key >> 16) & mask_8bit) };
+        auto branch{     static_cast<Branch>(    (key >> 24) & mask_8bit) };
         bool flag{       static_cast<bool>(      (key >> 32) & 0x1 ) };
 
         return { residue, element, remoteness, branch, flag };
+    }
+
+    // Bits allocation (Type 2)
+    // ┌─0~7─ComponentKey─┐┌─8~39─AtomKey─┐┌─40─Flag─┐
+    // | 8 bits           || 32 bits      || 1 bit   |
+    static uint64_t Pack(
+        ComponentKey component_key, AtomKey atom_key, bool flag)
+    {
+        return static_cast<uint64_t>(component_key)
+            | (static_cast<uint64_t>(atom_key)      <<  8)
+            | (static_cast<uint64_t>(flag ? 1 : 0)  << 40);
     }
 };
 
 struct KeyPackerStructureClass
 {
-    // Bits allocation
+    // Bits allocation (Type 1)
     // ┌─0~7─Struc.─┐┌─8~15─Residue─┐┌─16~23─Element─┐┌─24~31─Remo.─┐┌─32~39─Branch─┐┌─40─Flag─┐
     // | 8 bits     || 8 bits       || 8 bits        || 8 bits      || 8 bits       || 1 bit   |
     static uint64_t Pack(
@@ -93,5 +117,17 @@ struct KeyPackerStructureClass
         bool flag{       static_cast<bool>(      (key >> 40) & 0x1 ) };
 
         return { structure, residue, element, remoteness, branch, flag };
+    }
+
+    // Bits allocation (Type 2)
+    // ┌─0~7─Struc.─┐┌─8~15─ComponentKey─┐┌─16~47─AtomKey─┐┌─48─Flag─┐
+    // | 8 bits     || 8 bits            || 32 bits       || 1 bit   |
+    static uint64_t Pack(
+        Structure structure, ComponentKey component_key, AtomKey atom_key, bool flag)
+    {
+        return static_cast<uint64_t>(structure)
+            | (static_cast<uint64_t>(component_key) <<  8)
+            | (static_cast<uint64_t>(atom_key)      << 16)
+            | (static_cast<uint64_t>(flag ? 1 : 0)  << 48);
     }
 };
