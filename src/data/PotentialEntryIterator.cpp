@@ -74,13 +74,14 @@ size_t PotentialEntryIterator::GetResidueCount(
     const std::string & class_key, Residue residue, Structure structure) const
 {
     uint64_t group_key{ 0 };
+    AtomClassifier classifier;
     if (class_key == AtomicInfoHelper::GetResidueClassKey())
     {
-        group_key = KeyPackerResidueClass::Pack(residue, Element::CARBON, Remoteness::ALPHA, Branch::NONE, false);
+        group_key = classifier.GetMainChainResidueClassGroupKey(0, residue);
     }
     else if (class_key == AtomicInfoHelper::GetStructureClassKey())
     {
-        group_key = KeyPackerStructureClass::Pack(structure, residue, Element::CARBON, Remoteness::ALPHA, Branch::NONE, false);
+        group_key = classifier.GetMainChainStructureClassGroupKey(0, structure, residue);
     }
     if (IsAvailableGroupKey(group_key, class_key) == false)
     {

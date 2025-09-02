@@ -184,9 +184,8 @@ void DemoPainter::PaintAtomMapValueExample(
     double amplitude_prior;
     double width_prior;
     std::vector<double> y_array;
-    auto element{ AtomClassifier::GetMainChainElement(0) };
-    auto remoteness{ AtomClassifier::GetMainChainRemoteness(0) };
-    auto group_key{ KeyPackerResidueClass::Pack(Residue::ALA, element, remoteness, Branch::NONE, false) };
+    AtomClassifier classifier;
+    auto group_key{ classifier.GetMainChainResidueClassGroupKey(0, Residue::ALA) };
     if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) return;
     for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
     {

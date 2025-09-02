@@ -21,7 +21,8 @@ public:
     static AtomKeySystem & Instance(void);
     void RegisterAtom(const std::string & atom_id);
     AtomKey GetAtomKey(const std::string & atom_id);
-    std::string GetComponentId(AtomKey atom_key);
+    AtomKey GetAtomKey(Element element, Remoteness remoteness, Branch branch);
+    std::string GetAtomId(AtomKey atom_key);
     bool IsBuildInAtom(const std::string & atom_id) const;
     bool IsBuildInAtom(AtomKey atom_key) const;
     void ParseAtomId(

@@ -16,17 +16,14 @@ AtomKeySystem::AtomKeySystem(void)
     const auto & build_in_branch_map{ AtomicInfoHelper::GetBranchMap() };
     for (const auto & [id0, element] : build_in_element_map)
     {
-        auto key0{ static_cast<uint16_t>(element) };
         for (const auto & [id1, remoteness] : build_in_remoteness_map)
         {
-            auto key1{ static_cast<uint8_t>(remoteness) };
             for (const auto & [id2, branch] : build_in_branch_map)
             {
-                auto key2{ static_cast<uint8_t>(branch) };
-                auto component_key{ static_cast<AtomKey>((key2 << 16) | (key1 << 8) | key0) };
+                auto atom_key{ GetAtomKey(element, remoteness, branch) };
                 auto atom_id{ std::string{id0} + std::string{id1} + std::string{id2} };
-                m_id_to_key_map.emplace(atom_id, component_key);
-                m_key_to_id_map.emplace(component_key, atom_id);
+                m_id_to_key_map.emplace(atom_id, atom_key);
+                m_key_to_id_map.emplace(atom_key, atom_id);
             }
         }
     }
@@ -66,13 +63,23 @@ AtomKey AtomKeySystem::GetAtomKey(const std::string & atom_id)
     return m_id_to_key_map.at(atom_id);
 }
 
-std::string AtomKeySystem::GetComponentId(AtomKey atom_key)
+AtomKey AtomKeySystem::GetAtomKey(Element element, Remoteness remoteness, Branch branch)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    auto key0{ static_cast<AtomKey>(element) };
+    auto key1{ static_cast<AtomKey>(remoteness) };
+    auto key2{ static_cast<AtomKey>(branch) };
+    auto atom_key{ static_cast<AtomKey>((key2 << 16) | (key1 << 8) | key0) };
+    return atom_key;
+}
+
+std::string AtomKeySystem::GetAtomId(AtomKey atom_key)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_key_to_id_map.find(atom_key) == m_key_to_id_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-            "AtomKeySystem::GetComponentId() - Unknown atom key: "+ std::to_string(atom_key));
+            "AtomKeySystem::GetAtomId() - Unknown atom key: "+ std::to_string(atom_key));
         return "UNK";
     }
     return m_key_to_id_map.at(atom_key);

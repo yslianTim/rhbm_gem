@@ -9,6 +9,7 @@
 #include "ArrayStats.hpp"
 #include "KeyPacker.hpp"
 #include "GlobalEnumClass.hpp"
+#include "AtomKeySystem.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 
@@ -504,6 +505,7 @@ void ModelPainter::PaintGroupGausSideChain(
     std::vector<std::unique_ptr<TPaveText>> info_text(residue_size);
     for (auto residue : AtomicInfoHelper::GetStandardResidueList())
     {
+        auto component_key{ static_cast<ComponentKey>(residue) };
         size_t residue_index{ static_cast<size_t>(residue) };
         info_text[residue_index] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         std::vector<double> amplitude_array, width_array;
@@ -524,9 +526,10 @@ void ModelPainter::PaintGroupGausSideChain(
             {
                 for (auto branch : AtomicInfoHelper::GetStandardBranchList())
                 {
-                    auto mix_group_key{ KeyPackerResidueClass::Pack(residue, element, remoteness, branch, false) };
-                    auto free_group_key{ KeyPackerStructureClass::Pack(Structure::FREE, residue, element, remoteness, branch, false) };
-                    auto helix_group_key{ KeyPackerStructureClass::Pack(Structure::HELX_P, residue, element, remoteness, branch, false) };
+                    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+                    auto mix_group_key{ KeyPackerResidueClass::Pack(component_key, atom_key, false) };
+                    auto free_group_key{ KeyPackerStructureClass::Pack(Structure::FREE, component_key, atom_key, false) };
+                    auto helix_group_key{ KeyPackerStructureClass::Pack(Structure::HELX_P, component_key, atom_key, false) };
                     bool has_data{ false };
                     if (entry_iter->IsAvailableGroupKey(mix_group_key, AtomicInfoHelper::GetResidueClassKey()) == true)
                     {
@@ -689,11 +692,10 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     double width_prior[main_chain_element_size];
     std::vector<double> y_array;
     y_array.reserve(model_object->GetNumberOfSelectedAtom());
+    AtomClassifier classifier;
     for (size_t k = 0; k < main_chain_element_size; k++)
     {
-        auto element{ AtomClassifier::GetMainChainElement(k) };
-        auto remoteness{ AtomClassifier::GetMainChainRemoteness(k) };
-        auto group_key{ KeyPackerElementClass::Pack(element, remoteness, false) };
+        auto group_key{ classifier.GetMainChainElementClassGroupKey(k) };
         if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
         for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
         {

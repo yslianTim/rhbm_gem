@@ -137,27 +137,22 @@ uint64_t AtomClassifier::GetGroupKeyInClass(
     if (class_key == AtomicInfoHelper::GetElementClassKey())
     {
         return KeyPackerElementClass::Pack(
-            atom_object->GetElement(),
-            atom_object->GetRemoteness(),
+            atom_object->GetAtomKey(),
             atom_object->GetSpecialAtomFlag());
     }
     else if (class_key == AtomicInfoHelper::GetResidueClassKey())
     {
         return KeyPackerResidueClass::Pack(
-            atom_object->GetResidue(),
-            atom_object->GetElement(),
-            atom_object->GetRemoteness(),
-            atom_object->GetBranch(),
+            atom_object->GetComponentKey(),
+            atom_object->GetAtomKey(),
             atom_object->GetSpecialAtomFlag());
     }
     else if (class_key == AtomicInfoHelper::GetStructureClassKey())
     {
         return KeyPackerStructureClass::Pack(
             atom_object->GetStructure(),
-            atom_object->GetResidue(),
-            atom_object->GetElement(),
-            atom_object->GetRemoteness(),
-            atom_object->GetBranch(),
+            atom_object->GetComponentKey(),
+            atom_object->GetAtomKey(),
             atom_object->GetSpecialAtomFlag());
     }
     else
@@ -169,26 +164,34 @@ uint64_t AtomClassifier::GetGroupKeyInClass(
 uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
 {
     if (IsValidMainChainMemberID(id) == false) return 0;
-    auto element_id{ m_main_chain_member_element_list.at(id) };
-    auto remoteness_id{ m_main_chain_member_remoteness_list.at(id) };
-    return KeyPackerElementClass::Pack(element_id, remoteness_id, false);
+    auto element{ m_main_chain_member_element_list.at(id) };
+    auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
+    auto branch{ Branch::NONE };
+    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+    return KeyPackerElementClass::Pack(atom_key, false);
 }
 
 uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue residue) const
 {
     if (IsValidMainChainMemberID(id) == false) return 0;
-    auto element_id{ m_main_chain_member_element_list.at(id) };
-    auto remoteness_id{ m_main_chain_member_remoteness_list.at(id) };
-    return KeyPackerResidueClass::Pack(residue, element_id, remoteness_id, Branch::NONE, false);
+    auto element{ m_main_chain_member_element_list.at(id) };
+    auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
+    auto branch{ Branch::NONE };
+    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+    auto component_key{ static_cast<ComponentKey>(residue) };
+    return KeyPackerResidueClass::Pack(component_key, atom_key, false);
 }
 
 uint64_t AtomClassifier::GetMainChainStructureClassGroupKey(
     size_t id, Structure structure, Residue residue) const
 {
     if (IsValidMainChainMemberID(id) == false) return 0;
-    auto element_id{ m_main_chain_member_element_list.at(id) };
-    auto remoteness_id{ m_main_chain_member_remoteness_list.at(id) };
-    return KeyPackerStructureClass::Pack(structure, residue, element_id, remoteness_id, Branch::NONE, false);
+    auto element{ m_main_chain_member_element_list.at(id) };
+    auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
+    auto branch{ Branch::NONE };
+    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+    auto component_key{ static_cast<ComponentKey>(residue) };
+    return KeyPackerStructureClass::Pack(structure, component_key, atom_key, false);
 }
 
 std::vector<uint64_t> AtomClassifier::GetMainChainResidueClassGroupKeyList(
