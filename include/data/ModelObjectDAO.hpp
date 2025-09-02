@@ -32,7 +32,9 @@ private:
     void SaveChemicalComponentEntryList(const ModelObject * model_obj, const std::string & table_name);
     void SaveComponentAtomEntryList(const ModelObject * model_obj, const std::string & table_name);
     void SaveComponentBondEntryList(const ModelObject * model_obj, const std::string & table_name);
-    //void LoadChemicalComponentEntryList(ModelObject * model_obj);
+    void LoadChemicalComponentEntryList(ModelObject * model_obj, const std::string & table_name);
+    void LoadComponentAtomEntryList(ModelObject * model_obj, const std::string & table_name);
+    void LoadComponentBondEntryList(ModelObject * model_obj, const std::string & table_name);
 
     void SaveAtomicPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
     void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);

@@ -52,7 +52,11 @@ public:
     void AddGroupPotentialEntry(
         const std::string & class_key,
         std::unique_ptr<GroupPotentialEntry> & entry);
-    void SetChemicalComponentEntryMap(std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & entry_map);
+    void AddChemicalComponentEntry(
+        ComponentKey component_key,
+        std::unique_ptr<ChemicalComponentEntry> entry);
+    void SetChemicalComponentEntryMap(
+        std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & entry_map);
     void BuildKDTreeRoot(void);
     void FilterAtomFromSymmetry(bool is_asymmetry);
 

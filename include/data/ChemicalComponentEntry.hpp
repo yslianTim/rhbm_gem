@@ -49,6 +49,8 @@ public:
     void SetComponentFormula(const std::string & formula) { m_component_formula = formula; }
     void SetComponentMolecularWeight(float weight) { m_component_molecular_weight = weight; }
     void SetStandardMonomerFlag(bool flag) { m_standard_monomer_flag = flag; }
+    void SetComponentAtomEntryMap(std::map<AtomKey, ComponentAtomEntry> & atom_entry_map);
+    void SetComponentBondEntryMap(std::map<std::pair<AtomKey, AtomKey>, ComponentBondEntry> & bond_entry_map);
     void AddComponentAtomEntry(AtomKey atom_key, const ComponentAtomEntry & atom_info);
     void AddComponentBondEntry(
         const std::pair<AtomKey, AtomKey> & atom_key_pair,
