@@ -163,6 +163,8 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             AtomKeySystem::Instance().RegisterAtom(atom_id);
             auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
             m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
+
+            m_find_component_atom_entry = true;
         }
     );
 }
@@ -433,9 +435,9 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             auto is_special_atom{ (group_type == "HETATM") ? true : false };
             auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
 
-            if (m_data_block->HasChemicalComponentAtomInfo() == false)
+            if (m_find_component_atom_entry == false)
             {
-                AtomKeySystem::Instance().RegisterAtom(atom_id);
+                BuildDefaultComponentAtomEntry(comp_id, atom_id, element_type);
             }
             auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
             auto is_standard_monomer{ m_data_block->IsStandardMonomer(component_key) };
@@ -672,4 +674,25 @@ void CifFormat::ParseLoopBlock(
             table_handler(column_index_map, token_list);
         }
     }
+}
+
+void CifFormat::BuildDefaultComponentAtomEntry(
+    const std::string & comp_id,
+    const std::string & atom_id,
+    const std::string & element_symbol)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentAtomEntry() called");
+    auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+
+    AtomKeySystem::Instance().RegisterAtom(atom_id);
+
+    ComponentAtomEntry atom_entry;
+    atom_entry.atom_id = atom_id;
+    atom_entry.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
+    atom_entry.aromatic_atom_flag = false;
+    atom_entry.chiral_config = '.';
+    atom_entry.ordinal_index = 0;
+    
+    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
+    m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
 }

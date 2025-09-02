@@ -75,7 +75,6 @@ void AtomicModelDataBlock::AddComponentAtomEntry(
     AtomKey atom_id,
     const ComponentAtomEntry & atom_entry)
 {
-    m_has_chemical_component_atom_info = true;
     m_chemical_component_entry_map[comp_id]->AddComponentAtomEntry(atom_id, atom_entry);
 }
 
@@ -84,7 +83,6 @@ void AtomicModelDataBlock::AddComponentBondEntry(
     const std::pair<AtomKey, AtomKey> & atom_id_pair,
     const ComponentBondEntry & bond_entry)
 {
-    m_has_chemical_component_bond_info = true;
     m_chemical_component_entry_map[comp_id]->AddComponentBondEntry(atom_id_pair, bond_entry);
 }
 

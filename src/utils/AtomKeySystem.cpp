@@ -18,10 +18,12 @@ AtomKeySystem::AtomKeySystem(void)
     {
         for (const auto & [id1, remoteness] : build_in_remoteness_map)
         {
+            auto id1_string{ (id0 == " ") ? "" : id1 };
             for (const auto & [id2, branch] : build_in_branch_map)
             {
+                auto id2_string{ (id2 == " ") ? "" : id2 };
                 auto atom_key{ GetAtomKey(element, remoteness, branch) };
-                auto atom_id{ std::string{id0} + std::string{id1} + std::string{id2} };
+                auto atom_id{ std::string{id0} + std::string{id1_string} + std::string{id2_string} };
                 m_id_to_key_map.emplace(atom_id, atom_key);
                 m_key_to_id_map.emplace(atom_key, atom_id);
             }
