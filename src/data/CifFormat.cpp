@@ -130,6 +130,8 @@ void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
             ComponentKeySystem::Instance().RegisterComponent(comp_id);
             auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
             m_data_block->AddChemicalComponentEntry(component_key, std::move(entry));
+
+            m_find_chemical_component_entry = true;
         }
     );
     LoadChemicalComponentAtomBlock(infile);
@@ -435,6 +437,11 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             auto is_special_atom{ (group_type == "HETATM") ? true : false };
             auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
 
+            if (m_find_chemical_component_entry == false)
+            {
+                BuildDefaultComponentEntry(comp_id);
+            }
+
             if (m_find_component_atom_entry == false)
             {
                 BuildDefaultComponentAtomEntry(comp_id, atom_id, element_type);
@@ -674,6 +681,24 @@ void CifFormat::ParseLoopBlock(
             table_handler(column_index_map, token_list);
         }
     }
+}
+
+void CifFormat::BuildDefaultComponentEntry(const std::string & comp_id)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentEntry() called");
+    auto entry{ std::make_unique<ChemicalComponentEntry>() };
+    entry->SetComponentId(comp_id);
+    entry->SetComponentName("");
+    entry->SetComponentType("");
+    entry->SetComponentFormula("");
+    entry->SetComponentMolecularWeight(0.0f);
+    auto standard_flag{ false };
+    if (AtomicInfoHelper::GetResidueFromString(comp_id) != Residue::UNK) standard_flag = true;
+    entry->SetStandardMonomerFlag(standard_flag);
+
+    ComponentKeySystem::Instance().RegisterComponent(comp_id);
+    auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+    m_data_block->AddChemicalComponentEntry(component_key, std::move(entry));
 }
 
 void CifFormat::BuildDefaultComponentAtomEntry(

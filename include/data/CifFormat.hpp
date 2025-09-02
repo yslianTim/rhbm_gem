@@ -20,6 +20,7 @@ class AtomObject;
 class CifFormat : public ModelFileFormatBase
 {
     std::unique_ptr<AtomicModelDataBlock> m_data_block;
+    bool m_find_chemical_component_entry{ false };
     bool m_find_component_atom_entry{ false };
 
 public:
@@ -58,6 +59,7 @@ private:
         int model_number,
         std::ostream & stream
     );
+    void BuildDefaultComponentEntry(const std::string & comp_id);
     void BuildDefaultComponentAtomEntry(
         const std::string & comp_id,
         const std::string & atom_id,
