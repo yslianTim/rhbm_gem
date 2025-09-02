@@ -626,11 +626,11 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
         m_database->IterateQuery<
             int, int, std::string, std::string,
             double, double, int, int, int, int, int, int, double, double, double,
-            ComponentKey, AtomKey, std::string>(
+            int, int, std::string>(
             FormatSQL(SELECT_ATOM_LIST_SQL, atom_list_table_name)) };
     std::tuple<int, int, std::string, std::string,
                double, double, int, int, int, int, int, int, double, double, double,
-               ComponentKey, AtomKey, std::string> row;
+               int, int, std::string> row;
     while (iter.Next(row))
     {
         auto atom_object{ std::make_unique<AtomObject>() };
@@ -650,8 +650,8 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             static_cast<float>(std::get<12>(row)),
             static_cast<float>(std::get<13>(row)),
             static_cast<float>(std::get<14>(row)) );
-        atom_object->SetComponentKey(std::get<15>(row));
-        atom_object->SetAtomKey(std::get<16>(row));
+        atom_object->SetComponentKey(static_cast<ComponentKey>(std::get<15>(row)));
+        atom_object->SetAtomKey(static_cast<AtomKey>(std::get<16>(row)));
         atom_object->SetAtomID(std::get<17>(row));
 
         auto serial_id{ atom_object->GetSerialID() };
@@ -681,14 +681,14 @@ void ModelObjectDAO::LoadChemicalComponentEntryList(
     if (TableExists(table_name) == false) return;
     auto iter{
         m_database->IterateQuery<
-            ComponentKey, std::string, std::string,
+            int, std::string, std::string,
             std::string, std::string, double, int>(FormatSQL(SELECT_COMPONENT_ENTRY_SQL, table_name))
     };
-    std::tuple<ComponentKey, std::string, std::string, std::string, std::string, double, int> row;
+    std::tuple<int, std::string, std::string, std::string, std::string, double, int> row;
     while (iter.Next(row))
     {
         auto component_entry{ std::make_unique<ChemicalComponentEntry>() };
-        auto component_key{ std::get<0>(row) };
+        auto component_key{ static_cast<ComponentKey>(std::get<0>(row)) };
         component_entry->SetComponentId(std::get<1>(row));
         component_entry->SetComponentName(std::get<2>(row));
         component_entry->SetComponentType(std::get<3>(row));
@@ -705,13 +705,13 @@ void ModelObjectDAO::LoadComponentAtomEntryList(
     if (TableExists(table_name) == false) return;
     auto iter{
         m_database->IterateQuery<
-            ComponentKey, AtomKey, std::string, int, int, std::string, int>(
+            int, int, std::string, int, int, std::string, int>(
             FormatSQL(SELECT_COMPONENT_ATOM_ENTRY_SQL, table_name))
     };
-    std::tuple<ComponentKey, AtomKey, std::string, int, int, std::string, int> row;
+    std::tuple<int, int, std::string, int, int, std::string, int> row;
     while (iter.Next(row))
     {
-        auto component_key{ std::get<0>(row) };
+        auto component_key{ static_cast<ComponentKey>(std::get<0>(row)) };
         if (model_obj->GetChemicalComponentEntryMap().find(component_key)
             == model_obj->GetChemicalComponentEntryMap().end())
         {
@@ -724,7 +724,7 @@ void ModelObjectDAO::LoadComponentAtomEntryList(
         atom_entry.aromatic_atom_flag = static_cast<bool>(std::get<4>(row));
         atom_entry.chiral_config = static_cast<char>(std::get<5>(row)[0]);
         atom_entry.ordinal_index = std::get<6>(row);
-        component_entry->AddComponentAtomEntry(std::get<1>(row), atom_entry);
+        component_entry->AddComponentAtomEntry(static_cast<AtomKey>(std::get<1>(row)), atom_entry);
     }
 }
 
@@ -734,15 +734,15 @@ void ModelObjectDAO::LoadComponentBondEntryList(
     if (TableExists(table_name) == false) return;
     auto iter{
         m_database->IterateQuery<
-            ComponentKey, AtomKey, AtomKey, std::string, std::string,
+            int, int, int, std::string, std::string,
             std::string, int, std::string, int>(
             FormatSQL(SELECT_COMPONENT_BOND_ENTRY_SQL, table_name))
     };
-    std::tuple<ComponentKey, AtomKey, AtomKey, std::string, std::string,
+    std::tuple<int, int, int, std::string, std::string,
                std::string, int, std::string, int> row;
     while (iter.Next(row))
     {
-        auto component_key{ std::get<0>(row) };
+        auto component_key{ static_cast<ComponentKey>(std::get<0>(row)) };
         if (model_obj->GetChemicalComponentEntryMap().find(component_key)
             == model_obj->GetChemicalComponentEntryMap().end())
         {
@@ -755,7 +755,8 @@ void ModelObjectDAO::LoadComponentBondEntryList(
         bond_entry.aromatic_atom_flag = static_cast<bool>(std::get<6>(row));
         bond_entry.chiral_config = static_cast<char>(std::get<7>(row)[0]);
         bond_entry.ordinal_index = std::get<8>(row);
-        component_entry->AddComponentBondEntry({ std::get<1>(row), std::get<2>(row) }, bond_entry);
+        component_entry->AddComponentBondEntry(
+            { static_cast<AtomKey>(std::get<1>(row)), static_cast<AtomKey>(std::get<2>(row)) }, bond_entry);
     }
 }
 
