@@ -85,10 +85,19 @@ struct SQLiteColumnReader<std::string>
 {
     static std::string Get(sqlite3_stmt * stmt, int index)
     {
+        if (sqlite3_column_type(stmt, index) == SQLITE_NULL)
+        {
+            return {};
+        }
+
         const unsigned char * text{ sqlite3_column_text(stmt, index) };
+        // According to sqlite3 documentation sqlite3_column_text returns a pointer to a buffer
+        // that is valid until the next call to sqlite3_step() for the same statement. It may
+        // return nullptr only if the column type is SQLITE_NULL, which we check above.
+        // However, perform an extra safety check here just in case.
         if (!text)
         {
-            throw std::runtime_error("NULL column string");
+            return {};
         }
         return std::string(reinterpret_cast<const char*>(text));
     }
