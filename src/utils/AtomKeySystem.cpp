@@ -6,9 +6,8 @@
 
 #include <algorithm>
 
-const AtomKey AtomKeySystem::kDynamicBase{
-    static_cast<uint32_t>(static_cast<uint16_t>(Element::THORIUM) << 16)
-}; // 90 * 256 * 256 = 5898240
+const AtomKey AtomKeySystem::kDynamicBase{ static_cast<uint32_t>(Element::THORIUM) << 16 };
+// 90 * 256 * 256 = 5898240
 
 AtomKeySystem::AtomKeySystem(void)
 {
