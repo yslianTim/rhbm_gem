@@ -535,7 +535,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
     for (auto & group_key : group_key_list)
     {
         if (IsAvailableGroupKey(group_key, class_key) == false) continue;
-        auto x_value{ static_cast<int>(GetResidueFromGroupKey(group_key, class_key)) };
+        auto x_value{ static_cast<int>(GetResidueFromGroupKey(group_key, class_key)) - 1 };
         auto y_value{ m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id) };
         auto y_error{ m_model_object->GetGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
         graph->SetPoint(count, x_value, y_value);

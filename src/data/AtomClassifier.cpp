@@ -163,7 +163,11 @@ uint64_t AtomClassifier::GetGroupKeyInClass(
 
 uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
 {
-    if (IsValidMainChainMemberID(id) == false) return 0;
+    if (IsValidMainChainMemberID(id) == false)
+    {
+        Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
+        return 0;
+    }
     auto element{ m_main_chain_member_element_list.at(id) };
     auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
     auto branch{ Branch::NONE };
@@ -173,7 +177,11 @@ uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
 
 uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue residue) const
 {
-    if (IsValidMainChainMemberID(id) == false) return 0;
+    if (IsValidMainChainMemberID(id) == false)
+    {
+        Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
+        return 0;
+    }
     auto element{ m_main_chain_member_element_list.at(id) };
     auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
     auto branch{ Branch::NONE };
@@ -185,7 +193,11 @@ uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue res
 uint64_t AtomClassifier::GetMainChainStructureClassGroupKey(
     size_t id, Structure structure, Residue residue) const
 {
-    if (IsValidMainChainMemberID(id) == false) return 0;
+    if (IsValidMainChainMemberID(id) == false)
+    {
+        Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
+        return 0;
+    }
     auto element{ m_main_chain_member_element_list.at(id) };
     auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
     auto branch{ Branch::NONE };
