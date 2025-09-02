@@ -5,10 +5,9 @@
 #include <unordered_map>
 #include <mutex>
 
+#include "GlobalEnumClass.hpp"
+
 using AtomKey = uint32_t;
-enum class Element : uint16_t;
-enum class Remoteness : uint8_t;
-enum class Branch : uint8_t;
 
 class AtomKeySystem
 {

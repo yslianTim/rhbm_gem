@@ -5,10 +5,7 @@
 #include <vector>
 #include <string>
 
-enum class Element : uint16_t;
-enum class Remoteness : uint8_t;
-enum class Residue : uint16_t;
-enum class Structure : uint8_t;
+#include "GlobalEnumClass.hpp"
 
 class AtomObject;
 class AtomClassifier

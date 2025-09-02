@@ -4,11 +4,12 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+
+#include "GlobalEnumClass.hpp"
 #include "PainterBase.hpp"
 
 class ModelObject;
 class AtomClassifier;
-enum class Residue : uint16_t;
 
 #ifdef HAVE_ROOT
 class TPad;

@@ -6,8 +6,7 @@
 
 #include <algorithm>
 
-const AtomKey AtomKeySystem::kDynamicBase{ static_cast<uint32_t>(Element::THORIUM) << 16 };
-// 90 * 256 * 256 = 5898240
+const AtomKey AtomKeySystem::kDynamicBase{ static_cast<uint32_t>(Branch::TERMINAL) << 16 };
 
 AtomKeySystem::AtomKeySystem(void)
 {
@@ -24,7 +23,7 @@ AtomKeySystem::AtomKeySystem(void)
             for (const auto & [id2, branch] : build_in_branch_map)
             {
                 auto key2{ static_cast<uint8_t>(branch) };
-                auto component_key{ static_cast<AtomKey>((key0 << 16) | (key1 << 8) | key2) };
+                auto component_key{ static_cast<AtomKey>((key2 << 16) | (key1 << 8) | key0) };
                 auto atom_id{ std::string{id0} + std::string{id1} + std::string{id2} };
                 m_id_to_key_map.emplace(atom_id, component_key);
                 m_key_to_id_map.emplace(component_key, atom_id);

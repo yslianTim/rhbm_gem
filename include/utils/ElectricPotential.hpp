@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <array>
 
-enum class Element : uint16_t;
+#include "GlobalEnumClass.hpp"
 
 class ElectricPotential
 {

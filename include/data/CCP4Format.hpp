@@ -4,6 +4,7 @@
 #include <vector>
 #include <istream>
 #include <ostream>
+
 #include "MapFileFormatBase.hpp"
 
 class CCP4Format : public MapFileFormatBase

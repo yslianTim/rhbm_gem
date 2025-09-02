@@ -109,12 +109,12 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_
     {"HIS", Residue::HIS}, {"ILE", Residue::ILE}, {"LEU", Residue::LEU}, {"LYS", Residue::LYS},
     {"MET", Residue::MET}, {"PHE", Residue::PHE}, {"PRO", Residue::PRO}, {"SER", Residue::SER},
     {"THR", Residue::THR}, {"TRP", Residue::TRP}, {"TYR", Residue::TYR}, {"VAL", Residue::VAL},
-    {"HOH", Residue::HOH}, {"NA",  Residue::NA},  {"MG",  Residue::MG},  {"CA",  Residue::CA},
-    {"ZN",  Residue::ZN},  {"FE",  Residue::FE},  {"FE2", Residue::FE2}, {"CSX", Residue::CSX},
-    {"CL",  Residue::CL},
+    {"CSX", Residue::CSX},
 
     {"A",   Residue::A},   {"G",   Residue::G},   {"C",   Residue::C},   {"U",   Residue::U},
-    {"T",   Residue::T}
+    {"T",   Residue::T},
+
+    {"HOH", Residue::HOH}
 };
 
 const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
@@ -156,8 +156,6 @@ const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remot
     {" ", Remoteness::NONE}, {"A", Remoteness::ALPHA}, {"B", Remoteness::BETA},
     {"G", Remoteness::GAMMA},{"D", Remoteness::DELTA}, {"E", Remoteness::EPSILON},
     {"Z", Remoteness::ZETA}, {"H", Remoteness::ETA},
-    //{"1", Remoteness::ONE},  {"2", Remoteness::TWO},   {"3", Remoteness::THREE},
-    //{"4", Remoteness::FOUR}, {"5", Remoteness::FIVE},
     {"X", Remoteness::EXTRA}
 };
 
@@ -190,11 +188,10 @@ const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label
     {Residue::HIS, "HIS"}, {Residue::ILE, "ILE"}, {Residue::LEU, "LEU"}, {Residue::LYS, "LYS"},
     {Residue::MET, "MET"}, {Residue::PHE, "PHE"}, {Residue::PRO, "PRO"}, {Residue::SER, "SER"},
     {Residue::THR, "THR"}, {Residue::TRP, "TRP"}, {Residue::TYR, "TYR"}, {Residue::VAL, "VAL"},
-    {Residue::HOH, "HOH"}, {Residue::NA,  "NA"},  {Residue::MG,  "MG"},  {Residue::CA,  "CA"},
-    {Residue::ZN,  "ZN"},  {Residue::FE,  "FE"},  {Residue::FE2, "FE2"}, {Residue::CSX, "CSX"},
-    {Residue::CL,  "CL"},
+    {Residue::CSX, "CSX"},
     {Residue::A,   "A"  }, {Residue::G,   "G"  }, {Residue::C,   "C"  }, {Residue::U,   "U"  },
     {Residue::T,   "T"  },
+    {Residue::HOH, "HOH"},
     {Residue::UNK, "UNK"}
 };
 
@@ -239,9 +236,7 @@ const std::unordered_map<Remoteness, std::string> AtomicInfoHelper::m_remoteness
     {Remoteness::BETA, "#beta"}, {Remoteness::GAMMA, "#gamma"},
     {Remoteness::DELTA, "#delta"}, {Remoteness::EPSILON, "#varepsilon"},
     {Remoteness::ZETA, "#zeta"}, {Remoteness::ETA, "#eta"},
-    {Remoteness::ONE, "1"}, {Remoteness::TWO, "2"},
-    {Remoteness::THREE, "3"}, {Remoteness::FOUR, "4"},
-    {Remoteness::FIVE, "5"}, {Remoteness::EXTRA, "X"},
+    {Remoteness::EXTRA, "X"},
     {Remoteness::UNK, "UNK"}
 };
 
@@ -251,9 +246,7 @@ const std::unordered_map<Remoteness, char> AtomicInfoHelper::m_remoteness_char_m
     {Remoteness::BETA, 'B'}, {Remoteness::GAMMA, 'G'},
     {Remoteness::DELTA, 'D'}, {Remoteness::EPSILON, 'E'},
     {Remoteness::ZETA, 'Z'}, {Remoteness::ETA, 'H'},
-    {Remoteness::ONE, '1'}, {Remoteness::TWO, '2'},
-    {Remoteness::THREE, '3'}, {Remoteness::FOUR, '4'},
-    {Remoteness::FIVE, '5'}, {Remoteness::EXTRA, 'X'},
+    {Remoteness::EXTRA, 'X'},
     {Remoteness::UNK, '?'}
 };
 

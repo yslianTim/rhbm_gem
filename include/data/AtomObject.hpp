@@ -5,15 +5,11 @@
 #include <unordered_map>
 
 #include "DataObjectBase.hpp"
+#include "GlobalEnumClass.hpp"
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
 
 class AtomicPotentialEntry;
-enum class Residue : uint16_t;
-enum class Element : uint16_t;
-enum class Remoteness : uint8_t;
-enum class Branch : uint8_t;
-enum class Structure : uint8_t;
 
 class AtomObject : public DataObjectBase
 {

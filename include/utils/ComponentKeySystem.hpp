@@ -5,11 +5,11 @@
 #include <unordered_map>
 #include <mutex>
 
-using ComponentKey = uint16_t;
+using ComponentKey = uint8_t;
 
 class ComponentKeySystem
 {
-    static constexpr ComponentKey kDynamicBase{ 1000 };
+    static const ComponentKey kDynamicBase;
     std::mutex m_mutex;
     ComponentKey m_next_dynamic_key{ kDynamicBase };
     std::unordered_map<std::string, ComponentKey> m_id_to_key_map;

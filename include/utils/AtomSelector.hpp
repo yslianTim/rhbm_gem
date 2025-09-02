@@ -4,9 +4,7 @@
 #include <string>
 #include <unordered_set>
 
-enum class Residue : uint16_t;
-enum class Element : uint16_t;
-enum class Remoteness : uint8_t;
+#include "GlobalEnumClass.hpp"
 
 class AtomSelector
 {

@@ -7,11 +7,9 @@
 #include <utility>
 #include <unordered_map>
 
+#include "GlobalEnumClass.hpp"
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
-
-enum class Element : uint16_t;
-enum class Entity : uint8_t;
 
 class AtomObject;
 class ChemicalComponentEntry;

@@ -12,21 +12,22 @@
 #define UINT8_MAX 255
 #endif
 
-enum class Residue : uint16_t
+enum class Residue : uint8_t
 {
-    ALA =  0, ARG =  1, ASN =  2, ASP =  3, CYS =  4,
-    GLN =  5, GLU =  6, GLY =  7, HIS =  8, ILE =  9,
-    LEU = 10, LYS = 11, MET = 12, PHE = 13, PRO = 14,
-    SER = 15, THR = 16, TRP = 17, TYR = 18, VAL = 19,
-    CSX = 20,
-    A   = 50, G   = 51, C   = 52, U   = 53, T   = 54,
-    HOH = 99,
-    NA = 911, MG = 912, CL = 917, CA = 920, FE = 926,
-    FE2 = 826, ZN = 930,
-    UNK = UINT16_MAX
+    UNK =  0,
+
+    ALA =  1, ARG =  2, ASN =  3, ASP =  4, CYS =  5,
+    GLN =  6, GLU =  7, GLY =  8, HIS =  9, ILE = 10,
+    LEU = 11, LYS = 12, MET = 13, PHE = 14, PRO = 15,
+    SER = 16, THR = 17, TRP = 18, TYR = 19, VAL = 20,
+    CSX = 21,
+
+    A   = 30, G   = 31, C   = 32, U   = 33, T   = 34,
+
+    HOH = 35 // water
 };
 
-enum class Element : uint16_t
+enum class Element : uint8_t
 {
     UNK = 0,
     HYDROGEN   =  1, HELIUM     =  2, LITHIUM    =  3, BERYLLIUM    =  4, BORON      =  5,
@@ -51,31 +52,31 @@ enum class Element : uint16_t
 
 enum class Remoteness : uint8_t
 {
-    NONE = 0, ALPHA = 1, BETA = 2, GAMMA = 3, DELTA = 4, EPSILON = 5, ZETA = 6, ETA = 7,
-    ACID = 8,         // phosphoric acid
-    PENTOSE = 9,      // pentose sugar (Ribose, Deoxyribose)
-    BASE = 10,        // nucleotide base
-    ONE = 11, TWO = 12, THREE = 13, FOUR = 14, FIVE = 15,
-    EXTRA = 99,
-    UNK = UINT8_MAX
+    UNK = 0,
+    NONE = 1, ALPHA = 2, BETA = 3, GAMMA = 4, DELTA = 5, EPSILON = 6, ZETA = 7, ETA = 8,
+    EXTRA = 9,
+    ACID = 10,         // phosphoric acid
+    PENTOSE = 11,      // pentose sugar (Ribose, Deoxyribose)
+    BASE = 12          // nucleotide base
 };
 
 enum class Branch : uint8_t
 {
-    NONE = 0, ONE = 1, TWO = 2, THREE = 3, FOUR = 4,
-    FIVE = 5, SIX = 6, SEVEN = 7, EIGHT = 8, NINE = 9,
-    TERMINAL = 254,
-    UNK = UINT8_MAX
+    UNK = 0,
+    NONE = 1, ONE = 2, TWO = 3, THREE = 4, FOUR = 5,
+    FIVE = 6, SIX = 7, SEVEN = 8, EIGHT = 9, NINE = 10,
+    TERMINAL = 11
 };
 
 // Ref: https://mmcif.wwpdb.org/dictionaries/mmcif_ma.dic/Items/_struct_conf_type.id.html
 enum class Structure : uint8_t
 {
-    FREE = 0, BEND = 1,
+    UNK = 0,
+    FREE = 1, BEND = 2,
     /* beta-sheet */
-    SHEET = 2,
-    STRN = 3,
-    OTHER = 9,
+    SHEET = 3,
+    STRN = 4,
+    OTHER = 5,
 
     /* 10 - 99 for alpha-helix */
     HELX_P       = 10, HELX_OT_P    = 11,
@@ -99,14 +100,12 @@ enum class Structure : uint8_t
     TURN_P      = 100, TURN_OT_P  = 101,
     TURN_TY1P_P = 102, TURN_TY1_P = 103,
     TURN_TY2P_P = 104, TURN_TY2_P = 105,
-    TURN_TY3P_P = 106, TURN_TY3_P = 107,
-    
-    UNK = UINT8_MAX
+    TURN_TY3P_P = 106, TURN_TY3_P = 107
 };
 
 enum class Entity : uint8_t
 {
-    POLYMER = 0, NONPOLYMER = 1, BRANCHED = 2, MACROLIDE = 3,
-    WATER = 4,
-    UNK = UINT8_MAX
+    UNK = 0,
+    POLYMER = 1, NONPOLYMER = 2, BRANCHED = 3, MACROLIDE = 4,
+    WATER = 5
 };

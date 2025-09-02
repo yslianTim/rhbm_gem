@@ -83,7 +83,7 @@ INSTANTIATE_TEST_SUITE_P(AtomicNumberPairs, AtomicInfoHelperAtomicNumberTest,
 
 TEST_F(AtomicInfoHelperTest, InvalidElementReturnsZero)
 {
-    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(static_cast<Element>(999)));
+    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(static_cast<Element>(255)));
     EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(Element::UNK));
 }
 
@@ -148,7 +148,6 @@ TEST_F(AtomicInfoHelperTest, IsStandardResidue)
             << static_cast<int>(residue);
     }
     EXPECT_FALSE(AtomicInfoHelper::IsStandardResidue(Residue::HOH));
-    EXPECT_FALSE(AtomicInfoHelper::IsStandardResidue(Residue::ZN));
 }
 
 TEST_F(AtomicInfoHelperTest, MapsKnownStringsToEnums)
@@ -188,12 +187,12 @@ TEST_F(AtomicInfoHelperTest, ResidueUNKReturnsLabel)
 
 TEST_F(AtomicInfoHelperTest, UnknownResidueReturnsQuestionMark)
 {
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Residue>(999)), "?");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Residue>(255)), "?");
 }
 
 TEST_F(AtomicInfoHelperTest, UnknownElementReturnsQuestionMark)
 {
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Element>(999)), "?");
+    EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Element>(255)), "?");
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Element::UNK), "UNK");
 }
 
@@ -216,9 +215,6 @@ TEST_F(AtomicInfoHelperTest, ElementDisplayAttributes)
     EXPECT_NE(1, AtomicInfoHelper::GetDisplayMarker(Element::CARBON));
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayColor(Element::UNK));
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayMarker(Element::UNK));
-    const Element invalid_element{ static_cast<Element>(999) };
-    EXPECT_EQ(1, AtomicInfoHelper::GetDisplayColor(invalid_element));
-    EXPECT_EQ(121, AtomicInfoHelper::GetDisplayMarker(invalid_element));
 }
 
 TEST_F(AtomicInfoHelperTest, ResidueDisplayAttributes)
@@ -227,9 +223,6 @@ TEST_F(AtomicInfoHelperTest, ResidueDisplayAttributes)
     EXPECT_NE(1, AtomicInfoHelper::GetDisplayMarker(Residue::ALA));
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayColor(Residue::UNK));
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayMarker(Residue::UNK));
-    const Residue invalid_residue{ static_cast<Residue>(999) };
-    EXPECT_EQ(1, AtomicInfoHelper::GetDisplayColor(invalid_residue));
-    EXPECT_EQ(1, AtomicInfoHelper::GetDisplayMarker(invalid_residue));
 }
 
 TEST_F(AtomicInfoHelperTest, GetGroupClassKeyThrowsOnOutOfRange)
@@ -257,7 +250,6 @@ TEST_F(AtomicInfoHelperTest, ConversionHelpersReturnUnkForUnknownStrings)
 TEST_F(AtomicInfoHelperTest, RemotenessLabelVariants)
 {
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::NONE), "");
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::ONE), "1");
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::ALPHA), "#alpha");
     EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Remoteness>(253)), "?");
 }

@@ -3,6 +3,8 @@
 #include "AtomicInfoHelper.hpp"
 #include "Logger.hpp"
 
+const ComponentKey ComponentKeySystem::kDynamicBase{ static_cast<ComponentKey>(Residue::HOH) + 1 };
+
 ComponentKeySystem::ComponentKeySystem(void)
 {
     Logger::Log(LogLevel::Debug, "ComponentKeySystem::ComponentKeySystem() called");

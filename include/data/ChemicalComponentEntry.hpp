@@ -6,9 +6,8 @@
 #include <unordered_map>
 #include <map>
 
+#include "GlobalEnumClass.hpp"
 #include "AtomKeySystem.hpp"
-
-enum class Element : uint16_t;
 
 struct ComponentAtomEntry
 {

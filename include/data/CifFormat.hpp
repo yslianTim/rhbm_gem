@@ -9,9 +9,10 @@
 #include <unordered_map>
 #include <fstream>
 #include <array>
+
+#include "GlobalEnumClass.hpp"
 #include "ModelFileFormatBase.hpp"
 
-enum class Element : uint16_t;
 class AtomicModelDataBlock;
 class ModelObject;
 class AtomObject;

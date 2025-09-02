@@ -5,11 +5,7 @@
 #include <vector>
 #include <unordered_map>
 
-enum class Residue : uint16_t;
-enum class Element : uint16_t;
-enum class Remoteness : uint8_t;
-enum class Branch : uint8_t;
-enum class Structure : uint8_t;
+#include "GlobalEnumClass.hpp"
 
 class AminoAcidInfoHelper
 {
