@@ -22,9 +22,27 @@ struct SQLiteBinder<int>
 };
 
 template<>
+struct SQLiteBinder<uint8_t>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, uint8_t value)
+    {
+        return sqlite3_bind_int(stmt, index, static_cast<int>(value));
+    }
+};
+
+template<>
 struct SQLiteBinder<uint16_t>
 {
     static int Bind(sqlite3_stmt * stmt, int index, uint16_t value)
+    {
+        return sqlite3_bind_int(stmt, index, static_cast<int>(value));
+    }
+};
+
+template<>
+struct SQLiteBinder<uint32_t>
+{
+    static int Bind(sqlite3_stmt * stmt, int index, uint32_t value)
     {
         return sqlite3_bind_int(stmt, index, static_cast<int>(value));
     }

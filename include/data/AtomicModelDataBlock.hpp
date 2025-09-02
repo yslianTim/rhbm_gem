@@ -35,6 +35,8 @@ class AtomicModelDataBlock
     std::unordered_map<std::string, std::array<std::string, 4>> m_struct_sheet_range_map;
     std::vector<Element> m_element_type_list;
 
+    bool m_has_chemical_component_atom_info{ false };
+    bool m_has_chemical_component_bond_info{ false };
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map; // key : comp_id
 
 public:
@@ -77,7 +79,10 @@ public:
     const std::unordered_map<std::string, int> & GetMoleculesSizeMap(void) const;
     const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap(void) const;
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
+    ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key);
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
     bool IsStandardMonomer(ComponentKey key) const;
+    bool HasChemicalComponentAtomInfo(void) const { return m_has_chemical_component_atom_info; }
+    bool HasChemicalComponentBondInfo(void) const { return m_has_chemical_component_bond_info; }
 
 };

@@ -159,8 +159,8 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
             atom_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
 
-            AtomKeySystem::Instance().RegisterAtom(atom_id);
             auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            AtomKeySystem::Instance().RegisterAtom(atom_id);
             auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
             m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
         }
@@ -432,19 +432,26 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             if (element_type == "H") return; // Skip hydrogen atom
             auto is_special_atom{ (group_type == "HETATM") ? true : false };
             auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+
+            if (m_data_block->HasChemicalComponentAtomInfo() == false)
+            {
+                AtomKeySystem::Instance().RegisterAtom(atom_id);
+            }
+            auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
             auto is_standard_monomer{ m_data_block->IsStandardMonomer(component_key) };
             auto atom_object{ std::make_unique<AtomObject>() };
-            Element element{ AtomicInfoHelper::GetElementFromString(element_type) };
-            Residue residue{ Residue::UNK };
+            
+            Residue residue{ (is_standard_monomer) ?
+                AtomicInfoHelper::GetResidueFromString(comp_id) : Residue::UNK
+            };
+            Element element{ Element::UNK };
             Remoteness remoteness{ Remoteness::UNK };
             Branch branch{ Branch::UNK };
-            if (is_standard_monomer)
-            {
-                residue = AtomicInfoHelper::GetResidueFromString(comp_id);
-                ParseAtomID(atom_id, element_type, remoteness, branch);
-            }
+            AtomKeySystem::Instance().ParseAtomId(
+                atom_id, element_type, is_standard_monomer, element, remoteness, branch);
             atom_object->SetAtomID(atom_id);
             atom_object->SetComponentKey(component_key);
+            atom_object->SetAtomKey(atom_key);
             atom_object->SetElement(element);
             atom_object->SetRemoteness(remoteness);
             atom_object->SetBranch(branch);
@@ -484,50 +491,6 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             }
         }
     );
-}
-
-void CifFormat::ParseAtomID(
-    const std::string & atom_id,
-    const std::string & element_type,
-    Remoteness & remoteness,
-    Branch & branch)
-{
-    Logger::Log(LogLevel::Debug, "CifFormat::ParseAtomID() called");
-    auto atom_id_remove_element{ atom_id.substr(element_type.size()) };
-
-    if (atom_id == "P" || atom_id_remove_element.find("P") != std::string::npos)
-    {
-        remoteness = Remoteness::ACID; // phosphoric acid
-        std::string acid_branch_str{ atom_id_remove_element.back() };
-        branch = AtomicInfoHelper::GetBranchFromString(acid_branch_str);
-        return;
-    }
-
-    if (atom_id.find("'") != std::string::npos)
-    {
-        remoteness = Remoteness::PENTOSE; // pentose sugar (Ribose, Deoxyribose)
-        auto pentose_branch_str{ atom_id_remove_element };
-        pentose_branch_str.erase(
-            std::remove(pentose_branch_str.begin(), pentose_branch_str.end(), '\''), pentose_branch_str.end());
-        branch = AtomicInfoHelper::GetBranchFromString(pentose_branch_str);
-        return;
-    }
-
-    auto remoteness_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 0) };
-    if (AtomicInfoHelper::IsValidRemotenessString(remoteness_str) == true)
-    {
-        remoteness = AtomicInfoHelper::GetRemotenessFromString(remoteness_str);
-        auto branch_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 1) };
-        branch = AtomicInfoHelper::GetBranchFromString(branch_str);
-        return;
-    }
-    else
-    {
-        remoteness = Remoteness::BASE; // nucleotide base
-        std::string base_branch_str{ atom_id_remove_element.back() };
-        branch = AtomicInfoHelper::GetBranchFromString(base_branch_str);
-        return;
-    }
 }
 
 AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)

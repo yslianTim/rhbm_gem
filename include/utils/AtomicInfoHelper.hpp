@@ -59,6 +59,9 @@ public:
     static const std::vector<Remoteness> & GetStandardRemotenessList(void);
     static const std::vector<Branch> & GetStandardBranchList(void);
     static const std::unordered_map<std::string_view, Residue> & GetResidueMap(void);
+    static const std::unordered_map<std::string_view, Element> & GetElementMap(void);
+    static const std::unordered_map<std::string_view, Remoteness> & GetRemotenessMap(void);
+    static const std::unordered_map<std::string_view, Branch> & GetBranchMap(void);
     static const std::unordered_map<Element, std::string> & GetElementLabelMap(void);
     static bool IsStandardElement(Element element);
     static bool IsStandardResidue(Residue residue);

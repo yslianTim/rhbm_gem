@@ -388,6 +388,21 @@ const std::unordered_map<std::string_view, Residue> & AtomicInfoHelper::GetResid
     return m_residue_map;
 }
 
+const std::unordered_map<std::string_view, Element> & AtomicInfoHelper::GetElementMap(void)
+{
+    return m_element_map;
+}
+
+const std::unordered_map<std::string_view, Remoteness> & AtomicInfoHelper::GetRemotenessMap(void)
+{
+    return m_remoteness_map;
+}
+
+const std::unordered_map<std::string_view, Branch> & AtomicInfoHelper::GetBranchMap(void)
+{
+    return m_branch_map;
+}
+
 const std::unordered_map<Element, std::string> & AtomicInfoHelper::GetElementLabelMap(void)
 {
     return m_element_label_map;

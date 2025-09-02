@@ -1,18 +1,37 @@
 #include "AtomKeySystem.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "StringHelper.hpp"
 #include "Logger.hpp"
+
+#include <algorithm>
+
+const AtomKey AtomKeySystem::kDynamicBase{
+    static_cast<uint32_t>(static_cast<uint16_t>(Element::THORIUM) << 16)
+}; // 90 * 256 * 256 = 5898240
 
 AtomKeySystem::AtomKeySystem(void)
 {
     Logger::Log(LogLevel::Debug, "AtomKeySystem::AtomKeySystem() called");
-    //const auto & build_in_residue_map{ AtomicInfoHelper::GetResidueMap() };
-    //for (const auto & [id, residue] : build_in_residue_map)
-    //{
-    //    auto component_key{ static_cast<AtomKey>(residue) };
-    //    m_id_to_key_map.emplace(id, component_key);
-    //    m_key_to_id_map.emplace(component_key, std::string{id});
-    //};
+    const auto & build_in_element_map{ AtomicInfoHelper::GetElementMap() };
+    const auto & build_in_remoteness_map{ AtomicInfoHelper::GetRemotenessMap() };
+    const auto & build_in_branch_map{ AtomicInfoHelper::GetBranchMap() };
+    for (const auto & [id0, element] : build_in_element_map)
+    {
+        auto key0{ static_cast<uint16_t>(element) };
+        for (const auto & [id1, remoteness] : build_in_remoteness_map)
+        {
+            auto key1{ static_cast<uint8_t>(remoteness) };
+            for (const auto & [id2, branch] : build_in_branch_map)
+            {
+                auto key2{ static_cast<uint8_t>(branch) };
+                auto component_key{ static_cast<AtomKey>((key0 << 16) | (key1 << 8) | key2) };
+                auto atom_id{ std::string{id0} + std::string{id1} + std::string{id2} };
+                m_id_to_key_map.emplace(atom_id, component_key);
+                m_key_to_id_map.emplace(component_key, atom_id);
+            }
+        }
+    }
 }
 
 AtomKeySystem::~AtomKeySystem(void)
@@ -27,36 +46,103 @@ AtomKeySystem & AtomKeySystem::Instance(void)
     return instance;
 }
 
-void AtomKeySystem::RegisterAtom(const std::string & id)
+void AtomKeySystem::RegisterAtom(const std::string & atom_id)
 {
-    Logger::Log(LogLevel::Debug, "AtomKeySystem::RegisterAtom() called for " + id);
+    Logger::Log(LogLevel::Debug, "AtomKeySystem::RegisterAtom() called for " + atom_id);
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_id_to_key_map.find(id) != m_id_to_key_map.end()) return;
-    AtomKey new_key{ m_next_dynamic_key++ };
-    m_id_to_key_map[id] = new_key;
-    m_key_to_id_map[new_key] = id;
+    if (m_id_to_key_map.find(atom_id) != m_id_to_key_map.end()) return;
+    AtomKey new_atom_key{ m_next_dynamic_key++ };
+    m_id_to_key_map[atom_id] = new_atom_key;
+    m_key_to_id_map[new_atom_key] = atom_id;
 }
 
-AtomKey AtomKeySystem::GetAtomKey(const std::string & id)
+AtomKey AtomKeySystem::GetAtomKey(const std::string & atom_id)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_id_to_key_map.find(id) == m_id_to_key_map.end())
+    if (m_id_to_key_map.find(atom_id) == m_id_to_key_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-            "AtomKeySystem::GetAtomKey() - Unknown component id: " + id);
+            "AtomKeySystem::GetAtomKey() - Unknown atom id: " + atom_id);
         return static_cast<AtomKey>(0);
     }
-    return m_id_to_key_map.at(id);
+    return m_id_to_key_map.at(atom_id);
 }
 
-std::string AtomKeySystem::GetComponentId(AtomKey key)
+std::string AtomKeySystem::GetComponentId(AtomKey atom_key)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_key_to_id_map.find(key) == m_key_to_id_map.end())
+    if (m_key_to_id_map.find(atom_key) == m_key_to_id_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-            "AtomKeySystem::GetComponentId() - Unknown component key: "+ std::to_string(key));
+            "AtomKeySystem::GetComponentId() - Unknown atom key: "+ std::to_string(atom_key));
         return "UNK";
     }
-    return m_key_to_id_map.at(key);
+    return m_key_to_id_map.at(atom_key);
+}
+
+bool AtomKeySystem::IsBuildInAtom(const std::string & atom_id) const
+{
+    if (m_id_to_key_map.find(atom_id) == m_id_to_key_map.end()) return false;
+    return m_id_to_key_map.at(atom_id) < kDynamicBase;
+}
+
+bool AtomKeySystem::IsBuildInAtom(AtomKey atom_key) const
+{
+    return atom_key < kDynamicBase;
+}
+
+void AtomKeySystem::ParseAtomId(
+    const std::string & atom_id,
+    const std::string & element_type,
+    bool is_standard_monomer,
+    Element & element,
+    Remoteness & remoteness,
+    Branch & branch)
+{
+    Logger::Log(LogLevel::Debug, "AtomKeySystem::ParseAtomId() called");
+
+    element = AtomicInfoHelper::GetElementFromString(element_type);
+
+    if (is_standard_monomer == false)
+    {
+        remoteness = Remoteness::UNK;
+        branch = Branch::UNK;
+        return;
+    }
+
+    auto atom_id_remove_element{ atom_id.substr(element_type.size()) };
+
+    if (atom_id == "P" || atom_id_remove_element.find("P") != std::string::npos)
+    {
+        remoteness = Remoteness::ACID; // phosphoric acid
+        std::string acid_branch_str{ atom_id_remove_element.back() };
+        branch = AtomicInfoHelper::GetBranchFromString(acid_branch_str);
+        return;
+    }
+
+    if (atom_id.find("'") != std::string::npos)
+    {
+        remoteness = Remoteness::PENTOSE; // pentose sugar (Ribose, Deoxyribose)
+        auto pentose_branch_str{ atom_id_remove_element };
+        pentose_branch_str.erase(
+            std::remove(pentose_branch_str.begin(), pentose_branch_str.end(), '\''), pentose_branch_str.end());
+        branch = AtomicInfoHelper::GetBranchFromString(pentose_branch_str);
+        return;
+    }
+
+    auto remoteness_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 0) };
+    if (AtomicInfoHelper::IsValidRemotenessString(remoteness_str) == true)
+    {
+        remoteness = AtomicInfoHelper::GetRemotenessFromString(remoteness_str);
+        auto branch_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 1) };
+        branch = AtomicInfoHelper::GetBranchFromString(branch_str);
+        return;
+    }
+    else
+    {
+        remoteness = Remoteness::BASE; // nucleotide base
+        std::string base_branch_str{ atom_id_remove_element.back() };
+        branch = AtomicInfoHelper::GetBranchFromString(base_branch_str);
+        return;
+    }
 }

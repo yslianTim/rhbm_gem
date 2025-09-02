@@ -75,6 +75,7 @@ void AtomicModelDataBlock::AddComponentAtomEntry(
     AtomKey atom_id,
     const ComponentAtomEntry & atom_entry)
 {
+    m_has_chemical_component_atom_info = true;
     m_chemical_component_entry_map[comp_id]->AddComponentAtomEntry(atom_id, atom_entry);
 }
 
@@ -83,6 +84,7 @@ void AtomicModelDataBlock::AddComponentBondEntry(
     const std::pair<AtomKey, AtomKey> & atom_id_pair,
     const ComponentBondEntry & bond_entry)
 {
+    m_has_chemical_component_bond_info = true;
     m_chemical_component_entry_map[comp_id]->AddComponentBondEntry(atom_id_pair, bond_entry);
 }
 
@@ -186,6 +188,17 @@ const std::unordered_map<std::string, std::vector<std::string>> &
 AtomicModelDataBlock::GetChainIDListMap(void) const
 {
     return m_chain_id_list_map;
+}
+
+ChemicalComponentEntry * AtomicModelDataBlock::GetChemicalComponentEntryPtr(ComponentKey key)
+{
+    if (m_chemical_component_entry_map.find(key) == m_chemical_component_entry_map.end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "Chemical component key " + std::to_string(key) + " not found in chemical component map.");
+        return nullptr;
+    }
+    return m_chemical_component_entry_map.at(key).get();
 }
 
 std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &

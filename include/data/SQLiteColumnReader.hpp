@@ -24,11 +24,29 @@ struct SQLiteColumnReader<int>
 };
 
 template<>
+struct SQLiteColumnReader<uint8_t>
+{
+    static uint8_t Get(sqlite3_stmt * stmt, int index)
+    {
+        return static_cast<uint8_t>(sqlite3_column_int(stmt, index));
+    }
+};
+
+template<>
 struct SQLiteColumnReader<uint16_t>
 {
     static uint16_t Get(sqlite3_stmt * stmt, int index)
     {
         return static_cast<uint16_t>(sqlite3_column_int(stmt, index));
+    }
+};
+
+template<>
+struct SQLiteColumnReader<uint32_t>
+{
+    static uint32_t Get(sqlite3_stmt * stmt, int index)
+    {
+        return static_cast<uint32_t>(sqlite3_column_int(stmt, index));
     }
 };
 
