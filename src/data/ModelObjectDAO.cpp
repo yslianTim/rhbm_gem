@@ -222,7 +222,8 @@ namespace
             occupancy, temperature, residue_type,
             element_type, remoteness_type, branch_type,
             structure, is_special_atom,
-            position_x, position_y, position_z
+            position_x, position_y, position_z,
+            component_key, atom_key, atom_id
         FROM {}; )sql";
 
     constexpr std::string_view SELECT_COMPONENT_ENTRY_SQL = R"sql(
@@ -634,6 +635,8 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     while (iter.Next(row))
     {
         auto atom_object{ std::make_unique<AtomObject>() };
+        auto component_key{ static_cast<ComponentKey>(std::get<15>(row)) };
+        auto atom_key{ static_cast<AtomKey>(std::get<16>(row)) };
         atom_object->SetSerialID(std::get<0>(row));
         atom_object->SetResidueID(std::get<1>(row));
         atom_object->SetChainID(std::get<2>(row));
@@ -650,8 +653,8 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             static_cast<float>(std::get<12>(row)),
             static_cast<float>(std::get<13>(row)),
             static_cast<float>(std::get<14>(row)) );
-        atom_object->SetComponentKey(static_cast<ComponentKey>(std::get<15>(row)));
-        atom_object->SetAtomKey(static_cast<AtomKey>(std::get<16>(row)));
+        atom_object->SetComponentKey(component_key);
+        atom_object->SetAtomKey(atom_key);
         atom_object->SetAtomID(std::get<17>(row));
 
         auto serial_id{ atom_object->GetSerialID() };
@@ -689,13 +692,16 @@ void ModelObjectDAO::LoadChemicalComponentEntryList(
     {
         auto component_entry{ std::make_unique<ChemicalComponentEntry>() };
         auto component_key{ static_cast<ComponentKey>(std::get<0>(row)) };
-        component_entry->SetComponentId(std::get<1>(row));
+        auto component_id{ std::get<1>(row) };
+        component_entry->SetComponentId(component_id);
         component_entry->SetComponentName(std::get<2>(row));
         component_entry->SetComponentType(std::get<3>(row));
         component_entry->SetComponentFormula(std::get<4>(row));
         component_entry->SetComponentMolecularWeight(static_cast<float>(std::get<5>(row)));
         component_entry->SetStandardMonomerFlag(static_cast<bool>(std::get<6>(row)));
         model_obj->AddChemicalComponentEntry(component_key, std::move(component_entry));
+
+        ComponentKeySystem::Instance().RegisterComponent(component_id, component_key);
     }
 }
 
@@ -718,13 +724,17 @@ void ModelObjectDAO::LoadComponentAtomEntryList(
             continue;
         }
         auto & component_entry{ model_obj->GetChemicalComponentEntryMap().at(component_key) };
+        auto atom_key{ static_cast<AtomKey>(std::get<1>(row)) };
+        auto atom_id{ std::get<2>(row) };
         ComponentAtomEntry atom_entry;
-        atom_entry.atom_id = std::get<2>(row);
+        atom_entry.atom_id = atom_id;
         atom_entry.element_type = static_cast<Element>(std::get<3>(row));
         atom_entry.aromatic_atom_flag = static_cast<bool>(std::get<4>(row));
         atom_entry.chiral_config = static_cast<char>(std::get<5>(row)[0]);
         atom_entry.ordinal_index = std::get<6>(row);
-        component_entry->AddComponentAtomEntry(static_cast<AtomKey>(std::get<1>(row)), atom_entry);
+        component_entry->AddComponentAtomEntry(atom_key, atom_entry);
+
+        AtomKeySystem::Instance().RegisterAtom(atom_id, atom_key);
     }
 }
 

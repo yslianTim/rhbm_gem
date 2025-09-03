@@ -65,9 +65,10 @@ bool PotentialEntryIterator::IsOutlierAtom(const std::string & class_key) const
     return m_atomic_entry->GetOutlierTag(class_key);
 }
 
-bool PotentialEntryIterator::IsAvailableGroupKey(uint64_t group_key, const std::string & class_key) const
+bool PotentialEntryIterator::IsAvailableGroupKey(
+    uint64_t group_key, const std::string & class_key, bool varbose) const
 {
-    return CheckGroupKey(group_key, class_key, false);
+    return CheckGroupKey(group_key, class_key, varbose);
 }
 
 size_t PotentialEntryIterator::GetResidueCount(
@@ -322,7 +323,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
     for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
     {
         auto count{ GetResidueCount(class_key, residue, structure) };
-        hist->SetBinContent(static_cast<int>(residue) + 1, static_cast<double>(count));
+        hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
     }
     return hist;
 }

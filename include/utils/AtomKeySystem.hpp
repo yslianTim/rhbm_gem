@@ -20,6 +20,7 @@ class AtomKeySystem
 public:
     static AtomKeySystem & Instance(void);
     void RegisterAtom(const std::string & atom_id);
+    void RegisterAtom(const std::string & atom_id, AtomKey atom_key);
     AtomKey GetAtomKey(const std::string & atom_id);
     AtomKey GetAtomKey(Element element, Remoteness remoteness, Branch branch);
     std::string GetAtomId(AtomKey atom_key);

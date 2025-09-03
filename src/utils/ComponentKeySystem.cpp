@@ -39,6 +39,16 @@ void ComponentKeySystem::RegisterComponent(const std::string & component_id)
     m_key_to_id_map[new_component_key] = component_id;
 }
 
+void ComponentKeySystem::RegisterComponent(
+    const std::string & component_id, ComponentKey component_key)
+{
+    Logger::Log(LogLevel::Debug, "ComponentKeySystem::RegisterComponent() called for " + component_id);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_id_to_key_map.find(component_id) != m_id_to_key_map.end()) return;
+    m_id_to_key_map[component_id] = component_key;
+    m_key_to_id_map[component_key] = component_id;
+}
+
 ComponentKey ComponentKeySystem::GetComponentKey(const std::string & component_id)
 {
     std::lock_guard<std::mutex> lock(m_mutex);

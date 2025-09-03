@@ -59,7 +59,7 @@ private:
         int model_number,
         std::ostream & stream
     );
-    void BuildDefaultComponentEntry(const std::string & comp_id);
+    void BuildDefaultChemicalComponentEntry(const std::string & comp_id);
     void BuildDefaultComponentAtomEntry(
         const std::string & comp_id,
         const std::string & atom_id,

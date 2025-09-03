@@ -92,15 +92,15 @@ void ModelPainter::Painting(void)
         label += ".pdf";
         //PaintGroupGausMainChainStyle1(model_object, "group_gaus_main_chain_style1_"+ label);
         PaintGroupGausMainChain(model_object, "group_gaus_main_chain_"+ label);
-        //PaintGroupGausSideChain(model_object, "group_gaus_side_chain_"+ label);
+    //    PaintGroupGausSideChain(model_object, "group_gaus_side_chain_"+ label);
         model_object->BuildKDTreeRoot();
         //PaintGroupWidthScatterPlot(model_object, "group_gaus_com_"+ label, 0, true);
         //PaintGroupWidthScatterPlot(model_object, "group_gaus_knn_"+ label, 1, true);
         //PaintAtomXYPosition(model_object, "atom_position_"+ label);
         //PaintAtomGausToXYPosition(model_object, "atom_gaus_to_position_"+ label);
-    //    PaintAtomGausScatterPlot(model_object, "atom_gaus_scatter_"+ label, false);
-    //    PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
-    //    PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
+        PaintAtomGausScatterPlot(model_object, "atom_gaus_scatter_"+ label, false);
+        PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
+        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
         //PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
     }
 }

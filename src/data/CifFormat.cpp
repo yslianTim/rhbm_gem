@@ -439,7 +439,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
 
             if (m_find_chemical_component_entry == false)
             {
-                BuildDefaultComponentEntry(comp_id);
+                BuildDefaultChemicalComponentEntry(comp_id);
             }
 
             if (m_find_component_atom_entry == false)
@@ -645,7 +645,7 @@ void CifFormat::ParseLoopBlock(
             std::string next_line;
             while (token_list.size() < expected_column_size && std::getline(infile, next_line))
             {
-                StringHelper::StripCarriageReturn(line);
+                StringHelper::StripCarriageReturn(next_line);
                 if (next_line.empty() == true) continue;
                 if (in_multiline == false && next_line[0] == ';')
                 {
@@ -683,9 +683,9 @@ void CifFormat::ParseLoopBlock(
     }
 }
 
-void CifFormat::BuildDefaultComponentEntry(const std::string & comp_id)
+void CifFormat::BuildDefaultChemicalComponentEntry(const std::string & comp_id)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentEntry() called");
+    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultChemicalComponentEntry() called");
     auto entry{ std::make_unique<ChemicalComponentEntry>() };
     entry->SetComponentId(comp_id);
     entry->SetComponentName("");

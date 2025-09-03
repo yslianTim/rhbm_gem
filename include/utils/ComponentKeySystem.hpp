@@ -18,6 +18,7 @@ class ComponentKeySystem
 public:
     static ComponentKeySystem & Instance(void);
     void RegisterComponent(const std::string & component_id);
+    void RegisterComponent(const std::string & component_id, ComponentKey component_key);
     ComponentKey GetComponentKey(const std::string & component_id);
     std::string GetComponentId(ComponentKey component_key);
     bool IsBuildInComponent(const std::string & component_id) const;

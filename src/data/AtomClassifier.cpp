@@ -33,6 +33,11 @@ const std::vector<Remoteness> AtomClassifier::m_main_chain_member_remoteness_lis
     Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE, Remoteness::NONE
 };
 
+const std::vector<std::string> AtomClassifier::m_main_chain_member_atom_id_list
+{
+    "CA", "C", "N", "O"
+};
+
 const std::vector<std::string> AtomClassifier::m_main_chain_member_title_list
 {
     "Alpha Carbon",
@@ -168,10 +173,8 @@ uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto element{ m_main_chain_member_element_list.at(id) };
-    auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
-    auto branch{ Branch::NONE };
-    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+    auto atom_id{ m_main_chain_member_atom_id_list.at(id) };
+    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
     return KeyPackerElementClass::Pack(atom_key, false);
 }
 
@@ -182,10 +185,8 @@ uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue res
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto element{ m_main_chain_member_element_list.at(id) };
-    auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
-    auto branch{ Branch::NONE };
-    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+    auto atom_id{ m_main_chain_member_atom_id_list.at(id) };
+    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
     auto component_key{ static_cast<ComponentKey>(residue) };
     return KeyPackerResidueClass::Pack(component_key, atom_key, false);
 }
@@ -198,10 +199,8 @@ uint64_t AtomClassifier::GetMainChainStructureClassGroupKey(
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto element{ m_main_chain_member_element_list.at(id) };
-    auto remoteness{ m_main_chain_member_remoteness_list.at(id) };
-    auto branch{ Branch::NONE };
-    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+    auto atom_id{ m_main_chain_member_atom_id_list.at(id) };
+    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
     auto component_key{ static_cast<ComponentKey>(residue) };
     return KeyPackerStructureClass::Pack(structure, component_key, atom_key, false);
 }

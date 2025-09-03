@@ -18,7 +18,7 @@ AtomKeySystem::AtomKeySystem(void)
     {
         for (const auto & [id1, remoteness] : build_in_remoteness_map)
         {
-            auto id1_string{ (id0 == " ") ? "" : id1 };
+            auto id1_string{ (id1 == " ") ? "" : id1 };
             for (const auto & [id2, branch] : build_in_branch_map)
             {
                 auto id2_string{ (id2 == " ") ? "" : id2 };
@@ -51,6 +51,15 @@ void AtomKeySystem::RegisterAtom(const std::string & atom_id)
     AtomKey new_atom_key{ m_next_dynamic_key++ };
     m_id_to_key_map[atom_id] = new_atom_key;
     m_key_to_id_map[new_atom_key] = atom_id;
+}
+
+void AtomKeySystem::RegisterAtom(const std::string & atom_id, AtomKey atom_key)
+{
+    Logger::Log(LogLevel::Debug, "AtomKeySystem::RegisterAtom() called for " + atom_id);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_id_to_key_map.find(atom_id) != m_id_to_key_map.end()) return;
+    m_id_to_key_map[atom_id] = atom_key;
+    m_key_to_id_map[atom_key] = atom_id;
 }
 
 AtomKey AtomKeySystem::GetAtomKey(const std::string & atom_id)
