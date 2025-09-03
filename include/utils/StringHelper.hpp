@@ -43,6 +43,17 @@ public:
         return result;
     }
 
+    static std::string PadWithSpaces(const std::string & text, size_t length)
+    {
+        if (text.size() >= length)
+        {
+            return text;
+        }
+        std::string result{ text };
+        result.resize(length, ' ');
+        return result;
+    }
+
     static void StripCarriageReturn(std::string & line)
     {
         if (!line.empty() && line.back() == '\r')

@@ -459,3 +459,15 @@ TEST(StringHelperTest, ToStringWithPrecisionHandlesNaN)
     const double nan_val{ std::numeric_limits<double>::quiet_NaN() };
     EXPECT_EQ("nan", StringHelper::ToStringWithPrecision(nan_val));
 }
+
+TEST(StringHelperTest, PadWithSpacesPadsShortString)
+{
+    std::string input{ "abc" };
+    EXPECT_EQ("abc   ", StringHelper::PadWithSpaces(input, 6));
+}
+
+TEST(StringHelperTest, PadWithSpacesReturnsOriginalWhenLongEnough)
+{
+    std::string input{ "abcdef" };
+    EXPECT_EQ("abcdef", StringHelper::PadWithSpaces(input, 3));
+}
