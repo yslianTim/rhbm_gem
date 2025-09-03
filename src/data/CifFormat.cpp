@@ -154,6 +154,8 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
             auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
 
+            StringHelper::EraseCharFromString(atom_id, '\"');
+
             ComponentAtomEntry atom_entry;
             atom_entry.atom_id = atom_id;
             atom_entry.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
@@ -187,6 +189,9 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             auto pdbx_aromatic_flag{ token_list[index_map.at("pdbx_aromatic_flag")] };
             auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
             auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
+
+            StringHelper::EraseCharFromString(atom_id_1, '\"');
+            StringHelper::EraseCharFromString(atom_id_2, '\"');
 
             ComponentBondEntry bond_entry;
             bond_entry.atom_id_pair = {atom_id_1, atom_id_2};
@@ -436,6 +441,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             if (element_type == "H") return; // Skip hydrogen atom
             auto is_special_atom{ (group_type == "HETATM") ? true : false };
             auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            StringHelper::EraseCharFromString(atom_id, '\"');
 
             if (m_find_chemical_component_entry == false)
             {
@@ -457,7 +463,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             Remoteness remoteness{ Remoteness::UNK };
             Branch branch{ Branch::UNK };
             AtomKeySystem::Instance().ParseAtomId(
-                atom_id, element_type, is_standard_monomer, element, remoteness, branch);
+                atom_id, element_type, element, remoteness, branch);
             atom_object->SetAtomID(atom_id);
             atom_object->SetComponentKey(component_key);
             atom_object->SetAtomKey(atom_key);

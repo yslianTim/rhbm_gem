@@ -216,11 +216,11 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
     {
         if (atom->IsUnknownAtom() == true)
         {
-            Logger::Log(LogLevel::Warning,
-                "Unknown atom found in the model object: Serial-ID = "
-                + std::to_string(atom->GetSerialID()) +
-                ", this atom will be ignored in the simulation.");
-            continue;
+            //Logger::Log(LogLevel::Warning,
+            //    "Unknown atom found in the model object: Serial-ID = "
+            //    + std::to_string(atom->GetSerialID()) +
+            //    ", this atom will be ignored in the simulation.");
+            //continue;
         }
         m_selected_atom_list.emplace_back(atom.get());
         m_atom_charge_map.emplace(atom->GetSerialID(), CalculateAtomCharge(atom.get()));

@@ -7,7 +7,6 @@
 #include "AtomicInfoHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "ArrayStats.hpp"
-#include "KeyPacker.hpp"
 #include "GlobalEnumClass.hpp"
 #include "Logger.hpp"
 

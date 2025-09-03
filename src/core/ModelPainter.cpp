@@ -92,7 +92,7 @@ void ModelPainter::Painting(void)
         label += ".pdf";
         //PaintGroupGausMainChainStyle1(model_object, "group_gaus_main_chain_style1_"+ label);
         PaintGroupGausMainChain(model_object, "group_gaus_main_chain_"+ label);
-    //    PaintGroupGausSideChain(model_object, "group_gaus_side_chain_"+ label);
+        PaintGroupGausSideChain(model_object, "group_gaus_side_chain_"+ label);
         model_object->BuildKDTreeRoot();
         //PaintGroupWidthScatterPlot(model_object, "group_gaus_com_"+ label, 0, true);
         //PaintGroupWidthScatterPlot(model_object, "group_gaus_knn_"+ label, 1, true);
@@ -503,10 +503,10 @@ void ModelPainter::PaintGroupGausSideChain(
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> width_free_graph_list(residue_size);
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> width_helix_graph_list(residue_size);
     std::vector<std::unique_ptr<TPaveText>> info_text(residue_size);
+    size_t residue_index{ 0 };
     for (auto residue : AtomicInfoHelper::GetStandardResidueList())
     {
         auto component_key{ static_cast<ComponentKey>(residue) };
-        size_t residue_index{ static_cast<size_t>(residue) };
         info_text[residue_index] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         std::vector<double> amplitude_array, width_array;
         std::vector<std::string> label_list;
@@ -659,6 +659,7 @@ void ModelPainter::PaintGroupGausSideChain(
         info_text[residue_index]->Draw();
 
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+        residue_index++;
     }
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);

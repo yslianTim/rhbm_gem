@@ -110,7 +110,6 @@ bool AtomKeySystem::IsBuildInAtom(AtomKey atom_key) const
 void AtomKeySystem::ParseAtomId(
     const std::string & atom_id,
     const std::string & element_type,
-    bool is_standard_monomer,
     Element & element,
     Remoteness & remoteness,
     Branch & branch)
@@ -118,15 +117,15 @@ void AtomKeySystem::ParseAtomId(
     Logger::Log(LogLevel::Debug, "AtomKeySystem::ParseAtomId() called");
 
     element = AtomicInfoHelper::GetElementFromString(element_type);
-
-    if (is_standard_monomer == false)
+    auto atom_id_remove_element{ atom_id.substr(element_type.size()) };
+    auto remoteness_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 0) };
+    if (AtomicInfoHelper::IsValidRemotenessString(remoteness_str) == true)
     {
-        remoteness = Remoteness::UNK;
-        branch = Branch::UNK;
+        remoteness = AtomicInfoHelper::GetRemotenessFromString(remoteness_str);
+        auto branch_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 1) };
+        branch = AtomicInfoHelper::GetBranchFromString(branch_str);
         return;
     }
-
-    auto atom_id_remove_element{ atom_id.substr(element_type.size()) };
 
     if (atom_id == "P" || atom_id_remove_element.find("P") != std::string::npos)
     {
@@ -135,23 +134,15 @@ void AtomKeySystem::ParseAtomId(
         branch = AtomicInfoHelper::GetBranchFromString(acid_branch_str);
         return;
     }
-
-    if (atom_id.find("'") != std::string::npos)
+    else if (atom_id.find("'") != std::string::npos)
     {
         remoteness = Remoteness::PENTOSE; // pentose sugar (Ribose, Deoxyribose)
         auto pentose_branch_str{ atom_id_remove_element };
         pentose_branch_str.erase(
-            std::remove(pentose_branch_str.begin(), pentose_branch_str.end(), '\''), pentose_branch_str.end());
+            std::remove(pentose_branch_str.begin(), pentose_branch_str.end(), '\''),
+            pentose_branch_str.end()
+        );
         branch = AtomicInfoHelper::GetBranchFromString(pentose_branch_str);
-        return;
-    }
-
-    auto remoteness_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 0) };
-    if (AtomicInfoHelper::IsValidRemotenessString(remoteness_str) == true)
-    {
-        remoteness = AtomicInfoHelper::GetRemotenessFromString(remoteness_str);
-        auto branch_str{ StringHelper::ExtractCharAsString(atom_id_remove_element, 1) };
-        branch = AtomicInfoHelper::GetBranchFromString(branch_str);
         return;
     }
     else

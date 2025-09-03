@@ -7,6 +7,7 @@
 #include <cctype>
 #include <stdexcept>
 #include <type_traits>
+#include <algorithm>
 
 class StringHelper
 {
@@ -41,6 +42,11 @@ public:
             input++;
         }
         return result;
+    }
+
+    static void EraseCharFromString(std::string & input, char ch)
+    {
+        input.erase(std::remove(input.begin(), input.end(), ch), input.end());
     }
 
     static std::string PadWithSpaces(const std::string & text, size_t length)

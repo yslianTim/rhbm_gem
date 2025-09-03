@@ -29,7 +29,6 @@ public:
     void ParseAtomId(
         const std::string & atom_id,
         const std::string & element_type,
-        bool is_standard_monomer,
         Element & element,
         Remoteness & remoteness,
         Branch & branch
