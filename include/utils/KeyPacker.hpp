@@ -2,12 +2,10 @@
 
 #include <cstdint>
 #include <tuple>
-#include <type_traits>
 
 #include "GlobalEnumClass.hpp"
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
-#include "AtomicInfoHelper.hpp"
 
 static_assert(std::is_same_v<std::underlying_type_t<Structure>,  uint8_t>);
 static_assert(std::is_same_v<ComponentKey, uint8_t>);
@@ -28,7 +26,7 @@ struct KeyPackerElementClass
     {
         constexpr uint64_t mask_32bit{ 0xFFFFFFFF };
         AtomKey atom_key{ static_cast<AtomKey>((key      ) & mask_32bit) };
-        bool flag{        static_cast<bool>(   (key >> 32) & 0x1) };
+        bool flag{        static_cast<bool>(   (key >> 32) & 0x1)        };
         return { atom_key, flag };
     }
 };
@@ -47,13 +45,11 @@ struct KeyPackerResidueClass
 
     static std::tuple<ComponentKey, AtomKey, bool> Unpack(uint64_t key)
     {
-        constexpr uint64_t mask_8bit  { 0xFF };    //  8 bits mask
-        constexpr uint64_t mask_32bit { 0xFFFFFFFF };
-
-        auto component_key{ static_cast<ComponentKey>( (key      ) & mask_8bit) };
+        constexpr uint64_t mask_8bit { 0xFF };    //  8 bits mask
+        constexpr uint64_t mask_32bit{ 0xFFFFFFFF };
+        auto component_key{ static_cast<ComponentKey>( (key      ) & mask_8bit)  };
         auto atom_key{      static_cast<AtomKey>(      (key >> 8 ) & mask_32bit) };
-        bool flag{          static_cast<bool>(         (key >> 40) & 0x1) };
-
+        bool flag{          static_cast<bool>(         (key >> 40) & 0x1)        };
         return { component_key, atom_key, flag };
     }
 };
@@ -75,12 +71,11 @@ struct KeyPackerStructureClass
     static std::tuple<Structure, ComponentKey, AtomKey, bool> Unpack(uint64_t key)
     {
         constexpr uint64_t mask_8bit { 0xFF };    //  8 bits mask
-
-        auto structure{ static_cast<Structure>( (key      ) & mask_8bit) };
-        auto component_key{ static_cast<ComponentKey>((key >> 8)  & mask_8bit) };
-        auto atom_key{ static_cast<AtomKey>( (key >> 16) & 0xFFFFFFFF ) };
-        bool flag{ static_cast<bool>( (key >> 48) & 0x1) };
-
+        constexpr uint64_t mask_32bit{ 0xFFFFFFFF };
+        auto structure{ static_cast<Structure>(       (key      ) & mask_8bit)  };
+        auto component_key{ static_cast<ComponentKey>((key >> 8)  & mask_8bit)  };
+        auto atom_key{ static_cast<AtomKey>(          (key >> 16) & mask_32bit) };
+        bool flag{ static_cast<bool>(                 (key >> 48) & 0x1)        };
         return { structure, component_key, atom_key, flag };
     }
 };
