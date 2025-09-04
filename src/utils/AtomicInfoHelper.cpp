@@ -23,40 +23,6 @@ const std::vector<Element> AtomicInfoHelper::m_standard_element_list
     Element::HYDROGEN, Element::CARBON, Element::NITROGEN, Element::OXYGEN, Element::SULFUR
 };
 
-const std::unordered_map<Element, int> AtomicInfoHelper::m_atomic_number_map
-{
-    {Element::HYDROGEN,   1}, {Element::HELIUM,       2}, {Element::LITHIUM,     3},
-    {Element::BERYLLIUM,  4}, {Element::BORON,        5}, {Element::CARBON,      6},
-    {Element::NITROGEN,   7}, {Element::OXYGEN,       8}, {Element::FLUORINE,    9},
-    {Element::NEON,      10}, {Element::SODIUM,      11}, {Element::MAGNESIUM,  12},
-    {Element::ALUMINUM,  13}, {Element::SILICON,     14}, {Element::PHOSPHORUS, 15},
-    {Element::SULFUR,    16}, {Element::CHLORINE,    17}, {Element::ARGON,      18},
-    {Element::POTASSIUM, 19}, {Element::CALCIUM,     20}, {Element::SCANDIUM,   21},
-    {Element::TITANIUM,  22}, {Element::VANADIUM,    23}, {Element::CHROMIUM,   24},
-    {Element::MANGANESE, 25}, {Element::IRON,        26}, {Element::COBALT,     27},
-    {Element::NICKEL,    28}, {Element::COPPER,      29}, {Element::ZINC,       30},
-    {Element::GALLIUM,   31}, {Element::GERMANIUM,   32}, {Element::ARSENIC,    33},
-    {Element::SELENIUM,  34}, {Element::BROMINE,     35}, {Element::KRYPTON,    36},
-    {Element::RUBIDIUM,  37}, {Element::STRONTIUM,   38}, {Element::YTTRIUM,    39},
-    {Element::ZIRCONIUM, 40}, {Element::NIOBIUM,     41}, {Element::MOLYBDENUM, 42},
-    {Element::TECHNETIUM,43}, {Element::RUTHENIUM,   44}, {Element::RHODIUM,    45},
-    {Element::PALLADIUM, 46}, {Element::SILVER,      47}, {Element::CADMIUM,    48},
-    {Element::INDIUM,    49}, {Element::TIN,         50}, {Element::ANTIMONY,   51},
-    {Element::TELLURIUM, 52}, {Element::IODINE,      53}, {Element::XENON,      54},
-    {Element::CESIUM,    55}, {Element::BARIUM,      56}, {Element::LANTHANUM,  57},
-    {Element::CERIUM,    58}, {Element::PRASEODYMIUM,59}, {Element::NEODYMIUM,  60},
-    {Element::PROMETHIUM,61}, {Element::SAMARIUM,    62}, {Element::EUROPIUM,   63},
-    {Element::GADOLINIUM,64}, {Element::TERBIUM,     65}, {Element::DYSPROSIUM, 66},
-    {Element::HOLMIUM,   67}, {Element::ERBIUM,      68}, {Element::THULIUM,    69},
-    {Element::YTTERBIUM, 70}, {Element::LUTETIUM,    71}, {Element::HAFNIUM,    72},
-    {Element::TANTALUM,  73}, {Element::TUNGSTEN,    74}, {Element::RHENIUM,    75},
-    {Element::OSMIUM,    76}, {Element::IRIDIUM,     77}, {Element::PLATINUM,   78},
-    {Element::GOLD,      79}, {Element::MERCURY,     80}, {Element::THALLIUM,   81},
-    {Element::LEAD,      82}, {Element::BISMUTH,     83}, {Element::POLONIUM,   84},
-    {Element::ASTATINE,  85}, {Element::RADON,       86}, {Element::FRANCIUM,   87},
-    {Element::RADIUM,    88}, {Element::ACTINIUM,    89}, {Element::THORIUM,    90}
-};
-
 const std::unordered_map<int, Element> AtomicInfoHelper::m_atomic_number_to_element_map
 {
     { 1, Element::HYDROGEN},  { 2, Element::HELIUM},      { 3, Element::LITHIUM},
@@ -313,8 +279,7 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
 
 int AtomicInfoHelper::GetAtomicNumber(Element element)
 {
-    if (m_atomic_number_map.find(element) == m_atomic_number_map.end()) return 0;
-    return m_atomic_number_map.at(element);
+    return static_cast<int>(element);
 }
 
 size_t AtomicInfoHelper::GetGroupClassCount(void)

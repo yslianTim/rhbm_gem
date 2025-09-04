@@ -76,6 +76,7 @@ enum class Spot : uint32_t
 
 };
 
+// Element value defined as atomic number
 enum class Element : uint8_t
 {
     UNK = 0,

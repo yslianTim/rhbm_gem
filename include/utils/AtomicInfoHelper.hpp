@@ -15,7 +15,6 @@ class AtomicInfoHelper
     static const std::vector<Residue> m_standard_residue_list;
     static const std::vector<Element> m_standard_element_list;
 
-    static const std::unordered_map<Element, int> m_atomic_number_map;
     static const std::unordered_map<int, Element> m_atomic_number_to_element_map;
     static const std::unordered_map<std::string_view, Residue> m_residue_map;
     static const std::unordered_map<std::string_view, Element> m_element_map;
