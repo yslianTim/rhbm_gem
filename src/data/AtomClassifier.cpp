@@ -10,7 +10,7 @@
 const std::vector<short> AtomClassifier::m_main_chain_member_color_list
 {   // [Color defined in ROOT style]
     // kRed+1, kViolet+1, kGreen+2, kAzure+2 
-          633,       881,      418,      862
+    633,       881,      418,      862
 };
 
 const std::vector<short> AtomClassifier::m_main_chain_member_solid_marker_list
@@ -31,11 +31,6 @@ const std::vector<Element> AtomClassifier::m_main_chain_member_element_list
 const std::vector<Spot> AtomClassifier::m_main_chain_member_spot_list
 {
     Spot::CA, Spot::C, Spot::N, Spot::O
-};
-
-const std::vector<std::string> AtomClassifier::m_main_chain_member_atom_id_list
-{
-    "CA", "C", "N", "O"
 };
 
 const std::vector<std::string> AtomClassifier::m_main_chain_member_title_list
@@ -171,8 +166,7 @@ uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto atom_id{ m_main_chain_member_atom_id_list.at(id) };
-    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
+    auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
     return KeyPackerElementClass::Pack(atom_key, false);
 }
 
@@ -183,8 +177,7 @@ uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue res
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto atom_id{ m_main_chain_member_atom_id_list.at(id) };
-    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
+    auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
     auto component_key{ static_cast<ComponentKey>(residue) };
     return KeyPackerResidueClass::Pack(component_key, atom_key, false);
 }
@@ -197,8 +190,7 @@ uint64_t AtomClassifier::GetMainChainStructureClassGroupKey(
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto atom_id{ m_main_chain_member_atom_id_list.at(id) };
-    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
+    auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
     auto component_key{ static_cast<ComponentKey>(residue) };
     return KeyPackerStructureClass::Pack(structure, component_key, atom_key, false);
 }

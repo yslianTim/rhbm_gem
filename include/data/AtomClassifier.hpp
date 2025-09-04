@@ -16,7 +16,6 @@ class AtomClassifier
     static const std::vector<short> m_main_chain_member_open_marker_list;
     static const std::vector<Element> m_main_chain_member_element_list;
     static const std::vector<Spot> m_main_chain_member_spot_list;
-    static const std::vector<std::string> m_main_chain_member_atom_id_list;
     static const std::vector<std::string> m_main_chain_member_label_list;
     static const std::vector<std::string> m_main_chain_member_title_list;
 

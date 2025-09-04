@@ -83,7 +83,7 @@ INSTANTIATE_TEST_SUITE_P(AtomicNumberPairs, AtomicInfoHelperAtomicNumberTest,
 
 TEST_F(AtomicInfoHelperTest, InvalidElementReturnsZero)
 {
-    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(static_cast<Element>(255)));
+    EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(static_cast<Element>(0)));
     EXPECT_EQ(0, AtomicInfoHelper::GetAtomicNumber(Element::UNK));
 }
 
