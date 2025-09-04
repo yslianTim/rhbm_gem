@@ -4,6 +4,7 @@
 #include "AtomicPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
+#include "AtomKeySystem.hpp"
 #include "Logger.hpp"
 
 #include <stdexcept>
@@ -15,7 +16,7 @@ AtomObject::AtomObject(void) :
     m_atom_id{ "" }, m_chain_id{ "" }, m_indicator{ "" },
     m_occupancy{ 0.0 }, m_temperature{ 0.0 },
     m_component_key{ 0 }, m_atom_key{ 0 },
-    m_residue{ Residue::UNK }, m_element{ Element::UNK },
+    m_residue{ Residue::UNK }, m_element{ Element::UNK }, m_spot{ Spot::UNK },
     m_remoteness{ Remoteness::UNK }, m_branch{ Branch::UNK },
     m_structure{ Structure::UNK },
     m_position{ 0.0, 0.0, 0.0 },
@@ -36,7 +37,7 @@ AtomObject::AtomObject(const AtomObject & other) :
     m_atom_id{ other.m_atom_id }, m_chain_id{ other.m_chain_id }, m_indicator{ other.m_indicator },
     m_occupancy{ other.m_occupancy }, m_temperature{ other.m_temperature },
     m_component_key{ other.m_component_key }, m_atom_key{ other.m_atom_key },
-    m_residue{ other.m_residue }, m_element{ other.m_element },
+    m_residue{ other.m_residue }, m_element{ other.m_element }, m_spot{ other.m_spot },
     m_remoteness{ other.m_remoteness }, m_branch{ other.m_branch },
     m_structure{ other.m_structure },
     m_position{ other.m_position }
@@ -77,6 +78,7 @@ std::unique_ptr<AtomObject> AtomObject::AtomObjectClone(void) const
 
 void AtomObject::SetResidue(Residue value) { m_residue = value; }
 void AtomObject::SetElement(Element value) { m_element = value; }
+void AtomObject::SetSpot(Spot value) { m_spot = value; }
 void AtomObject::SetRemoteness(Remoteness value) { m_remoteness = value; }
 void AtomObject::SetBranch(Branch value) { m_branch = value; }
 void AtomObject::SetStructure(Structure value) { m_structure = value; }
@@ -89,6 +91,11 @@ void AtomObject::SetResidue(const std::string & name)
 void AtomObject::SetElement(const std::string & name)
 {
     m_element = AtomicInfoHelper::GetElementFromString(name);
+}
+
+void AtomObject::SetSpot(const std::string & name)
+{
+    m_spot = AtomicInfoHelper::GetSpotFromString(name);
 }
 
 void AtomObject::SetRemoteness(const std::string & name)
@@ -116,6 +123,7 @@ std::string AtomObject::GetInfo(void) const
            "[Chain ID] " + m_chain_id + " " +
            AtomicInfoHelper::GetLabel(m_residue) + " " +
            AtomicInfoHelper::GetLabel(m_element) + " " +
+           AtomKeySystem::Instance().GetAtomId(m_atom_key) + " " +
            m_indicator + " " +
            "Position = (" +
            std::to_string(m_position.at(0)) + ", " +
@@ -148,6 +156,7 @@ void AtomObject::AddAlternateTemperature(
 
 Element AtomObject::GetElement(void) const { return m_element; }
 Residue AtomObject::GetResidue(void) const { return m_residue; }
+Spot AtomObject::GetSpot(void) const { return m_spot; }
 Remoteness AtomObject::GetRemoteness(void) const { return m_remoteness; }
 Branch AtomObject::GetBranch(void) const { return m_branch; }
 Structure AtomObject::GetStructure(void) const { return m_structure; }
@@ -172,14 +181,7 @@ AtomObject::GetAlternateTemperatures(void) const
 
 bool AtomObject::IsUnknownAtom(void) const
 {
-    auto element{ GetElement() };
-    auto residue{ GetResidue() };
-    auto remoteness{ GetRemoteness() };
-    auto branch{ GetBranch() };
-    if (element == Element::UNK ||
-        residue == Residue::UNK ||
-        remoteness == Remoteness::UNK ||
-        branch == Branch::UNK)
+    if (m_element == Element::UNK || m_residue == Residue::UNK || m_spot == Spot::UNK)
     {
         return true;
     }

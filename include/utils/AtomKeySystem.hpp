@@ -22,7 +22,7 @@ public:
     void RegisterAtom(const std::string & atom_id);
     void RegisterAtom(const std::string & atom_id, AtomKey atom_key);
     AtomKey GetAtomKey(const std::string & atom_id);
-    AtomKey GetAtomKey(Element element, Remoteness remoteness, Branch branch);
+    //AtomKey GetAtomKey(Element element, Remoteness remoteness, Branch branch);
     std::string GetAtomId(AtomKey atom_key);
     bool IsBuildInAtom(const std::string & atom_id) const;
     bool IsBuildInAtom(AtomKey atom_key) const;

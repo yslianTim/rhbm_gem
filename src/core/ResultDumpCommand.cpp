@@ -358,7 +358,8 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
                     {
                         auto branch_name{ AtomicInfoHelper::GetLabel(branch) };
                         auto component_key{ static_cast<ComponentKey>(residue) };
-                        auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+                        uint32_t atom_key{ 0 }; // TODO: modify
+                        //auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
                         auto group_key{
                             KeyPackerResidueClass::Pack(component_key, atom_key, false)
                         };

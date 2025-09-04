@@ -112,9 +112,7 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_
     {"CSX", Residue::CSX},
 
     {"A",   Residue::A},   {"G",   Residue::G},   {"C",   Residue::C},   {"U",   Residue::U},
-    {"T",   Residue::T},
-
-    {"HOH", Residue::HOH}
+    {"T",   Residue::T}
 };
 
 const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
@@ -149,6 +147,69 @@ const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_
     {"PB", Element::LEAD},      {"BI", Element::BISMUTH},     {"PO", Element::POLONIUM},
     {"AT", Element::ASTATINE},  {"RN", Element::RADON},       {"FR", Element::FRANCIUM},
     {"RA", Element::RADIUM},    {"AC", Element::ACTINIUM},    {"TH", Element::THORIUM}
+};
+
+const std::unordered_map<std::string_view, Spot> AtomicInfoHelper::m_spot_map
+{
+    {"P",    Spot::P   }, {"OP1",  Spot::OP1 }, {"OP2",  Spot::OP2 }, {"OP3",  Spot::OP3 },
+    {"OP1",  Spot::OP1 }, {"OP2",  Spot::OP2 }, {"OP3",  Spot::OP3 },
+    {"HOP2", Spot::HOP2}, {"HOP3", Spot::HOP3},
+    {"C1'",  Spot::C1p }, {"C2'",  Spot::C2p }, {"C3'",  Spot::C3p }, {"C4'",  Spot::C4p },
+    {"C5'",  Spot::C5p },
+    {"O2'",  Spot::O2p }, {"O3'",  Spot::O3p }, {"O4'",  Spot::O4p }, {"O5'",  Spot::O5p },
+    {"H1'",  Spot::H1p }, {"H2'",  Spot::H2p }, {"H3'",  Spot::H3p }, {"H4'",  Spot::H4p },
+    {"H5'",  Spot::H5p }, {"H5''", Spot::H5pp},
+    {"HO2'", Spot::HO2p}, {"HO3'", Spot::HO3p},
+    {"C2",   Spot::C2  }, {"C4",   Spot::C4  }, {"C5",   Spot::C5  }, {"C6",   Spot::C6  },
+    {"C8",   Spot::C8  },
+    {"N1",   Spot::N1  }, {"N2",   Spot::N2  }, {"N3",   Spot::N3  }, {"N4",   Spot::N4  },
+    {"N6",   Spot::N6  }, {"N7",   Spot::N7  }, {"N9",   Spot::N9  },
+    {"O2",   Spot::O2  }, {"O4",   Spot::O4  }, {"O6",   Spot::O6  },
+    {"H1",   Spot::H1  }, {"H21",  Spot::H21 }, {"H22",  Spot::H22 }, {"H3",   Spot::H3  },
+    {"H41",  Spot::H41 }, {"H42",  Spot::H42 }, {"H5",   Spot::H5  }, {"H6",   Spot::H6  },
+    {"H61",  Spot::H61 }, {"H62",  Spot::H62 }, {"H8",   Spot::H8  },
+
+    {"H",    Spot::H   }, {"H2",   Spot::H2  },
+    {"HA",   Spot::HA  }, {"HA2",  Spot::HA2 }, {"HA3",  Spot::HA3 },
+    {"HB",   Spot::HB  }, {"HB1",  Spot::HB1 }, {"HB2",  Spot::HB2 }, {"HB3",  Spot::HB3 },
+    {"HG",   Spot::HG  },
+    {"HG1",  Spot::HG1 }, {"HG11", Spot::HG11}, {"HG12", Spot::HG12}, {"HG13", Spot::HG13},
+    {"HG2",  Spot::HG2 }, {"HG21", Spot::HG21}, {"HG22", Spot::HG22}, {"HG23", Spot::HG23},
+    {"HG3",  Spot::HG3 },
+    {"HD1",  Spot::HD1 }, {"HD11", Spot::HD11}, {"HD12", Spot::HD12}, {"HD13", Spot::HD13},
+    {"HD2",  Spot::HD2 }, {"HD21", Spot::HD21}, {"HD22", Spot::HD22}, {"HD23", Spot::HD23},
+    {"HD3",  Spot::HD3 },
+    {"HE",   Spot::HE  }, {"HE1",  Spot::HE1 },
+    {"HE2",  Spot::HE2 }, {"HE21", Spot::HE21}, {"HE22", Spot::HE22},
+    {"HE3",  Spot::HE3 },
+    {"HZ",   Spot::HZ  }, {"HZ1",  Spot::HZ1 }, {"HZ2",  Spot::HZ2 }, {"HZ3",  Spot::HZ3 },
+    {"HH",   Spot::HH  }, {"HH11", Spot::HH11}, {"HH12", Spot::HH12},
+    {"HH2",  Spot::HH2 }, {"HH21", Spot::HH21}, {"HH22", Spot::HH22},
+    {"HXT",  Spot::HXT },
+
+    {"C",    Spot::C   },
+    {"CA",   Spot::CA  }, {"CB",   Spot::CB  },
+    {"CG",   Spot::CG  }, {"CG1",  Spot::CG1 }, {"CG2",  Spot::CG2 },
+    {"CD",   Spot::CD  }, {"CD1",  Spot::CD1 }, {"CD2",  Spot::CD2 },
+    {"CE",   Spot::CE  }, {"CE1",  Spot::CE1 }, {"CE2",  Spot::CE2 }, {"CE3",  Spot::CE3 },
+    {"CZ",   Spot::CZ  }, {"CZ2",  Spot::CZ2 }, {"CZ3",  Spot::CZ3 },
+    {"CH2",  Spot::CH2 },
+
+    {"N",    Spot::N   },
+    {"ND1",  Spot::ND1 }, {"ND2",  Spot::ND2 },
+    {"NE",   Spot::NE  }, {"NE1",  Spot::NE1 }, {"NE2",  Spot::NE2 },
+    {"NZ",   Spot::NZ  },
+    {"NH1",  Spot::NH1 }, {"NH2",  Spot::NH2 },
+
+    {"O",    Spot::O   },
+    {"OG",   Spot::OG  }, {"OG1",  Spot::OG1 },
+    {"OD1",  Spot::OD1 }, {"OD2",  Spot::OD2 },
+    {"OE1",  Spot::OE1 }, {"OE2",  Spot::OE2 },
+    {"OH",   Spot::OH  },
+    {"OXT",  Spot::OXT },
+
+    {"SG",   Spot::SG  }, {"SD",   Spot::SD  }
+    
 };
 
 const std::unordered_map<std::string_view, Remoteness> AtomicInfoHelper::m_remoteness_map
@@ -191,7 +252,6 @@ const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label
     {Residue::CSX, "CSX"},
     {Residue::A,   "A"  }, {Residue::G,   "G"  }, {Residue::C,   "C"  }, {Residue::U,   "U"  },
     {Residue::T,   "T"  },
-    {Residue::HOH, "HOH"},
     {Residue::UNK, "UNK"}
 };
 
@@ -386,6 +446,11 @@ const std::unordered_map<std::string_view, Element> & AtomicInfoHelper::GetEleme
     return m_element_map;
 }
 
+const std::unordered_map<std::string_view, Spot> & AtomicInfoHelper::GetSpotMap(void)
+{
+    return m_spot_map;
+}
+
 const std::unordered_map<std::string_view, Remoteness> & AtomicInfoHelper::GetRemotenessMap(void)
 {
     return m_remoteness_map;
@@ -479,6 +544,26 @@ Element AtomicInfoHelper::GetElementFromAtomicNumber(int atomic_number)
     return m_atomic_number_to_element_map.at(atomic_number);
 }
 
+Spot AtomicInfoHelper::GetSpotFromString(const std::string & name)
+{
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_spot_map.find(name) == m_spot_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            Logger::Log(LogLevel::Warning, 
+                        "AtomicInfoHelper::GetSpotFromString - Unknown string: " + name);
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return Spot::UNK;
+    }
+    return m_spot_map.at(name);
+}
+
 Remoteness AtomicInfoHelper::GetRemotenessFromString(const std::string & name)
 {
     thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
@@ -547,7 +632,7 @@ Entity AtomicInfoHelper::GetEntityFromString(const std::string & name)
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
             Logger::Log(LogLevel::Warning, 
-                        "AtomicInfoHelper::GetEntityFromString - Unknown string: " + name);
+                "AtomicInfoHelper::GetEntityFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -565,8 +650,8 @@ const std::string & AtomicInfoHelper::GetLabel(Residue residue)
     if (m_residue_label_map.find(residue) == m_residue_label_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetLabel - Unknown Residue: "
-                    + std::to_string(static_cast<int>(residue)));
+            "AtomicInfoHelper::GetLabel - Unknown Residue: "
+            + std::to_string(static_cast<int>(residue)));
         return unk_label;
     }
     return m_residue_label_map.at(residue);
@@ -578,8 +663,8 @@ const std::string & AtomicInfoHelper::GetLabel(Element element)
     if (m_element_label_map.find(element) == m_element_label_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetLabel - Unknown Element: "
-                    + std::to_string(static_cast<int>(element)));
+            "AtomicInfoHelper::GetLabel - Unknown Element: "
+            + std::to_string(static_cast<int>(element)));
         return unk_label;
     }
     return m_element_label_map.at(element);
@@ -591,8 +676,8 @@ const std::string & AtomicInfoHelper::GetLabel(Remoteness remoteness)
     if (m_remoteness_label_map.find(remoteness) == m_remoteness_label_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetLabel - Unknown Remoteness: "
-                    + std::to_string(static_cast<int>(remoteness)));
+            "AtomicInfoHelper::GetLabel - Unknown Remoteness: "
+            + std::to_string(static_cast<int>(remoteness)));
         return unk_label;
     }
     return m_remoteness_label_map.at(remoteness);
@@ -604,8 +689,8 @@ const std::string & AtomicInfoHelper::GetLabel(Branch branch)
     if (m_branch_label_map.find(branch) == m_branch_label_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetLabel - Unknown Branch: "
-                    + std::to_string(static_cast<int>(branch)));
+            "AtomicInfoHelper::GetLabel - Unknown Branch: "
+            + std::to_string(static_cast<int>(branch)));
         return unk_label;
     }
     return m_branch_label_map.at(branch);
@@ -617,8 +702,8 @@ char AtomicInfoHelper::GetChar(Remoteness remoteness)
     if (m_remoteness_char_map.find(remoteness) == m_remoteness_char_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetChar - Unknown Remoteness: "
-                    + std::to_string(static_cast<int>(remoteness)));
+            "AtomicInfoHelper::GetChar - Unknown Remoteness: "
+            + std::to_string(static_cast<int>(remoteness)));
         return unk_char;
     }
     return m_remoteness_char_map.at(remoteness);
@@ -630,8 +715,8 @@ char AtomicInfoHelper::GetChar(Branch branch)
     if (m_branch_char_map.find(branch) == m_branch_char_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetChar - Unknown Branch: "
-                    + std::to_string(static_cast<int>(branch)));
+            "AtomicInfoHelper::GetChar - Unknown Branch: "
+            + std::to_string(static_cast<int>(branch)));
         return unk_char;
     }
     return m_branch_char_map.at(branch);

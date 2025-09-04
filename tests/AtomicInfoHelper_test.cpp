@@ -147,7 +147,7 @@ TEST_F(AtomicInfoHelperTest, IsStandardResidue)
         EXPECT_TRUE(AtomicInfoHelper::IsStandardResidue(residue))
             << static_cast<int>(residue);
     }
-    EXPECT_FALSE(AtomicInfoHelper::IsStandardResidue(Residue::HOH));
+    EXPECT_FALSE(AtomicInfoHelper::IsStandardResidue(Residue::UNK));
 }
 
 TEST_F(AtomicInfoHelperTest, MapsKnownStringsToEnums)

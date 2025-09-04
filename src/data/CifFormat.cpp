@@ -467,10 +467,11 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             atom_object->SetAtomID(atom_id);
             atom_object->SetComponentKey(component_key);
             atom_object->SetAtomKey(atom_key);
-            atom_object->SetElement(element);
+            atom_object->SetResidue(residue);
+            atom_object->SetElement(element_type);
+            atom_object->SetSpot(atom_id);
             atom_object->SetRemoteness(remoteness);
             atom_object->SetBranch(branch);
-            atom_object->SetResidue(residue);
             atom_object->SetIndicator(indicator);
             atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
             atom_object->SetSerialID(std::stoi(serial_id));

@@ -6,11 +6,20 @@
 
 #include <algorithm>
 
-const AtomKey AtomKeySystem::kDynamicBase{ static_cast<uint32_t>(Branch::TERMINAL) << 16 };
+const AtomKey AtomKeySystem::kDynamicBase{ 10000 };
 
 AtomKeySystem::AtomKeySystem(void)
 {
     Logger::Log(LogLevel::Debug, "AtomKeySystem::AtomKeySystem() called");
+    const auto & build_in_spot_map{ AtomicInfoHelper::GetSpotMap() };
+    for (const auto & [atom_id, spot] : build_in_spot_map)
+    {
+        auto atom_key{ static_cast<AtomKey>(spot) };
+        m_id_to_key_map.emplace(atom_id, atom_key);
+        m_key_to_id_map.emplace(atom_key, std::string{atom_id});
+    }
+
+    /*
     const auto & build_in_element_map{ AtomicInfoHelper::GetElementMap() };
     const auto & build_in_remoteness_map{ AtomicInfoHelper::GetRemotenessMap() };
     const auto & build_in_branch_map{ AtomicInfoHelper::GetBranchMap() };
@@ -28,7 +37,7 @@ AtomKeySystem::AtomKeySystem(void)
                 m_key_to_id_map.emplace(atom_key, atom_id);
             }
         }
-    }
+    }*/
 }
 
 AtomKeySystem::~AtomKeySystem(void)
@@ -73,7 +82,7 @@ AtomKey AtomKeySystem::GetAtomKey(const std::string & atom_id)
     }
     return m_id_to_key_map.at(atom_id);
 }
-
+/*
 AtomKey AtomKeySystem::GetAtomKey(Element element, Remoteness remoteness, Branch branch)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -82,7 +91,7 @@ AtomKey AtomKeySystem::GetAtomKey(Element element, Remoteness remoteness, Branch
     auto key2{ static_cast<AtomKey>(branch) };
     auto atom_key{ static_cast<AtomKey>((key2 << 16) | (key1 << 8) | key0) };
     return atom_key;
-}
+}*/
 
 std::string AtomKeySystem::GetAtomId(AtomKey atom_key)
 {

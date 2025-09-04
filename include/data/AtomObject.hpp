@@ -23,6 +23,7 @@ class AtomObject : public DataObjectBase
     AtomKey m_atom_key;
     Residue m_residue;
     Element m_element;
+    Spot m_spot;
     Remoteness m_remoteness;
     Branch m_branch;
     Structure m_structure;
@@ -57,11 +58,13 @@ public:
     void SetAtomKey(AtomKey value) { m_atom_key = value; }
     void SetResidue(Residue value);
     void SetElement(Element value);
+    void SetSpot(Spot value);
     void SetRemoteness(Remoteness value);
     void SetBranch(Branch value);
     void SetStructure(Structure value);
     void SetResidue(const std::string & name);
     void SetElement(const std::string & name);
+    void SetSpot(const std::string & name);
     void SetRemoteness(const std::string & name);
     void SetBranch(const std::string & name);
     void SetPosition(float x, float y, float z);
@@ -76,6 +79,7 @@ public:
     AtomKey GetAtomKey(void) const { return m_atom_key; }
     Element GetElement(void) const;
     Residue GetResidue(void) const;
+    Spot GetSpot(void) const;
     Remoteness GetRemoteness(void) const;
     Branch GetBranch(void) const;
     Structure GetStructure(void) const;

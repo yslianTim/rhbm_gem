@@ -1,16 +1,6 @@
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
-#include <cmath>
-
-#ifndef UINT16_MAX
-#define UINT16_MAX 65535
-#endif
-
-#ifndef UINT8_MAX
-#define UINT8_MAX 255
-#endif
 
 enum class Residue : uint8_t
 {
@@ -22,25 +12,26 @@ enum class Residue : uint8_t
     SER = 16, THR = 17, TRP = 18, TYR = 19, VAL = 20,
     CSX = 21,
 
-    A   = 30, G   = 31, C   = 32, U   = 33, T   = 34,
+    A   = 25, G   = 26, C   = 27, U   = 28, T   = 29
 
-    HOH = 35 // water
 };
 
-enum class Identifier : uint32_t
+enum class Spot : uint32_t
 {
     UNK = 0,
 
-    // Nucleotide
+    // Phosphoric acid
     P = 1,
     OP1 = 2, OP2 = 3, OP3 = 4,
     HOP2 = 5, HOP3 = 6,
 
+    // Pentose sugar (Ribose, Deoxyribose)
     C1p  = 11, C2p  = 12, C3p = 13, C4p = 14, C5p = 15,
     O2p  = 22, O3p  = 23, O4p = 24, O5p = 25,
     H1p  = 31, H2p  = 32, H3p = 33, H4p = 32, H5p = 35, H5pp = 36,
     HO2p = 37, HO3p = 38,
 
+    // Nucleotide base
     C2  = 42, C4  = 44, C5  = 45, C6 = 46, C8 = 48,
     N1  = 51, N2  = 52, N3  = 53, N4 = 54, N6 = 56, N7 = 57, N9 = 59,
     O2  = 62, O4  = 64, O6  = 66,
@@ -82,8 +73,8 @@ enum class Identifier : uint32_t
     OH  = 8800,
     OXT = 8999,
 
-    SG = 16400,
-    SD = 16500
+    SG =  9400,
+    SD =  9500
 
 };
 

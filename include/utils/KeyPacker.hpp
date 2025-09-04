@@ -10,6 +10,7 @@
 #include "AtomicInfoHelper.hpp"
 
 static_assert(std::is_same_v<std::underlying_type_t<Residue>,    uint8_t>);
+static_assert(std::is_same_v<std::underlying_type_t<Spot>,       uint32_t>);
 static_assert(std::is_same_v<std::underlying_type_t<Element>,    uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<Remoteness>, uint8_t>);
 static_assert(std::is_same_v<std::underlying_type_t<Branch>,     uint8_t>);
@@ -27,6 +28,15 @@ struct KeyPackerElementClass
         return static_cast<uint64_t>(atom_key)
             | (static_cast<uint64_t>(flag ? 1 : 0) << 32);
     }
+
+    /*
+    static std::tuple<AtomKey, bool> Unpack(uint64_t key)
+    {
+        constexpr uint64_t mask_32bit{ 0xFFFFFFFF };
+        AtomKey atom_key{ static_cast<AtomKey>(key & mask_32bit) };
+        bool flag{ static_cast<bool>((key >> 32) & 0x1) };
+        return { atom_key, flag };
+    }*/
 
     static std::tuple<Element, Remoteness, bool> Unpack(uint64_t key)
     {

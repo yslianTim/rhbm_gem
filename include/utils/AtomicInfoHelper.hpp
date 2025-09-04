@@ -21,6 +21,7 @@ class AtomicInfoHelper
     static const std::unordered_map<int, Element> m_atomic_number_to_element_map;
     static const std::unordered_map<std::string_view, Residue> m_residue_map;
     static const std::unordered_map<std::string_view, Element> m_element_map;
+    static const std::unordered_map<std::string_view, Spot> m_spot_map;
     static const std::unordered_map<std::string_view, Remoteness> m_remoteness_map;
     static const std::unordered_map<std::string_view, Branch> m_branch_map;
     static const std::unordered_map<std::string_view, Structure> m_structure_map;
@@ -55,6 +56,7 @@ public:
     static const std::vector<Branch> & GetStandardBranchList(void);
     static const std::unordered_map<std::string_view, Residue> & GetResidueMap(void);
     static const std::unordered_map<std::string_view, Element> & GetElementMap(void);
+    static const std::unordered_map<std::string_view, Spot> & GetSpotMap(void);
     static const std::unordered_map<std::string_view, Remoteness> & GetRemotenessMap(void);
     static const std::unordered_map<std::string_view, Branch> & GetBranchMap(void);
     static const std::unordered_map<Element, std::string> & GetElementLabelMap(void);
@@ -65,6 +67,7 @@ public:
     static Residue GetResidueFromString(const std::string & name);
     static Element GetElementFromString(const std::string & name);
     static Element GetElementFromAtomicNumber(int atomic_number);
+    static Spot GetSpotFromString(const std::string & name);
     static Remoteness GetRemotenessFromString(const std::string & name);
     static Branch GetBranchFromString(const std::string & name);
     static Structure GetStructureFromString(const std::string & name);

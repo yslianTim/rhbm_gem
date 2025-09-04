@@ -526,7 +526,8 @@ void ModelPainter::PaintGroupGausSideChain(
             {
                 for (auto branch : AtomicInfoHelper::GetStandardBranchList())
                 {
-                    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
+                    uint32_t atom_key{ 0 }; // TODO: modify
+                    //auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
                     auto mix_group_key{ KeyPackerResidueClass::Pack(component_key, atom_key, false) };
                     auto free_group_key{ KeyPackerStructureClass::Pack(Structure::FREE, component_key, atom_key, false) };
                     auto helix_group_key{ KeyPackerStructureClass::Pack(Structure::HELX_P, component_key, atom_key, false) };
