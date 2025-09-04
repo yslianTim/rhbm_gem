@@ -17,15 +17,13 @@ class AtomObject : public DataObjectBase
     bool m_is_selected;
     bool m_is_special_atom;
     int m_serial_id, m_residue_id;
-    std::string m_atom_id, m_chain_id, m_indicator;
+    std::string m_component_id, m_atom_id, m_chain_id, m_indicator;
     float m_occupancy, m_temperature;
     ComponentKey m_component_key;
     AtomKey m_atom_key;
     Residue m_residue;
     Element m_element;
     Spot m_spot;
-    Remoteness m_remoteness;
-    Branch m_branch;
     Structure m_structure;
     std::array<float, 3> m_position;
     std::unordered_map<std::string, std::array<float, 3>> m_alternate_position_map;
@@ -49,24 +47,19 @@ public:
     void SetSpecialAtomFlag(bool value) { m_is_special_atom = value; }
     void SetSerialID(int value) { m_serial_id = value; }
     void SetResidueID(int value) { m_residue_id = value; }
-    void SetAtomID(const std::string & value) { m_atom_id = value; }
+    void SetComponentID(const std::string & value);
+    void SetAtomID(const std::string & value);
     void SetChainID(const std::string & value) { m_chain_id = value; }
     void SetIndicator(const std::string & value) { m_indicator = value; }
     void SetOccupancy(float value) { m_occupancy = value; }
     void SetTemperature(float value) { m_temperature = value; }
-    void SetComponentKey(ComponentKey value) { m_component_key = value; }
-    void SetAtomKey(AtomKey value) { m_atom_key = value; }
     void SetResidue(Residue value);
     void SetElement(Element value);
     void SetSpot(Spot value);
-    void SetRemoteness(Remoteness value);
-    void SetBranch(Branch value);
     void SetStructure(Structure value);
     void SetResidue(const std::string & name);
     void SetElement(const std::string & name);
     void SetSpot(const std::string & name);
-    void SetRemoteness(const std::string & name);
-    void SetBranch(const std::string & name);
     void SetPosition(float x, float y, float z);
     void SetPosition(const std::array<float, 3> & value) { m_position = value; }
     void AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry);
@@ -80,14 +73,13 @@ public:
     Element GetElement(void) const;
     Residue GetResidue(void) const;
     Spot GetSpot(void) const;
-    Remoteness GetRemoteness(void) const;
-    Branch GetBranch(void) const;
     Structure GetStructure(void) const;
     bool IsUnknownAtom(void) const;
     bool GetSelectedFlag(void) const { return m_is_selected; }
     bool GetSpecialAtomFlag(void) const { return m_is_special_atom; }
     int GetSerialID(void) const { return m_serial_id; }
     int GetResidueID(void) const { return m_residue_id; }
+    std::string GetComponentID(void) const { return m_component_id; }
     std::string GetAtomID(void) const { return m_atom_id; }
     std::string GetChainID(void) const { return m_chain_id; }
     std::string GetIndicator(void) const { return m_indicator; }

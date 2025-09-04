@@ -10,6 +10,7 @@
 #include "GroupPotentialEntry.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "AminoAcidInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "KeyPacker.hpp"
 #include "StringHelper.hpp"
@@ -181,7 +182,7 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
                         "Could not open file " + output_path.string() + " for writing.\n");
             return;
         }
-        outfile << "SerialID,X,Y,Z,Residue,Element,Remoteness,Branch\n";
+        outfile << "SerialID,X,Y,Z,Residue,Element,Spot\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
             outfile << atom->GetSerialID() <<','
@@ -190,8 +191,7 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
                     << atom->GetPosition().at(2) <<','
                     << AtomicInfoHelper::GetLabel(atom->GetResidue()) <<','
                     << AtomicInfoHelper::GetLabel(atom->GetElement()) <<','
-                    << AtomicInfoHelper::GetLabel(atom->GetRemoteness()) <<','
-                    << AtomicInfoHelper::GetLabel(atom->GetBranch()) <<'\n';
+                    << atom->GetAtomID() <<'\n';
         }
         outfile.close();
         Logger::Log(LogLevel::Info, "Output file: " + output_path.string());
@@ -283,7 +283,7 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
             return;
         }
 
-        outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Remoteness,Branch\n";
+        outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
             auto entry{ atom->GetAtomicPotentialEntry() };
@@ -295,8 +295,7 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
                     << atom->GetPosition().at(2) <<','
                     << AtomicInfoHelper::GetLabel(atom->GetResidue()) <<','
                     << AtomicInfoHelper::GetLabel(atom->GetElement()) <<','
-                    << AtomicInfoHelper::GetLabel(atom->GetRemoteness()) <<','
-                    << AtomicInfoHelper::GetLabel(atom->GetBranch()) <<'\n';
+                    << atom->GetAtomID() <<'\n';
         }
         outfile.close();
         Logger::Log(LogLevel::Info, "Output file: " + output_csv_file.string());
@@ -342,36 +341,21 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
                         "Could not open file " + output_path.string() + " for writing.\n");
             return;
         }
-        outfile << "Residue,Element,Remoteness,Branch,Amplitude,Width\n";
+        outfile << "Residue,Spot,Amplitude,Width\n";
         for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
         {
             auto residue_name{ AtomicInfoHelper::GetLabel(residue) };
-            for (auto & element : AtomicInfoHelper::GetStandardElementList())
+            auto component_key{ static_cast<ComponentKey>(residue) };
+            for (auto & spot : AminoAcidInfoHelper::GetSpotList(residue))
             {
-                //if (element == Element::OXYGEN) continue; // TEST
-                auto element_name{ AtomicInfoHelper::GetLabel(element) };
-                for (auto & remoteness : AtomicInfoHelper::GetStandardRemotenessList())
-                {
-                    //if (remoteness != Remoteness::NONE && remoteness != Remoteness::ALPHA) continue; // TEST
-                    auto remoteness_name{ AtomicInfoHelper::GetLabel(remoteness) };
-                    for (auto & branch : AtomicInfoHelper::GetStandardBranchList())
-                    {
-                        auto branch_name{ AtomicInfoHelper::GetLabel(branch) };
-                        auto component_key{ static_cast<ComponentKey>(residue) };
-                        uint32_t atom_key{ 0 }; // TODO: modify
-                        //auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
-                        auto group_key{
-                            KeyPackerResidueClass::Pack(component_key, atom_key, false)
-                        };
-                        if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
-                        outfile << residue_name <<','
-                                << element_name <<','
-                                << remoteness_name <<','
-                                << branch_name <<','
-                                << entry_iter->GetGausEstimatePrior(group_key, class_key, 0) <<','
-                                << entry_iter->GetGausEstimatePrior(group_key, class_key, 1) <<'\n';
-                    }
-                }
+                auto atom_key{ static_cast<uint32_t>(spot) };
+                auto group_key{ KeyPackerResidueClass::Pack(component_key, atom_key, false) };
+                auto atom_id{ AtomKeySystem::Instance().GetAtomId(atom_key) };
+                if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
+                outfile << residue_name <<','
+                        << atom_id <<','
+                        << entry_iter->GetGausEstimatePrior(group_key, class_key, 0) <<','
+                        << entry_iter->GetGausEstimatePrior(group_key, class_key, 1) <<'\n';
             }
         }
 

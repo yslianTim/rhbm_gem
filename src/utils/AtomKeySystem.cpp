@@ -82,16 +82,6 @@ AtomKey AtomKeySystem::GetAtomKey(const std::string & atom_id)
     }
     return m_id_to_key_map.at(atom_id);
 }
-/*
-AtomKey AtomKeySystem::GetAtomKey(Element element, Remoteness remoteness, Branch branch)
-{
-    std::lock_guard<std::mutex> lock(m_mutex);
-    auto key0{ static_cast<AtomKey>(element) };
-    auto key1{ static_cast<AtomKey>(remoteness) };
-    auto key2{ static_cast<AtomKey>(branch) };
-    auto atom_key{ static_cast<AtomKey>((key2 << 16) | (key1 << 8) | key0) };
-    return atom_key;
-}*/
 
 std::string AtomKeySystem::GetAtomId(AtomKey atom_key)
 {
@@ -115,7 +105,7 @@ bool AtomKeySystem::IsBuildInAtom(AtomKey atom_key) const
 {
     return atom_key < kDynamicBase;
 }
-
+/*
 void AtomKeySystem::ParseAtomId(
     const std::string & atom_id,
     const std::string & element_type,
@@ -161,4 +151,4 @@ void AtomKeySystem::ParseAtomId(
         branch = AtomicInfoHelper::GetBranchFromString(base_branch_str);
         return;
     }
-}
+}*/

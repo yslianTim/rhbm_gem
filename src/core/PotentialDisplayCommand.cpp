@@ -63,9 +63,6 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
     cmd->add_option_function<std::string>("--pick-element",
         [&](const std::string & value) { SetPickElementType(value); },
         "Pick element type")->default_val(m_options.pick_element);
-    cmd->add_option_function<std::string>("--pick-remoteness",
-        [&](const std::string & value) { SetPickRemotenessType(value); },
-        "Pick remoteness type")->default_val(m_options.pick_remoteness);
     cmd->add_option_function<std::string>("--veto-chain",
         [&](const std::string & value) { SetVetoChainID(value); },
         "Veto chain ID")->default_val(m_options.veto_chain_id);
@@ -75,9 +72,6 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
     cmd->add_option_function<std::string>("--veto-element",
         [&](const std::string & value) { SetVetoElementType(value); },
         "Veto element type")->default_val(m_options.veto_element);
-    cmd->add_option_function<std::string>("--veto-remoteness",
-        [&](const std::string & value) { SetVetoRemotenessType(value); },
-        "Veto remoteness type")->default_val(m_options.veto_remoteness);
 }
 
 bool PotentialDisplayCommand::Execute(void)
@@ -185,16 +179,6 @@ void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
     m_options.veto_element = value;
 }
 
-void PotentialDisplayCommand::SetPickRemotenessType(const std::string & value)
-{
-    m_options.pick_remoteness = value;
-}
-
-void PotentialDisplayCommand::SetVetoRemotenessType(const std::string & value)
-{
-    m_options.veto_remoteness = value;
-}
-
 bool PotentialDisplayCommand::BuildDataObject(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::BuildDataObject() called");
@@ -249,11 +233,9 @@ void PotentialDisplayCommand::RunDataObjectSelection(void)
     m_atom_selector->PickChainID(m_options.pick_chain_id);
     m_atom_selector->PickResidueType(m_options.pick_residue);
     m_atom_selector->PickElementType(m_options.pick_element);
-    m_atom_selector->PickRemotenessType(m_options.pick_remoteness);
     m_atom_selector->VetoChainID(m_options.veto_chain_id);
     m_atom_selector->VetoResidueType(m_options.veto_residue);
     m_atom_selector->VetoElementType(m_options.veto_element);
-    m_atom_selector->VetoRemotenessType(m_options.veto_remoteness);
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -263,8 +245,7 @@ void PotentialDisplayCommand::RunDataObjectSelection(void)
                 m_atom_selector->GetSelectionFlag(
                     atom->GetChainID(),
                     atom->GetResidue(),
-                    atom->GetElement(),
-                    atom->GetRemoteness())
+                    atom->GetElement())
             );
         }
     }

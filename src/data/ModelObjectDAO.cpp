@@ -40,6 +40,17 @@ namespace
         return result;
     }
 
+    constexpr std::string_view CREATE_MODEL_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            key_tag           TEXT PRIMARY KEY,
+            atom_size         INTEGER,
+            pdb_id            TEXT,
+            emd_id            TEXT,
+            map_resolution    DOUBLE,
+            resolution_method TEXT
+        )
+    )sql";
+
     constexpr std::string_view INSERT_MODEL_LIST_SQL = R"sql(
         INSERT INTO {} (
             key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
@@ -52,44 +63,48 @@ namespace
             emd_id  = excluded.emd_id,
             map_resolution = excluded.map_resolution,
             resolution_method = excluded.resolution_method
-        )sql";
+    )sql";
 
     constexpr std::string_view SELECT_MODEL_LIST_SQL = R"sql(
         SELECT
             key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method
-        FROM {} WHERE key_tag = ? LIMIT 1; )sql";
-
-    constexpr std::string_view CREATE_MODEL_TABLE_SQL = R"sql(
-        CREATE TABLE IF NOT EXISTS {} (
-            key_tag           TEXT PRIMARY KEY,
-            atom_size         INTEGER,
-            pdb_id            TEXT,
-            emd_id            TEXT,
-            map_resolution    DOUBLE,
-            resolution_method TEXT
-        ) )sql";
+        FROM {} WHERE key_tag = ? LIMIT 1;
+    )sql";
 
     constexpr std::string_view CREATE_ATOM_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
             serial_id INTEGER PRIMARY KEY,
             residue_id INTEGER,
+            component_id TEXT,
+            atom_id TEXT,
             chain_id TEXT,
             indicator TEXT,
             occupancy DOUBLE,
             temperature DOUBLE,
-            residue_type INTEGER,
-            element_type INTEGER,
-            remoteness_type INTEGER,
-            branch_type INTEGER,
+            element INTEGER,
             structure INTEGER,
             is_special_atom INTEGER,
             position_x DOUBLE,
             position_y DOUBLE,
-            position_z DOUBLE,
-            component_key INTEGER,
-            atom_key INTEGER,
-            atom_id TEXT
-        ) )sql";
+            position_z DOUBLE
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_ATOM_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            serial_id, residue_id, component_id, atom_id, chain_id, indicator,
+            occupancy, temperature, element, structure, is_special_atom,
+            position_x, position_y, position_z
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_ATOM_LIST_SQL = R"sql(
+        SELECT
+            serial_id, residue_id, component_id, atom_id, chain_id, indicator,
+            occupancy, temperature, element, structure, is_special_atom,
+            position_x, position_y, position_z
+        FROM {};
+    )sql";
 
     constexpr std::string_view CREATE_COMPONENT_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
@@ -100,7 +115,22 @@ namespace
             formula TEXT,
             molecular_weight DOUBLE,
             is_standard_monomer INTEGER
-        ) )sql";
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_COMPONENT_ENTRY_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            component_key, id, name, type, formula,
+            molecular_weight, is_standard_monomer
+        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_COMPONENT_ENTRY_LIST_SQL = R"sql(
+        SELECT
+            component_key, id, name, type, formula,
+            molecular_weight, is_standard_monomer
+        FROM {};
+    )sql";
     
     constexpr std::string_view CREATE_COMPONENT_ATOM_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
@@ -112,7 +142,22 @@ namespace
             chiral_config TEXT,
             ordinal_index INTEGER,
             PRIMARY KEY (component_key, atom_key)
-        ) )sql";
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_COMPONENT_ATOM_ENTRY_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            component_key, atom_key, atom_id,
+            element_type, aromatic_atom_flag, chiral_config, ordinal_index
+        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_COMPONENT_ATOM_ENTRY_LIST_SQL = R"sql(
+        SELECT
+            component_key, atom_key, atom_id,
+            element_type, aromatic_atom_flag, chiral_config, ordinal_index
+        FROM {};
+    )sql";
 
     constexpr std::string_view CREATE_COMPONENT_BOND_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
@@ -126,7 +171,24 @@ namespace
             chiral_config TEXT,
             ordinal_index INTEGER,
             PRIMARY KEY (component_key, atom_key_1, atom_key_2)
-        ) )sql";
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_COMPONENT_BOND_ENTRY_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            component_key, atom_key_1, atom_key_2,
+            atom_id_1, atom_id_2,
+            bond_order, aromatic_atom_flag, chiral_config, ordinal_index
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_COMPONENT_BOND_ENTRY_LIST_SQL = R"sql(
+        SELECT
+            component_key, atom_key_1, atom_key_2,
+            atom_id_1, atom_id_2,
+            bond_order, aromatic_atom_flag, chiral_config, ordinal_index
+        FROM {};
+    )sql";
 
     constexpr std::string_view CREATE_ATOMIC_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
@@ -137,7 +199,24 @@ namespace
             width_estimate_ols DOUBLE,
             amplitude_estimate_mdpde DOUBLE,
             width_estimate_mdpde DOUBLE
-        ) )sql";
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_ATOMIC_ENTRY_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            serial_id, sampling_size, distance_and_map_value_list,
+            amplitude_estimate_ols, width_estimate_ols,
+            amplitude_estimate_mdpde, width_estimate_mdpde
+        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_ATOMIC_ENTRY_SQL = R"sql(
+        SELECT
+            serial_id, sampling_size, distance_and_map_value_list,
+            amplitude_estimate_ols, width_estimate_ols,
+            amplitude_estimate_mdpde, width_estimate_mdpde
+        FROM {};
+    )sql";
 
     constexpr std::string_view CREATE_ATOMIC_SUBLIST_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
@@ -148,7 +227,24 @@ namespace
             width_variance_posterior DOUBLE,
             outlier_tag INTEGER,
             statistical_distance DOUBLE
-        ) )sql";
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_ATOMIC_SUBLIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
+            amplitude_variance_posterior, width_variance_posterior,
+            outlier_tag, statistical_distance
+        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_ATOMIC_SUBLIST_SQL = R"sql(
+        SELECT
+            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
+            amplitude_variance_posterior, width_variance_posterior,
+            outlier_tag, statistical_distance
+        FROM {};
+    )sql";
 
     constexpr std::string_view CREATE_GROUP_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
@@ -162,50 +258,8 @@ namespace
             width_estimate_prior DOUBLE,
             amplitude_variance_prior DOUBLE,
             width_variance_prior DOUBLE
-        ) )sql";
-
-    constexpr std::string_view INSERT_ATOM_LIST_SQL = R"sql(
-        INSERT OR REPLACE INTO {} (
-            serial_id, residue_id, chain_id, indicator,
-            occupancy, temperature, residue_type,
-            element_type, remoteness_type, branch_type,
-            structure, is_special_atom,
-            position_x, position_y, position_z,
-            component_key, atom_key, atom_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); )sql";
-
-    constexpr std::string_view INSERT_COMPONENT_ENTRY_LIST_SQL = R"sql(
-        INSERT OR REPLACE INTO {} (
-            component_key, id, name, type, formula,
-            molecular_weight, is_standard_monomer
-        ) VALUES (?, ?, ?, ?, ?, ?, ?); )sql";
-
-    constexpr std::string_view INSERT_COMPONENT_ATOM_ENTRY_LIST_SQL = R"sql(
-        INSERT OR REPLACE INTO {} (
-            component_key, atom_key, atom_id,
-            element_type, aromatic_atom_flag, chiral_config, ordinal_index
-        ) VALUES (?, ?, ?, ?, ?, ?, ?); )sql";
-
-    constexpr std::string_view INSERT_COMPONENT_BOND_ENTRY_LIST_SQL = R"sql(
-        INSERT OR REPLACE INTO {} (
-            component_key, atom_key_1, atom_key_2,
-            atom_id_1, atom_id_2,
-            bond_order, aromatic_atom_flag, chiral_config, ordinal_index
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?); )sql";
-
-    constexpr std::string_view INSERT_ATOMIC_ENTRY_SQL = R"sql(
-        INSERT OR REPLACE INTO {} (
-            serial_id, sampling_size, distance_and_map_value_list,
-            amplitude_estimate_ols, width_estimate_ols,
-            amplitude_estimate_mdpde, width_estimate_mdpde
-        ) VALUES (?, ?, ?, ?, ?, ?, ?); )sql";
-
-    constexpr std::string_view INSERT_ATOMIC_SUBLIST_SQL = R"sql(
-        INSERT OR REPLACE INTO {} (
-            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
-            amplitude_variance_posterior, width_variance_posterior,
-            outlier_tag, statistical_distance
-        ) VALUES (?, ?, ?, ?, ?, ?, ?); )sql";
+        )
+    )sql";
 
     constexpr std::string_view INSERT_GROUP_ENTRY_SQL = R"sql(
         INSERT OR REPLACE INTO {} (
@@ -214,50 +268,8 @@ namespace
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
             amplitude_variance_prior, width_variance_prior
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?); )sql";
-
-    constexpr std::string_view SELECT_ATOM_LIST_SQL = R"sql(
-        SELECT
-            serial_id, residue_id, chain_id, indicator,
-            occupancy, temperature, residue_type,
-            element_type, remoteness_type, branch_type,
-            structure, is_special_atom,
-            position_x, position_y, position_z,
-            component_key, atom_key, atom_id
-        FROM {}; )sql";
-
-    constexpr std::string_view SELECT_COMPONENT_ENTRY_SQL = R"sql(
-        SELECT
-            component_key, id, name, type, formula,
-            molecular_weight, is_standard_monomer
-        FROM {}; )sql";
-
-    constexpr std::string_view SELECT_COMPONENT_ATOM_ENTRY_SQL = R"sql(
-        SELECT
-            component_key, atom_key, atom_id,
-            element_type, aromatic_atom_flag, chiral_config, ordinal_index
-        FROM {}; )sql";
-
-    constexpr std::string_view SELECT_COMPONENT_BOND_ENTRY_SQL = R"sql(
-        SELECT
-            component_key, atom_key_1, atom_key_2,
-            atom_id_1, atom_id_2,
-            bond_order, aromatic_atom_flag, chiral_config, ordinal_index
-        FROM {}; )sql";
-
-    constexpr std::string_view SELECT_ATOMIC_ENTRY_SQL = R"sql(
-        SELECT
-            serial_id, sampling_size, distance_and_map_value_list,
-            amplitude_estimate_ols, width_estimate_ols,
-            amplitude_estimate_mdpde, width_estimate_mdpde
-        FROM {}; )sql";
-
-    constexpr std::string_view SELECT_ATOMIC_SUBLIST_SQL = R"sql(
-        SELECT
-            serial_id, amplitude_estimate_posterior, width_estimate_posterior,
-            amplitude_variance_posterior, width_variance_posterior,
-            outlier_tag, statistical_distance
-        FROM {}; )sql";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    )sql";
 
     constexpr std::string_view SELECT_GROUP_ENTRY_SQL = R"sql(
         SELECT
@@ -266,7 +278,8 @@ namespace
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
             amplitude_variance_prior, width_variance_prior
-        FROM {}; )sql";
+        FROM {};
+    )sql";
 
     constexpr std::string_view SELECT_ROW_COUNT_SQL =
         "SELECT COUNT(*) FROM {};";
@@ -358,8 +371,22 @@ void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_ta
 std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag)
 {
     auto sanitized_key_tag{ SanitizeTableName(key_tag) };
+    auto model_object{ std::make_unique<ModelObject>() };
+
+    // Load chemical component entries
+    auto component_entry_table_name{ "chemical_component_entry_in_" + sanitized_key_tag };
+    LoadChemicalComponentEntryList(model_object.get(), component_entry_table_name);
+
+    // Load component atom entries
+    auto component_atom_entry_table_name{ "component_atom_entry_in_" + sanitized_key_tag };
+    LoadComponentAtomEntryList(model_object.get(), component_atom_entry_table_name);
+
+    // Load component bond entries
+    auto component_bond_entry_table_name{ "component_bond_entry_in_" + sanitized_key_tag };
+    LoadComponentBondEntryList(model_object.get(), component_bond_entry_table_name);
+
     auto atom_object_list{ LoadAtomObjectList(sanitized_key_tag) };
-    auto model_object{ std::make_unique<ModelObject>(std::move(atom_object_list)) };
+    model_object->SetAtomList(atom_object_list);
 
     std::string model_table_name{ "model_list" };
     m_database->Prepare(FormatSQL(SELECT_MODEL_LIST_SQL, model_table_name));
@@ -391,20 +418,7 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
             "The number of atoms in the model object does not match the database record.");
     }
 
-    // Load chemical component entries
-    auto component_entry_table_name{ "chemical_component_entry_in_" + sanitized_key_tag };
-    LoadChemicalComponentEntryList(model_object.get(), component_entry_table_name);
-
-    // Load component atom entries
-    auto component_atom_entry_table_name{ "component_atom_entry_in_" + sanitized_key_tag };
-    LoadComponentAtomEntryList(model_object.get(), component_atom_entry_table_name);
-
-    // Load component bond entries
-    auto component_bond_entry_table_name{ "component_bond_entry_in_" + sanitized_key_tag };
-    LoadComponentBondEntryList(model_object.get(), component_bond_entry_table_name);
-
-    // Load component atom entries
-
+    // Load atom entries
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
     {
         auto group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
@@ -429,22 +443,18 @@ void ModelObjectDAO::SaveAtomObjectList(
     {
         m_database->Bind<int>(1, atom_object->GetSerialID());
         m_database->Bind<int>(2, atom_object->GetResidueID());
-        m_database->Bind<std::string>(3, atom_object->GetChainID());
-        m_database->Bind<std::string>(4, atom_object->GetIndicator());
-        m_database->Bind<double>(5, static_cast<double>(atom_object->GetOccupancy()));
-        m_database->Bind<double>(6, static_cast<double>(atom_object->GetTemperature()));
-        m_database->Bind<int>(7, static_cast<int>(atom_object->GetResidue()));
-        m_database->Bind<int>(8, static_cast<int>(atom_object->GetElement()));
-        m_database->Bind<int>(9, static_cast<int>(atom_object->GetRemoteness()));
-        m_database->Bind<int>(10, static_cast<int>(atom_object->GetBranch()));
-        m_database->Bind<int>(11, static_cast<int>(atom_object->GetStructure()));
-        m_database->Bind<int>(12, static_cast<int>(atom_object->GetSpecialAtomFlag()));
-        m_database->Bind<double>(13, static_cast<double>(atom_object->GetPosition().at(0)));
-        m_database->Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(1)));
-        m_database->Bind<double>(15, static_cast<double>(atom_object->GetPosition().at(2)));
-        m_database->Bind<ComponentKey>(16, atom_object->GetComponentKey());
-        m_database->Bind<AtomKey>(17, atom_object->GetAtomKey());
-        m_database->Bind<std::string>(18, atom_object->GetAtomID());
+        m_database->Bind<std::string>(3, atom_object->GetComponentID());
+        m_database->Bind<std::string>(4, atom_object->GetAtomID());
+        m_database->Bind<std::string>(5, atom_object->GetChainID());
+        m_database->Bind<std::string>(6, atom_object->GetIndicator());
+        m_database->Bind<double>(7, static_cast<double>(atom_object->GetOccupancy()));
+        m_database->Bind<double>(8, static_cast<double>(atom_object->GetTemperature()));
+        m_database->Bind<int>(9, static_cast<int>(atom_object->GetElement()));
+        m_database->Bind<int>(10, static_cast<int>(atom_object->GetStructure()));
+        m_database->Bind<int>(11, static_cast<int>(atom_object->GetSpecialAtomFlag()));
+        m_database->Bind<double>(12, static_cast<double>(atom_object->GetPosition().at(0)));
+        m_database->Bind<double>(13, static_cast<double>(atom_object->GetPosition().at(1)));
+        m_database->Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(2)));
 
         m_database->StepOnce();
         m_database->Reset();
@@ -625,37 +635,29 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     atom_object_list.reserve(static_cast<size_t>(atom_count));
     auto iter{
         m_database->IterateQuery<
-            int, int, std::string, std::string,
-            double, double, int, int, int, int, int, int, double, double, double,
-            int, int, std::string>(
+            int, int, std::string, std::string, std::string, std::string,
+            double, double, int, int, int, double, double, double>(
             FormatSQL(SELECT_ATOM_LIST_SQL, atom_list_table_name)) };
-    std::tuple<int, int, std::string, std::string,
-               double, double, int, int, int, int, int, int, double, double, double,
-               int, int, std::string> row;
+    std::tuple<int, int, std::string, std::string, std::string, std::string,
+               double, double, int, int, int, double, double, double> row;
     while (iter.Next(row))
     {
         auto atom_object{ std::make_unique<AtomObject>() };
-        auto component_key{ static_cast<ComponentKey>(std::get<15>(row)) };
-        auto atom_key{ static_cast<AtomKey>(std::get<16>(row)) };
         atom_object->SetSerialID(std::get<0>(row));
         atom_object->SetResidueID(std::get<1>(row));
-        atom_object->SetChainID(std::get<2>(row));
-        atom_object->SetIndicator(std::get<3>(row));
-        atom_object->SetOccupancy(static_cast<float>(std::get<4>(row)));
-        atom_object->SetTemperature(static_cast<float>(std::get<5>(row)));
-        atom_object->SetResidue(static_cast<Residue>(std::get<6>(row)));
-        atom_object->SetElement(static_cast<Element>(std::get<7>(row)));
-        atom_object->SetRemoteness(static_cast<Remoteness>(std::get<8>(row)));
-        atom_object->SetBranch(static_cast<Branch>(std::get<9>(row)));
-        atom_object->SetStructure(static_cast<Structure>(std::get<10>(row)));
-        atom_object->SetSpecialAtomFlag(static_cast<bool>(std::get<11>(row)));
+        atom_object->SetComponentID(std::get<2>(row));
+        atom_object->SetAtomID(std::get<3>(row));
+        atom_object->SetChainID(std::get<4>(row));
+        atom_object->SetIndicator(std::get<5>(row));
+        atom_object->SetOccupancy(static_cast<float>(std::get<6>(row)));
+        atom_object->SetTemperature(static_cast<float>(std::get<7>(row)));
+        atom_object->SetElement(static_cast<Element>(std::get<8>(row)));
+        atom_object->SetStructure(static_cast<Structure>(std::get<9>(row)));
+        atom_object->SetSpecialAtomFlag(static_cast<bool>(std::get<10>(row)));
         atom_object->SetPosition(
+            static_cast<float>(std::get<11>(row)),
             static_cast<float>(std::get<12>(row)),
-            static_cast<float>(std::get<13>(row)),
-            static_cast<float>(std::get<14>(row)) );
-        atom_object->SetComponentKey(component_key);
-        atom_object->SetAtomKey(atom_key);
-        atom_object->SetAtomID(std::get<17>(row));
+            static_cast<float>(std::get<13>(row)) );
 
         auto serial_id{ atom_object->GetSerialID() };
 
@@ -685,7 +687,7 @@ void ModelObjectDAO::LoadChemicalComponentEntryList(
     auto iter{
         m_database->IterateQuery<
             int, std::string, std::string,
-            std::string, std::string, double, int>(FormatSQL(SELECT_COMPONENT_ENTRY_SQL, table_name))
+            std::string, std::string, double, int>(FormatSQL(SELECT_COMPONENT_ENTRY_LIST_SQL, table_name))
     };
     std::tuple<int, std::string, std::string, std::string, std::string, double, int> row;
     while (iter.Next(row))
@@ -712,7 +714,7 @@ void ModelObjectDAO::LoadComponentAtomEntryList(
     auto iter{
         m_database->IterateQuery<
             int, int, std::string, int, int, std::string, int>(
-            FormatSQL(SELECT_COMPONENT_ATOM_ENTRY_SQL, table_name))
+            FormatSQL(SELECT_COMPONENT_ATOM_ENTRY_LIST_SQL, table_name))
     };
     std::tuple<int, int, std::string, int, int, std::string, int> row;
     while (iter.Next(row))
@@ -746,7 +748,7 @@ void ModelObjectDAO::LoadComponentBondEntryList(
         m_database->IterateQuery<
             int, int, int, std::string, std::string,
             std::string, int, std::string, int>(
-            FormatSQL(SELECT_COMPONENT_BOND_ENTRY_SQL, table_name))
+            FormatSQL(SELECT_COMPONENT_BOND_ENTRY_LIST_SQL, table_name))
     };
     std::tuple<int, int, int, std::string, std::string,
                std::string, int, std::string, int> row;

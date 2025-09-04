@@ -69,6 +69,12 @@ void ModelObject::AddAtom(std::unique_ptr<AtomObject> component)
     m_atom_list.emplace_back(std::move(component));
 }
 
+void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> & atom_list)
+{
+    m_atom_list = std::move(atom_list);
+    Update();
+}
+
 void ModelObject::AddGroupPotentialEntry(
     const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
 {

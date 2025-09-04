@@ -22,17 +22,16 @@ public:
     void RegisterAtom(const std::string & atom_id);
     void RegisterAtom(const std::string & atom_id, AtomKey atom_key);
     AtomKey GetAtomKey(const std::string & atom_id);
-    //AtomKey GetAtomKey(Element element, Remoteness remoteness, Branch branch);
     std::string GetAtomId(AtomKey atom_key);
     bool IsBuildInAtom(const std::string & atom_id) const;
     bool IsBuildInAtom(AtomKey atom_key) const;
-    void ParseAtomId(
-        const std::string & atom_id,
-        const std::string & element_type,
-        Element & element,
-        Remoteness & remoteness,
-        Branch & branch
-    );
+    //void ParseAtomId(
+    //    const std::string & atom_id,
+    //    const std::string & element_type,
+    //    Element & element,
+    //    Remoteness & remoteness,
+    //    Branch & branch
+    //);
 
 private:
     AtomKeySystem(void);

@@ -108,20 +108,6 @@ TEST_F(AtomicInfoHelperTest, StandardElementList)
     EXPECT_TRUE(std::find(element_list.begin(), element_list.end(), Element::CARBON) != element_list.end());
 }
 
-TEST_F(AtomicInfoHelperTest, StandardRemotenessList)
-{
-    const auto & remoteness_list{ AtomicInfoHelper::GetStandardRemotenessList() };
-    EXPECT_EQ(8u, remoteness_list.size());
-    EXPECT_TRUE(std::find(remoteness_list.begin(), remoteness_list.end(), Remoteness::ALPHA) != remoteness_list.end());
-}
-
-TEST_F(AtomicInfoHelperTest, StandardBranchList)
-{
-    const auto & branch_list{ AtomicInfoHelper::GetStandardBranchList() };
-    EXPECT_EQ(4u, branch_list.size());
-    EXPECT_TRUE(std::find(branch_list.begin(), branch_list.end(), Branch::ONE) != branch_list.end());
-}
-
 TEST_F(AtomicInfoHelperTest, ElementLabelMapIncludesHydrogen)
 {
     const auto & label_map{ AtomicInfoHelper::GetElementLabelMap() };
@@ -154,8 +140,6 @@ TEST_F(AtomicInfoHelperTest, MapsKnownStringsToEnums)
 {
     EXPECT_EQ(AtomicInfoHelper::GetResidueFromString("ALA"), Residue::ALA);
     EXPECT_EQ(AtomicInfoHelper::GetElementFromString("H"), Element::HYDROGEN);
-    EXPECT_EQ(AtomicInfoHelper::GetRemotenessFromString("A"), Remoteness::ALPHA);
-    EXPECT_EQ(AtomicInfoHelper::GetBranchFromString("1"), Branch::ONE);
     EXPECT_EQ(AtomicInfoHelper::GetStructureFromString("BEND"), Structure::BEND);
     EXPECT_EQ(AtomicInfoHelper::GetEntityFromString("polymer"), Entity::POLYMER);
 }
@@ -164,8 +148,6 @@ TEST_F(AtomicInfoHelperTest, MapsUnknownStringsToUNK)
 {
     EXPECT_EQ(AtomicInfoHelper::GetResidueFromString("XXX"), Residue::UNK);
     EXPECT_EQ(AtomicInfoHelper::GetElementFromString("Q"), Element::UNK);
-    EXPECT_EQ(AtomicInfoHelper::GetRemotenessFromString("XXX"), Remoteness::UNK);
-    EXPECT_EQ(AtomicInfoHelper::GetBranchFromString("XXX"), Branch::UNK);
     EXPECT_EQ(AtomicInfoHelper::GetStructureFromString("XXX"), Structure::UNK);
     EXPECT_EQ(AtomicInfoHelper::GetEntityFromString("XXX"), Entity::UNK);
 }
@@ -196,19 +178,6 @@ TEST_F(AtomicInfoHelperTest, UnknownElementReturnsQuestionMark)
     EXPECT_EQ(AtomicInfoHelper::GetLabel(Element::UNK), "UNK");
 }
 
-TEST_F(AtomicInfoHelperTest, RemotenessUNKReturnsLabel)
-{
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::UNK), "UNK");
-}
-
-TEST_F(AtomicInfoHelperTest, BranchLabel)
-{
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(Branch::ONE), "1");
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(Branch::TERMINAL), "T");
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(Branch::UNK), "UNK");
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Branch>(253)), "?");
-}
-
 TEST_F(AtomicInfoHelperTest, ElementDisplayAttributes)
 {
     EXPECT_NE(1, AtomicInfoHelper::GetDisplayColor(Element::CARBON));
@@ -237,19 +206,8 @@ TEST_F(AtomicInfoHelperTest, ConversionHelpersReturnUnkForUnknownStrings)
     EXPECT_EQ(Residue::UNK, AtomicInfoHelper::GetResidueFromString(unknown));
     EXPECT_EQ(Element::UNK, AtomicInfoHelper::GetElementFromString(unknown));
     EXPECT_EQ(Element::UNK, AtomicInfoHelper::GetElementFromString(unknown));
-    EXPECT_EQ(Remoteness::UNK, AtomicInfoHelper::GetRemotenessFromString(unknown));
-    EXPECT_EQ(Remoteness::UNK, AtomicInfoHelper::GetRemotenessFromString(unknown));
-    EXPECT_EQ(Branch::UNK, AtomicInfoHelper::GetBranchFromString(unknown));
-    EXPECT_EQ(Branch::UNK, AtomicInfoHelper::GetBranchFromString(unknown));
     EXPECT_EQ(Structure::UNK, AtomicInfoHelper::GetStructureFromString(unknown));
     EXPECT_EQ(Structure::UNK, AtomicInfoHelper::GetStructureFromString(unknown));
     EXPECT_EQ(Entity::UNK, AtomicInfoHelper::GetEntityFromString(unknown));
     EXPECT_EQ(Entity::UNK, AtomicInfoHelper::GetEntityFromString(unknown));
-}
-
-TEST_F(AtomicInfoHelperTest, RemotenessLabelVariants)
-{
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::NONE), "");
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(Remoteness::ALPHA), "#alpha");
-    EXPECT_EQ(AtomicInfoHelper::GetLabel(static_cast<Remoteness>(253)), "?");
 }

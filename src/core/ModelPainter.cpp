@@ -5,6 +5,7 @@
 #include "PotentialEntryIterator.hpp"
 #include "FilePathHelper.hpp"
 #include "AtomicInfoHelper.hpp"
+#include "AminoAcidInfoHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "ArrayStats.hpp"
 #include "KeyPacker.hpp"
@@ -522,70 +523,68 @@ void ModelPainter::PaintGroupGausSideChain(
             auto count_mix{ 0 };
             auto count_free{ 0 };
             auto count_helix{ 0 };
-            for (auto remoteness : AtomicInfoHelper::GetStandardRemotenessList())
+            for (auto & spot : AminoAcidInfoHelper::GetSpotList(residue))
             {
-                for (auto branch : AtomicInfoHelper::GetStandardBranchList())
+                auto atom_key{ static_cast<AtomKey>(spot) };
+                auto atom_id{ AtomKeySystem::Instance().GetAtomId(atom_key) };
+                auto element_char{ StringHelper::ExtractCharAsString(atom_id, 0) };
+                auto element_type{ AtomicInfoHelper::GetElementFromString(element_char) };
+                if (element_type != element) continue;
+                auto mix_group_key{ KeyPackerResidueClass::Pack(component_key, atom_key, false) };
+                auto free_group_key{ KeyPackerStructureClass::Pack(Structure::FREE, component_key, atom_key, false) };
+                auto helix_group_key{ KeyPackerStructureClass::Pack(Structure::HELX_P, component_key, atom_key, false) };
+                bool has_data{ false };
+                if (entry_iter->IsAvailableGroupKey(mix_group_key, AtomicInfoHelper::GetResidueClassKey()) == true)
                 {
-                    uint32_t atom_key{ 0 }; // TODO: modify
-                    //auto atom_key{ AtomKeySystem::Instance().GetAtomKey(element, remoteness, branch) };
-                    auto mix_group_key{ KeyPackerResidueClass::Pack(component_key, atom_key, false) };
-                    auto free_group_key{ KeyPackerStructureClass::Pack(Structure::FREE, component_key, atom_key, false) };
-                    auto helix_group_key{ KeyPackerStructureClass::Pack(Structure::HELX_P, component_key, atom_key, false) };
-                    bool has_data{ false };
-                    if (entry_iter->IsAvailableGroupKey(mix_group_key, AtomicInfoHelper::GetResidueClassKey()) == true)
-                    {
-                        has_data = true;
-                        auto amplitude_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 0) };
-                        auto width_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 1) };
-                        auto amplitude_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 0) };
-                        auto width_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 1) };
-                        amplitude_array.emplace_back(amplitude_value);
-                        width_array.emplace_back(width_value);
-                        amplitude_mix_graph->SetPoint(count_mix, count_total, amplitude_value);
-                        amplitude_mix_graph->SetPointError(count_mix, 0.0, amplitude_error);
-                        width_mix_graph->SetPoint(count_mix, count_total, width_value);
-                        width_mix_graph->SetPointError(count_mix, 0.0, width_error);
-                        count_mix++;
-                    }
+                    has_data = true;
+                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 0) };
+                    auto width_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 0) };
+                    auto width_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 1) };
+                    amplitude_array.emplace_back(amplitude_value);
+                    width_array.emplace_back(width_value);
+                    amplitude_mix_graph->SetPoint(count_mix, count_total, amplitude_value);
+                    amplitude_mix_graph->SetPointError(count_mix, 0.0, amplitude_error);
+                    width_mix_graph->SetPoint(count_mix, count_total, width_value);
+                    width_mix_graph->SetPointError(count_mix, 0.0, width_error);
+                    count_mix++;
+                }
 
-                    if (entry_iter->IsAvailableGroupKey(free_group_key, AtomicInfoHelper::GetStructureClassKey()) == true)
-                    {
-                        auto amplitude_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
-                        auto width_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
-                        auto amplitude_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
-                        auto width_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
-                        //amplitude_array.emplace_back(amplitude_value);
-                        //width_array.emplace_back(width_value);
-                        amplitude_free_graph->SetPoint(count_free, count_total, amplitude_value);
-                        amplitude_free_graph->SetPointError(count_free, 0.0, amplitude_error);
-                        width_free_graph->SetPoint(count_free, count_total, width_value);
-                        width_free_graph->SetPointError(count_free, 0.0, width_error);
-                        count_free++;
-                    }
+                if (entry_iter->IsAvailableGroupKey(free_group_key, AtomicInfoHelper::GetStructureClassKey()) == true)
+                {
+                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
+                    auto width_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
+                    auto width_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                    //amplitude_array.emplace_back(amplitude_value);
+                    //width_array.emplace_back(width_value);
+                    amplitude_free_graph->SetPoint(count_free, count_total, amplitude_value);
+                    amplitude_free_graph->SetPointError(count_free, 0.0, amplitude_error);
+                    width_free_graph->SetPoint(count_free, count_total, width_value);
+                    width_free_graph->SetPointError(count_free, 0.0, width_error);
+                    count_free++;
+                }
 
-                    if (entry_iter->IsAvailableGroupKey(helix_group_key, AtomicInfoHelper::GetStructureClassKey()) == true)
-                    {
-                        auto amplitude_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
-                        auto width_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
-                        auto amplitude_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
-                        auto width_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
-                        //amplitude_array.emplace_back(amplitude_value);
-                        //width_array.emplace_back(width_value);
-                        amplitude_helix_graph->SetPoint(count_helix, count_total, amplitude_value);
-                        amplitude_helix_graph->SetPointError(count_helix, 0.0, amplitude_error);
-                        width_helix_graph->SetPoint(count_helix, count_total, width_value);
-                        width_helix_graph->SetPointError(count_helix, 0.0, width_error);
-                        count_helix++;
-                    }
+                if (entry_iter->IsAvailableGroupKey(helix_group_key, AtomicInfoHelper::GetStructureClassKey()) == true)
+                {
+                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
+                    auto width_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
+                    auto width_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                    //amplitude_array.emplace_back(amplitude_value);
+                    //width_array.emplace_back(width_value);
+                    amplitude_helix_graph->SetPoint(count_helix, count_total, amplitude_value);
+                    amplitude_helix_graph->SetPointError(count_helix, 0.0, amplitude_error);
+                    width_helix_graph->SetPoint(count_helix, count_total, width_value);
+                    width_helix_graph->SetPointError(count_helix, 0.0, width_error);
+                    count_helix++;
+                }
 
-                    if (has_data)
-                    {
-                        auto element_label{ AtomicInfoHelper::GetLabel(element) };
-                        auto remoteness_label{ AtomicInfoHelper::GetLabel(remoteness) };
-                        auto branch_label{ AtomicInfoHelper::GetLabel(branch) };
-                        label_list.emplace_back(element_label +"_{"+ remoteness_label + branch_label+"}");
-                        count_total++;
-                    }
+                if (has_data)
+                {
+                    
+                    label_list.emplace_back(atom_id);
+                    count_total++;
                 }
             }
             auto color{ AtomicInfoHelper::GetDisplayColor(element) };

@@ -242,16 +242,12 @@ double MapSimulationCommand::CalculateAtomCharge(AtomObject * atom) const
         case PartialCharge::PARTIAL:
             return AminoAcidInfoHelper::GetPartialCharge(
                 atom->GetResidue(),
-                atom->GetElement(),
-                atom->GetRemoteness(),
-                atom->GetBranch(),
+                atom->GetSpot(),
                 atom->GetStructure());
         case PartialCharge::AMBER:
             return AminoAcidInfoHelper::GetPartialCharge(
                 atom->GetResidue(),
-                atom->GetElement(),
-                atom->GetRemoteness(),
-                atom->GetBranch(),
+                atom->GetSpot(),
                 atom->GetStructure(), true);
         default:
             Logger::Log(LogLevel::Error,

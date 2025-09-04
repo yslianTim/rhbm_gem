@@ -10,10 +10,8 @@ enum class Residue : uint8_t
     GLN =  6, GLU =  7, GLY =  8, HIS =  9, ILE = 10,
     LEU = 11, LYS = 12, MET = 13, PHE = 14, PRO = 15,
     SER = 16, THR = 17, TRP = 18, TYR = 19, VAL = 20,
-    CSX = 21,
 
     A   = 25, G   = 26, C   = 27, U   = 28, T   = 29
-
 };
 
 enum class Spot : uint32_t
@@ -99,24 +97,6 @@ enum class Element : uint8_t
     OSMIUM     = 76, IRIDIUM    = 77, PLATINUM   = 78, GOLD         = 79, MERCURY    = 80,
     THALLIUM   = 81, LEAD       = 82, BISMUTH    = 83, POLONIUM     = 84, ASTATINE   = 85,
     RADON      = 86, FRANCIUM   = 87, RADIUM     = 88, ACTINIUM     = 89, THORIUM    = 90
-};
-
-enum class Remoteness : uint8_t
-{
-    UNK = 0,
-    NONE = 1, ALPHA = 2, BETA = 3, GAMMA = 4, DELTA = 5, EPSILON = 6, ZETA = 7, ETA = 8,
-    EXTRA = 9,
-    ACID = 10,         // phosphoric acid
-    PENTOSE = 11,      // pentose sugar (Ribose, Deoxyribose)
-    BASE = 12          // nucleotide base
-};
-
-enum class Branch : uint8_t
-{
-    UNK = 0,
-    NONE = 1, ONE = 2, TWO = 3, THREE = 4, FOUR = 5,
-    FIVE = 6, SIX = 7, SEVEN = 8, EIGHT = 9, NINE = 10,
-    TERMINAL = 11
 };
 
 // Ref: https://mmcif.wwpdb.org/dictionaries/mmcif_ma.dic/Items/_struct_conf_type.id.html

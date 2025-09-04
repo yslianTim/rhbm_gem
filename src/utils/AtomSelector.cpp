@@ -20,8 +20,6 @@ void AtomSelector::Print(void) const
     for (auto & residue : pick_residue_set) oss << AtomicInfoHelper::GetLabel(residue) <<", ";
     oss <<"\n - Element set: ";
     for (auto & element : pick_element_set) oss << AtomicInfoHelper::GetLabel(element) <<", ";
-    oss <<"\n - Remoteness set: ";
-    for (auto & remoteness : pick_remoteness_set) oss << AtomicInfoHelper::GetLabel(remoteness) <<", ";
     oss <<"\n";
 
     oss <<"Atomic Vetoing List:\n";
@@ -31,8 +29,6 @@ void AtomSelector::Print(void) const
     for (auto & residue : veto_residue_set) oss << AtomicInfoHelper::GetLabel(residue) <<", ";
     oss <<"\n - Element set: ";
     for (auto & element : veto_element_set) oss << AtomicInfoHelper::GetLabel(element) <<", ";
-    oss <<"\n - Remoteness set: ";
-    for (auto & remoteness : veto_remoteness_set) oss << AtomicInfoHelper::GetLabel(remoteness) <<", ";
     oss <<"\n";
 
     std::cout << oss.str() << std::endl;
@@ -40,18 +36,17 @@ void AtomSelector::Print(void) const
 
 bool AtomSelector::GetSelectionFlag(
     const std::string & chain_id,
-    Residue residue, Element element, Remoteness remoteness) const
+    Residue residue,
+    Element element) const
 {
     auto selected{ true };
     if (!pick_chain_set.empty() && pick_chain_set.find(chain_id) == pick_chain_set.end()) selected = false;
     if (!pick_residue_set.empty() && pick_residue_set.find(residue) == pick_residue_set.end()) selected = false;
     if (!pick_element_set.empty() && pick_element_set.find(element) == pick_element_set.end()) selected = false;
-    if (!pick_remoteness_set.empty() && pick_remoteness_set.find(remoteness) == pick_remoteness_set.end()) selected = false;
     
     if (veto_chain_set.find(chain_id) != veto_chain_set.end()) selected = false;
     if (veto_residue_set.find(residue) != veto_residue_set.end()) selected = false;
     if (veto_element_set.find(element) != veto_element_set.end()) selected = false;
-    if (veto_remoteness_set.find(remoteness) != veto_remoteness_set.end()) selected = false;
     
     return selected;
 }
@@ -83,16 +78,6 @@ void AtomSelector::VetoElementType(const std::string & name)
     }
 }
 
-void AtomSelector::VetoRemotenessType(const std::string & name)
-{
-    std::stringstream ss(name);
-    std::string segment;
-    while (std::getline(ss, segment, ','))
-    {
-        veto_remoteness_set.insert(AtomicInfoHelper::GetRemotenessFromString(segment));
-    }
-}
-
 void AtomSelector::PickChainID(const std::string & name)
 {
     std::stringstream ss(name);
@@ -117,15 +102,5 @@ void AtomSelector::PickElementType(const std::string & name)
     while (std::getline(ss, segment, ','))
     {
         pick_element_set.insert(AtomicInfoHelper::GetElementFromString(segment));
-    }
-}
-
-void AtomSelector::PickRemotenessType(const std::string & name)
-{
-    std::stringstream ss(name);
-    std::string segment;
-    while (std::getline(ss, segment, ','))
-    {
-        pick_remoteness_set.insert(AtomicInfoHelper::GetRemotenessFromString(segment));
     }
 }

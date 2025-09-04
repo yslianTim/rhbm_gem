@@ -4,7 +4,6 @@
 #include "AtomicPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
-#include "AtomKeySystem.hpp"
 #include "Logger.hpp"
 
 #include <stdexcept>
@@ -13,11 +12,10 @@ AtomObject::AtomObject(void) :
     m_key_tag{ "" },
     m_is_selected{ false }, m_is_special_atom{ false },
     m_serial_id{ 0 }, m_residue_id{ 0 },
-    m_atom_id{ "" }, m_chain_id{ "" }, m_indicator{ "" },
+    m_component_id{ "" }, m_atom_id{ "" }, m_chain_id{ "" }, m_indicator{ "" },
     m_occupancy{ 0.0 }, m_temperature{ 0.0 },
     m_component_key{ 0 }, m_atom_key{ 0 },
     m_residue{ Residue::UNK }, m_element{ Element::UNK }, m_spot{ Spot::UNK },
-    m_remoteness{ Remoteness::UNK }, m_branch{ Branch::UNK },
     m_structure{ Structure::UNK },
     m_position{ 0.0, 0.0, 0.0 },
     m_atomic_potential_entry{ nullptr }
@@ -34,11 +32,11 @@ AtomObject::AtomObject(const AtomObject & other) :
     m_key_tag{ other.m_key_tag },
     m_is_selected{ other.m_is_selected }, m_is_special_atom{ other.m_is_special_atom },
     m_serial_id{ other.m_serial_id }, m_residue_id{ other.m_residue_id },
-    m_atom_id{ other.m_atom_id }, m_chain_id{ other.m_chain_id }, m_indicator{ other.m_indicator },
+    m_component_id{ other.m_component_id }, m_atom_id{ other.m_atom_id },
+    m_chain_id{ other.m_chain_id }, m_indicator{ other.m_indicator },
     m_occupancy{ other.m_occupancy }, m_temperature{ other.m_temperature },
     m_component_key{ other.m_component_key }, m_atom_key{ other.m_atom_key },
     m_residue{ other.m_residue }, m_element{ other.m_element }, m_spot{ other.m_spot },
-    m_remoteness{ other.m_remoteness }, m_branch{ other.m_branch },
     m_structure{ other.m_structure },
     m_position{ other.m_position }
 {
@@ -79,13 +77,25 @@ std::unique_ptr<AtomObject> AtomObject::AtomObjectClone(void) const
 void AtomObject::SetResidue(Residue value) { m_residue = value; }
 void AtomObject::SetElement(Element value) { m_element = value; }
 void AtomObject::SetSpot(Spot value) { m_spot = value; }
-void AtomObject::SetRemoteness(Remoteness value) { m_remoteness = value; }
-void AtomObject::SetBranch(Branch value) { m_branch = value; }
 void AtomObject::SetStructure(Structure value) { m_structure = value; }
+
+void AtomObject::SetComponentID(const std::string & value)
+{
+    m_component_id = value;
+    m_component_key = ComponentKeySystem::Instance().GetComponentKey(m_component_id);
+    m_residue = AtomicInfoHelper::GetResidueFromString(m_component_id, false);
+}
+
+void AtomObject::SetAtomID(const std::string & value)
+{
+    m_atom_id = value;
+    m_atom_key = AtomKeySystem::Instance().GetAtomKey(m_atom_id);
+    m_spot = AtomicInfoHelper::GetSpotFromString(m_atom_id, false);
+}
 
 void AtomObject::SetResidue(const std::string & name)
 {
-    m_residue = AtomicInfoHelper::GetResidueFromString(name);
+    m_residue = AtomicInfoHelper::GetResidueFromString(name, false);
 }
 
 void AtomObject::SetElement(const std::string & name)
@@ -95,17 +105,7 @@ void AtomObject::SetElement(const std::string & name)
 
 void AtomObject::SetSpot(const std::string & name)
 {
-    m_spot = AtomicInfoHelper::GetSpotFromString(name);
-}
-
-void AtomObject::SetRemoteness(const std::string & name)
-{
-    m_remoteness = AtomicInfoHelper::GetRemotenessFromString(name);
-}
-
-void AtomObject::SetBranch(const std::string & name)
-{
-    m_branch = AtomicInfoHelper::GetBranchFromString(name);
+    m_spot = AtomicInfoHelper::GetSpotFromString(name, false);
 }
 
 void AtomObject::SetPosition(float x, float y, float z)
@@ -157,8 +157,6 @@ void AtomObject::AddAlternateTemperature(
 Element AtomObject::GetElement(void) const { return m_element; }
 Residue AtomObject::GetResidue(void) const { return m_residue; }
 Spot AtomObject::GetSpot(void) const { return m_spot; }
-Remoteness AtomObject::GetRemoteness(void) const { return m_remoteness; }
-Branch AtomObject::GetBranch(void) const { return m_branch; }
 Structure AtomObject::GetStructure(void) const { return m_structure; }
 
 const std::unordered_map<std::string, std::array<float, 3>> &

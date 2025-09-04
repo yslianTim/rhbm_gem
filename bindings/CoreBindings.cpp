@@ -64,11 +64,9 @@ PYBIND11_MODULE(cpp_module, m)
         .def("SetPickChainID",          &PotentialDisplayCommand::SetPickChainID)
         .def("SetPickResidueType",      &PotentialDisplayCommand::SetPickResidueType)
         .def("SetPickElementType",      &PotentialDisplayCommand::SetPickElementType)
-        .def("SetPickRemotenessType",   &PotentialDisplayCommand::SetPickRemotenessType)
         .def("SetVetoChainID",          &PotentialDisplayCommand::SetVetoChainID)
         .def("SetVetoResidueType",      &PotentialDisplayCommand::SetVetoResidueType)
         .def("SetVetoElementType",      &PotentialDisplayCommand::SetVetoElementType)
-        .def("SetVetoRemotenessType",   &PotentialDisplayCommand::SetVetoRemotenessType)
         ;
 
     pybind11::class_<ResultDumpCommand>(m, "ResultDumpCommand")

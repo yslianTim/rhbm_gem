@@ -28,9 +28,9 @@ const std::vector<Element> AtomClassifier::m_main_chain_member_element_list
     Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN
 };
 
-const std::vector<Remoteness> AtomClassifier::m_main_chain_member_remoteness_list
+const std::vector<Spot> AtomClassifier::m_main_chain_member_spot_list
 {
-    Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE, Remoteness::NONE
+    Spot::CA, Spot::C, Spot::N, Spot::O
 };
 
 const std::vector<std::string> AtomClassifier::m_main_chain_member_atom_id_list
@@ -64,13 +64,11 @@ AtomClassifier::~AtomClassifier()
 
 }
 
-bool AtomClassifier::IsMainChainMember(
-    Element element, Remoteness remoteness, size_t & main_chain_member_id)
+bool AtomClassifier::IsMainChainMember(Spot spot, size_t & main_chain_member_id)
 {
     for (size_t i = 0; i < m_main_chain_member_count; i++)
     {
-        if (m_main_chain_member_element_list.at(i) == element &&
-            m_main_chain_member_remoteness_list.at(i) == remoteness)
+        if (m_main_chain_member_spot_list.at(i) == spot)
         {
             main_chain_member_id = i;
             return true;
@@ -118,10 +116,10 @@ Element AtomClassifier::GetMainChainElement(size_t id)
     return m_main_chain_member_element_list.at(id);
 }
 
-Remoteness AtomClassifier::GetMainChainRemoteness(size_t id)
+Spot AtomClassifier::GetMainChainSpot(size_t id)
 {
-    if (IsValidMainChainMemberID(id) == false) return Remoteness::UNK;
-    return m_main_chain_member_remoteness_list.at(id);
+    if (IsValidMainChainMemberID(id) == false) return Spot::UNK;
+    return m_main_chain_member_spot_list.at(id);
 }
 
 const std::string & AtomClassifier::GetMainChainElementLabel(size_t id)

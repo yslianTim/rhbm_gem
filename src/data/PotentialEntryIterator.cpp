@@ -259,8 +259,7 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
                 auto unpack_key{ KeyPackerElementClass::Unpack(group_key) };
                 oss <<"Elelemt class group key :" << std::boolalpha
                     << static_cast<int>(std::get<0>(unpack_key)) <<", "
-                    << static_cast<int>(std::get<1>(unpack_key)) <<", "
-                    << std::get<2>(unpack_key) <<" not found." << std::endl;
+                    << std::get<1>(unpack_key) <<" not found." << std::endl;
             }
             else if (class_key == AtomicInfoHelper::GetResidueClassKey())
             {
@@ -268,9 +267,7 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
                 oss <<"Residue class group key : tuple<" << std::boolalpha
                     << static_cast<int>(std::get<0>(unpack_key)) <<", "
                     << static_cast<int>(std::get<1>(unpack_key)) <<", "
-                    << static_cast<int>(std::get<2>(unpack_key)) <<", "
-                    << static_cast<int>(std::get<3>(unpack_key)) <<", "
-                    << std::get<4>(unpack_key) <<"> not found." << std::endl;
+                    << std::get<2>(unpack_key) <<"> not found." << std::endl;
             }
             else if (class_key == AtomicInfoHelper::GetStructureClassKey())
             {
@@ -279,9 +276,7 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
                     << static_cast<int>(std::get<0>(unpack_key)) <<", "
                     << static_cast<int>(std::get<1>(unpack_key)) <<", "
                     << static_cast<int>(std::get<2>(unpack_key)) <<", "
-                    << static_cast<int>(std::get<3>(unpack_key)) <<", "
-                    << static_cast<int>(std::get<4>(unpack_key)) <<", "
-                    << std::get<5>(unpack_key) <<"> not found." << std::endl;
+                    << std::get<3>(unpack_key) <<"> not found." << std::endl;
             }
             Logger::Log(LogLevel::Error, oss.str());
         }
@@ -341,8 +336,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         size_t id;
-        if (AtomClassifier::IsMainChainMember(
-            atom->GetElement(), atom->GetRemoteness(), id) == false) continue;
+        if (AtomClassifier::IsMainChainMember(atom->GetSpot(), id) == false) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         if (atom->GetSpecialAtomFlag() == true) continue;
         bool is_veto_residue{ false };
@@ -395,7 +389,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAmplitudeRatioToWidt
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         if (atom->GetSpecialAtomFlag() == true) continue;
-        if (AtomClassifier::IsMainChainMember(atom->GetElement(), atom->GetRemoteness(), current_id) == false) continue;
+        if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         auto entry{ atom->GetAtomicPotentialEntry() };
         auto residue_id{ atom->GetResidueID() };
@@ -431,8 +425,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstima
     std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
-        if (atom->GetElement() != Element::OXYGEN) continue;
-        if (atom->GetRemoteness() != Remoteness::NONE) continue;
+        if (atom->GetSpot() != Spot::O) continue;
         if (atom->GetSpecialAtomFlag() == false)
         {
             auto entry{ atom->GetAtomicPotentialEntry() };
@@ -505,7 +498,7 @@ PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
-        if (atom->GetRemoteness() != AtomClassifier::GetMainChainRemoteness(main_chain_element_id)) continue;
+        if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         auto entry{ atom->GetAtomicPotentialEntry() };
         auto residue_id{ atom->GetResidueID() };
@@ -767,7 +760,7 @@ PotentialEntryIterator::CreateXYPositionTomographyGraphMap(
     for (auto & atom : m_model_object->GetComponentsList())
     {
         if (atom->GetSpecialAtomFlag() == true) continue;
-        if (AtomClassifier::IsMainChainMember(atom->GetElement(), atom->GetRemoteness(), current_id) == false) continue;
+        if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;
 
         auto position{ atom->GetPosition() };
         if (position.at(2) < z_window_min || position.at(2) >= z_window_max) continue;
@@ -881,7 +874,7 @@ PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2DMap(
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         if (atom->GetSpecialAtomFlag() == true) continue;
-        if (AtomClassifier::IsMainChainMember(atom->GetElement(), atom->GetRemoteness(), current_id) == false) continue;
+        if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;
         auto position{ atom->GetPosition() };
         if (position.at(2) < z_window_min || position.at(2) >= z_window_max) continue;
         if (graph_map.find(current_id) == graph_map.end())

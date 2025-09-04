@@ -28,8 +28,6 @@ public:
         std::string veto_residue{ "" };
         std::string pick_element{ "" };
         std::string veto_element{ "" };
-        std::string pick_remoteness{ "" };
-        std::string veto_remoteness{ "" };
     };
 
 private:
@@ -56,8 +54,6 @@ public:
     void SetVetoResidueType(const std::string & value);
     void SetPickElementType(const std::string & value);
     void SetVetoElementType(const std::string & value);
-    void SetPickRemotenessType(const std::string & value);
-    void SetVetoRemotenessType(const std::string & value);
 
 private:
     bool BuildDataObject(void);

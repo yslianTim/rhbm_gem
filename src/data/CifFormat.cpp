@@ -440,7 +440,6 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             auto model_number{ token_list[index_map.at("pdbx_PDB_model_num")] };
             if (element_type == "H") return; // Skip hydrogen atom
             auto is_special_atom{ (group_type == "HETATM") ? true : false };
-            auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
             StringHelper::EraseCharFromString(atom_id, '\"');
 
             if (m_find_chemical_component_entry == false)
@@ -452,26 +451,10 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             {
                 BuildDefaultComponentAtomEntry(comp_id, atom_id, element_type);
             }
-            auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
-            auto is_standard_monomer{ m_data_block->IsStandardMonomer(component_key) };
             auto atom_object{ std::make_unique<AtomObject>() };
-            
-            Residue residue{ (is_standard_monomer) ?
-                AtomicInfoHelper::GetResidueFromString(comp_id) : Residue::UNK
-            };
-            Element element{ Element::UNK };
-            Remoteness remoteness{ Remoteness::UNK };
-            Branch branch{ Branch::UNK };
-            AtomKeySystem::Instance().ParseAtomId(
-                atom_id, element_type, element, remoteness, branch);
+            atom_object->SetComponentID(comp_id);
             atom_object->SetAtomID(atom_id);
-            atom_object->SetComponentKey(component_key);
-            atom_object->SetAtomKey(atom_key);
-            atom_object->SetResidue(residue);
             atom_object->SetElement(element_type);
-            atom_object->SetSpot(atom_id);
-            atom_object->SetRemoteness(remoteness);
-            atom_object->SetBranch(branch);
             atom_object->SetIndicator(indicator);
             atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
             atom_object->SetSerialID(std::stoi(serial_id));
@@ -578,12 +561,9 @@ void CifFormat::WriteAtomSiteBlockEntry(
 {
     std::string group_PDB{ atom->GetSpecialAtomFlag() ? "HETATM" : "ATOM" };
     std::string type_symbol{ AtomicInfoHelper::GetLabel(atom->GetElement()) };
-    std::string label_atom_id{ type_symbol };
-    label_atom_id += AtomicInfoHelper::GetChar(atom->GetRemoteness());
-    label_atom_id += AtomicInfoHelper::GetChar(atom->GetBranch());
-
+    std::string label_atom_id{ atom->GetAtomID() };
     std::string label_alt_id{ alt_id.empty() ? "." : alt_id };
-    std::string label_comp_id{ AtomicInfoHelper::GetLabel(atom->GetResidue()) };
+    std::string label_comp_id{ atom->GetComponentID() };
     std::string label_asym_id{ atom->GetChainID() };
     std::string label_seq_id{
         (atom->GetResidueID() == -1) ? "." : std::to_string(atom->GetResidueID())

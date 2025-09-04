@@ -6,6 +6,30 @@
 #include <stdexcept>
 #include <mutex>
 
+const std::unordered_map<Residue, std::vector<Spot>> AminoAcidInfoHelper::m_spot_map
+{
+    {Residue::ALA, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB}},
+    {Residue::ARG, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD, Spot::NE, Spot::CZ, Spot::NH1, Spot::NH2}},
+    {Residue::ASN, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::OD1, Spot::ND2}},
+    {Residue::ASP, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::OD1, Spot::OD2}},
+    {Residue::CYS, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::SG}},
+    {Residue::GLN, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD, Spot::OE1, Spot::NE2}},
+    {Residue::GLU, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD, Spot::OE1, Spot::OE2}},
+    {Residue::GLY, {Spot::C, Spot::CA, Spot::N, Spot::O}},
+    {Residue::HIS, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::ND1, Spot::CD2, Spot::CE1, Spot::NE2}},
+    {Residue::ILE, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG1, Spot::CG2, Spot::CD1}},
+    {Residue::LEU, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD1, Spot::CD2}},
+    {Residue::LYS, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD, Spot::CE, Spot::NZ}},
+    {Residue::MET, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::SD, Spot::CE}},
+    {Residue::PHE, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD1, Spot::CD2, Spot::CE1, Spot::CE2, Spot::CZ}},
+    {Residue::PRO, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD}},
+    {Residue::SER, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::OG}},
+    {Residue::THR, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::OG1, Spot::CG2}},
+    {Residue::TRP, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD1, Spot::CD2, Spot::NE1, Spot::CE2, Spot::CE3, Spot::CZ2, Spot::CZ3, Spot::CH2}},
+    {Residue::TYR, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD1, Spot::CD2, Spot::CE1, Spot::CE2, Spot::CZ, Spot::OH}},
+    {Residue::VAL, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG1, Spot::CG2}}
+};
+
 const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_element_map
 {
     {Residue::ALA, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
@@ -74,158 +98,7 @@ const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_e
                     Element::CARBON, Element::CARBON, Element::CARBON, Element::OXYGEN}},
 
     {Residue::VAL, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
-                    Element::CARBON, Element::CARBON, Element::CARBON}},
-
-    {Residue::CSX, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
-                    Element::CARBON, Element::SULFUR, Element::OXYGEN}}
-};
-
-const std::unordered_map<Residue, std::vector<Remoteness>> AminoAcidInfoHelper::m_remoteness_map
-{
-    {Residue::ALA, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA}},
-
-    {Residue::ARG, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::EPSILON,
-                    Remoteness::ZETA, Remoteness::ETA, Remoteness::ETA}},
-
-    {Residue::ASN, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::DELTA}},
-
-    {Residue::ASP, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::DELTA}},
-
-    {Residue::CYS, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA}},
-
-    {Residue::GLN, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::EPSILON,
-                    Remoteness::EPSILON}},
-
-    {Residue::GLU, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::EPSILON,
-                    Remoteness::EPSILON}},
-
-    {Residue::GLY, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE}},
-
-    {Residue::HIS, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::DELTA,
-                    Remoteness::EPSILON, Remoteness::EPSILON}},
-
-    {Residue::ILE, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::GAMMA, Remoteness::DELTA}},
-
-    {Residue::LEU, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::DELTA}},
-
-    {Residue::LYS, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::EPSILON,
-                    Remoteness::ZETA}},
-
-    {Residue::MET, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::EPSILON}},
-
-    {Residue::PHE, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::DELTA,
-                    Remoteness::EPSILON, Remoteness::EPSILON, Remoteness::ZETA}},
-
-    {Residue::PRO, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA}},
-
-    {Residue::SER, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA}},
-
-    {Residue::THR, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::GAMMA}},
-
-    {Residue::TRP, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::DELTA,
-                    Remoteness::EPSILON, Remoteness::EPSILON, Remoteness::EPSILON, Remoteness::ZETA,
-                    Remoteness::ZETA, Remoteness::ETA}},
-
-    {Residue::TYR, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA, Remoteness::DELTA,
-                    Remoteness::EPSILON, Remoteness::EPSILON, Remoteness::ZETA, Remoteness::ETA}},
-
-    {Residue::VAL, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::GAMMA}},
-
-    {Residue::CSX, {Remoteness::NONE, Remoteness::ALPHA, Remoteness::NONE, Remoteness::NONE,
-                    Remoteness::BETA, Remoteness::GAMMA, Remoteness::DELTA}}
-};
-
-const std::unordered_map<Residue, std::vector<Branch>> AminoAcidInfoHelper::m_branch_map
-{
-    {Residue::ALA, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE}},
-
-    {Residue::ARG, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::ONE, Branch::TWO}},
-
-    {Residue::ASN, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::ONE, Branch::TWO}},
-
-    {Residue::ASP, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::ONE, Branch::TWO}},
-
-    {Residue::CYS, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE}},
-
-    {Residue::GLN, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::NONE, Branch::ONE,
-                    Branch::TWO}},
-
-    {Residue::GLU, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::NONE, Branch::ONE,
-                    Branch::TWO}},
-
-    {Residue::GLY, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE}},
-
-    {Residue::HIS, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::ONE, Branch::TWO,
-                    Branch::ONE, Branch::TWO}},
-
-    {Residue::ILE, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::ONE, Branch::TWO, Branch::ONE}},
-
-    {Residue::LEU, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::ONE, Branch::TWO}},
-
-    {Residue::LYS, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE}},
-
-    {Residue::MET, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE}},
-
-    {Residue::PHE, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::ONE, Branch::TWO,
-                    Branch::ONE, Branch::TWO, Branch::NONE}},
-
-    {Residue::PRO, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::NONE}},
-
-    {Residue::SER, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE}},
-
-    {Residue::THR, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::ONE, Branch::TWO}},
-
-    {Residue::TRP, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::ONE, Branch::TWO,
-                    Branch::ONE, Branch::TWO, Branch::THREE, Branch::TWO,
-                    Branch::THREE, Branch::TWO}},
-
-    {Residue::TYR, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::ONE, Branch::TWO,
-                    Branch::ONE, Branch::TWO, Branch::NONE, Branch::NONE}},
-
-    {Residue::VAL, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::ONE, Branch::TWO}},
-    
-    {Residue::CSX, {Branch::NONE, Branch::NONE, Branch::NONE, Branch::NONE,
-                    Branch::NONE, Branch::NONE, Branch::NONE}}
+                    Element::CARBON, Element::CARBON, Element::CARBON}}
 };
 
 const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_amber95_partial_charge_map
@@ -250,8 +123,7 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_am
     {Residue::THR, { 0.597,-0.039,-0.416,-0.568, 0.365,-0.676,-0.244}},
     {Residue::TRP, { 0.597,-0.028,-0.416,-0.568,-0.005,-0.142,-0.164, 0.124,-0.342, 0.138,-0.239,-0.260,-0.197,-0.113}},
     {Residue::TYR, { 0.597,-0.001,-0.416,-0.568,-0.015,-0.001,-0.191,-0.191,-0.234,-0.234, 0.326,-0.558}},
-    {Residue::VAL, { 0.597,-0.088,-0.416,-0.568, 0.299,-0.319,-0.319}},
-    {Residue::CSX, { 0.597, 0.021,-0.416,-0.568,-0.123,-0.285, 0.000}}
+    {Residue::VAL, { 0.597,-0.088,-0.416,-0.568, 0.299,-0.319,-0.319}}
 };
 
 const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_buried_partial_charge_map
@@ -276,8 +148,7 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_bu
     {Residue::THR, { 0.565, 0.169,-0.573,-0.659, 0.232,-0.494,-0.413}},
     {Residue::TRP, { 0.565, 0.233,-0.589,-0.669,-0.133,-0.175,-0.083, 0.013,-0.310, 0.195,-0.230,-0.268,-0.213,-0.190}},
     {Residue::TYR, { 0.561, 0.235,-0.586,-0.662,-0.148,-0.044,-0.182,-0.182,-0.334,-0.345, 0.403,-0.568}},
-    {Residue::VAL, { 0.560, 0.215,-0.588,-0.661,-0.005,-0.362,-0.360}},
-    {Residue::CSX, { 0.574, 0.186,-0.558,-0.694, 0.096,-0.285, 0.000}}
+    {Residue::VAL, { 0.560, 0.215,-0.588,-0.661,-0.005,-0.362,-0.360}}
 };
 
 const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_helix_partial_charge_map
@@ -302,8 +173,7 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_he
     {Residue::THR, { 0.563, 0.173,-0.589,-0.690, 0.225,-0.506,-0.410}},
     {Residue::TRP, { 0.568, 0.234,-0.602,-0.697,-0.142,-0.171,-0.085, 0.018,-0.310, 0.197,-0.225,-0.269,-0.213,-0.188}},
     {Residue::TYR, { 0.573, 0.238,-0.599,-0.690,-0.165,-0.037,-0.181,-0.182,-0.335,-0.349, 0.401,-0.565}},
-    {Residue::VAL, { 0.559, 0.220,-0.602,-0.695,-0.013,-0.362,-0.362}},
-    {Residue::CSX, { 0.571, 0.188,-0.577,-0.718, 0.086,-0.285, 0.000}}
+    {Residue::VAL, { 0.559, 0.220,-0.602,-0.695,-0.013,-0.362,-0.362}}
 };
 
 const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_sheet_partial_charge_map
@@ -328,34 +198,25 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_sh
     {Residue::THR, { 0.568, 0.168,-0.569,-0.663, 0.238,-0.482,-0.409}},
     {Residue::TRP, { 0.562, 0.229,-0.575,-0.661,-0.124,-0.181,-0.091, 0.008,-0.311, 0.195,-0.234,-0.270,-0.206,-0.186}},
     {Residue::TYR, { 0.561, 0.233,-0.578,-0.663,-0.138,-0.047,-0.180,-0.183,-0.330,-0.344, 0.408,-0.560}},
-    {Residue::VAL, { 0.563, 0.214,-0.587,-0.657, 0.000,-0.361,-0.356}},
-    {Residue::CSX, { 0.584, 0.183,-0.550,-0.695, 0.103,-0.285, 0.000}}
+    {Residue::VAL, { 0.563, 0.214,-0.587,-0.657, 0.000,-0.361,-0.356}}
 };
 
 size_t AminoAcidInfoHelper::GetAtomCount(Residue residue)
 {
-    return m_element_map.at(residue).size();
+    return m_spot_map.at(residue).size();
 }
 
 size_t AminoAcidInfoHelper::GetAtomCount(int residue)
 {
-    return m_element_map.at(static_cast<Residue>(residue)).size();
+    return m_spot_map.at(static_cast<Residue>(residue)).size();
 }
 
 double AminoAcidInfoHelper::GetPartialCharge(
-    Residue residue, Element element, Remoteness remoteness, Branch branch,
-    Structure structure, bool use_amber_table, bool verbose)
+    Residue residue, Spot spot, Structure structure,
+    bool use_amber_table, bool verbose)
 {
-    using Key = std::uint32_t; // packed <Element, Remoteness, Branch>
-    auto pack_key = [](Element e, Remoteness r, Branch b) noexcept -> Key
-    {
-        return  (static_cast<Key>(e) << 16) |
-                (static_cast<Key>(r) <<  8) |
-                 static_cast<Key>(b);
-    };
-
     // one cache bucket per residue, lazily initialised on first use
-    static std::unordered_map<Residue, std::unordered_map<Key, double>> cache;
+    static std::unordered_map<Residue, std::unordered_map<Spot, double>> cache;
     static std::mutex cache_mutex;
 
     std::lock_guard<std::mutex> lock(cache_mutex);
@@ -364,10 +225,8 @@ double AminoAcidInfoHelper::GetPartialCharge(
     {
         if (residue_cache.empty()) // first request for this residue
         {
-            auto atom_size{ m_element_map.at(residue).size() };
-            const auto & element_list{ m_element_map.at(residue) };
-            const auto & remoteness_list{ m_remoteness_map.at(residue) };
-            const auto & branch_list{ m_branch_map.at(residue) };
+            auto atom_size{ m_spot_map.at(residue).size() };
+            const auto & spot_list{ m_spot_map.at(residue) };
             const auto & charge_list
             {
                 (use_amber_table == true) ?
@@ -376,10 +235,7 @@ double AminoAcidInfoHelper::GetPartialCharge(
             };
 
             // the four vectors should guaranteed aligned
-            if (atom_size != element_list.size() ||
-                atom_size != remoteness_list.size() ||
-                atom_size != branch_list.size() ||
-                atom_size != charge_list.size())
+            if (atom_size != charge_list.size())
             {
                 throw std::range_error(
                     "AminoAcidInfoHelper::GetPartialCharge ‑ the four vectors are not aligned");
@@ -388,8 +244,7 @@ double AminoAcidInfoHelper::GetPartialCharge(
             residue_cache.reserve(atom_size);
             for (std::size_t i = 0; i < atom_size; i++)
             {
-                residue_cache.emplace(
-                    pack_key(element_list[i], remoteness_list[i], branch_list[i]), charge_list[i]);
+                residue_cache.emplace(spot_list[i], charge_list[i]);
             }
         }
     }
@@ -403,10 +258,9 @@ double AminoAcidInfoHelper::GetPartialCharge(
         return 0.0;
     }
     
-    const Key key{ pack_key(element, remoteness, branch) };
-    if (residue_cache.find(key) != residue_cache.end())
+    if (residue_cache.find(spot) != residue_cache.end())
     {
-        return residue_cache.at(key);
+        return residue_cache.at(spot);
     }
 
     if (verbose == true)
@@ -441,4 +295,14 @@ const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeList(
 const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeListAmber(Residue residue)
 {
     return m_amber95_partial_charge_map.at(residue);
+}
+
+const std::vector<Spot> & AminoAcidInfoHelper::GetSpotList(Residue residue)
+{
+    if (m_spot_map.find(residue) == m_spot_map.end())
+    {
+        throw std::out_of_range(
+            "AminoAcidInfoHelper::GetSpotList ‑ residue is not supported");
+    }
+    return m_spot_map.at(residue);
 }
