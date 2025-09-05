@@ -22,6 +22,8 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
     model_object->SetResolutionMethod(data_block->GetResolutionMethod());
     model_object->SetChainIDListMap(data_block->GetChainIDListMap());
     model_object->SetChemicalComponentEntryMap(data_block->GetChemicalComponentEntryMap());
+    model_object->SetComponentKeySystem(data_block->MoveComponentKeySystem());
+    model_object->SetAtomKeySystem(data_block->MoveAtomKeySystem());
     return model_object;
 }
 

@@ -8,13 +8,17 @@
 #include "Logger.hpp"
 
 ModelObject::ModelObject(void) :
-    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr }
+    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
+    m_component_key_system{ std::make_unique<ComponentKeySystem>() },
+    m_atom_key_system{ std::make_unique<AtomKeySystem>() }
 {
 }
 
 ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_list) :
     m_atom_list{ std::move(atom_object_list) },
-    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr }
+    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
+    m_component_key_system{ std::make_unique<ComponentKeySystem>() },
+    m_atom_key_system{ std::make_unique<AtomKeySystem>() }
 {
     Update();
 }
@@ -27,7 +31,9 @@ ModelObject::~ModelObject()
 ModelObject::ModelObject(const ModelObject & other) :
     m_key_tag{ other.m_key_tag }, m_pdb_id{ other.m_pdb_id }, m_emd_id{ other.m_emd_id },
     m_resolution_method{ other.m_resolution_method }, m_resolution{ other.m_resolution },
-    m_kd_tree_root{ nullptr }
+    m_kd_tree_root{ nullptr },
+    m_component_key_system{ std::make_unique<ComponentKeySystem>() },
+    m_atom_key_system{ std::make_unique<AtomKeySystem>() }
 {
     m_atom_list.clear();
     m_atom_list.reserve(other.m_atom_list.size());
@@ -64,9 +70,9 @@ void ModelObject::Accept(DataObjectVisitorBase * visitor)
     visitor->VisitModelObject(this);
 }
 
-void ModelObject::AddAtom(std::unique_ptr<AtomObject> component)
+void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)
 {
-    m_atom_list.emplace_back(std::move(component));
+    m_atom_list.emplace_back(std::move(atom));
 }
 
 void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> & atom_list)
@@ -91,6 +97,26 @@ void ModelObject::SetChemicalComponentEntryMap(
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & entry_map)
 {
     m_chemical_component_entry_map = std::move(entry_map);
+}
+
+void ModelObject::SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system)
+{
+    if (m_component_key_system != nullptr)
+    {
+        Logger::Log(LogLevel::Debug, "Remove the old ComponentKeySystem.");
+        m_component_key_system = nullptr;
+    }
+    m_component_key_system = std::move(component_key_system);
+}
+
+void ModelObject::SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system)
+{
+    if (m_atom_key_system != nullptr)
+    {
+        Logger::Log(LogLevel::Debug, "Remove the old AtomKeySystem.");
+        m_atom_key_system = nullptr;
+    }
+    m_atom_key_system = std::move(atom_key_system);
 }
 
 void ModelObject::BuildKDTreeRoot(void)

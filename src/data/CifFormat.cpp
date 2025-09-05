@@ -127,8 +127,8 @@ void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
             else standard_flag = false;
             entry->SetStandardMonomerFlag(standard_flag);
 
-            ComponentKeySystem::Instance().RegisterComponent(comp_id);
-            auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+            m_data_block->GetComponentKeySystemPtr()->RegisterComponent(comp_id);
+            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
             m_data_block->AddChemicalComponentEntry(component_key, std::move(entry));
 
             m_find_chemical_component_entry = true;
@@ -163,9 +163,9 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
             atom_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
 
-            auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
-            AtomKeySystem::Instance().RegisterAtom(atom_id);
-            auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
+            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
+            m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
+            auto atom_key{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id) };
             m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
 
             m_find_component_atom_entry = true;
@@ -200,9 +200,9 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             bond_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
             bond_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
 
-            auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
-            auto atom_key_1{ AtomKeySystem::Instance().GetAtomKey(atom_id_1) };
-            auto atom_key_2{ AtomKeySystem::Instance().GetAtomKey(atom_id_2) };
+            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
+            auto atom_key_1{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id_1) };
+            auto atom_key_2{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id_2) };
             m_data_block->AddComponentBondEntry(component_key, {atom_key_1, atom_key_2}, bond_entry);
         }
     );
@@ -453,7 +453,9 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             }
             auto atom_object{ std::make_unique<AtomObject>() };
             atom_object->SetComponentID(comp_id);
+            atom_object->SetComponentKey(m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id));
             atom_object->SetAtomID(atom_id);
+            atom_object->SetAtomKey(m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id));
             atom_object->SetElement(element_type);
             atom_object->SetIndicator(indicator);
             atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
@@ -683,8 +685,8 @@ void CifFormat::BuildDefaultChemicalComponentEntry(const std::string & comp_id)
     if (AtomicInfoHelper::GetResidueFromString(comp_id) != Residue::UNK) standard_flag = true;
     entry->SetStandardMonomerFlag(standard_flag);
 
-    ComponentKeySystem::Instance().RegisterComponent(comp_id);
-    auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+    m_data_block->GetComponentKeySystemPtr()->RegisterComponent(comp_id);
+    auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
     m_data_block->AddChemicalComponentEntry(component_key, std::move(entry));
 }
 
@@ -694,9 +696,9 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     const std::string & element_symbol)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentAtomEntry() called");
-    auto component_key{ ComponentKeySystem::Instance().GetComponentKey(comp_id) };
+    auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
 
-    AtomKeySystem::Instance().RegisterAtom(atom_id);
+    m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
 
     ComponentAtomEntry atom_entry;
     atom_entry.atom_id = atom_id;
@@ -705,6 +707,6 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     atom_entry.chiral_config = '.';
     atom_entry.ordinal_index = 0;
     
-    auto atom_key{ AtomKeySystem::Instance().GetAtomKey(atom_id) };
+    auto atom_key{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id) };
     m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
 }

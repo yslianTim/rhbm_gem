@@ -6,7 +6,9 @@
 #include "ComponentKeySystem.hpp"
 #include "Logger.hpp"
 
-AtomicModelDataBlock::AtomicModelDataBlock(void)
+AtomicModelDataBlock::AtomicModelDataBlock(void) :
+    m_component_key_system{ std::make_unique<ComponentKeySystem>() },
+    m_atom_key_system{ std::make_unique<AtomKeySystem>() }
 {
     Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::AtomicModelDataBlock() called");
 }

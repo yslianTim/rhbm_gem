@@ -526,7 +526,7 @@ void ModelPainter::PaintGroupGausSideChain(
             for (auto & spot : AminoAcidInfoHelper::GetSpotList(residue))
             {
                 auto atom_key{ static_cast<AtomKey>(spot) };
-                auto atom_id{ AtomKeySystem::Instance().GetAtomId(atom_key) };
+                auto atom_id{ model_object->GetAtomKeySystemPtr()->GetAtomId(atom_key) };
                 auto element_char{ StringHelper::ExtractCharAsString(atom_id, 0) };
                 auto element_type{ AtomicInfoHelper::GetElementFromString(element_char) };
                 if (element_type != element) continue;

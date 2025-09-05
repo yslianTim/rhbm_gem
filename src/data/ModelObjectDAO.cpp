@@ -86,7 +86,9 @@ namespace
             is_special_atom INTEGER,
             position_x DOUBLE,
             position_y DOUBLE,
-            position_z DOUBLE
+            position_z DOUBLE,
+            component_key INTEGER,
+            atom_key INTEGER
         )
     )sql";
 
@@ -94,15 +96,15 @@ namespace
         INSERT OR REPLACE INTO {} (
             serial_id, residue_id, component_id, atom_id, chain_id, indicator,
             occupancy, temperature, element, structure, is_special_atom,
-            position_x, position_y, position_z
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            position_x, position_y, position_z, component_key, atom_key
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )sql";
 
     constexpr std::string_view SELECT_ATOM_LIST_SQL = R"sql(
         SELECT
             serial_id, residue_id, component_id, atom_id, chain_id, indicator,
             occupancy, temperature, element, structure, is_special_atom,
-            position_x, position_y, position_z
+            position_x, position_y, position_z, component_key, atom_key
         FROM {};
     )sql";
 
@@ -455,6 +457,8 @@ void ModelObjectDAO::SaveAtomObjectList(
         m_database->Bind<double>(12, static_cast<double>(atom_object->GetPosition().at(0)));
         m_database->Bind<double>(13, static_cast<double>(atom_object->GetPosition().at(1)));
         m_database->Bind<double>(14, static_cast<double>(atom_object->GetPosition().at(2)));
+        m_database->Bind<int>(15, static_cast<int>(atom_object->GetComponentKey()));
+        m_database->Bind<int>(16, static_cast<int>(atom_object->GetAtomKey()));
 
         m_database->StepOnce();
         m_database->Reset();
@@ -636,10 +640,10 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     auto iter{
         m_database->IterateQuery<
             int, int, std::string, std::string, std::string, std::string,
-            double, double, int, int, int, double, double, double>(
+            double, double, int, int, int, double, double, double, ComponentKey, AtomKey>(
             FormatSQL(SELECT_ATOM_LIST_SQL, atom_list_table_name)) };
     std::tuple<int, int, std::string, std::string, std::string, std::string,
-               double, double, int, int, int, double, double, double> row;
+               double, double, int, int, int, double, double, double, ComponentKey, AtomKey> row;
     while (iter.Next(row))
     {
         auto atom_object{ std::make_unique<AtomObject>() };
@@ -658,6 +662,8 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             static_cast<float>(std::get<11>(row)),
             static_cast<float>(std::get<12>(row)),
             static_cast<float>(std::get<13>(row)) );
+        atom_object->SetComponentKey(std::get<14>(row));
+        atom_object->SetAtomKey(std::get<15>(row));
 
         auto serial_id{ atom_object->GetSerialID() };
 
@@ -703,7 +709,7 @@ void ModelObjectDAO::LoadChemicalComponentEntryList(
         component_entry->SetStandardMonomerFlag(static_cast<bool>(std::get<6>(row)));
         model_obj->AddChemicalComponentEntry(component_key, std::move(component_entry));
 
-        ComponentKeySystem::Instance().RegisterComponent(component_id, component_key);
+        model_obj->GetComponentKeySystemPtr()->RegisterComponent(component_id, component_key);
     }
 }
 
@@ -736,7 +742,7 @@ void ModelObjectDAO::LoadComponentAtomEntryList(
         atom_entry.ordinal_index = std::get<6>(row);
         component_entry->AddComponentAtomEntry(atom_key, atom_entry);
 
-        AtomKeySystem::Instance().RegisterAtom(atom_id, atom_key);
+        model_obj->GetAtomKeySystemPtr()->RegisterAtom(atom_id, atom_key);
     }
 }
 

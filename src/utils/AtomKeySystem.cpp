@@ -21,16 +21,29 @@ AtomKeySystem::AtomKeySystem(void) :
     }
 }
 
+AtomKeySystem::AtomKeySystem(const AtomKeySystem & other) :
+    m_next_dynamic_key{ other.m_next_dynamic_key },
+    m_id_to_key_map{ other.m_id_to_key_map },
+    m_key_to_id_map{ other.m_key_to_id_map }
+{
+    Logger::Log(LogLevel::Debug, "AtomKeySystem copy ctor called");
+}
+
+AtomKeySystem & AtomKeySystem::operator=(const AtomKeySystem & other)
+{
+    if (this != &other)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_next_dynamic_key = other.m_next_dynamic_key;
+        m_id_to_key_map = other.m_id_to_key_map;
+        m_key_to_id_map = other.m_key_to_id_map;
+    }
+    return *this;
+}
+
 AtomKeySystem::~AtomKeySystem(void)
 {
     Logger::Log(LogLevel::Debug, "AtomKeySystem::~AtomKeySystem() called");
-}
-
-AtomKeySystem & AtomKeySystem::Instance(void)
-{
-    Logger::Log(LogLevel::Debug, "AtomKeySystem::Instance() called");
-    static AtomKeySystem instance;
-    return instance;
 }
 
 void AtomKeySystem::RegisterAtom(const std::string & atom_id)

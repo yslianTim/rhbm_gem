@@ -82,14 +82,12 @@ void AtomObject::SetStructure(Structure value) { m_structure = value; }
 void AtomObject::SetComponentID(const std::string & value)
 {
     m_component_id = value;
-    m_component_key = ComponentKeySystem::Instance().GetComponentKey(m_component_id);
     m_residue = AtomicInfoHelper::GetResidueFromString(m_component_id, false);
 }
 
 void AtomObject::SetAtomID(const std::string & value)
 {
     m_atom_id = value;
-    m_atom_key = AtomKeySystem::Instance().GetAtomKey(m_atom_id);
     m_spot = AtomicInfoHelper::GetSpotFromString(m_atom_id, false);
 }
 
@@ -123,7 +121,8 @@ std::string AtomObject::GetInfo(void) const
            "[Chain ID] " + m_chain_id + " " +
            AtomicInfoHelper::GetLabel(m_residue) + " " +
            AtomicInfoHelper::GetLabel(m_element) + " " +
-           AtomKeySystem::Instance().GetAtomId(m_atom_key) + " " +
+           "[Component Key] " + std::to_string(m_component_key) + " " +
+           "[Atom Key] " + std::to_string(m_atom_key) + " " +
            m_indicator + " " +
            "Position = (" +
            std::to_string(m_position.at(0)) + ", " +

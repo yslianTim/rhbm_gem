@@ -18,16 +18,17 @@ class AtomKeySystem
     std::unordered_map<AtomKey, std::string> m_key_to_id_map;
     
 public:
-    static AtomKeySystem & Instance(void);
+
+    AtomKeySystem(void);
+    ~AtomKeySystem(void);
+    AtomKeySystem(const AtomKeySystem & other);
+    AtomKeySystem & operator=(const AtomKeySystem & other);
+
     void RegisterAtom(const std::string & atom_id);
     void RegisterAtom(const std::string & atom_id, AtomKey atom_key);
     AtomKey GetAtomKey(const std::string & atom_id);
     std::string GetAtomId(AtomKey atom_key);
     bool IsBuildInAtom(const std::string & atom_id) const;
     bool IsBuildInAtom(AtomKey atom_key) const;
-
-private:
-    AtomKeySystem(void);
-    ~AtomKeySystem(void);
 
 };

@@ -22,16 +22,29 @@ ComponentKeySystem::ComponentKeySystem(void) :
     };
 }
 
+ComponentKeySystem::ComponentKeySystem(const ComponentKeySystem & other) :
+    m_next_dynamic_key{ other.m_next_dynamic_key },
+    m_id_to_key_map{ other.m_id_to_key_map },
+    m_key_to_id_map{ other.m_key_to_id_map }
+{
+    Logger::Log(LogLevel::Debug, "ComponentKeySystem copy ctor called");
+}
+
+ComponentKeySystem & ComponentKeySystem::operator=(const ComponentKeySystem & other)
+{
+    if (this != &other)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_next_dynamic_key = other.m_next_dynamic_key;
+        m_id_to_key_map = other.m_id_to_key_map;
+        m_key_to_id_map = other.m_key_to_id_map;
+    }
+    return *this;
+}
+
 ComponentKeySystem::~ComponentKeySystem(void)
 {
     Logger::Log(LogLevel::Debug, "ComponentKeySystem::~ComponentKeySystem() called");
-}
-
-ComponentKeySystem & ComponentKeySystem::Instance(void)
-{
-    Logger::Log(LogLevel::Debug, "ComponentKeySystem::Instance() called");
-    static ComponentKeySystem instance;
-    return instance;
 }
 
 void ComponentKeySystem::RegisterComponent(const std::string & component_id)

@@ -10,6 +10,7 @@
 
 #include "DataObjectBase.hpp"
 #include "ComponentKeySystem.hpp"
+#include "AtomKeySystem.hpp"
 
 class AtomObject;
 class ChemicalComponentEntry;
@@ -29,6 +30,8 @@ class ModelObject : public DataObjectBase
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
+    std::unique_ptr<ComponentKeySystem> m_component_key_system;
+    std::unique_ptr<AtomKeySystem> m_atom_key_system;
 
 public:
     ModelObject(void);
@@ -58,6 +61,8 @@ public:
         std::unique_ptr<ChemicalComponentEntry> entry);
     void SetChemicalComponentEntryMap(
         std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & entry_map);
+    void SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system);
+    void SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system);
     void BuildKDTreeRoot(void);
     void FilterAtomFromSymmetry(bool is_asymmetry);
 
@@ -80,6 +85,8 @@ public:
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
     GetChemicalComponentEntryMap(void) const;
     KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
+    ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
+    AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
 
 private:
     void BuildSelectedAtomList(void);

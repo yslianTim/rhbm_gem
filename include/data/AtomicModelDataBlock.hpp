@@ -20,6 +20,8 @@ class AtomicModelDataBlock
 {
     std::string m_map_id, m_model_id;
     std::string m_resolution, m_resolution_method;
+    std::unique_ptr<ComponentKeySystem> m_component_key_system;
+    std::unique_ptr<AtomKeySystem> m_atom_key_system;
 
     std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> m_atom_object_list_map;
     
@@ -77,5 +79,9 @@ public:
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
     ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key);
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
+    ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
+    AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
+    std::unique_ptr<ComponentKeySystem> MoveComponentKeySystem(void) { return std::move(m_component_key_system); }
+    std::unique_ptr<AtomKeySystem> MoveAtomKeySystem(void) { return std::move(m_atom_key_system); }
 
 };

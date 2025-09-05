@@ -48,7 +48,9 @@ public:
     void SetSerialID(int value) { m_serial_id = value; }
     void SetResidueID(int value) { m_residue_id = value; }
     void SetComponentID(const std::string & value);
+    void SetComponentKey(ComponentKey value) { m_component_key = value; }
     void SetAtomID(const std::string & value);
+    void SetAtomKey(AtomKey value) { m_atom_key = value; }
     void SetChainID(const std::string & value) { m_chain_id = value; }
     void SetIndicator(const std::string & value) { m_indicator = value; }
     void SetOccupancy(float value) { m_occupancy = value; }
