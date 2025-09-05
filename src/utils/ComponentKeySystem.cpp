@@ -7,9 +7,10 @@
 #define UINT8_MAX 255
 #endif
 
-const ComponentKey ComponentKeySystem::kDynamicBase{ 30 };
+const ComponentKey ComponentKeySystem::k_dynamic_base{ 30 };
 
-ComponentKeySystem::ComponentKeySystem(void)
+ComponentKeySystem::ComponentKeySystem(void) :
+    m_next_dynamic_key{ k_dynamic_base }
 {
     Logger::Log(LogLevel::Debug, "ComponentKeySystem::ComponentKeySystem() called");
     const auto & build_in_residue_map{ AtomicInfoHelper::GetResidueMap() };
@@ -81,10 +82,10 @@ std::string ComponentKeySystem::GetComponentId(ComponentKey component_key)
 bool ComponentKeySystem::IsBuildInComponent(const std::string & component_id) const
 {
     if (m_id_to_key_map.find(component_id) == m_id_to_key_map.end()) return false;
-    return m_id_to_key_map.at(component_id) < kDynamicBase;
+    return m_id_to_key_map.at(component_id) < k_dynamic_base;
 }
 
 bool ComponentKeySystem::IsBuildInComponent(ComponentKey component_key) const
 {
-    return component_key < kDynamicBase;
+    return component_key < k_dynamic_base;
 }

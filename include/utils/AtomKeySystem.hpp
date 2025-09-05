@@ -11,9 +11,9 @@ using AtomKey = uint32_t;
 
 class AtomKeySystem
 {
-    static const AtomKey kDynamicBase;
+    static const AtomKey k_dynamic_base;
     std::mutex m_mutex;
-    AtomKey m_next_dynamic_key{ kDynamicBase };
+    AtomKey m_next_dynamic_key;
     std::unordered_map<std::string, AtomKey> m_id_to_key_map;
     std::unordered_map<AtomKey, std::string> m_key_to_id_map;
     
@@ -25,13 +25,6 @@ public:
     std::string GetAtomId(AtomKey atom_key);
     bool IsBuildInAtom(const std::string & atom_id) const;
     bool IsBuildInAtom(AtomKey atom_key) const;
-    //void ParseAtomId(
-    //    const std::string & atom_id,
-    //    const std::string & element_type,
-    //    Element & element,
-    //    Remoteness & remoteness,
-    //    Branch & branch
-    //);
 
 private:
     AtomKeySystem(void);

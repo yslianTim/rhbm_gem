@@ -9,9 +9,9 @@ using ComponentKey = uint8_t;
 
 class ComponentKeySystem
 {
-    static const ComponentKey kDynamicBase;
+    static const ComponentKey k_dynamic_base;
     std::mutex m_mutex;
-    ComponentKey m_next_dynamic_key{ kDynamicBase };
+    ComponentKey m_next_dynamic_key;
     std::unordered_map<std::string, ComponentKey> m_id_to_key_map;
     std::unordered_map<ComponentKey, std::string> m_key_to_id_map;
     
