@@ -216,15 +216,3 @@ AtomicModelDataBlock::GetChemicalComponentEntryMap(void)
 {
     return m_chemical_component_entry_map;
 }
-
-bool AtomicModelDataBlock::IsStandardMonomer(ComponentKey key) const
-{
-    auto comp_id{ ComponentKeySystem::Instance().GetComponentId(key) };
-    if (m_chemical_component_entry_map.find(key) == m_chemical_component_entry_map.end())
-    {
-        Logger::Log(LogLevel::Warning,
-            "Chemical component ID " + comp_id + " not found in chemical component map.");
-        return false;
-    }
-    return m_chemical_component_entry_map.at(key)->IsStandardMonomer();
-}

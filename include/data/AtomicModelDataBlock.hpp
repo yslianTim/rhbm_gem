@@ -77,6 +77,5 @@ public:
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
     ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key);
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
-    bool IsStandardMonomer(ComponentKey key) const;
 
 };
