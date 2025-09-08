@@ -14,7 +14,7 @@ enum class Residue : uint8_t
     A   = 25, G   = 26, C   = 27, U   = 28, T   = 29
 };
 
-enum class Spot : uint32_t
+enum class Spot : uint16_t
 {
     UNK = 0,
 

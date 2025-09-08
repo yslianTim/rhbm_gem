@@ -530,9 +530,9 @@ void ModelPainter::PaintGroupGausSideChain(
                 auto element_char{ StringHelper::ExtractCharAsString(atom_id, 0) };
                 auto element_type{ AtomicInfoHelper::GetElementFromString(element_char) };
                 if (element_type != element) continue;
-                auto mix_group_key{ KeyPackerResidueClass::Pack(component_key, atom_key, false) };
-                auto free_group_key{ KeyPackerStructureClass::Pack(Structure::FREE, component_key, atom_key, false) };
-                auto helix_group_key{ KeyPackerStructureClass::Pack(Structure::HELX_P, component_key, atom_key, false) };
+                auto mix_group_key{ KeyPackerResidueClass::Pack(component_key, atom_key) };
+                auto free_group_key{ KeyPackerStructureClass::Pack(Structure::FREE, component_key, atom_key) };
+                auto helix_group_key{ KeyPackerStructureClass::Pack(Structure::HELX_P, component_key, atom_key) };
                 bool has_data{ false };
                 if (entry_iter->IsAvailableGroupKey(mix_group_key, AtomicInfoHelper::GetResidueClassKey()) == true)
                 {

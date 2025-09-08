@@ -7,7 +7,7 @@
 
 #include "GlobalEnumClass.hpp"
 
-using AtomKey = uint32_t;
+using AtomKey = uint16_t;
 
 class AtomKeySystem
 {

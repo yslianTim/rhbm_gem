@@ -256,27 +256,18 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
         {
             if (class_key == AtomicInfoHelper::GetElementClassKey())
             {
-                auto unpack_key{ KeyPackerElementClass::Unpack(group_key) };
-                oss <<"Elelemt class group key :" << std::boolalpha
-                    << static_cast<int>(std::get<0>(unpack_key)) <<", "
-                    << std::get<1>(unpack_key) <<" not found." << std::endl;
+                oss <<"Elelemt class group key : " << KeyPackerElementClass::GetKeyString(group_key)
+                    <<" not found." << std::endl;
             }
             else if (class_key == AtomicInfoHelper::GetResidueClassKey())
             {
-                auto unpack_key{ KeyPackerResidueClass::Unpack(group_key) };
-                oss <<"Residue class group key : tuple<" << std::boolalpha
-                    << static_cast<int>(std::get<0>(unpack_key)) <<", "
-                    << static_cast<int>(std::get<1>(unpack_key)) <<", "
-                    << std::get<2>(unpack_key) <<"> not found." << std::endl;
+                oss <<"Residue class group key : " << KeyPackerResidueClass::GetKeyString(group_key)
+                    <<" not found." << std::endl;
             }
             else if (class_key == AtomicInfoHelper::GetStructureClassKey())
             {
-                auto unpack_key{ KeyPackerStructureClass::Unpack(group_key) };
-                oss <<"Structure class group key : tuple<" << std::boolalpha
-                    << static_cast<int>(std::get<0>(unpack_key)) <<", "
-                    << static_cast<int>(std::get<1>(unpack_key)) <<", "
-                    << static_cast<int>(std::get<2>(unpack_key)) <<", "
-                    << std::get<3>(unpack_key) <<"> not found." << std::endl;
+                oss <<"Structure class group key : " << KeyPackerStructureClass::GetKeyString(group_key)
+                    <<" not found." << std::endl;
             }
             Logger::Log(LogLevel::Error, oss.str());
         }

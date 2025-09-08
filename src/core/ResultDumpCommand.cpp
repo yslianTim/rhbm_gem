@@ -348,8 +348,8 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
             auto component_key{ static_cast<ComponentKey>(residue) };
             for (auto & spot : AminoAcidInfoHelper::GetSpotList(residue))
             {
-                auto atom_key{ static_cast<uint32_t>(spot) };
-                auto group_key{ KeyPackerResidueClass::Pack(component_key, atom_key, false) };
+                auto atom_key{ static_cast<uint16_t>(spot) };
+                auto group_key{ KeyPackerResidueClass::Pack(component_key, atom_key) };
                 auto atom_id{ model_object->GetAtomKeySystemPtr()->GetAtomId(atom_key) };
                 if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
                 outfile << residue_name <<','
