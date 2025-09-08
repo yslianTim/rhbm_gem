@@ -35,7 +35,7 @@ class AtomicModelDataBlock
     std::unordered_map<std::string, std::array<std::string, 4>> m_struct_sheet_range_map;
     std::vector<Element> m_element_type_list;
 
-    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map; // key : comp_id
+    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
 
 public:
     AtomicModelDataBlock(void);
@@ -49,15 +49,15 @@ public:
     void AddSheetRange(const std::string & composite_sheet_id, const std::array<std::string, 4> & range);
     void AddHelixRange(const std::string & helix_id, const std::array<std::string, 5> & range);
     void AddElementType(const Element & element);
-    void AddChemicalComponentEntry(ComponentKey comp_id, std::unique_ptr<ChemicalComponentEntry> entry);
+    void AddChemicalComponentEntry(ComponentKey comp_key, std::unique_ptr<ChemicalComponentEntry> entry);
     void AddComponentAtomEntry(
-        ComponentKey comp_id,
-        AtomKey atom_id,
+        ComponentKey comp_key,
+        AtomKey atom_key,
         const ComponentAtomEntry & atom_entry
     );
     void AddComponentBondEntry(
-        ComponentKey comp_id,
-        const std::pair<AtomKey, AtomKey> & atom_id_pair,
+        ComponentKey comp_key,
+        const std::pair<AtomKey, AtomKey> & atom_key_pair,
         const ComponentBondEntry & bond_entry
     );
 

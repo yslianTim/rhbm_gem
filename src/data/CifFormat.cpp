@@ -152,7 +152,6 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             auto element_symbol{ token_list[index_map.at("type_symbol")] };
             auto pdbx_aromatic_flag{ token_list[index_map.at("pdbx_aromatic_flag")] };
             auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
-            auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
 
             StringHelper::EraseCharFromString(atom_id, '\"');
 
@@ -161,7 +160,6 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             atom_entry.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
             atom_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
-            atom_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
 
             auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
             m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
@@ -188,7 +186,6 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             auto bond_order{ token_list[index_map.at("value_order")] };
             auto pdbx_aromatic_flag{ token_list[index_map.at("pdbx_aromatic_flag")] };
             auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
-            auto pdbx_ordinal_index{ token_list[index_map.at("pdbx_ordinal")] };
 
             StringHelper::EraseCharFromString(atom_id_1, '\"');
             StringHelper::EraseCharFromString(atom_id_2, '\"');
@@ -198,7 +195,6 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             bond_entry.bond_order = bond_order;
             bond_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             bond_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
-            bond_entry.ordinal_index = std::stoi(pdbx_ordinal_index);
 
             auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
             auto atom_key_1{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id_1) };
@@ -705,7 +701,6 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     atom_entry.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
     atom_entry.aromatic_atom_flag = false;
     atom_entry.chiral_config = '.';
-    atom_entry.ordinal_index = 0;
     
     auto atom_key{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id) };
     m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);

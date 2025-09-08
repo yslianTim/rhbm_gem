@@ -15,7 +15,6 @@ struct ComponentAtomEntry
     Element element_type;
     bool aromatic_atom_flag;
     char chiral_config; // 'N', 'R', 'S'
-    int ordinal_index;
 };
 
 struct ComponentBondEntry
@@ -24,7 +23,6 @@ struct ComponentBondEntry
     std::string bond_order;
     bool aromatic_atom_flag;
     char chiral_config; // 'N', 'R', 'S'
-    int ordinal_index;
 };
 
 class ChemicalComponentEntry

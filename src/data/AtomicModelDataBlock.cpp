@@ -66,37 +66,37 @@ void AtomicModelDataBlock::AddElementType(const Element & element)
 }
 
 void AtomicModelDataBlock::AddChemicalComponentEntry(
-    ComponentKey comp_id, std::unique_ptr<ChemicalComponentEntry> entry)
+    ComponentKey comp_key, std::unique_ptr<ChemicalComponentEntry> entry)
 {
-    m_chemical_component_entry_map[comp_id] = std::move(entry);
+    m_chemical_component_entry_map[comp_key] = std::move(entry);
 }
 
 void AtomicModelDataBlock::AddComponentAtomEntry(
-    ComponentKey comp_id,
-    AtomKey atom_id,
+    ComponentKey comp_key,
+    AtomKey atom_key,
     const ComponentAtomEntry & atom_entry)
 {
-    if (m_chemical_component_entry_map.find(comp_id) == m_chemical_component_entry_map.end())
+    if (m_chemical_component_entry_map.find(comp_key) == m_chemical_component_entry_map.end())
     {
         Logger::Log(LogLevel::Warning,
-            "Chemical component key " + std::to_string(comp_id) + " not found in chemical component map.");
+            "Chemical component key " + std::to_string(comp_key) + " not found in chemical component map.");
         return;
     }
-    m_chemical_component_entry_map.at(comp_id)->AddComponentAtomEntry(atom_id, atom_entry);
+    m_chemical_component_entry_map.at(comp_key)->AddComponentAtomEntry(atom_key, atom_entry);
 }
 
 void AtomicModelDataBlock::AddComponentBondEntry(
-    ComponentKey comp_id,
-    const std::pair<AtomKey, AtomKey> & atom_id_pair,
+    ComponentKey comp_key,
+    const std::pair<AtomKey, AtomKey> & atom_key_pair,
     const ComponentBondEntry & bond_entry)
 {
-    if (m_chemical_component_entry_map.find(comp_id) == m_chemical_component_entry_map.end())
+    if (m_chemical_component_entry_map.find(comp_key) == m_chemical_component_entry_map.end())
     {
         Logger::Log(LogLevel::Warning,
-            "Chemical component key " + std::to_string(comp_id) + " not found in chemical component map.");
+            "Chemical component key " + std::to_string(comp_key) + " not found in chemical component map.");
         return;
     }
-    m_chemical_component_entry_map.at(comp_id)->AddComponentBondEntry(atom_id_pair, bond_entry);
+    m_chemical_component_entry_map.at(comp_key)->AddComponentBondEntry(atom_key_pair, bond_entry);
 }
 
 void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
