@@ -3,11 +3,10 @@
 #include "AtomicInfoHelper.hpp"
 #include "Logger.hpp"
 
-#ifndef UINT8_MAX
-#define UINT8_MAX 255
-#endif
+#include <limits>
 
 const ComponentKey ComponentKeySystem::k_dynamic_base{ 30 };
+const ComponentKey ComponentKeySystem::k_max_key{ std::numeric_limits<ComponentKey>::max() };
 
 ComponentKeySystem::ComponentKeySystem(void) :
     m_next_dynamic_key{ k_dynamic_base }
@@ -30,18 +29,6 @@ ComponentKeySystem::ComponentKeySystem(const ComponentKeySystem & other) :
     Logger::Log(LogLevel::Debug, "ComponentKeySystem copy ctor called");
 }
 
-ComponentKeySystem & ComponentKeySystem::operator=(const ComponentKeySystem & other)
-{
-    if (this != &other)
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_next_dynamic_key = other.m_next_dynamic_key;
-        m_id_to_key_map = other.m_id_to_key_map;
-        m_key_to_id_map = other.m_key_to_id_map;
-    }
-    return *this;
-}
-
 ComponentKeySystem::~ComponentKeySystem(void)
 {
     Logger::Log(LogLevel::Debug, "ComponentKeySystem::~ComponentKeySystem() called");
@@ -52,6 +39,14 @@ void ComponentKeySystem::RegisterComponent(const std::string & component_id)
     Logger::Log(LogLevel::Debug, "ComponentKeySystem::RegisterComponent() called for " + component_id);
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(component_id) != m_id_to_key_map.end()) return;
+    if (m_next_dynamic_key >= k_max_key)
+    {
+        Logger::Log(LogLevel::Warning,
+            "ComponentKeySystem::RegisterComponent() - Component key overflow for " + component_id
+            + ", avoiding register new component key duw to maximum key reached."
+        );
+        return;
+    }
     ComponentKey new_component_key{ m_next_dynamic_key++ };
     m_id_to_key_map[component_id] = new_component_key;
     m_key_to_id_map[new_component_key] = component_id;

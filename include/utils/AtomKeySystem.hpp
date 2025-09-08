@@ -12,6 +12,7 @@ using AtomKey = uint32_t;
 class AtomKeySystem
 {
     static const AtomKey k_dynamic_base;
+    static const AtomKey k_max_key;
     std::mutex m_mutex;
     AtomKey m_next_dynamic_key;
     std::unordered_map<std::string, AtomKey> m_id_to_key_map;
@@ -22,7 +23,6 @@ public:
     AtomKeySystem(void);
     ~AtomKeySystem(void);
     AtomKeySystem(const AtomKeySystem & other);
-    AtomKeySystem & operator=(const AtomKeySystem & other);
 
     void RegisterAtom(const std::string & atom_id);
     void RegisterAtom(const std::string & atom_id, AtomKey atom_key);

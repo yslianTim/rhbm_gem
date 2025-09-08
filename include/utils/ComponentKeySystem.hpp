@@ -10,6 +10,7 @@ using ComponentKey = uint8_t;
 class ComponentKeySystem
 {
     static const ComponentKey k_dynamic_base;
+    static const ComponentKey k_max_key;
     std::mutex m_mutex;
     ComponentKey m_next_dynamic_key;
     std::unordered_map<std::string, ComponentKey> m_id_to_key_map;
@@ -19,7 +20,6 @@ public:
     ComponentKeySystem(void);
     ~ComponentKeySystem();
     ComponentKeySystem(const ComponentKeySystem & other);
-    ComponentKeySystem & operator=(const ComponentKeySystem & other);
 
     void RegisterComponent(const std::string & component_id);
     void RegisterComponent(const std::string & component_id, ComponentKey component_key);

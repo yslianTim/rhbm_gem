@@ -7,6 +7,7 @@
 #include <algorithm>
 
 const AtomKey AtomKeySystem::k_dynamic_base{ 10000 };
+const AtomKey AtomKeySystem::k_max_key{ std::numeric_limits<AtomKey>::max() };
 
 AtomKeySystem::AtomKeySystem(void) :
     m_next_dynamic_key{ k_dynamic_base }
@@ -29,18 +30,6 @@ AtomKeySystem::AtomKeySystem(const AtomKeySystem & other) :
     Logger::Log(LogLevel::Debug, "AtomKeySystem copy ctor called");
 }
 
-AtomKeySystem & AtomKeySystem::operator=(const AtomKeySystem & other)
-{
-    if (this != &other)
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_next_dynamic_key = other.m_next_dynamic_key;
-        m_id_to_key_map = other.m_id_to_key_map;
-        m_key_to_id_map = other.m_key_to_id_map;
-    }
-    return *this;
-}
-
 AtomKeySystem::~AtomKeySystem(void)
 {
     Logger::Log(LogLevel::Debug, "AtomKeySystem::~AtomKeySystem() called");
@@ -51,6 +40,14 @@ void AtomKeySystem::RegisterAtom(const std::string & atom_id)
     Logger::Log(LogLevel::Debug, "AtomKeySystem::RegisterAtom() called for " + atom_id);
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(atom_id) != m_id_to_key_map.end()) return;
+    if (m_next_dynamic_key >= k_max_key)
+    {
+        Logger::Log(LogLevel::Warning,
+            "AtomKeySystem::RegisterComponent() - Atom key overflow for " + atom_id
+            + ", avoiding register new atom key duw to maximum key reached."
+        );
+        return;
+    }
     AtomKey new_atom_key{ m_next_dynamic_key++ };
     m_id_to_key_map[atom_id] = new_atom_key;
     m_key_to_id_map[new_atom_key] = atom_id;
