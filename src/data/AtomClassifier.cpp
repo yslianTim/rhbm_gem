@@ -134,19 +134,19 @@ uint64_t AtomClassifier::GetGroupKeyInClass(
 {
     if (class_key == AtomicInfoHelper::GetElementClassKey())
     {
-        return KeyPackerElementClass::Pack(
+        return KeyPackerElementAtomClass::Pack(
             atom_object->GetAtomKey(),
             atom_object->GetSpecialAtomFlag());
     }
     else if (class_key == AtomicInfoHelper::GetResidueClassKey())
     {
-        return KeyPackerResidueClass::Pack(
+        return KeyPackerResidueAtomClass::Pack(
             atom_object->GetComponentKey(),
             atom_object->GetAtomKey());
     }
     else if (class_key == AtomicInfoHelper::GetStructureClassKey())
     {
-        return KeyPackerStructureClass::Pack(
+        return KeyPackerStructureAtomClass::Pack(
             atom_object->GetStructure(),
             atom_object->GetComponentKey(),
             atom_object->GetAtomKey());
@@ -165,7 +165,7 @@ uint64_t AtomClassifier::GetMainChainElementClassGroupKey(size_t id) const
         return 0;
     }
     auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
-    return KeyPackerElementClass::Pack(atom_key, false);
+    return KeyPackerElementAtomClass::Pack(atom_key, false);
 }
 
 uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue residue) const
@@ -177,7 +177,7 @@ uint64_t AtomClassifier::GetMainChainResidueClassGroupKey(size_t id, Residue res
     }
     auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
     auto component_key{ static_cast<ComponentKey>(residue) };
-    return KeyPackerResidueClass::Pack(component_key, atom_key);
+    return KeyPackerResidueAtomClass::Pack(component_key, atom_key);
 }
 
 uint64_t AtomClassifier::GetMainChainStructureClassGroupKey(
@@ -190,7 +190,7 @@ uint64_t AtomClassifier::GetMainChainStructureClassGroupKey(
     }
     auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
     auto component_key{ static_cast<ComponentKey>(residue) };
-    return KeyPackerStructureClass::Pack(structure, component_key, atom_key);
+    return KeyPackerStructureAtomClass::Pack(structure, component_key, atom_key);
 }
 
 std::vector<uint64_t> AtomClassifier::GetMainChainResidueClassGroupKeyList(

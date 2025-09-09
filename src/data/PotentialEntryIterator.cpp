@@ -256,17 +256,20 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
         {
             if (class_key == AtomicInfoHelper::GetElementClassKey())
             {
-                oss <<"Elelemt class group key : " << KeyPackerElementClass::GetKeyString(group_key)
+                oss <<"Elelemt class group key : "
+                    << KeyPackerElementAtomClass::GetKeyString(group_key)
                     <<" not found." << std::endl;
             }
             else if (class_key == AtomicInfoHelper::GetResidueClassKey())
             {
-                oss <<"Residue class group key : " << KeyPackerResidueClass::GetKeyString(group_key)
+                oss <<"Residue class group key : "
+                    << KeyPackerResidueAtomClass::GetKeyString(group_key)
                     <<" not found." << std::endl;
             }
             else if (class_key == AtomicInfoHelper::GetStructureClassKey())
             {
-                oss <<"Structure class group key : " << KeyPackerStructureClass::GetKeyString(group_key)
+                oss <<"Structure class group key : "
+                    << KeyPackerStructureAtomClass::GetKeyString(group_key)
                     <<" not found." << std::endl;
             }
             Logger::Log(LogLevel::Error, oss.str());
@@ -286,12 +289,12 @@ Residue PotentialEntryIterator::GetResidueFromGroupKey(
     }
     else if (class_key == AtomicInfoHelper::GetResidueClassKey())
     {
-        auto unpack_key{ KeyPackerResidueClass::Unpack(group_key) };
+        auto unpack_key{ KeyPackerResidueAtomClass::Unpack(group_key) };
         return static_cast<Residue>(std::get<0>(unpack_key));
     }
     else if (class_key == AtomicInfoHelper::GetStructureClassKey())
     {
-        auto unpack_key{ KeyPackerStructureClass::Unpack(group_key) };
+        auto unpack_key{ KeyPackerStructureAtomClass::Unpack(group_key) };
         return static_cast<Residue>(std::get<1>(unpack_key));
     }
     return Residue::UNK;
