@@ -12,6 +12,7 @@
 #include "GroupPotentialEntry.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "AtomClassifier.hpp"
+#include "BondClassifier.hpp"
 #include "GausLinearTransformHelper.hpp"
 #include "SphereSampler.hpp"
 #include "CylinderSampler.hpp"
@@ -105,6 +106,7 @@ bool PotentialAnalysisCommand::Execute(void)
     RunModelObjectPreprocessing();
     RunAtomMapValueSampling();
     RunAtomPotentialFitting();
+    SaveDataObject();
     return true;
 }
 
@@ -386,7 +388,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             group_potential_entry->InsertGroupKey(group_key);
         }
 
-        // Group Potential Fitting
+        // Group Atom Potential Fitting
         const auto & key_set{ group_potential_entry->GetGroupKeySet() };
         std::vector<uint64_t> group_keys(key_set.begin(), key_set.end());
         auto group_key_size{ group_keys.size() };
@@ -489,6 +491,137 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
         }
         m_model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
     }
+}
+
+void PotentialAnalysisCommand::RunBondPotentialFitting(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondPotentialFitting() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
+    if (m_model_object == nullptr) return;
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+    {
+        const auto & class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        Logger::Log(LogLevel::Info, "Class type: " + class_key);
+
+        // Bond Classification
+        auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
+        for (auto bond : m_model_object->GetSelectedBondList())
+        {
+            auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
+            group_potential_entry->AddBondObjectPtr(group_key, bond);
+            group_potential_entry->InsertGroupKey(group_key);
+        }
+
+        // Group Bond Potential Fitting
+        const auto & key_set{ group_potential_entry->GetGroupKeySet() };
+        std::vector<uint64_t> group_keys(key_set.begin(), key_set.end());
+        auto group_key_size{ group_keys.size() };
+        std::atomic<size_t> key_count{ 0 };
+
+        #ifdef USE_OPENMP
+        #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+        for (size_t idx = 0; idx < group_key_size; idx++)
+        {
+            auto group_key{ group_keys[idx] };
+            const auto & bond_list{ group_potential_entry->GetBondObjectPtrList(group_key) };
+            auto group_size{ bond_list.size() };
+            std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
+            data_array.reserve(group_size);
+            for (const auto & bond : bond_list)
+            {
+                auto entry{ bond->GetAtomicPotentialEntry() };
+                std::vector<Eigen::VectorXd> sampling_entry_list;
+                sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
+                for (auto & data_entry : entry->GetDistanceAndMapValueList())
+                {
+                    auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
+                    auto gaus_y{ static_cast<double>(std::get<1>(data_entry)) };
+                    if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
+                    if (gaus_y <= 0.0) continue;
+                    sampling_entry_list.emplace_back(
+                        GausLinearTransformHelper::BuildLinearModelDataVector(gaus_x, gaus_y)
+                    );
+                }
+                data_array.emplace_back(std::move(sampling_entry_list), bond->GetInfo());
+            }
+            auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
+            model_estimator->SetThreadSize(1);
+            model_estimator->SetDataArray(std::move(data_array));
+            model_estimator->RunEstimation(m_options.alpha_r, m_options.alpha_g);
+
+            auto gaus_group_mean{
+                GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMean())
+            };
+
+            auto gaus_group_mdpde{
+                GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMDPDE())
+            };
+
+            auto gaus_prior{
+                GausLinearTransformHelper::BuildGausModelWithVariance(
+                    model_estimator->GetMuVectorPrior(), model_estimator->GetCapitalLambdaMatrix())
+            };
+            auto prior_estimate{ std::get<0>(gaus_prior) };
+            auto prior_variance{ std::get<1>(gaus_prior) };
+
+            auto count{ 0 };
+            for (const auto & bond : bond_list)
+            {
+                auto bond_entry{ bond->GetAtomicPotentialEntry() };
+                const auto & beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
+                auto gaus_ols{ GausLinearTransformHelper::BuildGausModel(beta_vector_ols) };
+                bond_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
+
+                const auto & beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
+                auto gaus_mdpde{ GausLinearTransformHelper::BuildGausModel(beta_vector_mdpde) };
+                bond_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
+
+                const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
+                auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
+                auto gaus_posterior{
+                    GausLinearTransformHelper::BuildGausModelWithVariance(
+                        beta_vector_posterior, sigma_matrix_posterior)
+                };
+                auto posterior_estimate{ std::get<0>(gaus_posterior) };
+                auto posterior_variance{ std::get<1>(gaus_posterior) };
+                bond_entry->AddGausEstimatePosterior(class_key, posterior_estimate(0), posterior_estimate(1));
+                bond_entry->AddGausVariancePosterior(class_key, posterior_variance(0), posterior_variance(1));
+                bond_entry->AddOutlierTag(class_key, model_estimator->GetOutlierFlag(count));
+                bond_entry->AddStatisticalDistance(class_key, model_estimator->GetStatisticalDistance(count));
+                count++;
+            }
+            model_estimator.reset();
+            
+#ifdef USE_OPENMP
+            #pragma omp critical
+#endif
+            {
+                group_potential_entry->AddGausEstimateMean(
+                    group_key, gaus_group_mean(0), gaus_group_mean(1)
+                );
+                group_potential_entry->AddGausEstimateMDPDE(
+                    group_key, gaus_group_mdpde(0), gaus_group_mdpde(1)
+                );
+                group_potential_entry->AddGausEstimatePrior(
+                    group_key, prior_estimate(0), prior_estimate(1)
+                );
+                group_potential_entry->AddGausVariancePrior(
+                    group_key, prior_variance(0), prior_variance(1)
+                );
+                key_count++;
+                Logger::ProgressBar(key_count, group_key_size);
+            }
+        }
+        m_model_object->AddBondGroupPotentialEntry(class_key, group_potential_entry);
+    }
+}
+
+void PotentialAnalysisCommand::SaveDataObject(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::SaveDataObject() called");
+    ScopeTimer timer("PotentialAnalysisCommand::SaveDataObject");
+    if (m_model_object == nullptr) return;
 
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SaveDataObject(m_model_key_tag, m_options.saved_key_tag);
@@ -501,15 +634,4 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             entry->ClearDistanceAndMapValueList();
         }
     }
-
-    m_map_object.reset();
-    m_model_object.reset();
-}
-
-void PotentialAnalysisCommand::RunBondPotentialFitting(void)
-{
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondPotentialFitting() called");
-    ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
-    if (m_model_object == nullptr) return;
-
 }

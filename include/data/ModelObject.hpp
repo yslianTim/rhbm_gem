@@ -29,7 +29,8 @@ class ModelObject : public DataObjectBase
     double m_resolution;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map; // key : entity_id
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
-    std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_group_potential_entry_map;
+    std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_atom_group_potential_entry_map;
+    std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_bond_group_potential_entry_map;
     std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
@@ -59,6 +60,9 @@ public:
     void AddGroupPotentialEntry(
         const std::string & class_key,
         std::unique_ptr<GroupPotentialEntry> & entry);
+    void AddBondGroupPotentialEntry(
+        const std::string & class_key,
+        std::unique_ptr<GroupPotentialEntry> & entry);
     void AddChemicalComponentEntry(
         ComponentKey component_key,
         std::unique_ptr<ChemicalComponentEntry> entry);
@@ -86,9 +90,12 @@ public:
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
     GroupPotentialEntry * GetGroupPotentialEntry(const std::string & class_key) const;
+    GroupPotentialEntry * GetBondGroupPotentialEntry(const std::string & class_key) const;
     ChemicalComponentEntry * GetChemicalComponentEntry(ComponentKey key) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
     GetGroupPotentialEntryMap(void) const;
+    const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
+    GetBondGroupPotentialEntryMap(void) const;
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
     GetChemicalComponentEntryMap(void) const;
     KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }

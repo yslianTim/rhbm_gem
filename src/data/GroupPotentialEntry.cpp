@@ -1,5 +1,6 @@
 #include "GroupPotentialEntry.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "Constants.hpp"
 #include "Logger.hpp"
 
@@ -25,9 +26,19 @@ void GroupPotentialEntry::ReserveAtomObjectPtrList(uint64_t group_key, int size)
     m_group_atom_list_map[group_key].reserve(static_cast<size_t>(size));
 }
 
+void GroupPotentialEntry::ReserveBondObjectPtrList(uint64_t group_key, int size)
+{
+    m_group_bond_list_map[group_key].reserve(static_cast<size_t>(size));
+}
+
 void GroupPotentialEntry::AddAtomObjectPtr(uint64_t group_key, AtomObject * atom_object)
 {
     m_group_atom_list_map[group_key].emplace_back(atom_object);
+}
+
+void GroupPotentialEntry::AddBondObjectPtr(uint64_t group_key, BondObject * bond_object)
+{
+    m_group_bond_list_map[group_key].emplace_back(bond_object);
 }
 
 void GroupPotentialEntry::AddGausEstimateMean(uint64_t group_key, double v0, double v1)
@@ -55,9 +66,19 @@ int GroupPotentialEntry::GetAtomObjectPtrListSize(uint64_t group_key) const
     return static_cast<int>(m_group_atom_list_map.at(group_key).size());
 }
 
+int GroupPotentialEntry::GetBondObjectPtrListSize(uint64_t group_key) const
+{
+    return static_cast<int>(m_group_bond_list_map.at(group_key).size());
+}
+
 const std::vector<AtomObject *> & GroupPotentialEntry::GetAtomObjectPtrList(uint64_t group_key) const
 {
     return m_group_atom_list_map.at(group_key);
+}
+
+const std::vector<BondObject *> & GroupPotentialEntry::GetBondObjectPtrList(uint64_t group_key) const
+{
+    return m_group_bond_list_map.at(group_key);
 }
 
 std::tuple<double, double> GroupPotentialEntry::GetGausEstimateMean(uint64_t group_key) const

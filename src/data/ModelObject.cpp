@@ -85,7 +85,13 @@ void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> & atom_li
 void ModelObject::AddGroupPotentialEntry(
     const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
 {
-    m_group_potential_entry_map[class_key] = std::move(entry);
+    m_atom_group_potential_entry_map[class_key] = std::move(entry);
+}
+
+void ModelObject::AddBondGroupPotentialEntry(
+    const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
+{
+    m_bond_group_potential_entry_map[class_key] = std::move(entry);
 }
 
 void ModelObject::AddChemicalComponentEntry(
@@ -191,7 +197,12 @@ double ModelObject::GetModelLength(int axis)
 
 GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & class_key) const
 {
-    return m_group_potential_entry_map.at(class_key).get();
+    return m_atom_group_potential_entry_map.at(class_key).get();
+}
+
+GroupPotentialEntry * ModelObject::GetBondGroupPotentialEntry(const std::string & class_key) const
+{
+    return m_bond_group_potential_entry_map.at(class_key).get();
 }
 
 ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(ComponentKey key) const
@@ -202,7 +213,13 @@ ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(ComponentKey key
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
 ModelObject::GetGroupPotentialEntryMap(void) const
 {
-    return m_group_potential_entry_map;
+    return m_atom_group_potential_entry_map;
+}
+
+const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
+ModelObject::GetBondGroupPotentialEntryMap(void) const
+{
+    return m_bond_group_potential_entry_map;
 }
 
 const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &

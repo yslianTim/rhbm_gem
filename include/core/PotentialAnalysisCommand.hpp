@@ -69,5 +69,6 @@ private:
     void RunBondMapValueSampling(void);
     void RunAtomPotentialFitting(void);
     void RunBondPotentialFitting(void);
+    void SaveDataObject(void);
 
 };
