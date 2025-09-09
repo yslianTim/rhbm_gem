@@ -84,10 +84,9 @@ void CylinderSampler::Print(void) const
         + StringHelper::ToStringWithPrecision<double>(m_height_max, 3) + "] Angstrom");
 }
 
-void CylinderSampler::GenerateSamplingPoints(
+std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSamplingPoints(
     const std::array<float, 3> & reference_position,
-    const std::array<float, 3> & axis_vector,
-    std::vector<std::tuple<float, std::array<float, 3>>> & out) const
+    const std::array<float, 3> & axis_vector) const
 {
     if (m_radius_min < 0.0 || m_radius_max < 0.0)
         throw std::invalid_argument("CylinderSampler: radius range cannot be negative.");
@@ -99,7 +98,7 @@ void CylinderSampler::GenerateSamplingPoints(
     std::array<float,3> u, v, w;
     orthonormal_basis_from_axis(axis_vector, u, v, w);
 
-    out.clear();
+    std::vector<std::tuple<float, std::array<float, 3>>> out;
     out.resize(m_sampling_size);
 
     static thread_local std::mt19937 engine{ std::random_device{}() };
@@ -123,4 +122,6 @@ void CylinderSampler::GenerateSamplingPoints(
 
         out[i] = std::make_tuple(r, pos);
     }
+
+    return out;
 }

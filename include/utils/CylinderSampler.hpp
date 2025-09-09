@@ -15,10 +15,9 @@ public:
     ~CylinderSampler() = default;
 
     void Print(void) const;
-    void GenerateSamplingPoints(
+    std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
         const std::array<float, 3> & reference_position,
-        const std::array<float, 3> & axis_vector,
-        std::vector<std::tuple<float, std::array<float, 3>>> & out) const;
+        const std::array<float, 3> & axis_vector) const;
     unsigned int GetSamplingSize(void) const { return m_sampling_size; }
     void SetSamplingSize(unsigned int value) { m_sampling_size = value; }
     void SetRadiusRange(double rmin, double rmax) { m_radius_min = rmin; m_radius_max = rmax; }

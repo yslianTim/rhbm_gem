@@ -19,11 +19,7 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
     m_sampling_data_list.clear();
     if (m_sampler != nullptr)
     {
-        if (m_point_list.empty())
-        {
-            m_point_list.resize(m_sampler->GetSamplingSize());
-        }
-        m_sampler->GenerateSamplingPoints(m_position, m_point_list);
+        m_point_list = m_sampler->GenerateSamplingPoints(m_position);
         m_sampling_data_list.reserve(m_point_list.size());
         for (auto & [distance, point] : m_point_list)
         {
