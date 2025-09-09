@@ -533,7 +533,7 @@ void CifFormat::WriteAtomSiteBlock(
     stream << "_atom_site.pdbx_PDB_model_num\n";
 
     const int model_number{ 1 };
-    for (const auto & atom_ptr : model_object->GetComponentsList())
+    for (const auto & atom_ptr : model_object->GetAtomList())
     {
         const AtomObject * atom{ atom_ptr.get() };
         if (atom->GetAtomicPotentialEntry() == nullptr) continue;

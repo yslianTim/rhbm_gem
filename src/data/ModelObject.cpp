@@ -1,5 +1,6 @@
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"

@@ -212,7 +212,7 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
     m_selected_atom_list.clear();
     m_selected_atom_list.reserve(model_object->GetNumberOfAtom());
     m_atom_charge_map.clear();
-    for (auto & atom : model_object->GetComponentsList())
+    for (auto & atom : model_object->GetAtomList())
     {
         if (atom->IsUnknownAtom() == true)
         {

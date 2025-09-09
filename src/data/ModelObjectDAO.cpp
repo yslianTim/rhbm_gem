@@ -343,7 +343,7 @@ void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_ta
 
     // Save atomic potential entries if any atom contains them
     bool has_atomic_potential_entry{ false };
-    for (auto & atom_object : model_obj->GetComponentsList())
+    for (auto & atom_object : model_obj->GetAtomList())
     {
         if (atom_object->GetAtomicPotentialEntry() != nullptr)
         {
@@ -439,7 +439,7 @@ void ModelObjectDAO::SaveAtomObjectList(
     m_database->Prepare(FormatSQL(INSERT_ATOM_LIST_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
-    for (auto & atom_object : model_obj->GetComponentsList())
+    for (auto & atom_object : model_obj->GetAtomList())
     {
         m_database->Bind<int>(1, atom_object->GetSerialID());
         m_database->Bind<int>(2, atom_object->GetResidueID());
@@ -546,7 +546,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
     m_database->Prepare(FormatSQL(INSERT_ATOMIC_ENTRY_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
-    for (auto & atom_object : model_obj->GetComponentsList())
+    for (auto & atom_object : model_obj->GetAtomList())
     {
         auto entry{ atom_object->GetAtomicPotentialEntry() };
         if (entry == nullptr) continue;
@@ -571,7 +571,7 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     m_database->ClearTable(table_name);
     m_database->Prepare(FormatSQL(INSERT_ATOMIC_SUBLIST_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
-    for (auto & atom_object : model_obj->GetComponentsList())
+    for (auto & atom_object : model_obj->GetAtomList())
     {
         auto entry{ atom_object->GetAtomicPotentialEntry() };
         if (entry == nullptr) continue;

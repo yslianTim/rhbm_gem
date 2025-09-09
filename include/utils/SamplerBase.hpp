@@ -13,4 +13,7 @@ public:
     virtual std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
         const std::array<float, 3> & position,
         const std::array<float, 3> & axis_vector) const = 0;
+    virtual unsigned int GetSamplingSize(void) const = 0;
+    virtual void SetSamplingSize(unsigned int value) = 0;
+    
 };

@@ -239,7 +239,7 @@ void PotentialDisplayCommand::RunDataObjectSelection(void)
 
     for (const auto & model_object : m_model_object_list)
     {
-        for (auto & atom : model_object->GetComponentsList())
+        for (auto & atom : model_object->GetAtomList())
         {
             atom->SetSelectedFlag(
                 m_atom_selector->GetSelectionFlag(
@@ -262,7 +262,7 @@ void PotentialDisplayCommand::RunDisplay(void)
             painter = std::make_unique<AtomPainter>();
             for (const auto & model_object : m_model_object_list)
             {
-                for (auto & atom : model_object->GetComponentsList())
+                for (auto & atom : model_object->GetAtomList())
                 {
                     if (atom->GetSelectedFlag() == false) continue;
                     painter->AddDataObject(atom.get());

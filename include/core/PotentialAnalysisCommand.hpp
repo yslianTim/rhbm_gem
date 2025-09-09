@@ -9,7 +9,6 @@
 
 class ModelObject;
 class MapObject;
-class SphereSampler;
 
 class PotentialAnalysisCommand : public CommandBase
 {
@@ -21,6 +20,7 @@ public:
         int sampling_size{ 1500 };
         double sampling_range_min{ 0.0 };
         double sampling_range_max{ 1.5 };
+        double sampling_height{ 0.1 };
         double fit_range_min{ 0.0 };
         double fit_range_max{ 1.0 };
         double alpha_r{ 0.1 };
@@ -34,7 +34,6 @@ public:
 private:
     Options m_options;
     std::string m_model_key_tag, m_map_key_tag;
-    std::unique_ptr<SphereSampler> m_sphere_sampler;
     std::shared_ptr<MapObject> m_map_object;
     std::shared_ptr<ModelObject> m_model_object;
 
@@ -59,13 +58,16 @@ public:
     void SetSamplingSize(int value);
     void SetSamplingRangeMinimum(double value);
     void SetSamplingRangeMaximum(double value);
+    void SetSamplingHeight(double value);
 
 private:
     bool BuildDataObject(void);
     void UpdateModelObjectForSimulation(ModelObject * model_object);
     void RunMapObjectPreprocessing(void);
     void RunModelObjectPreprocessing(void);
-    void RunMapValueSampling(void);
-    void RunPotentialFitting(void);
+    void RunAtomMapValueSampling(void);
+    void RunBondMapValueSampling(void);
+    void RunAtomPotentialFitting(void);
+    void RunBondPotentialFitting(void);
 
 };

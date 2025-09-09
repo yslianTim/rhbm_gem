@@ -717,7 +717,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomography
     auto z_window_max{ z_pos + window_width };
     
     auto count{ 0 };
-    for (auto & atom : m_model_object->GetComponentsList())
+    for (auto & atom : m_model_object->GetAtomList())
     {
         auto position{ atom->GetPosition() };
         if (position.at(2) < z_window_min || position.at(2) >= z_window_max)
@@ -748,7 +748,7 @@ PotentialEntryIterator::CreateXYPositionTomographyGraphMap(
     std::unordered_map<size_t, std::unique_ptr<TGraphErrors>> graph_map;
     std::unordered_map<size_t, int> count_map;
     size_t current_id{ 0 };
-    for (auto & atom : m_model_object->GetComponentsList())
+    for (auto & atom : m_model_object->GetAtomList())
     {
         if (atom->GetSpecialAtomFlag() == true) continue;
         if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;

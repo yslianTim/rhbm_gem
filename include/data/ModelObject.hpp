@@ -13,6 +13,7 @@
 #include "AtomKeySystem.hpp"
 
 class AtomObject;
+class BondObject;
 class ChemicalComponentEntry;
 class GroupPotentialEntry;
 template <typename T> struct KDNode;
@@ -20,7 +21,9 @@ template <typename T> struct KDNode;
 class ModelObject : public DataObjectBase
 {
     std::vector<std::unique_ptr<AtomObject>> m_atom_list;
+    std::vector<std::unique_ptr<BondObject>> m_bond_list;
     std::vector<AtomObject *> m_selected_atom_list;
+    std::vector<BondObject *> m_selected_bond_list;
     std::string m_key_tag, m_pdb_id, m_emd_id;
     std::string m_resolution_method;
     double m_resolution;
@@ -67,9 +70,13 @@ public:
     void FilterAtomFromSymmetry(bool is_asymmetry);
 
     size_t GetNumberOfAtom(void) const { return m_atom_list.size(); }
+    size_t GetNumberOfBond(void) const { return m_bond_list.size(); }
     size_t GetNumberOfSelectedAtom(void) const { return m_selected_atom_list.size(); }
-    const std::vector<std::unique_ptr<AtomObject>> & GetComponentsList(void) const { return m_atom_list; }
+    size_t GetNumberOfSelectedBond(void) const { return m_selected_bond_list.size(); }
+    const std::vector<std::unique_ptr<AtomObject>> & GetAtomList(void) const { return m_atom_list; }
+    const std::vector<std::unique_ptr<BondObject>> & GetBondList(void) const { return m_bond_list; }
     const std::vector<AtomObject *> & GetSelectedAtomList(void) const { return m_selected_atom_list; }
+    const std::vector<BondObject *> & GetSelectedBondList(void) const { return m_selected_bond_list; }
     std::string GetPdbID(void) const { return m_pdb_id; }
     std::string GetEmdID(void) const { return m_emd_id; }
     double GetResolution(void) const { return m_resolution; }

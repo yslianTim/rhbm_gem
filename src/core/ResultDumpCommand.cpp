@@ -115,7 +115,7 @@ bool ResultDumpCommand::BuildDataObjectList(void)
             data_manager->LoadDataObject(key);
             auto model_object{ data_manager->GetTypedDataObject<ModelObject>(key) };
             m_model_object_list.emplace_back(model_object);
-            for (auto & atom : model_object->GetComponentsList())
+            for (auto & atom : model_object->GetAtomList())
             {
                 if (atom->GetAtomicPotentialEntry() == nullptr) continue;
                 m_selected_atom_list_map[key].emplace_back(atom.get());

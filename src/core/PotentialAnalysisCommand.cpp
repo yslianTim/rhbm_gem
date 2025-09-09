@@ -1,6 +1,7 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
 #include "MapInterpolationVisitor.hpp"
@@ -13,6 +14,7 @@
 #include "AtomClassifier.hpp"
 #include "GausLinearTransformHelper.hpp"
 #include "SphereSampler.hpp"
+#include "CylinderSampler.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 
@@ -34,7 +36,6 @@ CommandRegistrar<PotentialAnalysisCommand> registrar_potential_analysis{
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
-    m_sphere_sampler{ std::make_unique<SphereSampler>() },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::PotentialAnalysisCommand() called.");
@@ -79,6 +80,9 @@ void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
     cmd->add_option_function<double>("--sampling-max",
         [&](double value) { SetSamplingRangeMaximum(value); },
         "Maximum sampling range")->default_val(m_options.sampling_range_max);
+    cmd->add_option_function<double>("--sampling-height",
+        [&](double value) { SetSamplingHeight(value); },
+        "Maximum sampling height")->default_val(m_options.sampling_height);
     cmd->add_option_function<double>("--fit-min",
         [&](double value) { SetFitRangeMinimum(value); },
         "Minimum fitting range")->default_val(m_options.fit_range_min);
@@ -99,8 +103,8 @@ bool PotentialAnalysisCommand::Execute(void)
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
-    RunMapValueSampling();
-    RunPotentialFitting();
+    RunAtomMapValueSampling();
+    RunAtomPotentialFitting();
     return true;
 }
 
@@ -186,6 +190,11 @@ void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
     m_options.sampling_range_max = value;
 }
 
+void PotentialAnalysisCommand::SetSamplingHeight(double value)
+{
+    m_options.sampling_height = value;
+}
+
 bool PotentialAnalysisCommand::BuildDataObject(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::BuildDataObject() called");
@@ -242,7 +251,7 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
     m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
-    for (auto & atom : m_model_object->GetComponentsList())
+    for (auto & atom : m_model_object->GetAtomList())
     {
         atom->SetSelectedFlag(true);
     }
@@ -257,15 +266,16 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
 }
 
-void PotentialAnalysisCommand::RunMapValueSampling(void)
+void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunMapValueSampling() called");
-    ScopeTimer timer("PotentialAnalysisCommand::RunMapValueSampling");
-    if (m_map_object == nullptr || m_sphere_sampler == nullptr) return;
-    m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
-    m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
-    m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
-    m_sphere_sampler->Print();
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomMapValueSampling() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
+    if (m_map_object == nullptr) return;
+    auto sampler{ std::make_unique<SphereSampler>() };
+    sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
+    sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
+    sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
+    sampler->Print();
     
     const auto & atom_list{ m_model_object->GetSelectedAtomList() };
     auto atom_size{ atom_list.size() };
@@ -274,7 +284,7 @@ void PotentialAnalysisCommand::RunMapValueSampling(void)
 #ifdef USE_OPENMP
     #pragma omp parallel num_threads(m_options.thread_size)
     {
-        MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
+        MapInterpolationVisitor interpolation_visitor{ sampler.get() };
         #pragma omp for
         for (size_t i = 0; i < atom_size; i++)
         {
@@ -291,7 +301,7 @@ void PotentialAnalysisCommand::RunMapValueSampling(void)
         }
     }
 #else
-    MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
+    MapInterpolationVisitor interpolation_visitor{ sampler.get() };
     for (size_t i = 0; i < atom_size; i++)
     {
         auto atom{ atom_list[i] };
@@ -305,10 +315,62 @@ void PotentialAnalysisCommand::RunMapValueSampling(void)
 #endif
 }
 
-void PotentialAnalysisCommand::RunPotentialFitting(void)
+void PotentialAnalysisCommand::RunBondMapValueSampling(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunPotentialFitting() called");
-    ScopeTimer timer("PotentialAnalysisCommand::RunPotentialFitting");
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondMapValueSampling() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunBondMapValueSampling");
+    if (m_map_object == nullptr) return;
+    auto sampler{ std::make_unique<CylinderSampler>() };
+    sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
+    sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
+    sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
+    sampler->SetHeight(m_options.sampling_height);
+    sampler->Print();
+    
+    const auto & bond_list{ m_model_object->GetSelectedBondList() };
+    auto bond_size{ bond_list.size() };
+    size_t bond_count{ 0 };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel num_threads(m_options.thread_size)
+    {
+        MapInterpolationVisitor interpolation_visitor{ sampler.get() };
+        #pragma omp for
+        for (size_t i = 0; i < bond_size; i++)
+        {
+            auto bond{ bond_list[i] };
+            auto entry{ bond->GetAtomicPotentialEntry() };
+            interpolation_visitor.SetPosition(bond->GetPosition());
+            interpolation_visitor.SetAxisVector(bond->GetBondVector());
+            m_map_object->Accept(&interpolation_visitor);
+            entry->AddDistanceAndMapValueList(interpolation_visitor.TakeSamplingDataList());
+            #pragma omp critical
+            {
+                bond_count++;
+                Logger::ProgressPercent(bond_count, bond_size);
+            }
+        }
+    }
+#else
+    MapInterpolationVisitor interpolation_visitor{ sampler.get() };
+    for (size_t i = 0; i < bond_size; i++)
+    {
+        auto bond{ bond_list[i] };
+        auto entry{ bond->GetAtomicPotentialEntry() };
+        interpolation_visitor.SetPosition(bond->GetPosition());
+        interpolation_visitor.SetAxisVector(bond->GetBondVector());
+        m_map_object->Accept(&interpolation_visitor);
+        entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+        bond_count++
+        Logger::ProgressPercent(bond_count, bond_size);
+    }
+#endif
+}
+
+void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomPotentialFitting() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFitting");
     if (m_model_object == nullptr) return;
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
     {
@@ -442,4 +504,12 @@ void PotentialAnalysisCommand::RunPotentialFitting(void)
 
     m_map_object.reset();
     m_model_object.reset();
+}
+
+void PotentialAnalysisCommand::RunBondPotentialFitting(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondPotentialFitting() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
+    if (m_model_object == nullptr) return;
+
 }
