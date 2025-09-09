@@ -34,7 +34,7 @@ CommandRegistrar<BondAnalysisCommand> registrar_bond_analysis{
 
 BondAnalysisCommand::BondAnalysisCommand(void) :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
-    m_sphere_sampler{ std::make_unique<SphereSampler>() },
+    m_cylinder_sampler{ std::make_unique<SphereSampler>() },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
     Logger::Log(LogLevel::Debug, "BondAnalysisCommand::BondAnalysisCommand() called.");
@@ -261,11 +261,11 @@ void BondAnalysisCommand::RunMapValueSampling(void)
 {
     Logger::Log(LogLevel::Debug, "BondAnalysisCommand::RunMapValueSampling() called");
     ScopeTimer timer("BondAnalysisCommand::RunMapValueSampling");
-    if (m_map_object == nullptr || m_sphere_sampler == nullptr) return;
-    m_sphere_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
-    m_sphere_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
-    m_sphere_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
-    m_sphere_sampler->Print();
+    if (m_map_object == nullptr || m_cylinder_sampler == nullptr) return;
+    m_cylinder_sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
+    m_cylinder_sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
+    m_cylinder_sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
+    m_cylinder_sampler->Print();
     
     const auto & atom_list{ m_model_object->GetSelectedAtomList() };
     auto atom_size{ atom_list.size() };
@@ -274,7 +274,7 @@ void BondAnalysisCommand::RunMapValueSampling(void)
 #ifdef USE_OPENMP
     #pragma omp parallel num_threads(m_options.thread_size)
     {
-        MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
+        MapInterpolationVisitor interpolation_visitor{ m_cylinder_sampler.get() };
         #pragma omp for
         for (size_t i = 0; i < atom_size; i++)
         {
@@ -291,7 +291,7 @@ void BondAnalysisCommand::RunMapValueSampling(void)
         }
     }
 #else
-    MapInterpolationVisitor interpolation_visitor{ m_sphere_sampler.get() };
+    MapInterpolationVisitor interpolation_visitor{ m_cylinder_sampler.get() };
     for (size_t i = 0; i < atom_size; i++)
     {
         auto atom{ atom_list[i] };

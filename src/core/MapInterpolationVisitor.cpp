@@ -42,7 +42,7 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
     }
 }
 
-std::vector<std::tuple<float, float>>&& MapInterpolationVisitor::TakeSamplingDataList(void)
+std::vector<std::tuple<float, float>> && MapInterpolationVisitor::TakeSamplingDataList(void)
 {
     return std::move(m_sampling_data_list);
 }

@@ -9,7 +9,7 @@
 
 class ModelObject;
 class MapObject;
-class SphereSampler;
+class CylinderSampler;
 
 class BondAnalysisCommand : public CommandBase
 {
@@ -34,7 +34,7 @@ public:
 private:
     Options m_options;
     std::string m_model_key_tag, m_map_key_tag;
-    std::unique_ptr<SphereSampler> m_sphere_sampler;
+    std::unique_ptr<SphereSampler> m_cylinder_sampler;
     std::shared_ptr<MapObject> m_map_object;
     std::shared_ptr<ModelObject> m_model_object;
 
