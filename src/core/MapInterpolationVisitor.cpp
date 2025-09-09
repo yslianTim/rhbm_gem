@@ -1,51 +1,56 @@
 #include "MapInterpolationVisitor.hpp"
-#include "SphereSampler.hpp"
+#include "SamplerBase.hpp"
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
+#include "Logger.hpp"
 
 #include <algorithm>
 #include <utility>
 
-MapInterpolationVisitor::MapInterpolationVisitor(SphereSampler * sampler) :
+MapInterpolationVisitor::MapInterpolationVisitor(SamplerBase * sampler) :
     m_sampler{ sampler }, m_position{ 0.0, 0.0, 0.0 }, m_axis_vector{ 0.0, 0.0, 0.0 }
 {
-
+    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::MapInterpolationVisitor() called.");
 }
 
 void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 {
+    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::VisitMapObject() called.");
     if (data_object == nullptr) return;
     m_sampling_data_list.clear();
-    if (m_sampler != nullptr)
+    if (m_sampler == nullptr)
     {
-        m_point_list = m_sampler->GenerateSamplingPoints(m_position);
-        m_sampling_data_list.reserve(m_point_list.size());
-        for (auto & [distance, point] : m_point_list)
-        {
-            auto map_value{ MakeInterpolationInMapObject(data_object, point) };
-            m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
-        }
+        Logger::Log(LogLevel::Warning, "Cannot find any Sampler, skip interpolation.");
+        return;
     }
-    else
+
+    m_point_list = m_sampler->GenerateSamplingPoints(m_position, m_axis_vector);
+    m_sampling_data_list.reserve(m_point_list.size());
+    for (auto & [distance, point] : m_point_list)
     {
-        m_sampling_data_list.reserve(m_point_list.size());
-        for (auto & [distance, point] : m_point_list)
-        {
-            auto map_value{ MakeInterpolationInMapObject(data_object, point) };
-            m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
-        }
+        auto map_value{ MakeInterpolationInMapObject(data_object, point) };
+        m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));
     }
 }
 
 std::vector<std::tuple<float, float>> && MapInterpolationVisitor::TakeSamplingDataList(void)
 {
+    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::TakeSamplingDataList() called.");
     return std::move(m_sampling_data_list);
 }
 
 float MapInterpolationVisitor::MakeInterpolationInMapObject(
     MapObject * data_object, const std::array<float, 3> & position)
 {
+    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::MakeInterpolationInMapObject() called.");
+    if (data_object == nullptr)
+    {
+        Logger::Log(LogLevel::Warning,
+            "Input data object is nullptr, skip interpolation and return 0.");
+        return 0.0f;
+    }
+
     auto index{ data_object->GetIndexFromPosition(position) };
     auto origin{ data_object->GetOrigin() };
     auto grid_spacing{ data_object->GetGridSpacing() };
@@ -61,21 +66,21 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     // Helper function for cubic interpolation
     auto cubic_interpolate = [](float p0, float p1, float p2, float p3, float t)
     {
-        float a0 = p1;
-        float a1 = 0.5f * (p2 - p0);
-        float a2 = 0.5f * (-p3 + 4.0f*p2 - 5.0f*p1 + 2.0f*p0);
-        float a3 = 0.5f * (p3 - 3.0f*p2 + 3.0f*p1 - p0);
+        float a0{ p1 };
+        float a1{ 0.5f * (p2 - p0) };
+        float a2{ 0.5f * (-p3 + 4.0f*p2 - 5.0f*p1 + 2.0f*p0) };
+        float a3{ 0.5f * (p3 - 3.0f*p2 + 3.0f*p1 - p0) };
         return a3 * t * t * t + a2 * t * t + a1 * t + a0;
     };
 
     // Collect 64 points for interpolation
     std::array<std::array<std::array<float, 4>, 4>, 4> values;
     const auto grid_size{ data_object->GetGridSize() };
-    for (int i = -1; i < 3; ++i)
+    for (int i = -1; i < 3; i++)
     {
-        for (int j = -1; j < 3; ++j)
+        for (int j = -1; j < 3; j++)
         {
-            for (int k = -1; k < 3; ++k)
+            for (int k = -1; k < 3; k++)
             {
                 size_t i_next{ static_cast<size_t>(i + 1) };
                 size_t j_next{ static_cast<size_t>(j + 1) };
@@ -88,23 +93,24 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
         }
     }
     // Interpolate along x direction
-    std::array<std::array<float, 4>, 4> tempY;
-    for (size_t j = 0; j < 4; ++j)
+    std::array<std::array<float, 4>, 4> temp_y;
+    for (size_t j = 0; j < 4; j++)
     {
-        for (size_t k = 0; k < 4; ++k)
+        for (size_t k = 0; k < 4; k++)
         {
-            tempY[j][k] = cubic_interpolate(
+            temp_y[j][k] = cubic_interpolate(
                 values[0][j][k], values[1][j][k], values[2][j][k], values[3][j][k], local.at(0));
         }
     }
 
     // Interpolate along y direction
-    std::array<float, 4> tempZ;
-    for (size_t k = 0; k < 4; ++k)
+    std::array<float, 4> temp_z;
+    for (size_t k = 0; k < 4; k++)
     {
-        tempZ[k] = cubic_interpolate(tempY[0][k], tempY[1][k], tempY[2][k], tempY[3][k], local.at(1));
+        temp_z[k] = cubic_interpolate(
+            temp_y[0][k], temp_y[1][k], temp_y[2][k], temp_y[3][k], local.at(1));
     }
 
     // Interpolate along z direction
-    return cubic_interpolate(tempZ[0], tempZ[1], tempZ[2], tempZ[3], local.at(2));
+    return cubic_interpolate(temp_z[0], temp_z[1], temp_z[2], temp_z[3], local.at(2));
 }

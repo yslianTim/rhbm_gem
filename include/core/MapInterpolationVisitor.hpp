@@ -5,17 +5,17 @@
 #include <tuple>
 #include "DataObjectVisitorBase.hpp"
 
-class SphereSampler;
+class SamplerBase;
 
 class MapInterpolationVisitor : public DataObjectVisitorBase
 {
-    SphereSampler * m_sampler;
+    SamplerBase * m_sampler;
     std::array<float, 3> m_position, m_axis_vector;
     std::vector<std::tuple<float, float>> m_sampling_data_list;
     std::vector<std::tuple<float, std::array<float, 3>>> m_point_list;
 
 public:
-    explicit MapInterpolationVisitor(SphereSampler * sampler);
+    explicit MapInterpolationVisitor(SamplerBase * sampler);
     ~MapInterpolationVisitor() = default;
     void VisitMapObject(MapObject * data_object) override;
 

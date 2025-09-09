@@ -274,15 +274,14 @@ void BondAnalysisCommand::RunMapValueSampling(void)
 #ifdef USE_OPENMP
     #pragma omp parallel num_threads(m_options.thread_size)
     {
-        // TODO : interface of MapInterpolationVisitor with Sampler Abstract class
-        MapInterpolationVisitor interpolation_visitor{ nullptr };
-        //MapInterpolationVisitor interpolation_visitor{ m_cylinder_sampler.get() };
+        MapInterpolationVisitor interpolation_visitor{ m_cylinder_sampler.get() };
         #pragma omp for
         for (size_t i = 0; i < atom_size; i++)
         {
             auto atom{ atom_list[i] };
             auto entry{ atom->GetAtomicPotentialEntry() };
             interpolation_visitor.SetPosition(atom->GetPosition());
+            interpolation_visitor.SetAxisVector({ 0.0f, 0.0f, 1.0f });
             m_map_object->Accept(&interpolation_visitor);
             entry->AddDistanceAndMapValueList(interpolation_visitor.TakeSamplingDataList());
             #pragma omp critical
@@ -299,9 +298,10 @@ void BondAnalysisCommand::RunMapValueSampling(void)
         auto atom{ atom_list[i] };
         auto entry{ atom->GetAtomicPotentialEntry() };
         interpolation_visitor.SetPosition(atom->GetPosition());
+        interpolation_visitor.SetAxisVector({ 0.0f, 0.0f, 1.0f });
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
-        atom_count++
+        atom_count++;
         Logger::ProgressPercent(atom_count, atom_size);
     }
 #endif

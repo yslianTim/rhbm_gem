@@ -23,8 +23,10 @@ void SphereSampler::Print(void) const
 }
 
 std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamplingPoints(
-    const std::array<float, 3> & reference_position) const
+    const std::array<float, 3> & reference_position,
+    const std::array<float, 3> & axis_vector) const
 {
+    (void)axis_vector; // axis_vector is not used in SphereSampler
     if (m_distance_min > m_distance_max)
     {
         throw std::invalid_argument("SphereSampler: distance minimum greater than maximum");
