@@ -5,9 +5,14 @@
 #include <algorithm>
 #include <stdexcept>
 
-const std::vector<std::string> AtomicInfoHelper::m_group_class_key_list
+const std::vector<std::string> AtomicInfoHelper::m_group_atom_class_key_list
 {
-    "element_class", "residue_class", "structure_class"
+    "simple_atom_class", "component_atom_class", "structure_atom_class"
+};
+
+const std::vector<std::string> AtomicInfoHelper::m_group_bond_class_key_list
+{
+    "simple_bond_class", "component_bond_class"
 };
 
 const std::vector<Residue> AtomicInfoHelper::m_standard_residue_list
@@ -282,9 +287,14 @@ int AtomicInfoHelper::GetAtomicNumber(Element element)
     return static_cast<int>(element);
 }
 
-size_t AtomicInfoHelper::GetGroupClassCount(void)
+size_t AtomicInfoHelper::GetGroupAtomClassCount(void)
 {
-    return m_group_class_key_list.size();
+    return m_group_atom_class_key_list.size();
+}
+
+size_t AtomicInfoHelper::GetGroupBondClassCount(void)
+{
+    return m_group_bond_class_key_list.size();
 }
 
 size_t AtomicInfoHelper::GetStandardResidueCount(void)
@@ -297,28 +307,47 @@ size_t AtomicInfoHelper::GetElementCount(void)
     return m_element_map.size();
 }
 
-const std::string & AtomicInfoHelper::GetGroupClassKey(size_t class_id)
+const std::string & AtomicInfoHelper::GetGroupAtomClassKey(size_t class_id)
 {
-    if (class_id >= m_group_class_key_list.size())
+    if (class_id >= m_group_atom_class_key_list.size())
     {
         throw std::out_of_range("class_id out of range");
     }
-    return m_group_class_key_list.at(class_id);
+    return m_group_atom_class_key_list.at(class_id);
 }
 
-const std::string & AtomicInfoHelper::GetElementClassKey(void)
+const std::string & AtomicInfoHelper::GetGroupBondClassKey(size_t class_id)
 {
-    return m_group_class_key_list.at(0);
+    if (class_id >= m_group_bond_class_key_list.size())
+    {
+        throw std::out_of_range("class_id out of range");
+    }
+    return m_group_bond_class_key_list.at(class_id);
 }
 
-const std::string & AtomicInfoHelper::GetResidueClassKey(void)
+const std::string & AtomicInfoHelper::GetSimpleAtomClassKey(void)
 {
-    return m_group_class_key_list.at(1);
+    return m_group_atom_class_key_list.at(0);
 }
 
-const std::string & AtomicInfoHelper::GetStructureClassKey(void)
+const std::string & AtomicInfoHelper::GetComponentAtomClassKey(void)
 {
-    return m_group_class_key_list.at(2);
+    return m_group_atom_class_key_list.at(1);
+}
+
+const std::string & AtomicInfoHelper::GetStructureAtomClassKey(void)
+{
+    return m_group_atom_class_key_list.at(2);
+}
+
+const std::string & AtomicInfoHelper::GetSimpleBondClassKey(void)
+{
+    return m_group_bond_class_key_list.at(0);
+}
+
+const std::string & AtomicInfoHelper::GetComponentBondClassKey(void)
+{
+    return m_group_bond_class_key_list.at(1);
 }
 
 const std::vector<Residue> & AtomicInfoHelper::GetStandardResidueList(void)

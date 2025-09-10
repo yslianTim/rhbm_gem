@@ -12,7 +12,7 @@ static_assert(std::is_same_v<std::underlying_type_t<Structure>,  uint8_t>);
 static_assert(std::is_same_v<ComponentKey, uint8_t>);
 static_assert(std::is_same_v<AtomKey, uint16_t>);
 
-struct KeyPackerElementAtomClass
+struct KeyPackerSimpleAtomClass
 {
     // Bits allocation
     // ┌─0~15─AtomKey─┐┌─16─Flag─┐
@@ -39,7 +39,7 @@ struct KeyPackerElementAtomClass
     }
 };
 
-struct KeyPackerElementBondClass
+struct KeyPackerSimpleBondClass
 {
     // Bits allocation
     // ┌─0~15─AtomKey1─┐┌─16~31─AtomKey2─┐
@@ -66,7 +66,7 @@ struct KeyPackerElementBondClass
     }
 };
 
-struct KeyPackerResidueAtomClass
+struct KeyPackerComponentAtomClass
 {
     // Bits allocation
     // ┌─0~7─ComponentKey─┐┌─8~23─AtomKey─┐
@@ -79,7 +79,7 @@ struct KeyPackerResidueAtomClass
 
     static std::tuple<ComponentKey, AtomKey> Unpack(uint64_t key)
     {
-        constexpr uint64_t mask_8bit { 0xFF };    //  8 bits mask
+        constexpr uint64_t mask_8bit { 0xFF };
         constexpr uint64_t mask_16bit{ 0xFFFF };
         auto component_key{ static_cast<ComponentKey>( (key      ) & mask_8bit)  };
         auto atom_key{      static_cast<AtomKey>(      (key >> 8 ) & mask_16bit) };
@@ -91,6 +91,44 @@ struct KeyPackerResidueAtomClass
         auto [component_key, atom_key]{ Unpack(key) };
         return "<" + std::to_string(static_cast<int>(component_key)) + ", "
                    + std::to_string(static_cast<int>(atom_key)) + ">";
+    }
+};
+
+struct KeyPackerComponentBondClass
+{
+    // Bits allocation
+    // ┌─0~7─ComponentKey1─┐┌─8~15─ComponentKey2─┐┌─16~31─AtomKey1─┐┌─32~47─AtomKey2─┐
+    // | 8 bits            || 8 bits             || 16 bits        || 16 bits        |
+    static uint64_t Pack(
+        ComponentKey component_key_1,
+        ComponentKey component_key_2,
+        AtomKey atom_key_1,
+        AtomKey atom_key_2)
+    {
+        return static_cast<uint64_t>(component_key_1)
+            | (static_cast<uint64_t>(component_key_2) <<  8)
+            | (static_cast<uint64_t>(atom_key_1)      << 16)
+            | (static_cast<uint64_t>(atom_key_2)      << 32);
+    }
+
+    static std::tuple<ComponentKey, ComponentKey, AtomKey, AtomKey> Unpack(uint64_t key)
+    {
+        constexpr uint64_t mask_8bit { 0xFF };
+        constexpr uint64_t mask_16bit{ 0xFFFF };
+        auto component_key_1{ static_cast<ComponentKey>( (key      ) & mask_8bit)  };
+        auto component_key_2{ static_cast<ComponentKey>( (key >>  8) & mask_8bit)  };
+        auto atom_key_1{      static_cast<AtomKey>(      (key >> 16) & mask_16bit) };
+        auto atom_key_2{      static_cast<AtomKey>(      (key >> 32) & mask_16bit) };
+        return { component_key_1, component_key_2, atom_key_1, atom_key_2 };
+    }
+
+    static std::string GetKeyString(uint64_t key)
+    {
+        auto [component_key_1, component_key_2, atom_key_1, atom_key_2]{ Unpack(key) };
+        return "<" + std::to_string(static_cast<int>(component_key_1)) + ", "
+                   + std::to_string(static_cast<int>(component_key_2)) + ", "
+                   + std::to_string(static_cast<int>(atom_key_1)) + ", "
+                   + std::to_string(static_cast<int>(atom_key_2)) + ">";
     }
 };
 

@@ -38,6 +38,8 @@ public:
     std::string GetInfo(void) const;
     std::array<float, 3> GetPosition(void) const { return m_position; }
     std::array<float, 3> GetBondVector(void) const { return m_bond_vector; }
+    AtomObject * GetAtomObject1(void) const { return m_atom_object_1; }
+    AtomObject * GetAtomObject2(void) const { return m_atom_object_2; }
     AtomicPotentialEntry * GetAtomicPotentialEntry(void) const { return m_atomic_potential_entry.get(); }
 
 };

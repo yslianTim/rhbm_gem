@@ -419,9 +419,9 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     }
 
     // Load atom entries
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupAtomClassCount(); i++)
     {
-        auto group_class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        auto group_class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
         // Load potential entry
         auto potential_table_name{ group_class_key + "_group_potential_entry_in_" + sanitized_key_tag };
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
@@ -796,9 +796,9 @@ ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
         atomic_potential_entry_map[serial_id] = std::move(atomic_potential_entry);
     }
 
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupAtomClassCount(); i++)
     {
-        auto class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        auto class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
         auto table_name_with_class_key{ class_key + "_" + table_name };
         LoadAtomicPotentialEntrySubList(table_name_with_class_key, class_key, atomic_potential_entry_map);
     }
@@ -855,27 +855,27 @@ void ModelObjectDAO::LoadGroupPotentialEntrySubList(
     ModelObject * model_obj, const std::string & class_key)
 {
     auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
-    if (class_key == AtomicInfoHelper::GetElementClassKey())
+    if (class_key == AtomicInfoHelper::GetSimpleAtomClassKey())
     {
         for (auto & atom : model_obj->GetSelectedAtomList())
         {
             auto group_key{
-                KeyPackerElementAtomClass::Pack(atom->GetAtomKey(), atom->GetSpecialAtomFlag())
+                KeyPackerSimpleAtomClass::Pack(atom->GetAtomKey(), atom->GetSpecialAtomFlag())
             };
             group_entry->AddAtomObjectPtr(group_key, atom);
         }
     }
-    else if (class_key == AtomicInfoHelper::GetResidueClassKey())
+    else if (class_key == AtomicInfoHelper::GetComponentAtomClassKey())
     {
         for (auto & atom : model_obj->GetSelectedAtomList())
         {
             auto group_key{
-                KeyPackerResidueAtomClass::Pack(atom->GetComponentKey(), atom->GetAtomKey())
+                KeyPackerComponentAtomClass::Pack(atom->GetComponentKey(), atom->GetAtomKey())
             };
             group_entry->AddAtomObjectPtr(group_key, atom);
         }
     }
-    else if (class_key == AtomicInfoHelper::GetStructureClassKey())
+    else if (class_key == AtomicInfoHelper::GetStructureAtomClassKey())
     {
         for (auto & atom : model_obj->GetSelectedAtomList())
         {

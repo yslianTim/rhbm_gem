@@ -163,7 +163,7 @@ void DemoPainter::PaintAtomMapValueExample(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
+    auto class_key{ AtomicInfoHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomMapValueExample");
 
     if (model_object == nullptr) return;
@@ -184,7 +184,7 @@ void DemoPainter::PaintAtomMapValueExample(
     double width_prior;
     std::vector<double> y_array;
     AtomClassifier classifier;
-    auto group_key{ classifier.GetMainChainResidueClassGroupKey(0, Residue::ALA) };
+    auto group_key{ classifier.GetMainChainComponentAtomClassGroupKey(0, Residue::ALA) };
     if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) return;
     for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
     {
@@ -260,7 +260,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
     const std::vector<ModelObject *> & model_list, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSummary");
 
     for (auto & model : model_list) if (model == nullptr) return;
@@ -306,7 +306,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
         for (size_t k = 0; k < main_chain_element_count; k++)
         {
-            auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(k) };
+            auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
             amplitude_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 0);
             width_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 1);
             correlation_graph[j][k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
@@ -414,7 +414,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSingle");
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -451,7 +451,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     resolution_text = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(k) };
+        auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
         amplitude_graph[k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 0);
         width_graph[k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 1);
         correlation_graph[k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
@@ -600,14 +600,14 @@ void DemoPainter::PaintGroupGausToFSC(
     for (size_t i = 0; i < AtomClassifier::GetMainChainMemberCount(); i++)
     {
         if (i >= col_size) continue;
-        auto group_key{ m_atom_classifier->GetMainChainElementClassGroupKey(i) };
+        auto group_key{ m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(i) };
         graph[i] = ROOTHelper::CreateGraphErrors();
         auto count{ 0 };
         for (auto model : model_list)
         {
             auto entry_iter{ std::make_unique<PotentialEntryIterator>(model) };
-            auto width_value{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetElementClassKey(), 1) };
-            auto width_error{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetElementClassKey(), 1) };
+            auto width_value{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetSimpleAtomClassKey(), 1) };
+            auto width_error{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetSimpleAtomClassKey(), 1) };
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
             graph[i]->SetPointError(count, 0.0, width_error);
             count++;
@@ -721,7 +721,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomWidthScatterPlotSingle");
-    auto class_key{ AtomicInfoHelper::GetResidueClassKey() };
+    auto class_key{ AtomicInfoHelper::GetComponentAtomClassKey() };
 
     if (model_object == nullptr) return;
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -771,7 +771,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     {
         for (auto residue : AtomicInfoHelper::GetStandardResidueList())
         {
-            auto group_key{ m_atom_classifier->GetMainChainResidueClassGroupKey(i, residue) };
+            auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
             if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
             auto gaus_graph{ entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, class_key, 1) };
             for (int p = 0; p < gaus_graph->GetN(); p++)
@@ -929,7 +929,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupWidthScatterPlot");
-    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
 
     for (auto & model : model_list) if (model == nullptr) return;
 
@@ -959,7 +959,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
             auto element_id{ primary_element_size - j - 1 };
             for (auto residue : AtomicInfoHelper::GetStandardResidueList())
             {
-                auto group_key{ m_atom_classifier->GetMainChainResidueClassGroupKey(element_id, residue) };
+                auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(element_id, residue) };
                 if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
                 auto graph{ (par_id == 0) ?
                     entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, residue_class, 1) :

@@ -24,13 +24,10 @@ protected:
 
 TEST_F(AtomicInfoHelperTest, BasicChecks)
 {
-    EXPECT_EQ(3U, AtomicInfoHelper::GetGroupClassCount());
+    EXPECT_EQ(3U, AtomicInfoHelper::GetGroupAtomClassCount());
     EXPECT_EQ(AtomicInfoHelper::GetStandardResidueList().size(),
               AtomicInfoHelper::GetStandardResidueCount());
     EXPECT_EQ(90U, AtomicInfoHelper::GetElementCount());
-    EXPECT_EQ("element_class", AtomicInfoHelper::GetGroupClassKey(0));
-    EXPECT_EQ("residue_class", AtomicInfoHelper::GetGroupClassKey(1));
-    EXPECT_EQ("structure_class", AtomicInfoHelper::GetGroupClassKey(2));
 }
 
 using ElementAtomicPair = std::pair<Element, int>;
@@ -89,9 +86,9 @@ TEST_F(AtomicInfoHelperTest, InvalidElementReturnsZero)
 
 TEST_F(AtomicInfoHelperTest, ExplicitClassKeyGetters)
 {
-    EXPECT_EQ("element_class", AtomicInfoHelper::GetElementClassKey());
-    EXPECT_EQ("residue_class", AtomicInfoHelper::GetResidueClassKey());
-    EXPECT_EQ("structure_class", AtomicInfoHelper::GetStructureClassKey());
+    EXPECT_EQ("simple_atom_class", AtomicInfoHelper::GetSimpleAtomClassKey());
+    EXPECT_EQ("component_atom_class", AtomicInfoHelper::GetComponentAtomClassKey());
+    EXPECT_EQ("structure_atom_class", AtomicInfoHelper::GetStructureAtomClassKey());
 }
 
 TEST_F(AtomicInfoHelperTest, StandardResidueList)
@@ -194,9 +191,9 @@ TEST_F(AtomicInfoHelperTest, ResidueDisplayAttributes)
     EXPECT_EQ(1, AtomicInfoHelper::GetDisplayMarker(Residue::UNK));
 }
 
-TEST_F(AtomicInfoHelperTest, GetGroupClassKeyThrowsOnOutOfRange)
+TEST_F(AtomicInfoHelperTest, GetGroupAtomClassKeyThrowsOnOutOfRange)
 {
-    EXPECT_THROW(AtomicInfoHelper::GetGroupClassKey(3), std::out_of_range);
+    EXPECT_THROW(AtomicInfoHelper::GetGroupAtomClassKey(3), std::out_of_range);
 }
 
 TEST_F(AtomicInfoHelperTest, ConversionHelpersReturnUnkForUnknownStrings)

@@ -110,7 +110,7 @@ void ModelPainter::PaintGroupGausMainChainStyle1(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintGroupGausMainChainStyle1");
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -147,7 +147,7 @@ void ModelPainter::PaintGroupGausMainChainStyle1(
     resolution_text = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        auto group_key_list{ m_atom_classifier->GetMainChainResidueClassGroupKeyList(k) };
+        auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
         amplitude_graph[k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 0);
         width_graph[k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 1);
         correlation_graph[k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
@@ -311,10 +311,10 @@ void ModelPainter::PaintGroupGausMainChain(
     std::vector<uint64_t> group_key_list[primary_element_size][structure_size+1];
     for (size_t i = 0; i < primary_element_size; i++)
     {
-        group_key_list[i][0] = m_atom_classifier->GetMainChainResidueClassGroupKeyList(i);
-        group_key_list[i][1] = m_atom_classifier->GetMainChainStructureClassGroupKeyList(i, structure_list[1]);
-        group_key_list[i][2] = m_atom_classifier->GetMainChainStructureClassGroupKeyList(i, structure_list[2]);
-        group_key_list[i][3] = m_atom_classifier->GetMainChainStructureClassGroupKeyList(i, structure_list[3]);
+        group_key_list[i][0] = m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(i);
+        group_key_list[i][1] = m_atom_classifier->GetMainChainStructureAtomClassGroupKeyList(i, structure_list[1]);
+        group_key_list[i][2] = m_atom_classifier->GetMainChainStructureAtomClassGroupKeyList(i, structure_list[2]);
+        group_key_list[i][3] = m_atom_classifier->GetMainChainStructureAtomClassGroupKeyList(i, structure_list[3]);
     }
 
     for (size_t j = 0; j < structure_size + 1; j++)
@@ -327,7 +327,7 @@ void ModelPainter::PaintGroupGausMainChain(
         std::vector<double> amplitude_array, width_array;
         amplitude_array.reserve(80);
         width_array.reserve(80);
-        auto class_key{ (j == 0) ? AtomicInfoHelper::GetResidueClassKey() : AtomicInfoHelper::GetStructureClassKey() };
+        auto class_key{ (j == 0) ? AtomicInfoHelper::GetComponentAtomClassKey() : AtomicInfoHelper::GetStructureAtomClassKey() };
         for (size_t i = 0; i < primary_element_size; i++)
         {
             amplitude_graph[i] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list[i][j], class_key, 0);
@@ -530,17 +530,17 @@ void ModelPainter::PaintGroupGausSideChain(
                 auto element_char{ StringHelper::ExtractCharAsString(atom_id, 0) };
                 auto element_type{ AtomicInfoHelper::GetElementFromString(element_char) };
                 if (element_type != element) continue;
-                auto mix_group_key{ KeyPackerResidueAtomClass::Pack(component_key, atom_key) };
+                auto mix_group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
                 auto free_group_key{ KeyPackerStructureAtomClass::Pack(Structure::FREE, component_key, atom_key) };
                 auto helix_group_key{ KeyPackerStructureAtomClass::Pack(Structure::HELX_P, component_key, atom_key) };
                 bool has_data{ false };
-                if (entry_iter->IsAvailableGroupKey(mix_group_key, AtomicInfoHelper::GetResidueClassKey()) == true)
+                if (entry_iter->IsAvailableGroupKey(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey()) == true)
                 {
                     has_data = true;
-                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 0) };
-                    auto width_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 1) };
-                    auto amplitude_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 0) };
-                    auto width_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetResidueClassKey(), 1) };
+                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey(), 0) };
+                    auto width_value{ entry_iter->GetGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey(), 0) };
+                    auto width_error{ entry_iter->GetGausVariancePrior(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey(), 1) };
                     amplitude_array.emplace_back(amplitude_value);
                     width_array.emplace_back(width_value);
                     amplitude_mix_graph->SetPoint(count_mix, count_total, amplitude_value);
@@ -550,12 +550,12 @@ void ModelPainter::PaintGroupGausSideChain(
                     count_mix++;
                 }
 
-                if (entry_iter->IsAvailableGroupKey(free_group_key, AtomicInfoHelper::GetStructureClassKey()) == true)
+                if (entry_iter->IsAvailableGroupKey(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey()) == true)
                 {
-                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
-                    auto width_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
-                    auto amplitude_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
-                    auto width_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 0) };
+                    auto width_value{ entry_iter->GetGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 0) };
+                    auto width_error{ entry_iter->GetGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 1) };
                     //amplitude_array.emplace_back(amplitude_value);
                     //width_array.emplace_back(width_value);
                     amplitude_free_graph->SetPoint(count_free, count_total, amplitude_value);
@@ -565,12 +565,12 @@ void ModelPainter::PaintGroupGausSideChain(
                     count_free++;
                 }
 
-                if (entry_iter->IsAvailableGroupKey(helix_group_key, AtomicInfoHelper::GetStructureClassKey()) == true)
+                if (entry_iter->IsAvailableGroupKey(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey()) == true)
                 {
-                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
-                    auto width_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
-                    auto amplitude_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 0) };
-                    auto width_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureClassKey(), 1) };
+                    auto amplitude_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 0) };
+                    auto width_value{ entry_iter->GetGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 0) };
+                    auto width_error{ entry_iter->GetGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 1) };
                     //amplitude_array.emplace_back(amplitude_value);
                     //width_array.emplace_back(width_value);
                     amplitude_helix_graph->SetPoint(count_helix, count_total, amplitude_value);
@@ -670,7 +670,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomMapValueMainChain");
-    const auto & class_key{ AtomicInfoHelper::GetElementClassKey() };
+    const auto & class_key{ AtomicInfoHelper::GetSimpleAtomClassKey() };
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
     const int col_size{ 4 };
@@ -696,7 +696,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     AtomClassifier classifier;
     for (size_t k = 0; k < main_chain_element_size; k++)
     {
-        auto group_key{ classifier.GetMainChainElementClassGroupKey(k) };
+        auto group_key{ classifier.GetMainChainSimpleAtomClassGroupKey(k) };
         if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
         for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
         {
@@ -837,7 +837,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintGroupWidthScatterPlot");
-    auto residue_class{ AtomicInfoHelper::GetResidueClassKey() };
+    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
@@ -866,7 +866,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
         {
             for (auto residue : AtomicInfoHelper::GetStandardResidueList())
             {
-                auto group_key{ m_atom_classifier->GetMainChainResidueClassGroupKey(i, residue) };
+                auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
                 if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
                 auto gaus_graph
                 {

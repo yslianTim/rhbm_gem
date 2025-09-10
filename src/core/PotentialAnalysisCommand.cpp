@@ -374,9 +374,9 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomPotentialFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFitting");
     if (m_model_object == nullptr) return;
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupAtomClassCount(); i++)
     {
-        const auto & class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        const auto & class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
         // Atom Classification
@@ -498,9 +498,9 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondPotentialFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
     if (m_model_object == nullptr) return;
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupClassCount(); i++)
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupBondClassCount(); i++)
     {
-        const auto & class_key{ AtomicInfoHelper::GetGroupClassKey(i) };
+        const auto & class_key{ AtomicInfoHelper::GetGroupBondClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
         // Bond Classification

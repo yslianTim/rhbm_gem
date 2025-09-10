@@ -11,7 +11,8 @@
 
 class AtomicInfoHelper
 {
-    static const std::vector<std::string> m_group_class_key_list;
+    static const std::vector<std::string> m_group_atom_class_key_list;
+    static const std::vector<std::string> m_group_bond_class_key_list;
     static const std::vector<Residue> m_standard_residue_list;
     static const std::vector<Element> m_standard_element_list;
 
@@ -34,13 +35,17 @@ public:
     AtomicInfoHelper(void) = default;
     ~AtomicInfoHelper() = default;
     static int GetAtomicNumber(Element element);
-    static size_t GetGroupClassCount(void);
+    static size_t GetGroupAtomClassCount(void);
+    static size_t GetGroupBondClassCount(void);
     static size_t GetStandardResidueCount(void);
     static size_t GetElementCount(void);
-    static const std::string & GetGroupClassKey(size_t class_id);
-    static const std::string & GetElementClassKey(void);
-    static const std::string & GetResidueClassKey(void);
-    static const std::string & GetStructureClassKey(void);
+    static const std::string & GetGroupAtomClassKey(size_t class_id);
+    static const std::string & GetGroupBondClassKey(size_t class_id);
+    static const std::string & GetSimpleAtomClassKey(void);
+    static const std::string & GetComponentAtomClassKey(void);
+    static const std::string & GetStructureAtomClassKey(void);
+    static const std::string & GetSimpleBondClassKey(void);
+    static const std::string & GetComponentBondClassKey(void);
     static const std::vector<Residue> & GetStandardResidueList(void);
     static const std::vector<Element> & GetStandardElementList(void);
     static const std::unordered_map<std::string_view, Residue> & GetResidueMap(void);
