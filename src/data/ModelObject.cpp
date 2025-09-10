@@ -90,7 +90,6 @@ void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list
 void ModelObject::SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list)
 {
     m_bond_list = std::move(bond_list);
-    Update();
 }
 
 void ModelObject::AddGroupPotentialEntry(

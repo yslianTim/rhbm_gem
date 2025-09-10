@@ -149,7 +149,12 @@ std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::MoveAtomObjectLis
 
 std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectList(int model_number)
 {
-    return std::move(m_bond_object_list_map.at(model_number));
+    auto iter{ m_bond_object_list_map.find(model_number) };
+    if (iter == m_bond_object_list_map.end())
+    {
+        return {};
+    }
+    return std::move(iter->second);
 }
 
 const std::string & AtomicModelDataBlock::GetPdbID(void) const
