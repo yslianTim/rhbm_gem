@@ -3,6 +3,7 @@
 #include "ModelFileWriter.hpp"
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "AtomicModelDataBlock.hpp"
 #include "Logger.hpp"
 
