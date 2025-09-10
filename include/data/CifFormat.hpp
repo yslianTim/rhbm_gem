@@ -45,6 +45,7 @@ private:
     void LoadStructureConformationBlock(std::ifstream & infile);
     void LoadStructureSheetBlock(std::ifstream & infile);
     void LoadAtomSiteBlock(std::ifstream & infile);
+    void ConstructBondList(void);
     void ParseLoopBlock(std::ifstream & infile,
         std::string_view data_block_prefix,
         const std::function<void(const std::unordered_map<std::string, size_t> &,

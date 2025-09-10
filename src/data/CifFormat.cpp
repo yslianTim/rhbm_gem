@@ -89,6 +89,7 @@ void CifFormat::LoadDataArray(const std::string & filename)
         throw std::runtime_error("LoadDataArray failed!");
     }
     LoadAtomSiteBlock(infile);
+    ConstructBondList();
 }
 
 void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
@@ -488,6 +489,14 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             }
         }
     );
+}
+
+void CifFormat::ConstructBondList(void)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
+    
+
+    //m_data_block->AddBondObject(1, std::make_unique<BondObject>());
 }
 
 AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
