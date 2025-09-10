@@ -33,13 +33,13 @@ public:
     static const std::string & GetMainChainElementLabel(size_t id);
     static const std::string & GetMainChainElementTitle(size_t id);
 
-    static uint64_t GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);
+    static GroupKey GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);
 
-    uint64_t GetMainChainSimpleAtomClassGroupKey(size_t id) const;
-    uint64_t GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue) const;
-    uint64_t GetMainChainStructureAtomClassGroupKey(size_t id, Structure structure, Residue residue) const;
-    std::vector<uint64_t> GetMainChainComponentAtomClassGroupKeyList(size_t id) const;
-    std::vector<uint64_t> GetMainChainStructureAtomClassGroupKeyList(size_t id, Structure structure) const;
+    GroupKey GetMainChainSimpleAtomClassGroupKey(size_t id) const;
+    GroupKey GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue) const;
+    GroupKey GetMainChainStructureAtomClassGroupKey(size_t id, Structure structure, Residue residue) const;
+    std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t id) const;
+    std::vector<GroupKey> GetMainChainStructureAtomClassGroupKeyList(size_t id, Structure structure) const;
 
 private:
     static bool IsValidMainChainMemberID(size_t id);

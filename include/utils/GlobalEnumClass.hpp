@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+using GroupKey = uint64_t;
+
 enum class Residue : uint8_t
 {
     UNK =  0,

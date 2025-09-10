@@ -130,7 +130,7 @@ const std::string & BondClassifier::GetMainChainElementTitle(size_t id)
     return m_main_chain_member_title_list.at(id);
 }
 
-uint64_t BondClassifier::GetGroupKeyInClass(
+GroupKey BondClassifier::GetGroupKeyInClass(
     const BondObject * bond_object, const std::string & class_key)
 {
     if (class_key == AtomicInfoHelper::GetSimpleBondClassKey())
@@ -153,7 +153,7 @@ uint64_t BondClassifier::GetGroupKeyInClass(
     }
 }
 
-uint64_t BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id) const
+GroupKey BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id) const
 {
     if (IsValidMainChainMemberID(id) == false)
     {
@@ -164,7 +164,7 @@ uint64_t BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id) const
     return KeyPackerSimpleAtomClass::Pack(atom_key, false);
 }
 
-uint64_t BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Residue residue) const
+GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Residue residue) const
 {
     if (IsValidMainChainMemberID(id) == false)
     {
@@ -176,7 +176,7 @@ uint64_t BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Resid
     return KeyPackerComponentAtomClass::Pack(component_key, atom_key);
 }
 
-uint64_t BondClassifier::GetMainChainStructureBondClassGroupKey(
+GroupKey BondClassifier::GetMainChainStructureBondClassGroupKey(
     size_t id, Structure structure, Residue residue) const
 {
     if (IsValidMainChainMemberID(id) == false)
@@ -189,11 +189,11 @@ uint64_t BondClassifier::GetMainChainStructureBondClassGroupKey(
     return KeyPackerStructureAtomClass::Pack(structure, component_key, atom_key);
 }
 
-std::vector<uint64_t> BondClassifier::GetMainChainComponentBondClassGroupKeyList(
+std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList(
     size_t id) const
 {
     if (IsValidMainChainMemberID(id) == false) return {};
-    std::vector<uint64_t> group_key_list;
+    std::vector<GroupKey> group_key_list;
     group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
     for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
     {
@@ -202,11 +202,11 @@ std::vector<uint64_t> BondClassifier::GetMainChainComponentBondClassGroupKeyList
     return group_key_list;
 }
 
-std::vector<uint64_t> BondClassifier::GetMainChainStructureBondClassGroupKeyList(
+std::vector<GroupKey> BondClassifier::GetMainChainStructureBondClassGroupKeyList(
     size_t id, Structure structure) const
 {
     if (IsValidMainChainMemberID(id) == false) return {};
-    std::vector<uint64_t> group_key_list;
+    std::vector<GroupKey> group_key_list;
     group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
     for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
     {

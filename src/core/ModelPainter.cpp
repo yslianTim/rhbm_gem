@@ -308,7 +308,7 @@ void ModelPainter::PaintGroupGausMainChain(
     frame[4] = ROOTHelper::CreateHist2D("hist_4","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[5] = ROOTHelper::CreateHist2D("hist_5","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
-    std::vector<uint64_t> group_key_list[primary_element_size][structure_size+1];
+    std::vector<GroupKey> group_key_list[primary_element_size][structure_size+1];
     for (size_t i = 0; i < primary_element_size; i++)
     {
         group_key_list[i][0] = m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(i);

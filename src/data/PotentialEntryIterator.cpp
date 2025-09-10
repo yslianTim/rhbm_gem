@@ -66,7 +66,7 @@ bool PotentialEntryIterator::IsOutlierAtom(const std::string & class_key) const
 }
 
 bool PotentialEntryIterator::IsAvailableGroupKey(
-    uint64_t group_key, const std::string & class_key, bool varbose) const
+    GroupKey group_key, const std::string & class_key, bool varbose) const
 {
     return CheckGroupKey(group_key, class_key, varbose);
 }
@@ -74,7 +74,7 @@ bool PotentialEntryIterator::IsAvailableGroupKey(
 size_t PotentialEntryIterator::GetResidueCount(
     const std::string & class_key, Residue residue, Structure structure) const
 {
-    uint64_t group_key{ 0 };
+    GroupKey group_key{ 0 };
     AtomClassifier classifier;
     if (class_key == AtomicInfoHelper::GetComponentAtomClassKey())
     {
@@ -92,7 +92,7 @@ size_t PotentialEntryIterator::GetResidueCount(
 }
 
 double PotentialEntryIterator::GetGausEstimatePrior(
-    uint64_t group_key, const std::string & class_key, int par_id) const
+    GroupKey group_key, const std::string & class_key, int par_id) const
 {
     if (CheckGroupKey(group_key, class_key) == false)
     {
@@ -102,7 +102,7 @@ double PotentialEntryIterator::GetGausEstimatePrior(
 }
 
 double PotentialEntryIterator::GetGausVariancePrior(
-    uint64_t group_key, const std::string & class_key, int par_id) const
+    GroupKey group_key, const std::string & class_key, int par_id) const
 {
     if (CheckGroupKey(group_key, class_key) == false)
     {
@@ -112,7 +112,7 @@ double PotentialEntryIterator::GetGausVariancePrior(
 }
 
 const std::vector<AtomObject *> & PotentialEntryIterator::GetAtomObjectList(
-    uint64_t group_key, const std::string & class_key) const
+    GroupKey group_key, const std::string & class_key) const
 {
     if (CheckGroupKey(group_key, class_key) == false)
     {
@@ -122,7 +122,7 @@ const std::vector<AtomObject *> & PotentialEntryIterator::GetAtomObjectList(
 }
 
 std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
-    uint64_t group_key, const std::string & class_key) const
+    GroupKey group_key, const std::string & class_key) const
 {
     std::unordered_map<int, AtomObject *> atom_object_map;
     for (auto & atom_object : GetAtomObjectList(group_key, class_key))
@@ -246,7 +246,7 @@ bool PotentialEntryIterator::IsModelObjectAvailable(void) const
     return true;
 }
 
-bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string & class_key, bool verbose) const
+bool PotentialEntryIterator::CheckGroupKey(GroupKey group_key, const std::string & class_key, bool verbose) const
 {
     const auto & group_key_set{ m_model_object->GetGroupPotentialEntry(class_key)->GetGroupKeySet() };
     if (group_key_set.find(group_key) == group_key_set.end())
@@ -280,7 +280,7 @@ bool PotentialEntryIterator::CheckGroupKey(uint64_t group_key, const std::string
 }
 
 Residue PotentialEntryIterator::GetResidueFromGroupKey(
-    uint64_t group_key, const std::string & class_key) const
+    GroupKey group_key, const std::string & class_key) const
 {
     if (class_key == AtomicInfoHelper::GetSimpleAtomClassKey())
     {
@@ -453,7 +453,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstima
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatterGraph(
-    uint64_t group_key, const std::string & class_key)
+    GroupKey group_key, const std::string & class_key)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -511,7 +511,7 @@ PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueGraph(
-    std::vector<uint64_t> & group_key_list, const std::string & class_key, const int par_id)
+    std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -534,7 +534,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
-    std::vector<uint64_t> & group_key_list, const std::string & class_key,
+    std::vector<GroupKey> & group_key_list, const std::string & class_key,
     int par1_id, int par2_id)
 {
     if (IsModelObjectAvailable() == false)
@@ -586,7 +586,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
-    uint64_t group_key1, uint64_t group_key2, const std::string & class_key, const int par_id)
+    GroupKey group_key1, GroupKey group_key2, const std::string & class_key, const int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -655,7 +655,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBinnedDistanceToMapV
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEstimateGraph(
-    uint64_t group_key, const std::string & class_key, double range, int par_id)
+    GroupKey group_key, const std::string & class_key, double range, int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -683,7 +683,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateCOMDistanceToGausEstimateGraph(
-    uint64_t group_key, const std::string & class_key, int par_id)
+    GroupKey group_key, const std::string & class_key, int par_id)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -773,7 +773,7 @@ PotentialEntryIterator::CreateXYPositionTomographyGraphMap(
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomographyGraph(
-    std::vector<uint64_t> & group_key_list, const std::string & class_key, double normalized_z_pos, double z_ratio_window)
+    std::vector<GroupKey> & group_key_list, const std::string & class_key, double normalized_z_pos, double z_ratio_window)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -807,7 +807,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomography
 }
 
 std::unique_ptr<TGraph2DErrors> PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2D(
-    std::vector<uint64_t> & group_key_list, const std::string & class_key,
+    std::vector<GroupKey> & group_key_list, const std::string & class_key,
     double normalized_z_pos, double z_ratio_window, int par_id)
 {
     if (IsModelObjectAvailable() == false)
@@ -888,7 +888,7 @@ PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2DMap(
 }
 
 std::unique_ptr<TF1> PotentialEntryIterator::CreateGroupGausFunctionPrior(
-    uint64_t group_key, const std::string & class_key) const
+    GroupKey group_key, const std::string & class_key) const
 {
     auto amplitude
     {

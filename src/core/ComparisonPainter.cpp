@@ -857,7 +857,7 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
 }
 
 void ComparisonPainter::BuildMapValueScatterGraph(
-    uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
+    GroupKey group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
     int bin_size, double x_min, double x_max)
 {
     auto entry1_iter{ std::make_unique<PotentialEntryIterator>(model1) };

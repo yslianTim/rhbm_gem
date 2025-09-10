@@ -390,7 +390,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
 
         // Group Atom Potential Fitting
         const auto & key_set{ group_potential_entry->GetGroupKeySet() };
-        std::vector<uint64_t> group_keys(key_set.begin(), key_set.end());
+        std::vector<GroupKey> group_keys(key_set.begin(), key_set.end());
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 
@@ -514,7 +514,7 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
 
         // Group Bond Potential Fitting
         const auto & key_set{ group_potential_entry->GetGroupKeySet() };
-        std::vector<uint64_t> group_keys(key_set.begin(), key_set.end());
+        std::vector<GroupKey> group_keys(key_set.begin(), key_set.end());
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 

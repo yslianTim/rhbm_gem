@@ -44,7 +44,7 @@ private:
     #ifdef HAVE_ROOT
     void BuildGausRatioToResolutionGraph(int par_id, size_t target_id, size_t reference_id, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, Residue residue=Residue::UNK);
     void BuildAmplitudeRatioToWidthGraph(size_t target_id, size_t reference_id, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, bool draw_index=false, Residue residue=Residue::UNK);
-    void BuildMapValueScatterGraph(uint64_t group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
+    void BuildMapValueScatterGraph(GroupKey group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
     #endif
 
 };
