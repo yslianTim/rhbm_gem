@@ -26,7 +26,18 @@ BondObject::BondObject(AtomObject * atom_object_1, AtomObject * atom_object_2) :
     m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 },
     m_atomic_potential_entry{ nullptr }
 {
-
+    auto position_1{ m_atom_object_1->GetPosition() };
+    auto position_2{ m_atom_object_2->GetPosition() };
+    m_position = {
+        (position_1[0] + position_2[0]) / 2.0f,
+        (position_1[1] + position_2[1]) / 2.0f,
+        (position_1[2] + position_2[2]) / 2.0f
+    };
+    m_bond_vector = {
+        position_2[0] - position_1[0],
+        position_2[1] - position_1[1],
+        position_2[2] - position_1[2]
+    };
 }
 
 BondObject::~BondObject()
