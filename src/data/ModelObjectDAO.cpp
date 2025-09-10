@@ -385,8 +385,8 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     auto component_bond_entry_table_name{ "component_bond_entry_in_" + sanitized_key_tag };
     LoadComponentBondEntryList(model_object.get(), component_bond_entry_table_name);
 
-    auto atom_object_list{ LoadAtomObjectList(sanitized_key_tag) };
-    model_object->SetAtomList(atom_object_list);
+    // Load atom list and set to model
+    model_object->SetAtomList(LoadAtomObjectList(sanitized_key_tag));
 
     std::string model_table_name{ "model_list" };
     m_database->Prepare(FormatSQL(SELECT_MODEL_LIST_SQL, model_table_name));

@@ -76,9 +76,20 @@ void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)
     m_atom_list.emplace_back(std::move(atom));
 }
 
-void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> & atom_list)
+void ModelObject::AddBond(std::unique_ptr<BondObject> bond)
+{
+    m_bond_list.emplace_back(std::move(bond));
+}
+
+void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list)
 {
     m_atom_list = std::move(atom_list);
+    Update();
+}
+
+void ModelObject::SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list)
+{
+    m_bond_list = std::move(bond_list);
     Update();
 }
 

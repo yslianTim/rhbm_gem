@@ -15,7 +15,7 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
     file_reader->Read();
     if (file_reader->IsSuccessfullyRead() == false) return nullptr;
     auto data_block{ file_reader->GetDataBlockPtr() };
-    auto model_object{ std::make_unique<ModelObject>(data_block->GetAtomObjectList()) };
+    auto model_object{ std::make_unique<ModelObject>(data_block->MoveAtomObjectList()) };
     model_object->SetPdbID(data_block->GetPdbID());
     model_object->SetEmdID(data_block->GetEmdID());
     model_object->SetResolution(data_block->GetResolution());
@@ -24,6 +24,7 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
     model_object->SetChemicalComponentEntryMap(data_block->GetChemicalComponentEntryMap());
     model_object->SetComponentKeySystem(data_block->MoveComponentKeySystem());
     model_object->SetAtomKeySystem(data_block->MoveAtomKeySystem());
+    model_object->SetBondList(data_block->MoveBondObjectList());
     return model_object;
 }
 

@@ -1,5 +1,6 @@
 #include "AtomicModelDataBlock.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "ChemicalComponentEntry.hpp"
@@ -21,6 +22,12 @@ void AtomicModelDataBlock::AddAtomObject(
     int model_number, std::unique_ptr<AtomObject> atom_object)
 {
     m_atom_object_list_map[model_number].emplace_back(std::move(atom_object));
+}
+
+void AtomicModelDataBlock::AddBondObject(
+    int model_number, std::unique_ptr<BondObject> bond_object)
+{
+    m_bond_object_list_map[model_number].emplace_back(std::move(bond_object));
 }
 
 void AtomicModelDataBlock::AddEntityTypeInEntityMap(
@@ -135,9 +142,14 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
     atom_object->SetStructure(Structure::FREE);
 }
 
-std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::GetAtomObjectList(int model_number)
+std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::MoveAtomObjectList(int model_number)
 {
     return std::move(m_atom_object_list_map.at(model_number));
+}
+
+std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectList(int model_number)
+{
+    return std::move(m_bond_object_list_map.at(model_number));
 }
 
 const std::string & AtomicModelDataBlock::GetPdbID(void) const

@@ -12,6 +12,7 @@
 #include "AtomKeySystem.hpp"
 
 class AtomObject;
+class BondObject;
 class ChemicalComponentEntry;
 struct ComponentAtomEntry;
 struct ComponentBondEntry;
@@ -24,6 +25,7 @@ class AtomicModelDataBlock
     std::unique_ptr<AtomKeySystem> m_atom_key_system;
 
     std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> m_atom_object_list_map;
+    std::unordered_map<int, std::vector<std::unique_ptr<BondObject>>> m_bond_object_list_map;
     
     std::unordered_map<std::string, Entity> m_entity_type_map; // key : entity_id
     std::unordered_map<std::string, int> m_molecules_size_map; // key : entity_id
@@ -42,6 +44,7 @@ public:
     ~AtomicModelDataBlock();
 
     void AddAtomObject(int model_number, std::unique_ptr<AtomObject> atom_object);
+    void AddBondObject(int model_number, std::unique_ptr<BondObject> bond_object);
     void AddEntityTypeInEntityMap(const std::string & entity_id, Entity entity);
     void AddChainIDInEntityMap(const std::string & entity_id, const std::string & chain_id);
     void AddMoleculesSizeInEntityMap(const std::string & entity_id, int molecules_size);
@@ -67,7 +70,6 @@ public:
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetStructureInfo(AtomObject * atom_object);
 
-    std::vector<std::unique_ptr<AtomObject>> GetAtomObjectList(int model_number=1);
     const std::string & GetPdbID(void) const;
     const std::string & GetEmdID(void) const;
     double GetResolution(void) const;
@@ -81,6 +83,8 @@ public:
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
     ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
+    std::vector<std::unique_ptr<AtomObject>> MoveAtomObjectList(int model_number=1);
+    std::vector<std::unique_ptr<BondObject>> MoveBondObjectList(int model_number=1);
     std::unique_ptr<ComponentKeySystem> MoveComponentKeySystem(void) { return std::move(m_component_key_system); }
     std::unique_ptr<AtomKeySystem> MoveAtomKeySystem(void) { return std::move(m_atom_key_system); }
 

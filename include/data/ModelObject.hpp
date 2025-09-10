@@ -49,8 +49,10 @@ public:
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag(void) const override { return m_key_tag; }
 
-    void AddAtom(std::unique_ptr<AtomObject> component);
-    void SetAtomList(std::vector<std::unique_ptr<AtomObject>> & atom_list);
+    void AddAtom(std::unique_ptr<AtomObject> atom);
+    void AddBond(std::unique_ptr<BondObject> bond);
+    void SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list);
+    void SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list);
     void SetPdbID(const std::string & label) { m_pdb_id = label; }
     void SetEmdID(const std::string & label) { m_emd_id = label; }
     void SetResolution(double value) { m_resolution = value; }
