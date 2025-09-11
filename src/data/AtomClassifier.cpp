@@ -157,6 +157,17 @@ GroupKey AtomClassifier::GetGroupKeyInClass(
     }
 }
 
+GroupKey AtomClassifier::GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key)
+{
+    return KeyPackerComponentAtomClass::Pack(component_key, atom_key);
+}
+
+GroupKey AtomClassifier::GetGroupKeyInClass(
+    Structure structure, ComponentKey component_key, AtomKey atom_key)
+{
+    return KeyPackerStructureAtomClass::Pack(structure, component_key, atom_key);
+}
+
 GroupKey AtomClassifier::GetMainChainSimpleAtomClassGroupKey(size_t id) const
 {
     if (IsValidMainChainMemberID(id) == false)

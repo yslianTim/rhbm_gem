@@ -8,7 +8,6 @@
 #include "AminoAcidInfoHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "ArrayStats.hpp"
-#include "KeyPacker.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomKeySystem.hpp"
 #include "StringHelper.hpp"
@@ -530,9 +529,9 @@ void ModelPainter::PaintGroupGausSideChain(
                 auto element_char{ StringHelper::ExtractCharAsString(atom_id, 0) };
                 auto element_type{ AtomicInfoHelper::GetElementFromString(element_char) };
                 if (element_type != element) continue;
-                auto mix_group_key{ KeyPackerComponentAtomClass::Pack(component_key, atom_key) };
-                auto free_group_key{ KeyPackerStructureAtomClass::Pack(Structure::FREE, component_key, atom_key) };
-                auto helix_group_key{ KeyPackerStructureAtomClass::Pack(Structure::HELX_P, component_key, atom_key) };
+                auto mix_group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
+                auto free_group_key{ AtomClassifier::GetGroupKeyInClass(Structure::FREE, component_key, atom_key) };
+                auto helix_group_key{ AtomClassifier::GetGroupKeyInClass(Structure::HELX_P, component_key, atom_key) };
                 bool has_data{ false };
                 if (entry_iter->IsAvailableGroupKey(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey()) == true)
                 {

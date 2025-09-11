@@ -6,6 +6,8 @@
 #include <string>
 
 #include "GlobalEnumClass.hpp"
+#include "ComponentKeySystem.hpp"
+#include "AtomKeySystem.hpp"
 
 class AtomObject;
 class AtomClassifier
@@ -34,6 +36,8 @@ public:
     static const std::string & GetMainChainElementTitle(size_t id);
 
     static GroupKey GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);
+    static GroupKey GetGroupKeyInClass(ComponentKey component_key, AtomKey atom_key);
+    static GroupKey GetGroupKeyInClass(Structure structure, ComponentKey component_key, AtomKey atom_key);
 
     GroupKey GetMainChainSimpleAtomClassGroupKey(size_t id) const;
     GroupKey GetMainChainComponentAtomClassGroupKey(size_t id, Residue residue) const;
