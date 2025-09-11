@@ -10,7 +10,8 @@
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
 #include "DataObjectDAOFactoryRegistry.hpp"
-#include "KeyPacker.hpp"
+#include "AtomClassifier.hpp"
+#include "BondClassifier.hpp"
 
 #include <cctype>
 #include <sstream>
@@ -855,41 +856,9 @@ void ModelObjectDAO::LoadGroupPotentialEntrySubList(
     ModelObject * model_obj, const std::string & class_key)
 {
     auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
-    if (class_key == AtomicInfoHelper::GetSimpleAtomClassKey())
+    for (auto & atom : model_obj->GetSelectedAtomList())
     {
-        for (auto & atom : model_obj->GetSelectedAtomList())
-        {
-            auto group_key{
-                KeyPackerSimpleAtomClass::Pack(atom->GetAtomKey(), atom->GetSpecialAtomFlag())
-            };
-            group_entry->AddAtomObjectPtr(group_key, atom);
-        }
-    }
-    else if (class_key == AtomicInfoHelper::GetComponentAtomClassKey())
-    {
-        for (auto & atom : model_obj->GetSelectedAtomList())
-        {
-            auto group_key{
-                KeyPackerComponentAtomClass::Pack(atom->GetComponentKey(), atom->GetAtomKey())
-            };
-            group_entry->AddAtomObjectPtr(group_key, atom);
-        }
-    }
-    else if (class_key == AtomicInfoHelper::GetStructureAtomClassKey())
-    {
-        for (auto & atom : model_obj->GetSelectedAtomList())
-        {
-            auto group_key{
-                KeyPackerStructureAtomClass::Pack(
-                    atom->GetStructure(), atom->GetComponentKey(), atom->GetAtomKey())
-            };
-            group_entry->AddAtomObjectPtr(group_key, atom);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("ModelObjectDAO::LoadGroupPotentialEntrySubList() failed: "
-                                 "Unsupported group class key: " + class_key);
+        group_entry->AddAtomObjectPtr(AtomClassifier::GetGroupKeyInClass(atom, class_key), atom);
     }
 }
 
