@@ -162,8 +162,8 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             atom_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
 
-            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
             m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
+            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
             auto atom_key{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id) };
             m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
 
@@ -191,16 +191,20 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             StringHelper::EraseCharFromString(atom_id_1, '\"');
             StringHelper::EraseCharFromString(atom_id_2, '\"');
 
+            m_data_block->GetBondKeySystemPtr()->RegisterBond(atom_id_1, atom_id_2);
+            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
+            auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(atom_id_1, atom_id_2) };
+
             ComponentBondEntry bond_entry;
-            bond_entry.atom_id_pair = {atom_id_1, atom_id_2};
+            bond_entry.atom_id_pair.first = atom_id_1;
+            bond_entry.atom_id_pair.second = atom_id_2;
             bond_entry.bond_order = bond_order;
             bond_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             bond_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
 
-            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
-            auto atom_key_1{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id_1) };
-            auto atom_key_2{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id_2) };
-            m_data_block->AddComponentBondEntry(component_key, {atom_key_1, atom_key_2}, bond_entry);
+            m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
+
+            m_find_component_bond_entry = true;
         }
     );
 }
@@ -704,6 +708,7 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
 
     m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
+    auto atom_key{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id) };
 
     ComponentAtomEntry atom_entry;
     atom_entry.atom_id = atom_id;
@@ -711,6 +716,26 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     atom_entry.aromatic_atom_flag = false;
     atom_entry.chiral_config = '.';
     
-    auto atom_key{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id) };
     m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
+}
+
+void CifFormat::BuildDefaultComponentBondEntry(
+    const std::string & comp_id,
+    const std::string & atom_id_1,
+    const std::string & atom_id_2)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentBondEntry() called");
+    auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
+
+    m_data_block->GetBondKeySystemPtr()->RegisterBond(atom_id_1, atom_id_2);
+    auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(atom_id_1, atom_id_2) };
+
+    ComponentBondEntry bond_entry;
+    bond_entry.atom_id_pair.first = atom_id_1;
+    bond_entry.atom_id_pair.second = atom_id_2;
+    bond_entry.bond_order = ".";
+    bond_entry.aromatic_atom_flag = false;
+    bond_entry.chiral_config = '.';
+    
+    m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
 }

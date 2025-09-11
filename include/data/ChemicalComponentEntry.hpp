@@ -8,6 +8,7 @@
 
 #include "GlobalEnumClass.hpp"
 #include "AtomKeySystem.hpp"
+#include "BondKeySystem.hpp"
 
 struct ComponentAtomEntry
 {
@@ -34,7 +35,7 @@ class ChemicalComponentEntry
     float m_component_molecular_weight;
     bool m_standard_monomer_flag;
     std::map<AtomKey, ComponentAtomEntry> m_component_atom_entry_map;
-    std::map<std::pair<AtomKey, AtomKey>, ComponentBondEntry> m_component_bond_entry_map;
+    std::map<BondKey, ComponentBondEntry> m_component_bond_entry_map;
 
 public:
     ChemicalComponentEntry(void);
@@ -47,12 +48,9 @@ public:
     void SetComponentMolecularWeight(float weight) { m_component_molecular_weight = weight; }
     void SetStandardMonomerFlag(bool flag) { m_standard_monomer_flag = flag; }
     void SetComponentAtomEntryMap(std::map<AtomKey, ComponentAtomEntry> & atom_entry_map);
-    void SetComponentBondEntryMap(std::map<std::pair<AtomKey, AtomKey>, ComponentBondEntry> & bond_entry_map);
+    void SetComponentBondEntryMap(std::map<BondKey, ComponentBondEntry> & bond_entry_map);
     void AddComponentAtomEntry(AtomKey atom_key, const ComponentAtomEntry & atom_info);
-    void AddComponentBondEntry(
-        const std::pair<AtomKey, AtomKey> & atom_key_pair,
-        const ComponentBondEntry & bond_info
-    );
+    void AddComponentBondEntry(BondKey bond_key, const ComponentBondEntry & bond_info);
 
     std::string GetComponentId(void) const { return m_component_id; }
     std::string GetComponentName(void) const { return m_component_name; }
@@ -62,9 +60,7 @@ public:
     bool IsStandardMonomer(void) const { return m_standard_monomer_flag; }
     const std::map<AtomKey, ComponentAtomEntry> &
     GetComponentAtomEntryMap(void) const { return m_component_atom_entry_map; }
-    const std::map<std::pair<AtomKey, AtomKey>, ComponentBondEntry> &
+    const std::map<BondKey, ComponentBondEntry> &
     GetComponentBondEntryMap(void) const { return m_component_bond_entry_map; }
-
-private:
 
 };

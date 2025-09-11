@@ -8,7 +8,8 @@
 
 AtomicModelDataBlock::AtomicModelDataBlock(void) :
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
-    m_atom_key_system{ std::make_unique<AtomKeySystem>() }
+    m_atom_key_system{ std::make_unique<AtomKeySystem>() },
+    m_bond_key_system{ std::make_unique<BondKeySystem>() }
 {
     Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::AtomicModelDataBlock() called");
 }
@@ -94,7 +95,7 @@ void AtomicModelDataBlock::AddComponentAtomEntry(
 
 void AtomicModelDataBlock::AddComponentBondEntry(
     ComponentKey comp_key,
-    const std::pair<AtomKey, AtomKey> & atom_key_pair,
+    BondKey bond_key,
     const ComponentBondEntry & bond_entry)
 {
     if (m_chemical_component_entry_map.find(comp_key) == m_chemical_component_entry_map.end())
@@ -103,7 +104,7 @@ void AtomicModelDataBlock::AddComponentBondEntry(
             "Chemical component key " + std::to_string(comp_key) + " not found in chemical component map.");
         return;
     }
-    m_chemical_component_entry_map.at(comp_key)->AddComponentBondEntry(atom_key_pair, bond_entry);
+    m_chemical_component_entry_map.at(comp_key)->AddComponentBondEntry(bond_key, bond_entry);
 }
 
 void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)

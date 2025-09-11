@@ -19,7 +19,7 @@ void ChemicalComponentEntry::SetComponentAtomEntryMap(
 }
 
 void ChemicalComponentEntry::SetComponentBondEntryMap(
-    std::map<std::pair<AtomKey, AtomKey>, ComponentBondEntry> & bond_entry_map)
+    std::map<BondKey, ComponentBondEntry> & bond_entry_map)
 {
     m_component_bond_entry_map = std::move(bond_entry_map);
 }
@@ -31,8 +31,7 @@ void ChemicalComponentEntry::AddComponentAtomEntry(
 }
 
 void ChemicalComponentEntry::AddComponentBondEntry(
-    const std::pair<AtomKey, AtomKey> & atom_key_pair,
-    const ComponentBondEntry & bond_info)
+    BondKey bond_key, const ComponentBondEntry & bond_info)
 {
-    m_component_bond_entry_map[atom_key_pair] = bond_info;
+    m_component_bond_entry_map[bond_key] = bond_info;
 }

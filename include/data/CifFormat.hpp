@@ -22,6 +22,7 @@ class CifFormat : public ModelFileFormatBase
     std::unique_ptr<AtomicModelDataBlock> m_data_block;
     bool m_find_chemical_component_entry{ false };
     bool m_find_component_atom_entry{ false };
+    bool m_find_component_bond_entry{ false };
 
 public:
     CifFormat(void);
@@ -65,6 +66,11 @@ private:
         const std::string & comp_id,
         const std::string & atom_id,
         const std::string & element_symbol
+    );
+    void BuildDefaultComponentBondEntry(
+        const std::string & comp_id,
+        const std::string & atom_id_1,
+        const std::string & atom_id_2
     );
 
 };

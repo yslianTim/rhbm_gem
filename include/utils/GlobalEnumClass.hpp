@@ -12,8 +12,8 @@ enum class Residue : uint8_t
     GLN =  6, GLU =  7, GLY =  8, HIS =  9, ILE = 10,
     LEU = 11, LYS = 12, MET = 13, PHE = 14, PRO = 15,
     SER = 16, THR = 17, TRP = 18, TYR = 19, VAL = 20,
-
-    A   = 25, G   = 26, C   = 27, U   = 28, T   = 29
+    A   = 21, C   = 22, G   = 23, U   = 24,
+    DA  = 25, DC  = 26, DG  = 27, DT  = 28
 };
 
 enum class Spot : uint16_t
@@ -28,16 +28,18 @@ enum class Spot : uint16_t
     // Pentose sugar (Ribose, Deoxyribose)
     C1p  = 11, C2p  = 12, C3p = 13, C4p = 14, C5p = 15,
     O2p  = 22, O3p  = 23, O4p = 24, O5p = 25,
-    H1p  = 31, H2p  = 32, H3p = 33, H4p = 32, H5p = 35, H5pp = 36,
-    HO2p = 37, HO3p = 38,
+    H1p  = 31, H2p  = 32, H3p = 33, H4p = 32, H5p = 35,
+    H2pp = 36, H5pp = 37,
+    HO2p = 38, HO3p = 39,
 
     // Nucleotide base
-    C2  = 42, C4  = 44, C5  = 45, C6 = 46, C8 = 48,
+    C2  = 42, C4  = 44, C5  = 45, C6 = 46, C7 = 47, C8 = 48,
     N1  = 51, N2  = 52, N3  = 53, N4 = 54, N6 = 56, N7 = 57, N9 = 59,
     O2  = 62, O4  = 64, O6  = 66,
     H1  = 71, H21 = 72, H22 = 73, H3 = 74,  // there's H2 but shared with reisude's one
     H41 = 75, H42 = 76, H5  = 77,
     H6  = 78, H61 = 79, H62 = 80, H8 = 81,
+    H71 = 82, H72 = 83, H73 = 84,
 
     // Amino Acid components
     H    = 100, H2   = 120,
@@ -75,6 +77,79 @@ enum class Spot : uint16_t
 
     SG =  9400,
     SD =  9500
+
+};
+
+enum class Bond : uint16_t
+{
+    UNK = 0,
+
+    // Phosphoric acid
+    OP2_HOP2,
+    OP3_P, OP3_HOP3,
+    P_OP1, P_OP2, P_O5p,
+
+    // Pentose sugar (Ribose, Deoxyribose)
+    C1p_N1, C1p_N9, C1p_H1p,
+    C2p_O2p, C2p_C1p, C2p_H2p, C2p_H2pp,
+    C3p_O3p, C3p_C2p, C3p_H3p,
+    C4p_O4p, C4p_C3p, C4p_H4p,
+    C5p_C4p, C5p_H5p, C5p_H5pp,
+    O2p_HO2p, O3p_HO3p, O4p_C1p, O5p_C5p,
+    
+    // Nucleotide base
+    C2_H2, C2_O2, C2_N2, C2_N3,
+    C4_N4, C4_O4, C4_C5,
+    C5_C4, C5_H5, C5_C6, C5_C7,
+    C6_N1, C6_N6, C6_H6, C6_O6,
+    C7_H71, C7_H72, C7_H73,
+    C8_N7, C8_H8,
+    N1_H1, N1_C2, N1_C6,
+    N2_H21, N2_H22,
+    N3_C4, N3_H3,
+    N4_H41, N4_H42,
+    N6_H61, N6_H62,
+    N7_C5,
+    N9_C4, N9_C8,
+
+    
+    // Amino Acid components bond
+    N_CA, N_CD, N_H, N_H2,
+    CA_C, CA_CB, CA_HA,
+    C_O, C_OXT,
+
+    CB_CG, CB_OG, CB_SG, CB_HB1, CB_HB2, CB_HB3,
+    CG_CD, CG_CD1, CG_CD2, CG_HG, CG_HG2, CG_HG3, CG_OD1, CG_OD2, CG_ND1, CG_ND2, CG_SD,
+    CG1_CD1, CG1_HG11, CG1_HG12, CG1_HG13,
+    CG2_HG21, CG2_HG22, CG2_HG23,
+    CD_CE, CD_NE, CD_NE2, CD_OE1, CD_OE2, CD_HD2, CD_HD3,
+    CD1_CE1, CD1_NE1, CD1_HD1, CD1_HD11, CD1_HD12, CD1_HD13,
+    CD2_CE2, CD2_CE3, CD2_NE2, CD2_HD2, CD2_HD21, CD2_HD22, CD1_HD23,
+    CE_NZ, CE_HE1, CE_HE2, CE_HE3,
+    CE1_CZ, CE1_NE2, CE1_HE1,
+    CE2_CZ, CE2_CZ2, CE2_HE2,
+    CE3_CZ3, CE3_HE3,
+    CZ_HZ, CZ_NH1, CZ_NH2, CZ_OH,
+    CZ2_CH2, CZ2_HZ2,
+    CZ3_CH2, CZ3_HZ3,
+    CH2_HH2,
+    
+    ND1_CE1, ND1_HD1, ND2_HD21, ND2_HD22,
+    NE_CZ, NE_HE,
+    NE1_CE2, NE1_HE1,
+    NE2_HE2, NE2_HE21, NE2_HE22,
+    NZ_HZ1, NZ_HZ2, NZ_HZ3,
+    NH1_HH11, NH1_HH12, NH2_HH21, NH2_HH22,
+
+    O_H1, O_H2,
+    OG_HG,
+    OG1_HG1,
+    OD2_HD2,
+    OE2_HE2,
+    OH_HH,
+    OXT_HXT,
+
+    SD_CE
 
 };
 

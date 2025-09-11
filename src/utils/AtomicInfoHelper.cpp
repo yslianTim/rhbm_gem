@@ -69,8 +69,8 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_
     {"HIS", Residue::HIS}, {"ILE", Residue::ILE}, {"LEU", Residue::LEU}, {"LYS", Residue::LYS},
     {"MET", Residue::MET}, {"PHE", Residue::PHE}, {"PRO", Residue::PRO}, {"SER", Residue::SER},
     {"THR", Residue::THR}, {"TRP", Residue::TRP}, {"TYR", Residue::TYR}, {"VAL", Residue::VAL},
-    {"A",   Residue::A},   {"G",   Residue::G},   {"C",   Residue::C},   {"U",   Residue::U},
-    {"T",   Residue::T}
+    {"A",   Residue::A},   {"C",   Residue::C},   {"G",   Residue::G},   {"U",   Residue::U},
+    {"DA",  Residue::DA},  {"DC",  Residue::DC},  {"DG",  Residue::DG},  {"DT",  Residue::DT},
 };
 
 const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
@@ -170,6 +170,11 @@ const std::unordered_map<std::string_view, Spot> AtomicInfoHelper::m_spot_map
     
 };
 
+const std::unordered_map<std::string_view, Bond> AtomicInfoHelper::m_bond_map
+{
+
+};
+
 const std::unordered_map<std::string_view, Structure> AtomicInfoHelper::m_structure_map
 {
     {" ", Structure::FREE}, {"BEND", Structure::BEND},
@@ -193,8 +198,8 @@ const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label
     {Residue::HIS, "HIS"}, {Residue::ILE, "ILE"}, {Residue::LEU, "LEU"}, {Residue::LYS, "LYS"},
     {Residue::MET, "MET"}, {Residue::PHE, "PHE"}, {Residue::PRO, "PRO"}, {Residue::SER, "SER"},
     {Residue::THR, "THR"}, {Residue::TRP, "TRP"}, {Residue::TYR, "TYR"}, {Residue::VAL, "VAL"},
-    {Residue::A,   "A"  }, {Residue::G,   "G"  }, {Residue::C,   "C"  }, {Residue::U,   "U"  },
-    {Residue::T,   "T"  },
+    {Residue::A,   "A"  }, {Residue::C,   "C"  }, {Residue::G,   "G"  }, {Residue::U,   "U"  },
+    {Residue::DA,  "DA" }, {Residue::DC,  "DC" }, {Residue::DG,  "DG" }, {Residue::DT,  "DT" },
     {Residue::UNK, "UNK"}
 };
 
@@ -250,8 +255,8 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_color_map
     {Residue::MET, 600}, {Residue::PHE, 601}, {Residue::PRO, 602}, {Residue::SER, 603},
     {Residue::THR, 880}, {Residue::TRP, 881}, {Residue::TYR, 882}, {Residue::VAL, 883},
 
-    {Residue::A,     2}, {Residue::G,     3}, {Residue::C,     4}, {Residue::U,     5},
-    {Residue::T,     6}
+    {Residue::A,     2}, {Residue::C,     3}, {Residue::G,     4}, {Residue::U,     5},
+    {Residue::DA,    2}, {Residue::DC,    3}, {Residue::DG,    4}, {Residue::DT,    5}
 };
 
 const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
@@ -278,8 +283,8 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
     {Residue::MET, 32}, {Residue::PHE, 33}, {Residue::PRO, 34}, {Residue::SER, 35},
     {Residue::THR, 36}, {Residue::TRP, 37}, {Residue::TYR, 38}, {Residue::VAL, 39},
 
-    {Residue::A,    2}, {Residue::G,    3}, {Residue::C,    4}, {Residue::U,    5},
-    {Residue::T,    6}
+    {Residue::A,    2}, {Residue::C,    3}, {Residue::G,    4}, {Residue::U,    5},
+    {Residue::DA,   2}, {Residue::DC,   3}, {Residue::DG,   4}, {Residue::DT,   5}
 };
 
 int AtomicInfoHelper::GetAtomicNumber(Element element)
@@ -373,6 +378,11 @@ const std::unordered_map<std::string_view, Element> & AtomicInfoHelper::GetEleme
 const std::unordered_map<std::string_view, Spot> & AtomicInfoHelper::GetSpotMap(void)
 {
     return m_spot_map;
+}
+
+const std::unordered_map<std::string_view, Bond> & AtomicInfoHelper::GetBondMap(void)
+{
+    return m_bond_map;
 }
 
 const std::unordered_map<Element, std::string> & AtomicInfoHelper::GetElementLabelMap(void)
@@ -477,6 +487,29 @@ Spot AtomicInfoHelper::GetSpotFromString(const std::string & name, bool verbose)
         return Spot::UNK;
     }
     return m_spot_map.at(name);
+}
+
+Bond AtomicInfoHelper::GetBondFromString(const std::string & name, bool verbose)
+{
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_bond_map.find(name) == m_bond_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            if (verbose)
+            {
+                Logger::Log(LogLevel::Warning, 
+                    "AtomicInfoHelper::GetBondFromString - Unknown string: " + name);
+            }
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return Bond::UNK;
+    }
+    return m_bond_map.at(name);
 }
 
 Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)

@@ -30,7 +30,7 @@ AtomKeySystem::AtomKeySystem(const AtomKeySystem & other) :
     Logger::Log(LogLevel::Debug, "AtomKeySystem copy ctor called");
 }
 
-AtomKeySystem::~AtomKeySystem(void)
+AtomKeySystem::~AtomKeySystem()
 {
     Logger::Log(LogLevel::Debug, "AtomKeySystem::~AtomKeySystem() called");
 }

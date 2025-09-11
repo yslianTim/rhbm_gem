@@ -10,6 +10,7 @@
 #include "GlobalEnumClass.hpp"
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
+#include "BondKeySystem.hpp"
 
 class AtomObject;
 class BondObject;
@@ -23,6 +24,7 @@ class AtomicModelDataBlock
     std::string m_resolution, m_resolution_method;
     std::unique_ptr<ComponentKeySystem> m_component_key_system;
     std::unique_ptr<AtomKeySystem> m_atom_key_system;
+    std::unique_ptr<BondKeySystem> m_bond_key_system;
 
     std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> m_atom_object_list_map;
     std::unordered_map<int, std::vector<std::unique_ptr<BondObject>>> m_bond_object_list_map;
@@ -60,7 +62,7 @@ public:
     );
     void AddComponentBondEntry(
         ComponentKey comp_key,
-        const std::pair<AtomKey, AtomKey> & atom_key_pair,
+        BondKey bond_key,
         const ComponentBondEntry & bond_entry
     );
 
@@ -84,9 +86,11 @@ public:
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
     ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
+    BondKeySystem * GetBondKeySystemPtr(void) { return m_bond_key_system.get(); }
     std::vector<std::unique_ptr<AtomObject>> MoveAtomObjectList(int model_number=1);
     std::vector<std::unique_ptr<BondObject>> MoveBondObjectList(int model_number=1);
     std::unique_ptr<ComponentKeySystem> MoveComponentKeySystem(void) { return std::move(m_component_key_system); }
     std::unique_ptr<AtomKeySystem> MoveAtomKeySystem(void) { return std::move(m_atom_key_system); }
+    std::unique_ptr<BondKeySystem> MoveBondKeySystem(void) { return std::move(m_bond_key_system); }
 
 };
