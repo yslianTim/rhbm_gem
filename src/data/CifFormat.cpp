@@ -8,6 +8,7 @@
 #include "AtomicPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"
 #include "ComponentKeySystem.hpp"
+#include "KDTreeAlgorithm.hpp"
 #include "Logger.hpp"
 
 #include <iomanip>
@@ -499,6 +500,21 @@ void CifFormat::ConstructBondList(void)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
     
+    auto & atom_object_list_map{ m_data_block->GetAtomObjectMap() };
+    for (auto & [model_number, atom_object_list] : atom_object_list_map)
+    {
+        std::vector<AtomObject *> atom_ptr_list;
+        atom_ptr_list.reserve(atom_object_list.size());
+        for (auto & atom : atom_object_list)
+        {
+            atom_ptr_list.emplace_back(atom.get());
+        }
+        auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0) };
+        for (auto & atom : atom_object_list)
+        {
+
+        }
+    }
 
     //m_data_block->AddBondObject(1, std::make_unique<BondObject>());
 }

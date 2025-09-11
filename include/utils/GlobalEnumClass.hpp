@@ -116,6 +116,7 @@ enum class Bond : uint16_t
     // Amino Acid components bond
     N_CA, N_CD, N_H, N_H2,
     CA_C, CA_CB, CA_HA,
+    C_N,   // peptide connection 
     C_O, C_OXT,
 
     CB_CG, CB_OG, CB_SG, CB_HB1, CB_HB2, CB_HB3,
