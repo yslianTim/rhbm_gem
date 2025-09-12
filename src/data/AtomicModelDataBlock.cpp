@@ -225,6 +225,12 @@ AtomicModelDataBlock::GetAtomObjectMap(void) const
     return m_atom_object_list_map;
 }
 
+const std::unordered_map<int, std::vector<std::unique_ptr<BondObject>>> &
+AtomicModelDataBlock::GetBondObjectMap(void) const
+{
+    return m_bond_object_list_map;
+}
+
 ChemicalComponentEntry * AtomicModelDataBlock::GetChemicalComponentEntryPtr(ComponentKey key)
 {
     if (m_chemical_component_entry_map.find(key) == m_chemical_component_entry_map.end())

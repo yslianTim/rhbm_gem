@@ -82,6 +82,7 @@ public:
     const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap(void) const;
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
     const std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> & GetAtomObjectMap(void) const;
+    const std::unordered_map<int, std::vector<std::unique_ptr<BondObject>>> & GetBondObjectMap(void) const;
     ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key);
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
     ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }

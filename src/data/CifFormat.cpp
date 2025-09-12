@@ -1,5 +1,6 @@
 #include "CifFormat.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "ModelObject.hpp"
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
@@ -499,6 +500,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
 void CifFormat::ConstructBondList(void)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
+    auto search_radius{ 3.0f };
     
     auto & atom_object_list_map{ m_data_block->GetAtomObjectMap() };
     for (auto & [model_number, atom_object_list] : atom_object_list_map)
@@ -512,11 +514,31 @@ void CifFormat::ConstructBondList(void)
         auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0) };
         for (auto & atom : atom_object_list)
         {
+            auto component_id_1{ atom->GetComponentID() };
+            auto atom_id_1{ atom->GetAtomID() };
+            auto neighbor_atom_list{
+                KDTreeAlgorithm<AtomObject>::RangeSearch(kd_tree_root.get(), atom.get(), search_radius)
+            };
 
+            for (auto neighbor_atom : neighbor_atom_list)
+            {
+                if (neighbor_atom == atom.get()) continue;
+                auto atom_id_2{ neighbor_atom->GetAtomID() };
+                auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(atom_id_1, atom_id_2) };
+                if (bond_key == 0) continue;
+                if (m_find_component_bond_entry == false)
+                {
+                    BuildDefaultComponentBondEntry(component_id_1, atom_id_1, atom_id_2);
+                }
+                
+                auto bond_object{ std::make_unique<BondObject>(atom.get(), neighbor_atom) };
+                m_data_block->AddBondObject(model_number, std::move(bond_object));
+            }
         }
+        Logger::Log(LogLevel::Info,
+            "Construct " + std::to_string(m_data_block->GetBondObjectMap().at(model_number).size())
+            + " bonds.");
     }
-
-    //m_data_block->AddBondObject(1, std::make_unique<BondObject>());
 }
 
 AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
