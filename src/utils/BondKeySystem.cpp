@@ -19,6 +19,8 @@ BondKeySystem::BondKeySystem(void) :
         auto bond_key{ static_cast<BondKey>(bond) };
         m_id_to_key_map.emplace(bond_id, bond_key);
         m_key_to_id_map.emplace(bond_key, std::string{bond_id});
+        auto reverse_bond_id{ BuildReverseBondIdFromBondId(std::string{bond_id}) };
+        m_veto_bond_id_set.emplace(reverse_bond_id);
     }
 }
 
@@ -42,6 +44,7 @@ void BondKeySystem::RegisterBond(
     std::lock_guard<std::mutex> lock(m_mutex);
     auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
     if (m_id_to_key_map.find(bond_id) != m_id_to_key_map.end()) return;
+    if (m_veto_bond_id_set.find(bond_id) != m_veto_bond_id_set.end()) return; // veto reverse vector
     if (m_next_dynamic_key >= k_max_key)
     {
         Logger::Log(LogLevel::Warning,
@@ -105,10 +108,24 @@ bool BondKeySystem::IsBuildInBond(BondKey bond_key) const
     return bond_key < k_dynamic_base;
 }
 
+bool BondKeySystem::IsReverseBond(
+    const std::string & atom_id_1, const std::string & atom_id_2) const
+{
+    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
+    return m_veto_bond_id_set.find(bond_id) != m_veto_bond_id_set.end();
+}
+
 std::string BondKeySystem::BuildBondIdFromAtomIdPair(
     const std::string & atom_id_1, const std::string & atom_id_2) const
 {
     return atom_id_1 +"_"+ atom_id_2;
+}
+
+std::string BondKeySystem::BuildReverseBondIdFromBondId(
+    const std::string & bond_id) const
+{
+    auto atom_id_pair{ BuildAtomIdPairFromBondId(bond_id) };
+    return atom_id_pair.second +"_"+ atom_id_pair.first;
 }
 
 std::pair<std::string, std::string> BondKeySystem::BuildAtomIdPairFromBondId(

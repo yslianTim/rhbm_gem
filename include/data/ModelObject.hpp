@@ -27,6 +27,7 @@ class ModelObject : public DataObjectBase
     std::string m_key_tag, m_pdb_id, m_emd_id;
     std::string m_resolution_method;
     double m_resolution;
+    std::unordered_map<int, AtomObject*> m_serial_id_atom_map;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map; // key : entity_id
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_atom_group_potential_entry_map;
@@ -91,9 +92,11 @@ public:
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
+    AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
     GroupPotentialEntry * GetGroupPotentialEntry(const std::string & class_key) const;
     GroupPotentialEntry * GetBondGroupPotentialEntry(const std::string & class_key) const;
     ChemicalComponentEntry * GetChemicalComponentEntry(ComponentKey key) const;
+    const std::unordered_map<int, AtomObject *> & GetSerialIDAtomMap(void) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
     GetGroupPotentialEntryMap(void) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &

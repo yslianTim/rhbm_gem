@@ -59,6 +59,10 @@ void ModelObject::Display(void) const
 
 void ModelObject::Update(void)
 {
+    for (auto & atom : m_atom_list)
+    {
+        m_serial_id_atom_map[atom->GetSerialID()] = atom.get();
+    }
     BuildSelectedAtomList();
 }
 
@@ -74,6 +78,7 @@ void ModelObject::Accept(DataObjectVisitorBase * visitor)
 void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)
 {
     m_atom_list.emplace_back(std::move(atom));
+    m_serial_id_atom_map[atom->GetSerialID()] = atom.get();
 }
 
 void ModelObject::AddBond(std::unique_ptr<BondObject> bond)
@@ -218,6 +223,12 @@ GroupPotentialEntry * ModelObject::GetBondGroupPotentialEntry(const std::string 
 ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(ComponentKey key) const
 {
     return m_chemical_component_entry_map.at(key).get();
+}
+
+const std::unordered_map<int, AtomObject *> &
+ModelObject::GetSerialIDAtomMap(void) const
+{
+    return m_serial_id_atom_map;
 }
 
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &

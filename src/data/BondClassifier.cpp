@@ -136,16 +136,14 @@ GroupKey BondClassifier::GetGroupKeyInClass(
     if (class_key == AtomicInfoHelper::GetSimpleBondClassKey())
     {
         return KeyPackerSimpleBondClass::Pack(
-            bond_object->GetAtomObject1()->GetAtomKey(),
-            bond_object->GetAtomObject2()->GetAtomKey());
+            bond_object->GetBondKey(),
+            true);
     }
     else if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
     {
         return KeyPackerComponentBondClass::Pack(
-            bond_object->GetAtomObject1()->GetComponentKey(),
-            bond_object->GetAtomObject2()->GetComponentKey(),
-            bond_object->GetAtomObject1()->GetAtomKey(),
-            bond_object->GetAtomObject2()->GetAtomKey());
+            bond_object->GetComponentKey(),
+            bond_object->GetBondKey());
     }
     else
     {

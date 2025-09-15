@@ -524,6 +524,7 @@ void CifFormat::ConstructBondList(void)
             {
                 if (neighbor_atom == atom.get()) continue;
                 auto atom_id_2{ neighbor_atom->GetAtomID() };
+                if (m_data_block->GetBondKeySystemPtr()->IsReverseBond(atom_id_1, atom_id_2)) continue;
                 auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(atom_id_1, atom_id_2) };
                 if (bond_key == 0) continue;
                 if (m_find_component_bond_entry == false)
@@ -532,6 +533,8 @@ void CifFormat::ConstructBondList(void)
                 }
                 
                 auto bond_object{ std::make_unique<BondObject>(atom.get(), neighbor_atom) };
+                bond_object->SetBondKey(bond_key);
+                bond_object->SetSpecialBondFlag(false); // TODO: define special bond criteria
                 m_data_block->AddBondObject(model_number, std::move(bond_object));
             }
         }
