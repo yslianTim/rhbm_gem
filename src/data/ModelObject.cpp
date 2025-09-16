@@ -97,7 +97,7 @@ void ModelObject::SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list
     m_bond_list = std::move(bond_list);
 }
 
-void ModelObject::AddGroupPotentialEntry(
+void ModelObject::AddAtomGroupPotentialEntry(
     const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
 {
     m_atom_group_potential_entry_map[class_key] = std::move(entry);
@@ -210,7 +210,7 @@ double ModelObject::GetModelLength(int axis)
     return std::get<1>(range_tuple) - std::get<0>(range_tuple);
 }
 
-GroupPotentialEntry * ModelObject::GetGroupPotentialEntry(const std::string & class_key) const
+GroupPotentialEntry * ModelObject::GetAtomGroupPotentialEntry(const std::string & class_key) const
 {
     return m_atom_group_potential_entry_map.at(class_key).get();
 }
@@ -232,7 +232,7 @@ ModelObject::GetSerialIDAtomMap(void) const
 }
 
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-ModelObject::GetGroupPotentialEntryMap(void) const
+ModelObject::GetAtomGroupPotentialEntryMap(void) const
 {
     return m_atom_group_potential_entry_map;
 }

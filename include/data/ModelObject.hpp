@@ -60,7 +60,7 @@ public:
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetChainIDListMap(
         const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
-    void AddGroupPotentialEntry(
+    void AddAtomGroupPotentialEntry(
         const std::string & class_key,
         std::unique_ptr<GroupPotentialEntry> & entry);
     void AddBondGroupPotentialEntry(
@@ -93,12 +93,12 @@ public:
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
     AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
-    GroupPotentialEntry * GetGroupPotentialEntry(const std::string & class_key) const;
+    GroupPotentialEntry * GetAtomGroupPotentialEntry(const std::string & class_key) const;
     GroupPotentialEntry * GetBondGroupPotentialEntry(const std::string & class_key) const;
     ChemicalComponentEntry * GetChemicalComponentEntry(ComponentKey key) const;
     const std::unordered_map<int, AtomObject *> & GetSerialIDAtomMap(void) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-    GetGroupPotentialEntryMap(void) const;
+    GetAtomGroupPotentialEntryMap(void) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
     GetBondGroupPotentialEntryMap(void) const;
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &

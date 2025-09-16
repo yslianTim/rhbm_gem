@@ -4,6 +4,7 @@
 #include "ModelObject.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "AtomicPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"
@@ -110,6 +111,28 @@ namespace
         FROM {};
     )sql";
 
+    constexpr std::string_view CREATE_BOND_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            atom_serial_id_1 INTEGER,
+            atom_serial_id_2 INTEGER,
+            bond_key INTEGER,
+            is_special_bond INTEGER,
+            PRIMARY KEY (atom_serial_id_1, atom_serial_id_2)
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_BOND_LIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            atom_serial_id_1, atom_serial_id_2, bond_key, is_special_bond
+        ) VALUES (?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_BOND_LIST_SQL = R"sql(
+        SELECT
+            atom_serial_id_1, atom_serial_id_2, bond_key, is_special_bond
+        FROM {};
+    )sql";
+
     constexpr std::string_view CREATE_COMPONENT_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
             component_key INTEGER PRIMARY KEY,
@@ -191,7 +214,7 @@ namespace
         FROM {};
     )sql";
 
-    constexpr std::string_view CREATE_ATOMIC_ENTRY_TABLE_SQL = R"sql(
+    constexpr std::string_view CREATE_ATOM_LOCAL_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
             serial_id INTEGER PRIMARY KEY,
             sampling_size INTEGER,
@@ -203,7 +226,7 @@ namespace
         )
     )sql";
 
-    constexpr std::string_view INSERT_ATOMIC_ENTRY_SQL = R"sql(
+    constexpr std::string_view INSERT_ATOM_LOCAL_ENTRY_SQL = R"sql(
         INSERT OR REPLACE INTO {} (
             serial_id, sampling_size, distance_and_map_value_list,
             amplitude_estimate_ols, width_estimate_ols,
@@ -211,7 +234,7 @@ namespace
         ) VALUES (?, ?, ?, ?, ?, ?, ?);
     )sql";
 
-    constexpr std::string_view SELECT_ATOMIC_ENTRY_SQL = R"sql(
+    constexpr std::string_view SELECT_ATOM_LOCAL_ENTRY_SQL = R"sql(
         SELECT
             serial_id, sampling_size, distance_and_map_value_list,
             amplitude_estimate_ols, width_estimate_ols,
@@ -219,7 +242,7 @@ namespace
         FROM {};
     )sql";
 
-    constexpr std::string_view CREATE_ATOMIC_SUBLIST_TABLE_SQL = R"sql(
+    constexpr std::string_view CREATE_ATOM_LOCAL_SUBLIST_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
             serial_id INTEGER PRIMARY KEY,
             amplitude_estimate_posterior DOUBLE,
@@ -231,7 +254,7 @@ namespace
         )
     )sql";
 
-    constexpr std::string_view INSERT_ATOMIC_SUBLIST_SQL = R"sql(
+    constexpr std::string_view INSERT_ATOM_LOCAL_SUBLIST_SQL = R"sql(
         INSERT OR REPLACE INTO {} (
             serial_id, amplitude_estimate_posterior, width_estimate_posterior,
             amplitude_variance_posterior, width_variance_posterior,
@@ -239,9 +262,73 @@ namespace
         ) VALUES (?, ?, ?, ?, ?, ?, ?);
     )sql";
 
-    constexpr std::string_view SELECT_ATOMIC_SUBLIST_SQL = R"sql(
+    constexpr std::string_view SELECT_ATOM_LOCAL_SUBLIST_SQL = R"sql(
         SELECT
             serial_id, amplitude_estimate_posterior, width_estimate_posterior,
+            amplitude_variance_posterior, width_variance_posterior,
+            outlier_tag, statistical_distance
+        FROM {};
+    )sql";
+
+    constexpr std::string_view CREATE_BOND_LOCAL_ENTRY_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            atom_serial_id_1 INTEGER,
+            atom_serial_id_2 INTEGER,
+            sampling_size INTEGER,
+            distance_and_map_value_list BLOB,
+            amplitude_estimate_ols DOUBLE,
+            width_estimate_ols DOUBLE,
+            amplitude_estimate_mdpde DOUBLE,
+            width_estimate_mdpde DOUBLE,
+            PRIMARY KEY (atom_serial_id_1, atom_serial_id_2)
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_BOND_LOCAL_ENTRY_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            atom_serial_id_1, atom_serial_id_2,
+            sampling_size, distance_and_map_value_list,
+            amplitude_estimate_ols, width_estimate_ols,
+            amplitude_estimate_mdpde, width_estimate_mdpde
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_BOND_LOCAL_ENTRY_SQL = R"sql(
+        SELECT
+            atom_serial_id_1, atom_serial_id_2,
+            sampling_size, distance_and_map_value_list,
+            amplitude_estimate_ols, width_estimate_ols,
+            amplitude_estimate_mdpde, width_estimate_mdpde
+        FROM {};
+    )sql";
+
+    constexpr std::string_view CREATE_BOND_LOCAL_SUBLIST_TABLE_SQL = R"sql(
+        CREATE TABLE IF NOT EXISTS {} (
+            atom_serial_id_1 INTEGER,
+            atom_serial_id_2 INTEGER,
+            amplitude_estimate_posterior DOUBLE,
+            width_estimate_posterior DOUBLE,
+            amplitude_variance_posterior DOUBLE,
+            width_variance_posterior DOUBLE,
+            outlier_tag INTEGER,
+            statistical_distance DOUBLE,
+            PRIMARY KEY (atom_serial_id_1, atom_serial_id_2)
+        )
+    )sql";
+
+    constexpr std::string_view INSERT_BOND_LOCAL_SUBLIST_SQL = R"sql(
+        INSERT OR REPLACE INTO {} (
+            atom_serial_id_1, atom_serial_id_2,
+            amplitude_estimate_posterior, width_estimate_posterior,
+            amplitude_variance_posterior, width_variance_posterior,
+            outlier_tag, statistical_distance
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    )sql";
+
+    constexpr std::string_view SELECT_BOND_LOCAL_SUBLIST_SQL = R"sql(
+        SELECT
+            atom_serial_id_1, atom_serial_id_2,
+            amplitude_estimate_posterior, width_estimate_posterior,
             amplitude_variance_posterior, width_variance_posterior,
             outlier_tag, statistical_distance
         FROM {};
@@ -250,7 +337,7 @@ namespace
     constexpr std::string_view CREATE_GROUP_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
             key_id INTEGER PRIMARY KEY,
-            atom_size INTEGER,
+            memebr_size INTEGER,
             amplitude_estimate_mean DOUBLE,
             width_estimate_mean DOUBLE,
             amplitude_estimate_mdpde DOUBLE,
@@ -264,7 +351,7 @@ namespace
 
     constexpr std::string_view INSERT_GROUP_ENTRY_SQL = R"sql(
         INSERT OR REPLACE INTO {} (
-            key_id, atom_size,
+            key_id, memebr_size,
             amplitude_estimate_mean, width_estimate_mean,
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
@@ -274,7 +361,7 @@ namespace
 
     constexpr std::string_view SELECT_GROUP_ENTRY_SQL = R"sql(
         SELECT
-            key_id, atom_size,
+            key_id, memebr_size,
             amplitude_estimate_mean, width_estimate_mean,
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
@@ -342,31 +429,35 @@ void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_ta
     auto atom_list_table_name{ "atom_list_in_" + sanitized_key_tag };
     SaveAtomObjectList(model_obj, atom_list_table_name);
 
-    // Save atomic potential entries if any atom contains them
-    bool has_atomic_potential_entry{ false };
-    for (auto & atom_object : model_obj->GetAtomList())
-    {
-        if (atom_object->GetAtomicPotentialEntry() != nullptr)
-        {
-            has_atomic_potential_entry = true;
-            break;
-        }
-    }
+    // Save bond object list
+    auto bond_list_table_name{ "bond_list_in_" + sanitized_key_tag };
+    SaveBondObjectList(model_obj, bond_list_table_name);
 
-    if (has_atomic_potential_entry == true)
-    {
-        auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
-        SaveAtomicPotentialEntryList(model_obj, atomic_potential_entry_table_name);
+    // Save atom local potential entries
+    auto atom_local_potential_entry_table_name{ "atom_local_potential_entry_in_" + sanitized_key_tag };
+    SaveAtomLocalPotentialEntryList(model_obj, atom_local_potential_entry_table_name);
 
-        auto group_potential_entry_table_name{ "group_potential_entry_in_" + sanitized_key_tag };
-        for (auto & [class_key, group_entry] : model_obj->GetGroupPotentialEntryMap())
-        {
-            auto group_table_name{ class_key + "_" + group_potential_entry_table_name };
-            auto atom_table_name{ class_key + "_" + atomic_potential_entry_table_name };
-            SaveAtomicPotentialEntrySubList(model_obj, atom_table_name, class_key);
-            SaveGroupPotentialEntryList(group_entry.get(), group_table_name);
-        }
+    auto atom_group_potential_entry_table_name{ "atom_group_potential_entry_in_" + sanitized_key_tag };
+    for (auto & [class_key, group_entry] : model_obj->GetAtomGroupPotentialEntryMap())
+    {
+        auto local_table_name{ class_key + "_" + atom_group_potential_entry_table_name };
+        SaveAtomLocalPotentialEntrySubList(model_obj, local_table_name, class_key);
+        auto group_table_name{ class_key + "_" + atom_group_potential_entry_table_name };
+        SaveAtomGroupPotentialEntryList(group_entry.get(), group_table_name);
     }
+/*
+    // Save bond local potential entries
+    auto bond_local_potential_entry_table_name{ "bond_local_potential_entry_in_" + sanitized_key_tag };
+    SaveBondLocalPotentialEntryList(model_obj, bond_local_potential_entry_table_name);
+
+    auto bond_group_potential_entry_table_name{ "bond_group_potential_entry_in_" + sanitized_key_tag };
+    for (auto & [class_key, group_entry] : model_obj->GetBondGroupPotentialEntryMap())
+    {
+        auto local_table_name{ class_key + "_" + bond_group_potential_entry_table_name };
+        SaveBondLocalPotentialEntrySubList(model_obj, local_table_name, class_key);
+        auto group_table_name{ class_key + "_" + bond_group_potential_entry_table_name };
+        SaveBondGroupPotentialEntryList(group_entry.get(), group_table_name);
+    }*/
 }
 
 std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag)
@@ -388,6 +479,9 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
 
     // Load atom list and set to model
     model_object->SetAtomList(LoadAtomObjectList(sanitized_key_tag));
+
+    // Load bond list and set to model
+    model_object->SetBondList(LoadBondObjectList(sanitized_key_tag, model_object.get()));
 
     std::string model_table_name{ "model_list" };
     m_database->Prepare(FormatSQL(SELECT_MODEL_LIST_SQL, model_table_name));
@@ -419,15 +513,15 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
             "The number of atoms in the model object does not match the database record.");
     }
 
-    // Load atom entries
+    // Load atom group potential entries
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupAtomClassCount(); i++)
     {
         auto group_class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
-        // Load potential entry
-        auto potential_table_name{ group_class_key + "_group_potential_entry_in_" + sanitized_key_tag };
+        // Load atom potential entry
+        auto potential_table_name{ group_class_key + "_atom_group_potential_entry_in_" + sanitized_key_tag };
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
-        model_object->AddGroupPotentialEntry(group_class_key, group_potential_entry);
-        LoadGroupPotentialEntryList(model_object.get(), group_class_key, potential_table_name);
+        model_object->AddAtomGroupPotentialEntry(group_class_key, group_potential_entry);
+        LoadAtomGroupPotentialEntryList(model_object.get(), group_class_key, potential_table_name);
     }
     return model_object;
 }
@@ -459,6 +553,25 @@ void ModelObjectDAO::SaveAtomObjectList(
         m_database->Bind<int>(15, static_cast<int>(atom_object->GetComponentKey()));
         m_database->Bind<int>(16, static_cast<int>(atom_object->GetAtomKey()));
 
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+}
+
+void ModelObjectDAO::SaveBondObjectList(
+    const ModelObject * model_obj, const std::string & table_name)
+{
+    m_database->Execute(FormatSQL(CREATE_BOND_TABLE_SQL, table_name));
+    m_database->ClearTable(table_name);
+    m_database->Prepare(FormatSQL(INSERT_BOND_LIST_SQL, table_name));
+    SQLiteWrapper::StatementGuard guard(*m_database);
+
+    for (auto & bond_object : model_obj->GetBondList())
+    {
+        m_database->Bind<int>(1, bond_object->GetAtomSerialID1());
+        m_database->Bind<int>(2, bond_object->GetAtomSerialID2());
+        m_database->Bind<int>(3, bond_object->GetBondKey());
+        m_database->Bind<int>(4, static_cast<int>(bond_object->GetSpecialBondFlag()));
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -538,12 +651,12 @@ void ModelObjectDAO::SaveComponentBondEntryList(
     }
 }
 
-void ModelObjectDAO::SaveAtomicPotentialEntryList(
+void ModelObjectDAO::SaveAtomLocalPotentialEntryList(
     const ModelObject * model_obj, const std::string & table_name)
 {
-    m_database->Execute(FormatSQL(CREATE_ATOMIC_ENTRY_TABLE_SQL, table_name));
+    m_database->Execute(FormatSQL(CREATE_ATOM_LOCAL_ENTRY_TABLE_SQL, table_name));
     m_database->ClearTable(table_name);
-    m_database->Prepare(FormatSQL(INSERT_ATOMIC_ENTRY_SQL, table_name));
+    m_database->Prepare(FormatSQL(INSERT_ATOM_LOCAL_ENTRY_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
     for (auto & atom_object : model_obj->GetAtomList())
@@ -558,18 +671,43 @@ void ModelObjectDAO::SaveAtomicPotentialEntryList(
         m_database->Bind<double>(5, entry->GetWidthEstimateOLS());
         m_database->Bind<double>(6, entry->GetAmplitudeEstimateMDPDE());
         m_database->Bind<double>(7, entry->GetWidthEstimateMDPDE());
-
         m_database->StepOnce();
         m_database->Reset();
     }
 }
 
-void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
+void ModelObjectDAO::SaveBondLocalPotentialEntryList(
+    const ModelObject * model_obj, const std::string & table_name)
+{
+    m_database->Execute(FormatSQL(CREATE_BOND_LOCAL_ENTRY_TABLE_SQL, table_name));
+    m_database->ClearTable(table_name);
+    m_database->Prepare(FormatSQL(INSERT_BOND_LOCAL_ENTRY_SQL, table_name));
+    SQLiteWrapper::StatementGuard guard(*m_database);
+
+    for (auto & bond_object : model_obj->GetBondList())
+    {
+        auto entry{ bond_object->GetAtomicPotentialEntry() };
+        if (entry == nullptr) continue;
+
+        m_database->Bind<int>(1, bond_object->GetAtomSerialID1());
+        m_database->Bind<int>(2, bond_object->GetAtomSerialID2());
+        m_database->Bind<int>(3, entry->GetDistanceAndMapValueListSize());
+        m_database->Bind<std::vector<std::tuple<float, float>>>(4, entry->GetDistanceAndMapValueList());
+        m_database->Bind<double>(5, entry->GetAmplitudeEstimateOLS());
+        m_database->Bind<double>(6, entry->GetWidthEstimateOLS());
+        m_database->Bind<double>(7, entry->GetAmplitudeEstimateMDPDE());
+        m_database->Bind<double>(8, entry->GetWidthEstimateMDPDE());
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+}
+
+void ModelObjectDAO::SaveAtomLocalPotentialEntrySubList(
     const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
 {
-    m_database->Execute(FormatSQL(CREATE_ATOMIC_SUBLIST_TABLE_SQL, table_name));
+    m_database->Execute(FormatSQL(CREATE_ATOM_LOCAL_SUBLIST_TABLE_SQL, table_name));
     m_database->ClearTable(table_name);
-    m_database->Prepare(FormatSQL(INSERT_ATOMIC_SUBLIST_SQL, table_name));
+    m_database->Prepare(FormatSQL(INSERT_ATOM_LOCAL_SUBLIST_SQL, table_name));
     SQLiteWrapper::StatementGuard guard(*m_database);
     for (auto & atom_object : model_obj->GetAtomList())
     {
@@ -587,7 +725,31 @@ void ModelObjectDAO::SaveAtomicPotentialEntrySubList(
     }
 }
 
-void ModelObjectDAO::SaveGroupPotentialEntryList(
+void ModelObjectDAO::SaveBondLocalPotentialEntrySubList(
+    const ModelObject * model_obj, const std::string & table_name, const std::string & class_key)
+{
+    m_database->Execute(FormatSQL(CREATE_BOND_LOCAL_SUBLIST_TABLE_SQL, table_name));
+    m_database->ClearTable(table_name);
+    m_database->Prepare(FormatSQL(INSERT_BOND_LOCAL_SUBLIST_SQL, table_name));
+    SQLiteWrapper::StatementGuard guard(*m_database);
+    for (auto & bond_object : model_obj->GetBondList())
+    {
+        auto entry{ bond_object->GetAtomicPotentialEntry() };
+        if (entry == nullptr) continue;
+        m_database->Bind<int>(1, bond_object->GetAtomSerialID1());
+        m_database->Bind<int>(2, bond_object->GetAtomSerialID2());
+        m_database->Bind<double>(3, entry->GetAmplitudeEstimatePosterior(class_key));
+        m_database->Bind<double>(4, entry->GetWidthEstimatePosterior(class_key));
+        m_database->Bind<double>(5, entry->GetAmplitudeVariancePosterior(class_key));
+        m_database->Bind<double>(6, entry->GetWidthVariancePosterior(class_key));
+        m_database->Bind<int>(7, static_cast<int>(entry->GetOutlierTag(class_key)));
+        m_database->Bind<double>(8, entry->GetStatisticalDistance(class_key));
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+}
+
+void ModelObjectDAO::SaveAtomGroupPotentialEntryList(
     const GroupPotentialEntry * group_entry, const std::string & table_name)
 {
     m_database->Execute(FormatSQL(CREATE_GROUP_ENTRY_TABLE_SQL, table_name));
@@ -598,6 +760,30 @@ void ModelObjectDAO::SaveGroupPotentialEntryList(
     {
         m_database->Bind<GroupKey>(1, group_key);
         m_database->Bind<int>(2, group_entry->GetAtomObjectPtrListSize(group_key));
+        m_database->Bind<double>(3, std::get<0>(group_entry->GetGausEstimateMean(group_key)));
+        m_database->Bind<double>(4, std::get<1>(group_entry->GetGausEstimateMean(group_key)));
+        m_database->Bind<double>(5, std::get<0>(group_entry->GetGausEstimateMDPDE(group_key)));
+        m_database->Bind<double>(6, std::get<1>(group_entry->GetGausEstimateMDPDE(group_key)));
+        m_database->Bind<double>(7, std::get<0>(group_entry->GetGausEstimatePrior(group_key)));
+        m_database->Bind<double>(8, std::get<1>(group_entry->GetGausEstimatePrior(group_key)));
+        m_database->Bind<double>(9, std::get<0>(group_entry->GetGausVariancePrior(group_key)));
+        m_database->Bind<double>(10, std::get<1>(group_entry->GetGausVariancePrior(group_key)));
+        m_database->StepOnce();
+        m_database->Reset();
+    }
+}
+
+void ModelObjectDAO::SaveBondGroupPotentialEntryList(
+    const GroupPotentialEntry * group_entry, const std::string & table_name)
+{
+    m_database->Execute(FormatSQL(CREATE_GROUP_ENTRY_TABLE_SQL, table_name));
+    m_database->ClearTable(table_name);
+    m_database->Prepare(FormatSQL(INSERT_GROUP_ENTRY_SQL, table_name));
+    SQLiteWrapper::StatementGuard guard(*m_database);
+    for (auto & group_key : group_entry->GetGroupKeySet())
+    {
+        m_database->Bind<GroupKey>(1, group_key);
+        m_database->Bind<int>(2, group_entry->GetBondObjectPtrListSize(group_key));
         m_database->Bind<double>(3, std::get<0>(group_entry->GetGausEstimateMean(group_key)));
         m_database->Bind<double>(4, std::get<1>(group_entry->GetGausEstimateMean(group_key)));
         m_database->Bind<double>(5, std::get<0>(group_entry->GetGausEstimateMDPDE(group_key)));
@@ -624,11 +810,11 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     auto count_row_vec{ m_database->Query<int>(FormatSQL(SELECT_ROW_COUNT_SQL, atom_list_table_name)) };
     auto atom_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
 
-    auto atomic_potential_entry_table_name{ "atomic_potential_entry_in_" + sanitized_key_tag };
-    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
-    if (TableExists(atomic_potential_entry_table_name))
+    auto local_potential_entry_table_name{ "atom_local_potential_entry_in_" + sanitized_key_tag };
+    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> local_potential_entry_map;
+    if (TableExists(local_potential_entry_table_name))
     {
-        atomic_potential_entry_map = LoadAtomicPotentialEntryMap(atomic_potential_entry_table_name);
+        local_potential_entry_map = LoadAtomLocalPotentialEntryMap(local_potential_entry_table_name);
     }
 
     std::vector<std::unique_ptr<AtomObject>> atom_object_list;
@@ -664,12 +850,12 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
         auto serial_id{ atom_object->GetSerialID() };
 
         // Load potential entry
-        if (atomic_potential_entry_map.empty() == false)
+        if (local_potential_entry_map.empty() == false)
         {
-            if (atomic_potential_entry_map.find(serial_id) != atomic_potential_entry_map.end())
+            if (local_potential_entry_map.find(serial_id) != local_potential_entry_map.end())
             {
                 atom_object->SetSelectedFlag(true);
-                atom_object->AddAtomicPotentialEntry(std::move(atomic_potential_entry_map.at(serial_id)));
+                atom_object->AddAtomicPotentialEntry(std::move(local_potential_entry_map.at(serial_id)));
             }
             else
             {
@@ -680,6 +866,61 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
         atom_object_list.emplace_back(std::move(atom_object));
     }
     return atom_object_list;
+}
+
+std::vector<std::unique_ptr<BondObject>> ModelObjectDAO::LoadBondObjectList(
+    const std::string & key_tag, const ModelObject * model_object)
+{
+    auto sanitized_key_tag{ SanitizeTableName(key_tag) };
+    auto bond_list_table_name{ "bond_list_in_" + sanitized_key_tag };
+    if (TableExists(bond_list_table_name) == false)
+    {
+        throw std::runtime_error("Required table not found: " + bond_list_table_name);
+    }
+
+    auto count_row_vec{ m_database->Query<int>(FormatSQL(SELECT_ROW_COUNT_SQL, bond_list_table_name)) };
+    auto bond_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
+
+    auto local_potential_entry_table_name{ "bond_local_potential_entry_in_" + sanitized_key_tag };
+    std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> local_potential_entry_map;
+    if (TableExists(local_potential_entry_table_name))
+    {
+        local_potential_entry_map = LoadBondLocalPotentialEntryMap(local_potential_entry_table_name);
+    }
+
+    std::vector<std::unique_ptr<BondObject>> bond_object_list;
+    bond_object_list.reserve(static_cast<size_t>(bond_count));
+    auto iter{
+        m_database->IterateQuery<
+            int, int, BondKey, int>(
+            FormatSQL(SELECT_BOND_LIST_SQL, bond_list_table_name)) };
+    std::tuple<int, int, BondKey, int> row;
+    while (iter.Next(row))
+    {
+        auto atom_object_1{ model_object->GetAtomPtr(std::get<0>(row)) };
+        auto atom_object_2{ model_object->GetAtomPtr(std::get<1>(row)) };
+        auto bond_object{ std::make_unique<BondObject>(atom_object_1, atom_object_2) };
+        bond_object->SetBondKey(std::get<2>(row));
+        bond_object->SetSpecialBondFlag(static_cast<bool>(std::get<3>(row)));
+
+        // Load potential entry
+        auto atom_serial_id_pair{ std::make_pair(atom_object_1->GetSerialID(), atom_object_2->GetSerialID()) };
+        if (local_potential_entry_map.empty() == false)
+        {
+            if (local_potential_entry_map.find(atom_serial_id_pair) != local_potential_entry_map.end())
+            {
+                bond_object->SetSelectedFlag(true);
+                bond_object->AddAtomicPotentialEntry(std::move(local_potential_entry_map.at(atom_serial_id_pair)));
+            }
+            else
+            {
+                bond_object->SetSelectedFlag(false);
+            }
+        }
+
+        bond_object_list.emplace_back(std::move(bond_object));
+    }
+    return bond_object_list;
 }
 
 void ModelObjectDAO::LoadChemicalComponentEntryList(
@@ -773,45 +1014,45 @@ void ModelObjectDAO::LoadComponentBondEntryList(
 }
 
 std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>>
-ModelObjectDAO::LoadAtomicPotentialEntryMap(const std::string & table_name)
+ModelObjectDAO::LoadAtomLocalPotentialEntryMap(const std::string & table_name)
 {
     if (TableExists(table_name) == false) return {};
     auto count_row_vec{ m_database->Query<int>(FormatSQL(SELECT_ROW_COUNT_SQL, table_name)) };
     auto entry_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
     auto serial_id{ 0 };
-    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> atomic_potential_entry_map;
-    atomic_potential_entry_map.reserve(static_cast<size_t>(entry_count));
+    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> local_potential_entry_map;
+    local_potential_entry_map.reserve(static_cast<size_t>(entry_count));
     auto iter{
         m_database->IterateQuery<
             int, int, std::vector<std::tuple<float, float>>, double, double, double, double>(
-            FormatSQL(SELECT_ATOMIC_ENTRY_SQL, table_name)) };
+            FormatSQL(SELECT_ATOM_LOCAL_ENTRY_SQL, table_name)) };
     std::tuple<int, int, std::vector<std::tuple<float, float>>, double, double, double, double> row;
     while (iter.Next(row))
     {
-        auto atomic_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        auto local_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
         serial_id = std::get<0>(row);
-        atomic_potential_entry->AddDistanceAndMapValueList(std::move(std::get<2>(row)));
-        atomic_potential_entry->AddGausEstimateOLS(std::get<3>(row), std::get<4>(row));
-        atomic_potential_entry->AddGausEstimateMDPDE(std::get<5>(row), std::get<6>(row));
-        atomic_potential_entry_map[serial_id] = std::move(atomic_potential_entry);
+        local_potential_entry->AddDistanceAndMapValueList(std::move(std::get<2>(row)));
+        local_potential_entry->AddGausEstimateOLS(std::get<3>(row), std::get<4>(row));
+        local_potential_entry->AddGausEstimateMDPDE(std::get<5>(row), std::get<6>(row));
+        local_potential_entry_map[serial_id] = std::move(local_potential_entry);
     }
 
     for (size_t i = 0; i < AtomicInfoHelper::GetGroupAtomClassCount(); i++)
     {
         auto class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
         auto table_name_with_class_key{ class_key + "_" + table_name };
-        LoadAtomicPotentialEntrySubList(table_name_with_class_key, class_key, atomic_potential_entry_map);
+        LoadAtomLocalPotentialEntrySubList(table_name_with_class_key, class_key, local_potential_entry_map);
     }
-    return atomic_potential_entry_map;
+    return local_potential_entry_map;
 }
 
-void ModelObjectDAO::LoadAtomicPotentialEntrySubList(
+void ModelObjectDAO::LoadAtomLocalPotentialEntrySubList(
     const std::string & table_name, const std::string & class_key,
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map)
 {
     auto serial_id{ 0 };
     auto iter{ m_database->IterateQuery<int, double, double, double, double, int, double>(
-            FormatSQL(SELECT_ATOMIC_SUBLIST_SQL, table_name)) };
+            FormatSQL(SELECT_ATOM_LOCAL_SUBLIST_SQL, table_name)) };
     std::tuple<int, double, double, double, double, int, double> row;
     while (iter.Next(row))
     {
@@ -825,11 +1066,67 @@ void ModelObjectDAO::LoadAtomicPotentialEntrySubList(
     }
 }
 
-void ModelObjectDAO::LoadGroupPotentialEntryList(
+std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>>
+ModelObjectDAO::LoadBondLocalPotentialEntryMap(const std::string & table_name)
+{
+    if (TableExists(table_name) == false) return {};
+    auto count_row_vec{ m_database->Query<int>(FormatSQL(SELECT_ROW_COUNT_SQL, table_name)) };
+    auto atom_serial_id_pair{ std::make_pair(0, 0) };
+    std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> local_potential_entry_map;
+    auto iter{
+        m_database->IterateQuery<
+            int, int, int,
+            std::vector<std::tuple<float, float>>, double, double, double, double>(
+            FormatSQL(SELECT_BOND_LOCAL_ENTRY_SQL, table_name)) };
+    std::tuple<int, int, int,
+               std::vector<std::tuple<float, float>>, double, double, double, double> row;
+    while (iter.Next(row))
+    {
+        auto local_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        atom_serial_id_pair.first  = std::get<0>(row);
+        atom_serial_id_pair.second = std::get<1>(row);
+        local_potential_entry->AddDistanceAndMapValueList(std::move(std::get<3>(row)));
+        local_potential_entry->AddGausEstimateOLS(std::get<4>(row), std::get<5>(row));
+        local_potential_entry->AddGausEstimateMDPDE(std::get<6>(row), std::get<7>(row));
+        local_potential_entry_map[atom_serial_id_pair] = std::move(local_potential_entry);
+    }
+
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupBondClassCount(); i++)
+    {
+        auto class_key{ AtomicInfoHelper::GetGroupBondClassKey(i) };
+        auto table_name_with_class_key{ class_key + "_" + table_name };
+        LoadBondLocalPotentialEntrySubList(table_name_with_class_key, class_key, local_potential_entry_map);
+    }
+    return local_potential_entry_map;
+}
+
+void ModelObjectDAO::LoadBondLocalPotentialEntrySubList(
+    const std::string & table_name, const std::string & class_key,
+    std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> & entry_map)
+{
+    auto atom_serial_id_pair{ std::make_pair(0, 0) };
+    auto iter{ m_database->IterateQuery<
+        int, int, double, double, double, double, int, double>(
+        FormatSQL(SELECT_BOND_LOCAL_SUBLIST_SQL, table_name)) };
+    std::tuple<int, int, double, double, double, double, int, double> row;
+    while (iter.Next(row))
+    {
+        atom_serial_id_pair.first  = std::get<0>(row);
+        atom_serial_id_pair.second = std::get<1>(row);
+        if (entry_map.find(atom_serial_id_pair) == entry_map.end()) continue;
+        auto & entry{ entry_map.at(atom_serial_id_pair) };
+        entry->AddGausEstimatePosterior(class_key, std::get<2>(row), std::get<3>(row));
+        entry->AddGausVariancePosterior(class_key, std::get<4>(row), std::get<5>(row));
+        entry->AddOutlierTag(class_key, static_cast<bool>(std::get<6>(row)));
+        entry->AddStatisticalDistance(class_key, std::get<7>(row));
+    }
+}
+
+void ModelObjectDAO::LoadAtomGroupPotentialEntryList(
     ModelObject * model_obj, const std::string & class_key, const std::string & table_name)
 {
     if (TableExists(table_name) == false) return;
-    auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
+    auto group_entry{ model_obj->GetAtomGroupPotentialEntry(class_key) };
     auto iter{
         m_database->IterateQuery<GroupKey, int,
                                  double, double, double, double,
@@ -848,16 +1145,40 @@ void ModelObjectDAO::LoadGroupPotentialEntryList(
         group_entry->AddGausEstimatePrior(group_key, std::get<6>(row), std::get<7>(row));
         group_entry->AddGausVariancePrior(group_key, std::get<8>(row), std::get<9>(row));
     }
-    LoadGroupPotentialEntrySubList(model_obj, class_key);
-}
-
-void ModelObjectDAO::LoadGroupPotentialEntrySubList(
-    ModelObject * model_obj, const std::string & class_key)
-{
-    auto group_entry{ model_obj->GetGroupPotentialEntry(class_key) };
+    
     for (auto & atom : model_obj->GetSelectedAtomList())
     {
         group_entry->AddAtomObjectPtr(AtomClassifier::GetGroupKeyInClass(atom, class_key), atom);
+    }
+}
+
+void ModelObjectDAO::LoadBondGroupPotentialEntryList(
+    ModelObject * model_obj, const std::string & class_key, const std::string & table_name)
+{
+    if (TableExists(table_name) == false) return;
+    auto group_entry{ model_obj->GetBondGroupPotentialEntry(class_key) };
+    auto iter{
+        m_database->IterateQuery<GroupKey, int,
+                                 double, double, double, double,
+                                 double, double, double, double>(
+            FormatSQL(SELECT_GROUP_ENTRY_SQL, table_name)) };
+    std::tuple<GroupKey, int,
+               double, double, double, double,
+               double, double, double, double> row;
+    while (iter.Next(row))
+    {
+        auto group_key{ std::get<0>(row) };
+        group_entry->InsertGroupKey(group_key);
+        group_entry->ReserveBondObjectPtrList(group_key, std::get<1>(row));
+        group_entry->AddGausEstimateMean(group_key, std::get<2>(row), std::get<3>(row));
+        group_entry->AddGausEstimateMDPDE(group_key, std::get<4>(row), std::get<5>(row));
+        group_entry->AddGausEstimatePrior(group_key, std::get<6>(row), std::get<7>(row));
+        group_entry->AddGausVariancePrior(group_key, std::get<8>(row), std::get<9>(row));
+    }
+
+    for (auto & bond : model_obj->GetSelectedBondList())
+    {
+        group_entry->AddBondObjectPtr(BondClassifier::GetGroupKeyInClass(bond, class_key), bond);
     }
 }
 

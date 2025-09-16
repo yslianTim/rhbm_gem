@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <vector>
+#include <map>
+#include <utility>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -10,6 +12,7 @@
 class SQLiteWrapper;
 class ModelObject;
 class AtomObject;
+class BondObject;
 class AtomicPotentialEntry;
 class GroupPotentialEntry;
 
@@ -27,7 +30,9 @@ public:
     
 private:
     void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
+    void SaveBondObjectList(const ModelObject * model_obj, const std::string & table_name);
     std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & key_tag);
+    std::vector<std::unique_ptr<BondObject>> LoadBondObjectList(const std::string & key_tag, const ModelObject * model_obj);
 
     void SaveChemicalComponentEntryList(const ModelObject * model_obj, const std::string & table_name);
     void SaveComponentAtomEntryList(const ModelObject * model_obj, const std::string & table_name);
@@ -36,14 +41,20 @@ private:
     void LoadComponentAtomEntryList(ModelObject * model_obj, const std::string & table_name);
     void LoadComponentBondEntryList(ModelObject * model_obj, const std::string & table_name);
 
-    void SaveAtomicPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
-    void SaveAtomicPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
-    void SaveGroupPotentialEntryList(const GroupPotentialEntry * group_entry, const std::string & table_name);
+    void SaveAtomLocalPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
+    void SaveBondLocalPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
+    void SaveAtomLocalPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
+    void SaveBondLocalPotentialEntrySubList(const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
+    void SaveAtomGroupPotentialEntryList(const GroupPotentialEntry * group_entry, const std::string & table_name);
+    void SaveBondGroupPotentialEntryList(const GroupPotentialEntry * group_entry, const std::string & table_name);
 
-    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> LoadAtomicPotentialEntryMap(const std::string & table_name);
-    void LoadAtomicPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map);
-    void LoadGroupPotentialEntryList(ModelObject * model_obj, const std::string & class_key, const std::string & table_name);
-    void LoadGroupPotentialEntrySubList(ModelObject * model_obj, const std::string & class_key);
+    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> LoadAtomLocalPotentialEntryMap(const std::string & table_name);
+    std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> LoadBondLocalPotentialEntryMap(const std::string & table_name);
+    void LoadAtomLocalPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map);
+    void LoadBondLocalPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> & entry_map);
+    void LoadAtomGroupPotentialEntryList(ModelObject * model_obj, const std::string & class_key, const std::string & table_name);
+    void LoadBondGroupPotentialEntryList(ModelObject * model_obj, const std::string & class_key, const std::string & table_name);
+
 
     bool TableExists(const std::string & table_name) const;
     std::string SanitizeTableName(const std::string & key_tag) const;

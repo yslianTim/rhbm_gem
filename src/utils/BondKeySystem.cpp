@@ -72,12 +72,21 @@ void BondKeySystem::RegisterBond(
 BondKey BondKeySystem::GetBondKey(
     const std::string & atom_id_1, const std::string & atom_id_2)
 {
+    static std::unordered_map<std::string, int> unknown_bond_id_count_map;
     std::lock_guard<std::mutex> lock(m_mutex);
     auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
     if (m_id_to_key_map.find(bond_id) == m_id_to_key_map.end())
     {
-        Logger::Log(LogLevel::Warning, 
-            "BondKeySystem::GetBondKey() - Unknown bond id: " + bond_id);
+        if (unknown_bond_id_count_map.find(bond_id) == unknown_bond_id_count_map.end())
+        {
+            Logger::Log(LogLevel::Warning,
+                "BondKeySystem::GetBondKey() - Unknown bond id: " + bond_id);
+            unknown_bond_id_count_map[bond_id] = 1;
+        }
+        else
+        {
+            unknown_bond_id_count_map[bond_id]++;
+        }
         return static_cast<BondKey>(0);
     }
     return m_id_to_key_map.at(bond_id);
@@ -93,6 +102,14 @@ std::string BondKeySystem::GetBondId(BondKey bond_key)
         return "UNK";
     }
     return m_key_to_id_map.at(bond_key);
+}
+
+bool BondKeySystem::IsRegistedBond(
+    const std::string & atom_id_1, const std::string & atom_id_2) const
+{
+    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
+    if (m_id_to_key_map.find(bond_id) == m_id_to_key_map.end()) return false;
+    return true;
 }
 
 bool BondKeySystem::IsBuildInBond(
@@ -125,6 +142,7 @@ std::string BondKeySystem::BuildReverseBondIdFromBondId(
     const std::string & bond_id) const
 {
     auto atom_id_pair{ BuildAtomIdPairFromBondId(bond_id) };
+    if (atom_id_pair.first == atom_id_pair.second) return ".";
     return atom_id_pair.second +"_"+ atom_id_pair.first;
 }
 

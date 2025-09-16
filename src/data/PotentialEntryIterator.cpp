@@ -98,7 +98,7 @@ double PotentialEntryIterator::GetGausEstimatePrior(
     {
         throw std::runtime_error("Group key is not available.");
     }
-    return m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id);
+    return m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id);
 }
 
 double PotentialEntryIterator::GetGausVariancePrior(
@@ -108,7 +108,7 @@ double PotentialEntryIterator::GetGausVariancePrior(
     {
         throw std::runtime_error("Group key is not available.");
     }
-    return m_model_object->GetGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id);
+    return m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id);
 }
 
 const std::vector<AtomObject *> & PotentialEntryIterator::GetAtomObjectList(
@@ -118,7 +118,7 @@ const std::vector<AtomObject *> & PotentialEntryIterator::GetAtomObjectList(
     {
         throw std::runtime_error("Group key is not available.");
     }
-    return m_model_object->GetGroupPotentialEntry(class_key)->GetAtomObjectPtrList(group_key);
+    return m_model_object->GetAtomGroupPotentialEntry(class_key)->GetAtomObjectPtrList(group_key);
 }
 
 std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
@@ -248,7 +248,7 @@ bool PotentialEntryIterator::IsModelObjectAvailable(void) const
 
 bool PotentialEntryIterator::CheckGroupKey(GroupKey group_key, const std::string & class_key, bool verbose) const
 {
-    const auto & group_key_set{ m_model_object->GetGroupPotentialEntry(class_key)->GetGroupKeySet() };
+    const auto & group_key_set{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGroupKeySet() };
     if (group_key_set.find(group_key) == group_key_set.end())
     {
         std::ostringstream oss;
@@ -524,8 +524,8 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
     {
         if (IsAvailableGroupKey(group_key, class_key) == false) continue;
         auto x_value{ static_cast<int>(GetResidueFromGroupKey(group_key, class_key)) - 1 };
-        auto y_value{ m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id) };
-        auto y_error{ m_model_object->GetGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
+        auto y_value{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id) };
+        auto y_error{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
         count++;
@@ -892,11 +892,11 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateGroupGausFunctionPrior(
 {
     auto amplitude
     {
-        m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 0)
+        m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 0)
     };
     auto width
     {
-        m_model_object->GetGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
+        m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
     };
     return ROOTHelper::CreateGausFunction1D("gaus", amplitude, width);
 }

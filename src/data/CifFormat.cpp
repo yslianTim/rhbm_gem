@@ -524,9 +524,9 @@ void CifFormat::ConstructBondList(void)
             {
                 if (neighbor_atom == atom.get()) continue;
                 auto atom_id_2{ neighbor_atom->GetAtomID() };
-                if (m_data_block->GetBondKeySystemPtr()->IsReverseBond(atom_id_1, atom_id_2)) continue;
-                auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(atom_id_1, atom_id_2) };
-                if (bond_key == 0) continue;
+                auto bond_key_system{ m_data_block->GetBondKeySystemPtr() };
+                if (bond_key_system->IsRegistedBond(atom_id_1, atom_id_2) == false) continue;
+                auto bond_key{ bond_key_system->GetBondKey(atom_id_1, atom_id_2) };
                 if (m_find_component_bond_entry == false)
                 {
                     BuildDefaultComponentBondEntry(component_id_1, atom_id_1, atom_id_2);
@@ -767,8 +767,6 @@ void CifFormat::BuildDefaultComponentBondEntry(
 {
     Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentBondEntry() called");
     auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
-
-    m_data_block->GetBondKeySystemPtr()->RegisterBond(atom_id_1, atom_id_2);
     auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(atom_id_1, atom_id_2) };
 
     ComponentBondEntry bond_entry;

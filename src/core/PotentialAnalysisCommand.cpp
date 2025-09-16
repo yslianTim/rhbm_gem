@@ -489,7 +489,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
                 Logger::ProgressBar(key_count, group_key_size);
             }
         }
-        m_model_object->AddGroupPotentialEntry(class_key, group_potential_entry);
+        m_model_object->AddAtomGroupPotentialEntry(class_key, group_potential_entry);
     }
 }
 

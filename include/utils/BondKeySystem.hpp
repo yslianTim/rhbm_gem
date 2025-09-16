@@ -30,6 +30,7 @@ public:
     void RegisterBond(const std::string & atom_id_1, const std::string & atom_id_2, BondKey bond_key);
     BondKey GetBondKey(const std::string & atom_id_1, const std::string & atom_id_2);
     std::string GetBondId(BondKey bond_key);
+    bool IsRegistedBond(const std::string & atom_id_1, const std::string & atom_id_2) const;
     bool IsBuildInBond(const std::string & atom_id_1, const std::string & atom_id_2) const;
     bool IsBuildInBond(BondKey bond_key) const;
     bool IsReverseBond(const std::string & atom_id_1, const std::string & atom_id_2) const;
