@@ -337,7 +337,7 @@ namespace
     constexpr std::string_view CREATE_GROUP_ENTRY_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
             key_id INTEGER PRIMARY KEY,
-            memebr_size INTEGER,
+            member_size INTEGER,
             amplitude_estimate_mean DOUBLE,
             width_estimate_mean DOUBLE,
             amplitude_estimate_mdpde DOUBLE,
@@ -351,7 +351,7 @@ namespace
 
     constexpr std::string_view INSERT_GROUP_ENTRY_SQL = R"sql(
         INSERT OR REPLACE INTO {} (
-            key_id, memebr_size,
+            key_id, member_size,
             amplitude_estimate_mean, width_estimate_mean,
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
@@ -361,7 +361,7 @@ namespace
 
     constexpr std::string_view SELECT_GROUP_ENTRY_SQL = R"sql(
         SELECT
-            key_id, memebr_size,
+            key_id, member_size,
             amplitude_estimate_mean, width_estimate_mean,
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
@@ -440,12 +440,12 @@ void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_ta
     auto atom_group_potential_entry_table_name{ "atom_group_potential_entry_in_" + sanitized_key_tag };
     for (auto & [class_key, group_entry] : model_obj->GetAtomGroupPotentialEntryMap())
     {
-        auto local_table_name{ class_key + "_" + atom_group_potential_entry_table_name };
+        auto local_table_name{ class_key + "_" + atom_local_potential_entry_table_name };
         SaveAtomLocalPotentialEntrySubList(model_obj, local_table_name, class_key);
         auto group_table_name{ class_key + "_" + atom_group_potential_entry_table_name };
         SaveAtomGroupPotentialEntryList(group_entry.get(), group_table_name);
     }
-/*
+
     // Save bond local potential entries
     auto bond_local_potential_entry_table_name{ "bond_local_potential_entry_in_" + sanitized_key_tag };
     SaveBondLocalPotentialEntryList(model_obj, bond_local_potential_entry_table_name);
@@ -453,11 +453,11 @@ void ModelObjectDAO::Save(const DataObjectBase * obj, const std::string & key_ta
     auto bond_group_potential_entry_table_name{ "bond_group_potential_entry_in_" + sanitized_key_tag };
     for (auto & [class_key, group_entry] : model_obj->GetBondGroupPotentialEntryMap())
     {
-        auto local_table_name{ class_key + "_" + bond_group_potential_entry_table_name };
+        auto local_table_name{ class_key + "_" + bond_local_potential_entry_table_name };
         SaveBondLocalPotentialEntrySubList(model_obj, local_table_name, class_key);
         auto group_table_name{ class_key + "_" + bond_group_potential_entry_table_name };
         SaveBondGroupPotentialEntryList(group_entry.get(), group_table_name);
-    }*/
+    }
 }
 
 std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag)
