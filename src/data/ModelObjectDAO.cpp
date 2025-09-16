@@ -518,10 +518,21 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     {
         auto group_class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
         // Load atom potential entry
-        auto potential_table_name{ group_class_key + "_atom_group_potential_entry_in_" + sanitized_key_tag };
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
         model_object->AddAtomGroupPotentialEntry(group_class_key, group_potential_entry);
+        auto potential_table_name{ group_class_key + "_atom_group_potential_entry_in_" + sanitized_key_tag };
         LoadAtomGroupPotentialEntryList(model_object.get(), group_class_key, potential_table_name);
+    }
+
+    // Load bond group potential entries
+    for (size_t i = 0; i < AtomicInfoHelper::GetGroupBondClassCount(); i++)
+    {
+        auto group_class_key{ AtomicInfoHelper::GetGroupBondClassKey(i) };
+        // Load bond potential entry
+        auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
+        model_object->AddBondGroupPotentialEntry(group_class_key, group_potential_entry);
+        auto potential_table_name{ group_class_key + "_bond_group_potential_entry_in_" + sanitized_key_tag };
+        LoadBondGroupPotentialEntryList(model_object.get(), group_class_key, potential_table_name);
     }
     return model_object;
 }
@@ -1050,6 +1061,7 @@ void ModelObjectDAO::LoadAtomLocalPotentialEntrySubList(
     const std::string & table_name, const std::string & class_key,
     std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map)
 {
+    if (TableExists(table_name) == false) return;
     auto serial_id{ 0 };
     auto iter{ m_database->IterateQuery<int, double, double, double, double, int, double>(
             FormatSQL(SELECT_ATOM_LOCAL_SUBLIST_SQL, table_name)) };
@@ -1104,6 +1116,7 @@ void ModelObjectDAO::LoadBondLocalPotentialEntrySubList(
     const std::string & table_name, const std::string & class_key,
     std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> & entry_map)
 {
+    if (TableExists(table_name) == false) return;
     auto atom_serial_id_pair{ std::make_pair(0, 0) };
     auto iter{ m_database->IterateQuery<
         int, int, double, double, double, double, int, double>(
