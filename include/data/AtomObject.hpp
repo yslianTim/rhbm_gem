@@ -29,7 +29,7 @@ class AtomObject : public DataObjectBase
     std::unordered_map<std::string, std::array<float, 3>> m_alternate_position_map;
     std::unordered_map<std::string, float> m_alternate_occupancy_map;
     std::unordered_map<std::string, float> m_alternate_temperature_map;
-    std::unique_ptr<AtomicPotentialEntry> m_atomic_potential_entry;
+    std::unique_ptr<AtomicPotentialEntry> m_local_potential_entry;
 
 public:
     AtomObject(void);
@@ -64,7 +64,7 @@ public:
     void SetSpot(const std::string & name);
     void SetPosition(float x, float y, float z);
     void SetPosition(const std::array<float, 3> & value) { m_position = value; }
-    void AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry);
+    void AddLocalPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry);
     void AddAlternatePosition(const std::string & indicator, const std::array<float, 3> & value);
     void AddAlternateOccupancy(const std::string & indicator, float value);
     void AddAlternateTemperature(const std::string & indicator, float value);
@@ -92,6 +92,6 @@ public:
     const std::unordered_map<std::string, std::array<float, 3>> & GetAlternatePositions(void) const;
     const std::unordered_map<std::string, float> & GetAlternateOccupancies(void) const;
     const std::unordered_map<std::string, float> & GetAlternateTemperatures(void) const;
-    AtomicPotentialEntry * GetAtomicPotentialEntry(void) const { return m_atomic_potential_entry.get(); }
+    AtomicPotentialEntry * GetLocalPotentialEntry(void) const { return m_local_potential_entry.get(); }
     
 };

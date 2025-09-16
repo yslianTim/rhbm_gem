@@ -18,7 +18,7 @@ AtomObject::AtomObject(void) :
     m_residue{ Residue::UNK }, m_element{ Element::UNK }, m_spot{ Spot::UNK },
     m_structure{ Structure::UNK },
     m_position{ 0.0, 0.0, 0.0 },
-    m_atomic_potential_entry{ nullptr }
+    m_local_potential_entry{ nullptr }
 {
 
 }
@@ -130,9 +130,9 @@ std::string AtomObject::GetInfo(void) const
            std::to_string(m_position.at(2)) + ")";
 }
 
-void AtomObject::AddAtomicPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry)
+void AtomObject::AddLocalPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry)
 {
-    m_atomic_potential_entry = std::move(entry);
+    m_local_potential_entry = std::move(entry);
 }
 
 void AtomObject::AddAlternatePosition(

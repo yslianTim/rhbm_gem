@@ -17,8 +17,11 @@ public:
     ~GausLinearTransformHelper() = default;
 
     static Eigen::VectorXd BuildLinearModelDataVector(double gaus_x, double gaus_y);
-    static Eigen::VectorXd BuildGausModel(const Eigen::VectorXd & linear_model);
-    static std::tuple<Eigen::VectorXd, Eigen::VectorXd> BuildGausModelWithVariance(
+    static Eigen::VectorXd BuildGaus2DModel(const Eigen::VectorXd & linear_model);
+    static Eigen::VectorXd BuildGaus3DModel(const Eigen::VectorXd & linear_model);
+    static std::tuple<Eigen::VectorXd, Eigen::VectorXd> BuildGaus2DModelWithVariance(
+        const Eigen::VectorXd & linear_model, const Eigen::MatrixXd & covariance_matrix);
+    static std::tuple<Eigen::VectorXd, Eigen::VectorXd> BuildGaus3DModelWithVariance(
         const Eigen::VectorXd & linear_model, const Eigen::MatrixXd & covariance_matrix);
     
 };

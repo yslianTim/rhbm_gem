@@ -11,7 +11,8 @@
 ModelObject::ModelObject(void) :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
-    m_atom_key_system{ std::make_unique<AtomKeySystem>() }
+    m_atom_key_system{ std::make_unique<AtomKeySystem>() },
+    m_bond_key_system{ std::make_unique<BondKeySystem>() }
 {
 }
 
@@ -19,7 +20,8 @@ ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_li
     m_atom_list{ std::move(atom_object_list) },
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
-    m_atom_key_system{ std::make_unique<AtomKeySystem>() }
+    m_atom_key_system{ std::make_unique<AtomKeySystem>() },
+    m_bond_key_system{ std::make_unique<BondKeySystem>() }
 {
     Update();
 }
@@ -34,7 +36,8 @@ ModelObject::ModelObject(const ModelObject & other) :
     m_resolution_method{ other.m_resolution_method }, m_resolution{ other.m_resolution },
     m_kd_tree_root{ nullptr },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
-    m_atom_key_system{ std::make_unique<AtomKeySystem>() }
+    m_atom_key_system{ std::make_unique<AtomKeySystem>() },
+    m_bond_key_system{ std::make_unique<BondKeySystem>() }
 {
     m_atom_list.clear();
     m_atom_list.reserve(other.m_atom_list.size());
@@ -64,6 +67,7 @@ void ModelObject::Update(void)
         m_serial_id_atom_map[atom->GetSerialID()] = atom.get();
     }
     BuildSelectedAtomList();
+    BuildSelectedBondList();
 }
 
 void ModelObject::Accept(DataObjectVisitorBase * visitor)
@@ -139,6 +143,16 @@ void ModelObject::SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_syste
         m_atom_key_system = nullptr;
     }
     m_atom_key_system = std::move(atom_key_system);
+}
+
+void ModelObject::SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system)
+{
+    if (m_bond_key_system != nullptr)
+    {
+        Logger::Log(LogLevel::Debug, "Remove the old BondKeySystem.");
+        m_bond_key_system = nullptr;
+    }
+    m_bond_key_system = std::move(bond_key_system);
 }
 
 void ModelObject::BuildKDTreeRoot(void)
@@ -225,7 +239,7 @@ ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(ComponentKey key
     return m_chemical_component_entry_map.at(key).get();
 }
 
-const std::unordered_map<int, AtomObject *> &
+const std::map<int, AtomObject *> &
 ModelObject::GetSerialIDAtomMap(void) const
 {
     return m_serial_id_atom_map;
@@ -260,6 +274,17 @@ void ModelObject::BuildSelectedAtomList(void)
     }
 }
 
+void ModelObject::BuildSelectedBondList(void)
+{
+    m_selected_bond_list.clear();
+    m_selected_bond_list.reserve(m_bond_list.size());
+    for (auto & bond : m_bond_list)
+    {
+        if (bond->GetSelectedFlag() == false) continue;
+        m_selected_bond_list.emplace_back(bond.get());
+    }
+}
+
 void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
 {
     if (is_asymmetry == true)
@@ -282,5 +307,30 @@ void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
             }
         }
         if (in_candidate_chain == false) atom->SetSelectedFlag(false);
+    }
+}
+
+void ModelObject::FilterBondFromSymmetry(bool is_asymmetry)
+{
+    if (is_asymmetry == true)
+    {
+        return;
+    }
+
+    for (auto & bond : m_bond_list)
+    {
+        auto original_selection_flag{ bond->GetSelectedFlag() };
+        auto chain_id{ bond->GetAtomObject1()->GetChainID() };
+        bool in_candidate_chain{ false };
+        for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
+        {
+            if (chain_id == chain_id_list.at(0))
+            {
+                bond->SetSelectedFlag(original_selection_flag);
+                in_candidate_chain = true;
+                break;
+            }
+        }
+        if (in_candidate_chain == false) bond->SetSelectedFlag(false);
     }
 }

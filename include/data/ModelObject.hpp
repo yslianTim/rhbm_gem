@@ -6,11 +6,13 @@
 #include <vector>
 #include <array>
 #include <tuple>
+#include <map>
 #include <unordered_map>
 
 #include "DataObjectBase.hpp"
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
+#include "BondKeySystem.hpp"
 
 class AtomObject;
 class BondObject;
@@ -27,7 +29,7 @@ class ModelObject : public DataObjectBase
     std::string m_key_tag, m_pdb_id, m_emd_id;
     std::string m_resolution_method;
     double m_resolution;
-    std::unordered_map<int, AtomObject*> m_serial_id_atom_map;
+    std::map<int, AtomObject*> m_serial_id_atom_map;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map; // key : entity_id
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_atom_group_potential_entry_map;
@@ -37,6 +39,7 @@ class ModelObject : public DataObjectBase
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
     std::unique_ptr<ComponentKeySystem> m_component_key_system;
     std::unique_ptr<AtomKeySystem> m_atom_key_system;
+    std::unique_ptr<BondKeySystem> m_bond_key_system;
 
 public:
     ModelObject(void);
@@ -73,8 +76,10 @@ public:
         std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & entry_map);
     void SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system);
     void SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system);
+    void SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system);
     void BuildKDTreeRoot(void);
     void FilterAtomFromSymmetry(bool is_asymmetry);
+    void FilterBondFromSymmetry(bool is_asymmetry);
 
     size_t GetNumberOfAtom(void) const { return m_atom_list.size(); }
     size_t GetNumberOfBond(void) const { return m_bond_list.size(); }
@@ -96,7 +101,7 @@ public:
     GroupPotentialEntry * GetAtomGroupPotentialEntry(const std::string & class_key) const;
     GroupPotentialEntry * GetBondGroupPotentialEntry(const std::string & class_key) const;
     ChemicalComponentEntry * GetChemicalComponentEntry(ComponentKey key) const;
-    const std::unordered_map<int, AtomObject *> & GetSerialIDAtomMap(void) const;
+    const std::map<int, AtomObject *> & GetSerialIDAtomMap(void) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
     GetAtomGroupPotentialEntryMap(void) const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
@@ -106,8 +111,10 @@ public:
     KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
     ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
+    BondKeySystem * GetBondKeySystemPtr(void) { return m_bond_key_system.get(); }
 
 private:
     void BuildSelectedAtomList(void);
+    void BuildSelectedBondList(void);
     
 };

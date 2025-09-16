@@ -117,7 +117,7 @@ bool ResultDumpCommand::BuildDataObjectList(void)
             m_model_object_list.emplace_back(model_object);
             for (auto & atom : model_object->GetAtomList())
             {
-                if (atom->GetAtomicPotentialEntry() == nullptr) continue;
+                if (atom->GetLocalPotentialEntry() == nullptr) continue;
                 m_selected_atom_list_map[key].emplace_back(atom.get());
             }
             Logger::Log(LogLevel::Info,
@@ -286,7 +286,7 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
         outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
-            auto entry{ atom->GetAtomicPotentialEntry() };
+            auto entry{ atom->GetLocalPotentialEntry() };
             outfile << atom->GetSerialID() <<','
                     << entry->GetAmplitudeEstimateMDPDE() <<','
                     << entry->GetWidthEstimateMDPDE() <<','

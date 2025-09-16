@@ -590,8 +590,8 @@ void CifFormat::WriteAtomSiteBlock(
     for (const auto & atom_ptr : model_object->GetAtomList())
     {
         const AtomObject * atom{ atom_ptr.get() };
-        if (atom->GetAtomicPotentialEntry() == nullptr) continue;
-        auto model_entry{ atom->GetAtomicPotentialEntry() };
+        if (atom->GetLocalPotentialEntry() == nullptr) continue;
+        auto model_entry{ atom->GetLocalPotentialEntry() };
         auto gaus_estimate{ model_entry->GetGausEstimateMDPDE(model_par) };
         auto position{ atom->GetPosition() };
         WriteAtomSiteBlockEntry(

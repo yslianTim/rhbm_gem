@@ -106,6 +106,8 @@ bool PotentialAnalysisCommand::Execute(void)
     RunModelObjectPreprocessing();
     RunAtomMapValueSampling();
     RunAtomPotentialFitting();
+    RunBondMapValueSampling();
+    RunBondPotentialFitting();
     SaveDataObject();
     return true;
 }
@@ -253,19 +255,25 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
     m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
-    for (auto & atom : m_model_object->GetAtomList())
-    {
-        atom->SetSelectedFlag(true);
-    }
+    for (auto & atom : m_model_object->GetAtomList()) atom->SetSelectedFlag(true);
+    for (auto & bond : m_model_object->GetBondList()) bond->SetSelectedFlag(true);
     m_model_object->FilterAtomFromSymmetry(m_options.is_asymmetry);
+    m_model_object->FilterBondFromSymmetry(m_options.is_asymmetry);
     m_model_object->Update();
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
-        auto atom_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
-        atom->AddAtomicPotentialEntry(std::move(atom_potential_entry));
+        auto local_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        atom->AddLocalPotentialEntry(std::move(local_potential_entry));
+    }
+    for (auto & bond : m_model_object->GetSelectedBondList())
+    {
+        auto local_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        bond->AddLocalPotentialEntry(std::move(local_potential_entry));
     }
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
+    Logger::Log(LogLevel::Info,
+        "Number of selected bond = " + std::to_string(m_model_object->GetNumberOfSelectedBond()));
 }
 
 void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
@@ -291,7 +299,7 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
         for (size_t i = 0; i < atom_size; i++)
         {
             auto atom{ atom_list[i] };
-            auto entry{ atom->GetAtomicPotentialEntry() };
+            auto entry{ atom->GetLocalPotentialEntry() };
             interpolation_visitor.SetPosition(atom->GetPosition());
             m_map_object->Accept(&interpolation_visitor);
             entry->AddDistanceAndMapValueList(interpolation_visitor.TakeSamplingDataList());
@@ -307,11 +315,11 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
     for (size_t i = 0; i < atom_size; i++)
     {
         auto atom{ atom_list[i] };
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         interpolation_visitor.SetPosition(atom->GetPosition());
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
-        atom_count++
+        atom_count++;
         Logger::ProgressPercent(atom_count, atom_size);
     }
 #endif
@@ -341,7 +349,7 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
         for (size_t i = 0; i < bond_size; i++)
         {
             auto bond{ bond_list[i] };
-            auto entry{ bond->GetAtomicPotentialEntry() };
+            auto entry{ bond->GetLocalPotentialEntry() };
             interpolation_visitor.SetPosition(bond->GetPosition());
             interpolation_visitor.SetAxisVector(bond->GetBondVector());
             m_map_object->Accept(&interpolation_visitor);
@@ -358,12 +366,12 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
     for (size_t i = 0; i < bond_size; i++)
     {
         auto bond{ bond_list[i] };
-        auto entry{ bond->GetAtomicPotentialEntry() };
+        auto entry{ bond->GetLocalPotentialEntry() };
         interpolation_visitor.SetPosition(bond->GetPosition());
         interpolation_visitor.SetAxisVector(bond->GetBondVector());
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
-        bond_count++
+        bond_count++;
         Logger::ProgressPercent(bond_count, bond_size);
     }
 #endif
@@ -406,7 +414,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             data_array.reserve(group_size);
             for (const auto & atom : atom_list)
             {
-                auto entry{ atom->GetAtomicPotentialEntry() };
+                auto entry{ atom->GetLocalPotentialEntry() };
                 std::vector<Eigen::VectorXd> sampling_entry_list;
                 sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
                 for (auto & data_entry : entry->GetDistanceAndMapValueList())
@@ -427,15 +435,15 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             model_estimator->RunEstimation(m_options.alpha_r, m_options.alpha_g);
 
             auto gaus_group_mean{
-                GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMean())
+                GausLinearTransformHelper::BuildGaus3DModel(model_estimator->GetMuVectorMean())
             };
 
             auto gaus_group_mdpde{
-                GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMDPDE())
+                GausLinearTransformHelper::BuildGaus3DModel(model_estimator->GetMuVectorMDPDE())
             };
 
             auto gaus_prior{
-                GausLinearTransformHelper::BuildGausModelWithVariance(
+                GausLinearTransformHelper::BuildGaus3DModelWithVariance(
                     model_estimator->GetMuVectorPrior(), model_estimator->GetCapitalLambdaMatrix())
             };
             auto prior_estimate{ std::get<0>(gaus_prior) };
@@ -444,19 +452,19 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             auto count{ 0 };
             for (const auto & atom : atom_list)
             {
-                auto atom_entry{ atom->GetAtomicPotentialEntry() };
+                auto atom_entry{ atom->GetLocalPotentialEntry() };
                 const auto & beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
-                auto gaus_ols{ GausLinearTransformHelper::BuildGausModel(beta_vector_ols) };
+                auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_vector_ols) };
                 atom_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
 
                 const auto & beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
-                auto gaus_mdpde{ GausLinearTransformHelper::BuildGausModel(beta_vector_mdpde) };
+                auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_vector_mdpde) };
                 atom_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
 
                 const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
                 auto gaus_posterior{
-                    GausLinearTransformHelper::BuildGausModelWithVariance(
+                    GausLinearTransformHelper::BuildGaus3DModelWithVariance(
                         beta_vector_posterior, sigma_matrix_posterior)
                 };
                 auto posterior_estimate{ std::get<0>(gaus_posterior) };
@@ -530,7 +538,7 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
             data_array.reserve(group_size);
             for (const auto & bond : bond_list)
             {
-                auto entry{ bond->GetAtomicPotentialEntry() };
+                auto entry{ bond->GetLocalPotentialEntry() };
                 std::vector<Eigen::VectorXd> sampling_entry_list;
                 sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
                 for (auto & data_entry : entry->GetDistanceAndMapValueList())
@@ -551,15 +559,15 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
             model_estimator->RunEstimation(m_options.alpha_r, m_options.alpha_g);
 
             auto gaus_group_mean{
-                GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMean())
+                GausLinearTransformHelper::BuildGaus2DModel(model_estimator->GetMuVectorMean())
             };
 
             auto gaus_group_mdpde{
-                GausLinearTransformHelper::BuildGausModel(model_estimator->GetMuVectorMDPDE())
+                GausLinearTransformHelper::BuildGaus2DModel(model_estimator->GetMuVectorMDPDE())
             };
 
             auto gaus_prior{
-                GausLinearTransformHelper::BuildGausModelWithVariance(
+                GausLinearTransformHelper::BuildGaus2DModelWithVariance(
                     model_estimator->GetMuVectorPrior(), model_estimator->GetCapitalLambdaMatrix())
             };
             auto prior_estimate{ std::get<0>(gaus_prior) };
@@ -568,19 +576,19 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
             auto count{ 0 };
             for (const auto & bond : bond_list)
             {
-                auto bond_entry{ bond->GetAtomicPotentialEntry() };
+                auto bond_entry{ bond->GetLocalPotentialEntry() };
                 const auto & beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
-                auto gaus_ols{ GausLinearTransformHelper::BuildGausModel(beta_vector_ols) };
+                auto gaus_ols{ GausLinearTransformHelper::BuildGaus2DModel(beta_vector_ols) };
                 bond_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
 
                 const auto & beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
-                auto gaus_mdpde{ GausLinearTransformHelper::BuildGausModel(beta_vector_mdpde) };
+                auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus2DModel(beta_vector_mdpde) };
                 bond_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
 
                 const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
                 auto gaus_posterior{
-                    GausLinearTransformHelper::BuildGausModelWithVariance(
+                    GausLinearTransformHelper::BuildGaus2DModelWithVariance(
                         beta_vector_posterior, sigma_matrix_posterior)
                 };
                 auto posterior_estimate{ std::get<0>(gaus_posterior) };
@@ -628,7 +636,7 @@ void PotentialAnalysisCommand::SaveDataObject(void)
 
     for (auto atom : m_model_object->GetSelectedAtomList())
     {
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         if (entry != nullptr)
         {
             entry->ClearDistanceAndMapValueList();

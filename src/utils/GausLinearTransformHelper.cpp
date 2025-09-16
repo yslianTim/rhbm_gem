@@ -3,7 +3,8 @@
 
 #include <stdexcept>
 
-Eigen::VectorXd GausLinearTransformHelper::BuildLinearModelDataVector(double gaus_x, double gaus_y)
+Eigen::VectorXd GausLinearTransformHelper::BuildLinearModelDataVector(
+    double gaus_x, double gaus_y)
 {
     auto linear_model_data_vector_basis{ 2 + 1 };
     Eigen::VectorXd linear_model_data_vector{ Eigen::VectorXd::Zero(linear_model_data_vector_basis) };
@@ -20,7 +21,18 @@ Eigen::VectorXd GausLinearTransformHelper::BuildLinearModelDataVector(double gau
     return linear_model_data_vector;
 }
 
-Eigen::VectorXd GausLinearTransformHelper::BuildGausModel(const Eigen::VectorXd & linear_model)
+Eigen::VectorXd GausLinearTransformHelper::BuildGaus2DModel(const Eigen::VectorXd & linear_model)
+{
+    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
+    if (linear_model(1) <= 0.0) return gaus_model;
+
+    gaus_model(0) = std::exp(linear_model(0)) * Constants::two_pi / linear_model(1);
+    gaus_model(1) = 1.0 / std::sqrt(linear_model(1));
+
+    return gaus_model;
+}
+
+Eigen::VectorXd GausLinearTransformHelper::BuildGaus3DModel(const Eigen::VectorXd & linear_model)
 {
     Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
     if (linear_model(1) <= 0.0) return gaus_model;
@@ -31,7 +43,7 @@ Eigen::VectorXd GausLinearTransformHelper::BuildGausModel(const Eigen::VectorXd 
     return gaus_model;
 }
 
-std::tuple<Eigen::VectorXd, Eigen::VectorXd> GausLinearTransformHelper::BuildGausModelWithVariance(
+std::tuple<Eigen::VectorXd, Eigen::VectorXd> GausLinearTransformHelper::BuildGaus2DModelWithVariance(
     const Eigen::VectorXd & linear_model,
     const Eigen::MatrixXd & covariance_matrix)
 {
@@ -46,7 +58,45 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> GausLinearTransformHelper::BuildGau
         throw std::invalid_argument("covariance_matrix must be symmetric");
     }
 
-    gaus_model = BuildGausModel(linear_model);
+    gaus_model = BuildGaus2DModel(linear_model);
+    auto beta0{ linear_model(0) };
+    auto beta1{ linear_model(1) };
+    if (beta1 <= 0.0)
+    {
+        return std::make_tuple(gaus_model, gaus_model_variance);
+    }
+
+    // TODO: modify with Gaus-2D error propagation
+    auto var_beta0{ covariance_matrix(0, 0) };
+    auto var_beta1{ covariance_matrix(1, 1) };
+    auto cov{ covariance_matrix(0, 1) };
+    auto var_amplitude{
+        std::pow(Constants::two_pi, 3) * std::exp(2.0*beta0) * std::pow(beta1, -5) *
+        (std::pow(beta1, 2) * var_beta0 + 2.25 * var_beta1 - 3.0 * beta1 * cov)
+    };
+    auto var_width{ 0.25 * std::pow(beta1, -3) * var_beta1 };
+    gaus_model_variance(0) = std::sqrt(var_amplitude);
+    gaus_model_variance(1) = std::sqrt(var_width);
+
+    return std::make_tuple(gaus_model, gaus_model_variance);
+}
+
+std::tuple<Eigen::VectorXd, Eigen::VectorXd> GausLinearTransformHelper::BuildGaus3DModelWithVariance(
+    const Eigen::VectorXd & linear_model,
+    const Eigen::MatrixXd & covariance_matrix)
+{
+    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
+    Eigen::VectorXd gaus_model_variance{ Eigen::VectorXd::Zero(2) };
+    if (covariance_matrix.rows() != 2 || covariance_matrix.cols() != 2)
+    {
+        throw std::invalid_argument("covariance_matrix must be 2x2");
+    }
+    if (!covariance_matrix.isApprox(covariance_matrix.transpose()))
+    {
+        throw std::invalid_argument("covariance_matrix must be symmetric");
+    }
+
+    gaus_model = BuildGaus3DModel(linear_model);
     auto beta0{ linear_model(0) };
     auto beta1{ linear_model(1) };
     if (beta1 <= 0.0)

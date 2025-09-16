@@ -672,7 +672,7 @@ void ModelObjectDAO::SaveAtomLocalPotentialEntryList(
 
     for (auto & atom_object : model_obj->GetAtomList())
     {
-        auto entry{ atom_object->GetAtomicPotentialEntry() };
+        auto entry{ atom_object->GetLocalPotentialEntry() };
         if (entry == nullptr) continue;
 
         m_database->Bind<int>(1, atom_object->GetSerialID());
@@ -697,7 +697,7 @@ void ModelObjectDAO::SaveBondLocalPotentialEntryList(
 
     for (auto & bond_object : model_obj->GetBondList())
     {
-        auto entry{ bond_object->GetAtomicPotentialEntry() };
+        auto entry{ bond_object->GetLocalPotentialEntry() };
         if (entry == nullptr) continue;
 
         m_database->Bind<int>(1, bond_object->GetAtomSerialID1());
@@ -722,7 +722,7 @@ void ModelObjectDAO::SaveAtomLocalPotentialEntrySubList(
     SQLiteWrapper::StatementGuard guard(*m_database);
     for (auto & atom_object : model_obj->GetAtomList())
     {
-        auto entry{ atom_object->GetAtomicPotentialEntry() };
+        auto entry{ atom_object->GetLocalPotentialEntry() };
         if (entry == nullptr) continue;
         m_database->Bind<int>(1, atom_object->GetSerialID());
         m_database->Bind<double>(2, entry->GetAmplitudeEstimatePosterior(class_key));
@@ -745,7 +745,7 @@ void ModelObjectDAO::SaveBondLocalPotentialEntrySubList(
     SQLiteWrapper::StatementGuard guard(*m_database);
     for (auto & bond_object : model_obj->GetBondList())
     {
-        auto entry{ bond_object->GetAtomicPotentialEntry() };
+        auto entry{ bond_object->GetLocalPotentialEntry() };
         if (entry == nullptr) continue;
         m_database->Bind<int>(1, bond_object->GetAtomSerialID1());
         m_database->Bind<int>(2, bond_object->GetAtomSerialID2());
@@ -866,7 +866,7 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
             if (local_potential_entry_map.find(serial_id) != local_potential_entry_map.end())
             {
                 atom_object->SetSelectedFlag(true);
-                atom_object->AddAtomicPotentialEntry(std::move(local_potential_entry_map.at(serial_id)));
+                atom_object->AddLocalPotentialEntry(std::move(local_potential_entry_map.at(serial_id)));
             }
             else
             {
@@ -921,7 +921,7 @@ std::vector<std::unique_ptr<BondObject>> ModelObjectDAO::LoadBondObjectList(
             if (local_potential_entry_map.find(atom_serial_id_pair) != local_potential_entry_map.end())
             {
                 bond_object->SetSelectedFlag(true);
-                bond_object->AddAtomicPotentialEntry(std::move(local_potential_entry_map.at(atom_serial_id_pair)));
+                bond_object->AddLocalPotentialEntry(std::move(local_potential_entry_map.at(atom_serial_id_pair)));
             }
             else
             {

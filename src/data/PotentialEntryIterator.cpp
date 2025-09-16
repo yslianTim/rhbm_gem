@@ -31,7 +31,7 @@ PotentialEntryIterator::PotentialEntryIterator(ModelObject * model_object) :
 PotentialEntryIterator::PotentialEntryIterator(AtomObject * atom_object) :
     m_atom_object{ atom_object }, m_model_object{ nullptr }
 {
-    m_atomic_entry = atom_object->GetAtomicPotentialEntry();
+    m_atomic_entry = atom_object->GetLocalPotentialEntry();
 }
 
 PotentialEntryIterator::~PotentialEntryIterator()
@@ -50,7 +50,7 @@ double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element elemen
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != element) continue;
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         gaus_estimate_list.emplace_back(entry->GetGausEstimateMDPDE(par_id));
     }
     return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -341,7 +341,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
         if (is_veto_residue == true) continue;
         auto residue_id{ atom->GetResidueID() };
         auto chain_id{ atom->GetChainID() };
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         auto gaus_value{ entry->GetGausEstimateMDPDE(par_id) };
         values_map[chain_id][residue_id].at(id) = gaus_value;
     }
@@ -385,7 +385,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAmplitudeRatioToWidt
         if (atom->GetSpecialAtomFlag() == true) continue;
         if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         auto residue_id{ atom->GetResidueID() };
         auto amplitude_estimate{ entry->GetAmplitudeEstimateMDPDE() };
         auto width_estimate{ entry->GetWidthEstimateMDPDE() };
@@ -422,7 +422,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstima
         if (atom->GetSpot() != Spot::O) continue;
         if (atom->GetSpecialAtomFlag() == false)
         {
-            auto entry{ atom->GetAtomicPotentialEntry() };
+            auto entry{ atom->GetLocalPotentialEntry() };
             auto residue_id{ atom->GetResidueID() };
             auto amplitude_estimate{ entry->GetAmplitudeEstimateMDPDE() };
             amplitude_diff_to_carbonyl_oxygen_map[residue_id] = amplitude_estimate - reference_amplitude;
@@ -433,7 +433,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstima
     {
         if (atom->GetElement() != element) continue;
         auto residue_id{ atom->GetResidueID() };
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         auto normalized_amplitude{ entry->GetAmplitudeEstimateMDPDE() };
         if (amplitude_diff_to_carbonyl_oxygen_map.find(residue_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
         {
@@ -470,7 +470,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
     auto count{ 0 };
     for (auto & atom : atom_list)
     {
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         graph->SetPoint(count, atom->GetTemperature()/(8.0*Constants::pi_square), entry->GetWidthEstimateMDPDE());
         count++;
     }
@@ -494,7 +494,7 @@ PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         auto residue_id{ atom->GetResidueID() };
         auto chain_id{ atom->GetChainID() };
         if (residue_id < 0) continue;
@@ -571,7 +571,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != element) continue;
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         if (reverse == false)
         {
             graph->SetPoint(count, entry->GetAmplitudeEstimateMDPDE(), entry->GetWidthEstimateMDPDE());
@@ -605,10 +605,10 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     auto count{ 0 };
     for (auto atom1 : atom_list1)
     {
-        auto entry1{ atom1->GetAtomicPotentialEntry() };
+        auto entry1{ atom1->GetLocalPotentialEntry() };
         for (auto atom2 : atom_list2)
         {
-            auto entry2{ atom2->GetAtomicPotentialEntry() };
+            auto entry2{ atom2->GetLocalPotentialEntry() };
             if (atom1->GetResidueID() == atom2->GetResidueID() &&
                 atom1->GetChainID() == atom2->GetChainID())
             {
@@ -673,7 +673,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateInRangeAtomsToGausEs
     for (auto & atom : GetAtomObjectList(group_key, class_key))
     {
         auto in_range_atom_list{ KDTreeAlgorithm<AtomObject>::RangeSearch(kd_tree_root, atom, range) };
-        auto atom_entry{ atom->GetAtomicPotentialEntry() };
+        auto atom_entry{ atom->GetLocalPotentialEntry() };
         graph->SetPoint(count,
             static_cast<double>(in_range_atom_list.size()),
             atom_entry->GetGausEstimateMDPDE(par_id));
@@ -697,7 +697,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateCOMDistanceToGausEst
     {
         const auto & atom_pos{ atom->GetPositionRef() };
         auto distance{ ArrayStats<float>::ComputeNorm(atom_pos, center_of_mass_pos) };
-        auto atom_entry{ atom->GetAtomicPotentialEntry() };
+        auto atom_entry{ atom->GetLocalPotentialEntry() };
         graph->SetPoint(count,
             static_cast<double>(distance), atom_entry->GetGausEstimateMDPDE(par_id));
         count++;
@@ -834,7 +834,7 @@ std::unique_ptr<TGraph2DErrors> PotentialEntryIterator::CreateXYPositionTomograp
             {
                 continue;
             }
-            auto entry_iter{ atom->GetAtomicPotentialEntry() };
+            auto entry_iter{ atom->GetLocalPotentialEntry() };
             graph->SetPoint(count,
                 position.at(0), position.at(1),
                 entry_iter->GetGausEstimatePosterior(class_key, par_id));
@@ -876,7 +876,7 @@ PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2DMap(
             graph_map[current_id] = ROOTHelper::CreateGraph2DErrors();
             count_map[current_id] = 0;
         }
-        auto entry{ atom->GetAtomicPotentialEntry() };
+        auto entry{ atom->GetLocalPotentialEntry() };
         graph_map[current_id]->SetPoint(
             count_map[current_id],
             position.at(0) - com_pos.at(0),
