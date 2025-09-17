@@ -13,7 +13,7 @@ class SQLiteWrapper;
 class ModelObject;
 class AtomObject;
 class BondObject;
-class AtomicPotentialEntry;
+class LocalPotentialEntry;
 class GroupPotentialEntry;
 
 class ModelObjectDAO : public DataObjectDAOBase
@@ -48,10 +48,10 @@ private:
     void SaveAtomGroupPotentialEntryList(const GroupPotentialEntry * group_entry, const std::string & table_name);
     void SaveBondGroupPotentialEntryList(const GroupPotentialEntry * group_entry, const std::string & table_name);
 
-    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> LoadAtomLocalPotentialEntryMap(const std::string & table_name);
-    std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> LoadBondLocalPotentialEntryMap(const std::string & table_name);
-    void LoadAtomLocalPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map);
-    void LoadBondLocalPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> & entry_map);
+    std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> LoadAtomLocalPotentialEntryMap(const std::string & table_name);
+    std::map<std::pair<int, int>, std::unique_ptr<LocalPotentialEntry>> LoadBondLocalPotentialEntryMap(const std::string & table_name);
+    void LoadAtomLocalPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> & entry_map);
+    void LoadBondLocalPotentialEntrySubList(const std::string & table_name, const std::string & class_key, std::map<std::pair<int, int>, std::unique_ptr<LocalPotentialEntry>> & entry_map);
     void LoadAtomGroupPotentialEntryList(ModelObject * model_obj, const std::string & class_key, const std::string & table_name);
     void LoadBondGroupPotentialEntryList(ModelObject * model_obj, const std::string & class_key, const std::string & table_name);
 

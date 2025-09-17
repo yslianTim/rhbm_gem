@@ -7,7 +7,7 @@
 
 class DataObjectBase;
 
-class AtomicPotentialEntry
+class LocalPotentialEntry
 {
     std::vector<std::tuple<float, float>> m_distance_and_map_value_list;
     std::tuple<double, double> m_gaus_estimate_ols;
@@ -18,8 +18,8 @@ class AtomicPotentialEntry
     std::unordered_map<std::string, double> m_statistical_distance_map;
 
 public:
-    AtomicPotentialEntry(void);
-    ~AtomicPotentialEntry();
+    LocalPotentialEntry(void);
+    ~LocalPotentialEntry();
 
     void AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list);
     void ClearDistanceAndMapValueList(void);

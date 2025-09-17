@@ -6,7 +6,7 @@
 #include "FilePathHelper.hpp"
 #include "ScopeTimer.hpp"
 #include "ArrayStats.hpp"
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "AtomicInfoHelper.hpp"

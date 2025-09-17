@@ -1,71 +1,71 @@
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "Constants.hpp"
 #include "Logger.hpp"
 
 #include <cmath>
 
-AtomicPotentialEntry::AtomicPotentialEntry(void)
+LocalPotentialEntry::LocalPotentialEntry(void)
 {
 
 }
 
-AtomicPotentialEntry::~AtomicPotentialEntry()
+LocalPotentialEntry::~LocalPotentialEntry()
 {
 
 }
 
-void AtomicPotentialEntry::AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list)
+void LocalPotentialEntry::AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list)
 {
     m_distance_and_map_value_list = std::move(list);
 }
 
-void AtomicPotentialEntry::ClearDistanceAndMapValueList(void)
+void LocalPotentialEntry::ClearDistanceAndMapValueList(void)
 {
     m_distance_and_map_value_list.clear();
     m_distance_and_map_value_list.shrink_to_fit();
 }
 
-void AtomicPotentialEntry::AddGausEstimateOLS(double v0, double v1)
+void LocalPotentialEntry::AddGausEstimateOLS(double v0, double v1)
 {
     m_gaus_estimate_ols = std::make_tuple(v0, v1);
 }
 
-void AtomicPotentialEntry::AddGausEstimateMDPDE(double v0, double v1)
+void LocalPotentialEntry::AddGausEstimateMDPDE(double v0, double v1)
 {
     m_gaus_estimate_mdpde = std::make_tuple(v0, v1);
 }
 
-void AtomicPotentialEntry::AddGausEstimatePosterior(const std::string & key, double v0, double v1)
+void LocalPotentialEntry::AddGausEstimatePosterior(const std::string & key, double v0, double v1)
 {
     m_gaus_estimate_posterior_map[key] = std::make_tuple(v0, v1);
 }
 
-void AtomicPotentialEntry::AddGausVariancePosterior(const std::string & key, double v0, double v1)
+void LocalPotentialEntry::AddGausVariancePosterior(const std::string & key, double v0, double v1)
 {
     m_gaus_variance_posterior_map[key] = std::make_tuple(v0, v1);
 }
 
-void AtomicPotentialEntry::AddOutlierTag(const std::string & key, bool value)
+void LocalPotentialEntry::AddOutlierTag(const std::string & key, bool value)
 {
     m_outlier_tag_map[key] = value;
 }
 
-void AtomicPotentialEntry::AddStatisticalDistance(const std::string & key, double value)
+void LocalPotentialEntry::AddStatisticalDistance(const std::string & key, double value)
 {
     m_statistical_distance_map[key] = value;
 }
 
-int AtomicPotentialEntry::GetDistanceAndMapValueListSize(void) const
+int LocalPotentialEntry::GetDistanceAndMapValueListSize(void) const
 {
     return static_cast<int>(m_distance_and_map_value_list.size());
 }
 
-const std::vector<std::tuple<float, float>> & AtomicPotentialEntry::GetDistanceAndMapValueList(void) const
+const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList(void) const
 {
     return m_distance_and_map_value_list;
 }
 
-double AtomicPotentialEntry::GetGausEstimateOLS(int par_id) const
+double LocalPotentialEntry::GetGausEstimateOLS(int par_id) const
 {
     switch (par_id)
     {
@@ -78,22 +78,22 @@ double AtomicPotentialEntry::GetGausEstimateOLS(int par_id) const
     }
 }
 
-double AtomicPotentialEntry::GetAmplitudeEstimateOLS(void) const
+double LocalPotentialEntry::GetAmplitudeEstimateOLS(void) const
 {
     return std::get<0>(m_gaus_estimate_ols);
 }
 
-double AtomicPotentialEntry::GetWidthEstimateOLS(void) const
+double LocalPotentialEntry::GetWidthEstimateOLS(void) const
 {
     return std::get<1>(m_gaus_estimate_ols);
 }
 
-double AtomicPotentialEntry::GetIntensityEstimateOLS(void) const
+double LocalPotentialEntry::GetIntensityEstimateOLS(void) const
 {
     return CalculateIntensityEstimate(GetAmplitudeEstimateOLS(), GetWidthEstimateOLS());
 }
 
-double AtomicPotentialEntry::GetGausEstimateMDPDE(int par_id) const
+double LocalPotentialEntry::GetGausEstimateMDPDE(int par_id) const
 {
     switch (par_id)
     {
@@ -106,22 +106,22 @@ double AtomicPotentialEntry::GetGausEstimateMDPDE(int par_id) const
     }
 }
 
-double AtomicPotentialEntry::GetAmplitudeEstimateMDPDE(void) const
+double LocalPotentialEntry::GetAmplitudeEstimateMDPDE(void) const
 {
     return std::get<0>(m_gaus_estimate_mdpde);
 }
 
-double AtomicPotentialEntry::GetWidthEstimateMDPDE(void) const
+double LocalPotentialEntry::GetWidthEstimateMDPDE(void) const
 {
     return std::get<1>(m_gaus_estimate_mdpde);
 }
 
-double AtomicPotentialEntry::GetIntensityEstimateMDPDE(void) const
+double LocalPotentialEntry::GetIntensityEstimateMDPDE(void) const
 {
     return CalculateIntensityEstimate(GetAmplitudeEstimateMDPDE(), GetWidthEstimateMDPDE());
 }
 
-double AtomicPotentialEntry::GetGausEstimatePosterior(const std::string & key, int par_id) const
+double LocalPotentialEntry::GetGausEstimatePosterior(const std::string & key, int par_id) const
 {
     switch (par_id)
     {
@@ -134,23 +134,23 @@ double AtomicPotentialEntry::GetGausEstimatePosterior(const std::string & key, i
     }
 }
 
-double AtomicPotentialEntry::GetAmplitudeEstimatePosterior(const std::string & key) const
+double LocalPotentialEntry::GetAmplitudeEstimatePosterior(const std::string & key) const
 {
     return std::get<0>(m_gaus_estimate_posterior_map.at(key));
 }
 
-double AtomicPotentialEntry::GetWidthEstimatePosterior(const std::string & key) const
+double LocalPotentialEntry::GetWidthEstimatePosterior(const std::string & key) const
 {
     return std::get<1>(m_gaus_estimate_posterior_map.at(key));
 }
 
-double AtomicPotentialEntry::GetIntensityEstimatePosterior(const std::string & key) const
+double LocalPotentialEntry::GetIntensityEstimatePosterior(const std::string & key) const
 {
     return CalculateIntensityEstimate(
         GetAmplitudeEstimatePosterior(key), GetWidthEstimatePosterior(key));
 }
 
-double AtomicPotentialEntry::GetGausVariancePosterior(const std::string & key, int par_id) const
+double LocalPotentialEntry::GetGausVariancePosterior(const std::string & key, int par_id) const
 {
     switch (par_id)
     {
@@ -163,40 +163,40 @@ double AtomicPotentialEntry::GetGausVariancePosterior(const std::string & key, i
     }
 }
 
-double AtomicPotentialEntry::GetAmplitudeVariancePosterior(const std::string & key) const
+double LocalPotentialEntry::GetAmplitudeVariancePosterior(const std::string & key) const
 {
     return std::get<0>(m_gaus_variance_posterior_map.at(key));
 }
 
-double AtomicPotentialEntry::GetWidthVariancePosterior(const std::string & key) const
+double LocalPotentialEntry::GetWidthVariancePosterior(const std::string & key) const
 {
     return std::get<1>(m_gaus_variance_posterior_map.at(key));
 }
 
-double AtomicPotentialEntry::GetIntensityVariancePosterior(const std::string & key) const
+double LocalPotentialEntry::GetIntensityVariancePosterior(const std::string & key) const
 {
     return CalculateIntensityVariance(
         GetAmplitudeEstimatePosterior(key), GetAmplitudeVariancePosterior(key),
         GetWidthEstimatePosterior(key), GetWidthVariancePosterior(key));
 }
 
-bool AtomicPotentialEntry::GetOutlierTag(const std::string & key) const
+bool LocalPotentialEntry::GetOutlierTag(const std::string & key) const
 {
     return m_outlier_tag_map.at(key);
 }
 
-double AtomicPotentialEntry::GetStatisticalDistance(const std::string & key) const
+double LocalPotentialEntry::GetStatisticalDistance(const std::string & key) const
 {
     return m_statistical_distance_map.at(key);
 }
 
-double AtomicPotentialEntry::CalculateIntensityEstimate(double amplitude, double width) const
+double LocalPotentialEntry::CalculateIntensityEstimate(double amplitude, double width) const
 {
     if (width == 0.0) return 0.0;
     return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
 }
 
-double AtomicPotentialEntry::CalculateIntensityVariance(
+double LocalPotentialEntry::CalculateIntensityVariance(
     double amplitude, double sigma_amplitude, double width, double sigma_width) const
 {
     return std::sqrt(

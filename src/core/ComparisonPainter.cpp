@@ -3,7 +3,7 @@
 #include "AtomObject.hpp"
 #include "DataObjectBase.hpp"
 #include "PotentialEntryIterator.hpp"
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "FilePathHelper.hpp"
 #include "ArrayStats.hpp"
 #include "AtomClassifier.hpp"

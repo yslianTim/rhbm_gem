@@ -2,7 +2,7 @@
 #include "AtomObject.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "DataObjectVisitorBase.hpp"
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
 #include "Logger.hpp"
@@ -121,7 +121,7 @@ AtomKey BondObject::GetAtomKey2(void) const
     return m_atom_object_2->GetAtomKey();
 }
 
-void BondObject::AddLocalPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry)
+void BondObject::AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
 {
     m_local_potential_entry = std::move(entry);
 }

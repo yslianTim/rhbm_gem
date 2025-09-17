@@ -11,7 +11,7 @@
 
 class AtomObject;
 class ModelObject;
-class AtomicPotentialEntry;
+class LocalPotentialEntry;
 
 #ifdef HAVE_ROOT
 class TH1D;
@@ -24,7 +24,7 @@ class PotentialEntryIterator
 {
     AtomObject * m_atom_object;
     ModelObject * m_model_object;
-    AtomicPotentialEntry * m_atomic_entry;
+    LocalPotentialEntry * m_local_entry;
 
 public:
     PotentialEntryIterator(ModelObject * model_object);

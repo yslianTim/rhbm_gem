@@ -8,7 +8,7 @@
 #include "HRLModelHelper.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "AtomClassifier.hpp"
@@ -262,12 +262,12 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
     m_model_object->Update();
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
-        auto local_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        auto local_potential_entry{ std::make_unique<LocalPotentialEntry>() };
         atom->AddLocalPotentialEntry(std::move(local_potential_entry));
     }
     for (auto & bond : m_model_object->GetSelectedBondList())
     {
-        auto local_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        auto local_potential_entry{ std::make_unique<LocalPotentialEntry>() };
         bond->AddLocalPotentialEntry(std::move(local_potential_entry));
     }
     Logger::Log(LogLevel::Info,

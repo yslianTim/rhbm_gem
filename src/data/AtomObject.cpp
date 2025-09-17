@@ -1,7 +1,7 @@
 #include "AtomObject.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "DataObjectVisitorBase.hpp"
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
 #include "Logger.hpp"
@@ -130,7 +130,7 @@ std::string AtomObject::GetInfo(void) const
            std::to_string(m_position.at(2)) + ")";
 }
 
-void AtomObject::AddLocalPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry)
+void AtomObject::AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
 {
     m_local_potential_entry = std::move(entry);
 }

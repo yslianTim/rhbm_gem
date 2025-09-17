@@ -6,7 +6,7 @@
 #include "GlobalEnumClass.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"
 #include "ComponentKeySystem.hpp"
 #include "KDTreeAlgorithm.hpp"

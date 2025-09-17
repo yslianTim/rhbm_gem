@@ -1,7 +1,7 @@
 #include "PotentialEntryIterator.hpp"
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "ROOTHelper.hpp"
@@ -24,14 +24,14 @@
 #endif
 
 PotentialEntryIterator::PotentialEntryIterator(ModelObject * model_object) :
-    m_atom_object{ nullptr }, m_model_object{ model_object }, m_atomic_entry{ nullptr }
+    m_atom_object{ nullptr }, m_model_object{ model_object }, m_local_entry{ nullptr }
 {
 }
 
 PotentialEntryIterator::PotentialEntryIterator(AtomObject * atom_object) :
     m_atom_object{ atom_object }, m_model_object{ nullptr }
 {
-    m_atomic_entry = atom_object->GetLocalPotentialEntry();
+    m_local_entry = atom_object->GetLocalPotentialEntry();
 }
 
 PotentialEntryIterator::~PotentialEntryIterator()
@@ -62,7 +62,7 @@ bool PotentialEntryIterator::IsOutlierAtom(const std::string & class_key) const
     {
         throw std::runtime_error("Atomic entry is not available.");
     }
-    return m_atomic_entry->GetOutlierTag(class_key);
+    return m_local_entry->GetOutlierTag(class_key);
 }
 
 bool PotentialEntryIterator::IsAvailableGroupKey(
@@ -138,7 +138,7 @@ const std::vector<std::tuple<float, float>> & PotentialEntryIterator::GetDistanc
     {
         throw std::runtime_error("Atomic entry is not available.");
     }
-    return m_atomic_entry->GetDistanceAndMapValueList();
+    return m_local_entry->GetDistanceAndMapValueList();
 }
 
 std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceAndMapValueList(
@@ -151,7 +151,7 @@ std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceA
     
     auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
     std::unordered_map<int, std::vector<float>> bin_map;
-    for (auto & [distance, map_value] : m_atomic_entry->GetDistanceAndMapValueList())
+    for (auto & [distance, map_value] : m_local_entry->GetDistanceAndMapValueList())
     {
         auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
         bin_map[bin_index].emplace_back(map_value);
@@ -175,8 +175,8 @@ std::tuple<float, float> PotentialEntryIterator::GetDistanceRange(double margin_
         throw std::runtime_error("Atomic entry is not available.");
     }
     std::vector<float> distance_array;
-    distance_array.reserve(static_cast<size_t>(m_atomic_entry->GetDistanceAndMapValueListSize()));
-    for (auto & [distance, map_value] : m_atomic_entry->GetDistanceAndMapValueList())
+    distance_array.reserve(static_cast<size_t>(m_local_entry->GetDistanceAndMapValueListSize()));
+    for (auto & [distance, map_value] : m_local_entry->GetDistanceAndMapValueList())
     {
         distance_array.emplace_back(distance);
     }
@@ -190,8 +190,8 @@ std::tuple<float, float> PotentialEntryIterator::GetMapValueRange(double margin_
         throw std::runtime_error("Atomic entry is not available.");
     }
     std::vector<float> map_value_array;
-    map_value_array.reserve(static_cast<size_t>(m_atomic_entry->GetDistanceAndMapValueListSize()));
-    for (auto & [distance, map_value] : m_atomic_entry->GetDistanceAndMapValueList())
+    map_value_array.reserve(static_cast<size_t>(m_local_entry->GetDistanceAndMapValueListSize()));
+    for (auto & [distance, map_value] : m_local_entry->GetDistanceAndMapValueList())
     {
         map_value_array.emplace_back(map_value);
     }
@@ -204,7 +204,7 @@ double PotentialEntryIterator::GetAmplitudeEstimateMDPDE(void) const
     {
         return 0.0;
     }
-    return m_atomic_entry->GetAmplitudeEstimateMDPDE();
+    return m_local_entry->GetAmplitudeEstimateMDPDE();
 }
 
 double PotentialEntryIterator::GetWidthEstimateMDPDE(void) const
@@ -213,7 +213,7 @@ double PotentialEntryIterator::GetWidthEstimateMDPDE(void) const
     {
         return 0.0;
     }
-    return m_atomic_entry->GetWidthEstimateMDPDE();
+    return m_local_entry->GetWidthEstimateMDPDE();
 }
 
 bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
@@ -228,7 +228,7 @@ bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
 
 bool PotentialEntryIterator::IsAtomicEntryAvailable(void) const
 {
-    if (m_atomic_entry == nullptr)
+    if (m_local_entry == nullptr)
     {
         Logger::Log(LogLevel::Error, "Atomic entry is not available.");
         return false;
@@ -632,7 +632,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateDistanceToMapValueGr
     auto graph{ ROOTHelper::CreateGraphErrors() };
 
     auto count{ 0 };
-    for (auto & [distance, map_value] : m_atomic_entry->GetDistanceAndMapValueList())
+    for (auto & [distance, map_value] : m_local_entry->GetDistanceAndMapValueList())
     {
         graph->SetPoint(count, distance, map_value);
         count++;

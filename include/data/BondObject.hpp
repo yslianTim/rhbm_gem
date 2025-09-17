@@ -10,7 +10,7 @@
 #include "BondKeySystem.hpp"
 
 class AtomObject;
-class AtomicPotentialEntry;
+class LocalPotentialEntry;
 
 class BondObject : public DataObjectBase
 {
@@ -23,7 +23,7 @@ class BondObject : public DataObjectBase
     AtomObject * m_atom_object_1;
     AtomObject * m_atom_object_2;
     std::array<float, 3> m_position, m_bond_vector;
-    std::unique_ptr<AtomicPotentialEntry> m_local_potential_entry;
+    std::unique_ptr<LocalPotentialEntry> m_local_potential_entry;
 
 public:
     BondObject(void);
@@ -41,7 +41,7 @@ public:
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialBondFlag(bool value) { m_is_special_bond = value; }
     void SetBondKey(BondKey value) { m_bond_key = value; }
-    void AddLocalPotentialEntry(std::unique_ptr<AtomicPotentialEntry> entry);
+    void AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
 
     std::string GetInfo(void) const;
     int GetAtomSerialID1(void) const { return m_atom_serial_id_1; }
@@ -56,6 +56,6 @@ public:
     std::array<float, 3> GetBondVector(void) const { return m_bond_vector; }
     AtomObject * GetAtomObject1(void) const { return m_atom_object_1; }
     AtomObject * GetAtomObject2(void) const { return m_atom_object_2; }
-    AtomicPotentialEntry * GetLocalPotentialEntry(void) const { return m_local_potential_entry.get(); }
+    LocalPotentialEntry * GetLocalPotentialEntry(void) const { return m_local_potential_entry.get(); }
 
 };

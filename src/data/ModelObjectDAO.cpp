@@ -5,7 +5,7 @@
 #include "AtomicInfoHelper.hpp"
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
-#include "AtomicPotentialEntry.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"
 #include "ComponentKeySystem.hpp"
@@ -822,7 +822,7 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     auto atom_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
 
     auto local_potential_entry_table_name{ "atom_local_potential_entry_in_" + sanitized_key_tag };
-    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> local_potential_entry_map;
+    std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> local_potential_entry_map;
     if (TableExists(local_potential_entry_table_name))
     {
         local_potential_entry_map = LoadAtomLocalPotentialEntryMap(local_potential_entry_table_name);
@@ -893,7 +893,7 @@ std::vector<std::unique_ptr<BondObject>> ModelObjectDAO::LoadBondObjectList(
     auto bond_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
 
     auto local_potential_entry_table_name{ "bond_local_potential_entry_in_" + sanitized_key_tag };
-    std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> local_potential_entry_map;
+    std::map<std::pair<int, int>, std::unique_ptr<LocalPotentialEntry>> local_potential_entry_map;
     if (TableExists(local_potential_entry_table_name))
     {
         local_potential_entry_map = LoadBondLocalPotentialEntryMap(local_potential_entry_table_name);
@@ -1029,14 +1029,14 @@ void ModelObjectDAO::LoadComponentBondEntryList(
     }
 }
 
-std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>>
+std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>>
 ModelObjectDAO::LoadAtomLocalPotentialEntryMap(const std::string & table_name)
 {
     if (TableExists(table_name) == false) return {};
     auto count_row_vec{ m_database->Query<int>(FormatSQL(SELECT_ROW_COUNT_SQL, table_name)) };
     auto entry_count{ (count_row_vec.empty()) ? 0 : std::get<0>(count_row_vec.front()) };
     auto serial_id{ 0 };
-    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> local_potential_entry_map;
+    std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> local_potential_entry_map;
     local_potential_entry_map.reserve(static_cast<size_t>(entry_count));
     auto iter{
         m_database->IterateQuery<
@@ -1045,7 +1045,7 @@ ModelObjectDAO::LoadAtomLocalPotentialEntryMap(const std::string & table_name)
     std::tuple<int, int, std::vector<std::tuple<float, float>>, double, double, double, double> row;
     while (iter.Next(row))
     {
-        auto local_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        auto local_potential_entry{ std::make_unique<LocalPotentialEntry>() };
         serial_id = std::get<0>(row);
         local_potential_entry->AddDistanceAndMapValueList(std::move(std::get<2>(row)));
         local_potential_entry->AddGausEstimateOLS(std::get<3>(row), std::get<4>(row));
@@ -1064,7 +1064,7 @@ ModelObjectDAO::LoadAtomLocalPotentialEntryMap(const std::string & table_name)
 
 void ModelObjectDAO::LoadAtomLocalPotentialEntrySubList(
     const std::string & table_name, const std::string & class_key,
-    std::unordered_map<int, std::unique_ptr<AtomicPotentialEntry>> & entry_map)
+    std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>> & entry_map)
 {
     if (TableExists(table_name) == false) return;
     auto serial_id{ 0 };
@@ -1083,13 +1083,13 @@ void ModelObjectDAO::LoadAtomLocalPotentialEntrySubList(
     }
 }
 
-std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>>
+std::map<std::pair<int, int>, std::unique_ptr<LocalPotentialEntry>>
 ModelObjectDAO::LoadBondLocalPotentialEntryMap(const std::string & table_name)
 {
     if (TableExists(table_name) == false) return {};
     auto count_row_vec{ m_database->Query<int>(FormatSQL(SELECT_ROW_COUNT_SQL, table_name)) };
     auto atom_serial_id_pair{ std::make_pair(0, 0) };
-    std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> local_potential_entry_map;
+    std::map<std::pair<int, int>, std::unique_ptr<LocalPotentialEntry>> local_potential_entry_map;
     auto iter{
         m_database->IterateQuery<
             int, int, int,
@@ -1099,7 +1099,7 @@ ModelObjectDAO::LoadBondLocalPotentialEntryMap(const std::string & table_name)
                std::vector<std::tuple<float, float>>, double, double, double, double> row;
     while (iter.Next(row))
     {
-        auto local_potential_entry{ std::make_unique<AtomicPotentialEntry>() };
+        auto local_potential_entry{ std::make_unique<LocalPotentialEntry>() };
         atom_serial_id_pair.first  = std::get<0>(row);
         atom_serial_id_pair.second = std::get<1>(row);
         local_potential_entry->AddDistanceAndMapValueList(std::move(std::get<3>(row)));
@@ -1119,7 +1119,7 @@ ModelObjectDAO::LoadBondLocalPotentialEntryMap(const std::string & table_name)
 
 void ModelObjectDAO::LoadBondLocalPotentialEntrySubList(
     const std::string & table_name, const std::string & class_key,
-    std::map<std::pair<int, int>, std::unique_ptr<AtomicPotentialEntry>> & entry_map)
+    std::map<std::pair<int, int>, std::unique_ptr<LocalPotentialEntry>> & entry_map)
 {
     if (TableExists(table_name) == false) return;
     auto atom_serial_id_pair{ std::make_pair(0, 0) };
