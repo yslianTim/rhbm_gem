@@ -1008,6 +1008,9 @@ void ModelObjectDAO::LoadComponentBondEntryList(
     while (iter.Next(row))
     {
         auto component_key{ std::get<0>(row) };
+        auto bond_key{ std::get<1>(row) };
+        auto atom_id_1{ std::get<2>(row) };
+        auto atom_id_2{ std::get<3>(row) };
         if (model_obj->GetChemicalComponentEntryMap().find(component_key)
             == model_obj->GetChemicalComponentEntryMap().end())
         {
@@ -1015,12 +1018,14 @@ void ModelObjectDAO::LoadComponentBondEntryList(
         }
         auto & component_entry{ model_obj->GetChemicalComponentEntryMap().at(component_key) };
         ComponentBondEntry bond_entry;
-        bond_entry.atom_id_pair.first = { std::get<2>(row) };
-        bond_entry.atom_id_pair.second = { std::get<3>(row) };
+        bond_entry.atom_id_pair.first = atom_id_1;
+        bond_entry.atom_id_pair.second = atom_id_2;
         bond_entry.bond_order = static_cast<char>(std::get<4>(row)[0]);
         bond_entry.aromatic_atom_flag = static_cast<bool>(std::get<5>(row));
         bond_entry.chiral_config = static_cast<char>(std::get<6>(row)[0]);
-        component_entry->AddComponentBondEntry(std::get<1>(row), bond_entry);
+        component_entry->AddComponentBondEntry(bond_key, bond_entry);
+
+        model_obj->GetBondKeySystemPtr()->RegisterBond(atom_id_1, atom_id_2, bond_key);
     }
 }
 
