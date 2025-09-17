@@ -10,6 +10,7 @@
 
 class ModelObject;
 class AtomClassifier;
+class BondClassifier;
 
 #ifdef HAVE_ROOT
 class TPad;
@@ -23,6 +24,7 @@ class ModelPainter : public PainterBase
     std::vector<ModelObject *> m_model_object_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
+    std::unique_ptr<BondClassifier> m_bond_classifier;
 
 public:
     ModelPainter(void);
@@ -37,6 +39,7 @@ private:
     void PaintGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);
+    void PaintBondMapValueMainChain(ModelObject * model_object, const std::string & name);
     void PaintGroupWidthScatterPlot(ModelObject * model_object, const std::string & name, int par_id=0, bool draw_box_plot=false);
     void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
     void PaintAtomGausToXYPosition(ModelObject * model_object, const std::string & name);

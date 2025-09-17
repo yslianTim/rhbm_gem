@@ -10,6 +10,7 @@
 #include "GroupPotentialEntry.hpp"
 
 class AtomObject;
+class BondObject;
 class ModelObject;
 class LocalPotentialEntry;
 
@@ -23,21 +24,30 @@ class TF1;
 class PotentialEntryIterator
 {
     AtomObject * m_atom_object;
+    BondObject * m_bond_object;
     ModelObject * m_model_object;
-    LocalPotentialEntry * m_local_entry;
+    LocalPotentialEntry * m_atom_local_entry;
+    LocalPotentialEntry * m_bond_local_entry;
 
 public:
     PotentialEntryIterator(ModelObject * model_object);
     PotentialEntryIterator(AtomObject * atom_object);
+    PotentialEntryIterator(BondObject * bond_object);
     ~PotentialEntryIterator();
     double GetGausEstimateMinimum(int par_id, Element element) const;
     bool IsOutlierAtom(const std::string & class_key) const;
-    bool IsAvailableGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
+    bool IsOutlierBond(const std::string & class_key) const;
+    bool IsAvailableAtomGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
+    bool IsAvailableBondGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
     size_t GetResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;
-    double GetGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const;
+    const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const;
     std::unordered_map<int, AtomObject *> GetAtomObjectMap(GroupKey group_key, const std::string & class_key) const;
+    //std::unordered_map<int, BondObject *> GetBondObjectMap(GroupKey group_key, const std::string & class_key) const;
 
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
     std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(int bin_size=15, double x_min=0.0, double x_max=1.5) const;
@@ -66,14 +76,18 @@ public:
     std::unique_ptr<TGraphErrors> CreateXYPositionTomographyGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, double normalized_z_pos=0.5, double z_ratio_window=0.1);
     std::unique_ptr<TGraph2DErrors> CreateXYPositionTomographyToGausEstimateGraph2D(std::vector<GroupKey> & group_key_list, const std::string & class_key, double normalized_z_pos=0.5, double z_ratio_window=0.1, int par_id=0);
     std::unordered_map<size_t, std::unique_ptr<TGraph2DErrors>> CreateXYPositionTomographyToGausEstimateGraph2DMap(double normalized_z_pos=0.5, double z_ratio_window=0.1, int par_id=0, bool com_center=false);
-    std::unique_ptr<TF1> CreateGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
+    std::unique_ptr<TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
+    std::unique_ptr<TF1> CreateBondGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
     #endif
 
 private:
     bool IsAtomObjectAvailable(void) const;
-    bool IsAtomicEntryAvailable(void) const;
+    bool IsBondObjectAvailable(void) const;
+    bool IsAtomLocalEntryAvailable(void) const;
+    bool IsBondLocalEntryAvailable(void) const;
     bool IsModelObjectAvailable(void) const;
-    bool CheckGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
+    bool CheckAtomGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
+    bool CheckBondGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
     Residue GetResidueFromGroupKey(GroupKey group_key, const std::string & class_key) const;
 
 };

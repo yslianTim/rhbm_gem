@@ -185,7 +185,7 @@ void DemoPainter::PaintAtomMapValueExample(
     std::vector<double> y_array;
     AtomClassifier classifier;
     auto group_key{ classifier.GetMainChainComponentAtomClassGroupKey(0, Residue::ALA) };
-    if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) return;
+    if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) return;
     for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
     {
         auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
@@ -196,9 +196,9 @@ void DemoPainter::PaintAtomMapValueExample(
         y_array.emplace_back(std::get<0>(map_value_range));
         y_array.emplace_back(std::get<1>(map_value_range));
     }
-    gaus_function = entry_iter->CreateGroupGausFunctionPrior(group_key, class_key);
-    amplitude_prior = entry_iter->GetGausEstimatePrior(group_key, class_key, 0);
-    width_prior = entry_iter->GetGausEstimatePrior(group_key, class_key, 1);
+    gaus_function = entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key);
+    amplitude_prior = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0);
+    width_prior = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1);
 
 
     auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -606,8 +606,8 @@ void DemoPainter::PaintGroupGausToFSC(
         for (auto model : model_list)
         {
             auto entry_iter{ std::make_unique<PotentialEntryIterator>(model) };
-            auto width_value{ entry_iter->GetGausEstimatePrior(group_key, AtomicInfoHelper::GetSimpleAtomClassKey(), 1) };
-            auto width_error{ entry_iter->GetGausVariancePrior(group_key, AtomicInfoHelper::GetSimpleAtomClassKey(), 1) };
+            auto width_value{ entry_iter->GetAtomGausEstimatePrior(group_key, AtomicInfoHelper::GetSimpleAtomClassKey(), 1) };
+            auto width_error{ entry_iter->GetAtomGausVariancePrior(group_key, AtomicInfoHelper::GetSimpleAtomClassKey(), 1) };
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
             graph[i]->SetPointError(count, 0.0, width_error);
             count++;
@@ -772,7 +772,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         for (auto residue : AtomicInfoHelper::GetStandardResidueList())
         {
             auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
-            if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
+            if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
             auto gaus_graph{ entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, class_key, 1) };
             for (int p = 0; p < gaus_graph->GetN(); p++)
             {
@@ -960,7 +960,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
             for (auto residue : AtomicInfoHelper::GetStandardResidueList())
             {
                 auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(element_id, residue) };
-                if (entry_iter->IsAvailableGroupKey(group_key, residue_class) == false) continue;
+                if (entry_iter->IsAvailableAtomGroupKey(group_key, residue_class) == false) continue;
                 auto graph{ (par_id == 0) ?
                     entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, residue_class, 1) :
                     entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 1) };

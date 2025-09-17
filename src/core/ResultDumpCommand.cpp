@@ -351,11 +351,11 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
                 auto atom_key{ static_cast<uint16_t>(spot) };
                 auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
                 auto atom_id{ model_object->GetAtomKeySystemPtr()->GetAtomId(atom_key) };
-                if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
+                if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
                 outfile << residue_name <<','
                         << atom_id <<','
-                        << entry_iter->GetGausEstimatePrior(group_key, class_key, 0) <<','
-                        << entry_iter->GetGausEstimatePrior(group_key, class_key, 1) <<'\n';
+                        << entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0) <<','
+                        << entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1) <<'\n';
             }
         }
 

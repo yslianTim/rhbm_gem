@@ -783,13 +783,13 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
     for (auto model_object : model_list)
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
-        if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
-        if (entry_iter->IsAvailableGroupKey(ref_group_key, class_key) == false) continue;
+        if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
+        if (entry_iter->IsAvailableAtomGroupKey(ref_group_key, class_key) == false) continue;
         auto x_value{ model_object->GetResolution() };
-        auto y_value{ entry_iter->GetGausEstimatePrior(group_key, class_key, par_id) };
-        auto y_error{ entry_iter->GetGausVariancePrior(group_key, class_key, par_id) };
-        auto ref_y_value{ entry_iter->GetGausEstimatePrior(ref_group_key, class_key, par_id) };
-        auto ref_y_error{ entry_iter->GetGausVariancePrior(ref_group_key, class_key, par_id) };
+        auto y_value{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, par_id) };
+        auto y_error{ entry_iter->GetAtomGausVariancePrior(group_key, class_key, par_id) };
+        auto ref_y_value{ entry_iter->GetAtomGausEstimatePrior(ref_group_key, class_key, par_id) };
+        auto ref_y_error{ entry_iter->GetAtomGausVariancePrior(ref_group_key, class_key, par_id) };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };
@@ -823,14 +823,14 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     {
         model_count++;
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
-        if (entry_iter->IsAvailableGroupKey(group_key, class_key) == false) continue;
-        if (entry_iter->IsAvailableGroupKey(ref_group_key, class_key) == false) continue;
-        auto x_value{ entry_iter->GetGausEstimatePrior(group_key, class_key, 1) };
-        auto y_value{ entry_iter->GetGausEstimatePrior(group_key, class_key, 0) };
-        auto x_error{ std::sqrt(entry_iter->GetGausVariancePrior(group_key, class_key, 1)) };
-        auto y_error{ std::sqrt(entry_iter->GetGausVariancePrior(group_key, class_key, 0)) };
-        auto ref_y_value{ entry_iter->GetGausEstimatePrior(ref_group_key, class_key, 0) };
-        auto ref_y_error{ std::sqrt(entry_iter->GetGausVariancePrior(ref_group_key, class_key, 0)) };
+        if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
+        if (entry_iter->IsAvailableAtomGroupKey(ref_group_key, class_key) == false) continue;
+        auto x_value{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1) };
+        auto y_value{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0) };
+        auto x_error{ std::sqrt(entry_iter->GetAtomGausVariancePrior(group_key, class_key, 1)) };
+        auto y_error{ std::sqrt(entry_iter->GetAtomGausVariancePrior(group_key, class_key, 0)) };
+        auto ref_y_value{ entry_iter->GetAtomGausEstimatePrior(ref_group_key, class_key, 0) };
+        auto ref_y_error{ std::sqrt(entry_iter->GetAtomGausVariancePrior(ref_group_key, class_key, 0)) };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };
@@ -862,8 +862,8 @@ void ComparisonPainter::BuildMapValueScatterGraph(
 {
     auto entry1_iter{ std::make_unique<PotentialEntryIterator>(model1) };
     auto entry2_iter{ std::make_unique<PotentialEntryIterator>(model2) };
-    if (entry1_iter->IsAvailableGroupKey(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) == false) return;
-    if (entry2_iter->IsAvailableGroupKey(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) == false) return;
+    if (entry1_iter->IsAvailableAtomGroupKey(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) == false) return;
+    if (entry2_iter->IsAvailableAtomGroupKey(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) == false) return;
     auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) };
     auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) };
     auto count{ 0 };

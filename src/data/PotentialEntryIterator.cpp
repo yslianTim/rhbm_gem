@@ -1,5 +1,6 @@
 #include "PotentialEntryIterator.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "ModelObject.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
@@ -11,10 +12,12 @@
 #include "GlobalEnumClass.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "AtomClassifier.hpp"
+#include "BondClassifier.hpp"
 #include "Logger.hpp"
 
 #include <sstream>
 #include <cmath>
+#include <map>
 
 #ifdef HAVE_ROOT
 #include <TGraphErrors.h>
@@ -24,14 +27,23 @@
 #endif
 
 PotentialEntryIterator::PotentialEntryIterator(ModelObject * model_object) :
-    m_atom_object{ nullptr }, m_model_object{ model_object }, m_local_entry{ nullptr }
+    m_atom_object{ nullptr }, m_bond_object{ nullptr }, m_model_object{ model_object },
+    m_atom_local_entry{ nullptr }, m_bond_local_entry{ nullptr }
 {
 }
 
 PotentialEntryIterator::PotentialEntryIterator(AtomObject * atom_object) :
-    m_atom_object{ atom_object }, m_model_object{ nullptr }
+    m_atom_object{ atom_object }, m_bond_object{ nullptr }, m_model_object{ nullptr },
+    m_bond_local_entry{ nullptr }
 {
-    m_local_entry = atom_object->GetLocalPotentialEntry();
+    m_atom_local_entry = atom_object->GetLocalPotentialEntry();
+}
+
+PotentialEntryIterator::PotentialEntryIterator(BondObject * bond_object) :
+    m_atom_object{ nullptr }, m_bond_object{ bond_object }, m_model_object{ nullptr },
+    m_atom_local_entry{ nullptr }
+{
+    m_bond_local_entry = bond_object->GetLocalPotentialEntry();
 }
 
 PotentialEntryIterator::~PotentialEntryIterator()
@@ -58,17 +70,32 @@ double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element elemen
 
 bool PotentialEntryIterator::IsOutlierAtom(const std::string & class_key) const
 {
-    if (IsAtomicEntryAvailable() == false)
+    if (IsAtomLocalEntryAvailable() == false)
     {
-        throw std::runtime_error("Atomic entry is not available.");
+        throw std::runtime_error("Atom local entry is not available.");
     }
-    return m_local_entry->GetOutlierTag(class_key);
+    return m_atom_local_entry->GetOutlierTag(class_key);
 }
 
-bool PotentialEntryIterator::IsAvailableGroupKey(
+bool PotentialEntryIterator::IsOutlierBond(const std::string & class_key) const
+{
+    if (IsBondLocalEntryAvailable() == false)
+    {
+        throw std::runtime_error("Bond local entry is not available.");
+    }
+    return m_bond_local_entry->GetOutlierTag(class_key);
+}
+
+bool PotentialEntryIterator::IsAvailableAtomGroupKey(
     GroupKey group_key, const std::string & class_key, bool varbose) const
 {
-    return CheckGroupKey(group_key, class_key, varbose);
+    return CheckAtomGroupKey(group_key, class_key, varbose);
+}
+
+bool PotentialEntryIterator::IsAvailableBondGroupKey(
+    GroupKey group_key, const std::string & class_key, bool varbose) const
+{
+    return CheckBondGroupKey(group_key, class_key, varbose);
 }
 
 size_t PotentialEntryIterator::GetResidueCount(
@@ -84,41 +111,71 @@ size_t PotentialEntryIterator::GetResidueCount(
     {
         group_key = classifier.GetMainChainStructureAtomClassGroupKey(0, structure, residue);
     }
-    if (IsAvailableGroupKey(group_key, class_key) == false)
+    if (IsAvailableAtomGroupKey(group_key, class_key) == false)
     {
         return 0;
     }
     return GetAtomObjectList(group_key, class_key).size();
 }
 
-double PotentialEntryIterator::GetGausEstimatePrior(
+double PotentialEntryIterator::GetAtomGausEstimatePrior(
     GroupKey group_key, const std::string & class_key, int par_id) const
 {
-    if (CheckGroupKey(group_key, class_key) == false)
+    if (CheckAtomGroupKey(group_key, class_key) == false)
     {
         throw std::runtime_error("Group key is not available.");
     }
     return m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id);
 }
 
-double PotentialEntryIterator::GetGausVariancePrior(
+double PotentialEntryIterator::GetBondGausEstimatePrior(
     GroupKey group_key, const std::string & class_key, int par_id) const
 {
-    if (CheckGroupKey(group_key, class_key) == false)
+    if (CheckBondGroupKey(group_key, class_key) == false)
+    {
+        throw std::runtime_error("Group key is not available.");
+    }
+    return m_model_object->GetBondGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id);
+}
+
+double PotentialEntryIterator::GetAtomGausVariancePrior(
+    GroupKey group_key, const std::string & class_key, int par_id) const
+{
+    if (CheckAtomGroupKey(group_key, class_key) == false)
     {
         throw std::runtime_error("Group key is not available.");
     }
     return m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id);
 }
 
-const std::vector<AtomObject *> & PotentialEntryIterator::GetAtomObjectList(
-    GroupKey group_key, const std::string & class_key) const
+double PotentialEntryIterator::GetBondGausVariancePrior(
+    GroupKey group_key, const std::string & class_key, int par_id) const
 {
-    if (CheckGroupKey(group_key, class_key) == false)
+    if (CheckBondGroupKey(group_key, class_key) == false)
     {
         throw std::runtime_error("Group key is not available.");
     }
+    return m_model_object->GetBondGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id);
+}
+
+const std::vector<AtomObject *> & PotentialEntryIterator::GetAtomObjectList(
+    GroupKey group_key, const std::string & class_key) const
+{
+    if (CheckAtomGroupKey(group_key, class_key) == false)
+    {
+        throw std::runtime_error("Atom group key is not available.");
+    }
     return m_model_object->GetAtomGroupPotentialEntry(class_key)->GetAtomObjectPtrList(group_key);
+}
+
+const std::vector<BondObject *> & PotentialEntryIterator::GetBondObjectList(
+    GroupKey group_key, const std::string & class_key) const
+{
+    if (CheckBondGroupKey(group_key, class_key) == false)
+    {
+        throw std::runtime_error("Bond group key is not available.");
+    }
+    return m_model_object->GetBondGroupPotentialEntry(class_key)->GetBondObjectPtrList(group_key);
 }
 
 std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
@@ -131,30 +188,59 @@ std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
     }
     return atom_object_map;
 }
+/*
+std::unordered_map<int, BondObject *> PotentialEntryIterator::GetBondObjectMap(
+    GroupKey group_key, const std::string & class_key) const
+{
+    std::unordered_map<int, BondObject *> bond_object_map;
+    for (auto & bond_object : GetBondObjectList(group_key, class_key))
+    {
+        bond_object_map[bond_object->GetSerialID()] = bond_object;
+    }
+    return bond_object_map;
+}*/
 
 const std::vector<std::tuple<float, float>> & PotentialEntryIterator::GetDistanceAndMapValueList(void) const
 {
-    if (IsAtomicEntryAvailable() == false)
+    if (IsAtomLocalEntryAvailable() == true)
     {
-        throw std::runtime_error("Atomic entry is not available.");
+        return m_atom_local_entry->GetDistanceAndMapValueList();
     }
-    return m_local_entry->GetDistanceAndMapValueList();
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        return m_bond_local_entry->GetDistanceAndMapValueList();
+    }
+    else
+    {
+        throw std::runtime_error("Local entry is not available.");
+    }
 }
 
 std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceAndMapValueList(
     int bin_size, double x_min, double x_max) const
 {
-    if (IsAtomicEntryAvailable() == false)
-    {
-        throw std::runtime_error("Atomic entry is not available.");
-    }
-    
     auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
-    std::unordered_map<int, std::vector<float>> bin_map;
-    for (auto & [distance, map_value] : m_local_entry->GetDistanceAndMapValueList())
+    std::map<int, std::vector<float>> bin_map;
+
+    if (IsAtomLocalEntryAvailable() == true)
     {
-        auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
-        bin_map[bin_index].emplace_back(map_value);
+        for (auto & [distance, map_value] : m_atom_local_entry->GetDistanceAndMapValueList())
+        {
+            auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
+            bin_map[bin_index].emplace_back(map_value);
+        }
+    }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        for (auto & [distance, map_value] : m_bond_local_entry->GetDistanceAndMapValueList())
+        {
+            auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
+            bin_map[bin_index].emplace_back(map_value);
+        }
+    }
+    else
+    {
+        throw std::runtime_error("Local entry is not available.");
     }
 
     std::vector<std::tuple<float, float>> binned_distance_and_map_value_list;
@@ -170,50 +256,80 @@ std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceA
 
 std::tuple<float, float> PotentialEntryIterator::GetDistanceRange(double margin_rate) const
 {
-    if (IsAtomicEntryAvailable() == false)
-    {
-        throw std::runtime_error("Atomic entry is not available.");
-    }
     std::vector<float> distance_array;
-    distance_array.reserve(static_cast<size_t>(m_local_entry->GetDistanceAndMapValueListSize()));
-    for (auto & [distance, map_value] : m_local_entry->GetDistanceAndMapValueList())
+    if (IsAtomLocalEntryAvailable() == true)
     {
-        distance_array.emplace_back(distance);
+        distance_array.reserve(static_cast<size_t>(m_atom_local_entry->GetDistanceAndMapValueListSize()));
+        for (auto & [distance, map_value] : m_atom_local_entry->GetDistanceAndMapValueList())
+        {
+            distance_array.emplace_back(distance);
+        }
+    }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        distance_array.reserve(static_cast<size_t>(m_bond_local_entry->GetDistanceAndMapValueListSize()));
+        for (auto & [distance, map_value] : m_bond_local_entry->GetDistanceAndMapValueList())
+        {
+            distance_array.emplace_back(distance);
+        }
+    }
+    else
+    {
+        throw std::runtime_error("Local entry is not available.");
     }
     return ArrayStats<float>::ComputeScalingRangeTuple(distance_array, static_cast<float>(margin_rate));
 }
 
 std::tuple<float, float> PotentialEntryIterator::GetMapValueRange(double margin_rate) const
 {
-    if (IsAtomicEntryAvailable() == false)
-    {
-        throw std::runtime_error("Atomic entry is not available.");
-    }
     std::vector<float> map_value_array;
-    map_value_array.reserve(static_cast<size_t>(m_local_entry->GetDistanceAndMapValueListSize()));
-    for (auto & [distance, map_value] : m_local_entry->GetDistanceAndMapValueList())
+    if (IsAtomLocalEntryAvailable() == true)
     {
-        map_value_array.emplace_back(map_value);
+        map_value_array.reserve(static_cast<size_t>(m_atom_local_entry->GetDistanceAndMapValueListSize()));
+        for (auto & [distance, map_value] : m_atom_local_entry->GetDistanceAndMapValueList())
+        {
+            map_value_array.emplace_back(map_value);
+        }
+    }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        map_value_array.reserve(static_cast<size_t>(m_bond_local_entry->GetDistanceAndMapValueListSize()));
+        for (auto & [distance, map_value] : m_bond_local_entry->GetDistanceAndMapValueList())
+        {
+            map_value_array.emplace_back(map_value);
+        }
+    }
+    else
+    {
+        throw std::runtime_error("Local entry is not available.");
     }
     return ArrayStats<float>::ComputeScalingRangeTuple(map_value_array, static_cast<float>(margin_rate));
 }
 
 double PotentialEntryIterator::GetAmplitudeEstimateMDPDE(void) const
 {
-    if (IsAtomicEntryAvailable() == false)
+    if (IsAtomLocalEntryAvailable() == true)
     {
-        return 0.0;
+        return m_atom_local_entry->GetAmplitudeEstimateMDPDE();
     }
-    return m_local_entry->GetAmplitudeEstimateMDPDE();
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        return m_bond_local_entry->GetAmplitudeEstimateMDPDE();
+    }
+    return 0.0;
 }
 
 double PotentialEntryIterator::GetWidthEstimateMDPDE(void) const
 {
-    if (IsAtomicEntryAvailable() == false)
+    if (IsAtomLocalEntryAvailable() == true)
     {
-        return 0.0;
+        return m_atom_local_entry->GetWidthEstimateMDPDE();
     }
-    return m_local_entry->GetWidthEstimateMDPDE();
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        return m_bond_local_entry->GetWidthEstimateMDPDE();
+    }
+    return 0.0;
 }
 
 bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
@@ -226,11 +342,31 @@ bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
     return true;
 }
 
-bool PotentialEntryIterator::IsAtomicEntryAvailable(void) const
+bool PotentialEntryIterator::IsBondObjectAvailable(void) const
 {
-    if (m_local_entry == nullptr)
+    if (m_bond_object == nullptr)
     {
-        Logger::Log(LogLevel::Error, "Atomic entry is not available.");
+        Logger::Log(LogLevel::Error, "Bond object is not available.");
+        return false;
+    }
+    return true;
+}
+
+bool PotentialEntryIterator::IsAtomLocalEntryAvailable(void) const
+{
+    if (m_atom_local_entry == nullptr)
+    {
+        Logger::Log(LogLevel::Error, "Atom local entry is not available.");
+        return false;
+    }
+    return true;
+}
+
+bool PotentialEntryIterator::IsBondLocalEntryAvailable(void) const
+{
+    if (m_bond_local_entry == nullptr)
+    {
+        Logger::Log(LogLevel::Error, "Bond local entry is not available.");
         return false;
     }
     return true;
@@ -246,7 +382,8 @@ bool PotentialEntryIterator::IsModelObjectAvailable(void) const
     return true;
 }
 
-bool PotentialEntryIterator::CheckGroupKey(GroupKey group_key, const std::string & class_key, bool verbose) const
+bool PotentialEntryIterator::CheckAtomGroupKey(
+    GroupKey group_key, const std::string & class_key, bool verbose) const
 {
     const auto & group_key_set{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGroupKeySet() };
     if (group_key_set.find(group_key) == group_key_set.end())
@@ -270,6 +407,34 @@ bool PotentialEntryIterator::CheckGroupKey(GroupKey group_key, const std::string
             {
                 oss <<"Atom class group key : "
                     << KeyPackerStructureAtomClass::GetKeyString(group_key)
+                    <<" not found." << std::endl;
+            }
+            Logger::Log(LogLevel::Error, oss.str());
+        }
+        return false;
+    }
+    return true;
+}
+
+bool PotentialEntryIterator::CheckBondGroupKey(
+    GroupKey group_key, const std::string & class_key, bool verbose) const
+{
+    const auto & group_key_set{ m_model_object->GetBondGroupPotentialEntry(class_key)->GetGroupKeySet() };
+    if (group_key_set.find(group_key) == group_key_set.end())
+    {
+        std::ostringstream oss;
+        if (verbose == true)
+        {
+            if (class_key == AtomicInfoHelper::GetSimpleBondClassKey())
+            {
+                oss <<"Bond class group key : "
+                    << KeyPackerSimpleBondClass::GetKeyString(group_key)
+                    <<" not found." << std::endl;
+            }
+            else if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
+            {
+                oss <<"Bond class group key : "
+                    << KeyPackerComponentBondClass::GetKeyString(group_key)
                     <<" not found." << std::endl;
             }
             Logger::Log(LogLevel::Error, oss.str());
@@ -459,7 +624,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
     {
         return nullptr;
     }
-    if (IsAvailableGroupKey(group_key, class_key) == false)
+    if (IsAvailableAtomGroupKey(group_key, class_key) == false)
     {
         Logger::Log(LogLevel::Error, "Group key is not available.");
         return nullptr;
@@ -522,7 +687,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
     auto count{ 0 };
     for (auto & group_key : group_key_list)
     {
-        if (IsAvailableGroupKey(group_key, class_key) == false) continue;
+        if (IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
         auto x_value{ static_cast<int>(GetResidueFromGroupKey(group_key, class_key)) - 1 };
         auto y_value{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id) };
         auto y_error{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
@@ -546,13 +711,13 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     auto count{ 0 };
     for (auto & group_key : group_key_list)
     {
-        if (IsAvailableGroupKey(group_key, class_key) == false) continue;
+        if (IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
         graph->SetPoint(count,
-            GetGausEstimatePrior(group_key, class_key, par1_id),
-            GetGausEstimatePrior(group_key, class_key, par2_id));
+            GetAtomGausEstimatePrior(group_key, class_key, par1_id),
+            GetAtomGausEstimatePrior(group_key, class_key, par2_id));
         graph->SetPointError(count,
-            GetGausVariancePrior(group_key, class_key, par1_id),
-            GetGausVariancePrior(group_key, class_key, par2_id));
+            GetAtomGausVariancePrior(group_key, class_key, par1_id),
+            GetAtomGausVariancePrior(group_key, class_key, par2_id));
         count++;
     }
     return graph;
@@ -592,7 +757,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     {
         return nullptr;
     }
-    if (IsAvailableGroupKey(group_key1, class_key) == false || IsAvailableGroupKey(group_key2, class_key) == false)
+    if (IsAvailableAtomGroupKey(group_key1, class_key) == false || IsAvailableAtomGroupKey(group_key2, class_key) == false)
     {
         Logger::Log(LogLevel::Error, "Group key is not available.");
         return nullptr;
@@ -625,18 +790,25 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateDistanceToMapValueGraph(void)
 {
-    if (IsAtomicEntryAvailable() == false)
-    {
-        return nullptr;
-    }
     auto graph{ ROOTHelper::CreateGraphErrors() };
-
     auto count{ 0 };
-    for (auto & [distance, map_value] : m_local_entry->GetDistanceAndMapValueList())
+    if (IsAtomLocalEntryAvailable() == true)
     {
-        graph->SetPoint(count, distance, map_value);
-        count++;
+        for (auto & [distance, map_value] : m_atom_local_entry->GetDistanceAndMapValueList())
+        {
+            graph->SetPoint(count, distance, map_value);
+            count++;
+        }
     }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        for (auto & [distance, map_value] : m_bond_local_entry->GetDistanceAndMapValueList())
+        {
+            graph->SetPoint(count, distance, map_value);
+            count++;
+        }
+    }
+    else return nullptr;
     return graph;
 }
 
@@ -791,7 +963,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomography
     auto count{ 0 };
     for (auto & group_key : group_key_list)
     {
-        if (IsAvailableGroupKey(group_key, class_key) == false) continue;
+        if (IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
         for (auto & atom : GetAtomObjectList(group_key, class_key))
         {
             auto position{ atom->GetPosition() };
@@ -826,7 +998,7 @@ std::unique_ptr<TGraph2DErrors> PotentialEntryIterator::CreateXYPositionTomograp
     auto count{ 0 };
     for (auto & group_key : group_key_list)
     {
-        if (IsAvailableGroupKey(group_key, class_key) == false) continue;
+        if (IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
         for (auto & atom : GetAtomObjectList(group_key, class_key))
         {
             auto position{ atom->GetPosition() };
@@ -887,7 +1059,7 @@ PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2DMap(
     return graph_map;
 }
 
-std::unique_ptr<TF1> PotentialEntryIterator::CreateGroupGausFunctionPrior(
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionPrior(
     GroupKey group_key, const std::string & class_key) const
 {
     auto amplitude
@@ -897,6 +1069,20 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateGroupGausFunctionPrior(
     auto width
     {
         m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
+    };
+    return ROOTHelper::CreateGausFunction1D("gaus", amplitude, width);
+}
+
+std::unique_ptr<TF1> PotentialEntryIterator::CreateBondGroupGausFunctionPrior(
+    GroupKey group_key, const std::string & class_key) const
+{
+    auto amplitude
+    {
+        m_model_object->GetBondGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 0)
+    };
+    auto width
+    {
+        m_model_object->GetBondGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
     };
     return ROOTHelper::CreateGausFunction1D("gaus", amplitude, width);
 }
