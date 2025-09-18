@@ -861,6 +861,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
     std::unique_ptr<TF1> gaus_function[main_chain_element_size];
     double amplitude_prior[main_chain_element_size];
     double width_prior[main_chain_element_size];
+    int member_entries[main_chain_element_size];
     std::vector<double> y_array;
     y_array.reserve(model_object->GetNumberOfSelectedBond());
     BondClassifier classifier;
@@ -868,7 +869,6 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
     {
         auto group_key{ classifier.GetMainChainSimpleBondClassGroupKey(k) };
         if (entry_iter->IsAvailableBondGroupKey(group_key, class_key, true) == false) continue;
-        std::cout << entry_iter->GetBondObjectList(group_key, class_key).size() << std::endl;
 
         for (auto bond : entry_iter->GetBondObjectList(group_key, class_key))
         {
@@ -883,6 +883,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
         gaus_function[k] = entry_iter->CreateBondGroupGausFunctionPrior(group_key, class_key);
         amplitude_prior[k] = entry_iter->GetBondGausEstimatePrior(group_key, class_key, 0);
         width_prior[k] = entry_iter->GetBondGausEstimatePrior(group_key, class_key, 1);
+        member_entries[k] = static_cast<int>(entry_iter->GetBondObjectList(group_key, class_key).size());
     }
 
     auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.15) };
@@ -895,6 +896,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> element_text[col_size];
     std::unique_ptr<TPaveText> result_text[col_size];
+    std::unique_ptr<TPaveText> count_text[col_size];
     for (int i = 0; i < col_size; i++)
     {
         for (int j = 0; j < row_size; j++)
@@ -928,13 +930,20 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetLineAttribute(gaus_function[i].get(), 2, 2, kRed);
             gaus_function[i]->Draw("SAME");
 
-            element_text[i] = ROOTHelper::CreatePaveText(0.70, 0.75, 0.99, 0.99, "nbNDC ARC", true);
+            element_text[i] = ROOTHelper::CreatePaveText(0.55, 0.75, 0.99, 0.99, "nbNDC ARC", true);
             ROOTHelper::SetPaveTextDefaultStyle(element_text[i].get());
             ROOTHelper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
             ROOTHelper::SetTextAttribute(element_text[i].get(), 40.0f, 103, 22);
             ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, BondClassifier::GetMainChainMemberColor(static_cast<size_t>(i)), 0.5f);
             element_text[i]->AddText(BondClassifier::GetMainChainMemberLabel(static_cast<size_t>(i)).data());
             element_text[i]->Draw();
+
+            count_text[i] = ROOTHelper::CreatePaveText(0.03, 0.90, 0.54, 0.99, "nbNDC", true);
+            ROOTHelper::SetPaveTextDefaultStyle(count_text[i].get());
+            ROOTHelper::SetTextAttribute(count_text[i].get(), 15.0f, 133, 12, 0.0, kGray+2);
+            ROOTHelper::SetFillAttribute(count_text[i].get(), 4000);
+            count_text[i]->AddText(Form("#Entries = %d", member_entries[i]));
+            count_text[i]->Draw();
 
             result_text[i] = ROOTHelper::CreatePaveText(0.05, 0.08, 0.95, 0.25, "nbNDC", true);
             ROOTHelper::SetPaveTextDefaultStyle(result_text[i].get());
