@@ -144,7 +144,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
 
     auto amplitude{ atom_iter->GetAmplitudeEstimateMDPDE() };
     auto width{ atom_iter->GetWidthEstimateMDPDE() };
-    auto gaus_func{ ROOTHelper::CreateGausFunction1D("gaus", amplitude, width) };
+    auto gaus_func{ ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width) };
     ROOTHelper::SetLineAttribute(gaus_func.get(), 9, 4, kRed+1);
     gaus_func->Draw("SAME");
 

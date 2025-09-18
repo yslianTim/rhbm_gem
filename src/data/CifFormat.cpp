@@ -500,7 +500,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
 void CifFormat::ConstructBondList(void)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
-    auto search_radius{ 3.0f };
+    auto search_radius{ 2.0f };
     
     auto & atom_object_list_map{ m_data_block->GetAtomObjectMap() };
     for (auto & [model_number, atom_object_list] : atom_object_list_map)
@@ -523,10 +523,18 @@ void CifFormat::ConstructBondList(void)
             for (auto neighbor_atom : neighbor_atom_list)
             {
                 if (neighbor_atom == atom.get()) continue;
+                auto component_id_2{ neighbor_atom->GetComponentID() };
                 auto atom_id_2{ neighbor_atom->GetAtomID() };
                 auto bond_key_system{ m_data_block->GetBondKeySystemPtr() };
                 if (bond_key_system->IsRegistedBond(atom_id_1, atom_id_2) == false) continue;
                 auto bond_key{ bond_key_system->GetBondKey(atom_id_1, atom_id_2) };
+
+                //bool is_in_same_component{ (component_id_1 == component_id_2) ? true : false };
+                //if (is_in_same_component == false)
+                //{
+                //    if (bond_key != static_cast<BondKey>(Bond::C_N)) continue;
+                //}
+
                 if (m_find_component_bond_entry == false)
                 {
                     BuildDefaultComponentBondEntry(component_id_1, atom_id_1, atom_id_2);

@@ -356,7 +356,6 @@ bool PotentialEntryIterator::IsAtomLocalEntryAvailable(void) const
 {
     if (m_atom_local_entry == nullptr)
     {
-        Logger::Log(LogLevel::Error, "Atom local entry is not available.");
         return false;
     }
     return true;
@@ -366,7 +365,6 @@ bool PotentialEntryIterator::IsBondLocalEntryAvailable(void) const
 {
     if (m_bond_local_entry == nullptr)
     {
-        Logger::Log(LogLevel::Error, "Bond local entry is not available.");
         return false;
     }
     return true;
@@ -1070,7 +1068,7 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionPrior(
     {
         m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
     };
-    return ROOTHelper::CreateGausFunction1D("gaus", amplitude, width);
+    return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
 std::unique_ptr<TF1> PotentialEntryIterator::CreateBondGroupGausFunctionPrior(
@@ -1084,6 +1082,6 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateBondGroupGausFunctionPrior(
     {
         m_model_object->GetBondGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
     };
-    return ROOTHelper::CreateGausFunction1D("gaus", amplitude, width);
+    return ROOTHelper::CreateGaus2DFunctionIn1D("gaus", amplitude, width);
 }
 #endif

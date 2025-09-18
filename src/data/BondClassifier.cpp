@@ -24,30 +24,25 @@ const std::vector<short> BondClassifier::m_main_chain_member_open_marker_list
     25, 24, 26, 32
 };
 
-const std::vector<Element> BondClassifier::m_main_chain_member_element_list
+const std::vector<Bond> BondClassifier::m_main_chain_member_bond_list
 {
-    Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN
-};
-
-const std::vector<Spot> BondClassifier::m_main_chain_member_spot_list
-{
-    Spot::CA, Spot::C, Spot::N, Spot::O
+    Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N
 };
 
 const std::vector<std::string> BondClassifier::m_main_chain_member_title_list
 {
-    "Alpha Carbon",
-    "Carbonyl Carbon",
-    "Peptide Nitrogen",
-    "Carbonyl Oxygen"
+    "N-CA Bond",
+    "CA-C Bond",
+    "C=O Bond",
+    "C-N Bond"
 };
 
 const std::vector<std::string> BondClassifier::m_main_chain_member_label_list
 {
-    "C_{#alpha}",
-    "C",
-    "N",
-    "O"
+    "N-C_{#alpha}",
+    "C_{#alpha}-C",
+    "C=O",
+    "C-N"
 };
 
 BondClassifier::BondClassifier(void)
@@ -60,11 +55,11 @@ BondClassifier::~BondClassifier()
 
 }
 
-bool BondClassifier::IsMainChainMember(Spot spot, size_t & main_chain_member_id)
+bool BondClassifier::IsMainChainMember(Bond bond, size_t & main_chain_member_id)
 {
     for (size_t i = 0; i < m_main_chain_member_count; i++)
     {
-        if (m_main_chain_member_spot_list.at(i) == spot)
+        if (m_main_chain_member_bond_list.at(i) == bond)
         {
             main_chain_member_id = i;
             return true;
@@ -88,43 +83,37 @@ bool BondClassifier::IsValidMainChainMemberID(size_t id)
     return true;
 }
 
-short BondClassifier::GetMainChainElementColor(size_t id)
+short BondClassifier::GetMainChainMemberColor(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return 1;
     return m_main_chain_member_color_list.at(id);
 }
 
-short BondClassifier::GetMainChainElementSolidMarker(size_t id)
+short BondClassifier::GetMainChainMemberSolidMarker(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return 1;
     return m_main_chain_member_solid_marker_list.at(id);
 }
 
-short BondClassifier::GetMainChainElementOpenMarker(size_t id)
+short BondClassifier::GetMainChainMemberOpenMarker(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return 1;
     return m_main_chain_member_open_marker_list.at(id);
 }
 
-Element BondClassifier::GetMainChainElement(size_t id)
+Bond BondClassifier::GetMainChainBond(size_t id)
 {
-    if (IsValidMainChainMemberID(id) == false)  return Element::UNK;
-    return m_main_chain_member_element_list.at(id);
+    if (IsValidMainChainMemberID(id) == false) return Bond::UNK;
+    return m_main_chain_member_bond_list.at(id);
 }
 
-Spot BondClassifier::GetMainChainSpot(size_t id)
-{
-    if (IsValidMainChainMemberID(id) == false) return Spot::UNK;
-    return m_main_chain_member_spot_list.at(id);
-}
-
-const std::string & BondClassifier::GetMainChainElementLabel(size_t id)
+const std::string & BondClassifier::GetMainChainMemberLabel(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return m_main_chain_member_label_list.at(0);
     return m_main_chain_member_label_list.at(id);
 }
 
-const std::string & BondClassifier::GetMainChainElementTitle(size_t id)
+const std::string & BondClassifier::GetMainChainMemberTitle(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return m_main_chain_member_title_list.at(0);
     return m_main_chain_member_title_list.at(id);
@@ -137,7 +126,7 @@ GroupKey BondClassifier::GetGroupKeyInClass(
     {
         return KeyPackerSimpleBondClass::Pack(
             bond_object->GetBondKey(),
-            true);
+            bond_object->GetSpecialBondFlag());
     }
     else if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
     {
@@ -158,8 +147,8 @@ GroupKey BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id) const
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
-    return KeyPackerSimpleAtomClass::Pack(atom_key, false);
+    auto bond_key{ static_cast<BondKey>(m_main_chain_member_bond_list.at(id)) };
+    return KeyPackerSimpleBondClass::Pack(bond_key, false);
 }
 
 GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Residue residue) const
@@ -169,22 +158,9 @@ GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Resid
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
+    auto bond_key{ static_cast<BondKey>(m_main_chain_member_bond_list.at(id)) };
     auto component_key{ static_cast<ComponentKey>(residue) };
-    return KeyPackerComponentAtomClass::Pack(component_key, atom_key);
-}
-
-GroupKey BondClassifier::GetMainChainStructureBondClassGroupKey(
-    size_t id, Structure structure, Residue residue) const
-{
-    if (IsValidMainChainMemberID(id) == false)
-    {
-        Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
-        return 0;
-    }
-    auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(id)) };
-    auto component_key{ static_cast<ComponentKey>(residue) };
-    return KeyPackerStructureAtomClass::Pack(structure, component_key, atom_key);
+    return KeyPackerComponentBondClass::Pack(component_key, bond_key);
 }
 
 std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList(
@@ -196,19 +172,6 @@ std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList
     for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
     {
         group_key_list.emplace_back(GetMainChainComponentBondClassGroupKey(id, residue_id));
-    }
-    return group_key_list;
-}
-
-std::vector<GroupKey> BondClassifier::GetMainChainStructureBondClassGroupKeyList(
-    size_t id, Structure structure) const
-{
-    if (IsValidMainChainMemberID(id) == false) return {};
-    std::vector<GroupKey> group_key_list;
-    group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
-    for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
-    {
-        group_key_list.emplace_back(GetMainChainStructureBondClassGroupKey(id, structure, residue_id));
     }
     return group_key_list;
 }

@@ -119,10 +119,19 @@ std::unique_ptr<TF1> ROOTHelper::CreateFunction1D(const std::string & name, cons
     return std::make_unique<TF1>(name.data(), form.data());
 }
 
-std::unique_ptr<TF1> ROOTHelper::CreateGausFunction1D(
+std::unique_ptr<TF1> ROOTHelper::CreateGaus2DFunctionIn1D(
     const std::string & name, double amplitude, double width, double x_min, double x_max)
 {
-    auto function{ std::make_unique<TF1>(name.data(), GausModelFunction, x_min, x_max, 2) };
+    auto function{ std::make_unique<TF1>(name.data(), Gaus2DModelFunction, x_min, x_max, 2) };
+    function->SetParameter(0, amplitude);
+    function->SetParameter(1, width);
+    return function;
+}
+
+std::unique_ptr<TF1> ROOTHelper::CreateGaus3DFunctionIn1D(
+    const std::string & name, double amplitude, double width, double x_min, double x_max)
+{
+    auto function{ std::make_unique<TF1>(name.data(), Gaus3DModelFunction, x_min, x_max, 2) };
     function->SetParameter(0, amplitude);
     function->SetParameter(1, width);
     return function;
@@ -556,7 +565,14 @@ double ROOTHelper::PerformLinearRegression(
     return GetLinearRegressionRSquare(graph, fit_tmp.get());
 }
 
-double ROOTHelper::GausModelFunction(double * x, double * par)
+double ROOTHelper::Gaus2DModelFunction(double * x, double * par)
+{
+    double tau_square{ par[1]*par[1] };
+    double y{ par[0] / (2.0*TMath::Pi()*tau_square) * std::exp(-x[0]*x[0]/(2.0*tau_square)) };
+    return y;
+}
+
+double ROOTHelper::Gaus3DModelFunction(double * x, double * par)
 {
     double tau_square{ par[1]*par[1] };
     double y{ par[0] * std::pow(2.0*TMath::Pi()*tau_square, -1.5) * std::exp(-x[0]*x[0]/(2.0*tau_square)) };

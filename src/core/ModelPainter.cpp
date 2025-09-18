@@ -1,6 +1,7 @@
 #include "ModelPainter.hpp"
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
+#include "BondObject.hpp"
 #include "DataObjectBase.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "FilePathHelper.hpp"
@@ -94,17 +95,17 @@ void ModelPainter::Painting(void)
         }
         label += ".pdf";
         //PaintGroupGausMainChainStyle1(model_object, "group_gaus_main_chain_style1_"+ label);
-        PaintGroupGausMainChain(model_object, "group_gaus_main_chain_"+ label);
-        PaintGroupGausSideChain(model_object, "group_gaus_side_chain_"+ label);
-        model_object->BuildKDTreeRoot();
+//        PaintGroupGausMainChain(model_object, "group_gaus_main_chain_"+ label);
+//        PaintGroupGausSideChain(model_object, "group_gaus_side_chain_"+ label);
+//        model_object->BuildKDTreeRoot();
         //PaintGroupWidthScatterPlot(model_object, "group_gaus_com_"+ label, 0, true);
         //PaintGroupWidthScatterPlot(model_object, "group_gaus_knn_"+ label, 1, true);
         //PaintAtomXYPosition(model_object, "atom_position_"+ label);
         //PaintAtomGausToXYPosition(model_object, "atom_gaus_to_position_"+ label);
-        PaintAtomGausScatterPlot(model_object, "atom_gaus_scatter_"+ label, false);
-        PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
-        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
-        //PaintBondMapValueMainChain(model_object, "bond_map_value_main_chain_"+ label);
+//        PaintAtomGausScatterPlot(model_object, "atom_gaus_scatter_"+ label, false);
+//        PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
+//        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
+        PaintBondMapValueMainChain(model_object, "bond_map_value_main_chain_"+ label);
         //PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
     }
 }
@@ -866,7 +867,9 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
     for (size_t k = 0; k < main_chain_element_size; k++)
     {
         auto group_key{ classifier.GetMainChainSimpleBondClassGroupKey(k) };
-        if (entry_iter->IsAvailableBondGroupKey(group_key, class_key) == false) continue;
+        if (entry_iter->IsAvailableBondGroupKey(group_key, class_key, true) == false) continue;
+        std::cout << entry_iter->GetBondObjectList(group_key, class_key).size() << std::endl;
+
         for (auto bond : entry_iter->GetBondObjectList(group_key, class_key))
         {
             auto bond_iter{ std::make_unique<PotentialEntryIterator>(bond) };
@@ -929,8 +932,8 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetPaveTextDefaultStyle(element_text[i].get());
             ROOTHelper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
             ROOTHelper::SetTextAttribute(element_text[i].get(), 40.0f, 103, 22);
-            ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, AtomClassifier::GetMainChainElementColor(static_cast<size_t>(i)), 0.5f);
-            element_text[i]->AddText(AtomClassifier::GetMainChainElementLabel(static_cast<size_t>(i)).data());
+            ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, BondClassifier::GetMainChainMemberColor(static_cast<size_t>(i)), 0.5f);
+            element_text[i]->AddText(BondClassifier::GetMainChainMemberLabel(static_cast<size_t>(i)).data());
             element_text[i]->Draw();
 
             result_text[i] = ROOTHelper::CreatePaveText(0.05, 0.08, 0.95, 0.25, "nbNDC", true);
