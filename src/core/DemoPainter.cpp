@@ -307,9 +307,9 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         for (size_t k = 0; k < main_chain_element_count; k++)
         {
             auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
-            amplitude_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 0);
-            width_graph[j][k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 1);
-            correlation_graph[j][k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
+            amplitude_graph[j][k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 0);
+            width_graph[j][k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 1);
+            correlation_graph[j][k] = entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
             for (int p = 0; p < amplitude_graph[j][k]->GetN(); p++)
             {
                 amplitude_array.push_back(amplitude_graph[j][k]->GetPointY(p));
@@ -452,9 +452,9 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
-        amplitude_graph[k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 0);
-        width_graph[k] = entry_iter->CreateGausEstimateToResidueGraph(group_key_list, residue_class, 1);
-        correlation_graph[k] = entry_iter->CreateGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
+        amplitude_graph[k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 0);
+        width_graph[k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 1);
+        correlation_graph[k] = entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
         for (int p = 0; p < amplitude_graph[k]->GetN(); p++)
         {
             amplitude_array.push_back(amplitude_graph[k]->GetPointY(p));

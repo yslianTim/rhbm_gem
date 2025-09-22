@@ -118,6 +118,22 @@ size_t PotentialEntryIterator::GetResidueCount(
     return GetAtomObjectList(group_key, class_key).size();
 }
 
+size_t PotentialEntryIterator::GetBondResidueCount(
+    const std::string & class_key, Residue residue) const
+{
+    GroupKey group_key{ 0 };
+    BondClassifier classifier;
+    if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
+    {
+        group_key = classifier.GetMainChainComponentBondClassGroupKey(0, residue);
+    }
+    if (IsAvailableBondGroupKey(group_key, class_key) == false)
+    {
+        return 0;
+    }
+    return GetBondObjectList(group_key, class_key).size();
+}
+
 double PotentialEntryIterator::GetAtomGausEstimatePrior(
     GroupKey group_key, const std::string & class_key, int par_id) const
 {
@@ -442,12 +458,12 @@ bool PotentialEntryIterator::CheckBondGroupKey(
     return true;
 }
 
-Residue PotentialEntryIterator::GetResidueFromGroupKey(
+Residue PotentialEntryIterator::GetResidueFromAtomGroupKey(
     GroupKey group_key, const std::string & class_key) const
 {
     if (class_key == AtomicInfoHelper::GetSimpleAtomClassKey())
     {
-        Logger::Log(LogLevel::Error, "Element class group key is not recording Residue info.");
+        Logger::Log(LogLevel::Error, "Simple class group key is not recording Residue info.");
         return Residue::UNK;
     }
     else if (class_key == AtomicInfoHelper::GetComponentAtomClassKey())
@@ -459,6 +475,22 @@ Residue PotentialEntryIterator::GetResidueFromGroupKey(
     {
         auto unpack_key{ KeyPackerStructureAtomClass::Unpack(group_key) };
         return static_cast<Residue>(std::get<1>(unpack_key));
+    }
+    return Residue::UNK;
+}
+
+Residue PotentialEntryIterator::GetResidueFromBondGroupKey(
+    GroupKey group_key, const std::string & class_key) const
+{
+    if (class_key == AtomicInfoHelper::GetSimpleBondClassKey())
+    {
+        Logger::Log(LogLevel::Error, "Simple class group key is not recording Residue info.");
+        return Residue::UNK;
+    }
+    else if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
+    {
+        auto unpack_key{ KeyPackerComponentBondClass::Unpack(group_key) };
+        return static_cast<Residue>(std::get<0>(unpack_key));
     }
     return Residue::UNK;
 }
@@ -475,6 +507,22 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
     for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
     {
         auto count{ GetResidueCount(class_key, residue, structure) };
+        hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
+    }
+    return hist;
+}
+
+std::unique_ptr<TH1D> PotentialEntryIterator::CreateBondResidueCountHistogram(
+    const std::string & class_key)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
+    for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
+    {
+        auto count{ GetBondResidueCount(class_key, residue) };
         hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
     }
     return hist;
@@ -673,7 +721,7 @@ PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
     return graph_map;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidueGraph(
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateToResidueGraph(
     std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id)
 {
     if (IsModelObjectAvailable() == false)
@@ -686,7 +734,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
     for (auto & group_key : group_key_list)
     {
         if (IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
-        auto x_value{ static_cast<int>(GetResidueFromGroupKey(group_key, class_key)) - 1 };
+        auto x_value{ static_cast<int>(GetResidueFromAtomGroupKey(group_key, class_key)) - 1 };
         auto y_value{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id) };
         auto y_error{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
         graph->SetPoint(count, x_value, y_value);
@@ -696,7 +744,30 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateToResidu
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBondGausEstimateToResidueGraph(
+    std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    
+    auto count{ 0 };
+    for (auto & group_key : group_key_list)
+    {
+        if (IsAvailableBondGroupKey(group_key, class_key) == false) continue;
+        auto x_value{ static_cast<int>(GetResidueFromBondGroupKey(group_key, class_key)) - 1 };
+        auto y_value{ m_model_object->GetBondGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id) };
+        auto y_error{ m_model_object->GetBondGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
+        graph->SetPoint(count, x_value, y_value);
+        graph->SetPointError(count, 0.0, y_error);
+        count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateScatterGraph(
     std::vector<GroupKey> & group_key_list, const std::string & class_key,
     int par1_id, int par2_id)
 {
@@ -716,6 +787,31 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
         graph->SetPointError(count,
             GetAtomGausVariancePrior(group_key, class_key, par1_id),
             GetAtomGausVariancePrior(group_key, class_key, par2_id));
+        count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBondGausEstimateScatterGraph(
+    std::vector<GroupKey> & group_key_list, const std::string & class_key,
+    int par1_id, int par2_id)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    
+    auto count{ 0 };
+    for (auto & group_key : group_key_list)
+    {
+        if (IsAvailableBondGroupKey(group_key, class_key) == false) continue;
+        graph->SetPoint(count,
+            GetBondGausEstimatePrior(group_key, class_key, par1_id),
+            GetBondGausEstimatePrior(group_key, class_key, par2_id));
+        graph->SetPointError(count,
+            GetBondGausVariancePrior(group_key, class_key, par1_id),
+            GetBondGausVariancePrior(group_key, class_key, par2_id));
         count++;
     }
     return graph;

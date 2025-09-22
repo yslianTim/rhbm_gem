@@ -35,9 +35,10 @@ public:
     void Painting(void) override;
 
 private:
-    void PaintGroupGausMainChainStyle1(ModelObject * model_object, const std::string & name);
-    void PaintGroupGausMainChain(ModelObject * model_object, const std::string & name);
-    void PaintGroupGausSideChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausMainChainStyle1(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausMainChain(ModelObject * model_object, const std::string & name);
+    void PaintBondGroupGausMainChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);
     void PaintBondMapValueMainChain(ModelObject * model_object, const std::string & name);
     void PaintGroupWidthScatterPlot(ModelObject * model_object, const std::string & name, int par_id=0, bool draw_box_plot=false);
@@ -54,7 +55,8 @@ private:
     void PrintAmplitudePad(TPad * pad, TH2 * hist);
     void PrintWidthPad(TPad * pad, TH2 * hist);
     void PrintAmplitudeSummaryPad(TPad * pad, TH2 * hist);
-    void PrintWidthSummaryPad(TPad * pad, TH2 * hist);
+    void PrintAtomWidthSummaryPad(TPad * pad, TH2 * hist);
+    void PrintBondWidthSummaryPad(TPad * pad, TH2 * hist);
     void PrintGausSummaryPad(TPad * pad, TH2 * hist);
 
     void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
