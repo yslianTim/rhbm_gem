@@ -140,7 +140,12 @@ GroupKey BondClassifier::GetGroupKeyInClass(
     }
 }
 
-GroupKey BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id) const
+GroupKey BondClassifier::GetGroupKeyInClass(ComponentKey component_key, BondKey bond_key)
+{
+    return KeyPackerComponentBondClass::Pack(component_key, bond_key);
+}
+
+GroupKey BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false)
     {

@@ -6,6 +6,8 @@
 #include <string>
 
 #include "GlobalEnumClass.hpp"
+#include "ComponentKeySystem.hpp"
+#include "BondKeySystem.hpp"
 
 class BondObject;
 class BondClassifier
@@ -32,8 +34,9 @@ public:
     static const std::string & GetMainChainMemberTitle(size_t id);
 
     static GroupKey GetGroupKeyInClass(const BondObject * bond_object, const std::string & class_key);
+    static GroupKey GetGroupKeyInClass(ComponentKey component_key, BondKey bond_key);
 
-    GroupKey GetMainChainSimpleBondClassGroupKey(size_t id) const;
+    static GroupKey GetMainChainSimpleBondClassGroupKey(size_t id);
     GroupKey GetMainChainComponentBondClassGroupKey(size_t id, Residue residue) const;
     std::vector<GroupKey> GetMainChainComponentBondClassGroupKeyList(size_t id) const;
 

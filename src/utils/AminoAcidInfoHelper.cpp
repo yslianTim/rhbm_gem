@@ -30,6 +30,53 @@ const std::unordered_map<Residue, std::vector<Spot>> AminoAcidInfoHelper::m_spot
     {Residue::VAL, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG1, Spot::CG2}}
 };
 
+const std::unordered_map<Residue, std::vector<Bond>> AminoAcidInfoHelper::m_bond_map
+{
+    {Residue::ALA, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB}},
+    {Residue::ARG, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD, Bond::CD_NE, Bond::NE_CZ, Bond::CZ_NH1,
+                    Bond::CZ_NH2}},
+    {Residue::ASN, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_OD1, Bond::CG_ND2}},
+    {Residue::ASP, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_OD1, Bond::CG_OD2}},
+    {Residue::CYS, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB, Bond::CB_SG}},
+    {Residue::GLN, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD, Bond::CD_OE1, Bond::CD_NE2}},
+    {Residue::GLU, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD, Bond::CD_OE1, Bond::CD_OE2}},
+    {Residue::GLY, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N}},
+    {Residue::HIS, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_ND1, Bond::CG_CD2, Bond::ND1_CE1, Bond::CD2_NE2,
+                    Bond::CE1_NE2}},
+    {Residue::ILE, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG1, Bond::CB_CG2, Bond::CG1_CD1}},
+    {Residue::LEU, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD1, Bond::CG_CD2}},
+    {Residue::LYS, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD, Bond::CD_CE, Bond::CE_NZ}},
+    {Residue::MET, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_SD, Bond::SD_CE}},
+    {Residue::PHE, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD1, Bond::CG_CD2, Bond::CD1_CE1, Bond::CD2_CE2,
+                    Bond::CE1_CZ, Bond::CE2_CZ}},
+    {Residue::PRO, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD, Bond::N_CD}},
+    {Residue::SER, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_OG}},
+    {Residue::THR, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_OG1, Bond::CB_CG2}},
+    {Residue::TRP, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD1, Bond::CG_CD2, Bond::CD1_NE1, Bond::CD2_CE2,
+                    Bond::CD2_CE3, Bond::NE1_CE2, Bond::CE2_CZ2, Bond::CE3_CZ3, Bond::CZ2_CH2,
+                    Bond::CZ3_CH2}},
+    {Residue::TYR, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG, Bond::CG_CD1, Bond::CG_CD2, Bond::CD1_CE1, Bond::CD2_CE2,
+                    Bond::CE1_CZ, Bond::CE2_CZ, Bond::CZ_OH}},
+    {Residue::VAL, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
+                    Bond::CB_CG1, Bond::CB_CG2}}
+};
+
 const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_element_map
 {
     {Residue::ALA, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
@@ -206,9 +253,19 @@ size_t AminoAcidInfoHelper::GetAtomCount(Residue residue)
     return m_spot_map.at(residue).size();
 }
 
+size_t AminoAcidInfoHelper::GetBondCount(Residue residue)
+{
+    return m_bond_map.at(residue).size();
+}
+
 size_t AminoAcidInfoHelper::GetAtomCount(int residue)
 {
     return m_spot_map.at(static_cast<Residue>(residue)).size();
+}
+
+size_t AminoAcidInfoHelper::GetBondCount(int residue)
+{
+    return m_bond_map.at(static_cast<Residue>(residue)).size();
 }
 
 double AminoAcidInfoHelper::GetPartialCharge(
@@ -305,4 +362,14 @@ const std::vector<Spot> & AminoAcidInfoHelper::GetSpotList(Residue residue)
             "AminoAcidInfoHelper::GetSpotList ‑ residue is not supported");
     }
     return m_spot_map.at(residue);
+}
+
+const std::vector<Bond> & AminoAcidInfoHelper::GetBondList(Residue residue)
+{
+    if (m_bond_map.find(residue) == m_bond_map.end())
+    {
+        throw std::out_of_range(
+            "AminoAcidInfoHelper::GetBondList ‑ residue is not supported");
+    }
+    return m_bond_map.at(residue);
 }

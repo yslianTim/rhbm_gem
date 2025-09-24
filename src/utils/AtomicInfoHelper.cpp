@@ -206,6 +206,8 @@ const std::unordered_map<std::string_view, Bond> AtomicInfoHelper::m_bond_map
     {"C_O", Bond::C_O}, {"C_OXT", Bond::C_OXT},
 
     {"CB_CG", Bond::CB_CG}, {"CB_OG", Bond::CB_OG}, {"CB_SG", Bond::CB_SG},
+    {"CB_CG1", Bond::CB_CG1}, {"CB_CG2", Bond::CB_CG2}, {"CB_OG1", Bond::CB_OG1},
+    {"CB_HB", Bond::CB_HB},
     {"CB_HB1", Bond::CB_HB1}, {"CB_HB2", Bond::CB_HB2}, {"CB_HB3", Bond::CB_HB3},
     {"CG_CD", Bond::CG_CD}, {"CG_CD1", Bond::CG_CD1}, {"CG_CD2", Bond::CG_CD2},
     {"CG_HG", Bond::CG_HG}, {"CG_HG2", Bond::CG_HG2}, {"CG_HG3", Bond::CG_HG3},

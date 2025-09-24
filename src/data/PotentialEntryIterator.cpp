@@ -98,7 +98,7 @@ bool PotentialEntryIterator::IsAvailableBondGroupKey(
     return CheckBondGroupKey(group_key, class_key, varbose);
 }
 
-size_t PotentialEntryIterator::GetResidueCount(
+size_t PotentialEntryIterator::GetAtomResidueCount(
     const std::string & class_key, Residue residue, Structure structure) const
 {
     GroupKey group_key{ 0 };
@@ -496,7 +496,7 @@ Residue PotentialEntryIterator::GetResidueFromBondGroupKey(
 }
 
 #ifdef HAVE_ROOT
-std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
+std::unique_ptr<TH1D> PotentialEntryIterator::CreateAtomResidueCountHistogram(
     const std::string & class_key, Structure structure)
 {
     if (IsModelObjectAvailable() == false)
@@ -506,7 +506,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateResidueCountHistogram(
     auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
     for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
     {
-        auto count{ GetResidueCount(class_key, residue, structure) };
+        auto count{ GetAtomResidueCount(class_key, residue, structure) };
         hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
     }
     return hist;
@@ -690,7 +690,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
+PotentialEntryIterator::CreateAtomGausEstimateToResidueIDGraphMap(
     size_t main_chain_element_id, const int par_id, Residue residue)
 {
     if (IsModelObjectAvailable() == false)
@@ -700,6 +700,7 @@ PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
     
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
     std::unordered_map<std::string, int> count_map;
+    
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
@@ -708,6 +709,38 @@ PotentialEntryIterator::CreateGausEstimateToResidueIDGraphMap(
         auto entry{ atom->GetLocalPotentialEntry() };
         auto residue_id{ atom->GetResidueID() };
         auto chain_id{ atom->GetChainID() };
+        if (residue_id < 0) continue;
+        if (graph_map.find(chain_id) == graph_map.end())
+        {
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            count_map[chain_id] = 0;
+        }
+        auto x_value{ static_cast<double>(residue_id) };
+        graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, entry->GetGausEstimateMDPDE(par_id));
+        count_map[chain_id]++;
+    }
+    return graph_map;
+}
+
+std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
+PotentialEntryIterator::CreateBondGausEstimateToResidueIDGraphMap(
+    size_t main_chain_element_id, const int par_id, Residue residue)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return {};
+    }
+    
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
+    std::unordered_map<std::string, int> count_map;
+    auto class_key{ AtomicInfoHelper::GetSimpleBondClassKey() };
+    auto group_key{ BondClassifier::GetMainChainSimpleBondClassGroupKey(main_chain_element_id) };
+    for (auto & bond : GetBondObjectList(group_key, class_key))
+    {
+        if (residue != Residue::UNK && bond->GetAtomObject1()->GetResidue() != residue) continue;
+        auto entry{ bond->GetLocalPotentialEntry() };
+        auto residue_id{ bond->GetAtomObject1()->GetResidueID() };
+        auto chain_id{ bond->GetAtomObject1()->GetChainID() };
         if (residue_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {

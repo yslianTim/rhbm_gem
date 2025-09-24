@@ -119,7 +119,7 @@ enum class Bond : uint16_t
     C_N,   // peptide connection 
     C_O, C_OXT,
 
-    CB_CG, CB_OG, CB_SG, CB_HB1, CB_HB2, CB_HB3,
+    CB_CG, CB_CG1, CB_CG2, CB_OG, CB_OG1, CB_SG, CB_HB, CB_HB1, CB_HB2, CB_HB3,
     CG_CD, CG_CD1, CG_CD2, CG_HG, CG_HG2, CG_HG3, CG_OD1, CG_OD2, CG_ND1, CG_ND2, CG_SD,
     CG1_CD1, CG1_HG11, CG1_HG12, CG1_HG13,
     CG2_HG21, CG2_HG22, CG2_HG23,

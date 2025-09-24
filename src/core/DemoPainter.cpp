@@ -1156,7 +1156,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     std::vector<double> x_array, y_array;
     for (size_t i = 0; i < main_chain_element_count; i++)
     {
-        gaus_graph[i] = std::move(entry_iter1->CreateGausEstimateToResidueIDGraphMap(i, par_id).at("A"));
+        gaus_graph[i] = std::move(entry_iter1->CreateAtomGausEstimateToResidueIDGraphMap(i, par_id).at("A"));
         for (int p = 0; p < gaus_graph[i]->GetN(); p++)
         {
             x_array.emplace_back(gaus_graph[i]->GetPointX(p));
@@ -1169,8 +1169,8 @@ void DemoPainter::PaintAtomGausMainChainDemo(
         "frame","",
         100, 0.0, std::get<1>(x_range), 100, std::get<0>(y_range), std::get<1>(y_range)) };
 
-    gaus_gly_graph = std::move(entry_iter1->CreateGausEstimateToResidueIDGraphMap(0, par_id, Residue::GLY).at("A"));
-    gaus_pro_graph = std::move(entry_iter1->CreateGausEstimateToResidueIDGraphMap(0, par_id, Residue::PRO).at("A"));
+    gaus_gly_graph = std::move(entry_iter1->CreateAtomGausEstimateToResidueIDGraphMap(0, par_id, Residue::GLY).at("A"));
+    gaus_pro_graph = std::move(entry_iter1->CreateAtomGausEstimateToResidueIDGraphMap(0, par_id, Residue::PRO).at("A"));
     for (size_t j = 0; j < main_chain_element_count; j++)
     {
         for (int p = 0; p < gaus_gly_graph->GetN(); p++)
@@ -1259,7 +1259,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
 
     for (size_t i = 0; i < main_chain_element_count; i++)
     {
-        gaus_graph[i] = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(i, par_id).at("A"));
+        gaus_graph[i] = std::move(entry_iter->CreateAtomGausEstimateToResidueIDGraphMap(i, par_id).at("A"));
         for (int p = 0; p < gaus_graph[i]->GetN(); p++)
         {
             x_array.emplace_back(gaus_graph[i]->GetPointX(p));
@@ -1272,8 +1272,8 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
         "frame","",
         100, 0.0, std::get<1>(x_range), 100, std::get<0>(y_range), std::get<1>(y_range)) };
 
-    gaus_gly_graph = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(0, par_id, Residue::GLY).at("A"));
-    gaus_pro_graph = std::move(entry_iter->CreateGausEstimateToResidueIDGraphMap(0, par_id, Residue::PRO).at("A"));
+    gaus_gly_graph = std::move(entry_iter->CreateAtomGausEstimateToResidueIDGraphMap(0, par_id, Residue::GLY).at("A"));
+    gaus_pro_graph = std::move(entry_iter->CreateAtomGausEstimateToResidueIDGraphMap(0, par_id, Residue::PRO).at("A"));
     for (size_t j = 0; j < main_chain_element_count; j++)
     {
         for (int p = 0; p < gaus_gly_graph->GetN(); p++)
