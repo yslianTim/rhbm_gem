@@ -44,6 +44,7 @@ private:
     void LoadXRayResolutionInfo(std::ifstream & infile);
     void LoadAtomTypeBlock(std::ifstream & infile);
     void LoadStructureConformationBlock(std::ifstream & infile);
+    void LoadStructureConnectionBlock(std::ifstream & infile);
     void LoadStructureSheetBlock(std::ifstream & infile);
     void LoadAtomSiteBlock(std::ifstream & infile);
     void ConstructBondList(void);

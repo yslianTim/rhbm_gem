@@ -47,6 +47,7 @@ void CifFormat::LoadHeader(const std::string & filename)
     LoadPdbxData(infile);
     LoadAtomTypeBlock(infile);
     LoadStructureConformationBlock(infile);
+    LoadStructureConnectionBlock(infile);
     LoadStructureSheetBlock(infile);
 }
 
@@ -380,6 +381,21 @@ void CifFormat::LoadStructureConformationBlock(std::ifstream & infile)
             m_data_block->AddHelixRange(
                 helix_id,
                 {chain_id_beg, reisude_id_beg, chain_id_end, reisude_id_end, conf_type});
+        }
+    );
+}
+
+void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureConnectionBlock() called");
+    infile.clear();
+    infile.seekg(0);
+    ParseLoopBlock(infile, "_struct_conn.",
+        [this](const std::unordered_map<std::string, size_t> & index_map,
+               const std::vector<std::string> & token_list)
+        {
+            auto link_id{ token_list[index_map.at("id")] };
+
         }
     );
 }
