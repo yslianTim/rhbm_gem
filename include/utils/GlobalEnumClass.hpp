@@ -80,7 +80,7 @@ enum class Spot : uint16_t
 
 };
 
-enum class Bond : uint16_t
+enum class Link : uint16_t
 {
     UNK = 0,
 

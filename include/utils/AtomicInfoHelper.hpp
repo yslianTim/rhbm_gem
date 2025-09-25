@@ -20,7 +20,7 @@ class AtomicInfoHelper
     static const std::unordered_map<std::string_view, Residue> m_residue_map;
     static const std::unordered_map<std::string_view, Element> m_element_map;
     static const std::unordered_map<std::string_view, Spot> m_spot_map;
-    static const std::unordered_map<std::string_view, Bond> m_bond_map;
+    static const std::unordered_map<std::string_view, Link> m_link_map;
     static const std::unordered_map<std::string_view, Structure> m_structure_map;
     static const std::unordered_map<std::string_view, Entity> m_entity_map;
 
@@ -52,7 +52,7 @@ public:
     static const std::unordered_map<std::string_view, Residue> & GetResidueMap(void);
     static const std::unordered_map<std::string_view, Element> & GetElementMap(void);
     static const std::unordered_map<std::string_view, Spot> & GetSpotMap(void);
-    static const std::unordered_map<std::string_view, Bond> & GetBondMap(void);
+    static const std::unordered_map<std::string_view, Link> & GetLinkMap(void);
     static const std::unordered_map<Element, std::string> & GetElementLabelMap(void);
     static bool IsStandardElement(Element element);
     static bool IsStandardResidue(Residue residue);
@@ -61,7 +61,7 @@ public:
     static Element GetElementFromString(const std::string & name);
     static Element GetElementFromAtomicNumber(int atomic_number);
     static Spot GetSpotFromString(const std::string & name, bool verbose=true);
-    static Bond GetBondFromString(const std::string & name, bool verbose=true);
+    static Link GetLinkFromString(const std::string & name, bool verbose=true);
     static Structure GetStructureFromString(const std::string & name);
     static Entity GetEntityFromString(const std::string & name);
 

@@ -30,51 +30,51 @@ const std::unordered_map<Residue, std::vector<Spot>> AminoAcidInfoHelper::m_spot
     {Residue::VAL, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG1, Spot::CG2}}
 };
 
-const std::unordered_map<Residue, std::vector<Bond>> AminoAcidInfoHelper::m_bond_map
+const std::unordered_map<Residue, std::vector<Link>> AminoAcidInfoHelper::m_link_map
 {
-    {Residue::ALA, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB}},
-    {Residue::ARG, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD, Bond::CD_NE, Bond::NE_CZ, Bond::CZ_NH1,
-                    Bond::CZ_NH2}},
-    {Residue::ASN, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_OD1, Bond::CG_ND2}},
-    {Residue::ASP, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_OD1, Bond::CG_OD2}},
-    {Residue::CYS, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB, Bond::CB_SG}},
-    {Residue::GLN, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD, Bond::CD_OE1, Bond::CD_NE2}},
-    {Residue::GLU, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD, Bond::CD_OE1, Bond::CD_OE2}},
-    {Residue::GLY, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N}},
-    {Residue::HIS, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_ND1, Bond::CG_CD2, Bond::ND1_CE1, Bond::CD2_NE2,
-                    Bond::CE1_NE2}},
-    {Residue::ILE, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG1, Bond::CB_CG2, Bond::CG1_CD1}},
-    {Residue::LEU, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD1, Bond::CG_CD2}},
-    {Residue::LYS, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD, Bond::CD_CE, Bond::CE_NZ}},
-    {Residue::MET, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_SD, Bond::SD_CE}},
-    {Residue::PHE, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD1, Bond::CG_CD2, Bond::CD1_CE1, Bond::CD2_CE2,
-                    Bond::CE1_CZ, Bond::CE2_CZ}},
-    {Residue::PRO, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD, Bond::N_CD}},
-    {Residue::SER, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_OG}},
-    {Residue::THR, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_OG1, Bond::CB_CG2}},
-    {Residue::TRP, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD1, Bond::CG_CD2, Bond::CD1_NE1, Bond::CD2_CE2,
-                    Bond::CD2_CE3, Bond::NE1_CE2, Bond::CE2_CZ2, Bond::CE3_CZ3, Bond::CZ2_CH2,
-                    Bond::CZ3_CH2}},
-    {Residue::TYR, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG, Bond::CG_CD1, Bond::CG_CD2, Bond::CD1_CE1, Bond::CD2_CE2,
-                    Bond::CE1_CZ, Bond::CE2_CZ, Bond::CZ_OH}},
-    {Residue::VAL, {Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N, Bond::CA_CB,
-                    Bond::CB_CG1, Bond::CB_CG2}}
+    {Residue::ALA, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB}},
+    {Residue::ARG, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD, Link::CD_NE, Link::NE_CZ, Link::CZ_NH1,
+                    Link::CZ_NH2}},
+    {Residue::ASN, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_OD1, Link::CG_ND2}},
+    {Residue::ASP, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_OD1, Link::CG_OD2}},
+    {Residue::CYS, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB, Link::CB_SG}},
+    {Residue::GLN, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD, Link::CD_OE1, Link::CD_NE2}},
+    {Residue::GLU, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD, Link::CD_OE1, Link::CD_OE2}},
+    {Residue::GLY, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N}},
+    {Residue::HIS, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_ND1, Link::CG_CD2, Link::ND1_CE1, Link::CD2_NE2,
+                    Link::CE1_NE2}},
+    {Residue::ILE, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG1, Link::CB_CG2, Link::CG1_CD1}},
+    {Residue::LEU, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD1, Link::CG_CD2}},
+    {Residue::LYS, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD, Link::CD_CE, Link::CE_NZ}},
+    {Residue::MET, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_SD, Link::SD_CE}},
+    {Residue::PHE, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD1, Link::CG_CD2, Link::CD1_CE1, Link::CD2_CE2,
+                    Link::CE1_CZ, Link::CE2_CZ}},
+    {Residue::PRO, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD, Link::N_CD}},
+    {Residue::SER, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_OG}},
+    {Residue::THR, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_OG1, Link::CB_CG2}},
+    {Residue::TRP, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD1, Link::CG_CD2, Link::CD1_NE1, Link::CD2_CE2,
+                    Link::CD2_CE3, Link::NE1_CE2, Link::CE2_CZ2, Link::CE3_CZ3, Link::CZ2_CH2,
+                    Link::CZ3_CH2}},
+    {Residue::TYR, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG, Link::CG_CD1, Link::CG_CD2, Link::CD1_CE1, Link::CD2_CE2,
+                    Link::CE1_CZ, Link::CE2_CZ, Link::CZ_OH}},
+    {Residue::VAL, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
+                    Link::CB_CG1, Link::CB_CG2}}
 };
 
 const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_element_map
@@ -255,7 +255,7 @@ size_t AminoAcidInfoHelper::GetAtomCount(Residue residue)
 
 size_t AminoAcidInfoHelper::GetBondCount(Residue residue)
 {
-    return m_bond_map.at(residue).size();
+    return m_link_map.at(residue).size();
 }
 
 size_t AminoAcidInfoHelper::GetAtomCount(int residue)
@@ -265,7 +265,7 @@ size_t AminoAcidInfoHelper::GetAtomCount(int residue)
 
 size_t AminoAcidInfoHelper::GetBondCount(int residue)
 {
-    return m_bond_map.at(static_cast<Residue>(residue)).size();
+    return m_link_map.at(static_cast<Residue>(residue)).size();
 }
 
 double AminoAcidInfoHelper::GetPartialCharge(
@@ -364,12 +364,12 @@ const std::vector<Spot> & AminoAcidInfoHelper::GetSpotList(Residue residue)
     return m_spot_map.at(residue);
 }
 
-const std::vector<Bond> & AminoAcidInfoHelper::GetBondList(Residue residue)
+const std::vector<Link> & AminoAcidInfoHelper::GetLinkList(Residue residue)
 {
-    if (m_bond_map.find(residue) == m_bond_map.end())
+    if (m_link_map.find(residue) == m_link_map.end())
     {
         throw std::out_of_range(
-            "AminoAcidInfoHelper::GetBondList ‑ residue is not supported");
+            "AminoAcidInfoHelper::GetLinkList ‑ residue is not supported");
     }
-    return m_bond_map.at(residue);
+    return m_link_map.at(residue);
 }

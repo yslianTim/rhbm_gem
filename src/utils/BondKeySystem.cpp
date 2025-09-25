@@ -13,10 +13,10 @@ BondKeySystem::BondKeySystem(void) :
     m_next_dynamic_key{ k_dynamic_base }
 {
     Logger::Log(LogLevel::Debug, "BondKeySystem::BondKeySystem() called");
-    const auto & build_in_bond_map{ AtomicInfoHelper::GetBondMap() };
-    for (const auto & [bond_id, bond] : build_in_bond_map)
+    const auto & build_in_link_map{ AtomicInfoHelper::GetLinkMap() };
+    for (const auto & [bond_id, link] : build_in_link_map)
     {
-        auto bond_key{ static_cast<BondKey>(bond) };
+        auto bond_key{ static_cast<BondKey>(link) };
         m_id_to_key_map.emplace(bond_id, bond_key);
         m_key_to_id_map.emplace(bond_key, std::string{bond_id});
         auto reverse_bond_id{ BuildReverseBondIdFromBondId(std::string{bond_id}) };

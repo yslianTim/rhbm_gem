@@ -170,79 +170,79 @@ const std::unordered_map<std::string_view, Spot> AtomicInfoHelper::m_spot_map
     
 };
 
-const std::unordered_map<std::string_view, Bond> AtomicInfoHelper::m_bond_map
+const std::unordered_map<std::string_view, Link> AtomicInfoHelper::m_link_map
 {
-    {"OP2_HOP2",  Bond::OP2_HOP2},
-    {"OP3_P",     Bond::OP3_P},    {"OP3_HOP3",  Bond::OP3_HOP3},
-    {"P_OP1",     Bond::P_OP1},    {"P_OP2",     Bond::P_OP2},    {"P_O5'",     Bond::P_O5p},
+    {"OP2_HOP2",  Link::OP2_HOP2},
+    {"OP3_P",     Link::OP3_P},    {"OP3_HOP3",  Link::OP3_HOP3},
+    {"P_OP1",     Link::P_OP1},    {"P_OP2",     Link::P_OP2},    {"P_O5'",     Link::P_O5p},
 
-    {"C1'_N1",    Bond::C1p_N1},   {"C1'_N9",    Bond::C1p_N9},   {"C1'_H1'",   Bond::C1p_H1p},
-    {"C2'_O2'",   Bond::C2p_O2p},  {"C2'_C1'",   Bond::C2p_C1p},  {"C2'_H2'",   Bond::C2p_H2p},
-    {"C2'_H2''",  Bond::C2p_H2pp}, {"C3'_O3'",   Bond::C3p_O3p},  {"C3'_C2'",   Bond::C3p_C2p},
-    {"C3'_H3'",   Bond::C3p_H3p},  {"C4'_O4'",   Bond::C4p_O4p},  {"C4'_C3'",   Bond::C4p_C3p},
-    {"C4'_H4'",   Bond::C4p_H4p},  {"C5'_C4'",   Bond::C5p_C4p},  {"C5'_H5'",   Bond::C5p_H5p},
-    {"C5'_H5''",  Bond::C5p_H5pp}, {"O2'_HO2'",  Bond::O2p_HO2p}, {"O3'_HO3'",  Bond::O3p_HO3p},
-    {"O4'_C1'",   Bond::O4p_C1p},  {"O5'_C5'",   Bond::O5p_C5p},
+    {"C1'_N1",    Link::C1p_N1},   {"C1'_N9",    Link::C1p_N9},   {"C1'_H1'",   Link::C1p_H1p},
+    {"C2'_O2'",   Link::C2p_O2p},  {"C2'_C1'",   Link::C2p_C1p},  {"C2'_H2'",   Link::C2p_H2p},
+    {"C2'_H2''",  Link::C2p_H2pp}, {"C3'_O3'",   Link::C3p_O3p},  {"C3'_C2'",   Link::C3p_C2p},
+    {"C3'_H3'",   Link::C3p_H3p},  {"C4'_O4'",   Link::C4p_O4p},  {"C4'_C3'",   Link::C4p_C3p},
+    {"C4'_H4'",   Link::C4p_H4p},  {"C5'_C4'",   Link::C5p_C4p},  {"C5'_H5'",   Link::C5p_H5p},
+    {"C5'_H5''",  Link::C5p_H5pp}, {"O2'_HO2'",  Link::O2p_HO2p}, {"O3'_HO3'",  Link::O3p_HO3p},
+    {"O4'_C1'",   Link::O4p_C1p},  {"O5'_C5'",   Link::O5p_C5p},
 
-    {"C2_H2",     Bond::C2_H2},    {"C2_O2",     Bond::C2_O2},    {"C2_N2",     Bond::C2_N2},
-    {"C2_N3",     Bond::C2_N3},
-    {"C4_N4",     Bond::C4_N4},    {"C4_O4",     Bond::C4_O4},    {"C4_C5",     Bond::C4_C5},
-    {"C5_C4",     Bond::C5_C4},    {"C5_H5",     Bond::C5_H5},    {"C5_C6",     Bond::C5_C6},
-    {"C5_C7",     Bond::C5_C7},
-    {"C6_N1",     Bond::C6_N1},    {"C6_N6",     Bond::C6_N6},    {"C6_H6",     Bond::C6_H6},
-    {"C6_O6",     Bond::C6_O6},
-    {"C7_H71",    Bond::C7_H71},   {"C7_H72",    Bond::C7_H72},   {"C7_H73",    Bond::C7_H73},
-    {"C8_N7",     Bond::C8_N7},    {"C8_H8",     Bond::C8_H8},    {"N1_H1",     Bond::N1_H1},
-    {"N1_C2",     Bond::N1_C2},    {"N1_C6",     Bond::N1_C6},    {"N2_H21",    Bond::N2_H21},
-    {"N2_H22",    Bond::N2_H22},   {"N3_C4",     Bond::N3_C4},    {"N3_H3",     Bond::N3_H3},
-    {"N4_H41",    Bond::N4_H41},   {"N4_H42",    Bond::N4_H42},   {"N6_H61",    Bond::N6_H61},
-    {"N6_H62",    Bond::N6_H62},   {"N7_C5",     Bond::N7_C5},    {"N9_C4",     Bond::N9_C4},
-    {"N9_C8",     Bond::N9_C8},
+    {"C2_H2",     Link::C2_H2},    {"C2_O2",     Link::C2_O2},    {"C2_N2",     Link::C2_N2},
+    {"C2_N3",     Link::C2_N3},
+    {"C4_N4",     Link::C4_N4},    {"C4_O4",     Link::C4_O4},    {"C4_C5",     Link::C4_C5},
+    {"C5_C4",     Link::C5_C4},    {"C5_H5",     Link::C5_H5},    {"C5_C6",     Link::C5_C6},
+    {"C5_C7",     Link::C5_C7},
+    {"C6_N1",     Link::C6_N1},    {"C6_N6",     Link::C6_N6},    {"C6_H6",     Link::C6_H6},
+    {"C6_O6",     Link::C6_O6},
+    {"C7_H71",    Link::C7_H71},   {"C7_H72",    Link::C7_H72},   {"C7_H73",    Link::C7_H73},
+    {"C8_N7",     Link::C8_N7},    {"C8_H8",     Link::C8_H8},    {"N1_H1",     Link::N1_H1},
+    {"N1_C2",     Link::N1_C2},    {"N1_C6",     Link::N1_C6},    {"N2_H21",    Link::N2_H21},
+    {"N2_H22",    Link::N2_H22},   {"N3_C4",     Link::N3_C4},    {"N3_H3",     Link::N3_H3},
+    {"N4_H41",    Link::N4_H41},   {"N4_H42",    Link::N4_H42},   {"N6_H61",    Link::N6_H61},
+    {"N6_H62",    Link::N6_H62},   {"N7_C5",     Link::N7_C5},    {"N9_C4",     Link::N9_C4},
+    {"N9_C8",     Link::N9_C8},
 
-    {"N_CA", Bond::N_CA}, {"N_CD", Bond::N_CD}, {"N_H", Bond::N_H},
-    {"N_H2", Bond::N_H2},
-    {"CA_C", Bond::CA_C}, {"CA_CB", Bond::CA_CB}, {"CA_HA", Bond::CA_HA},
-    {"C_N", Bond::C_N},
-    {"C_O", Bond::C_O}, {"C_OXT", Bond::C_OXT},
+    {"N_CA", Link::N_CA}, {"N_CD", Link::N_CD}, {"N_H", Link::N_H},
+    {"N_H2", Link::N_H2},
+    {"CA_C", Link::CA_C}, {"CA_CB", Link::CA_CB}, {"CA_HA", Link::CA_HA},
+    {"C_N", Link::C_N},
+    {"C_O", Link::C_O}, {"C_OXT", Link::C_OXT},
 
-    {"CB_CG", Bond::CB_CG}, {"CB_OG", Bond::CB_OG}, {"CB_SG", Bond::CB_SG},
-    {"CB_CG1", Bond::CB_CG1}, {"CB_CG2", Bond::CB_CG2}, {"CB_OG1", Bond::CB_OG1},
-    {"CB_HB", Bond::CB_HB},
-    {"CB_HB1", Bond::CB_HB1}, {"CB_HB2", Bond::CB_HB2}, {"CB_HB3", Bond::CB_HB3},
-    {"CG_CD", Bond::CG_CD}, {"CG_CD1", Bond::CG_CD1}, {"CG_CD2", Bond::CG_CD2},
-    {"CG_HG", Bond::CG_HG}, {"CG_HG2", Bond::CG_HG2}, {"CG_HG3", Bond::CG_HG3},
-    {"CG_OD1", Bond::CG_OD1}, {"CG_OD2", Bond::CG_OD2}, {"CG_ND1", Bond::CG_ND1},
-    {"CG_ND2", Bond::CG_ND2}, {"CG_SD", Bond::CG_SD},
+    {"CB_CG", Link::CB_CG}, {"CB_OG", Link::CB_OG}, {"CB_SG", Link::CB_SG},
+    {"CB_CG1", Link::CB_CG1}, {"CB_CG2", Link::CB_CG2}, {"CB_OG1", Link::CB_OG1},
+    {"CB_HB", Link::CB_HB},
+    {"CB_HB1", Link::CB_HB1}, {"CB_HB2", Link::CB_HB2}, {"CB_HB3", Link::CB_HB3},
+    {"CG_CD", Link::CG_CD}, {"CG_CD1", Link::CG_CD1}, {"CG_CD2", Link::CG_CD2},
+    {"CG_HG", Link::CG_HG}, {"CG_HG2", Link::CG_HG2}, {"CG_HG3", Link::CG_HG3},
+    {"CG_OD1", Link::CG_OD1}, {"CG_OD2", Link::CG_OD2}, {"CG_ND1", Link::CG_ND1},
+    {"CG_ND2", Link::CG_ND2}, {"CG_SD", Link::CG_SD},
 
-    {"CG1_CD1", Bond::CG1_CD1}, {"CG1_HG11", Bond::CG1_HG11}, {"CG1_HG12", Bond::CG1_HG12},
-    {"CG1_HG13", Bond::CG1_HG13}, {"CG2_HG21", Bond::CG2_HG21}, {"CG2_HG22", Bond::CG2_HG22},
-    {"CG2_HG23", Bond::CG2_HG23}, {"CD_CE", Bond::CD_CE}, {"CD_NE", Bond::CD_NE},
-    {"CD_NE2", Bond::CD_NE2}, {"CD_OE1", Bond::CD_OE1}, {"CD_OE2", Bond::CD_OE2},
-    {"CD_HD2", Bond::CD_HD2}, {"CD_HD3", Bond::CD_HD3}, {"CD1_CE1", Bond::CD1_CE1},
-    {"CD1_NE1", Bond::CD1_NE1}, {"CD1_HD1", Bond::CD1_HD1}, {"CD1_HD11", Bond::CD1_HD11},
-    {"CD1_HD12", Bond::CD1_HD12}, {"CD1_HD13", Bond::CD1_HD13}, {"CD2_CE2", Bond::CD2_CE2},
-    {"CD2_CE3", Bond::CD2_CE3}, {"CD2_NE2", Bond::CD2_NE2}, {"CD2_HD2", Bond::CD2_HD2},
-    {"CD2_HD21", Bond::CD2_HD21}, {"CD2_HD22", Bond::CD2_HD22}, {"CD1_HD23", Bond::CD1_HD23},
+    {"CG1_CD1", Link::CG1_CD1}, {"CG1_HG11", Link::CG1_HG11}, {"CG1_HG12", Link::CG1_HG12},
+    {"CG1_HG13", Link::CG1_HG13}, {"CG2_HG21", Link::CG2_HG21}, {"CG2_HG22", Link::CG2_HG22},
+    {"CG2_HG23", Link::CG2_HG23}, {"CD_CE", Link::CD_CE}, {"CD_NE", Link::CD_NE},
+    {"CD_NE2", Link::CD_NE2}, {"CD_OE1", Link::CD_OE1}, {"CD_OE2", Link::CD_OE2},
+    {"CD_HD2", Link::CD_HD2}, {"CD_HD3", Link::CD_HD3}, {"CD1_CE1", Link::CD1_CE1},
+    {"CD1_NE1", Link::CD1_NE1}, {"CD1_HD1", Link::CD1_HD1}, {"CD1_HD11", Link::CD1_HD11},
+    {"CD1_HD12", Link::CD1_HD12}, {"CD1_HD13", Link::CD1_HD13}, {"CD2_CE2", Link::CD2_CE2},
+    {"CD2_CE3", Link::CD2_CE3}, {"CD2_NE2", Link::CD2_NE2}, {"CD2_HD2", Link::CD2_HD2},
+    {"CD2_HD21", Link::CD2_HD21}, {"CD2_HD22", Link::CD2_HD22}, {"CD1_HD23", Link::CD1_HD23},
 
-    {"CE_NZ", Bond::CE_NZ}, {"CE_HE1", Bond::CE_HE1}, {"CE_HE2", Bond::CE_HE2},
-    {"CE_HE3", Bond::CE_HE3}, {"CE1_CZ", Bond::CE1_CZ}, {"CE1_NE2", Bond::CE1_NE2},
-    {"CE1_HE1", Bond::CE1_HE1}, {"CE2_CZ", Bond::CE2_CZ}, {"CE2_CZ2", Bond::CE2_CZ2},
-    {"CE2_HE2", Bond::CE2_HE2}, {"CE3_CZ3", Bond::CE3_CZ3}, {"CE3_HE3", Bond::CE3_HE3},
-    {"CZ_HZ", Bond::CZ_HZ}, {"CZ_NH1", Bond::CZ_NH1}, {"CZ_NH2", Bond::CZ_NH2},
-    {"CZ_OH", Bond::CZ_OH}, {"CZ2_CH2", Bond::CZ2_CH2}, {"CZ2_HZ2", Bond::CZ2_HZ2},
-    {"CZ3_CH2", Bond::CZ3_CH2}, {"CZ3_HZ3", Bond::CZ3_HZ3}, {"CH2_HH2", Bond::CH2_HH2},
+    {"CE_NZ", Link::CE_NZ}, {"CE_HE1", Link::CE_HE1}, {"CE_HE2", Link::CE_HE2},
+    {"CE_HE3", Link::CE_HE3}, {"CE1_CZ", Link::CE1_CZ}, {"CE1_NE2", Link::CE1_NE2},
+    {"CE1_HE1", Link::CE1_HE1}, {"CE2_CZ", Link::CE2_CZ}, {"CE2_CZ2", Link::CE2_CZ2},
+    {"CE2_HE2", Link::CE2_HE2}, {"CE3_CZ3", Link::CE3_CZ3}, {"CE3_HE3", Link::CE3_HE3},
+    {"CZ_HZ", Link::CZ_HZ}, {"CZ_NH1", Link::CZ_NH1}, {"CZ_NH2", Link::CZ_NH2},
+    {"CZ_OH", Link::CZ_OH}, {"CZ2_CH2", Link::CZ2_CH2}, {"CZ2_HZ2", Link::CZ2_HZ2},
+    {"CZ3_CH2", Link::CZ3_CH2}, {"CZ3_HZ3", Link::CZ3_HZ3}, {"CH2_HH2", Link::CH2_HH2},
 
-    {"ND1_CE1", Bond::ND1_CE1}, {"ND1_HD1", Bond::ND1_HD1},
-    {"ND2_HD21", Bond::ND2_HD21}, {"ND2_HD22", Bond::ND2_HD22},
-    {"NE_CZ", Bond::NE_CZ}, {"NE_HE", Bond::NE_HE}, {"NE1_CE2", Bond::NE1_CE2},
-    {"NE1_HE1", Bond::NE1_HE1}, {"NE2_HE2", Bond::NE2_HE2}, {"NE2_HE21", Bond::NE2_HE21},
-    {"NE2_HE22", Bond::NE2_HE22}, {"NZ_HZ1", Bond::NZ_HZ1}, {"NZ_HZ2", Bond::NZ_HZ2},
-    {"NZ_HZ3", Bond::NZ_HZ3}, {"NH1_HH11", Bond::NH1_HH11}, {"NH1_HH12", Bond::NH1_HH12},
-    {"NH2_HH21", Bond::NH2_HH21}, {"NH2_HH22", Bond::NH2_HH22},
+    {"ND1_CE1", Link::ND1_CE1}, {"ND1_HD1", Link::ND1_HD1},
+    {"ND2_HD21", Link::ND2_HD21}, {"ND2_HD22", Link::ND2_HD22},
+    {"NE_CZ", Link::NE_CZ}, {"NE_HE", Link::NE_HE}, {"NE1_CE2", Link::NE1_CE2},
+    {"NE1_HE1", Link::NE1_HE1}, {"NE2_HE2", Link::NE2_HE2}, {"NE2_HE21", Link::NE2_HE21},
+    {"NE2_HE22", Link::NE2_HE22}, {"NZ_HZ1", Link::NZ_HZ1}, {"NZ_HZ2", Link::NZ_HZ2},
+    {"NZ_HZ3", Link::NZ_HZ3}, {"NH1_HH11", Link::NH1_HH11}, {"NH1_HH12", Link::NH1_HH12},
+    {"NH2_HH21", Link::NH2_HH21}, {"NH2_HH22", Link::NH2_HH22},
 
-    {"O_H1", Bond::O_H1}, {"O_H2", Bond::O_H2}, {"OG_HG", Bond::OG_HG},
-    {"OG1_HG1", Bond::OG1_HG1}, {"OD2_HD2", Bond::OD2_HD2}, {"OE2_HE2", Bond::OE2_HE2},
-    {"OH_HH", Bond::OH_HH}, {"OXT_HXT", Bond::OXT_HXT}, {"SD_CE", Bond::SD_CE}
+    {"O_H1", Link::O_H1}, {"O_H2", Link::O_H2}, {"OG_HG", Link::OG_HG},
+    {"OG1_HG1", Link::OG1_HG1}, {"OD2_HD2", Link::OD2_HD2}, {"OE2_HE2", Link::OE2_HE2},
+    {"OH_HH", Link::OH_HH}, {"OXT_HXT", Link::OXT_HXT}, {"SD_CE", Link::SD_CE}
 };
 
 const std::unordered_map<std::string_view, Structure> AtomicInfoHelper::m_structure_map
@@ -450,9 +450,9 @@ const std::unordered_map<std::string_view, Spot> & AtomicInfoHelper::GetSpotMap(
     return m_spot_map;
 }
 
-const std::unordered_map<std::string_view, Bond> & AtomicInfoHelper::GetBondMap(void)
+const std::unordered_map<std::string_view, Link> & AtomicInfoHelper::GetLinkMap(void)
 {
-    return m_bond_map;
+    return m_link_map;
 }
 
 const std::unordered_map<Element, std::string> & AtomicInfoHelper::GetElementLabelMap(void)
@@ -559,17 +559,17 @@ Spot AtomicInfoHelper::GetSpotFromString(const std::string & name, bool verbose)
     return m_spot_map.at(name);
 }
 
-Bond AtomicInfoHelper::GetBondFromString(const std::string & name, bool verbose)
+Link AtomicInfoHelper::GetLinkFromString(const std::string & name, bool verbose)
 {
     thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
-    if (m_bond_map.find(name) == m_bond_map.end())
+    if (m_link_map.find(name) == m_link_map.end())
     {
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
             if (verbose)
             {
                 Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetBondFromString - Unknown string: " + name);
+                    "AtomicInfoHelper::GetLinkFromString - Unknown string: " + name);
             }
             unknown_name_count_list[name] = 1;
         }
@@ -577,9 +577,9 @@ Bond AtomicInfoHelper::GetBondFromString(const std::string & name, bool verbose)
         {
             unknown_name_count_list[name]++;
         }
-        return Bond::UNK;
+        return Link::UNK;
     }
-    return m_bond_map.at(name);
+    return m_link_map.at(name);
 }
 
 Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)

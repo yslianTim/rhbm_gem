@@ -904,9 +904,9 @@ void ModelPainter::PaintBondGroupGausSideChain(
         auto count{ 0 };
         auto amplitude_graph{ ROOTHelper::CreateGraphErrors() };
         auto width_graph{ ROOTHelper::CreateGraphErrors() };
-        for (auto & bond : AminoAcidInfoHelper::GetBondList(residue))
+        for (auto & link : AminoAcidInfoHelper::GetLinkList(residue))
         {
-            auto bond_key{ static_cast<BondKey>(bond) };
+            auto bond_key{ static_cast<BondKey>(link) };
             auto bond_id{ model_object->GetBondKeySystemPtr()->GetBondId(bond_key) };
             auto group_key{ BondClassifier::GetGroupKeyInClass(component_key, bond_key) };
             if (entry_iter->IsAvailableBondGroupKey(group_key, AtomicInfoHelper::GetComponentBondClassKey()) == true)

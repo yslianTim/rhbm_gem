@@ -24,9 +24,9 @@ const std::vector<short> BondClassifier::m_main_chain_member_open_marker_list
     25, 24, 26, 32
 };
 
-const std::vector<Bond> BondClassifier::m_main_chain_member_bond_list
+const std::vector<Link> BondClassifier::m_main_chain_member_link_list
 {
-    Bond::N_CA, Bond::CA_C, Bond::C_O, Bond::C_N
+    Link::N_CA, Link::CA_C, Link::C_O, Link::C_N
 };
 
 const std::vector<std::string> BondClassifier::m_main_chain_member_title_list
@@ -55,11 +55,11 @@ BondClassifier::~BondClassifier()
 
 }
 
-bool BondClassifier::IsMainChainMember(Bond bond, size_t & main_chain_member_id)
+bool BondClassifier::IsMainChainMember(Link link, size_t & main_chain_member_id)
 {
     for (size_t i = 0; i < m_main_chain_member_count; i++)
     {
-        if (m_main_chain_member_bond_list.at(i) == bond)
+        if (m_main_chain_member_link_list.at(i) == link)
         {
             main_chain_member_id = i;
             return true;
@@ -101,10 +101,10 @@ short BondClassifier::GetMainChainMemberOpenMarker(size_t id)
     return m_main_chain_member_open_marker_list.at(id);
 }
 
-Bond BondClassifier::GetMainChainBond(size_t id)
+Link BondClassifier::GetMainChainLink(size_t id)
 {
-    if (IsValidMainChainMemberID(id) == false) return Bond::UNK;
-    return m_main_chain_member_bond_list.at(id);
+    if (IsValidMainChainMemberID(id) == false) return Link::UNK;
+    return m_main_chain_member_link_list.at(id);
 }
 
 const std::string & BondClassifier::GetMainChainMemberLabel(size_t id)
@@ -152,7 +152,7 @@ GroupKey BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id)
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto bond_key{ static_cast<BondKey>(m_main_chain_member_bond_list.at(id)) };
+    auto bond_key{ static_cast<BondKey>(m_main_chain_member_link_list.at(id)) };
     return KeyPackerSimpleBondClass::Pack(bond_key, false);
 }
 
@@ -163,7 +163,7 @@ GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Resid
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto bond_key{ static_cast<BondKey>(m_main_chain_member_bond_list.at(id)) };
+    auto bond_key{ static_cast<BondKey>(m_main_chain_member_link_list.at(id)) };
     auto component_key{ static_cast<ComponentKey>(residue) };
     return KeyPackerComponentBondClass::Pack(component_key, bond_key);
 }
