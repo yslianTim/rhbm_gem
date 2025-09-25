@@ -23,8 +23,6 @@ public:
 
     static size_t GetAtomCount(Residue residue);
     static size_t GetBondCount(Residue residue);
-    static size_t GetAtomCount(int residue);
-    static size_t GetBondCount(int residue);
     static double GetPartialCharge(
         Residue residue, Spot spot, Structure structure,
         bool use_amber_table=false, bool verbose=false

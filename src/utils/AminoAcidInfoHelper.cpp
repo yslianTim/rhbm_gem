@@ -258,16 +258,6 @@ size_t AminoAcidInfoHelper::GetBondCount(Residue residue)
     return m_link_map.at(residue).size();
 }
 
-size_t AminoAcidInfoHelper::GetAtomCount(int residue)
-{
-    return m_spot_map.at(static_cast<Residue>(residue)).size();
-}
-
-size_t AminoAcidInfoHelper::GetBondCount(int residue)
-{
-    return m_link_map.at(static_cast<Residue>(residue)).size();
-}
-
 double AminoAcidInfoHelper::GetPartialCharge(
     Residue residue, Spot spot, Structure structure,
     bool use_amber_table, bool verbose)

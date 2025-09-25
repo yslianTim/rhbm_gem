@@ -26,15 +26,6 @@ TEST_F(AminoAcidInfoHelperTest, GetAtomCountResidue)
     EXPECT_THROW(AminoAcidInfoHelper::GetAtomCount(Residue::UNK), std::out_of_range);
 }
 
-TEST_F(AminoAcidInfoHelperTest, GetAtomCountInt)
-{
-    EXPECT_EQ(5u, AminoAcidInfoHelper::GetAtomCount(static_cast<int>(Residue::ALA)));
-    EXPECT_EQ(4u, AminoAcidInfoHelper::GetAtomCount(static_cast<int>(Residue::GLY)));
-    EXPECT_THROW(
-        AminoAcidInfoHelper::GetAtomCount(static_cast<int>(Residue::UNK)),
-        std::out_of_range);
-}
-
 TEST_F(AminoAcidInfoHelperTest, GetPartialChargeListReturnsExpected)
 {
     const auto & free_list{
