@@ -8,7 +8,7 @@
 #include "FilePathHelper.hpp"
 #include "ElectricPotential.hpp"
 #include "KDTreeAlgorithm.hpp"
-#include "AminoAcidInfoHelper.hpp"
+#include "ComponentHelper.hpp"
 #include "ArrayStats.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
@@ -240,12 +240,12 @@ double MapSimulationCommand::CalculateAtomCharge(AtomObject * atom) const
         case PartialCharge::NEUTRAL:
             return 0.0;
         case PartialCharge::PARTIAL:
-            return AminoAcidInfoHelper::GetPartialCharge(
+            return ComponentHelper::GetPartialCharge(
                 atom->GetResidue(),
                 atom->GetSpot(),
                 atom->GetStructure());
         case PartialCharge::AMBER:
-            return AminoAcidInfoHelper::GetPartialCharge(
+            return ComponentHelper::GetPartialCharge(
                 atom->GetResidue(),
                 atom->GetSpot(),
                 atom->GetStructure(), true);

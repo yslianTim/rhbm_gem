@@ -6,7 +6,7 @@
 #include "PotentialEntryIterator.hpp"
 #include "FilePathHelper.hpp"
 #include "AtomicInfoHelper.hpp"
-#include "AminoAcidInfoHelper.hpp"
+#include "ComponentHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "BondClassifier.hpp"
 #include "ArrayStats.hpp"
@@ -721,7 +721,7 @@ void ModelPainter::PaintAtomGroupGausSideChain(
             auto count_mix{ 0 };
             auto count_free{ 0 };
             auto count_helix{ 0 };
-            for (auto & spot : AminoAcidInfoHelper::GetSpotList(residue))
+            for (auto & spot : ComponentHelper::GetSpotList(residue))
             {
                 auto atom_key{ static_cast<AtomKey>(spot) };
                 auto atom_id{ model_object->GetAtomKeySystemPtr()->GetAtomId(atom_key) };
@@ -904,7 +904,7 @@ void ModelPainter::PaintBondGroupGausSideChain(
         auto count{ 0 };
         auto amplitude_graph{ ROOTHelper::CreateGraphErrors() };
         auto width_graph{ ROOTHelper::CreateGraphErrors() };
-        for (auto & link : AminoAcidInfoHelper::GetLinkList(residue))
+        for (auto & link : ComponentHelper::GetLinkList(residue))
         {
             auto bond_key{ static_cast<BondKey>(link) };
             auto bond_id{ model_object->GetBondKeySystemPtr()->GetBondId(bond_key) };

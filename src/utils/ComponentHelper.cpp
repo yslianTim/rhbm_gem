@@ -1,4 +1,4 @@
-#include "AminoAcidInfoHelper.hpp"
+#include "ComponentHelper.hpp"
 #include "AtomicInfoHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "Logger.hpp"
@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <mutex>
 
-const std::unordered_map<Residue, std::vector<Spot>> AminoAcidInfoHelper::m_spot_map
+const std::unordered_map<Residue, std::vector<Spot>> ComponentHelper::m_spot_map
 {
     {Residue::ALA, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB}},
     {Residue::ARG, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG, Spot::CD, Spot::NE, Spot::CZ, Spot::NH1, Spot::NH2}},
@@ -30,7 +30,7 @@ const std::unordered_map<Residue, std::vector<Spot>> AminoAcidInfoHelper::m_spot
     {Residue::VAL, {Spot::C, Spot::CA, Spot::N, Spot::O, Spot::CB, Spot::CG1, Spot::CG2}}
 };
 
-const std::unordered_map<Residue, std::vector<Link>> AminoAcidInfoHelper::m_link_map
+const std::unordered_map<Residue, std::vector<Link>> ComponentHelper::m_link_map
 {
     {Residue::ALA, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB}},
     {Residue::ARG, {Link::N_CA, Link::CA_C, Link::C_O, Link::C_N, Link::CA_CB,
@@ -77,7 +77,7 @@ const std::unordered_map<Residue, std::vector<Link>> AminoAcidInfoHelper::m_link
                     Link::CB_CG1, Link::CB_CG2}}
 };
 
-const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_element_map
+const std::unordered_map<Residue, std::vector<Element>> ComponentHelper::m_element_map
 {
     {Residue::ALA, {Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
                     Element::CARBON}},
@@ -148,7 +148,7 @@ const std::unordered_map<Residue, std::vector<Element>> AminoAcidInfoHelper::m_e
                     Element::CARBON, Element::CARBON, Element::CARBON}}
 };
 
-const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_amber95_partial_charge_map
+const std::unordered_map<Residue, std::vector<double>> ComponentHelper::m_amber95_partial_charge_map
 {
     //               C      CA     N      O      CB
     {Residue::ALA, { 0.597, 0.034,-0.416,-0.568,-0.183}},
@@ -173,7 +173,7 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_am
     {Residue::VAL, { 0.597,-0.088,-0.416,-0.568, 0.299,-0.319,-0.319}}
 };
 
-const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_buried_partial_charge_map
+const std::unordered_map<Residue, std::vector<double>> ComponentHelper::m_buried_partial_charge_map
 {
     //               C      CA     N      O      CB
     {Residue::ALA, { 0.560, 0.267,-0.592,-0.673,-0.392}},
@@ -198,7 +198,7 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_bu
     {Residue::VAL, { 0.560, 0.215,-0.588,-0.661,-0.005,-0.362,-0.360}}
 };
 
-const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_helix_partial_charge_map
+const std::unordered_map<Residue, std::vector<double>> ComponentHelper::m_helix_partial_charge_map
 {
     //               C      CA     N      O      CB
     {Residue::ALA, { 0.559, 0.272,-0.598,-0.701,-0.400}},
@@ -223,7 +223,7 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_he
     {Residue::VAL, { 0.559, 0.220,-0.602,-0.695,-0.013,-0.362,-0.362}}
 };
 
-const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_sheet_partial_charge_map
+const std::unordered_map<Residue, std::vector<double>> ComponentHelper::m_sheet_partial_charge_map
 {
     //               C      CA     N      O      CB
     {Residue::ALA, { 0.562, 0.264,-0.588,-0.661,-0.380}},
@@ -248,17 +248,17 @@ const std::unordered_map<Residue, std::vector<double>> AminoAcidInfoHelper::m_sh
     {Residue::VAL, { 0.563, 0.214,-0.587,-0.657, 0.000,-0.361,-0.356}}
 };
 
-size_t AminoAcidInfoHelper::GetAtomCount(Residue residue)
+size_t ComponentHelper::GetAtomCount(Residue residue)
 {
     return m_spot_map.at(residue).size();
 }
 
-size_t AminoAcidInfoHelper::GetBondCount(Residue residue)
+size_t ComponentHelper::GetBondCount(Residue residue)
 {
     return m_link_map.at(residue).size();
 }
 
-double AminoAcidInfoHelper::GetPartialCharge(
+double ComponentHelper::GetPartialCharge(
     Residue residue, Spot spot, Structure structure,
     bool use_amber_table, bool verbose)
 {
@@ -285,7 +285,7 @@ double AminoAcidInfoHelper::GetPartialCharge(
             if (atom_size != charge_list.size())
             {
                 throw std::range_error(
-                    "AminoAcidInfoHelper::GetPartialCharge ‑ the four vectors are not aligned");
+                    "ComponentHelper::GetPartialCharge ‑ the four vectors are not aligned");
             }
 
             residue_cache.reserve(atom_size);
@@ -300,7 +300,7 @@ double AminoAcidInfoHelper::GetPartialCharge(
         if (verbose == true)
         {
             Logger::Log(LogLevel::Warning,
-                "AminoAcidInfoHelper::GetPartialCharge ‑ " + std::string(except.what()));
+                "ComponentHelper::GetPartialCharge ‑ " + std::string(except.what()));
         }
         return 0.0;
     }
@@ -317,7 +317,7 @@ double AminoAcidInfoHelper::GetPartialCharge(
     return 0.0;
 }
 
-const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeList(
+const std::vector<double> & ComponentHelper::GetPartialChargeList(
     Residue residue, Structure structure)
 {
     if (structure == Structure::FREE)
@@ -335,31 +335,31 @@ const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeList(
     else
     {
         throw std::out_of_range(
-            "AminoAcidInfoHelper::GetPartialChargeList ‑ structure is not supported");
+            "ComponentHelper::GetPartialChargeList ‑ structure is not supported");
     }
 }
 
-const std::vector<double> & AminoAcidInfoHelper::GetPartialChargeListAmber(Residue residue)
+const std::vector<double> & ComponentHelper::GetPartialChargeListAmber(Residue residue)
 {
     return m_amber95_partial_charge_map.at(residue);
 }
 
-const std::vector<Spot> & AminoAcidInfoHelper::GetSpotList(Residue residue)
+const std::vector<Spot> & ComponentHelper::GetSpotList(Residue residue)
 {
     if (m_spot_map.find(residue) == m_spot_map.end())
     {
         throw std::out_of_range(
-            "AminoAcidInfoHelper::GetSpotList ‑ residue is not supported");
+            "ComponentHelper::GetSpotList ‑ residue is not supported");
     }
     return m_spot_map.at(residue);
 }
 
-const std::vector<Link> & AminoAcidInfoHelper::GetLinkList(Residue residue)
+const std::vector<Link> & ComponentHelper::GetLinkList(Residue residue)
 {
     if (m_link_map.find(residue) == m_link_map.end())
     {
         throw std::out_of_range(
-            "AminoAcidInfoHelper::GetLinkList ‑ residue is not supported");
+            "ComponentHelper::GetLinkList ‑ residue is not supported");
     }
     return m_link_map.at(residue);
 }

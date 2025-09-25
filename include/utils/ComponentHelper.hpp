@@ -7,7 +7,7 @@
 
 #include "GlobalEnumClass.hpp"
 
-class AminoAcidInfoHelper
+class ComponentHelper
 {
     static const std::unordered_map<Residue, std::vector<Spot>> m_spot_map;
     static const std::unordered_map<Residue, std::vector<Link>> m_link_map;
@@ -18,8 +18,8 @@ class AminoAcidInfoHelper
     static const std::unordered_map<Residue, std::vector<double>> m_sheet_partial_charge_map;
 
 public:
-    AminoAcidInfoHelper(void) = default;
-    ~AminoAcidInfoHelper() = default;
+    ComponentHelper(void) = default;
+    ~ComponentHelper() = default;
 
     static size_t GetAtomCount(Residue residue);
     static size_t GetBondCount(Residue residue);

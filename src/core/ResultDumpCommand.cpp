@@ -10,7 +10,7 @@
 #include "GroupPotentialEntry.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "AtomicInfoHelper.hpp"
-#include "AminoAcidInfoHelper.hpp"
+#include "ComponentHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
 #include "StringHelper.hpp"
@@ -346,7 +346,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
         {
             auto residue_name{ AtomicInfoHelper::GetLabel(residue) };
             auto component_key{ static_cast<ComponentKey>(residue) };
-            for (auto & spot : AminoAcidInfoHelper::GetSpotList(residue))
+            for (auto & spot : ComponentHelper::GetSpotList(residue))
             {
                 auto atom_key{ static_cast<uint16_t>(spot) };
                 auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
