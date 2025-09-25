@@ -1,5 +1,5 @@
 #include "ElectricPotential.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "Logger.hpp"
 
@@ -234,7 +234,7 @@ ElectricPotential::ModelChoice ElectricPotential::CheckModelChoice(int value) co
 double ElectricPotential::CalculateSingleGausModel(
     Element element, double distance) const
 {
-    auto atomic_number{ AtomicInfoHelper::GetAtomicNumber(element) };
+    auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
     auto inv_atomic_number{ 1.0/static_cast<double>(atomic_number) };
     auto sigma_total_square{ inv_atomic_number * inv_atomic_number + m_blurring_width * m_blurring_width };
     auto distance_square{ distance * distance };

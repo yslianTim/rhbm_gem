@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 #include "ElectricPotential.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "Constants.hpp"
 
@@ -17,7 +17,7 @@ constexpr double F_1{ 14.39964393 };
 
 double ComputeSingleGaus(Element element, double distance, double blurring_width)
 {
-    const double atomic_number{ static_cast<double>(AtomicInfoHelper::GetAtomicNumber(element)) };
+    const double atomic_number{ static_cast<double>(ChemicalDataHelper::GetAtomicNumber(element)) };
     const double inv_atomic_number{ 1.0 / atomic_number };
     const double sigma_total_square{ inv_atomic_number * inv_atomic_number +
                                      blurring_width * blurring_width };
@@ -134,7 +134,7 @@ TEST(ElectricPotentialTest, DefaultConstructorSetsExpectedState)
     double computed{ potential.GetPotentialValue(element, distance, 0.0) };
 
     // Expected value computed independently using blurring width 0.5
-    int atomic_number{ AtomicInfoHelper::GetAtomicNumber(element) };
+    int atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
     double inv_atomic_number{ 1.0 / static_cast<double>(atomic_number) };
     double sigma_total_square{ inv_atomic_number * inv_atomic_number + 0.5 * 0.5 };
     double distance_square{ distance * distance };
@@ -159,7 +159,7 @@ TEST(ElectricPotentialTest, SingleGaussianCarbon)
     double computed{ potential.GetPotentialValue(element, distance, 0.0) };
 
     // Expected value using the formula from CalculateSingleGausModel
-    int atomic_number{ AtomicInfoHelper::GetAtomicNumber(element) };
+    int atomic_number{ ChemicalDataHelper::GetAtomicNumber(element) };
     double inv_atomic_number{ 1.0 / static_cast<double>(atomic_number) };
     double sigma_total_square{ inv_atomic_number * inv_atomic_number + 0.1 * 0.1 };
     double distance_square{ distance * distance };

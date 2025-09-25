@@ -7,7 +7,7 @@
 #include "FilePathHelper.hpp"
 #include "ArrayStats.hpp"
 #include "AtomClassifier.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "DataObjectManager.hpp"
 #include "Logger.hpp"
@@ -147,7 +147,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
             sim_no_charge_graph[i][j] = ROOTHelper::CreateGraphErrors();
             sim_additional_graph[i][j] = ROOTHelper::CreateGraphErrors();
 
-            auto class_key{ (j == row_size - 1) ? AtomicInfoHelper::GetSimpleAtomClassKey() : AtomicInfoHelper::GetComponentAtomClassKey() };
+            auto class_key{ (j == row_size - 1) ? ChemicalDataHelper::GetSimpleAtomClassKey() : ChemicalDataHelper::GetComponentAtomClassKey() };
             BuildAmplitudeRatioToWidthGraph(i, ref_id[i], data_graph[i][j].get(), m_model_object_list, class_key, true, residue_id[j]);
             BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_with_charge_graph[i][j].get(), sim_with_charge_model_object_list, class_key, false, residue_id[j]);
             BuildAmplitudeRatioToWidthGraph(i, ref_id[i], sim_no_charge_graph[i][j].get(), sim_no_charge_model_object_list, class_key, false, residue_id[j]);
@@ -187,9 +187,9 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
         simulation1_graph[i] = ROOTHelper::CreateGraphErrors();
         simulation2_graph[i] = ROOTHelper::CreateGraphErrors();
         simulation3_graph[i] = ROOTHelper::CreateGraphErrors();
-        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation1_graph[i].get(), sim_with_charge_model_object_list, AtomicInfoHelper::GetSimpleAtomClassKey());
-        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation2_graph[i].get(), sim_amber95_model_object_list, AtomicInfoHelper::GetSimpleAtomClassKey());
-        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation3_graph[i].get(), sim_no_charge_model_object_list, AtomicInfoHelper::GetSimpleAtomClassKey());
+        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation1_graph[i].get(), sim_with_charge_model_object_list, ChemicalDataHelper::GetSimpleAtomClassKey());
+        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation2_graph[i].get(), sim_amber95_model_object_list, ChemicalDataHelper::GetSimpleAtomClassKey());
+        BuildGausRatioToResolutionGraph(par_id[i], target_id, reference_id, simulation3_graph[i].get(), sim_no_charge_model_object_list, ChemicalDataHelper::GetSimpleAtomClassKey());
         for (int p = 0; p < simulation1_graph[i]->GetN(); p++)
         {
             x_array_sim.push_back(simulation1_graph[i]->GetPointX(p));
@@ -263,7 +263,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
                 ROOTHelper::SetFillAttribute(info_text[j].get(), 1001, kAzure-7);
                 ROOTHelper::SetTextAttribute(info_text[j].get(), 70.0f, 133, 22, 0.0, kYellow-10);
                 if (j == row_size - 1) info_text[j]->AddText("#splitline{Whole}{Protein}");
-                else info_text[j]->AddText(Form("#font[102]{%s}", AtomicInfoHelper::GetLabel(residue_id[j]).data()));
+                else info_text[j]->AddText(Form("#font[102]{%s}", ChemicalDataHelper::GetLabel(residue_id[j]).data()));
                 info_text[j]->Draw();
             }
 
@@ -432,7 +432,7 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ComparisonPainter::PaintGausEstimateResidueClassDenseComparison");
 
-    auto class_key{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     
     auto sim_with_charge_model_object_list{ m_ref_model_object_list_map.at("with_charge")};
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
@@ -541,7 +541,7 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
             ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
             ROOTHelper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22, 0.0, kYellow-10);
             ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, kAzure-7);
-            title_text[i]->AddText(AtomicInfoHelper::GetLabel(residue).data());
+            title_text[i]->AddText(ChemicalDataHelper::GetLabel(residue).data());
             title_text[i]->Draw();
         }
         canvas->cd();
@@ -769,13 +769,13 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
 {
     auto group_key
     {
-        (class_key == AtomicInfoHelper::GetSimpleAtomClassKey()) ?
+        (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
         m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(target_id) :
         m_atom_classifier->GetMainChainComponentAtomClassGroupKey(target_id, residue)
     };
     auto ref_group_key
     {
-        (class_key == AtomicInfoHelper::GetSimpleAtomClassKey()) ?
+        (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
         m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(reference_id) :
         m_atom_classifier->GetMainChainComponentAtomClassGroupKey(reference_id, residue)
     };
@@ -807,13 +807,13 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     const char * data_index[11]{"A","B","C","D","E","F","G","H","I","J","K"};
     auto group_key
     {
-        (class_key == AtomicInfoHelper::GetSimpleAtomClassKey()) ?
+        (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
         m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(target_id) :
         m_atom_classifier->GetMainChainComponentAtomClassGroupKey(target_id, residue)
     };
     auto ref_group_key
     {
-        (class_key == AtomicInfoHelper::GetSimpleAtomClassKey()) ?
+        (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
         m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(reference_id) :
         m_atom_classifier->GetMainChainComponentAtomClassGroupKey(reference_id, residue)
     };
@@ -862,10 +862,10 @@ void ComparisonPainter::BuildMapValueScatterGraph(
 {
     auto entry1_iter{ std::make_unique<PotentialEntryIterator>(model1) };
     auto entry2_iter{ std::make_unique<PotentialEntryIterator>(model2) };
-    if (entry1_iter->IsAvailableAtomGroupKey(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) == false) return;
-    if (entry2_iter->IsAvailableAtomGroupKey(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) == false) return;
-    auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) };
-    auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key, AtomicInfoHelper::GetSimpleAtomClassKey()) };
+    if (entry1_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
+    if (entry2_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
+    auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
+    auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
     auto count{ 0 };
     for (auto & [atom_id, atom_object1] : model1_atom_map)
     {

@@ -2,7 +2,7 @@
 #include "SQLiteWrapper.hpp"
 #include "DataObjectBase.hpp"
 #include "ModelObject.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
 #include "LocalPotentialEntry.hpp"
@@ -514,9 +514,9 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     }
 
     // Load atom group potential entries
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupAtomClassCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
-        auto group_class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
+        auto group_class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         // Load atom potential entry
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
         model_object->AddAtomGroupPotentialEntry(group_class_key, group_potential_entry);
@@ -525,9 +525,9 @@ std::unique_ptr<DataObjectBase> ModelObjectDAO::Load(const std::string & key_tag
     }
 
     // Load bond group potential entries
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupBondClassCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
-        auto group_class_key{ AtomicInfoHelper::GetGroupBondClassKey(i) };
+        auto group_class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         // Load bond potential entry
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
         model_object->AddBondGroupPotentialEntry(group_class_key, group_potential_entry);
@@ -1053,9 +1053,9 @@ ModelObjectDAO::LoadAtomLocalPotentialEntryMap(const std::string & table_name)
         local_potential_entry_map[serial_id] = std::move(local_potential_entry);
     }
 
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupAtomClassCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
-        auto class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
+        auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         auto table_name_with_class_key{ class_key + "_" + table_name };
         LoadAtomLocalPotentialEntrySubList(table_name_with_class_key, class_key, local_potential_entry_map);
     }
@@ -1108,9 +1108,9 @@ ModelObjectDAO::LoadBondLocalPotentialEntryMap(const std::string & table_name)
         local_potential_entry_map[atom_serial_id_pair] = std::move(local_potential_entry);
     }
 
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupBondClassCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
-        auto class_key{ AtomicInfoHelper::GetGroupBondClassKey(i) };
+        auto class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         auto table_name_with_class_key{ class_key + "_" + table_name };
         LoadBondLocalPotentialEntrySubList(table_name_with_class_key, class_key, local_potential_entry_map);
     }

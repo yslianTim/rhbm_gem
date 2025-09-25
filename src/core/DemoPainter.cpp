@@ -4,7 +4,7 @@
 #include "DataObjectBase.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "FilePathHelper.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "ArrayStats.hpp"
 #include "GlobalEnumClass.hpp"
@@ -163,7 +163,7 @@ void DemoPainter::PaintAtomMapValueExample(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    auto class_key{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomMapValueExample");
 
     if (model_object == nullptr) return;
@@ -260,7 +260,7 @@ void DemoPainter::PaintGroupGausMainChainSummary(
     const std::vector<ModelObject *> & model_list, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSummary");
 
     for (auto & model : model_list) if (model == nullptr) return;
@@ -414,7 +414,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSingle");
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -606,8 +606,8 @@ void DemoPainter::PaintGroupGausToFSC(
         for (auto model : model_list)
         {
             auto entry_iter{ std::make_unique<PotentialEntryIterator>(model) };
-            auto width_value{ entry_iter->GetAtomGausEstimatePrior(group_key, AtomicInfoHelper::GetSimpleAtomClassKey(), 1) };
-            auto width_error{ entry_iter->GetAtomGausVariancePrior(group_key, AtomicInfoHelper::GetSimpleAtomClassKey(), 1) };
+            auto width_value{ entry_iter->GetAtomGausEstimatePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
+            auto width_error{ entry_iter->GetAtomGausVariancePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
             graph[i]->SetPointError(count, 0.0, width_error);
             count++;
@@ -721,7 +721,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomWidthScatterPlotSingle");
-    auto class_key{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     if (model_object == nullptr) return;
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -769,7 +769,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     std::vector<double> y_array;
     for (size_t i = 0; i < pad_size - 1; i++)
     {
-        for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+        for (auto residue : ChemicalDataHelper::GetStandardResidueList())
         {
             auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
             if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
@@ -929,7 +929,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupWidthScatterPlot");
-    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     for (auto & model : model_list) if (model == nullptr) return;
 
@@ -957,7 +957,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
         for (size_t j = 0; j < row_size; j++)
         {
             auto element_id{ primary_element_size - j - 1 };
-            for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+            for (auto residue : ChemicalDataHelper::GetStandardResidueList())
             {
                 auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(element_id, residue) };
                 if (entry_iter->IsAvailableAtomGroupKey(group_key, residue_class) == false) continue;
@@ -1373,10 +1373,10 @@ void DemoPainter::PrintGausResultGlobalPad(
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardResidueCount(); i++)
     {
-        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(i) };
-        auto label{ AtomicInfoHelper::GetLabel(residue) };
+        auto residue{ ChemicalDataHelper::GetStandardResidueList().at(i) };
+        auto label{ ChemicalDataHelper::GetLabel(residue) };
         auto label_index{ static_cast<int>(i) + 2 };
         hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
     }
@@ -1408,10 +1408,10 @@ void DemoPainter::PrintGausResultPad(
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardResidueCount(); i++)
     {
-        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(i) };
-        auto label{ AtomicInfoHelper::GetLabel(residue) };
+        auto residue{ ChemicalDataHelper::GetStandardResidueList().at(i) };
+        auto label{ ChemicalDataHelper::GetLabel(residue) };
         auto label_index{ static_cast<int>(i) + 2 };
         hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
     }

@@ -1,5 +1,5 @@
 #include "AtomSelector.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "Logger.hpp"
 
 #include <iostream>
@@ -17,18 +17,18 @@ void AtomSelector::Print(void) const
     oss <<" - Chain set: ";
     for (auto & chain : pick_chain_set) oss << chain <<", ";
     oss <<"\n - Residue set: ";
-    for (auto & residue : pick_residue_set) oss << AtomicInfoHelper::GetLabel(residue) <<", ";
+    for (auto & residue : pick_residue_set) oss << ChemicalDataHelper::GetLabel(residue) <<", ";
     oss <<"\n - Element set: ";
-    for (auto & element : pick_element_set) oss << AtomicInfoHelper::GetLabel(element) <<", ";
+    for (auto & element : pick_element_set) oss << ChemicalDataHelper::GetLabel(element) <<", ";
     oss <<"\n";
 
     oss <<"Atomic Vetoing List:\n";
     oss <<" - Chain set: ";
     for (auto & chain : veto_chain_set) oss << chain <<", ";
     oss <<"\n - Residue set: ";
-    for (auto & residue : veto_residue_set) oss << AtomicInfoHelper::GetLabel(residue) <<", ";
+    for (auto & residue : veto_residue_set) oss << ChemicalDataHelper::GetLabel(residue) <<", ";
     oss <<"\n - Element set: ";
-    for (auto & element : veto_element_set) oss << AtomicInfoHelper::GetLabel(element) <<", ";
+    for (auto & element : veto_element_set) oss << ChemicalDataHelper::GetLabel(element) <<", ";
     oss <<"\n";
 
     std::cout << oss.str() << std::endl;
@@ -64,7 +64,7 @@ void AtomSelector::VetoResidueType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        veto_residue_set.insert(AtomicInfoHelper::GetResidueFromString(segment));
+        veto_residue_set.insert(ChemicalDataHelper::GetResidueFromString(segment));
     }
 }
 
@@ -74,7 +74,7 @@ void AtomSelector::VetoElementType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        veto_element_set.insert(AtomicInfoHelper::GetElementFromString(segment));
+        veto_element_set.insert(ChemicalDataHelper::GetElementFromString(segment));
     }
 }
 
@@ -91,7 +91,7 @@ void AtomSelector::PickResidueType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        pick_residue_set.insert(AtomicInfoHelper::GetResidueFromString(segment));
+        pick_residue_set.insert(ChemicalDataHelper::GetResidueFromString(segment));
     }
 }
 
@@ -101,6 +101,6 @@ void AtomSelector::PickElementType(const std::string & name)
     std::string segment;
     while (std::getline(ss, segment, ','))
     {
-        pick_element_set.insert(AtomicInfoHelper::GetElementFromString(segment));
+        pick_element_set.insert(ChemicalDataHelper::GetElementFromString(segment));
     }
 }

@@ -2,7 +2,7 @@
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
 #include "GlobalEnumClass.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "ChemicalComponentEntry.hpp"
 #include "Logger.hpp"
 
@@ -120,7 +120,7 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
             auto end{ std::stoi(range.at(3)) };
             if (residue_id >= beg && residue_id <= end)
             {
-                atom_object->SetStructure(AtomicInfoHelper::GetStructureFromString(range.at(4)));
+                atom_object->SetStructure(ChemicalDataHelper::GetStructureFromString(range.at(4)));
                 return;
             }
         }

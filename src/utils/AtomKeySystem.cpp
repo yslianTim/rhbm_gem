@@ -1,6 +1,6 @@
 #include "AtomKeySystem.hpp"
 #include "GlobalEnumClass.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 
@@ -13,7 +13,7 @@ AtomKeySystem::AtomKeySystem(void) :
     m_next_dynamic_key{ k_dynamic_base }
 {
     Logger::Log(LogLevel::Debug, "AtomKeySystem::AtomKeySystem() called");
-    const auto & build_in_spot_map{ AtomicInfoHelper::GetSpotMap() };
+    const auto & build_in_spot_map{ ChemicalDataHelper::GetSpotMap() };
     for (const auto & [atom_id, spot] : build_in_spot_map)
     {
         auto atom_key{ static_cast<AtomKey>(spot) };

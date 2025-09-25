@@ -1,5 +1,5 @@
 #include "AtomObject.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
@@ -82,28 +82,28 @@ void AtomObject::SetStructure(Structure value) { m_structure = value; }
 void AtomObject::SetComponentID(const std::string & value)
 {
     m_component_id = value;
-    m_residue = AtomicInfoHelper::GetResidueFromString(m_component_id, false);
+    m_residue = ChemicalDataHelper::GetResidueFromString(m_component_id, false);
 }
 
 void AtomObject::SetAtomID(const std::string & value)
 {
     m_atom_id = value;
-    m_spot = AtomicInfoHelper::GetSpotFromString(m_atom_id, false);
+    m_spot = ChemicalDataHelper::GetSpotFromString(m_atom_id, false);
 }
 
 void AtomObject::SetResidue(const std::string & name)
 {
-    m_residue = AtomicInfoHelper::GetResidueFromString(name, false);
+    m_residue = ChemicalDataHelper::GetResidueFromString(name, false);
 }
 
 void AtomObject::SetElement(const std::string & name)
 {
-    m_element = AtomicInfoHelper::GetElementFromString(name);
+    m_element = ChemicalDataHelper::GetElementFromString(name);
 }
 
 void AtomObject::SetSpot(const std::string & name)
 {
-    m_spot = AtomicInfoHelper::GetSpotFromString(name, false);
+    m_spot = ChemicalDataHelper::GetSpotFromString(name, false);
 }
 
 void AtomObject::SetPosition(float x, float y, float z)
@@ -119,8 +119,8 @@ std::string AtomObject::GetInfo(void) const
            "[Residue ID] " + std::to_string(m_residue_id) + " " +
            "[Atom ID] " + m_atom_id + " " +
            "[Chain ID] " + m_chain_id + " " +
-           AtomicInfoHelper::GetLabel(m_residue) + " " +
-           AtomicInfoHelper::GetLabel(m_element) + " " +
+           ChemicalDataHelper::GetLabel(m_residue) + " " +
+           ChemicalDataHelper::GetLabel(m_element) + " " +
            "[Component Key] " + std::to_string(m_component_key) + " " +
            "[Atom Key] " + std::to_string(m_atom_key) + " " +
            m_indicator + " " +

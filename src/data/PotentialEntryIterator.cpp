@@ -4,7 +4,7 @@
 #include "ModelObject.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "ROOTHelper.hpp"
 #include "ArrayStats.hpp"
 #include "KeyPacker.hpp"
@@ -119,11 +119,11 @@ size_t PotentialEntryIterator::GetAtomResidueCount(
 {
     GroupKey group_key{ 0 };
     AtomClassifier classifier;
-    if (class_key == AtomicInfoHelper::GetComponentAtomClassKey())
+    if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
     {
         group_key = classifier.GetMainChainComponentAtomClassGroupKey(0, residue);
     }
-    else if (class_key == AtomicInfoHelper::GetStructureAtomClassKey())
+    else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
     {
         group_key = classifier.GetMainChainStructureAtomClassGroupKey(0, structure, residue);
     }
@@ -139,7 +139,7 @@ size_t PotentialEntryIterator::GetBondResidueCount(
 {
     GroupKey group_key{ 0 };
     BondClassifier classifier;
-    if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
+    if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
     {
         group_key = classifier.GetMainChainComponentBondClassGroupKey(0, residue);
     }
@@ -410,19 +410,19 @@ bool PotentialEntryIterator::CheckAtomGroupKey(
         std::ostringstream oss;
         if (verbose == true)
         {
-            if (class_key == AtomicInfoHelper::GetSimpleAtomClassKey())
+            if (class_key == ChemicalDataHelper::GetSimpleAtomClassKey())
             {
                 oss <<"Atom class group key : "
                     << KeyPackerSimpleAtomClass::GetKeyString(group_key)
                     <<" not found." << std::endl;
             }
-            else if (class_key == AtomicInfoHelper::GetComponentAtomClassKey())
+            else if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
             {
                 oss <<"Atom class group key : "
                     << KeyPackerComponentAtomClass::GetKeyString(group_key)
                     <<" not found." << std::endl;
             }
-            else if (class_key == AtomicInfoHelper::GetStructureAtomClassKey())
+            else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
             {
                 oss <<"Atom class group key : "
                     << KeyPackerStructureAtomClass::GetKeyString(group_key)
@@ -444,13 +444,13 @@ bool PotentialEntryIterator::CheckBondGroupKey(
         std::ostringstream oss;
         if (verbose == true)
         {
-            if (class_key == AtomicInfoHelper::GetSimpleBondClassKey())
+            if (class_key == ChemicalDataHelper::GetSimpleBondClassKey())
             {
                 oss <<"Bond class group key : "
                     << KeyPackerSimpleBondClass::GetKeyString(group_key)
                     <<" not found." << std::endl;
             }
-            else if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
+            else if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
             {
                 oss <<"Bond class group key : "
                     << KeyPackerComponentBondClass::GetKeyString(group_key)
@@ -466,17 +466,17 @@ bool PotentialEntryIterator::CheckBondGroupKey(
 Residue PotentialEntryIterator::GetResidueFromAtomGroupKey(
     GroupKey group_key, const std::string & class_key) const
 {
-    if (class_key == AtomicInfoHelper::GetSimpleAtomClassKey())
+    if (class_key == ChemicalDataHelper::GetSimpleAtomClassKey())
     {
         Logger::Log(LogLevel::Error, "Simple class group key is not recording Residue info.");
         return Residue::UNK;
     }
-    else if (class_key == AtomicInfoHelper::GetComponentAtomClassKey())
+    else if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
     {
         auto unpack_key{ KeyPackerComponentAtomClass::Unpack(group_key) };
         return static_cast<Residue>(std::get<0>(unpack_key));
     }
-    else if (class_key == AtomicInfoHelper::GetStructureAtomClassKey())
+    else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
     {
         auto unpack_key{ KeyPackerStructureAtomClass::Unpack(group_key) };
         return static_cast<Residue>(std::get<1>(unpack_key));
@@ -487,12 +487,12 @@ Residue PotentialEntryIterator::GetResidueFromAtomGroupKey(
 Residue PotentialEntryIterator::GetResidueFromBondGroupKey(
     GroupKey group_key, const std::string & class_key) const
 {
-    if (class_key == AtomicInfoHelper::GetSimpleBondClassKey())
+    if (class_key == ChemicalDataHelper::GetSimpleBondClassKey())
     {
         Logger::Log(LogLevel::Error, "Simple class group key is not recording Residue info.");
         return Residue::UNK;
     }
-    else if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
+    else if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
     {
         auto unpack_key{ KeyPackerComponentBondClass::Unpack(group_key) };
         return static_cast<Residue>(std::get<0>(unpack_key));
@@ -509,7 +509,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateAtomResidueCountHistogram(
         return nullptr;
     }
     auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
-    for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
+    for (auto & residue : ChemicalDataHelper::GetStandardResidueList())
     {
         auto count{ GetAtomResidueCount(class_key, residue, structure) };
         hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
@@ -525,7 +525,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateBondResidueCountHistogram(
         return nullptr;
     }
     auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
-    for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
+    for (auto & residue : ChemicalDataHelper::GetStandardResidueList())
     {
         auto count{ GetBondResidueCount(class_key, residue) };
         hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
@@ -738,7 +738,7 @@ PotentialEntryIterator::CreateBondGausEstimateToResidueIDGraphMap(
     
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
     std::unordered_map<std::string, int> count_map;
-    auto class_key{ AtomicInfoHelper::GetSimpleBondClassKey() };
+    auto class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
     auto group_key{ BondClassifier::GetMainChainSimpleBondClassGroupKey(main_chain_element_id) };
     for (auto & bond : GetBondObjectList(group_key, class_key))
     {

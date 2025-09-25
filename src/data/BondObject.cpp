@@ -1,6 +1,5 @@
 #include "BondObject.hpp"
 #include "AtomObject.hpp"
-#include "AtomicInfoHelper.hpp"
 #include "DataObjectVisitorBase.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"

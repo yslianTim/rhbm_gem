@@ -9,7 +9,7 @@
 #include "LocalPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "PotentialEntryIterator.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "ComponentHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
@@ -189,8 +189,8 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
                     << atom->GetPosition().at(0) <<','
                     << atom->GetPosition().at(1) <<','
                     << atom->GetPosition().at(2) <<','
-                    << AtomicInfoHelper::GetLabel(atom->GetResidue()) <<','
-                    << AtomicInfoHelper::GetLabel(atom->GetElement()) <<','
+                    << ChemicalDataHelper::GetLabel(atom->GetResidue()) <<','
+                    << ChemicalDataHelper::GetLabel(atom->GetElement()) <<','
                     << atom->GetAtomID() <<'\n';
         }
         outfile.close();
@@ -293,8 +293,8 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
                     << atom->GetPosition().at(0) <<','
                     << atom->GetPosition().at(1) <<','
                     << atom->GetPosition().at(2) <<','
-                    << AtomicInfoHelper::GetLabel(atom->GetResidue()) <<','
-                    << AtomicInfoHelper::GetLabel(atom->GetElement()) <<','
+                    << ChemicalDataHelper::GetLabel(atom->GetResidue()) <<','
+                    << ChemicalDataHelper::GetLabel(atom->GetElement()) <<','
                     << atom->GetAtomID() <<'\n';
         }
         outfile.close();
@@ -325,7 +325,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
 {
     Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunGroupGausEstimatesDumping() called");
 
-    auto class_key{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -342,9 +342,9 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
             return;
         }
         outfile << "Residue,Spot,Amplitude,Width\n";
-        for (auto & residue : AtomicInfoHelper::GetStandardResidueList())
+        for (auto & residue : ChemicalDataHelper::GetStandardResidueList())
         {
-            auto residue_name{ AtomicInfoHelper::GetLabel(residue) };
+            auto residue_name{ ChemicalDataHelper::GetLabel(residue) };
             auto component_key{ static_cast<ComponentKey>(residue) };
             for (auto & spot : ComponentHelper::GetSpotList(residue))
             {

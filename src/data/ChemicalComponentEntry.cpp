@@ -1,5 +1,4 @@
 #include "ChemicalComponentEntry.hpp"
-#include "AtomicInfoHelper.hpp"
 #include "Logger.hpp"
 
 ChemicalComponentEntry::ChemicalComponentEntry(void)

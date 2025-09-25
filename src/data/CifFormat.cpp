@@ -4,7 +4,7 @@
 #include "ModelObject.hpp"
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"
@@ -73,7 +73,7 @@ void CifFormat::PrintHeader(void) const
     size_t count{ 0 };
     for (auto element : m_data_block->GetElementTypeList())
     {
-        oss << AtomicInfoHelper::GetLabel(element);
+        oss << ChemicalDataHelper::GetLabel(element);
         if (count < element_size - 1) oss << ",";
         count++;
     }
@@ -160,7 +160,7 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
 
             ComponentAtomEntry atom_entry;
             atom_entry.atom_id = atom_id;
-            atom_entry.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
+            atom_entry.element_type = ChemicalDataHelper::GetElementFromString(element_symbol);
             atom_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
 
@@ -262,7 +262,7 @@ void CifFormat::LoadEntityBlock(std::ifstream & infile)
             }
             
             m_data_block->AddEntityTypeInEntityMap(
-                entity_id, AtomicInfoHelper::GetEntityFromString(entity_type));
+                entity_id, ChemicalDataHelper::GetEntityFromString(entity_type));
             m_data_block->AddMoleculesSizeInEntityMap(entity_id, molecules_size);
         }
     );
@@ -356,7 +356,7 @@ void CifFormat::LoadAtomTypeBlock(std::ifstream & infile)
                const std::vector<std::string> & token_list)
         {
             auto element_type_string{ token_list[index_map.at("symbol")] };
-            auto element{ AtomicInfoHelper::GetElementFromString(element_type_string) };
+            auto element{ ChemicalDataHelper::GetElementFromString(element_type_string) };
             m_data_block->AddElementType(element);
         }
     );
@@ -620,7 +620,7 @@ void CifFormat::WriteAtomSiteBlockEntry(
     std::ostream & stream)
 {
     std::string group_PDB{ atom->GetSpecialAtomFlag() ? "HETATM" : "ATOM" };
-    std::string type_symbol{ AtomicInfoHelper::GetLabel(atom->GetElement()) };
+    std::string type_symbol{ ChemicalDataHelper::GetLabel(atom->GetElement()) };
     std::string label_atom_id{ atom->GetAtomID() };
     std::string label_alt_id{ alt_id.empty() ? "." : alt_id };
     std::string label_comp_id{ atom->GetComponentID() };
@@ -740,7 +740,7 @@ void CifFormat::BuildDefaultChemicalComponentEntry(const std::string & comp_id)
     entry->SetComponentFormula("");
     entry->SetComponentMolecularWeight(0.0f);
     auto standard_flag{ false };
-    if (AtomicInfoHelper::GetResidueFromString(comp_id) != Residue::UNK) standard_flag = true;
+    if (ChemicalDataHelper::GetResidueFromString(comp_id) != Residue::UNK) standard_flag = true;
     entry->SetStandardMonomerFlag(standard_flag);
 
     m_data_block->GetComponentKeySystemPtr()->RegisterComponent(comp_id);
@@ -761,7 +761,7 @@ void CifFormat::BuildDefaultComponentAtomEntry(
 
     ComponentAtomEntry atom_entry;
     atom_entry.atom_id = atom_id;
-    atom_entry.element_type = AtomicInfoHelper::GetElementFromString(element_symbol);
+    atom_entry.element_type = ChemicalDataHelper::GetElementFromString(element_symbol);
     atom_entry.aromatic_atom_flag = false;
     atom_entry.chiral_config = '.';
     

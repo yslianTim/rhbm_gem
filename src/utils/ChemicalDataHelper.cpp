@@ -1,21 +1,21 @@
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "Logger.hpp"
 
 #include <algorithm>
 #include <stdexcept>
 
-const std::vector<std::string> AtomicInfoHelper::m_group_atom_class_key_list
+const std::vector<std::string> ChemicalDataHelper::m_group_atom_class_key_list
 {
     "simple_atom_class", "component_atom_class", "structure_atom_class"
 };
 
-const std::vector<std::string> AtomicInfoHelper::m_group_bond_class_key_list
+const std::vector<std::string> ChemicalDataHelper::m_group_bond_class_key_list
 {
     "simple_bond_class", "component_bond_class"
 };
 
-const std::vector<Residue> AtomicInfoHelper::m_standard_residue_list
+const std::vector<Residue> ChemicalDataHelper::m_standard_residue_list
 {
     Residue::ALA, Residue::ARG, Residue::ASN, Residue::ASP, Residue::CYS,
     Residue::GLN, Residue::GLU, Residue::GLY, Residue::HIS, Residue::ILE,
@@ -23,12 +23,12 @@ const std::vector<Residue> AtomicInfoHelper::m_standard_residue_list
     Residue::SER, Residue::THR, Residue::TRP, Residue::TYR, Residue::VAL
 };
 
-const std::vector<Element> AtomicInfoHelper::m_standard_element_list
+const std::vector<Element> ChemicalDataHelper::m_standard_element_list
 {
     Element::HYDROGEN, Element::CARBON, Element::NITROGEN, Element::OXYGEN, Element::SULFUR
 };
 
-const std::unordered_map<int, Element> AtomicInfoHelper::m_atomic_number_to_element_map
+const std::unordered_map<int, Element> ChemicalDataHelper::m_atomic_number_to_element_map
 {
     { 1, Element::HYDROGEN},  { 2, Element::HELIUM},      { 3, Element::LITHIUM},
     { 4, Element::BERYLLIUM}, { 5, Element::BORON},       { 6, Element::CARBON},
@@ -62,7 +62,7 @@ const std::unordered_map<int, Element> AtomicInfoHelper::m_atomic_number_to_elem
     {88, Element::RADIUM},    {89, Element::ACTINIUM},    {90, Element::THORIUM}
 };
 
-const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_map
+const std::unordered_map<std::string_view, Residue> ChemicalDataHelper::m_residue_map
 {
     {"ALA", Residue::ALA}, {"ARG", Residue::ARG}, {"ASN", Residue::ASN}, {"ASP", Residue::ASP},
     {"CYS", Residue::CYS}, {"GLN", Residue::GLN}, {"GLU", Residue::GLU}, {"GLY", Residue::GLY},
@@ -73,7 +73,7 @@ const std::unordered_map<std::string_view, Residue> AtomicInfoHelper::m_residue_
     {"DA",  Residue::DA},  {"DC",  Residue::DC},  {"DG",  Residue::DG},  {"DT",  Residue::DT},
 };
 
-const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_map
+const std::unordered_map<std::string_view, Element> ChemicalDataHelper::m_element_map
 {
     {"H",  Element::HYDROGEN},  {"HE", Element::HELIUM},      {"LI", Element::LITHIUM},
     {"BE", Element::BERYLLIUM}, {"B",  Element::BORON},       {"C",  Element::CARBON},
@@ -107,7 +107,7 @@ const std::unordered_map<std::string_view, Element> AtomicInfoHelper::m_element_
     {"RA", Element::RADIUM},    {"AC", Element::ACTINIUM},    {"TH", Element::THORIUM}
 };
 
-const std::unordered_map<std::string_view, Spot> AtomicInfoHelper::m_spot_map
+const std::unordered_map<std::string_view, Spot> ChemicalDataHelper::m_spot_map
 {
     {"P",    Spot::P   }, {"OP1",  Spot::OP1 }, {"OP2",  Spot::OP2 }, {"OP3",  Spot::OP3 },
     {"OP1",  Spot::OP1 }, {"OP2",  Spot::OP2 }, {"OP3",  Spot::OP3 },
@@ -170,7 +170,7 @@ const std::unordered_map<std::string_view, Spot> AtomicInfoHelper::m_spot_map
     
 };
 
-const std::unordered_map<std::string_view, Link> AtomicInfoHelper::m_link_map
+const std::unordered_map<std::string_view, Link> ChemicalDataHelper::m_link_map
 {
     {"OP2_HOP2",  Link::OP2_HOP2},
     {"OP3_P",     Link::OP3_P},    {"OP3_HOP3",  Link::OP3_HOP3},
@@ -245,7 +245,7 @@ const std::unordered_map<std::string_view, Link> AtomicInfoHelper::m_link_map
     {"OH_HH", Link::OH_HH}, {"OXT_HXT", Link::OXT_HXT}, {"SD_CE", Link::SD_CE}
 };
 
-const std::unordered_map<std::string_view, Structure> AtomicInfoHelper::m_structure_map
+const std::unordered_map<std::string_view, Structure> ChemicalDataHelper::m_structure_map
 {
     {" ", Structure::FREE}, {"BEND", Structure::BEND},
     {"STRN", Structure::STRN},
@@ -254,14 +254,14 @@ const std::unordered_map<std::string_view, Structure> AtomicInfoHelper::m_struct
     {"TURN_P", Structure::TURN_P}
 };
 
-const std::unordered_map<std::string_view, Entity> AtomicInfoHelper::m_entity_map
+const std::unordered_map<std::string_view, Entity> ChemicalDataHelper::m_entity_map
 {
     {"polymer",  Entity::POLYMER},  {"non-polymer", Entity::NONPOLYMER},
     {"branched", Entity::BRANCHED}, {"macrolide",   Entity::MACROLIDE},
     {"water",    Entity::WATER}
 };
 
-const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label_map
+const std::unordered_map<Residue, std::string> ChemicalDataHelper::m_residue_label_map
 {
     {Residue::ALA, "ALA"}, {Residue::ARG, "ARG"}, {Residue::ASN, "ASN"}, {Residue::ASP, "ASP"},
     {Residue::CYS, "CYS"}, {Residue::GLN, "GLN"}, {Residue::GLU, "GLU"}, {Residue::GLY, "GLY"},
@@ -273,7 +273,7 @@ const std::unordered_map<Residue, std::string> AtomicInfoHelper::m_residue_label
     {Residue::UNK, "UNK"}
 };
 
-const std::unordered_map<Element, std::string> AtomicInfoHelper::m_element_label_map
+const std::unordered_map<Element, std::string> ChemicalDataHelper::m_element_label_map
 {
     {Element::HYDROGEN,   "H" }, {Element::HELIUM,      "He"}, {Element::LITHIUM,    "Li"},
     {Element::BERYLLIUM,  "Be"}, {Element::BORON,       "B" }, {Element::CARBON,     "C" },
@@ -308,7 +308,7 @@ const std::unordered_map<Element, std::string> AtomicInfoHelper::m_element_label
     {Element::UNK,       "UNK"}
 };
 
-const std::unordered_map<Element, int> AtomicInfoHelper::m_element_color_map
+const std::unordered_map<Element, int> ChemicalDataHelper::m_element_color_map
 {
     {Element::HYDROGEN, 921}, {Element::CARBON,   633}, {Element::NITROGEN,  418},
     {Element::OXYGEN,   862}, {Element::PHOSPHORUS, 2},
@@ -317,7 +317,7 @@ const std::unordered_map<Element, int> AtomicInfoHelper::m_element_color_map
     {Element::IRON,       1}, {Element::CHLORINE,   1}, {Element::UNK,         1}
 };
 
-const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_color_map
+const std::unordered_map<Residue, int> ChemicalDataHelper::m_residue_color_map
 {
     {Residue::ALA, 632}, {Residue::ARG, 633}, {Residue::ASN, 634}, {Residue::ASP, 635},
     {Residue::CYS, 800}, {Residue::GLN, 801}, {Residue::GLU, 802}, {Residue::GLY, 803},
@@ -329,7 +329,7 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_color_map
     {Residue::DA,    2}, {Residue::DC,    3}, {Residue::DG,    4}, {Residue::DT,    5}
 };
 
-const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
+const std::unordered_map<Element, int> ChemicalDataHelper::m_element_marker_map
 {
     {Element::HYDROGEN,   5}, {Element::HELIUM,    2}, {Element::LITHIUM,     3},
     {Element::BERYLLIUM, 30}, {Element::BORON,    28}, {Element::CARBON,     53},
@@ -345,7 +345,7 @@ const std::unordered_map<Element, int> AtomicInfoHelper::m_element_marker_map
     {Element::UNK,        1}
 };
 
-const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
+const std::unordered_map<Residue, int> ChemicalDataHelper::m_residue_marker_map
 {
     {Residue::ALA, 20}, {Residue::ARG, 21}, {Residue::ASN, 22}, {Residue::ASP, 23},
     {Residue::CYS, 24}, {Residue::GLN, 25}, {Residue::GLU, 26}, {Residue::GLY, 27},
@@ -357,32 +357,32 @@ const std::unordered_map<Residue, int> AtomicInfoHelper::m_residue_marker_map
     {Residue::DA,   2}, {Residue::DC,   3}, {Residue::DG,   4}, {Residue::DT,   5}
 };
 
-int AtomicInfoHelper::GetAtomicNumber(Element element)
+int ChemicalDataHelper::GetAtomicNumber(Element element)
 {
     return static_cast<int>(element);
 }
 
-size_t AtomicInfoHelper::GetGroupAtomClassCount(void)
+size_t ChemicalDataHelper::GetGroupAtomClassCount(void)
 {
     return m_group_atom_class_key_list.size();
 }
 
-size_t AtomicInfoHelper::GetGroupBondClassCount(void)
+size_t ChemicalDataHelper::GetGroupBondClassCount(void)
 {
     return m_group_bond_class_key_list.size();
 }
 
-size_t AtomicInfoHelper::GetStandardResidueCount(void)
+size_t ChemicalDataHelper::GetStandardResidueCount(void)
 {
     return m_standard_residue_list.size();
 }
 
-size_t AtomicInfoHelper::GetElementCount(void)
+size_t ChemicalDataHelper::GetElementCount(void)
 {
     return m_element_map.size();
 }
 
-const std::string & AtomicInfoHelper::GetGroupAtomClassKey(size_t class_id)
+const std::string & ChemicalDataHelper::GetGroupAtomClassKey(size_t class_id)
 {
     if (class_id >= m_group_atom_class_key_list.size())
     {
@@ -391,7 +391,7 @@ const std::string & AtomicInfoHelper::GetGroupAtomClassKey(size_t class_id)
     return m_group_atom_class_key_list.at(class_id);
 }
 
-const std::string & AtomicInfoHelper::GetGroupBondClassKey(size_t class_id)
+const std::string & ChemicalDataHelper::GetGroupBondClassKey(size_t class_id)
 {
     if (class_id >= m_group_bond_class_key_list.size())
     {
@@ -400,79 +400,79 @@ const std::string & AtomicInfoHelper::GetGroupBondClassKey(size_t class_id)
     return m_group_bond_class_key_list.at(class_id);
 }
 
-const std::string & AtomicInfoHelper::GetSimpleAtomClassKey(void)
+const std::string & ChemicalDataHelper::GetSimpleAtomClassKey(void)
 {
     return m_group_atom_class_key_list.at(0);
 }
 
-const std::string & AtomicInfoHelper::GetComponentAtomClassKey(void)
+const std::string & ChemicalDataHelper::GetComponentAtomClassKey(void)
 {
     return m_group_atom_class_key_list.at(1);
 }
 
-const std::string & AtomicInfoHelper::GetStructureAtomClassKey(void)
+const std::string & ChemicalDataHelper::GetStructureAtomClassKey(void)
 {
     return m_group_atom_class_key_list.at(2);
 }
 
-const std::string & AtomicInfoHelper::GetSimpleBondClassKey(void)
+const std::string & ChemicalDataHelper::GetSimpleBondClassKey(void)
 {
     return m_group_bond_class_key_list.at(0);
 }
 
-const std::string & AtomicInfoHelper::GetComponentBondClassKey(void)
+const std::string & ChemicalDataHelper::GetComponentBondClassKey(void)
 {
     return m_group_bond_class_key_list.at(1);
 }
 
-const std::vector<Residue> & AtomicInfoHelper::GetStandardResidueList(void)
+const std::vector<Residue> & ChemicalDataHelper::GetStandardResidueList(void)
 {
     return m_standard_residue_list;
 }
 
-const std::vector<Element> & AtomicInfoHelper::GetStandardElementList(void)
+const std::vector<Element> & ChemicalDataHelper::GetStandardElementList(void)
 {
     return m_standard_element_list;
 }
 
-const std::unordered_map<std::string_view, Residue> & AtomicInfoHelper::GetResidueMap(void)
+const std::unordered_map<std::string_view, Residue> & ChemicalDataHelper::GetResidueMap(void)
 {
     return m_residue_map;
 }
 
-const std::unordered_map<std::string_view, Element> & AtomicInfoHelper::GetElementMap(void)
+const std::unordered_map<std::string_view, Element> & ChemicalDataHelper::GetElementMap(void)
 {
     return m_element_map;
 }
 
-const std::unordered_map<std::string_view, Spot> & AtomicInfoHelper::GetSpotMap(void)
+const std::unordered_map<std::string_view, Spot> & ChemicalDataHelper::GetSpotMap(void)
 {
     return m_spot_map;
 }
 
-const std::unordered_map<std::string_view, Link> & AtomicInfoHelper::GetLinkMap(void)
+const std::unordered_map<std::string_view, Link> & ChemicalDataHelper::GetLinkMap(void)
 {
     return m_link_map;
 }
 
-const std::unordered_map<Element, std::string> & AtomicInfoHelper::GetElementLabelMap(void)
+const std::unordered_map<Element, std::string> & ChemicalDataHelper::GetElementLabelMap(void)
 {
     return m_element_label_map;
 }
 
-bool AtomicInfoHelper::IsStandardElement(Element element)
+bool ChemicalDataHelper::IsStandardElement(Element element)
 {
     return std::find(m_standard_element_list.begin(), m_standard_element_list.end(), element)
             != m_standard_element_list.end();
 }
 
-bool AtomicInfoHelper::IsStandardResidue(Residue residue)
+bool ChemicalDataHelper::IsStandardResidue(Residue residue)
 {
     return std::find(m_standard_residue_list.begin(), m_standard_residue_list.end(), residue)
             != m_standard_residue_list.end();
 }
 
-Residue AtomicInfoHelper::GetResidueFromString(const std::string & name, bool verbose)
+Residue ChemicalDataHelper::GetResidueFromString(const std::string & name, bool verbose)
 {
     thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_residue_map.find(name) == m_residue_map.end())
@@ -482,7 +482,7 @@ Residue AtomicInfoHelper::GetResidueFromString(const std::string & name, bool ve
             if (verbose)
             {
                 Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetResidueFromString - Unknown string: " + name);
+                    "ChemicalDataHelper::GetResidueFromString - Unknown string: " + name);
             }
             unknown_name_count_list[name] = 1;
         }
@@ -495,7 +495,7 @@ Residue AtomicInfoHelper::GetResidueFromString(const std::string & name, bool ve
     return m_residue_map.at(name);
 }
 
-Element AtomicInfoHelper::GetElementFromString(const std::string & name)
+Element ChemicalDataHelper::GetElementFromString(const std::string & name)
 {
     thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_element_map.find(name) == m_element_map.end())
@@ -503,7 +503,7 @@ Element AtomicInfoHelper::GetElementFromString(const std::string & name)
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
             Logger::Log(LogLevel::Warning, 
-                        "AtomicInfoHelper::GetElementFromString - Unknown string: " + name);
+                        "ChemicalDataHelper::GetElementFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -515,7 +515,7 @@ Element AtomicInfoHelper::GetElementFromString(const std::string & name)
     return m_element_map.at(name);
 }
 
-Element AtomicInfoHelper::GetElementFromAtomicNumber(int atomic_number)
+Element ChemicalDataHelper::GetElementFromAtomicNumber(int atomic_number)
 {
     thread_local static std::unordered_map<int, int> unknown_atomic_number_count_list;
     if (m_atomic_number_to_element_map.find(atomic_number) == m_atomic_number_to_element_map.end())
@@ -523,7 +523,7 @@ Element AtomicInfoHelper::GetElementFromAtomicNumber(int atomic_number)
         if (unknown_atomic_number_count_list.find(atomic_number) == unknown_atomic_number_count_list.end())
         {
             Logger::Log(LogLevel::Warning, 
-                "AtomicInfoHelper::GetElementFromAtomicNumber - Unknown atomic number: "
+                "ChemicalDataHelper::GetElementFromAtomicNumber - Unknown atomic number: "
                 + std::to_string(atomic_number));
                 unknown_atomic_number_count_list[atomic_number] = 1;
         }
@@ -536,7 +536,7 @@ Element AtomicInfoHelper::GetElementFromAtomicNumber(int atomic_number)
     return m_atomic_number_to_element_map.at(atomic_number);
 }
 
-Spot AtomicInfoHelper::GetSpotFromString(const std::string & name, bool verbose)
+Spot ChemicalDataHelper::GetSpotFromString(const std::string & name, bool verbose)
 {
     thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_spot_map.find(name) == m_spot_map.end())
@@ -546,7 +546,7 @@ Spot AtomicInfoHelper::GetSpotFromString(const std::string & name, bool verbose)
             if (verbose)
             {
                 Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetSpotFromString - Unknown string: " + name);
+                    "ChemicalDataHelper::GetSpotFromString - Unknown string: " + name);
             }
             unknown_name_count_list[name] = 1;
         }
@@ -559,7 +559,7 @@ Spot AtomicInfoHelper::GetSpotFromString(const std::string & name, bool verbose)
     return m_spot_map.at(name);
 }
 
-Link AtomicInfoHelper::GetLinkFromString(const std::string & name, bool verbose)
+Link ChemicalDataHelper::GetLinkFromString(const std::string & name, bool verbose)
 {
     thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_link_map.find(name) == m_link_map.end())
@@ -569,7 +569,7 @@ Link AtomicInfoHelper::GetLinkFromString(const std::string & name, bool verbose)
             if (verbose)
             {
                 Logger::Log(LogLevel::Warning, 
-                    "AtomicInfoHelper::GetLinkFromString - Unknown string: " + name);
+                    "ChemicalDataHelper::GetLinkFromString - Unknown string: " + name);
             }
             unknown_name_count_list[name] = 1;
         }
@@ -582,7 +582,7 @@ Link AtomicInfoHelper::GetLinkFromString(const std::string & name, bool verbose)
     return m_link_map.at(name);
 }
 
-Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
+Structure ChemicalDataHelper::GetStructureFromString(const std::string & name)
 {
     thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_structure_map.find(name) == m_structure_map.end())
@@ -590,7 +590,7 @@ Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
             Logger::Log(LogLevel::Warning, 
-                        "AtomicInfoHelper::GetStructureFromString - Unknown string: " + name);
+                        "ChemicalDataHelper::GetStructureFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -602,7 +602,7 @@ Structure AtomicInfoHelper::GetStructureFromString(const std::string & name)
     return m_structure_map.at(name);
 }
 
-Entity AtomicInfoHelper::GetEntityFromString(const std::string & name)
+Entity ChemicalDataHelper::GetEntityFromString(const std::string & name)
 {
     thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
     if (m_entity_map.find(name) == m_entity_map.end())
@@ -610,7 +610,7 @@ Entity AtomicInfoHelper::GetEntityFromString(const std::string & name)
         if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
         {
             Logger::Log(LogLevel::Warning, 
-                "AtomicInfoHelper::GetEntityFromString - Unknown string: " + name);
+                "ChemicalDataHelper::GetEntityFromString - Unknown string: " + name);
             unknown_name_count_list[name] = 1;
         }
         else
@@ -622,51 +622,51 @@ Entity AtomicInfoHelper::GetEntityFromString(const std::string & name)
     return m_entity_map.at(name);
 }
 
-const std::string & AtomicInfoHelper::GetLabel(Residue residue)
+const std::string & ChemicalDataHelper::GetLabel(Residue residue)
 {
     static std::string unk_label{"?"};
     if (m_residue_label_map.find(residue) == m_residue_label_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-            "AtomicInfoHelper::GetLabel - Unknown Residue: "
+            "ChemicalDataHelper::GetLabel - Unknown Residue: "
             + std::to_string(static_cast<int>(residue)));
         return unk_label;
     }
     return m_residue_label_map.at(residue);
 }
 
-const std::string & AtomicInfoHelper::GetLabel(Element element)
+const std::string & ChemicalDataHelper::GetLabel(Element element)
 {
     static std::string unk_label{"?"};
     if (m_element_label_map.find(element) == m_element_label_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-            "AtomicInfoHelper::GetLabel - Unknown Element: "
+            "ChemicalDataHelper::GetLabel - Unknown Element: "
             + std::to_string(static_cast<int>(element)));
         return unk_label;
     }
     return m_element_label_map.at(element);
 }
 
-short AtomicInfoHelper::GetDisplayColor(Element element)
+short ChemicalDataHelper::GetDisplayColor(Element element)
 {
     if (m_element_color_map.find(element) == m_element_color_map.end()) return 1;
     return static_cast<short>(m_element_color_map.at(element));
 }
 
-short AtomicInfoHelper::GetDisplayColor(Residue residue)
+short ChemicalDataHelper::GetDisplayColor(Residue residue)
 {
     if (m_residue_color_map.find(residue) == m_residue_color_map.end()) return 1;
     return static_cast<short>(m_residue_color_map.at(residue));
 }
 
-short AtomicInfoHelper::GetDisplayMarker(Element element)
+short ChemicalDataHelper::GetDisplayMarker(Element element)
 {
     if (m_element_marker_map.find(element) == m_element_marker_map.end()) return 121;
     return static_cast<short>(m_element_marker_map.at(element));
 }
 
-short AtomicInfoHelper::GetDisplayMarker(Residue residue)
+short ChemicalDataHelper::GetDisplayMarker(Residue residue)
 {
     if (m_residue_marker_map.find(residue) == m_residue_marker_map.end()) return 1;
     return static_cast<short>(m_residue_marker_map.at(residue));

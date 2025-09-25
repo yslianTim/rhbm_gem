@@ -1,6 +1,6 @@
 #include "ComponentKeySystem.hpp"
 #include "GlobalEnumClass.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "Logger.hpp"
 
 #include <limits>
@@ -12,7 +12,7 @@ ComponentKeySystem::ComponentKeySystem(void) :
     m_next_dynamic_key{ k_dynamic_base }
 {
     Logger::Log(LogLevel::Debug, "ComponentKeySystem::ComponentKeySystem() called");
-    const auto & build_in_residue_map{ AtomicInfoHelper::GetResidueMap() };
+    const auto & build_in_residue_map{ ChemicalDataHelper::GetResidueMap() };
     for (const auto & [component_id, residue] : build_in_residue_map)
     {
         auto component_key{ static_cast<ComponentKey>(residue) };

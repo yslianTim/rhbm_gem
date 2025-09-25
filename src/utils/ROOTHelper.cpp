@@ -1,5 +1,4 @@
 #include "ROOTHelper.hpp"
-#include "AtomicInfoHelper.hpp"
 
 #ifdef HAVE_ROOT
 

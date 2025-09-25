@@ -10,7 +10,7 @@
 #include "FilePathHelper.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "GroupPotentialEntry.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "BondClassifier.hpp"
 #include "GausLinearTransformHelper.hpp"
@@ -382,9 +382,9 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomPotentialFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFitting");
     if (m_model_object == nullptr) return;
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupAtomClassCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
-        const auto & class_key{ AtomicInfoHelper::GetGroupAtomClassKey(i) };
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
         // Atom Classification
@@ -506,9 +506,9 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondPotentialFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
     if (m_model_object == nullptr) return;
-    for (size_t i = 0; i < AtomicInfoHelper::GetGroupBondClassCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
-        const auto & class_key{ AtomicInfoHelper::GetGroupBondClassKey(i) };
+        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
         // Bond Classification

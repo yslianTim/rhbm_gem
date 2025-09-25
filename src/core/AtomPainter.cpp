@@ -3,7 +3,6 @@
 #include "DataObjectBase.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "FilePathHelper.hpp"
-#include "AtomicInfoHelper.hpp"
 #include "ArrayStats.hpp"
 #include "Logger.hpp"
 

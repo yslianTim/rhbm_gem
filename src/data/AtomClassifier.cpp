@@ -1,5 +1,5 @@
 #include "AtomClassifier.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "KeyPacker.hpp"
 #include "AtomObject.hpp"
@@ -132,19 +132,19 @@ const std::string & AtomClassifier::GetMainChainElementTitle(size_t id)
 GroupKey AtomClassifier::GetGroupKeyInClass(
     const AtomObject * atom_object, const std::string & class_key)
 {
-    if (class_key == AtomicInfoHelper::GetSimpleAtomClassKey())
+    if (class_key == ChemicalDataHelper::GetSimpleAtomClassKey())
     {
         return KeyPackerSimpleAtomClass::Pack(
             atom_object->GetAtomKey(),
             atom_object->GetSpecialAtomFlag());
     }
-    else if (class_key == AtomicInfoHelper::GetComponentAtomClassKey())
+    else if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
     {
         return KeyPackerComponentAtomClass::Pack(
             atom_object->GetComponentKey(),
             atom_object->GetAtomKey());
     }
-    else if (class_key == AtomicInfoHelper::GetStructureAtomClassKey())
+    else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
     {
         return KeyPackerStructureAtomClass::Pack(
             atom_object->GetStructure(),
@@ -209,8 +209,8 @@ std::vector<GroupKey> AtomClassifier::GetMainChainComponentAtomClassGroupKeyList
 {
     if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<GroupKey> group_key_list;
-    group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
-    for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
+    group_key_list.reserve(ChemicalDataHelper::GetStandardResidueCount());
+    for (auto residue_id : ChemicalDataHelper::GetStandardResidueList())
     {
         group_key_list.emplace_back(GetMainChainComponentAtomClassGroupKey(id, residue_id));
     }
@@ -222,8 +222,8 @@ std::vector<GroupKey> AtomClassifier::GetMainChainStructureAtomClassGroupKeyList
 {
     if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<GroupKey> group_key_list;
-    group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
-    for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
+    group_key_list.reserve(ChemicalDataHelper::GetStandardResidueCount());
+    for (auto residue_id : ChemicalDataHelper::GetStandardResidueList())
     {
         group_key_list.emplace_back(GetMainChainStructureAtomClassGroupKey(id, structure, residue_id));
     }

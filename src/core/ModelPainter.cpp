@@ -5,7 +5,7 @@
 #include "DataObjectBase.hpp"
 #include "PotentialEntryIterator.hpp"
 #include "FilePathHelper.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "ComponentHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "BondClassifier.hpp"
@@ -117,7 +117,7 @@ void ModelPainter::PaintAtomGroupGausMainChainStyle1(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGroupGausMainChainStyle1");
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
@@ -334,7 +334,7 @@ void ModelPainter::PaintAtomGroupGausMainChain(
         std::vector<double> amplitude_array, width_array;
         amplitude_array.reserve(80);
         width_array.reserve(80);
-        auto class_key{ (j == 0) ? AtomicInfoHelper::GetComponentAtomClassKey() : AtomicInfoHelper::GetStructureAtomClassKey() };
+        auto class_key{ (j == 0) ? ChemicalDataHelper::GetComponentAtomClassKey() : ChemicalDataHelper::GetStructureAtomClassKey() };
         for (size_t i = 0; i < primary_element_size; i++)
         {
             amplitude_graph[i] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list[i][j], class_key, 0);
@@ -527,7 +527,7 @@ void ModelPainter::PaintBondGroupGausMainChain(
     std::vector<double> amplitude_array, width_array;
     amplitude_array.reserve(80);
     width_array.reserve(80);
-    auto class_key{ AtomicInfoHelper::GetComponentBondClassKey() };
+    auto class_key{ ChemicalDataHelper::GetComponentBondClassKey() };
     for (size_t i = 0; i < primary_element_size; i++)
     {
         amplitude_graph[i] = entry_iter->CreateBondGausEstimateToResidueGraph(group_key_list[i], class_key, 0);
@@ -694,7 +694,7 @@ void ModelPainter::PaintAtomGroupGausSideChain(
     frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
-    size_t residue_size{ static_cast<size_t>(AtomicInfoHelper::GetStandardResidueCount()) };
+    size_t residue_size{ static_cast<size_t>(ChemicalDataHelper::GetStandardResidueCount()) };
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_mix_graph_list(residue_size);
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_free_graph_list(residue_size);
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_helix_graph_list(residue_size);
@@ -703,14 +703,14 @@ void ModelPainter::PaintAtomGroupGausSideChain(
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> width_helix_graph_list(residue_size);
     std::vector<std::unique_ptr<TPaveText>> info_text(residue_size);
     size_t residue_index{ 0 };
-    for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+    for (auto residue : ChemicalDataHelper::GetStandardResidueList())
     {
         auto component_key{ static_cast<ComponentKey>(residue) };
         info_text[residue_index] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         std::vector<double> amplitude_array, width_array;
         std::vector<std::string> label_list;
         auto count_total{ 0 };
-        for (auto element : AtomicInfoHelper::GetStandardElementList())
+        for (auto element : ChemicalDataHelper::GetStandardElementList())
         {
             auto amplitude_mix_graph{ ROOTHelper::CreateGraphErrors() };
             auto amplitude_free_graph{ ROOTHelper::CreateGraphErrors() };
@@ -726,19 +726,19 @@ void ModelPainter::PaintAtomGroupGausSideChain(
                 auto atom_key{ static_cast<AtomKey>(spot) };
                 auto atom_id{ model_object->GetAtomKeySystemPtr()->GetAtomId(atom_key) };
                 auto element_char{ StringHelper::ExtractCharAsString(atom_id, 0) };
-                auto element_type{ AtomicInfoHelper::GetElementFromString(element_char) };
+                auto element_type{ ChemicalDataHelper::GetElementFromString(element_char) };
                 if (element_type != element) continue;
                 auto mix_group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
                 auto free_group_key{ AtomClassifier::GetGroupKeyInClass(Structure::FREE, component_key, atom_key) };
                 auto helix_group_key{ AtomClassifier::GetGroupKeyInClass(Structure::HELX_P, component_key, atom_key) };
                 bool has_data{ false };
-                if (entry_iter->IsAvailableAtomGroupKey(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey()) == true)
+                if (entry_iter->IsAvailableAtomGroupKey(mix_group_key, ChemicalDataHelper::GetComponentAtomClassKey()) == true)
                 {
                     has_data = true;
-                    auto amplitude_value{ entry_iter->GetAtomGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey(), 0) };
-                    auto width_value{ entry_iter->GetAtomGausEstimatePrior(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey(), 1) };
-                    auto amplitude_error{ entry_iter->GetAtomGausVariancePrior(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey(), 0) };
-                    auto width_error{ entry_iter->GetAtomGausVariancePrior(mix_group_key, AtomicInfoHelper::GetComponentAtomClassKey(), 1) };
+                    auto amplitude_value{ entry_iter->GetAtomGausEstimatePrior(mix_group_key, ChemicalDataHelper::GetComponentAtomClassKey(), 0) };
+                    auto width_value{ entry_iter->GetAtomGausEstimatePrior(mix_group_key, ChemicalDataHelper::GetComponentAtomClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetAtomGausVariancePrior(mix_group_key, ChemicalDataHelper::GetComponentAtomClassKey(), 0) };
+                    auto width_error{ entry_iter->GetAtomGausVariancePrior(mix_group_key, ChemicalDataHelper::GetComponentAtomClassKey(), 1) };
                     amplitude_array.emplace_back(amplitude_value);
                     width_array.emplace_back(width_value);
                     amplitude_mix_graph->SetPoint(count_mix, count_total, amplitude_value);
@@ -748,12 +748,12 @@ void ModelPainter::PaintAtomGroupGausSideChain(
                     count_mix++;
                 }
 
-                if (entry_iter->IsAvailableAtomGroupKey(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey()) == true)
+                if (entry_iter->IsAvailableAtomGroupKey(free_group_key, ChemicalDataHelper::GetStructureAtomClassKey()) == true)
                 {
-                    auto amplitude_value{ entry_iter->GetAtomGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 0) };
-                    auto width_value{ entry_iter->GetAtomGausEstimatePrior(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 1) };
-                    auto amplitude_error{ entry_iter->GetAtomGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 0) };
-                    auto width_error{ entry_iter->GetAtomGausVariancePrior(free_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 1) };
+                    auto amplitude_value{ entry_iter->GetAtomGausEstimatePrior(free_group_key, ChemicalDataHelper::GetStructureAtomClassKey(), 0) };
+                    auto width_value{ entry_iter->GetAtomGausEstimatePrior(free_group_key, ChemicalDataHelper::GetStructureAtomClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetAtomGausVariancePrior(free_group_key, ChemicalDataHelper::GetStructureAtomClassKey(), 0) };
+                    auto width_error{ entry_iter->GetAtomGausVariancePrior(free_group_key, ChemicalDataHelper::GetStructureAtomClassKey(), 1) };
                     //amplitude_array.emplace_back(amplitude_value);
                     //width_array.emplace_back(width_value);
                     amplitude_free_graph->SetPoint(count_free, count_total, amplitude_value);
@@ -763,12 +763,12 @@ void ModelPainter::PaintAtomGroupGausSideChain(
                     count_free++;
                 }
 
-                if (entry_iter->IsAvailableAtomGroupKey(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey()) == true)
+                if (entry_iter->IsAvailableAtomGroupKey(helix_group_key, ChemicalDataHelper::GetStructureAtomClassKey()) == true)
                 {
-                    auto amplitude_value{ entry_iter->GetAtomGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 0) };
-                    auto width_value{ entry_iter->GetAtomGausEstimatePrior(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 1) };
-                    auto amplitude_error{ entry_iter->GetAtomGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 0) };
-                    auto width_error{ entry_iter->GetAtomGausVariancePrior(helix_group_key, AtomicInfoHelper::GetStructureAtomClassKey(), 1) };
+                    auto amplitude_value{ entry_iter->GetAtomGausEstimatePrior(helix_group_key, ChemicalDataHelper::GetStructureAtomClassKey(), 0) };
+                    auto width_value{ entry_iter->GetAtomGausEstimatePrior(helix_group_key, ChemicalDataHelper::GetStructureAtomClassKey(), 1) };
+                    auto amplitude_error{ entry_iter->GetAtomGausVariancePrior(helix_group_key, ChemicalDataHelper::GetStructureAtomClassKey(), 0) };
+                    auto width_error{ entry_iter->GetAtomGausVariancePrior(helix_group_key, ChemicalDataHelper::GetStructureAtomClassKey(), 1) };
                     //amplitude_array.emplace_back(amplitude_value);
                     //width_array.emplace_back(width_value);
                     amplitude_helix_graph->SetPoint(count_helix, count_total, amplitude_value);
@@ -785,7 +785,7 @@ void ModelPainter::PaintAtomGroupGausSideChain(
                     count_total++;
                 }
             }
-            auto color{ AtomicInfoHelper::GetDisplayColor(element) };
+            auto color{ ChemicalDataHelper::GetDisplayColor(element) };
             ROOTHelper::SetMarkerAttribute(amplitude_mix_graph.get(), kFullCircle, 1.5f, color);
             ROOTHelper::SetMarkerAttribute(width_mix_graph.get(), kFullCircle, 1.5f, color);
             ROOTHelper::SetMarkerAttribute(amplitude_free_graph.get(), kOpenTriangleUp, 1.5f, color);
@@ -853,7 +853,7 @@ void ModelPainter::PaintAtomGroupGausSideChain(
         ROOTHelper::SetPaveAttribute(info_text[residue_index].get(), 0, 0.2);
         ROOTHelper::SetFillAttribute(info_text[residue_index].get(), 1001, kAzure-7);
         ROOTHelper::SetTextAttribute(info_text[residue_index].get(), 45, 103, 22, 0.0, kYellow-10);
-        info_text[residue_index]->AddText(AtomicInfoHelper::GetLabel(residue).data());
+        info_text[residue_index]->AddText(ChemicalDataHelper::GetLabel(residue).data());
         info_text[residue_index]->Draw();
 
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
@@ -890,12 +890,12 @@ void ModelPainter::PaintBondGroupGausSideChain(
     frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
-    size_t residue_size{ static_cast<size_t>(AtomicInfoHelper::GetStandardResidueCount()) };
+    size_t residue_size{ static_cast<size_t>(ChemicalDataHelper::GetStandardResidueCount()) };
     std::vector<std::unique_ptr<TGraphErrors>> amplitude_graph_list(residue_size);
     std::vector<std::unique_ptr<TGraphErrors>> width_graph_list(residue_size);
     std::vector<std::unique_ptr<TPaveText>> info_text(residue_size);
     size_t residue_index{ 0 };
-    for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+    for (auto residue : ChemicalDataHelper::GetStandardResidueList())
     {
         auto component_key{ static_cast<ComponentKey>(residue) };
         info_text[residue_index] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
@@ -909,12 +909,12 @@ void ModelPainter::PaintBondGroupGausSideChain(
             auto bond_key{ static_cast<BondKey>(link) };
             auto bond_id{ model_object->GetBondKeySystemPtr()->GetBondId(bond_key) };
             auto group_key{ BondClassifier::GetGroupKeyInClass(component_key, bond_key) };
-            if (entry_iter->IsAvailableBondGroupKey(group_key, AtomicInfoHelper::GetComponentBondClassKey()) == true)
+            if (entry_iter->IsAvailableBondGroupKey(group_key, ChemicalDataHelper::GetComponentBondClassKey()) == true)
             {
-                auto amplitude_value{ entry_iter->GetBondGausEstimatePrior(group_key, AtomicInfoHelper::GetComponentBondClassKey(), 0) };
-                auto width_value{ entry_iter->GetBondGausEstimatePrior(group_key, AtomicInfoHelper::GetComponentBondClassKey(), 1) };
-                auto amplitude_error{ entry_iter->GetBondGausVariancePrior(group_key, AtomicInfoHelper::GetComponentBondClassKey(), 0) };
-                auto width_error{ entry_iter->GetBondGausVariancePrior(group_key, AtomicInfoHelper::GetComponentBondClassKey(), 1) };
+                auto amplitude_value{ entry_iter->GetBondGausEstimatePrior(group_key, ChemicalDataHelper::GetComponentBondClassKey(), 0) };
+                auto width_value{ entry_iter->GetBondGausEstimatePrior(group_key, ChemicalDataHelper::GetComponentBondClassKey(), 1) };
+                auto amplitude_error{ entry_iter->GetBondGausVariancePrior(group_key, ChemicalDataHelper::GetComponentBondClassKey(), 0) };
+                auto width_error{ entry_iter->GetBondGausVariancePrior(group_key, ChemicalDataHelper::GetComponentBondClassKey(), 1) };
                 amplitude_array.emplace_back(amplitude_value);
                 width_array.emplace_back(width_value);
                 amplitude_graph->SetPoint(count, count, amplitude_value);
@@ -980,7 +980,7 @@ void ModelPainter::PaintBondGroupGausSideChain(
         ROOTHelper::SetPaveAttribute(info_text[residue_index].get(), 0, 0.2);
         ROOTHelper::SetFillAttribute(info_text[residue_index].get(), 1001, kAzure-7);
         ROOTHelper::SetTextAttribute(info_text[residue_index].get(), 45, 103, 22, 0.0, kYellow-10);
-        info_text[residue_index]->AddText(AtomicInfoHelper::GetLabel(residue).data());
+        info_text[residue_index]->AddText(ChemicalDataHelper::GetLabel(residue).data());
         info_text[residue_index]->Draw();
 
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
@@ -995,7 +995,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomMapValueMainChain");
-    const auto & class_key{ AtomicInfoHelper::GetSimpleAtomClassKey() };
+    const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
     const int col_size{ 4 };
@@ -1161,7 +1161,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondMapValueMainChain");
-    const auto & class_key{ AtomicInfoHelper::GetSimpleBondClassKey() };
+    const auto & class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
     const int col_size{ 4 };
@@ -1339,7 +1339,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintGroupWidthScatterPlot");
-    auto residue_class{ AtomicInfoHelper::GetComponentAtomClassKey() };
+    auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
 
@@ -1366,7 +1366,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
     {
         for (int j = 0; j < row_size; j++)
         {
-            for (auto residue : AtomicInfoHelper::GetStandardResidueList())
+            for (auto residue : ChemicalDataHelper::GetStandardResidueList())
             {
                 auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
                 if (entry_iter->IsAvailableAtomGroupKey(group_key, residue_class) == false) continue;
@@ -1579,7 +1579,7 @@ void ModelPainter::PaintAtomGausScatterPlot(
     std::vector<double> x_array, y_array;
     x_array.reserve(model_object->GetNumberOfSelectedAtom());
     y_array.reserve(model_object->GetNumberOfSelectedAtom());
-    for (auto & [element_type, element_name] : AtomicInfoHelper::GetElementLabelMap())
+    for (auto & [element_type, element_name] : ChemicalDataHelper::GetElementLabelMap())
     {
         auto graph
         {
@@ -1587,14 +1587,14 @@ void ModelPainter::PaintAtomGausScatterPlot(
             entry_iter->CreateNormalizedGausEstimateScatterGraph(element_type, amplitude_min) :
             entry_iter->CreateGausEstimateScatterGraph(element_type)
         };
-        auto atomic_number{ AtomicInfoHelper::GetAtomicNumber(element_type) };
+        auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element_type) };
         auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
-        short marker_color{ (AtomicInfoHelper::IsStandardElement(element_type)) ?
-            AtomicInfoHelper::GetDisplayColor(element_type) : static_cast<short>(kRed)
+        short marker_color{ (ChemicalDataHelper::IsStandardElement(element_type)) ?
+            ChemicalDataHelper::GetDisplayColor(element_type) : static_cast<short>(kRed)
         };
         auto transparency{ (atomic_number <= 8) ? 0.2f : 1.0f };
         ROOTHelper::SetMarkerAttribute(graph.get(),
-            AtomicInfoHelper::GetDisplayMarker(element_type), marker_size,
+            ChemicalDataHelper::GetDisplayMarker(element_type), marker_size,
             marker_color, transparency);
         for (int p = 0; p < graph->GetN(); p++)
         {
@@ -1636,13 +1636,13 @@ void ModelPainter::PaintAtomGausScatterPlot(
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
     for (int i = 1; i <= 90; i++)
     {
-        auto element{ AtomicInfoHelper::GetElementFromAtomicNumber(i) };
+        auto element{ ChemicalDataHelper::GetElementFromAtomicNumber(i) };
         if (graph_map.find(element) == graph_map.end()) continue;
         auto & graph{ graph_map.at(element) };
         graph->Draw("P X0");
         legend->AddEntry(graph.get(),
                          Form("#font[102]{%s} (%d)",
-                            AtomicInfoHelper::GetElementLabelMap().at(element).data(),
+                            ChemicalDataHelper::GetElementLabelMap().at(element).data(),
                             graph->GetN()), "p");
     }
     legend->Draw();
@@ -1684,7 +1684,7 @@ void ModelPainter::PaintBondGausScatterPlot(
     std::vector<double> x_array, y_array;
     x_array.reserve(model_object->GetNumberOfSelectedBond());
     y_array.reserve(model_object->GetNumberOfSelectedBond());
-    for (auto & [element_type, element_name] : AtomicInfoHelper::GetElementLabelMap())
+    for (auto & [element_type, element_name] : ChemicalDataHelper::GetElementLabelMap())
     {
         auto graph
         {
@@ -1692,14 +1692,14 @@ void ModelPainter::PaintBondGausScatterPlot(
             entry_iter->CreateNormalizedGausEstimateScatterGraph(element_type, amplitude_min) :
             entry_iter->CreateGausEstimateScatterGraph(element_type)
         };
-        auto atomic_number{ AtomicInfoHelper::GetAtomicNumber(element_type) };
+        auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element_type) };
         auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
-        short marker_color{ (AtomicInfoHelper::IsStandardElement(element_type)) ?
-            AtomicInfoHelper::GetDisplayColor(element_type) : static_cast<short>(kRed)
+        short marker_color{ (ChemicalDataHelper::IsStandardElement(element_type)) ?
+            ChemicalDataHelper::GetDisplayColor(element_type) : static_cast<short>(kRed)
         };
         auto transparency{ (atomic_number <= 8) ? 0.2f : 1.0f };
         ROOTHelper::SetMarkerAttribute(graph.get(),
-            AtomicInfoHelper::GetDisplayMarker(element_type), marker_size,
+            ChemicalDataHelper::GetDisplayMarker(element_type), marker_size,
             marker_color, transparency);
         for (int p = 0; p < graph->GetN(); p++)
         {
@@ -1741,13 +1741,13 @@ void ModelPainter::PaintBondGausScatterPlot(
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
     for (int i = 1; i <= 90; i++)
     {
-        auto element{ AtomicInfoHelper::GetElementFromAtomicNumber(i) };
+        auto element{ ChemicalDataHelper::GetElementFromAtomicNumber(i) };
         if (graph_map.find(element) == graph_map.end()) continue;
         auto & graph{ graph_map.at(element) };
         graph->Draw("P X0");
         legend->AddEntry(graph.get(),
                          Form("#font[102]{%s} (%d)",
-                            AtomicInfoHelper::GetElementLabelMap().at(element).data(),
+                            ChemicalDataHelper::GetElementLabelMap().at(element).data(),
                             graph->GetN()), "p");
     }
     legend->Draw();
@@ -2246,10 +2246,10 @@ void ModelPainter::PrintGausResultGlobalPad(
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardResidueCount(); i++)
     {
-        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(i) };
-        auto label{ AtomicInfoHelper::GetLabel(residue) };
+        auto residue{ ChemicalDataHelper::GetStandardResidueList().at(i) };
+        auto label{ ChemicalDataHelper::GetLabel(residue) };
         auto label_index{ static_cast<int>(i) + 2 };
         hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
     }
@@ -2295,10 +2295,10 @@ void ModelPainter::PrintWidthPad(TPad * pad, TH2 * hist)
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < AtomicInfoHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardResidueCount(); i++)
     {
-        auto residue{ AtomicInfoHelper::GetStandardResidueList().at(i) };
-        auto label{ AtomicInfoHelper::GetLabel(residue) };
+        auto residue{ ChemicalDataHelper::GetStandardResidueList().at(i) };
+        auto label{ ChemicalDataHelper::GetLabel(residue) };
         auto label_index{ static_cast<int>(i) + 2 };
         hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
     }
@@ -2415,7 +2415,7 @@ void ModelPainter::PrintGausSummaryPad(TPad * pad, TH2 * hist)
 void ModelPainter::ModifyAxisLabelSideChain(
     TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list)
 {
-    if (AtomicInfoHelper::IsStandardResidue(residue) == false) return;
+    if (ChemicalDataHelper::IsStandardResidue(residue) == false) return;
 
     auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
     auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };

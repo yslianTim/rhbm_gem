@@ -1,6 +1,6 @@
 #include "BondKeySystem.hpp"
 #include "GlobalEnumClass.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 
@@ -13,7 +13,7 @@ BondKeySystem::BondKeySystem(void) :
     m_next_dynamic_key{ k_dynamic_base }
 {
     Logger::Log(LogLevel::Debug, "BondKeySystem::BondKeySystem() called");
-    const auto & build_in_link_map{ AtomicInfoHelper::GetLinkMap() };
+    const auto & build_in_link_map{ ChemicalDataHelper::GetLinkMap() };
     for (const auto & [bond_id, link] : build_in_link_map)
     {
         auto bond_key{ static_cast<BondKey>(link) };

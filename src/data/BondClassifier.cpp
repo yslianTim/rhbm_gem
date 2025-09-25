@@ -1,5 +1,5 @@
 #include "BondClassifier.hpp"
-#include "AtomicInfoHelper.hpp"
+#include "ChemicalDataHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "KeyPacker.hpp"
 #include "AtomObject.hpp"
@@ -122,13 +122,13 @@ const std::string & BondClassifier::GetMainChainMemberTitle(size_t id)
 GroupKey BondClassifier::GetGroupKeyInClass(
     const BondObject * bond_object, const std::string & class_key)
 {
-    if (class_key == AtomicInfoHelper::GetSimpleBondClassKey())
+    if (class_key == ChemicalDataHelper::GetSimpleBondClassKey())
     {
         return KeyPackerSimpleBondClass::Pack(
             bond_object->GetBondKey(),
             bond_object->GetSpecialBondFlag());
     }
-    else if (class_key == AtomicInfoHelper::GetComponentBondClassKey())
+    else if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
     {
         return KeyPackerComponentBondClass::Pack(
             bond_object->GetComponentKey(),
@@ -173,8 +173,8 @@ std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList
 {
     if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<GroupKey> group_key_list;
-    group_key_list.reserve(AtomicInfoHelper::GetStandardResidueCount());
-    for (auto residue_id : AtomicInfoHelper::GetStandardResidueList())
+    group_key_list.reserve(ChemicalDataHelper::GetStandardResidueCount());
+    for (auto residue_id : ChemicalDataHelper::GetStandardResidueList())
     {
         group_key_list.emplace_back(GetMainChainComponentBondClassGroupKey(id, residue_id));
     }

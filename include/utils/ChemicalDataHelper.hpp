@@ -9,7 +9,7 @@
 
 #include "GlobalEnumClass.hpp"
 
-class AtomicInfoHelper
+class ChemicalDataHelper
 {
     static const std::vector<std::string> m_group_atom_class_key_list;
     static const std::vector<std::string> m_group_bond_class_key_list;
@@ -33,8 +33,8 @@ class AtomicInfoHelper
     static const std::unordered_map<Residue, int> m_residue_marker_map;
 
 public:
-    AtomicInfoHelper(void) = default;
-    ~AtomicInfoHelper() = default;
+    ChemicalDataHelper(void) = default;
+    ~ChemicalDataHelper() = default;
     static int GetAtomicNumber(Element element);
     static size_t GetGroupAtomClassCount(void);
     static size_t GetGroupBondClassCount(void);
