@@ -34,7 +34,8 @@ public:
     PotentialEntryIterator(AtomObject * atom_object);
     PotentialEntryIterator(BondObject * bond_object);
     ~PotentialEntryIterator();
-    double GetGausEstimateMinimum(int par_id, Element element) const;
+    double GetAtomGausEstimateMinimum(int par_id, Element element) const;
+    double GetBondGausEstimateMinimum(int par_id) const;
     bool IsOutlierAtom(const std::string & class_key) const;
     bool IsOutlierBond(const std::string & class_key) const;
     bool IsAvailableAtomGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
@@ -46,7 +47,6 @@ public:
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const;
     const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const;
     std::unordered_map<int, AtomObject *> GetAtomObjectMap(GroupKey group_key, const std::string & class_key) const;
-    //std::unordered_map<int, BondObject *> GetBondObjectMap(GroupKey group_key, const std::string & class_key) const;
 
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
     std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(int bin_size=15, double x_min=0.0, double x_max=1.5) const;

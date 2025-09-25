@@ -51,7 +51,7 @@ PotentialEntryIterator::~PotentialEntryIterator()
 
 }
 
-double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element element) const
+double PotentialEntryIterator::GetAtomGausEstimateMinimum(int par_id, Element element) const
 {
     if (m_model_object == nullptr)
     {
@@ -63,6 +63,22 @@ double PotentialEntryIterator::GetGausEstimateMinimum(int par_id, Element elemen
     {
         if (atom->GetElement() != element) continue;
         auto entry{ atom->GetLocalPotentialEntry() };
+        gaus_estimate_list.emplace_back(entry->GetGausEstimateMDPDE(par_id));
+    }
+    return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
+}
+
+double PotentialEntryIterator::GetBondGausEstimateMinimum(int par_id) const
+{
+    if (m_model_object == nullptr)
+    {
+        throw std::runtime_error("Model object is not available.");
+    }
+    std::vector<double> gaus_estimate_list;
+    gaus_estimate_list.reserve(m_model_object->GetNumberOfSelectedBond());
+    for (auto & bond : m_model_object->GetSelectedBondList())
+    {
+        auto entry{ bond->GetLocalPotentialEntry() };
         gaus_estimate_list.emplace_back(entry->GetGausEstimateMDPDE(par_id));
     }
     return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -204,17 +220,6 @@ std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
     }
     return atom_object_map;
 }
-/*
-std::unordered_map<int, BondObject *> PotentialEntryIterator::GetBondObjectMap(
-    GroupKey group_key, const std::string & class_key) const
-{
-    std::unordered_map<int, BondObject *> bond_object_map;
-    for (auto & bond_object : GetBondObjectList(group_key, class_key))
-    {
-        bond_object_map[bond_object->GetSerialID()] = bond_object;
-    }
-    return bond_object_map;
-}*/
 
 const std::vector<std::tuple<float, float>> & PotentialEntryIterator::GetDistanceAndMapValueList(void) const
 {
