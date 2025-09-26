@@ -62,8 +62,8 @@ public:
     std::unique_ptr<TGraphErrors> CreateAmplitudeRatioToWidthScatterGraph(size_t target_id, size_t reference_id, Residue residue=Residue::UNK);
     std::unique_ptr<TGraphErrors> CreateNormalizedGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateBfactorToWidthScatterGraph(GroupKey group_key, const std::string & class_key);
-    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateAtomGausEstimateToResidueIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
-    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateBondGausEstimateToResidueIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateBondGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);

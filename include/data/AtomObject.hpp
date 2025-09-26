@@ -46,7 +46,7 @@ public:
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialAtomFlag(bool value) { m_is_special_atom = value; }
     void SetSerialID(int value) { m_serial_id = value; }
-    void SetResidueID(int value) { m_residue_id = value; }
+    void SetSequenceID(int value) { m_residue_id = value; }
     void SetComponentID(const std::string & value);
     void SetComponentKey(ComponentKey value) { m_component_key = value; }
     void SetAtomID(const std::string & value);
@@ -80,7 +80,7 @@ public:
     bool GetSelectedFlag(void) const { return m_is_selected; }
     bool GetSpecialAtomFlag(void) const { return m_is_special_atom; }
     int GetSerialID(void) const { return m_serial_id; }
-    int GetResidueID(void) const { return m_residue_id; }
+    int GetSequenceID(void) const { return m_residue_id; }
     std::string GetComponentID(void) const { return m_component_id; }
     std::string GetAtomID(void) const { return m_atom_id; }
     std::string GetChainID(void) const { return m_chain_id; }

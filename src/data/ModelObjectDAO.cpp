@@ -77,7 +77,7 @@ namespace
     constexpr std::string_view CREATE_ATOM_TABLE_SQL = R"sql(
         CREATE TABLE IF NOT EXISTS {} (
             serial_id INTEGER PRIMARY KEY,
-            residue_id INTEGER,
+            sequence_id INTEGER,
             component_id TEXT,
             atom_id TEXT,
             chain_id TEXT,
@@ -97,7 +97,7 @@ namespace
 
     constexpr std::string_view INSERT_ATOM_LIST_SQL = R"sql(
         INSERT OR REPLACE INTO {} (
-            serial_id, residue_id, component_id, atom_id, chain_id, indicator,
+            serial_id, sequence_id, component_id, atom_id, chain_id, indicator,
             occupancy, temperature, element, structure, is_special_atom,
             position_x, position_y, position_z, component_key, atom_key
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -105,7 +105,7 @@ namespace
 
     constexpr std::string_view SELECT_ATOM_LIST_SQL = R"sql(
         SELECT
-            serial_id, residue_id, component_id, atom_id, chain_id, indicator,
+            serial_id, sequence_id, component_id, atom_id, chain_id, indicator,
             occupancy, temperature, element, structure, is_special_atom,
             position_x, position_y, position_z, component_key, atom_key
         FROM {};
@@ -548,7 +548,7 @@ void ModelObjectDAO::SaveAtomObjectList(
     for (auto & atom_object : model_obj->GetAtomList())
     {
         m_database->Bind<int>(1, atom_object->GetSerialID());
-        m_database->Bind<int>(2, atom_object->GetResidueID());
+        m_database->Bind<int>(2, atom_object->GetSequenceID());
         m_database->Bind<std::string>(3, atom_object->GetComponentID());
         m_database->Bind<std::string>(4, atom_object->GetAtomID());
         m_database->Bind<std::string>(5, atom_object->GetChainID());
@@ -841,7 +841,7 @@ std::vector<std::unique_ptr<AtomObject>> ModelObjectDAO::LoadAtomObjectList(
     {
         auto atom_object{ std::make_unique<AtomObject>() };
         atom_object->SetSerialID(std::get<0>(row));
-        atom_object->SetResidueID(std::get<1>(row));
+        atom_object->SetSequenceID(std::get<1>(row));
         atom_object->SetComponentID(std::get<2>(row));
         atom_object->SetAtomID(std::get<3>(row));
         atom_object->SetChainID(std::get<4>(row));

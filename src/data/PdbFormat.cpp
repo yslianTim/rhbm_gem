@@ -79,7 +79,7 @@ void PdbFormat::ScanAtomEntry(char * line, bool is_special, int model_number)
     std::sscanf(&line[static_cast<int>(ATOM::INDICATOR)],    "%c",  &atom->indicator);
     std::sscanf(&line[static_cast<int>(ATOM::RESIDUE_NAME)], "%3c", &atom->residue_name[0]);
     std::sscanf(&line[static_cast<int>(ATOM::CHAIN_ID)],     "%c",  &atom->chain_id);
-    std::sscanf(&line[static_cast<int>(ATOM::RESIDUE_ID)],   "%d",  &atom->residue_id);
+    std::sscanf(&line[static_cast<int>(ATOM::RESIDUE_ID)],   "%d",  &atom->sequence_id);
     std::sscanf(&line[static_cast<int>(ATOM::CODE)],         "%c",  &atom->code);
     std::sscanf(&line[static_cast<int>(ATOM::POSITION_X)],   "%8f", &atom->position_x);
     std::sscanf(&line[static_cast<int>(ATOM::POSITION_Y)],   "%8f", &atom->position_y);
@@ -100,7 +100,7 @@ void PdbFormat::ScanAtomEntry(char * line, bool is_special, int model_number)
     atom_object->SetAtomID(atom_name);
     atom_object->SetResidue(StringHelper::ConvertCharArrayToString(atom->residue_name));
     atom_object->SetIndicator(indicator);
-    atom_object->SetResidueID(atom->residue_id);
+    atom_object->SetSequenceID(atom->sequence_id);
     atom_object->SetSerialID(atom->serial_id);
     atom_object->SetChainID(std::string(1, atom->chain_id));
     atom_object->SetPosition(atom->position_x, atom->position_y, atom->position_z);

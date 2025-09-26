@@ -555,11 +555,11 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
             if (atom->GetResidue() == veto_residue) is_veto_residue = true;
         }
         if (is_veto_residue == true) continue;
-        auto residue_id{ atom->GetResidueID() };
+        auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         auto entry{ atom->GetLocalPotentialEntry() };
         auto gaus_value{ entry->GetGausEstimateMDPDE(par_id) };
-        values_map[chain_id][residue_id].at(id) = gaus_value;
+        values_map[chain_id][sequence_id].at(id) = gaus_value;
     }
     chain_size = static_cast<int>(values_map.size());
 
@@ -570,7 +570,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
         auto hist{ ROOTHelper::CreateHist1D(name, "", 4,  0.5, 4.5) };
         for (auto & [chain_id, values_map_tmp] : values_map)
         {
-            for (auto & [residue_id, values] : values_map_tmp)
+            for (auto & [sequence_id, values] : values_map_tmp)
             {
                 hist->Fill(ArrayStats<double>::ComputeRank(values, i));
             }
@@ -602,19 +602,19 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAmplitudeRatioToWidt
         if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         auto entry{ atom->GetLocalPotentialEntry() };
-        auto residue_id{ atom->GetResidueID() };
+        auto sequence_id{ atom->GetSequenceID() };
         auto amplitude_estimate{ entry->GetAmplitudeEstimateMDPDE() };
         auto width_estimate{ entry->GetWidthEstimateMDPDE() };
-        (gaus_estimate_map[current_id])[residue_id] = std::make_tuple(amplitude_estimate, width_estimate);
+        (gaus_estimate_map[current_id])[sequence_id] = std::make_tuple(amplitude_estimate, width_estimate);
     }
 
     auto count{ 0 };
-    for (auto & [residue_id, gaus_estimate] : gaus_estimate_map[target_id])
+    for (auto & [sequence_id, gaus_estimate] : gaus_estimate_map[target_id])
     {
-        if (gaus_estimate_map[reference_id].find(residue_id) == gaus_estimate_map[reference_id].end()) continue;
+        if (gaus_estimate_map[reference_id].find(sequence_id) == gaus_estimate_map[reference_id].end()) continue;
         auto target_amplitude{ std::get<0>(gaus_estimate) };
         auto target_width{ std::get<1>(gaus_estimate) };
-        auto reference_amplitude{ std::get<0>(gaus_estimate_map[reference_id].at(residue_id)) };
+        auto reference_amplitude{ std::get<0>(gaus_estimate_map[reference_id].at(sequence_id)) };
         if (reference_amplitude <= 0.0) continue;
         auto ratio{ target_amplitude / reference_amplitude };
         graph->SetPoint(count, target_width, ratio);
@@ -639,21 +639,21 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstima
         if (atom->GetSpecialAtomFlag() == false)
         {
             auto entry{ atom->GetLocalPotentialEntry() };
-            auto residue_id{ atom->GetResidueID() };
+            auto sequence_id{ atom->GetSequenceID() };
             auto amplitude_estimate{ entry->GetAmplitudeEstimateMDPDE() };
-            amplitude_diff_to_carbonyl_oxygen_map[residue_id] = amplitude_estimate - reference_amplitude;
+            amplitude_diff_to_carbonyl_oxygen_map[sequence_id] = amplitude_estimate - reference_amplitude;
         }
     }
     auto count{ 0 };
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != element) continue;
-        auto residue_id{ atom->GetResidueID() };
+        auto sequence_id{ atom->GetSequenceID() };
         auto entry{ atom->GetLocalPotentialEntry() };
         auto normalized_amplitude{ entry->GetAmplitudeEstimateMDPDE() };
-        if (amplitude_diff_to_carbonyl_oxygen_map.find(residue_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
+        if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
         {
-            normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(residue_id);
+            normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(sequence_id);
         }
         if (reverse == false)
         {
@@ -695,7 +695,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatte
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialEntryIterator::CreateAtomGausEstimateToResidueIDGraphMap(
+PotentialEntryIterator::CreateAtomGausEstimateToSequenceIDGraphMap(
     size_t main_chain_element_id, const int par_id, Residue residue)
 {
     if (IsModelObjectAvailable() == false)
@@ -712,15 +712,15 @@ PotentialEntryIterator::CreateAtomGausEstimateToResidueIDGraphMap(
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         auto entry{ atom->GetLocalPotentialEntry() };
-        auto residue_id{ atom->GetResidueID() };
+        auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
-        if (residue_id < 0) continue;
+        if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
             graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
-        auto x_value{ static_cast<double>(residue_id) };
+        auto x_value{ static_cast<double>(sequence_id) };
         graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, entry->GetGausEstimateMDPDE(par_id));
         count_map[chain_id]++;
     }
@@ -728,7 +728,7 @@ PotentialEntryIterator::CreateAtomGausEstimateToResidueIDGraphMap(
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialEntryIterator::CreateBondGausEstimateToResidueIDGraphMap(
+PotentialEntryIterator::CreateBondGausEstimateToSequenceIDGraphMap(
     size_t main_chain_element_id, const int par_id, Residue residue)
 {
     if (IsModelObjectAvailable() == false)
@@ -744,15 +744,15 @@ PotentialEntryIterator::CreateBondGausEstimateToResidueIDGraphMap(
     {
         if (residue != Residue::UNK && bond->GetAtomObject1()->GetResidue() != residue) continue;
         auto entry{ bond->GetLocalPotentialEntry() };
-        auto residue_id{ bond->GetAtomObject1()->GetResidueID() };
+        auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
         auto chain_id{ bond->GetAtomObject1()->GetChainID() };
-        if (residue_id < 0) continue;
+        if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
             graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
-        auto x_value{ static_cast<double>(residue_id) };
+        auto x_value{ static_cast<double>(sequence_id) };
         graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, entry->GetGausEstimateMDPDE(par_id));
         count_map[chain_id]++;
     }
@@ -906,7 +906,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
         for (auto atom2 : atom_list2)
         {
             auto entry2{ atom2->GetLocalPotentialEntry() };
-            if (atom1->GetResidueID() == atom2->GetResidueID() &&
+            if (atom1->GetSequenceID() == atom2->GetSequenceID() &&
                 atom1->GetChainID() == atom2->GetChainID())
             {
                 graph->SetPoint(count,

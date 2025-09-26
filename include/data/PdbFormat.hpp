@@ -72,7 +72,7 @@ class PdbFormat : public ModelFileFormatBase
         char  indicator;
         char  residue_name[4];
         char  chain_id;
-        int   residue_id;
+        int   sequence_id;
         char  code;
         float position_x, position_y, position_z;
         float occupancy;

@@ -448,7 +448,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             auto comp_id{ token_list[index_map.at("label_comp_id")] };
             auto atom_id{ token_list[index_map.at("label_atom_id")] };
             auto indicator{ token_list[index_map.at("label_alt_id")] };
-            auto residue_id{ token_list[index_map.at("label_seq_id")] };
+            auto sequence_id{ token_list[index_map.at("label_seq_id")] };
             auto serial_id{ token_list[index_map.at("id")] };
             auto chain_id{ token_list[index_map.at("label_asym_id")] };
             auto position_x{ std::stof(token_list[index_map.at("Cartn_x")]) };
@@ -477,7 +477,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             atom_object->SetAtomKey(m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id));
             atom_object->SetElement(element_type);
             atom_object->SetIndicator(indicator);
-            atom_object->SetResidueID((residue_id == ".") ? -1 : std::stoi(residue_id));
+            atom_object->SetSequenceID((sequence_id == ".") ? -1 : std::stoi(sequence_id));
             atom_object->SetSerialID(std::stoi(serial_id));
             atom_object->SetChainID(chain_id);
             atom_object->SetPosition(position_x, position_y, position_z);
@@ -642,7 +642,7 @@ void CifFormat::WriteAtomSiteBlockEntry(
     std::string label_comp_id{ atom->GetComponentID() };
     std::string label_asym_id{ atom->GetChainID() };
     std::string label_seq_id{
-        (atom->GetResidueID() == -1) ? "." : std::to_string(atom->GetResidueID())
+        (atom->GetSequenceID() == -1) ? "." : std::to_string(atom->GetSequenceID())
     };
 
     stream << group_PDB << ' '

@@ -110,7 +110,7 @@ void AtomicModelDataBlock::AddComponentBondEntry(
 void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 {
     auto chain_id{ atom_object->GetChainID() };
-    auto residue_id{ atom_object->GetResidueID() };
+    auto sequence_id{ atom_object->GetSequenceID() };
 
     for (auto & [helix_id, range] : m_struct_helix_range_map)
     {
@@ -118,7 +118,7 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
         {
             auto beg{ std::stoi(range.at(1)) };
             auto end{ std::stoi(range.at(3)) };
-            if (residue_id >= beg && residue_id <= end)
+            if (sequence_id >= beg && sequence_id <= end)
             {
                 atom_object->SetStructure(ChemicalDataHelper::GetStructureFromString(range.at(4)));
                 return;
@@ -132,7 +132,7 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
         {
             auto beg{ std::stoi(range.at(1)) };
             auto end{ std::stoi(range.at(3)) };
-            if (residue_id >= beg && residue_id <= end)
+            if (sequence_id >= beg && sequence_id <= end)
             {
                 atom_object->SetStructure(Structure::SHEET);
                 return;

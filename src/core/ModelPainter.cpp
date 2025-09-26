@@ -1796,9 +1796,9 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_map[row_size][main_chain_element_count];
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph_map[2][k] = entry_iter->CreateAtomGausEstimateToResidueIDGraphMap(k, 0);
-        gaus_graph_map[1][k] = entry_iter->CreateAtomGausEstimateToResidueIDGraphMap(k, 1);
-        gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimateToResidueIDGraphMap(k, 2);
+        gaus_graph_map[2][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
+        gaus_graph_map[1][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
+        gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])
@@ -1946,9 +1946,9 @@ void ModelPainter::PaintBondGausMainChain(ModelObject * model_object, const std:
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_map[row_size][main_chain_element_count];
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph_map[2][k] = entry_iter->CreateBondGausEstimateToResidueIDGraphMap(k, 0);
-        gaus_graph_map[1][k] = entry_iter->CreateBondGausEstimateToResidueIDGraphMap(k, 1);
-        gaus_graph_map[0][k] = entry_iter->CreateBondGausEstimateToResidueIDGraphMap(k, 2);
+        gaus_graph_map[2][k] = entry_iter->CreateBondGausEstimateToSequenceIDGraphMap(k, 0);
+        gaus_graph_map[1][k] = entry_iter->CreateBondGausEstimateToSequenceIDGraphMap(k, 1);
+        gaus_graph_map[0][k] = entry_iter->CreateBondGausEstimateToSequenceIDGraphMap(k, 2);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])
