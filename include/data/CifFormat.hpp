@@ -19,6 +19,7 @@ class AtomObject;
 
 class CifFormat : public ModelFileFormatBase
 {
+    static constexpr float m_bond_searching_radius{ 2.0f };
     std::unique_ptr<AtomicModelDataBlock> m_data_block;
     bool m_find_chemical_component_entry{ false };
     bool m_find_component_atom_entry{ false };

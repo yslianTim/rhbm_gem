@@ -21,7 +21,8 @@ struct ComponentAtomEntry
 struct ComponentBondEntry
 {
     std::pair<std::string, std::string> atom_id_pair;
-    std::string bond_order;
+    BondType bond_type;
+    BondOrder bond_order;
     bool aromatic_atom_flag;
     char chiral_config; // 'N', 'R', 'S'
 };

@@ -18,6 +18,8 @@ class BondObject : public DataObjectBase
     bool m_is_selected;
     bool m_is_special_bond;
     BondKey m_bond_key;
+    BondType m_bond_type;
+    BondOrder m_bond_order;
     int m_atom_serial_id_1;
     int m_atom_serial_id_2;
     AtomObject * m_atom_object_1;
@@ -41,6 +43,8 @@ public:
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialBondFlag(bool value) { m_is_special_bond = value; }
     void SetBondKey(BondKey value) { m_bond_key = value; }
+    void SetBondType(BondType value) { m_bond_type = value; }
+    void SetBondOrder(BondOrder value) { m_bond_order = value; }
     void AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
 
     std::string GetInfo(void) const;
@@ -50,6 +54,8 @@ public:
     AtomKey GetAtomKey1(void) const;
     AtomKey GetAtomKey2(void) const;
     BondKey GetBondKey(void) const { return m_bond_key; }
+    BondType GetBondType(void) const { return m_bond_type; }
+    BondOrder GetBondOrder(void) const { return m_bond_order; }
     bool GetSelectedFlag(void) const { return m_is_selected; }
     bool GetSpecialBondFlag(void) const { return m_is_special_bond; }
     std::array<float, 3> GetPosition(void) const { return m_position; }

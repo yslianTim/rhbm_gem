@@ -261,6 +261,20 @@ const std::unordered_map<std::string_view, Entity> ChemicalDataHelper::m_entity_
     {"water",    Entity::WATER}
 };
 
+const std::unordered_map<std::string_view, BondType> ChemicalDataHelper::m_bond_type_map
+{
+    {"covale", BondType::COVALENT}, {"disulf", BondType::IONIC},
+    {"metalc", BondType::METALLIC}, {"hydrog", BondType::HYDROGEN}
+};
+
+const std::unordered_map<std::string_view, BondOrder> ChemicalDataHelper::m_bond_order_map
+{
+    {"sing", BondOrder::SINGLE},   {"doub", BondOrder::DOUBLE},
+    {"trip", BondOrder::TRIPLE},   {"quad", BondOrder::QUADRUPLE},
+    {"arom", BondOrder::AROMATIC}, {"delo", BondOrder::DELOCALIZED},
+    {"pi",   BondOrder::PI},       {"poly", BondOrder::POLYMERIC}
+};
+
 const std::unordered_map<Residue, std::string> ChemicalDataHelper::m_residue_label_map
 {
     {Residue::ALA, "ALA"}, {Residue::ARG, "ARG"}, {Residue::ASN, "ASN"}, {Residue::ASP, "ASP"},
@@ -620,6 +634,46 @@ Entity ChemicalDataHelper::GetEntityFromString(const std::string & name)
         return Entity::UNK;
     }
     return m_entity_map.at(name);
+}
+
+BondType ChemicalDataHelper::GetBondTypeFromString(const std::string & name)
+{
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_bond_type_map.find(name) == m_bond_type_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            Logger::Log(LogLevel::Warning, 
+                "ChemicalDataHelper::GetBondTypeFromString - Unknown string: " + name);
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return BondType::UNK;
+    }
+    return m_bond_type_map.at(name);
+}
+
+BondOrder ChemicalDataHelper::GetBondOrderFromString(const std::string & name)
+{
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_bond_order_map.find(name) == m_bond_order_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            Logger::Log(LogLevel::Warning, 
+                "ChemicalDataHelper::GetBondOrderFromString - Unknown string: " + name);
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return BondOrder::UNK;
+    }
+    return m_bond_order_map.at(name);
 }
 
 const std::string & ChemicalDataHelper::GetLabel(Residue residue)

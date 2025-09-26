@@ -11,6 +11,7 @@
 BondObject::BondObject(void) :
     m_key_tag{ "" },
     m_is_selected{ false }, m_bond_key{ 0 },
+    m_bond_type{ BondType::UNK }, m_bond_order{ BondOrder::UNK },
     m_atom_serial_id_1{ 0 }, m_atom_serial_id_2{ 0 },
     m_atom_object_1{ nullptr }, m_atom_object_2{ nullptr },
     m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 },
@@ -22,6 +23,7 @@ BondObject::BondObject(void) :
 BondObject::BondObject(AtomObject * atom_object_1, AtomObject * atom_object_2) :
     m_key_tag{ "" },
     m_is_selected{ false }, m_bond_key{ 0 },
+    m_bond_type{ BondType::UNK }, m_bond_order{ BondOrder::UNK },
     m_atom_serial_id_1{ atom_object_1->GetSerialID() },
     m_atom_serial_id_2{ atom_object_2->GetSerialID() },
     m_atom_object_1{ atom_object_1 }, m_atom_object_2{ atom_object_2 },
@@ -50,6 +52,7 @@ BondObject::~BondObject()
 BondObject::BondObject(const BondObject & other) :
     m_key_tag{ other.m_key_tag },
     m_is_selected{ other.m_is_selected }, m_bond_key{ other.m_bond_key },
+    m_bond_type{ other.m_bond_type }, m_bond_order{ other.m_bond_order },
     m_atom_serial_id_1{ other.m_atom_serial_id_1 },
     m_atom_serial_id_2{ other.m_atom_serial_id_2 },
     m_atom_object_1{ other.m_atom_object_1 }, m_atom_object_2{ other.m_atom_object_2 },

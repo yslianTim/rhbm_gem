@@ -219,3 +219,16 @@ enum class Entity : uint8_t
     POLYMER = 1, NONPOLYMER = 2, BRANCHED = 3, MACROLIDE = 4,
     WATER = 5
 };
+
+enum class BondType : uint8_t
+{
+    UNK = 0,
+    COVALENT = 1, IONIC = 2, METALLIC = 3, HYDROGEN = 4
+};
+
+enum class BondOrder : uint8_t
+{
+    UNK = 0,
+    SINGLE = 1, DOUBLE = 2, TRIPLE = 3, QUADRUPLE = 4,
+    AROMATIC = 5, DELOCALIZED = 6, PI = 7, POLYMERIC = 8
+};

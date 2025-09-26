@@ -201,7 +201,8 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             ComponentBondEntry bond_entry;
             bond_entry.atom_id_pair.first = atom_id_1;
             bond_entry.atom_id_pair.second = atom_id_2;
-            bond_entry.bond_order = bond_order;
+            bond_entry.bond_type = BondType::COVALENT; // The bonds in this block are all covalent bonds
+            bond_entry.bond_order = ChemicalDataHelper::GetBondOrderFromString(bond_order);
             bond_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
             bond_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
 
@@ -395,7 +396,33 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
                const std::vector<std::string> & token_list)
         {
             auto link_id{ token_list[index_map.at("id")] };
-
+            auto conn_type_id{ token_list[index_map.at("conn_type_id")] };
+            auto ptnr1_asym_id{ token_list[index_map.at("ptnr1_label_asym_id")] };
+            auto ptnr1_comp_id{ token_list[index_map.at("ptnr1_label_comp_id")] };
+            auto ptnr1_seq_id{ token_list[index_map.at("ptnr1_label_seq_id")] };
+            auto ptnr1_atom_id{ token_list[index_map.at("ptnr1_label_atom_id")] };
+            auto ptnr2_asym_id{ token_list[index_map.at("ptnr2_label_asym_id")] };
+            auto ptnr2_comp_id{ token_list[index_map.at("ptnr2_label_comp_id")] };
+            auto ptnr2_seq_id{ token_list[index_map.at("ptnr2_label_seq_id")] };
+            auto ptnr2_atom_id{ token_list[index_map.at("ptnr2_label_atom_id")] };
+            auto distance_value_str{ token_list[index_map.at("pdbx_dist_value")] };
+            double distance_value{ -1.0 };
+            try
+            {
+                distance_value = std::stod(distance_value_str);
+            }
+            catch (const std::exception & e)
+            {
+                Logger::Log(LogLevel::Error, "Invalid distance value: " + distance_value_str);
+            }
+            if (static_cast<float>(distance_value) > m_bond_searching_radius)
+            {
+                Logger::Log(LogLevel::Warning,
+                    "CifFormat::LoadStructureConnectionBlock() distance value is too large: "
+                    + std::to_string(distance_value) + " > " + std::to_string(m_bond_searching_radius)
+                    + ", this bond will be ignored."
+                );
+            }
         }
     );
 }
@@ -516,7 +543,6 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
 void CifFormat::ConstructBondList(void)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
-    auto search_radius{ 2.0f };
     
     auto & atom_object_list_map{ m_data_block->GetAtomObjectMap() };
     for (auto & [model_number, atom_object_list] : atom_object_list_map)
@@ -532,8 +558,11 @@ void CifFormat::ConstructBondList(void)
         {
             auto component_id_1{ atom->GetComponentID() };
             auto atom_id_1{ atom->GetAtomID() };
+            auto sequence_id_1{ atom->GetSequenceID() };
+            auto chain_id_1{ atom->GetChainID() };
             auto neighbor_atom_list{
-                KDTreeAlgorithm<AtomObject>::RangeSearch(kd_tree_root.get(), atom.get(), search_radius)
+                KDTreeAlgorithm<AtomObject>::RangeSearch(
+                    kd_tree_root.get(), atom.get(), m_bond_searching_radius)
             };
 
             for (auto neighbor_atom : neighbor_atom_list)
@@ -541,15 +570,24 @@ void CifFormat::ConstructBondList(void)
                 if (neighbor_atom == atom.get()) continue;
                 auto component_id_2{ neighbor_atom->GetComponentID() };
                 auto atom_id_2{ neighbor_atom->GetAtomID() };
+                auto sequence_id_2{ neighbor_atom->GetSequenceID() };
+                auto chain_id_2{ neighbor_atom->GetChainID() };
                 auto bond_key_system{ m_data_block->GetBondKeySystemPtr() };
                 if (bond_key_system->IsRegistedBond(atom_id_1, atom_id_2) == false) continue;
                 auto bond_key{ bond_key_system->GetBondKey(atom_id_1, atom_id_2) };
 
-                //bool is_in_same_component{ (component_id_1 == component_id_2) ? true : false };
-                //if (is_in_same_component == false)
-                //{
-                //    if (bond_key != static_cast<BondKey>(Bond::C_N)) continue;
-                //}
+                bool is_in_same_component{ (component_id_1 == component_id_2) };
+                bool is_in_same_chain{ (chain_id_1 == chain_id_2) };
+                bool is_in_consecutive_sequence{ (sequence_id_1 + 1 == sequence_id_2) };
+
+                // Peptide bond C-N between consecutive residues in the same chain
+                bool is_peptide_bond{
+                    is_in_same_chain &&
+                    is_in_consecutive_sequence &&
+                    (bond_key == static_cast<BondKey>(Link::C_N))
+                };
+                
+                if (is_in_same_component == false && is_peptide_bond == false) continue;
 
                 if (m_find_component_bond_entry == false)
                 {
@@ -796,7 +834,8 @@ void CifFormat::BuildDefaultComponentBondEntry(
     ComponentBondEntry bond_entry;
     bond_entry.atom_id_pair.first = atom_id_1;
     bond_entry.atom_id_pair.second = atom_id_2;
-    bond_entry.bond_order = ".";
+    bond_entry.bond_type = BondType::COVALENT;
+    bond_entry.bond_order = BondOrder::UNK;
     bond_entry.aromatic_atom_flag = false;
     bond_entry.chiral_config = '.';
     
