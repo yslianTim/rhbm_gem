@@ -322,6 +322,11 @@ const std::unordered_map<Element, std::string> ChemicalDataHelper::m_element_lab
     {Element::UNK,       "UNK"}
 };
 
+const std::unordered_map<Link, std::string> ChemicalDataHelper::m_link_label_map
+{
+    
+};
+
 const std::unordered_map<Element, int> ChemicalDataHelper::m_element_color_map
 {
     {Element::HYDROGEN, 921}, {Element::CARBON,   633}, {Element::NITROGEN,  418},
@@ -700,6 +705,19 @@ const std::string & ChemicalDataHelper::GetLabel(Element element)
         return unk_label;
     }
     return m_element_label_map.at(element);
+}
+
+const std::string & ChemicalDataHelper::GetLabel(Link link)
+{
+    static std::string unk_label{"?"};
+    if (m_link_label_map.find(link) == m_link_label_map.end())
+    {
+        Logger::Log(LogLevel::Warning, 
+            "ChemicalDataHelper::GetLabel - Unknown Link: "
+            + std::to_string(static_cast<int>(link)));
+        return unk_label;
+    }
+    return m_link_label_map.at(link);
 }
 
 short ChemicalDataHelper::GetDisplayColor(Element element)

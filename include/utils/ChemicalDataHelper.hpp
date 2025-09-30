@@ -28,6 +28,7 @@ class ChemicalDataHelper
 
     static const std::unordered_map<Residue, std::string> m_residue_label_map;
     static const std::unordered_map<Element, std::string> m_element_label_map;
+    static const std::unordered_map<Link, std::string> m_link_label_map;
 
     static const std::unordered_map<Element, int> m_element_color_map;
     static const std::unordered_map<Residue, int> m_residue_color_map;
@@ -71,6 +72,7 @@ public:
 
     static const std::string & GetLabel(Residue residue);
     static const std::string & GetLabel(Element element);
+    static const std::string & GetLabel(Link link);
 
     static short GetDisplayColor(Element element);
     static short GetDisplayColor(Residue residue);

@@ -38,11 +38,10 @@ BondKeySystem::~BondKeySystem()
 }
 
 void BondKeySystem::RegisterBond(
-    const std::string & atom_id_1, const std::string & atom_id_2)
+    const std::string & bond_id)
 {
     Logger::Log(LogLevel::Debug, "BondKeySystem::RegisterBond() called");
     std::lock_guard<std::mutex> lock(m_mutex);
-    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
     if (m_id_to_key_map.find(bond_id) != m_id_to_key_map.end()) return;
     if (m_veto_bond_id_set.find(bond_id) != m_veto_bond_id_set.end()) return; // veto reverse vector
     if (m_next_dynamic_key >= k_max_key)
@@ -59,6 +58,14 @@ void BondKeySystem::RegisterBond(
 }
 
 void BondKeySystem::RegisterBond(
+    const std::string & atom_id_1, const std::string & atom_id_2)
+{
+    Logger::Log(LogLevel::Debug, "BondKeySystem::RegisterBond() called");
+    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
+    RegisterBond(bond_id);
+}
+
+void BondKeySystem::RegisterBond(
     const std::string & atom_id_1, const std::string & atom_id_2, BondKey bond_key)
 {
     Logger::Log(LogLevel::Debug, "BondKeySystem::RegisterBond() called");
@@ -70,11 +77,10 @@ void BondKeySystem::RegisterBond(
 }
 
 BondKey BondKeySystem::GetBondKey(
-    const std::string & atom_id_1, const std::string & atom_id_2)
+    const std::string & bond_id)
 {
     static std::unordered_map<std::string, int> unknown_bond_id_count_map;
     std::lock_guard<std::mutex> lock(m_mutex);
-    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
     if (m_id_to_key_map.find(bond_id) == m_id_to_key_map.end())
     {
         if (unknown_bond_id_count_map.find(bond_id) == unknown_bond_id_count_map.end())
@@ -90,6 +96,14 @@ BondKey BondKeySystem::GetBondKey(
         return static_cast<BondKey>(0);
     }
     return m_id_to_key_map.at(bond_id);
+}
+
+BondKey BondKeySystem::GetBondKey(
+    const std::string & atom_id_1, const std::string & atom_id_2)
+{
+    static std::unordered_map<std::string, int> unknown_bond_id_count_map;
+    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
+    return GetBondKey(bond_id);
 }
 
 std::string BondKeySystem::GetBondId(BondKey bond_key)

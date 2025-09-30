@@ -5,6 +5,7 @@
 #include "StringHelper.hpp"
 #include "GlobalEnumClass.hpp"
 #include "ChemicalDataHelper.hpp"
+#include "ComponentHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"
@@ -832,6 +833,33 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     atom_entry.chiral_config = '.';
     
     m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
+}
+
+void CifFormat::BuildDefaultComponentBondEntry(void)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentBondEntry() called");
+    for (auto & residue : ChemicalDataHelper::GetStandardResidueList())
+    {
+        auto comp_id{ ChemicalDataHelper::GetLabel(residue) };
+        auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
+        for (auto & link : ComponentHelper::GetLinkList(residue))
+        {
+            auto bond_id{ ChemicalDataHelper::GetLabel(link) };
+            m_data_block->GetBondKeySystemPtr()->RegisterBond(bond_id);
+            auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(bond_id) };
+            auto atom_id_pair{ m_data_block->GetBondKeySystemPtr()->BuildAtomIdPairFromBondId(bond_id) };
+
+            ComponentBondEntry bond_entry;
+            bond_entry.atom_id_pair.first = atom_id_pair.first;
+            bond_entry.atom_id_pair.second = atom_id_pair.second;
+            bond_entry.bond_type = BondType::COVALENT;
+            bond_entry.bond_order = BondOrder::UNK;
+            bond_entry.aromatic_atom_flag = false;
+            bond_entry.chiral_config = '.';
+            
+            m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
+        }
+    }
 }
 
 void CifFormat::BuildDefaultComponentBondEntry(
