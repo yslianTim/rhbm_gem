@@ -99,8 +99,8 @@ void CifFormat::LoadDataArray(const std::string & filename)
         throw std::runtime_error("LoadDataArray failed!");
     }
     LoadAtomSiteBlock(infile);
-    LoadStructureConnectionBlock(infile);
     ConstructBondList();
+    LoadStructureConnectionBlock(infile);
 }
 
 void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
@@ -423,7 +423,7 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
             bond_entry.atom_id_pair.first = ptnr1_atom_id;
             bond_entry.atom_id_pair.second = ptnr2_atom_id;
             bond_entry.bond_type = ChemicalDataHelper::GetBondTypeFromString(conn_type_id);
-            bond_entry.bond_order = (value_order_str == "?") ? BondOrder::SINGLE : ChemicalDataHelper::GetBondOrderFromString(value_order_str);
+            bond_entry.bond_order = (value_order_str == "?") ? BondOrder::UNK : ChemicalDataHelper::GetBondOrderFromString(value_order_str);
             bond_entry.aromatic_atom_flag = false;
             bond_entry.chiral_config = 'N';
             m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
