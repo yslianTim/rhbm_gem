@@ -324,7 +324,85 @@ const std::unordered_map<Element, std::string> ChemicalDataHelper::m_element_lab
 
 const std::unordered_map<Link, std::string> ChemicalDataHelper::m_link_label_map
 {
-    
+    {Link::OP2_HOP2, "OP2_HOP2"},
+    {Link::OP3_P, "OP3_P"},       {Link::OP3_HOP3, "OP3_HOP3"},
+    {Link::P_OP1, "P_OP1"},       {Link::P_OP2, "P_OP2"},       {Link::P_O5p, "P_O5'"},
+
+    {Link::C1p_N1, "C1'_N1"},     {Link::C1p_N9, "C1'_N9"},     {Link::C1p_H1p, "C1'_H1'"},
+    {Link::C2p_O2p, "C2'_O2'"},   {Link::C2p_C1p, "C2'_C1'"},   {Link::C2p_H2p, "C2'_H2'"},
+    {Link::C2p_H2pp, "C2'_H2''"}, {Link::C3p_O3p, "C3'_O3'"},   {Link::C3p_C2p, "C3'_C2'"},
+    {Link::C3p_H3p, "C3'_H3'"},   {Link::C4p_O4p, "C4'_O4'"},   {Link::C4p_C3p, "C4'_C3'"},
+    {Link::C4p_H4p, "C4'_H4'"},   {Link::C5p_C4p, "C5'_C4'"},   {Link::C5p_H5p, "C5'_H5'"},
+    {Link::C5p_H5pp, "C5'_H5''"}, {Link::O2p_HO2p, "O2'_HO2'"}, {Link::O3p_HO3p, "O3'_HO3'"},
+    {Link::O4p_C1p, "O4'_C1'"},   {Link::O5p_C5p, "O5'_C5'"},
+
+    {Link::C2_H2, "C2_H2"},       {Link::C2_O2, "C2_O2"},       {Link::C2_N2, "C2_N2"},
+    {Link::C2_N3, "C2_N3"},
+    {Link::C4_N4, "C4_N4"},       {Link::C4_O4, "C4_O4"},       {Link::C4_C5, "C4_C5"},
+    {Link::C5_C4, "C5_C4"},       {Link::C5_H5, "C5_H5"},       {Link::C5_C6, "C5_C6"},
+    {Link::C5_C7, "C5_C7"},
+    {Link::C6_N1, "C6_N1"},       {Link::C6_N6, "C6_N6"},       {Link::C6_H6, "C6_H6"},
+    {Link::C6_O6, "C6_O6"},
+    {Link::C7_H71, "C7_H71"},     {Link::C7_H72, "C7_H72"},     {Link::C7_H73, "C7_H73"},
+    {Link::C8_N7, "C8_N7"},       {Link::C8_H8, "C8_H8"},       {Link::N1_H1, "N1_H1"},
+    {Link::N1_C2, "N1_C2"},       {Link::N1_C6, "N1_C6"},       {Link::N2_H21, "N2_H21"},
+    {Link::N2_H22, "N2_H22"},     {Link::N3_C4, "N3_C4"},       {Link::N3_H3, "N3_H3"},
+    {Link::N4_H41, "N4_H41"},     {Link::N4_H42, "N4_H42"},     {Link::N6_H61, "N6_H61"},
+    {Link::N6_H62, "N6_H62"},     {Link::N7_C5, "N7_C5"},       {Link::N9_C4, "N9_C4"},
+    {Link::N9_C8, "N9_C8"},
+
+    {Link::N_CA, "N_CA"},         {Link::N_CD, "N_CD"},         {Link::N_H, "N_H"},
+    {Link::N_H2, "N_H2"},
+    {Link::CA_C, "CA_C"},         {Link::CA_CB, "CA_CB"},       {Link::CA_HA, "CA_HA"},
+    {Link::C_N, "C_N"},
+    {Link::C_O, "C_O"},           {Link::C_OXT, "C_OXT"},
+
+    {Link::CB_CG, "CB_CG"},       {Link::CB_OG, "CB_OG"},       {Link::CB_SG, "CB_SG"},
+    {Link::CB_CG1, "CB_CG1"},     {Link::CB_CG2, "CB_CG2"},     {Link::CB_OG1, "CB_OG1"},
+    {Link::CB_HB, "CB_HB"},
+    {Link::CB_HB1, "CB_HB1"},     {Link::CB_HB2, "CB_HB2"},     {Link::CB_HB3, "CB_HB3"},
+    {Link::CG_CD, "CG_CD"},       {Link::CG_CD1, "CG_CD1"},     {Link::CG_CD2, "CG_CD2"},
+    {Link::CG_HG, "CG_HG"},       {Link::CG_HG2, "CG_HG2"},     {Link::CG_HG3, "CG_HG3"},
+    {Link::CG_OD1, "CG_OD1"},     {Link::CG_OD2, "CG_OD2"},     {Link::CG_ND1, "CG_ND1"},
+    {Link::CG_ND2, "CG_ND2"},     {Link::CG_SD, "CG_SD"},
+
+    {Link::CG1_CD1, "CG1_CD1"},   {Link::CG1_HG11, "CG1_HG11"}, {Link::CG1_HG12, "CG1_HG12"},
+    {Link::CG1_HG13, "CG1_HG13"}, {Link::CG2_HG21, "CG2_HG21"}, {Link::CG2_HG22, "CG2_HG22"},
+    {Link::CG2_HG23, "CG2_HG23"}, {Link::CD_CE, "CD_CE"},       {Link::CD_NE, "CD_NE"},
+    {Link::CD_NE2, "CD_NE2"},     {Link::CD_OE1, "CD_OE1"},     {Link::CD_OE2, "CD_OE2"},
+    {Link::CD_HD2, "CD_HD2"},     {Link::CD_HD3, "CD_HD3"},     {Link::CD1_CE1, "CD1_CE1"},
+    {Link::CD1_NE1, "CD1_NE1"},   {Link::CD1_HD1, "CD1_HD1"},   {Link::CD1_HD11, "CD1_HD11"},
+    {Link::CD1_HD12, "CD1_HD12"}, {Link::CD1_HD13, "CD1_HD13"}, {Link::CD2_CE2, "CD2_CE2"},
+    {Link::CD2_CE3, "CD2_CE3"},   {Link::CD2_NE2, "CD2_NE2"},   {Link::CD2_HD2, "CD2_HD2"},
+    {Link::CD2_HD21, "CD2_HD21"}, {Link::CD2_HD22, "CD2_HD22"}, {Link::CD1_HD23, "CD1_HD23"},
+
+    {Link::CE_NZ, "CE_NZ"},       {Link::CE_HE1, "CE_HE1"},     {Link::CE_HE2, "CE_HE2"},
+    {Link::CE_HE3, "CE_HE3"},     {Link::CE1_CZ, "CE1_CZ"},     {Link::CE1_NE2, "CE1_NE2"},
+    {Link::CE1_HE1, "CE1_HE1"},   {Link::CE2_CZ, "CE2_CZ"},     {Link::CE2_CZ2, "CE2_CZ2"},
+    {Link::CE2_HE2, "CE2_HE2"},   {Link::CE3_CZ3, "CE3_CZ3"},   {Link::CE3_HE3, "CE3_HE3"},
+    {Link::CZ_HZ, "CZ_HZ"},       {Link::CZ_NH1, "CZ_NH1"},     {Link::CZ_NH2, "CZ_NH2"},
+    {Link::CZ_OH, "CZ_OH"},       {Link::CZ2_CH2, "CZ2_CH2"},   {Link::CZ2_HZ2, "CZ2_HZ2"},
+    {Link::CZ3_CH2, "CZ3_CH2"},   {Link::CZ3_HZ3, "CZ3_HZ3"},   {Link::CH2_HH2, "CH2_HH2"},
+
+    {Link::ND1_CE1, "ND1_CE1"},   {Link::ND1_HD1, "ND1_HD1"},
+    {Link::ND2_HD21, "ND2_HD21"}, {Link::ND2_HD22, "ND2_HD22"},
+    {Link::NE_CZ, "NE_CZ"},       {Link::NE_HE, "NE_HE"},
+    {Link::NE1_CE2, "NE1_CE2"},   {Link::NE1_HE1, "NE1_HE1"},
+    {Link::NE2_HE2, "NE2_HE2"},   {Link::NE2_HE21, "NE2_HE21"}, {Link::NE2_HE22, "NE2_HE22"},
+    {Link::NZ_HZ1, "NZ_HZ1"},     {Link::NZ_HZ2, "NZ_HZ2"},     {Link::NZ_HZ3, "NZ_HZ3"},
+    {Link::NH1_HH11, "NH1_HH11"}, {Link::NH1_HH12, "NH1_HH12"}, {Link::NH2_HH21, "NH2_HH21"},
+    {Link::NH2_HH22, "NH2_HH22"},
+
+    {Link::O_H1, "O_H1"},         {Link::O_H2, "O_H2"},
+    {Link::OG_HG, "OG_HG"},
+    {Link::OG1_HG1, "OG1_HG1"},
+    {Link::OD2_HD2, "OD2_HD2"},
+    {Link::OE2_HE2, "OE2_HE2"},
+    {Link::OH_HH, "OH_HH"},
+    {Link::OXT_HXT, "OXT_HXT"},
+    {Link::SD_CE, "SD_CE"},
+
+    {Link::UNK, "UNK"}
 };
 
 const std::unordered_map<Element, int> ChemicalDataHelper::m_element_color_map

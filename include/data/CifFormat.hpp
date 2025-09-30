@@ -70,10 +70,5 @@ private:
         const std::string & element_symbol
     );
     void BuildDefaultComponentBondEntry(void);
-    void BuildDefaultComponentBondEntry(
-        const std::string & comp_id,
-        const std::string & atom_id_1,
-        const std::string & atom_id_2
-    );
 
 };

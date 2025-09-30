@@ -49,6 +49,13 @@ void CifFormat::LoadHeader(const std::string & filename)
     LoadAtomTypeBlock(infile);
     LoadStructureConformationBlock(infile);
     LoadStructureSheetBlock(infile);
+
+    if (m_find_component_bond_entry == false)
+    {
+        Logger::Log(LogLevel::Info,
+            "No component bond entry found in the CIF file. Build default component bond entries.");
+        BuildDefaultComponentBondEntry();
+    }
 }
 
 void CifFormat::PrintHeader(void) const
@@ -601,11 +608,6 @@ void CifFormat::ConstructBondList(void)
             };
             
             if (is_in_same_component == false && is_peptide_bond == false) continue;
-
-            if (m_find_component_bond_entry == false)
-            {
-                BuildDefaultComponentBondEntry(component_id_1, atom_id_1, atom_id_2);
-            }
             
             auto bond_object{ std::make_unique<BondObject>(atom.get(), neighbor_atom) };
             bond_object->SetBondKey(bond_key);
@@ -860,25 +862,4 @@ void CifFormat::BuildDefaultComponentBondEntry(void)
             m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
         }
     }
-}
-
-void CifFormat::BuildDefaultComponentBondEntry(
-    const std::string & comp_id,
-    const std::string & atom_id_1,
-    const std::string & atom_id_2)
-{
-    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentBondEntry() called");
-    auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
-    auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(atom_id_1, atom_id_2) };
-
-    // TODO: modify with more accurate default bond information
-    ComponentBondEntry bond_entry;
-    bond_entry.atom_id_pair.first = atom_id_1;
-    bond_entry.atom_id_pair.second = atom_id_2;
-    bond_entry.bond_type = BondType::COVALENT;
-    bond_entry.bond_order = BondOrder::UNK;
-    bond_entry.aromatic_atom_flag = false;
-    bond_entry.chiral_config = '.';
-    
-    m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
 }
