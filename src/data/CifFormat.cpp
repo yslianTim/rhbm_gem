@@ -594,7 +594,9 @@ void CifFormat::ConstructBondList(void)
             auto chain_id_2{ neighbor_atom->GetChainID() };
             auto bond_key_system{ m_data_block->GetBondKeySystemPtr() };
             if (bond_key_system->IsRegistedBond(atom_id_1, atom_id_2) == false) continue;
+            auto component_key_1{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(component_id_1) };
             auto bond_key{ bond_key_system->GetBondKey(atom_id_1, atom_id_2) };
+            if (m_data_block->HasComponentBondEntry(component_key_1, bond_key) == false) continue;
 
             bool is_in_same_component{ (component_id_1 == component_id_2) };
             bool is_in_same_chain{ (chain_id_1 == chain_id_2) };
@@ -608,11 +610,15 @@ void CifFormat::ConstructBondList(void)
             };
             
             if (is_in_same_component == false && is_peptide_bond == false) continue;
+
+            auto bond_entry{
+                m_data_block->GetComponentBondEntryPtr(component_key_1, bond_key)
+            };
             
             auto bond_object{ std::make_unique<BondObject>(atom.get(), neighbor_atom) };
             bond_object->SetBondKey(bond_key);
-            bond_object->SetBondType(BondType::COVALENT);
-            bond_object->SetBondOrder(BondOrder::SINGLE);
+            bond_object->SetBondType(bond_entry->bond_type);
+            bond_object->SetBondOrder(bond_entry->bond_order);
             bond_object->SetSpecialBondFlag(false);
             m_data_block->AddBondObject(std::move(bond_object));
         }

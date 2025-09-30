@@ -86,7 +86,8 @@ public:
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
     const std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> & GetAtomObjectMap(void) const;
     const std::vector<std::unique_ptr<BondObject>> & GetBondObjectList(void) const;
-    ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key);
+    ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key) const;
+    const ComponentBondEntry * GetComponentBondEntryPtr(ComponentKey comp_key, BondKey bond_key) const;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
     bool HasComponentBondEntry(ComponentKey comp_key, BondKey bond_key) const;
     AtomObject * GetAtomObjectPtrInTuple(

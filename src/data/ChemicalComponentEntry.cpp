@@ -44,3 +44,29 @@ bool ChemicalComponentEntry::HasComponentBondEntry(BondKey bond_key) const
 {
     return (m_component_bond_entry_map.find(bond_key) != m_component_bond_entry_map.end());
 }
+
+const ComponentAtomEntry * ChemicalComponentEntry::GetComponentAtomEntryPtr(AtomKey atom_key) const
+{
+    if (m_component_atom_entry_map.find(atom_key) == m_component_atom_entry_map.end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "Component atom entry (atom_key: "
+            + std::to_string(atom_key)
+            + ") not found in chemical component map.");
+        return nullptr;
+    }
+    return &m_component_atom_entry_map.at(atom_key);
+}
+
+const ComponentBondEntry * ChemicalComponentEntry::GetComponentBondEntryPtr(BondKey bond_key) const
+{
+    if (m_component_bond_entry_map.find(bond_key) == m_component_bond_entry_map.end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "Component bond entry (bond_key: "
+            + std::to_string(bond_key)
+            + ") not found in chemical component map.");
+        return nullptr;
+    }
+    return &m_component_bond_entry_map.at(bond_key);
+}   

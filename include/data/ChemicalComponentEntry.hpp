@@ -65,5 +65,7 @@ public:
     GetComponentAtomEntryMap(void) const { return m_component_atom_entry_map; }
     const std::map<BondKey, ComponentBondEntry> &
     GetComponentBondEntryMap(void) const { return m_component_bond_entry_map; }
+    const ComponentAtomEntry * GetComponentAtomEntryPtr(AtomKey atom_key) const;
+    const ComponentBondEntry * GetComponentBondEntryPtr(BondKey bond_key) const;
 
 };
