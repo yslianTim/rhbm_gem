@@ -53,6 +53,8 @@ public:
     void AddComponentAtomEntry(AtomKey atom_key, const ComponentAtomEntry & atom_info);
     void AddComponentBondEntry(BondKey bond_key, const ComponentBondEntry & bond_info);
 
+    bool HasComponentAtomEntry(AtomKey atom_key) const;
+    bool HasComponentBondEntry(BondKey bond_key) const;
     std::string GetComponentId(void) const { return m_component_id; }
     std::string GetComponentName(void) const { return m_component_name; }
     std::string GetComponentType(void) const { return m_component_type; }

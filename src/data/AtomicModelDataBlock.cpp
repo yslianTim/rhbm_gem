@@ -22,13 +22,22 @@ AtomicModelDataBlock::~AtomicModelDataBlock()
 void AtomicModelDataBlock::AddAtomObject(
     int model_number, std::unique_ptr<AtomObject> atom_object)
 {
+    auto sequence_id_str{ std::to_string(atom_object->GetSequenceID()) };
+    sequence_id_str = (sequence_id_str == "-1") ? "." : sequence_id_str;
+    auto atom_tuple_key{ std::make_tuple(
+        atom_object->GetChainID(),
+        atom_object->GetComponentID(),
+        sequence_id_str,
+        atom_object->GetAtomID())
+    };
+    m_atom_object_in_tuple_map[model_number][atom_tuple_key] = atom_object.get();
     m_atom_object_list_map[model_number].emplace_back(std::move(atom_object));
 }
 
 void AtomicModelDataBlock::AddBondObject(
-    int model_number, std::unique_ptr<BondObject> bond_object)
+    std::unique_ptr<BondObject> bond_object)
 {
-    m_bond_object_list_map[model_number].emplace_back(std::move(bond_object));
+    m_bond_object_list.emplace_back(std::move(bond_object));
 }
 
 void AtomicModelDataBlock::AddEntityTypeInEntityMap(
@@ -148,14 +157,13 @@ std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::MoveAtomObjectLis
     return std::move(m_atom_object_list_map.at(model_number));
 }
 
-std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectList(int model_number)
+std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectList(void)
 {
-    auto iter{ m_bond_object_list_map.find(model_number) };
-    if (iter == m_bond_object_list_map.end())
+    if (m_bond_object_list.empty())
     {
         return {};
     }
-    return std::move(iter->second);
+    return std::move(m_bond_object_list);
 }
 
 const std::string & AtomicModelDataBlock::GetPdbID(void) const
@@ -225,10 +233,37 @@ AtomicModelDataBlock::GetAtomObjectMap(void) const
     return m_atom_object_list_map;
 }
 
-const std::unordered_map<int, std::vector<std::unique_ptr<BondObject>>> &
-AtomicModelDataBlock::GetBondObjectMap(void) const
+const std::vector<std::unique_ptr<BondObject>> & AtomicModelDataBlock::GetBondObjectList(void) const
 {
-    return m_bond_object_list_map;
+    return m_bond_object_list;
+}
+
+AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInTuple(
+    int model_number,
+    const std::string & chain_id,
+    const std::string & comp_id,
+    const std::string & seq_id,
+    const std::string & atom_id) const
+{
+    if (m_atom_object_in_tuple_map.find(model_number) == m_atom_object_in_tuple_map.end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "Model number " + std::to_string(model_number) + " not found in atom object map.");
+        return nullptr;
+    }
+    auto atom_tuple_key{ std::make_tuple(chain_id, comp_id, seq_id, atom_id) };
+    if (m_atom_object_in_tuple_map.at(model_number).find(atom_tuple_key) ==
+        m_atom_object_in_tuple_map.at(model_number).end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "Atom object ("
+            + chain_id + ", "
+            + comp_id + ", "
+            + seq_id + ", "
+            + atom_id + ") not found in atom object map.");
+        return nullptr;
+    }
+    return m_atom_object_in_tuple_map.at(model_number).at(atom_tuple_key);
 }
 
 ChemicalComponentEntry * AtomicModelDataBlock::GetChemicalComponentEntryPtr(ComponentKey key)
@@ -246,4 +281,14 @@ std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
 AtomicModelDataBlock::GetChemicalComponentEntryMap(void)
 {
     return m_chemical_component_entry_map;
+}
+
+bool AtomicModelDataBlock::HasComponentBondEntry(
+    ComponentKey comp_key, BondKey bond_key) const
+{
+    if (m_chemical_component_entry_map.find(comp_key) == m_chemical_component_entry_map.end())
+    {
+        return false;
+    }
+    return m_chemical_component_entry_map.at(comp_key)->HasComponentBondEntry(bond_key);
 }
