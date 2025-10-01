@@ -28,6 +28,7 @@ public:
 
     void RegisterBond(const std::string & bond_id);
     void RegisterBond(const std::string & atom_id_1, const std::string & atom_id_2);
+    void RegisterBond(const std::string & bond_id, BondKey bond_key);
     void RegisterBond(const std::string & atom_id_1, const std::string & atom_id_2, BondKey bond_key);
     BondKey GetBondKey(const std::string & bond_id);
     BondKey GetBondKey(const std::string & atom_id_1, const std::string & atom_id_2);
@@ -36,10 +37,10 @@ public:
     bool IsBuildInBond(const std::string & atom_id_1, const std::string & atom_id_2) const;
     bool IsBuildInBond(BondKey bond_key) const;
     bool IsReverseBond(const std::string & atom_id_1, const std::string & atom_id_2) const;
-    std::pair<std::string, std::string> BuildAtomIdPairFromBondId(const std::string & bond_id) const;
 
 private:
     std::string BuildBondIdFromAtomIdPair(const std::string & atom_id_1, const std::string & atom_id_2) const;
     std::string BuildReverseBondIdFromBondId(const std::string & bond_id) const;
+    std::pair<std::string, std::string> BuildAtomIdPairFromBondId(const std::string & bond_id) const;
 
 };

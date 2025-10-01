@@ -205,10 +205,10 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             m_data_block->GetBondKeySystemPtr()->RegisterBond(atom_id_1, atom_id_2);
             auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
             auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(atom_id_1, atom_id_2) };
+            auto bond_id{ m_data_block->GetBondKeySystemPtr()->GetBondId(bond_key) };
 
             ComponentBondEntry bond_entry;
-            bond_entry.atom_id_pair.first = atom_id_1;
-            bond_entry.atom_id_pair.second = atom_id_2;
+            bond_entry.bond_id = bond_id;
             bond_entry.bond_type = BondType::COVALENT; // The bonds in this block are all covalent bonds
             bond_entry.bond_order = ChemicalDataHelper::GetBondOrderFromString(bond_order);
             bond_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y");
@@ -418,10 +418,10 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
             m_data_block->GetBondKeySystemPtr()->RegisterBond(ptnr1_atom_id, ptnr2_atom_id);
             auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(ptnr1_comp_id) };
             auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(ptnr1_atom_id, ptnr2_atom_id) };
+            auto bond_id{ m_data_block->GetBondKeySystemPtr()->GetBondId(bond_key) };
 
             ComponentBondEntry bond_entry;
-            bond_entry.atom_id_pair.first = ptnr1_atom_id;
-            bond_entry.atom_id_pair.second = ptnr2_atom_id;
+            bond_entry.bond_id = bond_id;
             bond_entry.bond_type = ChemicalDataHelper::GetBondTypeFromString(conn_type_id);
             bond_entry.bond_order = (value_order_str == "?") ? BondOrder::UNK : ChemicalDataHelper::GetBondOrderFromString(value_order_str);
             bond_entry.aromatic_atom_flag = false;
@@ -855,11 +855,9 @@ void CifFormat::BuildDefaultComponentBondEntry(void)
             auto bond_id{ ChemicalDataHelper::GetLabel(link) };
             m_data_block->GetBondKeySystemPtr()->RegisterBond(bond_id);
             auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(bond_id) };
-            auto atom_id_pair{ m_data_block->GetBondKeySystemPtr()->BuildAtomIdPairFromBondId(bond_id) };
 
             ComponentBondEntry bond_entry;
-            bond_entry.atom_id_pair.first = atom_id_pair.first;
-            bond_entry.atom_id_pair.second = atom_id_pair.second;
+            bond_entry.bond_id = bond_id;
             bond_entry.bond_type = BondType::COVALENT;
             bond_entry.bond_order = BondOrder::UNK;
             bond_entry.aromatic_atom_flag = false;

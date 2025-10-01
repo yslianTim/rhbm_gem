@@ -60,20 +60,25 @@ void BondKeySystem::RegisterBond(
 void BondKeySystem::RegisterBond(
     const std::string & atom_id_1, const std::string & atom_id_2)
 {
-    Logger::Log(LogLevel::Debug, "BondKeySystem::RegisterBond() called");
     auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
     RegisterBond(bond_id);
 }
 
 void BondKeySystem::RegisterBond(
-    const std::string & atom_id_1, const std::string & atom_id_2, BondKey bond_key)
+    const std::string & bond_id, BondKey bond_key)
 {
     Logger::Log(LogLevel::Debug, "BondKeySystem::RegisterBond() called");
     std::lock_guard<std::mutex> lock(m_mutex);
-    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
     if (m_id_to_key_map.find(bond_id) != m_id_to_key_map.end()) return;
     m_id_to_key_map[bond_id] = bond_key;
     m_key_to_id_map[bond_key] = bond_id;
+}
+
+void BondKeySystem::RegisterBond(
+    const std::string & atom_id_1, const std::string & atom_id_2, BondKey bond_key)
+{
+    auto bond_id{ BuildBondIdFromAtomIdPair(atom_id_1, atom_id_2) };
+    RegisterBond(bond_id, bond_key);
 }
 
 BondKey BondKeySystem::GetBondKey(

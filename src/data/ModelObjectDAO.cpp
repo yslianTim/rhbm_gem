@@ -193,8 +193,7 @@ namespace
         CREATE TABLE IF NOT EXISTS {} (
             component_key INTEGER,
             bond_key INTEGER,
-            atom_id_1 TEXT,
-            atom_id_2 TEXT,
+            bond_id TEXT,
             bond_type INTEGER,
             bond_order INTEGER,
             aromatic_atom_flag INTEGER,
@@ -205,16 +204,14 @@ namespace
 
     constexpr std::string_view INSERT_COMPONENT_BOND_ENTRY_LIST_SQL = R"sql(
         INSERT OR REPLACE INTO {} (
-            component_key, bond_key,
-            atom_id_1, atom_id_2,
+            component_key, bond_key, bond_id,
             bond_type, bond_order, aromatic_atom_flag, chiral_config
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?);
     )sql";
 
     constexpr std::string_view SELECT_COMPONENT_BOND_ENTRY_LIST_SQL = R"sql(
         SELECT
-            component_key, bond_key,
-            atom_id_1, atom_id_2,
+            component_key, bond_key, bond_id,
             bond_type, bond_order, aromatic_atom_flag, chiral_config
         FROM {};
     )sql";
@@ -657,12 +654,11 @@ void ModelObjectDAO::SaveComponentBondEntryList(
         {
             m_database->Bind<ComponentKey>(1, component_key);
             m_database->Bind<BondKey>(2, bond_key);
-            m_database->Bind<std::string>(3, bond_entry.atom_id_pair.first);
-            m_database->Bind<std::string>(4, bond_entry.atom_id_pair.second);
-            m_database->Bind<int>(5, static_cast<int>(bond_entry.bond_type));
-            m_database->Bind<int>(6, static_cast<int>(bond_entry.bond_order));
-            m_database->Bind<int>(7, static_cast<int>(bond_entry.aromatic_atom_flag));
-            m_database->Bind<std::string>(8, std::string{bond_entry.chiral_config});
+            m_database->Bind<std::string>(3, bond_entry.bond_id);
+            m_database->Bind<int>(4, static_cast<int>(bond_entry.bond_type));
+            m_database->Bind<int>(5, static_cast<int>(bond_entry.bond_order));
+            m_database->Bind<int>(6, static_cast<int>(bond_entry.aromatic_atom_flag));
+            m_database->Bind<std::string>(7, std::string{bond_entry.chiral_config});
 
             m_database->StepOnce();
             m_database->Reset();
@@ -1009,18 +1005,15 @@ void ModelObjectDAO::LoadComponentBondEntryList(
     if (TableExists(table_name) == false) return;
     auto iter{
         m_database->IterateQuery<
-            ComponentKey, BondKey, std::string, std::string,
-            int, int, int, std::string>(
+            ComponentKey, BondKey, std::string, int, int, int, std::string>(
             FormatSQL(SELECT_COMPONENT_BOND_ENTRY_LIST_SQL, table_name))
     };
-    std::tuple<ComponentKey, BondKey, std::string, std::string,
-               int, int, int, std::string> row;
+    std::tuple<ComponentKey, BondKey, std::string, int, int, int, std::string> row;
     while (iter.Next(row))
     {
         auto component_key{ std::get<0>(row) };
         auto bond_key{ std::get<1>(row) };
-        auto atom_id_1{ std::get<2>(row) };
-        auto atom_id_2{ std::get<3>(row) };
+        auto bond_id{ std::get<2>(row) };
         if (model_obj->GetChemicalComponentEntryMap().find(component_key)
             == model_obj->GetChemicalComponentEntryMap().end())
         {
@@ -1028,15 +1021,14 @@ void ModelObjectDAO::LoadComponentBondEntryList(
         }
         auto & component_entry{ model_obj->GetChemicalComponentEntryMap().at(component_key) };
         ComponentBondEntry bond_entry;
-        bond_entry.atom_id_pair.first = atom_id_1;
-        bond_entry.atom_id_pair.second = atom_id_2;
-        bond_entry.bond_type = static_cast<BondType>(std::get<4>(row));
-        bond_entry.bond_order = static_cast<BondOrder>(std::get<5>(row));
-        bond_entry.aromatic_atom_flag = static_cast<bool>(std::get<6>(row));
-        bond_entry.chiral_config = static_cast<char>(std::get<7>(row)[0]);
+        bond_entry.bond_id = bond_id;
+        bond_entry.bond_type = static_cast<BondType>(std::get<3>(row));
+        bond_entry.bond_order = static_cast<BondOrder>(std::get<4>(row));
+        bond_entry.aromatic_atom_flag = static_cast<bool>(std::get<5>(row));
+        bond_entry.chiral_config = static_cast<char>(std::get<6>(row)[0]);
         component_entry->AddComponentBondEntry(bond_key, bond_entry);
 
-        model_obj->GetBondKeySystemPtr()->RegisterBond(atom_id_1, atom_id_2, bond_key);
+        model_obj->GetBondKeySystemPtr()->RegisterBond(bond_id, bond_key);
     }
 }
 
