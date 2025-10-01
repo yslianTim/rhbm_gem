@@ -232,3 +232,11 @@ enum class BondOrder : uint8_t
     SINGLE = 1, DOUBLE = 2, TRIPLE = 3, QUADRUPLE = 4,
     AROMATIC = 5, DELOCALIZED = 6, PI = 7, POLYMERIC = 8
 };
+
+enum class StereoChemistry : uint8_t
+{
+    UNK = 0,
+    NONE = 1,
+    R = 2, S = 3,
+    E = 4, Z = 5
+};

@@ -15,7 +15,7 @@ struct ComponentAtomEntry
     std::string atom_id;
     Element element_type;
     bool aromatic_atom_flag;
-    char chiral_config; // 'N', 'R', 'S'
+    StereoChemistry stereo_config;
 };
 
 struct ComponentBondEntry
@@ -24,7 +24,7 @@ struct ComponentBondEntry
     BondType bond_type;
     BondOrder bond_order;
     bool aromatic_atom_flag;
-    char chiral_config; // 'N', 'R', 'S'
+    StereoChemistry stereo_config;
 };
 
 class ChemicalComponentEntry

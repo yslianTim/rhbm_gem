@@ -163,7 +163,7 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             auto atom_id{ token_list[index_map.at("atom_id")] };
             auto element_symbol{ token_list[index_map.at("type_symbol")] };
             auto pdbx_aromatic_flag{ token_list[index_map.at("pdbx_aromatic_flag")] };
-            auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
+            auto pdbx_stereo_config{ token_list[index_map.at("pdbx_stereo_config")] };
 
             StringHelper::EraseCharFromString(atom_id, '\"');
 
@@ -171,7 +171,7 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
             atom_entry.atom_id = atom_id;
             atom_entry.element_type = ChemicalDataHelper::GetElementFromString(element_symbol);
             atom_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y") ? true : false;
-            atom_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
+            atom_entry.stereo_config = ChemicalDataHelper::GetStereoChemistryFromString(pdbx_stereo_config);
 
             m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
             auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
@@ -197,7 +197,7 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             auto atom_id_2{ token_list[index_map.at("atom_id_2")] };
             auto bond_order{ token_list[index_map.at("value_order")] };
             auto pdbx_aromatic_flag{ token_list[index_map.at("pdbx_aromatic_flag")] };
-            auto pdbx_chiral_config{ token_list[index_map.at("pdbx_stereo_config")] };
+            auto pdbx_stereo_config{ token_list[index_map.at("pdbx_stereo_config")] };
 
             StringHelper::EraseCharFromString(atom_id_1, '\"');
             StringHelper::EraseCharFromString(atom_id_2, '\"');
@@ -212,7 +212,7 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
             bond_entry.bond_type = BondType::COVALENT; // The bonds in this block are all covalent bonds
             bond_entry.bond_order = ChemicalDataHelper::GetBondOrderFromString(bond_order);
             bond_entry.aromatic_atom_flag = (pdbx_aromatic_flag == "Y");
-            bond_entry.chiral_config = (pdbx_chiral_config.empty()) ? 'N' : pdbx_chiral_config.at(0);
+            bond_entry.stereo_config = ChemicalDataHelper::GetStereoChemistryFromString(pdbx_stereo_config);
 
             m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
 
@@ -425,7 +425,7 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
             bond_entry.bond_type = ChemicalDataHelper::GetBondTypeFromString(conn_type_id);
             bond_entry.bond_order = (value_order_str == "?") ? BondOrder::UNK : ChemicalDataHelper::GetBondOrderFromString(value_order_str);
             bond_entry.aromatic_atom_flag = false;
-            bond_entry.chiral_config = 'N';
+            bond_entry.stereo_config = StereoChemistry::NONE;
             m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
 
             auto model_number{ 1 };
@@ -838,7 +838,7 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     atom_entry.atom_id = atom_id;
     atom_entry.element_type = ChemicalDataHelper::GetElementFromString(element_symbol);
     atom_entry.aromatic_atom_flag = false;
-    atom_entry.chiral_config = '.';
+    atom_entry.stereo_config = StereoChemistry::NONE;
     
     m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
 }
@@ -861,7 +861,7 @@ void CifFormat::BuildDefaultComponentBondEntry(void)
             bond_entry.bond_type = BondType::COVALENT;
             bond_entry.bond_order = BondOrder::UNK;
             bond_entry.aromatic_atom_flag = false;
-            bond_entry.chiral_config = '.';
+            bond_entry.stereo_config = StereoChemistry::NONE;
             
             m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
         }

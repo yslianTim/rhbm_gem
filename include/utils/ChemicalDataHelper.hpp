@@ -25,6 +25,7 @@ class ChemicalDataHelper
     static const std::unordered_map<std::string_view, Entity> m_entity_map;
     static const std::unordered_map<std::string_view, BondType> m_bond_type_map;
     static const std::unordered_map<std::string_view, BondOrder> m_bond_order_map;
+    static const std::unordered_map<std::string_view, StereoChemistry> m_stereo_chemistry_map;
 
     static const std::unordered_map<Residue, std::string> m_residue_label_map;
     static const std::unordered_map<Element, std::string> m_element_label_map;
@@ -69,6 +70,7 @@ public:
     static Entity GetEntityFromString(const std::string & name);
     static BondType GetBondTypeFromString(const std::string & name);
     static BondOrder GetBondOrderFromString(const std::string & name);
+    static StereoChemistry GetStereoChemistryFromString(const std::string & name);
 
     static const std::string & GetLabel(Residue residue);
     static const std::string & GetLabel(Element element);

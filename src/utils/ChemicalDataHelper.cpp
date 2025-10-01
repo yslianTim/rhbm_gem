@@ -275,6 +275,13 @@ const std::unordered_map<std::string_view, BondOrder> ChemicalDataHelper::m_bond
     {"pi",   BondOrder::PI},       {"poly", BondOrder::POLYMERIC}
 };
 
+const std::unordered_map<std::string_view, StereoChemistry> ChemicalDataHelper::m_stereo_chemistry_map
+{
+    {"N", StereoChemistry::NONE},
+    {"R", StereoChemistry::R},     {"S", StereoChemistry::S},
+    {"E", StereoChemistry::E},     {"Z", StereoChemistry::Z}
+};
+
 const std::unordered_map<Residue, std::string> ChemicalDataHelper::m_residue_label_map
 {
     {Residue::ALA, "ALA"}, {Residue::ARG, "ARG"}, {Residue::ASN, "ASN"}, {Residue::ASP, "ASP"},
@@ -757,6 +764,26 @@ BondOrder ChemicalDataHelper::GetBondOrderFromString(const std::string & name)
         return BondOrder::UNK;
     }
     return m_bond_order_map.at(name);
+}
+
+StereoChemistry ChemicalDataHelper::GetStereoChemistryFromString(const std::string & name)
+{
+    thread_local static std::unordered_map<std::string, int> unknown_name_count_list;
+    if (m_stereo_chemistry_map.find(name) == m_stereo_chemistry_map.end())
+    {
+        if (unknown_name_count_list.find(name) == unknown_name_count_list.end())
+        {
+            Logger::Log(LogLevel::Warning, 
+                "ChemicalDataHelper::GetStereoChemistryFromString - Unknown string: " + name);
+            unknown_name_count_list[name] = 1;
+        }
+        else
+        {
+            unknown_name_count_list[name]++;
+        }
+        return StereoChemistry::UNK;
+    }
+    return m_stereo_chemistry_map.at(name);
 }
 
 const std::string & ChemicalDataHelper::GetLabel(Residue residue)
