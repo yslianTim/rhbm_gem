@@ -13,14 +13,12 @@ BondKeySystem::BondKeySystem(void) :
     m_next_dynamic_key{ k_dynamic_base }
 {
     Logger::Log(LogLevel::Debug, "BondKeySystem::BondKeySystem() called");
-    const auto & build_in_link_map{ ChemicalDataHelper::GetLinkMap() };
-    for (const auto & [bond_id, link] : build_in_link_map)
+    for (const auto & [bond_id, link] : ChemicalDataHelper::GetLinkMap())
     {
         auto bond_key{ static_cast<BondKey>(link) };
         m_id_to_key_map.emplace(bond_id, bond_key);
         m_key_to_id_map.emplace(bond_key, std::string{bond_id});
-        auto reverse_bond_id{ BuildReverseBondIdFromBondId(std::string{bond_id}) };
-        m_veto_bond_id_set.emplace(reverse_bond_id);
+        m_veto_bond_id_set.emplace(BuildReverseBondIdFromBondId(std::string{bond_id}));
     }
 }
 
