@@ -11,46 +11,6 @@
 
 using Eigen::Vector3f;
 
-namespace
-{
-    inline Vector3f ToEigen(const std::array<float, 3> & vec)
-    {
-        return Vector3f{ vec[0], vec[1], vec[2] };
-    }
-
-    inline std::array<float, 3> ToStdArray(const Vector3f & vec)
-    {
-        return { vec[0], vec[1], vec[2] };
-    }
-
-    inline void OrthonormalBasisFromAxis(
-        const Vector3f & axis_raw, Vector3f & u, Vector3f & v, Vector3f & w)
-    {
-        if (axis_raw.squaredNorm() == 0.0f)
-        {
-            throw std::invalid_argument("CylinderSampler: axis_vector cannot be zero.");
-        }
-        w = axis_raw.normalized();
-
-        Vector3f t{ (std::abs(w[2]) < 0.9f) ?
-            Vector3f{ 0.0f, 0.0f, 1.0f } : Vector3f{ 1.0f, 0.0f, 0.0f }
-        };
-
-        u = w.cross(t);
-        float nu{ u.norm() };
-        if (nu == 0.0f)
-        {
-            t = Vector3f{ 0.0f, 1.0f, 0.0f };
-            u = w.cross(t);
-            nu = u.norm();
-            if (nu == 0.0f)
-                throw std::runtime_error("CylinderSampler: failed to build orthonormal basis.");
-        }
-        u /= nu;
-        v = w.cross(u);
-    }
-}
-
 CylinderSampler::CylinderSampler(void) :
     m_sampling_size{ 10 },
     m_distance_min{ 0.0 }, m_distance_max{ 1.0 }, m_height{ 0.1 }
@@ -86,14 +46,20 @@ std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSa
         throw std::invalid_argument("CylinderSampler: height is negative.");
     }
 
-    Vector3f eigen_reference_position{ ToEigen(reference_position) };
-    Vector3f eigen_axis_vector{ ToEigen(axis_vector) };
+    const Eigen::Map<const Vector3f> eigen_reference_position(reference_position.data());
+    const Eigen::Map<const Vector3f> eigen_axis_vector(axis_vector.data());
 
     Vector3f u, v, w;
-    OrthonormalBasisFromAxis(eigen_axis_vector, u, v, w);
+    if (eigen_axis_vector.isZero(Eigen::NumTraits<float>::epsilon()))
+    {
+        throw std::invalid_argument("CylinderSampler: axis_vector cannot be zero.");
+    }
+    w = eigen_axis_vector.normalized();
+    u = w.unitOrthogonal();
+    v = w.cross(u);
 
     std::vector<std::tuple<float, std::array<float, 3>>> output_list;
-    output_list.resize(m_sampling_size);
+    output_list.reserve(m_sampling_size);
 
     static thread_local std::mt19937 engine{ std::random_device{}() };
     const float min_radius{ static_cast<float>(m_distance_min) };
@@ -112,12 +78,13 @@ std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSa
         float phi{ dist_phi(engine) };
         float height{ dist_height(engine) };
 
-        Vector3f eigen_position{ (
+        Vector3f position{ (
             (eigen_reference_position + (w * height)) +
             ((u * radius * std::cos(phi)) + (v * radius * std::sin(phi))))
         };
 
-        output_list[i] = std::make_tuple(radius, ToStdArray(eigen_position));
+        output_list.emplace_back(
+            radius, std::array<float, 3>{ position.x(), position.y(), position.z() });
     }
 
     return output_list;
