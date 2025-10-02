@@ -26,11 +26,11 @@ namespace
     inline void OrthonormalBasisFromAxis(
         const Vector3f & axis_raw, Vector3f & u, Vector3f & v, Vector3f & w)
     {
-        w = axis_raw.normalized();
-        if (w == Vector3f::Zero())
+        if (axis_raw.squaredNorm() == 0.0f)
         {
             throw std::invalid_argument("CylinderSampler: axis_vector cannot be zero.");
         }
+        w = axis_raw.normalized();
 
         Vector3f t{ (std::abs(w[2]) < 0.9f) ?
             Vector3f{ 0.0f, 0.0f, 1.0f } : Vector3f{ 1.0f, 0.0f, 0.0f }
@@ -96,8 +96,10 @@ std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSa
     output_list.resize(m_sampling_size);
 
     static thread_local std::mt19937 engine{ std::random_device{}() };
-    std::uniform_real_distribution<float> dist_radius(
-        static_cast<float>(m_distance_min), static_cast<float>(m_distance_max));
+    const float min_radius{ static_cast<float>(m_distance_min) };
+    const float max_radius{ static_cast<float>(m_distance_max) };
+    std::uniform_real_distribution<float> dist_radius_squared(
+        min_radius * min_radius, max_radius * max_radius);
     std::uniform_real_distribution<float> dist_phi(
         0.0f, static_cast<float>(Constants::two_pi));
     std::uniform_real_distribution<float> dist_height(
@@ -105,7 +107,8 @@ std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSa
 
     for (unsigned int i = 0; i < m_sampling_size; i++)
     {
-        float radius{ dist_radius(engine) };
+        float radius_squared{ dist_radius_squared(engine) };
+        float radius{ std::sqrt(radius_squared) };
         float phi{ dist_phi(engine) };
         float height{ dist_height(engine) };
 
