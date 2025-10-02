@@ -4,6 +4,7 @@
 #include "LocalPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
+#include "ArrayStats.hpp"
 #include "Logger.hpp"
 
 #include <stdexcept>
@@ -128,3 +129,9 @@ void BondObject::AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> ent
     m_local_potential_entry = std::move(entry);
 }
 
+float BondObject::GetBondLength(void) const
+{
+    if (m_atom_object_1 == nullptr || m_atom_object_2 == nullptr) return 0.0f;
+    return ArrayStats<float>::ComputeNorm(
+        m_atom_object_1->GetPositionRef(), m_atom_object_2->GetPositionRef());
+}

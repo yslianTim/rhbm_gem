@@ -6,6 +6,7 @@
 #include "ChemicalComponentEntry.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "ArrayStats.hpp"
+#include "StringHelper.hpp"
 #include "Logger.hpp"
 
 ModelObject::ModelObject(void) :
@@ -56,8 +57,25 @@ std::unique_ptr<DataObjectBase> ModelObject::Clone() const
 void ModelObject::Display(void) const
 {
     Logger::Log(LogLevel::Info, "ModelObject Display: " + GetKeyTag());
-    Logger::Log(LogLevel::Info, "This is ModelObject, it contains: "
-                + std::to_string(m_atom_list.size()) + " atoms.");
+    Logger::Log(LogLevel::Info,
+        " - PDB ID = " + m_pdb_id + "\n"
+        " - EMD ID = " + m_emd_id + "\n"
+        " - Map Resolution = " + StringHelper::ToStringWithPrecision(m_resolution, 2)
+            + " A (" + m_resolution_method + ")\n"
+        " - #Unique Entities = " + std::to_string(m_chain_id_list_map.size()) + "\n"
+        " - #Atoms = "+ std::to_string(m_atom_list.size()) +"\n"
+        " - #Bonds = "+ std::to_string(m_bond_list.size()) +"\n"
+        " - #Unique Components = " + std::to_string(m_chemical_component_entry_map.size()) + "\n"
+    );
+
+    for (auto & [component_key, entry]: m_chemical_component_entry_map)
+    {
+        Logger::Log(LogLevel::Info,
+            "   - Component ID = " + entry->GetComponentId() + " "
+            " (#Atoms = "+ std::to_string(entry->GetComponentAtomEntryMap().size()) +
+            ", #Bonds = "+ std::to_string(entry->GetComponentBondEntryMap().size()) +")"
+        );
+    }
 }
 
 void ModelObject::Update(void)

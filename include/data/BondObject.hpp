@@ -50,6 +50,7 @@ public:
     std::string GetInfo(void) const;
     int GetAtomSerialID1(void) const { return m_atom_serial_id_1; }
     int GetAtomSerialID2(void) const { return m_atom_serial_id_2; }
+    float GetBondLength(void) const;
     ComponentKey GetComponentKey(void) const;
     AtomKey GetAtomKey1(void) const;
     AtomKey GetAtomKey2(void) const;
