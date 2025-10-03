@@ -302,7 +302,7 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
             auto entry{ atom->GetLocalPotentialEntry() };
             interpolation_visitor.SetPosition(atom->GetPosition());
             m_map_object->Accept(&interpolation_visitor);
-            entry->AddDistanceAndMapValueList(interpolation_visitor.TakeSamplingDataList());
+            entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
             #pragma omp critical
             {
                 atom_count++;
@@ -350,10 +350,18 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
         {
             auto bond{ bond_list[i] };
             auto entry{ bond->GetLocalPotentialEntry() };
-            interpolation_visitor.SetPosition(bond->GetPosition());
-            interpolation_visitor.SetAxisVector(bond->GetBondVector());
+            auto bond_vector{ bond->GetBondVector() };
+            auto bond_position{ bond->GetPosition() };
+            auto adjusted_rate{ 0.0f };
+            std::array<float, 3> adjusted_position{
+                bond_position[0] + 0.5f * bond_vector[0] * adjusted_rate,
+                bond_position[1] + 0.5f * bond_vector[1] * adjusted_rate,
+                bond_position[2] + 0.5f * bond_vector[2] * adjusted_rate
+            };
+            interpolation_visitor.SetPosition(adjusted_position);
+            interpolation_visitor.SetAxisVector(bond_vector);
             m_map_object->Accept(&interpolation_visitor);
-            entry->AddDistanceAndMapValueList(interpolation_visitor.TakeSamplingDataList());
+            entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
             #pragma omp critical
             {
                 bond_count++;

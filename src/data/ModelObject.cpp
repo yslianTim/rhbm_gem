@@ -70,7 +70,7 @@ void ModelObject::Display(void) const
 
     for (auto & [component_key, entry]: m_chemical_component_entry_map)
     {
-        Logger::Log(LogLevel::Info,
+        Logger::Log(LogLevel::Debug,
             "   - Component ID = " + entry->GetComponentId() + " "
             " (#Atoms = "+ std::to_string(entry->GetComponentAtomEntryMap().size()) +
             ", #Bonds = "+ std::to_string(entry->GetComponentBondEntryMap().size()) +")"

@@ -34,9 +34,9 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
     }
 }
 
-std::vector<std::tuple<float, float>> && MapInterpolationVisitor::TakeSamplingDataList(void)
+std::vector<std::tuple<float, float>> && MapInterpolationVisitor::MoveSamplingDataList(void)
 {
-    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::TakeSamplingDataList() called.");
+    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::MoveSamplingDataList() called.");
     return std::move(m_sampling_data_list);
 }
 

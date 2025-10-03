@@ -15,7 +15,7 @@ BondObject::BondObject(void) :
     m_bond_type{ BondType::UNK }, m_bond_order{ BondOrder::UNK },
     m_atom_serial_id_1{ 0 }, m_atom_serial_id_2{ 0 },
     m_atom_object_1{ nullptr }, m_atom_object_2{ nullptr },
-    m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 },
+    m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 }, m_unit_vector{ 0.0, 0.0, 0.0 },
     m_local_potential_entry{ nullptr }
 {
 
@@ -28,7 +28,7 @@ BondObject::BondObject(AtomObject * atom_object_1, AtomObject * atom_object_2) :
     m_atom_serial_id_1{ atom_object_1->GetSerialID() },
     m_atom_serial_id_2{ atom_object_2->GetSerialID() },
     m_atom_object_1{ atom_object_1 }, m_atom_object_2{ atom_object_2 },
-    m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 },
+    m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 }, m_unit_vector{ 0.0, 0.0, 0.0 },
     m_local_potential_entry{ nullptr }
 {
     auto position_1{ m_atom_object_1->GetPosition() };
@@ -43,6 +43,15 @@ BondObject::BondObject(AtomObject * atom_object_1, AtomObject * atom_object_2) :
         position_2[1] - position_1[1],
         position_2[2] - position_1[2]
     };
+    auto norm{ ArrayStats<float>::ComputeNorm(m_bond_vector) };
+    if (norm > 0.0f)
+    {
+        m_unit_vector = {
+            m_bond_vector[0] / norm,
+            m_bond_vector[1] / norm,
+            m_bond_vector[2] / norm
+        };
+    }
 }
 
 BondObject::~BondObject()
@@ -57,7 +66,9 @@ BondObject::BondObject(const BondObject & other) :
     m_atom_serial_id_1{ other.m_atom_serial_id_1 },
     m_atom_serial_id_2{ other.m_atom_serial_id_2 },
     m_atom_object_1{ other.m_atom_object_1 }, m_atom_object_2{ other.m_atom_object_2 },
-    m_position{ other.m_position }, m_bond_vector{ other.m_bond_vector }
+    m_position{ other.m_position }, m_bond_vector{ other.m_bond_vector },
+    m_unit_vector{ other.m_unit_vector },
+    m_local_potential_entry{ nullptr }
 {
 
 }

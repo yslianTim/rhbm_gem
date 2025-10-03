@@ -23,10 +23,10 @@ void CylinderSampler::Print(void) const
         "CylinderSampler Configuration:\n"
         " - Sampling size: " + std::to_string(m_sampling_size) + "\n"
         " - Distance range: ["
-        + StringHelper::ToStringWithPrecision<double>(m_distance_min, 3) + ", "
-        + StringHelper::ToStringWithPrecision<double>(m_distance_max, 3) + "] Angstrom\n"
+        + StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) + ", "
+        + StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) + "] Angstrom\n"
         " - Height length = "
-        + StringHelper::ToStringWithPrecision<double>(m_height, 3) + " Angstrom");
+        + StringHelper::ToStringWithPrecision<double>(m_height, 1) + " Angstrom");
 }
 
 std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSamplingPoints(

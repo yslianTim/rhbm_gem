@@ -24,7 +24,7 @@ class BondObject : public DataObjectBase
     int m_atom_serial_id_2;
     AtomObject * m_atom_object_1;
     AtomObject * m_atom_object_2;
-    std::array<float, 3> m_position, m_bond_vector;
+    std::array<float, 3> m_position, m_bond_vector, m_unit_vector;
     std::unique_ptr<LocalPotentialEntry> m_local_potential_entry;
 
 public:
@@ -61,6 +61,7 @@ public:
     bool GetSpecialBondFlag(void) const { return m_is_special_bond; }
     std::array<float, 3> GetPosition(void) const { return m_position; }
     std::array<float, 3> GetBondVector(void) const { return m_bond_vector; }
+    std::array<float, 3> GetUnitVector(void) const { return m_unit_vector; }
     AtomObject * GetAtomObject1(void) const { return m_atom_object_1; }
     AtomObject * GetAtomObject2(void) const { return m_atom_object_2; }
     LocalPotentialEntry * GetLocalPotentialEntry(void) const { return m_local_potential_entry.get(); }

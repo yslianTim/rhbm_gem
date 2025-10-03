@@ -201,6 +201,11 @@ public:
         return std::make_tuple(min_value, max_value);
     }
 
+    static Type ComputeNorm(const std::array<Type, 3> & vec)
+    {
+        return static_cast<Type>(std::sqrt(vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2]));
+    }
+
     static Type ComputeNorm(const std::array<Type, 3> & v1, const std::array<Type, 3> & v2)
     {
         auto diff_x{ static_cast<Type>(v1[0] - v2[0]) };
