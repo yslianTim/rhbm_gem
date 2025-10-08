@@ -94,6 +94,7 @@ void ModelPainter::Painting(void)
                      "_bw"+ StringHelper::ToStringWithPrecision(model_object->GetResolution(), 2);
         }
         label += ".pdf";
+        /*
         //PaintAtomGroupGausMainChainStyle1(model_object, "atom_group_gaus_main_chain_style1_"+ label);
         PaintAtomGroupGausMainChain(model_object, "atom_group_gaus_main_chain_"+ label);
         PaintBondGroupGausMainChain(model_object, "bond_group_gaus_main_chain_"+ label);
@@ -107,7 +108,7 @@ void ModelPainter::Painting(void)
         //PaintBondGausScatterPlot(model_object, "bond_gaus_scatter_"+ label, false);
         PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
         PaintBondGausMainChain(model_object, "bond_gaus_main_chain_"+ label);
-        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
+        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);*/
         PaintBondMapValueMainChain(model_object, "bond_map_value_main_chain_"+ label);
         //PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
     }

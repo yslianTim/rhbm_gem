@@ -269,7 +269,9 @@ std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceA
     for (int i = 0; i < bin_size; i++)
     {
         auto x_value{ static_cast<float>(x_min + (i + 0.5) * bin_spacing) };
-        auto y_value{ ArrayStats<float>::ComputeMedian(bin_map.at(i)) };
+        auto y_value{ (bin_map.find(i) == bin_map.end()) ?
+            0.0f : ArrayStats<float>::ComputeMedian(bin_map.at(i))
+        };
         binned_distance_and_map_value_list.emplace_back(std::make_tuple(x_value, y_value));
     }
     return binned_distance_and_map_value_list;
