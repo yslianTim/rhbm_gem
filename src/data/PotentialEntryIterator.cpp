@@ -535,7 +535,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateBondResidueCountHistogram(
     return hist;
 }
 
-std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHistogram(
+std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainAtomGausRankHistogram(
     int par_id, int & chain_size, Residue residue,
     size_t extra_id, std::vector<Residue> veto_residues_list)
 {
@@ -582,51 +582,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainRankHi
     return hist_list;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAmplitudeRatioToWidthScatterGraph(
-    size_t target_id, size_t reference_id, Residue residue)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
-    auto element_size{ AtomClassifier::GetMainChainMemberCount() };
-    if (target_id >= element_size || reference_id >= element_size)
-    {
-        Logger::Log(LogLevel::Error, "Target or reference ID exceeds the number of main chain elements.");
-        return nullptr;
-    }
-    std::unordered_map<int, std::tuple<double, double>> gaus_estimate_map[4];
-    size_t current_id{ 0 };
-    for (auto & atom : m_model_object->GetSelectedAtomList())
-    {
-        if (atom->GetSpecialAtomFlag() == true) continue;
-        if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;
-        if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
-        auto entry{ atom->GetLocalPotentialEntry() };
-        auto sequence_id{ atom->GetSequenceID() };
-        auto amplitude_estimate{ entry->GetAmplitudeEstimateMDPDE() };
-        auto width_estimate{ entry->GetWidthEstimateMDPDE() };
-        (gaus_estimate_map[current_id])[sequence_id] = std::make_tuple(amplitude_estimate, width_estimate);
-    }
-
-    auto count{ 0 };
-    for (auto & [sequence_id, gaus_estimate] : gaus_estimate_map[target_id])
-    {
-        if (gaus_estimate_map[reference_id].find(sequence_id) == gaus_estimate_map[reference_id].end()) continue;
-        auto target_amplitude{ std::get<0>(gaus_estimate) };
-        auto target_width{ std::get<1>(gaus_estimate) };
-        auto reference_amplitude{ std::get<0>(gaus_estimate_map[reference_id].at(sequence_id)) };
-        if (reference_amplitude <= 0.0) continue;
-        auto ratio{ target_amplitude / reference_amplitude };
-        graph->SetPoint(count, target_width, ratio);
-        graph->SetPointError(count, 0.0, 0.0);
-        count++;
-    }
-    return graph;
-}
-
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstimateScatterGraph(
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedAtomGausEstimateScatterGraph(
     Element element, double reference_amplitude, bool reverse)
 {
     if (IsModelObjectAvailable() == false)
@@ -670,29 +626,46 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedGausEstima
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBfactorToWidthScatterGraph(
-    GroupKey group_key, const std::string & class_key)
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateNormalizedBondGausEstimateScatterGraph(
+    Element element, double reference_amplitude, bool reverse)
 {
     if (IsModelObjectAvailable() == false)
     {
         return nullptr;
     }
-    if (IsAvailableAtomGroupKey(group_key, class_key) == false)
-    {
-        Logger::Log(LogLevel::Error, "Group key is not available.");
-        return nullptr;
-    }
     auto graph{ ROOTHelper::CreateGraphErrors() };
-    const auto & atom_list{ GetAtomObjectList(group_key, class_key) };
-
-    auto count{ 0 };
-    for (auto & atom : atom_list)
+    std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
+    for (auto & bond : m_model_object->GetSelectedBondList())
     {
-        auto entry{ atom->GetLocalPotentialEntry() };
-        graph->SetPoint(count, atom->GetTemperature()/(8.0*Constants::pi_square), entry->GetWidthEstimateMDPDE());
+        if (bond->GetSpecialBondFlag() == false)
+        {
+            auto entry{ bond->GetLocalPotentialEntry() };
+            auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
+            auto amplitude_estimate{ entry->GetAmplitudeEstimateMDPDE() };
+            amplitude_diff_to_carbonyl_oxygen_map[sequence_id] = amplitude_estimate - reference_amplitude;
+        }
+    }
+    auto count{ 0 };
+    for (auto & bond : m_model_object->GetSelectedBondList())
+    {
+        if (bond->GetAtomObject1()->GetElement() != element) continue;
+        auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
+        auto entry{ bond->GetLocalPotentialEntry() };
+        auto normalized_amplitude{ entry->GetAmplitudeEstimateMDPDE() };
+        if (amplitude_diff_to_carbonyl_oxygen_map.find(sequence_id) != amplitude_diff_to_carbonyl_oxygen_map.end())
+        {
+            normalized_amplitude -= amplitude_diff_to_carbonyl_oxygen_map.at(sequence_id);
+        }
+        if (reverse == false)
+        {
+            graph->SetPoint(count, normalized_amplitude, entry->GetWidthEstimateMDPDE());
+        }
+        else
+        {
+            graph->SetPoint(count, entry->GetWidthEstimateMDPDE(), normalized_amplitude);
+        }
         count++;
     }
-
     return graph;
 }
 
@@ -857,7 +830,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBondGausEstimateScat
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterGraph(
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateScatterGraph(
     Element element, bool reverse)
 {
     if (IsModelObjectAvailable() == false)
@@ -871,6 +844,33 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     {
         if (atom->GetElement() != element) continue;
         auto entry{ atom->GetLocalPotentialEntry() };
+        if (reverse == false)
+        {
+            graph->SetPoint(count, entry->GetAmplitudeEstimateMDPDE(), entry->GetWidthEstimateMDPDE());
+        }
+        else
+        {
+            graph->SetPoint(count, entry->GetWidthEstimateMDPDE(), entry->GetAmplitudeEstimateMDPDE());
+        }
+        count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBondGausEstimateScatterGraph(
+    Element element, bool reverse)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto count{ 0 };
+    for (auto & bond : m_model_object->GetSelectedBondList())
+    {
+        if (bond->GetAtomObject1()->GetElement() != element) continue;
+        auto entry{ bond->GetLocalPotentialEntry() };
         if (reverse == false)
         {
             graph->SetPoint(count, entry->GetAmplitudeEstimateMDPDE(), entry->GetWidthEstimateMDPDE());
@@ -1011,7 +1011,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateCOMDistanceToGausEst
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomographyGraph(
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomXYPositionTomographyGraph(
     double normalized_z_pos, double z_ratio_window, bool com_center)
 {
     if (IsModelObjectAvailable() == false)
@@ -1037,160 +1037,6 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomography
         count++;
     }
     return graph;
-}
-
-std::unordered_map<size_t, std::unique_ptr<TGraphErrors>>
-PotentialEntryIterator::CreateXYPositionTomographyGraphMap(
-    double normalized_z_pos, double z_ratio_window, bool com_center)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return {};
-    }
-
-    auto com_pos{ com_center ? m_model_object->GetCenterOfMassPosition() : std::array<float, 3>{0.0, 0.0, 0.0} };
-    auto z_pos{ m_model_object->GetModelPosition(2, normalized_z_pos) };
-    auto window_width{ 0.5 * m_model_object->GetModelLength(2) * z_ratio_window };
-    auto z_window_min{ z_pos - window_width };
-    auto z_window_max{ z_pos + window_width };
-    
-    std::unordered_map<size_t, std::unique_ptr<TGraphErrors>> graph_map;
-    std::unordered_map<size_t, int> count_map;
-    size_t current_id{ 0 };
-    for (auto & atom : m_model_object->GetAtomList())
-    {
-        if (atom->GetSpecialAtomFlag() == true) continue;
-        if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;
-
-        auto position{ atom->GetPosition() };
-        if (position.at(2) < z_window_min || position.at(2) >= z_window_max) continue;
-        if (graph_map.find(current_id) == graph_map.end())
-        {
-            graph_map[current_id] = ROOTHelper::CreateGraphErrors();
-            count_map[current_id] = 0;
-        }
-        graph_map[current_id]->SetPoint(
-            count_map[current_id],
-            position.at(0) - com_pos.at(0),
-            position.at(1) - com_pos.at(1));
-        count_map[current_id]++;
-    }
-    return graph_map;
-}
-
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateXYPositionTomographyGraph(
-    std::vector<GroupKey> & group_key_list, const std::string & class_key, double normalized_z_pos, double z_ratio_window)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto graph{ ROOTHelper::CreateGraphErrors() };
-    auto z_range_tuple{ m_model_object->GetModelPositionRange(2) };
-    auto z_pos_min{ std::get<0>(z_range_tuple) };
-    auto z_pos_max{ std::get<1>(z_range_tuple) };
-    auto z_range{ z_pos_max - z_pos_min };
-    auto window_width{ 0.5 * z_range * z_ratio_window };
-    auto z_window_min{ z_pos_min + normalized_z_pos * z_range - window_width };
-    auto z_window_max{ z_pos_min + normalized_z_pos * z_range + window_width };
-    
-    auto count{ 0 };
-    for (auto & group_key : group_key_list)
-    {
-        if (IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
-        for (auto & atom : GetAtomObjectList(group_key, class_key))
-        {
-            auto position{ atom->GetPosition() };
-            if (position.at(2) < z_window_min || position.at(2) >= z_window_max)
-            {
-                continue;
-            }
-            graph->SetPoint(count, position.at(0), position.at(1));
-            count++;
-        }
-    }
-    return graph;
-}
-
-std::unique_ptr<TGraph2DErrors> PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2D(
-    std::vector<GroupKey> & group_key_list, const std::string & class_key,
-    double normalized_z_pos, double z_ratio_window, int par_id)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return nullptr;
-    }
-    auto graph{ ROOTHelper::CreateGraph2DErrors() };
-    auto z_range_tuple{ m_model_object->GetModelPositionRange(2) };
-    auto z_pos_min{ std::get<0>(z_range_tuple) };
-    auto z_pos_max{ std::get<1>(z_range_tuple) };
-    auto z_range{ z_pos_max - z_pos_min };
-    auto window_width{ 0.5 * z_range * z_ratio_window };
-    auto z_window_min{ z_pos_min + normalized_z_pos * z_range - window_width };
-    auto z_window_max{ z_pos_min + normalized_z_pos * z_range + window_width };
-    
-    auto count{ 0 };
-    for (auto & group_key : group_key_list)
-    {
-        if (IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
-        for (auto & atom : GetAtomObjectList(group_key, class_key))
-        {
-            auto position{ atom->GetPosition() };
-            if (position.at(2) < z_window_min || position.at(2) >= z_window_max)
-            {
-                continue;
-            }
-            auto entry_iter{ atom->GetLocalPotentialEntry() };
-            graph->SetPoint(count,
-                position.at(0), position.at(1),
-                entry_iter->GetGausEstimatePosterior(class_key, par_id));
-            count++;
-        }
-    }
-    return graph;
-}
-
-std::unordered_map<size_t, std::unique_ptr<TGraph2DErrors>>
-PotentialEntryIterator::CreateXYPositionTomographyToGausEstimateGraph2DMap(
-    double normalized_z_pos, double z_ratio_window, int par_id, bool com_center)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return {};
-    }
-
-    auto com_pos{ com_center ? m_model_object->GetCenterOfMassPosition() : std::array<float, 3>{0.0, 0.0, 0.0} };
-    auto z_range_tuple{ m_model_object->GetModelPositionRange(2) };
-    auto z_pos_min{ std::get<0>(z_range_tuple) };
-    auto z_pos_max{ std::get<1>(z_range_tuple) };
-    auto z_range{ z_pos_max - z_pos_min };
-    auto window_width{ 0.5 * z_range * z_ratio_window };
-    auto z_window_min{ z_pos_min + normalized_z_pos * z_range - window_width };
-    auto z_window_max{ z_pos_min + normalized_z_pos * z_range + window_width };
-    
-    std::unordered_map<size_t, std::unique_ptr<TGraph2DErrors>> graph_map;
-    std::unordered_map<size_t, int> count_map;
-    size_t current_id{ 0 };
-    for (auto & atom : m_model_object->GetSelectedAtomList())
-    {
-        if (atom->GetSpecialAtomFlag() == true) continue;
-        if (AtomClassifier::IsMainChainMember(atom->GetSpot(), current_id) == false) continue;
-        auto position{ atom->GetPosition() };
-        if (position.at(2) < z_window_min || position.at(2) >= z_window_max) continue;
-        if (graph_map.find(current_id) == graph_map.end())
-        {
-            graph_map[current_id] = ROOTHelper::CreateGraph2DErrors();
-            count_map[current_id] = 0;
-        }
-        auto entry{ atom->GetLocalPotentialEntry() };
-        graph_map[current_id]->SetPoint(
-            count_map[current_id],
-            position.at(0) - com_pos.at(0),
-            position.at(1) - com_pos.at(1),
-            entry->GetGausEstimateMDPDE(par_id));
-        count_map[current_id]++;
-    }
-    return graph_map;
 }
 
 std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionPrior(

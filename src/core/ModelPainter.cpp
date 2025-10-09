@@ -94,8 +94,7 @@ void ModelPainter::Painting(void)
                      "_bw"+ StringHelper::ToStringWithPrecision(model_object->GetResolution(), 2);
         }
         label += ".pdf";
-        /*
-        //PaintAtomGroupGausMainChainStyle1(model_object, "atom_group_gaus_main_chain_style1_"+ label);
+        
         PaintAtomGroupGausMainChain(model_object, "atom_group_gaus_main_chain_"+ label);
         PaintBondGroupGausMainChain(model_object, "bond_group_gaus_main_chain_"+ label);
         PaintAtomGroupGausSideChain(model_object, "atom_group_gaus_side_chain_"+ label);
@@ -108,167 +107,10 @@ void ModelPainter::Painting(void)
         //PaintBondGausScatterPlot(model_object, "bond_gaus_scatter_"+ label, false);
         PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
         PaintBondGausMainChain(model_object, "bond_gaus_main_chain_"+ label);
-        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);*/
+        PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
         PaintBondMapValueMainChain(model_object, "bond_map_value_main_chain_"+ label);
         //PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
     }
-}
-
-void ModelPainter::PaintAtomGroupGausMainChainStyle1(
-    ModelObject * model_object, const std::string & name)
-{
-    auto file_path{ m_folder_path + name };
-    auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGroupGausMainChainStyle1");
-
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
-
-    #ifdef HAVE_ROOT
-
-    const int main_chain_element_count{ 4 };
-    float marker_size{ 1.5f };
-
-    gStyle->SetLineScalePS(1.5);
-    gStyle->SetGridColor(kGray);
-
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 3000, 500) };
-    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
-    const int pad_size{ 4 };
-    std::unique_ptr<TPad> pad[pad_size];
-    std::unique_ptr<TH2> frame[pad_size];
-    
-    const double x_pos[pad_size + 1]{ 0.00, 0.16, 0.52, 0.64, 1.00 };
-    for (int i = 0; i < pad_size; i++)
-    {
-        auto pad_name{ "pad"+ std::to_string(i) };
-        pad[i] = ROOTHelper::CreatePad(pad_name.data(),"", x_pos[i], 0.0, x_pos[i+1], 1.0);
-    }
-
-    std::unique_ptr<TPaveText> info_text;
-    std::unique_ptr<TPaveText> resolution_text;
-    std::unique_ptr<TGraphErrors> amplitude_graph[main_chain_element_count];
-    std::unique_ptr<TGraphErrors> width_graph[main_chain_element_count];
-    std::unique_ptr<TGraphErrors> correlation_graph[main_chain_element_count];
-    std::vector<double> amplitude_array, width_array;
-    info_text = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
-    resolution_text = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
-    for (size_t k = 0; k < main_chain_element_count; k++)
-    {
-        auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
-        amplitude_graph[k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 0);
-        width_graph[k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 1);
-        correlation_graph[k] = entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
-        for (int p = 0; p < amplitude_graph[k]->GetN(); p++)
-        {
-            amplitude_array.push_back(amplitude_graph[k]->GetPointY(p));
-            width_array.push_back(width_graph[k]->GetPointY(p));
-        }
-        auto element_color{ AtomClassifier::GetMainChainElementColor(k) };
-        auto element_marker{ AtomClassifier::GetMainChainElementOpenMarker(k) };
-        ROOTHelper::SetMarkerAttribute(amplitude_graph[k].get(), element_marker, marker_size, element_color);
-        ROOTHelper::SetMarkerAttribute(width_graph[k].get(), element_marker, marker_size, element_color);
-        ROOTHelper::SetMarkerAttribute(correlation_graph[k].get(), element_marker, marker_size, element_color);
-        ROOTHelper::SetLineAttribute(amplitude_graph[k].get(), 1, 1, element_color);
-        ROOTHelper::SetLineAttribute(width_graph[k].get(), 1, 1, element_color);
-        ROOTHelper::SetLineAttribute(correlation_graph[k].get(), 1, 1, element_color);
-    }
-    auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, 0.2) };
-    auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, 0.1) };
-
-    frame[0] = ROOTHelper::CreateHist2D("frame0","", 100, 0.0, 1.0, 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-    frame[1] = ROOTHelper::CreateHist2D("frame1","", 100, std::get<0>(width_range), std::get<1>(width_range), 100, std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-    frame[2] = ROOTHelper::CreateHist2D("frame2","", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
-
-    auto amplitude_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-    auto width_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-    auto correlation_title_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-
-    canvas->cd();
-    for (int i = 0; i < pad_size; i++)
-    {
-        ROOTHelper::SetPadDefaultStyle(pad[i].get());
-        pad[i]->Draw();
-    }
-
-    pad[0]->cd();
-    auto pdb_id{ model_object->GetPdbID() };
-    auto emd_id{ model_object->GetEmdID() };
-
-    // PDB & EMD Text
-    ROOTHelper::SetPaveTextMarginInCanvas(pad[0].get(), info_text.get(), 0.003, 0.00, 0.25, 0.25);
-    ROOTHelper::SetPaveTextDefaultStyle(info_text.get());
-    ROOTHelper::SetPaveAttribute(info_text.get(), 0, 0.1);
-    ROOTHelper::SetFillAttribute(info_text.get(), 1001, kAzure-7, 0.3f);
-    ROOTHelper::SetTextAttribute(info_text.get(), 75.0f, 103, 32);
-    ROOTHelper::SetLineAttribute(info_text.get(), 1, 0);
-    info_text->AddText(pdb_id.data());
-    info_text->AddText(emd_id.data());
-    info_text->Draw();
-    
-    // Resolution Text
-    ROOTHelper::SetPaveTextMarginInCanvas(pad[0].get(), resolution_text.get(), 0.001, 0.07, 0.50, 0.20);
-    ROOTHelper::SetPaveTextDefaultStyle(resolution_text.get());
-    ROOTHelper::SetPaveAttribute(resolution_text.get(), 0, 0.2);
-    ROOTHelper::SetFillAttribute(resolution_text.get(), 1001, kAzure-7);
-    ROOTHelper::SetTextAttribute(resolution_text.get(), 80.0f, 133, 22, 0.0, kYellow-10);
-    auto resolution{ model_object->GetResolution() };
-    if (emd_id == "Simulation")
-    {
-        resolution_text->AddText(Form("#sigma_{B} = %.2f", resolution));
-    }
-    else
-    {
-        resolution_text->AddText(Form("%.2f #AA", resolution));
-    }
-    resolution_text->Draw();
-
-    auto legend{ ROOTHelper::CreateLegend(0.15, 0.00, 1.00, 0.20, false) };
-    ROOTHelper::SetLegendDefaultStyle(legend.get());
-    ROOTHelper::SetTextAttribute(legend.get(), 70.0f, 103, 12);
-    ROOTHelper::SetFillAttribute(legend.get(), 4000);
-    for (size_t k = 0; k < main_chain_element_count; k++)
-    {
-        auto element_color{ AtomClassifier::GetMainChainElementColor(k) };
-        auto element_label{ AtomClassifier::GetMainChainElementLabel(k) };
-        auto label{ Form("#color[%d]{%s}", element_color, element_label.data()) };
-        legend->AddEntry(correlation_graph[k].get(), label, "p");
-    }
-    legend->SetNColumns(4);
-    //legend->Draw();
-
-    pad[1]->cd();
-    PrintGausResultGlobalPad(pad[1].get(), frame[0].get(), 0.030, 0.005, 0.205, 0.205, false);
-    for (int k = 0; k < main_chain_element_count; k++) amplitude_graph[k]->Draw("PL X0");
-    PrintGausTitlePad(pad[1].get(), amplitude_title_text.get(), "Amplitude #font[2]{A}", 80.0f);
-
-    pad[2]->cd();
-    ROOTHelper::SetPadMarginInCanvas(pad[2].get(), 0.005, 0.005, 0.205, 0.205);
-    ROOTHelper::SetPadLayout(pad[2].get(), 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 60.0f, 0.75f);
-    ROOTHelper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 47.0f);
-    ROOTHelper::SetAxisLabelAttribute(frame[1]->GetYaxis(), 0.0f);
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad[2].get(), 0.040, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad[2].get(), 0.008, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame[1]->GetXaxis(), static_cast<float>(x_tick_length), 505);
-    ROOTHelper::SetAxisTickAttribute(frame[1]->GetYaxis(), static_cast<float>(y_tick_length), 505);
-    frame[1]->SetStats(0);
-    frame[1]->GetXaxis()->SetTitle("Width #font[2]{#tau}");
-    frame[1]->GetXaxis()->CenterTitle();
-    frame[1]->Draw("");
-    for (int k = 0; k < main_chain_element_count; k++) correlation_graph[k]->Draw("P X0");
-    PrintGausTitlePad(pad[2].get(), correlation_title_text.get(), "#tau#minus#font[2]{A} Plot", 80.0f);
-
-    pad[3]->cd();
-    PrintGausResultGlobalPad(pad[3].get(), frame[2].get(), 0.005, 0.030, 0.205, 0.205, true);
-    for (int k = 0; k < main_chain_element_count; k++) width_graph[k]->Draw("PL X0");
-    PrintGausTitlePad(pad[3].get(), width_title_text.get(), "Width #font[2]{#tau}", 80.0f);
-
-    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
-    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
-    Logger::Log(LogLevel::Info, " Output file: " + file_path);
-    #endif
 }
 
 void ModelPainter::PaintAtomGroupGausMainChain(
@@ -1488,7 +1330,9 @@ void ModelPainter::PaintAtomXYPosition(
 
     auto normalized_z_position{ 0.5 };
     auto z_ratio_window{ 0.1 };
-    auto graph{ entry_iter->CreateXYPositionTomographyGraph(normalized_z_position, z_ratio_window, true) };
+    auto graph{ entry_iter->CreateAtomXYPositionTomographyGraph(
+        normalized_z_position, z_ratio_window, true)
+    };
     auto z_position{ model_object->GetModelPosition(2, normalized_z_position) };
     auto z_window{ model_object->GetModelLength(2) * z_ratio_window };
     auto com_pos{ model_object->GetCenterOfMassPosition() };
@@ -1585,8 +1429,8 @@ void ModelPainter::PaintAtomGausScatterPlot(
         auto graph
         {
             (do_normalize == true) ?
-            entry_iter->CreateNormalizedGausEstimateScatterGraph(element_type, amplitude_min) :
-            entry_iter->CreateGausEstimateScatterGraph(element_type)
+            entry_iter->CreateNormalizedAtomGausEstimateScatterGraph(element_type, amplitude_min) :
+            entry_iter->CreateAtomGausEstimateScatterGraph(element_type)
         };
         auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element_type) };
         auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
@@ -1690,18 +1534,15 @@ void ModelPainter::PaintBondGausScatterPlot(
         auto graph
         {
             (do_normalize == true) ?
-            entry_iter->CreateNormalizedGausEstimateScatterGraph(element_type, amplitude_min) :
-            entry_iter->CreateGausEstimateScatterGraph(element_type)
+            entry_iter->CreateNormalizedBondGausEstimateScatterGraph(element_type, amplitude_min) :
+            entry_iter->CreateBondGausEstimateScatterGraph(element_type)
         };
-        auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element_type) };
-        auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
-        short marker_color{ (ChemicalDataHelper::IsStandardElement(element_type)) ?
+        auto marker_size{ 2.0f };
+        auto marker_color{ (ChemicalDataHelper::IsStandardElement(element_type)) ?
             ChemicalDataHelper::GetDisplayColor(element_type) : static_cast<short>(kRed)
         };
-        auto transparency{ (atomic_number <= 8) ? 0.2f : 1.0f };
         ROOTHelper::SetMarkerAttribute(graph.get(),
-            ChemicalDataHelper::GetDisplayMarker(element_type), marker_size,
-            marker_color, transparency);
+            ChemicalDataHelper::GetDisplayMarker(element_type), marker_size, marker_color);
         for (int p = 0; p < graph->GetN(); p++)
         {
             auto x{ graph->GetPointX(p) };
@@ -2099,15 +1940,15 @@ void ModelPainter::PaintAtomRankMainChain(
     std::vector<std::unique_ptr<TH1D>> rank_hist_list[row_size][3];
     std::unique_ptr<TH1D> rank_reference[row_size];
     std::vector<Residue> veto_residues_list{  };
-    rank_hist_list[2][0] = entry_iter->CreateMainChainRankHistogram(0, chain_size, Residue::UNK, 2, veto_residues_list);
-    rank_hist_list[1][0] = entry_iter->CreateMainChainRankHistogram(1, chain_size, Residue::UNK, 1, veto_residues_list);
-    rank_hist_list[0][0] = entry_iter->CreateMainChainRankHistogram(2, chain_size, Residue::UNK, 0, veto_residues_list);
-    rank_hist_list[2][1] = entry_iter->CreateMainChainRankHistogram(0, chain_size, Residue::GLY);
-    rank_hist_list[1][1] = entry_iter->CreateMainChainRankHistogram(1, chain_size, Residue::GLY);
-    rank_hist_list[0][1] = entry_iter->CreateMainChainRankHistogram(2, chain_size, Residue::GLY);
-    rank_hist_list[2][2] = entry_iter->CreateMainChainRankHistogram(0, chain_size, Residue::PRO);
-    rank_hist_list[1][2] = entry_iter->CreateMainChainRankHistogram(1, chain_size, Residue::PRO);
-    rank_hist_list[0][2] = entry_iter->CreateMainChainRankHistogram(2, chain_size, Residue::PRO);
+    rank_hist_list[2][0] = entry_iter->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::UNK, 2, veto_residues_list);
+    rank_hist_list[1][0] = entry_iter->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::UNK, 1, veto_residues_list);
+    rank_hist_list[0][0] = entry_iter->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::UNK, 0, veto_residues_list);
+    rank_hist_list[2][1] = entry_iter->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::GLY);
+    rank_hist_list[1][1] = entry_iter->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::GLY);
+    rank_hist_list[0][1] = entry_iter->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::GLY);
+    rank_hist_list[2][2] = entry_iter->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::PRO);
+    rank_hist_list[1][2] = entry_iter->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::PRO);
+    rank_hist_list[0][2] = entry_iter->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::PRO);
     
     for (int j = 0; j < row_size; j++)
     {

@@ -742,7 +742,9 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     // X-Y Position
     auto normalized_z_position{ 0.5 };
     auto z_ratio_window{ 0.1 };
-    auto graph_position{ entry_iter->CreateXYPositionTomographyGraph(normalized_z_position, z_ratio_window, true) };
+    auto graph_position{
+        entry_iter->CreateAtomXYPositionTomographyGraph(normalized_z_position, z_ratio_window, true)
+    };
     auto z_position{ model_object->GetModelPosition(2, normalized_z_position) };
     auto z_window{ model_object->GetModelLength(2) * z_ratio_window };
     auto com_pos{ model_object->GetCenterOfMassPosition() };
