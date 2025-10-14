@@ -1,5 +1,6 @@
 #include "FileProcessFactoryRegistry.hpp"
 #include "FileProcessFactoryBase.hpp"
+#include "StringHelper.hpp"
 #include "Logger.hpp"
 
 #include <stdexcept>
@@ -26,7 +27,9 @@ void FileProcessFactoryRegistry::RegisterFactory(
 {
     Logger::Log(LogLevel::Debug,
         "FileProcessFactoryRegistry::RegisterFactory() called for extension: " + extension);
-    m_factory_map[extension] = std::move(creator);
+    auto normalized_extension{ extension };
+    StringHelper::ToLowerCase(normalized_extension);
+    m_factory_map[normalized_extension] = std::move(creator);
 }
 
 std::unique_ptr<FileProcessFactoryBase> FileProcessFactoryRegistry::CreateFactory(
@@ -34,7 +37,9 @@ std::unique_ptr<FileProcessFactoryBase> FileProcessFactoryRegistry::CreateFactor
 {
     Logger::Log(LogLevel::Debug,
         "FileProcessFactoryRegistry::CreateFactory() called for extension: " + extension);
-    auto iter{ m_factory_map.find(extension) };
+    auto normalized_extension{ extension };
+    StringHelper::ToLowerCase(normalized_extension);
+    auto iter{ m_factory_map.find(normalized_extension) };
     if (iter == m_factory_map.end())
     {
         throw std::runtime_error("Unsupported file format: " + extension);

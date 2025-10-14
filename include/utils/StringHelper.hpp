@@ -14,10 +14,18 @@ class StringHelper
 public:
     static void ToUpperCase(std::string & text)
     {
-        for (auto & ch : text)
-        {
-            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        }
+        std::transform(
+            text.begin(), text.end(), text.begin(),
+            [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); }
+        );
+    }
+
+    static void ToLowerCase(std::string & text)
+    {
+        std::transform(
+            text.begin(), text.end(), text.begin(),
+            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); }
+        );
     }
     
     static std::string ExtractCharAsString(const std::string & input, size_t index)

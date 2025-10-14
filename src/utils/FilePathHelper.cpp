@@ -1,4 +1,5 @@
 #include "FilePathHelper.hpp"
+#include "StringHelper.hpp"
 #include "Logger.hpp"
 
 #include <algorithm>
@@ -17,10 +18,7 @@ std::string FilePathHelper::GetExtension(const std::filesystem::path & path)
         extension = path.extension().string();
     }
 
-    std::transform(
-        extension.begin(), extension.end(), extension.begin(),
-        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); }
-    );
+    StringHelper::ToLowerCase(extension);
     return extension;
 }
 
