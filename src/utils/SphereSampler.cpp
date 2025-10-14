@@ -5,6 +5,7 @@
 
 #include <random>
 #include <stdexcept>
+#include <sstream>
 
 SphereSampler::SphereSampler(void) :
     m_sampling_size{ 10 }, m_distance_min{ 0.0 }, m_distance_max{ 1.0 }
@@ -14,12 +15,14 @@ SphereSampler::SphereSampler(void) :
 
 void SphereSampler::Print(void) const
 {
-    Logger::Log(LogLevel::Info,
-        "SphereSampler Configuration:\n"
-        " - Sampling size: " + std::to_string(m_sampling_size) + "\n"
-        " - Distance range: ["
-        + StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) + ", "
-        + StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) + "] Angstrom.");
+    std::ostringstream oss;
+    oss << "SphereSampler Configuration:\n"
+        << " - Sampling size: " << m_sampling_size << '\n'
+        << " - Distance range: ["
+        << StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) << ", "
+        << StringHelper::ToStringWithPrecision<double>(m_distance_max, 1)
+        << "] Angstrom.";
+    Logger::Log(LogLevel::Info, oss.str());
 }
 
 std::vector<std::tuple<float, std::array<float, 3>>> SphereSampler::GenerateSamplingPoints(

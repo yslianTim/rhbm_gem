@@ -6,6 +6,7 @@
 #include <limits>
 #include <utility>
 #include <stdexcept>
+#include <sstream>
 
 using std::string;
 using std::vector;
@@ -176,12 +177,12 @@ void HRLModelHelper::RunEstimation(double alpha_r, double alpha_g)
 
     if (m_data_size_list.size() < static_cast<size_t>(m_member_size))
     {
-        Logger::Log(LogLevel::Info,
-            "HRLModelHelper::RunEstimation : "
-            "Valid member size is smaller than expected member size -> "
-            + std::to_string(m_member_size) + ", "
-            "reassigning member size to -> "+ std::to_string(m_data_size_list.size())
-        );
+        std::ostringstream oss;
+        oss << "HRLModelHelper::RunEstimation : "
+            << "Valid member size is smaller than expected member size -> "
+            << m_member_size << ", "
+            << "reassigning member size to -> " << m_data_size_list.size();
+        Logger::Log(LogLevel::Info, oss.str());
         m_member_size = static_cast<int>(m_data_size_list.size());
         m_weight_member_min = DEFAULT_WEIGHT_MEMBER_MIN / m_member_size;
         m_sigma_square_array.resize(m_member_size);

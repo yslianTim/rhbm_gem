@@ -6,6 +6,7 @@
 #include <random>
 #include <stdexcept>
 #include <cmath>
+#include <sstream>
 #include <algorithm>
 #include <Eigen/Dense>
 
@@ -19,14 +20,15 @@ CylinderSampler::CylinderSampler(void) :
 
 void CylinderSampler::Print(void) const
 {
-    Logger::Log(LogLevel::Info,
-        "CylinderSampler Configuration:\n"
-        " - Sampling size: " + std::to_string(m_sampling_size) + "\n"
-        " - Distance range: ["
-        + StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) + ", "
-        + StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) + "] Angstrom\n"
-        " - Height length = "
-        + StringHelper::ToStringWithPrecision<double>(m_height, 1) + " Angstrom");
+    std::ostringstream oss;
+    oss << "CylinderSampler Configuration:\n"
+        << " - Sampling size: " << m_sampling_size << '\n'
+        << " - Distance range: ["
+        << StringHelper::ToStringWithPrecision<double>(m_distance_min, 1) << ", "
+        << StringHelper::ToStringWithPrecision<double>(m_distance_max, 1) << "] Angstrom\n"
+        << " - Height length = "
+        << StringHelper::ToStringWithPrecision<double>(m_height, 1) << " Angstrom";
+    Logger::Log(LogLevel::Info, oss.str());
 }
 
 std::vector<std::tuple<float, std::array<float, 3>>> CylinderSampler::GenerateSamplingPoints(
