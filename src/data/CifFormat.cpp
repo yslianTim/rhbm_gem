@@ -565,6 +565,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
 void CifFormat::ConstructBondList(void)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
+    BuildPepetideBondEntry();
     auto model_number{ 1 };
     auto & atom_object_list{ m_data_block->GetAtomObjectMap().at(model_number) };
     std::vector<AtomObject *> atom_ptr_list;
@@ -865,5 +866,27 @@ void CifFormat::BuildDefaultComponentBondEntry(void)
             
             m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
         }
+    }
+}
+
+void CifFormat::BuildPepetideBondEntry(void)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::BuildPepetideBondEntry() called");
+    for (auto & residue : ChemicalDataHelper::GetStandardResidueList())
+    {
+        auto comp_id{ ChemicalDataHelper::GetLabel(residue) };
+        auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
+        auto bond_id{ ChemicalDataHelper::GetLabel(Link::C_N) };
+        m_data_block->GetBondKeySystemPtr()->RegisterBond(bond_id);
+        auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(bond_id) };
+
+        ComponentBondEntry bond_entry;
+        bond_entry.bond_id = bond_id;
+        bond_entry.bond_type = BondType::COVALENT;
+        bond_entry.bond_order = BondOrder::SINGLE;
+        bond_entry.aromatic_atom_flag = false;
+        bond_entry.stereo_config = StereoChemistry::NONE;
+        
+        m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
     }
 }

@@ -70,5 +70,6 @@ private:
         const std::string & element_symbol
     );
     void BuildDefaultComponentBondEntry(void);
+    void BuildPepetideBondEntry(void);
 
 };
