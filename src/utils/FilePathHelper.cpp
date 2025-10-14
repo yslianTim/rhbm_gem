@@ -2,15 +2,26 @@
 #include "Logger.hpp"
 
 #include <algorithm>
+#include <cctype>
 
 std::string FilePathHelper::GetExtension(const std::filesystem::path & path)
 {
     const std::string filename{ path.filename().string() };
+    std::string extension;
     if (!filename.empty() && filename.front() == '.' && filename.find('.', 1) == std::string::npos)
     {
-        return filename;
+        extension = filename;
     }
-    return (path.has_extension()) ? path.extension().string() : std::string("");
+    else if (path.has_extension())
+    {
+        extension = path.extension().string();
+    }
+
+    std::transform(
+        extension.begin(), extension.end(), extension.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); }
+    );
+    return extension;
 }
 
 std::string FilePathHelper::GetDirectory(const std::filesystem::path & path)
@@ -29,17 +40,32 @@ std::string FilePathHelper::GetDirectory(const std::filesystem::path & path)
 std::string FilePathHelper::GetFileName(
     const std::filesystem::path & path, bool include_extension)
 {
-    std::string normalized{ path.string() };
-    std::replace(normalized.begin(), normalized.end(), '\\', '/');
-    if (include_extension == false)
+    std::filesystem::path normalized{ path };
+    std::string native{ normalized.string() };
+    if (native.find('\\') != std::string::npos)
     {
-        auto pos{ normalized.find_last_of('.') };
-        if (pos != std::string::npos)
-        {
-            normalized.erase(pos);
-        }
+        std::replace(native.begin(), native.end(), '\\', '/');
+        normalized = std::filesystem::path{ native };
     }
-    return std::filesystem::path{ normalized }.filename().string();
+
+    const std::filesystem::path filename{ normalized.filename() };
+    if (include_extension)
+    {
+        return filename.string();
+    }
+
+    if (filename.empty())
+    {
+        return filename.string();
+    }
+
+    const std::filesystem::path stem{ filename.stem() };
+    if (stem.empty())
+    {
+        return filename.string();
+    }
+
+    return stem.string();
 }
 
 std::string FilePathHelper::EnsureTrailingSlash(const std::filesystem::path & path)

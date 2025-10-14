@@ -10,6 +10,12 @@ TEST(FilePathHelperTest, PathWithExtensionReturnsExtension)
     EXPECT_EQ(".txt", FilePathHelper::GetExtension(path));
 }
 
+TEST(FilePathHelperTest, UppercaseExtensionIsNormalizedToLowercase)
+{
+    std::filesystem::path path{ "MODEL.MRC" };
+    EXPECT_EQ(".mrc", FilePathHelper::GetExtension(path));
+}
+
 TEST(FilePathHelperTest, PathWithoutExtensionReturnsEmptyString)
 {
     std::filesystem::path path{ "file" };
@@ -96,6 +102,22 @@ TEST(FilePathHelperTest, PathEndingWithSeparatorReturnsEmptyString)
 {
     std::filesystem::path path{"/foo/bar/"};
     EXPECT_TRUE(FilePathHelper::GetFileName(path).empty());
+}
+
+TEST(FilePathHelperTest, FileWithoutExtensionInDottedDirectoryReturnsFileName)
+{
+    const std::filesystem::path path{
+        std::filesystem::path("dir.with.dots") / "file"
+    };
+    EXPECT_EQ("file", FilePathHelper::GetFileName(path, false));
+}
+
+TEST(FilePathHelperTest, RemoveExtensionIgnoresDotsInParentDirectories)
+{
+    const std::filesystem::path path{
+        std::filesystem::path("dir.with.dots") / "archive.tar.gz"
+    };
+    EXPECT_EQ("archive.tar", FilePathHelper::GetFileName(path, false));
 }
 
 TEST(FilePathHelperTest, RootPathReturnsSlash)
