@@ -443,7 +443,7 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
             bond_object->SetBondKey(bond_key);
             bond_object->SetBondType(bond_entry.bond_type);
             bond_object->SetBondOrder(bond_entry.bond_order);
-            bond_object->SetSpecialBondFlag(true);
+            bond_object->SetSpecialBondFlag(atom_1->GetSpecialAtomFlag());
             m_data_block->AddBondObject(std::move(bond_object));
         }
     );

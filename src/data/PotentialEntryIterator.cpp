@@ -728,8 +728,14 @@ PotentialEntryIterator::CreateBondGausEstimateToSequenceIDGraphMap(
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
-        graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, entry->GetGausEstimateMDPDE(par_id));
+        auto y_value{ entry->GetGausEstimateMDPDE(par_id) };
+        graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, y_value);
         count_map[chain_id]++;
+    }
+
+    for (auto & [chain, graph] : graph_map)
+    {
+        graph->Sort(); // sort points along x axis
     }
     return graph_map;
 }
