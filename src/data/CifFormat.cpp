@@ -569,6 +569,7 @@ void CifFormat::ConstructBondList(void)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
     BuildPepetideBondEntry();
+    BuildPhosphodiesterBondEntry();
     auto model_number{ 1 };
     auto & atom_object_list{ m_data_block->GetAtomObjectMap().at(model_number) };
     std::vector<AtomObject *> atom_ptr_list;
@@ -901,7 +902,7 @@ void CifFormat::BuildPhosphodiesterBondEntry(void)
     {
         auto comp_id{ ChemicalDataHelper::GetLabel(residue) };
         auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
-        auto bond_id{ ChemicalDataHelper::GetLabel(Link::UNK) };
+        auto bond_id{ ChemicalDataHelper::GetLabel(Link::P_O3p) };
         m_data_block->GetBondKeySystemPtr()->RegisterBond(bond_id);
         auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(bond_id) };
 

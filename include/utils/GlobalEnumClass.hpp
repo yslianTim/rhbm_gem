@@ -112,6 +112,7 @@ enum class Link : uint16_t
     N7_C5,
     N9_C4, N9_C8,
 
+    P_O3p, // phosphodiester bond
     
     // Amino Acid components bond
     N_CA, N_CD, N_H, N_H2,
