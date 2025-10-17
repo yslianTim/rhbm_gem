@@ -415,6 +415,9 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
             auto ptnr2_atom_id{ token_list[index_map.at("ptnr2_label_atom_id")] };
             auto value_order_str{ token_list[index_map.at("pdbx_value_order")] };
 
+            StringHelper::EraseCharFromString(ptnr1_atom_id, '\"');
+            StringHelper::EraseCharFromString(ptnr2_atom_id, '\"');
+
             m_data_block->GetBondKeySystemPtr()->RegisterBond(ptnr1_atom_id, ptnr2_atom_id);
             auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(ptnr1_comp_id) };
             auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(ptnr1_atom_id, ptnr2_atom_id) };

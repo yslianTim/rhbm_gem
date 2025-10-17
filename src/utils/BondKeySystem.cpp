@@ -41,7 +41,6 @@ void BondKeySystem::RegisterBond(
     Logger::Log(LogLevel::Debug, "BondKeySystem::RegisterBond() called");
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(bond_id) != m_id_to_key_map.end()) return;
-    if (m_veto_bond_id_set.find(bond_id) != m_veto_bond_id_set.end()) return; // veto reverse vector
     if (m_next_dynamic_key >= k_max_key)
     {
         Logger::Log(LogLevel::Warning,
@@ -89,7 +88,7 @@ BondKey BondKeySystem::GetBondKey(
         if (unknown_bond_id_count_map.find(bond_id) == unknown_bond_id_count_map.end())
         {
             Logger::Log(LogLevel::Warning,
-                "BondKeySystem::GetBondKey() - Unknown bond id: " + bond_id);
+                "BondKeySystem::GetBondKey() - Unknown bond id: [" + bond_id + "]");
             unknown_bond_id_count_map[bond_id] = 1;
         }
         else
@@ -115,7 +114,7 @@ std::string BondKeySystem::GetBondId(BondKey bond_key)
     if (m_key_to_id_map.find(bond_key) == m_key_to_id_map.end())
     {
         Logger::Log(LogLevel::Warning, 
-            "BondKeySystem::GetBondId() - Unknown atom key: "+ std::to_string(bond_key));
+            "BondKeySystem::GetBondId() - Unknown bond key: "+ std::to_string(bond_key));
         return "UNK";
     }
     return m_key_to_id_map.at(bond_key);

@@ -10,43 +10,65 @@
 const std::vector<short> AtomClassifier::m_main_chain_member_color_list
 {   // [Color defined in ROOT style]
     // kRed+1, kViolet+1, kGreen+2, kAzure+2 
-    633,       881,      418,      862
+    633, 881, 418, 862,
+    111, 862, 862,
+    862, 633, 881,
+    862, 881, 862,
+    881, 862, 881
 };
 
 const std::vector<short> AtomClassifier::m_main_chain_member_solid_marker_list
 {   // [Marker defined in ROOT style]
-    21, 20, 22, 23
+    21, 20, 22, 23,
+    33, 23, 23,
+    23, 21, 20,
+    23, 20, 23,
+    20, 23, 20
 };
 
 const std::vector<short> AtomClassifier::m_main_chain_member_open_marker_list
 {   // [Marker defined in ROOT style]
-    25, 24, 26, 32
+    25, 24, 26, 32,
+    27, 32, 32,
+    32, 25, 24,
+    32, 24, 32,
+    24, 32, 24
 };
 
 const std::vector<Element> AtomClassifier::m_main_chain_member_element_list
 {
-    Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN
+    Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
+    Element::PHOSPHORUS, Element::OXYGEN, Element::OXYGEN,
+    Element::OXYGEN, Element::CARBON, Element::CARBON,
+    Element::OXYGEN, Element::CARBON, Element::OXYGEN,
+    Element::CARBON, Element::OXYGEN, Element::CARBON
 };
 
 const std::vector<Spot> AtomClassifier::m_main_chain_member_spot_list
 {
-    Spot::CA, Spot::C, Spot::N, Spot::O
+    Spot::CA, Spot::C, Spot::N, Spot::O,
+    Spot::P, Spot::OP1, Spot::OP2,
+    Spot::O5p, Spot::C5p, Spot::C4p,
+    Spot::O4p, Spot::C3p, Spot::O3p,
+    Spot::C2p, Spot::O2p, Spot::C1p
 };
 
 const std::vector<std::string> AtomClassifier::m_main_chain_member_title_list
 {
-    "Alpha Carbon",
-    "Carbonyl Carbon",
-    "Peptide Nitrogen",
-    "Carbonyl Oxygen"
+    "Alpha Carbon", "Carbonyl Carbon", "Peptide Nitrogen", "Carbonyl Oxygen",
+    "Phosphorus", "Phosphate Oxygen 1", "Phosphate Oxygen 2",
+    "Sugar Oxygen 5'", "Sugar Carbon 5'", "Sugar Carbon 4'",
+    "Sugar Oxygen 4'", "Sugar Carbon 3'", "Sugar Oxygen 3'",
+    "Sugar Carbon 2'", "Sugar Oxygen 2'", "Sugar Carbon 1'"
 };
 
 const std::vector<std::string> AtomClassifier::m_main_chain_member_label_list
 {
-    "C_{#alpha}",
-    "C",
-    "N",
-    "O"
+    "C_{#alpha}", "C", "N", "O",
+    "P", "O1", "O2",
+    "O5'", "C5'", "C4'",
+    "O4'", "C3'", "O3'",
+    "C2'", "O2'", "C1'"
 };
 
 AtomClassifier::AtomClassifier(void)

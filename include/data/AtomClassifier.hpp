@@ -12,7 +12,7 @@
 class AtomObject;
 class AtomClassifier
 {
-    static const size_t m_main_chain_member_count{ 4 };
+    static const size_t m_main_chain_member_count{ 4 + 3 + 9 };
     static const std::vector<short> m_main_chain_member_color_list;
     static const std::vector<short> m_main_chain_member_solid_marker_list;
     static const std::vector<short> m_main_chain_member_open_marker_list;
