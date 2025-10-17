@@ -71,5 +71,6 @@ private:
     );
     void BuildDefaultComponentBondEntry(void);
     void BuildPepetideBondEntry(void);
+    void BuildPhosphodiesterBondEntry(void);
 
 };

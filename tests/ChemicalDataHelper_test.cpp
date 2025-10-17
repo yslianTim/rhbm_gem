@@ -25,8 +25,8 @@ protected:
 TEST_F(ChemicalDataHelperTest, BasicChecks)
 {
     EXPECT_EQ(3U, ChemicalDataHelper::GetGroupAtomClassCount());
-    EXPECT_EQ(ChemicalDataHelper::GetStandardResidueList().size(),
-              ChemicalDataHelper::GetStandardResidueCount());
+    EXPECT_EQ(ChemicalDataHelper::GetStandardAminoAcidList().size(),
+              ChemicalDataHelper::GetStandardAminoAcidCount());
     EXPECT_EQ(90U, ChemicalDataHelper::GetElementCount());
 }
 
@@ -93,7 +93,7 @@ TEST_F(ChemicalDataHelperTest, ExplicitClassKeyGetters)
 
 TEST_F(ChemicalDataHelperTest, StandardResidueList)
 {
-    const auto & residue_list{ ChemicalDataHelper::GetStandardResidueList() };
+    const auto & residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
     EXPECT_EQ(20u, residue_list.size());
     EXPECT_TRUE(std::find(residue_list.begin(), residue_list.end(), Residue::ALA) != residue_list.end());
 }
@@ -125,12 +125,12 @@ TEST_F(ChemicalDataHelperTest, IsStandardElement)
 
 TEST_F(ChemicalDataHelperTest, IsStandardResidue)
 {
-    for (auto residue : ChemicalDataHelper::GetStandardResidueList())
+    for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
-        EXPECT_TRUE(ChemicalDataHelper::IsStandardResidue(residue))
+        EXPECT_TRUE(ChemicalDataHelper::IsStandardAminoAcid(residue))
             << static_cast<int>(residue);
     }
-    EXPECT_FALSE(ChemicalDataHelper::IsStandardResidue(Residue::UNK));
+    EXPECT_FALSE(ChemicalDataHelper::IsStandardAminoAcid(Residue::UNK));
 }
 
 TEST_F(ChemicalDataHelperTest, MapsKnownStringsToEnums)

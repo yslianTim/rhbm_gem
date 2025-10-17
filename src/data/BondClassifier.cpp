@@ -174,7 +174,11 @@ std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList
     if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<GroupKey> group_key_list;
     group_key_list.reserve(ChemicalDataHelper::GetStandardResidueCount());
-    for (auto residue_id : ChemicalDataHelper::GetStandardResidueList())
+    for (auto residue_id : ChemicalDataHelper::GetStandardAminoAcidList())
+    {
+        group_key_list.emplace_back(GetMainChainComponentBondClassGroupKey(id, residue_id));
+    }
+    for (auto residue_id : ChemicalDataHelper::GetStandardNucleotideList())
     {
         group_key_list.emplace_back(GetMainChainComponentBondClassGroupKey(id, residue_id));
     }

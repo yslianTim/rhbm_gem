@@ -511,7 +511,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateAtomResidueCountHistogram(
         return nullptr;
     }
     auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
-    for (auto & residue : ChemicalDataHelper::GetStandardResidueList())
+    for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto count{ GetAtomResidueCount(class_key, residue, structure) };
         hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));
@@ -527,7 +527,7 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateBondResidueCountHistogram(
         return nullptr;
     }
     auto hist{ ROOTHelper::CreateHist1D("hist", "Residue Count", 20, -0.5, 19.5) };
-    for (auto & residue : ChemicalDataHelper::GetStandardResidueList())
+    for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto count{ GetBondResidueCount(class_key, residue) };
         hist->SetBinContent(static_cast<int>(residue), static_cast<double>(count));

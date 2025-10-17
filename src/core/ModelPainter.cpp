@@ -538,7 +538,7 @@ void ModelPainter::PaintAtomGroupGausSideChain(
     frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
-    size_t residue_size{ static_cast<size_t>(ChemicalDataHelper::GetStandardResidueCount()) };
+    size_t residue_size{ static_cast<size_t>(ChemicalDataHelper::GetStandardAminoAcidCount()) };
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_mix_graph_list(residue_size);
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_free_graph_list(residue_size);
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> amplitude_helix_graph_list(residue_size);
@@ -547,7 +547,7 @@ void ModelPainter::PaintAtomGroupGausSideChain(
     std::vector<std::vector<std::unique_ptr<TGraphErrors>>> width_helix_graph_list(residue_size);
     std::vector<std::unique_ptr<TPaveText>> info_text(residue_size);
     size_t residue_index{ 0 };
-    for (auto residue : ChemicalDataHelper::GetStandardResidueList())
+    for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto component_key{ static_cast<ComponentKey>(residue) };
         info_text[residue_index] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
@@ -734,12 +734,12 @@ void ModelPainter::PaintBondGroupGausSideChain(
     frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
-    size_t residue_size{ static_cast<size_t>(ChemicalDataHelper::GetStandardResidueCount()) };
+    size_t residue_size{ static_cast<size_t>(ChemicalDataHelper::GetStandardAminoAcidCount()) };
     std::vector<std::unique_ptr<TGraphErrors>> amplitude_graph_list(residue_size);
     std::vector<std::unique_ptr<TGraphErrors>> width_graph_list(residue_size);
     std::vector<std::unique_ptr<TPaveText>> info_text(residue_size);
     size_t residue_index{ 0 };
-    for (auto residue : ChemicalDataHelper::GetStandardResidueList())
+    for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto component_key{ static_cast<ComponentKey>(residue) };
         info_text[residue_index] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
@@ -1310,7 +1310,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
     {
         for (int j = 0; j < row_size; j++)
         {
-            for (auto residue : ChemicalDataHelper::GetStandardResidueList())
+            for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
             {
                 auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
                 if (entry_iter->IsAvailableAtomGroupKey(group_key, residue_class) == false) continue;
@@ -2189,9 +2189,9 @@ void ModelPainter::PrintGausResultGlobalPad(
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < ChemicalDataHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardAminoAcidCount(); i++)
     {
-        auto residue{ ChemicalDataHelper::GetStandardResidueList().at(i) };
+        auto residue{ ChemicalDataHelper::GetStandardAminoAcidList().at(i) };
         auto label{ ChemicalDataHelper::GetLabel(residue) };
         auto label_index{ static_cast<int>(i) + 2 };
         hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
@@ -2238,9 +2238,9 @@ void ModelPainter::PrintWidthPad(TPad * pad, TH2 * hist)
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < ChemicalDataHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardAminoAcidCount(); i++)
     {
-        auto residue{ ChemicalDataHelper::GetStandardResidueList().at(i) };
+        auto residue{ ChemicalDataHelper::GetStandardAminoAcidList().at(i) };
         auto label{ ChemicalDataHelper::GetLabel(residue) };
         auto label_index{ static_cast<int>(i) + 2 };
         hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());

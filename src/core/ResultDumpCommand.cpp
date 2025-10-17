@@ -342,7 +342,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
             return;
         }
         outfile << "Residue,Spot,Amplitude,Width\n";
-        for (auto & residue : ChemicalDataHelper::GetStandardResidueList())
+        for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
         {
             auto residue_name{ ChemicalDataHelper::GetLabel(residue) };
             auto component_key{ static_cast<ComponentKey>(residue) };

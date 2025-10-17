@@ -15,12 +15,18 @@ const std::vector<std::string> ChemicalDataHelper::m_group_bond_class_key_list
     "simple_bond_class", "component_bond_class"
 };
 
-const std::vector<Residue> ChemicalDataHelper::m_standard_residue_list
+const std::vector<Residue> ChemicalDataHelper::m_standard_amino_acid_list
 {
     Residue::ALA, Residue::ARG, Residue::ASN, Residue::ASP, Residue::CYS,
     Residue::GLN, Residue::GLU, Residue::GLY, Residue::HIS, Residue::ILE,
     Residue::LEU, Residue::LYS, Residue::MET, Residue::PHE, Residue::PRO,
     Residue::SER, Residue::THR, Residue::TRP, Residue::TYR, Residue::VAL
+};
+
+const std::vector<Residue> ChemicalDataHelper::m_standard_nucleotide_list
+{
+    Residue::A, Residue::C, Residue::G, Residue::U,
+    Residue::DA, Residue::DC, Residue::DG, Residue::DT
 };
 
 const std::vector<Element> ChemicalDataHelper::m_standard_element_list
@@ -478,7 +484,17 @@ size_t ChemicalDataHelper::GetGroupBondClassCount(void)
 
 size_t ChemicalDataHelper::GetStandardResidueCount(void)
 {
-    return m_standard_residue_list.size();
+    return m_standard_amino_acid_list.size() + m_standard_nucleotide_list.size();
+}
+
+size_t ChemicalDataHelper::GetStandardAminoAcidCount(void)
+{
+    return m_standard_amino_acid_list.size();
+}
+
+size_t ChemicalDataHelper::GetStandardNucleotideCount(void)
+{
+    return m_standard_nucleotide_list.size();
 }
 
 size_t ChemicalDataHelper::GetElementCount(void)
@@ -529,9 +545,14 @@ const std::string & ChemicalDataHelper::GetComponentBondClassKey(void)
     return m_group_bond_class_key_list.at(1);
 }
 
-const std::vector<Residue> & ChemicalDataHelper::GetStandardResidueList(void)
+const std::vector<Residue> & ChemicalDataHelper::GetStandardAminoAcidList(void)
 {
-    return m_standard_residue_list;
+    return m_standard_amino_acid_list;
+}
+
+const std::vector<Residue> & ChemicalDataHelper::GetStandardNucleotideList(void)
+{
+    return m_standard_nucleotide_list;
 }
 
 const std::vector<Element> & ChemicalDataHelper::GetStandardElementList(void)
@@ -572,8 +593,19 @@ bool ChemicalDataHelper::IsStandardElement(Element element)
 
 bool ChemicalDataHelper::IsStandardResidue(Residue residue)
 {
-    return std::find(m_standard_residue_list.begin(), m_standard_residue_list.end(), residue)
-            != m_standard_residue_list.end();
+    return IsStandardAminoAcid(residue) || IsStandardNucleotide(residue);
+}
+
+bool ChemicalDataHelper::IsStandardAminoAcid(Residue residue)
+{
+    return std::find(m_standard_amino_acid_list.begin(), m_standard_amino_acid_list.end(), residue)
+            != m_standard_amino_acid_list.end();
+}
+
+bool ChemicalDataHelper::IsStandardNucleotide(Residue residue)
+{
+    return std::find(m_standard_nucleotide_list.begin(), m_standard_nucleotide_list.end(), residue)
+            != m_standard_nucleotide_list.end();
 }
 
 Residue ChemicalDataHelper::GetResidueFromString(const std::string & name, bool verbose)

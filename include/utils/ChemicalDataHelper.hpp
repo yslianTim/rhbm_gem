@@ -13,7 +13,8 @@ class ChemicalDataHelper
 {
     static const std::vector<std::string> m_group_atom_class_key_list;
     static const std::vector<std::string> m_group_bond_class_key_list;
-    static const std::vector<Residue> m_standard_residue_list;
+    static const std::vector<Residue> m_standard_amino_acid_list;
+    static const std::vector<Residue> m_standard_nucleotide_list;
     static const std::vector<Element> m_standard_element_list;
 
     static const std::unordered_map<int, Element> m_atomic_number_to_element_map;
@@ -43,6 +44,8 @@ public:
     static size_t GetGroupAtomClassCount(void);
     static size_t GetGroupBondClassCount(void);
     static size_t GetStandardResidueCount(void);
+    static size_t GetStandardAminoAcidCount(void);
+    static size_t GetStandardNucleotideCount(void);
     static size_t GetElementCount(void);
     static const std::string & GetGroupAtomClassKey(size_t class_id);
     static const std::string & GetGroupBondClassKey(size_t class_id);
@@ -51,7 +54,8 @@ public:
     static const std::string & GetStructureAtomClassKey(void);
     static const std::string & GetSimpleBondClassKey(void);
     static const std::string & GetComponentBondClassKey(void);
-    static const std::vector<Residue> & GetStandardResidueList(void);
+    static const std::vector<Residue> & GetStandardAminoAcidList(void);
+    static const std::vector<Residue> & GetStandardNucleotideList(void);
     static const std::vector<Element> & GetStandardElementList(void);
     static const std::unordered_map<std::string_view, Residue> & GetResidueMap(void);
     static const std::unordered_map<std::string_view, Element> & GetElementMap(void);
@@ -60,6 +64,8 @@ public:
     static const std::unordered_map<Element, std::string> & GetElementLabelMap(void);
     static bool IsStandardElement(Element element);
     static bool IsStandardResidue(Residue residue);
+    static bool IsStandardAminoAcid(Residue residue);
+    static bool IsStandardNucleotide(Residue residue);
 
     static Residue GetResidueFromString(const std::string & name, bool verbose=true);
     static Element GetElementFromString(const std::string & name);

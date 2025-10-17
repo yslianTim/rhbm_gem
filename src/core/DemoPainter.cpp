@@ -771,7 +771,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     std::vector<double> y_array;
     for (size_t i = 0; i < pad_size - 1; i++)
     {
-        for (auto residue : ChemicalDataHelper::GetStandardResidueList())
+        for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
         {
             auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
             if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
@@ -959,7 +959,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
         for (size_t j = 0; j < row_size; j++)
         {
             auto element_id{ primary_element_size - j - 1 };
-            for (auto residue : ChemicalDataHelper::GetStandardResidueList())
+            for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
             {
                 auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(element_id, residue) };
                 if (entry_iter->IsAvailableAtomGroupKey(group_key, residue_class) == false) continue;
@@ -1375,9 +1375,9 @@ void DemoPainter::PrintGausResultGlobalPad(
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < ChemicalDataHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardAminoAcidCount(); i++)
     {
-        auto residue{ ChemicalDataHelper::GetStandardResidueList().at(i) };
+        auto residue{ ChemicalDataHelper::GetStandardAminoAcidList().at(i) };
         auto label{ ChemicalDataHelper::GetLabel(residue) };
         auto label_index{ static_cast<int>(i) + 2 };
         hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
@@ -1410,9 +1410,9 @@ void DemoPainter::PrintGausResultPad(
     hist->GetXaxis()->SetLimits(-1.0, 20.0);
     hist->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     hist->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < ChemicalDataHelper::GetStandardResidueCount(); i++)
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardAminoAcidCount(); i++)
     {
-        auto residue{ ChemicalDataHelper::GetStandardResidueList().at(i) };
+        auto residue{ ChemicalDataHelper::GetStandardAminoAcidList().at(i) };
         auto label{ ChemicalDataHelper::GetLabel(residue) };
         auto label_index{ static_cast<int>(i) + 2 };
         hist->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
