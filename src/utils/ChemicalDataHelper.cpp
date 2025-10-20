@@ -76,7 +76,7 @@ const std::unordered_map<std::string_view, Residue> ChemicalDataHelper::m_residu
     {"MET", Residue::MET}, {"PHE", Residue::PHE}, {"PRO", Residue::PRO}, {"SER", Residue::SER},
     {"THR", Residue::THR}, {"TRP", Residue::TRP}, {"TYR", Residue::TYR}, {"VAL", Residue::VAL},
     {"A",   Residue::A},   {"C",   Residue::C},   {"G",   Residue::G},   {"U",   Residue::U},
-    {"DA",  Residue::DA},  {"DC",  Residue::DC},  {"DG",  Residue::DG},  {"DT",  Residue::DT},
+    {"DA",  Residue::DA},  {"DC",  Residue::DC},  {"DG",  Residue::DG},  {"DT",  Residue::DT}
 };
 
 const std::unordered_map<std::string_view, Element> ChemicalDataHelper::m_element_map

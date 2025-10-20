@@ -89,6 +89,7 @@ public:
     ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key) const;
     const ComponentBondEntry * GetComponentBondEntryPtr(ComponentKey comp_key, BondKey bond_key) const;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
+    bool HasChemicalComponentEntry(ComponentKey comp_key) const;
     bool HasComponentBondEntry(ComponentKey comp_key, BondKey bond_key) const;
     AtomObject * GetAtomObjectPtrInTuple(
         int model_number,

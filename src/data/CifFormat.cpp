@@ -880,6 +880,7 @@ void CifFormat::BuildPepetideBondEntry(void)
     {
         auto comp_id{ ChemicalDataHelper::GetLabel(residue) };
         auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
+        if (m_data_block->HasChemicalComponentEntry(component_key) == false) continue;
         auto bond_id{ ChemicalDataHelper::GetLabel(Link::C_N) };
         m_data_block->GetBondKeySystemPtr()->RegisterBond(bond_id);
         auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(bond_id) };
@@ -902,6 +903,7 @@ void CifFormat::BuildPhosphodiesterBondEntry(void)
     {
         auto comp_id{ ChemicalDataHelper::GetLabel(residue) };
         auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
+        if (m_data_block->HasChemicalComponentEntry(component_key) == false) continue;
         auto bond_id{ ChemicalDataHelper::GetLabel(Link::P_O3p) };
         m_data_block->GetBondKeySystemPtr()->RegisterBond(bond_id);
         auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(bond_id) };

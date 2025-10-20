@@ -93,10 +93,12 @@ void AtomicModelDataBlock::AddComponentAtomEntry(
     AtomKey atom_key,
     const ComponentAtomEntry & atom_entry)
 {
-    if (m_chemical_component_entry_map.find(comp_key) == m_chemical_component_entry_map.end())
+    Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::AddComponentAtomEntry() called");
+    if (HasChemicalComponentEntry(comp_key) == false)
     {
         Logger::Log(LogLevel::Warning,
-            "Chemical component key " + std::to_string(comp_key) + " not found in chemical component map.");
+            "Chemical component key " + std::to_string(comp_key) +
+            " not found in chemical component map.");
         return;
     }
     m_chemical_component_entry_map.at(comp_key)->AddComponentAtomEntry(atom_key, atom_entry);
@@ -107,10 +109,12 @@ void AtomicModelDataBlock::AddComponentBondEntry(
     BondKey bond_key,
     const ComponentBondEntry & bond_entry)
 {
-    if (m_chemical_component_entry_map.find(comp_key) == m_chemical_component_entry_map.end())
+    Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::AddComponentBondEntry() called");
+    if (HasChemicalComponentEntry(comp_key) == false)
     {
         Logger::Log(LogLevel::Warning,
-            "Chemical component key " + std::to_string(comp_key) + " not found in chemical component map.");
+            "Chemical component key " + std::to_string(comp_key) +
+            " not found in chemical component map.");
         return;
     }
     m_chemical_component_entry_map.at(comp_key)->AddComponentBondEntry(bond_key, bond_entry);
@@ -185,9 +189,11 @@ double AtomicModelDataBlock::GetResolution(void) const
     }
     catch (const std::exception & e)
     {
-        Logger::Log(LogLevel::Error, "AtomicModelDataBlock::GetResolution()" + std::string(e.what()));
-        Logger::Log(LogLevel::Error, "Invalid resolution value: " + m_resolution
-                    + ". Setting resolution to -1.0");
+        Logger::Log(LogLevel::Error,
+            "AtomicModelDataBlock::GetResolution()" + std::string(e.what()));
+        Logger::Log(LogLevel::Error,
+            "Invalid resolution value: " + m_resolution
+            + ". Setting resolution to -1.0");
         resolution_value = -1.0;
     }
     return resolution_value;
@@ -248,7 +254,8 @@ AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInTuple(
     if (m_atom_object_in_tuple_map.find(model_number) == m_atom_object_in_tuple_map.end())
     {
         Logger::Log(LogLevel::Warning,
-            "Model number " + std::to_string(model_number) + " not found in atom object map.");
+            "Model number " + std::to_string(model_number) +
+            " not found in atom object map.");
         return nullptr;
     }
     auto atom_tuple_key{ std::make_tuple(chain_id, comp_id, seq_id, atom_id) };
@@ -268,10 +275,11 @@ AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInTuple(
 
 ChemicalComponentEntry * AtomicModelDataBlock::GetChemicalComponentEntryPtr(ComponentKey key) const
 {
-    if (m_chemical_component_entry_map.find(key) == m_chemical_component_entry_map.end())
+    if (HasChemicalComponentEntry(key) == false)
     {
         Logger::Log(LogLevel::Warning,
-            "Chemical component key " + std::to_string(key) + " not found in chemical component map.");
+            "Chemical component key " + std::to_string(key) +
+            " not found in chemical component map.");
         return nullptr;
     }
     return m_chemical_component_entry_map.at(key).get();
@@ -284,10 +292,8 @@ const ComponentBondEntry * AtomicModelDataBlock::GetComponentBondEntryPtr(
     if (comp_entry_ptr == nullptr || comp_entry_ptr->HasComponentBondEntry(bond_key) == false)
     {
         Logger::Log(LogLevel::Warning,
-            "Component bond entry (comp_key: "
-            + std::to_string(comp_key)
-            + ", bond_key: "
-            + std::to_string(bond_key)
+            "Component bond entry (comp_key: "+ std::to_string(comp_key)
+            + ", bond_key: "+ std::to_string(bond_key)
             + ") not found in chemical component map.");
         return nullptr;
     }
@@ -300,10 +306,15 @@ AtomicModelDataBlock::GetChemicalComponentEntryMap(void)
     return m_chemical_component_entry_map;
 }
 
+bool AtomicModelDataBlock::HasChemicalComponentEntry(ComponentKey comp_key) const
+{
+    return (m_chemical_component_entry_map.find(comp_key) != m_chemical_component_entry_map.end());
+}
+
 bool AtomicModelDataBlock::HasComponentBondEntry(
     ComponentKey comp_key, BondKey bond_key) const
 {
-    if (m_chemical_component_entry_map.find(comp_key) == m_chemical_component_entry_map.end())
+    if (HasChemicalComponentEntry(comp_key) == false)
     {
         return false;
     }
