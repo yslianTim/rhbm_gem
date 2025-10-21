@@ -205,7 +205,7 @@ const std::unordered_map<std::string_view, Link> ChemicalDataHelper::m_link_map
     {"N6_H62",    Link::N6_H62},   {"N7_C5",     Link::N7_C5},    {"N9_C4",     Link::N9_C4},
     {"N9_C8",     Link::N9_C8},
 
-    {"P_O3p",    Link::P_O3p},
+    {"P_O3'",    Link::P_O3p},
 
     {"N_CA", Link::N_CA}, {"N_CD", Link::N_CD}, {"N_H", Link::N_H},
     {"N_H2", Link::N_H2},
@@ -366,7 +366,7 @@ const std::unordered_map<Link, std::string> ChemicalDataHelper::m_link_label_map
     {Link::N6_H62, "N6_H62"},     {Link::N7_C5, "N7_C5"},       {Link::N9_C4, "N9_C4"},
     {Link::N9_C8, "N9_C8"},
 
-    {Link::P_O3p, "P_O3p"},
+    {Link::P_O3p, "P_O3'"},
 
     {Link::N_CA, "N_CA"},         {Link::N_CD, "N_CD"},         {Link::N_H, "N_H"},
     {Link::N_H2, "N_H2"},

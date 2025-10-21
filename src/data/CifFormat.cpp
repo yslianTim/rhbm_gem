@@ -422,10 +422,12 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
             auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(ptnr1_comp_id) };
             auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(ptnr1_atom_id, ptnr2_atom_id) };
             auto bond_id{ m_data_block->GetBondKeySystemPtr()->GetBondId(bond_key) };
+            auto bond_type{ ChemicalDataHelper::GetBondTypeFromString(conn_type_id) };
+            if (bond_type == BondType::HYDROGEN) return; // Skip hydrogen bond
 
             ComponentBondEntry bond_entry;
             bond_entry.bond_id = bond_id;
-            bond_entry.bond_type = ChemicalDataHelper::GetBondTypeFromString(conn_type_id);
+            bond_entry.bond_type = bond_type;
             bond_entry.bond_order = (value_order_str == "?") ? BondOrder::UNK : ChemicalDataHelper::GetBondOrderFromString(value_order_str);
             bond_entry.aromatic_atom_flag = false;
             bond_entry.stereo_config = StereoChemistry::NONE;
@@ -609,12 +611,23 @@ void CifFormat::ConstructBondList(void)
 
             // Peptide bond C-N between consecutive residues in the same chain
             bool is_peptide_bond{
+                !is_in_same_component &&
                 is_in_same_chain &&
                 is_in_consecutive_sequence &&
                 (bond_key == static_cast<BondKey>(Link::C_N))
             };
-            
-            if (is_in_same_component == false && is_peptide_bond == false) continue;
+
+            // Phosphodiester bond P-O3' between consecutive residues in the same chain
+            bool is_phosphodiester_bond{
+                !is_in_same_component &&
+                is_in_same_chain &&
+                is_in_consecutive_sequence &&
+                (bond_key == static_cast<BondKey>(Link::P_O3p))
+            };
+
+            if (is_in_same_component == false &&
+                is_peptide_bond == false &&
+                is_phosphodiester_bond == false) continue;
 
             auto bond_entry{
                 m_data_block->GetComponentBondEntryPtr(component_key_1, bond_key)
