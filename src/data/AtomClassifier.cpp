@@ -99,11 +99,12 @@ size_t AtomClassifier::GetMainChainMemberCount(void)
     return m_main_chain_member_count;
 }
 
-bool AtomClassifier::IsValidMainChainMemberID(size_t id)
+bool AtomClassifier::IsValidMainChainMemberID(size_t member_id)
 {
-    if (id >= m_main_chain_member_count)
+    if (member_id >= m_main_chain_member_count)
     {
-        Logger::Log(LogLevel::Error, "Invalid main chain member ID: " + std::to_string(id));
+        Logger::Log(LogLevel::Error,
+            "Invalid main chain member ID: " + std::to_string(member_id));
         return false;
     }
     return true;
@@ -135,6 +136,13 @@ Element AtomClassifier::GetMainChainElement(size_t id)
 
 Spot AtomClassifier::GetMainChainSpot(size_t id)
 {
+    if (IsValidMainChainMemberID(id) == false) return Spot::UNK;
+    return m_main_chain_member_spot_list.at(id);
+}
+
+Spot AtomClassifier::GetNucleotideMainChainSpot(size_t id)
+{
+    id += m_nucleotide_main_chain_member_start_id;
     if (IsValidMainChainMemberID(id) == false) return Spot::UNK;
     return m_main_chain_member_spot_list.at(id);
 }
@@ -256,6 +264,29 @@ std::vector<GroupKey> AtomClassifier::GetMainChainStructureAtomClassGroupKeyList
     for (auto residue_id : ChemicalDataHelper::GetStandardNucleotideList())
     {
         group_key_list.emplace_back(GetMainChainStructureAtomClassGroupKey(id, structure, residue_id));
+    }
+    return group_key_list;
+}
+
+GroupKey AtomClassifier::GetNucleotideMainChainComponentAtomClassGroupKey(
+    size_t member_id, Residue residue) const
+{
+    member_id += m_nucleotide_main_chain_member_start_id;
+    if (IsValidMainChainMemberID(member_id) == false) return 0;
+    auto atom_key{ static_cast<AtomKey>(m_main_chain_member_spot_list.at(member_id)) };
+    auto component_key{ static_cast<ComponentKey>(residue) };
+    return KeyPackerComponentAtomClass::Pack(component_key, atom_key);
+}
+
+std::vector<GroupKey> AtomClassifier::GetNucleotideMainChainComponentAtomClassGroupKeyList(
+    Residue component_id) const
+{
+    std::vector<GroupKey> group_key_list;
+    group_key_list.reserve(m_nucleotide_main_chain_member_count);
+    for (size_t i = 0; i < m_nucleotide_main_chain_member_count; i++)
+    {
+        group_key_list.emplace_back(
+            GetNucleotideMainChainComponentAtomClassGroupKey(i, component_id));
     }
     return group_key_list;
 }

@@ -65,6 +65,7 @@ public:
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateBondGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
+    std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToSpotGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, bool reverse=false);

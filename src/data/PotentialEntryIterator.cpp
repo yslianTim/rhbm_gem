@@ -786,6 +786,30 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateBondGausEstimateToRe
     return graph;
 }
 
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateToSpotGraph(
+    std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    
+    auto count{ 0 };
+    for (size_t i = 0; i < group_key_list.size(); i++)
+    {
+        auto & group_key{ group_key_list[i] };
+        if (IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
+        auto x_value{ static_cast<double>(i) };
+        auto y_value{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, par_id) };
+        auto y_error{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
+        graph->SetPoint(count, x_value, y_value);
+        graph->SetPointError(count, 0.0, y_error);
+        count++;
+    }
+    return graph;
+}
+
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateScatterGraph(
     std::vector<GroupKey> & group_key_list, const std::string & class_key,
     int par1_id, int par2_id)

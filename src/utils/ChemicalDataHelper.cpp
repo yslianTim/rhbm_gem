@@ -337,6 +337,61 @@ const std::unordered_map<Element, std::string> ChemicalDataHelper::m_element_lab
     {Element::UNK,       "UNK"}
 };
 
+const std::unordered_map<Spot, std::string> ChemicalDataHelper::m_spot_label_map
+{
+    {Spot::P,    "P"   }, {Spot::OP1,  "OP1" }, {Spot::OP2,  "OP2" }, {Spot::OP3,  "OP3" },
+    {Spot::HOP2, "HOP2"}, {Spot::HOP3, "HOP3"},
+    {Spot::C1p,  "C1'" }, {Spot::C2p,  "C2'" }, {Spot::C3p,  "C3'" }, {Spot::C4p,  "C4'" },
+    {Spot::C5p,  "C5'" },
+    {Spot::O2p,  "O2'" }, {Spot::O3p,  "O3'" }, {Spot::O4p,  "O4'" }, {Spot::O5p,  "O5'" },
+    {Spot::H1p,  "H1'" }, {Spot::H2p,  "H2'" }, {Spot::H3p,  "H3'" }, {Spot::H4p,  "H4'" },
+    {Spot::H5p,  "H5'" }, {Spot::H5pp, "H5''"},
+    {Spot::HO2p, "HO2'"}, {Spot::HO3p, "HO3'"},
+    {Spot::C2,   "C2"  }, {Spot::C4,   "C4"  }, {Spot::C5,   "C5"  }, {Spot::C6,   "C6"  },
+    {Spot::C8,   "C8"  },
+    {Spot::N1,   "N1"  }, {Spot::N2,   "N2"  }, {Spot::N3,   "N3"  }, {Spot::N4,   "N4"  },
+    {Spot::N6,   "N6"  }, {Spot::N7,   "N7"  }, {Spot::N9,   "N9"  },
+    {Spot::O2,   "O2"  }, {Spot::O4,   "O4"  }, {Spot::O6,   "O6"  },
+    {Spot::H1,   "H1"  }, {Spot::H21,  "H21" }, {Spot::H22,  "H22" }, {Spot::H3,   "H3"  },
+    {Spot::H41,  "H41" }, {Spot::H42,  "H42" }, {Spot::H5,   "H5"  }, {Spot::H6,   "H6"  },
+    {Spot::H61,  "H61" }, {Spot::H62,  "H62" }, {Spot::H8,   "H8"  },
+    {Spot::H71,  "H71" }, {Spot::H72,  "H72" }, {Spot::H73,  "H73" },
+    {Spot::H,    "H"   }, {Spot::H2,   "H2"  },
+    {Spot::HA,   "HA"  }, {Spot::HA2,  "HA2" }, {Spot::HA3,  "HA3" },
+    {Spot::HB,   "HB"  }, {Spot::HB1,  "HB1" }, {Spot::HB2,  "HB2" }, {Spot::HB3,  "HB3" },
+    {Spot::HG,   "HG"  }, {Spot::HG2,  "HG2" }, {Spot::HG21, "HG21"}, {Spot::HG22, "HG22"},
+    {Spot::HG23, "HG23"}, {Spot::HG3,  "HG3" },
+    {Spot::HD1,  "HD1" }, {Spot::HD11, "HD11"}, {Spot::HD12, "HD12"}, {Spot::HD13, "HD13"},
+    {Spot::HD2,  "HD2" }, {Spot::HD21, "HD21"}, {Spot::HD22, "HD22"}, {Spot::HD23, "HD23"},
+    {Spot::HD3,  "HD3" },
+    {Spot::HE,   "HE"  }, {Spot::HE1,  "HE1" },
+    {Spot::HE2,  "HE2" }, {Spot::HE21, "HE21"}, {Spot::HE22, "HE22"},
+    {Spot::HE3,  "HE3" },
+    {Spot::HZ,   "HZ"  }, {Spot::HZ1,  "HZ1" }, {Spot::HZ2,  "HZ2" }, {Spot::HZ3,  "HZ3" },
+    {Spot::HH2,  "HH2" }, {Spot::HH21, "HH21"}, {Spot::HH22, "HH22"},
+    {Spot::HH,   "HH"  }, {Spot::HH11, "HH11"}, {Spot::HH12, "HH12"},
+    {Spot::HH2,  "HH2" }, {Spot::HH21, "HH21"}, {Spot::HH22, "HH22"},
+    {Spot::HXT,  "HXT" },
+    {Spot::C,    "C"   },
+    {Spot::CA,   "CA"  }, {Spot::CB,   "CB"  },
+    {Spot::CG,   "CG"  }, {Spot::CG1,  "CG1" }, {Spot::CG2,  "CG2" },
+    {Spot::CD,   "CD"  }, {Spot::CD1,  "CD1" }, {Spot::CD2,  "CD2" },
+    {Spot::CE,   "CE"  }, {Spot::CE1,  "CE1" }, {Spot::CE2,  "CE2" }, {Spot::CE3, "CE3" },
+    {Spot::CZ,   "CZ"  }, {Spot::CZ2,  "CZ2" }, {Spot::CZ3,  "CZ3" },
+    {Spot::CH2,  "CH2" },
+    {Spot::N,    "N"   },
+    {Spot::ND1,  "ND1" }, {Spot::ND2,  "ND2" },
+    {Spot::NE,   "NE"  }, {Spot::NE1,  "NE1" }, {Spot::NE2,  "NE2" },
+    {Spot::NZ,   "NZ"  }, {Spot::NH1,  "NH1" }, {Spot::NH2,  "NH2" },
+    {Spot::O,    "O"   }, {Spot::OG,   "OG"  }, {Spot::OG1,  "OG1" },
+    {Spot::OD1,  "OD1" }, {Spot::OD2,  "OD2" },
+    {Spot::OE1,  "OE1" }, {Spot::OE2,  "OE2" },
+    {Spot::OH,   "OH"  },
+    {Spot::OXT,  "OXT" },
+    {Spot::SG,   "SG"  }, {Spot::SD,   "SD"  },
+    {Spot::UNK,  "UNK" }
+};
+
 const std::unordered_map<Link, std::string> ChemicalDataHelper::m_link_label_map
 {
     {Link::OP2_HOP2, "OP2_HOP2"},
@@ -846,6 +901,19 @@ const std::string & ChemicalDataHelper::GetLabel(Element element)
         return unk_label;
     }
     return m_element_label_map.at(element);
+}
+
+const std::string & ChemicalDataHelper::GetLabel(Spot spot)
+{
+    static std::string unk_label{"?"};
+    if (m_spot_label_map.find(spot) == m_spot_label_map.end())
+    {
+        Logger::Log(LogLevel::Warning, 
+            "ChemicalDataHelper::GetLabel - Unknown Spot: "
+            + std::to_string(static_cast<int>(spot)));
+        return unk_label;
+    }
+    return m_spot_label_map.at(spot);
 }
 
 const std::string & ChemicalDataHelper::GetLabel(Link link)
