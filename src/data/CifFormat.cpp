@@ -551,14 +551,9 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
                 last_atom_object = atom_object.get();
                 m_data_block->AddAtomObject(model_number_id, std::move(atom_object));
             }
-            else
+
+            if (last_atom_object != nullptr && indicator != "." && indicator != "A")
             {
-                if (last_atom_object == nullptr)
-                {
-                    Logger::Log(LogLevel::Error,
-                        "CifFormat::LoadAtomSiteBlock() atom_object is missing.");
-                    return;
-                }
                 last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});
                 last_atom_object->AddAlternateOccupancy(indicator, occupancy);
                 last_atom_object->AddAlternateTemperature(indicator, temperature);

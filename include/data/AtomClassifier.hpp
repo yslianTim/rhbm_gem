@@ -33,6 +33,7 @@ public:
     static Spot GetMainChainSpot(size_t member_id);
     static Spot GetNucleotideMainChainSpot(size_t member_id);
     static short GetMainChainElementColor(size_t member_id);
+    static short GetNucleotideMainChainElementColor(size_t member_id);
     static short GetMainChainElementSolidMarker(size_t member_id);
     static short GetMainChainElementOpenMarker(size_t member_id);
     static const std::string & GetMainChainElementLabel(size_t member_id);

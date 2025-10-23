@@ -970,7 +970,7 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
     frame[1]->GetYaxis()->SetTitle("Amplitude");
     frame[1]->GetYaxis()->CenterTitle();
     frame[1]->Draw();
-    for (int i = 0; i < component_size; i++) amplitude_graph[i]->Draw("PL X0");
+    for (int i = 0; i < component_size; i++) amplitude_graph[i]->Draw("P X0");
 
     pad[0]->cd();
     ROOTHelper::SetPadMarginInCanvas(gPad, 0.07, 0.005, 0.11, 0.01);
@@ -997,7 +997,7 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
     frame[0]->GetYaxis()->SetTitle("Width");
     frame[0]->GetYaxis()->CenterTitle();
     frame[0]->Draw();
-    for (int i = 0; i < component_size; i++) width_graph[i]->Draw("PL X0");
+    for (int i = 0; i < component_size; i++) width_graph[i]->Draw("P X0");
 
     pad[3]->cd();
     PrintAmplitudeSummaryPad(pad[3].get(), frame[3].get());
