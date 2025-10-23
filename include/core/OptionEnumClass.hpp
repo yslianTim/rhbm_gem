@@ -4,10 +4,11 @@
 
 enum class PainterType : int
 {
-    ATOM       = 0,
+    GAUS       = 0,
     MODEL      = 1,
     COMPARISON = 2,
-    DEMO       = 3
+    DEMO       = 3,
+    ATOM       = 4
 };
 
 enum class PrinterType : int

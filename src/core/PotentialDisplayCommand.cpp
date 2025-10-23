@@ -4,6 +4,7 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 #include "PainterBase.hpp"
+#include "GausPainter.hpp"
 #include "AtomPainter.hpp"
 #include "ModelPainter.hpp"
 #include "ComparisonPainter.hpp"
@@ -38,10 +39,11 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
     Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RegisterCLIOptionsExtend() called");
     std::map<std::string, PainterType> painter_map
     {
-        {"0", PainterType::ATOM},       {"atom",       PainterType::ATOM},
+        {"0", PainterType::GAUS},       {"gaus",       PainterType::GAUS},
         {"1", PainterType::MODEL},      {"model",      PainterType::MODEL},
         {"2", PainterType::COMPARISON}, {"comparison", PainterType::COMPARISON},
-        {"3", PainterType::DEMO},       {"demo",       PainterType::DEMO}
+        {"3", PainterType::DEMO},       {"demo",       PainterType::DEMO},
+        {"4", PainterType::ATOM},       {"atom",       PainterType::ATOM},
     };
     cmd->add_option_function<PainterType>("-p,--painter",
         [&](PainterType value) { SetPainterChoice(value); },
@@ -258,17 +260,19 @@ void PotentialDisplayCommand::RunDisplay(void)
     std::unique_ptr<PainterBase> painter{ nullptr };
     switch (m_options.painter_choice)
     {
-        case PainterType::ATOM:
-            painter = std::make_unique<AtomPainter>();
+        case PainterType::GAUS:
+            painter = std::make_unique<GausPainter>();
             for (const auto & model_object : m_model_object_list)
             {
-                for (auto & atom : model_object->GetAtomList())
+                painter->AddDataObject(model_object.get());
+            }
+            for (auto & [class_key, model_object_list] : m_ref_model_object_list_map)
+            {
+                for (const auto & model_object : model_object_list)
                 {
-                    if (atom->GetSelectedFlag() == false) continue;
-                    painter->AddDataObject(atom.get());
+                    painter->AddReferenceDataObject(model_object.get(), class_key);
                 }
             }
-            m_atom_selector->Print();
             break;
         case PainterType::MODEL:
             painter = std::make_unique<ModelPainter>();
@@ -311,6 +315,18 @@ void PotentialDisplayCommand::RunDisplay(void)
                     painter->AddReferenceDataObject(model_object.get(), class_key);
                 }
             }
+            break;
+        case PainterType::ATOM:
+            painter = std::make_unique<AtomPainter>();
+            for (const auto & model_object : m_model_object_list)
+            {
+                for (auto & atom : model_object->GetAtomList())
+                {
+                    if (atom->GetSelectedFlag() == false) continue;
+                    painter->AddDataObject(atom.get());
+                }
+            }
+            m_atom_selector->Print();
             break;
         default:
             Logger::Log(LogLevel::Warning,
