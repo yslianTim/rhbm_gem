@@ -4,6 +4,8 @@
 #include <tuple>
 #include <vector>
 #include <memory>
+#include <map>
+#include <string>
 #include <unordered_map>
 
 #include "GlobalEnumClass.hpp"
@@ -66,6 +68,7 @@ public:
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToSpotGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
+    std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, bool reverse=false);

@@ -112,6 +112,7 @@ public:
     ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
     BondKeySystem * GetBondKeySystemPtr(void) { return m_bond_key_system.get(); }
+    std::vector<ComponentKey> GetComponentKeyList(void) const;
 
 private:
     void BuildSelectedAtomList(void);

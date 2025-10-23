@@ -38,7 +38,8 @@ private:
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
-    
+    void RemodelPad(TPad * pad, TH2 * frame, const std::vector<std::string> & label_list);
+    void RemodelElementPad(TPad * pad, TH2 * frame, const std::vector<std::string> & label_list);
     #endif
 
 };

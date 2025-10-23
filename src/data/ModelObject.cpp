@@ -353,3 +353,14 @@ void ModelObject::FilterBondFromSymmetry(bool is_asymmetry)
         if (in_candidate_chain == false) bond->SetSelectedFlag(false);
     }
 }
+
+std::vector<ComponentKey> ModelObject::GetComponentKeyList(void) const
+{
+    std::vector<ComponentKey> component_key_list;
+    component_key_list.reserve(m_chemical_component_entry_map.size());
+    for (const auto & [component_key, entry] : m_chemical_component_entry_map)
+    {
+        component_key_list.emplace_back(component_key);
+    }
+    return component_key_list;
+}
