@@ -133,20 +133,26 @@ void GausPainter::PaintAtomGroupGausSummary(
     frame[4] = ROOTHelper::CreateHist2D("hist_4","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[5] = ROOTHelper::CreateHist2D("hist_5","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
+    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     for (auto & [component_key, component_entry] : chemical_component_map)
     {
+        if (component_entry->GetComponentType() == "non-polymer") continue;
         const auto & component_atom_map{ component_entry->GetComponentAtomEntryMap() };
         auto component_id{ component_entry->GetComponentId() };
         std::map<Element, std::map<std::string, GroupKey>> group_key_list_map;
         std::vector<std::string> atom_id_list;
         atom_id_list.reserve(component_atom_map.size());
+        GroupKey group_key_tmp{ 0 };
         for (auto & [atom_key, atom_entry] : component_atom_map)
         {
-            group_key_list_map[atom_entry.element_type].emplace(
-                atom_entry.atom_id, AtomClassifier::GetGroupKeyInClass(component_key, atom_key)
-            );
+            if (atom_entry.element_type == Element::HYDROGEN) continue;
+            if (atom_entry.atom_id == "OXT") continue;
+            auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
+            group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, group_key);
+            if (group_key_tmp == 0) group_key_tmp = group_key;
             atom_id_list.emplace_back(atom_entry.atom_id);
         }
+        if (entry_iter->IsAvailableAtomGroupKey(group_key_tmp, class_key) == false) continue;
 
         std::map<Element, std::unique_ptr<TGraphErrors>> amplitude_graph_map;
         std::map<Element, std::unique_ptr<TGraphErrors>> width_graph_map;
@@ -157,7 +163,8 @@ void GausPainter::PaintAtomGroupGausSummary(
         std::vector<double> amplitude_array, width_array;
         amplitude_array.reserve(component_atom_map.size());
         width_array.reserve(component_atom_map.size());
-        auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+        
+        auto component_size{ entry_iter->GetAtomObjectList(group_key_tmp, class_key).size() };
         for (auto & [element, group_key_list] : group_key_list_map)
         {
             auto amplitude_graph{
@@ -258,55 +265,66 @@ void GausPainter::PaintAtomGroupGausSummary(
 
         pad[1]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.07, 0.005, 0.01, 0.01);
-        RemodelPad(pad[1].get(), frame[1].get(), atom_id_list);
+        RemodelFrameInPad(frame[1].get(), pad[1].get(), 0.0, 0.015);
+        RemodelAxisLabels(frame[1].get(), atom_id_list, 90.0, 12);
+        ROOTHelper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 0.0);
+        ROOTHelper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 35.0, 1.4f);
         ROOTHelper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 0.0f);
+        ROOTHelper::SetAxisLabelAttribute(frame[1]->GetYaxis(), 30.0, 0.01f);
         frame[1]->GetYaxis()->SetTitle("Amplitude");
-        frame[1]->GetYaxis()->CenterTitle();
         frame[1]->Draw();
         for (auto & [element, graph] : amplitude_graph_map) graph->Draw("P X0");
 
         pad[0]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.07, 0.005, 0.11, 0.01);
-        RemodelPad(pad[0].get(), frame[0].get(), atom_id_list);
+        RemodelFrameInPad(frame[0].get(), pad[0].get(), 0.0, 0.015);
+        RemodelAxisLabels(frame[0].get(), atom_id_list, 90.0, 12);
+        ROOTHelper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 0.0);
+        ROOTHelper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 35.0, 1.4f);
+        ROOTHelper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 32.0, 0.11f, 103, kCyan+3);
+        ROOTHelper::SetAxisLabelAttribute(frame[0]->GetYaxis(), 30.0, 0.01f);
         frame[0]->GetYaxis()->SetTitle("Width");
-        frame[0]->GetYaxis()->CenterTitle();
         frame[0]->Draw();
         for (auto & [element, graph] : width_graph_map) graph->Draw("P X0");
 
         pad[3]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.005, 0.005, 0.01, 0.01);
-        RemodelElementPad(pad[3].get(), frame[3].get(), element_label_list);
+        RemodelFrameInPad(frame[3].get(), pad[3].get(), 0.0, 0.015);
+        RemodelAxisLabels(frame[3].get(), element_label_list, 0.0, -1);
+        ROOTHelper::SetAxisTitleAttribute(frame[3]->GetXaxis(), 35.0f, 1.0f);
+        ROOTHelper::SetAxisTitleAttribute(frame[3]->GetYaxis(), 0.0f);
+        ROOTHelper::SetAxisLabelAttribute(frame[3]->GetXaxis(), 35.0f, 0.005f, 103);
+        ROOTHelper::SetAxisLabelAttribute(frame[3]->GetYaxis(), 0.0f);
+        frame[3]->GetXaxis()->SetTitle("Element");
         frame[3]->Draw();
         for (auto & [element, hist] : amplitude_hist_map) hist->Draw("CANDLE3 SAME");
 
         pad[2]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.005, 0.005, 0.11, 0.01);
-        RemodelElementPad(pad[2].get(), frame[2].get(), element_label_list);
+        RemodelFrameInPad(frame[2].get(), pad[2].get(), 0.0, 0.015);
+        RemodelAxisLabels(frame[2].get(), element_label_list, 0.0, -1);
+        ROOTHelper::SetAxisTitleAttribute(frame[2]->GetXaxis(), 35.0f, 1.0f);
+        ROOTHelper::SetAxisTitleAttribute(frame[2]->GetYaxis(), 0.0f);
+        ROOTHelper::SetAxisLabelAttribute(frame[2]->GetXaxis(), 35.0f, 0.005f, 103);
+        ROOTHelper::SetAxisLabelAttribute(frame[2]->GetYaxis(), 0.0f);
+        frame[2]->GetXaxis()->SetTitle("Element");
         frame[2]->Draw();
         for (auto & [element, hist] : width_hist_map) hist->Draw("CANDLE3 SAME");
 
         pad[4]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.005, 0.07, 0.11, 0.01);
-        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+        RemodelFrameInPad(frame[4].get(), pad[4].get(), 0.03, 0.015);
         ROOTHelper::SetAxisTitleAttribute(frame[4]->GetXaxis(), 35.0f, 1.0f);
         ROOTHelper::SetAxisTitleAttribute(frame[4]->GetYaxis(), 35.0f, 1.5f);
         ROOTHelper::SetAxisLabelAttribute(frame[4]->GetXaxis(), 35.0f);
         ROOTHelper::SetAxisLabelAttribute(frame[4]->GetYaxis(), 35.0f, 0.01f);
-        auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.03, 0) };
-        auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.015, 1) };
-        ROOTHelper::SetAxisTickAttribute(frame[4]->GetXaxis(), static_cast<float>(x_tick_length), 505);
-        ROOTHelper::SetAxisTickAttribute(frame[4]->GetYaxis(), static_cast<float>(y_tick_length), 505);
-        frame[4]->SetStats(0);
         frame[4]->GetXaxis()->SetTitle("Amplitude Estimate");
         frame[4]->GetYaxis()->SetTitle("Width Estimate");
-        frame[4]->GetXaxis()->CenterTitle();
-        frame[4]->GetYaxis()->CenterTitle();
         frame[4]->Draw("Y+");
         for (auto & [element, graph] : correlation_graph_map) graph->Draw("P X0");
 
         pad[5]->cd();
         auto info_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-        auto resolution_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
         ROOTHelper::SetPaveTextMarginInCanvas(gPad, info_text.get(), 0.005, 0.24, 0.01, 0.02);
         ROOTHelper::SetPaveTextDefaultStyle(info_text.get());
         ROOTHelper::SetPaveAttribute(info_text.get(), 0, 0.1);
@@ -316,6 +334,7 @@ void GausPainter::PaintAtomGroupGausSummary(
         info_text->AddText(("#font[102]{"+ model_object->GetEmdID() +"}").data());
         info_text->Draw();
 
+        auto resolution_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
         ROOTHelper::SetPaveTextMarginInCanvas(gPad, resolution_text.get(), 0.25, 0.07, 0.01, 0.02);
         ROOTHelper::SetPaveTextDefaultStyle(resolution_text.get());
         ROOTHelper::SetPaveAttribute(resolution_text.get(), 0, 0.1);
@@ -333,10 +352,25 @@ void GausPainter::PaintAtomGroupGausSummary(
         resolution_text->Draw();
 
         pad[6]->cd();
-        ROOTHelper::SetPadMarginInCanvas(gPad, 0.07, 0.005, 0.01, 0.02);
-        ROOTHelper::SetPadLayout(gPad, 1, 0, 0, 0, 0, 0);
-        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        
+        auto component_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, component_text.get(), 0.01, 0.33, 0.01, 0.02);
+        ROOTHelper::SetPaveTextDefaultStyle(component_text.get());
+        ROOTHelper::SetPaveAttribute(component_text.get(), 0, 0.1);
+        ROOTHelper::SetFillAttribute(component_text.get(), 1001, kAzure-7);
+        ROOTHelper::SetTextAttribute(component_text.get(), 75.0f, 103, 22, 0.0, kYellow-10);
+        component_text->AddText(component_entry->GetComponentId().data());
+        component_text->Draw();
+
+        auto component_info_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC", false) };
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, component_info_text.get(), 0.19, 0.01, 0.01, 0.02);
+        ROOTHelper::SetPaveTextDefaultStyle(component_info_text.get());
+        ROOTHelper::SetPaveAttribute(component_info_text.get(), 0);
+        ROOTHelper::SetFillAttribute(component_info_text.get(), 4000);
+        ROOTHelper::SetTextAttribute(component_info_text.get(), 30.0f, 133);
+        component_info_text->AddText(component_entry->GetComponentName().data());
+        component_info_text->AddText(("Formula: " + component_entry->GetComponentFormula()).data());
+        component_info_text->AddText(Form("Number of members: %zu", component_size));
+        component_info_text->Draw();
 
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     }
@@ -346,54 +380,32 @@ void GausPainter::PaintAtomGroupGausSummary(
 }
 
 #ifdef HAVE_ROOT
-void GausPainter::RemodelPad(TPad * pad, TH2 * frame, const std::vector<std::string> & label_list)
+void GausPainter::RemodelFrameInPad(
+    TH2 * frame, TPad * pad, double x_tick, double y_tick)
 {
     pad->cd();
-    auto label_size{ static_cast<int>(label_list.size()) };
     ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 0.0);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 35.0, 1.4f);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 32.0, 0.11f, 103, kCyan+3);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 30.0, 0.01f);
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.0, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.015, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), label_size + 1);
+    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, x_tick, 0) };
+    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, y_tick, 1) };
+    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), 505);
     ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
-    frame->GetXaxis()->SetLimits(-1.0, static_cast<float>(label_size));
-    frame->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
-    frame->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
-    for (size_t i = 0; i < label_list.size(); i++)
-    {
-        auto label_index{ static_cast<int>(i) + 2 };
-        frame->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label_list.at(i).data());
-    }
     frame->SetStats(0);
+    frame->GetXaxis()->CenterTitle();
+    frame->GetYaxis()->CenterTitle();
 }
 
-void GausPainter::RemodelElementPad(
-    TPad * pad, TH2 * frame, const std::vector<std::string> & label_list)
+void GausPainter::RemodelAxisLabels(
+    TH2 * frame, const std::vector<std::string> & label_list, double angle, int align)
 {
-    pad->cd();
     auto label_size{ static_cast<int>(label_list.size()) };
-    ROOTHelper::SetPadLayout(pad, 1, 1, 0, 0);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 35.0f, 1.0f);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 0.0f);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 35.0f, 0.005f, 103);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 0.0f);
-    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.0, 0) };
-    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(pad, 0.015, 1) };
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), label_size + 1);
-    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), 0.0, label_size + 1);
     frame->GetXaxis()->SetLimits(-1.0, static_cast<float>(label_size));
     frame->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
     frame->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
     for (size_t i = 0; i < label_list.size(); i++)
     {
         auto label_index{ static_cast<int>(i) + 2 };
-        frame->GetXaxis()->ChangeLabel(label_index, 0.0, -1, -1, -1, -1, label_list.at(i).data());
+        frame->GetXaxis()->ChangeLabel(label_index, angle, -1, align, -1, -1, label_list.at(i).data());
     }
-    frame->SetStats(0);
-    frame->GetXaxis()->SetTitle("Element");
-    frame->GetXaxis()->CenterTitle();
 }
 #endif
