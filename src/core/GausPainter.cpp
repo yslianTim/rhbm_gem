@@ -367,7 +367,9 @@ void GausPainter::PaintAtomGroupGausSummary(
         ROOTHelper::SetPaveAttribute(component_info_text.get(), 0);
         ROOTHelper::SetFillAttribute(component_info_text.get(), 4000);
         ROOTHelper::SetTextAttribute(component_info_text.get(), 30.0f, 133);
-        component_info_text->AddText(component_entry->GetComponentName().data());
+        auto component_name{ component_entry->GetComponentName() };
+        StringHelper::EraseCharFromString(component_name, '\"');
+        component_info_text->AddText(component_name.data());
         component_info_text->AddText(("Formula: " + component_entry->GetComponentFormula()).data());
         component_info_text->AddText(Form("Number of members: %zu", component_size));
         component_info_text->Draw();
