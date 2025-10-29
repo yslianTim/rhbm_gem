@@ -60,6 +60,7 @@ public:
     #ifdef HAVE_ROOT
     std::unique_ptr<TH1D> CreateAtomResidueCountHistogram(const std::string & class_key, Structure structure=static_cast<Structure>(0));
     std::unique_ptr<TH1D> CreateBondResidueCountHistogram(const std::string & class_key);
+    std::unique_ptr<TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, const std::string & class_key, int par_id) const;
     std::vector<std::unique_ptr<TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, size_t extra_id=0, std::vector<Residue> veto_residues_list={});
     std::unique_ptr<TGraphErrors> CreateNormalizedAtomGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateNormalizedBondGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
@@ -69,6 +70,7 @@ public:
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToSpotGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const std::string & class_key, const int par_id=0);
+    std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, bool reverse=false);

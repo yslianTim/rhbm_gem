@@ -535,6 +535,52 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateBondResidueCountHistogram(
     return hist;
 }
 
+std::unique_ptr<TH1D> PotentialEntryIterator::CreateAtomGausEstimateHistogram(
+    GroupKey group_key, const std::string & class_key, int par_id) const
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    if (IsAvailableAtomGroupKey(group_key, class_key) == false)
+    {
+        Logger::Log(LogLevel::Error, "Group key is not available.");
+        return nullptr;
+    }
+
+    const auto & atom_list{ GetAtomObjectList(group_key, class_key) };
+    std::vector<double> gaus_estimate_list;
+    gaus_estimate_list.reserve(atom_list.size());
+    for (auto atom : atom_list)
+    {
+        auto local_entry{ atom->GetLocalPotentialEntry() };
+        gaus_estimate_list.emplace_back(local_entry->GetGausEstimateMDPDE(par_id));
+    }
+
+    double x_min{ 0.0 };
+    double x_max{ 1.0 };
+
+    auto estimate_range{
+        ArrayStats<double>::ComputeScalingPercentileRangeTuple(gaus_estimate_list, 0.1, 0.05, 0.95)
+    };
+
+    if (gaus_estimate_list.size() > 1)
+    {
+        x_min = std::get<0>(estimate_range);
+        x_max = std::get<1>(estimate_range);
+    }
+    else
+    {
+        x_max = 2.0 * std::ceil(gaus_estimate_list.at(0));
+    }
+    if (x_max == 0.0) x_max = 1.0;
+
+    auto hist_name{ std::to_string(group_key) + "_" + class_key + "_par" + std::to_string(par_id) };
+    auto hist{ ROOTHelper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
+    for (auto & value : gaus_estimate_list) hist->Fill(value);
+    return hist;
+}
+
 std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainAtomGausRankHistogram(
     int par_id, int & chain_size, Residue residue,
     size_t extra_id, std::vector<Residue> veto_residues_list)
@@ -832,6 +878,25 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateToAt
         auto y_error{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausVariancePrior(group_key, par_id) };
         graph->SetPoint(count, x_value, y_value);
         graph->SetPointError(count, 0.0, y_error);
+        count++;
+    }
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateScatterGraph(
+    GroupKey group_key, const std::string & class_key, int par1_id, int par2_id)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto atom_list{ GetAtomObjectList(group_key, class_key) };
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto count{ 0 };
+    for (auto atom : atom_list)
+    {
+        auto entry{ atom->GetLocalPotentialEntry() };
+        graph->SetPoint(count, entry->GetGausEstimateMDPDE(par1_id), entry->GetGausEstimateMDPDE(par2_id));
         count++;
     }
     return graph;

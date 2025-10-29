@@ -35,6 +35,7 @@ public:
     void Painting(void) override;
 
 private:
+    void PaintAtomGausInGroupSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
