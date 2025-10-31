@@ -81,6 +81,8 @@ public:
     void FilterAtomFromSymmetry(bool is_asymmetry);
     void FilterBondFromSymmetry(bool is_asymmetry);
 
+    bool HasStandardRNAComponent(void) const;
+    bool HasStandardDNAComponent(void) const;
     size_t GetNumberOfAtom(void) const { return m_atom_list.size(); }
     size_t GetNumberOfBond(void) const { return m_bond_list.size(); }
     size_t GetNumberOfSelectedAtom(void) const { return m_selected_atom_list.size(); }

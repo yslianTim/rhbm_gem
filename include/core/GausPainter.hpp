@@ -42,6 +42,8 @@ private:
     #ifdef HAVE_ROOT
     void RemodelFrameInPad(TH2 * frame, TPad * pad, double x_tick_length, double y_tick_length);
     void RemodelAxisLabels(TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
+    std::unique_ptr<TPaveText> CreateDataInfoPaveText(ModelObject * model_object) const;
+    std::unique_ptr<TPaveText> CreateResolutionPaveText(ModelObject * model_object) const;
     #endif
 
 };

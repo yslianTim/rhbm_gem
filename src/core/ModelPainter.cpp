@@ -842,6 +842,13 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGroupGausNucleotideMainChain");
 
+    if (model_object->HasStandardRNAComponent() == false)
+    {
+        Logger::Log(LogLevel::Warning,
+            " The model does not have standard RNA components. Skipped.");
+        return;
+    }
+
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     
     #ifdef HAVE_ROOT

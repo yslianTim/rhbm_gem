@@ -364,3 +364,35 @@ std::vector<ComponentKey> ModelObject::GetComponentKeyList(void) const
     }
     return component_key_list;
 }
+
+bool ModelObject::HasStandardRNAComponent(void) const
+{
+    for (const auto & [component_key, entry] : m_chemical_component_entry_map)
+    {
+        const auto component_id{ entry->GetComponentId() };
+        if (component_id == "A" ||
+            component_id == "C" ||
+            component_id == "G" ||
+            component_id == "U")
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ModelObject::HasStandardDNAComponent(void) const
+{
+    for (const auto & [component_key, entry] : m_chemical_component_entry_map)
+    {
+        const auto component_id{ entry->GetComponentId() };
+        if (component_id == "DA" ||
+            component_id == "DC" ||
+            component_id == "DG" ||
+            component_id == "DT")
+        {
+            return true;
+        }
+    }
+    return false;
+}

@@ -9,6 +9,7 @@
 PYBIND11_MODULE(cpp_module, m)
 {
     pybind11::enum_<PainterType>(m, "PainterType")
+        .value("GAUS",       PainterType::GAUS)
         .value("ATOM",       PainterType::ATOM)
         .value("MODEL",      PainterType::MODEL)
         .value("COMPARISON", PainterType::COMPARISON)

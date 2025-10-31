@@ -479,11 +479,11 @@ const std::unordered_map<Link, std::string> ChemicalDataHelper::m_link_label_map
 
 const std::unordered_map<Element, int> ChemicalDataHelper::m_element_color_map
 {
-    {Element::HYDROGEN, 921}, {Element::CARBON,   633}, {Element::NITROGEN,  418},
-    {Element::OXYGEN,   862}, {Element::PHOSPHORUS, 2},
-    {Element::SULFUR,   619}, {Element::CALCIUM,    1},
-    {Element::ZINC,       1}, {Element::SODIUM,     1}, {Element::MAGNESIUM,   1},
-    {Element::IRON,       1}, {Element::CHLORINE,   1}, {Element::UNK,         1}
+    {Element::HYDROGEN, 921}, {Element::CARBON,     633}, {Element::NITROGEN,  418},
+    {Element::OXYGEN,   862}, {Element::PHOSPHORUS,  28},
+    {Element::SULFUR,   619}, {Element::CALCIUM,      1},
+    {Element::ZINC,       1}, {Element::SODIUM,       1}, {Element::MAGNESIUM,   1},
+    {Element::IRON,       1}, {Element::CHLORINE,     1}, {Element::UNK,         1}
 };
 
 const std::unordered_map<Residue, int> ChemicalDataHelper::m_residue_color_map
@@ -504,8 +504,8 @@ const std::unordered_map<Element, int> ChemicalDataHelper::m_element_marker_map
     {Element::BERYLLIUM, 30}, {Element::BORON,    28}, {Element::CARBON,     53},
     {Element::NITROGEN,  55}, {Element::OXYGEN,   59}, {Element::FLUORINE,   35},
     {Element::NEON,      36}, {Element::SODIUM,   29}, {Element::MAGNESIUM,  22},
-    {Element::ALUMINUM,  34}, {Element::SILICON,  41}, {Element::PHOSPHORUS, 21},
-    {Element::SULFUR,    33}, {Element::CHLORINE, 39}, {Element::ARGON,      20},
+    {Element::ALUMINUM,  34}, {Element::SILICON,  41}, {Element::PHOSPHORUS, 56},
+    {Element::SULFUR,    54}, {Element::CHLORINE, 39}, {Element::ARGON,      20},
     {Element::POTASSIUM, 31}, {Element::CALCIUM,  45}, {Element::SCANDIUM,   36},
     {Element::TITANIUM,  37}, {Element::VANADIUM, 38}, {Element::CHROMIUM,   40},
     {Element::MANGANESE, 43}, {Element::IRON,     47}, {Element::COBALT,     44},
