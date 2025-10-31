@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <tuple>
 
 #ifdef HAVE_ROOT
 class TCanvas;
@@ -98,6 +99,7 @@ public:
     static double ConvertGlobalTickLengthToPadTickLength(TVirtualPad * pad, double global_tick_length, bool use_width=true);
     static double GetLinearRegressionRSquare(const TGraphErrors * graph, const TF1 * function);
     static double PerformLinearRegression(TGraphErrors * graph, double & slope, double & intercept);
+    static std::tuple<double, double> GetRangeInGraph(TGraphErrors * graph);
     #endif
 
 private:

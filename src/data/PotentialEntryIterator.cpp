@@ -329,6 +329,19 @@ std::tuple<float, float> PotentialEntryIterator::GetMapValueRange(double margin_
     return ArrayStats<float>::ComputeScalingRangeTuple(map_value_array, static_cast<float>(margin_rate));
 }
 
+std::tuple<float, float> PotentialEntryIterator::GetBinnedMapValueRange(
+    int bin_size, double x_min, double x_max, double margin_rate) const
+{
+    auto data_array{ GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
+    std::vector<float> map_value_array;
+    map_value_array.reserve(data_array.size());
+    for (auto & [distance, map_value] : data_array)
+    {
+        map_value_array.emplace_back(map_value);
+    }
+    return ArrayStats<float>::ComputeScalingRangeTuple(map_value_array, static_cast<float>(margin_rate));
+}
+
 double PotentialEntryIterator::GetAmplitudeEstimateMDPDE(void) const
 {
     if (IsAtomLocalEntryAvailable() == true)

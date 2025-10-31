@@ -54,6 +54,7 @@ public:
     std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(int bin_size=15, double x_min=0.0, double x_max=1.5) const;
     std::tuple<float, float> GetDistanceRange(double margin_rate=0.0) const;
     std::tuple<float, float> GetMapValueRange(double margin_rate=0.0) const;
+    std::tuple<float, float> GetBinnedMapValueRange(int bin_size=15, double x_min=0.0, double x_max=1.5, double margin_rate=0.0) const;
     double GetAmplitudeEstimateMDPDE(void) const;
     double GetWidthEstimateMDPDE(void) const;
 

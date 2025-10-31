@@ -564,6 +564,20 @@ double ROOTHelper::PerformLinearRegression(
     return GetLinearRegressionRSquare(graph, fit_tmp.get());
 }
 
+std::tuple<double, double> ROOTHelper::GetRangeInGraph(TGraphErrors * graph)
+{
+    double y_min{ std::numeric_limits<double>::max() };
+    double y_max{ std::numeric_limits<double>::lowest() };
+    auto data_size{ graph->GetN() };
+    for (int i = 0; i < data_size; i++)
+    {
+        auto y_data{ graph->GetY()[i] };
+        if (y_data < y_min) y_min = y_data;
+        if (y_data > y_max) y_max = y_data;
+    }
+    return std::make_tuple(y_min, y_max);
+}
+
 double ROOTHelper::Gaus2DModelFunction(double * x, double * par)
 {
     double tau_square{ par[1]*par[1] };
