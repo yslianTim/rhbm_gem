@@ -210,6 +210,22 @@ const std::vector<BondObject *> & PotentialEntryIterator::GetBondObjectList(
     return m_model_object->GetBondGroupPotentialEntry(class_key)->GetBondObjectPtrList(group_key);
 }
 
+std::vector<AtomObject *> PotentialEntryIterator::GetOutlierAtomObjectList(
+    GroupKey group_key, const std::string & class_key) const
+{
+    auto atom_list{ GetAtomObjectList(group_key, class_key) };
+    std::vector<AtomObject *> outlier_atom_list;
+    outlier_atom_list.reserve(atom_list.size());
+    for (auto & atom : atom_list)
+    {
+        if (atom->GetLocalPotentialEntry()->GetOutlierTag(class_key) == true)
+        {
+            outlier_atom_list.emplace_back(atom);
+        }
+    }
+    return outlier_atom_list;
+}
+
 std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
     GroupKey group_key, const std::string & class_key) const
 {
@@ -588,6 +604,18 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateAtomGausEstimateHistogram(
     }
     if (x_max == 0.0) x_max = 1.0;
 
+    auto estimate_average{ 0.5 * (x_max + x_min) };
+    if (par_id == 0 && (x_max - x_min) < 5.0)
+    {
+        x_max = estimate_average + 2.5;
+        x_min = estimate_average - 2.5;
+    }
+    else if (par_id == 1 && (x_max - x_min) < 0.1)
+    {
+        x_max = estimate_average + 0.05;
+        x_min = estimate_average - 0.05;
+    }
+
     auto hist_name{ std::to_string(group_key) + "_" + class_key + "_par" + std::to_string(par_id) };
     auto hist{ ROOTHelper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
     for (auto & value : gaus_estimate_list) hist->Fill(value);
@@ -897,7 +925,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateToAt
 }
 
 std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateScatterGraph(
-    GroupKey group_key, const std::string & class_key, int par1_id, int par2_id)
+    GroupKey group_key, const std::string & class_key, int par1_id, int par2_id, bool select_outliers)
 {
     if (IsModelObjectAvailable() == false)
     {
@@ -909,6 +937,8 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomGausEstimateScat
     for (auto atom : atom_list)
     {
         auto entry{ atom->GetLocalPotentialEntry() };
+        auto is_outlier{ entry->GetOutlierTag(class_key) };
+        if (select_outliers == true && is_outlier == false) continue;
         graph->SetPoint(count, entry->GetGausEstimateMDPDE(par1_id), entry->GetGausEstimateMDPDE(par2_id));
         count++;
     }

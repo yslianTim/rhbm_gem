@@ -206,8 +206,11 @@ void GausPainter::PaintAtomLocalGausSummary(
             frame_scatter->SetStats(0);
             frame_scatter->Draw();
             auto scatter_graph{ entry_iter->CreateAtomGausEstimateScatterGraph(group_key, class_key, 0, 1) };
+            auto outlier_scatter_graph{ entry_iter->CreateAtomGausEstimateScatterGraph(group_key, class_key, 0, 1, true) };
             ROOTHelper::SetMarkerAttribute(scatter_graph.get(), 24, 1.5, kAzure-7, 1.0f);
+            ROOTHelper::SetMarkerAttribute(outlier_scatter_graph.get(), 5, 1.5, kRed+1, 1.0f);
             scatter_graph->Draw("P");
+            outlier_scatter_graph->Draw("P");
 
             pad[3]->cd();
             ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
@@ -244,6 +247,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             pad[1]->cd();
             ROOTHelper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
             auto member_size{ entry_iter->GetAtomObjectList(group_key, class_key).size() };
+            auto outlier_size{ entry_iter->GetOutlierAtomObjectList(group_key, class_key).size() };
             std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
             std::vector<double> y_array;
             map_value_graph_list.reserve(member_size);
@@ -252,7 +256,9 @@ void GausPainter::PaintAtomLocalGausSummary(
             {
                 auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
                 auto graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
-                ROOTHelper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(kAzure-7), 0.3f);
+                auto is_outlier{ atom_iter->IsOutlierAtom(class_key) };
+                auto line_color{ is_outlier ? kRed+1 : kAzure-7 };
+                ROOTHelper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
                 auto range_in_graph{ ROOTHelper::GetRangeInGraph(graph.get()) };
                 y_array.emplace_back(std::get<0>(range_in_graph));
                 y_array.emplace_back(std::get<1>(range_in_graph));
@@ -302,11 +308,12 @@ void GausPainter::PaintAtomLocalGausSummary(
                 "Map Value", "l");
             legend->Draw();
 
-            auto count_text{ ROOTHelper::CreatePaveText(0.45, 0.80, 1.00, 0.90, "nbNDC", false) };
+            auto count_text{ ROOTHelper::CreatePaveText(0.45, 0.75, 1.00, 0.90, "nbNDC", false) };
             ROOTHelper::SetPaveTextDefaultStyle(count_text.get());
-            ROOTHelper::SetTextAttribute(count_text.get(), 40.0f, 133, 12, 0.0, kGray+1);
+            ROOTHelper::SetTextAttribute(count_text.get(), 40.0f, 133, 32, 0.0, kGray+1);
             ROOTHelper::SetFillAttribute(count_text.get(), 4000);
             count_text->AddText(Form("Number of Members: %ld ", member_size));
+            count_text->AddText(Form("Group Outliers: #color[633]{%ld} ", outlier_size));
             count_text->Draw();
             
             ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
@@ -330,6 +337,7 @@ void GausPainter::PaintAtomGroupGausSummary(
 
     gStyle->SetLineScalePS(2.0);
     gStyle->SetGridColor(kGray);
+    gStyle->SetEndErrorSize(5.0f);
 
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 750) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
@@ -354,15 +362,22 @@ void GausPainter::PaintAtomGroupGausSummary(
     frame[5] = ROOTHelper::CreateHist2D("hist_5","", 100, 0.0, 1.0, 100, 0.0, 1.0);
 
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    auto struct_class_key{ ChemicalDataHelper::GetStructureAtomClassKey() };
     for (auto & [component_key, component_entry] : chemical_component_map)
     {
         if (component_entry->GetComponentType() == "non-polymer") continue;
         const auto & component_atom_map{ component_entry->GetComponentAtomEntryMap() };
         auto component_id{ component_entry->GetComponentId() };
         std::map<Element, std::map<std::string, GroupKey>> group_key_list_map;
+        std::map<Element, std::map<std::string, GroupKey>> helix_group_key_list_map;
+        std::map<Element, std::map<std::string, GroupKey>> sheet_group_key_list_map;
         std::vector<std::string> atom_id_list;
         atom_id_list.reserve(component_atom_map.size());
         GroupKey group_key_tmp{ 0 };
+        GroupKey helix_group_key_tmp{ 0 };
+        GroupKey sheet_group_key_tmp{ 0 };
+        bool has_helix_component{ false };
+        bool has_sheet_component{ false };
         for (auto & [atom_key, atom_entry] : component_atom_map)
         {
             if (atom_entry.element_type == Element::HYDROGEN) continue;
@@ -371,13 +386,35 @@ void GausPainter::PaintAtomGroupGausSummary(
             auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
             group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, group_key);
             if (group_key_tmp == 0) group_key_tmp = group_key;
+            auto helix_group_key{
+                AtomClassifier::GetGroupKeyInClass(Structure::HELX_P, component_key, atom_key)
+            };
+            helix_group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, helix_group_key);
+            if (helix_group_key_tmp == 0) helix_group_key_tmp = helix_group_key;
+            auto sheet_group_key{
+                AtomClassifier::GetGroupKeyInClass(Structure::SHEET, component_key, atom_key)
+            };
+            sheet_group_key_list_map[atom_entry.element_type].emplace(atom_entry.atom_id, sheet_group_key);
+            if (sheet_group_key_tmp == 0) sheet_group_key_tmp = sheet_group_key;
             atom_id_list.emplace_back(atom_entry.atom_id);
         }
         if (entry_iter->IsAvailableAtomGroupKey(group_key_tmp, class_key) == false) continue;
+        if (entry_iter->IsAvailableAtomGroupKey(helix_group_key_tmp, struct_class_key) == true)
+        {
+            has_helix_component = true;
+        }
+        if (entry_iter->IsAvailableAtomGroupKey(sheet_group_key_tmp, struct_class_key) == true)
+        {
+            has_sheet_component = true;
+        }
 
         std::map<Element, std::unique_ptr<TGraphErrors>> amplitude_graph_map;
         std::map<Element, std::unique_ptr<TGraphErrors>> width_graph_map;
         std::map<Element, std::unique_ptr<TGraphErrors>> correlation_graph_map;
+        std::map<Element, std::unique_ptr<TGraphErrors>> helix_amplitude_graph_map;
+        std::map<Element, std::unique_ptr<TGraphErrors>> sheet_amplitude_graph_map;
+        std::map<Element, std::unique_ptr<TGraphErrors>> helix_width_graph_map;
+        std::map<Element, std::unique_ptr<TGraphErrors>> sheet_width_graph_map;
         std::map<Element, std::unique_ptr<TH2D>> amplitude_hist_map;
         std::map<Element, std::unique_ptr<TH2D>> width_hist_map;
         std::vector<Element> element_list;
@@ -386,6 +423,12 @@ void GausPainter::PaintAtomGroupGausSummary(
         width_array.reserve(component_atom_map.size());
         
         auto component_size{ entry_iter->GetAtomObjectList(group_key_tmp, class_key).size() };
+        auto helix_component_size{ (has_helix_component == true) ?
+            entry_iter->GetAtomObjectList(helix_group_key_tmp, struct_class_key).size() : 0
+        };
+        auto sheet_component_size{ (has_sheet_component == true) ?
+            entry_iter->GetAtomObjectList(sheet_group_key_tmp, struct_class_key).size() : 0
+        };
         for (auto & [element, group_key_list] : group_key_list_map)
         {
             auto amplitude_graph{
@@ -411,10 +454,10 @@ void GausPainter::PaintAtomGroupGausSummary(
                 width_array.push_back(width_graph->GetPointY(p));
             }
             auto component_color{ ChemicalDataHelper::GetDisplayColor(element) };
-            auto component_marker{ ChemicalDataHelper::GetDisplayMarker(element) };
-            ROOTHelper::SetMarkerAttribute(amplitude_graph.get(), component_marker, 1.3f, component_color);
-            ROOTHelper::SetMarkerAttribute(width_graph.get(), component_marker, 1.3f, component_color);
-            ROOTHelper::SetMarkerAttribute(correlation_graph.get(), component_marker, 1.3f, component_color);
+            short component_marker{ 53 };
+            ROOTHelper::SetMarkerAttribute(amplitude_graph.get(), component_marker, 1.5f, component_color);
+            ROOTHelper::SetMarkerAttribute(width_graph.get(), component_marker, 1.5f, component_color);
+            ROOTHelper::SetMarkerAttribute(correlation_graph.get(), component_marker, 1.5f, component_color);
             ROOTHelper::SetLineAttribute(amplitude_graph.get(), 1, 1, component_color);
             ROOTHelper::SetLineAttribute(width_graph.get(), 1, 1, component_color);
             ROOTHelper::SetLineAttribute(correlation_graph.get(), 1, 1, component_color);
@@ -423,6 +466,48 @@ void GausPainter::PaintAtomGroupGausSummary(
             width_graph_map[element] = std::move(width_graph);
             correlation_graph_map[element] = std::move(correlation_graph);
             element_list.emplace_back(element);
+
+            if (has_helix_component == true)
+            {
+                auto helix_amplitude_graph{
+                    entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                        helix_group_key_list_map[element], atom_id_list, struct_class_key, 0)
+                };
+                auto helix_width_graph{
+                    entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                        helix_group_key_list_map[element], atom_id_list, struct_class_key, 1)
+                };
+                
+                short helix_marker{ 20 };
+                ROOTHelper::SetMarkerAttribute(helix_amplitude_graph.get(), helix_marker, 1.5f, component_color, 0.5f);
+                ROOTHelper::SetMarkerAttribute(helix_width_graph.get(), helix_marker, 1.5f, component_color, 0.5f);
+                ROOTHelper::SetLineAttribute(helix_amplitude_graph.get(), 1, 1, component_color, 0.5f);
+                ROOTHelper::SetLineAttribute(helix_width_graph.get(), 1, 1, component_color, 0.5f);
+
+                helix_amplitude_graph_map[element] = std::move(helix_amplitude_graph);
+                helix_width_graph_map[element] = std::move(helix_width_graph);
+            }
+
+            if (has_sheet_component == true)
+            {
+                auto sheet_amplitude_graph{
+                    entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                        sheet_group_key_list_map[element], atom_id_list, struct_class_key, 0)
+                };
+                auto sheet_width_graph{
+                    entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                        sheet_group_key_list_map[element], atom_id_list, struct_class_key, 1)
+                };
+                
+                short sheet_marker{ 52 };
+                ROOTHelper::SetMarkerAttribute(sheet_amplitude_graph.get(), sheet_marker, 1.5f, component_color);
+                ROOTHelper::SetMarkerAttribute(sheet_width_graph.get(), sheet_marker, 1.5f, component_color);
+                ROOTHelper::SetLineAttribute(sheet_amplitude_graph.get(), 1, 1, component_color);
+                ROOTHelper::SetLineAttribute(sheet_width_graph.get(), 1, 1, component_color);
+
+                sheet_amplitude_graph_map[element] = std::move(sheet_amplitude_graph);
+                sheet_width_graph_map[element] = std::move(sheet_width_graph);
+            }
         }
 
         auto scaling{ 0.3 };
@@ -497,7 +582,7 @@ void GausPainter::PaintAtomGroupGausSummary(
         StringHelper::EraseCharFromString(component_name, '\"');
         component_info_text->AddText(component_name.data());
         component_info_text->AddText(("Formula: " + component_entry->GetComponentFormula()).data());
-        component_info_text->AddText(Form("Number of members: %zu", component_size));
+        component_info_text->AddText(Form("Number of members: %zu (#alpha-helix: %zu, #beta-sheet: %zu)", component_size, helix_component_size, sheet_component_size));
         component_info_text->Draw();
 
         auto info_text{ CreateDataInfoPaveText(model_object) };
@@ -527,6 +612,8 @@ void GausPainter::PaintAtomGroupGausSummary(
         frame[0]->GetYaxis()->SetTitle("Width");
         frame[0]->Draw();
         for (auto & [element, graph] : width_graph_map) graph->Draw("P");
+        for (auto & [element, graph] : helix_width_graph_map) graph->Draw("P X0");
+        for (auto & [element, graph] : sheet_width_graph_map) graph->Draw("P X0");
 
         pad[2]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.02, 0.01);
@@ -540,6 +627,8 @@ void GausPainter::PaintAtomGroupGausSummary(
         frame[1]->GetYaxis()->SetTitle("Amplitude");
         frame[1]->Draw();
         for (auto & [element, graph] : amplitude_graph_map) graph->Draw("P");
+        for (auto & [element, graph] : helix_amplitude_graph_map) graph->Draw("P X0");
+        for (auto & [element, graph] : sheet_amplitude_graph_map) graph->Draw("P X0");
 
         pad[3]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);

@@ -48,6 +48,7 @@ public:
     double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const;
     const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const;
+    std::vector<AtomObject *> GetOutlierAtomObjectList(GroupKey group_key, const std::string & class_key) const;
     std::unordered_map<int, AtomObject *> GetAtomObjectMap(GroupKey group_key, const std::string & class_key) const;
 
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
@@ -71,7 +72,7 @@ public:
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToSpotGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const std::string & class_key, const int par_id=0);
-    std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, const std::string & class_key, int par1_id=0, int par2_id=1);
+    std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, const std::string & class_key, int par1_id=0, int par2_id=1, bool select_outliers=false);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateScatterGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, int par1_id=0, int par2_id=1);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, bool reverse=false);

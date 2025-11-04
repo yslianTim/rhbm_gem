@@ -37,8 +37,6 @@ public:
 private:
     void PaintAtomGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintBondGroupGausMainChain(ModelObject * model_object, const std::string & name);
-    void PaintAtomGroupGausSideChain(ModelObject * model_object, const std::string & name);
-    void PaintBondGroupGausSideChain(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausNucleotideMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomMapValueMainChain(ModelObject * model_object, const std::string & name);
     void PaintBondMapValueMainChain(ModelObject * model_object, const std::string & name);
