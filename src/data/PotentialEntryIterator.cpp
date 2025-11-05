@@ -13,8 +13,10 @@
 #include "KDTreeAlgorithm.hpp"
 #include "AtomClassifier.hpp"
 #include "BondClassifier.hpp"
+#include "GausLinearTransformHelper.hpp"
 #include "Logger.hpp"
 
+#include <Eigen/Dense>
 #include <sstream>
 #include <cmath>
 #include <map>
@@ -237,7 +239,27 @@ std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
     return atom_object_map;
 }
 
-const std::vector<std::tuple<float, float>> & PotentialEntryIterator::GetDistanceAndMapValueList(void) const
+std::vector<std::tuple<float, float>>
+PotentialEntryIterator::GetLinearModelDistanceAndMapValueList(void) const
+{
+    const auto & data_array{ GetDistanceAndMapValueList() };
+    std::vector<std::tuple<float, float>> linear_model_distance_and_map_value_list;
+    linear_model_distance_and_map_value_list.reserve(data_array.size());
+    for (auto & [distance, map_value] : data_array)
+    {
+        if (map_value <= 0.0f) continue;
+        auto data_vector{
+            GausLinearTransformHelper::BuildLinearModelDataVector(distance, map_value)
+        };
+        linear_model_distance_and_map_value_list.emplace_back(
+            std::make_tuple(data_vector(1), data_vector(2)))
+        ;
+    }
+    return linear_model_distance_and_map_value_list;
+}
+
+const std::vector<std::tuple<float, float>> &
+PotentialEntryIterator::GetDistanceAndMapValueList(void) const
 {
     if (IsAtomLocalEntryAvailable() == true)
     {
@@ -258,26 +280,10 @@ std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceA
 {
     auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
     std::map<int, std::vector<float>> bin_map;
-
-    if (IsAtomLocalEntryAvailable() == true)
+    for (auto & [distance, map_value] : GetDistanceAndMapValueList())
     {
-        for (auto & [distance, map_value] : m_atom_local_entry->GetDistanceAndMapValueList())
-        {
-            auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
-            bin_map[bin_index].emplace_back(map_value);
-        }
-    }
-    else if (IsBondLocalEntryAvailable() == true)
-    {
-        for (auto & [distance, map_value] : m_bond_local_entry->GetDistanceAndMapValueList())
-        {
-            auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
-            bin_map[bin_index].emplace_back(map_value);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Local entry is not available.");
+        auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
+        bin_map[bin_index].emplace_back(map_value);
     }
 
     std::vector<std::tuple<float, float>> binned_distance_and_map_value_list;
@@ -295,52 +301,24 @@ std::vector<std::tuple<float, float>> PotentialEntryIterator::GetBinnedDistanceA
 
 std::tuple<float, float> PotentialEntryIterator::GetDistanceRange(double margin_rate) const
 {
+    const auto & data_array{ GetDistanceAndMapValueList() };
     std::vector<float> distance_array;
-    if (IsAtomLocalEntryAvailable() == true)
+    distance_array.reserve(static_cast<size_t>(data_array.size()));
+    for (auto & [distance, map_value] : data_array)
     {
-        distance_array.reserve(static_cast<size_t>(m_atom_local_entry->GetDistanceAndMapValueListSize()));
-        for (auto & [distance, map_value] : m_atom_local_entry->GetDistanceAndMapValueList())
-        {
-            distance_array.emplace_back(distance);
-        }
-    }
-    else if (IsBondLocalEntryAvailable() == true)
-    {
-        distance_array.reserve(static_cast<size_t>(m_bond_local_entry->GetDistanceAndMapValueListSize()));
-        for (auto & [distance, map_value] : m_bond_local_entry->GetDistanceAndMapValueList())
-        {
-            distance_array.emplace_back(distance);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Local entry is not available.");
+        distance_array.emplace_back(distance);
     }
     return ArrayStats<float>::ComputeScalingRangeTuple(distance_array, static_cast<float>(margin_rate));
 }
 
 std::tuple<float, float> PotentialEntryIterator::GetMapValueRange(double margin_rate) const
 {
+    const auto & data_array{ GetDistanceAndMapValueList() };
     std::vector<float> map_value_array;
-    if (IsAtomLocalEntryAvailable() == true)
+    map_value_array.reserve(data_array.size());
+    for (auto & [distance, map_value] : data_array)
     {
-        map_value_array.reserve(static_cast<size_t>(m_atom_local_entry->GetDistanceAndMapValueListSize()));
-        for (auto & [distance, map_value] : m_atom_local_entry->GetDistanceAndMapValueList())
-        {
-            map_value_array.emplace_back(map_value);
-        }
-    }
-    else if (IsBondLocalEntryAvailable() == true)
-    {
-        map_value_array.reserve(static_cast<size_t>(m_bond_local_entry->GetDistanceAndMapValueListSize()));
-        for (auto & [distance, map_value] : m_bond_local_entry->GetDistanceAndMapValueList())
-        {
-            map_value_array.emplace_back(map_value);
-        }
-    }
-    else
-    {
-        throw std::runtime_error("Local entry is not available.");
+        map_value_array.emplace_back(map_value);
     }
     return ArrayStats<float>::ComputeScalingRangeTuple(map_value_array, static_cast<float>(margin_rate));
 }
@@ -639,6 +617,36 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateAtomGausEstimateHistogram(
     auto hist_name{ std::to_string(group_key) + "_" + class_key + "_par" + std::to_string(par_id) };
     auto hist{ ROOTHelper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
     for (auto & value : gaus_estimate_list) hist->Fill(value);
+    return hist;
+}
+
+std::unique_ptr<TH1D> PotentialEntryIterator::CreateLinearModelDataHistogram(int dimension_id) const
+{
+    auto data_array{ GetLinearModelDistanceAndMapValueList() };
+    std::vector<float> data_list;
+    data_list.reserve(data_array.size());
+    for (auto & [distance, map_value] : data_array)
+    {
+        switch (dimension_id)
+        {
+            case 0:
+                data_list.emplace_back(distance);
+                break;
+            case 1:
+                data_list.emplace_back(map_value);
+                break;
+            default:
+                throw std::runtime_error("Dimension id is invalid.");
+        }
+    }
+
+    auto data_range{ ArrayStats<float>::ComputeScalingRangeTuple(data_list, 0.1f) };
+    double x_min{ std::get<0>(data_range) };
+    double x_max{ std::get<1>(data_range) };
+
+    auto hist_name{ "data_dim" + std::to_string(dimension_id) };
+    auto hist{ ROOTHelper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
+    for (auto & value : data_list) hist->Fill(value);
     return hist;
 }
 
@@ -1111,23 +1119,23 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateDistanceToMapValueGr
 {
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
-    if (IsAtomLocalEntryAvailable() == true)
+    for (auto & [distance, map_value] : GetDistanceAndMapValueList())
     {
-        for (auto & [distance, map_value] : m_atom_local_entry->GetDistanceAndMapValueList())
-        {
-            graph->SetPoint(count, distance, map_value);
-            count++;
-        }
+        graph->SetPoint(count, distance, map_value);
+        count++;
     }
-    else if (IsBondLocalEntryAvailable() == true)
+    return graph;
+}
+
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateLinearModelDistanceToMapValueGraph(void)
+{
+    auto graph{ ROOTHelper::CreateGraphErrors() };
+    auto count{ 0 };
+    for (auto & [x, y] : GetLinearModelDistanceAndMapValueList())
     {
-        for (auto & [distance, map_value] : m_bond_local_entry->GetDistanceAndMapValueList())
-        {
-            graph->SetPoint(count, distance, map_value);
-            count++;
-        }
+        graph->SetPoint(count, x, y);
+        count++;
     }
-    else return nullptr;
     return graph;
 }
 
@@ -1222,6 +1230,17 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomXYPositionTomogr
         count++;
     }
     return graph;
+}
+
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionMDPDE(void) const
+{
+    if (IsAtomLocalEntryAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto amplitude{ m_atom_local_entry->GetGausEstimateMDPDE(0) };
+    auto width{ m_atom_local_entry->GetGausEstimateMDPDE(1) };
+    return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
 std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionPrior(

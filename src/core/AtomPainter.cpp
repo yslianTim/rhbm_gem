@@ -25,7 +25,6 @@
 #include <vector>
 #include <tuple>
 
-
 AtomPainter::AtomPainter(void) :
     m_folder_path{ "./" }
 {
@@ -50,6 +49,8 @@ void AtomPainter::AddDataObject(DataObjectBase * data_object)
         throw std::runtime_error(
             "AtomPainter::AddDataObject(): invalid data_object type");
     }
+    if (atom_obj->GetLocalPotentialEntry() == nullptr) return;
+    if (atom_obj->GetSelectedFlag() == false) return;
     m_atom_object_list.push_back(atom_obj);
 }
 
@@ -61,6 +62,8 @@ void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std
         throw std::runtime_error(
             "AtomPainter::AddReferenceDataObject(): invalid data_object type");
     }
+    if (atom_obj->GetLocalPotentialEntry() == nullptr) return;
+    if (atom_obj->GetSelectedFlag() == false) return;
     m_ref_atom_object_map[label] = atom_obj;
 }
 
@@ -70,8 +73,12 @@ void AtomPainter::Painting(void)
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
     Logger::Log(LogLevel::Info, "Number of atom objects to be painted: "
                 + std::to_string(m_atom_object_list.size()));
+
+    auto label{ m_atom_object_list.at(0)->GetKeyTag() };
+    label += ".pdf";
     
-    PaintDemoPlot("demo_plot.pdf");
+    PaintDemoPlot("demo_plot" + label);
+    PaintAtomSamplingDataSummary("atom_sampling_data_summary" + label);
 }
 
 void AtomPainter::PaintDemoPlot(const std::string & name)
@@ -80,7 +87,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
 
     #ifdef HAVE_ROOT
     gStyle->SetGridColor(kGray);
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 1200) };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1200, 1500) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
     auto atom_object{ m_atom_object_list.at(0) };
@@ -150,6 +157,182 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    #endif
+}
+
+void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    Logger::Log(LogLevel::Info, "AtomPainter::PaintAtomSamplingDataSummary");
+
+    #ifdef HAVE_ROOT
+
+    gStyle->SetLineScalePS(2.0);
+    gStyle->SetGridColor(kGray);
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 750) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    const int pad_size{ 5 };
+
+    std::unique_ptr<TPad> pad[pad_size];
+    pad[0] = ROOTHelper::CreatePad("pad0","", 0.00, 0.80, 1.00, 1.00); // The title pad
+    pad[1] = ROOTHelper::CreatePad("pad1","", 0.00, 0.00, 0.55, 0.80); // The left pad
+    pad[2] = ROOTHelper::CreatePad("pad2","", 0.55, 0.00, 0.90, 0.60); // The bottom-middle pad
+    pad[3] = ROOTHelper::CreatePad("pad3","", 0.55, 0.60, 0.90, 0.80); // The top-middle pad
+    pad[4] = ROOTHelper::CreatePad("pad4","", 0.90, 0.00, 1.00, 0.60); // The bottom-right pad
+    
+    for (auto atom_object : m_atom_object_list)
+    {
+        auto entry_iter{ std::make_unique<PotentialEntryIterator>(atom_object) };
+        auto data_graph{ entry_iter->CreateDistanceToMapValueGraph() };
+        auto gaus_function{ entry_iter->CreateAtomGroupGausFunctionMDPDE() };
+        auto x_hist{ entry_iter->CreateLinearModelDataHistogram(0) };
+        auto y_hist{ entry_iter->CreateLinearModelDataHistogram(1) };
+
+        canvas->cd();
+        for (int i = 0; i < pad_size; i++)
+        {
+            ROOTHelper::SetPadDefaultStyle(pad[i].get());
+            pad[i]->Draw();
+        }
+
+        pad[0]->cd();
+        ROOTHelper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.01, 0.01);
+
+        auto component_text{ ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
+        auto component_id{ atom_object->GetComponentID() };
+        auto atom_id{ atom_object->GetAtomID() };
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, component_text.get(), 0.01, 0.75, 0.02, 0.02);
+        ROOTHelper::SetPaveTextDefaultStyle(component_text.get());
+        ROOTHelper::SetPaveAttribute(component_text.get(), 0, 0.1);
+        ROOTHelper::SetFillAttribute(component_text.get(), 1001, kAzure-7);
+        ROOTHelper::SetTextAttribute(component_text.get(), 75.0f, 103, 22, 0.0, kYellow-10);
+        component_text->AddText((component_id + "/" + atom_id).data());
+        component_text->Draw();
+
+        auto result_text{ ROOTHelper::CreatePaveText(0.26, 0.10, 0.55, 0.90, "nbNDC", false) };
+        ROOTHelper::SetPaveTextDefaultStyle(result_text.get());
+        ROOTHelper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
+        ROOTHelper::SetFillAttribute(result_text.get(), 4000);
+        auto amplitude_prior{ entry_iter->GetAmplitudeEstimateMDPDE() };
+        auto width_prior{ entry_iter->GetWidthEstimateMDPDE() };
+        result_text->AddText(Form("#font[2]{A} = %.2f", amplitude_prior));
+        result_text->AddText(Form("#tau = %.2f", width_prior));
+        result_text->Draw();
+
+        pad[1]->cd();
+        ROOTHelper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
+        auto frame{ ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
+        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 0.75f);
+        ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 50.0f, 0.005f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), 0.06f, 505);
+        ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.25f);
+        ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 60.0f, 0.01f, 133);
+        ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 506);
+        ROOTHelper::SetLineAttribute(frame.get(), 1, 0);
+        frame->SetStats(0);
+        frame->GetYaxis()->CenterTitle();
+        frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
+        frame->GetYaxis()->SetTitle("Map Value");
+        auto y_range{ entry_iter->GetMapValueRange(0.1) };
+        auto x_min{ 0.01 };
+        auto x_max{ 1.49 };
+        auto y_min{ std::get<0>(y_range) };
+        auto y_max{ std::get<1>(y_range) };
+        frame->GetXaxis()->SetLimits(x_min, x_max);
+        frame->GetYaxis()->SetLimits(y_min, y_max);
+        frame->SetStats(0);
+        frame->Draw();
+        ROOTHelper::SetMarkerAttribute(data_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
+        data_graph->Draw("P");
+        
+        ROOTHelper::SetLineAttribute(gaus_function.get(), 2, 3, kRed);
+        gaus_function->Draw("SAME");
+
+        auto legend{ ROOTHelper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
+        ROOTHelper::SetLegendDefaultStyle(legend.get());
+        ROOTHelper::SetFillAttribute(legend.get(), 4000);
+        ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
+        legend->SetMargin(0.15f);
+        legend->SetNColumns(2);
+        legend->AddEntry(gaus_function.get(),
+            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+        legend->AddEntry(data_graph.get(),
+            "Sampling Map Value", "p");
+        legend->Draw();
+
+        pad[2]->cd();
+        ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);
+        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        auto frame_scatter{ ROOTHelper::CreateHist2D("hist_scatter","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
+        ROOTHelper::SetAxisTitleAttribute(frame_scatter->GetXaxis(), 40.0f, 1.1f);
+        ROOTHelper::SetAxisTitleAttribute(frame_scatter->GetYaxis(), 40.0f, 1.3f);
+        ROOTHelper::SetAxisLabelAttribute(frame_scatter->GetXaxis(), 40.0f, 0.01f);
+        ROOTHelper::SetAxisLabelAttribute(frame_scatter->GetYaxis(), 40.0f, 0.01f);
+        auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.03, 0) };
+        auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.015, 1) };
+        ROOTHelper::SetAxisTickAttribute(frame_scatter->GetXaxis(), static_cast<float>(x_tick_length), 505);
+        ROOTHelper::SetAxisTickAttribute(frame_scatter->GetYaxis(), static_cast<float>(y_tick_length), 505);
+        frame_scatter->GetXaxis()->SetTitle("x");
+        frame_scatter->GetYaxis()->SetTitle("y");
+        frame_scatter->GetXaxis()->SetLimits(
+            x_hist->GetXaxis()->GetXmin(),
+            x_hist->GetXaxis()->GetXmax()
+        );
+        frame_scatter->GetYaxis()->SetLimits(
+            y_hist->GetXaxis()->GetXmin(),
+            y_hist->GetXaxis()->GetXmax()
+        );
+        frame_scatter->GetXaxis()->CenterTitle();
+        frame_scatter->GetYaxis()->CenterTitle();
+        frame_scatter->SetStats(0);
+        frame_scatter->Draw();
+        auto scatter_graph{ entry_iter->CreateLinearModelDistanceToMapValueGraph() };
+        ROOTHelper::SetMarkerAttribute(scatter_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
+        scatter_graph->Draw("P");
+
+        pad[3]->cd();
+        ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
+        ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 1, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        ROOTHelper::SetAxisTitleAttribute(x_hist->GetXaxis(), 0.0f);
+        ROOTHelper::SetAxisTitleAttribute(x_hist->GetYaxis(), 40.0, 1.3f);
+        ROOTHelper::SetAxisLabelAttribute(x_hist->GetXaxis(), 0.0f);
+        ROOTHelper::SetAxisLabelAttribute(x_hist->GetYaxis(), 40.0, -0.01f);
+        ROOTHelper::SetAxisTickAttribute(x_hist->GetXaxis(), 0.0f, 505);
+        ROOTHelper::SetAxisTickAttribute(x_hist->GetYaxis(), static_cast<float>(y_tick_length), 504);
+        ROOTHelper::SetFillAttribute(x_hist.get(), 1001, kAzure-7, 0.5f);
+        x_hist->GetYaxis()->SetTitle("Counts");
+        x_hist->GetYaxis()->CenterTitle();
+        x_hist->GetYaxis()->SetRangeUser(1.0, x_hist->GetMaximum() * 1.1);
+        x_hist->SetStats(0);
+        x_hist->Draw("BAR");
+
+        pad[4]->cd();
+        ROOTHelper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.12, 0.02);
+        ROOTHelper::SetPadLayout(gPad, 1, 1, 1, 0, 0, 0);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        ROOTHelper::SetAxisTitleAttribute(y_hist->GetXaxis(), 0.0f);
+        ROOTHelper::SetAxisTitleAttribute(y_hist->GetYaxis(), 40.0, 1.0f);
+        ROOTHelper::SetAxisLabelAttribute(y_hist->GetXaxis(), 0.0f);
+        ROOTHelper::SetAxisLabelAttribute(y_hist->GetYaxis(), 40.0, -0.02f);
+        ROOTHelper::SetAxisTickAttribute(y_hist->GetXaxis(), 0.0f, 505);
+        ROOTHelper::SetAxisTickAttribute(y_hist->GetYaxis(), static_cast<float>(y_tick_length), 504);
+        ROOTHelper::SetFillAttribute(y_hist.get(), 1001, kAzure-7, 0.5f);
+        y_hist->GetYaxis()->SetTitle("Counts");
+        y_hist->GetYaxis()->CenterTitle();
+        y_hist->GetYaxis()->SetRangeUser(1.0, y_hist->GetMaximum() * 1.1);
+        y_hist->SetStats(0);
+        y_hist->Draw("HBAR");
+
+        ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    }
 
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     #endif

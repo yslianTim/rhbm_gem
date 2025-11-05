@@ -29,5 +29,6 @@ public:
 
 private:
     void PaintDemoPlot(const std::string & name);
+    void PaintAtomSamplingDataSummary(const std::string & name);
 
 };
