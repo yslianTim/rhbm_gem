@@ -26,7 +26,7 @@ HRLModelTester::HRLModelTester(int basis_size, int member_size) :
     m_member_size{ ValidatePositive(member_size, "member_size") },
     m_data_array{}
 {
-    m_data_array.reserve(m_member_size);
+    m_data_array.reserve(static_cast<size_t>(m_member_size));
 }
 
 void HRLModelTester::BuildDataArray(void)
