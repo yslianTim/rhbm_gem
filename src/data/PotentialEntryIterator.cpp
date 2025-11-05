@@ -532,6 +532,26 @@ Residue PotentialEntryIterator::GetResidueFromBondGroupKey(
 }
 
 #ifdef HAVE_ROOT
+std::unique_ptr<TH1D> PotentialEntryIterator::CreateComponentCountHistogram(
+    std::vector<GroupKey> & group_key_list, const std::string & class_key) const
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto component_size{ static_cast<int>(group_key_list.size()) };
+    auto hist{
+        ROOTHelper::CreateHist1D("hist_" + class_key, "Component Count",
+            component_size, -0.5, component_size-0.5)
+    };
+    for (size_t i = 0; i < group_key_list.size(); i++)
+    {
+        auto count{ GetAtomObjectList(group_key_list.at(i), class_key).size() };
+        hist->SetBinContent(static_cast<int>(i+1), static_cast<double>(count));
+    }
+    return hist;
+}
+
 std::unique_ptr<TH1D> PotentialEntryIterator::CreateAtomResidueCountHistogram(
     const std::string & class_key, Structure structure)
 {

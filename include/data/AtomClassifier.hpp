@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 #include "GlobalEnumClass.hpp"
 #include "ComponentKeySystem.hpp"
@@ -18,6 +19,11 @@ class AtomClassifier
     static const std::vector<short> m_main_chain_member_color_list;
     static const std::vector<short> m_main_chain_member_solid_marker_list;
     static const std::vector<short> m_main_chain_member_open_marker_list;
+    static const std::unordered_map<Spot, short> m_main_chain_color_map;
+    static const std::unordered_map<Spot, short> m_main_chain_solid_marker_map;
+    static const std::unordered_map<Spot, short> m_main_chain_open_marker_map;
+    static const std::unordered_map<Spot, short> m_main_chain_line_style_map;
+    static const std::unordered_map<Spot, std::string> m_main_chain_spot_label_map;
     static const std::vector<Element> m_main_chain_member_element_list;
     static const std::vector<Spot> m_main_chain_member_spot_list;
     static const std::vector<std::string> m_main_chain_member_label_list;
@@ -33,10 +39,15 @@ public:
     static Spot GetMainChainSpot(size_t member_id);
     static Spot GetNucleotideMainChainSpot(size_t member_id);
     static short GetMainChainElementColor(size_t member_id);
+    static short GetMainChainSpotColor(Spot spot);
     static short GetNucleotideMainChainElementColor(size_t member_id);
     static short GetMainChainElementSolidMarker(size_t member_id);
+    static short GetMainChainSpotSolidMarker(Spot spot);
     static short GetMainChainElementOpenMarker(size_t member_id);
+    static short GetMainChainSpotOpenMarker(Spot spot);
+    static short GetMainChainSpotLineStyle(Spot spot);
     static const std::string & GetMainChainElementLabel(size_t member_id);
+    static const std::string & GetMainChainSpotLabel(Spot spot);
     static const std::string & GetMainChainElementTitle(size_t member_id);
 
     static GroupKey GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);

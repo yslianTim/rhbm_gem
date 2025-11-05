@@ -7,6 +7,8 @@
 
 class HRLModelTester
 {
+    const int m_basis_size;
+    int m_member_size;
     std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> m_data_array;
 
 public:

@@ -7,6 +7,46 @@
 
 #include <stdexcept>
 
+const std::unordered_map<Spot, short> AtomClassifier::m_main_chain_color_map
+{
+    { Spot::CA, 633 }, // kRed+1
+    { Spot::C, 881 },  // kViolet+1
+    { Spot::N, 418 },  // kGreen+2
+    { Spot::O, 862 }   // kAzure+2
+};
+
+const std::unordered_map<Spot, short> AtomClassifier::m_main_chain_solid_marker_map
+{
+    { Spot::CA, 21 },
+    { Spot::C, 20 },
+    { Spot::N, 22 },
+    { Spot::O, 23 }
+};
+
+const std::unordered_map<Spot, short> AtomClassifier::m_main_chain_open_marker_map
+{
+    { Spot::CA, 25 },
+    { Spot::C, 24 },
+    { Spot::N, 26 },
+    { Spot::O, 32 }
+};
+
+const std::unordered_map<Spot, short> AtomClassifier::m_main_chain_line_style_map
+{
+    { Spot::CA, 1 },
+    { Spot::C, 2 },
+    { Spot::N, 3 },
+    { Spot::O, 4 }
+};
+
+const std::unordered_map<Spot, std::string> AtomClassifier::m_main_chain_spot_label_map
+{
+    { Spot::CA, "C_{#alpha}" },
+    { Spot::C,  "C" },
+    { Spot::N,  "N" },
+    { Spot::O,  "O" }
+};
+
 const std::vector<short> AtomClassifier::m_main_chain_member_color_list
 {   // [Color defined in ROOT style]
     // kRed+1, kViolet+1, kGreen+2, kAzure+2 
@@ -116,6 +156,15 @@ short AtomClassifier::GetMainChainElementColor(size_t id)
     return m_main_chain_member_color_list.at(id);
 }
 
+short AtomClassifier::GetMainChainSpotColor(Spot spot)
+{
+    if (m_main_chain_color_map.find(spot) == m_main_chain_color_map.end())
+    {
+        return 1;
+    }
+    return m_main_chain_color_map.at(spot);
+}
+
 short AtomClassifier::GetNucleotideMainChainElementColor(size_t id)
 {
     id += m_nucleotide_main_chain_member_start_id;
@@ -129,10 +178,40 @@ short AtomClassifier::GetMainChainElementSolidMarker(size_t id)
     return m_main_chain_member_solid_marker_list.at(id);
 }
 
+short AtomClassifier::GetMainChainSpotSolidMarker(Spot spot)
+{
+    if (m_main_chain_solid_marker_map.find(spot) ==
+        m_main_chain_solid_marker_map.end())
+    {
+        return 1;
+    }
+    return m_main_chain_solid_marker_map.at(spot);
+}
+
 short AtomClassifier::GetMainChainElementOpenMarker(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return 1;
     return m_main_chain_member_open_marker_list.at(id);
+}
+
+short AtomClassifier::GetMainChainSpotOpenMarker(Spot spot)
+{
+    if (m_main_chain_open_marker_map.find(spot) ==
+        m_main_chain_open_marker_map.end())
+    {
+        return 1;
+    }
+    return m_main_chain_open_marker_map.at(spot);
+}
+
+short AtomClassifier::GetMainChainSpotLineStyle(Spot spot)
+{
+    if (m_main_chain_line_style_map.find(spot) ==
+        m_main_chain_line_style_map.end())
+    {
+        return 1;
+    }
+    return m_main_chain_line_style_map.at(spot);
 }
 
 Element AtomClassifier::GetMainChainElement(size_t id)
@@ -158,6 +237,17 @@ const std::string & AtomClassifier::GetMainChainElementLabel(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return m_main_chain_member_label_list.at(0);
     return m_main_chain_member_label_list.at(id);
+}
+
+const std::string & AtomClassifier::GetMainChainSpotLabel(Spot spot)
+{
+    if (m_main_chain_spot_label_map.find(spot) ==
+        m_main_chain_spot_label_map.end())
+    {
+        static const std::string default_label{ "UNK" };
+        return default_label;
+    }
+    return m_main_chain_spot_label_map.at(spot);
 }
 
 const std::string & AtomClassifier::GetMainChainElementTitle(size_t id)

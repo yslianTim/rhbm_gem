@@ -58,8 +58,11 @@ public:
     std::tuple<float, float> GetBinnedMapValueRange(int bin_size=15, double x_min=0.0, double x_max=1.5, double margin_rate=0.0) const;
     double GetAmplitudeEstimateMDPDE(void) const;
     double GetWidthEstimateMDPDE(void) const;
+    Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
+    Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
 
     #ifdef HAVE_ROOT
+    std::unique_ptr<TH1D> CreateComponentCountHistogram(std::vector<GroupKey> & group_key_list, const std::string & class_key) const;
     std::unique_ptr<TH1D> CreateAtomResidueCountHistogram(const std::string & class_key, Structure structure=static_cast<Structure>(0));
     std::unique_ptr<TH1D> CreateBondResidueCountHistogram(const std::string & class_key);
     std::unique_ptr<TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, const std::string & class_key, int par_id) const;
@@ -97,7 +100,5 @@ private:
     bool IsModelObjectAvailable(void) const;
     bool CheckAtomGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
     bool CheckBondGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
-    Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
-    Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
 
 };
