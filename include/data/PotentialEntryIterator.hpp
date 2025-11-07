@@ -18,6 +18,7 @@ class LocalPotentialEntry;
 
 #ifdef HAVE_ROOT
 class TH1D;
+class TH2D;
 class TGraphErrors;
 class TGraph2DErrors;
 class TF1;
@@ -68,6 +69,7 @@ public:
     std::unique_ptr<TH1D> CreateBondResidueCountHistogram(const std::string & class_key);
     std::unique_ptr<TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, const std::string & class_key, int par_id) const;
     std::unique_ptr<TH1D> CreateLinearModelDataHistogram(int dimension_id) const;
+    std::unique_ptr<TH2D> CreateDistanceToMapValueHistogram(int x_bin_size=15, int y_bin_size=1000) const;
     std::vector<std::unique_ptr<TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, size_t extra_id=0, std::vector<Residue> veto_residues_list={});
     std::unique_ptr<TGraphErrors> CreateNormalizedAtomGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unique_ptr<TGraphErrors> CreateNormalizedBondGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
@@ -89,6 +91,7 @@ public:
     std::unique_ptr<TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(GroupKey group_key, const std::string & class_key, double range=5.0, int par_id=0);
     std::unique_ptr<TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, const std::string & class_key, int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
+    std::unique_ptr<TF1> CreateAtomGroupGausFunctionOLS(void) const;
     std::unique_ptr<TF1> CreateAtomGroupGausFunctionMDPDE(void) const;
     std::unique_ptr<TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
     std::unique_ptr<TF1> CreateBondGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;

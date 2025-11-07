@@ -26,6 +26,7 @@
 #include <TGraph2DErrors.h>
 #include <TF1.h>
 #include <TH1.h>
+#include <TH2.h>
 #endif
 
 PotentialEntryIterator::PotentialEntryIterator(ModelObject * model_object) :
@@ -650,6 +651,24 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateLinearModelDataHistogram(int
     return hist;
 }
 
+std::unique_ptr<TH2D> PotentialEntryIterator::CreateDistanceToMapValueHistogram(
+    int x_bin_size, int y_bin_size) const
+{
+    auto distance_range{ GetDistanceRange(0.0) };
+    auto map_value_range{ GetMapValueRange(0.1) };
+    auto hist{
+        ROOTHelper::CreateHist2D(
+            "hist_distance_mapvalue", "Distance vs Map Value",
+            x_bin_size, std::get<0>(distance_range), std::get<1>(distance_range),
+            y_bin_size, std::get<0>(map_value_range), std::get<1>(map_value_range))
+    };
+    for (auto & [distance, map_value] : GetDistanceAndMapValueList())
+    {
+        hist->Fill(distance, map_value);
+    }
+    return hist;
+}
+
 std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainAtomGausRankHistogram(
     int par_id, int & chain_size, Residue residue,
     size_t extra_id, std::vector<Residue> veto_residues_list)
@@ -1230,6 +1249,17 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomXYPositionTomogr
         count++;
     }
     return graph;
+}
+
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionOLS(void) const
+{
+    if (IsAtomLocalEntryAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto amplitude{ m_atom_local_entry->GetGausEstimateOLS(0) };
+    auto width{ m_atom_local_entry->GetGausEstimateOLS(1) };
+    return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
 std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionMDPDE(void) const

@@ -96,7 +96,6 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     pad_main->Draw();
 
     auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom_object) };
-    auto data_array{ atom_iter->GetDistanceAndMapValueList() };
     auto map_value_range{ atom_iter->GetMapValueRange(0.3) };
     auto distance_range{ atom_iter->GetDistanceRange(0.0) };
 
@@ -188,7 +187,9 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     {
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(atom_object) };
         auto data_graph{ entry_iter->CreateDistanceToMapValueGraph() };
+        auto data_hist{ entry_iter->CreateDistanceToMapValueHistogram(15) };
         auto gaus_function{ entry_iter->CreateAtomGroupGausFunctionMDPDE() };
+        auto gaus_function_ols{ entry_iter->CreateAtomGroupGausFunctionOLS() };
         auto x_hist{ entry_iter->CreateLinearModelDataHistogram(0) };
         auto y_hist{ entry_iter->CreateLinearModelDataHistogram(1) };
 
@@ -213,7 +214,16 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         component_text->AddText((component_id + "/" + atom_id).data());
         component_text->Draw();
 
-        auto result_text{ ROOTHelper::CreatePaveText(0.26, 0.10, 0.55, 0.90, "nbNDC", false) };
+        auto atom_info_text{ ROOTHelper::CreatePaveText(0.26, 0.10, 0.55, 0.90, "nbNDC", false) };
+        ROOTHelper::SetPaveTextDefaultStyle(atom_info_text.get());
+        ROOTHelper::SetPaveAttribute(atom_info_text.get(), 0);
+        ROOTHelper::SetFillAttribute(atom_info_text.get(), 4000);
+        ROOTHelper::SetTextAttribute(atom_info_text.get(), 50.0f, 133);
+        atom_info_text->AddText(("Serial ID: " + std::to_string(atom_object->GetSerialID())).data());
+        atom_info_text->AddText(("Sequence ID: " + std::to_string(atom_object->GetSequenceID())).data());
+        atom_info_text->Draw();
+
+        auto result_text{ ROOTHelper::CreatePaveText(0.60, 0.10, 0.90, 0.90, "nbNDC", false) };
         ROOTHelper::SetPaveTextDefaultStyle(result_text.get());
         ROOTHelper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
         ROOTHelper::SetFillAttribute(result_text.get(), 4000);
@@ -250,9 +260,17 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         frame->Draw();
         ROOTHelper::SetMarkerAttribute(data_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
         data_graph->Draw("P");
+
+        data_hist->SetStats(0);
+        data_hist->SetBarWidth(1.0);
+        ROOTHelper::SetFillAttribute(data_hist.get(), 1001, kGray, 0.3f);
+        ROOTHelper::SetLineAttribute(data_hist.get(), 1, 2, kGray+2);
+        data_hist->Draw("CANDLE2 SAME");
         
         ROOTHelper::SetLineAttribute(gaus_function.get(), 2, 3, kRed);
+        ROOTHelper::SetLineAttribute(gaus_function_ols.get(), 3, 3, kBlue);
         gaus_function->Draw("SAME");
+        gaus_function_ols->Draw("SAME");
 
         auto legend{ ROOTHelper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
         ROOTHelper::SetLegendDefaultStyle(legend.get());
