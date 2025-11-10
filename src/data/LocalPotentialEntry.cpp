@@ -65,6 +65,42 @@ const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAn
     return m_distance_and_map_value_list;
 }
 
+double LocalPotentialEntry::GetMomentZeroEstimate(void) const
+{
+    auto data_size{ GetDistanceAndMapValueListSize() };
+    if (data_size == 0) return 0.0;
+    auto y_sum{ 0.0 };
+    auto count{ 0 };
+    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    {
+        auto y_value{ static_cast<double>(map_value) };
+        if (y_value <= 0.0) continue;
+        if (distance > 1.0f) continue;
+        y_sum += y_value;
+        count++;
+    }
+    return y_sum/static_cast<double>(count);
+}
+
+double LocalPotentialEntry::GetMomentTwoEstimate(void) const
+{
+    auto data_size{ GetDistanceAndMapValueListSize() };
+    if (data_size == 0) return 0.0;
+    auto m_0{ GetMomentZeroEstimate() };
+    auto y_sum{ 0.0 };
+    auto count{ 0 };
+    for (const auto & [distance, map_value] : m_distance_and_map_value_list)
+    {
+        auto y_value{ static_cast<double>(map_value) };
+        if (y_value <= 0.0) continue;
+        if (distance > 1.0f) continue;
+        y_sum += y_value * distance * distance;
+        count++;
+    }
+    y_sum /= static_cast<double>(count);
+    return std::sqrt(y_sum/m_0/3.0);
+}
+
 double LocalPotentialEntry::GetGausEstimateOLS(int par_id) const
 {
     switch (par_id)

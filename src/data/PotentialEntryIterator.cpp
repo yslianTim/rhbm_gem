@@ -243,6 +243,7 @@ std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
 std::vector<std::tuple<float, float>>
 PotentialEntryIterator::GetLinearModelDistanceAndMapValueList(void) const
 {
+    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
     const auto & data_array{ GetDistanceAndMapValueList() };
     std::vector<std::tuple<float, float>> linear_model_distance_and_map_value_list;
     linear_model_distance_and_map_value_list.reserve(data_array.size());
@@ -250,7 +251,7 @@ PotentialEntryIterator::GetLinearModelDistanceAndMapValueList(void) const
     {
         if (map_value <= 0.0f) continue;
         auto data_vector{
-            GausLinearTransformHelper::BuildLinearModelDataVector(distance, map_value)
+            GausLinearTransformHelper::BuildLinearModelDataVector(distance, map_value, model_par_init)
         };
         linear_model_distance_and_map_value_list.emplace_back(
             std::make_tuple(data_vector(1), data_vector(2)))

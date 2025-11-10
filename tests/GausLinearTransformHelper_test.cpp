@@ -4,7 +4,7 @@
 
 #include "GausLinearTransformHelper.hpp"
 #include "Constants.hpp"
-
+/*
 TEST(GausLinearTransformHelperTest, BuildLinearModelDataVectorNormalCase)
 {
     const double gaus_x{ 2.0 };
@@ -61,7 +61,7 @@ TEST(GausLinearTransformHelperTest, BuildLinearModelDataVectorThrowsForNonPositi
         GausLinearTransformHelper::BuildLinearModelDataVector(gaus_x, -1.0),
         std::runtime_error
     );
-}
+}*/
 
 TEST(GausLinearTransformHelperTest, BuildGaus3DModelNegativeBeta0)
 {

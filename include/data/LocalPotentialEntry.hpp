@@ -32,6 +32,8 @@ public:
 
     int GetDistanceAndMapValueListSize(void) const;
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
+    double GetMomentZeroEstimate(void) const;
+    double GetMomentTwoEstimate(void) const;
     double GetGausEstimateOLS(int par_id) const;
     double GetAmplitudeEstimateOLS(void) const;
     double GetWidthEstimateOLS(void) const;

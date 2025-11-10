@@ -390,6 +390,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomPotentialFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFitting");
     if (m_model_object == nullptr) return;
+    const int basis_size{ 2 };
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
@@ -423,6 +424,9 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             for (const auto & atom : atom_list)
             {
                 auto entry{ atom->GetLocalPotentialEntry() };
+                Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+                model_par_init(0) = entry->GetMomentZeroEstimate();
+                model_par_init(1) = entry->GetMomentTwoEstimate();
                 std::vector<Eigen::VectorXd> sampling_entry_list;
                 sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
                 for (auto & data_entry : entry->GetDistanceAndMapValueList())
@@ -432,12 +436,13 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
                     if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
                     if (gaus_y <= 0.0) continue;
                     sampling_entry_list.emplace_back(
-                        GausLinearTransformHelper::BuildLinearModelDataVector(gaus_x, gaus_y)
+                        GausLinearTransformHelper::BuildLinearModelDataVector(
+                            gaus_x, gaus_y, model_par_init, basis_size)
                     );
                 }
                 data_array.emplace_back(std::move(sampling_entry_list), atom->GetInfo());
             }
-            auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
+            auto model_estimator{ std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(group_size)) };
             model_estimator->SetThreadSize(1);
             model_estimator->SetDataArray(std::move(data_array));
             model_estimator->RunEstimation(m_options.alpha_r, m_options.alpha_g);
@@ -461,12 +466,15 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             for (const auto & atom : atom_list)
             {
                 auto atom_entry{ atom->GetLocalPotentialEntry() };
+                Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+                model_par_init(0) = atom_entry->GetMomentZeroEstimate();
+                model_par_init(1) = atom_entry->GetMomentTwoEstimate();
                 const auto & beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
-                auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_vector_ols) };
+                auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_vector_ols, model_par_init) };
                 atom_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
 
                 const auto & beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
-                auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_vector_mdpde) };
+                auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_vector_mdpde, model_par_init) };
                 atom_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
 
                 const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
@@ -547,6 +555,7 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
             for (const auto & bond : bond_list)
             {
                 auto entry{ bond->GetLocalPotentialEntry() };
+                Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
                 std::vector<Eigen::VectorXd> sampling_entry_list;
                 sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
                 for (auto & data_entry : entry->GetDistanceAndMapValueList())
@@ -556,7 +565,7 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
                     if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
                     if (gaus_y <= 0.0) continue;
                     sampling_entry_list.emplace_back(
-                        GausLinearTransformHelper::BuildLinearModelDataVector(gaus_x, gaus_y)
+                        GausLinearTransformHelper::BuildLinearModelDataVector(gaus_x, gaus_y, model_par_init)
                     );
                 }
                 data_array.emplace_back(std::move(sampling_entry_list), bond->GetInfo());
