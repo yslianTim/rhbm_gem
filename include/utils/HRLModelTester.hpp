@@ -68,5 +68,6 @@ private:
         size_t sampling_entry_size, const Eigen::VectorXd & model_par);
     bool CheckModelParametersDimension(const Eigen::VectorXd & model_par);
     Eigen::VectorXd CalculateResidual(const Eigen::VectorXd & estimate, const Eigen::VectorXd & true_value);
+    Eigen::VectorXd CalculateMoment(const std::vector<std::tuple<double, double>> & sampling_entries) const;
 
 };

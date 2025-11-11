@@ -81,14 +81,13 @@ void HRLModelTester::BuildDataArray(void)
     for (int i = 0; i < m_member_size; i++)
     {
         Eigen::VectorXd model_par_local{ Eigen::VectorXd::Zero(m_model_par_size) };
-        Eigen::VectorXd model_par_0{ Eigen::VectorXd::Zero(m_model_par_size) };
         for (int p = 0; p < m_model_par_size; p++)
         {
             model_par_local(p) = dist_model_par_list.at(static_cast<size_t>(p))(generator);
-            model_par_0(p) = model_par_local(p);
         }
 
         auto sampling_entries{ BuildRandomSamplingEntry(m_sampling_entry_size, model_par_local) };
+        Eigen::VectorXd model_par_0{ CalculateMoment(sampling_entries) };
         m_sampling_entries_list.emplace_back(sampling_entries);
         std::vector<Eigen::VectorXd> data_vector_list;
         data_vector_list.reserve(sampling_entries.size());
@@ -222,4 +221,22 @@ Eigen::VectorXd HRLModelTester::CalculateResidual(
         throw std::invalid_argument("model parameters size inconsistant.");
     }
     return ((estimate - true_value).array() / true_value.array());
+}
+
+Eigen::VectorXd HRLModelTester::CalculateMoment(
+    const std::vector<std::tuple<double, double>> & sampling_entries) const
+{
+    Eigen::VectorXd model_par{ Eigen::VectorXd::Zero(3) };
+    double m_0{ 0.0 }, m_2{ 0.0 };
+    double y_max{ 0.0 };
+    for (auto & [r, y] : sampling_entries)
+    {
+        auto y_new{ y - model_par(2) };
+        m_0 += y_new;
+        m_2 += y_new * r * r;
+        y_max = std::max(y_max, y_new);
+    }
+    model_par(1) = std::sqrt(m_2 / m_0 / 3.0);
+    model_par(0) = y_max / GausLinearTransformHelper::GetGaussianResponseAtDistance(0.0, model_par(1));
+    return model_par;
 }
