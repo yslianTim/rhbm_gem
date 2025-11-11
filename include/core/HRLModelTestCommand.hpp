@@ -11,7 +11,7 @@ class HRLModelTestCommand : public CommandBase
 public:
     struct Options : public CommandOptions
     {
-        TesterType tester_choice{ TesterType::DATA_OUTLIER };
+        TesterType tester_choice{ TesterType::BENCHMARK };
         double fit_range_min{ 0.0 };
         double fit_range_max{ 1.0 };
         double alpha_r{ 0.1 };
@@ -36,6 +36,7 @@ public:
     void SetAlphaG(double value);
 
 private:
+    void RunSimulationTestOnBenchMark(void);
     void RunSimulationTestOnDataOutlier(void);
     void RunSimulationTestOnMemberOutlier(void);
     void RunSimulationTestOnModelAlphaData(void);

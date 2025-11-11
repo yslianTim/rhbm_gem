@@ -34,6 +34,7 @@ enum class PartialCharge : int
 
 enum class TesterType : int
 {
+    BENCHMARK = 0,
     DATA_OUTLIER = 1,
     MEMBER_OUTLIER = 2,
     MODEL_ALPHA_DATA = 3,

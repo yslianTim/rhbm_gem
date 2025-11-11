@@ -28,7 +28,7 @@ Eigen::VectorXd GausLinearTransformHelper::GetTylorSeriesBasisVector(
     auto G_0{ GetGaussianResponseAtDistance(r, width_0, 3) };
     Eigen::VectorXd basis_vector{ Eigen::VectorXd::Zero(3) };
     basis_vector(0) = G_0;
-    basis_vector(1) = amplitude_0 * G_0 * (-3.0/width_0 + r*r/(width_0*width_0*width_0));
+    basis_vector(1) = amplitude_0 * G_0 * (-3.0/width_0 + r*r/std::pow(width_0, 3));
     basis_vector(2) = 1.0;
     return basis_vector;
 }
@@ -36,8 +36,8 @@ Eigen::VectorXd GausLinearTransformHelper::GetTylorSeriesBasisVector(
 Eigen::VectorXd GausLinearTransformHelper::BuildLinearModelDataVector(
     double x, double y, const Eigen::VectorXd & model_par, int basis_dimension)
 {
-    auto linear_model_basis{ basis_dimension + 1 };
-    Eigen::VectorXd linear_model_data_vector{ Eigen::VectorXd::Zero(linear_model_basis) };
+    auto data_vector_dimension{ basis_dimension + 1 };
+    Eigen::VectorXd linear_model_data_vector{ Eigen::VectorXd::Zero(data_vector_dimension) };
 
     if (basis_dimension == 2)
     {
@@ -52,11 +52,13 @@ Eigen::VectorXd GausLinearTransformHelper::BuildLinearModelDataVector(
     }
 
     auto basis_vector{ GetTylorSeriesBasisVector(x, model_par) };
+    auto amplitude_0{ model_par(0) };
+    auto width_0{ model_par(1) };
     for (int i = 0; i < basis_dimension; i++)
     {
         linear_model_data_vector(i) = basis_vector(i);
     }
-    auto intercept{ model_par(0) * GetGaussianResponseAtDistance(x, model_par(1), 3) + model_par(2) };
+    auto intercept{ amplitude_0 * GetGaussianResponseAtDistance(x, width_0) + model_par(2) };
     linear_model_data_vector(basis_dimension) = y - intercept;
     return linear_model_data_vector;
 }
@@ -84,7 +86,7 @@ Eigen::VectorXd GausLinearTransformHelper::BuildGaus2DModel(const Eigen::VectorX
 Eigen::VectorXd GausLinearTransformHelper::BuildGaus3DModel(
     const Eigen::VectorXd & linear_model)
 {
-    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
+    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(3) };
     if (linear_model(1) <= 0.0) return gaus_model;
 
     auto model_dimension{ linear_model.rows() };
@@ -92,11 +94,13 @@ Eigen::VectorXd GausLinearTransformHelper::BuildGaus3DModel(
     {
         gaus_model(0) = std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5);
         gaus_model(1) = 1.0 / std::sqrt(linear_model(1));
+        gaus_model(2) = 0.0;
     }
     else
     {
         gaus_model(0) = linear_model(0);
         gaus_model(1) = linear_model(1);
+        gaus_model(2) = linear_model(2);
     }
 
     return gaus_model;
@@ -105,7 +109,7 @@ Eigen::VectorXd GausLinearTransformHelper::BuildGaus3DModel(
 Eigen::VectorXd GausLinearTransformHelper::BuildGaus3DModel(
     const Eigen::VectorXd & linear_model, const Eigen::VectorXd & model_par)
 {
-    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(2) };
+    Eigen::VectorXd gaus_model{ Eigen::VectorXd::Zero(3) };
     if (linear_model(1) <= 0.0) return gaus_model;
 
     auto model_dimension{ linear_model.rows() };
@@ -113,11 +117,13 @@ Eigen::VectorXd GausLinearTransformHelper::BuildGaus3DModel(
     {
         gaus_model(0) = std::exp(linear_model(0)) * std::pow(Constants::two_pi / linear_model(1), 1.5);
         gaus_model(1) = 1.0 / std::sqrt(linear_model(1));
+        gaus_model(2) = 0.0;
     }
     else
     {
-        gaus_model(0) = linear_model(0) + model_par(0);
-        gaus_model(1) = linear_model(1) + model_par(1);
+        gaus_model(0) = std::exp(linear_model(0)) * model_par(0);
+        gaus_model(1) = std::exp(linear_model(1)) + model_par(1);
+        gaus_model(2) = linear_model(2) + model_par(2);
     }
 
     return gaus_model;
