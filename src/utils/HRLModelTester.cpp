@@ -111,8 +111,8 @@ std::vector<std::tuple<double, double>> HRLModelTester::BuildRandomSamplingEntry
     CheckModelParametersDimension(model_par);
     auto gaus_amplitude{ model_par(0) };
     auto gaus_width{ model_par(1) };
-    auto intersect{ model_par(2) };
-    //auto intersect{ 0.0 };
+    //auto intersect{ model_par(2) };
+    auto intersect{ 0.0 };
     std::random_device random_device;
     std::mt19937 generator{ random_device() };
     std::uniform_real_distribution<> dist_distance(m_x_min, m_x_max);
@@ -127,7 +127,7 @@ std::vector<std::tuple<double, double>> HRLModelTester::BuildRandomSamplingEntry
             gaus_amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(r, gaus_width)
             + intersect + error
         };
-        //if (y <= 0.0) continue;
+        if (y <= 0.0) continue;
         member_sampling_entry.emplace_back(r, y);
     }
     return member_sampling_entry;

@@ -104,9 +104,14 @@ bool PotentialAnalysisCommand::Execute(void)
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
+
     RunAtomMapValueSampling();
+    RunAtomGroupClassification();
+    //RunAtomAlphaTraining();
     RunAtomPotentialFitting();
+
     RunBondMapValueSampling();
+    RunBondGroupClassification();
     RunBondPotentialFitting();
     SaveDataObject();
     return true;
@@ -385,6 +390,73 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
 #endif
 }
 
+void PotentialAnalysisCommand::RunAtomGroupClassification(void)
+{
+    Logger::Log(LogLevel::Debug, "RunAtomGroupClassification() called");
+    ScopeTimer timer("RunAtomGroupClassification");
+    if (m_map_object == nullptr) return;
+
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
+        for (auto atom : m_model_object->GetSelectedAtomList())
+        {
+            auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
+            group_potential_entry->AddAtomObjectPtr(group_key, atom);
+            group_potential_entry->InsertGroupKey(group_key);
+        }
+        auto group_size{ group_potential_entry->GetGroupKeySet().size() };
+        m_model_object->AddAtomGroupPotentialEntry(class_key, group_potential_entry);
+        Logger::Log(LogLevel::Info,
+            "Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
+    }
+}
+
+void PotentialAnalysisCommand::RunBondGroupClassification(void)
+{
+    Logger::Log(LogLevel::Debug, "RunBondGroupClassification() called");
+    ScopeTimer timer("RunBondGroupClassification");
+    if (m_map_object == nullptr) return;
+
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
+        auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
+        for (auto bond : m_model_object->GetSelectedBondList())
+        {
+            auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
+            group_potential_entry->AddBondObjectPtr(group_key, bond);
+            group_potential_entry->InsertGroupKey(group_key);
+        }
+        auto group_size{ group_potential_entry->GetGroupKeySet().size() };
+        m_model_object->AddBondGroupPotentialEntry(class_key, group_potential_entry);
+        Logger::Log(LogLevel::Info,
+            "Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
+    }
+}
+
+void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomAlphaTraining() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
+    if (m_map_object == nullptr) return;
+
+    const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(0) };
+    auto classifier{ std::make_unique<AtomClassifier>() };
+    auto group_key{ classifier->GetMainChainSimpleAtomClassGroupKey(0) };
+    Logger::Log(LogLevel::Info,
+        "Using group_key: " + std::to_string(group_key) + " for alpha training...");
+
+    std::vector<AtomObject *> atom_list;
+    for (auto atom : m_model_object->GetSelectedAtomList())
+    {
+        auto group_key_tmp{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
+        if (group_key_tmp != group_key) continue;
+        atom_list.emplace_back(atom);
+    }
+}
+
 void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomPotentialFitting() called");
@@ -396,16 +468,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
-        // Atom Classification
-        auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
-        for (auto atom : m_model_object->GetSelectedAtomList())
-        {
-            auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-            group_potential_entry->AddAtomObjectPtr(group_key, atom);
-            group_potential_entry->InsertGroupKey(group_key);
-        }
-
         // Group Atom Potential Fitting
+        auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
         const auto & key_set{ group_potential_entry->GetGroupKeySet() };
         std::vector<GroupKey> group_keys(key_set.begin(), key_set.end());
         auto group_key_size{ group_keys.size() };
@@ -513,7 +577,6 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
                 Logger::ProgressBar(key_count, group_key_size);
             }
         }
-        m_model_object->AddAtomGroupPotentialEntry(class_key, group_potential_entry);
     }
 }
 
@@ -527,16 +590,8 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
-        // Bond Classification
-        auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
-        for (auto bond : m_model_object->GetSelectedBondList())
-        {
-            auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
-            group_potential_entry->AddBondObjectPtr(group_key, bond);
-            group_potential_entry->InsertGroupKey(group_key);
-        }
-
         // Group Bond Potential Fitting
+        auto group_potential_entry{ m_model_object->GetBondGroupPotentialEntry(class_key) };
         const auto & key_set{ group_potential_entry->GetGroupKeySet() };
         std::vector<GroupKey> group_keys(key_set.begin(), key_set.end());
         auto group_key_size{ group_keys.size() };
@@ -638,7 +693,6 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
                 Logger::ProgressBar(key_count, group_key_size);
             }
         }
-        m_model_object->AddBondGroupPotentialEntry(class_key, group_potential_entry);
     }
 }
 

@@ -67,6 +67,9 @@ private:
     void RunModelObjectPreprocessing(void);
     void RunAtomMapValueSampling(void);
     void RunBondMapValueSampling(void);
+    void RunAtomGroupClassification(void);
+    void RunBondGroupClassification(void);
+    void RunAtomAlphaTraining(void);
     void RunAtomPotentialFitting(void);
     void RunBondPotentialFitting(void);
     void SaveDataObject(void);

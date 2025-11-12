@@ -99,13 +99,13 @@ void HRLModelHelper::SetDataArray(
     X_list.reserve(static_cast<size_t>(m_member_size));
     y_list.reserve(static_cast<size_t>(m_member_size));
 
-    for (auto & [member_data, member_info] : data_array)
+    for (auto & [member_data_vector, member_info] : data_array)
     {
-        if (member_data.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+        if (member_data_vector.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
         {
-            throw std::overflow_error("member_data size exceeds maximum int");
+            throw std::overflow_error("member_data_vector size exceeds maximum int");
         }
-        auto data_size{ static_cast<int>(member_data.size()) };
+        auto data_size{ static_cast<int>(member_data_vector.size()) };
         if (data_size == 0)
         {
             Logger::Log(LogLevel::Warning,
@@ -115,7 +115,7 @@ void HRLModelHelper::SetDataArray(
         VectorXd y_data_vector{ VectorXd::Zero(data_size) };
         for (int i = 0; i < data_size; i++)
         {
-            const auto & sample{ member_data.at(static_cast<size_t>(i)) };
+            const auto & sample{ member_data_vector.at(static_cast<size_t>(i)) };
             if (sample.size() != m_basis_size + 1)
             {
                 throw std::invalid_argument("The input data size isn't consistent with basis size.");

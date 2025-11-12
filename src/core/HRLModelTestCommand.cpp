@@ -119,7 +119,7 @@ void HRLModelTestCommand::RunSimulationTestOnBenchMark(void)
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
 
     const int model_par_size{ 3 };
-    const int linear_basis_size{ 3 };
+    const int linear_basis_size{ 2 };
     Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(model_par_size) };
     model_par_prior(0) = 1.0;
     model_par_prior(1) = 0.5;
