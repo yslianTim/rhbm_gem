@@ -107,7 +107,7 @@ bool PotentialAnalysisCommand::Execute(void)
 
     RunAtomMapValueSampling();
     RunAtomGroupClassification();
-    //RunAtomAlphaTraining();
+    RunAtomAlphaTraining();
     RunAtomPotentialFitting();
 
     RunBondMapValueSampling();
@@ -443,17 +443,59 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     if (m_map_object == nullptr) return;
 
     const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(0) };
+    auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
     auto classifier{ std::make_unique<AtomClassifier>() };
     auto group_key{ classifier->GetMainChainSimpleAtomClassGroupKey(0) };
     Logger::Log(LogLevel::Info,
         "Using group_key: " + std::to_string(group_key) + " for alpha training...");
-
-    std::vector<AtomObject *> atom_list;
-    for (auto atom : m_model_object->GetSelectedAtomList())
+    const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
+    auto total_atom_size{ atom_list.size() };
+    Logger::Log(LogLevel::Info,
+        " - Include " + std::to_string(total_atom_size) + " atoms.");
+    const size_t group_size{ 5 };
+    size_t atom_in_group_size{ total_atom_size / group_size + 1};
+    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array[group_size];
+    for (size_t i = 0; i < group_size; i++) data_array[i].reserve(atom_in_group_size);
+    const int basis_size{ 2 };
+    size_t count{ 0 };
+    for (const auto & atom : atom_list)
     {
-        auto group_key_tmp{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-        if (group_key_tmp != group_key) continue;
-        atom_list.emplace_back(atom);
+        auto entry{ atom->GetLocalPotentialEntry() };
+        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+        std::vector<Eigen::VectorXd> sampling_entry_list;
+        sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
+        for (auto & data_entry : entry->GetDistanceAndMapValueList())
+        {
+            auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
+            auto gaus_y{ static_cast<double>(std::get<1>(data_entry)) };
+            if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
+            if (gaus_y <= 0.0) continue;
+            sampling_entry_list.emplace_back(
+                GausLinearTransformHelper::BuildLinearModelDataVector(
+                    gaus_x, gaus_y, model_par_init, basis_size)
+            );
+        }
+        auto group_index{ count % group_size };
+        data_array[group_index].emplace_back(std::move(sampling_entry_list), atom->GetInfo());
+        count++;
+    }
+
+    std::unique_ptr<HRLModelHelper> estimator[group_size];
+    for (size_t i = 0; i < group_size; i++)
+    {
+        estimator[i] = std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(data_array[i].size()));
+        estimator[i]->SetThreadSize(1);
+        estimator[i]->SetDataArray(std::move(data_array[i]));
+    }
+
+    auto alpha_r{ 0.0 };
+    std::vector<double> alpha_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
+    for (auto & alpha : alpha_list)
+    {
+        for (size_t i = 0; i < group_size; i++)
+        {
+            estimator[i]->RunEstimation(alpha, 0.0);
+        }
     }
 }
 
