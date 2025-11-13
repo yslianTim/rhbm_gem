@@ -140,7 +140,8 @@ bool HRLModelTester::RunTest(double alpha_r, double alpha_g)
     auto estimator{ std::make_unique<HRLModelHelper>(m_linear_basis_size, m_member_size) };
     estimator->SetThreadSize(1);
     estimator->SetDataArray(std::move(m_data_array));
-    estimator->RunEstimation(alpha_r, alpha_g);
+    estimator->SetUniversalAlphaR(alpha_r);
+    estimator->RunEstimation(alpha_g);
 
     auto group_mean{
         GausLinearTransformHelper::BuildGaus3DModel(estimator->GetMuVectorMean(), m_model_par_prior)

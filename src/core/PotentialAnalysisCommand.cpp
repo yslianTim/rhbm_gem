@@ -442,21 +442,178 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     if (m_map_object == nullptr) return;
 
+    const size_t group_size{ 5 };
+    std::vector<double> alpha_list{ 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
+    auto ordered_alpha_list{ alpha_list };
+    std::sort(ordered_alpha_list.begin(), ordered_alpha_list.end());
+    
+    // Alpha_R Training
+    auto & selected_atom_list{ m_model_object->GetSelectedAtomList() };
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+    for (size_t i = 0; i < selected_atom_list.size(); i++)
+    {
+        auto atom{ selected_atom_list[i] };
+        auto entry{ atom->GetLocalPotentialEntry() };
+        auto alpha_r{ TrainAlphaR(atom, group_size, ordered_alpha_list) };
+        entry->SetAlphaR(alpha_r);
+        #ifdef USE_OPENMP
+            #pragma omp critical
+        #endif
+        {
+            Logger::ProgressPercent(i+1, m_model_object->GetNumberOfSelectedAtom());
+        }
+    }
+
+    // Alpha_G Training
     const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(0) };
     auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
     auto classifier{ std::make_unique<AtomClassifier>() };
     auto group_key{ classifier->GetMainChainSimpleAtomClassGroupKey(0) };
     Logger::Log(LogLevel::Info,
-        "Using group_key: " + std::to_string(group_key) + " for alpha training...");
+        "Using group_key: " + std::to_string(group_key) + " for alpha_g training...");
+
     const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
     auto total_atom_size{ atom_list.size() };
-    Logger::Log(LogLevel::Info,
-        " - Include " + std::to_string(total_atom_size) + " atoms.");
-    const size_t group_size{ 5 };
-    size_t atom_in_group_size{ total_atom_size / group_size + 1};
-    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array[group_size];
-    for (size_t i = 0; i < group_size; i++) data_array[i].reserve(atom_in_group_size);
+    Logger::Log(LogLevel::Info, " - Include " + std::to_string(total_atom_size) + " atoms.");
+    auto alpha_g{ TrainAlphaG(atom_list, 5, ordered_alpha_list) };
+    Logger::Log(LogLevel::Info, "Alpha G = " + std::to_string(alpha_g));
+}
+
+double PotentialAnalysisCommand::TrainAlphaR(
+    const AtomObject * atom, const size_t group_size, const std::vector<double> & alpha_list)
+{
+    auto local_entry{ atom->GetLocalPotentialEntry() };
     const int basis_size{ 2 };
+    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+    std::map<size_t, std::vector<Eigen::VectorXd>> sampling_entry_list_map;
+    auto total_entry_size{ static_cast<size_t>(local_entry->GetDistanceAndMapValueListSize()) };
+    size_t entries_in_atom_size{ total_entry_size / group_size + 1};
+    for (size_t i = 0; i < group_size; i++)
+    {
+        sampling_entry_list_map[i].reserve(entries_in_atom_size);
+    }
+
+    size_t count{ 0 };
+    for (auto & data_entry : local_entry->GetDistanceAndMapValueList())
+    {
+        auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
+        auto gaus_y{ static_cast<double>(std::get<1>(data_entry)) };
+        if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
+        if (gaus_y <= 0.0) continue;
+        auto group_index{ count % group_size };
+        sampling_entry_list_map.at(group_index).emplace_back(
+            GausLinearTransformHelper::BuildLinearModelDataVector(
+                gaus_x, gaus_y, model_par_init, basis_size)
+        );
+        count++;
+    }
+    size_t total_selected_entry_size{ count };
+
+    std::map<size_t, std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> data_array_test_map;
+    std::map<size_t, std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> data_array_training_map;
+    for (size_t i = 0; i < group_size; i++)
+    {
+        auto test_set_entry_size{ sampling_entry_list_map.at(i).size() };
+        data_array_test_map[i].emplace_back(
+            sampling_entry_list_map.at(i), "test set - group:" + std::to_string(i));
+        std::vector<Eigen::VectorXd> training_set;
+        training_set.reserve(total_selected_entry_size - test_set_entry_size);
+        for (size_t j = 0; j < group_size; j++)
+        {
+            if (j == i) continue;
+            training_set.insert(
+                training_set.end(),
+                sampling_entry_list_map.at(j).begin(), sampling_entry_list_map.at(j).end());
+        }
+        data_array_training_map[i].emplace_back(
+            std::move(training_set), "training set - group:" + std::to_string(i));
+    }
+
+    std::map<size_t, std::unique_ptr<HRLModelHelper>> estimator_test_map;
+    std::map<size_t, std::unique_ptr<HRLModelHelper>> estimator_training_map;
+    for (size_t i = 0; i < group_size; i++)
+    {
+        estimator_test_map[i] = std::make_unique<HRLModelHelper>(
+            basis_size, static_cast<int>(data_array_test_map.at(i).size()));
+        estimator_training_map[i] = std::make_unique<HRLModelHelper>(
+            basis_size, static_cast<int>(data_array_training_map.at(i).size()));
+        estimator_test_map.at(i)->SetQuietMode();
+        estimator_test_map.at(i)->SetThreadSize(1);
+        estimator_test_map.at(i)->SetDataArray(std::move(data_array_test_map.at(i)));
+        estimator_training_map.at(i)->SetQuietMode();
+        estimator_training_map.at(i)->SetThreadSize(1);
+        estimator_training_map.at(i)->SetDataArray(std::move(data_array_training_map.at(i)));
+    }
+    
+    auto alpha_size{ static_cast<int>(alpha_list.size()) };
+    Eigen::ArrayXd beta_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
+    Eigen::ArrayXd beta_variance_trace_array{ Eigen::ArrayXd::Zero(alpha_size) };
+    for (int p = 0; p < alpha_size; p++)
+    {
+        auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
+        Eigen::VectorXd beta_mean_training{ Eigen::VectorXd::Zero(basis_size) };
+        std::map<size_t, Eigen::VectorXd> beta_mdpde_training_map;
+        auto beta_error_sum{ 0.0 };
+        for (size_t i = 0; i < group_size; i++)
+        {
+            auto estimator_test{ estimator_test_map.at(i).get() };
+            auto estimator_training{ estimator_training_map.at(i).get() };
+            estimator_test->SetUniversalAlphaR(alpha);
+            estimator_training->SetUniversalAlphaR(alpha);
+            estimator_test->RunEstimation(0.0);
+            estimator_training->RunEstimation(0.0);
+            auto beta_mdpde_test{ estimator_test->GetBetaMatrixMDPDE(0) };
+            auto beta_mdpde_training{ estimator_training->GetBetaMatrixMDPDE(0) };
+            beta_mdpde_training_map.emplace(i, beta_mdpde_training);
+            beta_error_sum += (beta_mdpde_test - beta_mdpde_training).norm();
+            beta_mean_training += beta_mdpde_training;
+        }
+        beta_mean_training /= static_cast<double>(group_size);
+        beta_error_sum_array(p) = beta_error_sum;
+        
+        // Calculate variance of beta
+        Eigen::MatrixXd beta_variance_training{ Eigen::MatrixXd::Zero(basis_size, basis_size) };
+        for (size_t i = 0; i < group_size; i++)
+        {
+            auto beta_mdpde_training{ beta_mdpde_training_map.at(i) };
+            auto beta_deviation{ beta_mdpde_training - beta_mean_training };
+            beta_variance_training += beta_deviation * beta_deviation.transpose();
+        }
+        beta_variance_training /= static_cast<double>(group_size - 1);
+        auto trace{ beta_variance_training.trace() };
+        beta_variance_trace_array(p) = trace;
+        //std::cout << "Training : Variance trace = " << trace << std::endl;
+        //std::cout << "Test : Error sum = " << beta_error_sum << std::endl;
+    }
+
+    int trace_min_id, error_min_id;
+    beta_variance_trace_array.minCoeff(&trace_min_id);
+    beta_error_sum_array.minCoeff(&error_min_id);
+    //auto trace_min{ beta_variance_trace_array.minCoeff(&trace_min_id) };
+    //auto error_min{ beta_error_sum_array.minCoeff(&error_min_id) };
+    //std::cout << "Min trace = " << trace_min << " @ Id: "<< trace_min_id << std::endl;
+    //std::cout << "Min error = " << error_min << " @ Id: " << error_min_id << std::endl;
+    auto result_alpha_id{ std::max(trace_min_id, error_min_id) };
+
+    return alpha_list.at(static_cast<size_t>(result_alpha_id));
+}
+
+double PotentialAnalysisCommand::TrainAlphaG(
+    const std::vector<AtomObject *> & atom_list,
+    const size_t group_size, const std::vector<double> & alpha_list)
+{
+    size_t atom_in_group_size{ atom_list.size() / group_size + 1};
+    const int basis_size{ 2 };
+    std::map<size_t, std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> total_data_array_map;
+    std::map<size_t, std::vector<double>> total_alpha_r_map;
+    for (size_t i = 0; i < group_size; i++)
+    {
+        total_data_array_map[i].reserve(atom_in_group_size);
+        total_alpha_r_map[i].reserve(atom_in_group_size);
+    }
+
     size_t count{ 0 };
     for (const auto & atom : atom_list)
     {
@@ -476,27 +633,99 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
             );
         }
         auto group_index{ count % group_size };
-        data_array[group_index].emplace_back(std::move(sampling_entry_list), atom->GetInfo());
+        total_data_array_map.at(group_index).emplace_back(std::move(sampling_entry_list), atom->GetInfo());
+        total_alpha_r_map.at(group_index).emplace_back(entry->GetAlphaR());
         count++;
     }
-
-    std::unique_ptr<HRLModelHelper> estimator[group_size];
+    
+    std::map<size_t, std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> data_array_test_map;
+    std::map<size_t, std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> data_array_training_map;
+    std::map<size_t, std::vector<double>> alpha_r_list_test_map;
+    std::map<size_t, std::vector<double>> alpha_r_list_training_map;
     for (size_t i = 0; i < group_size; i++)
     {
-        estimator[i] = std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(data_array[i].size()));
-        estimator[i]->SetThreadSize(1);
-        estimator[i]->SetDataArray(std::move(data_array[i]));
+        auto test_set_atom_size{ total_data_array_map.at(i).size() };
+        data_array_test_map.emplace(i, total_data_array_map.at(i));
+        alpha_r_list_test_map.emplace(i, total_alpha_r_map.at(i));
+        std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array_training_set;
+        std::vector<double> alpha_r_list_training_set;
+        data_array_training_set.reserve(atom_list.size() - test_set_atom_size);
+        alpha_r_list_training_set.reserve(atom_list.size() - test_set_atom_size);
+        for (size_t j = 0; j < group_size; j++)
+        {
+            if (j == i) continue;
+            data_array_training_set.insert(
+                data_array_training_set.end(),
+                total_data_array_map.at(j).begin(), total_data_array_map.at(j).end());
+            alpha_r_list_training_set.insert(
+                alpha_r_list_training_set.end(),
+                total_alpha_r_map.at(j).begin(), total_alpha_r_map.at(j).end());
+        }
+        data_array_training_map.emplace(i, std::move(data_array_training_set));
+        alpha_r_list_training_map.emplace(i, std::move(alpha_r_list_training_set));
     }
 
-    auto alpha_r{ 0.0 };
-    std::vector<double> alpha_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
-    for (auto & alpha : alpha_list)
+    std::map<size_t, std::unique_ptr<HRLModelHelper>> estimator_test_map;
+    std::map<size_t, std::unique_ptr<HRLModelHelper>> estimator_training_map;
+    for (size_t i = 0; i < group_size; i++)
     {
+        estimator_test_map[i] = std::make_unique<HRLModelHelper>(
+            basis_size, static_cast<int>(data_array_test_map.at(i).size()));
+        estimator_training_map[i] = std::make_unique<HRLModelHelper>(
+            basis_size, static_cast<int>(data_array_training_map.at(i).size()));
+        estimator_test_map.at(i)->SetThreadSize(1);
+        estimator_test_map.at(i)->SetDataArray(std::move(data_array_test_map.at(i)));
+        estimator_test_map.at(i)->SetDedicateAlphaRList(std::move(alpha_r_list_test_map.at(i)));
+        estimator_training_map.at(i)->SetThreadSize(1);
+        estimator_training_map.at(i)->SetDataArray(std::move(data_array_training_map.at(i)));
+        estimator_training_map.at(i)->SetDedicateAlphaRList(std::move(alpha_r_list_training_map.at(i)));
+    }
+
+    auto alpha_size{ static_cast<int>(alpha_list.size()) };
+    Eigen::ArrayXd mu_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
+    Eigen::ArrayXd mu_variance_trace_array{ Eigen::ArrayXd::Zero(alpha_size) };
+    for (int p = 0; p < alpha_size; p++)
+    {
+        auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
+        Eigen::VectorXd mu_mean_training{ Eigen::VectorXd::Zero(basis_size) };
+        std::map<size_t, Eigen::VectorXd> mu_mdpde_training_map;
+        auto mu_error_sum{ 0.0 };
         for (size_t i = 0; i < group_size; i++)
         {
-            estimator[i]->RunEstimation(alpha, 0.0);
+            auto estimator_test{ estimator_test_map.at(i).get() };
+            auto estimator_training{ estimator_training_map.at(i).get() };
+            estimator_test->RunEstimation(alpha);
+            estimator_training->RunEstimation(alpha);
+            auto mu_mdpde_test{ estimator_test->GetMuVectorMDPDE() };
+            auto mu_mdpde_training{ estimator_training->GetMuVectorMDPDE() };
+            mu_mdpde_training_map.emplace(i, mu_mdpde_training);
+            mu_error_sum += (mu_mdpde_test - mu_mdpde_training).norm();
+            mu_mean_training += mu_mdpde_training;
         }
+        mu_mean_training /= static_cast<double>(group_size);
+        mu_error_sum_array(p) = mu_error_sum;
+        
+        // Calculate variance of mu
+        Eigen::MatrixXd mu_variance_training{ Eigen::MatrixXd::Zero(basis_size, basis_size) };
+        for (size_t i = 0; i < group_size; i++)
+        {
+            auto mu_mdpde_training{ mu_mdpde_training_map.at(i) };
+            auto mu_deviation{ mu_mdpde_training - mu_mean_training };
+            mu_variance_training += mu_deviation * mu_deviation.transpose();
+        }
+        mu_variance_training /= static_cast<double>(group_size - 1);
+        auto trace{ mu_variance_training.trace() };
+        mu_variance_trace_array(p) = trace;
     }
+
+    int trace_min_id, error_min_id;
+    auto trace_min{ mu_variance_trace_array.minCoeff(&trace_min_id) };
+    auto error_min{ mu_error_sum_array.minCoeff(&error_min_id) };
+    std::cout << "Min trace = " << trace_min << " @ Id: "<< trace_min_id << std::endl;
+    std::cout << "Min error = " << error_min << " @ Id: " << error_min_id << std::endl;
+    auto result_alpha_id{ std::max(trace_min_id, error_min_id) };
+
+    return alpha_list.at(static_cast<size_t>(result_alpha_id));
 }
 
 void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
@@ -526,7 +755,9 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
             auto group_size{ atom_list.size() };
             std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
+            std::vector<double> alpha_r_list;
             data_array.reserve(group_size);
+            alpha_r_list.reserve(group_size);
             for (const auto & atom : atom_list)
             {
                 auto entry{ atom->GetLocalPotentialEntry() };
@@ -547,11 +778,14 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
                     );
                 }
                 data_array.emplace_back(std::move(sampling_entry_list), atom->GetInfo());
+                alpha_r_list.emplace_back(entry->GetAlphaR());
             }
             auto model_estimator{ std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(group_size)) };
             model_estimator->SetThreadSize(1);
             model_estimator->SetDataArray(std::move(data_array));
-            model_estimator->RunEstimation(m_options.alpha_r, m_options.alpha_g);
+            //model_estimator->SetUniversalAlphaR(m_options.alpha_r);
+            model_estimator->SetDedicateAlphaRList(alpha_r_list);
+            model_estimator->RunEstimation(m_options.alpha_g);
 
             auto gaus_group_mean{
                 GausLinearTransformHelper::BuildGaus3DModel(model_estimator->GetMuVectorMean())
@@ -670,7 +904,8 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
             auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
             model_estimator->SetThreadSize(1);
             model_estimator->SetDataArray(std::move(data_array));
-            model_estimator->RunEstimation(m_options.alpha_r, m_options.alpha_g);
+            model_estimator->SetUniversalAlphaR(m_options.alpha_r);
+            model_estimator->RunEstimation(m_options.alpha_g);
 
             auto gaus_group_mean{
                 GausLinearTransformHelper::BuildGaus2DModel(model_estimator->GetMuVectorMean())

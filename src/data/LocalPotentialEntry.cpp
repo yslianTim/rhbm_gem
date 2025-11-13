@@ -4,7 +4,7 @@
 
 #include <cmath>
 
-LocalPotentialEntry::LocalPotentialEntry(void)
+LocalPotentialEntry::LocalPotentialEntry(void) : m_alpha_r{ 0.0 }
 {
 
 }

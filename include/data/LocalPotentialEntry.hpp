@@ -9,6 +9,7 @@ class DataObjectBase;
 
 class LocalPotentialEntry
 {
+    double m_alpha_r;
     std::vector<std::tuple<float, float>> m_distance_and_map_value_list;
     std::tuple<double, double> m_gaus_estimate_ols;
     std::tuple<double, double> m_gaus_estimate_mdpde;
@@ -21,6 +22,7 @@ public:
     LocalPotentialEntry(void);
     ~LocalPotentialEntry();
 
+    void SetAlphaR(double value) { m_alpha_r = value;};
     void AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list);
     void ClearDistanceAndMapValueList(void);
     void AddGausEstimateOLS(double v0, double v1);
@@ -31,6 +33,7 @@ public:
     void AddStatisticalDistance(const std::string & key, double value);
 
     int GetDistanceAndMapValueListSize(void) const;
+    double GetAlphaR(void) const { return m_alpha_r; };
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
     double GetMomentZeroEstimate(void) const;
     double GetMomentTwoEstimate(void) const;

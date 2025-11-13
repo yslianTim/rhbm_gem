@@ -9,6 +9,7 @@
 
 class ModelObject;
 class MapObject;
+class AtomObject;
 
 class PotentialAnalysisCommand : public CommandBase
 {
@@ -70,6 +71,8 @@ private:
     void RunAtomGroupClassification(void);
     void RunBondGroupClassification(void);
     void RunAtomAlphaTraining(void);
+    double TrainAlphaR(const AtomObject * atom, const size_t group_size, const std::vector<double> & alpha_list);
+    double TrainAlphaG(const std::vector<AtomObject *> & atom_list, const size_t group_size, const std::vector<double> & alpha_list);
     void RunAtomPotentialFitting(void);
     void RunBondPotentialFitting(void);
     void SaveDataObject(void);

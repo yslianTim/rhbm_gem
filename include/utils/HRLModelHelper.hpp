@@ -13,6 +13,7 @@
 
 class HRLModelHelper
 {
+    bool m_quiet_mode;
     const int m_basis_size;
     int m_member_size; ///< The size of atomic member (number of members)  \f$ I \f$
     int m_maximum_iteration; ///< The upper limit of iteration (default = 100)
@@ -21,6 +22,8 @@ class HRLModelHelper
     double m_omega_h;   ///< The reciprocal of sum of inverse member weights
     double m_weight_data_min;
     double m_weight_member_min;
+    double m_universal_alpha_r;
+    std::vector<double> m_dedicate_alpha_r_list;
 
     /**
      * @brief   The list of selected data sample size \f$ = n_{i} \f$
@@ -138,14 +141,18 @@ public:
     static constexpr double DEFAULT_TOLERANCE{ 1.0e-5 };
     static constexpr double DEFAULT_WEIGHT_DATA_MIN{ 1.0e-8 };
     static constexpr double DEFAULT_WEIGHT_MEMBER_MIN{ 1.0e-2 };
+    static constexpr double DEFAULT_UNIVERSAL_ALPHA_R{ 0.1 };
 
     HRLModelHelper(void) = delete;
     explicit HRLModelHelper(int basis_size, int member_size);
-    ~HRLModelHelper() = default;
+    ~HRLModelHelper();
 
+    void SetQuietMode(void) { m_quiet_mode = true; }
     void SetThreadSize(int thread_size);
     void SetDataArray(std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> && data_array);
-    void RunEstimation(double alpha_r, double alpha_g);
+    void SetUniversalAlphaR(double alpha_r);
+    void SetDedicateAlphaRList(const std::vector<double> & alpha_r_list);
+    void RunEstimation(double alpha_g);
     void SetMaximumIteration(int size);
     void SetTolerance(double value);
     bool GetOutlierFlag(int id) const;
@@ -171,11 +178,11 @@ private:
     void AlgorithmWEB(void);
     void CalculateBetaByMDPDE(int member_id);
     void CalculateMuByMDPDE(void);
-    void CalculateDataVarianceSquare(int member_id, double alpha_r);
+    void CalculateDataVarianceSquare(int member_id, double alpha);
     void CalculateDataCovariance(int member_id);
     void CalculateMemberCovariance(double alpha_g);
     void CalculateMemberWeight(double alpha_g);
-    void CalculateDataWeight(int member_id, double alpha_r);
+    void CalculateDataWeight(int member_id, double alpha);
     void CalculateStatisticalDistance(void);
     void LabelOutlierMember(void);
     void Finalization(void);
