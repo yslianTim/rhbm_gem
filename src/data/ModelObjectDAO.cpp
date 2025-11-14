@@ -353,7 +353,8 @@ namespace
             amplitude_estimate_prior DOUBLE,
             width_estimate_prior DOUBLE,
             amplitude_variance_prior DOUBLE,
-            width_variance_prior DOUBLE
+            width_variance_prior DOUBLE,
+            alpha_g DOUBLE
         )
     )sql";
 
@@ -363,8 +364,9 @@ namespace
             amplitude_estimate_mean, width_estimate_mean,
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
-            amplitude_variance_prior, width_variance_prior
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            amplitude_variance_prior, width_variance_prior,
+            alpha_g
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     )sql";
 
     constexpr std::string_view SELECT_GROUP_ENTRY_SQL = R"sql(
@@ -373,7 +375,8 @@ namespace
             amplitude_estimate_mean, width_estimate_mean,
             amplitude_estimate_mdpde, width_estimate_mdpde,
             amplitude_estimate_prior, width_estimate_prior,
-            amplitude_variance_prior, width_variance_prior
+            amplitude_variance_prior, width_variance_prior,
+            alpha_g
         FROM {};
     )sql";
 
@@ -791,6 +794,7 @@ void ModelObjectDAO::SaveAtomGroupPotentialEntryList(
         m_database->Bind<double>(8, std::get<1>(group_entry->GetGausEstimatePrior(group_key)));
         m_database->Bind<double>(9, std::get<0>(group_entry->GetGausVariancePrior(group_key)));
         m_database->Bind<double>(10, std::get<1>(group_entry->GetGausVariancePrior(group_key)));
+        m_database->Bind<double>(11, group_entry->GetAlphaG(group_key));
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -815,6 +819,7 @@ void ModelObjectDAO::SaveBondGroupPotentialEntryList(
         m_database->Bind<double>(8, std::get<1>(group_entry->GetGausEstimatePrior(group_key)));
         m_database->Bind<double>(9, std::get<0>(group_entry->GetGausVariancePrior(group_key)));
         m_database->Bind<double>(10, std::get<1>(group_entry->GetGausVariancePrior(group_key)));
+        m_database->Bind<double>(11, group_entry->GetAlphaG(group_key));
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -1164,11 +1169,11 @@ void ModelObjectDAO::LoadAtomGroupPotentialEntryList(
     auto iter{
         m_database->IterateQuery<GroupKey, int,
                                  double, double, double, double,
-                                 double, double, double, double>(
+                                 double, double, double, double, double>(
             FormatSQL(SELECT_GROUP_ENTRY_SQL, table_name)) };
     std::tuple<GroupKey, int,
                double, double, double, double,
-               double, double, double, double> row;
+               double, double, double, double, double> row;
     while (iter.Next(row))
     {
         auto group_key{ std::get<0>(row) };
@@ -1178,6 +1183,7 @@ void ModelObjectDAO::LoadAtomGroupPotentialEntryList(
         group_entry->AddGausEstimateMDPDE(group_key, std::get<4>(row), std::get<5>(row));
         group_entry->AddGausEstimatePrior(group_key, std::get<6>(row), std::get<7>(row));
         group_entry->AddGausVariancePrior(group_key, std::get<8>(row), std::get<9>(row));
+        group_entry->AddAlphaG(group_key, std::get<10>(row));
     }
     
     for (auto & atom : model_obj->GetSelectedAtomList())
@@ -1194,11 +1200,11 @@ void ModelObjectDAO::LoadBondGroupPotentialEntryList(
     auto iter{
         m_database->IterateQuery<GroupKey, int,
                                  double, double, double, double,
-                                 double, double, double, double>(
+                                 double, double, double, double, double>(
             FormatSQL(SELECT_GROUP_ENTRY_SQL, table_name)) };
     std::tuple<GroupKey, int,
                double, double, double, double,
-               double, double, double, double> row;
+               double, double, double, double, double> row;
     while (iter.Next(row))
     {
         auto group_key{ std::get<0>(row) };
@@ -1208,6 +1214,7 @@ void ModelObjectDAO::LoadBondGroupPotentialEntryList(
         group_entry->AddGausEstimateMDPDE(group_key, std::get<4>(row), std::get<5>(row));
         group_entry->AddGausEstimatePrior(group_key, std::get<6>(row), std::get<7>(row));
         group_entry->AddGausVariancePrior(group_key, std::get<8>(row), std::get<9>(row));
+        group_entry->AddAlphaG(group_key, std::get<10>(row));
     }
 
     for (auto & bond : model_obj->GetSelectedBondList())

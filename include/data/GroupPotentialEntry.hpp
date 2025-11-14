@@ -21,6 +21,7 @@ class GroupPotentialEntry
     std::unordered_map<GroupKey, std::tuple<double, double>> m_gaus_estimate_mdpde_map;
     std::unordered_map<GroupKey, std::tuple<double, double>> m_gaus_estimate_prior_map;
     std::unordered_map<GroupKey, std::tuple<double, double>> m_gaus_variance_prior_map;
+    std::unordered_map<GroupKey, double> m_alpha_g_map;
 
 public:
     GroupPotentialEntry(void);
@@ -34,8 +35,10 @@ public:
     void AddGausEstimateMDPDE(GroupKey group_key, double v0, double v1);
     void AddGausEstimatePrior(GroupKey group_key, double v0, double v1);
     void AddGausVariancePrior(GroupKey group_key, double v0, double v1);
+    void AddAlphaG(GroupKey group_key, double value);
     int GetAtomObjectPtrListSize(GroupKey group_key) const;
     int GetBondObjectPtrListSize(GroupKey group_key) const;
+    double GetAlphaG(GroupKey group_key) const;
     const std::vector<AtomObject *> & GetAtomObjectPtrList(GroupKey group_key) const;
     const std::vector<BondObject *> & GetBondObjectPtrList(GroupKey group_key) const;
     std::tuple<double, double> GetGausEstimateMean(GroupKey group_key) const;

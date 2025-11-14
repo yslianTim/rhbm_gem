@@ -61,6 +61,8 @@ public:
     double GetAmplitudeEstimateMDPDE(void) const;
     double GetWidthEstimateMDPDE(void) const;
     double GetAlphaR(void) const;
+    double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const;
+    double GetBondAlphaG(GroupKey group_key, const std::string & class_key) const;
     Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
     Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
 

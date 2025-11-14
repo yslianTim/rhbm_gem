@@ -61,6 +61,11 @@ void GroupPotentialEntry::AddGausVariancePrior(GroupKey group_key, double v0, do
     m_gaus_variance_prior_map[group_key] = std::make_tuple(v0, v1);
 }
 
+void GroupPotentialEntry::AddAlphaG(GroupKey group_key, double value)
+{
+    m_alpha_g_map[group_key] = value;
+}
+
 int GroupPotentialEntry::GetAtomObjectPtrListSize(GroupKey group_key) const
 {
     return static_cast<int>(m_group_atom_list_map.at(group_key).size());
@@ -99,6 +104,17 @@ std::tuple<double, double> GroupPotentialEntry::GetGausEstimatePrior(GroupKey gr
 std::tuple<double, double> GroupPotentialEntry::GetGausVariancePrior(GroupKey group_key) const
 {
     return m_gaus_variance_prior_map.at(group_key);
+}
+
+double GroupPotentialEntry::GetAlphaG(GroupKey group_key) const
+{
+    if (m_alpha_g_map.find(group_key) == m_alpha_g_map.end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "GroupPotentialEntry::GetAlphaG() - Group key not found: " + std::to_string(group_key));
+        return 0.0;
+    }
+    return m_alpha_g_map.at(group_key);
 }
 
 const std::unordered_set<GroupKey> & GroupPotentialEntry::GetGroupKeySet(void) const

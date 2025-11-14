@@ -8,6 +8,7 @@
 #include <random>
 #include <limits>
 #include <utility>
+#include <memory>
 #include <stdexcept>
 #include <sstream>
 

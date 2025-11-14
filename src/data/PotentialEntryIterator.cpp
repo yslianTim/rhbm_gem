@@ -377,6 +377,26 @@ double PotentialEntryIterator::GetAlphaR(void) const
     return 0.0;
 }
 
+double PotentialEntryIterator::GetAtomAlphaG(
+    GroupKey group_key, const std::string & class_key) const
+{
+    if (CheckAtomGroupKey(group_key, class_key) == false)
+    {
+        throw std::runtime_error("Group key is not available.");
+    }
+    return m_model_object->GetAtomGroupPotentialEntry(class_key)->GetAlphaG(group_key);
+}
+
+double PotentialEntryIterator::GetBondAlphaG(
+    GroupKey group_key, const std::string & class_key) const
+{
+    if (CheckBondGroupKey(group_key, class_key) == false)
+    {
+        throw std::runtime_error("Group key is not available.");
+    }
+    return m_model_object->GetBondGroupPotentialEntry(class_key)->GetAlphaG(group_key);
+}
+
 bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
 {
     if (m_atom_object == nullptr)
