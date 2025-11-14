@@ -284,6 +284,14 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
             "Sampling Map Value", "p");
         legend->Draw();
 
+        auto alpha_text{ ROOTHelper::CreatePaveText(0.20, 0.10, 0.40, 0.40, "nbNDC", false) };
+        ROOTHelper::SetPaveTextDefaultStyle(alpha_text.get());
+        ROOTHelper::SetTextAttribute(alpha_text.get(), 50.0f, 133, 12, 0.0, kRed);
+        ROOTHelper::SetFillAttribute(alpha_text.get(), 4000);
+        auto alpha_r{ entry_iter->GetAlphaR() };
+        alpha_text->AddText(Form("#alpha_{r} = %.1f", alpha_r));
+        alpha_text->Draw();
+
         pad[2]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);
         ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);

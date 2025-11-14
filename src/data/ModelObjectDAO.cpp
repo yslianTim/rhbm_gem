@@ -224,7 +224,8 @@ namespace
             amplitude_estimate_ols DOUBLE,
             width_estimate_ols DOUBLE,
             amplitude_estimate_mdpde DOUBLE,
-            width_estimate_mdpde DOUBLE
+            width_estimate_mdpde DOUBLE,
+            alpha_r DOUBLE
         )
     )sql";
 
@@ -232,15 +233,17 @@ namespace
         INSERT OR REPLACE INTO {} (
             serial_id, sampling_size, distance_and_map_value_list,
             amplitude_estimate_ols, width_estimate_ols,
-            amplitude_estimate_mdpde, width_estimate_mdpde
-        ) VALUES (?, ?, ?, ?, ?, ?, ?);
+            amplitude_estimate_mdpde, width_estimate_mdpde,
+            alpha_r
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
     )sql";
 
     constexpr std::string_view SELECT_ATOM_LOCAL_ENTRY_SQL = R"sql(
         SELECT
             serial_id, sampling_size, distance_and_map_value_list,
             amplitude_estimate_ols, width_estimate_ols,
-            amplitude_estimate_mdpde, width_estimate_mdpde
+            amplitude_estimate_mdpde, width_estimate_mdpde,
+            alpha_r
         FROM {};
     )sql";
 
@@ -282,6 +285,7 @@ namespace
             width_estimate_ols DOUBLE,
             amplitude_estimate_mdpde DOUBLE,
             width_estimate_mdpde DOUBLE,
+            alpha_r DOUBLE,
             PRIMARY KEY (atom_serial_id_1, atom_serial_id_2)
         )
     )sql";
@@ -291,8 +295,9 @@ namespace
             atom_serial_id_1, atom_serial_id_2,
             sampling_size, distance_and_map_value_list,
             amplitude_estimate_ols, width_estimate_ols,
-            amplitude_estimate_mdpde, width_estimate_mdpde
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            amplitude_estimate_mdpde, width_estimate_mdpde,
+            alpha_r
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
     )sql";
 
     constexpr std::string_view SELECT_BOND_LOCAL_ENTRY_SQL = R"sql(
@@ -300,7 +305,8 @@ namespace
             atom_serial_id_1, atom_serial_id_2,
             sampling_size, distance_and_map_value_list,
             amplitude_estimate_ols, width_estimate_ols,
-            amplitude_estimate_mdpde, width_estimate_mdpde
+            amplitude_estimate_mdpde, width_estimate_mdpde,
+            alpha_r
         FROM {};
     )sql";
 
@@ -686,6 +692,7 @@ void ModelObjectDAO::SaveAtomLocalPotentialEntryList(
         m_database->Bind<double>(5, entry->GetWidthEstimateOLS());
         m_database->Bind<double>(6, entry->GetAmplitudeEstimateMDPDE());
         m_database->Bind<double>(7, entry->GetWidthEstimateMDPDE());
+        m_database->Bind<double>(8, entry->GetAlphaR());
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -712,6 +719,7 @@ void ModelObjectDAO::SaveBondLocalPotentialEntryList(
         m_database->Bind<double>(6, entry->GetWidthEstimateOLS());
         m_database->Bind<double>(7, entry->GetAmplitudeEstimateMDPDE());
         m_database->Bind<double>(8, entry->GetWidthEstimateMDPDE());
+        m_database->Bind<double>(9, entry->GetAlphaR());
         m_database->StepOnce();
         m_database->Reset();
     }
@@ -1043,9 +1051,11 @@ ModelObjectDAO::LoadAtomLocalPotentialEntryMap(const std::string & table_name)
     local_potential_entry_map.reserve(static_cast<size_t>(entry_count));
     auto iter{
         m_database->IterateQuery<
-            int, int, std::vector<std::tuple<float, float>>, double, double, double, double>(
+            int, int, std::vector<std::tuple<float, float>>,
+            double, double, double, double, double>(
             FormatSQL(SELECT_ATOM_LOCAL_ENTRY_SQL, table_name)) };
-    std::tuple<int, int, std::vector<std::tuple<float, float>>, double, double, double, double> row;
+    std::tuple<int, int, std::vector<std::tuple<float, float>>,
+               double, double, double, double, double> row;
     while (iter.Next(row))
     {
         auto local_potential_entry{ std::make_unique<LocalPotentialEntry>() };
@@ -1053,6 +1063,7 @@ ModelObjectDAO::LoadAtomLocalPotentialEntryMap(const std::string & table_name)
         local_potential_entry->AddDistanceAndMapValueList(std::move(std::get<2>(row)));
         local_potential_entry->AddGausEstimateOLS(std::get<3>(row), std::get<4>(row));
         local_potential_entry->AddGausEstimateMDPDE(std::get<5>(row), std::get<6>(row));
+        local_potential_entry->SetAlphaR(std::get<7>(row));
         local_potential_entry_map[serial_id] = std::move(local_potential_entry);
     }
 
@@ -1060,7 +1071,8 @@ ModelObjectDAO::LoadAtomLocalPotentialEntryMap(const std::string & table_name)
     {
         auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         auto table_name_with_class_key{ class_key + "_" + table_name };
-        LoadAtomLocalPotentialEntrySubList(table_name_with_class_key, class_key, local_potential_entry_map);
+        LoadAtomLocalPotentialEntrySubList(
+            table_name_with_class_key, class_key, local_potential_entry_map);
     }
     return local_potential_entry_map;
 }
@@ -1096,10 +1108,10 @@ ModelObjectDAO::LoadBondLocalPotentialEntryMap(const std::string & table_name)
     auto iter{
         m_database->IterateQuery<
             int, int, int,
-            std::vector<std::tuple<float, float>>, double, double, double, double>(
+            std::vector<std::tuple<float, float>>, double, double, double, double, double>(
             FormatSQL(SELECT_BOND_LOCAL_ENTRY_SQL, table_name)) };
     std::tuple<int, int, int,
-               std::vector<std::tuple<float, float>>, double, double, double, double> row;
+               std::vector<std::tuple<float, float>>, double, double, double, double, double> row;
     while (iter.Next(row))
     {
         auto local_potential_entry{ std::make_unique<LocalPotentialEntry>() };
@@ -1108,6 +1120,7 @@ ModelObjectDAO::LoadBondLocalPotentialEntryMap(const std::string & table_name)
         local_potential_entry->AddDistanceAndMapValueList(std::move(std::get<3>(row)));
         local_potential_entry->AddGausEstimateOLS(std::get<4>(row), std::get<5>(row));
         local_potential_entry->AddGausEstimateMDPDE(std::get<6>(row), std::get<7>(row));
+        local_potential_entry->SetAlphaR(std::get<8>(row));
         local_potential_entry_map[atom_serial_id_pair] = std::move(local_potential_entry);
     }
 

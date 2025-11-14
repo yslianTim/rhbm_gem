@@ -364,6 +364,19 @@ double PotentialEntryIterator::GetWidthEstimateMDPDE(void) const
     return 0.0;
 }
 
+double PotentialEntryIterator::GetAlphaR(void) const
+{
+    if (IsAtomLocalEntryAvailable() == true)
+    {
+        return m_atom_local_entry->GetAlphaR();
+    }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        return m_bond_local_entry->GetAlphaR();
+    }
+    return 0.0;
+}
+
 bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
 {
     if (m_atom_object == nullptr)

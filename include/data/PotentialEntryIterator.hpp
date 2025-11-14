@@ -60,6 +60,7 @@ public:
     std::tuple<float, float> GetBinnedMapValueRange(int bin_size=15, double x_min=0.0, double x_max=1.5, double margin_rate=0.0) const;
     double GetAmplitudeEstimateMDPDE(void) const;
     double GetWidthEstimateMDPDE(void) const;
+    double GetAlphaR(void) const;
     Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
     Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
 

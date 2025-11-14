@@ -69,6 +69,9 @@ void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         [&](const std::string & value) { SetSavedKeyTag(value); },
         "New key tag for saving ModelObject results into database")
         ->default_val(m_options.saved_key_tag);
+    cmd->add_option_function<bool>("--training-alpha",
+        [&](bool value) { SetTrainingAlphaFlag(value); },
+        "Turn On/Off alpha training flag")->default_val(m_options.use_training_alpha);
     cmd->add_option_function<bool>("--asymmetry",
         [&](bool value) { SetAsymmetryFlag(value); },
         "Turn On/Off asymmetry flag")->default_val(m_options.is_asymmetry);
@@ -107,7 +110,7 @@ bool PotentialAnalysisCommand::Execute(void)
 
     RunAtomMapValueSampling();
     RunAtomGroupClassification();
-    RunAtomAlphaTraining();
+    if (m_options.use_training_alpha) RunAtomAlphaTraining();
     RunAtomPotentialFitting();
 
     RunBondMapValueSampling();
@@ -115,6 +118,11 @@ bool PotentialAnalysisCommand::Execute(void)
     RunBondPotentialFitting();
     SaveDataObject();
     return true;
+}
+
+void PotentialAnalysisCommand::SetTrainingAlphaFlag(bool value)
+{
+    m_options.use_training_alpha = value;
 }
 
 void PotentialAnalysisCommand::SetAsymmetryFlag(bool value)
@@ -465,7 +473,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
             Logger::ProgressPercent(i+1, m_model_object->GetNumberOfSelectedAtom());
         }
     }
-
+/*
     // Alpha_G Training
     const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(0) };
     auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
@@ -477,8 +485,8 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
     auto total_atom_size{ atom_list.size() };
     Logger::Log(LogLevel::Info, " - Include " + std::to_string(total_atom_size) + " atoms.");
-    auto alpha_g{ TrainAlphaG(atom_list, 5, ordered_alpha_list) };
-    Logger::Log(LogLevel::Info, "Alpha G = " + std::to_string(alpha_g));
+    auto alpha_g{ TrainAlphaG(atom_list, group_size, ordered_alpha_list) };
+    Logger::Log(LogLevel::Info, "Alpha G = " + std::to_string(alpha_g));*/
 }
 
 double PotentialAnalysisCommand::TrainAlphaR(
@@ -719,10 +727,12 @@ double PotentialAnalysisCommand::TrainAlphaG(
     }
 
     int trace_min_id, error_min_id;
-    auto trace_min{ mu_variance_trace_array.minCoeff(&trace_min_id) };
-    auto error_min{ mu_error_sum_array.minCoeff(&error_min_id) };
-    std::cout << "Min trace = " << trace_min << " @ Id: "<< trace_min_id << std::endl;
-    std::cout << "Min error = " << error_min << " @ Id: " << error_min_id << std::endl;
+    mu_variance_trace_array.minCoeff(&trace_min_id);
+    mu_error_sum_array.minCoeff(&error_min_id);
+    //auto trace_min{ mu_variance_trace_array.minCoeff(&trace_min_id) };
+    //auto error_min{ mu_error_sum_array.minCoeff(&error_min_id) };
+    //std::cout << "Min trace = " << trace_min << " @ Id: "<< trace_min_id << std::endl;
+    //std::cout << "Min error = " << error_min << " @ Id: " << error_min_id << std::endl;
     auto result_alpha_id{ std::max(trace_min_id, error_min_id) };
 
     return alpha_list.at(static_cast<size_t>(result_alpha_id));
@@ -783,8 +793,14 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             auto model_estimator{ std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(group_size)) };
             model_estimator->SetThreadSize(1);
             model_estimator->SetDataArray(std::move(data_array));
-            //model_estimator->SetUniversalAlphaR(m_options.alpha_r);
-            model_estimator->SetDedicateAlphaRList(alpha_r_list);
+            if (m_options.use_training_alpha)
+            {
+                model_estimator->SetDedicateAlphaRList(alpha_r_list);
+            }
+            else
+            {
+                model_estimator->SetUniversalAlphaR(m_options.alpha_r);
+            }
             model_estimator->RunEstimation(m_options.alpha_g);
 
             auto gaus_group_mean{
@@ -873,7 +889,7 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 
-        #ifdef USE_OPENMP
+#ifdef USE_OPENMP
         #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
 #endif
         for (size_t idx = 0; idx < group_key_size; idx++)

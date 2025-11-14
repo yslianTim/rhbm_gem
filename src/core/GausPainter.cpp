@@ -108,6 +108,7 @@ void GausPainter::PaintAtomLocalGausSummary(
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    auto show_outlier{ true };
 
     #ifdef HAVE_ROOT
 
@@ -211,7 +212,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             ROOTHelper::SetMarkerAttribute(scatter_graph.get(), 24, 1.5, kAzure-7, 1.0f);
             ROOTHelper::SetMarkerAttribute(outlier_scatter_graph.get(), 5, 1.5, kRed+1, 1.0f);
             scatter_graph->Draw("P");
-            //outlier_scatter_graph->Draw("P");
+            if (show_outlier == true) outlier_scatter_graph->Draw("P");
 
             pad[3]->cd();
             ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
@@ -248,7 +249,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             pad[1]->cd();
             ROOTHelper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
             auto member_size{ entry_iter->GetAtomObjectList(group_key, class_key).size() };
-            //auto outlier_size{ entry_iter->GetOutlierAtomObjectList(group_key, class_key).size() };
+            auto outlier_size{ entry_iter->GetOutlierAtomObjectList(group_key, class_key).size() };
             std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
             std::vector<double> y_array;
             map_value_graph_list.reserve(member_size);
@@ -257,9 +258,9 @@ void GausPainter::PaintAtomLocalGausSummary(
             {
                 auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
                 auto graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
-                //auto is_outlier{ atom_iter->IsOutlierAtom(class_key) };
-                //auto line_color{ is_outlier ? kRed+1 : kAzure-7 };
-                auto line_color{ kAzure-7 };
+                auto is_outlier{ atom_iter->IsOutlierAtom(class_key) };
+                auto line_color{ is_outlier ? kRed+1 : kAzure-7 };
+                if (show_outlier == true && is_outlier == true) line_color = kRed+1;
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
                 auto range_in_graph{ ROOTHelper::GetRangeInGraph(graph.get()) };
                 y_array.emplace_back(std::get<0>(range_in_graph));
@@ -315,7 +316,10 @@ void GausPainter::PaintAtomLocalGausSummary(
             ROOTHelper::SetTextAttribute(count_text.get(), 40.0f, 133, 32, 0.0, kGray+1);
             ROOTHelper::SetFillAttribute(count_text.get(), 4000);
             count_text->AddText(Form("Number of Members: %ld ", member_size));
-            //count_text->AddText(Form("Group Outliers: #color[633]{%ld} ", outlier_size));
+            if (show_outlier == true)
+            {
+                count_text->AddText(Form("Group Outliers: #color[633]{%ld} ", outlier_size));
+            }
             count_text->Draw();
             
             ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
@@ -691,7 +695,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChain(
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
 
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N};
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     
     #ifdef HAVE_ROOT
 

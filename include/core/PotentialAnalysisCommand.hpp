@@ -16,6 +16,7 @@ class PotentialAnalysisCommand : public CommandBase
 public:
     struct Options : public CommandOptions
     {
+        bool use_training_alpha{ false };
         bool is_asymmetry{ false };
         bool is_simulation{ false };
         int sampling_size{ 1500 };
@@ -46,6 +47,7 @@ public:
     const CommandOptions & GetOptions(void) const override { return m_options; }
     CommandOptions & GetOptions(void) override { return m_options; }
 
+    void SetTrainingAlphaFlag(bool value);
     void SetAsymmetryFlag(bool value);
     void SetSimulationFlag(bool value);
     void SetSimulatedMapResolution(double value);
