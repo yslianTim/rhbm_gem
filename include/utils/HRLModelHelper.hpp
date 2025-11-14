@@ -160,6 +160,10 @@ public:
         const std::vector<MemberDataEntry> & data_array,
         size_t offset,
         size_t count);
+    void SetDataArrayMergedView(
+        const std::vector<MemberDataEntry> & data_array,
+        const std::vector<size_t> & indices,
+        const std::string & merged_info);
     void SetUniversalAlphaR(double alpha_r);
     void SetDedicateAlphaRList(const std::vector<double> & alpha_r_list);
     void SetDedicateAlphaRListView(const std::vector<double> & alpha_r_list);

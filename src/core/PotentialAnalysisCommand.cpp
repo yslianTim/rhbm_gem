@@ -24,6 +24,9 @@
 #include <vector>
 #include <atomic>
 #include <utility>
+#include <iterator>
+#include <stdexcept>
+#include <limits>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -550,42 +553,43 @@ double PotentialAnalysisCommand::TrainAlphaR(
         );
         count++;
     }
-    size_t total_selected_entry_size{ count };
-
-    std::vector<std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> data_array_test_map(group_size);
-    std::vector<std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> data_array_training_map(group_size);
+    
+    using MemberDataEntry = HRLModelHelper::MemberDataEntry;
+    std::vector<MemberDataEntry> grouped_data;
+    grouped_data.reserve(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
-        auto test_set_entry_size{ sampling_entry_list_map[i].size() };
-        data_array_test_map[i].emplace_back(
-            sampling_entry_list_map[i], "test set - group:" + std::to_string(i));
-        std::vector<Eigen::VectorXd> training_set;
-        training_set.reserve(total_selected_entry_size - test_set_entry_size);
-        for (size_t j = 0; j < group_size; j++)
-        {
-            if (j == i) continue;
-            training_set.insert(
-                training_set.end(),
-                sampling_entry_list_map[j].begin(), sampling_entry_list_map[j].end());
-        }
-        data_array_training_map[i].emplace_back(
-            std::move(training_set), "training set - group:" + std::to_string(i));
+        grouped_data.emplace_back(
+            std::move(sampling_entry_list_map[i]),
+            "test set - group:" + std::to_string(i));
     }
 
     std::vector<std::unique_ptr<HRLModelHelper>> estimator_test_map(group_size);
     std::vector<std::unique_ptr<HRLModelHelper>> estimator_training_map(group_size);
+    std::vector<size_t> training_indices;
+    training_indices.reserve(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
-        estimator_test_map[i] = std::make_unique<HRLModelHelper>(
-            basis_size, static_cast<int>(data_array_test_map[i].size()));
-        estimator_training_map[i] = std::make_unique<HRLModelHelper>(
-            basis_size, static_cast<int>(data_array_training_map[i].size()));
+        estimator_test_map[i] = std::make_unique<HRLModelHelper>(basis_size, 1);
+        estimator_training_map[i] = std::make_unique<HRLModelHelper>(basis_size, 1);
         estimator_test_map[i]->SetQuietMode();
         estimator_test_map[i]->SetThreadSize(1);
-        estimator_test_map[i]->SetDataArray(std::move(data_array_test_map[i]));
+        estimator_test_map[i]->SetDataArrayView(grouped_data, i, 1);
+
+        training_indices.clear();
+        training_indices.reserve(group_size > 0 ? group_size - 1 : 0);
+        for (size_t idx = 0; idx < group_size; ++idx)
+        {
+            if (idx == i) continue;
+            training_indices.emplace_back(idx);
+        }
+
         estimator_training_map[i]->SetQuietMode();
         estimator_training_map[i]->SetThreadSize(1);
-        estimator_training_map[i]->SetDataArray(std::move(data_array_training_map[i]));
+        estimator_training_map[i]->SetDataArrayMergedView(
+            grouped_data,
+            training_indices,
+            "training set - group:" + std::to_string(i));
     }
     
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
@@ -647,13 +651,13 @@ double PotentialAnalysisCommand::TrainAlphaG(
 {
     size_t atom_in_group_size{ atom_list.size() / group_size + 1};
     const int basis_size{ 2 };
-    using DataGroup = std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>;
-    std::vector<DataGroup> total_data_array_map(group_size);
-    std::vector<std::vector<double>> total_alpha_r_map(group_size);
+    using MemberDataEntry = HRLModelHelper::MemberDataEntry;
+    std::vector<std::vector<MemberDataEntry>> grouped_data_map(group_size);
+    std::vector<std::vector<double>> grouped_alpha_r_map(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
-        total_data_array_map[i].reserve(atom_in_group_size);
-        total_alpha_r_map[i].reserve(atom_in_group_size);
+        grouped_data_map[i].reserve(atom_in_group_size);
+        grouped_alpha_r_map[i].reserve(atom_in_group_size);
     }
 
     size_t count{ 0 };
@@ -675,52 +679,82 @@ double PotentialAnalysisCommand::TrainAlphaG(
             );
         }
         auto group_index{ count % group_size };
-        total_data_array_map[group_index].emplace_back(std::move(sampling_entry_list), atom->GetInfo());
-        total_alpha_r_map[group_index].emplace_back(entry->GetAlphaR());
+        grouped_data_map[group_index].emplace_back(std::move(sampling_entry_list), atom->GetInfo());
+        grouped_alpha_r_map[group_index].emplace_back(entry->GetAlphaR());
         count++;
     }
     
-    std::vector<DataGroup> data_array_test_map(group_size);
-    std::vector<DataGroup> data_array_training_map(group_size);
-    std::vector<std::vector<double>> alpha_r_list_test_map(group_size);
-    std::vector<std::vector<double>> alpha_r_list_training_map(group_size);
+    std::vector<size_t> group_offsets(group_size + 1, 0);
     for (size_t i = 0; i < group_size; i++)
     {
-        auto test_set_atom_size{ total_data_array_map[i].size() };
-        data_array_test_map[i] = total_data_array_map[i];
-        alpha_r_list_test_map[i] = total_alpha_r_map[i];
-        std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array_training_set;
-        std::vector<double> alpha_r_list_training_set;
-        data_array_training_set.reserve(atom_list.size() - test_set_atom_size);
-        alpha_r_list_training_set.reserve(atom_list.size() - test_set_atom_size);
-        for (size_t j = 0; j < group_size; j++)
-        {
-            if (j == i) continue;
-            data_array_training_set.insert(
-                data_array_training_set.end(),
-                total_data_array_map[j].begin(), total_data_array_map[j].end());
-            alpha_r_list_training_set.insert(
-                alpha_r_list_training_set.end(),
-                total_alpha_r_map[j].begin(), total_alpha_r_map[j].end());
-        }
-        data_array_training_map[i] = std::move(data_array_training_set);
-        alpha_r_list_training_map[i] = std::move(alpha_r_list_training_set);
+        group_offsets[i + 1] = group_offsets[i] + grouped_data_map.at(i).size();
     }
+
+    const size_t total_member_size{ group_offsets.back() };
+    std::vector<MemberDataEntry> flattened_data;
+    flattened_data.reserve(total_member_size);
+    for (auto & group_data : grouped_data_map)
+    {
+        flattened_data.insert(
+            flattened_data.end(),
+            std::make_move_iterator(group_data.begin()),
+            std::make_move_iterator(group_data.end()));
+    }
+
+    std::vector<double> flattened_alpha_r;
+    flattened_alpha_r.reserve(total_member_size);
+    for (auto & alpha_r_list : grouped_alpha_r_map)
+    {
+        flattened_alpha_r.insert(
+            flattened_alpha_r.end(),
+            std::make_move_iterator(alpha_r_list.begin()),
+            std::make_move_iterator(alpha_r_list.end()));
+    }
+
+    std::vector<size_t> training_indices;
+    training_indices.reserve(total_member_size);
 
     std::vector<std::unique_ptr<HRLModelHelper>> estimator_test_map(group_size);
     std::vector<std::unique_ptr<HRLModelHelper>> estimator_training_map(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
+        const auto test_begin{ group_offsets.at(i) };
+        const auto test_end{ group_offsets.at(i + 1) };
+        const auto test_count{ test_end - test_begin };
+        const auto training_count{ total_member_size - test_count };
+
+        if (test_count > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+            training_count > static_cast<size_t>(std::numeric_limits<int>::max()))
+        {
+            throw std::overflow_error("Alpha-G cross validation fold exceeds supported sample count.");
+        }
+
         estimator_test_map[i] = std::make_unique<HRLModelHelper>(
-            basis_size, static_cast<int>(data_array_test_map[i].size()));
+            basis_size, static_cast<int>(test_count));
         estimator_training_map[i] = std::make_unique<HRLModelHelper>(
-            basis_size, static_cast<int>(data_array_training_map[i].size()));
+            basis_size, static_cast<int>(training_count));
         estimator_test_map[i]->SetThreadSize(1);
-        estimator_test_map[i]->SetDataArray(std::move(data_array_test_map[i]));
-        estimator_test_map[i]->SetDedicateAlphaRList(std::move(alpha_r_list_test_map[i]));
+        estimator_test_map[i]->SetDataArrayView(flattened_data, test_begin, test_count);
+        estimator_test_map[i]->SetDedicateAlphaRListView(flattened_alpha_r, test_begin, test_count);
+
+        training_indices.clear();
+        for (size_t idx = 0; idx < test_begin; ++idx)
+        {
+            training_indices.emplace_back(idx);
+        }
+        for (size_t idx = test_end; idx < total_member_size; ++idx)
+        {
+            training_indices.emplace_back(idx);
+        }
+
+        if (training_indices.size() != training_count)
+        {
+            throw std::runtime_error("Training index size mismatch while preparing alpha-G training data.");
+        }
+
         estimator_training_map[i]->SetThreadSize(1);
-        estimator_training_map[i]->SetDataArray(std::move(data_array_training_map[i]));
-        estimator_training_map[i]->SetDedicateAlphaRList(std::move(alpha_r_list_training_map[i]));
+        estimator_training_map[i]->SetDataArrayView(flattened_data, training_indices);
+        estimator_training_map[i]->SetDedicateAlphaRListView(flattened_alpha_r, training_indices);
     }
 
     auto alpha_size{ static_cast<int>(alpha_list.size()) };

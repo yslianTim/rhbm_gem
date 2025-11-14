@@ -217,6 +217,73 @@ void HRLModelHelper::SetDataArrayView(
     m_member_info_list = std::move(member_info_list);
 }
 
+void HRLModelHelper::SetDataArrayMergedView(
+    const std::vector<MemberDataEntry> & data_array,
+    const std::vector<size_t> & indices,
+    const std::string & merged_info)
+{
+    if (m_member_size != 1)
+    {
+        throw std::invalid_argument("Merged data view requires member size of 1");
+    }
+
+    size_t total_sample_count{ 0 };
+    for (auto index : indices)
+    {
+        if (index >= data_array.size())
+        {
+            throw std::out_of_range("Merged data view index exceeds available range");
+        }
+        total_sample_count += std::get<0>(data_array.at(index)).size();
+    }
+
+    auto total_sample_count_int{ CheckedCastToInt(total_sample_count) };
+    MatrixXd x_data_matrix{ MatrixXd::Zero(total_sample_count_int, m_basis_size) };
+    VectorXd y_data_vector{ VectorXd::Zero(total_sample_count_int) };
+
+    size_t row_offset{ 0 };
+    for (auto index : indices)
+    {
+        const auto & entry{ data_array.at(index) };
+        const auto & member_data_vector{ std::get<0>(entry) };
+        auto data_size{ CheckedCastToInt(member_data_vector.size()) };
+        if (data_size == 0 && m_quiet_mode == false)
+        {
+            Logger::Log(LogLevel::Warning,
+                "HRLModelHelper::SetDataArray : Member dataset is empty -> " + std::get<1>(entry));
+        }
+        for (int i = 0; i < data_size; ++i)
+        {
+            const auto & sample{ member_data_vector.at(static_cast<size_t>(i)) };
+            if (sample.size() != m_basis_size + 1)
+            {
+                throw std::invalid_argument("The input data size isn't consistent with basis size.");
+            }
+            if (!sample.array().allFinite())
+            {
+                throw std::invalid_argument("Member dataset contains non-finite value.");
+            }
+            x_data_matrix.row(static_cast<Eigen::Index>(row_offset + static_cast<size_t>(i))) = sample.head(m_basis_size);
+            y_data_vector(static_cast<Eigen::Index>(row_offset + static_cast<size_t>(i))) = sample(m_basis_size);
+        }
+        row_offset += static_cast<size_t>(data_size);
+    }
+
+    std::vector<int> data_size_list;
+    std::vector<std::string> member_info_list;
+    std::vector<MatrixXd> X_list;
+    std::vector<VectorXd> y_list;
+    data_size_list.emplace_back(total_sample_count_int);
+    member_info_list.emplace_back(merged_info);
+    X_list.emplace_back(std::move(x_data_matrix));
+    y_list.emplace_back(std::move(y_data_vector));
+
+    m_data_size_list = std::move(data_size_list);
+    m_X_list = std::move(X_list);
+    m_y_list = std::move(y_list);
+    m_member_info_list = std::move(member_info_list);
+}
+
 void HRLModelHelper::SetDataArrayView(
     const std::vector<MemberDataEntry> & data_array,
     const std::vector<size_t> & indices)
