@@ -498,16 +498,22 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            //const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
-            //auto total_atom_size{ atom_list.size() };
-            //Logger::Log(LogLevel::Info, " - Include " + std::to_string(total_atom_size) + " atoms.");
-            //auto alpha_g{ TrainAlphaG(atom_list, group_size, ordered_alpha_list) };
-            //Logger::Log(LogLevel::Info, "Alpha G = " + std::to_string(alpha_g));
+            auto alpha_g{ 0.0 };
+            const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
+            auto total_atom_size{ atom_list.size() };
+            if (total_atom_size < 100)
+            {
+                alpha_g = m_options.alpha_g;
+            }
+            else
+            {
+                alpha_g = TrainAlphaG(atom_list, group_size, ordered_alpha_list);
+            }
 #ifdef USE_OPENMP
             #pragma omp critical
 #endif
             {
-                group_potential_entry->AddAlphaG(group_key, 0.2);
+                group_potential_entry->AddAlphaG(group_key, alpha_g);
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
