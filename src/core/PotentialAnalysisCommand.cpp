@@ -647,8 +647,9 @@ double PotentialAnalysisCommand::TrainAlphaG(
 {
     size_t atom_in_group_size{ atom_list.size() / group_size + 1};
     const int basis_size{ 2 };
-    std::map<size_t, std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> total_data_array_map;
-    std::map<size_t, std::vector<double>> total_alpha_r_map;
+    using DataGroup = std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>;
+    std::vector<DataGroup> total_data_array_map(group_size);
+    std::vector<std::vector<double>> total_alpha_r_map(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
         total_data_array_map[i].reserve(atom_in_group_size);
@@ -674,20 +675,20 @@ double PotentialAnalysisCommand::TrainAlphaG(
             );
         }
         auto group_index{ count % group_size };
-        total_data_array_map.at(group_index).emplace_back(std::move(sampling_entry_list), atom->GetInfo());
-        total_alpha_r_map.at(group_index).emplace_back(entry->GetAlphaR());
+        total_data_array_map[group_index].emplace_back(std::move(sampling_entry_list), atom->GetInfo());
+        total_alpha_r_map[group_index].emplace_back(entry->GetAlphaR());
         count++;
     }
     
-    std::map<size_t, std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> data_array_test_map;
-    std::map<size_t, std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>>> data_array_training_map;
-    std::map<size_t, std::vector<double>> alpha_r_list_test_map;
-    std::map<size_t, std::vector<double>> alpha_r_list_training_map;
+    std::vector<DataGroup> data_array_test_map(group_size);
+    std::vector<DataGroup> data_array_training_map(group_size);
+    std::vector<std::vector<double>> alpha_r_list_test_map(group_size);
+    std::vector<std::vector<double>> alpha_r_list_training_map(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
-        auto test_set_atom_size{ total_data_array_map.at(i).size() };
-        data_array_test_map.emplace(i, total_data_array_map.at(i));
-        alpha_r_list_test_map.emplace(i, total_alpha_r_map.at(i));
+        auto test_set_atom_size{ total_data_array_map[i].size() };
+        data_array_test_map[i] = total_data_array_map[i];
+        alpha_r_list_test_map[i] = total_alpha_r_map[i];
         std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array_training_set;
         std::vector<double> alpha_r_list_training_set;
         data_array_training_set.reserve(atom_list.size() - test_set_atom_size);
@@ -697,29 +698,29 @@ double PotentialAnalysisCommand::TrainAlphaG(
             if (j == i) continue;
             data_array_training_set.insert(
                 data_array_training_set.end(),
-                total_data_array_map.at(j).begin(), total_data_array_map.at(j).end());
+                total_data_array_map[j].begin(), total_data_array_map[j].end());
             alpha_r_list_training_set.insert(
                 alpha_r_list_training_set.end(),
-                total_alpha_r_map.at(j).begin(), total_alpha_r_map.at(j).end());
+                total_alpha_r_map[j].begin(), total_alpha_r_map[j].end());
         }
-        data_array_training_map.emplace(i, std::move(data_array_training_set));
-        alpha_r_list_training_map.emplace(i, std::move(alpha_r_list_training_set));
+        data_array_training_map[i] = std::move(data_array_training_set);
+        alpha_r_list_training_map[i] = std::move(alpha_r_list_training_set);
     }
 
-    std::map<size_t, std::unique_ptr<HRLModelHelper>> estimator_test_map;
-    std::map<size_t, std::unique_ptr<HRLModelHelper>> estimator_training_map;
+    std::vector<std::unique_ptr<HRLModelHelper>> estimator_test_map(group_size);
+    std::vector<std::unique_ptr<HRLModelHelper>> estimator_training_map(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
         estimator_test_map[i] = std::make_unique<HRLModelHelper>(
-            basis_size, static_cast<int>(data_array_test_map.at(i).size()));
+            basis_size, static_cast<int>(data_array_test_map[i].size()));
         estimator_training_map[i] = std::make_unique<HRLModelHelper>(
-            basis_size, static_cast<int>(data_array_training_map.at(i).size()));
-        estimator_test_map.at(i)->SetThreadSize(1);
-        estimator_test_map.at(i)->SetDataArray(std::move(data_array_test_map.at(i)));
-        estimator_test_map.at(i)->SetDedicateAlphaRList(std::move(alpha_r_list_test_map.at(i)));
-        estimator_training_map.at(i)->SetThreadSize(1);
-        estimator_training_map.at(i)->SetDataArray(std::move(data_array_training_map.at(i)));
-        estimator_training_map.at(i)->SetDedicateAlphaRList(std::move(alpha_r_list_training_map.at(i)));
+            basis_size, static_cast<int>(data_array_training_map[i].size()));
+        estimator_test_map[i]->SetThreadSize(1);
+        estimator_test_map[i]->SetDataArray(std::move(data_array_test_map[i]));
+        estimator_test_map[i]->SetDedicateAlphaRList(std::move(alpha_r_list_test_map[i]));
+        estimator_training_map[i]->SetThreadSize(1);
+        estimator_training_map[i]->SetDataArray(std::move(data_array_training_map[i]));
+        estimator_training_map[i]->SetDedicateAlphaRList(std::move(alpha_r_list_training_map[i]));
     }
 
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
@@ -729,17 +730,17 @@ double PotentialAnalysisCommand::TrainAlphaG(
     {
         auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
         Eigen::VectorXd mu_mean_training{ Eigen::VectorXd::Zero(basis_size) };
-        std::map<size_t, Eigen::VectorXd> mu_mdpde_training_map;
+        std::vector<Eigen::VectorXd> mu_mdpde_training_map(group_size);
         auto mu_error_sum{ 0.0 };
         for (size_t i = 0; i < group_size; i++)
         {
-            auto estimator_test{ estimator_test_map.at(i).get() };
-            auto estimator_training{ estimator_training_map.at(i).get() };
+            auto estimator_test{ estimator_test_map[i].get() };
+            auto estimator_training{ estimator_training_map[i].get() };
             estimator_test->RunEstimation(alpha);
             estimator_training->RunEstimation(alpha);
             auto mu_mdpde_test{ estimator_test->GetMuVectorMDPDE() };
             auto mu_mdpde_training{ estimator_training->GetMuVectorMDPDE() };
-            mu_mdpde_training_map.emplace(i, mu_mdpde_training);
+            mu_mdpde_training_map[i] = mu_mdpde_training;
             mu_error_sum += (mu_mdpde_test - mu_mdpde_training).norm();
             mu_mean_training += mu_mdpde_training;
         }
@@ -750,7 +751,7 @@ double PotentialAnalysisCommand::TrainAlphaG(
         Eigen::MatrixXd mu_variance_training{ Eigen::MatrixXd::Zero(basis_size, basis_size) };
         for (size_t i = 0; i < group_size; i++)
         {
-            auto mu_mdpde_training{ mu_mdpde_training_map.at(i) };
+            const auto & mu_mdpde_training{ mu_mdpde_training_map[i] };
             auto mu_deviation{ mu_mdpde_training - mu_mean_training };
             mu_variance_training += mu_deviation * mu_deviation.transpose();
         }

@@ -3,6 +3,7 @@
 #include "Logger.hpp"
 
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <utility>
 #include <stdexcept>
@@ -27,6 +28,16 @@ int ValidatePositive(int value, const char * name)
         throw std::invalid_argument(std::string(name) + " must be positive value");
     }
     return value;
+}
+
+template <typename SizeType>
+int CheckedCastToInt(SizeType value)
+{
+    if (value > static_cast<SizeType>(std::numeric_limits<int>::max()))
+    {
+        throw std::overflow_error("data_array size exceeds maximum int");
+    }
+    return static_cast<int>(value);
 }
 } // namespace
 
@@ -81,14 +92,9 @@ void HRLModelHelper::SetThreadSize(int thread_size)
     Logger::Log(LogLevel::Debug, "Thread size = " + std::to_string(Eigen::nbThreads()));
 }
 
-void HRLModelHelper::SetDataArray(
-    std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> && data_array)
+void HRLModelHelper::SetDataArray(std::vector<MemberDataEntry> && data_array)
 {
-    if (data_array.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        throw std::overflow_error("data_array size exceeds maximum int");
-    }
-    int data_array_size{ static_cast<int>(data_array.size()) };
+    auto data_array_size{ CheckedCastToInt(data_array.size()) };
     if (data_array_size != m_member_size)
     {
         throw std::invalid_argument("The input size of data list isn't consistent with member size.");
@@ -107,11 +113,7 @@ void HRLModelHelper::SetDataArray(
 
     for (auto & [member_data_vector, member_info] : data_array)
     {
-        if (member_data_vector.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-        {
-            throw std::overflow_error("member_data_vector size exceeds maximum int");
-        }
-        auto data_size{ static_cast<int>(member_data_vector.size()) };
+        auto data_size{ CheckedCastToInt(member_data_vector.size()) };
         if (data_size == 0 && m_quiet_mode == false)
         {
             Logger::Log(LogLevel::Warning,
@@ -146,6 +148,134 @@ void HRLModelHelper::SetDataArray(
     m_member_info_list = std::move(member_info_list);
 }
 
+void HRLModelHelper::SetDataArrayView(const std::vector<MemberDataEntry> & data_array)
+{
+    SetDataArrayView(data_array, 0, data_array.size());
+}
+
+void HRLModelHelper::SetDataArrayView(
+    const std::vector<MemberDataEntry> & data_array,
+    size_t offset,
+    size_t count)
+{
+    if (offset > data_array.size() || count > data_array.size() - offset)
+    {
+        throw std::out_of_range("Requested data view exceeds available range");
+    }
+
+    const auto data_array_size{ CheckedCastToInt(count) };
+    if (data_array_size != m_member_size)
+    {
+        throw std::invalid_argument("The input size of data list isn't consistent with member size.");
+    }
+
+    std::vector<int> data_size_list;
+    std::vector<std::string> member_info_list;
+    std::vector<MatrixXd> X_list;
+    std::vector<VectorXd> y_list;
+    data_size_list.reserve(static_cast<size_t>(m_member_size));
+    member_info_list.reserve(static_cast<size_t>(m_member_size));
+    X_list.reserve(static_cast<size_t>(m_member_size));
+    y_list.reserve(static_cast<size_t>(m_member_size));
+
+    for (size_t idx = 0; idx < count; ++idx)
+    {
+        const auto & entry{ data_array.at(offset + idx) };
+        const auto & member_data_vector{ std::get<0>(entry) };
+        const auto & member_info{ std::get<1>(entry) };
+        auto data_size{ CheckedCastToInt(member_data_vector.size()) };
+        if (data_size == 0 && m_quiet_mode == false)
+        {
+            Logger::Log(LogLevel::Warning,
+                "HRLModelHelper::SetDataArray : Member dataset is empty -> " + member_info);
+        }
+        MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
+        VectorXd y_data_vector{ VectorXd::Zero(data_size) };
+        for (int i = 0; i < data_size; i++)
+        {
+            const auto & sample{ member_data_vector.at(static_cast<size_t>(i)) };
+            if (sample.size() != m_basis_size + 1)
+            {
+                throw std::invalid_argument("The input data size isn't consistent with basis size.");
+            }
+            if (!sample.array().allFinite())
+            {
+                throw std::invalid_argument("Member dataset contains non-finite value.");
+            }
+            x_data_matrix.row(i) = sample.head(m_basis_size);
+            y_data_vector(i) = sample(m_basis_size);
+        }
+        data_size_list.emplace_back(data_size);
+        X_list.emplace_back(std::move(x_data_matrix));
+        y_list.emplace_back(std::move(y_data_vector));
+        member_info_list.emplace_back(member_info);
+    }
+
+    m_data_size_list = std::move(data_size_list);
+    m_X_list = std::move(X_list);
+    m_y_list = std::move(y_list);
+    m_member_info_list = std::move(member_info_list);
+}
+
+void HRLModelHelper::SetDataArrayView(
+    const std::vector<MemberDataEntry> & data_array,
+    const std::vector<size_t> & indices)
+{
+    const auto data_array_size{ CheckedCastToInt(indices.size()) };
+    if (data_array_size != m_member_size)
+    {
+        throw std::invalid_argument("The input size of data list isn't consistent with member size.");
+    }
+
+    std::vector<int> data_size_list;
+    std::vector<std::string> member_info_list;
+    std::vector<MatrixXd> X_list;
+    std::vector<VectorXd> y_list;
+    data_size_list.reserve(static_cast<size_t>(m_member_size));
+    member_info_list.reserve(static_cast<size_t>(m_member_size));
+    X_list.reserve(static_cast<size_t>(m_member_size));
+    y_list.reserve(static_cast<size_t>(m_member_size));
+
+    for (size_t idx = 0; idx < indices.size(); ++idx)
+    {
+        const auto entry_index{ indices.at(idx) };
+        const auto & entry{ data_array.at(entry_index) };
+        const auto & member_data_vector{ std::get<0>(entry) };
+        const auto & member_info{ std::get<1>(entry) };
+        auto data_size{ CheckedCastToInt(member_data_vector.size()) };
+        if (data_size == 0 && m_quiet_mode == false)
+        {
+            Logger::Log(LogLevel::Warning,
+                "HRLModelHelper::SetDataArray : Member dataset is empty -> " + member_info);
+        }
+        MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
+        VectorXd y_data_vector{ VectorXd::Zero(data_size) };
+        for (int i = 0; i < data_size; i++)
+        {
+            const auto & sample{ member_data_vector.at(static_cast<size_t>(i)) };
+            if (sample.size() != m_basis_size + 1)
+            {
+                throw std::invalid_argument("The input data size isn't consistent with basis size.");
+            }
+            if (!sample.array().allFinite())
+            {
+                throw std::invalid_argument("Member dataset contains non-finite value.");
+            }
+            x_data_matrix.row(i) = sample.head(m_basis_size);
+            y_data_vector(i) = sample(m_basis_size);
+        }
+        data_size_list.emplace_back(data_size);
+        X_list.emplace_back(std::move(x_data_matrix));
+        y_list.emplace_back(std::move(y_data_vector));
+        member_info_list.emplace_back(std::get<1>(entry));
+    }
+
+    m_data_size_list = std::move(data_size_list);
+    m_X_list = std::move(X_list);
+    m_y_list = std::move(y_list);
+    m_member_info_list = std::move(member_info_list);
+}
+
 void HRLModelHelper::SetUniversalAlphaR(double alpha_r)
 {
     if (!std::isfinite(alpha_r) || alpha_r < 0.0)
@@ -163,12 +293,55 @@ void HRLModelHelper::SetUniversalAlphaR(double alpha_r)
 
 void HRLModelHelper::SetDedicateAlphaRList(const std::vector<double> & alpha_r_list)
 {
-    m_dedicate_alpha_r_list.clear();
-    if (alpha_r_list.size() != static_cast<size_t>(m_member_size))
+    SetDedicateAlphaRListView(alpha_r_list, 0, alpha_r_list.size());
+}
+
+void HRLModelHelper::SetDedicateAlphaRListView(const std::vector<double> & alpha_r_list)
+{
+    SetDedicateAlphaRListView(alpha_r_list, 0, alpha_r_list.size());
+}
+
+void HRLModelHelper::SetDedicateAlphaRListView(
+    const std::vector<double> & alpha_r_list,
+    size_t offset,
+    size_t count)
+{
+    if (offset > alpha_r_list.size() || count > alpha_r_list.size() - offset)
     {
-        throw std::invalid_argument("The input size of alpha_r list isn't consistent with member size.");
+        throw std::out_of_range("Requested alpha list view exceeds available range");
     }
-    m_dedicate_alpha_r_list = alpha_r_list;
+
+    const auto size{ CheckedCastToInt(count) };
+    if (size != m_member_size)
+    {
+        throw std::invalid_argument("Alpha list size isn't consistent with member size.");
+    }
+
+    const auto begin_it{ alpha_r_list.begin() + static_cast<std::ptrdiff_t>(offset) };
+    const auto end_it{ begin_it + static_cast<std::ptrdiff_t>(count) };
+    m_dedicate_alpha_r_list.assign(begin_it, end_it);
+}
+
+void HRLModelHelper::SetDedicateAlphaRListView(
+    const std::vector<double> & alpha_r_list,
+    const std::vector<size_t> & indices)
+{
+    const auto size{ CheckedCastToInt(indices.size()) };
+    if (size != m_member_size)
+    {
+        throw std::invalid_argument("Alpha list size isn't consistent with member size.");
+    }
+
+    m_dedicate_alpha_r_list.clear();
+    m_dedicate_alpha_r_list.reserve(indices.size());
+    for (auto index : indices)
+    {
+        if (index >= alpha_r_list.size())
+        {
+            throw std::out_of_range("Alpha list index exceeds available range");
+        }
+        m_dedicate_alpha_r_list.emplace_back(alpha_r_list.at(index));
+    }
 }
 
 void HRLModelHelper::SetMaximumIteration(int size)

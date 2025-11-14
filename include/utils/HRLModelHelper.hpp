@@ -149,9 +149,27 @@ public:
 
     void SetQuietMode(void) { m_quiet_mode = true; }
     void SetThreadSize(int thread_size);
-    void SetDataArray(std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> && data_array);
+
+    using MemberDataEntry = std::tuple<std::vector<Eigen::VectorXd>, std::string>;
+    void SetDataArray(std::vector<MemberDataEntry> && data_array);
+    void SetDataArrayView(const std::vector<MemberDataEntry> & data_array);
+    void SetDataArrayView(
+        const std::vector<MemberDataEntry> & data_array,
+        const std::vector<size_t> & indices);
+    void SetDataArrayView(
+        const std::vector<MemberDataEntry> & data_array,
+        size_t offset,
+        size_t count);
     void SetUniversalAlphaR(double alpha_r);
     void SetDedicateAlphaRList(const std::vector<double> & alpha_r_list);
+    void SetDedicateAlphaRListView(const std::vector<double> & alpha_r_list);
+    void SetDedicateAlphaRListView(
+        const std::vector<double> & alpha_r_list,
+        const std::vector<size_t> & indices);
+    void SetDedicateAlphaRListView(
+        const std::vector<double> & alpha_r_list,
+        size_t offset,
+        size_t count);
     void RunEstimation(double alpha_g);
     void SetMaximumIteration(int size);
     void SetTolerance(double value);
