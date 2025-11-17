@@ -321,6 +321,14 @@ void GausPainter::PaintAtomLocalGausSummary(
                 count_text->AddText(Form("Group Outliers: #color[633]{%ld} ", outlier_size));
             }
             count_text->Draw();
+
+            auto alpha_text{ ROOTHelper::CreatePaveText(0.20, 0.10, 0.40, 0.40, "nbNDC", false) };
+            ROOTHelper::SetPaveTextDefaultStyle(alpha_text.get());
+            ROOTHelper::SetTextAttribute(alpha_text.get(), 50.0f, 133, 12, 0.0, kRed);
+            ROOTHelper::SetFillAttribute(alpha_text.get(), 4000);
+            auto alpha_g{ entry_iter->GetAtomAlphaG(group_key, class_key) };
+            alpha_text->AddText(Form("#alpha_{g} = %.1f", alpha_g));
+            alpha_text->Draw();
             
             ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
         }

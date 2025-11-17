@@ -319,6 +319,7 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
             interpolation_visitor.SetPosition(atom->GetPosition());
             m_map_object->Accept(&interpolation_visitor);
             entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
+            if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
             #pragma omp critical
             {
                 atom_count++;
@@ -335,6 +336,7 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
         interpolation_visitor.SetPosition(atom->GetPosition());
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+        if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
         atom_count++;
         Logger::ProgressPercent(atom_count, atom_size);
     }
@@ -378,6 +380,7 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
             interpolation_visitor.SetAxisVector(bond_vector);
             m_map_object->Accept(&interpolation_visitor);
             entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
+            if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
             #pragma omp critical
             {
                 bond_count++;
@@ -395,6 +398,7 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
         interpolation_visitor.SetAxisVector(bond->GetBondVector());
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+        if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
         bond_count++;
         Logger::ProgressPercent(bond_count, bond_size);
     }
@@ -407,6 +411,7 @@ void PotentialAnalysisCommand::RunAtomGroupClassification(void)
     ScopeTimer timer("RunAtomGroupClassification");
     if (m_map_object == nullptr) return;
 
+    Logger::Log(LogLevel::Info, "Atom Classification Summary:");
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
@@ -420,7 +425,7 @@ void PotentialAnalysisCommand::RunAtomGroupClassification(void)
         auto group_size{ group_potential_entry->GetGroupKeySet().size() };
         m_model_object->AddAtomGroupPotentialEntry(class_key, group_potential_entry);
         Logger::Log(LogLevel::Info,
-            "Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
+            " - Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
     }
 }
 
@@ -430,6 +435,7 @@ void PotentialAnalysisCommand::RunBondGroupClassification(void)
     ScopeTimer timer("RunBondGroupClassification");
     if (m_map_object == nullptr) return;
 
+    Logger::Log(LogLevel::Info, "Bond Classification Summary:");
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
@@ -443,7 +449,7 @@ void PotentialAnalysisCommand::RunBondGroupClassification(void)
         auto group_size{ group_potential_entry->GetGroupKeySet().size() };
         m_model_object->AddBondGroupPotentialEntry(class_key, group_potential_entry);
         Logger::Log(LogLevel::Info,
-            "Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
+            " - Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
     }
 }
 
@@ -454,17 +460,16 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     if (m_map_object == nullptr) return;
 
     const size_t group_size{ 5 };
-    std::vector<double> alpha_list{
-        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-        1.1, 1.2, 1.3, 1.4, 1.5
-    };
-    auto ordered_alpha_list{ alpha_list };
-    std::sort(ordered_alpha_list.begin(), ordered_alpha_list.end());
+    std::vector<double> alpha_r_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
+    auto ordered_alpha_r_list{ alpha_r_list };
+    std::sort(ordered_alpha_r_list.begin(), ordered_alpha_r_list.end());
     
     // Alpha_R Training
     std::atomic<size_t> atom_count{ 0 };
     auto & selected_atom_list{ m_model_object->GetSelectedAtomList() };
     auto selected_atom_size{ selected_atom_list.size() };
+    Logger::Log(LogLevel::Info,
+        "Run Alpha_R Training for "+ std::to_string(selected_atom_size) +" atoms.");
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
 #endif
@@ -472,7 +477,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     {
         auto atom{ selected_atom_list[i] };
         auto entry{ atom->GetLocalPotentialEntry() };
-        auto alpha_r{ TrainAlphaR(atom, group_size, ordered_alpha_list) };
+        auto alpha_r{ TrainAlphaR(atom, group_size, ordered_alpha_r_list) };
         entry->SetAlphaR(alpha_r);
         #ifdef USE_OPENMP
             #pragma omp critical
@@ -484,45 +489,54 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     }
 
     // Alpha_G Training
+    std::vector<std::tuple<GroupPotentialEntry *, size_t>> key_list;
+    key_list.reserve(2000);
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        Logger::Log(LogLevel::Info, "Class type: " + class_key);
-
         auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
-        const auto & key_set{ group_potential_entry->GetGroupKeySet() };
-        std::vector<GroupKey> group_keys(key_set.begin(), key_set.end());
-        auto group_key_size{ group_keys.size() };
-        std::atomic<size_t> key_count{ 0 };
-
-#ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
-#endif
-        for (size_t idx = 0; idx < group_key_size; idx++)
+        const auto & group_key_set{ group_potential_entry->GetGroupKeySet() };
+        for (auto group_key : group_key_set)
         {
-            auto group_key{ group_keys[idx] };
-            auto alpha_g{ 0.0 };
             const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
-            auto total_atom_size{ atom_list.size() };
-            if (total_atom_size < 100)
+            if (atom_list.size() >= 25)
             {
-                alpha_g = m_options.alpha_g;
+                key_list.emplace_back(group_potential_entry, group_key);
             }
             else
             {
-                alpha_g = TrainAlphaG(atom_list, group_size, ordered_alpha_list);
-            }
-#ifdef USE_OPENMP
-            #pragma omp critical
-#endif
-            {
-                group_potential_entry->AddAlphaG(group_key, alpha_g);
-                key_count++;
-                Logger::ProgressBar(key_count, group_key_size);
+                group_potential_entry->AddAlphaG(group_key, m_options.alpha_g);
             }
         }
     }
-    
+
+    std::vector<double> alpha_g_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
+    auto ordered_alpha_g_list{ alpha_g_list };
+    std::sort(ordered_alpha_g_list.begin(), ordered_alpha_g_list.end());
+
+    std::atomic<size_t> key_count{ 0 };
+    Logger::Log(LogLevel::Info,
+        "Run Alpha_G Training for "+ std::to_string(key_list.size()) +" groups.");
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+    for (size_t i = 0; i < key_list.size(); i++)
+    {
+        auto group_potential_entry{ std::get<0>(key_list[i]) };
+        auto group_key{ std::get<1>(key_list[i]) };
+        const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
+        auto alpha_g{ TrainAlphaG(atom_list, group_size, ordered_alpha_g_list) };
+
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            group_potential_entry->AddAlphaG(group_key, alpha_g);
+            key_count++;
+            Logger::ProgressBar(key_count, key_list.size());
+        }
+    }
 }
 
 double PotentialAnalysisCommand::TrainAlphaR(
@@ -733,6 +747,7 @@ double PotentialAnalysisCommand::TrainAlphaG(
             basis_size, static_cast<int>(test_count));
         estimator_training_map[i] = std::make_unique<HRLModelHelper>(
             basis_size, static_cast<int>(training_count));
+        estimator_test_map[i]->SetQuietMode();
         estimator_test_map[i]->SetThreadSize(1);
         estimator_test_map[i]->SetDataArrayView(flattened_data, test_begin, test_count);
         estimator_test_map[i]->SetDedicateAlphaRListView(flattened_alpha_r, test_begin, test_count);
@@ -752,6 +767,7 @@ double PotentialAnalysisCommand::TrainAlphaG(
             throw std::runtime_error("Training index size mismatch while preparing alpha-G training data.");
         }
 
+        estimator_training_map[i]->SetQuietMode();
         estimator_training_map[i]->SetThreadSize(1);
         estimator_training_map[i]->SetDataArrayView(flattened_data, training_indices);
         estimator_training_map[i]->SetDedicateAlphaRListView(flattened_alpha_r, training_indices);
