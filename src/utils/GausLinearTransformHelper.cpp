@@ -67,6 +67,8 @@ Eigen::VectorXd GausLinearTransformHelper::BuildLinearModelCoefficentVector(
     double amplitude, double width)
 {
     Eigen::VectorXd linear_model_coeff{ Eigen::VectorXd::Zero(3) };
+    if (width == 0.0) return linear_model_coeff;
+
     auto width_square{ width * width };
     linear_model_coeff(0) = (amplitude <= 0.0) ?
         0.0 : std::log(amplitude) - 1.5 * std::log(Constants::two_pi * width_square);
