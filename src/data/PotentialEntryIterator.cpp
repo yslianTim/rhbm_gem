@@ -1285,7 +1285,29 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomXYPositionTomogr
     return graph;
 }
 
-std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionOLS(void) const
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalLinearModelFunctionOLS(void) const
+{
+    if (IsAtomLocalEntryAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto beta_0{ m_atom_local_entry->GetBetaEstimateOLS(0) };
+    auto beta_1{ m_atom_local_entry->GetBetaEstimateOLS(1) };
+    return ROOTHelper::CreateLinearModelFunction("linear", beta_0, beta_1);
+}
+
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalLinearModelFunctionMDPDE(void) const
+{
+    if (IsAtomLocalEntryAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto beta_0{ m_atom_local_entry->GetBetaEstimateMDPDE(0) };
+    auto beta_1{ m_atom_local_entry->GetBetaEstimateMDPDE(1) };
+    return ROOTHelper::CreateLinearModelFunction("linear", beta_0, beta_1);
+}
+
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalGausFunctionOLS(void) const
 {
     if (IsAtomLocalEntryAvailable() == false)
     {
@@ -1296,7 +1318,7 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionOLS(void
     return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
-std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionMDPDE(void) const
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalGausFunctionMDPDE(void) const
 {
     if (IsAtomLocalEntryAvailable() == false)
     {

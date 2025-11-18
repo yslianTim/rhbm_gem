@@ -118,6 +118,15 @@ std::unique_ptr<TF1> ROOTHelper::CreateFunction1D(const std::string & name, cons
     return std::make_unique<TF1>(name.data(), form.data());
 }
 
+std::unique_ptr<TF1> ROOTHelper::CreateLinearModelFunction(
+    const std::string & name, double beta_0, double beta_1, double x_min, double x_max)
+{
+    auto function{ std::make_unique<TF1>(name.data(), LinearModelFunction, x_min, x_max, 2) };
+    function->SetParameter(0, beta_0);
+    function->SetParameter(1, beta_1);
+    return function;
+}
+
 std::unique_ptr<TF1> ROOTHelper::CreateGaus2DFunctionIn1D(
     const std::string & name, double amplitude, double width, double x_min, double x_max)
 {
@@ -576,6 +585,12 @@ std::tuple<double, double> ROOTHelper::GetRangeInGraph(TGraphErrors * graph)
         if (y_data > y_max) y_max = y_data;
     }
     return std::make_tuple(y_min, y_max);
+}
+
+double ROOTHelper::LinearModelFunction(double * x, double * par)
+{
+    double y{ par[0] + par[1]*x[0] };
+    return y;
 }
 
 double ROOTHelper::Gaus2DModelFunction(double * x, double * par)

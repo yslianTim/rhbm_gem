@@ -1,4 +1,5 @@
 #include "LocalPotentialEntry.hpp"
+#include "GausLinearTransformHelper.hpp"
 #include "Constants.hpp"
 #include "Logger.hpp"
 
@@ -99,6 +100,26 @@ double LocalPotentialEntry::GetMomentTwoEstimate(void) const
     }
     y_sum /= static_cast<double>(count);
     return std::sqrt(y_sum/m_0/3.0);
+}
+
+double LocalPotentialEntry::GetBetaEstimateOLS(int par_id) const
+{
+    auto amplitude{ GetAmplitudeEstimateOLS() };
+    auto width{ GetWidthEstimateOLS() };
+    Eigen::VectorXd coefficient_vector{
+        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
+    };
+    return coefficient_vector(par_id);
+}
+
+double LocalPotentialEntry::GetBetaEstimateMDPDE(int par_id) const
+{
+    auto amplitude{ GetAmplitudeEstimateMDPDE() };
+    auto width{ GetWidthEstimateMDPDE() };
+    Eigen::VectorXd coefficient_vector{
+        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
+    };
+    return coefficient_vector(par_id);
 }
 
 double LocalPotentialEntry::GetGausEstimateOLS(int par_id) const

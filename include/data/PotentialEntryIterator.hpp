@@ -94,8 +94,10 @@ public:
     std::unique_ptr<TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(GroupKey group_key, const std::string & class_key, double range=5.0, int par_id=0);
     std::unique_ptr<TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, const std::string & class_key, int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
-    std::unique_ptr<TF1> CreateAtomGroupGausFunctionOLS(void) const;
-    std::unique_ptr<TF1> CreateAtomGroupGausFunctionMDPDE(void) const;
+    std::unique_ptr<TF1> CreateAtomLocalLinearModelFunctionOLS(void) const;
+    std::unique_ptr<TF1> CreateAtomLocalLinearModelFunctionMDPDE(void) const;
+    std::unique_ptr<TF1> CreateAtomLocalGausFunctionOLS(void) const;
+    std::unique_ptr<TF1> CreateAtomLocalGausFunctionMDPDE(void) const;
     std::unique_ptr<TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
     std::unique_ptr<TF1> CreateBondGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
     #endif

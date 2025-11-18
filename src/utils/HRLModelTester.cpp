@@ -139,6 +139,7 @@ bool HRLModelTester::RunTest(double alpha_r, double alpha_g)
     BuildDataArray();
 
     auto estimator{ std::make_unique<HRLModelHelper>(m_linear_basis_size, m_member_size) };
+    estimator->SetQuietMode();
     estimator->SetThreadSize(1);
     estimator->SetDataArray(std::move(m_data_array));
     estimator->SetUniversalAlphaR(alpha_r);

@@ -188,8 +188,10 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(atom_object) };
         auto data_graph{ entry_iter->CreateDistanceToMapValueGraph() };
         auto data_hist{ entry_iter->CreateDistanceToMapValueHistogram(15) };
-        auto gaus_function{ entry_iter->CreateAtomGroupGausFunctionMDPDE() };
-        auto gaus_function_ols{ entry_iter->CreateAtomGroupGausFunctionOLS() };
+        auto gaus_function_mdpde{ entry_iter->CreateAtomLocalGausFunctionMDPDE() };
+        auto gaus_function_ols{ entry_iter->CreateAtomLocalGausFunctionOLS() };
+        auto linear_model_mdpde{ entry_iter->CreateAtomLocalLinearModelFunctionMDPDE() };
+        auto linear_model_ols{ entry_iter->CreateAtomLocalLinearModelFunctionOLS() };
         auto x_hist{ entry_iter->CreateLinearModelDataHistogram(0) };
         auto y_hist{ entry_iter->CreateLinearModelDataHistogram(1) };
 
@@ -267,9 +269,9 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         ROOTHelper::SetLineAttribute(data_hist.get(), 1, 2, kGray+2);
         data_hist->Draw("CANDLE2 SAME");
         
-        ROOTHelper::SetLineAttribute(gaus_function.get(), 2, 3, kRed);
+        ROOTHelper::SetLineAttribute(gaus_function_mdpde.get(), 2, 3, kRed);
         ROOTHelper::SetLineAttribute(gaus_function_ols.get(), 3, 3, kBlue);
-        gaus_function->Draw("SAME");
+        gaus_function_mdpde->Draw("SAME");
         gaus_function_ols->Draw("SAME");
 
         auto legend{ ROOTHelper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
@@ -278,7 +280,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.15f);
         legend->SetNColumns(2);
-        legend->AddEntry(gaus_function.get(),
+        legend->AddEntry(gaus_function_mdpde.get(),
             "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
         legend->AddEntry(data_graph.get(),
             "Sampling Map Value", "p");
@@ -322,6 +324,11 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         auto scatter_graph{ entry_iter->CreateLinearModelDistanceToMapValueGraph() };
         ROOTHelper::SetMarkerAttribute(scatter_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
         scatter_graph->Draw("P");
+
+        ROOTHelper::SetLineAttribute(linear_model_mdpde.get(), 2, 3, kRed);
+        ROOTHelper::SetLineAttribute(linear_model_ols.get(), 3, 3, kBlue);
+        linear_model_mdpde->Draw("SAME");
+        linear_model_ols->Draw("SAME");
 
         pad[3]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
