@@ -45,6 +45,9 @@ public:
     std::tuple<double, double> GetGausEstimateMDPDE(GroupKey group_key) const;
     std::tuple<double, double> GetGausEstimatePrior(GroupKey group_key) const;
     std::tuple<double, double> GetGausVariancePrior(GroupKey group_key) const;
+    double GetMuEstimateMean(GroupKey group_key, int par_id) const;
+    double GetMuEstimateMDPDE(GroupKey group_key, int par_id) const;
+    double GetMuEstimatePrior(GroupKey group_key, int par_id) const;
     double GetGausEstimateMean(GroupKey group_key, int par_id) const;
     double GetGausEstimateMDPDE(GroupKey group_key, int par_id) const;
     double GetGausEstimatePrior(GroupKey group_key, int par_id) const;

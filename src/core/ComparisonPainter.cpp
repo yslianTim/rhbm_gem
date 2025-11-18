@@ -469,7 +469,7 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
         std::vector<double> x_array, y_array;
         for (int i = 0; i < standard_residue_size; i++)
         {
-            auto residue{ static_cast<Residue>(i) };
+            auto residue{ static_cast<Residue>(i+1) };
             auto data_graph{ ROOTHelper::CreateGraphErrors() };
             auto sim_with_charge_graph{ ROOTHelper::CreateGraphErrors() };
             auto sim_no_charge_graph{ ROOTHelper::CreateGraphErrors() };
@@ -504,7 +504,7 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
         std::unique_ptr<TPaveText> title_text[standard_residue_size];
         for (int i = 0; i < standard_residue_size; i++)
         {
-            auto residue{ static_cast<Residue>(i) };
+            auto residue{ static_cast<Residue>(i+1) };
             auto col_id{ i % col_size };
             auto row_id{ row_size - (i / col_size) - 1 };
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), col_id, row_id);

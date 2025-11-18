@@ -1329,6 +1329,48 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalGausFunctionMDPDE(vo
     return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupLinearModelFunctionMean(
+    GroupKey group_key, const std::string & class_key, double x_min, double x_max) const
+{
+    auto mu_0
+    {
+        m_model_object->GetAtomGroupPotentialEntry(class_key)->GetMuEstimateMean(group_key, 0)
+    };
+    auto mu_1
+    {
+        m_model_object->GetAtomGroupPotentialEntry(class_key)->GetMuEstimateMean(group_key, 1)
+    };
+    return ROOTHelper::CreateLinearModelFunction("linear_mean", mu_0, mu_1, x_min, x_max);
+}
+
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupLinearModelFunctionPrior(
+    GroupKey group_key, const std::string & class_key, double x_min, double x_max) const
+{
+    auto mu_0
+    {
+        m_model_object->GetAtomGroupPotentialEntry(class_key)->GetMuEstimatePrior(group_key, 0)
+    };
+    auto mu_1
+    {
+        m_model_object->GetAtomGroupPotentialEntry(class_key)->GetMuEstimatePrior(group_key, 1)
+    };
+    return ROOTHelper::CreateLinearModelFunction("linear_prior", mu_0, mu_1, x_min, x_max);
+}
+
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionMean(
+    GroupKey group_key, const std::string & class_key) const
+{
+    auto amplitude
+    {
+        m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimateMean(group_key, 0)
+    };
+    auto width
+    {
+        m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimateMean(group_key, 1)
+    };
+    return ROOTHelper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width);
+}
+
 std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionPrior(
     GroupKey group_key, const std::string & class_key) const
 {
@@ -1340,7 +1382,7 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomGroupGausFunctionPrior(
     {
         m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
     };
-    return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
+    return ROOTHelper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width);
 }
 
 std::unique_ptr<TF1> PotentialEntryIterator::CreateBondGroupGausFunctionPrior(
@@ -1354,6 +1396,6 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateBondGroupGausFunctionPrior(
     {
         m_model_object->GetBondGroupPotentialEntry(class_key)->GetGausEstimatePrior(group_key, 1)
     };
-    return ROOTHelper::CreateGaus2DFunctionIn1D("gaus", amplitude, width);
+    return ROOTHelper::CreateGaus2DFunctionIn1D("group_gaus_prior", amplitude, width);
 }
 #endif

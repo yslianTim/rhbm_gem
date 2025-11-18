@@ -1,4 +1,5 @@
 #include "GroupPotentialEntry.hpp"
+#include "GausLinearTransformHelper.hpp"
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
 #include "Constants.hpp"
@@ -120,6 +121,36 @@ double GroupPotentialEntry::GetAlphaG(GroupKey group_key) const
 const std::unordered_set<GroupKey> & GroupPotentialEntry::GetGroupKeySet(void) const
 {
     return m_group_key_set;
+}
+
+double GroupPotentialEntry::GetMuEstimateMean(GroupKey group_key, int par_id) const
+{
+    auto amplitude{ GetGausEstimateMean(group_key, 0) };
+    auto width{ GetGausEstimateMean(group_key, 1) };
+    Eigen::VectorXd coefficient_vector{
+        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
+    };
+    return coefficient_vector(par_id);
+}
+
+double GroupPotentialEntry::GetMuEstimateMDPDE(GroupKey group_key, int par_id) const
+{
+    auto amplitude{ GetGausEstimateMDPDE(group_key, 0) };
+    auto width{ GetGausEstimateMDPDE(group_key, 1) };
+    Eigen::VectorXd coefficient_vector{
+        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
+    };
+    return coefficient_vector(par_id);
+}
+
+double GroupPotentialEntry::GetMuEstimatePrior(GroupKey group_key, int par_id) const
+{
+    auto amplitude{ GetGausEstimatePrior(group_key, 0) };
+    auto width{ GetGausEstimatePrior(group_key, 1) };
+    Eigen::VectorXd coefficient_vector{
+        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
+    };
+    return coefficient_vector(par_id);
 }
 
 double GroupPotentialEntry::GetGausEstimateMean(GroupKey group_key, int par_id) const

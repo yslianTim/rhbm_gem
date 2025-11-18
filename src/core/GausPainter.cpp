@@ -267,7 +267,6 @@ void GausPainter::PaintAtomLocalGausSummary(
                 y_array.emplace_back(std::get<1>(range_in_graph));
                 map_value_graph_list.emplace_back(std::move(graph));
             }
-            auto gaus_function{ entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key) };
 
             auto frame{ ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
             ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
@@ -284,28 +283,33 @@ void GausPainter::PaintAtomLocalGausSummary(
             frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
             frame->GetYaxis()->SetTitle("Map Value");
             auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.1) };
-            auto x_min{ 0.01 };
-            auto x_max{ 1.49 };
-            auto y_min{ std::get<0>(y_range) };
-            auto y_max{ std::get<1>(y_range) };
-            frame->GetXaxis()->SetLimits(x_min, x_max);
-            frame->GetYaxis()->SetLimits(y_min, y_max);
+            auto x_min_tmp{ 0.01 };
+            auto x_max_tmp{ 1.49 };
+            auto y_min_tmp{ std::get<0>(y_range) };
+            auto y_max_tmp{ std::get<1>(y_range) };
+            frame->GetXaxis()->SetLimits(x_min_tmp, x_max_tmp);
+            frame->GetYaxis()->SetLimits(y_min_tmp, y_max_tmp);
             frame->SetStats(0);
             frame->Draw();
             for (auto & graph : map_value_graph_list)
             {
                 graph->Draw("L X0");
             }
-            ROOTHelper::SetLineAttribute(gaus_function.get(), 2, 3, kRed);
-            gaus_function->Draw("SAME");
 
-            auto legend{ ROOTHelper::CreateLegend(0.20, 0.90, 1.00, 1.00, false) };
+            auto gaus_mean{ entry_iter->CreateAtomGroupGausFunctionMean(group_key, class_key) };
+            auto gaus_prior{ entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key) };
+            ROOTHelper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
+            ROOTHelper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
+            gaus_prior->Draw("SAME");
+            //gaus_mean->Draw("SAME");
+
+            auto legend{ ROOTHelper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
             ROOTHelper::SetLegendDefaultStyle(legend.get());
             ROOTHelper::SetFillAttribute(legend.get(), 4000);
             ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
             legend->SetMargin(0.15f);
             legend->SetNColumns(2);
-            legend->AddEntry(gaus_function.get(),
+            legend->AddEntry(gaus_prior.get(),
                 "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
                 "Map Value", "l");

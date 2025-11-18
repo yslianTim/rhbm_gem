@@ -98,6 +98,9 @@ public:
     std::unique_ptr<TF1> CreateAtomLocalLinearModelFunctionMDPDE(void) const;
     std::unique_ptr<TF1> CreateAtomLocalGausFunctionOLS(void) const;
     std::unique_ptr<TF1> CreateAtomLocalGausFunctionMDPDE(void) const;
+    std::unique_ptr<TF1> CreateAtomGroupLinearModelFunctionMean(GroupKey group_key, const std::string & class_key, double x_min, double x_max) const;
+    std::unique_ptr<TF1> CreateAtomGroupLinearModelFunctionPrior(GroupKey group_key, const std::string & class_key, double x_min, double x_max) const;
+    std::unique_ptr<TF1> CreateAtomGroupGausFunctionMean(GroupKey group_key, const std::string & class_key) const;
     std::unique_ptr<TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
     std::unique_ptr<TF1> CreateBondGroupGausFunctionPrior(GroupKey group_key, const std::string & class_key) const;
     #endif
