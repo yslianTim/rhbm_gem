@@ -19,7 +19,6 @@ class HRLModelHelper
     int m_maximum_iteration; ///< The upper limit of iteration (default = 100)
     double m_tolerance; ///< The tolerance for algorithms (default = \f$ 10^{-5} \f$)
     double m_omega_sum; ///< The sum of member weights \f$ \Omega^{(t)} = \sum_{0}^{I-1}\omega_{i}^{(t)} \f$
-    double m_omega_h;   ///< The reciprocal of sum of inverse member weights
     double m_weight_data_min;
     double m_weight_member_min;
     double m_universal_alpha_r;
@@ -132,8 +131,7 @@ class HRLModelHelper
     Eigen::MatrixXd m_capital_lambda;
 
 
-    Eigen::VectorXd m_mu_iter, m_mu_MDPDE, m_mu_prior, m_mu_mean; // [basis_size x 1]
-    Eigen::MatrixXd m_beta_iter_array;
+    Eigen::VectorXd m_mu_MDPDE, m_mu_prior, m_mu_mean; // [basis_size x 1]
     Eigen::MatrixXd m_beta_OLS_array, m_beta_MDPDE_array, m_beta_posterior_array; // [basis_size x member_size]
 
 public:
@@ -142,6 +140,7 @@ public:
     static constexpr double DEFAULT_WEIGHT_DATA_MIN{ 1.0e-8 };
     static constexpr double DEFAULT_WEIGHT_MEMBER_MIN{ 1.0e-2 };
     static constexpr double DEFAULT_UNIVERSAL_ALPHA_R{ 0.1 };
+    static constexpr double ALPHA_LIMIT{ 100.0 };
 
     HRLModelHelper(void) = delete;
     explicit HRLModelHelper(int basis_size, int member_size);
@@ -175,6 +174,8 @@ public:
         size_t offset,
         size_t count);
     void RunEstimation(double alpha_g);
+    void RunBetaMDPDE(double alpha_r);
+    void RunMuMDPDE(double alpha_g);
     void SetMaximumIteration(int size);
     void SetTolerance(double value);
     bool GetOutlierFlag(int id) const;
@@ -194,17 +195,66 @@ public:
 
 private:
     void ValidateMemberId(int id) const;
+    void ValidateAlpha(double alpha) const;
     void Initialization(void);
-    void AlgorithmBetaMDPDE(double alpha_r);
-    void AlgorithmMuMDPDE(double alpha_g);
-    void AlgorithmWEB(void);
-    void CalculateBetaByMDPDE(int member_id);
-    void CalculateMuByMDPDE(void);
-    void CalculateDataVarianceSquare(int member_id, double alpha);
-    void CalculateDataCovariance(int member_id);
-    void CalculateMemberCovariance(double alpha_g);
-    void CalculateMemberWeight(double alpha_g);
-    void CalculateDataWeight(int member_id, double alpha);
+    void RunAlgorithmBetaMDPDE(double alpha_r);
+    void RunAlgorithmMuMDPDE(double alpha_g);
+    void RunAlgorithmWEB(void);
+
+    void AlgorithmBetaMDPDE(
+        double alpha_r,
+        const Eigen::MatrixXd & X,
+        const Eigen::VectorXd & y,
+        Eigen::VectorXd & beta,
+        double & sigma_square,
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma);
+    void AlgorithmMuMDPDE(
+        double alpha_g,
+        const Eigen::MatrixXd & beta_array,
+        Eigen::VectorXd & mu,
+        Eigen::ArrayXd & omega_array,
+        double & omega_sum,
+        Eigen::MatrixXd & capital_lambda,
+        std::vector<Eigen::MatrixXd> & member_capital_lambda_list);
+    Eigen::VectorXd CalculateMuByMDPDE(
+        const Eigen::MatrixXd & beta_array,
+        const Eigen::ArrayXd & omega_array,
+        double omega_sum);
+    Eigen::ArrayXd CalculateMemberWeight(
+        double alpha,
+        const Eigen::MatrixXd & beta_array,
+        const Eigen::VectorXd & mu,
+        const Eigen::MatrixXd & capital_lambda);
+    Eigen::MatrixXd CalculateMemberCovariance(
+        double alpha,
+        const Eigen::MatrixXd & beta_array,
+        const Eigen::VectorXd & mu,
+        const Eigen::ArrayXd & omega_array,
+        double omega_sum);
+    double CalculateInverseMemberWeightSum(const Eigen::ArrayXd & omega_array);
+    Eigen::VectorXd CalculateBetaByOLS(
+        const Eigen::MatrixXd & X,
+        const Eigen::VectorXd & y);
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataWeight(
+        double alpha,
+        const Eigen::MatrixXd & X,
+        const Eigen::VectorXd & y,
+        const Eigen::VectorXd & beta,
+        double sigma_square);
+    Eigen::VectorXd CalculateBetaByMDPDE(
+        const Eigen::MatrixXd & X,
+        const Eigen::VectorXd & y,
+        const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W);
+    double CalculateDataVarianceSquare(
+        double alpha,
+        const Eigen::MatrixXd & X,
+        const Eigen::VectorXd & y,
+        const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
+        const Eigen::VectorXd & beta);
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataCovariance(
+        double sigma_square,
+        const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W);
     void CalculateStatisticalDistance(void);
     void LabelOutlierMember(void);
     void Finalization(void);

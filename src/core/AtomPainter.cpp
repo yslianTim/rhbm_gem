@@ -77,7 +77,7 @@ void AtomPainter::Painting(void)
     auto label{ m_atom_object_list.at(0)->GetKeyTag() };
     label += ".pdf";
     
-    PaintDemoPlot("demo_plot" + label);
+    //PaintDemoPlot("demo_plot" + label);
     PaintAtomSamplingDataSummary("atom_sampling_data_summary" + label);
 }
 

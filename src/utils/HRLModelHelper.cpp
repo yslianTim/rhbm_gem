@@ -46,7 +46,7 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_basis_size{ ValidatePositive(basis_size, "basis_size") },
     m_member_size{ ValidatePositive(member_size, "member_size") },
     m_maximum_iteration{ DEFAULT_MAXIMUM_ITERATION }, m_tolerance{ DEFAULT_TOLERANCE },
-    m_omega_sum{ 0.0 }, m_omega_h{ 0.0 },
+    m_omega_sum{ 0.0 },
     m_weight_data_min{ DEFAULT_WEIGHT_DATA_MIN },
     m_weight_member_min{ DEFAULT_WEIGHT_MEMBER_MIN / m_member_size },
     m_universal_alpha_r{ DEFAULT_UNIVERSAL_ALPHA_R },
@@ -55,11 +55,9 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_statistical_distance_array{ ArrayXd::Zero(m_member_size) },
     m_outlier_flag_array{ ArrayXb::Constant(m_member_size, false) },
     m_capital_lambda{ MatrixXd::Identity(m_basis_size, m_basis_size) },
-    m_mu_iter{ VectorXd::Zero(m_basis_size) },
     m_mu_MDPDE{ VectorXd::Zero(m_basis_size) },
     m_mu_prior{ VectorXd::Zero(m_basis_size) },
     m_mu_mean{ VectorXd::Zero(m_basis_size) },
-    m_beta_iter_array{ MatrixXd::Zero(m_basis_size, m_member_size) },
     m_beta_OLS_array{ MatrixXd::Zero(m_basis_size, m_member_size) },
     m_beta_MDPDE_array{ MatrixXd::Zero(m_basis_size, m_member_size) },
     m_beta_posterior_array{ MatrixXd::Zero(m_basis_size, m_member_size) }
@@ -345,16 +343,7 @@ void HRLModelHelper::SetDataArrayView(
 
 void HRLModelHelper::SetUniversalAlphaR(double alpha_r)
 {
-    if (!std::isfinite(alpha_r) || alpha_r < 0.0)
-    {
-        throw std::invalid_argument("Alpha parameters must be finite and non-negative.");
-    }
-
-    const double alpha_limit{ std::sqrt(std::numeric_limits<double>::max()) };
-    if (alpha_r > alpha_limit)
-    {
-        throw std::overflow_error("Alpha parameters are too large and may overflow calculations.");
-    }
+    ValidateAlpha(alpha_r);
     m_universal_alpha_r = alpha_r;
 }
 
@@ -435,16 +424,7 @@ void HRLModelHelper::SetTolerance(double value)
 
 void HRLModelHelper::RunEstimation(double alpha_g)
 {
-    if (!std::isfinite(alpha_g) || alpha_g < 0.0)
-    {
-        throw std::invalid_argument("Alpha parameters must be finite and non-negative.");
-    }
-
-    const double alpha_limit{ std::sqrt(std::numeric_limits<double>::max()) };
-    if (alpha_g > alpha_limit)
-    {
-        throw std::overflow_error("Alpha parameters are too large and may overflow calculations.");
-    }
+    ValidateAlpha(alpha_g);
 
     if (m_data_size_list.size() < static_cast<size_t>(m_member_size))
     {
@@ -460,7 +440,6 @@ void HRLModelHelper::RunEstimation(double alpha_g)
         m_omega_array.resize(m_member_size);
         m_statistical_distance_array.resize(m_member_size);
         m_outlier_flag_array.resize(m_member_size);
-        m_beta_iter_array.resize(m_basis_size, m_member_size);
         m_beta_OLS_array.resize(m_basis_size, m_member_size);
         m_beta_MDPDE_array.resize(m_basis_size, m_member_size);
         m_capital_sigma_posterior_list.resize(static_cast<size_t>(m_member_size));
@@ -472,11 +451,25 @@ void HRLModelHelper::RunEstimation(double alpha_g)
     }
 
     Initialization();
-    AlgorithmBetaMDPDE(m_universal_alpha_r);
-    AlgorithmMuMDPDE(alpha_g);
-    AlgorithmWEB();
+    RunAlgorithmBetaMDPDE(m_universal_alpha_r);
+    RunAlgorithmMuMDPDE(alpha_g);
+    RunAlgorithmWEB();
     CalculateStatisticalDistance();
     LabelOutlierMember();
+}
+
+void HRLModelHelper::RunBetaMDPDE(double alpha_r)
+{
+    ValidateAlpha(alpha_r);
+    Initialization();
+    RunAlgorithmBetaMDPDE(alpha_r);
+}
+
+void HRLModelHelper::RunMuMDPDE(double alpha_g)
+{
+    ValidateAlpha(alpha_g);
+    Initialization();
+    RunAlgorithmMuMDPDE(alpha_g);
 }
 
 void HRLModelHelper::Initialization(void)
@@ -484,18 +477,15 @@ void HRLModelHelper::Initialization(void)
     // Reset scalars and arrays to their default values
     m_capital_lambda.setIdentity();
     m_omega_sum = 0.0;
-    m_omega_h = 0.0;
     m_sigma_square_array.setOnes();
     m_omega_array.setOnes();
     m_statistical_distance_array.setZero();
     m_outlier_flag_array.setConstant(false);
 
     // Reset member-wise parameter estimates
-    m_beta_iter_array.setZero();
     m_beta_OLS_array.setZero();
     m_beta_MDPDE_array.setZero();
     m_beta_posterior_array.setZero();
-    m_mu_iter.setZero();
     m_mu_MDPDE.setZero();
     m_mu_prior.setZero();
     m_mu_mean.setZero();
@@ -511,58 +501,90 @@ void HRLModelHelper::Initialization(void)
     for (int i = 0; i < m_member_size; i++)
     { //=== Begin of member ID loop (0 ... I-1)
         const auto & data_size{ m_data_size_list.at(static_cast<size_t>(i)) };
-        DMatrixXd w{ data_size };
-        w.setIdentity();
-        m_W_list.emplace_back(std::move(w));
+        DMatrixXd W{ data_size };
+        W.setIdentity();
+        m_W_list.emplace_back(std::move(W));
         DMatrixXd sigma{ data_size };
         sigma.setIdentity();
         m_capital_sigma_list.emplace_back(std::move(sigma));
     } //=== End of member ID loop
 }
 
-void HRLModelHelper::AlgorithmBetaMDPDE(double alpha_r)
+void HRLModelHelper::AlgorithmBetaMDPDE(
+    double alpha,
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y,
+    Eigen::VectorXd & beta,
+    double & sigma_square,
+    DMatrixXd & W,
+    DMatrixXd & capital_sigma)
+{
+    int n{ static_cast<int>(y.size()) };
+    beta = CalculateBetaByOLS(X, y); // OLS init
+    sigma_square = (n < 2) ?
+        std::numeric_limits<double>::max() : (y - (X * beta)).squaredNorm() / (n-1);
+    W = VectorXd::Ones(n).asDiagonal();
+    VectorXd beta_in_previous_iter{ beta };
+    for (int t = 0; t < m_maximum_iteration; t++)
+    { //=== Begin of iteration loop
+        W = CalculateDataWeight(alpha, X, y, beta, sigma_square);
+        beta = CalculateBetaByMDPDE(X, y, W);
+        sigma_square = CalculateDataVarianceSquare(alpha, X, y, W, beta);
+        if ((beta - beta_in_previous_iter).squaredNorm() < m_tolerance) break;
+        beta_in_previous_iter = beta;
+        if (t == m_maximum_iteration - 1 && m_quiet_mode == false)
+        {
+            Logger::Log(LogLevel::Warning,
+                "HRLModelHelper::AlgorithmBetaMDPDE : "
+                "Reach maximum iterations before achieving tolerance.");
+        }
+    } //=== End of iteration loop
+
+    capital_sigma = CalculateDataCovariance(sigma_square, W);
+}
+
+void HRLModelHelper::RunAlgorithmBetaMDPDE(double alpha_r)
 {
     for (int i = 0; i < m_member_size; i++)
     { //=== Begin of member ID loop (0 ... I-1)
         const auto & X{ m_X_list.at(static_cast<size_t>(i)) };
         const auto & y{ m_y_list.at(static_cast<size_t>(i)) };
-        const auto & n{ m_data_size_list.at(static_cast<size_t>(i)) };
         auto alpha{ (m_dedicate_alpha_r_list.empty()) ?
             alpha_r : m_dedicate_alpha_r_list.at(static_cast<size_t>(i))
         };
-        MatrixXd gram_matrix{ X.transpose() * X };
-        auto inverse_gram_matrix{ EigenMatrixUtility::GetInverseMatrix(gram_matrix) };
-        m_beta_OLS_array.col(i) = inverse_gram_matrix * (X.transpose() * y);
-        m_beta_iter_array.col(i) = m_beta_OLS_array.col(i);
-        m_sigma_square_array(i) = (n < 2) ?
-            std::numeric_limits<double>::max() :
-            (y - (X * m_beta_iter_array.col(i))).squaredNorm() / (n-1);
-        VectorXd beta_in_previous_iter;
-        for (int iter = 0; iter < m_maximum_iteration; iter++)
-        { //=== Begin of iteration loop
-            beta_in_previous_iter = m_beta_iter_array.col(i);
-            CalculateDataWeight(i, alpha);
-            CalculateBetaByMDPDE(i);
-            CalculateDataVarianceSquare(i, alpha);
-            if ((m_beta_iter_array.col(i) - beta_in_previous_iter).squaredNorm() < m_tolerance) break;
-            if (iter == m_maximum_iteration - 1 && m_quiet_mode == false)
-            {
-                Logger::Log(LogLevel::Warning,
-                    "HRLModelHelper::AlgorithmBetaMDPDE : "
-                    "Reach maximum iterations before achieving tolerance for member -> "
-                    + m_member_info_list.at(static_cast<size_t>(i)));
-            }
-        } //=== End of iteration loop
-        m_beta_MDPDE_array.col(i) = m_beta_iter_array.col(i);
-        CalculateDataCovariance(i);
+        VectorXd beta;
+        double sigma_square;
+        DMatrixXd W;
+        DMatrixXd capital_sigma;
+        AlgorithmBetaMDPDE(alpha, X, y, beta, sigma_square, W, capital_sigma);
+        m_beta_OLS_array.col(i) = CalculateBetaByOLS(X, y);
+        m_beta_MDPDE_array.col(i) = beta;
+        m_sigma_square_array(i) = sigma_square;
+        m_W_list.at(static_cast<size_t>(i)) = W;
+        m_capital_sigma_list.at(static_cast<size_t>(i)) = CalculateDataCovariance(sigma_square, W);
     } //=== End of member ID loop
 
     m_mu_mean = m_beta_OLS_array.rowwise().mean();
 }
 
-void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
+void HRLModelHelper::AlgorithmMuMDPDE(
+    double alpha_g,
+    const Eigen::MatrixXd & beta_array,
+    Eigen::VectorXd & mu,
+    Eigen::ArrayXd & omega_array,
+    double & omega_sum,
+    Eigen::MatrixXd & capital_lambda,
+    std::vector<Eigen::MatrixXd> & member_capital_lambda_list)
 {
-    if (m_member_size == 1)
+    int basis_size{ static_cast<int>(beta_array.rows()) };
+    int member_size{ static_cast<int>(beta_array.cols()) };
+    omega_array = ArrayXd::Ones(member_size);
+    capital_lambda = MatrixXd::Identity(basis_size, basis_size);
+    member_capital_lambda_list.reserve(static_cast<size_t>(member_size));
+    member_capital_lambda_list.assign(
+        static_cast<size_t>(member_size), MatrixXd::Identity(basis_size, basis_size));
+
+    if (member_size == 1)
     {
         if (m_quiet_mode == false)
         {
@@ -570,43 +592,57 @@ void HRLModelHelper::AlgorithmMuMDPDE(double alpha_g)
                 "HRLModelHelper::AlgorithmMuMDPDE : "
                 "Only one member is present, using OLS estimate for Mu MDPDE.");
         }
-        m_mu_MDPDE = m_beta_MDPDE_array.col(0);
-        m_capital_lambda = MatrixXd::Zero(m_basis_size, m_basis_size);
-        m_capital_lambda_list.at(0) = m_capital_lambda;
+        mu = beta_array.col(0);
         return;
     }
 
-    for (int b = 0; b < m_basis_size; b++)
+    for (int b = 0; b < basis_size; b++)
     {
-        m_mu_iter(b) = EigenMatrixUtility::GetMedian(m_beta_MDPDE_array.row(b));
+        mu(b) = EigenMatrixUtility::GetMedian(beta_array.row(b));
     }
 
     VectorXd mu_in_previous_iter;
-    for (int iter = 0; iter < m_maximum_iteration; iter++)
+    for (int t = 0; t < m_maximum_iteration; t++)
     { //=== Begin of iteration loop
-        mu_in_previous_iter = m_mu_iter;
-        CalculateMemberWeight(alpha_g);
-        CalculateMuByMDPDE();
-        CalculateMemberCovariance(alpha_g);
-        if ((m_mu_iter - mu_in_previous_iter).squaredNorm() < m_tolerance) break;
-        if (iter == m_maximum_iteration - 1 && m_quiet_mode == false)
+        mu_in_previous_iter = mu;
+        omega_array = CalculateMemberWeight(alpha_g, beta_array, mu, capital_lambda);
+        omega_sum = omega_array.sum();
+        mu = CalculateMuByMDPDE(beta_array, omega_array, omega_sum);
+        capital_lambda = CalculateMemberCovariance(alpha_g, beta_array, mu, omega_array, omega_sum);
+        if ((mu - mu_in_previous_iter).squaredNorm() < m_tolerance) break;
+        if (t == m_maximum_iteration - 1 && m_quiet_mode == false)
         {
             Logger::Log(LogLevel::Warning,
-                        "Reach maximum iterations (Mu MDPDE) before achieving tolerance for member: "
-                        + m_member_info_list.at(0));
+                "Reach maximum iterations (Mu MDPDE) before achieving tolerance.");
         }
     } //=== End of iteration loop
 
-    m_mu_MDPDE = m_mu_iter;
-    for (int i = 0; i < m_member_size; i++)
+    auto omega_h{ CalculateInverseMemberWeightSum(omega_array) };
+    for (int i = 0; i < member_size; i++)
     {
-        m_capital_lambda_list.at(static_cast<size_t>(i)) =
-            (m_member_size * m_omega_h / m_omega_array(i)) * m_capital_lambda;
+        member_capital_lambda_list.at(static_cast<size_t>(i)) =
+            (member_size * omega_h / omega_array(i)) * capital_lambda;
     }
-
 }
 
-void HRLModelHelper::AlgorithmWEB(void)
+void HRLModelHelper::RunAlgorithmMuMDPDE(double alpha_g)
+{
+    VectorXd mu{ VectorXd::Zero(m_basis_size) };
+    ArrayXd omega_array;
+    double omega_sum;
+    MatrixXd capital_lambda;
+    std::vector<MatrixXd> member_capital_lambda_list;
+    AlgorithmMuMDPDE(
+        alpha_g, m_beta_MDPDE_array, mu,
+        omega_array, omega_sum, capital_lambda, member_capital_lambda_list);
+    m_mu_MDPDE = mu;
+    m_omega_array = omega_array;
+    m_omega_sum = omega_sum;
+    m_capital_lambda = capital_lambda;
+    m_capital_lambda_list = std::move(member_capital_lambda_list);
+}
+
+void HRLModelHelper::RunAlgorithmWEB(void)
 {
     VectorXd numerator{ VectorXd::Zero(m_basis_size, 1) };
     MatrixXd denominator{ MatrixXd::Zero(m_basis_size, m_basis_size) };
@@ -643,7 +679,7 @@ void HRLModelHelper::AlgorithmWEB(void)
         if (m_quiet_mode == false)
         {
             Logger::Log(LogLevel::Debug,
-                "HRLModelHelper::AlgorithmWEB : "
+                "HRLModelHelper::RunAlgorithmWEB : "
                 "Only one member is present, using MDPDE estimate for Mu prior.");
         }
         m_mu_prior = m_beta_MDPDE_array.col(0);
@@ -656,24 +692,23 @@ void HRLModelHelper::AlgorithmWEB(void)
     }
 }
 
-void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha)
+double HRLModelHelper::CalculateDataVarianceSquare(
+    double alpha,
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y,
+    const DMatrixXd & W,
+    const Eigen::VectorXd & beta)
 {
     double alpha_pow{ std::pow(1.0 + alpha, -1.5) };
     if (!std::isfinite(alpha_pow))
     {
         if (m_quiet_mode == false)
         {
-            Logger::Log(LogLevel::Warning,
-                "HRLModelHelper::AlgorithmBetaMDPDE : "
-                "non-finite alpha power term; using 0.0");
+            Logger::Log(LogLevel::Warning, "non-finite alpha power term; using 0.0");
         }
         alpha_pow = 0.0;
     }
-    const auto & X{ m_X_list.at(static_cast<size_t>(member_id)) };
-    const auto & y{ m_y_list.at(static_cast<size_t>(member_id)) };
-    const auto & W{ m_W_list.at(static_cast<size_t>(member_id)) };
-    const auto & n{ m_data_size_list.at(static_cast<size_t>(member_id)) };
-    VectorXd beta{ m_beta_iter_array.col(member_id) };
+    auto n{ static_cast<double>(y.size()) };
     VectorXd residual{ y - (X * beta) };
     auto numerator{ static_cast<double>(residual.transpose() * W * residual) };
     auto denominator{ W.diagonal().sum() - n * alpha * alpha_pow };
@@ -683,9 +718,8 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha)
         {
             Logger::Log(
                 LogLevel::Warning,
-                "Non-positive denominator in CalculateDataVarianceSquare for member -> "
-                + m_member_info_list.at(static_cast<size_t>(member_id))
-                + ", using small positive value");
+                "Non-positive denominator in CalculateDataVarianceSquare,"
+                " using small positive value");
         }
         denominator = 1.0e-10; // avoid division by zero
     }
@@ -696,23 +730,22 @@ void HRLModelHelper::CalculateDataVarianceSquare(int member_id, double alpha)
         {
             Logger::Log(
                 LogLevel::Warning,
-                "Non-finite variance in CalculateDataVarianceSquare for member -> "
-                + m_member_info_list.at(static_cast<size_t>(member_id))
-                + ", using fallback value");
+                "Non-finite variance in CalculateDataVarianceSquare,"
+                " using fallback value");
         }
         sigma_square = (std::isfinite(m_weight_data_min) && m_weight_data_min > 0.0)
             ? m_weight_data_min
             : std::numeric_limits<double>::max();
     }
-    m_sigma_square_array(member_id) = sigma_square;
+    return sigma_square;
 }
 
-void HRLModelHelper::CalculateDataCovariance(int member_id)
+Eigen::DiagonalMatrix<double, Eigen::Dynamic> HRLModelHelper::CalculateDataCovariance(
+    double sigma_square,
+    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W)
 {
-    const auto & W{ m_W_list.at(static_cast<size_t>(member_id)) };
-    const auto & sigma_square{ m_sigma_square_array(member_id) };
     VectorXd data_weight_array{ W.diagonal() };
-    const auto data_size{ m_data_size_list.at(static_cast<size_t>(member_id)) };
+    const auto data_size{ static_cast<int>(data_weight_array.size()) };
     const auto W_inverse_trace{ EigenMatrixUtility::GetInverseDiagonalMatrix(W).diagonal().sum() };
     if (!std::isfinite(W_inverse_trace) || W_inverse_trace <= 0.0)
     {
@@ -722,12 +755,7 @@ void HRLModelHelper::CalculateDataCovariance(int member_id)
                 "HRLModelHelper::CalculateDataCovariance : "
                 "degenerate weights; using fallback covariance");
         }
-        auto & capital_sigma_matrix{ m_capital_sigma_list.at(static_cast<size_t>(member_id)) };
-        if (capital_sigma_matrix.diagonal().size() != data_size)
-        {
-            capital_sigma_matrix.setIdentity(data_size);
-        }
-        return;
+        return VectorXd::Ones(data_size).asDiagonal();
     }
     
     VectorXd capital_sigma{ VectorXd::Zero(data_size) };
@@ -740,13 +768,20 @@ void HRLModelHelper::CalculateDataCovariance(int member_id)
             capital_sigma(j) = 1.0;
         }
     }
-    m_capital_sigma_list.at(static_cast<size_t>(member_id)) = capital_sigma.asDiagonal();
+    return capital_sigma.asDiagonal();
 }
 
-void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
+Eigen::MatrixXd HRLModelHelper::CalculateMemberCovariance(
+    double alpha,
+    const Eigen::MatrixXd & beta_array,
+    const Eigen::VectorXd & mu,
+    const Eigen::ArrayXd & omega_array,
+    double omega_sum)
 {
-    double alpha_g_pow{ std::pow(1.0 + alpha_g, -1.0 - 0.5 * m_basis_size) };
-    if (!std::isfinite(alpha_g_pow))
+    auto basis_size{ static_cast<int>(beta_array.rows()) };
+    auto member_size{ static_cast<int>(beta_array.cols()) };
+    double alpha_pow{ std::pow(1.0 + alpha, -1.0 - 0.5 * basis_size) };
+    if (!std::isfinite(alpha_pow))
     {
         if (m_quiet_mode == false)
         {
@@ -754,11 +789,11 @@ void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
                 "HRLModelHelper::CalculateMemberCovariance : "
                 "non-finite alpha_g power term; using 0.0");
         }
-        alpha_g_pow = 0.0;
+        alpha_pow = 0.0;
     }
 
-    MatrixXd numerator{ MatrixXd::Zero(m_basis_size, m_basis_size) };
-    double denominator{ m_omega_sum - m_member_size * alpha_g * alpha_g_pow };
+    MatrixXd numerator{ MatrixXd::Zero(basis_size, basis_size) };
+    double denominator{ omega_sum - member_size * alpha * alpha_pow };
     if (denominator <= 0.0)
     {
         if (m_quiet_mode == false)
@@ -767,16 +802,17 @@ void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
                 "HRLModelHelper::CalculateMemberCovariance : "
                 "Member covariance denominator is non-positive; using previous value.");
         }
-        return; // Leave m_capital_lambda unchanged
+        return MatrixXd::Identity(basis_size, basis_size);
     }
-    MatrixXd residual_array{ m_beta_MDPDE_array.colwise() - m_mu_iter };
-    for (int i = 0; i < m_member_size; i++)
+    MatrixXd residual_array{ beta_array.colwise() - mu };
+    for (int i = 0; i < member_size; i++)
     {
         VectorXd residual{ residual_array.col(i) };
-        numerator += m_omega_array(i) * (residual * residual.transpose());
+        numerator += omega_array(i) * (residual * residual.transpose());
     }
-    m_capital_lambda = numerator / denominator;
-    if (!m_capital_lambda.array().allFinite())
+
+    MatrixXd capital_lambda{ numerator / denominator };
+    if (!capital_lambda.array().allFinite())
     {
         if (m_quiet_mode == false)
         {
@@ -784,37 +820,64 @@ void HRLModelHelper::CalculateMemberCovariance(double alpha_g)
                 "HRLModelHelper::CalculateMemberCovariance : "
                 "Resulting covariance has non-finite entries; resetting to identity.");
         }
-        m_capital_lambda = MatrixXd::Identity(m_basis_size, m_basis_size);
+        capital_lambda = MatrixXd::Identity(basis_size, basis_size);
     }
+    return capital_lambda;
 }
 
-void HRLModelHelper::CalculateBetaByMDPDE(int member_id)
+double HRLModelHelper::CalculateInverseMemberWeightSum(const Eigen::ArrayXd & omega_array)
 {
-    const auto & X{ m_X_list.at(static_cast<size_t>(member_id)) };
-    const auto & y{ m_y_list.at(static_cast<size_t>(member_id)) };
-    const auto & W{ m_W_list.at(static_cast<size_t>(member_id)) };
+    auto member_size{ static_cast<int>(omega_array.size()) };
+    auto omega_inverse_sum{ 0.0 };
+    for (int i = 0; i < member_size; i++)
+    {
+        omega_inverse_sum += (omega_array(i) == 0.0) ? 0.0 : 1.0 / omega_array(i);
+    }
+    return 1.0 / omega_inverse_sum;
+}
+
+Eigen::VectorXd HRLModelHelper::CalculateBetaByOLS(
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y)
+{
+    MatrixXd gram_matrix{ X.transpose() * X };
+    MatrixXd inverse_gram_matrix{ EigenMatrixUtility::GetInverseMatrix(gram_matrix) };
+    return inverse_gram_matrix * (X.transpose() * y);
+}
+
+Eigen::VectorXd HRLModelHelper::CalculateBetaByMDPDE(
+    const Eigen::MatrixXd & X, const Eigen::VectorXd & y, const DMatrixXd & W)
+{
     MatrixXd gram_matrix{ (X.transpose() * W * X) };
     auto inverse_gram_matrix{ EigenMatrixUtility::GetInverseMatrix(gram_matrix) };
-    m_beta_iter_array.col(member_id) = inverse_gram_matrix * (X.transpose() * W * y);
+    return inverse_gram_matrix * (X.transpose() * W * y);
 }
 
-void HRLModelHelper::CalculateMuByMDPDE(void)
+Eigen::VectorXd HRLModelHelper::CalculateMuByMDPDE(
+    const Eigen::MatrixXd & beta_array,
+    const Eigen::ArrayXd & omega_array,
+    double omega_sum)
 {
     // Method 1
-    MatrixXd numerator{ m_beta_MDPDE_array.array() / m_omega_sum };
-    for (int i = 0; i < m_member_size; i++) numerator.col(i) *= m_omega_array(i);
-    m_mu_iter = numerator.rowwise().sum();
+    MatrixXd numerator{ beta_array.array() / omega_sum };
+    for (int i = 0; i < numerator.cols(); i++) numerator.col(i) *= omega_array(i);
+    return numerator.rowwise().sum();
 
     // Method 2 (To be checked the consistency with Method 1)
-    //m_mu_iter = (m_beta_MDPDE_array * m_omega_array.matrix()) / m_omega_sum;
+    //return (beta_array * omega_array.matrix()) / omega_sum;
 }
 
-void HRLModelHelper::CalculateMemberWeight(double alpha_g)
+Eigen::ArrayXd HRLModelHelper::CalculateMemberWeight(
+    double alpha,
+    const Eigen::MatrixXd & beta_array,
+    const Eigen::VectorXd & mu,
+    const Eigen::MatrixXd & capital_lambda)
 {
-    auto inverse_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(m_capital_lambda) };
-    MatrixXd residual_array{ m_beta_MDPDE_array.colwise() - m_mu_iter };
-    auto omega_inverse_sum{ 0.0 };
-    for (int i = 0; i < m_member_size; i++)
+    auto member_size{ static_cast<int>(beta_array.cols()) };
+    auto inverse_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(capital_lambda) };
+    MatrixXd residual_array{ beta_array.colwise() - mu };
+    Eigen::ArrayXd omega_array{ Eigen::ArrayXd::Zero(member_size) };
+    for (int i = 0; i < member_size; i++)
     {
         VectorXd residual{ residual_array.col(i) };
         auto exp_index{ static_cast<double>(residual.transpose() * inverse_capital_lambda * residual) };
@@ -825,24 +888,21 @@ void HRLModelHelper::CalculateMemberWeight(double alpha_g)
                 Logger::Log(LogLevel::Warning,
                     "HRLModelHelper::CalculateMemberWeight : non-finite exponent index");
             }
-            m_omega_array(i) = m_weight_member_min;
+            omega_array(i) = m_weight_member_min;
         }
         else
         {
-            m_omega_array(i) = std::exp(-0.5 * alpha_g * exp_index);
-            if (m_omega_array(i) < m_weight_member_min) m_omega_array(i) = m_weight_member_min;
+            omega_array(i) = std::exp(-0.5 * alpha * exp_index);
+            if (omega_array(i) < m_weight_member_min) omega_array(i) = m_weight_member_min;
         }
-        omega_inverse_sum += (m_omega_array(i) == 0.0) ? 0.0 : 1.0 / m_omega_array(i);
     }
-    m_omega_sum = m_omega_array.sum();
-    m_omega_h = 1.0 / omega_inverse_sum;
+    return omega_array;
 }
 
-void HRLModelHelper::CalculateDataWeight(int member_id, double alpha)
+DMatrixXd HRLModelHelper::CalculateDataWeight(
+    double alpha, const Eigen::MatrixXd & X, const Eigen::VectorXd & y,
+    const VectorXd & beta, double sigma_square)
 {
-    const auto & X{ m_X_list.at(static_cast<size_t>(member_id)) };
-    const auto & y{ m_y_list.at(static_cast<size_t>(member_id)) };
-    auto sigma_square{ m_sigma_square_array(member_id) };
     if (!std::isfinite(sigma_square) || sigma_square <= 0.0)
     {
         if (!std::isfinite(m_weight_data_min) || m_weight_data_min <= 0.0)
@@ -853,12 +913,10 @@ void HRLModelHelper::CalculateDataWeight(int member_id, double alpha)
         sigma_square = m_weight_data_min;
     }
 
-    VectorXd beta{ m_beta_iter_array.col(member_id) };
     if (alpha == 0.0)
     {
-        const auto data_size{ m_data_size_list.at(static_cast<size_t>(member_id)) };
-        m_W_list.at(static_cast<size_t>(member_id)) = VectorXd::Ones(data_size).asDiagonal();
-        return;
+        const auto data_size{ static_cast<int>(y.size()) };
+        return VectorXd::Ones(data_size).asDiagonal();
     }
 
     const double max_log{ std::log(std::numeric_limits<double>::max()) };
@@ -868,7 +926,7 @@ void HRLModelHelper::CalculateDataWeight(int member_id, double alpha)
     ArrayXd W{ exponent.exp() };
     W = W.unaryExpr([&](double w) { return (std::isfinite(w)) ? w : fallback_weight; });
     W = W.cwiseMax(m_weight_data_min);
-    m_W_list.at(static_cast<size_t>(member_id)) = W.matrix().asDiagonal();
+    return W.matrix().asDiagonal();
 }
 
 void HRLModelHelper::CalculateStatisticalDistance(void)
@@ -937,6 +995,19 @@ void HRLModelHelper::ValidateMemberId(int id) const
     if (id < 0 || id >= m_member_size)
     {
         throw std::out_of_range("HRLModelHelper::ValidateMemberId : member ID is out of range");
+    }
+}
+
+void HRLModelHelper::ValidateAlpha(double alpha) const
+{
+    if (!std::isfinite(alpha) || alpha < 0.0)
+    {
+        throw std::invalid_argument("Alpha parameters must be finite and non-negative.");
+    }
+
+    if (alpha > ALPHA_LIMIT)
+    {
+        throw std::overflow_error("Alpha parameters are too large and may overflow calculations.");
     }
 }
 

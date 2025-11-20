@@ -459,7 +459,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     if (m_map_object == nullptr) return;
 
-    const size_t group_size{ 5 };
+    const size_t group_size_alpha_r{ 5 };
     std::vector<double> alpha_r_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
     auto ordered_alpha_r_list{ alpha_r_list };
     std::sort(ordered_alpha_r_list.begin(), ordered_alpha_r_list.end());
@@ -477,7 +477,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     {
         auto atom{ selected_atom_list[i] };
         auto entry{ atom->GetLocalPotentialEntry() };
-        auto alpha_r{ TrainAlphaR(atom, group_size, ordered_alpha_r_list) };
+        auto alpha_r{ TrainAlphaR(atom, group_size_alpha_r, ordered_alpha_r_list) };
         entry->SetAlphaR(alpha_r);
         #ifdef USE_OPENMP
             #pragma omp critical
@@ -499,7 +499,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         for (auto group_key : group_key_set)
         {
             const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
-            if (atom_list.size() >= 25)
+            if (atom_list.size() >= 1000)
             {
                 key_list.emplace_back(group_potential_entry, group_key);
             }
@@ -510,6 +510,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         }
     }
 
+    const size_t group_size_alpha_g{ 5 };
     std::vector<double> alpha_g_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
     auto ordered_alpha_g_list{ alpha_g_list };
     std::sort(ordered_alpha_g_list.begin(), ordered_alpha_g_list.end());
@@ -526,7 +527,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         auto group_potential_entry{ std::get<0>(key_list[i]) };
         auto group_key{ std::get<1>(key_list[i]) };
         const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
-        auto alpha_g{ TrainAlphaG(atom_list, group_size, ordered_alpha_g_list) };
+        auto alpha_g{ TrainAlphaG(atom_list, group_size_alpha_g, ordered_alpha_g_list) };
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -612,26 +613,26 @@ double PotentialAnalysisCommand::TrainAlphaR(
     for (int p = 0; p < alpha_size; p++)
     {
         auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
-        Eigen::VectorXd beta_mean_training{ Eigen::VectorXd::Zero(basis_size) };
-        std::vector<Eigen::VectorXd> beta_mdpde_training_map(group_size);
+        //Eigen::VectorXd beta_mean_training{ Eigen::VectorXd::Zero(basis_size) };
+        //std::vector<Eigen::VectorXd> beta_mdpde_training_map(group_size);
         auto beta_error_sum{ 0.0 };
         for (size_t i = 0; i < group_size; i++)
         {
             auto estimator_test{ estimator_test_map[i].get() };
             auto estimator_training{ estimator_training_map[i].get() };
-            estimator_test->SetUniversalAlphaR(alpha);
-            estimator_training->SetUniversalAlphaR(alpha);
-            estimator_test->RunEstimation(0.0);
-            estimator_training->RunEstimation(0.0);
+            //estimator_test->SetUniversalAlphaR(alpha);
+            //estimator_training->SetUniversalAlphaR(alpha);
+            estimator_test->RunBetaMDPDE(alpha);
+            estimator_training->RunBetaMDPDE(alpha);
             auto beta_mdpde_test{ estimator_test->GetBetaMatrixMDPDE(0) };
             auto beta_mdpde_training{ estimator_training->GetBetaMatrixMDPDE(0) };
-            beta_mdpde_training_map[i] = beta_mdpde_training;
+            //beta_mdpde_training_map[i] = beta_mdpde_training;
             beta_error_sum += (beta_mdpde_test - beta_mdpde_training).norm();
-            beta_mean_training += beta_mdpde_training;
+            //beta_mean_training += beta_mdpde_training;
         }
-        beta_mean_training /= static_cast<double>(group_size);
+        //beta_mean_training /= static_cast<double>(group_size);
         beta_error_sum_array(p) = beta_error_sum;
-        
+        /*
         // Calculate variance of beta
         Eigen::MatrixXd beta_variance_training{ Eigen::MatrixXd::Zero(basis_size, basis_size) };
         for (size_t i = 0; i < group_size; i++)
@@ -642,21 +643,18 @@ double PotentialAnalysisCommand::TrainAlphaR(
         }
         beta_variance_training /= static_cast<double>(group_size - 1);
         auto trace{ beta_variance_training.trace() };
-        beta_variance_trace_array(p) = trace;
-        //std::cout << "Training : Variance trace = " << trace << std::endl;
-        //std::cout << "Test : Error sum = " << beta_error_sum << std::endl;
+        beta_variance_trace_array(p) = trace;*/
     }
 
-    int trace_min_id, error_min_id;
-    beta_variance_trace_array.minCoeff(&trace_min_id);
+    //int trace_min_id, error_min_id;
+    //beta_variance_trace_array.minCoeff(&trace_min_id);
+    //beta_error_sum_array.minCoeff(&error_min_id);
+    //auto result_alpha_id{ std::max(trace_min_id, error_min_id) };
+    //return alpha_list.at(static_cast<size_t>(result_alpha_id));
+ 
+    int error_min_id;
     beta_error_sum_array.minCoeff(&error_min_id);
-    //auto trace_min{ beta_variance_trace_array.minCoeff(&trace_min_id) };
-    //auto error_min{ beta_error_sum_array.minCoeff(&error_min_id) };
-    //std::cout << "Min trace = " << trace_min << " @ Id: "<< trace_min_id << std::endl;
-    //std::cout << "Min error = " << error_min << " @ Id: " << error_min_id << std::endl;
-    auto result_alpha_id{ std::max(trace_min_id, error_min_id) };
-
-    return alpha_list.at(static_cast<size_t>(result_alpha_id));
+    return alpha_list.at(static_cast<size_t>(error_min_id));
 }
 
 double PotentialAnalysisCommand::TrainAlphaG(

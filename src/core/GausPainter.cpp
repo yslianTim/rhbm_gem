@@ -360,7 +360,7 @@ void GausPainter::PaintAtomGroupGausSummary(
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 750) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
-    const int pad_size{ 6 };
+    const int pad_size{ 7 };
     
     std::unique_ptr<TPad> pad[pad_size];
     std::unique_ptr<TH2> frame[pad_size];
@@ -371,6 +371,7 @@ void GausPainter::PaintAtomGroupGausSummary(
     pad[3] = ROOTHelper::CreatePad("pad3","", 0.55, 0.00, 0.90, 0.60); // The bottom-middle pad
     pad[4] = ROOTHelper::CreatePad("pad4","", 0.55, 0.60, 0.90, 0.80); // The top-middle pad
     pad[5] = ROOTHelper::CreatePad("pad5","", 0.90, 0.00, 1.00, 0.60); // The bottom-right pad
+    pad[6] = ROOTHelper::CreatePad("pad6","", 0.90, 0.60, 1.00, 0.80); // The top-right pad
 
     frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
     frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
@@ -690,6 +691,25 @@ void GausPainter::PaintAtomGroupGausSummary(
         frame[2]->GetXaxis()->SetTitle("Element");
         frame[2]->Draw();
         for (auto & [element, hist] : width_hist_map) hist->Draw("CANDLE3 SAME");
+
+        pad[6]->cd();
+        ROOTHelper::SetPadMarginInCanvas(gPad, 0.02, 0.02, 0.20, 0.20);
+        ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+        auto legend{ ROOTHelper::CreateLegend(0.00, 0.00, 1.00, 1.00, false) };
+        ROOTHelper::SetLegendDefaultStyle(legend.get());
+        ROOTHelper::SetTextAttribute(legend.get(), 30.0f, 133, 12);
+        short general_color{ kGray+2 };
+        auto merge_marker{ std::make_unique<TMarker>(0.0, 0.0, 1) };
+        auto helix_marker{ std::make_unique<TMarker>(0.0, 0.0, 1) };
+        auto sheet_marker{ std::make_unique<TMarker>(0.0, 0.0, 1) };
+        ROOTHelper::SetMarkerAttribute(merge_marker.get(), 53, 1.5f, general_color);
+        ROOTHelper::SetMarkerAttribute(helix_marker.get(), 20, 1.5f, general_color);
+        ROOTHelper::SetMarkerAttribute(sheet_marker.get(), 52, 1.5f, general_color);
+        legend->AddEntry(merge_marker.get(), "Merge", "pe");
+        if (has_helix_component == true) legend->AddEntry(helix_marker.get(), "#alpha-helix", "p");
+        if (has_sheet_component == true) legend->AddEntry(sheet_marker.get(), "#beta-sheet", "p");
+        legend->SetMargin(0.30f);
+        legend->Draw();
         
         ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     }
