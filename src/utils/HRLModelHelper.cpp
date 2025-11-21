@@ -63,7 +63,6 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
     m_beta_posterior_array{ MatrixXd::Zero(m_basis_size, m_member_size) }
 {
     auto size{ static_cast<size_t>(m_member_size) };
-    m_data_size_list.reserve(size);
     m_member_info_list.reserve(size);
     m_X_list.reserve(size);
     m_y_list.reserve(size);
@@ -90,6 +89,41 @@ void HRLModelHelper::SetThreadSize(int thread_size)
     Logger::Log(LogLevel::Debug, "Thread size = " + std::to_string(Eigen::nbThreads()));
 }
 
+std::tuple<Eigen::MatrixXd, Eigen::VectorXd> HRLModelHelper::BuildBasisVectorAndResponseArray(
+    const std::vector<Eigen::VectorXd> & data_vector)
+{
+    auto data_size{ CheckedCastToInt(data_vector.size()) };
+    if (data_size == 0 && m_quiet_mode == false)
+    {
+        Logger::Log(LogLevel::Warning,
+            "HRLModelHelper::BuildBasisVectorAndResponseArray : dataset is empty.");
+    }
+    
+    auto basis_size{ (data_vector[0].rows() - 1) };
+    if (basis_size != m_basis_size)
+    {
+        Logger::Log(LogLevel::Warning,"basis size wrong : "+ std::to_string(basis_size));
+    }
+    MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, basis_size) };
+    VectorXd y_data_vector{ VectorXd::Zero(data_size) };
+    for (int i = 0; i < data_size; i++)
+    {
+        const auto & sample{ data_vector.at(static_cast<size_t>(i)) };
+        if (sample.size() != basis_size + 1)
+        {
+            throw std::invalid_argument("The input data size isn't consistent with basis size.");
+        }
+        if (!sample.array().allFinite())
+        {
+            throw std::invalid_argument("Member dataset contains non-finite value.");
+        }
+        x_data_matrix.row(i) = sample.head(basis_size);
+        y_data_vector(i) = sample(basis_size);
+    }
+
+    return std::make_tuple(std::move(x_data_matrix), std::move(y_data_vector));
+}
+
 void HRLModelHelper::SetDataArray(std::vector<MemberDataEntry> && data_array)
 {
     auto data_array_size{ CheckedCastToInt(data_array.size()) };
@@ -100,47 +134,22 @@ void HRLModelHelper::SetDataArray(std::vector<MemberDataEntry> && data_array)
 
     // Build new data structures locally so existing member data remains
     // untouched if validation fails midway through the process.
-    std::vector<int> data_size_list;
     std::vector<std::string> member_info_list;
     std::vector<MatrixXd> X_list;
     std::vector<VectorXd> y_list;
-    data_size_list.reserve(static_cast<size_t>(m_member_size));
     member_info_list.reserve(static_cast<size_t>(m_member_size));
     X_list.reserve(static_cast<size_t>(m_member_size));
     y_list.reserve(static_cast<size_t>(m_member_size));
 
-    for (auto & [member_data_vector, member_info] : data_array)
+    for (auto & [data_vector, member_info] : data_array)
     {
-        auto data_size{ CheckedCastToInt(member_data_vector.size()) };
-        if (data_size == 0 && m_quiet_mode == false)
-        {
-            Logger::Log(LogLevel::Warning,
-                "HRLModelHelper::SetDataArray : Member dataset is empty -> " + member_info);
-        }
-        MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
-        VectorXd y_data_vector{ VectorXd::Zero(data_size) };
-        for (int i = 0; i < data_size; i++)
-        {
-            const auto & sample{ member_data_vector.at(static_cast<size_t>(i)) };
-            if (sample.size() != m_basis_size + 1)
-            {
-                throw std::invalid_argument("The input data size isn't consistent with basis size.");
-            }
-            if (!sample.array().allFinite())
-            {
-                throw std::invalid_argument("Member dataset contains non-finite value.");
-            }
-            x_data_matrix.row(i) = sample.head(m_basis_size);
-            y_data_vector(i) = sample(m_basis_size);
-        }
-        data_size_list.emplace_back(data_size);
-        X_list.emplace_back(std::move(x_data_matrix));
-        y_list.emplace_back(std::move(y_data_vector));
+        auto data{ BuildBasisVectorAndResponseArray(data_vector) };
+        X_list.emplace_back(std::move(std::get<0>(data)));
+        y_list.emplace_back(std::move(std::get<1>(data)));
         member_info_list.emplace_back(std::move(member_info));
     }
 
     // All validation and transformations succeeded, move into member variables.
-    m_data_size_list = std::move(data_size_list);
     m_X_list = std::move(X_list);
     m_y_list = std::move(y_list);
     m_member_info_list = std::move(member_info_list);
@@ -167,11 +176,9 @@ void HRLModelHelper::SetDataArrayView(
         throw std::invalid_argument("The input size of data list isn't consistent with member size.");
     }
 
-    std::vector<int> data_size_list;
     std::vector<std::string> member_info_list;
     std::vector<MatrixXd> X_list;
     std::vector<VectorXd> y_list;
-    data_size_list.reserve(static_cast<size_t>(m_member_size));
     member_info_list.reserve(static_cast<size_t>(m_member_size));
     X_list.reserve(static_cast<size_t>(m_member_size));
     y_list.reserve(static_cast<size_t>(m_member_size));
@@ -179,37 +186,14 @@ void HRLModelHelper::SetDataArrayView(
     for (size_t idx = 0; idx < count; ++idx)
     {
         const auto & entry{ data_array.at(offset + idx) };
-        const auto & member_data_vector{ std::get<0>(entry) };
+        const auto & data_vector{ std::get<0>(entry) };
         const auto & member_info{ std::get<1>(entry) };
-        auto data_size{ CheckedCastToInt(member_data_vector.size()) };
-        if (data_size == 0 && m_quiet_mode == false)
-        {
-            Logger::Log(LogLevel::Warning,
-                "HRLModelHelper::SetDataArray : Member dataset is empty -> " + member_info);
-        }
-        MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
-        VectorXd y_data_vector{ VectorXd::Zero(data_size) };
-        for (int i = 0; i < data_size; i++)
-        {
-            const auto & sample{ member_data_vector.at(static_cast<size_t>(i)) };
-            if (sample.size() != m_basis_size + 1)
-            {
-                throw std::invalid_argument("The input data size isn't consistent with basis size.");
-            }
-            if (!sample.array().allFinite())
-            {
-                throw std::invalid_argument("Member dataset contains non-finite value.");
-            }
-            x_data_matrix.row(i) = sample.head(m_basis_size);
-            y_data_vector(i) = sample(m_basis_size);
-        }
-        data_size_list.emplace_back(data_size);
-        X_list.emplace_back(std::move(x_data_matrix));
-        y_list.emplace_back(std::move(y_data_vector));
-        member_info_list.emplace_back(member_info);
+        auto data{ BuildBasisVectorAndResponseArray(data_vector) };
+        X_list.emplace_back(std::move(std::get<0>(data)));
+        y_list.emplace_back(std::move(std::get<1>(data)));
+        member_info_list.emplace_back(std::move(member_info));
     }
 
-    m_data_size_list = std::move(data_size_list);
     m_X_list = std::move(X_list);
     m_y_list = std::move(y_list);
     m_member_info_list = std::move(member_info_list);
@@ -267,16 +251,13 @@ void HRLModelHelper::SetDataArrayMergedView(
         row_offset += static_cast<size_t>(data_size);
     }
 
-    std::vector<int> data_size_list;
     std::vector<std::string> member_info_list;
     std::vector<MatrixXd> X_list;
     std::vector<VectorXd> y_list;
-    data_size_list.emplace_back(total_sample_count_int);
     member_info_list.emplace_back(merged_info);
     X_list.emplace_back(std::move(x_data_matrix));
     y_list.emplace_back(std::move(y_data_vector));
 
-    m_data_size_list = std::move(data_size_list);
     m_X_list = std::move(X_list);
     m_y_list = std::move(y_list);
     m_member_info_list = std::move(member_info_list);
@@ -292,11 +273,9 @@ void HRLModelHelper::SetDataArrayView(
         throw std::invalid_argument("The input size of data list isn't consistent with member size.");
     }
 
-    std::vector<int> data_size_list;
     std::vector<std::string> member_info_list;
     std::vector<MatrixXd> X_list;
     std::vector<VectorXd> y_list;
-    data_size_list.reserve(static_cast<size_t>(m_member_size));
     member_info_list.reserve(static_cast<size_t>(m_member_size));
     X_list.reserve(static_cast<size_t>(m_member_size));
     y_list.reserve(static_cast<size_t>(m_member_size));
@@ -305,37 +284,14 @@ void HRLModelHelper::SetDataArrayView(
     {
         const auto entry_index{ indices.at(idx) };
         const auto & entry{ data_array.at(entry_index) };
-        const auto & member_data_vector{ std::get<0>(entry) };
+        const auto & data_vector{ std::get<0>(entry) };
         const auto & member_info{ std::get<1>(entry) };
-        auto data_size{ CheckedCastToInt(member_data_vector.size()) };
-        if (data_size == 0 && m_quiet_mode == false)
-        {
-            Logger::Log(LogLevel::Warning,
-                "HRLModelHelper::SetDataArray : Member dataset is empty -> " + member_info);
-        }
-        MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, m_basis_size) };
-        VectorXd y_data_vector{ VectorXd::Zero(data_size) };
-        for (int i = 0; i < data_size; i++)
-        {
-            const auto & sample{ member_data_vector.at(static_cast<size_t>(i)) };
-            if (sample.size() != m_basis_size + 1)
-            {
-                throw std::invalid_argument("The input data size isn't consistent with basis size.");
-            }
-            if (!sample.array().allFinite())
-            {
-                throw std::invalid_argument("Member dataset contains non-finite value.");
-            }
-            x_data_matrix.row(i) = sample.head(m_basis_size);
-            y_data_vector(i) = sample(m_basis_size);
-        }
-        data_size_list.emplace_back(data_size);
-        X_list.emplace_back(std::move(x_data_matrix));
-        y_list.emplace_back(std::move(y_data_vector));
-        member_info_list.emplace_back(std::get<1>(entry));
+        auto data{ BuildBasisVectorAndResponseArray(data_vector) };
+        X_list.emplace_back(std::move(std::get<0>(data)));
+        y_list.emplace_back(std::move(std::get<1>(data)));
+        member_info_list.emplace_back(std::move(member_info));
     }
 
-    m_data_size_list = std::move(data_size_list);
     m_X_list = std::move(X_list);
     m_y_list = std::move(y_list);
     m_member_info_list = std::move(member_info_list);
@@ -422,19 +378,18 @@ void HRLModelHelper::SetTolerance(double value)
     m_tolerance = value;
 }
 
-void HRLModelHelper::RunEstimation(double alpha_g)
+void HRLModelHelper::UpdateMemberSize(size_t expected_member_size)
 {
-    ValidateAlpha(alpha_g);
-
-    if (m_data_size_list.size() < static_cast<size_t>(m_member_size))
+    auto current_member_size{ m_y_list.size() };
+    if (current_member_size != expected_member_size)
     {
         std::ostringstream oss;
         oss << "HRLModelHelper::RunEstimation : "
-            << "Valid member size is smaller than expected member size -> "
-            << m_member_size << ", "
-            << "reassigning member size to -> " << m_data_size_list.size();
+            << "Valid member size is different with expected member size -> "
+            << expected_member_size << ", "
+            << "reassigning member size to -> " << current_member_size;
         if (m_quiet_mode == false) Logger::Log(LogLevel::Info, oss.str());
-        m_member_size = static_cast<int>(m_data_size_list.size());
+        m_member_size = static_cast<int>(current_member_size);
         m_weight_member_min = DEFAULT_WEIGHT_MEMBER_MIN / m_member_size;
         m_sigma_square_array.resize(m_member_size);
         m_omega_array.resize(m_member_size);
@@ -442,27 +397,40 @@ void HRLModelHelper::RunEstimation(double alpha_g)
         m_outlier_flag_array.resize(m_member_size);
         m_beta_OLS_array.resize(m_basis_size, m_member_size);
         m_beta_MDPDE_array.resize(m_basis_size, m_member_size);
-        m_capital_sigma_posterior_list.resize(static_cast<size_t>(m_member_size));
+        m_beta_posterior_array.resize(m_basis_size, m_member_size);
+        m_capital_sigma_posterior_list.resize(current_member_size);
         m_capital_sigma_posterior_list.shrink_to_fit();
-        m_capital_lambda_list.resize(static_cast<size_t>(m_member_size));
+        m_capital_lambda_list.resize(current_member_size);
         m_capital_lambda_list.shrink_to_fit();
-        m_W_list.resize(static_cast<size_t>(m_member_size));
+        m_W_list.resize(current_member_size);
         m_W_list.shrink_to_fit();
     }
+}
 
+void HRLModelHelper::RunEstimation(double alpha_g)
+{
+    ValidateAlpha(alpha_g);
+    UpdateMemberSize(static_cast<size_t>(m_member_size));
     Initialization();
     RunAlgorithmBetaMDPDE(m_universal_alpha_r);
     RunAlgorithmMuMDPDE(alpha_g);
     RunAlgorithmWEB();
-    CalculateStatisticalDistance();
-    LabelOutlierMember();
+    m_outlier_flag_array = CalculateOutlierMemberFlag(m_basis_size, m_statistical_distance_array);
 }
 
-void HRLModelHelper::RunBetaMDPDE(double alpha_r)
+Eigen::VectorXd HRLModelHelper::RunBetaMDPDE(
+    const std::vector<Eigen::VectorXd> & data_vector, double alpha_r)
 {
     ValidateAlpha(alpha_r);
-    Initialization();
-    RunAlgorithmBetaMDPDE(alpha_r);
+    auto data{ BuildBasisVectorAndResponseArray(data_vector) };
+    const auto & X{ std::get<0>(data) };
+    const auto & y{ std::get<1>(data) };
+    Eigen::VectorXd beta{ CalculateBetaByOLS(X, y) };
+    double sigma_square;
+    DMatrixXd W;
+    DMatrixXd capital_sigma;
+    AlgorithmBetaMDPDE(alpha_r, X, y, beta, sigma_square, W, capital_sigma);
+    return beta;
 }
 
 void HRLModelHelper::RunMuMDPDE(double alpha_g)
@@ -500,7 +468,7 @@ void HRLModelHelper::Initialization(void)
 
     for (int i = 0; i < m_member_size; i++)
     { //=== Begin of member ID loop (0 ... I-1)
-        const auto & data_size{ m_data_size_list.at(static_cast<size_t>(i)) };
+        auto data_size{ m_y_list.at(static_cast<size_t>(i)).rows() };
         DMatrixXd W{ data_size };
         W.setIdentity();
         m_W_list.emplace_back(std::move(W));
@@ -508,6 +476,36 @@ void HRLModelHelper::Initialization(void)
         sigma.setIdentity();
         m_capital_sigma_list.emplace_back(std::move(sigma));
     } //=== End of member ID loop
+}
+
+void HRLModelHelper::RunAlgorithmWEB(void)
+{
+    if (m_member_size == 1)
+    {
+        if (m_quiet_mode == false)
+        {
+            Logger::Log(LogLevel::Debug,
+                "HRLModelHelper::RunAlgorithmWEB : "
+                "Only one member is present, using MDPDE estimate for WEB.");
+        }
+        m_beta_posterior_array = m_beta_MDPDE_array;
+        m_capital_sigma_posterior_list[0] = Eigen::MatrixXd::Zero(m_basis_size, m_basis_size);
+        m_mu_prior = m_mu_MDPDE;
+        m_statistical_distance_array.setZero();
+        return;
+    }
+
+    Eigen::MatrixXd beta_posterior_array;
+    std::vector<Eigen::MatrixXd> capital_sigma_posterior_list;
+    Eigen::ArrayXd statistical_distance_array;
+    Eigen::VectorXd mu_prior{ AlgorithmWEB(
+        m_X_list, m_y_list, m_capital_sigma_list, m_mu_MDPDE, m_capital_lambda_list,
+        beta_posterior_array, capital_sigma_posterior_list, statistical_distance_array)
+    };
+    m_beta_posterior_array = beta_posterior_array;
+    m_capital_sigma_posterior_list = std::move(capital_sigma_posterior_list);
+    m_mu_prior = mu_prior;
+    m_statistical_distance_array = statistical_distance_array;
 }
 
 void HRLModelHelper::AlgorithmBetaMDPDE(
@@ -520,7 +518,6 @@ void HRLModelHelper::AlgorithmBetaMDPDE(
     DMatrixXd & capital_sigma)
 {
     int n{ static_cast<int>(y.size()) };
-    beta = CalculateBetaByOLS(X, y); // OLS init
     sigma_square = (n < 2) ?
         std::numeric_limits<double>::max() : (y - (X * beta)).squaredNorm() / (n-1);
     W = VectorXd::Ones(n).asDiagonal();
@@ -549,19 +546,20 @@ void HRLModelHelper::RunAlgorithmBetaMDPDE(double alpha_r)
     { //=== Begin of member ID loop (0 ... I-1)
         const auto & X{ m_X_list.at(static_cast<size_t>(i)) };
         const auto & y{ m_y_list.at(static_cast<size_t>(i)) };
+        VectorXd beta_OLS{ CalculateBetaByOLS(X, y) };
         auto alpha{ (m_dedicate_alpha_r_list.empty()) ?
             alpha_r : m_dedicate_alpha_r_list.at(static_cast<size_t>(i))
         };
-        VectorXd beta;
+        VectorXd beta{ beta_OLS };
         double sigma_square;
         DMatrixXd W;
         DMatrixXd capital_sigma;
         AlgorithmBetaMDPDE(alpha, X, y, beta, sigma_square, W, capital_sigma);
-        m_beta_OLS_array.col(i) = CalculateBetaByOLS(X, y);
+        m_beta_OLS_array.col(i) = beta_OLS;
         m_beta_MDPDE_array.col(i) = beta;
         m_sigma_square_array(i) = sigma_square;
         m_W_list.at(static_cast<size_t>(i)) = W;
-        m_capital_sigma_list.at(static_cast<size_t>(i)) = CalculateDataCovariance(sigma_square, W);
+        m_capital_sigma_list.at(static_cast<size_t>(i)) = capital_sigma;
     } //=== End of member ID loop
 
     m_mu_mean = m_beta_OLS_array.rowwise().mean();
@@ -642,54 +640,70 @@ void HRLModelHelper::RunAlgorithmMuMDPDE(double alpha_g)
     m_capital_lambda_list = std::move(member_capital_lambda_list);
 }
 
-void HRLModelHelper::RunAlgorithmWEB(void)
+Eigen::VectorXd HRLModelHelper::AlgorithmWEB(
+    const std::vector<Eigen::MatrixXd> & X_list,
+    const std::vector<Eigen::VectorXd> & y_list,
+    const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list,
+    const Eigen::VectorXd & mu_MDPDE,
+    const std::vector<Eigen::MatrixXd> & capital_lambda_list,
+    Eigen::MatrixXd & beta_posterior_array,
+    std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list,
+    Eigen::ArrayXd & statistical_distance_array)
 {
-    VectorXd numerator{ VectorXd::Zero(m_basis_size, 1) };
-    MatrixXd denominator{ MatrixXd::Zero(m_basis_size, m_basis_size) };
-    for (size_t i = 0; i < static_cast<size_t>(m_member_size); i++)
+    auto basis_size{ static_cast<int>(mu_MDPDE.rows()) };
+    auto member_size{ static_cast<int>(capital_lambda_list.size()) };
+    beta_posterior_array = MatrixXd::Zero(basis_size, member_size);
+    statistical_distance_array = ArrayXd::Zero(member_size);
+
+    capital_sigma_posterior_list.clear();
+    capital_sigma_posterior_list.reserve(static_cast<size_t>(member_size));
+
+    VectorXd mu_prior{ VectorXd::Zero(basis_size) };
+    VectorXd numerator{ VectorXd::Zero(basis_size) };
+    MatrixXd denominator{ MatrixXd::Zero(basis_size, basis_size) };
+    for (size_t i = 0; i < static_cast<size_t>(member_size); i++)
     {
-        const auto & X{ m_X_list.at(i) };
-        const auto & y{ m_y_list.at(i) };
-        auto inv_capital_sigma{
-            EigenMatrixUtility::GetInverseDiagonalMatrix(m_capital_sigma_list.at(i))
-        };
+        const auto & X{ X_list.at(i) };
+        const auto & y{ y_list.at(i) };
+        const auto & capital_sigma{ capital_sigma_list.at(i) };
+        const auto & capital_lambda{ capital_lambda_list.at(i) };
+        auto inv_capital_sigma{ EigenMatrixUtility::GetInverseDiagonalMatrix(capital_sigma) };
         MatrixXd inv_capital_lambda;
-        if (m_member_size == 1)
+        if (member_size == 1)
         {
-            inv_capital_lambda = MatrixXd::Zero(m_basis_size, m_basis_size);
+            inv_capital_lambda = MatrixXd::Zero(basis_size, basis_size);
         }
         else
         {
-            inv_capital_lambda = EigenMatrixUtility::GetInverseMatrix(m_capital_lambda_list.at(i));
+            inv_capital_lambda = EigenMatrixUtility::GetInverseMatrix(capital_lambda);
         }
         MatrixXd gram_matrix{ X.transpose() * inv_capital_sigma * X };
         VectorXd moment_matrix{ X.transpose() * inv_capital_sigma * y };
         MatrixXd inv_capital_sigma_posterior{ gram_matrix + inv_capital_lambda };
-        m_capital_sigma_posterior_list.at(i) =
-            EigenMatrixUtility::GetInverseMatrix(inv_capital_sigma_posterior);
-        const auto & capital_sigma_posterior{ m_capital_sigma_posterior_list.at(i) };
-        m_beta_posterior_array.col(static_cast<int>(i)) =
-            capital_sigma_posterior * (moment_matrix + inv_capital_lambda * m_mu_MDPDE);
+        MatrixXd capital_sigma_posterior{
+            EigenMatrixUtility::GetInverseMatrix(inv_capital_sigma_posterior)
+        };
+        capital_sigma_posterior_list.emplace_back(capital_sigma_posterior);
+        beta_posterior_array.col(static_cast<int>(i)) =
+            capital_sigma_posterior * (moment_matrix + inv_capital_lambda * mu_MDPDE);
         numerator += inv_capital_lambda * capital_sigma_posterior * moment_matrix;
         denominator += inv_capital_lambda * capital_sigma_posterior * gram_matrix;
     }
     
-    if (m_member_size == 1)
+    MatrixXd inv_denominator{ EigenMatrixUtility::GetInverseMatrix(denominator) };
+    mu_prior = inv_denominator * numerator;
+    if (m_member_size == 2) mu_prior = mu_MDPDE;
+
+    MatrixXd error_array{ beta_posterior_array.colwise() - mu_prior };
+    for (int i = 0; i < m_member_size; i++)
     {
-        if (m_quiet_mode == false)
-        {
-            Logger::Log(LogLevel::Debug,
-                "HRLModelHelper::RunAlgorithmWEB : "
-                "Only one member is present, using MDPDE estimate for Mu prior.");
-        }
-        m_mu_prior = m_beta_MDPDE_array.col(0);
+        const auto & capital_lambda{ capital_lambda_list.at(static_cast<size_t>(i)) };
+        auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(capital_lambda) };
+        statistical_distance_array(i) =
+            error_array.col(i).transpose() * inv_capital_lambda * error_array.col(i);
     }
-    else
-    {
-        MatrixXd inv_denominator{ EigenMatrixUtility::GetInverseMatrix(denominator) };
-        m_mu_prior = inv_denominator * numerator;
-        if (m_member_size == 2) m_mu_prior = m_mu_MDPDE;
-    }
+
+    return mu_prior;
 }
 
 double HRLModelHelper::CalculateDataVarianceSquare(
@@ -929,65 +943,40 @@ DMatrixXd HRLModelHelper::CalculateDataWeight(
     return W.matrix().asDiagonal();
 }
 
-void HRLModelHelper::CalculateStatisticalDistance(void)
+Eigen::Array<bool, Eigen::Dynamic, 1> HRLModelHelper::CalculateOutlierMemberFlag(
+    int basis_size,
+    const Eigen::ArrayXd & statistical_distance_array)
 {
-    MatrixXd error_array{ m_beta_posterior_array.colwise() - m_mu_prior };
-    if (m_member_size == 1)
+    auto chi_square_quantile = [](int df)
     {
-        m_statistical_distance_array.setZero();
-        return;
-    }
-    
-    auto inv_capital_lambda{ EigenMatrixUtility::GetInverseMatrix(m_capital_lambda) };
-    for (int i = 0; i < m_member_size; i++)
-    {
-        m_statistical_distance_array(i) =
-            error_array.col(i).transpose() * inv_capital_lambda * error_array.col(i);
-    }
-}
-
-void HRLModelHelper::LabelOutlierMember(void)
-{
-    auto chi_square_quantile = [](int df) {
         switch (df)
         {
-        case 1: return 6.63;  // 99th percentile
-        case 2: return 9.21;
-        case 3: return 11.34;
-        case 4: return 13.28;
-        case 5: return 15.09;
-        case 6: return 16.81;
-        case 7: return 18.48;
-        case 8: return 20.09;
-        case 9: return 21.67;
-        case 10: return 23.21;
-        default:
-            // Wilson-Hilferty approximation
-            const double z{ 2.3263478740408408 }; // standard normal 0.99 quantile
-            const double d{ static_cast<double>(df) };
-            const double term{ 1.0 - 2.0 / (9.0 * d) + z * std::sqrt(2.0 / (9.0 * d)) };
-            return d * term * term * term;
+            case 1: return 6.63;  // 99th percentile
+            case 2: return 9.21;
+            case 3: return 11.34;
+            case 4: return 13.28;
+            case 5: return 15.09;
+            case 6: return 16.81;
+            case 7: return 18.48;
+            case 8: return 20.09;
+            case 9: return 21.67;
+            case 10: return 23.21;
+            default: // Wilson-Hilferty approximation
+                const double z{ 2.3263478740408408 }; // standard normal 0.99 quantile
+                const double d{ static_cast<double>(df) };
+                const double term{ 1.0 - 2.0 / (9.0 * d) + z * std::sqrt(2.0 / (9.0 * d)) };
+                return d * term * term * term;
         }
     };
-    const auto quantile{ chi_square_quantile(m_basis_size) };
-    m_outlier_flag_array = (m_statistical_distance_array > quantile);
-    for (int i = 0; i < m_member_size; ++i)
-    {
-        if (m_data_size_list.at(static_cast<size_t>(i)) < m_basis_size)
-        {
-            m_outlier_flag_array(i) = true;
-        }
-    }
 
-    //m_outlier_flag_array = ((m_omega_array/m_omega_sum) < 0.05/static_cast<double>(m_member_size));
+    return (statistical_distance_array > chi_square_quantile(basis_size));
+    //return ((m_omega_array/m_omega_sum) < 0.05/static_cast<double>(member_size));
 }
 
 void HRLModelHelper::Finalization(void)
 {
     m_X_list.clear();
-    m_X_list.shrink_to_fit();
     m_y_list.clear();
-    m_y_list.shrink_to_fit();
 }
 
 void HRLModelHelper::ValidateMemberId(int id) const

@@ -25,14 +25,6 @@ class HRLModelHelper
     std::vector<double> m_dedicate_alpha_r_list;
 
     /**
-     * @brief   The list of selected data sample size \f$ = n_{i} \f$
-     *          for each member \f$ i = 0\cdots I-1 \f$
-     *          (length of list \f$ = I \f$)
-     * @see     BuildDataArray()
-     */
-    std::vector<int> m_data_size_list;
-
-    /**
      * @brief   The list of member information
      *          for each member \f$ i = 0\cdots I-1 \f$
      *          (length of list \f$ = I \f$)
@@ -150,6 +142,9 @@ public:
     void SetThreadSize(int thread_size);
 
     using MemberDataEntry = std::tuple<std::vector<Eigen::VectorXd>, std::string>;
+    std::tuple<Eigen::MatrixXd, Eigen::VectorXd> BuildBasisVectorAndResponseArray(
+        const std::vector<Eigen::VectorXd> & data_vector
+    );
     void SetDataArray(std::vector<MemberDataEntry> && data_array);
     void SetDataArrayView(const std::vector<MemberDataEntry> & data_array);
     void SetDataArrayView(
@@ -174,7 +169,9 @@ public:
         size_t offset,
         size_t count);
     void RunEstimation(double alpha_g);
-    void RunBetaMDPDE(double alpha_r);
+    Eigen::VectorXd RunBetaMDPDE(
+        const std::vector<Eigen::VectorXd> & data_vector, double alpha_r
+    );
     void RunMuMDPDE(double alpha_g);
     void SetMaximumIteration(int size);
     void SetTolerance(double value);
@@ -196,11 +193,12 @@ public:
 private:
     void ValidateMemberId(int id) const;
     void ValidateAlpha(double alpha) const;
+    void UpdateMemberSize(size_t expected_member_size);
     void Initialization(void);
     void RunAlgorithmBetaMDPDE(double alpha_r);
     void RunAlgorithmMuMDPDE(double alpha_g);
     void RunAlgorithmWEB(void);
-
+    
     void AlgorithmBetaMDPDE(
         double alpha_r,
         const Eigen::MatrixXd & X,
@@ -208,7 +206,8 @@ private:
         Eigen::VectorXd & beta,
         double & sigma_square,
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma);
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma
+    );
     void AlgorithmMuMDPDE(
         double alpha_g,
         const Eigen::MatrixXd & beta_array,
@@ -216,47 +215,68 @@ private:
         Eigen::ArrayXd & omega_array,
         double & omega_sum,
         Eigen::MatrixXd & capital_lambda,
-        std::vector<Eigen::MatrixXd> & member_capital_lambda_list);
+        std::vector<Eigen::MatrixXd> & member_capital_lambda_list
+    );
+    Eigen::VectorXd AlgorithmWEB(
+        const std::vector<Eigen::MatrixXd> & X_list,
+        const std::vector<Eigen::VectorXd> & y_list,
+        const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list,
+        const Eigen::VectorXd & mu_MDPDE,
+        const std::vector<Eigen::MatrixXd> & capital_lambda_list,
+        Eigen::MatrixXd & beta_posterior_array,
+        std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list,
+        Eigen::ArrayXd & statistical_distance_array
+    );
     Eigen::VectorXd CalculateMuByMDPDE(
         const Eigen::MatrixXd & beta_array,
         const Eigen::ArrayXd & omega_array,
-        double omega_sum);
+        double omega_sum
+    );
     Eigen::ArrayXd CalculateMemberWeight(
         double alpha,
         const Eigen::MatrixXd & beta_array,
         const Eigen::VectorXd & mu,
-        const Eigen::MatrixXd & capital_lambda);
+        const Eigen::MatrixXd & capital_lambda
+    );
     Eigen::MatrixXd CalculateMemberCovariance(
         double alpha,
         const Eigen::MatrixXd & beta_array,
         const Eigen::VectorXd & mu,
         const Eigen::ArrayXd & omega_array,
-        double omega_sum);
+        double omega_sum
+    );
     double CalculateInverseMemberWeightSum(const Eigen::ArrayXd & omega_array);
     Eigen::VectorXd CalculateBetaByOLS(
         const Eigen::MatrixXd & X,
-        const Eigen::VectorXd & y);
+        const Eigen::VectorXd & y
+    );
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataWeight(
         double alpha,
         const Eigen::MatrixXd & X,
         const Eigen::VectorXd & y,
         const Eigen::VectorXd & beta,
-        double sigma_square);
+        double sigma_square
+    );
     Eigen::VectorXd CalculateBetaByMDPDE(
         const Eigen::MatrixXd & X,
         const Eigen::VectorXd & y,
-        const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W);
+        const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W
+    );
     double CalculateDataVarianceSquare(
         double alpha,
         const Eigen::MatrixXd & X,
         const Eigen::VectorXd & y,
         const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
-        const Eigen::VectorXd & beta);
+        const Eigen::VectorXd & beta
+    );
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataCovariance(
         double sigma_square,
-        const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W);
-    void CalculateStatisticalDistance(void);
-    void LabelOutlierMember(void);
+        const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W
+    );
+    Eigen::Array<bool, Eigen::Dynamic, 1> CalculateOutlierMemberFlag(
+        int basis_size,
+        const Eigen::ArrayXd & statistical_distance_array
+    );
     void Finalization(void);
 
 };

@@ -546,12 +546,12 @@ double PotentialAnalysisCommand::TrainAlphaR(
     auto local_entry{ atom->GetLocalPotentialEntry() };
     const int basis_size{ 2 };
     Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-    std::vector<std::vector<Eigen::VectorXd>> sampling_entry_list_map(group_size);
+    std::vector<std::vector<Eigen::VectorXd>> grouped_data_list(group_size);
     auto total_entry_size{ static_cast<size_t>(local_entry->GetDistanceAndMapValueListSize()) };
     size_t entries_in_atom_size{ total_entry_size / group_size + 1};
     for (size_t i = 0; i < group_size; i++)
     {
-        sampling_entry_list_map[i].reserve(entries_in_atom_size);
+        grouped_data_list[i].reserve(entries_in_atom_size);
     }
 
     size_t count{ 0 };
@@ -562,49 +562,30 @@ double PotentialAnalysisCommand::TrainAlphaR(
         if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
         if (gaus_y <= 0.0) continue;
         auto group_index{ count % group_size };
-        sampling_entry_list_map[group_index].emplace_back(
+        grouped_data_list[group_index].emplace_back(
             GausLinearTransformHelper::BuildLinearModelDataVector(
                 gaus_x, gaus_y, model_par_init, basis_size)
         );
         count++;
     }
-    
-    using MemberDataEntry = HRLModelHelper::MemberDataEntry;
-    std::vector<MemberDataEntry> grouped_data;
-    grouped_data.reserve(group_size);
+
+    std::unique_ptr<HRLModelHelper> estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
+    estimator->SetQuietMode();
+    estimator->SetThreadSize(1);
+    std::vector<std::vector<Eigen::VectorXd>> data_test(group_size);
+    std::vector<std::vector<Eigen::VectorXd>> data_training(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
-        grouped_data.emplace_back(
-            std::move(sampling_entry_list_map[i]),
-            "test set - group:" + std::to_string(i));
-    }
-
-    std::vector<std::unique_ptr<HRLModelHelper>> estimator_test_map(group_size);
-    std::vector<std::unique_ptr<HRLModelHelper>> estimator_training_map(group_size);
-    std::vector<size_t> training_indices;
-    training_indices.reserve(group_size);
-    for (size_t i = 0; i < group_size; i++)
-    {
-        estimator_test_map[i] = std::make_unique<HRLModelHelper>(basis_size, 1);
-        estimator_training_map[i] = std::make_unique<HRLModelHelper>(basis_size, 1);
-        estimator_test_map[i]->SetQuietMode();
-        estimator_test_map[i]->SetThreadSize(1);
-        estimator_test_map[i]->SetDataArrayView(grouped_data, i, 1);
-
-        training_indices.clear();
-        training_indices.reserve(group_size > 0 ? group_size - 1 : 0);
-        for (size_t idx = 0; idx < group_size; ++idx)
+        data_test[i].reserve(entries_in_atom_size);
+        data_training[i].reserve(total_entry_size - entries_in_atom_size);
+        data_test[i].insert(
+            data_test[i].end(), grouped_data_list[i].begin(), grouped_data_list[i].end());
+        for (size_t j = 0; j < group_size; j++)
         {
-            if (idx == i) continue;
-            training_indices.emplace_back(idx);
+            if (i == j) continue;
+            data_training[i].insert(
+                data_training[i].end(), grouped_data_list[j].begin(), grouped_data_list[j].end());
         }
-
-        estimator_training_map[i]->SetQuietMode();
-        estimator_training_map[i]->SetThreadSize(1);
-        estimator_training_map[i]->SetDataArrayMergedView(
-            grouped_data,
-            training_indices,
-            "training set - group:" + std::to_string(i));
     }
     
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
@@ -613,44 +594,15 @@ double PotentialAnalysisCommand::TrainAlphaR(
     for (int p = 0; p < alpha_size; p++)
     {
         auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
-        //Eigen::VectorXd beta_mean_training{ Eigen::VectorXd::Zero(basis_size) };
-        //std::vector<Eigen::VectorXd> beta_mdpde_training_map(group_size);
         auto beta_error_sum{ 0.0 };
         for (size_t i = 0; i < group_size; i++)
         {
-            auto estimator_test{ estimator_test_map[i].get() };
-            auto estimator_training{ estimator_training_map[i].get() };
-            //estimator_test->SetUniversalAlphaR(alpha);
-            //estimator_training->SetUniversalAlphaR(alpha);
-            estimator_test->RunBetaMDPDE(alpha);
-            estimator_training->RunBetaMDPDE(alpha);
-            auto beta_mdpde_test{ estimator_test->GetBetaMatrixMDPDE(0) };
-            auto beta_mdpde_training{ estimator_training->GetBetaMatrixMDPDE(0) };
-            //beta_mdpde_training_map[i] = beta_mdpde_training;
+            auto beta_mdpde_test{ estimator->RunBetaMDPDE(data_test.at(i), alpha) };
+            auto beta_mdpde_training{ estimator->RunBetaMDPDE(data_training.at(i), alpha) };
             beta_error_sum += (beta_mdpde_test - beta_mdpde_training).norm();
-            //beta_mean_training += beta_mdpde_training;
         }
-        //beta_mean_training /= static_cast<double>(group_size);
         beta_error_sum_array(p) = beta_error_sum;
-        /*
-        // Calculate variance of beta
-        Eigen::MatrixXd beta_variance_training{ Eigen::MatrixXd::Zero(basis_size, basis_size) };
-        for (size_t i = 0; i < group_size; i++)
-        {
-            const auto & beta_mdpde_training{ beta_mdpde_training_map[i] };
-            auto beta_deviation{ beta_mdpde_training - beta_mean_training };
-            beta_variance_training += beta_deviation * beta_deviation.transpose();
-        }
-        beta_variance_training /= static_cast<double>(group_size - 1);
-        auto trace{ beta_variance_training.trace() };
-        beta_variance_trace_array(p) = trace;*/
     }
-
-    //int trace_min_id, error_min_id;
-    //beta_variance_trace_array.minCoeff(&trace_min_id);
-    //beta_error_sum_array.minCoeff(&error_min_id);
-    //auto result_alpha_id{ std::max(trace_min_id, error_min_id) };
-    //return alpha_list.at(static_cast<size_t>(result_alpha_id));
  
     int error_min_id;
     beta_error_sum_array.minCoeff(&error_min_id);
