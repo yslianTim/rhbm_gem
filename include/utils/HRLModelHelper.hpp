@@ -141,38 +141,24 @@ public:
     void SetQuietMode(void) { m_quiet_mode = true; }
     void SetThreadSize(int thread_size);
 
-    using MemberDataEntry = std::tuple<std::vector<Eigen::VectorXd>, std::string>;
     std::tuple<Eigen::MatrixXd, Eigen::VectorXd> BuildBasisVectorAndResponseArray(
         const std::vector<Eigen::VectorXd> & data_vector
     );
+    Eigen::MatrixXd BuildBetaArray(const std::vector<Eigen::VectorXd> & beta_vector);
+
+    using MemberDataEntry = std::tuple<std::vector<Eigen::VectorXd>, std::string>;
     void SetDataArray(std::vector<MemberDataEntry> && data_array);
-    void SetDataArrayView(const std::vector<MemberDataEntry> & data_array);
-    void SetDataArrayView(
-        const std::vector<MemberDataEntry> & data_array,
-        const std::vector<size_t> & indices);
-    void SetDataArrayView(
-        const std::vector<MemberDataEntry> & data_array,
-        size_t offset,
-        size_t count);
-    void SetDataArrayMergedView(
-        const std::vector<MemberDataEntry> & data_array,
-        const std::vector<size_t> & indices,
-        const std::string & merged_info);
     void SetUniversalAlphaR(double alpha_r);
     void SetDedicateAlphaRList(const std::vector<double> & alpha_r_list);
-    void SetDedicateAlphaRListView(const std::vector<double> & alpha_r_list);
-    void SetDedicateAlphaRListView(
-        const std::vector<double> & alpha_r_list,
-        const std::vector<size_t> & indices);
-    void SetDedicateAlphaRListView(
-        const std::vector<double> & alpha_r_list,
-        size_t offset,
-        size_t count);
     void RunEstimation(double alpha_g);
     Eigen::VectorXd RunBetaMDPDE(
-        const std::vector<Eigen::VectorXd> & data_vector, double alpha_r
+        const std::vector<Eigen::VectorXd> & data_vector,
+        double alpha_r
     );
-    void RunMuMDPDE(double alpha_g);
+    Eigen::VectorXd RunMuMDPDE(
+        const std::vector<Eigen::VectorXd> & beta_vector,
+        double alpha_g
+    );
     void SetMaximumIteration(int size);
     void SetTolerance(double value);
     bool GetOutlierFlag(int id) const;
@@ -222,10 +208,9 @@ private:
         const std::vector<Eigen::VectorXd> & y_list,
         const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list,
         const Eigen::VectorXd & mu_MDPDE,
-        const std::vector<Eigen::MatrixXd> & capital_lambda_list,
+        const std::vector<Eigen::MatrixXd> & member_capital_lambda_list,
         Eigen::MatrixXd & beta_posterior_array,
-        std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list,
-        Eigen::ArrayXd & statistical_distance_array
+        std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list
     );
     Eigen::VectorXd CalculateMuByMDPDE(
         const Eigen::MatrixXd & beta_array,
@@ -272,6 +257,11 @@ private:
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataCovariance(
         double sigma_square,
         const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W
+    );
+    Eigen::ArrayXd CalculateMemberStatisticalDistance(
+        const Eigen::VectorXd & mu_prior,
+        const Eigen::MatrixXd & capital_lambda,
+        const Eigen::MatrixXd & beta_posterior_array
     );
     Eigen::Array<bool, Eigen::Dynamic, 1> CalculateOutlierMemberFlag(
         int basis_size,

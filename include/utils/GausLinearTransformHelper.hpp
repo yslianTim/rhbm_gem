@@ -17,6 +17,10 @@ public:
     ~GausLinearTransformHelper() = default;
 
     static double GetGaussianResponseAtDistance(double distance, double width, int dimension=3);
+    static std::vector<Eigen::VectorXd> MapValueTransform(
+        const std::vector<std::tuple<float, float>> & distance_and_map_value_list,
+        double x_min, double x_max, int basis_size=2
+    );
     static Eigen::VectorXd GetTylorSeriesBasisVector(double distance, const Eigen::VectorXd & model_par);
     static Eigen::VectorXd BuildLinearModelDataVector(double x, double y, const Eigen::VectorXd & model_par, int basis_dimension=2);
     static Eigen::VectorXd BuildLinearModelCoefficentVector(double amplitude, double width);

@@ -5,7 +5,8 @@
 
 #include <cmath>
 
-LocalPotentialEntry::LocalPotentialEntry(void) : m_alpha_r{ 0.0 }
+LocalPotentialEntry::LocalPotentialEntry(void) :
+    m_alpha_r{ 0.0 }, m_basis_and_response_entry_list_tmp{}
 {
 
 }
@@ -18,6 +19,11 @@ LocalPotentialEntry::~LocalPotentialEntry()
 void LocalPotentialEntry::AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list)
 {
     m_distance_and_map_value_list = std::move(list);
+}
+
+void LocalPotentialEntry::AddBasisAndResponseEntryList(std::vector<Eigen::VectorXd> && list)
+{
+    m_basis_and_response_entry_list_tmp = std::move(list);
 }
 
 void LocalPotentialEntry::ClearDistanceAndMapValueList(void)
@@ -61,9 +67,23 @@ int LocalPotentialEntry::GetDistanceAndMapValueListSize(void) const
     return static_cast<int>(m_distance_and_map_value_list.size());
 }
 
+int LocalPotentialEntry::GetBasisAndResponseEntryListSize(void) const
+{
+    return static_cast<int>(m_basis_and_response_entry_list_tmp.size());
+}
+
 const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList(void) const
 {
     return m_distance_and_map_value_list;
+}
+
+const std::vector<Eigen::VectorXd> & LocalPotentialEntry::GetBasisAndResponseEntryList(void) const
+{
+    if (m_basis_and_response_entry_list_tmp.empty())
+    {
+        throw std::runtime_error("m_basis_and_response_entry_list_tmp is empty");
+    }
+    return m_basis_and_response_entry_list_tmp;
 }
 
 double LocalPotentialEntry::GetMomentZeroEstimate(void) const

@@ -4,6 +4,7 @@
 #include <tuple>
 #include <string>
 #include <unordered_map>
+#include <Eigen/Dense>
 
 class DataObjectBase;
 
@@ -17,13 +18,17 @@ class LocalPotentialEntry
     std::unordered_map<std::string, std::tuple<double, double>> m_gaus_variance_posterior_map;
     std::unordered_map<std::string, bool> m_outlier_tag_map;
     std::unordered_map<std::string, double> m_statistical_distance_map;
+    Eigen::VectorXd m_beta_mdpde_tmp;
+    std::vector<Eigen::VectorXd> m_basis_and_response_entry_list_tmp;
 
 public:
     LocalPotentialEntry(void);
     ~LocalPotentialEntry();
 
     void SetAlphaR(double value) { m_alpha_r = value;};
+    void SetBetaEstimateMDPDE(const Eigen::VectorXd & value) { m_beta_mdpde_tmp = value; };
     void AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list);
+    void AddBasisAndResponseEntryList(std::vector<Eigen::VectorXd> && list);
     void ClearDistanceAndMapValueList(void);
     void AddGausEstimateOLS(double v0, double v1);
     void AddGausEstimateMDPDE(double v0, double v1);
@@ -33,8 +38,11 @@ public:
     void AddStatisticalDistance(const std::string & key, double value);
 
     int GetDistanceAndMapValueListSize(void) const;
+    int GetBasisAndResponseEntryListSize(void) const;
     double GetAlphaR(void) const { return m_alpha_r; };
+    const Eigen::VectorXd & GetBetaEstimateMDPDE(void) const { return m_beta_mdpde_tmp; };
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
+    const std::vector<Eigen::VectorXd> & GetBasisAndResponseEntryList(void) const;
     double GetMomentZeroEstimate(void) const;
     double GetMomentTwoEstimate(void) const;
     double GetBetaEstimateOLS(int par_id) const;

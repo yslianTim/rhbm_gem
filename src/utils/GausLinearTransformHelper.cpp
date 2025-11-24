@@ -20,6 +20,28 @@ double GausLinearTransformHelper::GetGaussianResponseAtDistance(
     return y;
 }
 
+std::vector<Eigen::VectorXd> GausLinearTransformHelper::MapValueTransform(
+    const std::vector<std::tuple<float, float>> & distance_and_map_value_list,
+    double x_min, double x_max, int basis_size)
+{
+    std::vector<Eigen::VectorXd> basis_and_response_entry_list;
+    basis_and_response_entry_list.reserve(distance_and_map_value_list.size());
+    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+    for (auto & data_entry : distance_and_map_value_list)
+    {
+        auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
+        auto gaus_y{ static_cast<double>(std::get<1>(data_entry)) };
+        if (gaus_x < x_min || gaus_x > x_max) continue;
+        if (gaus_y <= 0.0) continue;
+        basis_and_response_entry_list.emplace_back(
+            GausLinearTransformHelper::BuildLinearModelDataVector(
+                gaus_x, gaus_y, model_par_init, basis_size)
+        );
+    }
+    basis_and_response_entry_list.shrink_to_fit();
+    return basis_and_response_entry_list;
+}
+
 Eigen::VectorXd GausLinearTransformHelper::GetTylorSeriesBasisVector(
     double r, const Eigen::VectorXd & model_par)
 {

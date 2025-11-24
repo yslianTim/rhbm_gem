@@ -75,6 +75,7 @@ private:
     void RunAtomAlphaTraining(void);
     double TrainAlphaR(const AtomObject * atom, const size_t group_size, const std::vector<double> & alpha_list);
     double TrainAlphaG(const std::vector<AtomObject *> & atom_list, const size_t group_size, const std::vector<double> & alpha_list);
+    void RunLocalAtomFitting(void);
     void RunAtomPotentialFitting(void);
     void RunBondPotentialFitting(void);
     void SaveDataObject(void);

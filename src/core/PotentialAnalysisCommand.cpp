@@ -27,6 +27,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <limits>
+#include <random>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -319,6 +320,11 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
             interpolation_visitor.SetPosition(atom->GetPosition());
             m_map_object->Accept(&interpolation_visitor);
             entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
+            entry->AddBasisAndResponseEntryList(
+                GausLinearTransformHelper::MapValueTransform(
+                    entry->GetDistanceAndMapValueList(),
+                    m_options.fit_range_min, m_options.fit_range_max)
+            );
             if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
             #pragma omp critical
             {
@@ -336,6 +342,11 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
         interpolation_visitor.SetPosition(atom->GetPosition());
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+        entry->AddBasisAndResponseEntryList(
+            GausLinearTransformHelper::MapValueTransform(
+                entry->GetDistanceAndMapValueList(),
+                m_options.fit_range_min, m_options.fit_range_max)
+        );
         if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
         atom_count++;
         Logger::ProgressPercent(atom_count, atom_size);
@@ -476,9 +487,8 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto atom{ selected_atom_list[i] };
-        auto entry{ atom->GetLocalPotentialEntry() };
         auto alpha_r{ TrainAlphaR(atom, group_size_alpha_r, ordered_alpha_r_list) };
-        entry->SetAlphaR(alpha_r);
+        atom->GetLocalPotentialEntry()->SetAlphaR(alpha_r);
         #ifdef USE_OPENMP
             #pragma omp critical
         #endif
@@ -487,6 +497,8 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
             Logger::ProgressPercent(atom_count, selected_atom_size);
         }
     }
+
+    RunLocalAtomFitting();
 
     // Alpha_G Training
     std::vector<std::tuple<GroupPotentialEntry *, size_t>> key_list;
@@ -499,7 +511,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         for (auto group_key : group_key_set)
         {
             const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
-            if (atom_list.size() >= 1000)
+            if (atom_list.size() >= 10)
             {
                 key_list.emplace_back(group_potential_entry, group_key);
             }
@@ -545,9 +557,8 @@ double PotentialAnalysisCommand::TrainAlphaR(
 {
     auto local_entry{ atom->GetLocalPotentialEntry() };
     const int basis_size{ 2 };
-    Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
     std::vector<std::vector<Eigen::VectorXd>> grouped_data_list(group_size);
-    auto total_entry_size{ static_cast<size_t>(local_entry->GetDistanceAndMapValueListSize()) };
+    auto total_entry_size{ static_cast<size_t>(local_entry->GetBasisAndResponseEntryListSize()) };
     size_t entries_in_atom_size{ total_entry_size / group_size + 1};
     for (size_t i = 0; i < group_size; i++)
     {
@@ -555,23 +566,13 @@ double PotentialAnalysisCommand::TrainAlphaR(
     }
 
     size_t count{ 0 };
-    for (auto & data_entry : local_entry->GetDistanceAndMapValueList())
+    for (auto & data_entry : local_entry->GetBasisAndResponseEntryList())
     {
-        auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
-        auto gaus_y{ static_cast<double>(std::get<1>(data_entry)) };
-        if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
-        if (gaus_y <= 0.0) continue;
         auto group_index{ count % group_size };
-        grouped_data_list[group_index].emplace_back(
-            GausLinearTransformHelper::BuildLinearModelDataVector(
-                gaus_x, gaus_y, model_par_init, basis_size)
-        );
+        grouped_data_list[group_index].emplace_back(data_entry);
         count++;
     }
 
-    std::unique_ptr<HRLModelHelper> estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
-    estimator->SetQuietMode();
-    estimator->SetThreadSize(1);
     std::vector<std::vector<Eigen::VectorXd>> data_test(group_size);
     std::vector<std::vector<Eigen::VectorXd>> data_training(group_size);
     for (size_t i = 0; i < group_size; i++)
@@ -597,6 +598,9 @@ double PotentialAnalysisCommand::TrainAlphaR(
         auto beta_error_sum{ 0.0 };
         for (size_t i = 0; i < group_size; i++)
         {
+            auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
+            estimator->SetQuietMode();
+            estimator->SetThreadSize(1);
             auto beta_mdpde_test{ estimator->RunBetaMDPDE(data_test.at(i), alpha) };
             auto beta_mdpde_training{ estimator->RunBetaMDPDE(data_training.at(i), alpha) };
             beta_error_sum += (beta_mdpde_test - beta_mdpde_training).norm();
@@ -613,114 +617,30 @@ double PotentialAnalysisCommand::TrainAlphaG(
     const std::vector<AtomObject *> & atom_list,
     const size_t group_size, const std::vector<double> & alpha_list)
 {
-    size_t atom_in_group_size{ atom_list.size() / group_size + 1};
+    auto atom_in_half_size{ atom_list.size() / 2 };
     const int basis_size{ 2 };
-    using MemberDataEntry = HRLModelHelper::MemberDataEntry;
-    std::vector<std::vector<MemberDataEntry>> grouped_data_map(group_size);
-    std::vector<std::vector<double>> grouped_alpha_r_map(group_size);
-    for (size_t i = 0; i < group_size; i++)
-    {
-        grouped_data_map[i].reserve(atom_in_group_size);
-        grouped_alpha_r_map[i].reserve(atom_in_group_size);
-    }
-
-    size_t count{ 0 };
-    for (const auto & atom : atom_list)
-    {
-        auto entry{ atom->GetLocalPotentialEntry() };
-        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-        std::vector<Eigen::VectorXd> sampling_entry_list;
-        sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
-        for (auto & data_entry : entry->GetDistanceAndMapValueList())
-        {
-            auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
-            auto gaus_y{ static_cast<double>(std::get<1>(data_entry)) };
-            if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
-            if (gaus_y <= 0.0) continue;
-            sampling_entry_list.emplace_back(
-                GausLinearTransformHelper::BuildLinearModelDataVector(
-                    gaus_x, gaus_y, model_par_init, basis_size)
-            );
-        }
-        auto group_index{ count % group_size };
-        grouped_data_map[group_index].emplace_back(std::move(sampling_entry_list), atom->GetInfo());
-        grouped_alpha_r_map[group_index].emplace_back(entry->GetAlphaR());
-        count++;
-    }
     
-    std::vector<size_t> group_offsets(group_size + 1, 0);
+    std::vector<std::vector<Eigen::VectorXd>> data_test(group_size);
+    std::vector<std::vector<Eigen::VectorXd>> data_training(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
-        group_offsets[i + 1] = group_offsets[i] + grouped_data_map.at(i).size();
-    }
-
-    const size_t total_member_size{ group_offsets.back() };
-    std::vector<MemberDataEntry> flattened_data;
-    flattened_data.reserve(total_member_size);
-    for (auto & group_data : grouped_data_map)
-    {
-        flattened_data.insert(
-            flattened_data.end(),
-            std::make_move_iterator(group_data.begin()),
-            std::make_move_iterator(group_data.end()));
-    }
-
-    std::vector<double> flattened_alpha_r;
-    flattened_alpha_r.reserve(total_member_size);
-    for (auto & alpha_r_list : grouped_alpha_r_map)
-    {
-        flattened_alpha_r.insert(
-            flattened_alpha_r.end(),
-            std::make_move_iterator(alpha_r_list.begin()),
-            std::make_move_iterator(alpha_r_list.end()));
-    }
-
-    std::vector<size_t> training_indices;
-    training_indices.reserve(total_member_size);
-
-    std::vector<std::unique_ptr<HRLModelHelper>> estimator_test_map(group_size);
-    std::vector<std::unique_ptr<HRLModelHelper>> estimator_training_map(group_size);
-    for (size_t i = 0; i < group_size; i++)
-    {
-        const auto test_begin{ group_offsets.at(i) };
-        const auto test_end{ group_offsets.at(i + 1) };
-        const auto test_count{ test_end - test_begin };
-        const auto training_count{ total_member_size - test_count };
-
-        if (test_count > static_cast<size_t>(std::numeric_limits<int>::max()) ||
-            training_count > static_cast<size_t>(std::numeric_limits<int>::max()))
+        // Randomly pick the half of atoms into test set and training set for each group
+        std::vector<AtomObject *> data1, data2;
+        std::vector<AtomObject *> shuffled{ atom_list };
+        std::shuffle(shuffled.begin(), shuffled.end(), std::mt19937{std::random_device{}()});
+        auto diff{ static_cast<std::vector<AtomObject *>::difference_type>(atom_in_half_size) };
+        data1.assign(shuffled.begin(), shuffled.begin() + diff);
+        data2.assign(shuffled.begin() + diff, shuffled.end());
+        data_test[i].reserve(data1.size());
+        data_training[i].reserve(data2.size());
+        for (auto atom : data1)
         {
-            throw std::overflow_error("Alpha-G cross validation fold exceeds supported sample count.");
+            data_test[i].emplace_back(atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE());
         }
-
-        estimator_test_map[i] = std::make_unique<HRLModelHelper>(
-            basis_size, static_cast<int>(test_count));
-        estimator_training_map[i] = std::make_unique<HRLModelHelper>(
-            basis_size, static_cast<int>(training_count));
-        estimator_test_map[i]->SetQuietMode();
-        estimator_test_map[i]->SetThreadSize(1);
-        estimator_test_map[i]->SetDataArrayView(flattened_data, test_begin, test_count);
-        estimator_test_map[i]->SetDedicateAlphaRListView(flattened_alpha_r, test_begin, test_count);
-
-        training_indices.clear();
-        for (size_t idx = 0; idx < test_begin; ++idx)
+        for (auto atom : data2)
         {
-            training_indices.emplace_back(idx);
+            data_training[i].emplace_back(atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE());
         }
-        for (size_t idx = test_end; idx < total_member_size; ++idx)
-        {
-            training_indices.emplace_back(idx);
-        }
-
-        if (training_indices.size() != training_count)
-        {
-            throw std::runtime_error("Training index size mismatch while preparing alpha-G training data.");
-        }
-
-        estimator_training_map[i]->SetQuietMode();
-        estimator_training_map[i]->SetThreadSize(1);
-        estimator_training_map[i]->SetDataArrayView(flattened_data, training_indices);
-        estimator_training_map[i]->SetDedicateAlphaRListView(flattened_alpha_r, training_indices);
     }
 
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
@@ -731,21 +651,17 @@ double PotentialAnalysisCommand::TrainAlphaG(
         auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
         Eigen::VectorXd mu_mean_training{ Eigen::VectorXd::Zero(basis_size) };
         std::vector<Eigen::VectorXd> mu_mdpde_training_map(group_size);
-        auto mu_error_sum{ 0.0 };
         for (size_t i = 0; i < group_size; i++)
         {
-            auto estimator_test{ estimator_test_map[i].get() };
-            auto estimator_training{ estimator_training_map[i].get() };
-            estimator_test->RunEstimation(alpha);
-            estimator_training->RunEstimation(alpha);
-            auto mu_mdpde_test{ estimator_test->GetMuVectorMDPDE() };
-            auto mu_mdpde_training{ estimator_training->GetMuVectorMDPDE() };
+            auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
+            estimator->SetQuietMode();
+            estimator->SetThreadSize(1);
+            auto mu_mdpde_test{ estimator->RunMuMDPDE(data_test.at(i), alpha) };
+            auto mu_mdpde_training{ estimator->RunMuMDPDE(data_training.at(i), alpha) };
             mu_mdpde_training_map[i] = mu_mdpde_training;
-            mu_error_sum += (mu_mdpde_test - mu_mdpde_training).norm();
             mu_mean_training += mu_mdpde_training;
         }
         mu_mean_training /= static_cast<double>(group_size);
-        mu_error_sum_array(p) = mu_error_sum;
         
         // Calculate variance of mu
         Eigen::MatrixXd mu_variance_training{ Eigen::MatrixXd::Zero(basis_size, basis_size) };
@@ -760,16 +676,45 @@ double PotentialAnalysisCommand::TrainAlphaG(
         mu_variance_trace_array(p) = trace;
     }
 
-    int trace_min_id, error_min_id;
+    int trace_min_id;
     mu_variance_trace_array.minCoeff(&trace_min_id);
-    mu_error_sum_array.minCoeff(&error_min_id);
-    //auto trace_min{ mu_variance_trace_array.minCoeff(&trace_min_id) };
-    //auto error_min{ mu_error_sum_array.minCoeff(&error_min_id) };
-    //std::cout << "Min trace = " << trace_min << " @ Id: "<< trace_min_id << std::endl;
-    //std::cout << "Min error = " << error_min << " @ Id: " << error_min_id << std::endl;
-    auto result_alpha_id{ std::max(trace_min_id, error_min_id) };
+    return alpha_list.at(static_cast<size_t>(trace_min_id));
+}
 
-    return alpha_list.at(static_cast<size_t>(result_alpha_id));
+void PotentialAnalysisCommand::RunLocalAtomFitting(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunLocalAtomFitting() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
+    if (m_model_object == nullptr) return;
+
+    const int basis_size{ 2 };
+
+    std::atomic<size_t> atom_count{ 0 };
+    auto & selected_atom_list{ m_model_object->GetSelectedAtomList() };
+    auto selected_atom_size{ selected_atom_list.size() };
+    Logger::Log(LogLevel::Info,
+        "Run Local atom fitting for "+ std::to_string(selected_atom_size) +" atoms.");
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+    for (size_t i = 0; i < selected_atom_size; i++)
+    {
+        auto local_entry{ selected_atom_list[i]->GetLocalPotentialEntry() };
+        auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
+        auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
+        estimator->SetQuietMode();
+        estimator->SetThreadSize(1);
+        auto beta_mdpde{ estimator->RunBetaMDPDE(data_entry_list, local_entry->GetAlphaR()) };
+        local_entry->SetBetaEstimateMDPDE(beta_mdpde);
+
+        #ifdef USE_OPENMP
+            #pragma omp critical
+        #endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, selected_atom_size);
+        }
+    }
 }
 
 void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
@@ -805,22 +750,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             for (const auto & atom : atom_list)
             {
                 auto entry{ atom->GetLocalPotentialEntry() };
-                Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-                model_par_init(0) = entry->GetMomentZeroEstimate();
-                model_par_init(1) = entry->GetMomentTwoEstimate();
-                std::vector<Eigen::VectorXd> sampling_entry_list;
-                sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
-                for (auto & data_entry : entry->GetDistanceAndMapValueList())
-                {
-                    auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
-                    auto gaus_y{ static_cast<double>(std::get<1>(data_entry)) };
-                    if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
-                    if (gaus_y <= 0.0) continue;
-                    sampling_entry_list.emplace_back(
-                        GausLinearTransformHelper::BuildLinearModelDataVector(
-                            gaus_x, gaus_y, model_par_init, basis_size)
-                    );
-                }
+                auto sampling_entry_list{ entry->GetBasisAndResponseEntryList() };
                 data_array.emplace_back(std::move(sampling_entry_list), atom->GetInfo());
                 alpha_r_list.emplace_back(entry->GetAlphaR());
             }
