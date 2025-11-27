@@ -21,16 +21,6 @@ class HRLModelHelper
     double m_omega_sum; ///< The sum of member weights \f$ \Omega^{(t)} = \sum_{0}^{I-1}\omega_{i}^{(t)} \f$
     double m_weight_data_min;
     double m_weight_member_min;
-    double m_universal_alpha_r;
-    std::vector<double> m_dedicate_alpha_r_list;
-
-    /**
-     * @brief   The list of member information
-     *          for each member \f$ i = 0\cdots I-1 \f$
-     *          (length of list \f$ = I \f$)
-     * @see     BuildDataArray()
-     */
-    std::vector<std::string> m_member_info_list;
 
     /**
      * @brief   The list of model basis matrix \f$ \boldsymbol{X}_{i} \f$
@@ -124,7 +114,7 @@ class HRLModelHelper
 
 
     Eigen::VectorXd m_mu_MDPDE, m_mu_prior, m_mu_mean; // [basis_size x 1]
-    Eigen::MatrixXd m_beta_OLS_array, m_beta_MDPDE_array, m_beta_posterior_array; // [basis_size x member_size]
+    Eigen::MatrixXd m_beta_MDPDE_array, m_beta_posterior_array; // [basis_size x member_size]
 
 public:
     static constexpr int DEFAULT_MAXIMUM_ITERATION{ 100 };
@@ -148,12 +138,24 @@ public:
 
     using MemberDataEntry = std::tuple<std::vector<Eigen::VectorXd>, std::string>;
     void SetDataArray(std::vector<MemberDataEntry> && data_array);
-    void SetUniversalAlphaR(double alpha_r);
-    void SetDedicateAlphaRList(const std::vector<double> & alpha_r_list);
+    void SetMemberDataEntriesList(const std::vector<std::vector<Eigen::VectorXd>> & data_list);
+    void SetMemberBetaMDPDEList(
+        const std::vector<Eigen::VectorXd> & beta_list,
+        const std::vector<double> & sigma_square_list,
+        const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & W_list,
+        const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list
+    );
     void RunEstimation(double alpha_g);
-    Eigen::VectorXd RunBetaMDPDE(
+    void RunGroupEstimation(double alpha_g);
+    std::tuple<
+        Eigen::VectorXd,
+        double,
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic>,
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic>
+    > RunBetaMDPDE(
         const std::vector<Eigen::VectorXd> & data_vector,
-        double alpha_r
+        double alpha_r,
+        Eigen::VectorXd & beta_OLS
     );
     Eigen::VectorXd RunMuMDPDE(
         const std::vector<Eigen::VectorXd> & beta_vector,
@@ -163,7 +165,6 @@ public:
     void SetTolerance(double value);
     bool GetOutlierFlag(int id) const;
     double GetStatisticalDistance(int id) const;
-    double GetSigmaSquare(int id) const;
     double GetMemberWeight(int id) const;
     const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataWeightMatrix(int id) const;
     const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataCovarianceMatrix(int id) const;
@@ -174,7 +175,6 @@ public:
     const Eigen::VectorXd & GetMuVectorMean(void) const { return m_mu_mean; }
     Eigen::Ref<const Eigen::VectorXd> GetBetaMatrixPosterior(int id) const;
     Eigen::Ref<const Eigen::VectorXd> GetBetaMatrixMDPDE(int id) const;
-    Eigen::Ref<const Eigen::VectorXd> GetBetaMatrixOLS(int id) const;
 
 private:
     void ValidateMemberId(int id) const;

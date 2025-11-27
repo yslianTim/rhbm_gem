@@ -142,7 +142,6 @@ bool HRLModelTester::RunTest(double alpha_r, double alpha_g)
     estimator->SetQuietMode();
     estimator->SetThreadSize(1);
     estimator->SetDataArray(std::move(m_data_array));
-    estimator->SetUniversalAlphaR(alpha_r);
     estimator->RunEstimation(alpha_g);
 
     auto group_mean{
@@ -164,7 +163,7 @@ bool HRLModelTester::RunTest(double alpha_r, double alpha_g)
         auto model_par_0{ m_model_par_0_list.at(static_cast<size_t>(i)) };
         auto local_ols{
             GausLinearTransformHelper::BuildGaus3DModel(
-                estimator->GetBetaMatrixOLS(i), model_par_0)
+                estimator->GetBetaMatrixMDPDE(i), model_par_0) // to be update
         };
         auto local_mdpde{
             GausLinearTransformHelper::BuildGaus3DModel(

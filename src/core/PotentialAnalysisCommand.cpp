@@ -115,10 +115,12 @@ bool PotentialAnalysisCommand::Execute(void)
     RunAtomMapValueSampling();
     RunAtomGroupClassification();
     if (m_options.use_training_alpha) RunAtomAlphaTraining();
+    else RunLocalAtomFitting();
     RunAtomPotentialFitting();
 
     RunBondMapValueSampling();
     RunBondGroupClassification();
+    RunLocalBondFitting();
     RunBondPotentialFitting();
     SaveDataObject();
     return true;
@@ -391,7 +393,12 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
             interpolation_visitor.SetAxisVector(bond_vector);
             m_map_object->Accept(&interpolation_visitor);
             entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
-            if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
+            entry->AddBasisAndResponseEntryList(
+                GausLinearTransformHelper::MapValueTransform(
+                    entry->GetDistanceAndMapValueList(),
+                    m_options.fit_range_min, m_options.fit_range_max)
+            );
+            entry->SetAlphaR(m_options.alpha_r);
             #pragma omp critical
             {
                 bond_count++;
@@ -409,7 +416,12 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
         interpolation_visitor.SetAxisVector(bond->GetBondVector());
         m_map_object->Accept(&interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
-        if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
+        entry->AddBasisAndResponseEntryList(
+            GausLinearTransformHelper::MapValueTransform(
+                entry->GetDistanceAndMapValueList(),
+                m_options.fit_range_min, m_options.fit_range_max)
+        );
+        entry->SetAlphaR(m_options.alpha_r);
         bond_count++;
         Logger::ProgressPercent(bond_count, bond_size);
     }
@@ -601,8 +613,14 @@ double PotentialAnalysisCommand::TrainAlphaR(
             auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
             estimator->SetQuietMode();
             estimator->SetThreadSize(1);
-            auto beta_mdpde_test{ estimator->RunBetaMDPDE(data_test.at(i), alpha) };
-            auto beta_mdpde_training{ estimator->RunBetaMDPDE(data_training.at(i), alpha) };
+            Eigen::VectorXd beta_ols_test;
+            Eigen::VectorXd beta_ols_training;
+            auto beta_mdpde_test{
+                std::get<0>(estimator->RunBetaMDPDE(data_test.at(i), alpha, beta_ols_test))
+            };
+            auto beta_mdpde_training{
+                std::get<0>(estimator->RunBetaMDPDE(data_training.at(i), alpha, beta_ols_training))
+            };
             beta_error_sum += (beta_mdpde_test - beta_mdpde_training).norm();
         }
         beta_error_sum_array(p) = beta_error_sum;
@@ -704,8 +722,21 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(void)
         auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
         estimator->SetQuietMode();
         estimator->SetThreadSize(1);
-        auto beta_mdpde{ estimator->RunBetaMDPDE(data_entry_list, local_entry->GetAlphaR()) };
-        local_entry->SetBetaEstimateMDPDE(beta_mdpde);
+        Eigen::VectorXd beta_ols;
+        auto output{ estimator->RunBetaMDPDE(data_entry_list, local_entry->GetAlphaR(), beta_ols) };
+        local_entry->SetBetaEstimateOLS(beta_ols);
+        local_entry->SetBetaEstimateMDPDE(std::get<0>(output));
+        local_entry->SetSigmaSquare(std::get<1>(output));
+        local_entry->SetDataWeight(std::get<2>(output));
+        local_entry->SetDataCovariance(std::get<3>(output));
+
+        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+        model_par_init(0) = local_entry->GetMomentZeroEstimate();
+        model_par_init(1) = local_entry->GetMomentTwoEstimate();
+        auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, model_par_init) };
+        auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(std::get<0>(output), model_par_init) };
+        local_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
+        local_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
 
         #ifdef USE_OPENMP
             #pragma omp critical
@@ -713,6 +744,55 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(void)
         {
             atom_count++;
             Logger::ProgressPercent(atom_count, selected_atom_size);
+        }
+    }
+}
+
+void PotentialAnalysisCommand::RunLocalBondFitting(void)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunLocalBondFitting() called");
+    ScopeTimer timer("PotentialAnalysisCommand::RunLocalBondFitting");
+    if (m_model_object == nullptr) return;
+
+    const int basis_size{ 2 };
+
+    std::atomic<size_t> atom_count{ 0 };
+    auto & selected_bond_list{ m_model_object->GetSelectedBondList() };
+    auto selected_bond_size{ selected_bond_list.size() };
+    Logger::Log(LogLevel::Info,
+        "Run Local bond fitting for "+ std::to_string(selected_bond_size) +" bonds.");
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+    for (size_t i = 0; i < selected_bond_size; i++)
+    {
+        auto local_entry{ selected_bond_list[i]->GetLocalPotentialEntry() };
+        auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
+        auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
+        estimator->SetQuietMode();
+        estimator->SetThreadSize(1);
+        Eigen::VectorXd beta_ols;
+        auto output{ estimator->RunBetaMDPDE(data_entry_list, local_entry->GetAlphaR(), beta_ols) };
+        local_entry->SetBetaEstimateOLS(beta_ols);
+        local_entry->SetBetaEstimateMDPDE(std::get<0>(output));
+        local_entry->SetSigmaSquare(std::get<1>(output));
+        local_entry->SetDataWeight(std::get<2>(output));
+        local_entry->SetDataCovariance(std::get<3>(output));
+
+        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+        model_par_init(0) = local_entry->GetMomentZeroEstimate();
+        model_par_init(1) = local_entry->GetMomentTwoEstimate();
+        auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, model_par_init) };
+        auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(std::get<0>(output), model_par_init) };
+        local_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
+        local_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
+
+        #ifdef USE_OPENMP
+            #pragma omp critical
+        #endif
+        {
+            atom_count++;
+            Logger::ProgressPercent(atom_count, selected_bond_size);
         }
     }
 }
@@ -743,32 +823,35 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             auto group_key{ group_keys[idx] };
             const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
             auto group_size{ atom_list.size() };
-            std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
-            std::vector<double> alpha_r_list;
-            data_array.reserve(group_size);
-            alpha_r_list.reserve(group_size);
+            std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
+            std::vector<Eigen::VectorXd> beta_mdpde_list;
+            std::vector<double> sigma_square_list;
+            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_weight_list;
+            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_covariance_list;
+            data_entry_list.reserve(group_size);
+            beta_mdpde_list.reserve(group_size);
+            sigma_square_list.reserve(group_size);
+            data_weight_list.reserve(group_size);
+            data_covariance_list.reserve(group_size);
             for (const auto & atom : atom_list)
             {
                 auto entry{ atom->GetLocalPotentialEntry() };
-                auto sampling_entry_list{ entry->GetBasisAndResponseEntryList() };
-                data_array.emplace_back(std::move(sampling_entry_list), atom->GetInfo());
-                alpha_r_list.emplace_back(entry->GetAlphaR());
+                data_entry_list.emplace_back(entry->GetBasisAndResponseEntryList());
+                beta_mdpde_list.emplace_back(entry->GetBetaEstimateMDPDE());
+                sigma_square_list.emplace_back(entry->GetSigmaSquare());
+                data_weight_list.emplace_back(entry->GetDataWeight());
+                data_covariance_list.emplace_back(entry->GetDataCovariance());
             }
             auto model_estimator{ std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(group_size)) };
             model_estimator->SetThreadSize(1);
-            model_estimator->SetDataArray(std::move(data_array));
-            if (m_options.use_training_alpha)
-            {
-                model_estimator->SetDedicateAlphaRList(alpha_r_list);
-            }
-            else
-            {
-                model_estimator->SetUniversalAlphaR(m_options.alpha_r);
-            }
+            model_estimator->SetMemberDataEntriesList(data_entry_list);
+            model_estimator->SetMemberBetaMDPDEList(
+                beta_mdpde_list, sigma_square_list, data_weight_list, data_covariance_list
+            );
             auto alpha_g{ (m_options.use_training_alpha) ?
                 group_potential_entry->GetAlphaG(group_key) : m_options.alpha_g
             };
-            model_estimator->RunEstimation(alpha_g);
+            model_estimator->RunGroupEstimation(alpha_g);
 
             auto gaus_group_mean{
                 GausLinearTransformHelper::BuildGaus3DModel(model_estimator->GetMuVectorMean())
@@ -789,17 +872,6 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             for (const auto & atom : atom_list)
             {
                 auto atom_entry{ atom->GetLocalPotentialEntry() };
-                Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-                model_par_init(0) = atom_entry->GetMomentZeroEstimate();
-                model_par_init(1) = atom_entry->GetMomentTwoEstimate();
-                const auto & beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
-                auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_vector_ols, model_par_init) };
-                atom_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
-
-                const auto & beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
-                auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_vector_mdpde, model_par_init) };
-                atom_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
-
                 const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
                 auto gaus_posterior{
@@ -845,6 +917,7 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondPotentialFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
     if (m_model_object == nullptr) return;
+    const int basis_size{ 2 };
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
@@ -865,31 +938,33 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
             auto group_key{ group_keys[idx] };
             const auto & bond_list{ group_potential_entry->GetBondObjectPtrList(group_key) };
             auto group_size{ bond_list.size() };
-            std::vector<std::tuple<std::vector<Eigen::VectorXd>, std::string>> data_array;
-            data_array.reserve(group_size);
+            std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
+            std::vector<Eigen::VectorXd> beta_mdpde_list;
+            std::vector<double> sigma_square_list;
+            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_weight_list;
+            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_covariance_list;
+            data_entry_list.reserve(group_size);
+            beta_mdpde_list.reserve(group_size);
+            sigma_square_list.reserve(group_size);
+            data_weight_list.reserve(group_size);
+            data_covariance_list.reserve(group_size);
             for (const auto & bond : bond_list)
             {
                 auto entry{ bond->GetLocalPotentialEntry() };
-                Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-                std::vector<Eigen::VectorXd> sampling_entry_list;
-                sampling_entry_list.reserve(static_cast<size_t>(entry->GetDistanceAndMapValueListSize()));
-                for (auto & data_entry : entry->GetDistanceAndMapValueList())
-                {
-                    auto gaus_x{ static_cast<double>(std::get<0>(data_entry)) };
-                    auto gaus_y{ static_cast<double>(std::get<1>(data_entry)) };
-                    if (gaus_x < m_options.fit_range_min || gaus_x > m_options.fit_range_max) continue;
-                    if (gaus_y <= 0.0) continue;
-                    sampling_entry_list.emplace_back(
-                        GausLinearTransformHelper::BuildLinearModelDataVector(gaus_x, gaus_y, model_par_init)
-                    );
-                }
-                data_array.emplace_back(std::move(sampling_entry_list), bond->GetInfo());
+                data_entry_list.emplace_back(entry->GetBasisAndResponseEntryList());
+                beta_mdpde_list.emplace_back(entry->GetBetaEstimateMDPDE());
+                sigma_square_list.emplace_back(entry->GetSigmaSquare());
+                data_weight_list.emplace_back(entry->GetDataWeight());
+                data_covariance_list.emplace_back(entry->GetDataCovariance());
             }
-            auto model_estimator{ std::make_unique<HRLModelHelper>(2, static_cast<int>(group_size)) };
+            auto model_estimator{ std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(group_size)) };
             model_estimator->SetThreadSize(1);
-            model_estimator->SetDataArray(std::move(data_array));
-            model_estimator->SetUniversalAlphaR(m_options.alpha_r);
-            model_estimator->RunEstimation(m_options.alpha_g);
+            model_estimator->SetMemberDataEntriesList(data_entry_list);
+            model_estimator->SetMemberBetaMDPDEList(
+                beta_mdpde_list, sigma_square_list, data_weight_list, data_covariance_list
+            );
+            auto alpha_g{ m_options.alpha_g };
+            model_estimator->RunGroupEstimation(alpha_g);
 
             auto gaus_group_mean{
                 GausLinearTransformHelper::BuildGaus2DModel(model_estimator->GetMuVectorMean())
@@ -910,14 +985,6 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
             for (const auto & bond : bond_list)
             {
                 auto bond_entry{ bond->GetLocalPotentialEntry() };
-                const auto & beta_vector_ols{ model_estimator->GetBetaMatrixOLS(count) };
-                auto gaus_ols{ GausLinearTransformHelper::BuildGaus2DModel(beta_vector_ols) };
-                bond_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
-
-                const auto & beta_vector_mdpde{ model_estimator->GetBetaMatrixMDPDE(count) };
-                auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus2DModel(beta_vector_mdpde) };
-                bond_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
-
                 const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
                 auto gaus_posterior{
