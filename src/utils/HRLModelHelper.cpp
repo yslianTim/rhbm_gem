@@ -142,33 +142,6 @@ Eigen::MatrixXd HRLModelHelper::BuildBetaArray(const std::vector<Eigen::VectorXd
     return beta_array;
 }
 
-void HRLModelHelper::SetDataArray(std::vector<MemberDataEntry> && data_array)
-{
-    auto data_array_size{ CheckedCastToInt(data_array.size()) };
-    if (data_array_size != m_member_size)
-    {
-        throw std::invalid_argument("The input size of data list isn't consistent with member size.");
-    }
-
-    // Build new data structures locally so existing member data remains
-    // untouched if validation fails midway through the process.
-    std::vector<MatrixXd> X_list;
-    std::vector<VectorXd> y_list;
-    X_list.reserve(static_cast<size_t>(m_member_size));
-    y_list.reserve(static_cast<size_t>(m_member_size));
-
-    for (auto & [data_vector, member_info] : data_array)
-    {
-        auto data{ BuildBasisVectorAndResponseArray(data_vector) };
-        X_list.emplace_back(std::move(std::get<0>(data)));
-        y_list.emplace_back(std::move(std::get<1>(data)));
-    }
-
-    // All validation and transformations succeeded, move into member variables.
-    m_X_list = std::move(X_list);
-    m_y_list = std::move(y_list);
-}
-
 void HRLModelHelper::SetMemberDataEntriesList(const std::vector<std::vector<Eigen::VectorXd>> & data_list)
 {
     auto member_size{ CheckedCastToInt(data_list.size()) };
@@ -232,47 +205,6 @@ void HRLModelHelper::SetTolerance(double value)
     m_tolerance = value;
 }
 
-void HRLModelHelper::UpdateMemberSize(size_t expected_member_size)
-{
-    auto current_member_size{ m_y_list.size() };
-    if (current_member_size != expected_member_size)
-    {
-        std::ostringstream oss;
-        oss << "HRLModelHelper::RunEstimation : "
-            << "Valid member size is different with expected member size -> "
-            << expected_member_size << ", "
-            << "reassigning member size to -> " << current_member_size;
-        if (m_quiet_mode == false) Logger::Log(LogLevel::Info, oss.str());
-        m_member_size = static_cast<int>(current_member_size);
-        m_weight_member_min = DEFAULT_WEIGHT_MEMBER_MIN / m_member_size;
-        m_omega_array.resize(m_member_size);
-        m_sigma_square_array.resize(m_member_size);
-        m_statistical_distance_array.resize(m_member_size);
-        m_outlier_flag_array.resize(m_member_size);
-        m_beta_MDPDE_array.resize(m_basis_size, m_member_size);
-        m_beta_posterior_array.resize(m_basis_size, m_member_size);
-        m_capital_sigma_posterior_list.resize(current_member_size);
-        m_capital_sigma_posterior_list.shrink_to_fit();
-        m_capital_lambda_list.resize(current_member_size);
-        m_capital_lambda_list.shrink_to_fit();
-        m_W_list.resize(current_member_size);
-        m_W_list.shrink_to_fit();
-    }
-}
-
-void HRLModelHelper::RunEstimation(double alpha_g)
-{
-    ValidateAlpha(alpha_g);
-    UpdateMemberSize(static_cast<size_t>(m_member_size));
-    Initialization();
-    RunAlgorithmBetaMDPDE(DEFAULT_UNIVERSAL_ALPHA_R);
-    RunAlgorithmMuMDPDE(alpha_g);
-    RunAlgorithmWEB();
-    m_statistical_distance_array =
-        CalculateMemberStatisticalDistance(m_mu_prior, m_capital_lambda, m_beta_posterior_array);
-    m_outlier_flag_array = CalculateOutlierMemberFlag(m_basis_size, m_statistical_distance_array);
-}
-
 void HRLModelHelper::RunGroupEstimation(double alpha_g)
 {
     ValidateAlpha(alpha_g);
@@ -320,43 +252,6 @@ Eigen::VectorXd HRLModelHelper::RunMuMDPDE(
         alpha_g, data, mu,
         omega_array, omega_sum, capital_lambda, member_capital_lambda_list);
     return mu;
-}
-
-void HRLModelHelper::Initialization(void)
-{
-    // Reset scalars and arrays to their default values
-    m_capital_lambda.setIdentity();
-    m_omega_sum = 0.0;
-    m_omega_array.setOnes();
-    m_sigma_square_array.setZero();
-    m_statistical_distance_array.setZero();
-    m_outlier_flag_array.setConstant(false);
-
-    // Reset member-wise parameter estimates
-    m_beta_MDPDE_array.setZero();
-    m_beta_posterior_array.setZero();
-    m_mu_MDPDE.setZero();
-    m_mu_prior.setZero();
-    m_mu_mean.setZero();
-
-    // Reset the containers of matrix objects
-    m_W_list.clear();
-    m_capital_sigma_list.clear();
-    m_capital_sigma_posterior_list.assign(
-        static_cast<size_t>(m_member_size), MatrixXd::Identity(m_basis_size, m_basis_size));
-    m_capital_lambda_list.assign(
-        static_cast<size_t>(m_member_size), MatrixXd::Identity(m_basis_size, m_basis_size));
-
-    for (int i = 0; i < m_member_size; i++)
-    { //=== Begin of member ID loop (0 ... I-1)
-        auto data_size{ m_y_list.at(static_cast<size_t>(i)).rows() };
-        DMatrixXd W{ data_size };
-        W.setIdentity();
-        m_W_list.emplace_back(std::move(W));
-        DMatrixXd sigma{ data_size };
-        sigma.setIdentity();
-        m_capital_sigma_list.emplace_back(std::move(sigma));
-    } //=== End of member ID loop
 }
 
 void HRLModelHelper::RunAlgorithmWEB(void)
@@ -573,7 +468,7 @@ double HRLModelHelper::CalculateDataVarianceSquare(
     double alpha,
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
-    const DMatrixXd & W,
+    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
     const Eigen::VectorXd & beta)
 {
     double alpha_pow{ std::pow(1.0 + alpha, -1.5) };
@@ -723,7 +618,9 @@ Eigen::VectorXd HRLModelHelper::CalculateBetaByOLS(
 }
 
 Eigen::VectorXd HRLModelHelper::CalculateBetaByMDPDE(
-    const Eigen::MatrixXd & X, const Eigen::VectorXd & y, const DMatrixXd & W)
+    const Eigen::MatrixXd & X,
+    const Eigen::VectorXd & y,
+    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W)
 {
     MatrixXd gram_matrix{ (X.transpose() * W * X) };
     auto inverse_gram_matrix{ EigenMatrixUtility::GetInverseMatrix(gram_matrix) };

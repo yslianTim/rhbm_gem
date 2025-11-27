@@ -136,8 +136,6 @@ public:
     );
     Eigen::MatrixXd BuildBetaArray(const std::vector<Eigen::VectorXd> & beta_vector);
 
-    using MemberDataEntry = std::tuple<std::vector<Eigen::VectorXd>, std::string>;
-    void SetDataArray(std::vector<MemberDataEntry> && data_array);
     void SetMemberDataEntriesList(const std::vector<std::vector<Eigen::VectorXd>> & data_list);
     void SetMemberBetaMDPDEList(
         const std::vector<Eigen::VectorXd> & beta_list,
@@ -145,7 +143,6 @@ public:
         const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & W_list,
         const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list
     );
-    void RunEstimation(double alpha_g);
     void RunGroupEstimation(double alpha_g);
     std::tuple<
         Eigen::VectorXd,
@@ -179,8 +176,6 @@ public:
 private:
     void ValidateMemberId(int id) const;
     void ValidateAlpha(double alpha) const;
-    void UpdateMemberSize(size_t expected_member_size);
-    void Initialization(void);
     void RunAlgorithmBetaMDPDE(double alpha_r);
     void RunAlgorithmMuMDPDE(double alpha_g);
     void RunAlgorithmWEB(void);

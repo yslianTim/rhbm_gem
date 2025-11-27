@@ -130,13 +130,14 @@ void HRLModelTestCommand::RunSimulationTestOnBenchMark(void)
     model_par_sigma(2) = 0.001;
 
     auto data_replica_size{ 100 };
-    auto tester{ std::make_unique<HRLModelTester>(model_par_size, linear_basis_size, data_replica_size) };
+    auto tester{ std::make_unique<HRLModelTester>(model_par_size, linear_basis_size) };
+    tester->SetReplicaSize(data_replica_size);
     tester->SetFittingRange(m_options.fit_range_min, m_options.fit_range_max);
     tester->SetSamplingEntrySize(1000);
     tester->SetDataErrorSigma(0.1);
     tester->SetModelParametersPrior(model_par_prior);
     tester->SetModelParametersSigma(model_par_sigma);
-    tester->RunTest(m_options.alpha_r, m_options.alpha_g);
+    tester->RunBetaEstimateTest(m_options.alpha_r);
 
     auto & residual_ols_list{ tester->GetLocalEstimateResidualOLSList() };
     auto & residual_mdpde_list{ tester->GetLocalEstimateResidualMDPDEList() };
