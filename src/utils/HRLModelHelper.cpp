@@ -71,7 +71,6 @@ HRLModelHelper::HRLModelHelper(int basis_size, int member_size) :
 
 HRLModelHelper::~HRLModelHelper()
 {
-    Finalization();
 }
 
 void HRLModelHelper::SetThreadSize(int thread_size)
@@ -95,11 +94,8 @@ std::tuple<Eigen::MatrixXd, Eigen::VectorXd> HRLModelHelper::BuildBasisVectorAnd
             "HRLModelHelper::BuildBasisVectorAndResponseArray : dataset is empty.");
     }
     
-    auto basis_size{ (data_vector[0].rows() - 1) };
-    if (basis_size != m_basis_size)
-    {
-        Logger::Log(LogLevel::Warning,"basis size wrong : "+ std::to_string(basis_size));
-    }
+    auto basis_size{ static_cast<int>(data_vector[0].rows() - 1) };
+    ValidateBasisSize(basis_size);
     MatrixXd x_data_matrix{ MatrixXd::Zero(data_size, basis_size) };
     VectorXd y_data_vector{ VectorXd::Zero(data_size) };
     for (int i = 0; i < data_size; i++)
@@ -120,9 +116,9 @@ std::tuple<Eigen::MatrixXd, Eigen::VectorXd> HRLModelHelper::BuildBasisVectorAnd
     return std::make_tuple(std::move(x_data_matrix), std::move(y_data_vector));
 }
 
-Eigen::MatrixXd HRLModelHelper::BuildBetaArray(const std::vector<Eigen::VectorXd> & beta_vector)
+Eigen::MatrixXd HRLModelHelper::ConvertBetaListToMatrix(const std::vector<Eigen::VectorXd> & beta_list)
 {
-    auto member_size{ CheckedCastToInt(beta_vector.size()) };
+    auto member_size{ CheckedCastToInt(beta_list.size()) };
     if (member_size == 0 && m_quiet_mode == false)
     {
         Logger::Log(LogLevel::Warning,
@@ -132,11 +128,8 @@ Eigen::MatrixXd HRLModelHelper::BuildBetaArray(const std::vector<Eigen::VectorXd
     MatrixXd beta_array{ MatrixXd::Zero(m_basis_size, member_size) };
     for (int i = 0; i < member_size; i++)
     {
-        const auto & beta{ beta_vector.at(static_cast<size_t>(i)) };
-        if (beta.size() != m_basis_size)
-        {
-            throw std::invalid_argument("The input data size isn't consistent with basis size.");
-        }
+        const auto & beta{ beta_list.at(static_cast<size_t>(i)) };
+        ValidateBasisSize(static_cast<int>(beta.size()));
         beta_array.col(i) = beta;
     }
     return beta_array;
@@ -145,10 +138,7 @@ Eigen::MatrixXd HRLModelHelper::BuildBetaArray(const std::vector<Eigen::VectorXd
 void HRLModelHelper::SetMemberDataEntriesList(const std::vector<std::vector<Eigen::VectorXd>> & data_list)
 {
     auto member_size{ CheckedCastToInt(data_list.size()) };
-    if (member_size != m_member_size)
-    {
-        throw std::invalid_argument("The input size of data list isn't consistent with member size.");
-    }
+    ValidateMemberSize(member_size);
     m_X_list.clear();
     m_y_list.clear();
     for (auto & data_entry : data_list)
@@ -166,10 +156,7 @@ void HRLModelHelper::SetMemberBetaMDPDEList(
     const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list)
 {
     auto member_size{ CheckedCastToInt(beta_list.size()) };
-    if (member_size != m_member_size)
-    {
-        throw std::invalid_argument("The input size of data list isn't consistent with member size.");
-    }
+    ValidateMemberSize(member_size);
     m_beta_MDPDE_array.setZero();
     m_sigma_square_array.setZero();
     m_W_list.clear();
@@ -266,11 +253,11 @@ void HRLModelHelper::RunMuMDPDE(
     Eigen::MatrixXd & capital_lambda,
     std::vector<Eigen::MatrixXd> & member_capital_lambda_list)
 {
-    auto data{ BuildBetaArray(beta_vector) };
-    m_mu_mean = CalculateMuByMedian(data);
+    auto beta_matrix{ ConvertBetaListToMatrix(beta_vector) };
+    m_mu_mean = CalculateMuByMedian(beta_matrix);
     mu_MDPDE = m_mu_mean;
     AlgorithmMuMDPDE(
-        alpha_g, data, mu_MDPDE,
+        alpha_g, beta_matrix, mu_MDPDE,
         omega_array, omega_sum, capital_lambda, member_capital_lambda_list);
 }
 
@@ -725,10 +712,24 @@ Eigen::Array<bool, Eigen::Dynamic, 1> HRLModelHelper::CalculateOutlierMemberFlag
     //return ((m_omega_array/m_omega_sum) < 0.05/static_cast<double>(member_size));
 }
 
-void HRLModelHelper::Finalization(void)
+void HRLModelHelper::ValidateBasisSize(int size) const
 {
-    m_X_list.clear();
-    m_y_list.clear();
+    if (size != m_basis_size)
+    {
+        throw std::invalid_argument(
+            "The input size of data list isn't consistent with basis size : "+ std::to_string(size)
+            + " -> Expected: " + std::to_string(m_basis_size));
+    }
+}
+
+void HRLModelHelper::ValidateMemberSize(int size) const
+{
+    if (size != m_member_size)
+    {
+        throw std::invalid_argument(
+            "The input size of data list isn't consistent with member size : "+ std::to_string(size)
+            + " -> Expected: " + std::to_string(m_member_size));
+    }
 }
 
 void HRLModelHelper::ValidateMemberId(int id) const
@@ -765,34 +766,14 @@ double HRLModelHelper::GetMemberWeight(int id) const
     return m_omega_array(id);
 }
 
-const Eigen::DiagonalMatrix<double, Eigen::Dynamic> &
-HRLModelHelper::GetDataWeightMatrix(int id) const
+Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaPosterior(int id) const
 {
     ValidateMemberId(id);
-    return m_W_list[static_cast<size_t>(id)];
-}
-
-const Eigen::DiagonalMatrix<double, Eigen::Dynamic> &
-HRLModelHelper::GetDataCovarianceMatrix(int id) const
-{
-    ValidateMemberId(id);
-    return m_capital_sigma_list[static_cast<size_t>(id)];
+    return Eigen::Ref<const Eigen::VectorXd>(m_beta_posterior_array.col(static_cast<Eigen::Index>(id)));
 }
 
 const Eigen::MatrixXd & HRLModelHelper::GetCapitalSigmaMatrixPosterior(int id) const
 {
     ValidateMemberId(id);
     return m_capital_sigma_posterior_list[static_cast<size_t>(id)];
-}
-
-Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixPosterior(int id) const
-{
-    ValidateMemberId(id);
-    return Eigen::Ref<const Eigen::VectorXd>(m_beta_posterior_array.col(static_cast<Eigen::Index>(id)));
-}
-
-Eigen::Ref<const Eigen::VectorXd> HRLModelHelper::GetBetaMatrixMDPDE(int id) const
-{
-    ValidateMemberId(id);
-    return Eigen::Ref<const Eigen::VectorXd>(m_beta_MDPDE_array.col(static_cast<Eigen::Index>(id)));
 }

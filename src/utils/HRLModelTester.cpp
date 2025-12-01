@@ -123,28 +123,28 @@ std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomSamplingEntry(
     size_t sampling_entry_size, const Eigen::VectorXd & model_par)
 {
     CheckModelParametersDimension(model_par);
-    auto gaus_amplitude{ model_par(0) };
-    auto gaus_width{ model_par(1) };
+    auto amplitude{ model_par(0) };
+    auto width{ model_par(1) };
     //auto intersect{ model_par(2) };
     auto intersect{ 0.0 };
     std::random_device random_device;
     std::mt19937 generator{ random_device() };
     std::uniform_real_distribution<> dist_distance(m_x_min, m_x_max);
     std::normal_distribution<> dist_error(0.0, m_data_error_sigma);
-    std::vector<std::tuple<float, float>> member_sampling_entry;
-    member_sampling_entry.reserve(sampling_entry_size);
+    std::vector<std::tuple<float, float>> sampling_entry_list;
+    sampling_entry_list.reserve(sampling_entry_size);
     for (size_t i = 0; i < sampling_entry_size; i++)
     {
         auto r{ dist_distance(generator) };
         auto error{ dist_error(generator) };
         auto y{
-            gaus_amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(r, gaus_width)
+            amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(r, width)
             + intersect + error
         };
         if (y <= 0.0) continue;
-        member_sampling_entry.emplace_back(r, y);
+        sampling_entry_list.emplace_back(r, y);
     }
-    return member_sampling_entry;
+    return sampling_entry_list;
 }
 
 bool HRLModelTester::RunBetaEstimateTest(double alpha_r)

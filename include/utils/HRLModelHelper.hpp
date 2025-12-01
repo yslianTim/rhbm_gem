@@ -141,7 +141,6 @@ public:
     std::tuple<Eigen::MatrixXd, Eigen::VectorXd> BuildBasisVectorAndResponseArray(
         const std::vector<Eigen::VectorXd> & data_vector
     );
-    Eigen::MatrixXd BuildBetaArray(const std::vector<Eigen::VectorXd> & beta_vector);
     
     void RunGroupEstimation(double alpha_g);
     void RunBetaMDPDE(
@@ -154,7 +153,7 @@ public:
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma
     );
     void RunMuMDPDE(
-        const std::vector<Eigen::VectorXd> & beta_vector,
+        const std::vector<Eigen::VectorXd> & beta_list,
         double alpha_g,
         Eigen::VectorXd & mu_MDPDE,
         Eigen::ArrayXd & omega_array,
@@ -166,17 +165,16 @@ public:
     bool GetOutlierFlag(int id) const;
     double GetStatisticalDistance(int id) const;
     double GetMemberWeight(int id) const;
-    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataWeightMatrix(int id) const;
-    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataCovarianceMatrix(int id) const;
+    Eigen::Ref<const Eigen::VectorXd> GetBetaPosterior(int id) const;
     const Eigen::MatrixXd & GetCapitalSigmaMatrixPosterior(int id) const;
     const Eigen::MatrixXd & GetCapitalLambdaMatrix(void) const { return m_capital_lambda; }
     const Eigen::VectorXd & GetMuVectorPrior(void) const { return m_mu_prior; }
     const Eigen::VectorXd & GetMuVectorMDPDE(void) const { return m_mu_MDPDE; }
     const Eigen::VectorXd & GetMuVectorMean(void) const { return m_mu_mean; }
-    Eigen::Ref<const Eigen::VectorXd> GetBetaMatrixPosterior(int id) const;
-    Eigen::Ref<const Eigen::VectorXd> GetBetaMatrixMDPDE(int id) const;
 
 private:
+    void ValidateBasisSize(int size) const;
+    void ValidateMemberSize(int size) const;
     void ValidateMemberId(int id) const;
     void ValidateAlpha(double alpha) const;
     
@@ -208,6 +206,7 @@ private:
         Eigen::MatrixXd & beta_posterior_array,
         std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list
     );
+    Eigen::MatrixXd ConvertBetaListToMatrix(const std::vector<Eigen::VectorXd> & beta_list);
     Eigen::VectorXd CalculateMuByMDPDE(
         const Eigen::MatrixXd & beta_array,
         const Eigen::ArrayXd & omega_array,
@@ -264,6 +263,5 @@ private:
         int basis_size,
         const Eigen::ArrayXd & statistical_distance_array
     );
-    void Finalization(void);
 
 };

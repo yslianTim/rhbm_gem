@@ -914,7 +914,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             for (const auto & atom : atom_list)
             {
                 auto atom_entry{ atom->GetLocalPotentialEntry() };
-                const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
+                const auto & beta_vector_posterior{ model_estimator->GetBetaPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
                 auto gaus_posterior{
                     GausLinearTransformHelper::BuildGaus3DModelWithVariance(
@@ -1027,7 +1027,7 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
             for (const auto & bond : bond_list)
             {
                 auto bond_entry{ bond->GetLocalPotentialEntry() };
-                const auto & beta_vector_posterior{ model_estimator->GetBetaMatrixPosterior(count) };
+                const auto & beta_vector_posterior{ model_estimator->GetBetaPosterior(count) };
                 auto sigma_matrix_posterior{ model_estimator->GetCapitalSigmaMatrixPosterior(count) };
                 auto gaus_posterior{
                     GausLinearTransformHelper::BuildGaus2DModelWithVariance(
