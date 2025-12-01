@@ -121,8 +121,6 @@ public:
     static constexpr double DEFAULT_TOLERANCE{ 1.0e-5 };
     static constexpr double DEFAULT_WEIGHT_DATA_MIN{ 1.0e-8 };
     static constexpr double DEFAULT_WEIGHT_MEMBER_MIN{ 1.0e-2 };
-    static constexpr double DEFAULT_UNIVERSAL_ALPHA_R{ 0.1 };
-    static constexpr double ALPHA_LIMIT{ 100.0 };
 
     HRLModelHelper(void) = delete;
     explicit HRLModelHelper(int basis_size, int member_size);
@@ -130,12 +128,8 @@ public:
 
     void SetQuietMode(void) { m_quiet_mode = true; }
     void SetThreadSize(int thread_size);
-
-    std::tuple<Eigen::MatrixXd, Eigen::VectorXd> BuildBasisVectorAndResponseArray(
-        const std::vector<Eigen::VectorXd> & data_vector
-    );
-    Eigen::MatrixXd BuildBetaArray(const std::vector<Eigen::VectorXd> & beta_vector);
-
+    void SetMaximumIteration(int size);
+    void SetTolerance(double value);
     void SetMemberDataEntriesList(const std::vector<std::vector<Eigen::VectorXd>> & data_list);
     void SetMemberBetaMDPDEList(
         const std::vector<Eigen::VectorXd> & beta_list,
@@ -143,23 +137,32 @@ public:
         const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & W_list,
         const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list
     );
+
+    std::tuple<Eigen::MatrixXd, Eigen::VectorXd> BuildBasisVectorAndResponseArray(
+        const std::vector<Eigen::VectorXd> & data_vector
+    );
+    Eigen::MatrixXd BuildBetaArray(const std::vector<Eigen::VectorXd> & beta_vector);
+    
     void RunGroupEstimation(double alpha_g);
-    std::tuple<
-        Eigen::VectorXd,
-        double,
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic>,
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic>
-    > RunBetaMDPDE(
+    void RunBetaMDPDE(
         const std::vector<Eigen::VectorXd> & data_vector,
         double alpha_r,
-        Eigen::VectorXd & beta_OLS
+        Eigen::VectorXd & beta_OLS,
+        Eigen::VectorXd & beta_MDPDE,
+        double & sigma_square,
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma
     );
-    Eigen::VectorXd RunMuMDPDE(
+    void RunMuMDPDE(
         const std::vector<Eigen::VectorXd> & beta_vector,
-        double alpha_g
+        double alpha_g,
+        Eigen::VectorXd & mu_MDPDE,
+        Eigen::ArrayXd & omega_array,
+        double & omega_sum,
+        Eigen::MatrixXd & capital_lambda,
+        std::vector<Eigen::MatrixXd> & member_capital_lambda_list
     );
-    void SetMaximumIteration(int size);
-    void SetTolerance(double value);
+    
     bool GetOutlierFlag(int id) const;
     double GetStatisticalDistance(int id) const;
     double GetMemberWeight(int id) const;
@@ -176,9 +179,6 @@ public:
 private:
     void ValidateMemberId(int id) const;
     void ValidateAlpha(double alpha) const;
-    void RunAlgorithmBetaMDPDE(double alpha_r);
-    void RunAlgorithmMuMDPDE(double alpha_g);
-    void RunAlgorithmWEB(void);
     
     void AlgorithmBetaMDPDE(
         double alpha_r,
@@ -198,12 +198,13 @@ private:
         Eigen::MatrixXd & capital_lambda,
         std::vector<Eigen::MatrixXd> & member_capital_lambda_list
     );
-    Eigen::VectorXd AlgorithmWEB(
+    void AlgorithmWEB(
         const std::vector<Eigen::MatrixXd> & X_list,
         const std::vector<Eigen::VectorXd> & y_list,
         const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list,
         const Eigen::VectorXd & mu_MDPDE,
         const std::vector<Eigen::MatrixXd> & member_capital_lambda_list,
+        Eigen::VectorXd & mu_prior,
         Eigen::MatrixXd & beta_posterior_array,
         std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list
     );
@@ -230,6 +231,7 @@ private:
         const Eigen::MatrixXd & X,
         const Eigen::VectorXd & y
     );
+    Eigen::VectorXd CalculateMuByMedian(const Eigen::MatrixXd & beta_array);
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataWeight(
         double alpha,
         const Eigen::MatrixXd & X,

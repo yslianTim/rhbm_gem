@@ -158,8 +158,12 @@ bool HRLModelTester::RunBetaEstimateTest(double alpha_r)
         estimator->SetQuietMode();
         estimator->SetThreadSize(1);
         Eigen::VectorXd beta_ols;
-        auto output{ estimator->RunBetaMDPDE(data_entry, alpha_r, beta_ols) };
-        Eigen::VectorXd beta_mdpde{ std::get<0>(output) };
+        Eigen::VectorXd beta_mdpde;
+        double sigma_square;
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
+        estimator->RunBetaMDPDE(
+            data_entry, alpha_r, beta_ols, beta_mdpde, sigma_square, W, capital_sigma);
 
         auto model_par_local{ m_model_par_local_list.at(i) };
         auto model_par_0{ m_model_par_0_list.at(i) };

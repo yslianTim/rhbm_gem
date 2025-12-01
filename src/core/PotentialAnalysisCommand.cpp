@@ -614,13 +614,23 @@ double PotentialAnalysisCommand::TrainAlphaR(
             estimator->SetQuietMode();
             estimator->SetThreadSize(1);
             Eigen::VectorXd beta_ols_test;
+            Eigen::VectorXd beta_mdpde_test;
+            double sigma_square_test;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W_test;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma_test;
+            estimator->RunBetaMDPDE(
+                data_test.at(i), alpha, beta_ols_test, beta_mdpde_test,
+                sigma_square_test, W_test, capital_sigma_test);
+
             Eigen::VectorXd beta_ols_training;
-            auto beta_mdpde_test{
-                std::get<0>(estimator->RunBetaMDPDE(data_test.at(i), alpha, beta_ols_test))
-            };
-            auto beta_mdpde_training{
-                std::get<0>(estimator->RunBetaMDPDE(data_training.at(i), alpha, beta_ols_training))
-            };
+            Eigen::VectorXd beta_mdpde_training;
+            double sigma_square_training;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W_training;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma_training;
+            estimator->RunBetaMDPDE(
+                data_training.at(i), alpha, beta_ols_training,
+                beta_mdpde_training, sigma_square_training, W_training, capital_sigma_training);
+
             beta_error_sum += (beta_mdpde_test - beta_mdpde_training).norm();
         }
         beta_error_sum_array(p) = beta_error_sum;
@@ -674,8 +684,26 @@ double PotentialAnalysisCommand::TrainAlphaG(
             auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
             estimator->SetQuietMode();
             estimator->SetThreadSize(1);
-            auto mu_mdpde_test{ estimator->RunMuMDPDE(data_test.at(i), alpha) };
-            auto mu_mdpde_training{ estimator->RunMuMDPDE(data_training.at(i), alpha) };
+            Eigen::VectorXd mu_mdpde_test;
+            Eigen::ArrayXd omega_array_test;
+            double omega_sum_test;
+            Eigen::MatrixXd capital_lambda_test;
+            std::vector<Eigen::MatrixXd> member_capital_lambda_list_test;
+            estimator->RunMuMDPDE(
+                data_test.at(i), alpha, mu_mdpde_test,
+                omega_array_test, omega_sum_test, capital_lambda_test,
+                member_capital_lambda_list_test);
+
+            Eigen::VectorXd mu_mdpde_training;
+            Eigen::ArrayXd omega_array_training;
+            double omega_sum_training;
+            Eigen::MatrixXd capital_lambda_training;
+            std::vector<Eigen::MatrixXd> member_capital_lambda_list_training;
+            estimator->RunMuMDPDE(
+                data_training.at(i), alpha, mu_mdpde_training,
+                omega_array_training, omega_sum_training, capital_lambda_training,
+                member_capital_lambda_list_training);
+
             mu_mdpde_training_map[i] = mu_mdpde_training;
             mu_mean_training += mu_mdpde_training;
         }
@@ -723,18 +751,25 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(void)
         estimator->SetQuietMode();
         estimator->SetThreadSize(1);
         Eigen::VectorXd beta_ols;
-        auto output{ estimator->RunBetaMDPDE(data_entry_list, local_entry->GetAlphaR(), beta_ols) };
+        Eigen::VectorXd beta_mdpde;
+        double sigma_square;
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
+        estimator->RunBetaMDPDE(
+            data_entry_list, local_entry->GetAlphaR(), beta_ols, beta_mdpde,
+            sigma_square, W, capital_sigma);
+
         local_entry->SetBetaEstimateOLS(beta_ols);
-        local_entry->SetBetaEstimateMDPDE(std::get<0>(output));
-        local_entry->SetSigmaSquare(std::get<1>(output));
-        local_entry->SetDataWeight(std::get<2>(output));
-        local_entry->SetDataCovariance(std::get<3>(output));
+        local_entry->SetBetaEstimateMDPDE(beta_mdpde);
+        local_entry->SetSigmaSquare(sigma_square);
+        local_entry->SetDataWeight(W);
+        local_entry->SetDataCovariance(capital_sigma);
 
         Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
         model_par_init(0) = local_entry->GetMomentZeroEstimate();
         model_par_init(1) = local_entry->GetMomentTwoEstimate();
         auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, model_par_init) };
-        auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(std::get<0>(output), model_par_init) };
+        auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, model_par_init) };
         local_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
         local_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
 
@@ -772,18 +807,25 @@ void PotentialAnalysisCommand::RunLocalBondFitting(void)
         estimator->SetQuietMode();
         estimator->SetThreadSize(1);
         Eigen::VectorXd beta_ols;
-        auto output{ estimator->RunBetaMDPDE(data_entry_list, local_entry->GetAlphaR(), beta_ols) };
+        Eigen::VectorXd beta_mdpde;
+        double sigma_square;
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
+        estimator->RunBetaMDPDE(
+            data_entry_list, local_entry->GetAlphaR(), beta_ols, beta_mdpde,
+            sigma_square, W, capital_sigma);
+
         local_entry->SetBetaEstimateOLS(beta_ols);
-        local_entry->SetBetaEstimateMDPDE(std::get<0>(output));
-        local_entry->SetSigmaSquare(std::get<1>(output));
-        local_entry->SetDataWeight(std::get<2>(output));
-        local_entry->SetDataCovariance(std::get<3>(output));
+        local_entry->SetBetaEstimateMDPDE(beta_mdpde);
+        local_entry->SetSigmaSquare(sigma_square);
+        local_entry->SetDataWeight(W);
+        local_entry->SetDataCovariance(capital_sigma);
 
         Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
         model_par_init(0) = local_entry->GetMomentZeroEstimate();
         model_par_init(1) = local_entry->GetMomentTwoEstimate();
         auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, model_par_init) };
-        auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(std::get<0>(output), model_par_init) };
+        auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, model_par_init) };
         local_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
         local_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
 

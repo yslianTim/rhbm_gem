@@ -207,82 +207,75 @@ void HRLModelHelper::SetTolerance(double value)
 
 void HRLModelHelper::RunGroupEstimation(double alpha_g)
 {
-    ValidateAlpha(alpha_g);
-    RunAlgorithmMuMDPDE(alpha_g);
-    RunAlgorithmWEB();
-    m_statistical_distance_array =
-        CalculateMemberStatisticalDistance(m_mu_prior, m_capital_lambda, m_beta_posterior_array);
-    m_outlier_flag_array = CalculateOutlierMemberFlag(m_basis_size, m_statistical_distance_array);
-}
-
-std::tuple<
-    Eigen::VectorXd,
-    double,
-    Eigen::DiagonalMatrix<double, Eigen::Dynamic>,
-    Eigen::DiagonalMatrix<double, Eigen::Dynamic>
-> HRLModelHelper::RunBetaMDPDE(
-    const std::vector<Eigen::VectorXd> & data_vector,
-    double alpha_r,
-    Eigen::VectorXd & beta_OLS)
-{
-    ValidateAlpha(alpha_r);
-    auto data{ BuildBasisVectorAndResponseArray(data_vector) };
-    const auto & X{ std::get<0>(data) };
-    const auto & y{ std::get<1>(data) };
-    beta_OLS = CalculateBetaByOLS(X, y);
-    Eigen::VectorXd beta{ beta_OLS };
-    double sigma_square;
-    DMatrixXd W;
-    DMatrixXd capital_sigma;
-    AlgorithmBetaMDPDE(alpha_r, X, y, beta, sigma_square, W, capital_sigma);
-    return std::make_tuple(beta, sigma_square, W, capital_sigma);
-}
-
-Eigen::VectorXd HRLModelHelper::RunMuMDPDE(
-    const std::vector<Eigen::VectorXd> & beta_vector, double alpha_g)
-{
-    ValidateAlpha(alpha_g);
-    auto data{ BuildBetaArray(beta_vector) };
-    VectorXd mu{ VectorXd::Zero(m_basis_size) };
+    VectorXd mu_median{ CalculateMuByMedian(m_beta_MDPDE_array) };
+    VectorXd mu_MDPDE{ mu_median };
     ArrayXd omega_array;
     double omega_sum;
     MatrixXd capital_lambda;
     std::vector<MatrixXd> member_capital_lambda_list;
     AlgorithmMuMDPDE(
-        alpha_g, data, mu,
+        alpha_g, m_beta_MDPDE_array, mu_MDPDE,
         omega_array, omega_sum, capital_lambda, member_capital_lambda_list);
-    return mu;
-}
 
-void HRLModelHelper::RunAlgorithmWEB(void)
-{
-    if (m_member_size == 1)
-    {
-        if (m_quiet_mode == false)
-        {
-            Logger::Log(LogLevel::Debug,
-                "HRLModelHelper::RunAlgorithmWEB : "
-                "Only one member is present, using MDPDE estimate for WEB.");
-        }
-        m_beta_posterior_array = m_beta_MDPDE_array;
-        m_capital_sigma_posterior_list[0] = Eigen::MatrixXd::Zero(m_basis_size, m_basis_size);
-        m_mu_prior = m_mu_MDPDE;
-        return;
-    }
+    m_mu_mean = mu_median;
+    m_mu_MDPDE = mu_MDPDE;
+    m_omega_array = omega_array;
+    m_omega_sum = omega_sum;
+    m_capital_lambda = capital_lambda;
+    m_capital_lambda_list = std::move(member_capital_lambda_list);
 
+    Eigen::VectorXd mu_prior;
     Eigen::MatrixXd beta_posterior_array;
     std::vector<Eigen::MatrixXd> capital_sigma_posterior_list;
-    Eigen::VectorXd mu_prior{ AlgorithmWEB(
+    AlgorithmWEB(
         m_X_list, m_y_list, m_capital_sigma_list, m_mu_MDPDE, m_capital_lambda_list,
-        beta_posterior_array, capital_sigma_posterior_list)
-    };
+        mu_prior, beta_posterior_array, capital_sigma_posterior_list);
+
+    m_mu_prior = mu_prior;
     m_beta_posterior_array = beta_posterior_array;
     m_capital_sigma_posterior_list = std::move(capital_sigma_posterior_list);
-    m_mu_prior = mu_prior;
+
+    m_statistical_distance_array =
+        CalculateMemberStatisticalDistance(m_mu_prior, m_capital_lambda, m_beta_posterior_array);
+    m_outlier_flag_array = CalculateOutlierMemberFlag(m_basis_size, m_statistical_distance_array);
+}
+
+void HRLModelHelper::RunBetaMDPDE(
+    const std::vector<Eigen::VectorXd> & data_vector,
+    double alpha_r,
+    Eigen::VectorXd & beta_OLS,
+    Eigen::VectorXd & beta_MDPDE,
+    double & sigma_square,
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma)
+{
+    auto data{ BuildBasisVectorAndResponseArray(data_vector) };
+    const auto & X{ std::get<0>(data) };
+    const auto & y{ std::get<1>(data) };
+    beta_OLS = CalculateBetaByOLS(X, y);
+    beta_MDPDE = beta_OLS;
+    AlgorithmBetaMDPDE(alpha_r, X, y, beta_MDPDE, sigma_square, W, capital_sigma);
+}
+
+void HRLModelHelper::RunMuMDPDE(
+    const std::vector<Eigen::VectorXd> & beta_vector,
+    double alpha_g,
+    Eigen::VectorXd & mu_MDPDE,
+    Eigen::ArrayXd & omega_array,
+    double & omega_sum,
+    Eigen::MatrixXd & capital_lambda,
+    std::vector<Eigen::MatrixXd> & member_capital_lambda_list)
+{
+    auto data{ BuildBetaArray(beta_vector) };
+    m_mu_mean = CalculateMuByMedian(data);
+    mu_MDPDE = m_mu_mean;
+    AlgorithmMuMDPDE(
+        alpha_g, data, mu_MDPDE,
+        omega_array, omega_sum, capital_lambda, member_capital_lambda_list);
 }
 
 void HRLModelHelper::AlgorithmBetaMDPDE(
-    double alpha,
+    double alpha_r,
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
     Eigen::VectorXd & beta,
@@ -290,6 +283,7 @@ void HRLModelHelper::AlgorithmBetaMDPDE(
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma)
 {
+    ValidateAlpha(alpha_r);
     int n{ static_cast<int>(y.size()) };
     sigma_square = (n < 2) ?
         std::numeric_limits<double>::max() : (y - (X * beta)).squaredNorm() / (n-1);
@@ -297,9 +291,9 @@ void HRLModelHelper::AlgorithmBetaMDPDE(
     VectorXd beta_in_previous_iter{ beta };
     for (int t = 0; t < m_maximum_iteration; t++)
     { //=== Begin of iteration loop
-        W = CalculateDataWeight(alpha, X, y, beta, sigma_square);
+        W = CalculateDataWeight(alpha_r, X, y, beta, sigma_square);
         beta = CalculateBetaByMDPDE(X, y, W);
-        sigma_square = CalculateDataVarianceSquare(alpha, X, y, W, beta);
+        sigma_square = CalculateDataVarianceSquare(alpha_r, X, y, W, beta);
         if ((beta - beta_in_previous_iter).squaredNorm() < m_tolerance) break;
         beta_in_previous_iter = beta;
         if (t == m_maximum_iteration - 1 && m_quiet_mode == false)
@@ -313,27 +307,6 @@ void HRLModelHelper::AlgorithmBetaMDPDE(
     capital_sigma = CalculateDataCovariance(sigma_square, W);
 }
 
-void HRLModelHelper::RunAlgorithmBetaMDPDE(double alpha_r)
-{
-    for (int i = 0; i < m_member_size; i++)
-    { //=== Begin of member ID loop (0 ... I-1)
-        const auto & X{ m_X_list.at(static_cast<size_t>(i)) };
-        const auto & y{ m_y_list.at(static_cast<size_t>(i)) };
-        VectorXd beta_OLS{ CalculateBetaByOLS(X, y) };
-        VectorXd beta{ beta_OLS };
-        double sigma_square;
-        DMatrixXd W;
-        DMatrixXd capital_sigma;
-        AlgorithmBetaMDPDE(alpha_r, X, y, beta, sigma_square, W, capital_sigma);
-        m_mu_mean += beta_OLS;
-        m_beta_MDPDE_array.col(i) = beta;
-        m_W_list.at(static_cast<size_t>(i)) = W;
-        m_capital_sigma_list.at(static_cast<size_t>(i)) = capital_sigma;
-    } //=== End of member ID loop
-
-    m_mu_mean /= m_member_size;
-}
-
 void HRLModelHelper::AlgorithmMuMDPDE(
     double alpha_g,
     const Eigen::MatrixXd & beta_array,
@@ -343,6 +316,7 @@ void HRLModelHelper::AlgorithmMuMDPDE(
     Eigen::MatrixXd & capital_lambda,
     std::vector<Eigen::MatrixXd> & member_capital_lambda_list)
 {
+    ValidateAlpha(alpha_g);
     int basis_size{ static_cast<int>(beta_array.rows()) };
     int member_size{ static_cast<int>(beta_array.cols()) };
     omega_array = ArrayXd::Ones(member_size);
@@ -361,11 +335,6 @@ void HRLModelHelper::AlgorithmMuMDPDE(
         }
         mu = beta_array.col(0);
         return;
-    }
-
-    for (int b = 0; b < basis_size; b++)
-    {
-        mu(b) = EigenMatrixUtility::GetMedian(beta_array.row(b));
     }
 
     VectorXd mu_in_previous_iter;
@@ -392,40 +361,37 @@ void HRLModelHelper::AlgorithmMuMDPDE(
     }
 }
 
-void HRLModelHelper::RunAlgorithmMuMDPDE(double alpha_g)
-{
-    VectorXd mu{ VectorXd::Zero(m_basis_size) };
-    ArrayXd omega_array;
-    double omega_sum;
-    MatrixXd capital_lambda;
-    std::vector<MatrixXd> member_capital_lambda_list;
-    AlgorithmMuMDPDE(
-        alpha_g, m_beta_MDPDE_array, mu,
-        omega_array, omega_sum, capital_lambda, member_capital_lambda_list);
-    m_mu_MDPDE = mu;
-    m_omega_array = omega_array;
-    m_omega_sum = omega_sum;
-    m_capital_lambda = capital_lambda;
-    m_capital_lambda_list = std::move(member_capital_lambda_list);
-}
-
-Eigen::VectorXd HRLModelHelper::AlgorithmWEB(
+void HRLModelHelper::AlgorithmWEB(
     const std::vector<Eigen::MatrixXd> & X_list,
     const std::vector<Eigen::VectorXd> & y_list,
     const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list,
     const Eigen::VectorXd & mu_MDPDE,
     const std::vector<Eigen::MatrixXd> & member_capital_lambda_list,
+    Eigen::VectorXd & mu_prior,
     Eigen::MatrixXd & beta_posterior_array,
     std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list)
 {
     auto basis_size{ static_cast<int>(mu_MDPDE.rows()) };
     auto member_size{ static_cast<int>(member_capital_lambda_list.size()) };
     beta_posterior_array = MatrixXd::Zero(basis_size, member_size);
-
     capital_sigma_posterior_list.clear();
     capital_sigma_posterior_list.reserve(static_cast<size_t>(member_size));
+    mu_prior = VectorXd::Zero(basis_size);
 
-    VectorXd mu_prior{ VectorXd::Zero(basis_size) };
+    if (member_size == 1)
+    {
+        if (m_quiet_mode == false)
+        {
+            Logger::Log(LogLevel::Debug,
+                "HRLModelHelper::AlgorithmWEB : "
+                "Only one member is present, using MDPDE estimate for WEB.");
+        }
+        beta_posterior_array = m_beta_MDPDE_array;
+        capital_sigma_posterior_list.emplace_back(Eigen::MatrixXd::Zero(basis_size, basis_size));
+        mu_prior = mu_MDPDE;
+        return;
+    }
+    
     VectorXd numerator{ VectorXd::Zero(basis_size) };
     MatrixXd denominator{ MatrixXd::Zero(basis_size, basis_size) };
     for (size_t i = 0; i < static_cast<size_t>(member_size); i++)
@@ -460,8 +426,6 @@ Eigen::VectorXd HRLModelHelper::AlgorithmWEB(
     MatrixXd inv_denominator{ EigenMatrixUtility::GetInverseMatrix(denominator) };
     mu_prior = inv_denominator * numerator;
     if (m_member_size == 2) mu_prior = mu_MDPDE;
-
-    return mu_prior;
 }
 
 double HRLModelHelper::CalculateDataVarianceSquare(
@@ -617,6 +581,17 @@ Eigen::VectorXd HRLModelHelper::CalculateBetaByOLS(
     return inverse_gram_matrix * (X.transpose() * y);
 }
 
+Eigen::VectorXd HRLModelHelper::CalculateMuByMedian(const Eigen::MatrixXd & beta_array)
+{
+    auto basis_size{ static_cast<int>(beta_array.rows()) };
+    VectorXd mu{ VectorXd::Zero(basis_size) };
+    for (int b = 0; b < basis_size; b++)
+    {
+        mu(b) = EigenMatrixUtility::GetMedian(beta_array.row(b));
+    }
+    return mu;
+}
+
 Eigen::VectorXd HRLModelHelper::CalculateBetaByMDPDE(
     const Eigen::MatrixXd & X,
     const Eigen::VectorXd & y,
@@ -769,11 +744,6 @@ void HRLModelHelper::ValidateAlpha(double alpha) const
     if (!std::isfinite(alpha) || alpha < 0.0)
     {
         throw std::invalid_argument("Alpha parameters must be finite and non-negative.");
-    }
-
-    if (alpha > ALPHA_LIMIT)
-    {
-        throw std::overflow_error("Alpha parameters are too large and may overflow calculations.");
     }
 }
 
