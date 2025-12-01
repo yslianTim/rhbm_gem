@@ -24,6 +24,10 @@ class AtomClassifier
     static const std::unordered_map<Spot, short> m_main_chain_open_marker_map;
     static const std::unordered_map<Spot, short> m_main_chain_line_style_map;
     static const std::unordered_map<Spot, std::string> m_main_chain_spot_label_map;
+    static const std::unordered_map<Structure, short> m_main_chain_structure_color_map;
+    static const std::unordered_map<Structure, short> m_main_chain_structure_marker_map;
+    static const std::unordered_map<Structure, short> m_main_chain_structure_line_style_map;
+    static const std::unordered_map<Structure, std::string> m_main_chain_structure_label_map;
     static const std::vector<Element> m_main_chain_member_element_list;
     static const std::vector<Spot> m_main_chain_member_spot_list;
     static const std::vector<std::string> m_main_chain_member_label_list;
@@ -40,14 +44,18 @@ public:
     static Spot GetNucleotideMainChainSpot(size_t member_id);
     static short GetMainChainElementColor(size_t member_id);
     static short GetMainChainSpotColor(Spot spot);
+    static short GetMainChainStructureColor(Structure structure);
     static short GetNucleotideMainChainElementColor(size_t member_id);
     static short GetMainChainElementSolidMarker(size_t member_id);
     static short GetMainChainSpotSolidMarker(Spot spot);
+    static short GetMainChainStructureMarker(Structure structure);
     static short GetMainChainElementOpenMarker(size_t member_id);
     static short GetMainChainSpotOpenMarker(Spot spot);
     static short GetMainChainSpotLineStyle(Spot spot);
+    static short GetMainChainStructureLineStyle(Structure structure);
     static const std::string & GetMainChainElementLabel(size_t member_id);
     static const std::string & GetMainChainSpotLabel(Spot spot);
+    static const std::string & GetMainChainStructureLabel(Structure structure);
     static const std::string & GetMainChainElementTitle(size_t member_id);
 
     static GroupKey GetGroupKeyInClass(const AtomObject * atom_object, const std::string & class_key);

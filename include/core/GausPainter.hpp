@@ -39,6 +39,7 @@ private:
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausAminoAcidMainChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausAminoAcidMainChainStructure(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
     void RemodelFrameInPad(TH2 * frame, TPad * pad, double x_tick_length, double y_tick_length);

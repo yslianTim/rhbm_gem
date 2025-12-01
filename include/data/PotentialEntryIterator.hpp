@@ -68,6 +68,7 @@ public:
 
     #ifdef HAVE_ROOT
     std::unique_ptr<TH1D> CreateComponentCountHistogram(std::vector<GroupKey> & group_key_list, const std::string & class_key) const;
+    std::unique_ptr<TH2D> CreateAtomResidueCountHistogram2D(const std::string & class_key);
     std::unique_ptr<TH1D> CreateAtomResidueCountHistogram(const std::string & class_key, Structure structure=static_cast<Structure>(0));
     std::unique_ptr<TH1D> CreateBondResidueCountHistogram(const std::string & class_key);
     std::unique_ptr<TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, const std::string & class_key, int par_id) const;

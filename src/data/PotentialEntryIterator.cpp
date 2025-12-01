@@ -565,6 +565,29 @@ std::unique_ptr<TH1D> PotentialEntryIterator::CreateComponentCountHistogram(
     return hist;
 }
 
+std::unique_ptr<TH2D> PotentialEntryIterator::CreateAtomResidueCountHistogram2D(
+    const std::string & class_key)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return nullptr;
+    }
+    auto hist{ ROOTHelper::CreateHist2D("hist", "Residue Count", 20, -0.5, 19.5, 3, -0.5, 2.5) };
+    std::vector<Structure> structure_list{ Structure::FREE, Structure::HELX_P, Structure::SHEET };
+    for (size_t i = 0; i < structure_list.size(); i++)
+    {
+        auto structure{ structure_list.at(i) };
+        for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
+        {
+            auto count{ GetAtomResidueCount(class_key, residue, structure) };
+            hist->SetBinContent(
+                static_cast<int>(residue), static_cast<int>(i+1), static_cast<double>(count)
+            );
+        }
+    }
+    return hist;
+}
+
 std::unique_ptr<TH1D> PotentialEntryIterator::CreateAtomResidueCountHistogram(
     const std::string & class_key, Structure structure)
 {
