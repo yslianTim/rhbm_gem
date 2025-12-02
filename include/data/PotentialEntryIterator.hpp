@@ -59,7 +59,11 @@ public:
     std::tuple<float, float> GetMapValueRange(double margin_rate=0.0) const;
     std::tuple<float, float> GetBinnedMapValueRange(int bin_size=15, double x_min=0.0, double x_max=1.5, double margin_rate=0.0) const;
     double GetAmplitudeEstimateMDPDE(void) const;
+    double GetAmplitudeEstimatePosterior(const std::string & key) const;
+    double GetAmplitudeVariancePosterior(const std::string & key) const;
     double GetWidthEstimateMDPDE(void) const;
+    double GetWidthEstimatePosterior(const std::string & key) const;
+    double GetWidthVariancePosterior(const std::string & key) const;
     double GetAlphaR(void) const;
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const;
     double GetBondAlphaG(GroupKey group_key, const std::string & class_key) const;
@@ -79,6 +83,7 @@ public:
     std::unique_ptr<TGraphErrors> CreateNormalizedBondGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateBondGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(size_t main_chain_element_id, const std::string & class_key, const int par_id=0, Residue residue=Residue::UNK);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateBondGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
     std::unique_ptr<TGraphErrors> CreateAtomGausEstimateToSpotGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);

@@ -351,6 +351,32 @@ double PotentialEntryIterator::GetAmplitudeEstimateMDPDE(void) const
     return 0.0;
 }
 
+double PotentialEntryIterator::GetAmplitudeEstimatePosterior(const std::string & class_key) const
+{
+    if (IsAtomLocalEntryAvailable() == true)
+    {
+        return m_atom_local_entry->GetAmplitudeEstimatePosterior(class_key);
+    }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        return m_bond_local_entry->GetAmplitudeEstimatePosterior(class_key);
+    }
+    return 0.0;
+}
+
+double PotentialEntryIterator::GetAmplitudeVariancePosterior(const std::string & class_key) const
+{
+    if (IsAtomLocalEntryAvailable() == true)
+    {
+        return m_atom_local_entry->GetAmplitudeVariancePosterior(class_key);
+    }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        return m_bond_local_entry->GetAmplitudeVariancePosterior(class_key);
+    }
+    return 0.0;
+}
+
 double PotentialEntryIterator::GetWidthEstimateMDPDE(void) const
 {
     if (IsAtomLocalEntryAvailable() == true)
@@ -360,6 +386,32 @@ double PotentialEntryIterator::GetWidthEstimateMDPDE(void) const
     else if (IsBondLocalEntryAvailable() == true)
     {
         return m_bond_local_entry->GetWidthEstimateMDPDE();
+    }
+    return 0.0;
+}
+
+double PotentialEntryIterator::GetWidthEstimatePosterior(const std::string & class_key) const
+{
+    if (IsAtomLocalEntryAvailable() == true)
+    {
+        return m_atom_local_entry->GetWidthEstimatePosterior(class_key);
+    }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        return m_bond_local_entry->GetWidthEstimatePosterior(class_key);
+    }
+    return 0.0;
+}
+
+double PotentialEntryIterator::GetWidthVariancePosterior(const std::string & class_key) const
+{
+    if (IsAtomLocalEntryAvailable() == true)
+    {
+        return m_atom_local_entry->GetWidthVariancePosterior(class_key);
+    }
+    else if (IsBondLocalEntryAvailable() == true)
+    {
+        return m_bond_local_entry->GetWidthVariancePosterior(class_key);
     }
     return 0.0;
 }
@@ -927,6 +979,44 @@ PotentialEntryIterator::CreateBondGausEstimateToSequenceIDGraphMap(
     for (auto & [chain, graph] : graph_map)
     {
         graph->Sort(); // sort points along x axis
+    }
+    return graph_map;
+}
+
+std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
+PotentialEntryIterator::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
+    size_t main_chain_element_id, const std::string & class_key, const int par_id, Residue residue)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return {};
+    }
+    
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
+    std::unordered_map<std::string, int> count_map;
+    
+    for (auto & atom : m_model_object->GetSelectedAtomList())
+    {
+        if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
+        if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
+        if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
+        auto entry{ atom->GetLocalPotentialEntry() };
+        auto sequence_id{ atom->GetSequenceID() };
+        auto chain_id{ atom->GetChainID() };
+        if (sequence_id < 0) continue;
+        if (graph_map.find(chain_id) == graph_map.end())
+        {
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            count_map[chain_id] = 0;
+        }
+        auto x_value{ static_cast<double>(sequence_id) };
+        graph_map[chain_id]->SetPoint(
+            count_map[chain_id], x_value, entry->GetGausEstimatePosterior(class_key, par_id)
+        );
+        graph_map[chain_id]->SetPointError(
+            count_map[chain_id], 0.0, entry->GetGausVariancePosterior(class_key, par_id)
+        );
+        count_map[chain_id]++;
     }
     return graph_map;
 }

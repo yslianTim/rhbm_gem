@@ -77,6 +77,7 @@ public:
     Spot GetSpot(void) const;
     Structure GetStructure(void) const;
     bool IsUnknownAtom(void) const;
+    bool IsMainChainAtom(void) const;
     bool GetSelectedFlag(void) const { return m_is_selected; }
     bool GetSpecialAtomFlag(void) const { return m_is_special_atom; }
     int GetSerialID(void) const { return m_serial_id; }

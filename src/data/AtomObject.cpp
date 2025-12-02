@@ -184,3 +184,9 @@ bool AtomObject::IsUnknownAtom(void) const
     }
     return false;
 }
+
+bool AtomObject::IsMainChainAtom(void) const
+{
+    size_t dummy_id;
+    return AtomClassifier::IsMainChainMember(m_spot, dummy_id);
+}
