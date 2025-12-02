@@ -118,10 +118,10 @@ bool PotentialAnalysisCommand::Execute(void)
     else RunLocalAtomFitting();
     RunAtomPotentialFitting();
 
-    RunBondMapValueSampling();
-    RunBondGroupClassification();
-    RunLocalBondFitting();
-    RunBondPotentialFitting();
+    //RunBondMapValueSampling();
+    //RunBondGroupClassification();
+    //RunLocalBondFitting();
+    //RunBondPotentialFitting();
     SaveDataObject();
     return true;
 }
@@ -500,7 +500,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     
     auto selected_atom_size{ selected_atom_list.size() };
     Logger::Log(LogLevel::Info,
-        "Run Alpha_R Training for "+ std::to_string(selected_atom_size) +" atoms.");
+        "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
     auto alpha_r{ TrainUniversalAlphaR(
         selected_atom_list,
         group_size_alpha_r,
@@ -518,7 +518,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     std::vector<double> alpha_g_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
     auto ordered_alpha_g_list{ alpha_g_list };
     std::sort(ordered_alpha_g_list.begin(), ordered_alpha_g_list.end());
-    auto alpha_g{ TrainUniversalAlphaG(selected_atom_list, group_size_alpha_g, ordered_alpha_g_list) };
+    auto alpha_g{ TrainUniversalAlphaG(group_size_alpha_g, ordered_alpha_g_list) };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
@@ -611,37 +611,34 @@ std::vector<double> PotentialAnalysisCommand::TrainAlphaG(
     const std::vector<AtomObject *> & atom_list,
     const size_t group_size, const std::vector<double> & alpha_list)
 {
+    if (atom_list.size() < 10)
+    {
+        std::vector<double> empty_result(alpha_list.size(), 0.0);
+        return empty_result;
+    }
+    auto atom_in_half_size{ atom_list.size() / 2 };
     const int basis_size{ 2 };
-    std::vector<std::vector<Eigen::VectorXd>> grouped_data_list(group_size);
-    auto total_atom_size{ atom_list.size() };
-    size_t atom_in_group_size{ total_atom_size / group_size + 1};
-    for (size_t i = 0; i < group_size; i++)
-    {
-        grouped_data_list[i].reserve(atom_in_group_size);
-    }
-
-    size_t count{ 0 };
-    for (auto atom : atom_list)
-    {
-        auto local_entry{ atom->GetLocalPotentialEntry() };
-        auto group_index{ count % group_size };
-        grouped_data_list[group_index].emplace_back(local_entry->GetBetaEstimateMDPDE());
-        count++;
-    }
     
     std::vector<std::vector<Eigen::VectorXd>> data_test(group_size);
     std::vector<std::vector<Eigen::VectorXd>> data_training(group_size);
     for (size_t i = 0; i < group_size; i++)
     {
-        data_test[i].reserve(atom_in_group_size);
-        data_training[i].reserve(total_atom_size - atom_in_group_size);
-        data_test[i].insert(
-            data_test[i].end(), grouped_data_list[i].begin(), grouped_data_list[i].end());
-        for (size_t j = 0; j < group_size; j++)
+        // Randomly pick the half of atoms into test set and training set for each group
+        std::vector<AtomObject *> data1, data2;
+        std::vector<AtomObject *> shuffled{ atom_list };
+        std::shuffle(shuffled.begin(), shuffled.end(), std::mt19937{std::random_device{}()});
+        auto diff{ static_cast<std::vector<AtomObject *>::difference_type>(atom_in_half_size) };
+        data1.assign(shuffled.begin(), shuffled.begin() + diff);
+        data2.assign(shuffled.begin() + diff, shuffled.end());
+        data_test[i].reserve(data1.size());
+        data_training[i].reserve(data2.size());
+        for (auto atom : data1)
         {
-            if (i == j) continue;
-            data_training[i].insert(
-                data_training[i].end(), grouped_data_list[j].begin(), grouped_data_list[j].end());
+            data_test[i].emplace_back(atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE());
+        }
+        for (auto atom : data2)
+        {
+            data_training[i].emplace_back(atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE());
         }
     }
 
@@ -728,26 +725,25 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
 }
 
 double PotentialAnalysisCommand::TrainUniversalAlphaG(
-    const std::vector<AtomObject *> & atom_list,
     const size_t group_size,
     const std::vector<double> & alpha_list)
 {
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
-    std::unordered_map<Spot, std::vector<AtomObject *>> class_atom_list_map;
-    for (auto atom : atom_list)
-    {
-        auto spot{ atom->GetSpot() };
-        class_atom_list_map[spot].emplace_back(atom);
-    }
-
     Eigen::ArrayXd mu_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
-    for (auto & [spot, class_atom_list] : class_atom_list_map)
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
-        auto error_list{ TrainAlphaG(class_atom_list, group_size, alpha_list) };
-        for (int p = 0; p < alpha_size; p++)
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
+        const auto & group_key_set{ group_potential_entry->GetGroupKeySet() };
+        for (auto group_key : group_key_set)
         {
-            auto error{ error_list.at(static_cast<size_t>(p)) };
-            mu_error_sum_array(p) += error;
+            auto & group_atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
+            auto error_list{ TrainAlphaG(group_atom_list, group_size, alpha_list) };
+            for (int p = 0; p < alpha_size; p++)
+            {
+                auto error{ error_list.at(static_cast<size_t>(p)) };
+                mu_error_sum_array(p) += error;
+            }
         }
     }
 

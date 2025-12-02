@@ -76,7 +76,7 @@ private:
     std::vector<double> TrainAlphaR(const AtomObject * atom, const size_t group_size, const std::vector<double> & alpha_list);
     std::vector<double> TrainAlphaG(const std::vector<AtomObject *> & atom_list, const size_t group_size, const std::vector<double> & alpha_list);
     double TrainUniversalAlphaR(const std::vector<AtomObject *> & atom_list, const size_t group_size, const std::vector<double> & alpha_list);
-    double TrainUniversalAlphaG(const std::vector<AtomObject *> & atom_list, const size_t group_size, const std::vector<double> & alpha_list);
+    double TrainUniversalAlphaG(const size_t group_size, const std::vector<double> & alpha_list);
     void RunLocalAtomFitting(void);
     void RunLocalBondFitting(void);
     void RunAtomPotentialFitting(void);
