@@ -161,6 +161,16 @@ public:
         Eigen::MatrixXd & capital_lambda,
         std::vector<Eigen::MatrixXd> & member_capital_lambda_list
     );
+    Eigen::VectorXd RunAlphaRTraining(
+        const std::vector<Eigen::VectorXd> & data_list,
+        const size_t subset_size,
+        const std::vector<double> & alpha_list
+    );
+    Eigen::VectorXd RunAlphaGTraining(
+        const std::vector<Eigen::VectorXd> & data_list,
+        const size_t subset_size,
+        const std::vector<double> & alpha_list
+    );
     
     bool GetOutlierFlag(int id) const;
     double GetStatisticalDistance(int id) const;
@@ -177,6 +187,18 @@ private:
     void ValidateMemberSize(int size) const;
     void ValidateMemberId(int id) const;
     void ValidateAlpha(double alpha) const;
+    void PrepareDataSubset(
+        const std::vector<Eigen::VectorXd> & data_list,
+        size_t subset_size,
+        std::vector<std::vector<Eigen::VectorXd>> & data_subset_list
+    ) const;
+    void PrepareTestAndTrainingDataSet(
+        const std::vector<std::vector<Eigen::VectorXd>> & data_subset_list,
+        size_t subset_size,
+        size_t total_entries_size,
+        std::vector<std::vector<Eigen::VectorXd>> & data_set_test,
+        std::vector<std::vector<Eigen::VectorXd>> & data_set_training
+    ) const;
     
     void AlgorithmBetaMDPDE(
         double alpha_r,

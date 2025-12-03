@@ -527,6 +527,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         {
             auto & group_atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
             if (group_atom_list.size() < 10) continue;
+            if (group_atom_list.front()->IsMainChainAtom() == false) continue;
             atom_list_set.emplace_back(group_atom_list);
         }
     }
@@ -549,97 +550,17 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         }
     }
 }
-
-std::vector<double> PotentialAnalysisCommand::TrainAlphaR(
-    const AtomObject * atom, const size_t group_size, const std::vector<double> & alpha_list)
-{
-    auto local_entry{ atom->GetLocalPotentialEntry() };
-    const int basis_size{ 2 };
-    std::vector<std::vector<Eigen::VectorXd>> grouped_data_list(group_size);
-    auto total_entry_size{ static_cast<size_t>(local_entry->GetBasisAndResponseEntryListSize()) };
-    size_t entries_in_atom_size{ total_entry_size / group_size + 1};
-    for (size_t i = 0; i < group_size; i++)
-    {
-        grouped_data_list[i].reserve(entries_in_atom_size);
-    }
-
-    size_t count{ 0 };
-    for (auto & data_entry : local_entry->GetBasisAndResponseEntryList())
-    {
-        auto group_index{ count % group_size };
-        grouped_data_list[group_index].emplace_back(data_entry);
-        count++;
-    }
-
-    std::vector<std::vector<Eigen::VectorXd>> data_test(group_size);
-    std::vector<std::vector<Eigen::VectorXd>> data_training(group_size);
-    for (size_t i = 0; i < group_size; i++)
-    {
-        data_test[i].reserve(entries_in_atom_size);
-        data_training[i].reserve(total_entry_size - entries_in_atom_size);
-        data_test[i].insert(
-            data_test[i].end(), grouped_data_list[i].begin(), grouped_data_list[i].end());
-        for (size_t j = 0; j < group_size; j++)
-        {
-            if (i == j) continue;
-            data_training[i].insert(
-                data_training[i].end(), grouped_data_list[j].begin(), grouped_data_list[j].end());
-        }
-    }
-    
-    auto alpha_size{ alpha_list.size() };
-    std::vector<double> error_sum_list;
-    error_sum_list.resize(alpha_size, 0.0);
-    for (size_t p = 0; p < alpha_size; p++)
-    {
-        auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
-        auto beta_error_sum{ 0.0 };
-        for (size_t i = 0; i < group_size; i++)
-        {
-            auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
-            estimator->SetQuietMode();
-            estimator->SetThreadSize(1);
-            Eigen::VectorXd beta_ols_test;
-            Eigen::VectorXd beta_mdpde_test;
-            double sigma_square_test;
-            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W_test;
-            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma_test;
-            estimator->RunBetaMDPDE(
-                data_test.at(i), alpha, beta_ols_test, beta_mdpde_test,
-                sigma_square_test, W_test, capital_sigma_test);
-
-            Eigen::VectorXd beta_ols_training;
-            Eigen::VectorXd beta_mdpde_training;
-            double sigma_square_training;
-            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W_training;
-            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma_training;
-            estimator->RunBetaMDPDE(
-                data_training.at(i), alpha, beta_ols_training,
-                beta_mdpde_training, sigma_square_training, W_training, capital_sigma_training);
-
-            beta_error_sum += (beta_mdpde_test - beta_mdpde_training).norm();
-        }
-        error_sum_list[p] = beta_error_sum;
-    }
-
-    return error_sum_list;
-}
-
+/*
 std::vector<double> PotentialAnalysisCommand::TrainAlphaG(
     const std::vector<AtomObject *> & atom_list,
-    const size_t group_size, const std::vector<double> & alpha_list)
+    const size_t subset_size, const std::vector<double> & alpha_list)
 {
-    if (atom_list.size() < 10)
-    {
-        std::vector<double> empty_result(alpha_list.size(), 0.0);
-        return empty_result;
-    }
     auto atom_in_half_size{ atom_list.size() / 2 };
     const int basis_size{ 2 };
     
-    std::vector<std::vector<Eigen::VectorXd>> data_test(group_size);
-    std::vector<std::vector<Eigen::VectorXd>> data_training(group_size);
-    for (size_t i = 0; i < group_size; i++)
+    std::vector<std::vector<Eigen::VectorXd>> data_test(subset_size);
+    std::vector<std::vector<Eigen::VectorXd>> data_training(subset_size);
+    for (size_t i = 0; i < subset_size; i++)
     {
         // Randomly pick the half of atoms into test set and training set for each group
         std::vector<AtomObject *> data1, data2;
@@ -667,7 +588,7 @@ std::vector<double> PotentialAnalysisCommand::TrainAlphaG(
     {
         auto alpha{ alpha_list.at(p) };
         auto mu_error_sum{ 0.0 };
-        for (size_t i = 0; i < group_size; i++)
+        for (size_t i = 0; i < subset_size; i++)
         {
             auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
             estimator->SetQuietMode();
@@ -698,7 +619,7 @@ std::vector<double> PotentialAnalysisCommand::TrainAlphaG(
     }
 
     return error_sum_list;
-}
+}*/
 
 double PotentialAnalysisCommand::TrainUniversalAlphaR(
     const std::vector<AtomObject *> & atom_list,
@@ -708,6 +629,11 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
     auto atom_size{ atom_list.size() };
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
 
+    const int basis_size{ 2 };
+    auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
+    estimator->SetQuietMode();
+    estimator->SetThreadSize(1);
+
     std::atomic<size_t> atom_count{ 0 };
     Eigen::ArrayXd beta_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
 
@@ -716,17 +642,17 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
-        auto error_list{ TrainAlphaR(atom_list[i], subset_size, alpha_list) };
+        auto local_entry{ atom_list[i]->GetLocalPotentialEntry() };
+        const auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
+        auto error_array{
+            estimator->RunAlphaRTraining(data_entry_list, subset_size, alpha_list)
+        };
         
 #ifdef USE_OPENMP
         #pragma omp critical
 #endif
         {
-            for (int p = 0; p < alpha_size; p++)
-            {
-                auto error{ error_list.at(static_cast<size_t>(p)) };
-                beta_error_sum_array(p) += error;
-            }
+            beta_error_sum_array += error_array.array();
             atom_count++;
             Logger::ProgressPercent(atom_count, atom_size);
         }
@@ -748,6 +674,12 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     const std::vector<double> & alpha_list)
 {
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
+
+    const int basis_size{ 2 };
+    auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
+    estimator->SetQuietMode();
+    estimator->SetThreadSize(1);
+
     auto group_size{ atom_list_set.size() };
     std::atomic<size_t> group_count{ 0 };
     Eigen::ArrayXd mu_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
@@ -758,17 +690,29 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     for (size_t i = 0; i < group_size; i++)
     {
         auto & group_atom_list{ atom_list_set[i] };
-        auto error_list{ TrainAlphaG(group_atom_list, subset_size, alpha_list) };
+        std::vector<Eigen::VectorXd> data_entry_list;
+        data_entry_list.reserve(group_atom_list.size());
+        for (auto atom : group_atom_list)
+        {
+            data_entry_list.emplace_back(
+                atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE()
+            );
+        }
+        //auto error_list{ TrainAlphaG(group_atom_list, subset_size, alpha_list) };
+        auto error_array{
+            estimator->RunAlphaGTraining(data_entry_list, subset_size, alpha_list)
+        };
         
 #ifdef USE_OPENMP
         #pragma omp critical
 #endif
         {
-            for (int p = 0; p < alpha_size; p++)
-            {
-                auto error{ error_list.at(static_cast<size_t>(p)) };
-                mu_error_sum_array(p) += error;
-            }
+            //for (int p = 0; p < alpha_size; p++)
+            //{
+            //    auto error{ error_list.at(static_cast<size_t>(p)) };
+            //    mu_error_sum_array(p) += error;
+            //}
+            mu_error_sum_array += error_array.array();
             group_count++;
             Logger::ProgressPercent(group_count, group_size);
         }

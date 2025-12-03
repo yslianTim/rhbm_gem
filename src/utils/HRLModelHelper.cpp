@@ -8,6 +8,7 @@
 #include <utility>
 #include <stdexcept>
 #include <sstream>
+#include <random>
 
 using std::string;
 using std::vector;
@@ -259,6 +260,168 @@ void HRLModelHelper::RunMuMDPDE(
     AlgorithmMuMDPDE(
         alpha_g, beta_matrix, mu_MDPDE,
         omega_array, omega_sum, capital_lambda, member_capital_lambda_list);
+}
+
+Eigen::VectorXd HRLModelHelper::RunAlphaRTraining(
+    const std::vector<Eigen::VectorXd> & data_list,
+    const size_t subset_size,
+    const std::vector<double> & alpha_list)
+{
+    std::vector<std::vector<Eigen::VectorXd>> data_subset_list;
+    std::vector<std::vector<Eigen::VectorXd>> data_set_test;
+    std::vector<std::vector<Eigen::VectorXd>> data_set_training;
+    PrepareDataSubset(data_list, subset_size, data_subset_list);
+    PrepareTestAndTrainingDataSet(
+        data_subset_list, subset_size, data_list.size(),
+        data_set_test, data_set_training
+    );
+
+    auto alpha_size{ static_cast<int>(alpha_list.size()) };
+    Eigen::VectorXd error_sum_list{ Eigen::VectorXd::Zero(alpha_size) };
+    for (int p = 0; p < alpha_size; p++)
+    {
+        auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
+        auto beta_error_sum{ 0.0 };
+        for (size_t i = 0; i < subset_size; i++)
+        {
+            Eigen::VectorXd beta_ols_test;
+            Eigen::VectorXd beta_mdpde_test;
+            double sigma_square_test;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W_test;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma_test;
+            RunBetaMDPDE(
+                data_set_test.at(i), alpha, beta_ols_test, beta_mdpde_test,
+                sigma_square_test, W_test, capital_sigma_test
+            );
+
+            Eigen::VectorXd beta_ols_training;
+            Eigen::VectorXd beta_mdpde_training;
+            double sigma_square_training;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W_training;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma_training;
+            RunBetaMDPDE(
+                data_set_training.at(i), alpha, beta_ols_training,
+                beta_mdpde_training, sigma_square_training, W_training, capital_sigma_training
+            );
+
+            beta_error_sum += (beta_mdpde_test - beta_mdpde_training).norm();
+        }
+        error_sum_list(p) = beta_error_sum;
+    }
+    return error_sum_list;
+}
+
+Eigen::VectorXd HRLModelHelper::RunAlphaGTraining(
+    const std::vector<Eigen::VectorXd> & data_list,
+    const size_t subset_size,
+    const std::vector<double> & alpha_list)
+{
+    auto data_size_in_half{ data_list.size() / 2 };
+    std::vector<std::vector<Eigen::VectorXd>> data_set_test(subset_size);
+    std::vector<std::vector<Eigen::VectorXd>> data_set_training(subset_size);
+    for (size_t i = 0; i < subset_size; i++)
+    {
+        // Randomly pick the half of data into test set and training set for each group
+        data_set_test[i].reserve(data_size_in_half);
+        data_set_training[i].reserve(data_size_in_half);
+        std::vector<Eigen::VectorXd> data_1, data_2;
+        std::vector<Eigen::VectorXd> shuffled_data{ data_list };
+        std::shuffle(shuffled_data.begin(), shuffled_data.end(), std::mt19937{std::random_device{}()});
+        auto diff{ static_cast<std::vector<Eigen::VectorXd>::difference_type>(data_size_in_half) };
+        data_1.assign(shuffled_data.begin(), shuffled_data.begin() + diff);
+        data_2.assign(shuffled_data.begin() + diff, shuffled_data.end());
+        data_set_test[i] = std::move(data_1);
+        data_set_training[i] = std::move(data_2);
+    }
+
+    auto alpha_size{ static_cast<int>(alpha_list.size()) };
+    Eigen::VectorXd error_sum_list{ Eigen::VectorXd::Zero(alpha_size) };
+    for (int p = 0; p < alpha_size; p++)
+    {
+        auto alpha{ alpha_list.at(static_cast<size_t>(p)) };
+        auto mu_error_sum{ 0.0 };
+        for (size_t i = 0; i < subset_size; i++)
+        {
+            Eigen::VectorXd mu_mdpde_test;
+            Eigen::ArrayXd omega_array_test;
+            double omega_sum_test;
+            Eigen::MatrixXd capital_lambda_test;
+            std::vector<Eigen::MatrixXd> member_capital_lambda_list_test;
+            RunMuMDPDE(
+                data_set_test.at(i), alpha, mu_mdpde_test,
+                omega_array_test, omega_sum_test, capital_lambda_test,
+                member_capital_lambda_list_test);
+
+            Eigen::VectorXd mu_mdpde_training;
+            Eigen::ArrayXd omega_array_training;
+            double omega_sum_training;
+            Eigen::MatrixXd capital_lambda_training;
+            std::vector<Eigen::MatrixXd> member_capital_lambda_list_training;
+            RunMuMDPDE(
+                data_set_training.at(i), alpha, mu_mdpde_training,
+                omega_array_training, omega_sum_training, capital_lambda_training,
+                member_capital_lambda_list_training);
+
+            mu_error_sum += (mu_mdpde_test - mu_mdpde_training).norm();
+        }
+        error_sum_list(p) = mu_error_sum;
+    }
+
+    return error_sum_list;
+}
+
+void HRLModelHelper::PrepareDataSubset(
+    const std::vector<Eigen::VectorXd> & data_list,
+    size_t subset_size,
+    std::vector<std::vector<Eigen::VectorXd>> & data_subset_list) const
+{
+    data_subset_list.clear();
+    data_subset_list.resize(subset_size);
+    size_t total_entry_size{ data_list.size() };
+    size_t entries_in_subset_size{ total_entry_size / subset_size + 1 };
+    for (size_t i = 0; i < subset_size; i++)
+    {
+        data_subset_list[i].reserve(entries_in_subset_size);
+    }
+
+    size_t count{ 0 };
+    for (const auto & entry : data_list)
+    {
+        data_subset_list[count % subset_size].emplace_back(entry);
+        count++;
+    }
+}
+
+void HRLModelHelper::PrepareTestAndTrainingDataSet(
+    const std::vector<std::vector<Eigen::VectorXd>> & data_subset_list,
+    size_t subset_size,
+    size_t total_entries_size,
+    std::vector<std::vector<Eigen::VectorXd>> & data_set_test,
+    std::vector<std::vector<Eigen::VectorXd>> & data_set_training) const
+{
+    data_set_test.clear();
+    data_set_training.clear();
+    data_set_test.resize(subset_size);
+    data_set_training.resize(subset_size);
+    for (size_t i = 0; i < subset_size; i++)
+    {
+        size_t test_set_size{ data_subset_list[i].size() };
+        size_t training_set_size{ total_entries_size - test_set_size };
+        data_set_test[i].reserve(test_set_size);
+        data_set_training[i].reserve(training_set_size);
+        data_set_test[i].insert(
+            data_set_test[i].end(),
+            data_subset_list[i].begin(),
+            data_subset_list[i].end());
+        for (size_t j = 0; j < subset_size; j++)
+        {
+            if (i == j) continue;
+            data_set_training[i].insert(
+                data_set_training[i].end(),
+                data_subset_list[j].begin(),
+                data_subset_list[j].end());
+        }
+    }
 }
 
 void HRLModelHelper::AlgorithmBetaMDPDE(
