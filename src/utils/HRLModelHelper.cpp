@@ -248,6 +248,7 @@ void HRLModelHelper::RunBetaMDPDE(
 void HRLModelHelper::RunMuMDPDE(
     const std::vector<Eigen::VectorXd> & beta_vector,
     double alpha_g,
+    Eigen::VectorXd & mu_median,
     Eigen::VectorXd & mu_MDPDE,
     Eigen::ArrayXd & omega_array,
     double & omega_sum,
@@ -255,8 +256,8 @@ void HRLModelHelper::RunMuMDPDE(
     std::vector<Eigen::MatrixXd> & member_capital_lambda_list)
 {
     auto beta_matrix{ ConvertBetaListToMatrix(beta_vector) };
-    m_mu_mean = CalculateMuByMedian(beta_matrix);
-    mu_MDPDE = m_mu_mean;
+    mu_median = CalculateMuByMedian(beta_matrix);
+    mu_MDPDE = mu_median;
     AlgorithmMuMDPDE(
         alpha_g, beta_matrix, mu_MDPDE,
         omega_array, omega_sum, capital_lambda, member_capital_lambda_list);
@@ -342,23 +343,25 @@ Eigen::VectorXd HRLModelHelper::RunAlphaGTraining(
         auto mu_error_sum{ 0.0 };
         for (size_t i = 0; i < subset_size; i++)
         {
+            Eigen::VectorXd mu_median_test;
             Eigen::VectorXd mu_mdpde_test;
             Eigen::ArrayXd omega_array_test;
             double omega_sum_test;
             Eigen::MatrixXd capital_lambda_test;
             std::vector<Eigen::MatrixXd> member_capital_lambda_list_test;
             RunMuMDPDE(
-                data_set_test.at(i), alpha, mu_mdpde_test,
+                data_set_test.at(i), alpha, mu_median_test, mu_mdpde_test,
                 omega_array_test, omega_sum_test, capital_lambda_test,
                 member_capital_lambda_list_test);
 
+            Eigen::VectorXd mu_median_training;
             Eigen::VectorXd mu_mdpde_training;
             Eigen::ArrayXd omega_array_training;
             double omega_sum_training;
             Eigen::MatrixXd capital_lambda_training;
             std::vector<Eigen::MatrixXd> member_capital_lambda_list_training;
             RunMuMDPDE(
-                data_set_training.at(i), alpha, mu_mdpde_training,
+                data_set_training.at(i), alpha, mu_median_training, mu_mdpde_training,
                 omega_array_training, omega_sum_training, capital_lambda_training,
                 member_capital_lambda_list_training);
 

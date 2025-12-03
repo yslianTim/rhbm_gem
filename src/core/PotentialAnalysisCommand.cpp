@@ -550,76 +550,6 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         }
     }
 }
-/*
-std::vector<double> PotentialAnalysisCommand::TrainAlphaG(
-    const std::vector<AtomObject *> & atom_list,
-    const size_t subset_size, const std::vector<double> & alpha_list)
-{
-    auto atom_in_half_size{ atom_list.size() / 2 };
-    const int basis_size{ 2 };
-    
-    std::vector<std::vector<Eigen::VectorXd>> data_test(subset_size);
-    std::vector<std::vector<Eigen::VectorXd>> data_training(subset_size);
-    for (size_t i = 0; i < subset_size; i++)
-    {
-        // Randomly pick the half of atoms into test set and training set for each group
-        std::vector<AtomObject *> data1, data2;
-        std::vector<AtomObject *> shuffled{ atom_list };
-        std::shuffle(shuffled.begin(), shuffled.end(), std::mt19937{std::random_device{}()});
-        auto diff{ static_cast<std::vector<AtomObject *>::difference_type>(atom_in_half_size) };
-        data1.assign(shuffled.begin(), shuffled.begin() + diff);
-        data2.assign(shuffled.begin() + diff, shuffled.end());
-        data_test[i].reserve(data1.size());
-        data_training[i].reserve(data2.size());
-        for (auto atom : data1)
-        {
-            data_test[i].emplace_back(atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE());
-        }
-        for (auto atom : data2)
-        {
-            data_training[i].emplace_back(atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE());
-        }
-    }
-
-    auto alpha_size{ alpha_list.size() };
-    std::vector<double> error_sum_list;
-    error_sum_list.resize(alpha_size, 0.0);
-    for (size_t p = 0; p < alpha_size; p++)
-    {
-        auto alpha{ alpha_list.at(p) };
-        auto mu_error_sum{ 0.0 };
-        for (size_t i = 0; i < subset_size; i++)
-        {
-            auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
-            estimator->SetQuietMode();
-            estimator->SetThreadSize(1);
-            Eigen::VectorXd mu_mdpde_test;
-            Eigen::ArrayXd omega_array_test;
-            double omega_sum_test;
-            Eigen::MatrixXd capital_lambda_test;
-            std::vector<Eigen::MatrixXd> member_capital_lambda_list_test;
-            estimator->RunMuMDPDE(
-                data_test.at(i), alpha, mu_mdpde_test,
-                omega_array_test, omega_sum_test, capital_lambda_test,
-                member_capital_lambda_list_test);
-
-            Eigen::VectorXd mu_mdpde_training;
-            Eigen::ArrayXd omega_array_training;
-            double omega_sum_training;
-            Eigen::MatrixXd capital_lambda_training;
-            std::vector<Eigen::MatrixXd> member_capital_lambda_list_training;
-            estimator->RunMuMDPDE(
-                data_training.at(i), alpha, mu_mdpde_training,
-                omega_array_training, omega_sum_training, capital_lambda_training,
-                member_capital_lambda_list_training);
-
-            mu_error_sum += (mu_mdpde_test - mu_mdpde_training).norm();
-        }
-        error_sum_list[p] = mu_error_sum;
-    }
-
-    return error_sum_list;
-}*/
 
 double PotentialAnalysisCommand::TrainUniversalAlphaR(
     const std::vector<AtomObject *> & atom_list,
@@ -698,7 +628,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
                 atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE()
             );
         }
-        //auto error_list{ TrainAlphaG(group_atom_list, subset_size, alpha_list) };
+
         auto error_array{
             estimator->RunAlphaGTraining(data_entry_list, subset_size, alpha_list)
         };
@@ -707,11 +637,6 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
         #pragma omp critical
 #endif
         {
-            //for (int p = 0; p < alpha_size; p++)
-            //{
-            //    auto error{ error_list.at(static_cast<size_t>(p)) };
-            //    mu_error_sum_array(p) += error;
-            //}
             mu_error_sum_array += error_array.array();
             group_count++;
             Logger::ProgressPercent(group_count, group_size);

@@ -155,6 +155,7 @@ public:
     void RunMuMDPDE(
         const std::vector<Eigen::VectorXd> & beta_list,
         double alpha_g,
+        Eigen::VectorXd & mu_median,
         Eigen::VectorXd & mu_MDPDE,
         Eigen::ArrayXd & omega_array,
         double & omega_sum,
