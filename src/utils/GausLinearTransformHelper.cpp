@@ -39,6 +39,7 @@ std::vector<Eigen::VectorXd> GausLinearTransformHelper::MapValueTransform(
         );
     }
     basis_and_response_entry_list.shrink_to_fit();
+    // TODO: check empty
     return basis_and_response_entry_list;
 }
 

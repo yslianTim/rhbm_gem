@@ -96,7 +96,7 @@ void ModelPainter::Painting(void)
         label += ".pdf";
         
         PaintAtomGroupGausMainChain(model_object, "atom_group_gaus_main_chain_"+ label);
-        PaintBondGroupGausMainChain(model_object, "bond_group_gaus_main_chain_"+ label);
+        //PaintBondGroupGausMainChain(model_object, "bond_group_gaus_main_chain_"+ label);
 
         PaintAtomGroupGausNucleotideMainChain(model_object, "atom_group_gaus_nucleotide_main_chain_"+ label);
 //        model_object->BuildKDTreeRoot();
@@ -106,10 +106,10 @@ void ModelPainter::Painting(void)
         PaintAtomGausScatterPlot(model_object, "atom_gaus_scatter_"+ label, false);
         //PaintBondGausScatterPlot(model_object, "bond_gaus_scatter_"+ label, false);
         PaintAtomGausMainChain(model_object, "atom_gaus_main_chain_"+ label);
-        PaintBondGausMainChain(model_object, "bond_gaus_main_chain_"+ label);
+        //PaintBondGausMainChain(model_object, "bond_gaus_main_chain_"+ label);
         PaintAtomMapValueMainChain(model_object, "atom_map_value_main_chain_"+ label);
-        PaintBondMapValueMainChain(model_object, "bond_map_value_main_chain_"+ label);
-        //PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
+        //PaintBondMapValueMainChain(model_object, "bond_map_value_main_chain_"+ label);
+        PaintAtomRankMainChain(model_object, "atom_rank_main_chain_"+ label);
     }
 }
 

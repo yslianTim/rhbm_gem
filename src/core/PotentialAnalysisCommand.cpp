@@ -482,8 +482,8 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     if (m_map_object == nullptr) return;
 
-    const size_t group_size_alpha_r{ 5 };
-    std::vector<double> alpha_r_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
+    const size_t subset_size_alpha_r{ 5 };
+    std::vector<double> alpha_r_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
     auto ordered_alpha_r_list{ alpha_r_list };
     std::sort(ordered_alpha_r_list.begin(), ordered_alpha_r_list.end());
     
@@ -502,9 +502,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     Logger::Log(LogLevel::Info,
         "Run Alpha_R Training with "+ std::to_string(selected_atom_size) +" atoms.");
     auto alpha_r{ TrainUniversalAlphaR(
-        selected_atom_list,
-        group_size_alpha_r,
-        ordered_alpha_r_list)
+        selected_atom_list, subset_size_alpha_r, ordered_alpha_r_list)
     };
     
     for (auto & atom : atom_list)
@@ -514,11 +512,31 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     
     // Alpha_G Training
     RunLocalAtomFitting();
-    const size_t group_size_alpha_g{ 5 };
-    std::vector<double> alpha_g_list{ 0.1, 0.2, 0.3, 0.4, 0.5 };
+    const size_t subset_size_alpha_g{ 10 };
+    std::vector<double> alpha_g_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
     auto ordered_alpha_g_list{ alpha_g_list };
     std::sort(ordered_alpha_g_list.begin(), ordered_alpha_g_list.end());
-    auto alpha_g{ TrainUniversalAlphaG(group_size_alpha_g, ordered_alpha_g_list) };
+
+    std::vector<std::vector<AtomObject *>> atom_list_set;
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
+        const auto & group_key_set{ group_potential_entry->GetGroupKeySet() };
+        for (auto group_key : group_key_set)
+        {
+            auto & group_atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
+            if (group_atom_list.size() < 10) continue;
+            atom_list_set.emplace_back(group_atom_list);
+        }
+    }
+
+    auto selected_group_size{ atom_list_set.size() };
+    Logger::Log(LogLevel::Info,
+        "Run Alpha_G Training with "+ std::to_string(selected_group_size) +" groups.");
+    auto alpha_g{ TrainUniversalAlphaG(
+        atom_list_set, subset_size_alpha_g, ordered_alpha_g_list)
+    };
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
@@ -684,7 +702,7 @@ std::vector<double> PotentialAnalysisCommand::TrainAlphaG(
 
 double PotentialAnalysisCommand::TrainUniversalAlphaR(
     const std::vector<AtomObject *> & atom_list,
-    const size_t group_size,
+    const size_t subset_size,
     const std::vector<double> & alpha_list)
 {
     auto atom_size{ atom_list.size() };
@@ -698,7 +716,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
-        auto error_list{ TrainAlphaR(atom_list[i], group_size, alpha_list) };
+        auto error_list{ TrainAlphaR(atom_list[i], subset_size, alpha_list) };
         
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -725,25 +743,34 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
 }
 
 double PotentialAnalysisCommand::TrainUniversalAlphaG(
-    const size_t group_size,
+    const std::vector<std::vector<AtomObject *>> & atom_list_set,
+    const size_t subset_size,
     const std::vector<double> & alpha_list)
 {
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
+    auto group_size{ atom_list_set.size() };
+    std::atomic<size_t> group_count{ 0 };
     Eigen::ArrayXd mu_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+    for (size_t i = 0; i < group_size; i++)
     {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
-        const auto & group_key_set{ group_potential_entry->GetGroupKeySet() };
-        for (auto group_key : group_key_set)
+        auto & group_atom_list{ atom_list_set[i] };
+        auto error_list{ TrainAlphaG(group_atom_list, subset_size, alpha_list) };
+        
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
         {
-            auto & group_atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
-            auto error_list{ TrainAlphaG(group_atom_list, group_size, alpha_list) };
             for (int p = 0; p < alpha_size; p++)
             {
                 auto error{ error_list.at(static_cast<size_t>(p)) };
                 mu_error_sum_array(p) += error;
             }
+            group_count++;
+            Logger::ProgressPercent(group_count, group_size);
         }
     }
 
