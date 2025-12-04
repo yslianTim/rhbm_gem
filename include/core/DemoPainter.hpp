@@ -16,6 +16,7 @@ class TPad;
 class TVirtualPad;
 class TH2;
 class TPaveText;
+class TGraphErrors;
 #endif
 
 class DemoPainter : public PainterBase
@@ -34,6 +35,7 @@ public:
     void Painting(void) override;
 
 private:
+    void PainMapValueComparisonSingle(const std::string & name, ModelObject * model_object, ModelObject * ref_model_object);
     void PaintAtomMapValueExample(ModelObject * model_object, const std::string & name);
     void PaintGroupGausMainChainSummary(const std::vector<ModelObject *> & model_list, const std::string & name);
     void PaintGroupGausMainChainSingle(ModelObject * model_object, const std::string & name);
@@ -48,6 +50,7 @@ private:
     void PrintGausTitlePad(TPad * pad, TPaveText * text, const std::string & title, float text_size);
     void PrintGausResultPad(TPad * pad, TH2 * hist, bool draw_x_axis, bool draw_title_label, bool is_right_side_pad);
     void PrintGausCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_axis, bool draw_title_label);
+    void BuildMapValueScatterGraph(GroupKey group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size, double x_min, double x_max);
     #endif
 
 };

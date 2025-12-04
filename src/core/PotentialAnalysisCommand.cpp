@@ -494,6 +494,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     for (auto & atom : atom_list)
     {
         if (atom->IsMainChainAtom() == false) continue;
+        if (atom->GetLocalPotentialEntry()->GetBasisAndResponseEntryListSize() < 500) continue;
         selected_atom_list.emplace_back(atom);
     }
     selected_atom_list.shrink_to_fit();
@@ -513,23 +514,21 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
     // Alpha_G Training
     RunLocalAtomFitting();
     const size_t subset_size_alpha_g{ 10 };
-    std::vector<double> alpha_g_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
+    std::vector<double> alpha_g_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
     auto ordered_alpha_g_list{ alpha_g_list };
     std::sort(ordered_alpha_g_list.begin(), ordered_alpha_g_list.end());
-
+    
+    auto component_group_potential_entry{
+        m_model_object->GetAtomGroupPotentialEntry(ChemicalDataHelper::GetComponentAtomClassKey())
+    };
     std::vector<std::vector<AtomObject *>> atom_list_set;
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    atom_list_set.reserve(component_group_potential_entry->GetGroupKeySet().size());
+    for (auto group_key : component_group_potential_entry->GetGroupKeySet())
     {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
-        const auto & group_key_set{ group_potential_entry->GetGroupKeySet() };
-        for (auto group_key : group_key_set)
-        {
-            auto & group_atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
-            if (group_atom_list.size() < 10) continue;
-            if (group_atom_list.front()->IsMainChainAtom() == false) continue;
-            atom_list_set.emplace_back(group_atom_list);
-        }
+        auto & group_atom_list{ component_group_potential_entry->GetAtomObjectPtrList(group_key) };
+        if (group_atom_list.size() < 10) continue;
+        if (group_atom_list.front()->IsMainChainAtom() == false) continue;
+        atom_list_set.emplace_back(group_atom_list);
     }
 
     auto selected_group_size{ atom_list_set.size() };

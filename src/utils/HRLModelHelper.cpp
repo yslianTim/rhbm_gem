@@ -438,6 +438,17 @@ void HRLModelHelper::AlgorithmBetaMDPDE(
 {
     ValidateAlpha(alpha_r);
     int n{ static_cast<int>(y.size()) };
+    if (n == 0)
+    {
+        Logger::Log(LogLevel::Warning,
+            "HRLModelHelper::AlgorithmBetaMDPDE : "
+            "Dataset is empty, returning zero beta and infinite variance.");
+        beta = VectorXd::Zero(static_cast<int>(X.cols()));
+        sigma_square = std::numeric_limits<double>::max();
+        W = Eigen::DiagonalMatrix<double, Eigen::Dynamic>::Identity(0);
+        capital_sigma = Eigen::DiagonalMatrix<double, Eigen::Dynamic>::Identity(0);
+        return;
+    }
     sigma_square = (n < 2) ?
         std::numeric_limits<double>::max() : (y - (X * beta)).squaredNorm() / (n-1);
     W = VectorXd::Ones(n).asDiagonal();

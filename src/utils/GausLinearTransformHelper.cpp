@@ -38,8 +38,16 @@ std::vector<Eigen::VectorXd> GausLinearTransformHelper::MapValueTransform(
                 gaus_x, gaus_y, model_par_init, basis_size)
         );
     }
+    
+    if (basis_and_response_entry_list.empty())
+    {
+        Logger::Log(LogLevel::Warning,
+            "GausLinearTransformHelper::MapValueTransform : "
+            "No valid gaus data entry in the specified range.");
+        basis_and_response_entry_list.emplace_back(Eigen::VectorXd::Zero(basis_size + 1));
+    }
     basis_and_response_entry_list.shrink_to_fit();
-    // TODO: check empty
+
     return basis_and_response_entry_list;
 }
 

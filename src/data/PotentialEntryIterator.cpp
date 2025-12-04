@@ -787,6 +787,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainAtomGa
         return {};
     }
     
+    //auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     std::unordered_map<std::string, std::unordered_map<int, std::array<double, 4>>> values_map;
     for (auto & atom : m_model_object->GetSelectedAtomList())
     {
@@ -804,6 +805,7 @@ std::vector<std::unique_ptr<TH1D>> PotentialEntryIterator::CreateMainChainAtomGa
         auto chain_id{ atom->GetChainID() };
         auto entry{ atom->GetLocalPotentialEntry() };
         auto gaus_value{ entry->GetGausEstimateMDPDE(par_id) };
+        //auto gaus_value{ entry->GetGausEstimatePosterior(class_key, par_id) };
         values_map[chain_id][sequence_id].at(id) = gaus_value;
     }
     chain_size = static_cast<int>(values_map.size());

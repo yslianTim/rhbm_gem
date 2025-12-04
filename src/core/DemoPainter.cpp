@@ -155,8 +155,150 @@ void DemoPainter::Painting(void)
         {
             PaintAtomGausMainChainDemoSingle(model, "figure_2_c2.pdf", 0);
             PaintGroupGausMainChainSingle(model, "figure_2_d.pdf");
+            PainMapValueComparisonSingle("figure_5.pdf", demo_model_object, model);
         }
     }
+}
+
+void DemoPainter::PainMapValueComparisonSingle(
+    const std::string & name,
+    ModelObject * model_object,
+    ModelObject * ref_model_object)
+{
+    auto file_path{ m_folder_path + name };
+    Logger::Log(LogLevel::Info, " DemoPainter::PainMapValueComparisonSingle");
+
+    #ifdef HAVE_ROOT
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+    const int col_size{ 4 };
+    const int row_size{ 1 };
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 600) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.02f, 0.20f, 0.12f, 0.01f, 0.005f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    std::vector<std::unique_ptr<TGraphErrors>> scatter_graph_list;
+    std::vector<std::unique_ptr<TF1>> fit_function_list;
+
+    TGraphErrors * scatter_graph[col_size];
+    TF1 * fit_function[col_size];
+    double r_square[col_size]{ 0.0 };
+    double slope[col_size]{ 0.0 };
+    double intercept[col_size]{ 0.0 };
+    std::vector<double> x_array, y_array;
+    for (size_t i = 0; i < col_size; i++)
+    {
+        auto group_key{ m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(i) };
+        auto graph{ ROOTHelper::CreateGraphErrors() };
+        BuildMapValueScatterGraph(group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
+        r_square[i] = ROOTHelper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
+        auto function{ ROOTHelper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
+        function->SetParameters(intercept[i], slope[i]);
+        scatter_graph[i] = graph.get();
+        fit_function[i] = function.get();
+        scatter_graph_list.emplace_back(std::move(graph));
+        fit_function_list.emplace_back(std::move(function));
+
+        for (int p = 0; p < scatter_graph[i]->GetN(); p++)
+        {
+            x_array.emplace_back(scatter_graph[i]->GetPointX(p));
+            y_array.emplace_back(scatter_graph[i]->GetPointY(p));
+        }
+    }
+
+    auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+    double x_min{ std::get<0>(x_range) };
+    double x_max{ std::get<1>(x_range) };
+
+    auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array, 0.2) };
+    double y_min{ std::get<0>(y_range) };
+    double y_max{ std::get<1>(y_range) };
+
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    std::unique_ptr<TPaveText> title_text[col_size];
+    std::unique_ptr<TPaveText> r_square_text[col_size];
+    std::unique_ptr<TPaveText> fit_info_text[col_size];
+    for (size_t i = 0; i < col_size; i++)
+    {
+        auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
+        auto element_marker{ AtomClassifier::GetMainChainElementOpenMarker(i) };
+        auto element_label{ AtomClassifier::GetMainChainElementLabel(i) };
+        for (int j = 0; j < row_size; j++)
+        {
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 500, x_min, x_max, 500, y_min, y_max);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 60.0f, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 50.0f, 0.01f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
+            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            frame[i][j]->GetXaxis()->SetTitle("");
+            frame[i][j]->GetYaxis()->SetTitle("Real Map Value");
+            frame[i][j]->GetYaxis()->CenterTitle();
+            frame[i][j]->SetStats(0);
+            frame[i][j]->Draw();
+            ROOTHelper::SetMarkerAttribute(scatter_graph[i], element_marker, 1.0f, element_color);
+            ROOTHelper::SetLineAttribute(scatter_graph[i], 1, 2, element_color);
+            scatter_graph[i]->Draw("P");
+            ROOTHelper::SetLineAttribute(fit_function[i], 2, 2, kRed);
+            fit_function[i]->SetRange(x_min, x_max);
+            fit_function[i]->Draw("SAME");
+        }
+        title_text[i] = ROOTHelper::CreatePaveText(0.30, 1.01, 0.70, 1.16, "nbNDC ARC", true);
+        ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
+        ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
+        ROOTHelper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
+        ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, element_color, 0.5f);
+        title_text[i]->AddText(element_label.data());
+        title_text[i]->Draw();
+
+        r_square_text[i] = ROOTHelper::CreatePaveText(0.30, 0.05, 0.95, 0.18, "nbNDC ARC", true);
+        ROOTHelper::SetPaveTextDefaultStyle(r_square_text[i].get());
+        ROOTHelper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
+        ROOTHelper::SetLineAttribute(r_square_text[i].get(), 1, 0);
+        ROOTHelper::SetTextAttribute(r_square_text[i].get(), 45.0f, 133, 22);
+        ROOTHelper::SetFillAttribute(r_square_text[i].get(), 1001, kAzure-7, 0.20f);
+        r_square_text[i]->AddText(Form("R^{2} = %.2f", r_square[i]));
+        r_square_text[i]->Draw();
+
+        fit_info_text[i] = ROOTHelper::CreatePaveText(0.05, 0.88, 0.95, 0.99, "nbNDC", true);
+        ROOTHelper::SetPaveTextDefaultStyle(fit_info_text[i].get());
+        ROOTHelper::SetTextAttribute(fit_info_text[i].get(), 45.0f, 133, 22, 0.0, kGray+2);
+        if (intercept[i] > 0.0)
+        {
+            fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}+ %.2f", slope[i], intercept[i]));
+        }
+        else
+        {
+            fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}#minus %.2f", slope[i], std::fabs(intercept[i])));
+        }
+        fit_info_text[i]->Draw();
+    }
+    canvas->cd();
+    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.08, 0.00, 0.98, 0.12) };
+    pad_extra->Draw();
+    pad_extra->cd();
+    ROOTHelper::SetPadDefaultStyle(pad_extra.get());
+    ROOTHelper::SetFillAttribute(pad_extra.get(), 4000);
+    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
+    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
+    bottom_title_text->AddText("Simulated Map Value");
+    bottom_title_text->Draw();
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
+    #endif
 }
 
 void DemoPainter::PaintAtomMapValueExample(
@@ -586,9 +728,9 @@ void DemoPainter::PaintGroupGausToFSC(
     const int col_size{ 4 };
     const int row_size{ 1 };
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 600) };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 300) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.02f, 0.20f, 0.12f, 0.01f, 0.005f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.08f, 0.01f, 0.30f, 0.02f, 0.01f, 0.005f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::unique_ptr<TGraphErrors> graph[col_size];
@@ -638,7 +780,6 @@ void DemoPainter::PaintGroupGausToFSC(
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> title_text[col_size];
     std::unique_ptr<TPaveText> r_square_text[col_size];
-    std::unique_ptr<TPaveText> fit_info_text[col_size];
     for (size_t i = 0; i < col_size; i++)
     {
         auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
@@ -652,10 +793,10 @@ void DemoPainter::PaintGroupGausToFSC(
             auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
             frame[i][j] = ROOTHelper::CreateHist2D(Form("hist_%d_%d", static_cast<int>(i), j),"", 500, x_min, x_max, 500, y_min, y_max);
             ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 50.0f, 0.005f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 506);
-            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 60.0f, 1.0f, 133);
-            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 50.0f, 0.01f, 133);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 45.0f, 1.3f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.01f, 133);
             ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
@@ -668,7 +809,7 @@ void DemoPainter::PaintGroupGausToFSC(
             fit_function[i]->SetRange(x_min, x_max);
             fit_function[i]->Draw("SAME");
         }
-        title_text[i] = ROOTHelper::CreatePaveText(0.30, 1.01, 0.70, 1.16, "nbNDC ARC", true);
+        title_text[i] = ROOTHelper::CreatePaveText(0.10, 0.75, 0.40, 0.99, "nbNDC ARC", true);
         ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
         ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
         ROOTHelper::SetTextAttribute(title_text[i].get(), 60.0f, 103, 22);
@@ -676,30 +817,17 @@ void DemoPainter::PaintGroupGausToFSC(
         title_text[i]->AddText(element_label.data());
         title_text[i]->Draw();
 
-        r_square_text[i] = ROOTHelper::CreatePaveText(0.30, 0.05, 0.95, 0.18, "nbNDC ARC", true);
+        r_square_text[i] = ROOTHelper::CreatePaveText(0.48, 0.05, 0.99, 0.25, "nbNDC ARC", true);
         ROOTHelper::SetPaveTextDefaultStyle(r_square_text[i].get());
         ROOTHelper::SetPaveAttribute(r_square_text[i].get(), 0, 0.5);
         ROOTHelper::SetLineAttribute(r_square_text[i].get(), 1, 0);
-        ROOTHelper::SetTextAttribute(r_square_text[i].get(), 45.0f, 133, 22);
+        ROOTHelper::SetTextAttribute(r_square_text[i].get(), 40.0f, 133, 22);
         ROOTHelper::SetFillAttribute(r_square_text[i].get(), 1001, kAzure-7, 0.20f);
         r_square_text[i]->AddText(Form("R^{2} = %.2f", r_square[i]));
         r_square_text[i]->Draw();
-
-        fit_info_text[i] = ROOTHelper::CreatePaveText(0.05, 0.88, 0.95, 0.99, "nbNDC", true);
-        ROOTHelper::SetPaveTextDefaultStyle(fit_info_text[i].get());
-        ROOTHelper::SetTextAttribute(fit_info_text[i].get(), 45.0f, 133, 22, 0.0, kGray+2);
-        if (intercept[i] > 0.0)
-        {
-            fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}+ %.2f", slope[i], intercept[i]));
-        }
-        else
-        {
-            fit_info_text[i]->AddText(Form("#font[1]{y} = %.2f#font[1]{x}#minus %.2f", slope[i], std::fabs(intercept[i])));
-        }
-        fit_info_text[i]->Draw();
     }
     canvas->cd();
-    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.08, 0.00, 0.98, 0.12) };
+    auto pad_extra{ ROOTHelper::CreatePad("pad_extra","", 0.08, 0.00, 0.98, 0.19) };
     pad_extra->Draw();
     pad_extra->cd();
     ROOTHelper::SetPadDefaultStyle(pad_extra.get());
@@ -707,7 +835,7 @@ void DemoPainter::PaintGroupGausToFSC(
     auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
     ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
     ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
-    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
+    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 40.0f, 133, 22);
     bottom_title_text->AddText("FSC Resolution #[]{#AA}");
     bottom_title_text->Draw();
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
@@ -940,6 +1068,215 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     gStyle->SetGridColor(kGray);
     const int col_size{ 4 };
     const int row_size{ 4 };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 800) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.17f, 0.08f, 0.10f, 0.05f, 0.01f, 0.01f);
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    std::vector<std::unique_ptr<TGraphErrors>> graph_list[col_size][row_size];
+    std::vector<double> x_array[col_size][row_size];
+    std::vector<double> y_array[col_size][row_size];
+    std::vector<double> global_x_array[col_size];
+    std::vector<double> global_y_array[row_size];
+    for (size_t i = 0; i < col_size; i++)
+    {
+        auto element_id{ i };
+        for (size_t j = 0; j < row_size; j++)
+        {
+            auto model_id{ j };
+            auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_list.at(model_id)) };
+            for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
+            {
+                auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(element_id, residue) };
+                if (entry_iter->IsAvailableAtomGroupKey(group_key, residue_class) == false) continue;
+                auto graph{ (par_id == 0) ?
+                    entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, residue_class, 1) :
+                    entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 1) };
+                for (int p = 0; p < graph->GetN(); p++)
+                {
+                    x_array[i][j].emplace_back(graph->GetPointX(p));
+                    y_array[i][j].emplace_back(graph->GetPointY(p));
+                    global_x_array[i].emplace_back(graph->GetPointX(p));
+                    global_y_array[j].emplace_back(graph->GetPointY(p));
+                }
+                graph_list[i][j].emplace_back(std::move(graph));
+            }
+        }
+    }
+
+    double x_min[col_size]{ 0.0 };
+    double x_max[col_size]{ 0.0 };
+    double y_min[row_size]{ 0.0 };
+    double y_max[row_size]{ 0.0 };
+    for (size_t i = 0; i < col_size; i++)
+    {
+        auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(global_x_array[i], 0.12, 0.005, 0.995) };
+        x_min[i] = std::get<0>(x_range);
+        x_max[i] = std::get<1>(x_range);
+    }
+    for (size_t j = 0; j < row_size; j++)
+    {
+        auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(global_y_array[j], 0.38, 0.005, 0.995) };
+        y_min[j] = std::get<0>(y_range);
+        y_max[j] = std::get<1>(y_range);
+    }
+
+    std::unique_ptr<TH2D> summary_hist[col_size][row_size];
+    for (int i = 0; i < col_size; i++)
+    {
+        for (int j = 0; j < row_size; j++)
+        {
+            auto x_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(x_array[i][j], 0.0, 0.005, 0.995) };
+            //auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(y_array[i][j], 0.15) };
+            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[i][j], 0.5, 0.005, 0.995) };
+            summary_hist[i][j] = ROOTHelper::CreateHist2D(
+                Form("summary_hist_%d_%d", i, j), "",
+                5, std::get<0>(x_range), std::get<1>(x_range),
+                100, std::get<0>(y_range), std::get<1>(y_range));
+            for (auto & graph : graph_list[i][j])
+            {
+                for (int p = 0; p < graph->GetN(); p++)
+                {
+                    summary_hist[i][j]->Fill(graph->GetPointX(p), graph->GetPointY(p));
+                }
+            }
+        }
+    }
+
+    std::unique_ptr<TH2> frame[col_size][row_size];
+    std::unique_ptr<TPaveText> resolution_text[col_size];
+    std::unique_ptr<TPaveText> title_x_text[col_size];
+    std::unique_ptr<TPaveText> title_y_text[row_size];
+    for (int i = 0; i < col_size; i++)
+    {
+        auto element_id{ i };
+        auto element_color{ AtomClassifier::GetMainChainElementColor(static_cast<size_t>(element_id)) };
+        auto element_label{ AtomClassifier::GetMainChainElementLabel(static_cast<size_t>(element_id)) };
+        for (int j = 0; j < row_size; j++)
+        {
+            auto model_id{ j };
+            ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+            auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
+            auto y_factor{ ROOTHelper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
+            frame[i][j] = ROOTHelper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min[i], x_max[i], 500, y_min[j], y_max[j]);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 50.0f, 1.0f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.005f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
+            ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 50.0f, 1.2f, 133);
+            ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 45.0f, 0.02f, 133);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
+            ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
+            frame[i][j]->GetXaxis()->SetTitle("");
+            frame[i][j]->GetYaxis()->SetTitle("");
+            frame[i][j]->GetXaxis()->CenterTitle();
+            frame[i][j]->GetYaxis()->CenterTitle();
+            frame[i][j]->SetStats(0);
+            frame[i][j]->Draw("Y+");
+
+            
+            if (draw_box_plot == true)
+            {
+                ROOTHelper::SetLineAttribute(summary_hist[i][j].get(), 1, 1, element_color);
+                ROOTHelper::SetFillAttribute(summary_hist[i][j].get(), 1001, element_color, 0.3f);
+                summary_hist[i][j]->Draw("CANDLE3 SAME");
+            }
+            else
+            {
+                for (auto & graph : graph_list[i][j])
+                {
+                    ROOTHelper::SetMarkerAttribute(graph.get(), 24, 1.0f, element_color);
+                    ROOTHelper::SetLineAttribute(graph.get(), 1, 2, element_color);
+                    graph->Draw("P");
+                }
+            }
+
+            if (i == 0)
+            {
+                title_y_text[j] = ROOTHelper::CreatePaveText(-0.90, 0.20, 0.02, 0.80, "nbNDC ARC", true);
+                ROOTHelper::SetPaveTextDefaultStyle(title_y_text[j].get());
+                ROOTHelper::SetPaveAttribute(title_y_text[j].get(), 0, 0.1);
+                ROOTHelper::SetLineAttribute(title_y_text[j].get(), 1, 0);
+                ROOTHelper::SetTextAttribute(title_y_text[j].get(), 40.0f, 103, 32);
+                ROOTHelper::SetFillAttribute(title_y_text[j].get(), 1001, kAzure-7, 0.5f);
+                title_y_text[j]->AddText(model_list.at(static_cast<size_t>(model_id))->GetPdbID().data());
+                title_y_text[j]->AddText(model_list.at(static_cast<size_t>(model_id))->GetEmdID().data());
+                title_y_text[j]->Draw();
+
+                resolution_text[j] = ROOTHelper::CreatePaveText(-0.92, 0.50,-0.40, 0.90, "nbNDC ARC", true);
+                ROOTHelper::SetPaveTextDefaultStyle(resolution_text[j].get());
+                ROOTHelper::SetPaveAttribute(resolution_text[j].get(), 0, 0.2);
+                ROOTHelper::SetFillAttribute(resolution_text[j].get(), 1001, kAzure-7);
+                ROOTHelper::SetTextAttribute(resolution_text[j].get(), 45.0f, 133, 22, 0.0, kYellow-10);
+                resolution_text[j]->AddText(Form("%.2f #AA", model_list.at(static_cast<size_t>(model_id))->GetResolution()));
+                resolution_text[j]->Draw();
+            }
+
+            if (j == row_size - 1)
+            {
+                title_x_text[i] = ROOTHelper::CreatePaveText(0.02, 0.95, 0.35, 1.23, "nbNDC ARC", true);
+                ROOTHelper::SetPaveTextDefaultStyle(title_x_text[i].get());
+                ROOTHelper::SetPaveAttribute(title_x_text[i].get(), 0, 0.2);
+                ROOTHelper::SetTextAttribute(title_x_text[i].get(), 50.0f, 103, 22);
+                ROOTHelper::SetFillAttribute(title_x_text[i].get(), 1001, element_color, 0.5f);
+                title_x_text[i]->AddText(element_label.data());
+                //title_x_text[i]->Draw();
+            }
+        }
+    }
+
+    canvas->cd();
+    auto pad_extra1{ ROOTHelper::CreatePad("pad_extra1","", 0.07, 0.00, 0.92, 0.06) };
+    pad_extra1->Draw();
+    pad_extra1->cd();
+    ROOTHelper::SetPadDefaultStyle(pad_extra1.get());
+    ROOTHelper::SetFillAttribute(pad_extra1.get(), 4000);
+    auto bottom_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
+    ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
+    ROOTHelper::SetTextAttribute(bottom_title_text.get(), 40.0f, 133, 22);
+    bottom_title_text->AddText("Number of In-Range Atoms");
+    bottom_title_text->Draw();
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
+
+    canvas->cd();
+    auto pad_extra2{ ROOTHelper::CreatePad("pad_extra2","", 0.96, 0.10, 1.00, 0.90) };
+    pad_extra2->Draw();
+    pad_extra2->cd();
+    ROOTHelper::SetPadDefaultStyle(pad_extra2.get());
+    ROOTHelper::SetFillAttribute(pad_extra2.get(), 4000);
+    auto right_title_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC", false) };
+    ROOTHelper::SetPaveTextDefaultStyle(right_title_text.get());
+    ROOTHelper::SetFillAttribute(right_title_text.get(), 4000);
+    ROOTHelper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
+    right_title_text->AddText("Width #tau");
+    auto text{ right_title_text->GetLineWith("Width") };
+    text->SetTextAngle(90.0f);
+    right_title_text->Draw();
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
+    #endif
+}
+/*
+void DemoPainter::PaintGroupWidthScatterPlot(
+    const std::vector<ModelObject *> & model_list, const std::string & name,
+    int par_id, bool draw_box_plot)
+{
+    auto file_path{ m_folder_path + name };
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupWidthScatterPlot");
+    auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
+
+    for (auto & model : model_list) if (model == nullptr) return;
+
+    #ifdef HAVE_ROOT
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+    const int col_size{ 4 };
+    const int row_size{ 4 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 1000) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
     ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.07f, 0.08f, 0.10f, 0.10f, 0.01f, 0.01f);
@@ -1129,7 +1466,7 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     Logger::Log(LogLevel::Info, " Output file: " + file_path);
     #endif
-}
+}*/
 
 void DemoPainter::PaintAtomGausMainChainDemo(
     ModelObject * model_object1, ModelObject * model_object2, const std::string & name, int par_id)
@@ -1444,6 +1781,35 @@ void DemoPainter::PrintGausCorrelationPad(TPad * pad, TH2 * hist, bool draw_x_ax
     hist->GetXaxis()->SetTitle("Width #font[2]{#tau}");
     hist->GetXaxis()->CenterTitle();
     hist->Draw("");
+}
+
+void DemoPainter::BuildMapValueScatterGraph(
+    GroupKey group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
+    int bin_size, double x_min, double x_max)
+{
+    auto entry1_iter{ std::make_unique<PotentialEntryIterator>(model1) };
+    auto entry2_iter{ std::make_unique<PotentialEntryIterator>(model2) };
+    if (entry1_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
+    if (entry2_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
+    auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
+    auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
+    auto count{ 0 };
+    for (auto & [atom_id, atom_object1] : model1_atom_map)
+    {
+        if (model2_atom_map.find(atom_id) == model2_atom_map.end()) continue;
+        auto atom_object2{ model2_atom_map.at(atom_id) };
+        auto atom1_iter{ std::make_unique<PotentialEntryIterator>(atom_object1) };
+        auto atom2_iter{ std::make_unique<PotentialEntryIterator>(atom_object2) };
+        auto data1_array{ atom1_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
+        auto data2_array{ atom2_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
+        for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
+        {
+            auto x_value{ std::get<1>(data1_array.at(i)) };
+            auto y_value{ std::get<1>(data2_array.at(i)) };
+            graph->SetPoint(count, x_value, y_value);
+            count++;
+        }
+    }
 }
 
 #endif
