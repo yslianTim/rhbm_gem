@@ -275,7 +275,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
                 ROOTHelper::SetFillAttribute(info_x_text[i].get(), 1001, element_color_x, 0.50f);
                 ROOTHelper::SetTextAttribute(info_x_text[i].get(), 70.0f, 133, 22);
                 ROOTHelper::SetLineAttribute(info_x_text[i].get(), 1, 0);
-                info_x_text[i]->AddText(Form("#font[2]{i} = #font[102]{%s}", element_label_x.data()));
+                info_x_text[i]->AddText(Form("#font[2]{t_{i}} = #font[102]{%s}", element_label_x.data()));
                 info_x_text[i]->Draw();
             }
         }
@@ -405,7 +405,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
     ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(bottom_title_text.get(), 80.0f, 133, 22);
-    bottom_title_text->AddText("Width #tau_{#font[2]{i}}");
+    bottom_title_text->AddText("Width #tau_{#font[2]{t_{i}}}");
     bottom_title_text->Draw();
 
     pad_extra[4]->cd(); // left Y title
@@ -413,7 +413,7 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     ROOTHelper::SetPaveTextDefaultStyle(left_title_text.get());
     ROOTHelper::SetFillAttribute(left_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(left_title_text.get(), 80.0f, 133, 22);
-    left_title_text->AddText(Form("Amplitude Ratio #font[1]{A}_{#font[2]{i}} / #font[2]{A}_{#color[%d]{#font[102]{%s}}}",
+    left_title_text->AddText(Form("Amplitude Ratio #font[1]{A}_{#font[2]{t_{i}}} / #font[2]{A}_{#color[%d]{#font[102]{%s}}}",
                     AtomClassifier::GetMainChainElementColor(3), AtomClassifier::GetMainChainElementLabel(3).data()));
     left_title_text->Draw();
     auto text{ left_title_text->GetLineWith("Amplitude") };

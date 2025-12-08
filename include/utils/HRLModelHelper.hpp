@@ -19,8 +19,6 @@ class HRLModelHelper
     int m_maximum_iteration; ///< The upper limit of iteration (default = 100)
     double m_tolerance; ///< The tolerance for algorithms (default = \f$ 10^{-5} \f$)
     double m_omega_sum; ///< The sum of member weights \f$ \Omega^{(t)} = \sum_{0}^{I-1}\omega_{i}^{(t)} \f$
-    double m_weight_data_min;
-    double m_weight_member_min;
 
     /**
      * @brief   The list of model basis matrix \f$ \boldsymbol{X}_{i} \f$
@@ -172,10 +170,48 @@ public:
         const size_t subset_size,
         const std::vector<double> & alpha_list
     );
+    static bool AlgorithmBetaMDPDE(
+        double alpha_r,
+        const Eigen::MatrixXd & X,
+        const Eigen::VectorXd & y,
+        Eigen::VectorXd & beta_OLS,
+        Eigen::VectorXd & beta,
+        double & sigma_square,
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma,
+        int iteration = DEFAULT_MAXIMUM_ITERATION,
+        double tolerance = DEFAULT_TOLERANCE,
+        double weight_min = DEFAULT_WEIGHT_DATA_MIN,
+        bool quite_mode = false
+    );
+    static bool AlgorithmMuMDPDE(
+        double alpha_g,
+        const Eigen::MatrixXd & beta_array,
+        Eigen::VectorXd & mu_median,
+        Eigen::VectorXd & mu,
+        Eigen::ArrayXd & omega_array,
+        double & omega_sum,
+        Eigen::MatrixXd & capital_lambda,
+        std::vector<Eigen::MatrixXd> & member_capital_lambda_list,
+        int iteration = DEFAULT_MAXIMUM_ITERATION,
+        double tolerance = DEFAULT_TOLERANCE,
+        double weight_min = DEFAULT_WEIGHT_MEMBER_MIN,
+        bool quite_mode = false
+    );
+    static bool AlgorithmWEB(
+        const std::vector<Eigen::MatrixXd> & X_list,
+        const std::vector<Eigen::VectorXd> & y_list,
+        const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list,
+        const Eigen::VectorXd & mu_MDPDE,
+        const std::vector<Eigen::MatrixXd> & member_capital_lambda_list,
+        Eigen::VectorXd & mu_prior,
+        Eigen::MatrixXd & beta_posterior_array,
+        std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list,
+        bool quite_mode = false
+    );
     
     bool GetOutlierFlag(int id) const;
     double GetStatisticalDistance(int id) const;
-    double GetMemberWeight(int id) const;
     Eigen::Ref<const Eigen::VectorXd> GetBetaPosterior(int id) const;
     const Eigen::MatrixXd & GetCapitalSigmaMatrixPosterior(int id) const;
     const Eigen::MatrixXd & GetCapitalLambdaMatrix(void) const { return m_capital_lambda; }
@@ -187,7 +223,7 @@ private:
     void ValidateBasisSize(int size) const;
     void ValidateMemberSize(int size) const;
     void ValidateMemberId(int id) const;
-    void ValidateAlpha(double alpha) const;
+    static void ValidateAlpha(double alpha);
     void PrepareDataSubset(
         const std::vector<Eigen::VectorXd> & data_list,
         size_t subset_size,
@@ -200,89 +236,69 @@ private:
         std::vector<std::vector<Eigen::VectorXd>> & data_set_test,
         std::vector<std::vector<Eigen::VectorXd>> & data_set_training
     ) const;
-    
-    void AlgorithmBetaMDPDE(
-        double alpha_r,
-        const Eigen::MatrixXd & X,
-        const Eigen::VectorXd & y,
-        Eigen::VectorXd & beta,
-        double & sigma_square,
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma
-    );
-    void AlgorithmMuMDPDE(
-        double alpha_g,
-        const Eigen::MatrixXd & beta_array,
-        Eigen::VectorXd & mu,
-        Eigen::ArrayXd & omega_array,
-        double & omega_sum,
-        Eigen::MatrixXd & capital_lambda,
-        std::vector<Eigen::MatrixXd> & member_capital_lambda_list
-    );
-    void AlgorithmWEB(
-        const std::vector<Eigen::MatrixXd> & X_list,
-        const std::vector<Eigen::VectorXd> & y_list,
-        const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list,
-        const Eigen::VectorXd & mu_MDPDE,
-        const std::vector<Eigen::MatrixXd> & member_capital_lambda_list,
-        Eigen::VectorXd & mu_prior,
-        Eigen::MatrixXd & beta_posterior_array,
-        std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list
-    );
-    Eigen::MatrixXd ConvertBetaListToMatrix(const std::vector<Eigen::VectorXd> & beta_list);
-    Eigen::VectorXd CalculateMuByMDPDE(
-        const Eigen::MatrixXd & beta_array,
-        const Eigen::ArrayXd & omega_array,
-        double omega_sum
-    );
-    Eigen::ArrayXd CalculateMemberWeight(
-        double alpha,
-        const Eigen::MatrixXd & beta_array,
-        const Eigen::VectorXd & mu,
-        const Eigen::MatrixXd & capital_lambda
-    );
-    Eigen::MatrixXd CalculateMemberCovariance(
-        double alpha,
-        const Eigen::MatrixXd & beta_array,
-        const Eigen::VectorXd & mu,
-        const Eigen::ArrayXd & omega_array,
-        double omega_sum
-    );
-    double CalculateInverseMemberWeightSum(const Eigen::ArrayXd & omega_array);
-    Eigen::VectorXd CalculateBetaByOLS(
+    Eigen::MatrixXd ConvertBetaListToMatrix(const std::vector<Eigen::VectorXd> & beta_list) const;
+
+    static Eigen::VectorXd CalculateBetaByOLS(
         const Eigen::MatrixXd & X,
         const Eigen::VectorXd & y
     );
-    Eigen::VectorXd CalculateMuByMedian(const Eigen::MatrixXd & beta_array);
-    Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataWeight(
-        double alpha,
-        const Eigen::MatrixXd & X,
-        const Eigen::VectorXd & y,
-        const Eigen::VectorXd & beta,
-        double sigma_square
-    );
-    Eigen::VectorXd CalculateBetaByMDPDE(
+    static Eigen::VectorXd CalculateBetaByMDPDE(
         const Eigen::MatrixXd & X,
         const Eigen::VectorXd & y,
         const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W
     );
-    double CalculateDataVarianceSquare(
+    static Eigen::VectorXd CalculateMuByMedian(
+        const Eigen::MatrixXd & beta_array
+    );
+    static Eigen::VectorXd CalculateMuByMDPDE(
+        const Eigen::MatrixXd & beta_array,
+        const Eigen::ArrayXd & omega_array,
+        double omega_sum
+    );
+    static Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataWeight(
+        double alpha,
+        const Eigen::MatrixXd & X,
+        const Eigen::VectorXd & y,
+        const Eigen::VectorXd & beta,
+        double sigma_square,
+        double weight_min = DEFAULT_WEIGHT_DATA_MIN
+    );
+    static double CalculateDataVarianceSquare(
         double alpha,
         const Eigen::MatrixXd & X,
         const Eigen::VectorXd & y,
         const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
         const Eigen::VectorXd & beta
     );
-    Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataCovariance(
+    static Eigen::DiagonalMatrix<double, Eigen::Dynamic> CalculateDataCovariance(
         double sigma_square,
         const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W
     );
-    Eigen::ArrayXd CalculateMemberStatisticalDistance(
+    static Eigen::ArrayXd CalculateMemberWeight(
+        double alpha,
+        const Eigen::MatrixXd & beta_array,
+        const Eigen::VectorXd & mu,
+        const Eigen::MatrixXd & capital_lambda,
+        double weight_min = DEFAULT_WEIGHT_MEMBER_MIN
+    );
+    static Eigen::MatrixXd CalculateMemberCovariance(
+        double alpha,
+        const Eigen::MatrixXd & beta_array,
+        const Eigen::VectorXd & mu,
+        const Eigen::ArrayXd & omega_array,
+        double omega_sum
+    );
+    static std::vector<Eigen::MatrixXd> CalculateWeightedMemberCovariance(
+        const Eigen::MatrixXd & capital_lambda,
+        const Eigen::ArrayXd & omega_array
+    );
+    
+    static Eigen::ArrayXd CalculateMemberStatisticalDistance(
         const Eigen::VectorXd & mu_prior,
         const Eigen::MatrixXd & capital_lambda,
         const Eigen::MatrixXd & beta_posterior_array
     );
-    Eigen::Array<bool, Eigen::Dynamic, 1> CalculateOutlierMemberFlag(
+    static Eigen::Array<bool, Eigen::Dynamic, 1> CalculateOutlierMemberFlag(
         int basis_size,
         const Eigen::ArrayXd & statistical_distance_array
     );
