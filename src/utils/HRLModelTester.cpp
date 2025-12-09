@@ -153,17 +153,20 @@ bool HRLModelTester::RunBetaEstimateTest(double alpha_r)
 
     for (size_t i = 0; i < static_cast<size_t>(m_replica_size); i++)
     {
-        const auto & data_entry{ m_data_array.at(i) };
-        auto estimator{ std::make_unique<HRLModelHelper>(m_linear_basis_size, 1) };
-        estimator->SetQuietMode();
-        estimator->SetThreadSize(1);
+        const auto & data_entry_list{ m_data_array.at(i) };
+        auto data_array{ HRLModelHelper::BuildBasisVectorAndResponseArray(data_entry_list) };
+        const auto & X{ std::get<0>(data_array) };
+        const auto & y{ std::get<1>(data_array) };
+
         Eigen::VectorXd beta_ols;
         Eigen::VectorXd beta_mdpde;
         double sigma_square;
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
-        estimator->RunBetaMDPDE(
-            data_entry, alpha_r, beta_ols, beta_mdpde, sigma_square, W, capital_sigma);
+        HRLModelHelper::AlgorithmBetaMDPDE(
+            alpha_r, X, y,
+            beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
+        );
 
         auto model_par_local{ m_model_par_local_list.at(i) };
         auto model_par_0{ m_model_par_0_list.at(i) };

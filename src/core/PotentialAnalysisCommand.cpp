@@ -557,12 +557,6 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
 {
     auto atom_size{ atom_list.size() };
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
-
-    const int basis_size{ 2 };
-    auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
-    estimator->SetQuietMode();
-    estimator->SetThreadSize(1);
-
     std::atomic<size_t> atom_count{ 0 };
     Eigen::ArrayXd beta_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
 
@@ -574,7 +568,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
         auto local_entry{ atom_list[i]->GetLocalPotentialEntry() };
         const auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
         auto error_array{
-            estimator->RunAlphaRTraining(data_entry_list, subset_size, alpha_list)
+            HRLModelHelper::RunAlphaRTraining(data_entry_list, subset_size, alpha_list)
         };
         
 #ifdef USE_OPENMP
@@ -603,12 +597,6 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     const std::vector<double> & alpha_list)
 {
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
-
-    const int basis_size{ 2 };
-    auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
-    estimator->SetQuietMode();
-    estimator->SetThreadSize(1);
-
     auto group_size{ atom_list_set.size() };
     std::atomic<size_t> group_count{ 0 };
     Eigen::ArrayXd mu_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
@@ -629,7 +617,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
         }
 
         auto error_array{
-            estimator->RunAlphaGTraining(data_entry_list, subset_size, alpha_list)
+            HRLModelHelper::RunAlphaGTraining(data_entry_list, subset_size, alpha_list)
         };
         
 #ifdef USE_OPENMP
@@ -658,8 +646,6 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(void)
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
     if (m_model_object == nullptr) return;
 
-    const int basis_size{ 2 };
-
     std::atomic<size_t> atom_count{ 0 };
     auto & selected_atom_list{ m_model_object->GetSelectedAtomList() };
     auto selected_atom_size{ selected_atom_list.size() };
@@ -672,17 +658,19 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(void)
     {
         auto local_entry{ selected_atom_list[i]->GetLocalPotentialEntry() };
         auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
-        auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
-        estimator->SetQuietMode();
-        estimator->SetThreadSize(1);
+        auto data_array{ HRLModelHelper::BuildBasisVectorAndResponseArray(data_entry_list) };
+        const auto & X{ std::get<0>(data_array) };
+        const auto & y{ std::get<1>(data_array) };
+
         Eigen::VectorXd beta_ols;
         Eigen::VectorXd beta_mdpde;
         double sigma_square;
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
-        estimator->RunBetaMDPDE(
-            data_entry_list, local_entry->GetAlphaR(), beta_ols, beta_mdpde,
-            sigma_square, W, capital_sigma);
+        HRLModelHelper::AlgorithmBetaMDPDE(
+            local_entry->GetAlphaR(), X, y,
+            beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
+        );
 
         local_entry->SetBetaEstimateOLS(beta_ols);
         local_entry->SetBetaEstimateMDPDE(beta_mdpde);
@@ -714,8 +702,6 @@ void PotentialAnalysisCommand::RunLocalBondFitting(void)
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalBondFitting");
     if (m_model_object == nullptr) return;
 
-    const int basis_size{ 2 };
-
     std::atomic<size_t> atom_count{ 0 };
     auto & selected_bond_list{ m_model_object->GetSelectedBondList() };
     auto selected_bond_size{ selected_bond_list.size() };
@@ -728,17 +714,19 @@ void PotentialAnalysisCommand::RunLocalBondFitting(void)
     {
         auto local_entry{ selected_bond_list[i]->GetLocalPotentialEntry() };
         auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
-        auto estimator{ std::make_unique<HRLModelHelper>(basis_size, 1) };
-        estimator->SetQuietMode();
-        estimator->SetThreadSize(1);
+        auto data_array{ HRLModelHelper::BuildBasisVectorAndResponseArray(data_entry_list) };
+        const auto & X{ std::get<0>(data_array) };
+        const auto & y{ std::get<1>(data_array) };
+
         Eigen::VectorXd beta_ols;
         Eigen::VectorXd beta_mdpde;
         double sigma_square;
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
-        estimator->RunBetaMDPDE(
-            data_entry_list, local_entry->GetAlphaR(), beta_ols, beta_mdpde,
-            sigma_square, W, capital_sigma);
+        HRLModelHelper::AlgorithmBetaMDPDE(
+            local_entry->GetAlphaR(), X, y,
+            beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
+        );
 
         local_entry->SetBetaEstimateOLS(beta_ols);
         local_entry->SetBetaEstimateMDPDE(beta_mdpde);
@@ -810,7 +798,6 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
                 data_covariance_list.emplace_back(entry->GetDataCovariance());
             }
             auto model_estimator{ std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(group_size)) };
-            model_estimator->SetThreadSize(1);
             model_estimator->SetMemberDataEntriesList(data_entry_list);
             model_estimator->SetMemberBetaMDPDEList(
                 beta_mdpde_list, sigma_square_list, data_weight_list, data_covariance_list
@@ -818,7 +805,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
             auto alpha_g{ (m_options.use_training_alpha) ?
                 group_potential_entry->GetAlphaG(group_key) : m_options.alpha_g
             };
-            model_estimator->RunGroupEstimation(alpha_g);
+            model_estimator->RunGroupEstimation(alpha_g, 1);
 
             auto gaus_group_mean{
                 GausLinearTransformHelper::BuildGaus3DModel(model_estimator->GetMuVectorMean())
@@ -925,13 +912,12 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
                 data_covariance_list.emplace_back(entry->GetDataCovariance());
             }
             auto model_estimator{ std::make_unique<HRLModelHelper>(basis_size, static_cast<int>(group_size)) };
-            model_estimator->SetThreadSize(1);
             model_estimator->SetMemberDataEntriesList(data_entry_list);
             model_estimator->SetMemberBetaMDPDEList(
                 beta_mdpde_list, sigma_square_list, data_weight_list, data_covariance_list
             );
             auto alpha_g{ m_options.alpha_g };
-            model_estimator->RunGroupEstimation(alpha_g);
+            model_estimator->RunGroupEstimation(alpha_g, 1);
 
             auto gaus_group_mean{
                 GausLinearTransformHelper::BuildGaus2DModel(model_estimator->GetMuVectorMean())

@@ -13,12 +13,13 @@
 
 class HRLModelHelper
 {
-    bool m_quiet_mode;
+    static constexpr int DEFAULT_MAXIMUM_ITERATION{ 100 };
+    static constexpr double DEFAULT_TOLERANCE{ 1.0e-5 };
+    static constexpr double DEFAULT_WEIGHT_DATA_MIN{ 1.0e-8 };
+    static constexpr double DEFAULT_WEIGHT_MEMBER_MIN{ 1.0e-2 };
+    
     const int m_basis_size;
     int m_member_size; ///< The size of atomic member (number of members)  \f$ I \f$
-    int m_maximum_iteration; ///< The upper limit of iteration (default = 100)
-    double m_tolerance; ///< The tolerance for algorithms (default = \f$ 10^{-5} \f$)
-    double m_omega_sum; ///< The sum of member weights \f$ \Omega^{(t)} = \sum_{0}^{I-1}\omega_{i}^{(t)} \f$
 
     /**
      * @brief   The list of model basis matrix \f$ \boldsymbol{X}_{i} \f$
@@ -110,62 +111,45 @@ class HRLModelHelper
      */
     Eigen::MatrixXd m_capital_lambda;
 
-
     Eigen::VectorXd m_mu_MDPDE, m_mu_prior, m_mu_mean; // [basis_size x 1]
     Eigen::MatrixXd m_beta_MDPDE_array, m_beta_posterior_array; // [basis_size x member_size]
 
 public:
-    static constexpr int DEFAULT_MAXIMUM_ITERATION{ 100 };
-    static constexpr double DEFAULT_TOLERANCE{ 1.0e-5 };
-    static constexpr double DEFAULT_WEIGHT_DATA_MIN{ 1.0e-8 };
-    static constexpr double DEFAULT_WEIGHT_MEMBER_MIN{ 1.0e-2 };
-
     HRLModelHelper(void) = delete;
     explicit HRLModelHelper(int basis_size, int member_size);
     ~HRLModelHelper();
 
-    void SetQuietMode(void) { m_quiet_mode = true; }
-    void SetThreadSize(int thread_size);
-    void SetMaximumIteration(int size);
-    void SetTolerance(double value);
-    void SetMemberDataEntriesList(const std::vector<std::vector<Eigen::VectorXd>> & data_list);
+    void SetMemberDataEntriesList(
+        const std::vector<std::vector<Eigen::VectorXd>> & data_list
+    );
     void SetMemberBetaMDPDEList(
         const std::vector<Eigen::VectorXd> & beta_list,
         const std::vector<double> & sigma_square_list,
         const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & W_list,
         const std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> & capital_sigma_list
     );
-
-    std::tuple<Eigen::MatrixXd, Eigen::VectorXd> BuildBasisVectorAndResponseArray(
-        const std::vector<Eigen::VectorXd> & data_vector
-    );
-    
-    void RunGroupEstimation(double alpha_g);
-    void RunBetaMDPDE(
-        const std::vector<Eigen::VectorXd> & data_vector,
-        double alpha_r,
-        Eigen::VectorXd & beta_OLS,
-        Eigen::VectorXd & beta_MDPDE,
-        double & sigma_square,
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma
-    );
-    void RunMuMDPDE(
-        const std::vector<Eigen::VectorXd> & beta_list,
+    void RunGroupEstimation(
         double alpha_g,
-        Eigen::VectorXd & mu_median,
-        Eigen::VectorXd & mu_MDPDE,
-        Eigen::ArrayXd & omega_array,
-        double & omega_sum,
-        Eigen::MatrixXd & capital_lambda,
-        std::vector<Eigen::MatrixXd> & member_capital_lambda_list
+        bool quiet_mode = false,
+        int thread_size = 1,
+        int iteration = DEFAULT_MAXIMUM_ITERATION,
+        double tolerance = DEFAULT_TOLERANCE
     );
-    Eigen::VectorXd RunAlphaRTraining(
+
+    static std::tuple<Eigen::MatrixXd, Eigen::VectorXd> BuildBasisVectorAndResponseArray(
+        const std::vector<Eigen::VectorXd> & data_vector,
+        bool quiet_mode = false
+    );
+    static Eigen::MatrixXd ConvertBetaListToMatrix(
+        const std::vector<Eigen::VectorXd> & beta_list,
+        bool quiet_mode = false
+    );
+    static Eigen::VectorXd RunAlphaRTraining(
         const std::vector<Eigen::VectorXd> & data_list,
         const size_t subset_size,
         const std::vector<double> & alpha_list
     );
-    Eigen::VectorXd RunAlphaGTraining(
+    static Eigen::VectorXd RunAlphaGTraining(
         const std::vector<Eigen::VectorXd> & data_list,
         const size_t subset_size,
         const std::vector<double> & alpha_list
@@ -179,10 +163,11 @@ public:
         double & sigma_square,
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> & W,
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> & capital_sigma,
+        bool quiet_mode = false,
+        int thread_size = 1,
         int iteration = DEFAULT_MAXIMUM_ITERATION,
         double tolerance = DEFAULT_TOLERANCE,
-        double weight_min = DEFAULT_WEIGHT_DATA_MIN,
-        bool quite_mode = false
+        double weight_min = DEFAULT_WEIGHT_DATA_MIN
     );
     static bool AlgorithmMuMDPDE(
         double alpha_g,
@@ -193,10 +178,11 @@ public:
         double & omega_sum,
         Eigen::MatrixXd & capital_lambda,
         std::vector<Eigen::MatrixXd> & member_capital_lambda_list,
+        bool quiet_mode = false,
+        int thread_size = 1,
         int iteration = DEFAULT_MAXIMUM_ITERATION,
         double tolerance = DEFAULT_TOLERANCE,
-        double weight_min = DEFAULT_WEIGHT_MEMBER_MIN,
-        bool quite_mode = false
+        double weight_min = DEFAULT_WEIGHT_MEMBER_MIN
     );
     static bool AlgorithmWEB(
         const std::vector<Eigen::MatrixXd> & X_list,
@@ -207,7 +193,8 @@ public:
         Eigen::VectorXd & mu_prior,
         Eigen::MatrixXd & beta_posterior_array,
         std::vector<Eigen::MatrixXd> & capital_sigma_posterior_list,
-        bool quite_mode = false
+        bool quiet_mode = false,
+        int thread_size = 1
     );
     
     bool GetOutlierFlag(int id) const;
@@ -223,21 +210,11 @@ private:
     void ValidateBasisSize(int size) const;
     void ValidateMemberSize(int size) const;
     void ValidateMemberId(int id) const;
-    static void ValidateAlpha(double alpha);
-    void PrepareDataSubset(
-        const std::vector<Eigen::VectorXd> & data_list,
-        size_t subset_size,
-        std::vector<std::vector<Eigen::VectorXd>> & data_subset_list
-    ) const;
-    void PrepareTestAndTrainingDataSet(
-        const std::vector<std::vector<Eigen::VectorXd>> & data_subset_list,
-        size_t subset_size,
-        size_t total_entries_size,
-        std::vector<std::vector<Eigen::VectorXd>> & data_set_test,
-        std::vector<std::vector<Eigen::VectorXd>> & data_set_training
-    ) const;
-    Eigen::MatrixXd ConvertBetaListToMatrix(const std::vector<Eigen::VectorXd> & beta_list) const;
 
+    static void ValidateAlpha(double alpha);
+    static void ValidateMaximumIteration(int size);
+    static void ValidateTolerance(double value);
+    static void SetThreadSize(int thread_size);
     static Eigen::VectorXd CalculateBetaByOLS(
         const Eigen::MatrixXd & X,
         const Eigen::VectorXd & y
