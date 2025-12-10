@@ -5,7 +5,6 @@
 #include "Logger.hpp"
 
 #include <cmath>
-#include <random>
 #include <limits>
 #include <utility>
 #include <memory>
@@ -24,136 +23,126 @@ int ValidatePositive(int value, const char * name)
 }
 } // namespace
 
-HRLModelTester::HRLModelTester(int model_par_size, int linear_basis_size) :
-    m_model_par_size{ ValidatePositive(model_par_size, "model_par_size") },
+HRLModelTester::HRLModelTester(int gaus_par_size, int linear_basis_size, int replica_size) :
+    m_gaus_par_size{ ValidatePositive(gaus_par_size, "gaus_par_size") },
     m_linear_basis_size{ ValidatePositive(linear_basis_size, "linear_basis_size") },
     m_member_size{ 1 },
-    m_replica_size{ 100 },
+    m_replica_size{ replica_size },
     m_sampling_entry_size{ 1000 },
     m_x_min{ 0.0 }, m_x_max{ 1.0 },
     m_data_error_sigma{ 0.05 },
-    m_model_par_prior{ Eigen::VectorXd::Zero(m_model_par_size) },
-    m_model_par_sigma{ Eigen::VectorXd::Ones(m_model_par_size) },
-    m_sampling_entries_list{},
-    m_data_array{},
-    m_local_estimate_mean_ols{ Eigen::VectorXd::Zero(m_model_par_size) },
-    m_local_estimate_mean_mdpde{ Eigen::VectorXd::Zero(m_model_par_size) }
+    m_outlier_ratio{ 0.0 },
+    m_gaus_par_prior{ Eigen::VectorXd::Zero(m_gaus_par_size) },
+    m_gaus_par_sigma{ Eigen::VectorXd::Ones(m_gaus_par_size) }
 {
 }
 
-HRLModelTester::HRLModelTester(int model_par_size, int linear_basis_size, int member_size) :
-    m_model_par_size{ ValidatePositive(model_par_size, "model_par_size") },
-    m_linear_basis_size{ ValidatePositive(linear_basis_size, "linear_basis_size") },
-    m_member_size{ ValidatePositive(member_size, "member_size") },
-    m_sampling_entry_size{ 1000 },
-    m_x_min{ 0.0 }, m_x_max{ 1.0 },
-    m_data_error_sigma{ 0.05 },
-    m_model_par_prior{ Eigen::VectorXd::Zero(m_model_par_size) },
-    m_model_par_sigma{ Eigen::VectorXd::Ones(m_model_par_size) },
-    m_sampling_entries_list{},
-    m_data_array{},
-    m_local_estimate_mean_ols{ Eigen::VectorXd::Zero(m_model_par_size) },
-    m_local_estimate_mean_mdpde{ Eigen::VectorXd::Zero(m_model_par_size) },
-    m_local_estimate_mean_posterior{ Eigen::VectorXd::Zero(m_model_par_size) },
-    m_group_estimate_residual_mean{ Eigen::VectorXd::Zero(m_model_par_size) },
-    m_group_estimate_residual_mdpde{ Eigen::VectorXd::Zero(m_model_par_size) },
-    m_group_estimate_residual_hrl{ Eigen::VectorXd::Zero(m_model_par_size) }
+void HRLModelTester::SetGausParametersPrior(const Eigen::VectorXd & gaus_par_prior)
 {
-    auto size{ static_cast<size_t>(m_member_size) };
-    m_sampling_entries_list.reserve(size);
-    m_data_array.reserve(size);
-    m_model_par_local_list.reserve(size);
-    m_model_par_0_list.reserve(size);
-    m_local_estimate_residual_ols_list.reserve(size);
-    m_local_estimate_residual_mdpde_list.reserve(size);
-    m_local_estimate_residual_posterior_list.reserve(size);
-    m_local_estimate_deviation_ols_list.reserve(size);
-    m_local_estimate_deviation_mdpde_list.reserve(size);
-    m_local_estimate_deviation_posterior_list.reserve(size);
+    CheckGausParametersDimension(gaus_par_prior);
+    m_gaus_par_prior = gaus_par_prior;
 }
 
-void HRLModelTester::SetModelParametersPrior(const Eigen::VectorXd & model_par_prior)
+void HRLModelTester::SetGausParametersSigma(const Eigen::VectorXd & gaus_par_sigma)
 {
-    CheckModelParametersDimension(model_par_prior);
-    m_model_par_prior = model_par_prior;
+    CheckGausParametersDimension(gaus_par_sigma);
+    m_gaus_par_sigma = gaus_par_sigma;
 }
 
-void HRLModelTester::SetModelParametersSigma(const Eigen::VectorXd & model_par_sigma)
+Eigen::MatrixXd HRLModelTester::BuildRandomGausParameters(int replica_size)
 {
-    CheckModelParametersDimension(model_par_sigma);
-    m_model_par_sigma = model_par_sigma;
-}
-
-void HRLModelTester::BuildDataArray(int replica_size)
-{
-    std::random_device random_device;
-    std::mt19937 generator{ random_device() };
-    std::vector<std::normal_distribution<>> dist_model_par_list;
-    for (int p = 0; p < m_model_par_size; p++)
+    std::vector<std::normal_distribution<>> dist_gaus_par_list;
+    for (int p = 0; p < m_gaus_par_size; p++)
     {
-        std::normal_distribution<> dist_model_par(m_model_par_prior(p), m_model_par_sigma(p));
-        dist_model_par_list.emplace_back(dist_model_par);
+        std::normal_distribution<> dist_gaus_par(m_gaus_par_prior(p), m_gaus_par_sigma(p));
+        dist_gaus_par_list.emplace_back(dist_gaus_par);
     }
 
-    m_data_array.clear();
-    m_data_array.reserve(static_cast<size_t>(replica_size));
-    m_model_par_local_list.reserve(static_cast<size_t>(replica_size));
-    m_model_par_0_list.reserve(static_cast<size_t>(replica_size));
+    Eigen::MatrixXd gaus_par_matrix{ Eigen::MatrixXd::Zero(m_gaus_par_size, replica_size) };
     for (int i = 0; i < replica_size; i++)
     {
-        Eigen::VectorXd model_par_local{ Eigen::VectorXd::Zero(m_model_par_size) };
-        for (int p = 0; p < m_model_par_size; p++)
+        Eigen::VectorXd gaus_par{ Eigen::VectorXd::Zero(m_gaus_par_size) };
+        for (int p = 0; p < m_gaus_par_size; p++)
         {
-            model_par_local(p) = dist_model_par_list.at(static_cast<size_t>(p))(generator);
+            gaus_par(p) = dist_gaus_par_list.at(static_cast<size_t>(p))(m_generator);
         }
-
-        auto sampling_entries{ BuildRandomSamplingEntry(m_sampling_entry_size, model_par_local) };
-        Eigen::VectorXd model_par_0{ CalculateMoment(sampling_entries) };
-        m_sampling_entries_list.emplace_back(sampling_entries);
-        auto data_vector_list{
-            GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
-        };
-        m_data_array.emplace_back(std::move(data_vector_list));
-        m_model_par_local_list.emplace_back(model_par_local);
-        m_model_par_0_list.emplace_back(model_par_0);
+        gaus_par_matrix.col(i) = gaus_par;
     }
+    return gaus_par_matrix;
 }
 
-std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomSamplingEntry(
-    size_t sampling_entry_size, const Eigen::VectorXd & model_par)
+std::vector<std::tuple<float, float>> HRLModelTester::BuildRandomGausSamplingEntry(
+    size_t sampling_entry_size, const Eigen::VectorXd & gaus_par, double outlier_ratio)
 {
-    CheckModelParametersDimension(model_par);
-    auto amplitude{ model_par(0) };
-    auto width{ model_par(1) };
-    //auto intersect{ model_par(2) };
+    CheckGausParametersDimension(gaus_par);
+    auto amplitude{ gaus_par(0) };
+    auto width{ gaus_par(1) };
+    //auto intersect{ gaus_par(2) };
     auto intersect{ 0.0 };
-    std::random_device random_device;
-    std::mt19937 generator{ random_device() };
     std::uniform_real_distribution<> dist_distance(m_x_min, m_x_max);
-    std::normal_distribution<> dist_error(0.0, m_data_error_sigma);
+    std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
     std::vector<std::tuple<float, float>> sampling_entry_list;
     sampling_entry_list.reserve(sampling_entry_size);
     for (size_t i = 0; i < sampling_entry_size; i++)
     {
-        auto r{ dist_distance(generator) };
-        auto error{ dist_error(generator) };
+        auto r{ dist_distance(m_generator) };
         auto y{
-            amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(r, width)
-            + intersect + error
+            amplitude * GausLinearTransformHelper::GetGaussianResponseAtDistance(r, width) + intersect
         };
-        if (y <= 0.0) continue;
+        auto y_outlier{ 0.5 * amplitude * std::pow(Constants::two_pi * std::pow(width, 2), -1.5) };
+        if (dist_outlier(m_generator) < outlier_ratio)
+        {
+            y = y_outlier;
+        }
         sampling_entry_list.emplace_back(r, y);
     }
     return sampling_entry_list;
 }
 
-bool HRLModelTester::RunBetaEstimateTest(double alpha_r)
+std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntry(
+    size_t sampling_entry_size,
+    const Eigen::VectorXd & gaus_par,
+    double error_sigma,
+    double outlier_ratio)
 {
-    BuildDataArray(m_replica_size);
-
-    for (size_t i = 0; i < static_cast<size_t>(m_replica_size); i++)
+    auto sampling_entries{ BuildRandomGausSamplingEntry(sampling_entry_size, gaus_par, outlier_ratio) };
+    auto linear_data_entry_list{
+        GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
+    };
+    auto max_response{
+        gaus_par(0) * GausLinearTransformHelper::GetGaussianResponseAtDistance(0.0, gaus_par(1))
+    };
+    std::normal_distribution<> dist_error(0.0, error_sigma * max_response);
+    for (auto & data_entry : linear_data_entry_list)
     {
-        const auto & data_entry_list{ m_data_array.at(i) };
+        data_entry(m_linear_basis_size) += dist_error(m_generator);
+    }
+    return linear_data_entry_list;
+}
+
+bool HRLModelTester::RunBetaMDPDETest(
+    double alpha_r,
+    Eigen::VectorXd & residual_mean_ols,
+    Eigen::VectorXd & residual_mean_mdpde,
+    Eigen::VectorXd & residual_sigma_ols,
+    Eigen::VectorXd & residual_sigma_mdpde,
+    int thread_size)
+{
+    auto gaus_par_local_matrix{ BuildRandomGausParameters(m_replica_size) };
+    Eigen::MatrixXd gaus_residual_matrix_ols(m_gaus_par_size, m_replica_size);
+    Eigen::MatrixXd gaus_residual_matrix_mdpde(m_gaus_par_size, m_replica_size);
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+#endif
+    for (int i = 0; i < m_replica_size; i++)
+    {
+        Eigen::VectorXd gaus_true{ gaus_par_local_matrix.col(i) };
+        auto data_entry_list{
+            BuildRandomLinearDataEntry(
+                m_sampling_entry_size, gaus_true, m_data_error_sigma, m_outlier_ratio
+            )
+        };
         auto data_array{ HRLModelHelper::BuildBasisVectorAndResponseArray(data_entry_list) };
         const auto & X{ std::get<0>(data_array) };
         const auto & y{ std::get<1>(data_array) };
@@ -168,66 +157,39 @@ bool HRLModelTester::RunBetaEstimateTest(double alpha_r)
             beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
         );
 
-        auto model_par_local{ m_model_par_local_list.at(i) };
-        auto model_par_0{ m_model_par_0_list.at(i) };
-        auto local_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, model_par_0) };
-        auto local_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, model_par_0) };
-        m_local_estimate_residual_ols_list.emplace_back(CalculateResidual(local_ols, model_par_local));
-        m_local_estimate_residual_mdpde_list.emplace_back(CalculateResidual(local_mdpde, model_par_local));
-        m_local_estimate_deviation_ols_list.emplace_back(local_ols);
-        m_local_estimate_deviation_mdpde_list.emplace_back(local_mdpde);
-        m_local_estimate_mean_ols += local_ols;
-        m_local_estimate_mean_mdpde += local_mdpde;
+        Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
+        auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, gaus_0) };
+        auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, gaus_0) };
+        gaus_residual_matrix_ols.col(i) = CalculateResidual(gaus_ols, gaus_true);
+        gaus_residual_matrix_mdpde.col(i) = CalculateResidual(gaus_mdpde, gaus_true);
     }
-    m_local_estimate_mean_ols /= m_replica_size;
-    m_local_estimate_mean_mdpde /= m_replica_size;
-
-    for (size_t i = 0; i < static_cast<size_t>(m_replica_size); i++)
-    {
-        m_local_estimate_deviation_ols_list.at(i) -= m_local_estimate_mean_ols;
-        m_local_estimate_deviation_mdpde_list.at(i) -= m_local_estimate_mean_mdpde;
-    }
+    residual_mean_ols = gaus_residual_matrix_ols.rowwise().mean();
+    residual_mean_mdpde = gaus_residual_matrix_mdpde.rowwise().mean();
+    residual_sigma_ols = (gaus_residual_matrix_ols.colwise() - residual_mean_ols).rowwise().norm() / std::sqrt(m_replica_size - 1);
+    residual_sigma_mdpde = (gaus_residual_matrix_mdpde.colwise() - residual_mean_mdpde).rowwise().norm() / std::sqrt(m_replica_size - 1);
     
     return true;
 }
 
-bool HRLModelTester::CheckModelParametersDimension(const Eigen::VectorXd & model_par)
+bool HRLModelTester::CheckGausParametersDimension(const Eigen::VectorXd & gaus_par)
 {
-    if (model_par.rows() != m_model_par_size)
+    if (gaus_par.rows() != m_gaus_par_size)
     {
         throw std::invalid_argument("model parameters size invalid, must be : " +
-            std::to_string(m_model_par_size));
+            std::to_string(m_gaus_par_size));
     }
     return true;
 }
 
 Eigen::VectorXd HRLModelTester::CalculateResidual(
-    const Eigen::VectorXd & estimate, const Eigen::VectorXd & true_value)
+    const Eigen::VectorXd & estimate, const Eigen::VectorXd & truth)
 {
-    if (estimate.rows() != true_value.rows())
+    if (estimate.rows() != truth.rows())
     {
         Logger::Log(LogLevel::Error,
             "estimate size " + std::to_string(estimate.rows()) +
-            " != model size " + std::to_string(true_value.rows()));
+            " != model size " + std::to_string(truth.rows()));
         throw std::invalid_argument("model parameters size inconsistant.");
     }
-    return ((estimate - true_value).array() / true_value.array());
-}
-
-Eigen::VectorXd HRLModelTester::CalculateMoment(
-    const std::vector<std::tuple<float, float>> & sampling_entries) const
-{
-    Eigen::VectorXd model_par{ Eigen::VectorXd::Zero(3) };
-    double m_0{ 0.0 }, m_2{ 0.0 };
-    double y_max{ 0.0 };
-    for (auto & [r, y] : sampling_entries)
-    {
-        auto y_new{ y - model_par(2) };
-        m_0 += y_new;
-        m_2 += y_new * r * r;
-        y_max = std::max(y_max, y_new);
-    }
-    model_par(1) = std::sqrt(m_2 / m_0 / 3.0);
-    model_par(0) = y_max / GausLinearTransformHelper::GetGaussianResponseAtDistance(0.0, model_par(1));
-    return model_par;
+    return ((estimate - truth).array() / truth.array());
 }
