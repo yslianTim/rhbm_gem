@@ -110,7 +110,8 @@ void GausPainter::PaintAtomLocalGausSummary(
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
-    auto show_outlier{ true };
+    //auto class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+    auto show_outlier{ false };
 
     #ifdef HAVE_ROOT
 
@@ -178,8 +179,8 @@ void GausPainter::PaintAtomLocalGausSummary(
             auto amplitude_error{ entry_iter->GetAtomGausVariancePrior(group_key, class_key, 0) };
             auto width_prior{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1) };
             auto width_error{ entry_iter->GetAtomGausVariancePrior(group_key, class_key, 1) };
-            result_text->AddText(Form("#font[2]{A} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
-            result_text->AddText(Form("#tau = %.2f #pm %.2f", width_prior, width_error));
+            result_text->AddText(Form("#font[2]{#hat{A}} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
+            result_text->AddText(Form("#hat{#tau} = %.2f #pm %.2f", width_prior, width_error));
             result_text->Draw();
 
             pad[2]->cd();
@@ -261,7 +262,7 @@ void GausPainter::PaintAtomLocalGausSummary(
                 auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
                 auto graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
                 auto is_outlier{ atom_iter->IsOutlierAtom(class_key) };
-                auto line_color{ is_outlier ? kRed+1 : kAzure-7 };
+                auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
                 auto range_in_graph{ ROOTHelper::GetRangeInGraph(graph.get()) };
@@ -314,7 +315,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             legend->AddEntry(gaus_prior.get(),
                 "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
-                "Map Value", "l");
+                "Members of Value", "l");
             legend->Draw();
 
             auto count_text{ ROOTHelper::CreatePaveText(0.45, 0.75, 1.00, 0.90, "nbNDC", false) };
@@ -334,7 +335,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             ROOTHelper::SetFillAttribute(alpha_text.get(), 4000);
             auto alpha_g{ entry_iter->GetAtomAlphaG(group_key, class_key) };
             alpha_text->AddText(Form("#alpha_{g} = %.1f", alpha_g));
-            alpha_text->Draw();
+            //alpha_text->Draw();
             
             ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
         }
@@ -729,8 +730,9 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChain(
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
 
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
-    
+    //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+
     #ifdef HAVE_ROOT
 
     gStyle->SetLineScalePS(2.0);

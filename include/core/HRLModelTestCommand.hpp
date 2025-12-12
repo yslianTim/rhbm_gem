@@ -2,6 +2,9 @@
 
 #include <CLI/CLI.hpp>
 #include <filesystem>
+#include <string>
+#include <vector>
+#include <Eigen/Dense>
 
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
@@ -41,5 +44,13 @@ private:
     void RunSimulationTestOnMemberOutlier(void);
     void RunSimulationTestOnModelAlphaData(void);
     void RunSimulationTestOnModelAlphaMember(void);
+    void PrintDataOutlierResult(
+        const std::string & name,
+        const std::vector<double> & outlier_list,
+        const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
+        const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
+        const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
+        const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list
+    );
 
 };

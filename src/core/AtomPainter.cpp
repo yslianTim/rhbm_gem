@@ -233,7 +233,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         auto width_prior{ entry_iter->GetWidthEstimateMDPDE() };
         result_text->AddText(Form("#font[2]{A} = %.2f", amplitude_prior));
         result_text->AddText(Form("#tau = %.2f", width_prior));
-        result_text->Draw();
+        //result_text->Draw();
 
         pad[1]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
@@ -272,7 +272,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         ROOTHelper::SetLineAttribute(gaus_function_mdpde.get(), 2, 3, kRed);
         ROOTHelper::SetLineAttribute(gaus_function_ols.get(), 3, 3, kBlue);
         gaus_function_mdpde->Draw("SAME");
-        gaus_function_ols->Draw("SAME");
+        //gaus_function_ols->Draw("SAME");
 
         auto legend{ ROOTHelper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
         ROOTHelper::SetLegendDefaultStyle(legend.get());
@@ -292,7 +292,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         ROOTHelper::SetFillAttribute(alpha_text.get(), 4000);
         auto alpha_r{ entry_iter->GetAlphaR() };
         alpha_text->AddText(Form("#alpha_{r} = %.1f", alpha_r));
-        alpha_text->Draw();
+        //alpha_text->Draw();
 
         pad[2]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);
@@ -328,7 +328,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         ROOTHelper::SetLineAttribute(linear_model_mdpde.get(), 2, 3, kRed);
         ROOTHelper::SetLineAttribute(linear_model_ols.get(), 3, 3, kBlue);
         linear_model_mdpde->Draw("SAME");
-        linear_model_ols->Draw("SAME");
+        //linear_model_ols->Draw("SAME");
 
         pad[3]->cd();
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);

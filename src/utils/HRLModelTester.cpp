@@ -26,45 +26,43 @@ int ValidatePositive(int value, const char * name)
 HRLModelTester::HRLModelTester(int gaus_par_size, int linear_basis_size, int replica_size) :
     m_gaus_par_size{ ValidatePositive(gaus_par_size, "gaus_par_size") },
     m_linear_basis_size{ ValidatePositive(linear_basis_size, "linear_basis_size") },
-    m_member_size{ 1 },
     m_replica_size{ replica_size },
-    m_sampling_entry_size{ 1000 },
-    m_x_min{ 0.0 }, m_x_max{ 1.0 },
-    m_data_error_sigma{ 0.05 },
-    m_outlier_ratio{ 0.0 },
-    m_gaus_par_prior{ Eigen::VectorXd::Zero(m_gaus_par_size) },
-    m_gaus_par_sigma{ Eigen::VectorXd::Ones(m_gaus_par_size) }
+    m_x_min{ 0.0 }, m_x_max{ 1.0 }
 {
 }
 
-void HRLModelTester::SetGausParametersPrior(const Eigen::VectorXd & gaus_par_prior)
+Eigen::MatrixXd HRLModelTester::BuildRandomGausParameters(
+    int member_size,
+    const Eigen::VectorXd & gaus_prior,
+    const Eigen::VectorXd & gaus_sigma,
+    const Eigen::VectorXd & outlier_prior,
+    const Eigen::VectorXd & outlier_sigma,
+    const Eigen::VectorXd & outlier_ratio)
 {
-    CheckGausParametersDimension(gaus_par_prior);
-    m_gaus_par_prior = gaus_par_prior;
-}
-
-void HRLModelTester::SetGausParametersSigma(const Eigen::VectorXd & gaus_par_sigma)
-{
-    CheckGausParametersDimension(gaus_par_sigma);
-    m_gaus_par_sigma = gaus_par_sigma;
-}
-
-Eigen::MatrixXd HRLModelTester::BuildRandomGausParameters(int replica_size)
-{
-    std::vector<std::normal_distribution<>> dist_gaus_par_list;
+    std::uniform_real_distribution<> dist_outlier(0.0, 1.0);
+    std::vector<std::normal_distribution<>> dist_gaus_list;
+    std::vector<std::normal_distribution<>> dist_outlier_list;
     for (int p = 0; p < m_gaus_par_size; p++)
     {
-        std::normal_distribution<> dist_gaus_par(m_gaus_par_prior(p), m_gaus_par_sigma(p));
-        dist_gaus_par_list.emplace_back(dist_gaus_par);
+        std::normal_distribution<> dist_gaus_par(gaus_prior(p), gaus_sigma(p));
+        std::normal_distribution<> dist_outlier_par(outlier_prior(p), outlier_sigma(p));
+        dist_gaus_list.emplace_back(dist_gaus_par);
+        dist_outlier_list.emplace_back(dist_outlier_par);
     }
 
-    Eigen::MatrixXd gaus_par_matrix{ Eigen::MatrixXd::Zero(m_gaus_par_size, replica_size) };
-    for (int i = 0; i < replica_size; i++)
+    Eigen::MatrixXd gaus_par_matrix{ Eigen::MatrixXd::Zero(m_gaus_par_size, member_size) };
+    for (int i = 0; i < member_size; i++)
     {
         Eigen::VectorXd gaus_par{ Eigen::VectorXd::Zero(m_gaus_par_size) };
+        Eigen::VectorXd outlier_par{ Eigen::VectorXd::Zero(m_gaus_par_size) };
         for (int p = 0; p < m_gaus_par_size; p++)
         {
-            gaus_par(p) = dist_gaus_par_list.at(static_cast<size_t>(p))(m_generator);
+            gaus_par(p) = dist_gaus_list.at(static_cast<size_t>(p))(m_generator);
+            outlier_par(p) = dist_outlier_list.at(static_cast<size_t>(p))(m_generator);
+            if (dist_outlier(m_generator) < outlier_ratio(p))
+            {
+                gaus_par(p) = outlier_par(p);
+            }
         }
         gaus_par_matrix.col(i) = gaus_par;
     }
@@ -105,7 +103,9 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntry(
     double error_sigma,
     double outlier_ratio)
 {
-    auto sampling_entries{ BuildRandomGausSamplingEntry(sampling_entry_size, gaus_par, outlier_ratio) };
+    auto sampling_entries{
+        BuildRandomGausSamplingEntry(static_cast<size_t>(sampling_entry_size), gaus_par, outlier_ratio)
+    };
     auto linear_data_entry_list{
         GausLinearTransformHelper::MapValueTransform(sampling_entries, m_x_min, m_x_max)
     };
@@ -121,53 +121,155 @@ std::vector<Eigen::VectorXd> HRLModelTester::BuildRandomLinearDataEntry(
 }
 
 bool HRLModelTester::RunBetaMDPDETest(
-    double alpha_r,
-    Eigen::VectorXd & residual_mean_ols,
-    Eigen::VectorXd & residual_mean_mdpde,
-    Eigen::VectorXd & residual_sigma_ols,
-    Eigen::VectorXd & residual_sigma_mdpde,
+    const std::vector<double> & alpha_r_list,
+    std::vector<Eigen::VectorXd> & residual_mean_ols_list,
+    std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
+    std::vector<Eigen::VectorXd> & residual_sigma_ols_list,
+    std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
+    const Eigen::VectorXd & gaus_true,
+    int sampling_entry_size,
+    double data_error_sigma,
+    double outlier_ratio,
     int thread_size)
 {
-    auto gaus_par_local_matrix{ BuildRandomGausParameters(m_replica_size) };
-    Eigen::MatrixXd gaus_residual_matrix_ols(m_gaus_par_size, m_replica_size);
-    Eigen::MatrixXd gaus_residual_matrix_mdpde(m_gaus_par_size, m_replica_size);
+    auto alpha_size{ alpha_r_list.size() };
+    std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
+    std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
+    residual_matrix_ols_list.assign(
+        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size)
+    );
+    residual_matrix_mdpde_list.assign(
+        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size)
+    );
+    residual_mean_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
 #endif
     for (int i = 0; i < m_replica_size; i++)
     {
-        Eigen::VectorXd gaus_true{ gaus_par_local_matrix.col(i) };
         auto data_entry_list{
             BuildRandomLinearDataEntry(
-                m_sampling_entry_size, gaus_true, m_data_error_sigma, m_outlier_ratio
+                static_cast<size_t>(sampling_entry_size), gaus_true, data_error_sigma, outlier_ratio
             )
         };
         auto data_array{ HRLModelHelper::BuildBasisVectorAndResponseArray(data_entry_list) };
         const auto & X{ std::get<0>(data_array) };
         const auto & y{ std::get<1>(data_array) };
 
-        Eigen::VectorXd beta_ols;
-        Eigen::VectorXd beta_mdpde;
-        double sigma_square;
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
-        HRLModelHelper::AlgorithmBetaMDPDE(
-            alpha_r, X, y,
-            beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
-        );
+        for (size_t j = 0; j < alpha_size; j++)
+        {
+            Eigen::VectorXd beta_ols;
+            Eigen::VectorXd beta_mdpde;
+            double sigma_square;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
+            HRLModelHelper::AlgorithmBetaMDPDE(
+                alpha_r_list.at(j), X, y,
+                beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
+            );
 
-        Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
-        auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, gaus_0) };
-        auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, gaus_0) };
-        gaus_residual_matrix_ols.col(i) = CalculateResidual(gaus_ols, gaus_true);
-        gaus_residual_matrix_mdpde.col(i) = CalculateResidual(gaus_mdpde, gaus_true);
+            Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
+            auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, gaus_0) };
+            auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, gaus_0) };
+            residual_matrix_ols_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
+            residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
+        }
     }
-    residual_mean_ols = gaus_residual_matrix_ols.rowwise().mean();
-    residual_mean_mdpde = gaus_residual_matrix_mdpde.rowwise().mean();
-    residual_sigma_ols = (gaus_residual_matrix_ols.colwise() - residual_mean_ols).rowwise().norm() / std::sqrt(m_replica_size - 1);
-    residual_sigma_mdpde = (gaus_residual_matrix_mdpde.colwise() - residual_mean_mdpde).rowwise().norm() / std::sqrt(m_replica_size - 1);
-    
+
+    for (size_t j = 0; j < alpha_size; j++)
+    {
+        residual_mean_ols_list.at(j) = residual_matrix_ols_list.at(j).rowwise().mean();
+        residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
+        residual_sigma_ols_list.at(j) =
+            (residual_matrix_ols_list.at(j).colwise() - residual_mean_ols_list.at(j)).rowwise().norm()
+            / std::sqrt(m_replica_size - 1);
+        residual_sigma_mdpde_list.at(j) =
+            (residual_matrix_mdpde_list.at(j).colwise() - residual_mean_mdpde_list.at(j)).rowwise().norm()
+            / std::sqrt(m_replica_size - 1);
+    }
+
+    return true;
+}
+
+bool HRLModelTester::RunMuMDPDETest(
+    const std::vector<double> & alpha_g_list,
+    std::vector<Eigen::VectorXd> & residual_mean_median_list,
+    std::vector<Eigen::VectorXd> & residual_mean_mdpde_list,
+    std::vector<Eigen::VectorXd> & residual_sigma_median_list,
+    std::vector<Eigen::VectorXd> & residual_sigma_mdpde_list,
+    int member_size,
+    const Eigen::VectorXd & gaus_prior,
+    const Eigen::VectorXd & gaus_sigma,
+    const Eigen::VectorXd & outlier_prior,
+    const Eigen::VectorXd & outlier_sigma,
+    const Eigen::VectorXd & outlier_ratio,
+    int thread_size)
+{
+    auto alpha_size{ alpha_g_list.size() };
+    std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
+    std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
+    residual_matrix_ols_list.assign(
+        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size)
+    );
+    residual_matrix_mdpde_list.assign(
+        alpha_size, Eigen::MatrixXd::Zero(m_gaus_par_size, m_replica_size)
+    );
+    residual_mean_median_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_sigma_median_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+    residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
+#endif
+    for (int i = 0; i < m_replica_size; i++)
+    {
+        Eigen::VectorXd gaus_true{ gaus_prior };
+        auto beta_array{
+            BuildRandomGausParameters(
+                member_size, gaus_prior, gaus_sigma,
+                outlier_prior, outlier_sigma, outlier_ratio
+            )
+        };
+
+        for (size_t j = 0; j < alpha_size; j++)
+        {
+            Eigen::VectorXd mu_median;
+            Eigen::VectorXd mu_mdpde;
+            Eigen::ArrayXd omega_array;
+            double omega_sum;
+            Eigen::MatrixXd capital_lambda;
+            std::vector<Eigen::MatrixXd> member_capital_lambda_list;
+            HRLModelHelper::AlgorithmMuMDPDE(
+                alpha_g_list.at(j), beta_array,
+                mu_median, mu_mdpde, omega_array, omega_sum,
+                capital_lambda, member_capital_lambda_list, true
+            );
+
+            Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
+            auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(mu_median, gaus_0) };
+            auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(mu_mdpde, gaus_0) };
+            residual_matrix_ols_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
+            residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
+        }
+    }
+
+    for (size_t j = 0; j < alpha_size; j++)
+    {
+        residual_mean_median_list.at(j) = residual_matrix_ols_list.at(j).rowwise().mean();
+        residual_mean_mdpde_list.at(j) = residual_matrix_mdpde_list.at(j).rowwise().mean();
+        residual_sigma_median_list.at(j) =
+            (residual_matrix_ols_list.at(j).colwise() - residual_mean_median_list.at(j)).rowwise().norm()
+            / std::sqrt(m_replica_size - 1);
+        residual_sigma_mdpde_list.at(j) =
+            (residual_matrix_mdpde_list.at(j).colwise() - residual_mean_mdpde_list.at(j)).rowwise().norm()
+            / std::sqrt(m_replica_size - 1);
+    }
+
     return true;
 }
 
@@ -181,7 +283,7 @@ bool HRLModelTester::CheckGausParametersDimension(const Eigen::VectorXd & gaus_p
     return true;
 }
 
-Eigen::VectorXd HRLModelTester::CalculateResidual(
+Eigen::VectorXd HRLModelTester::CalculateNormalizedResidual(
     const Eigen::VectorXd & estimate, const Eigen::VectorXd & truth)
 {
     if (estimate.rows() != truth.rows())
