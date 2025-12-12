@@ -83,10 +83,19 @@ private:
         const size_t subset_size,
         const std::vector<double> & alpha_list
     );
-    void RunLocalAtomFitting(void);
-    void RunLocalBondFitting(void);
+    void RunLocalAtomFitting(double universal_alpha_r);
+    void RunLocalBondFitting(double universal_alpha_r);
     void RunAtomPotentialFitting(void);
     void RunBondPotentialFitting(void);
     void SaveDataObject(void);
+
+    void StudyAtomLocalFittingViaAlphaR(
+        const std::vector<AtomObject *> & atom_list,
+        const std::vector<double> & alpha_list
+    );
+    void StudyAtomGroupFittingViaAlphaG(
+        const std::vector<std::vector<AtomObject *>> & atom_list_set,
+        const std::vector<double> & alpha_list
+    );
 
 };

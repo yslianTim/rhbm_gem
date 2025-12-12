@@ -285,7 +285,6 @@ void HRLModelTestCommand::PrintDataOutlierResult(
         "Amplitude #font[2]{A}", "Width #tau"
     };
 
-
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);

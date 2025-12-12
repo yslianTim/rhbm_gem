@@ -18,6 +18,7 @@
 #include "CylinderSampler.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
+#include "LocalPainter.hpp"
 
 #include <unordered_set>
 #include <tuple>
@@ -115,7 +116,7 @@ bool PotentialAnalysisCommand::Execute(void)
     RunAtomMapValueSampling();
     RunAtomGroupClassification();
     if (m_options.use_training_alpha) RunAtomAlphaTraining();
-    else RunLocalAtomFitting();
+    else RunLocalAtomFitting(m_options.alpha_r);
     RunAtomPotentialFitting();
 
     //RunBondMapValueSampling();
@@ -511,8 +512,9 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
         atom->GetLocalPotentialEntry()->SetAlphaR(alpha_r);
     }
     
+    
     // Alpha_G Training
-    RunLocalAtomFitting();
+    RunLocalAtomFitting(alpha_r);
     const size_t subset_size_alpha_g{ 10 };
     std::vector<double> alpha_g_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
     auto ordered_alpha_g_list{ alpha_g_list };
@@ -548,6 +550,9 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
             group_potential_entry->AddAlphaG(group_key, alpha_g);
         }
     }
+
+    StudyAtomLocalFittingViaAlphaR(selected_atom_list, ordered_alpha_g_list);
+    StudyAtomGroupFittingViaAlphaG(atom_list_set, ordered_alpha_g_list);
 }
 
 double PotentialAnalysisCommand::TrainUniversalAlphaR(
@@ -640,7 +645,136 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     return alpha_g_error;
 }
 
-void PotentialAnalysisCommand::RunLocalAtomFitting(void)
+void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
+    const std::vector<AtomObject *> & atom_list,
+    const std::vector<double> & alpha_list)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR() called");
+    ScopeTimer timer("PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR");
+    if (m_model_object == nullptr) return;
+
+    auto atom_size{ atom_list.size() };
+    auto alpha_size{ static_cast<int>(alpha_list.size()) };
+    std::atomic<size_t> atom_count{ 0 };
+    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+    for (size_t i = 0; i < atom_size; i++)
+    {
+        auto local_entry{ atom_list[i]->GetLocalPotentialEntry() };
+        const auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
+        auto data_array{ HRLModelHelper::BuildBasisVectorAndResponseArray(data_entry_list) };
+        const auto & X{ std::get<0>(data_array) };
+        const auto & y{ std::get<1>(data_array) };
+
+        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
+        for (int j = 0; j < alpha_size; j++)
+        {
+            auto alpha_r{ alpha_list[static_cast<size_t>(j)] };
+            Eigen::VectorXd beta_ols;
+            Eigen::VectorXd beta_mdpde;
+            double sigma_square;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
+            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
+            HRLModelHelper::AlgorithmBetaMDPDE(
+                alpha_r, X, y, beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
+            );
+            Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+            auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, model_par_init) };
+            auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, model_par_init) };
+            local_bias_array.col(j) = (gaus_mdpde - gaus_ols).array().abs() / gaus_ols.array();
+        }
+        
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            gaus_bias_matrix += local_bias_array;
+            atom_count++;
+            Logger::ProgressPercent(atom_count, atom_size);
+        }
+    }
+    gaus_bias_matrix /= static_cast<double>(atom_size);
+
+    LocalPainter::PaintTemplate1(
+        gaus_bias_matrix, alpha_list, "#alpha_{r}",
+        "/Users/yslian/Downloads/alpha_r_bias.pdf"
+    );
+
+    std::cout << gaus_bias_matrix << std::endl;
+}
+
+void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
+    const std::vector<std::vector<AtomObject *>> & atom_list_set,
+    const std::vector<double> & alpha_list)
+{
+    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG() called");
+    ScopeTimer timer("PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG");
+    if (m_model_object == nullptr) return;
+
+    auto alpha_size{ static_cast<int>(alpha_list.size()) };
+    auto group_size{ atom_list_set.size() };
+    std::atomic<size_t> group_count{ 0 };
+    Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#endif
+    for (size_t i = 0; i < group_size; i++)
+    {
+        auto & group_atom_list{ atom_list_set[i] };
+        std::vector<Eigen::VectorXd> data_entry_list;
+        data_entry_list.reserve(group_atom_list.size());
+        for (auto atom : group_atom_list)
+        {
+            data_entry_list.emplace_back(
+                atom->GetLocalPotentialEntry()->GetBetaEstimateMDPDE()
+            );
+        }
+        auto beta_matrix{ HRLModelHelper::ConvertBetaListToMatrix(data_entry_list, true) };
+
+        Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
+        for (int j = 0; j < alpha_size; j++)
+        {
+            auto alpha_g{ alpha_list[static_cast<size_t>(j)] };
+            Eigen::VectorXd mu_median;
+            Eigen::VectorXd mu_mdpde;
+            Eigen::ArrayXd omega_array;
+            double omega_sum;
+            Eigen::MatrixXd capital_lambda;
+            std::vector<Eigen::MatrixXd> member_capital_lambda_list;
+            HRLModelHelper::AlgorithmMuMDPDE(
+                alpha_g, beta_matrix, mu_median, mu_mdpde,
+                omega_array, omega_sum, capital_lambda,
+                member_capital_lambda_list, true
+            );
+            Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
+            auto gaus_median{ GausLinearTransformHelper::BuildGaus3DModel(mu_median, model_par_init) };
+            auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(mu_mdpde, model_par_init) };
+            local_bias_array.col(j) = (gaus_mdpde - gaus_median).array().abs() / gaus_median.array();
+        }
+        
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
+        {
+            gaus_bias_matrix += local_bias_array;
+            group_count++;
+            Logger::ProgressPercent(group_count, group_size);
+        }
+    }
+    gaus_bias_matrix /= static_cast<double>(group_size);
+
+    LocalPainter::PaintTemplate1(
+        gaus_bias_matrix, alpha_list, "#alpha_{g}",
+        "/Users/yslian/Downloads/alpha_g_bias.pdf"
+    );
+    std::cout << gaus_bias_matrix << std::endl;
+}
+
+void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunLocalAtomFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
@@ -668,7 +802,7 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(void)
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
         HRLModelHelper::AlgorithmBetaMDPDE(
-            local_entry->GetAlphaR(), X, y,
+            universal_alpha_r, X, y,
             beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
         );
 
@@ -696,7 +830,7 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(void)
     }
 }
 
-void PotentialAnalysisCommand::RunLocalBondFitting(void)
+void PotentialAnalysisCommand::RunLocalBondFitting(double universal_alpha_r)
 {
     Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunLocalBondFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalBondFitting");
@@ -724,7 +858,7 @@ void PotentialAnalysisCommand::RunLocalBondFitting(void)
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
         Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
         HRLModelHelper::AlgorithmBetaMDPDE(
-            local_entry->GetAlphaR(), X, y,
+            universal_alpha_r, X, y,
             beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
         );
 
