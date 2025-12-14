@@ -153,47 +153,59 @@ void LocalPainter::PaintTemplate1(
 }
 
 void LocalPainter::PaintHistogram2D(
-    const Eigen::MatrixXd & data_matrix,
+    const std::vector<double> & data_array,
+    int x_bin_size, double x_min, double x_max,
+    int y_bin_size, double y_min, double y_max,
     const std::string & x_axis_title,
     const std::string & y_axis_title,
+    const std::string & z_axis_title,
     const std::string & file_name)
 {
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(2);
     gStyle->SetGridColor(kGray);
-    auto canvas{ ROOTHelper::CreateCanvas("canvas","", 1000, 1000) };
+    gStyle->SetPalette(kLightTemperature);
+    gStyle->SetNumberContours(50);
+    auto canvas{ ROOTHelper::CreateCanvas("canvas","", 1200, 1000) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::SetPadMarginInCanvas(gPad, 0.15, 0.20, 0.15, 0.10);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_name);
 
-    std::unique_ptr<TH2> hist_data;
+    std::unique_ptr<TH2> hist_data{
+        ROOTHelper::CreateHist2D("data","", x_bin_size, x_min, x_max, y_bin_size, y_min, y_max)
+    };
 
-    int x_size{ data_matrix.cols() };
-    int y_size{ data_matrix.rows() };
-    double x_min{ 0.0 };
-    double x_max{ 0.0 };
-    double y_min{ 0.0 };
-    double y_max{ 0.0 };
-    data_matrix.cwiseMin(x_min);
-    data_matrix.cwiseMax(x_max);
+    for (int i = 0; i < static_cast<int>(data_array.size()); i++)
+    {
+        auto x_index{ i % x_bin_size + 1 };
+        auto y_index{ i / x_bin_size + 1 };
+        hist_data->SetBinContent(x_index, y_index, data_array[static_cast<size_t>(i)]);
+    }
+    auto z_min{ ArrayStats<double>::ComputeMin(data_array.data(), data_array.size()) };
+    auto z_max{ ArrayStats<double>::ComputeMax(data_array.data(), data_array.size()) };
 
     canvas->cd();
     ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
     ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-    auto frame{ ROOTHelper::CreateHist2D("frame","", x_size, x_min, x_max, y_size, y_min, y_max) };
-    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 0.8f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 40.0f, 0.005f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), 0.02f, 505);
-    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 50.0f, 1.2f, 133);
-    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 45.0f, 0.005f, 133);
-    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), 0.02f, 505);
-    ROOTHelper::SetLineAttribute(frame.get(), 1, 0);
-    frame->GetXaxis()->SetTitle(x_axis_title.data());
-    frame->GetYaxis()->SetTitle(y_axis_title.data());
-    frame->GetXaxis()->CenterTitle();
-    frame->GetYaxis()->CenterTitle();
-    frame->SetStats(0);
-    frame->Draw("");
-    hist_data->Draw("COLZ SAME");
+    ROOTHelper::SetAxisTitleAttribute(hist_data->GetXaxis(), 60.0f, 1.0f, 133);
+    ROOTHelper::SetAxisLabelAttribute(hist_data->GetXaxis(), 60.0f, 0.01f, 133);
+    ROOTHelper::SetAxisTickAttribute(hist_data->GetXaxis(), 0.04f, 505);
+    ROOTHelper::SetAxisTitleAttribute(hist_data->GetYaxis(), 60.0f, 1.5f, 133);
+    ROOTHelper::SetAxisLabelAttribute(hist_data->GetYaxis(), 60.0f, 0.01f, 133);
+    ROOTHelper::SetAxisTickAttribute(hist_data->GetYaxis(), 0.04f, 505);
+    ROOTHelper::SetAxisTitleAttribute(hist_data->GetZaxis(), 60.0f, 1.3f, 133);
+    ROOTHelper::SetAxisLabelAttribute(hist_data->GetZaxis(), 60.0f, 0.005f, 133);
+    ROOTHelper::SetAxisTickAttribute(hist_data->GetZaxis(), 0.02f, 505);
+    ROOTHelper::SetLineAttribute(hist_data.get(), 1, 0);
+    hist_data->GetXaxis()->SetTitle(x_axis_title.data());
+    hist_data->GetYaxis()->SetTitle(y_axis_title.data());
+    hist_data->GetZaxis()->SetTitle(z_axis_title.data());
+    hist_data->GetXaxis()->CenterTitle();
+    hist_data->GetYaxis()->CenterTitle();
+    hist_data->GetZaxis()->CenterTitle();
+    hist_data->GetZaxis()->SetRangeUser(z_min, z_max);
+    hist_data->SetStats(0);
+    hist_data->Draw("COLZ");
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_name);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_name);

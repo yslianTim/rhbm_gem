@@ -19,9 +19,12 @@ public:
     );
 
     static void PaintHistogram2D(
-        const Eigen::MatrixXd & data_matrix,
+        const std::vector<double> & data_array,
+        int x_bin_size, double x_min, double x_max,
+        int y_bin_size, double y_min, double y_max,
         const std::string & x_axis_title,
         const std::string & y_axis_title,
+        const std::string & z_axis_title,
         const std::string & file_name
     );
 
