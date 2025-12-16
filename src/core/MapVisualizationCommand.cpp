@@ -170,16 +170,30 @@ void MapVisualizationCommand::RunAtomMapValueSampling(void)
     sampler->Print();
     
     const auto & atom_list{ m_model_object->GetSelectedAtomList() };
+    const auto & bond_list{ m_model_object->GetSelectedBondList() };
     std::unordered_map<int, AtomObject*> atom_map;
+    std::unordered_map<int, std::vector<BondObject*>> bond_map;
     for (auto & atom : atom_list)
     {
         atom_map.emplace(atom->GetSerialID(), atom);
     }
+    for (auto & bond : bond_list)
+    {
+        bond_map[bond->GetAtomSerialID1()].emplace_back(bond);
+    }
+    auto target_atom_position{ atom_map.at(m_options.atom_serial_id)->GetPosition() };
+    auto reference_u_vector{ bond_map.at(m_options.atom_serial_id).at(1)->GetBondVector() };
+    bond_map.at(m_options.atom_serial_id).at(1)->Display();
+    const Eigen::Map<const Eigen::Vector3f> eigen_u_vector(reference_u_vector.data());
+    Eigen::Vector3f u_vector{ eigen_u_vector.normalized() };
+    Eigen::Vector3f v_vector{ Eigen::Vector3f{0.0, 0.0, 1.0} };
+    Eigen::Vector3f n_vector{ u_vector.cross(v_vector) };
+    sampler->SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
     MapInterpolationVisitor interpolation_visitor{ sampler.get() };
-    auto target_atom_position{ atom_map.at(m_options.atom_serial_id)->GetPosition() };
+    
     interpolation_visitor.SetPosition(target_atom_position);
-    interpolation_visitor.SetAxisVector({0.0, 0.0, 1.0});
+    interpolation_visitor.SetAxisVector({n_vector(0), n_vector(1), n_vector(2)});
     m_map_object->Accept(&interpolation_visitor);
     auto & sampling_data_list{ interpolation_visitor.GetSamplingDataList() };
     std::vector<double> map_value_list;
