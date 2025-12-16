@@ -38,7 +38,8 @@ public:
 private:
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
-    void PaintAtomGroupGausAminoAcidMainChain(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausAminoAcidMainChainStructure(ModelObject * model_object, const std::string & name);
     void PaintAtomLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
 

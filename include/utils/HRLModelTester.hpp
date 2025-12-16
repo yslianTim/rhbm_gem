@@ -44,7 +44,7 @@ public:
         const Eigen::VectorXd & gaus_sigma,
         const Eigen::VectorXd & outlier_prior,
         const Eigen::VectorXd & outlier_sigma,
-        const Eigen::VectorXd & outlier_ratio,
+        double outlier_ratio = 0.0,
         int thread_size = 1
     );
 
@@ -56,8 +56,9 @@ private:
         const Eigen::VectorXd & gaus_sigma,
         const Eigen::VectorXd & outlier_prior,
         const Eigen::VectorXd & outlier_sigma,
-        const Eigen::VectorXd & outlier_ratio
+        double outlier_ratio = 0.0
     );
+    Eigen::MatrixXd BuildBetaMatrix(const Eigen::MatrixXd & gaus_array);
     std::vector<std::tuple<float, float>> BuildRandomGausSamplingEntry(
         size_t sampling_entry_size,
         const Eigen::VectorXd & gaus_par,
