@@ -751,7 +751,6 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
     for (size_t k = 0; k < spot_list.size(); k++)
     {
-        //auto spot{ spot_list.at(k) };
         auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
@@ -861,15 +860,29 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
         ROOTHelper::SetPadDefaultStyle(pad_extra_0.get());
         ROOTHelper::SetFillAttribute(pad_extra_0.get(), 4000);
         ROOTHelper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.01, 0.01);
+
+        auto spot{ spot_list.at(k) };
+        auto spot_color{ AtomClassifier::GetMainChainSpotColor(spot) };
+        auto spot_text{ ROOTHelper::CreatePaveText(0.0, 0.0, 1.0, 1.0, "nbNDC ARC", false) };
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, spot_text.get(), 0.01, 0.91, 0.02, 0.01);
+        ROOTHelper::SetPaveTextDefaultStyle(spot_text.get());
+        ROOTHelper::SetFillAttribute(spot_text.get(), 1001, spot_color, 0.3f);
+        ROOTHelper::SetLineAttribute(spot_text.get(), 1, 3, spot_color);
+        ROOTHelper::SetTextAttribute(spot_text.get(), 90.0f, 133, 22);
+        spot_text->AddText(AtomClassifier::GetMainChainSpotLabel(spot).data());
+        spot_text->Draw();
+
         auto resolution_text{ CreateResolutionPaveText(model_object) };
-        ROOTHelper::SetPaveTextMarginInCanvas(gPad, resolution_text.get(), 0.02, 0.80, 0.02, 0.02);
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, resolution_text.get(), 0.10, 0.76, 0.02, 0.01);
+        resolution_text->SetTextSize(90.0f);
         resolution_text->Draw();
 
         auto map_info_text{ CreateDataInfoPaveText(model_object) };
-        ROOTHelper::SetPaveTextMarginInCanvas(gPad, map_info_text.get(), 0.20, 0.60, 0.02, 0.02);
+        ROOTHelper::SetPaveTextMarginInCanvas(gPad, map_info_text.get(), 0.25, 0.53, 0.02, 0.01);
+        map_info_text->SetTextSize(70.0f);
         map_info_text->Draw();
 
-        auto legend{ ROOTHelper::CreateLegend(0.60, 0.00, 1.00, 1.00, false) };
+        auto legend{ ROOTHelper::CreateLegend(0.60, 0.02, 1.00, 0.99, false) };
         ROOTHelper::SetLegendDefaultStyle(legend.get());
         ROOTHelper::SetFillAttribute(legend.get(), 4000);
         ROOTHelper::SetTextAttribute(legend.get(), 60.0f, 133, 12, 0.0);
