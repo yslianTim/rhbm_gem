@@ -1572,12 +1572,12 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
     };
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_map[row_size][main_chain_element_count];
-    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph_map[2][k] = entry_iter->CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(k, class_key, 0);
-        gaus_graph_map[1][k] = entry_iter->CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(k, class_key, 1);
-        gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(k, class_key, 2);
+        gaus_graph_map[2][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
+        gaus_graph_map[1][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
+        //gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
+        gaus_graph_map[0][k] = entry_iter->CreateAtomMapValueToSequenceIDGraphMap(k);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])
@@ -1597,7 +1597,7 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
                     y_array[j].emplace_back(gaus_graph_map[j][k].at(chain_id)->GetPointY(p));
                 }
             }
-            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.2) };
+            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array[j], 0.4) };
             y_min[j] = std::get<0>(y_range);
             y_max[j] = std::get<1>(y_range);
         }

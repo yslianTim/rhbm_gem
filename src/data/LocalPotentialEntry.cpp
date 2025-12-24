@@ -86,6 +86,22 @@ const std::vector<Eigen::VectorXd> & LocalPotentialEntry::GetBasisAndResponseEnt
     return m_basis_and_response_entry_list_tmp;
 }
 
+double LocalPotentialEntry::GetMapValueNearCenter(void) const
+{
+    const auto & data_list{ GetDistanceAndMapValueList() };
+    if (data_list.empty()) return 0.0;
+    int count{ 0 };
+    double sum{ 0.0 };
+    for (const auto & [distance, map_value] : data_list)
+    {
+        if (distance > 0.05f) continue;
+        sum += map_value;
+        count++;
+    }
+    if (count == 0) return 0.0;
+    return sum/static_cast<double>(count);
+}
+
 double LocalPotentialEntry::GetMomentZeroEstimate(void) const
 {
     auto data_size{ GetDistanceAndMapValueListSize() };

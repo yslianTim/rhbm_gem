@@ -55,6 +55,7 @@ public:
     const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataCovariance(void) const { return m_data_covariance_tmp; }
     const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
     const std::vector<Eigen::VectorXd> & GetBasisAndResponseEntryList(void) const;
+    double GetMapValueNearCenter(void) const;
     double GetMomentZeroEstimate(void) const;
     double GetMomentTwoEstimate(void) const;
     double GetBetaEstimateOLS(int par_id) const;
