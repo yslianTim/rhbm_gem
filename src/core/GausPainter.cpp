@@ -938,8 +938,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
 
-    //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
+    //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
 
     #ifdef HAVE_ROOT
 
@@ -1023,7 +1023,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
                 group_key_list, class_key, 1)
         };
         auto correlation_graph{
-            entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, class_key, 0, 1)
+            entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, class_key, 1, 0)
         };
         for (int p = 0; p < amplitude_graph->GetN(); p++)
         {
@@ -1062,22 +1062,22 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
         auto amplitude_hist{
             ROOTHelper::CreateHist2D(
                 name_amplitude.data(),"",
-                100, std::get<0>(amplitude_range), std::get<1>(amplitude_range),
-                static_cast<int>(spot_count), -0.5, static_cast<int>(spot_count)-0.5)
+                static_cast<int>(spot_count), -0.5, static_cast<int>(spot_count)-0.5,
+                100, std::get<0>(amplitude_range), std::get<1>(amplitude_range))
         };
         auto width_hist{
             ROOTHelper::CreateHist2D(
                 name_width.data(),"",
-                static_cast<int>(spot_count), -0.5, static_cast<int>(spot_count)-0.5,
-                100, std::get<0>(width_range), std::get<1>(width_range))
+                100, std::get<0>(width_range), std::get<1>(width_range),
+                static_cast<int>(spot_count), -0.5, static_cast<int>(spot_count)-0.5)
         };
         for (int p = 0; p < amplitude_graph_map.at(spot)->GetN(); p++)
         {
-            amplitude_hist->Fill(amplitude_graph_map.at(spot)->GetPointY(p), x_value);
+            amplitude_hist->Fill(x_value, amplitude_graph_map.at(spot)->GetPointY(p));
         }
         for (int p = 0; p < width_graph_map.at(spot)->GetN(); p++)
         {
-            width_hist->Fill(x_value, width_graph_map.at(spot)->GetPointY(p));
+            width_hist->Fill(width_graph_map.at(spot)->GetPointY(p), x_value);
         }
         auto spot_color{ AtomClassifier::GetMainChainSpotColor(spot) };
         ROOTHelper::SetLineAttribute(amplitude_hist.get(), 1, 1, spot_color);
@@ -1112,10 +1112,10 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
 
     frame[0]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
     frame[1]->GetYaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-    frame[2]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
-    frame[3]->GetXaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-    frame[4]->GetXaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
-    frame[4]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
+    frame[2]->GetYaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+    frame[3]->GetXaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
+    frame[4]->GetYaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+    frame[4]->GetXaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
 
     pad[1]->cd();
     ROOTHelper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.11, 0.02);
@@ -1155,8 +1155,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.015, 1) };
     ROOTHelper::SetAxisTickAttribute(frame[4]->GetXaxis(), static_cast<float>(x_tick_length), 505);
     ROOTHelper::SetAxisTickAttribute(frame[4]->GetYaxis(), static_cast<float>(y_tick_length), 505);
-    frame[4]->GetXaxis()->SetTitle("Group Amplitude");
-    frame[4]->GetYaxis()->SetTitle("Group Width");
+    frame[4]->GetYaxis()->SetTitle("Amplitude #font[2]{A}");
+    frame[4]->GetXaxis()->SetTitle("Width #font[2]{#tau}");
     frame[4]->Draw("");
     for (auto & [element, graph] : correlation_graph_map) graph->Draw("P X0");
 
@@ -1171,7 +1171,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     ROOTHelper::SetAxisLabelAttribute(frame[3]->GetYaxis(), 35.0f, 0.04f, 103);
     frame[3]->GetYaxis()->SetTitle("Element");
     frame[3]->Draw();
-    for (auto & [element, hist] : amplitude_hist_map) hist->Draw("CANDLEY3 SAME");
+    for (auto & [element, hist] : width_hist_map) hist->Draw("CANDLEY3 SAME");
 
     pad[5]->cd();
     ROOTHelper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.12, 0.02);
@@ -1184,7 +1184,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     ROOTHelper::SetAxisLabelAttribute(frame[2]->GetYaxis(), 0.0f);
     frame[2]->GetXaxis()->SetTitle("Element");
     frame[2]->Draw();
-    for (auto & [element, hist] : width_hist_map) hist->Draw("CANDLE3 SAME");
+    for (auto & [element, hist] : amplitude_hist_map) hist->Draw("CANDLE3 SAME");
 
     pad[6]->cd();
     ROOTHelper::SetPadMarginInCanvas(gPad, 0.02, 0.02, 0.20, 0.20);
