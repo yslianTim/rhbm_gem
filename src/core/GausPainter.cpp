@@ -1556,7 +1556,7 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
     const int col_size{ 1 };
-    const int row_size{ 3 };
+    const int row_size{ 2 };
     auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 900) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
     ROOTHelper::SetCanvasPartition(
@@ -1566,7 +1566,6 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
     const int main_chain_element_count{ 4 };
     const std::string y_title[row_size]
     {
-        "Intensity",
         "Width",
         "Amplitude"
     };
@@ -1574,10 +1573,10 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_map[row_size][main_chain_element_count];
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph_map[2][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
-        gaus_graph_map[1][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
+        gaus_graph_map[1][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
+        gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
         //gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
-        gaus_graph_map[0][k] = entry_iter->CreateAtomMapValueToSequenceIDGraphMap(k);
+        //gaus_graph_map[0][k] = entry_iter->CreateAtomMapValueToSequenceIDGraphMap(k);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])
@@ -1652,7 +1651,7 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
 
                 if (i == 0 && j == row_size - 1)
                 {
-                    subtitle1_text = ROOTHelper::CreatePaveText(0.00, 1.02, 0.15, 1.37, "nbNDC ARC", true);
+                    subtitle1_text = ROOTHelper::CreatePaveText(0.00, 1.02, 0.15, 1.24, "nbNDC ARC", true);
                     ROOTHelper::SetPaveTextDefaultStyle(subtitle1_text.get());
                     ROOTHelper::SetPaveAttribute(subtitle1_text.get(), 0, 0.2);
                     ROOTHelper::SetFillAttribute(subtitle1_text.get(), 1001, kAzure-7);
@@ -1660,7 +1659,7 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
                     subtitle1_text->AddText(Form("%.2f #AA", model_object->GetResolution()));
                     subtitle1_text->Draw();
 
-                    subtitle2_text = ROOTHelper::CreatePaveText(0.16, 1.02, 0.35, 1.37, "nbNDC ARC", true);
+                    subtitle2_text = ROOTHelper::CreatePaveText(0.16, 1.02, 0.35, 1.24, "nbNDC ARC", true);
                     ROOTHelper::SetPaveTextDefaultStyle(subtitle2_text.get());
                     ROOTHelper::SetPaveAttribute(subtitle2_text.get(), 0, 0.2);
                     ROOTHelper::SetFillAttribute(subtitle2_text.get(), 1001, kAzure-7, 0.5f);
@@ -1668,7 +1667,7 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
                     subtitle2_text->AddText(Form("PDB-%s", model_object->GetPdbID().data()));
                     subtitle2_text->Draw();
 
-                    subtitle3_text = ROOTHelper::CreatePaveText(0.36, 1.02, 0.57, 1.37, "nbNDC ARC", true);
+                    subtitle3_text = ROOTHelper::CreatePaveText(0.36, 1.02, 0.57, 1.24, "nbNDC ARC", true);
                     ROOTHelper::SetPaveTextDefaultStyle(subtitle3_text.get());
                     ROOTHelper::SetPaveAttribute(subtitle3_text.get(), 0, 0.2);
                     ROOTHelper::SetFillAttribute(subtitle3_text.get(), 1001, kAzure-7, 0.5f);
@@ -1676,7 +1675,7 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
                     subtitle3_text->AddText(model_object->GetEmdID().data());
                     subtitle3_text->Draw();
 
-                    legend = ROOTHelper::CreateLegend(0.58, 1.02, 0.98, 1.37, true);
+                    legend = ROOTHelper::CreateLegend(0.58, 1.02, 0.98, 1.24, true);
                     ROOTHelper::SetLegendDefaultStyle(legend.get());
                     ROOTHelper::SetTextAttribute(legend.get(), 70.0f, 133, 12);
                     ROOTHelper::SetFillAttribute(legend.get(), 4000);
