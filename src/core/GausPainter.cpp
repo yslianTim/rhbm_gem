@@ -938,8 +938,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
 
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
-    //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+    //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
 
     #ifdef HAVE_ROOT
 
