@@ -26,6 +26,8 @@ const std::unordered_map<Element, std::array<double, 5>> ElectricPotential::a_ne
     {Element::CALCIUM,   {   0.2355,   0.9916,   2.3959,   3.7252,   2.5647 }},
     {Element::IRON,      {   0.1929,   0.8239,   1.8689,   2.3694,   1.9060 }},
     {Element::COPPER,    {   0.3501,   1.6558,   1.9582,   0.2134,   1.4109 }},
+    //{Element::COPPER,    { 0.312E+0, 0.812E+0, 0.111E+1, 0.794E+0, 0.257E+0 }}, // Cu1+
+    //{Element::COPPER,    { 0.224E+0, 0.544E+0, 0.970E+0, 0.727E+0, 0.182E+0 }}, // Cu2+
     {Element::ZINC,      {   0.1780,   0.8096,   1.6744,   1.9499,   1.4495 }}
 };
 const std::unordered_map<Element, std::array<double, 5>> ElectricPotential::b_neutral_par_map
@@ -42,6 +44,8 @@ const std::unordered_map<Element, std::array<double, 5>> ElectricPotential::b_ne
     {Element::CALCIUM,   {   0.1742,   1.8329,   8.8407,  47.4583, 134.9613 }},
     {Element::IRON,      {   0.1087,   1.0806,   4.7637,  22.8500,  76.7309 }},
     {Element::COPPER,    {   0.1867,   1.9917,  11.3396,  53.2619,  63.2520 }},
+    //{Element::COPPER,    { 0.201E+0, 0.131E+1, 0.380E+1, 0.105E+2, 0.282E+2 }}, // Cu1+
+    //{Element::COPPER,    { 0.145E+0, 0.933E+0, 0.269E+1, 0.711E+1, 0.194E+2 }}, // Cu2+
     {Element::ZINC,      {   0.0876,   0.8650,   3.8612,  18.8726,  64.7016 }}
 };
 
