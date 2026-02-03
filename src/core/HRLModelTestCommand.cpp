@@ -340,6 +340,70 @@ void HRLModelTestCommand::RunSimulationTestOnModelAlphaData(void)
     Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnModelAlphaData() called");
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
 
+    const int gaus_par_size{ 3 };
+    const int linear_basis_size{ 2 };
+    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
+    model_par_prior(0) = 1.0;
+    model_par_prior(1) = 0.5;
+    model_par_prior(2) = 0.1;
+
+    auto replica_size{ 100 };
+    auto sampling_entry_size{ 1000 };
+    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
+    tester->SetFittingRange(m_options.fit_range_min, m_options.fit_range_max);
+
+    std::vector<double> alpha_r_list{ 0.1, 0.4 };
+    std::vector<double> error_list{ 0.1, 0.2, 0.3 };
+    std::vector<Eigen::MatrixXd> mean_matrix_alpha1_list;
+    std::vector<Eigen::MatrixXd> mean_matrix_alpha2_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_alpha1_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_alpha2_list;
+    
+    auto outlier_size{ 10 };
+    auto outlier_step_size{ 0.05 };
+    std::vector<double> outlier_list(static_cast<size_t>(outlier_size));
+    for (size_t i = 0; i < static_cast<size_t>(outlier_size); i++)
+    {
+        outlier_list[i] = static_cast<double>(i) * outlier_step_size;
+    }
+
+    for (auto error_sigma : error_list)
+    {
+        Eigen::MatrixXd mean_matrix_alpha1{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd mean_matrix_alpha2{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_alpha1{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        for (int i = 0; i < outlier_size; i++)
+        {
+            std::vector<Eigen::VectorXd> residual_mean_ols_list;
+            std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
+            std::vector<Eigen::VectorXd> residual_sigma_ols_list;
+            std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+            tester->RunBetaMDPDETest(
+                alpha_r_list,
+                residual_mean_ols_list, residual_mean_mdpde_list,
+                residual_sigma_ols_list, residual_sigma_mdpde_list,
+                model_par_prior, sampling_entry_size, error_sigma,
+                outlier_list[static_cast<size_t>(i)], m_options.thread_size
+            );
+
+            mean_matrix_alpha1.col(i) = residual_mean_mdpde_list.front();
+            mean_matrix_alpha2.col(i) = residual_mean_mdpde_list.back();
+            sigma_matrix_alpha1.col(i) = residual_sigma_mdpde_list.front();
+            sigma_matrix_alpha2.col(i) = residual_sigma_mdpde_list.back();
+        }
+        mean_matrix_alpha1_list.emplace_back(mean_matrix_alpha1);
+        mean_matrix_alpha2_list.emplace_back(mean_matrix_alpha2);
+        sigma_matrix_alpha1_list.emplace_back(sigma_matrix_alpha1);
+        sigma_matrix_alpha2_list.emplace_back(sigma_matrix_alpha2);
+    }
+
+    PrintDataOutlierResult(
+        "bias_outlier_with_alpha_in_data.pdf",
+        outlier_list,
+        mean_matrix_alpha1_list, mean_matrix_alpha2_list,
+        sigma_matrix_alpha1_list, sigma_matrix_alpha2_list
+    );
 }
 
 void HRLModelTestCommand::RunSimulationTestOnModelAlphaMember(void)
@@ -347,6 +411,85 @@ void HRLModelTestCommand::RunSimulationTestOnModelAlphaMember(void)
     Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnModelAlphaMember() called");
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
 
+    const int gaus_par_size{ 3 };
+    const int linear_basis_size{ 2 };
+    Eigen::VectorXd model_par_prior{ Eigen::VectorXd::Zero(gaus_par_size) };
+    Eigen::VectorXd model_par_sigma{ Eigen::VectorXd::Zero(gaus_par_size) };
+    model_par_prior(0) = 1.0;
+    model_par_prior(1) = 0.5;
+    model_par_prior(2) = 0.1;
+    model_par_sigma(0) = 0.050;
+    model_par_sigma(1) = 0.025;
+    model_par_sigma(2) = 0.010;
+
+    auto replica_size{ 100 };
+    auto member_size{ 100 };
+    auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
+    tester->SetFittingRange(m_options.fit_range_min, m_options.fit_range_max);
+
+    std::vector<double> alpha_g_list{ 0.2, 0.5 };
+    std::vector<Eigen::VectorXd> outlier_prior_list{
+        Eigen::VectorXd::Zero(gaus_par_size),
+        Eigen::VectorXd::Zero(gaus_par_size)
+    };
+    outlier_prior_list.at(0)(0) = 1.50;
+    outlier_prior_list.at(0)(1) = 0.50;
+    outlier_prior_list.at(0)(2) = 0.10;
+    outlier_prior_list.at(1)(0) = 1.00;
+    outlier_prior_list.at(1)(1) = 1.00;
+    outlier_prior_list.at(1)(2) = 0.10;
+
+    std::vector<Eigen::MatrixXd> mean_matrix_alpha1_list;
+    std::vector<Eigen::MatrixXd> mean_matrix_alpha2_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_alpha1_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_alpha2_list;
+    
+    auto outlier_size{ 10 };
+    auto outlier_step_size{ 0.05 };
+    std::vector<double> outlier_list(static_cast<size_t>(outlier_size));
+    for (size_t i = 0; i < static_cast<size_t>(outlier_size); i++)
+    {
+        outlier_list[i] = static_cast<double>(i) * outlier_step_size;
+    }
+
+    for (auto outlier_prior : outlier_prior_list)
+    {
+        Eigen::MatrixXd mean_matrix_alpha1{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd mean_matrix_alpha2{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_alpha1{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_alpha2{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        for (int i = 0; i < outlier_size; i++)
+        {
+            std::vector<Eigen::VectorXd> residual_mean_median_list;
+            std::vector<Eigen::VectorXd> residual_mean_mdpde_list;
+            std::vector<Eigen::VectorXd> residual_sigma_median_list;
+            std::vector<Eigen::VectorXd> residual_sigma_mdpde_list;
+            tester->RunMuMDPDETest(
+                alpha_g_list,
+                residual_mean_median_list, residual_mean_mdpde_list,
+                residual_sigma_median_list, residual_sigma_mdpde_list,
+                member_size, model_par_prior, model_par_sigma,
+                outlier_prior, model_par_sigma,
+                outlier_list[static_cast<size_t>(i)], m_options.thread_size
+            );
+
+            mean_matrix_alpha1.col(i) = residual_mean_mdpde_list.front();
+            mean_matrix_alpha2.col(i) = residual_mean_mdpde_list.back();
+            sigma_matrix_alpha1.col(i) = residual_sigma_mdpde_list.front();
+            sigma_matrix_alpha2.col(i) = residual_sigma_mdpde_list.back();
+        }
+        mean_matrix_alpha1_list.emplace_back(mean_matrix_alpha1);
+        mean_matrix_alpha2_list.emplace_back(mean_matrix_alpha2);
+        sigma_matrix_alpha1_list.emplace_back(sigma_matrix_alpha1);
+        sigma_matrix_alpha2_list.emplace_back(sigma_matrix_alpha2);
+    }
+
+    PrintMemberOutlierResult(
+        "bias_outlier_with_alpha_in_member.pdf",
+        outlier_list,
+        mean_matrix_alpha1_list, mean_matrix_alpha2_list,
+        sigma_matrix_alpha1_list, sigma_matrix_alpha2_list
+    );
 }
 
 void HRLModelTestCommand::PrintDataOutlierResult(
@@ -413,8 +556,8 @@ void HRLModelTestCommand::PrintDataOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = -0.7;
-        x_max[i] = 22.0;
+        x_min[i] = (m_options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? -2.0 : -0.7;
+        x_max[i] = (m_options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? 47.0 : 22.0;
     }
     for (size_t j = 0; j < row_size; j++)
     {
@@ -506,10 +649,20 @@ void HRLModelTestCommand::PrintDataOutlierResult(
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(2);
-    legend->AddEntry(graph_mdpde_list[0][0].front().get(),
-        "MDPDE (#alpha_{r} = 0.1)", "plf");
-    legend->AddEntry(graph_ols_list[0][0].front().get(),
-        "Ordinary Least Squares", "plf");
+    if (m_options.tester_choice == TesterType::MODEL_ALPHA_DATA)
+    {
+        legend->AddEntry(graph_ols_list[0][0].front().get(),
+            "MDPDE (#alpha_{r} = 0.1)", "plf");
+        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
+            "MDPDE (#alpha_{r} = 0.4)", "plf");
+    }
+    else
+    {
+        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
+            "MDPDE (#alpha_{r} = 0.1)", "plf");
+        legend->AddEntry(graph_ols_list[0][0].front().get(),
+            "Ordinary Least Squares", "plf");
+    }
     legend->Draw();
 
     canvas->cd();
@@ -610,8 +763,8 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = -0.7;
-        x_max[i] = 22.0;
+        x_min[i] = (m_options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : 0.7;
+        x_max[i] = (m_options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? 47.0 : 22.0;
     }
     auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(global_y_array, 0.3) };
     for (size_t j = 0; j < row_size; j++)
@@ -705,10 +858,20 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(2);
-    legend->AddEntry(graph_mdpde_list[0][0].front().get(),
-        "MDPDE (#alpha_{g} = 0.2)", "plf");
-    legend->AddEntry(graph_ols_list[0][0].front().get(),
-        "MDPDE (#alpha_{g} = 0)", "plf");
+    if (m_options.tester_choice == TesterType::MODEL_ALPHA_MEMBER)
+    {
+        legend->AddEntry(graph_ols_list[0][0].front().get(),
+            "MDPDE (#alpha_{g} = 0.2)", "plf");
+        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
+            "MDPDE (#alpha_{g} = 0.5)", "plf");
+    }
+    else
+    {
+        legend->AddEntry(graph_mdpde_list[0][0].front().get(),
+            "MDPDE (#alpha_{g} = 0.2)", "plf");
+        legend->AddEntry(graph_ols_list[0][0].front().get(),
+            "MDPDE (#alpha_{g} = 0)", "plf");
+    }
     legend->Draw();
 
     canvas->cd();
