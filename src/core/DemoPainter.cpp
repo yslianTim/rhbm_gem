@@ -87,6 +87,10 @@ void DemoPainter::Painting(void)
         nullptr, nullptr, nullptr, nullptr, nullptr,
         nullptr
     };
+    std::vector<ModelObject *> demo_alpha_carbon_list
+    {
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr
+    };
     for (auto model : m_model_object_list)
     {
         if (model->GetPdbID() == "6Z6U" && model->GetEmdID() == "EMD-11103")
@@ -94,21 +98,25 @@ void DemoPainter::Painting(void)
             demo_model_object = model;
             demo_model_list[3] = model;
             demo_fsc_model_list[0] = model;
+            demo_alpha_carbon_list[0] = model;
         }
         else if (model->GetPdbID() == "8DQV" && model->GetEmdID() == "EMD-27661")
         {
             demo_model_list[2] = model;
             demo_fsc_model_list[1] = model;
+            demo_alpha_carbon_list[1] = model;
         }
         else if (model->GetPdbID() == "9EVX" && model->GetEmdID() == "EMD-50019")
         {
             demo_model_list[1] = model;
             demo_fsc_model_list[2] = model;
+            demo_alpha_carbon_list[2] = model;
         }
         else if (model->GetPdbID() == "6CVM" && model->GetEmdID() == "EMD-7770" )
         {
             demo_model_list[0] = model;
             demo_fsc_model_list[3] = model;
+            demo_alpha_carbon_list[3] = model;
         }
         else if (model->GetPdbID() == "8RQB" && model->GetEmdID() == "EMD-19436")
         {
@@ -137,9 +145,16 @@ void DemoPainter::Painting(void)
         else if (model->GetPdbID() == "6DRV" && model->GetEmdID() == "EMD-8908" )
         {
             demo_fsc_model_list[10] = model;
+            demo_alpha_carbon_list[4] = model; 
+        }
+        else if (model->GetPdbID() == "9GXM" && model->GetEmdID() == "EMD-51667" )
+        {
+            demo_alpha_carbon_list[5] = model;
         }
     };
 
+    PaintGroupWidthAlphaCarbonDemo(demo_alpha_carbon_list, "figure_alpha_carbon_width.pdf");
+/*
     PaintAtomMapValueExample(demo_model_object, "figure_1_a.pdf");
     PaintGroupGausMainChainSummary(demo_model_list, "figure_1_b.pdf");
     PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_c1.pdf", 0);
@@ -157,7 +172,7 @@ void DemoPainter::Painting(void)
             PaintGroupGausMainChainSingle(model, "figure_2_d.pdf");
             PainMapValueComparisonSingle("figure_5.pdf", demo_model_object, model);
         }
-    }
+    }*/
 }
 
 void DemoPainter::PainMapValueComparisonSingle(
@@ -1461,6 +1476,111 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
         legend->AddEntry(gaus_graph[i].get(), element_label.data(), "pl");
     }
     legend->Draw();
+
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
+    #endif
+}
+
+void DemoPainter::PaintGroupWidthAlphaCarbonDemo(
+    const std::vector<ModelObject *> & model_list, const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupWidthAlphaCarbonDemo");
+
+    for (auto & model : model_list) if (model == nullptr) return;
+
+    #ifdef HAVE_ROOT
+    float marker_size{ 1.5f };
+
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 1000) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    auto pad{ ROOTHelper::CreatePad("pad_0","", 0.0, 0.0, 1.0, 1.0) };
+    std::unique_ptr<TH2> frame;
+
+    const size_t model_size{ 6 };
+    const short color_list[model_size] = { kRed-4, kBlue-4, kGreen-3, kMagenta-4, kOrange-3, kCyan+1 };
+    const short marker_list[model_size] = { 20, 21, 22, 23, 33, 34 };
+    const short line_style_list[model_size] = { 1, 2, 3, 4, 5, 6 };
+    const int member_id{ 0 }; // Alpha Carbon
+    std::unique_ptr<TGraphErrors> width_graph[model_size];
+    std::vector<double> width_array;
+    for (size_t j = 0; j < model_size; j++)
+    {
+        auto model_object{ model_list.at(j) };
+        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+
+        auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(member_id) };
+        width_graph[j] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 1);
+        for (int p = 0; p < width_graph[j]->GetN(); p++)
+        {
+            width_array.push_back(width_graph[j]->GetPointY(p));
+        }
+        ROOTHelper::SetMarkerAttribute(width_graph[j].get(), marker_list[j], marker_size, color_list[j]);
+        ROOTHelper::SetLineAttribute(width_graph[j].get(), line_style_list[j], 1, color_list[j]);
+    }
+
+    auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, 0.2) };
+    frame = ROOTHelper::CreateHist2D("frame_total","", 100, 0.0, 1.0, 100, std::get<0>(width_range), std::get<1>(width_range));
+    frame->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
+    frame->GetYaxis()->SetTitle("Width #font[2]{#tau}");
+    frame->GetYaxis()->CenterTitle();
+
+    auto legend{ ROOTHelper::CreateLegend(0.05, 0.85, 0.95, 1.00, false) };
+    ROOTHelper::SetLegendDefaultStyle(legend.get());
+    ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12);
+    ROOTHelper::SetFillAttribute(legend.get(), 4000);
+    for (size_t j = 0; j < model_size; j++)
+    {
+        auto model_object{ model_list.at(j) };
+        auto text{ Form("#font[102]{%s} (FSC = %.2f #AA)", model_object->GetPdbID().data(), model_object->GetResolution()) };
+        legend->AddEntry(width_graph[j].get(), text, "pl");
+    }
+    legend->SetNColumns(2);
+
+    canvas->cd();
+    ROOTHelper::SetPadDefaultStyle(pad.get());
+    pad->Draw();
+    pad->cd();
+    auto left_margin{ 0.15 };
+    auto right_margin{ 0.05 };
+    auto bottom_margin{ 0.12 };
+    auto top_margin{ 0.15 };
+    auto label_size{ 55.0f };
+    ROOTHelper::SetPadMarginInCanvas(gPad, left_margin, right_margin, bottom_margin, top_margin);
+    ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
+    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
+    ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 0.0f);
+    ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.2f);
+    ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), label_size, 0.06f, 103, kCyan+3);
+    ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 50.0f, 0.01f);
+
+    auto x_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.00, 0) };
+    auto y_tick_length{ ROOTHelper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.02, 1) };
+    ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(x_tick_length), 21);
+    ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(y_tick_length), 505);
+    frame->GetXaxis()->SetLimits(-1.0, 20.0);
+    frame->GetXaxis()->ChangeLabel(1, -1.0, 0.0);
+    frame->GetXaxis()->ChangeLabel(-1, -1.0, 0.0);
+    for (size_t i = 0; i < ChemicalDataHelper::GetStandardAminoAcidCount(); i++)
+    {
+        auto residue{ ChemicalDataHelper::GetStandardAminoAcidList().at(i) };
+        auto label{ ChemicalDataHelper::GetLabel(residue) };
+        auto label_index{ static_cast<int>(i) + 2 };
+        frame->GetXaxis()->ChangeLabel(label_index, 90.0, -1, 12, -1, -1, label.data());
+    }
+    frame->SetStats(0);
+    frame->Draw();
+    legend->Draw();
+
+    for (size_t j = 0; j < model_size; j++) width_graph[j]->Draw("PL X0");
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
