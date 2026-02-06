@@ -172,7 +172,7 @@ public:
     static bool AlgorithmMuMDPDE(
         double alpha_g,
         const Eigen::MatrixXd & beta_array,
-        Eigen::VectorXd & mu_median,
+        Eigen::VectorXd & mu_mean,
         Eigen::VectorXd & mu,
         Eigen::ArrayXd & omega_array,
         double & omega_sum,

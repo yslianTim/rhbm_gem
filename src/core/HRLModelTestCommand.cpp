@@ -199,8 +199,10 @@ void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
     std::vector<Eigen::MatrixXd> mean_matrix_ols_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
+    std::vector<Eigen::MatrixXd> mean_matrix_train_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_ols_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
     
     auto outlier_size{ 9 };
     auto outlier_step_size{ 0.025 };
@@ -214,8 +216,10 @@ void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)
     {
         Eigen::MatrixXd mean_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
         Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
         Eigen::MatrixXd sigma_matrix_ols{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
         Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
             std::vector<Eigen::VectorXd> residual_mean_ols_list;
@@ -234,18 +238,22 @@ void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)
             mean_matrix_mdpde.col(i) = residual_mean_mdpde_list.front();
             sigma_matrix_ols.col(i) = residual_sigma_ols_list.front();
             sigma_matrix_mdpde.col(i) = residual_sigma_mdpde_list.front();
+            mean_matrix_train.col(i) = residual_mean_mdpde_list.back();
+            sigma_matrix_train.col(i) = residual_sigma_mdpde_list.back();
         }
         mean_matrix_ols_list.emplace_back(mean_matrix_ols);
         mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
+        mean_matrix_train_list.emplace_back(mean_matrix_train);
         sigma_matrix_ols_list.emplace_back(sigma_matrix_ols);
         sigma_matrix_mdpde_list.emplace_back(sigma_matrix_mdpde);
+        sigma_matrix_train_list.emplace_back(sigma_matrix_train);
     }
 
     PrintDataOutlierResult(
         "bias_outlier_in_data.pdf",
         outlier_list,
-        mean_matrix_ols_list, mean_matrix_mdpde_list,
-        sigma_matrix_ols_list, sigma_matrix_mdpde_list
+        mean_matrix_ols_list, mean_matrix_mdpde_list, mean_matrix_train_list,
+        sigma_matrix_ols_list, sigma_matrix_mdpde_list, sigma_matrix_train_list
     );
 }
 
@@ -284,8 +292,10 @@ void HRLModelTestCommand::RunSimulationTestOnMemberOutlier(void)
 
     std::vector<Eigen::MatrixXd> mean_matrix_median_list;
     std::vector<Eigen::MatrixXd> mean_matrix_mdpde_list;
+    std::vector<Eigen::MatrixXd> mean_matrix_train_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_median_list;
     std::vector<Eigen::MatrixXd> sigma_matrix_mdpde_list;
+    std::vector<Eigen::MatrixXd> sigma_matrix_train_list;
     
     auto outlier_size{ 9 };
     auto outlier_step_size{ 0.025 };
@@ -299,8 +309,10 @@ void HRLModelTestCommand::RunSimulationTestOnMemberOutlier(void)
     {
         Eigen::MatrixXd mean_matrix_median{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
         Eigen::MatrixXd mean_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd mean_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
         Eigen::MatrixXd sigma_matrix_median{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
         Eigen::MatrixXd sigma_matrix_mdpde{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
+        Eigen::MatrixXd sigma_matrix_train{ Eigen::MatrixXd::Zero(gaus_par_size, outlier_size) };
         for (int i = 0; i < outlier_size; i++)
         {
             std::vector<Eigen::VectorXd> residual_mean_median_list;
@@ -318,20 +330,24 @@ void HRLModelTestCommand::RunSimulationTestOnMemberOutlier(void)
 
             mean_matrix_median.col(i) = residual_mean_median_list.front();
             mean_matrix_mdpde.col(i) = residual_mean_mdpde_list.front();
+            mean_matrix_train.col(i) = residual_mean_mdpde_list.back();
             sigma_matrix_median.col(i) = residual_sigma_median_list.front();
             sigma_matrix_mdpde.col(i) = residual_sigma_mdpde_list.front();
+            sigma_matrix_train.col(i) = residual_sigma_mdpde_list.back();
         }
         mean_matrix_median_list.emplace_back(mean_matrix_median);
         mean_matrix_mdpde_list.emplace_back(mean_matrix_mdpde);
+        mean_matrix_train_list.emplace_back(mean_matrix_train);
         sigma_matrix_median_list.emplace_back(sigma_matrix_median);
         sigma_matrix_mdpde_list.emplace_back(sigma_matrix_mdpde);
+        sigma_matrix_train_list.emplace_back(sigma_matrix_train);
     }
 
     PrintMemberOutlierResult(
         "bias_outlier_in_member.pdf",
         outlier_list,
-        mean_matrix_median_list, mean_matrix_mdpde_list,
-        sigma_matrix_median_list, sigma_matrix_mdpde_list
+        mean_matrix_median_list, mean_matrix_mdpde_list, mean_matrix_train_list,
+        sigma_matrix_median_list, sigma_matrix_mdpde_list, sigma_matrix_train_list
     );
 }
 
@@ -401,8 +417,8 @@ void HRLModelTestCommand::RunSimulationTestOnModelAlphaData(void)
     PrintDataOutlierResult(
         "bias_outlier_with_alpha_in_data.pdf",
         outlier_list,
-        mean_matrix_alpha1_list, mean_matrix_alpha2_list,
-        sigma_matrix_alpha1_list, sigma_matrix_alpha2_list
+        mean_matrix_alpha1_list, mean_matrix_alpha2_list, mean_matrix_alpha2_list,
+        sigma_matrix_alpha1_list, sigma_matrix_alpha2_list, sigma_matrix_alpha2_list
     );
 }
 
@@ -487,8 +503,8 @@ void HRLModelTestCommand::RunSimulationTestOnModelAlphaMember(void)
     PrintMemberOutlierResult(
         "bias_outlier_with_alpha_in_member.pdf",
         outlier_list,
-        mean_matrix_alpha1_list, mean_matrix_alpha2_list,
-        sigma_matrix_alpha1_list, sigma_matrix_alpha2_list
+        mean_matrix_alpha1_list, mean_matrix_alpha2_list, mean_matrix_alpha2_list,
+        sigma_matrix_alpha1_list, sigma_matrix_alpha2_list, sigma_matrix_alpha2_list
     );
 }
 
@@ -497,8 +513,10 @@ void HRLModelTestCommand::PrintDataOutlierResult(
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
+    const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list)
+    const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
+    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
     auto file_path{ m_options.folder_path / name };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintDataOutlierResult");
@@ -521,6 +539,7 @@ void HRLModelTestCommand::PrintDataOutlierResult(
 
     std::vector<std::unique_ptr<TGraphErrors>> graph_ols_list[col_size][row_size];
     std::vector<std::unique_ptr<TGraphErrors>> graph_mdpde_list[col_size][row_size];
+    std::vector<std::unique_ptr<TGraphErrors>> graph_train_list[col_size][row_size];
     std::vector<double> y_array[col_size][row_size];
     std::vector<double> global_y_array[row_size];
     for (size_t i = 0; i < col_size; i++)
@@ -529,6 +548,7 @@ void HRLModelTestCommand::PrintDataOutlierResult(
         {
             auto graph_ols{ ROOTHelper::CreateGraphErrors() };
             auto graph_mdpde{ ROOTHelper::CreateGraphErrors() };
+            auto graph_train{ ROOTHelper::CreateGraphErrors() };
             for (int p = 0; p < static_cast<int>(outlier_list.size()); p++)
             {
                 auto x_value{ outlier_list.at(static_cast<size_t>(p)) * 100.0 };
@@ -536,17 +556,24 @@ void HRLModelTestCommand::PrintDataOutlierResult(
                 auto sigma_ols{ sigma_matrix_ols_list.at(i).col(p)(static_cast<int>(j)) };
                 auto mean_mdpde{ mean_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
                 auto sigma_mdpde{ sigma_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
+                auto mean_train{ mean_matrix_train_list.at(i).col(p)(static_cast<int>(j)) };
+                auto sigma_train{ sigma_matrix_train_list.at(i).col(p)(static_cast<int>(j)) };
                 graph_ols->SetPoint(p, x_value, mean_ols);
                 graph_ols->SetPointError(p, 0.0, sigma_ols);
                 graph_mdpde->SetPoint(p, x_value, mean_mdpde);
                 graph_mdpde->SetPointError(p, 0.0, sigma_mdpde);
+                graph_train->SetPoint(p, x_value, mean_train);
+                graph_train->SetPointError(p, 0.0, sigma_train);
                 y_array[i][j].emplace_back(mean_ols);
                 y_array[i][j].emplace_back(mean_mdpde);
+                y_array[i][j].emplace_back(mean_train);
                 global_y_array[i].emplace_back(mean_ols);
                 global_y_array[j].emplace_back(mean_mdpde);
+                global_y_array[j].emplace_back(mean_train);
             }
             graph_ols_list[i][j].emplace_back(std::move(graph_ols));
             graph_mdpde_list[i][j].emplace_back(std::move(graph_mdpde));
+            graph_train_list[i][j].emplace_back(std::move(graph_train));
         }
     }
 
@@ -597,6 +624,7 @@ void HRLModelTestCommand::PrintDataOutlierResult(
 
             short color_ols{ kAzure };
             short color_mdpde{ kRed };
+            short color_train{ kGreen+1 };
             for (auto & graph : graph_ols_list[i][par_id])
             {
                 ROOTHelper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
@@ -609,6 +637,13 @@ void HRLModelTestCommand::PrintDataOutlierResult(
                 ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_mdpde);
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
+                graph->Draw("PL3");
+            }
+            for (auto & graph : graph_train_list[i][par_id])
+            {
+                ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
+                ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
+                ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
                 graph->Draw("PL3");
             }
 
@@ -638,7 +673,7 @@ void HRLModelTestCommand::PrintDataOutlierResult(
     }
 
     canvas->cd();
-    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.18, 0.92, 0.92, 1.00) };
+    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
     pad_extra0->Draw();
     pad_extra0->cd();
     ROOTHelper::SetPadDefaultStyle(pad_extra0.get());
@@ -648,7 +683,7 @@ void HRLModelTestCommand::PrintDataOutlierResult(
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
-    legend->SetNColumns(2);
+    legend->SetNColumns(3);
     if (m_options.tester_choice == TesterType::MODEL_ALPHA_DATA)
     {
         legend->AddEntry(graph_ols_list[0][0].front().get(),
@@ -660,6 +695,8 @@ void HRLModelTestCommand::PrintDataOutlierResult(
     {
         legend->AddEntry(graph_mdpde_list[0][0].front().get(),
             "MDPDE (#alpha_{r} = 0.1)", "plf");
+        legend->AddEntry(graph_train_list[0][0].front().get(),
+            "MDPDE (#alpha_{r} from training)", "plf");
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "Ordinary Least Squares", "plf");
     }
@@ -704,8 +741,10 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
+    const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
-    const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list)
+    const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
+    const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
     auto file_path{ m_options.folder_path / name };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintMemberOutlierResult");
@@ -731,6 +770,7 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
 
     std::vector<std::unique_ptr<TGraphErrors>> graph_ols_list[col_size][row_size];
     std::vector<std::unique_ptr<TGraphErrors>> graph_mdpde_list[col_size][row_size];
+    std::vector<std::unique_ptr<TGraphErrors>> graph_train_list[col_size][row_size];
     std::vector<double> global_y_array;
     for (size_t i = 0; i < col_size; i++)
     {
@@ -738,6 +778,7 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
         {
             auto graph_ols{ ROOTHelper::CreateGraphErrors() };
             auto graph_mdpde{ ROOTHelper::CreateGraphErrors() };
+            auto graph_train{ ROOTHelper::CreateGraphErrors() };
             for (int p = 0; p < static_cast<int>(outlier_list.size()); p++)
             {
                 auto x_value{ outlier_list.at(static_cast<size_t>(p)) * 100.0 };
@@ -745,15 +786,21 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
                 auto sigma_ols{ sigma_matrix_ols_list.at(i).col(p)(static_cast<int>(j)) };
                 auto mean_mdpde{ mean_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
                 auto sigma_mdpde{ sigma_matrix_mdpde_list.at(i).col(p)(static_cast<int>(j)) };
+                auto mean_train{ mean_matrix_train_list.at(i).col(p)(static_cast<int>(j)) };
+                auto sigma_train{ sigma_matrix_train_list.at(i).col(p)(static_cast<int>(j)) };
                 graph_ols->SetPoint(p, x_value, mean_ols);
                 graph_ols->SetPointError(p, 0.0, sigma_ols);
                 graph_mdpde->SetPoint(p, x_value, mean_mdpde);
                 graph_mdpde->SetPointError(p, 0.0, sigma_mdpde);
+                graph_train->SetPoint(p, x_value, mean_train);
+                graph_train->SetPointError(p, 0.0, sigma_train);
                 global_y_array.emplace_back(mean_ols);
                 global_y_array.emplace_back(mean_mdpde);
+                global_y_array.emplace_back(mean_train);
             }
             graph_ols_list[i][j].emplace_back(std::move(graph_ols));
             graph_mdpde_list[i][j].emplace_back(std::move(graph_mdpde));
+            graph_train_list[i][j].emplace_back(std::move(graph_train));
         }
     }
 
@@ -804,6 +851,7 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
 
             short color_ols{ kAzure };
             short color_mdpde{ kRed };
+            short color_train{ kGreen+1 };
             for (auto & graph : graph_ols_list[i][par_id])
             {
                 ROOTHelper::SetMarkerAttribute(graph.get(), 24, 1.5f, color_ols);
@@ -816,6 +864,13 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
                 ROOTHelper::SetMarkerAttribute(graph.get(), 20, 1.5f, color_mdpde);
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 2, color_mdpde);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_mdpde, 0.2f);
+                graph->Draw("PL3");
+            }
+            for (auto & graph : graph_train_list[i][par_id])
+            {
+                ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
+                ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
+                ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
                 graph->Draw("PL3");
             }
 
@@ -847,7 +902,7 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     }
 
     canvas->cd();
-    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.18, 0.92, 0.92, 1.00) };
+    auto pad_extra0{ ROOTHelper::CreatePad("pad_extra0","", 0.02, 0.92, 0.98, 1.00) };
     pad_extra0->Draw();
     pad_extra0->cd();
     ROOTHelper::SetPadDefaultStyle(pad_extra0.get());
@@ -857,7 +912,7 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
-    legend->SetNColumns(2);
+    legend->SetNColumns(3);
     if (m_options.tester_choice == TesterType::MODEL_ALPHA_MEMBER)
     {
         legend->AddEntry(graph_ols_list[0][0].front().get(),
@@ -869,6 +924,8 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     {
         legend->AddEntry(graph_mdpde_list[0][0].front().get(),
             "MDPDE (#alpha_{g} = 0.2)", "plf");
+        legend->AddEntry(graph_train_list[0][0].front().get(),
+            "MDPDE (#alpha_{g} from training)", "plf");
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "MDPDE (#alpha_{g} = 0)", "plf");
     }

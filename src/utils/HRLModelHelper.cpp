@@ -171,19 +171,19 @@ void HRLModelHelper::SetMemberBetaMDPDEList(
 void HRLModelHelper::RunGroupEstimation(
     double alpha_g, bool quiet_mode, int thread_size, int iteration, double tolerance)
 {
-    VectorXd mu_median;
+    VectorXd mu_mean;
     VectorXd mu_MDPDE;
     ArrayXd omega_array;
     double omega_sum;
     MatrixXd capital_lambda;
     std::vector<MatrixXd> member_capital_lambda_list;
     AlgorithmMuMDPDE(
-        alpha_g, m_beta_MDPDE_array, mu_median, mu_MDPDE,
+        alpha_g, m_beta_MDPDE_array, mu_mean, mu_MDPDE,
         omega_array, omega_sum, capital_lambda, member_capital_lambda_list,
         quiet_mode, thread_size, iteration, tolerance
     );
 
-    m_mu_mean = mu_median;
+    m_mu_mean = mu_mean;
     m_mu_MDPDE = mu_MDPDE;
     m_omega_array = omega_array;
     m_capital_lambda = capital_lambda;
@@ -338,27 +338,27 @@ Eigen::VectorXd HRLModelHelper::RunAlphaGTraining(
         for (size_t i = 0; i < subset_size; i++)
         {
             auto beta_matrix_test{ ConvertBetaListToMatrix(data_set_test.at(i), true) };
-            Eigen::VectorXd mu_median_test;
+            Eigen::VectorXd mu_mean_test;
             Eigen::VectorXd mu_mdpde_test;
             Eigen::ArrayXd omega_array_test;
             double omega_sum_test;
             Eigen::MatrixXd capital_lambda_test;
             std::vector<Eigen::MatrixXd> member_capital_lambda_list_test;
             AlgorithmMuMDPDE(
-                alpha, beta_matrix_test, mu_median_test, mu_mdpde_test,
+                alpha, beta_matrix_test, mu_mean_test, mu_mdpde_test,
                 omega_array_test, omega_sum_test, capital_lambda_test,
                 member_capital_lambda_list_test, true
             );
 
             auto beta_matrix_training{ ConvertBetaListToMatrix(data_set_training.at(i), true) };
-            Eigen::VectorXd mu_median_training;
+            Eigen::VectorXd mu_mean_training;
             Eigen::VectorXd mu_mdpde_training;
             Eigen::ArrayXd omega_array_training;
             double omega_sum_training;
             Eigen::MatrixXd capital_lambda_training;
             std::vector<Eigen::MatrixXd> member_capital_lambda_list_training;
             AlgorithmMuMDPDE(
-                alpha, beta_matrix_training, mu_median_training, mu_mdpde_training,
+                alpha, beta_matrix_training, mu_mean_training, mu_mdpde_training,
                 omega_array_training, omega_sum_training, capital_lambda_training,
                 member_capital_lambda_list_training, true
             );
@@ -434,7 +434,7 @@ bool HRLModelHelper::AlgorithmBetaMDPDE(
 bool HRLModelHelper::AlgorithmMuMDPDE(
     double alpha_g,
     const Eigen::MatrixXd & beta_array,
-    Eigen::VectorXd & mu_median,
+    Eigen::VectorXd & mu_mean,
     Eigen::VectorXd & mu,
     Eigen::ArrayXd & omega_array,
     double & omega_sum,
@@ -461,8 +461,8 @@ bool HRLModelHelper::AlgorithmMuMDPDE(
                 "HRLModelHelper::AlgorithmMuMDPDE : "
                 "Only one member is present, skipping Mu MDPDE estimation.");
         }
-        mu_median = beta_array.rowwise().mean();
-        mu = mu_median;
+        mu_mean = beta_array.rowwise().mean();
+        mu = mu_mean;
         omega_array = ArrayXd::Ones(member_size);
         omega_sum = omega_array.sum(); 
         capital_lambda = MatrixXd::Identity(basis_size, basis_size);
@@ -472,8 +472,8 @@ bool HRLModelHelper::AlgorithmMuMDPDE(
         return false;
     }
 
-    mu_median = CalculateMuByMedian(beta_array);
-    mu = mu_median;
+    mu_mean = beta_array.rowwise().mean();
+    mu = CalculateMuByMedian(beta_array);
     capital_lambda = MatrixXd::Identity(basis_size, basis_size);
     VectorXd mu_in_previous_iter{ mu };
     for (int t = 0; t < iteration; t++)

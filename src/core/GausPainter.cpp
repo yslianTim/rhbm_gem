@@ -305,18 +305,26 @@ void GausPainter::PaintAtomLocalGausSummary(
             ROOTHelper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
             ROOTHelper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
             gaus_prior->Draw("SAME");
-            //gaus_mean->Draw("SAME");
+            gaus_mean->Draw("SAME");
 
             auto legend{ ROOTHelper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
             ROOTHelper::SetLegendDefaultStyle(legend.get());
             ROOTHelper::SetFillAttribute(legend.get(), 4000);
             ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
             legend->SetMargin(0.15f);
-            legend->SetNColumns(2);
+            legend->SetNColumns(3);
+            //legend->AddEntry(gaus_prior.get(),
+            //    "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+            //legend->AddEntry(map_value_graph_list.at(0).get(),
+            //    "Members of Value", "l");
             legend->AddEntry(gaus_prior.get(),
-                "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+                Form("#alpha_{r} = %.1f, #alpha_{g} = %.1f",
+                    entry_iter->GetAtomAlphaR(group_key, class_key),
+                    entry_iter->GetAtomAlphaG(group_key, class_key)), "l");
+            legend->AddEntry(gaus_mean.get(),
+                "#alpha_{r} = #alpha_{g} = 0", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
-                "Members of Value", "l");
+                "Map Value", "l");
             legend->Draw();
 
             auto count_text{ ROOTHelper::CreatePaveText(0.45, 0.75, 1.00, 0.90, "nbNDC", false) };
@@ -767,6 +775,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 
         std::map<Residue, std::vector<std::unique_ptr<TGraphErrors>>> map_value_graph_list_map;
         std::map<Residue, std::unique_ptr<TF1>> gaus_prior_map;
+        std::map<Residue, std::unique_ptr<TF1>> gaus_mean_map;
         std::map<Residue, std::string> component_id_map;
         std::vector<double> global_y_array;
         for (auto & group_key : group_key_list)
@@ -776,7 +785,9 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
             auto component_id{ chemical_component_map.at(component_key)->GetComponentId() };
             component_id_map.emplace(residue, component_id);
 
+            auto gaus_mean{ entry_iter->CreateAtomGroupGausFunctionMean(group_key, class_key) };
             auto gaus_prior{ entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key) };
+            gaus_mean_map.emplace(residue, std::move(gaus_mean));
             gaus_prior_map.emplace(residue, std::move(gaus_prior));
 
             auto member_size{ entry_iter->GetAtomObjectList(group_key, class_key).size() };
@@ -809,6 +820,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 
         std::unique_ptr<TH2> frame[col_size][row_size];
         std::unique_ptr<TPaveText> info_text[col_size][row_size];
+        std::unique_ptr<TPaveText> result_text[col_size][row_size];
         for (int i = 0; i < col_size; i++)
         {
             for (int j = 0; j < row_size; j++)
@@ -848,9 +860,22 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
                 info_text[i][j]->AddText(component_id_map.at(residue).data());
                 info_text[i][j]->Draw();
 
+                auto & gaus_mean{ gaus_mean_map.at(residue) };
                 auto & gaus_prior{ gaus_prior_map.at(residue) };
+                ROOTHelper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
                 ROOTHelper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
                 gaus_prior->Draw("SAME");
+                gaus_mean->Draw("SAME");
+
+                result_text[i][j] = ROOTHelper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
+                ROOTHelper::SetPaveTextDefaultStyle(result_text[i][j].get());
+                ROOTHelper::SetLineAttribute(result_text[i][j].get(), 1, 0);
+                ROOTHelper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
+                ROOTHelper::SetFillAttribute(result_text[i][j].get(), 4000);
+                result_text[i][j]->AddText(
+                    Form("A = %.2f,   #tau = %.2f", gaus_prior->GetParameter(0), gaus_prior->GetParameter(2))
+                );
+                result_text[i][j]->Draw();
             }
         }
 
@@ -883,15 +908,18 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
         map_info_text->SetTextSize(70.0f);
         map_info_text->Draw();
 
-        auto legend{ ROOTHelper::CreateLegend(0.60, 0.02, 1.00, 0.99, false) };
+        auto legend{ ROOTHelper::CreateLegend(0.50, 0.02, 1.00, 0.99, false) };
         ROOTHelper::SetLegendDefaultStyle(legend.get());
         ROOTHelper::SetFillAttribute(legend.get(), 4000);
-        ROOTHelper::SetTextAttribute(legend.get(), 60.0f, 133, 12, 0.0);
+        ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
         legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
-            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+            Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
+            entry_iter->GetAtomAlphaR(group_key_list.at(0), class_key), entry_iter->GetAtomAlphaG(group_key_list.at(0), class_key)), "l");
+        legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
+            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = #alpha_{g} = 0", "l");
         legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),
-            "Members of Value", "l");
+            "Members of Map Value", "l");
         legend->Draw();
 
         canvas->cd();

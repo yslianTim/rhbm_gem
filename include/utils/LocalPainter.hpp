@@ -15,6 +15,7 @@ public:
         const Eigen::MatrixXd & data_matrix,
         const std::vector<double> & alpha_list,
         const std::string & x_axis_title,
+        const std::string & y_axis_title,
         const std::string & file_name
     );
 
