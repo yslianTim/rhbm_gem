@@ -1,5 +1,48 @@
 # em_map_analysis
 
+## Getting Started (macOS / Linux)
+
+This project uses CMake + C++17. By default it prefers system-installed Eigen3 / CLI11 / pybind11 / SQLite3; if any are missing, CMake automatically falls back to the bundled copies in `third_party/`. To force bundled deps, pass `-DUSE_SYSTEM_LIBS=OFF` during configure.
+
+**macOS (Homebrew)**
+1. Install Xcode Command Line Tools:
+```bash
+xcode-select --install
+```
+1. Install dependencies (adjust as needed):
+```bash
+brew install cmake eigen sqlite3 python pybind11 cli11
+```
+
+**Linux (Ubuntu/Debian example)**
+1. Install dependencies (adjust as needed):
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake pkg-config python3 python3-dev libsqlite3-dev libeigen3-dev
+```
+1. If you want to build Python bindings, also install:
+```bash
+sudo apt install -y pybind11-dev
+```
+
+**Build and run from scratch**
+1. From the project root:
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+1. Run the main executable:
+```bash
+./build/PotentialMap_run --help
+```
+
+**Troubleshooting**
+1. If you do not have Eigen / SQLite3 / pybind11 / CLI11 installed, you can skip installing them; CMake will use the bundled versions in `third_party/`.
+1. To force bundled deps, configure with:
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
+```
+
 ## Verbosity Levels
 
 The command line option `-v, --verbose` controls how much information is printed.
