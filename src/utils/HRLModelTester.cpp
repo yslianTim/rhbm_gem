@@ -147,6 +147,10 @@ bool HRLModelTester::RunBetaMDPDETest(
     double outlier_ratio,
     int thread_size)
 {
+#ifndef USE_OPENMP
+    (void)thread_size;
+#endif
+
     auto local_alpha_r_list{ alpha_r_list };
     auto alpha_size{ local_alpha_r_list.size() + 1 }; // add one for training alpha_r
     std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
@@ -236,6 +240,10 @@ bool HRLModelTester::RunMuMDPDETest(
     double outlier_ratio,
     int thread_size)
 {
+#ifndef USE_OPENMP
+    (void)thread_size;
+#endif
+
     auto local_alpha_g_list{ alpha_g_list };
     auto alpha_size{ local_alpha_g_list.size() + 1 }; // add one for training alpha_g
     std::vector<Eigen::MatrixXd> residual_matrix_median_list(alpha_size);

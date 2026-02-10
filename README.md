@@ -11,7 +11,7 @@ xcode-select --install
 ```
 1. Install dependencies (adjust as needed):
 ```bash
-brew install cmake eigen sqlite3 python pybind11 cli11
+brew install cmake eigen sqlite3 python pybind11 cli11 libomp
 ```
 
 **Linux (Ubuntu/Debian example)**
@@ -41,6 +41,30 @@ cmake --build build -j
 1. To force bundled deps, configure with:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
+```
+
+**OpenMP mode checks (both OFF and ON)**
+1. Force OpenMP OFF (macOS / Linux):
+```bash
+cmake -S . -B build-openmp-off -DCMAKE_BUILD_TYPE=Release -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=TRUE
+cmake --build build-openmp-off -j
+./build-openmp-off/PotentialMap_run --help
+```
+1. Force OpenMP ON on macOS (Homebrew `libomp`):
+```bash
+cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
+cmake --build build-openmp-on -j
+./build-openmp-on/PotentialMap_run --help
+```
+1. Force OpenMP ON on Linux (no `OpenMP_ROOT` needed):
+```bash
+cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release
+cmake --build build-openmp-on -j
+./build-openmp-on/PotentialMap_run --help
+```
+1. If OpenMP is missing on Linux, install:
+```bash
+sudo apt install -y libomp-dev
 ```
 
 ## Verbosity Levels

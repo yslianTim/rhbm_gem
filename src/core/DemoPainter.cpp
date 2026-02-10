@@ -80,7 +80,6 @@ void DemoPainter::Painting(void)
         model->BuildKDTreeRoot();
     }
 
-    ModelObject * demo_model_object{ nullptr };
     std::vector<ModelObject *> demo_model_list{ nullptr, nullptr, nullptr, nullptr };
     std::vector<ModelObject *> demo_fsc_model_list
     {
@@ -96,7 +95,6 @@ void DemoPainter::Painting(void)
     {
         if (model->GetPdbID() == "6Z6U" && model->GetEmdID() == "EMD-11103")
         {
-            demo_model_object = model;
             demo_model_list[3] = model;
             demo_fsc_model_list[0] = model;
             demo_alpha_carbon_list[0] = model;

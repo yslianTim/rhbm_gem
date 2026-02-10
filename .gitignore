@@ -39,6 +39,7 @@ Thumbs.db
 
 # Build directories
 build/
+build*/
 Debug/
 Release/
 

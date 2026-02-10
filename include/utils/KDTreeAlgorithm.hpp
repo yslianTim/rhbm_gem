@@ -118,6 +118,10 @@ public:
     {
         std::vector<std::vector<NodeType *>> results(query_nodes.size());
 
+#ifndef USE_OPENMP
+        (void)thread_size;
+#endif
+
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(thread_size)
 #endif
@@ -175,7 +179,6 @@ private:
         constexpr int dimension{ 3 };
         auto axis{ static_cast<size_t>(depth % dimension) };
         auto count{ std::distance(begin, end) };
-        constexpr int parallel_threshold{ 1024 };
         auto mid_iter{ begin + count / 2 };
 
         std::nth_element(
@@ -199,6 +202,7 @@ private:
         }
 
 #ifdef USE_OPENMP
+        constexpr int parallel_threshold{ 1024 };
         if (thread_size > 1 && count >= parallel_threshold)
         {
             auto left_threads{ thread_size / 2 };
