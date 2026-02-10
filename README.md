@@ -67,6 +67,48 @@ cmake --build build-openmp-on -j
 sudo apt install -y libomp-dev
 ```
 
+**CMake parameters (quick reference)**
+The following options are directly supported by this project.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `BUILD_TESTING` | `ON` | Build unit tests (`unit_tests` target). |
+| `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3 / CLI11 / pybind11 / SQLite3. If `OFF`, use bundled `third_party` copies. |
+| `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
+
+Common CMake cache variables that are useful when configuring this project:
+
+| Parameter | Example | Description |
+|---|---|---|
+| `CMAKE_BUILD_TYPE` | `Release` | Build type for single-config generators (e.g. Make/Ninja). |
+| `CMAKE_PREFIX_PATH` | `/opt/homebrew;/opt/homebrew/opt/libomp` | Extra package search prefixes for `find_package(...)`. |
+| `OpenMP_ROOT` | `/opt/homebrew/opt/libomp` | Help CMake find OpenMP on macOS/Homebrew. |
+| `CMAKE_DISABLE_FIND_PACKAGE_OpenMP` | `TRUE` | Force OpenMP detection off. |
+| `CMAKE_DISABLE_FIND_PACKAGE_ROOT` | `TRUE` | Force ROOT detection off. |
+| `CMAKE_DISABLE_FIND_PACKAGE_Eigen3` | `TRUE` | Force Eigen3 system detection off (bundled fallback if available). |
+| `CMAKE_DISABLE_FIND_PACKAGE_CLI11` | `TRUE` | Force CLI11 system detection off (bundled fallback if available). |
+| `CMAKE_DISABLE_FIND_PACKAGE_PYBIND11` | `TRUE` | Force pybind11 system detection off (bundled fallback if available). |
+| `CMAKE_DISABLE_FIND_PACKAGE_SQLite3` | `TRUE` | Force SQLite3 system detection off (bundled fallback if available). |
+
+Examples:
+
+```bash
+# Release build, no tests
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+
+# Force bundled third-party dependencies
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
+
+# Enable OpenMP on macOS (Homebrew)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
+```
+
+To inspect the full cache after configure:
+
+```bash
+cmake -S . -B build -LAH
+```
+
 ## Verbosity Levels
 
 The command line option `-v, --verbose` controls how much information is printed.
