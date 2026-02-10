@@ -1,5 +1,26 @@
 # em_map_analysis
 
+## License and Third-Party Notices
+
+- Project license: Apache License 2.0 (see `LICENSE`).
+- Third-party licenses and attribution summary: see `THIRD_PARTY_NOTICES.md`.
+- This repository can use either system packages or bundled third-party dependencies under `third_party/` depending on CMake configuration.
+
+**Distribution policy (default release profile)**
+1. Release builds define `EIGEN_MPL2_ONLY` to constrain Eigen header usage to MPL-2.0-only subsets.
+2. ROOT is optional and not required for non-plot workflows; release artifacts may be shipped without ROOT-linked binaries.
+3. If binaries are distributed, include `LICENSE` and `THIRD_PARTY_NOTICES.md` in the package.
+4. If large `.sqlite` datasets are distributed, verify their source-data license terms separately.
+
+**Compliance checklist (source and binary release)**
+1. Include `LICENSE`.
+2. Include `THIRD_PARTY_NOTICES.md`.
+3. Ensure bundled third-party license file paths referenced in `THIRD_PARTY_NOTICES.md` remain valid.
+4. Validate build variants used for release:
+   - `USE_SYSTEM_LIBS=OFF`
+   - `USE_SYSTEM_LIBS=ON`
+   - `CMAKE_DISABLE_FIND_PACKAGE_ROOT=TRUE`
+
 ## Getting Started (macOS / Linux)
 
 This project uses CMake + C++17. By default it prefers system-installed Eigen3 / CLI11 / pybind11 / SQLite3; if any are missing, CMake automatically falls back to the bundled copies in `third_party/`. To force bundled deps, pass `-DUSE_SYSTEM_LIBS=OFF` during configure.
@@ -11,7 +32,7 @@ xcode-select --install
 ```
 2. Install dependencies (adjust as needed):
 ```bash
-brew install cmake eigen sqlite3 python pybind11 cli11 libomp
+brew install cmake eigen sqlite3 python pybind11 cli11 libomp root
 ```
 
 **Linux (Ubuntu/Debian example)**
@@ -24,6 +45,39 @@ sudo apt install -y build-essential cmake pkg-config python3 python3-dev libsqli
 ```bash
 sudo apt install -y pybind11-dev
 ```
+
+**ROOT (recommended for plotting features)**
+This project can build without ROOT, but ROOT is strongly recommended if you need figure/plot output.
+
+1. Install ROOT on macOS (Homebrew):
+```bash
+brew install root
+```
+2. Install ROOT on Linux (choose one):
+```bash
+# Option A: package manager (if available on your distro)
+sudo apt update
+sudo apt install -y root-system
+
+# Option B: conda-forge (works on most Linux setups)
+conda create -n emmap-root -c conda-forge root
+conda activate emmap-root
+```
+3. Verify ROOT installation:
+```bash
+root-config --version
+root-config --prefix
+```
+4. If CMake cannot find ROOT automatically, pass ROOT prefix explicitly:
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(root-config --prefix)"
+```
+
+Without ROOT, build still succeeds, but plotting code paths are compiled out (`HAVE_ROOT` disabled). In practice:
+1. `potential_display` (all painter modes: `gaus`, `model`, `comparison`, `demo`, `atom`) will not generate ROOT-based figures.
+2. `map_visualization` will not generate the 2D histogram plot output from `LocalPainter::PaintHistogram2D`.
+3. `potential_analysis` study plots from `LocalPainter::PaintTemplate1` (for example alpha-scan figure outputs) will not be generated.
+4. Non-plotting workflows (data processing / analysis / simulation / dumping) remain available.
 
 **Build and run from scratch**
 1. From the project root:

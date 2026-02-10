@@ -34,6 +34,10 @@ target_compile_options(CompilerFlags INTERFACE
     "$<${gcc_like_cxx}:$<BUILD_INTERFACE:-Wall;-Wextra;-Wshadow;-Wformat=2;-Wpedantic;-Wconversion;-Wsign-conversion;-Wunused;-Wcast-align;-Wold-style-cast;-Wstrict-overflow;-Wno-psabi>>"
     "$<${msvc_cxx}:$<BUILD_INTERFACE:-W3;/Zc:__cplusplus>>"
 )
+# Constrain Eigen headers in Release builds to MPL-2.0-only subsets.
+target_compile_definitions(CompilerFlags INTERFACE
+    "$<$<CONFIG:Release>:EIGEN_MPL2_ONLY>"
+)
 
 # Apply coverage flags via helper when requested
 #if(ENABLE_COVERAGE AND BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
