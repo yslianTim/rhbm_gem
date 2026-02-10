@@ -1,13 +1,15 @@
 cmake_minimum_required(VERSION 3.15)
-message(STATUS "-----------------------------")
-message(STATUS "-- EP Map Analysis Project --")
-message(STATUS "-----------------------------")
-project(PotentialMap
+message(STATUS "----------------------------")
+message(STATUS "---   RHBM-GEM Project   ---")
+message(STATUS "----------------------------")
+project(RHBM_GEM
     VERSION 1.0
-    DESCRIPTION TestProject
+    DESCRIPTION RHBM-GEM
     HOMEPAGE_URL xxx
     LANGUAGES C CXX
 )
+
+set(PROJECT_DISPLAY_NAME "RHBM-GEM")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

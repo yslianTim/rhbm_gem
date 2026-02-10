@@ -1,4 +1,4 @@
-# em_map_analysis
+# RHBM-GEM
 
 ## License and Third-Party Notices
 
@@ -87,7 +87,7 @@ cmake --build build -j
 ```
 2. Run the main executable:
 ```bash
-./build/PotentialMap_run --help
+./build/RHBM-GEM_run --help
 ```
 
 **Troubleshooting**
@@ -102,19 +102,19 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 ```bash
 cmake -S . -B build-openmp-off -DCMAKE_BUILD_TYPE=Release -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=TRUE
 cmake --build build-openmp-off -j
-./build-openmp-off/PotentialMap_run --help
+./build-openmp-off/RHBM-GEM_run --help
 ```
 2. Force OpenMP ON on macOS (Homebrew `libomp`):
 ```bash
 cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
 cmake --build build-openmp-on -j
-./build-openmp-on/PotentialMap_run --help
+./build-openmp-on/RHBM-GEM_run --help
 ```
 3. Force OpenMP ON on Linux (no `OpenMP_ROOT` needed):
 ```bash
 cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release
 cmake --build build-openmp-on -j
-./build-openmp-on/PotentialMap_run --help
+./build-openmp-on/RHBM-GEM_run --help
 ```
 4. If OpenMP is missing on Linux, install:
 ```bash

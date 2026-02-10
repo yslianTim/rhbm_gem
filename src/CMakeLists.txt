@@ -2,17 +2,20 @@ add_subdirectory(core)
 add_subdirectory(utils)
 add_subdirectory(data)
 
-set(MAIN_EXEC_NAME ${CMAKE_PROJECT_NAME}_run)
-add_executable(${MAIN_EXEC_NAME} main.cpp)
+set(MAIN_EXEC_TARGET ${CMAKE_PROJECT_NAME}_run)
+add_executable(${MAIN_EXEC_TARGET} main.cpp)
+set_target_properties(${MAIN_EXEC_TARGET} PROPERTIES
+    OUTPUT_NAME "${PROJECT_DISPLAY_NAME}_run"
+)
 
-target_link_libraries(${MAIN_EXEC_NAME} PUBLIC
+target_link_libraries(${MAIN_EXEC_TARGET} PUBLIC
     core
     utils
     data
     CompilerFlags
 )
 
-target_include_directories(${MAIN_EXEC_NAME} PUBLIC "${PROJECT_BINARY_DIR}")
+target_include_directories(${MAIN_EXEC_TARGET} PUBLIC "${PROJECT_BINARY_DIR}")
 
 # Install rules
-install(TARGETS ${MAIN_EXEC_NAME} DESTINATION bin)
+install(TARGETS ${MAIN_EXEC_TARGET} DESTINATION bin)
