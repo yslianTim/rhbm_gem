@@ -402,8 +402,10 @@ bool HRLModelHelper::AlgorithmBetaMDPDE(
         beta_OLS = VectorXd::Zero(X.cols());
         beta = VectorXd::Zero(X.cols());
         sigma_square = std::numeric_limits<double>::max();
-        W = Eigen::DiagonalMatrix<double, Eigen::Dynamic>::Identity(1);
-        capital_sigma = Eigen::DiagonalMatrix<double, Eigen::Dynamic>::Identity(1);
+        W.resize(1);
+        W.diagonal().setOnes();
+        capital_sigma.resize(1);
+        capital_sigma.diagonal().setOnes();
         return false;
     }
 

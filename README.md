@@ -9,7 +9,7 @@ This project uses CMake + C++17. By default it prefers system-installed Eigen3 /
 ```bash
 xcode-select --install
 ```
-1. Install dependencies (adjust as needed):
+2. Install dependencies (adjust as needed):
 ```bash
 brew install cmake eigen sqlite3 python pybind11 cli11 libomp
 ```
@@ -20,7 +20,7 @@ brew install cmake eigen sqlite3 python pybind11 cli11 libomp
 sudo apt update
 sudo apt install -y build-essential cmake pkg-config python3 python3-dev libsqlite3-dev libeigen3-dev
 ```
-1. If you want to build Python bindings, also install:
+2. If you want to build Python bindings, also install:
 ```bash
 sudo apt install -y pybind11-dev
 ```
@@ -31,14 +31,14 @@ sudo apt install -y pybind11-dev
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
-1. Run the main executable:
+2. Run the main executable:
 ```bash
 ./build/PotentialMap_run --help
 ```
 
 **Troubleshooting**
 1. If you do not have Eigen / SQLite3 / pybind11 / CLI11 installed, you can skip installing them; CMake will use the bundled versions in `third_party/`.
-1. To force bundled deps, configure with:
+2. To force bundled deps, configure with:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 ```
@@ -50,45 +50,45 @@ cmake -S . -B build-openmp-off -DCMAKE_BUILD_TYPE=Release -DCMAKE_DISABLE_FIND_P
 cmake --build build-openmp-off -j
 ./build-openmp-off/PotentialMap_run --help
 ```
-1. Force OpenMP ON on macOS (Homebrew `libomp`):
+2. Force OpenMP ON on macOS (Homebrew `libomp`):
 ```bash
 cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
 cmake --build build-openmp-on -j
 ./build-openmp-on/PotentialMap_run --help
 ```
-1. Force OpenMP ON on Linux (no `OpenMP_ROOT` needed):
+3. Force OpenMP ON on Linux (no `OpenMP_ROOT` needed):
 ```bash
 cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release
 cmake --build build-openmp-on -j
 ./build-openmp-on/PotentialMap_run --help
 ```
-1. If OpenMP is missing on Linux, install:
+4. If OpenMP is missing on Linux, install:
 ```bash
 sudo apt install -y libomp-dev
 ```
 
 **CMake parameters (quick reference)**
-The following options are directly supported by this project.
+Beginner (most common):
 
 | Parameter | Default | Description |
 |---|---|---|
+| `CMAKE_BUILD_TYPE` | generator-dependent | Build type for single-config generators (for example `Release` / `Debug`). |
 | `BUILD_TESTING` | `ON` | Build unit tests (`unit_tests` target). |
 | `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3 / CLI11 / pybind11 / SQLite3. If `OFF`, use bundled `third_party` copies. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
 
-Common CMake cache variables that are useful when configuring this project:
+Advanced (debugging / environment control):
 
 | Parameter | Example | Description |
 |---|---|---|
-| `CMAKE_BUILD_TYPE` | `Release` | Build type for single-config generators (e.g. Make/Ninja). |
 | `CMAKE_PREFIX_PATH` | `/opt/homebrew;/opt/homebrew/opt/libomp` | Extra package search prefixes for `find_package(...)`. |
 | `OpenMP_ROOT` | `/opt/homebrew/opt/libomp` | Help CMake find OpenMP on macOS/Homebrew. |
 | `CMAKE_DISABLE_FIND_PACKAGE_OpenMP` | `TRUE` | Force OpenMP detection off. |
 | `CMAKE_DISABLE_FIND_PACKAGE_ROOT` | `TRUE` | Force ROOT detection off. |
-| `CMAKE_DISABLE_FIND_PACKAGE_Eigen3` | `TRUE` | Force Eigen3 system detection off (bundled fallback if available). |
-| `CMAKE_DISABLE_FIND_PACKAGE_CLI11` | `TRUE` | Force CLI11 system detection off (bundled fallback if available). |
-| `CMAKE_DISABLE_FIND_PACKAGE_PYBIND11` | `TRUE` | Force pybind11 system detection off (bundled fallback if available). |
-| `CMAKE_DISABLE_FIND_PACKAGE_SQLite3` | `TRUE` | Force SQLite3 system detection off (bundled fallback if available). |
+
+Notes:
+1. For Eigen3 / CLI11 / pybind11 / SQLite3, `-DUSE_SYSTEM_LIBS=OFF` is usually simpler than setting multiple `CMAKE_DISABLE_FIND_PACKAGE_*` flags.
+2. `CMAKE_DISABLE_FIND_PACKAGE_*` is mainly useful for troubleshooting and reproducible CI scenarios.
 
 Examples:
 
