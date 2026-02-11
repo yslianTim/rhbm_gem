@@ -23,7 +23,7 @@ RHBM-GEM is a robust hierarchical Bayesian framework for Gaussian modeling and p
    - `USE_SYSTEM_LIBS=ON`
    - `CMAKE_DISABLE_FIND_PACKAGE_ROOT=TRUE`
 
-## Getting Started (macOS / Linux)
+## Getting Started (macOS / Linux / Windows)
 
 This project uses CMake + C++17. By default it prefers system-installed Eigen3 / CLI11 / pybind11 / SQLite3; if any are missing, CMake automatically falls back to the bundled copies in `third_party/`. To force bundled deps, pass `-DUSE_SYSTEM_LIBS=OFF` during configure.
 
@@ -48,6 +48,24 @@ sudo apt install -y build-essential cmake pkg-config python3 python3-dev libsqli
 sudo apt install -y pybind11-dev
 ```
 
+**Windows (PowerShell + Visual Studio 2022)**
+1. Install prerequisites:
+   - Visual Studio 2022 (or Build Tools) with the `Desktop development with C++` workload
+   - CMake (>= 3.15), Python 3, and Git
+2. Quick start using bundled dependencies (recommended on Windows):
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DUSE_SYSTEM_LIBS=OFF -DRHBM_GEM_ROOT_MODE=OFF
+cmake --build build --config Release
+```
+3. Optional: use vcpkg system dependencies instead of bundled copies:
+```powershell
+git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
+& $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
+& $env:USERPROFILE\vcpkg\vcpkg.exe install eigen3 sqlite3 pybind11 cli11:x64-windows
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
+cmake --build build --config Release
+```
+
 **ROOT (recommended for plotting features)**
 This project can build without ROOT, but ROOT is strongly recommended if you need figure/plot output.
 
@@ -65,14 +83,28 @@ sudo apt install -y root-system
 conda create -n emmap-root -c conda-forge root
 conda activate emmap-root
 ```
-3. Verify ROOT installation:
+3. Install ROOT on Windows (conda-forge):
+```powershell
+conda create -n emmap-root -c conda-forge root
+conda activate emmap-root
+```
+4. Verify ROOT installation:
 ```bash
 root-config --version
 root-config --prefix
 ```
-4. If CMake cannot find ROOT automatically, pass ROOT prefix explicitly:
+On Windows + conda, verify with PowerShell:
+```powershell
+where.exe root.exe
+root.exe -b -q
+```
+5. If CMake cannot find ROOT automatically, pass ROOT prefix explicitly:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(root-config --prefix)"
+```
+On Windows + conda, use PowerShell:
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$env:CONDA_PREFIX;$env:CONDA_PREFIX\Library"
 ```
 
 Without ROOT, build still succeeds, but plotting code paths are compiled out (`HAVE_ROOT` disabled). In practice:
@@ -108,6 +140,14 @@ cmake --install build --prefix "$HOME/.local"
 5. Run the installed executable:
 ```bash
 "$HOME/.local/bin/RHBM-GEM" --help
+```
+Windows PowerShell equivalent:
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DUSE_SYSTEM_LIBS=OFF -DRHBM_GEM_ROOT_MODE=OFF
+cmake --build build --config Release
+.\build\Release\RHBM-GEM.exe --help
+cmake --install build --config Release --prefix "$env:USERPROFILE\AppData\Local\RHBM-GEM"
+& "$env:USERPROFILE\AppData\Local\RHBM-GEM\bin\RHBM-GEM.exe" --help
 ```
 
 **Troubleshooting**
