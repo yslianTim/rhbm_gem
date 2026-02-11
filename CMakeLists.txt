@@ -5,7 +5,7 @@ message(STATUS "----------------------------")
 project(RHBM_GEM
     VERSION 1.0
     DESCRIPTION RHBM-GEM
-    HOMEPAGE_URL xxx
+    HOMEPAGE_URL https://github.com/yslianTim/em_map_analysis
     LANGUAGES C CXX
 )
 
