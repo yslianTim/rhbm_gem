@@ -79,7 +79,7 @@ Without ROOT, build still succeeds, but plotting code paths are compiled out (`H
 3. `potential_analysis` study plots from `LocalPainter::PaintTemplate1` (for example alpha-scan figure outputs) will not be generated.
 4. Non-plotting workflows (data processing / analysis / simulation / dumping) remain available.
 
-**Build and run from scratch**
+**Build, install, and run from scratch**
 1. From the project root:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -87,7 +87,25 @@ cmake --build build -j
 ```
 2. Run the main executable:
 ```bash
-./build/RHBM-GEM_run --help
+./build/RHBM-GEM --help
+```
+3. Install to the default prefix (`CMAKE_INSTALL_PREFIX`, usually `/usr/local`):
+```bash
+cmake --install build
+```
+4. Install to a user-specified path (choose one):
+```bash
+# Option A: set install prefix at configure time
+cmake -S . -B build-local -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+cmake --build build-local -j
+cmake --install build-local
+
+# Option B: override prefix at install time
+cmake --install build --prefix "$HOME/.local"
+```
+5. Run the installed executable:
+```bash
+"$HOME/.local/bin/RHBM-GEM" --help
 ```
 
 **Troubleshooting**
@@ -102,19 +120,19 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 ```bash
 cmake -S . -B build-openmp-off -DCMAKE_BUILD_TYPE=Release -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=TRUE
 cmake --build build-openmp-off -j
-./build-openmp-off/RHBM-GEM_run --help
+./build-openmp-off/RHBM-GEM --help
 ```
 2. Force OpenMP ON on macOS (Homebrew `libomp`):
 ```bash
 cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
 cmake --build build-openmp-on -j
-./build-openmp-on/RHBM-GEM_run --help
+./build-openmp-on/RHBM-GEM --help
 ```
 3. Force OpenMP ON on Linux (no `OpenMP_ROOT` needed):
 ```bash
 cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release
 cmake --build build-openmp-on -j
-./build-openmp-on/RHBM-GEM_run --help
+./build-openmp-on/RHBM-GEM --help
 ```
 4. If OpenMP is missing on Linux, install:
 ```bash
@@ -127,6 +145,7 @@ Beginner (most common):
 | Parameter | Default | Description |
 |---|---|---|
 | `CMAKE_BUILD_TYPE` | generator-dependent | Build type for single-config generators (for example `Release` / `Debug`). |
+| `CMAKE_INSTALL_PREFIX` | platform-dependent (usually `/usr/local`) | Base install path for `cmake --install`; change this to install into a custom location. |
 | `BUILD_TESTING` | `ON` | Build unit tests (`unit_tests` target). |
 | `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3 / CLI11 / pybind11 / SQLite3. If `OFF`, use bundled `third_party` copies. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |

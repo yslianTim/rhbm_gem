@@ -10,6 +10,15 @@ project(RHBM_GEM
 )
 
 set(PROJECT_DISPLAY_NAME "RHBM-GEM")
+include(GNUInstallDirs)
+
+# Keep installed binaries relocatable with project-local shared libraries.
+if(APPLE)
+    set(CMAKE_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+elseif(UNIX)
+    set(CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+endif()
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -137,12 +146,24 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 add_subdirectory(src)
 add_subdirectory(bindings)
 
+# Install public headers and legal notices.
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(
+    FILES
+        "${CMAKE_SOURCE_DIR}/LICENSE"
+        "${CMAKE_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
+)
+
 # -------------------------------------------------
 # Unit tests (GoogleTest via FetchContent)
 # -------------------------------------------------
 if(BUILD_TESTING)
     include(CTest)
     enable_testing()
+    # Do not export test framework artifacts in normal project installs.
+    set(INSTALL_GTEST OFF CACHE BOOL "Disable GoogleTest install targets" FORCE)
+    set(INSTALL_GMOCK OFF CACHE BOOL "Disable GoogleMock install targets" FORCE)
 
     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/googletest/CMakeLists.txt")
         message(STATUS "Using bundled GoogleTest")
