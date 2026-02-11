@@ -117,29 +117,42 @@ cmake --install build --prefix "$HOME/.local"
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 ```
 
-**OpenMP mode checks (both OFF and ON)**
+**Feature mode checks (`AUTO` / `OFF` / `ON`)**
 1. Force OpenMP OFF (macOS / Linux):
 ```bash
-cmake -S . -B build-openmp-off -DCMAKE_BUILD_TYPE=Release -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=TRUE
+cmake -S . -B build-openmp-off -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_OPENMP_MODE=OFF
 cmake --build build-openmp-off -j
 ./build-openmp-off/RHBM-GEM --help
 ```
 2. Force OpenMP ON on macOS (Homebrew `libomp`):
 ```bash
-cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
+cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_OPENMP_MODE=ON -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
 cmake --build build-openmp-on -j
 ./build-openmp-on/RHBM-GEM --help
 ```
 3. Force OpenMP ON on Linux (no `OpenMP_ROOT` needed):
 ```bash
-cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_OPENMP_MODE=ON
 cmake --build build-openmp-on -j
 ./build-openmp-on/RHBM-GEM --help
 ```
-4. If OpenMP is missing on Linux, install:
+4. Force ROOT OFF even if ROOT is installed:
+```bash
+cmake -S . -B build-root-off -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=OFF
+cmake --build build-root-off -j
+./build-root-off/RHBM-GEM --help
+```
+5. Force ROOT ON (configure fails if ROOT is unavailable):
+```bash
+cmake -S . -B build-root-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON
+```
+6. If OpenMP is missing on Linux, install:
 ```bash
 sudo apt install -y libomp-dev
 ```
+
+**Python bindings module name**
+1. The canonical Python extension module name is `rhbm_gem_module`.
 
 **Coverage test without additional third-party libraries (`gcov`)**
 This project supports text-based coverage reports using compiler-provided `gcov` only.
@@ -180,6 +193,10 @@ Beginner (most common):
 | `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3 / CLI11 / pybind11 / SQLite3. If `OFF`, use bundled `third_party` copies. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
 | `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `bindings/`. Set `OFF` for pure C++ builds without Python dependency. |
+| `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. `ON` fails configure if unavailable. |
+| `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. `ON` fails configure if unavailable. |
+| `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
+| `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for Python extension module (overrides layout). |
 
 Advanced (debugging / environment control):
 
@@ -187,12 +204,11 @@ Advanced (debugging / environment control):
 |---|---|---|
 | `CMAKE_PREFIX_PATH` | `/opt/homebrew;/opt/homebrew/opt/libomp` | Extra package search prefixes for `find_package(...)`. |
 | `OpenMP_ROOT` | `/opt/homebrew/opt/libomp` | Help CMake find OpenMP on macOS/Homebrew. |
-| `CMAKE_DISABLE_FIND_PACKAGE_OpenMP` | `TRUE` | Force OpenMP detection off. |
-| `CMAKE_DISABLE_FIND_PACKAGE_ROOT` | `TRUE` | Force ROOT detection off. |
+| `Python_EXECUTABLE` | `/opt/homebrew/bin/python3` | Select Python interpreter used to build bindings and derive major/minor version for install layout. |
 
 Notes:
 1. For Eigen3 / CLI11 / pybind11 / SQLite3, `-DUSE_SYSTEM_LIBS=OFF` is usually simpler than setting multiple `CMAKE_DISABLE_FIND_PACKAGE_*` flags.
-2. `CMAKE_DISABLE_FIND_PACKAGE_*` is mainly useful for troubleshooting and reproducible CI scenarios.
+2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
 
 Examples:
 
@@ -206,8 +222,17 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 # Pure C++ build (skip Python bindings)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
 
-# Enable OpenMP on macOS (Homebrew)
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
+# Force ROOT/OpenMP requirements
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GEM_OPENMP_MODE=ON
+
+# Install Python module into <prefix>/lib/pythonX.Y/site-packages (default)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON
+cmake --install build --prefix "$HOME/.local"
+PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PYTHONPATH="$HOME/.local/lib/python${PYVER}/site-packages" python3 -c "import rhbm_gem_module"
+
+# Keep old libdir install style for Python module
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR
 ```
 
 After installation, downstream CMake projects can consume this project with:

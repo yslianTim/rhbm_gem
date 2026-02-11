@@ -33,6 +33,44 @@ option(BUILD_TESTING "Build unit tests" ON)
 option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
 option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
 option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)
+set(RHBM_GEM_OPENMP_MODE "AUTO" CACHE STRING "OpenMP feature mode: AUTO, ON, or OFF")
+set_property(CACHE RHBM_GEM_OPENMP_MODE PROPERTY STRINGS AUTO ON OFF)
+set(RHBM_GEM_ROOT_MODE "AUTO" CACHE STRING "ROOT feature mode: AUTO, ON, or OFF")
+set_property(CACHE RHBM_GEM_ROOT_MODE PROPERTY STRINGS AUTO ON OFF)
+set(RHBM_GEM_PYTHON_INSTALL_LAYOUT "SITE_PREFIX" CACHE STRING
+    "Python extension install layout: SITE_PREFIX or LIBDIR")
+set_property(CACHE RHBM_GEM_PYTHON_INSTALL_LAYOUT PROPERTY STRINGS SITE_PREFIX LIBDIR)
+set(RHBM_GEM_PYTHON_INSTALL_DIR "" CACHE PATH
+    "Override installation directory for Python extension module (relative or absolute path)")
+
+set(_RHBM_GEM_VALID_FEATURE_MODES AUTO ON OFF)
+string(TOUPPER "${RHBM_GEM_OPENMP_MODE}" RHBM_GEM_OPENMP_MODE)
+if(NOT RHBM_GEM_OPENMP_MODE IN_LIST _RHBM_GEM_VALID_FEATURE_MODES)
+    message(FATAL_ERROR
+        "Invalid RHBM_GEM_OPENMP_MODE='${RHBM_GEM_OPENMP_MODE}'. Valid values: AUTO, ON, OFF.")
+endif()
+set(RHBM_GEM_OPENMP_MODE "${RHBM_GEM_OPENMP_MODE}" CACHE STRING
+    "OpenMP feature mode: AUTO, ON, or OFF" FORCE)
+
+string(TOUPPER "${RHBM_GEM_ROOT_MODE}" RHBM_GEM_ROOT_MODE)
+if(NOT RHBM_GEM_ROOT_MODE IN_LIST _RHBM_GEM_VALID_FEATURE_MODES)
+    message(FATAL_ERROR
+        "Invalid RHBM_GEM_ROOT_MODE='${RHBM_GEM_ROOT_MODE}'. Valid values: AUTO, ON, OFF.")
+endif()
+set(RHBM_GEM_ROOT_MODE "${RHBM_GEM_ROOT_MODE}" CACHE STRING
+    "ROOT feature mode: AUTO, ON, or OFF" FORCE)
+unset(_RHBM_GEM_VALID_FEATURE_MODES)
+
+set(_RHBM_GEM_VALID_PY_LAYOUTS SITE_PREFIX LIBDIR)
+string(TOUPPER "${RHBM_GEM_PYTHON_INSTALL_LAYOUT}" RHBM_GEM_PYTHON_INSTALL_LAYOUT)
+if(NOT RHBM_GEM_PYTHON_INSTALL_LAYOUT IN_LIST _RHBM_GEM_VALID_PY_LAYOUTS)
+    message(FATAL_ERROR
+        "Invalid RHBM_GEM_PYTHON_INSTALL_LAYOUT='${RHBM_GEM_PYTHON_INSTALL_LAYOUT}'. "
+        "Valid values: SITE_PREFIX, LIBDIR.")
+endif()
+set(RHBM_GEM_PYTHON_INSTALL_LAYOUT "${RHBM_GEM_PYTHON_INSTALL_LAYOUT}" CACHE STRING
+    "Python extension install layout: SITE_PREFIX or LIBDIR" FORCE)
+unset(_RHBM_GEM_VALID_PY_LAYOUTS)
 
 if(ENABLE_COVERAGE AND NOT BUILD_TESTING)
     message(FATAL_ERROR "ENABLE_COVERAGE requires BUILD_TESTING=ON")
@@ -149,9 +187,15 @@ endif()
 install(TARGETS rhbm_cli11 EXPORT RHBM_GEMTargets)
 
 if(BUILD_PYTHON_BINDINGS)
+    set(PYBIND11_FINDPYTHON ON)
+    if(CMAKE_VERSION VERSION_LESS "3.18")
+        find_package(Python REQUIRED COMPONENTS Interpreter Development)
+    else()
+        find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+    endif()
+
     # Locate Pybind11 package
     if(USE_SYSTEM_LIBS)
-        set(PYBIND11_FINDPYTHON ON)
         find_package(pybind11 CONFIG QUIET)
         if(pybind11_FOUND)
             message(STATUS "Using system Pybind11")

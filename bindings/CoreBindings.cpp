@@ -6,7 +6,7 @@
 #include "MapSimulationCommand.hpp"
 #include "OptionEnumClass.hpp"
 
-PYBIND11_MODULE(cpp_module, m)
+PYBIND11_MODULE(rhbm_gem_module, m)
 {
     pybind11::enum_<PainterType>(m, "PainterType")
         .value("GAUS",       PainterType::GAUS)
