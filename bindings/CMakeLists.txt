@@ -1,14 +1,16 @@
-file(GLOB SOURCE *.cpp)
+set(BINDINGS_SOURCES
+    CoreBindings.cpp
+)
 
-pybind11_add_module(cpp_module ${SOURCE})
+pybind11_add_module(cpp_module ${BINDINGS_SOURCES})
 
 
 target_link_libraries(cpp_module PRIVATE core data utils CompilerFlags)
 
 set_target_properties(cpp_module PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
 )
 
 install(

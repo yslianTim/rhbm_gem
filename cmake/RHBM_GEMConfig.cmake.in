@@ -1,0 +1,25 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Eigen3 REQUIRED)
+
+if("@RHBM_GEM_USE_SYSTEM_CLI11@" STREQUAL "TRUE")
+    find_dependency(CLI11 REQUIRED)
+endif()
+
+if("@RHBM_GEM_WITH_OPENMP@" STREQUAL "TRUE")
+    find_dependency(OpenMP REQUIRED COMPONENTS CXX)
+endif()
+
+if("@RHBM_GEM_WITH_ROOT@" STREQUAL "TRUE")
+    find_dependency(ROOT REQUIRED COMPONENTS Core Hist Gpad RIO)
+endif()
+
+if("@RHBM_GEM_USE_SYSTEM_SQLITE3@" STREQUAL "TRUE")
+    find_dependency(SQLite3 REQUIRED)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/RHBM_GEMTargets.cmake")
+
+check_required_components(RHBM_GEM)

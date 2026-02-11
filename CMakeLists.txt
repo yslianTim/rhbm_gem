@@ -11,6 +11,10 @@ project(RHBM_GEM
 
 set(PROJECT_DISPLAY_NAME "RHBM-GEM")
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+# Avoid writing entries into the user package registry from bundled deps.
+set(CMAKE_EXPORT_NO_PACKAGE_REGISTRY ON)
 
 # Keep installed binaries relocatable with project-local shared libraries.
 if(APPLE)
@@ -28,6 +32,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_TESTING "Build unit tests" ON)
 option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
 option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
+option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)
 
 if(ENABLE_COVERAGE AND NOT BUILD_TESTING)
     message(FATAL_ERROR "ENABLE_COVERAGE requires BUILD_TESTING=ON")
@@ -115,42 +120,54 @@ if(USE_SYSTEM_LIBS)
     if(CLI11_FOUND)
         message(STATUS "Using system CLI11")
         set(HAVE_CLI11 TRUE)
+        set(RHBM_GEM_USE_SYSTEM_CLI11 TRUE)
     else()
         message(STATUS "System CLI11 not found, will use third_party version")
         set(HAVE_CLI11 FALSE)
+        set(RHBM_GEM_USE_SYSTEM_CLI11 FALSE)
     endif()
 else()
     set(HAVE_CLI11 FALSE)
+    set(RHBM_GEM_USE_SYSTEM_CLI11 FALSE)
 endif()
 
 if(NOT HAVE_CLI11)
     add_subdirectory(third_party/CLI11)
 endif()
 
-# Locate Pybind11 package
-if(USE_SYSTEM_LIBS)
-    set(PYBIND11_FINDPYTHON ON)
-    find_package(PYBIND11 QUIET)
-    if(PYBIND11_FOUND)
-        message(STATUS "Using system Pybind11")
-        set(HAVE_PYBIND11 TRUE)
+add_library(rhbm_cli11 INTERFACE)
+if(HAVE_CLI11)
+    target_link_libraries(rhbm_cli11 INTERFACE CLI11::CLI11)
+else()
+    target_include_directories(rhbm_cli11 INTERFACE
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11/include>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+    )
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11/include/CLI" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+endif()
+
+install(TARGETS rhbm_cli11 EXPORT RHBM_GEMTargets)
+
+if(BUILD_PYTHON_BINDINGS)
+    # Locate Pybind11 package
+    if(USE_SYSTEM_LIBS)
+        set(PYBIND11_FINDPYTHON ON)
+        find_package(pybind11 CONFIG QUIET)
+        if(pybind11_FOUND)
+            message(STATUS "Using system Pybind11")
+            set(HAVE_PYBIND11 TRUE)
+        else()
+            message(STATUS "System Pybind11 not found, will use third_party version")
+            set(HAVE_PYBIND11 FALSE)
+        endif()
     else()
-        message(STATUS "System Pybind11 not found, will use third_party version")
         set(HAVE_PYBIND11 FALSE)
     endif()
-else()
-    set(HAVE_PYBIND11 FALSE)
-endif()
 
-if(NOT HAVE_PYBIND11)
-    add_subdirectory(third_party/pybind11)
+    if(NOT HAVE_PYBIND11)
+        add_subdirectory(third_party/pybind11)
+    endif()
 endif()
-
-# Control where the static and shared libraries are built so that on windows
-# we don't need to tinker with the path to run the executable
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
@@ -158,15 +175,58 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
 add_subdirectory(src)
-add_subdirectory(bindings)
+if(BUILD_PYTHON_BINDINGS)
+    add_subdirectory(bindings)
+endif()
+
+if(NOT DEFINED RHBM_GEM_WITH_OPENMP)
+    set(RHBM_GEM_WITH_OPENMP FALSE)
+endif()
+if(NOT DEFINED RHBM_GEM_WITH_ROOT)
+    set(RHBM_GEM_WITH_ROOT FALSE)
+endif()
+if(NOT DEFINED RHBM_GEM_USE_SYSTEM_SQLITE3)
+    set(RHBM_GEM_USE_SYSTEM_SQLITE3 FALSE)
+endif()
+if(NOT DEFINED RHBM_GEM_USE_SYSTEM_CLI11)
+    set(RHBM_GEM_USE_SYSTEM_CLI11 FALSE)
+endif()
 
 # Install public headers and legal notices.
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(
     FILES
-        "${CMAKE_SOURCE_DIR}/LICENSE"
-        "${CMAKE_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
+)
+
+set(RHBM_GEM_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RHBM_GEMConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfig.cmake"
+    INSTALL_DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
+    VERSION "${PROJECT_VERSION}"
+    COMPATIBILITY SameMajorVersion
+)
+
+install(
+    EXPORT RHBM_GEMTargets
+    FILE RHBM_GEMTargets.cmake
+    NAMESPACE RHBM_GEM::
+    DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
+)
+
+install(
+    FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
+    DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
 )
 
 # -------------------------------------------------
@@ -210,21 +270,21 @@ if(BUILD_TESTING)
             message(FATAL_ERROR "ENABLE_COVERAGE is ON but gcov was not found in PATH")
         endif()
 
-        set(COVERAGE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/coverage")
+        set(COVERAGE_OUTPUT_DIR "${PROJECT_BINARY_DIR}/coverage")
         add_custom_target(coverage
             COMMAND ${CMAKE_COMMAND}
                 -DCOVERAGE_ACTION=clean
-                -DCOVERAGE_BUILD_DIR:PATH=${CMAKE_BINARY_DIR}
-                -P ${CMAKE_SOURCE_DIR}/cmake/GcovCoverageReport.cmake
+                -DCOVERAGE_BUILD_DIR:PATH=${PROJECT_BINARY_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GcovCoverageReport.cmake
             COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
             COMMAND ${CMAKE_COMMAND}
                 -DCOVERAGE_ACTION=report
-                -DCOVERAGE_BUILD_DIR:PATH=${CMAKE_BINARY_DIR}
-                -DCOVERAGE_PROJECT_SOURCE_DIR:PATH=${CMAKE_SOURCE_DIR}
+                -DCOVERAGE_BUILD_DIR:PATH=${PROJECT_BINARY_DIR}
+                -DCOVERAGE_PROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}
                 -DCOVERAGE_OUTPUT_DIR:PATH=${COVERAGE_OUTPUT_DIR}
                 -DCOVERAGE_INCLUDE_TESTS:BOOL=${COVERAGE_INCLUDE_TESTS}
                 -DGCOV_EXECUTABLE:FILEPATH=${GCOV_EXECUTABLE}
-                -P ${CMAKE_SOURCE_DIR}/cmake/GcovCoverageReport.cmake
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GcovCoverageReport.cmake
             BYPRODUCTS
                 "${COVERAGE_OUTPUT_DIR}/coverage_summary.txt"
                 "${COVERAGE_OUTPUT_DIR}/coverage_detail.txt"

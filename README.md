@@ -179,6 +179,7 @@ Beginner (most common):
 | `COVERAGE_INCLUDE_TESTS` | `OFF` | Include `tests/` files in coverage summary when `ENABLE_COVERAGE=ON`. |
 | `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3 / CLI11 / pybind11 / SQLite3. If `OFF`, use bundled `third_party` copies. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
+| `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `bindings/`. Set `OFF` for pure C++ builds without Python dependency. |
 
 Advanced (debugging / environment control):
 
@@ -202,8 +203,18 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 # Force bundled third-party dependencies
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 
+# Pure C++ build (skip Python bindings)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
+
 # Enable OpenMP on macOS (Homebrew)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
+```
+
+After installation, downstream CMake projects can consume this project with:
+
+```cmake
+find_package(RHBM_GEM CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE RHBM_GEM::core)
 ```
 
 To inspect the full cache after configure:
