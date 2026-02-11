@@ -155,21 +155,34 @@ sudo apt install -y libomp-dev
 1. The canonical Python extension module name is `rhbm_gem_module`.
 
 **Python examples**
-Prerequisite:
-1. Configure/build/install with `BUILD_PYTHON_BINDINGS=ON`.
-
-Run from source tree:
+Recommended single-prefix quickstart (build + install + verify + run):
 ```bash
-PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PYTHONPATH="$HOME/.local/lib/python${PYVER}/site-packages" python3 examples/python/00_quickstart.py
-PYTHONPATH="$HOME/.local/lib/python${PYVER}/site-packages" python3 examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
-```
+INSTALL_PREFIX="$HOME/.local"
 
-Run from installed examples:
-```bash
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_PYTHON_BINDINGS=ON \
+  -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}"
+cmake --build build -j
+cmake --install build
+
 PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PYTHONPATH="$HOME/.local/lib/python${PYVER}/site-packages" \
-python3 "$HOME/.local/share/RHBM_GEM/examples/python/01_end_to_end_from_test_data.py" --workdir /tmp/rhbm_py_demo_installed
+PY_SITE="${INSTALL_PREFIX}/lib/python${PYVER}/site-packages"
+
+# Verify module import before running examples.
+PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
+python3 -c "import rhbm_gem_module as rgm; print(rgm.__file__)"
+
+# Run examples from source tree.
+PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
+python3 examples/python/00_quickstart.py
+PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
+python3 examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
+
+# Run installed example.
+PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
+python3 "${INSTALL_PREFIX}/share/RHBM_GEM/examples/python/01_end_to_end_from_test_data.py" \
+  --workdir /tmp/rhbm_py_demo_installed
 ```
 
 Expected outputs for the pipeline example:
@@ -180,7 +193,10 @@ Expected outputs for the pipeline example:
 Troubleshooting:
 1. `ModuleNotFoundError: No module named 'rhbm_gem_module'`  
    Verify `BUILD_PYTHON_BINDINGS=ON`, run `cmake --install`, and ensure `PYTHONPATH` points to your install site-packages.
-2. `Could not find sample model ...`  
+2. Install prefix mismatch (`/usr/local` vs `$HOME/.local`)  
+   If you install under `/usr/local`, do not use `$HOME/.local/.../site-packages` in `PYTHONPATH`.
+   Reinstall with a single `INSTALL_PREFIX` (recommended), or update `PYTHONPATH` to match your actual install prefix.
+3. `Could not find sample model ...`  
    Pass `--model /path/to/your_model.cif` explicitly.
 
 **Coverage test without additional third-party libraries (`gcov`)**
