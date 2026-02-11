@@ -26,21 +26,27 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Unit‑test build option
 option(BUILD_TESTING "Build unit tests" ON)
+option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
+option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
 
-# Option to enable coverage instrumentation
-#option(ENABLE_COVERAGE "Enable coverage reporting" ON)
-
-# Include coverage helper module when coverage is enabled
-#if(ENABLE_COVERAGE)
-#    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11/cmake")
-#    include(CodeCoverage)
-#endif()
+if(ENABLE_COVERAGE AND NOT BUILD_TESTING)
+    message(FATAL_ERROR "ENABLE_COVERAGE requires BUILD_TESTING=ON")
+endif()
 
 # Specify the C++ standard (Use interface libraries)
 add_library(CompilerFlags INTERFACE)
 target_compile_features(CompilerFlags INTERFACE cxx_std_17)
 set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
 set(msvc_cxx "$<COMPILE_LANG_AND_ID:CXX,MSVC>")
+
+if(ENABLE_COVERAGE)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        message(FATAL_ERROR
+            "ENABLE_COVERAGE supports GNU/Clang/AppleClang only. Detected: ${CMAKE_CXX_COMPILER_ID}")
+    endif()
+    message(STATUS "Coverage instrumentation enabled")
+endif()
+
 target_compile_options(CompilerFlags INTERFACE
     "$<${gcc_like_cxx}:$<BUILD_INTERFACE:-Wall;-Wextra;-Wshadow;-Wformat=2;-Wpedantic;-Wconversion;-Wsign-conversion;-Wunused;-Wcast-align;-Wold-style-cast;-Wstrict-overflow;-Wno-psabi>>"
     "$<${msvc_cxx}:$<BUILD_INTERFACE:-W3;/Zc:__cplusplus>>"
@@ -50,10 +56,18 @@ target_compile_definitions(CompilerFlags INTERFACE
     "$<$<CONFIG:Release>:EIGEN_MPL2_ONLY>"
 )
 
-# Apply coverage flags via helper when requested
-#if(ENABLE_COVERAGE AND BUILD_TESTING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-#   append_coverage_compiler_flags()
-#endif()
+if(ENABLE_COVERAGE)
+    target_compile_options(CompilerFlags INTERFACE
+        -O0
+        -g
+        --coverage
+        -fprofile-arcs
+        -ftest-coverage
+    )
+    target_link_options(CompilerFlags INTERFACE
+        --coverage
+    )
+endif()
 
 option(USE_SYSTEM_LIBS "Use system-installed libraries" ON)
 
@@ -189,34 +203,34 @@ if(BUILD_TESTING)
 
     include(GoogleTest)
     add_subdirectory(tests)    # all test sources live here
+
+    if(ENABLE_COVERAGE)
+        find_program(GCOV_EXECUTABLE NAMES gcov)
+        if(NOT GCOV_EXECUTABLE)
+            message(FATAL_ERROR "ENABLE_COVERAGE is ON but gcov was not found in PATH")
+        endif()
+
+        set(COVERAGE_OUTPUT_DIR "${CMAKE_BINARY_DIR}/coverage")
+        add_custom_target(coverage
+            COMMAND ${CMAKE_COMMAND}
+                -DCOVERAGE_ACTION=clean
+                -DCOVERAGE_BUILD_DIR:PATH=${CMAKE_BINARY_DIR}
+                -P ${CMAKE_SOURCE_DIR}/cmake/GcovCoverageReport.cmake
+            COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+            COMMAND ${CMAKE_COMMAND}
+                -DCOVERAGE_ACTION=report
+                -DCOVERAGE_BUILD_DIR:PATH=${CMAKE_BINARY_DIR}
+                -DCOVERAGE_PROJECT_SOURCE_DIR:PATH=${CMAKE_SOURCE_DIR}
+                -DCOVERAGE_OUTPUT_DIR:PATH=${COVERAGE_OUTPUT_DIR}
+                -DCOVERAGE_INCLUDE_TESTS:BOOL=${COVERAGE_INCLUDE_TESTS}
+                -DGCOV_EXECUTABLE:FILEPATH=${GCOV_EXECUTABLE}
+                -P ${CMAKE_SOURCE_DIR}/cmake/GcovCoverageReport.cmake
+            BYPRODUCTS
+                "${COVERAGE_OUTPUT_DIR}/coverage_summary.txt"
+                "${COVERAGE_OUTPUT_DIR}/coverage_detail.txt"
+            DEPENDS unit_tests
+            USES_TERMINAL
+            COMMENT "Running tests and generating gcov text coverage reports"
+        )
+    endif()
 endif()
-
-# Custom target to generate coverage report
-#if(ENABLE_COVERAGE AND BUILD_TESTING)
-#    find_program(LCOV_EXECUTABLE lcov)
-#    find_program(GENHTML_EXECUTABLE genhtml)
-
-#    if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
-#        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-#            find_program(GCOV_PATH llvm-cov)
-#       else()
-#            find_program(GCOV_PATH gcov)
-#        endif()
-
-#        setup_target_for_coverage_lcov(
-#            NAME coverage
-#            EXECUTABLE ${CMAKE_CTEST_COMMAND}
-#            EXECUTABLE_ARGS --output-on-failure
-#            DEPENDENCIES unit_tests
-#            ALL
-#            EXCLUDE
-#                "${PROJECT_SOURCE_DIR}/third_party/*"
-#                "${PROJECT_BINARY_DIR}/*"
-#            LCOV_ARGS
-#                "--gcov-tool=${GCOV_PATH}"
-#                "--rc" "lcov_branch_coverage=1"
-#        )
-#    else()
-#        message(WARNING "lcov and/or genhtml not found; coverage target will not be generated")
-#    endif()
-#endif()

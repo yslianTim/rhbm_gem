@@ -42,6 +42,7 @@ build/
 build*/
 Debug/
 Release/
+coverage/
 
 # IDE files
 .vs/

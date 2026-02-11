@@ -139,6 +139,32 @@ cmake --build build-openmp-on -j
 sudo apt install -y libomp-dev
 ```
 
+**Coverage test without additional third-party libraries (`gcov`)**
+This project supports text-based coverage reports using compiler-provided `gcov` only.
+
+1. Configure a coverage build:
+```bash
+cmake -S . -B build-cov -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON
+```
+2. Build tests:
+```bash
+cmake --build build-cov -j
+```
+3. Run coverage target:
+```bash
+cmake --build build-cov --target coverage
+```
+4. Read reports:
+```bash
+cat build-cov/coverage/coverage_summary.txt
+cat build-cov/coverage/coverage_detail.txt
+```
+
+Notes:
+1. Default summary includes only `src/` files.
+2. To include `tests/`, configure with `-DCOVERAGE_INCLUDE_TESTS=ON`.
+3. Coverage artifacts are generated under the build directory.
+
 **CMake parameters (quick reference)**
 Beginner (most common):
 
@@ -147,6 +173,8 @@ Beginner (most common):
 | `CMAKE_BUILD_TYPE` | generator-dependent | Build type for single-config generators (for example `Release` / `Debug`). |
 | `CMAKE_INSTALL_PREFIX` | platform-dependent (usually `/usr/local`) | Base install path for `cmake --install`; change this to install into a custom location. |
 | `BUILD_TESTING` | `ON` | Build unit tests (`unit_tests` target). |
+| `ENABLE_COVERAGE` | `OFF` | Enable `gcov` coverage instrumentation and the `coverage` target. Requires GNU/Clang/AppleClang with `BUILD_TESTING=ON`. |
+| `COVERAGE_INCLUDE_TESTS` | `OFF` | Include `tests/` files in coverage summary when `ENABLE_COVERAGE=ON`. |
 | `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3 / CLI11 / pybind11 / SQLite3. If `OFF`, use bundled `third_party` copies. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
 
