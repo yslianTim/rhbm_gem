@@ -86,6 +86,8 @@ public:
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
     const std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> & GetAtomObjectMap(void) const;
     const std::vector<std::unique_ptr<BondObject>> & GetBondObjectList(void) const;
+    std::vector<int> GetModelNumberList(void) const;
+    bool HasModelNumber(int model_number) const;
     ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key) const;
     const ComponentBondEntry * GetComponentBondEntryPtr(ComponentKey comp_key, BondKey bond_key) const;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
@@ -97,6 +99,13 @@ public:
         const std::string & comp_id,
         const std::string & seq_id,
         const std::string & atom_id
+    ) const;
+    AtomObject * GetAtomObjectPtrInAnyModel(
+        const std::string & chain_id,
+        const std::string & comp_id,
+        const std::string & seq_id,
+        const std::string & atom_id,
+        int * model_number = nullptr
     ) const;
     ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }

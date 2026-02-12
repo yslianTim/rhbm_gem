@@ -16,7 +16,7 @@ ModelFileReader::ModelFileReader(const std::string & filename) :
     {
         m_file_object = std::make_unique<PdbFormat>();
     }
-    else if (file_extension == ".cif")
+    else if (file_extension == ".cif" || file_extension == ".mmcif" || file_extension == ".mcif")
     {
         m_file_object = std::make_unique<CifFormat>();
     }

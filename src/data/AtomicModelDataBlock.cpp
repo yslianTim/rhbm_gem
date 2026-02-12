@@ -6,6 +6,8 @@
 #include "ChemicalComponentEntry.hpp"
 #include "Logger.hpp"
 
+#include <algorithm>
+
 AtomicModelDataBlock::AtomicModelDataBlock(void) :
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
@@ -158,7 +160,15 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 
 std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::MoveAtomObjectList(int model_number)
 {
-    return std::move(m_atom_object_list_map.at(model_number));
+    auto iter{ m_atom_object_list_map.find(model_number) };
+    if (iter == m_atom_object_list_map.end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "AtomicModelDataBlock::MoveAtomObjectList() - Model number "
+            + std::to_string(model_number) + " not found.");
+        return {};
+    }
+    return std::move(iter->second);
 }
 
 std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectList(void)
@@ -244,6 +254,24 @@ const std::vector<std::unique_ptr<BondObject>> & AtomicModelDataBlock::GetBondOb
     return m_bond_object_list;
 }
 
+std::vector<int> AtomicModelDataBlock::GetModelNumberList(void) const
+{
+    std::vector<int> model_number_list;
+    model_number_list.reserve(m_atom_object_list_map.size());
+    for (const auto & [model_number, _] : m_atom_object_list_map)
+    {
+        (void)_;
+        model_number_list.emplace_back(model_number);
+    }
+    std::sort(model_number_list.begin(), model_number_list.end());
+    return model_number_list;
+}
+
+bool AtomicModelDataBlock::HasModelNumber(int model_number) const
+{
+    return m_atom_object_list_map.find(model_number) != m_atom_object_list_map.end();
+}
+
 AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInTuple(
     int model_number,
     const std::string & chain_id,
@@ -271,6 +299,30 @@ AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInTuple(
         return nullptr;
     }
     return m_atom_object_in_tuple_map.at(model_number).at(atom_tuple_key);
+}
+
+AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInAnyModel(
+    const std::string & chain_id,
+    const std::string & comp_id,
+    const std::string & seq_id,
+    const std::string & atom_id,
+    int * model_number) const
+{
+    auto atom_tuple_key{ std::make_tuple(chain_id, comp_id, seq_id, atom_id) };
+    auto model_number_list{ GetModelNumberList() };
+    for (const auto current_model_number : model_number_list)
+    {
+        auto model_iter{ m_atom_object_in_tuple_map.find(current_model_number) };
+        if (model_iter == m_atom_object_in_tuple_map.end()) continue;
+        auto atom_iter{ model_iter->second.find(atom_tuple_key) };
+        if (atom_iter == model_iter->second.end()) continue;
+        if (model_number != nullptr)
+        {
+            *model_number = current_model_number;
+        }
+        return atom_iter->second;
+    }
+    return nullptr;
 }
 
 ChemicalComponentEntry * AtomicModelDataBlock::GetChemicalComponentEntryPtr(ComponentKey key) const

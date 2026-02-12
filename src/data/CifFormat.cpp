@@ -21,6 +21,8 @@
 #include <ostream>
 #include <algorithm>
 #include <optional>
+#include <initializer_list>
+#include <map>
 
 namespace
 {
@@ -29,11 +31,127 @@ bool IsMmCifMissingValue(const std::string & value)
     return value.empty() || value == "." || value == "?";
 }
 
+std::vector<std::string> SplitMmCifTokens(const std::string & line)
+{
+    std::vector<std::string> token_list;
+    for (size_t pos = 0; pos < line.size();)
+    {
+        while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
+        if (pos >= line.size()) break;
+
+        const char first_char{ line[pos] };
+        if (first_char == '\'' || first_char == '"')
+        {
+            const char quote_char{ first_char };
+            ++pos;
+            const auto start{ pos };
+            while (pos < line.size() && line[pos] != quote_char) ++pos;
+            token_list.emplace_back(line.substr(start, pos - start));
+            if (pos < line.size()) ++pos;
+            continue;
+        }
+
+        const auto start{ pos };
+        while (pos < line.size() && !std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
+        token_list.emplace_back(line.substr(start, pos - start));
+    }
+    return token_list;
+}
+
+std::string BuildMmCifTokenPreview(const std::vector<std::string> & token_list, size_t max_items = 8)
+{
+    std::ostringstream oss;
+    oss << "[";
+    for (size_t i = 0; i < token_list.size() && i < max_items; ++i)
+    {
+        if (i > 0) oss << ", ";
+        oss << token_list[i];
+    }
+    if (token_list.size() > max_items) oss << ", ...";
+    oss << "]";
+    return oss.str();
+}
+
+std::optional<std::string> GetTokenOptional(
+    const std::unordered_map<std::string, size_t> & index_map,
+    const std::vector<std::string> & token_list,
+    std::initializer_list<std::string_view> name_candidates)
+{
+    for (const auto & name : name_candidates)
+    {
+        auto iter{ index_map.find(std::string{name}) };
+        if (iter == index_map.end()) continue;
+        if (iter->second >= token_list.size()) continue;
+        return token_list[iter->second];
+    }
+    return std::nullopt;
+}
+
+int ParseIntOrDefault(
+    const std::string & value,
+    int default_value,
+    const std::string & field_name,
+    const std::string & log_context)
+{
+    if (IsMmCifMissingValue(value)) return default_value;
+    try
+    {
+        return std::stoi(value);
+    }
+    catch (const std::exception &)
+    {
+        Logger::Log(LogLevel::Warning,
+            log_context + " Invalid integer in " + field_name + ": " + value
+            + ", fallback = " + std::to_string(default_value));
+        return default_value;
+    }
+}
+
+std::optional<float> TryParseFloat(const std::string & value)
+{
+    if (IsMmCifMissingValue(value)) return std::nullopt;
+    try
+    {
+        return std::stof(value);
+    }
+    catch (const std::exception &)
+    {
+        return std::nullopt;
+    }
+}
+
+float ParseFloatOrDefault(
+    const std::string & value,
+    float default_value,
+    const std::string & field_name,
+    const std::string & log_context)
+{
+    auto parsed_value{ TryParseFloat(value) };
+    if (parsed_value.has_value()) return *parsed_value;
+    if (!IsMmCifMissingValue(value))
+    {
+        Logger::Log(LogLevel::Warning,
+            log_context + " Invalid float in " + field_name + ": " + value
+            + ", fallback = " + std::to_string(default_value));
+    }
+    return default_value;
+}
+
+std::string BuildAtomAltLocKey(
+    int model_number,
+    const std::string & chain_id,
+    const std::string & comp_id,
+    const std::string & sequence_id,
+    const std::string & atom_id)
+{
+    return std::to_string(model_number) + "|" + chain_id + "|" + comp_id + "|" + sequence_id + "|" + atom_id;
+}
+
 std::optional<std::string> ParseMmCifDataItemValue(
     std::ifstream & infile, const std::string & line, std::string_view key)
 {
     if (line.rfind(key, 0) != 0) return std::nullopt;
-    auto token_list{ StringHelper::SplitStringLineAsTokens(line, 2) };
+    auto token_list{ SplitMmCifTokens(line) };
     if (token_list.size() >= 2) return token_list[1];
     if (token_list.size() != 1) return std::string{};
 
@@ -45,7 +163,7 @@ std::optional<std::string> ParseMmCifDataItemValue(
         if (next_line[0] == '#') return std::string{};
         if (next_line[0] != ';')
         {
-            auto next_tokens{ StringHelper::SplitStringLineAsTokens(next_line, 1) };
+            auto next_tokens{ SplitMmCifTokens(next_line) };
             return next_tokens.empty() ? std::string{} : next_tokens.front();
         }
 
@@ -269,27 +387,30 @@ void CifFormat::LoadDatabaseBlock(std::ifstream & infile)
     Logger::Log(LogLevel::Debug, "CifFormat::LoadDatabaseBlock() called");
     infile.clear();
     infile.seekg(0);
+    std::unordered_map<std::string, std::string> data_map;
     ParseLoopBlock(infile, "_database_2.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
-               const std::vector<std::string> & token_list)
+        [&data_map](const std::unordered_map<std::string, size_t> & index_map,
+                    const std::vector<std::string> & token_list)
         {
-            std::unordered_map<std::string, std::string> data_map;
-            auto key{ token_list[index_map.at("database_id")] };
-            data_map[key] = token_list[index_map.at("database_code")];
-            if (data_map.find("PDB") != data_map.end())
-            {
-                m_data_block->SetPdbID(data_map.at("PDB"));
-            }
-            if (data_map.find("EMDB") != data_map.end())
-            {
-                m_data_block->SetEmdID(data_map.at("EMDB"));
-            }
-            else
-            {
-                m_data_block->SetEmdID("X-RAY DIFF");
-            }
+            auto database_id{ GetTokenOptional(index_map, token_list, {"database_id"}) };
+            auto database_code{ GetTokenOptional(index_map, token_list, {"database_code"}) };
+            if (!database_id.has_value() || !database_code.has_value()) return;
+            if (IsMmCifMissingValue(*database_id) || IsMmCifMissingValue(*database_code)) return;
+            data_map[*database_id] = *database_code;
         }
     );
+    if (data_map.find("PDB") != data_map.end())
+    {
+        m_data_block->SetPdbID(data_map.at("PDB"));
+    }
+    if (data_map.find("EMDB") != data_map.end())
+    {
+        m_data_block->SetEmdID(data_map.at("EMDB"));
+    }
+    else
+    {
+        m_data_block->SetEmdID("X-RAY DIFF");
+    }
 }
 
 void CifFormat::LoadEntityBlock(std::ifstream & infile)
@@ -569,44 +690,103 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
         {
-            auto conn_id{ token_list[index_map.at("id")] };
-            auto conn_type_id{ token_list[index_map.at("conn_type_id")] };
-            auto ptnr1_asym_id{ token_list[index_map.at("ptnr1_label_asym_id")] };
-            auto ptnr1_comp_id{ token_list[index_map.at("ptnr1_label_comp_id")] };
-            auto ptnr1_seq_id{ token_list[index_map.at("ptnr1_label_seq_id")] };
-            auto ptnr1_atom_id{ token_list[index_map.at("ptnr1_label_atom_id")] };
-            auto ptnr2_asym_id{ token_list[index_map.at("ptnr2_label_asym_id")] };
-            auto ptnr2_comp_id{ token_list[index_map.at("ptnr2_label_comp_id")] };
-            auto ptnr2_seq_id{ token_list[index_map.at("ptnr2_label_seq_id")] };
-            auto ptnr2_atom_id{ token_list[index_map.at("ptnr2_label_atom_id")] };
-            auto value_order_str{ token_list[index_map.at("pdbx_value_order")] };
+            auto conn_id{ GetTokenOptional(index_map, token_list, {"id"}) };
+            auto conn_type_id{ GetTokenOptional(index_map, token_list, {"conn_type_id"}) };
+            auto ptnr1_asym_id{ GetTokenOptional(index_map, token_list, {"ptnr1_label_asym_id"}) };
+            auto ptnr1_comp_id{ GetTokenOptional(index_map, token_list, {"ptnr1_label_comp_id"}) };
+            auto ptnr1_seq_id{ GetTokenOptional(index_map, token_list, {"ptnr1_label_seq_id"}) };
+            auto ptnr1_atom_id{ GetTokenOptional(index_map, token_list, {"ptnr1_label_atom_id"}) };
+            auto ptnr2_asym_id{ GetTokenOptional(index_map, token_list, {"ptnr2_label_asym_id"}) };
+            auto ptnr2_comp_id{ GetTokenOptional(index_map, token_list, {"ptnr2_label_comp_id"}) };
+            auto ptnr2_seq_id{ GetTokenOptional(index_map, token_list, {"ptnr2_label_seq_id"}) };
+            auto ptnr2_atom_id{ GetTokenOptional(index_map, token_list, {"ptnr2_label_atom_id"}) };
+            auto value_order_str{
+                GetTokenOptional(index_map, token_list, {"pdbx_value_order"})
+            };
 
-            StringHelper::EraseCharFromString(ptnr1_atom_id, '\"');
-            StringHelper::EraseCharFromString(ptnr2_atom_id, '\"');
+            if (!conn_type_id.has_value() ||
+                !ptnr1_asym_id.has_value() || !ptnr1_comp_id.has_value() ||
+                !ptnr1_seq_id.has_value() || !ptnr1_atom_id.has_value() ||
+                !ptnr2_asym_id.has_value() || !ptnr2_comp_id.has_value() ||
+                !ptnr2_seq_id.has_value() || !ptnr2_atom_id.has_value())
+            {
+                return;
+            }
+            auto conn_id_label{ conn_id.value_or("UNKNOWN_CONN") };
+            auto ptnr1_atom_id_value{ *ptnr1_atom_id };
+            auto ptnr2_atom_id_value{ *ptnr2_atom_id };
+            auto ptnr1_seq_id_value{ IsMmCifMissingValue(*ptnr1_seq_id) ? "." : *ptnr1_seq_id };
+            auto ptnr2_seq_id_value{ IsMmCifMissingValue(*ptnr2_seq_id) ? "." : *ptnr2_seq_id };
 
-            m_data_block->GetBondKeySystemPtr()->RegisterBond(ptnr1_atom_id, ptnr2_atom_id);
-            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(ptnr1_comp_id) };
-            auto bond_key{ m_data_block->GetBondKeySystemPtr()->GetBondKey(ptnr1_atom_id, ptnr2_atom_id) };
+            StringHelper::EraseCharFromString(ptnr1_atom_id_value, '\"');
+            StringHelper::EraseCharFromString(ptnr2_atom_id_value, '\"');
+
+            m_data_block->GetBondKeySystemPtr()->RegisterBond(ptnr1_atom_id_value, ptnr2_atom_id_value);
+            auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(*ptnr1_comp_id) };
+            auto bond_key{
+                m_data_block->GetBondKeySystemPtr()->GetBondKey(ptnr1_atom_id_value, ptnr2_atom_id_value)
+            };
             auto bond_id{ m_data_block->GetBondKeySystemPtr()->GetBondId(bond_key) };
-            auto bond_type{ ChemicalDataHelper::GetBondTypeFromString(conn_type_id) };
+            auto bond_type{ ChemicalDataHelper::GetBondTypeFromString(*conn_type_id) };
             if (bond_type == BondType::HYDROGEN) return; // Skip hydrogen bond
 
             ComponentBondEntry bond_entry;
             bond_entry.bond_id = bond_id;
             bond_entry.bond_type = bond_type;
-            bond_entry.bond_order = (value_order_str == "?") ? BondOrder::UNK : ChemicalDataHelper::GetBondOrderFromString(value_order_str);
+            if (!value_order_str.has_value() || IsMmCifMissingValue(*value_order_str))
+            {
+                bond_entry.bond_order = BondOrder::UNK;
+            }
+            else
+            {
+                bond_entry.bond_order = ChemicalDataHelper::GetBondOrderFromString(*value_order_str);
+            }
             bond_entry.aromatic_atom_flag = false;
             bond_entry.stereo_config = StereoChemistry::NONE;
             m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
 
-            auto model_number{ 1 };
+            auto ptnr1_model_num_token{
+                GetTokenOptional(index_map, token_list, {"pdbx_ptnr1_PDB_model_num", "ptnr1_PDB_model_num"})
+            };
+            auto ptnr2_model_num_token{
+                GetTokenOptional(index_map, token_list, {"pdbx_ptnr2_PDB_model_num", "ptnr2_PDB_model_num"})
+            };
+            auto model_number_1{
+                ParseIntOrDefault(ptnr1_model_num_token.value_or("1"), 1,
+                    "_struct_conn.pdbx_ptnr1_PDB_model_num",
+                    "LoadStructureConnectionBlock()[" + conn_id_label + "]")
+            };
+            auto model_number_2{
+                ParseIntOrDefault(ptnr2_model_num_token.value_or(std::to_string(model_number_1)), model_number_1,
+                    "_struct_conn.pdbx_ptnr2_PDB_model_num",
+                    "LoadStructureConnectionBlock()[" + conn_id_label + "]")
+            };
+
             auto atom_1{ m_data_block->GetAtomObjectPtrInTuple(
-                model_number, ptnr1_asym_id, ptnr1_comp_id, ptnr1_seq_id, ptnr1_atom_id) };
+                model_number_1, *ptnr1_asym_id, *ptnr1_comp_id, ptnr1_seq_id_value, ptnr1_atom_id_value) };
             auto atom_2{ m_data_block->GetAtomObjectPtrInTuple(
-                model_number, ptnr2_asym_id, ptnr2_comp_id, ptnr2_seq_id, ptnr2_atom_id) };
+                model_number_2, *ptnr2_asym_id, *ptnr2_comp_id, ptnr2_seq_id_value, ptnr2_atom_id_value) };
+            if (atom_1 == nullptr)
+            {
+                atom_1 = m_data_block->GetAtomObjectPtrInAnyModel(
+                    *ptnr1_asym_id, *ptnr1_comp_id, ptnr1_seq_id_value, ptnr1_atom_id_value, &model_number_1);
+            }
+            if (atom_2 == nullptr)
+            {
+                atom_2 = m_data_block->GetAtomObjectPtrInAnyModel(
+                    *ptnr2_asym_id, *ptnr2_comp_id, ptnr2_seq_id_value, ptnr2_atom_id_value, &model_number_2);
+            }
             if (atom_1 == nullptr || atom_2 == nullptr)
             {
-                Logger::Log(LogLevel::Warning, "Cannot find atom object for connection: " + conn_id);
+                Logger::Log(LogLevel::Warning, "Cannot find atom object for connection: " + conn_id_label);
+                return;
+            }
+            if (model_number_1 != model_number_2)
+            {
+                Logger::Log(LogLevel::Warning,
+                    "Skip cross-model connection [" + conn_id_label + "] between model "
+                    + std::to_string(model_number_1) + " and model "
+                    + std::to_string(model_number_2) + ".");
                 return;
             }
 
@@ -658,74 +838,162 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
     Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomSiteBlock() called");
     infile.clear();
     infile.seekg(0);
+    std::map<std::string, AtomObject *> altloc_primary_atom_map;
+    size_t atom_site_row_count{ 0 };
+    size_t atom_site_skip_count{ 0 };
     ParseLoopBlock(infile, "_atom_site.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
-               const std::vector<std::string> & token_list)
+        [this, &altloc_primary_atom_map, &atom_site_row_count, &atom_site_skip_count](
+            const std::unordered_map<std::string, size_t> & index_map,
+            const std::vector<std::string> & token_list)
         {
-            static AtomObject * last_atom_object{ nullptr };
-            auto group_type{ token_list[index_map.at("group_PDB")] };
-            auto element_type{ token_list[index_map.at("type_symbol")] };
-            auto comp_id{ token_list[index_map.at("label_comp_id")] };
-            auto atom_id{ token_list[index_map.at("label_atom_id")] };
-            auto indicator{ token_list[index_map.at("label_alt_id")] };
-            auto sequence_id{ token_list[index_map.at("label_seq_id")] };
-            auto serial_id{ token_list[index_map.at("id")] };
-            auto chain_id{ token_list[index_map.at("label_asym_id")] };
-            auto position_x{ std::stof(token_list[index_map.at("Cartn_x")]) };
-            auto position_y{ std::stof(token_list[index_map.at("Cartn_y")]) };
-            auto position_z{ std::stof(token_list[index_map.at("Cartn_z")]) };
-            auto occupancy{ std::stof(token_list[index_map.at("occupancy")]) };
-            auto temperature{ std::stof(token_list[index_map.at("B_iso_or_equiv")]) };
-            auto model_number{ token_list[index_map.at("pdbx_PDB_model_num")] };
-            if (element_type == "H") return; // Skip hydrogen atom
-            auto is_special_atom{ (group_type == "HETATM") ? true : false };
+            ++atom_site_row_count;
+            const std::string context{
+                "LoadAtomSiteBlock[row " + std::to_string(atom_site_row_count) + "]"
+            };
+
+            auto group_type{ GetTokenOptional(index_map, token_list, {"group_PDB"}).value_or("ATOM") };
+            auto element_type{ GetTokenOptional(index_map, token_list, {"type_symbol"}).value_or("UNK") };
+            auto comp_id{
+                GetTokenOptional(index_map, token_list, {"label_comp_id", "auth_comp_id"}).value_or("UNK")
+            };
+            auto atom_id_opt{ GetTokenOptional(index_map, token_list, {"label_atom_id", "auth_atom_id"}) };
+            auto indicator{
+                GetTokenOptional(index_map, token_list, {"label_alt_id"}).value_or(".")
+            };
+            auto sequence_id{
+                GetTokenOptional(index_map, token_list, {"label_seq_id", "auth_seq_id"}).value_or(".")
+            };
+            auto serial_id{ GetTokenOptional(index_map, token_list, {"id"}).value_or(
+                std::to_string(atom_site_row_count)) };
+            auto chain_id{
+                GetTokenOptional(index_map, token_list, {"label_asym_id", "auth_asym_id"}).value_or("?")
+            };
+            auto position_x_str{ GetTokenOptional(index_map, token_list, {"Cartn_x"}) };
+            auto position_y_str{ GetTokenOptional(index_map, token_list, {"Cartn_y"}) };
+            auto position_z_str{ GetTokenOptional(index_map, token_list, {"Cartn_z"}) };
+            auto occupancy_str{ GetTokenOptional(index_map, token_list, {"occupancy"}) };
+            auto temperature_str{ GetTokenOptional(index_map, token_list, {"B_iso_or_equiv"}) };
+            auto model_number_str{ GetTokenOptional(index_map, token_list, {"pdbx_PDB_model_num"}) };
+
+            if (!atom_id_opt.has_value())
+            {
+                Logger::Log(LogLevel::Warning, context + " Missing atom id, skip this row.");
+                ++atom_site_skip_count;
+                return;
+            }
+
+            if (IsMmCifMissingValue(indicator)) indicator = ".";
+            auto parsed_x{ TryParseFloat(position_x_str.value_or("?")) };
+            auto parsed_y{ TryParseFloat(position_y_str.value_or("?")) };
+            auto parsed_z{ TryParseFloat(position_z_str.value_or("?")) };
+            if (!parsed_x.has_value() || !parsed_y.has_value() || !parsed_z.has_value())
+            {
+                Logger::Log(LogLevel::Warning,
+                    context + " Invalid/missing Cartesian coordinates, skip this row.");
+                ++atom_site_skip_count;
+                return;
+            }
+
+            auto occupancy{
+                ParseFloatOrDefault(occupancy_str.value_or("?"), 1.0f, "_atom_site.occupancy", context)
+            };
+            auto temperature{
+                ParseFloatOrDefault(
+                    temperature_str.value_or("?"), 0.0f, "_atom_site.B_iso_or_equiv", context)
+            };
+            auto model_number_id{
+                ParseIntOrDefault(
+                    model_number_str.value_or("1"), 1, "_atom_site.pdbx_PDB_model_num", context)
+            };
+            auto sequence_id_value{
+                ParseIntOrDefault(sequence_id, -1, "_atom_site.(label/auth)_seq_id", context)
+            };
+            auto serial_id_value{ ParseIntOrDefault(serial_id, static_cast<int>(atom_site_row_count),
+                "_atom_site.id", context) };
+
+            auto atom_id{ *atom_id_opt };
             StringHelper::EraseCharFromString(atom_id, '\"');
+
+            auto element_enum{ ChemicalDataHelper::GetElementFromString(element_type) };
+            if (element_enum == Element::HYDROGEN) return; // Skip hydrogen atom
+
+            auto is_special_atom{ (group_type == "HETATM") ? true : false };
 
             if (m_find_chemical_component_entry == false)
             {
                 BuildDefaultChemicalComponentEntry(comp_id);
+            }
+            m_data_block->GetComponentKeySystemPtr()->RegisterComponent(comp_id);
+            auto component_key{
+                m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id)
+            };
+            if (m_data_block->HasChemicalComponentEntry(component_key) == false)
+            {
+                BuildDefaultChemicalComponentEntry(comp_id);
+                component_key = m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id);
             }
 
             if (m_find_component_atom_entry == false)
             {
                 BuildDefaultComponentAtomEntry(comp_id, atom_id, element_type);
             }
+            m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
+            auto atom_key{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id) };
+
+            auto atom_altloc_key{
+                BuildAtomAltLocKey(model_number_id, chain_id, comp_id, sequence_id, atom_id)
+            };
+            auto add_atom_as_primary{
+                [&](std::unique_ptr<AtomObject> atom_object) -> AtomObject *
+                {
+                    auto raw_atom_ptr{ atom_object.get() };
+                    m_data_block->AddAtomObject(model_number_id, std::move(atom_object));
+                    altloc_primary_atom_map[atom_altloc_key] = raw_atom_ptr;
+                    return raw_atom_ptr;
+                }
+            };
+
+            if (indicator != "." && indicator != "A")
+            {
+                auto primary_iter{ altloc_primary_atom_map.find(atom_altloc_key) };
+                if (primary_iter != altloc_primary_atom_map.end())
+                {
+                    primary_iter->second->AddAlternatePosition(indicator, {*parsed_x, *parsed_y, *parsed_z});
+                    primary_iter->second->AddAlternateOccupancy(indicator, occupancy);
+                    primary_iter->second->AddAlternateTemperature(indicator, temperature);
+                    return;
+                }
+            }
+
             auto atom_object{ std::make_unique<AtomObject>() };
             atom_object->SetComponentID(comp_id);
-            atom_object->SetComponentKey(m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id));
+            atom_object->SetComponentKey(component_key);
             atom_object->SetAtomID(atom_id);
-            atom_object->SetAtomKey(m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id));
+            atom_object->SetAtomKey(atom_key);
             atom_object->SetElement(element_type);
             atom_object->SetIndicator(indicator);
-            atom_object->SetSequenceID((sequence_id == ".") ? -1 : std::stoi(sequence_id));
-            atom_object->SetSerialID(std::stoi(serial_id));
+            atom_object->SetSequenceID(sequence_id_value);
+            atom_object->SetSerialID(serial_id_value);
             atom_object->SetChainID(chain_id);
-            atom_object->SetPosition(position_x, position_y, position_z);
+            atom_object->SetPosition(*parsed_x, *parsed_y, *parsed_z);
             atom_object->SetOccupancy(occupancy);
             atom_object->SetTemperature(temperature);
             atom_object->SetSpecialAtomFlag(is_special_atom);
             m_data_block->SetStructureInfo(atom_object.get());
 
-            auto model_number_id{ std::stoi(model_number) };
-            if (indicator == ".")
+            if (indicator == "." || indicator == "A")
             {
-                last_atom_object = nullptr;
-                m_data_block->AddAtomObject(model_number_id, std::move(atom_object));
-            }
-            else if (indicator == "A")
-            {
-                last_atom_object = atom_object.get();
-                m_data_block->AddAtomObject(model_number_id, std::move(atom_object));
+                add_atom_as_primary(std::move(atom_object));
+                return;
             }
 
-            if (last_atom_object != nullptr && indicator != "." && indicator != "A")
-            {
-                last_atom_object->AddAlternatePosition(indicator, {position_x, position_y, position_z});
-                last_atom_object->AddAlternateOccupancy(indicator, occupancy);
-                last_atom_object->AddAlternateTemperature(indicator, temperature);
-            }
+            // First alternate indicator is not "A" (e.g. only "B"): treat as primary.
+            add_atom_as_primary(std::move(atom_object));
         }
     );
+    Logger::Log(LogLevel::Info,
+        "LoadAtomSiteBlock parsed rows = " + std::to_string(atom_site_row_count)
+        + ", skipped rows = " + std::to_string(atom_site_skip_count) + ".");
 }
 
 void CifFormat::ConstructBondList(void)
@@ -733,77 +1001,88 @@ void CifFormat::ConstructBondList(void)
     Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
     BuildPepetideBondEntry();
     BuildPhosphodiesterBondEntry();
-    auto model_number{ 1 };
-    auto & atom_object_list{ m_data_block->GetAtomObjectMap().at(model_number) };
-    std::vector<AtomObject *> atom_ptr_list;
-    atom_ptr_list.reserve(atom_object_list.size());
-    for (auto & atom : atom_object_list)
+    const auto bond_count_before{ m_data_block->GetBondObjectList().size() };
+    const auto & atom_object_map{ m_data_block->GetAtomObjectMap() };
+    for (const auto & [model_number, atom_object_list] : atom_object_map)
     {
-        atom_ptr_list.emplace_back(atom.get());
-    }
-    auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0) };
-    for (auto & atom : atom_object_list)
-    {
-        auto component_id_1{ atom->GetComponentID() };
-        auto atom_id_1{ atom->GetAtomID() };
-        auto sequence_id_1{ atom->GetSequenceID() };
-        auto chain_id_1{ atom->GetChainID() };
-        auto neighbor_atom_list{
-            KDTreeAlgorithm<AtomObject>::RangeSearch(
-                kd_tree_root.get(), atom.get(), m_bond_searching_radius)
-        };
-
-        for (auto neighbor_atom : neighbor_atom_list)
+        if (atom_object_list.empty()) continue;
+        std::vector<AtomObject *> atom_ptr_list;
+        atom_ptr_list.reserve(atom_object_list.size());
+        for (const auto & atom : atom_object_list)
         {
-            if (neighbor_atom == atom.get()) continue;
-            auto component_id_2{ neighbor_atom->GetComponentID() };
-            auto atom_id_2{ neighbor_atom->GetAtomID() };
-            auto sequence_id_2{ neighbor_atom->GetSequenceID() };
-            auto chain_id_2{ neighbor_atom->GetChainID() };
-            auto bond_key_system{ m_data_block->GetBondKeySystemPtr() };
-            if (bond_key_system->IsRegistedBond(atom_id_1, atom_id_2) == false) continue;
-            auto component_key_1{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(component_id_1) };
-            auto bond_key{ bond_key_system->GetBondKey(atom_id_1, atom_id_2) };
-            if (m_data_block->HasComponentBondEntry(component_key_1, bond_key) == false) continue;
-
-            bool is_in_same_component{ (component_id_1 == component_id_2) };
-            bool is_in_same_chain{ (chain_id_1 == chain_id_2) };
-            bool is_in_consecutive_sequence{ (sequence_id_1 + 1 == sequence_id_2) };
-
-            // Peptide bond C-N between consecutive residues in the same chain
-            bool is_peptide_bond{
-                !is_in_same_component &&
-                is_in_same_chain &&
-                is_in_consecutive_sequence &&
-                (bond_key == static_cast<BondKey>(Link::C_N))
-            };
-
-            // Phosphodiester bond P-O3' between consecutive residues in the same chain
-            bool is_phosphodiester_bond{
-                !is_in_same_component &&
-                is_in_same_chain &&
-                is_in_consecutive_sequence &&
-                (bond_key == static_cast<BondKey>(Link::P_O3p))
-            };
-
-            if (is_in_same_component == false &&
-                is_peptide_bond == false &&
-                is_phosphodiester_bond == false) continue;
-
-            auto bond_entry{
-                m_data_block->GetComponentBondEntryPtr(component_key_1, bond_key)
-            };
-            
-            auto bond_object{ std::make_unique<BondObject>(atom.get(), neighbor_atom) };
-            bond_object->SetBondKey(bond_key);
-            bond_object->SetBondType(bond_entry->bond_type);
-            bond_object->SetBondOrder(bond_entry->bond_order);
-            bond_object->SetSpecialBondFlag(false);
-            m_data_block->AddBondObject(std::move(bond_object));
+            atom_ptr_list.emplace_back(atom.get());
         }
+        auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0) };
+        for (const auto & atom : atom_object_list)
+        {
+            auto component_id_1{ atom->GetComponentID() };
+            auto atom_id_1{ atom->GetAtomID() };
+            auto sequence_id_1{ atom->GetSequenceID() };
+            auto chain_id_1{ atom->GetChainID() };
+            auto neighbor_atom_list{
+                KDTreeAlgorithm<AtomObject>::RangeSearch(
+                    kd_tree_root.get(), atom.get(), m_bond_searching_radius)
+            };
+
+            for (auto neighbor_atom : neighbor_atom_list)
+            {
+                if (neighbor_atom == atom.get()) continue;
+                auto component_id_2{ neighbor_atom->GetComponentID() };
+                auto atom_id_2{ neighbor_atom->GetAtomID() };
+                auto sequence_id_2{ neighbor_atom->GetSequenceID() };
+                auto chain_id_2{ neighbor_atom->GetChainID() };
+                auto bond_key_system{ m_data_block->GetBondKeySystemPtr() };
+                if (bond_key_system->IsRegistedBond(atom_id_1, atom_id_2) == false) continue;
+                auto component_key_1{
+                    m_data_block->GetComponentKeySystemPtr()->GetComponentKey(component_id_1)
+                };
+                auto bond_key{ bond_key_system->GetBondKey(atom_id_1, atom_id_2) };
+                if (m_data_block->HasComponentBondEntry(component_key_1, bond_key) == false) continue;
+
+                bool is_in_same_component{ (component_id_1 == component_id_2) };
+                bool is_in_same_chain{ (chain_id_1 == chain_id_2) };
+                bool is_in_consecutive_sequence{ (sequence_id_1 + 1 == sequence_id_2) };
+
+                // Peptide bond C-N between consecutive residues in the same chain
+                bool is_peptide_bond{
+                    !is_in_same_component &&
+                    is_in_same_chain &&
+                    is_in_consecutive_sequence &&
+                    (bond_key == static_cast<BondKey>(Link::C_N))
+                };
+
+                // Phosphodiester bond P-O3' between consecutive residues in the same chain
+                bool is_phosphodiester_bond{
+                    !is_in_same_component &&
+                    is_in_same_chain &&
+                    is_in_consecutive_sequence &&
+                    (bond_key == static_cast<BondKey>(Link::P_O3p))
+                };
+
+                if (is_in_same_component == false &&
+                    is_peptide_bond == false &&
+                    is_phosphodiester_bond == false) continue;
+
+                auto bond_entry{
+                    m_data_block->GetComponentBondEntryPtr(component_key_1, bond_key)
+                };
+                if (bond_entry == nullptr) continue;
+                
+                auto bond_object{ std::make_unique<BondObject>(atom.get(), neighbor_atom) };
+                bond_object->SetBondKey(bond_key);
+                bond_object->SetBondType(bond_entry->bond_type);
+                bond_object->SetBondOrder(bond_entry->bond_order);
+                bond_object->SetSpecialBondFlag(false);
+                m_data_block->AddBondObject(std::move(bond_object));
+            }
+        }
+        Logger::Log(LogLevel::Debug,
+            "ConstructBondList() processed model " + std::to_string(model_number)
+            + " with " + std::to_string(atom_object_list.size()) + " atoms.");
     }
     Logger::Log(LogLevel::Info,
-        "Construct " + std::to_string(m_data_block->GetBondObjectList().size()) + " bonds.");
+        "Construct " + std::to_string(m_data_block->GetBondObjectList().size() - bond_count_before)
+        + " bonds (total " + std::to_string(m_data_block->GetBondObjectList().size()) + ").");
 }
 
 AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
@@ -906,8 +1185,11 @@ void CifFormat::ParseLoopBlock(
     auto header_parsed{ false };
     std::vector<std::string> data_column_list;
     std::unordered_map<std::string, size_t> column_index_map;
+    size_t loop_row_number{ 0 };
+    size_t file_line_number{ 0 };
     while (std::getline(infile, line))
     {
+        ++file_line_number;
         StringHelper::StripCarriageReturn(line);
         if (header_parsed == false)
         {
@@ -931,13 +1213,14 @@ void CifFormat::ParseLoopBlock(
         if (header_parsed == true)
         {
             if (line.empty() || line[0] == '#') break;
+            if (line == "loop_" || line.rfind("data_", 0) == 0 || line[0] == '_') break;
 
             const auto expected_column_size{ column_index_map.size() };
             std::vector<std::string> token_list;
             token_list.reserve(expected_column_size);
 
             // initial tokens from this line
-            auto initial{ StringHelper::SplitStringLineAsTokens(line, expected_column_size) };
+            auto initial{ SplitMmCifTokens(line) };
             token_list.insert(token_list.end(), initial.begin(), initial.end());
 
             // now read continuation lines until we have all fields
@@ -946,8 +1229,13 @@ void CifFormat::ParseLoopBlock(
             std::string next_line;
             while (token_list.size() < expected_column_size && std::getline(infile, next_line))
             {
+                ++file_line_number;
                 StringHelper::StripCarriageReturn(next_line);
                 if (next_line.empty() == true) continue;
+                if (next_line == "loop_" || next_line.rfind("data_", 0) == 0 || next_line[0] == '_')
+                {
+                    break;
+                }
                 if (in_multiline == false && next_line[0] == ';')
                 {
                     // start of multiline literal for the next field
@@ -974,12 +1262,45 @@ void CifFormat::ParseLoopBlock(
                 else
                 {
                     // normal continuation tokens
-                    auto more{ StringHelper::SplitStringLineAsTokens(next_line, expected_column_size) };
+                    auto more{ SplitMmCifTokens(next_line) };
                     token_list.insert(token_list.end(), more.begin(), more.end());
                 }
             }
 
-            table_handler(column_index_map, token_list);
+            ++loop_row_number;
+            if (in_multiline)
+            {
+                Logger::Log(LogLevel::Warning,
+                    "ParseLoopBlock(" + std::string(data_block_prefix)
+                    + ") row " + std::to_string(loop_row_number)
+                    + " has unterminated multiline token. Skip this row.");
+                continue;
+            }
+            if (token_list.size() != expected_column_size)
+            {
+                Logger::Log(LogLevel::Warning,
+                    "ParseLoopBlock(" + std::string(data_block_prefix)
+                    + ") row " + std::to_string(loop_row_number)
+                    + " has token count " + std::to_string(token_list.size())
+                    + " but expects " + std::to_string(expected_column_size)
+                    + ". tokens = " + BuildMmCifTokenPreview(token_list));
+                continue;
+            }
+
+            try
+            {
+                table_handler(column_index_map, token_list);
+            }
+            catch (const std::exception & ex)
+            {
+                Logger::Log(LogLevel::Warning,
+                    "ParseLoopBlock(" + std::string(data_block_prefix)
+                    + ") row " + std::to_string(loop_row_number)
+                    + " failed at file line " + std::to_string(file_line_number)
+                    + ": " + std::string(ex.what())
+                    + ". tokens = " + BuildMmCifTokenPreview(token_list));
+                continue;
+            }
         }
     }
 }

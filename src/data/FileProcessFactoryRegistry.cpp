@@ -17,6 +17,8 @@ void FileProcessFactoryRegistry::RegisterDefaultFactories(void)
     Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::RegisterDefaultFactories() called");
     RegisterFactory(".pdb",  []() { return std::make_unique<ModelObjectFactory>(); });
     RegisterFactory(".cif",  []() { return std::make_unique<ModelObjectFactory>(); });
+    RegisterFactory(".mmcif",[]() { return std::make_unique<ModelObjectFactory>(); });
+    RegisterFactory(".mcif", []() { return std::make_unique<ModelObjectFactory>(); });
     RegisterFactory(".mrc",  []() { return std::make_unique<MapObjectFactory>(); });
     RegisterFactory(".map",  []() { return std::make_unique<MapObjectFactory>(); });
     RegisterFactory(".ccp4", []() { return std::make_unique<MapObjectFactory>(); });
