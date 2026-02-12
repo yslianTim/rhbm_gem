@@ -344,7 +344,7 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
         auto entry{ atom->GetLocalPotentialEntry() };
         interpolation_visitor.SetPosition(atom->GetPosition());
         m_map_object->Accept(&interpolation_visitor);
-        entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+        entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
         entry->AddBasisAndResponseEntryList(
             GausLinearTransformHelper::MapValueTransform(
                 entry->GetDistanceAndMapValueList(),
@@ -416,7 +416,7 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
         interpolation_visitor.SetPosition(bond->GetPosition());
         interpolation_visitor.SetAxisVector(bond->GetBondVector());
         m_map_object->Accept(&interpolation_visitor);
-        entry->AddDistanceAndMapValueList(interpolation_visitor.GetSamplingDataList());
+        entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
         entry->AddBasisAndResponseEntryList(
             GausLinearTransformHelper::MapValueTransform(
                 entry->GetDistanceAndMapValueList(),
@@ -684,7 +684,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
             Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
             auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, model_par_init) };
             auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, model_par_init) };
-            local_bias_array.col(j) = (gaus_mdpde - gaus_ols).array().abs() / gaus_ols.array();
+            local_bias_array.col(j) = (gaus_mdpde - gaus_ols).array().abs();
         }
         
 #ifdef USE_OPENMP
@@ -699,7 +699,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     gaus_bias_matrix /= static_cast<double>(atom_size);
 
     LocalPainter::PaintTemplate1(
-        gaus_bias_matrix, alpha_list, "#alpha_{r}",
+        gaus_bias_matrix, alpha_list, "#alpha_{r}", "Deviation with OLS",
         "/Users/yslian/Downloads/alpha_r_bias.pdf"
     );
 
@@ -739,21 +739,21 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
         for (int j = 0; j < alpha_size; j++)
         {
             auto alpha_g{ alpha_list[static_cast<size_t>(j)] };
-            Eigen::VectorXd mu_median;
+            Eigen::VectorXd mu_mean;
             Eigen::VectorXd mu_mdpde;
             Eigen::ArrayXd omega_array;
             double omega_sum;
             Eigen::MatrixXd capital_lambda;
             std::vector<Eigen::MatrixXd> member_capital_lambda_list;
             HRLModelHelper::AlgorithmMuMDPDE(
-                alpha_g, beta_matrix, mu_median, mu_mdpde,
+                alpha_g, beta_matrix, mu_mean, mu_mdpde,
                 omega_array, omega_sum, capital_lambda,
                 member_capital_lambda_list, true
             );
             Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-            auto gaus_median{ GausLinearTransformHelper::BuildGaus3DModel(mu_median, model_par_init) };
+            auto gaus_mean{ GausLinearTransformHelper::BuildGaus3DModel(mu_mean, model_par_init) };
             auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(mu_mdpde, model_par_init) };
-            local_bias_array.col(j) = (gaus_mdpde - gaus_median).array().abs() / gaus_median.array();
+            local_bias_array.col(j) = (gaus_mdpde - gaus_mean).array().abs();
         }
         
 #ifdef USE_OPENMP
@@ -768,7 +768,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
     gaus_bias_matrix /= static_cast<double>(group_size);
 
     LocalPainter::PaintTemplate1(
-        gaus_bias_matrix, alpha_list, "#alpha_{g}",
+        gaus_bias_matrix, alpha_list, "#alpha_{g}", "Deviation with Mean",
         "/Users/yslian/Downloads/alpha_g_bias.pdf"
     );
     std::cout << gaus_bias_matrix << std::endl;

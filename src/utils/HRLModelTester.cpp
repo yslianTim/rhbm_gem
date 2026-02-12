@@ -147,7 +147,12 @@ bool HRLModelTester::RunBetaMDPDETest(
     double outlier_ratio,
     int thread_size)
 {
-    auto alpha_size{ alpha_r_list.size() };
+#ifndef USE_OPENMP
+    (void)thread_size;
+#endif
+
+    auto local_alpha_r_list{ alpha_r_list };
+    auto alpha_size{ local_alpha_r_list.size() + 1 }; // add one for training alpha_r
     std::vector<Eigen::MatrixXd> residual_matrix_ols_list(alpha_size);
     std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
     residual_matrix_ols_list.assign(
@@ -160,6 +165,9 @@ bool HRLModelTester::RunBetaMDPDETest(
     residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_ols_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+
+    const size_t subset_size_alpha_r{ 5 };
+    std::vector<double> train_alpha_r_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -175,6 +183,14 @@ bool HRLModelTester::RunBetaMDPDETest(
         const auto & X{ std::get<0>(data_array) };
         const auto & y{ std::get<1>(data_array) };
 
+        auto error_array{
+            HRLModelHelper::RunAlphaRTraining(data_entry_list, subset_size_alpha_r, train_alpha_r_list)
+        };
+        int error_min_id;
+        error_array.minCoeff(&error_min_id);
+        auto alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(error_min_id)) };
+        local_alpha_r_list.emplace_back(alpha_r_train);
+
         for (size_t j = 0; j < alpha_size; j++)
         {
             Eigen::VectorXd beta_ols;
@@ -183,7 +199,7 @@ bool HRLModelTester::RunBetaMDPDETest(
             Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
             Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
             HRLModelHelper::AlgorithmBetaMDPDE(
-                alpha_r_list.at(j), X, y,
+                local_alpha_r_list.at(j), X, y,
                 beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
             );
 
@@ -224,7 +240,12 @@ bool HRLModelTester::RunMuMDPDETest(
     double outlier_ratio,
     int thread_size)
 {
-    auto alpha_size{ alpha_g_list.size() };
+#ifndef USE_OPENMP
+    (void)thread_size;
+#endif
+
+    auto local_alpha_g_list{ alpha_g_list };
+    auto alpha_size{ local_alpha_g_list.size() + 1 }; // add one for training alpha_g
     std::vector<Eigen::MatrixXd> residual_matrix_median_list(alpha_size);
     std::vector<Eigen::MatrixXd> residual_matrix_mdpde_list(alpha_size);
     residual_matrix_median_list.assign(
@@ -237,6 +258,9 @@ bool HRLModelTester::RunMuMDPDETest(
     residual_mean_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_median_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
     residual_sigma_mdpde_list.assign(alpha_size, Eigen::VectorXd::Zero(m_gaus_par_size));
+
+    const size_t subset_size_alpha_g{ 10 };
+    std::vector<double> train_alpha_g_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -251,6 +275,16 @@ bool HRLModelTester::RunMuMDPDETest(
             )
         };
         auto beta_matrix{ BuildBetaMatrix(random_gaus_array) };
+        std::vector<Eigen::VectorXd> data_entry_list;
+        for (int m = 0; m < beta_matrix.cols(); m++) data_entry_list.emplace_back(beta_matrix.col(m));
+
+        auto error_array{
+            HRLModelHelper::RunAlphaGTraining(data_entry_list, subset_size_alpha_g, train_alpha_g_list)
+        };
+        int error_min_id;
+        error_array.minCoeff(&error_min_id);
+        auto alpha_g_train{ train_alpha_g_list.at(static_cast<size_t>(error_min_id)) };
+        local_alpha_g_list.emplace_back(alpha_g_train);
 
         for (size_t j = 0; j < alpha_size; j++)
         {
@@ -262,7 +296,7 @@ bool HRLModelTester::RunMuMDPDETest(
             Eigen::MatrixXd capital_lambda;
             std::vector<Eigen::MatrixXd> member_capital_lambda_list;
             HRLModelHelper::AlgorithmMuMDPDE(
-                alpha_g_list.at(j), beta_matrix,
+                local_alpha_g_list.at(j), beta_matrix,
                 mu_median, mu_mdpde, omega_array, omega_sum,
                 capital_lambda, member_capital_lambda_list, true
             );

@@ -34,18 +34,21 @@ public:
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting(void) override;
+    #ifdef HAVE_ROOT
+    static void RemodelAxisLabels(TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
+    #endif
 
 private:
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintAtomGroupGausAminoAcidMainChainComponentSimple(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausAminoAcidMainChainStructure(ModelObject * model_object, const std::string & name);
     void PaintAtomLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
 
     #ifdef HAVE_ROOT
     void RemodelFrameInPad(TH2 * frame, TPad * pad, double x_tick_length, double y_tick_length);
-    void RemodelAxisLabels(TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
     std::unique_ptr<TPaveText> CreateDataInfoPaveText(ModelObject * model_object) const;
     std::unique_ptr<TPaveText> CreateResolutionPaveText(ModelObject * model_object) const;
     #endif

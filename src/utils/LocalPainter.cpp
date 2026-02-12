@@ -32,6 +32,7 @@ void LocalPainter::PaintTemplate1(
     const Eigen::MatrixXd & data_matrix,
     const std::vector<double> & alpha_list,
     const std::string & x_axis_title,
+    const std::string & y_axis_title,
     const std::string & file_path)
 {
     std::vector<std::string> title_y_list{
@@ -141,8 +142,8 @@ void LocalPainter::PaintTemplate1(
     ROOTHelper::SetPaveTextDefaultStyle(right_title_text.get());
     ROOTHelper::SetFillAttribute(right_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
-    right_title_text->AddText("Normalized Bias Mean #font[2]{#bar{b}}");
-    auto text{ right_title_text->GetLineWith("Bias") };
+    right_title_text->AddText(y_axis_title.data());
+    auto text{ right_title_text->GetLineWith(y_axis_title.data()) };
     text->SetTextAngle(90.0f);
     right_title_text->Draw();
 

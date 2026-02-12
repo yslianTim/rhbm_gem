@@ -1,17 +1,47 @@
-# File dependencies
-file(GLOB SOURCE *.cpp)
+set(CORE_SOURCES
+    Application.cpp
+    AtomPainter.cpp
+    CommandBase.cpp
+    CommandRegistry.cpp
+    ComparisonPainter.cpp
+    DataObjectManager.cpp
+    DemoPainter.cpp
+    GausPainter.cpp
+    HRLModelTestCommand.cpp
+    MapInterpolationVisitor.cpp
+    MapSimulationCommand.cpp
+    MapVisualizationCommand.cpp
+    ModelPainter.cpp
+    PositionEstimationCommand.cpp
+    PotentialAnalysisCommand.cpp
+    PotentialDisplayCommand.cpp
+    ResultDumpCommand.cpp
+)
 
-add_library(core SHARED ${SOURCE})
-target_include_directories(core PUBLIC ${CMAKE_SOURCE_DIR}/include/core)
+add_library(core ${CORE_SOURCES})
+target_include_directories(core PUBLIC
+    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/core>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core>"
+)
 target_link_libraries(core PUBLIC
-    CLI11::CLI11
     utils
     data
-    CompilerFlags
+    rhbm_cli11
+)
+target_link_libraries(core PRIVATE
+    $<BUILD_INTERFACE:CompilerFlags>
 )
 
 set_target_properties(core PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+)
+
+install(
+    TARGETS core
+    EXPORT RHBM_GEMTargets
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
 )

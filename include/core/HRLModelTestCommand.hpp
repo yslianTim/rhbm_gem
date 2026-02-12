@@ -49,16 +49,20 @@ private:
         const std::vector<double> & outlier_list,
         const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
         const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
+        const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
         const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
-        const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list
+        const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
+        const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list
     );
     void PrintMemberOutlierResult(
         const std::string & name,
         const std::vector<double> & outlier_list,
         const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
         const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
+        const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
         const std::vector<Eigen::MatrixXd> & sigma_matrix_median_list,
-        const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list
+        const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
+        const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list
     );
 
 };

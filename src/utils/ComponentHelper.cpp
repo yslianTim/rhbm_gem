@@ -405,9 +405,8 @@ size_t ComponentHelper::GetAtomCount(Residue residue)
 {
     if (m_spot_map.find(residue) == m_spot_map.end())
     {
-        Logger::Log(LogLevel::Warning,
-            "ComponentHelper::GetAtomCount ‑ residue is not supported");
-        return 0;
+        throw std::out_of_range(
+            "ComponentHelper::GetAtomCount - residue is not supported");
     }
     return m_spot_map.at(residue).size();
 }

@@ -5,7 +5,7 @@
 
 int main(int argc, char * argv[])
 {
-    CLI::App app{"App with subcommands"};
+    CLI::App app{"RHBM-GEM"};
 
     Application app_controller(app);
 

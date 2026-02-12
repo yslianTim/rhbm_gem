@@ -93,6 +93,7 @@ void GausPainter::Painting(void)
         }
         label += ".pdf";
         
+        PaintAtomGroupGausAminoAcidMainChainComponentSimple(model_object, "atom_group_gaus_amino_acid_main_chain_component_simple_"+ label);
         PaintAtomLocalGausSummary(model_object, "atom_local_gaus_summary_"+ label);
         PaintAtomGroupGausSummary(model_object, "atom_group_gaus_summary_"+ label);
         PaintAtomGroupMapValueAminoAcidMainChainComponent(model_object, "atom_group_map_value_amino_acid_main_chain_component_"+ label);
@@ -304,18 +305,26 @@ void GausPainter::PaintAtomLocalGausSummary(
             ROOTHelper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
             ROOTHelper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
             gaus_prior->Draw("SAME");
-            //gaus_mean->Draw("SAME");
+            gaus_mean->Draw("SAME");
 
             auto legend{ ROOTHelper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
             ROOTHelper::SetLegendDefaultStyle(legend.get());
             ROOTHelper::SetFillAttribute(legend.get(), 4000);
             ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
             legend->SetMargin(0.15f);
-            legend->SetNColumns(2);
+            legend->SetNColumns(3);
+            //legend->AddEntry(gaus_prior.get(),
+            //    "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+            //legend->AddEntry(map_value_graph_list.at(0).get(),
+            //    "Members of Value", "l");
             legend->AddEntry(gaus_prior.get(),
-                "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+                Form("#alpha_{r} = %.1f, #alpha_{g} = %.1f",
+                    entry_iter->GetAtomAlphaR(group_key, class_key),
+                    entry_iter->GetAtomAlphaG(group_key, class_key)), "l");
+            legend->AddEntry(gaus_mean.get(),
+                "#alpha_{r} = #alpha_{g} = 0", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
-                "Members of Value", "l");
+                "Map Value", "l");
             legend->Draw();
 
             auto count_text{ ROOTHelper::CreatePaveText(0.45, 0.75, 1.00, 0.90, "nbNDC", false) };
@@ -766,6 +775,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 
         std::map<Residue, std::vector<std::unique_ptr<TGraphErrors>>> map_value_graph_list_map;
         std::map<Residue, std::unique_ptr<TF1>> gaus_prior_map;
+        std::map<Residue, std::unique_ptr<TF1>> gaus_mean_map;
         std::map<Residue, std::string> component_id_map;
         std::vector<double> global_y_array;
         for (auto & group_key : group_key_list)
@@ -775,7 +785,9 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
             auto component_id{ chemical_component_map.at(component_key)->GetComponentId() };
             component_id_map.emplace(residue, component_id);
 
+            auto gaus_mean{ entry_iter->CreateAtomGroupGausFunctionMean(group_key, class_key) };
             auto gaus_prior{ entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key) };
+            gaus_mean_map.emplace(residue, std::move(gaus_mean));
             gaus_prior_map.emplace(residue, std::move(gaus_prior));
 
             auto member_size{ entry_iter->GetAtomObjectList(group_key, class_key).size() };
@@ -808,6 +820,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 
         std::unique_ptr<TH2> frame[col_size][row_size];
         std::unique_ptr<TPaveText> info_text[col_size][row_size];
+        std::unique_ptr<TPaveText> result_text[col_size][row_size];
         for (int i = 0; i < col_size; i++)
         {
             for (int j = 0; j < row_size; j++)
@@ -847,9 +860,22 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
                 info_text[i][j]->AddText(component_id_map.at(residue).data());
                 info_text[i][j]->Draw();
 
+                auto & gaus_mean{ gaus_mean_map.at(residue) };
                 auto & gaus_prior{ gaus_prior_map.at(residue) };
+                ROOTHelper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
                 ROOTHelper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
                 gaus_prior->Draw("SAME");
+                gaus_mean->Draw("SAME");
+
+                result_text[i][j] = ROOTHelper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
+                ROOTHelper::SetPaveTextDefaultStyle(result_text[i][j].get());
+                ROOTHelper::SetLineAttribute(result_text[i][j].get(), 1, 0);
+                ROOTHelper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
+                ROOTHelper::SetFillAttribute(result_text[i][j].get(), 4000);
+                result_text[i][j]->AddText(
+                    Form("A = %.2f,   #tau = %.2f", gaus_prior->GetParameter(0), gaus_prior->GetParameter(2))
+                );
+                result_text[i][j]->Draw();
             }
         }
 
@@ -882,15 +908,18 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
         map_info_text->SetTextSize(70.0f);
         map_info_text->Draw();
 
-        auto legend{ ROOTHelper::CreateLegend(0.60, 0.02, 1.00, 0.99, false) };
+        auto legend{ ROOTHelper::CreateLegend(0.50, 0.02, 1.00, 0.99, false) };
         ROOTHelper::SetLegendDefaultStyle(legend.get());
         ROOTHelper::SetFillAttribute(legend.get(), 4000);
-        ROOTHelper::SetTextAttribute(legend.get(), 60.0f, 133, 12, 0.0);
+        ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
         legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
-            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
+            Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
+            entry_iter->GetAtomAlphaR(group_key_list.at(0), class_key), entry_iter->GetAtomAlphaG(group_key_list.at(0), class_key)), "l");
+        legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
+            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = #alpha_{g} = 0", "l");
         legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),
-            "Members of Value", "l");
+            "Members of Map Value", "l");
         legend->Draw();
 
         canvas->cd();
@@ -938,8 +967,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
 
-    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
-    //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+    //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
 
     #ifdef HAVE_ROOT
 
@@ -1223,6 +1252,192 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     ROOTHelper::SetLineAttribute(count_hist.get(), 0, 0);
     ROOTHelper::SetMarkerAttribute(count_hist.get(), 20, 7.0f, kAzure);
     count_hist->Draw("BAR TEXT0 SAME");
+    ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
+    #endif
+}
+
+void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
+    ModelObject * model_object, const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple");
+
+    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
+
+    const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+
+    #ifdef HAVE_ROOT
+
+    gStyle->SetLineScalePS(2.0);
+    gStyle->SetGridColor(kGray);
+    gStyle->SetEndErrorSize(5.0f);
+
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1000, 1000) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+    const int pad_size{ 4 };
+    
+    std::unique_ptr<TPad> pad[pad_size];
+    std::unique_ptr<TH2> frame[pad_size];
+
+    
+    pad[0] = ROOTHelper::CreatePad("pad0","", 0.00, 0.00, 1.00, 0.45);
+    pad[1] = ROOTHelper::CreatePad("pad1","", 0.00, 0.45, 1.00, 0.80);
+    pad[2] = ROOTHelper::CreatePad("pad2","", 0.00, 0.80, 1.00, 0.95);
+    pad[3] = ROOTHelper::CreatePad("pad3","", 0.00, 0.95, 1.00, 1.00);
+
+    frame[0] = ROOTHelper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0);
+    frame[1] = ROOTHelper::CreateHist2D("hist_1","", 100, 0.0, 1.0, 100, 0.0, 1.0);
+    frame[2] = ROOTHelper::CreateHist2D("hist_2","", 100, 0.0, 1.0, 100, 0.0, 1.0);
+    frame[3] = ROOTHelper::CreateHist2D("hist_3","", 100, 0.0, 1.0, 100, 0.0, 1.0);
+
+    auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    std::map<Spot, std::vector<GroupKey>> group_key_list_map;
+    for (size_t i = 0; i < spot_list.size(); i++)
+    {
+        auto spot{ spot_list.at(i) };
+        group_key_list_map.emplace(
+            spot, m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(i));
+        auto & group_key_list{ group_key_list_map.at(spot) };
+        for (auto it = group_key_list.begin(); it != group_key_list.end(); )
+        {
+            if (entry_iter->IsAvailableAtomGroupKey(*it, class_key) == false)
+            {
+                it = group_key_list.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    std::vector<std::string> component_id_list;
+    component_id_list.reserve(ChemicalDataHelper::GetStandardAminoAcidCount());
+    for (auto & group_key : group_key_list_map.at(Spot::CA))
+    {
+        auto residue{ entry_iter->GetResidueFromAtomGroupKey(group_key, class_key) };
+        auto component_key{ static_cast<ComponentKey>(residue) };
+        auto component_id{ chemical_component_map.at(component_key)->GetComponentId() };
+        component_id_list.emplace_back(component_id);
+    }
+
+    std::map<Spot, std::unique_ptr<TGraphErrors>> amplitude_graph_map;
+    std::map<Spot, std::unique_ptr<TGraphErrors>> width_graph_map;
+    std::vector<double> amplitude_array, width_array;
+    amplitude_array.reserve(group_key_list_map.at(Spot::CA).size()*4);
+    width_array.reserve(group_key_list_map.at(Spot::CA).size()*4);
+    std::map<Spot, short> color_list{ { Spot::CA,kRed }, { Spot::C, kBlue }, { Spot::N, kGreen+2 } };
+    std::map<Spot, short> marker_list{ { Spot::CA, 72 }, { Spot::C, 71 }, { Spot::N, 73 } };
+    std::map<Spot, short> line_list{ { Spot::CA, 1 }, { Spot::C, 2 }, { Spot::N, 3 } };
+    
+    for (auto & [spot, group_key_list] : group_key_list_map)
+    {
+        auto amplitude_graph{
+            entry_iter->CreateAtomGausEstimateToResidueGraph(
+                group_key_list, class_key, 0)
+        };
+        auto width_graph{
+            entry_iter->CreateAtomGausEstimateToResidueGraph(
+                group_key_list, class_key, 1)
+        };
+        for (int p = 0; p < amplitude_graph->GetN(); p++)
+        {
+            amplitude_array.push_back(amplitude_graph->GetPointY(p));
+            width_array.push_back(width_graph->GetPointY(p));
+        }
+        ROOTHelper::SetMarkerAttribute(amplitude_graph.get(), marker_list[spot], 1.5f, color_list[spot]);
+        ROOTHelper::SetMarkerAttribute(width_graph.get(), marker_list[spot], 1.5f, color_list[spot]);
+        ROOTHelper::SetLineAttribute(amplitude_graph.get(), line_list[spot], 2, color_list[spot]);
+        ROOTHelper::SetLineAttribute(width_graph.get(), line_list[spot], 2, color_list[spot]);
+
+        amplitude_graph_map[spot] = std::move(amplitude_graph);
+        width_graph_map[spot] = std::move(width_graph);
+    }
+
+    auto scaling{ 0.3 };
+    auto amplitude_range{ ArrayStats<double>::ComputeScalingRangeTuple(amplitude_array, scaling) };
+    auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
+
+    auto count_hist{
+        entry_iter->CreateComponentCountHistogram(group_key_list_map.at(Spot::CA), class_key)
+    };
+
+    canvas->cd();
+    for (int i = 0; i < pad_size; i++)
+    {
+        ROOTHelper::SetPadDefaultStyle(pad[i].get());
+        pad[i]->Draw();
+    }
+
+    frame[0]->GetYaxis()->SetLimits(std::get<0>(width_range), std::get<1>(width_range));
+    frame[1]->GetYaxis()->SetLimits(std::get<0>(amplitude_range), std::get<1>(amplitude_range));
+
+    pad[0]->cd();
+    ROOTHelper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.11, 0.02);
+    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    RemodelFrameInPad(frame[0].get(), pad[0].get(), 0.0, 0.015);
+    RemodelAxisLabels(frame[0]->GetXaxis(), component_id_list, 90.0, 12);
+    ROOTHelper::SetAxisTitleAttribute(frame[0]->GetXaxis(), 0.0f);
+    ROOTHelper::SetAxisTitleAttribute(frame[0]->GetYaxis(), 50.0f, 1.5f);
+    ROOTHelper::SetAxisLabelAttribute(frame[0]->GetXaxis(), 50.0f, 0.13f, 103, kCyan+3);
+    ROOTHelper::SetAxisLabelAttribute(frame[0]->GetYaxis(), 45.0f, 0.01f);
+    frame[0]->GetYaxis()->SetTitle("Width");
+    frame[0]->Draw();
+    for (auto & [element, graph] : width_graph_map) graph->Draw("PL X0");
+
+    pad[1]->cd();
+    ROOTHelper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.02, 0.01);
+    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    RemodelFrameInPad(frame[1].get(), pad[1].get(), 0.0, 0.015);
+    RemodelAxisLabels(frame[1]->GetXaxis(), component_id_list, 90.0, 12);
+    ROOTHelper::SetAxisTitleAttribute(frame[1]->GetXaxis(), 0.0f);
+    ROOTHelper::SetAxisTitleAttribute(frame[1]->GetYaxis(), 50.0f, 1.5f);
+    ROOTHelper::SetAxisLabelAttribute(frame[1]->GetXaxis(), 0.0f);
+    ROOTHelper::SetAxisLabelAttribute(frame[1]->GetYaxis(), 45.0f, 0.01f);
+    frame[1]->GetYaxis()->SetTitle("Amplitude");
+    frame[1]->Draw();
+    for (auto & [element, graph] : amplitude_graph_map) graph->Draw("PL X0");
+
+    pad[2]->cd();
+    ROOTHelper::SetPadMarginInCanvas(gPad, 0.15, 0.02, 0.2, 0.003);
+    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    RemodelFrameInPad(frame[2].get(), pad[2].get(), 0.0, 0.015);
+    RemodelAxisLabels(frame[2]->GetXaxis(), component_id_list, 90.0, 12);
+    ROOTHelper::SetAxisTitleAttribute(frame[2]->GetXaxis(), 0.0f);
+    ROOTHelper::SetAxisTitleAttribute(frame[2]->GetYaxis(), 40.0f, 1.2f);
+    ROOTHelper::SetAxisLabelAttribute(frame[2]->GetXaxis(), 0.0f);
+    ROOTHelper::SetAxisLabelAttribute(frame[2]->GetYaxis(), 0.0f);
+    ROOTHelper::SetAxisTickAttribute(frame[2]->GetYaxis(), 0.0f, 504);
+    frame[2]->GetYaxis()->SetTitle("#splitline{Member}{Counts}");
+    frame[2]->GetYaxis()->SetLimits(0.5, count_hist->GetMaximum()*1.1);
+    frame[2]->GetYaxis()->CenterTitle();
+    frame[2]->Draw();
+    gStyle->SetTextFont(132);
+    ROOTHelper::SetFillAttribute(count_hist.get(), 1001, kAzure-7, 0.5f);
+    ROOTHelper::SetLineAttribute(count_hist.get(), 0, 0);
+    ROOTHelper::SetMarkerAttribute(count_hist.get(), 20, 8.0f, kAzure);
+    count_hist->Draw("BAR TEXT0 SAME");
+
+    pad[3]->cd();
+    ROOTHelper::SetPadMarginInCanvas(gPad, 0.0, 0.0, 0.0, 0.0);
+    ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
+    auto legend{
+        ROOTHelper::CreateLegend(0.05, 0.00, 1.00, 1.00, false)
+    };
+    ROOTHelper::SetLegendDefaultStyle(legend.get());
+    ROOTHelper::SetTextAttribute(legend.get(), 35.0f, 133, 12);
+    legend->AddEntry(amplitude_graph_map.at(Spot::CA).get(), "Alpha Carbon", "lp");
+    legend->AddEntry(amplitude_graph_map.at(Spot::C).get(), "Carbon", "lp");
+    legend->AddEntry(amplitude_graph_map.at(Spot::N).get(), "Nitrogen", "lp");
+    legend->SetNColumns(3);
+    legend->SetMargin(0.50f);
+    legend->Draw();
+
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
 
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);

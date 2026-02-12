@@ -360,7 +360,7 @@ void MapObject::BuildGridNodeList(void)
 #else
     for (size_t i = 0; i < m_voxel_size; i++)
     {
-        thread_local_list.emplace_back(i, this);
+        m_grid_node_list.emplace_back(i, this);
     }
 #endif
 }

@@ -43,6 +43,7 @@ public:
     bool IsOutlierBond(const std::string & class_key) const;
     bool IsAvailableAtomGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
     bool IsAvailableBondGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
+    double GetAtomGausEstimateMean(GroupKey group_key, const std::string & class_key, int par_id) const;
     double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
     double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
     double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
@@ -65,6 +66,8 @@ public:
     double GetWidthEstimatePosterior(const std::string & key) const;
     double GetWidthVariancePosterior(const std::string & key) const;
     double GetAlphaR(void) const;
+    double GetAtomAlphaR(GroupKey group_key, const std::string & class_key) const;
+    double GetBondAlphaR(GroupKey group_key, const std::string & class_key) const;
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const;
     double GetBondAlphaG(GroupKey group_key, const std::string & class_key) const;
     Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;

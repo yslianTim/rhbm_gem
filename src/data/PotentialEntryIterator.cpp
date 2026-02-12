@@ -153,6 +153,16 @@ size_t PotentialEntryIterator::GetBondResidueCount(
     return GetBondObjectList(group_key, class_key).size();
 }
 
+double PotentialEntryIterator::GetAtomGausEstimateMean(
+    GroupKey group_key, const std::string & class_key, int par_id) const
+{
+    if (CheckAtomGroupKey(group_key, class_key) == false)
+    {
+        throw std::runtime_error("Group key is not available.");
+    }
+    return m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGausEstimateMean(group_key, par_id);
+}
+
 double PotentialEntryIterator::GetAtomGausEstimatePrior(
     GroupKey group_key, const std::string & class_key, int par_id) const
 {
@@ -426,7 +436,40 @@ double PotentialEntryIterator::GetAlphaR(void) const
     {
         return m_bond_local_entry->GetAlphaR();
     }
-    return 0.0;
+    throw std::runtime_error(
+        "Local entry is not available. Use GetAtomAlphaR/GetBondAlphaR for model-level access.");
+}
+
+double PotentialEntryIterator::GetAtomAlphaR(
+    GroupKey group_key, const std::string & class_key) const
+{
+    const auto & atom_list{ GetAtomObjectList(group_key, class_key) };
+    if (atom_list.empty())
+    {
+        throw std::runtime_error("Atom group has no members.");
+    }
+    auto local_entry{ atom_list.front()->GetLocalPotentialEntry() };
+    if (local_entry == nullptr)
+    {
+        throw std::runtime_error("Local entry of the first atom member is not available.");
+    }
+    return local_entry->GetAlphaR();
+}
+
+double PotentialEntryIterator::GetBondAlphaR(
+    GroupKey group_key, const std::string & class_key) const
+{
+    const auto & bond_list{ GetBondObjectList(group_key, class_key) };
+    if (bond_list.empty())
+    {
+        throw std::runtime_error("Bond group has no members.");
+    }
+    auto local_entry{ bond_list.front()->GetLocalPotentialEntry() };
+    if (local_entry == nullptr)
+    {
+        throw std::runtime_error("Local entry of the first bond member is not available.");
+    }
+    return local_entry->GetAlphaR();
 }
 
 double PotentialEntryIterator::GetAtomAlphaG(
