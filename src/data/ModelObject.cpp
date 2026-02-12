@@ -310,6 +310,13 @@ void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
     {
         return;
     }
+    if (m_chain_id_list_map.empty())
+    {
+        Logger::Log(LogLevel::Warning,
+            "FilterAtomFromSymmetry(): chain metadata is empty. "
+            "Skip symmetry filtering and keep current atom selection.");
+        return;
+    }
 
     for (auto & atom : m_atom_list)
     {
@@ -318,7 +325,9 @@ void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
         bool in_candidate_chain{ false };
         for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
         {
-            if (chain_id == chain_id_list.at(0))
+            (void)entity_id;
+            if (chain_id_list.empty()) continue;
+            if (chain_id == chain_id_list.front())
             {
                 atom->SetSelectedFlag(original_selection_flag);
                 in_candidate_chain = true;
@@ -335,6 +344,13 @@ void ModelObject::FilterBondFromSymmetry(bool is_asymmetry)
     {
         return;
     }
+    if (m_chain_id_list_map.empty())
+    {
+        Logger::Log(LogLevel::Warning,
+            "FilterBondFromSymmetry(): chain metadata is empty. "
+            "Skip symmetry filtering and keep current bond selection.");
+        return;
+    }
 
     for (auto & bond : m_bond_list)
     {
@@ -343,7 +359,9 @@ void ModelObject::FilterBondFromSymmetry(bool is_asymmetry)
         bool in_candidate_chain{ false };
         for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
         {
-            if (chain_id == chain_id_list.at(0))
+            (void)entity_id;
+            if (chain_id_list.empty()) continue;
+            if (chain_id == chain_id_list.front())
             {
                 bond->SetSelectedFlag(original_selection_flag);
                 in_candidate_chain = true;

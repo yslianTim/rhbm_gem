@@ -20,6 +20,49 @@
 #include <cctype>
 #include <ostream>
 #include <algorithm>
+#include <optional>
+
+namespace
+{
+bool IsMmCifMissingValue(const std::string & value)
+{
+    return value.empty() || value == "." || value == "?";
+}
+
+std::optional<std::string> ParseMmCifDataItemValue(
+    std::ifstream & infile, const std::string & line, std::string_view key)
+{
+    if (line.rfind(key, 0) != 0) return std::nullopt;
+    auto token_list{ StringHelper::SplitStringLineAsTokens(line, 2) };
+    if (token_list.size() >= 2) return token_list[1];
+    if (token_list.size() != 1) return std::string{};
+
+    std::string next_line;
+    while (std::getline(infile, next_line))
+    {
+        StringHelper::StripCarriageReturn(next_line);
+        if (next_line.empty()) continue;
+        if (next_line[0] == '#') return std::string{};
+        if (next_line[0] != ';')
+        {
+            auto next_tokens{ StringHelper::SplitStringLineAsTokens(next_line, 1) };
+            return next_tokens.empty() ? std::string{} : next_tokens.front();
+        }
+
+        // Multi-line value starts with ';' and ends at the next line that starts with ';'.
+        std::string value{ next_line.substr(1) };
+        while (std::getline(infile, next_line))
+        {
+            StringHelper::StripCarriageReturn(next_line);
+            if (next_line.empty() == false && next_line[0] == ';') break;
+            if (!value.empty()) value += "\n";
+            value += next_line;
+        }
+        return value;
+    }
+    return std::string{};
+}
+} // namespace
 
 CifFormat::CifFormat(void) :
     m_data_block{ std::make_unique<AtomicModelDataBlock>() }
@@ -258,9 +301,25 @@ void CifFormat::LoadEntityBlock(std::ifstream & infile)
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
         {
+            if (index_map.find("id") == index_map.end() ||
+                index_map.find("type") == index_map.end())
+            {
+                return;
+            }
+            if (index_map.at("id") >= token_list.size() ||
+                index_map.at("type") >= token_list.size())
+            {
+                return;
+            }
+
             auto entity_id{ token_list[index_map.at("id")] };
             auto entity_type{ token_list[index_map.at("type")] };
-            auto molecules_size_string{ token_list[index_map.at("pdbx_number_of_molecules")] };
+            std::string molecules_size_string{ "-1" };
+            if (index_map.find("pdbx_number_of_molecules") != index_map.end() &&
+                index_map.at("pdbx_number_of_molecules") < token_list.size())
+            {
+                molecules_size_string = token_list[index_map.at("pdbx_number_of_molecules")];
+            }
             int molecules_size{ -1 };
             try
             {
@@ -281,11 +340,118 @@ void CifFormat::LoadEntityBlock(std::ifstream & infile)
         [this](const std::unordered_map<std::string, size_t> & index_map,
                const std::vector<std::string> & token_list)
         {
+            if (index_map.find("entity_id") == index_map.end() ||
+                index_map.find("id") == index_map.end())
+            {
+                return;
+            }
+            if (index_map.at("entity_id") >= token_list.size() ||
+                index_map.at("id") >= token_list.size())
+            {
+                return;
+            }
             auto entity_id{ token_list[index_map.at("entity_id")] };
             auto chain_id{ token_list[index_map.at("id")] };
             m_data_block->AddChainIDInEntityMap(entity_id, chain_id);
         }
     );
+
+    const auto need_entity_fallback{ m_data_block->GetEntityTypeMap().empty() };
+    const auto need_chain_fallback{ m_data_block->GetChainIDListMap().empty() };
+    if (!need_entity_fallback && !need_chain_fallback) return;
+
+    Logger::Log(LogLevel::Warning,
+        "Cannot parse complete entity/chain metadata from loop blocks. "
+        "Trying key-value fallback for _entity/_struct_asym.");
+
+    infile.clear();
+    infile.seekg(0);
+
+    std::string entity_id;
+    std::string entity_type;
+    std::string molecules_size_raw;
+    std::string struct_asym_id;
+    std::string struct_asym_entity_id;
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        StringHelper::StripCarriageReturn(line);
+
+        if (need_entity_fallback)
+        {
+            if (auto value{ ParseMmCifDataItemValue(infile, line, "_entity.id") })
+            {
+                entity_id = *value;
+                continue;
+            }
+            if (auto value{ ParseMmCifDataItemValue(infile, line, "_entity.type") })
+            {
+                entity_type = *value;
+                continue;
+            }
+            if (auto value{ ParseMmCifDataItemValue(infile, line, "_entity.pdbx_number_of_molecules") })
+            {
+                molecules_size_raw = *value;
+                continue;
+            }
+        }
+
+        if (need_chain_fallback)
+        {
+            if (auto value{ ParseMmCifDataItemValue(infile, line, "_struct_asym.id") })
+            {
+                struct_asym_id = *value;
+                continue;
+            }
+            if (auto value{ ParseMmCifDataItemValue(infile, line, "_struct_asym.entity_id") })
+            {
+                struct_asym_entity_id = *value;
+                continue;
+            }
+        }
+    }
+
+    if (need_entity_fallback)
+    {
+        if (IsMmCifMissingValue(entity_id) || IsMmCifMissingValue(entity_type))
+        {
+            Logger::Log(LogLevel::Warning,
+                "Key-value fallback cannot recover required _entity.id/_entity.type fields.");
+        }
+        else
+        {
+            int molecules_size{ -1 };
+            if (!IsMmCifMissingValue(molecules_size_raw))
+            {
+                try
+                {
+                    molecules_size = std::stoi(molecules_size_raw);
+                }
+                catch (const std::exception &)
+                {
+                    Logger::Log(LogLevel::Warning,
+                        "Invalid _entity.pdbx_number_of_molecules in key-value fallback: "
+                        + molecules_size_raw);
+                }
+            }
+            m_data_block->AddEntityTypeInEntityMap(
+                entity_id, ChemicalDataHelper::GetEntityFromString(entity_type));
+            m_data_block->AddMoleculesSizeInEntityMap(entity_id, molecules_size);
+        }
+    }
+
+    if (need_chain_fallback)
+    {
+        if (IsMmCifMissingValue(struct_asym_id) || IsMmCifMissingValue(struct_asym_entity_id))
+        {
+            Logger::Log(LogLevel::Warning,
+                "Key-value fallback cannot recover required _struct_asym.id/_struct_asym.entity_id fields.");
+        }
+        else
+        {
+            m_data_block->AddChainIDInEntityMap(struct_asym_entity_id, struct_asym_id);
+        }
+    }
 }
 
 void CifFormat::LoadPdbxData(std::ifstream & infile)
