@@ -31,6 +31,12 @@
 
 #include <vector>
 #include <tuple>
+#include <cmath>
+#include <limits>
+
+#ifdef HAVE_BOOST
+#include <boost/math/distributions/students_t.hpp>
+#endif
 
 DemoPainter::DemoPainter(void) :
     m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
@@ -89,7 +95,7 @@ void DemoPainter::Painting(void)
     };
     std::vector<ModelObject *> demo_alpha_carbon_list
     {
-        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr
+        nullptr, nullptr, nullptr
     };
     for (auto model : m_model_object_list)
     {
@@ -103,19 +109,16 @@ void DemoPainter::Painting(void)
         {
             demo_model_list[2] = model;
             demo_fsc_model_list[1] = model;
-            demo_alpha_carbon_list[1] = model;
         }
         else if (model->GetPdbID() == "9EVX" && model->GetEmdID() == "EMD-50019")
         {
             demo_model_list[1] = model;
             demo_fsc_model_list[2] = model;
-            demo_alpha_carbon_list[2] = model;
         }
         else if (model->GetPdbID() == "6CVM" && model->GetEmdID() == "EMD-7770" )
         {
             demo_model_list[0] = model;
             demo_fsc_model_list[3] = model;
-            demo_alpha_carbon_list[3] = model;
         }
         else if (model->GetPdbID() == "8RQB" && model->GetEmdID() == "EMD-19436")
         {
@@ -144,11 +147,11 @@ void DemoPainter::Painting(void)
         else if (model->GetPdbID() == "6DRV" && model->GetEmdID() == "EMD-8908" )
         {
             demo_fsc_model_list[10] = model;
-            demo_alpha_carbon_list[4] = model; 
+            demo_alpha_carbon_list[1] = model; 
         }
         else if (model->GetPdbID() == "9GXM" && model->GetEmdID() == "EMD-51667" )
         {
-            demo_alpha_carbon_list[5] = model;
+            demo_alpha_carbon_list[2] = model;
         }
     };
 
@@ -1596,7 +1599,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
 
     for (auto & model : model_list) if (model == nullptr) return;
 
-    const int col_size{ 6 };
+    const int col_size{ 3 };
     const int row_size{ 2 };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
@@ -1629,9 +1632,9 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
 
-    auto canvas{ ROOTHelper::CreateCanvas("test","", 1200, 700) };
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1200, 500) };
     ROOTHelper::SetCanvasDefaultStyle(canvas.get());
-    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.09f, 0.06f, 0.42f, 0.10f, 0.01f, 0.005f);
+    ROOTHelper::SetCanvasPartition(canvas.get(), col_size, row_size, 0.09f, 0.07f, 0.09f, 0.12f, 0.02f, 0.01f);
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
 
     std::map<Spot, std::unique_ptr<TGraphErrors>> graph_map[col_size];
@@ -1708,33 +1711,77 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
         }
     }
 
-    std::map<Spot, std::unique_ptr<TGraphErrors>> summary_graph1_map;
-    std::map<Spot, std::unique_ptr<TGraphErrors>> summary_graph2_map;
-    for (auto & spot : spot_list)
+
+    for (size_t i = 0; i < model_list.size(); i++)
     {
-        auto graph1{ std::make_unique<TGraphErrors>() };
-        auto graph2{ std::make_unique<TGraphErrors>() };
-        for (size_t i = 0; i < model_list.size(); i++)
+        auto model_object{ model_list.at(i) };
+        auto data_carbon{ width_array_map[i].at(Spot::CA) };
+        data_carbon.insert(
+            data_carbon.end(),
+            width_array_map[i].at(Spot::C).begin(),
+            width_array_map[i].at(Spot::C).end()
+        );
+        auto data_nitrogen{ width_array_map[i].at(Spot::N) };
+
+
+        auto width_carbon_mean{
+            ArrayStats<double>::ComputeMean(data_carbon.data(), data_carbon.size())
+        };
+        auto width_carbon_std{
+            ArrayStats<double>::ComputeStandardDeviation(
+                data_carbon.data(), data_carbon.size(), width_carbon_mean)
+        };
+        auto width_nitrogen_mean{
+            ArrayStats<double>::ComputeMean(data_nitrogen.data(), data_nitrogen.size())
+        };
+        auto width_nitrogen_std{
+            ArrayStats<double>::ComputeStandardDeviation(
+                data_nitrogen.data(), data_nitrogen.size(), width_nitrogen_mean)
+        };
+
+        auto n1{ static_cast<double>(data_carbon.size()) };
+        auto n2{ static_cast<double>(data_nitrogen.size()) };
+        auto s1_square{ width_carbon_std * width_carbon_std };
+        auto s2_square{ width_nitrogen_std * width_nitrogen_std };
+        
+        auto std_square_total{ 0.0 };
+        for (auto & value : data_carbon)
         {
-            auto model_object{ model_list.at(i) };
-            auto width_mean{
-                ArrayStats<double>::ComputeMean(
-                    width_array_map[i].at(spot).data(),
-                    width_array_map[i].at(spot).size())
-            };
-            auto width_std{
-                ArrayStats<double>::ComputeStandardDeviation(
-                    width_array_map[i].at(spot).data(),
-                    width_array_map[i].at(spot).size(),
-                    width_mean)
-            };
-            auto x_value{ model_object->GetResolution() };
-            graph1->SetPoint(static_cast<int>(i), x_value, width_mean);
-            graph2->SetPoint(static_cast<int>(i), x_value, width_std);
+            std_square_total += (value - width_carbon_mean) * (value - width_carbon_mean);
         }
-        summary_graph1_map.emplace(spot, std::move(graph1));
-        summary_graph2_map.emplace(spot, std::move(graph2));
+        for (auto & value : data_nitrogen)
+        {
+            std_square_total += (value - width_nitrogen_mean) * (value - width_nitrogen_mean);
+        }
+        std_square_total /= (n1 + n2 - 2);
+
+        auto t_value{ (width_carbon_mean - width_nitrogen_mean) /
+            std::sqrt(std_square_total / n1 + std_square_total / n2)
+        };
+
+        auto dof{ n1 + n2 - 2 };
+        //auto dof{ std::pow(s1_square / n1 + s2_square / n2, 2) /
+        //    ((s1_square * s1_square) / (n1 * n1 * (n1 - 1)) + (s2_square * s2_square) / (n2 * n2 * (n2 - 1)))
+        //};
+
+        auto p_value{ std::numeric_limits<double>::quiet_NaN() };
+        #ifdef HAVE_BOOST
+        if (std::isfinite(t_value) && dof > 0.0)
+        {
+            boost::math::students_t_distribution<double> dist(dof);
+            p_value = 2.0 * boost::math::cdf(
+                boost::math::complement(dist, std::fabs(t_value))
+            );
+        }
+        #endif
+
+        std::cout << "Model: " << model_object->GetPdbID();
+        std::cout << "  t-value: " << t_value << "  dof: " << dof << "  p-value: " << p_value << std::endl;
+        std::cout << "  Carbon mean: " << width_carbon_mean << "  std: " << width_carbon_std << std::endl;
+        std::cout << "  Nitrogen mean: " << width_nitrogen_mean << "  std: " << width_nitrogen_std << std::endl;
+        std::cout << "  sp: " << std::sqrt(std_square_total) << std::endl;
     }
+
     
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> title_text[col_size];
@@ -1756,7 +1803,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
             if (i == col_size - 1) ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 0.0);
             else ROOTHelper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 35.0f, 1.5f, 133);
             ROOTHelper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 35.0f, 0.02f, 133);
-            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
+            ROOTHelper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 506);
             ROOTHelper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
             frame[i][j]->GetYaxis()->SetTitle((j == 0) ? "Width" : "Amplitude");
@@ -1780,19 +1827,19 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
 
             if (j == row_size - 1)
             {
-                title_text[i] = ROOTHelper::CreatePaveText(0.02, 1.02, 0.98, 1.40, "nbNDC ARC", true);
+                title_text[i] = ROOTHelper::CreatePaveText(0.02, 1.02, 0.98, 1.30, "nbNDC ARC", true);
                 ROOTHelper::SetPaveTextDefaultStyle(title_text[i].get());
                 ROOTHelper::SetPaveAttribute(title_text[i].get(), 0, 0.2);
-                ROOTHelper::SetTextAttribute(title_text[i].get(), 25.0f, 133, 22);
+                ROOTHelper::SetTextAttribute(title_text[i].get(), 35.0f, 133, 22);
                 ROOTHelper::SetFillAttribute(title_text[i].get(), 1001, kAzure-7, 0.5f);
                 ROOTHelper::SetLineAttribute(title_text[i].get(), 1, 0);
-                title_text[i]->AddText(Form("#font[102]{%s}", model_object->GetPdbID().data()));
-                title_text[i]->AddText(Form("FSC = %.2f #AA", model_object->GetResolution()));
+                title_text[i]->AddText(Form("#font[102]{%s} (FSC = %.2f #AA)",
+                    model_object->GetPdbID().data(), model_object->GetResolution()));
                 title_text[i]->Draw();
             }
         }
     }
-
+/*
     canvas->cd();
     auto pad_extra1{ ROOTHelper::CreatePad("pad_extra1","", 0.00, 0.00, 0.50, 0.35) };
     pad_extra1->Draw();
@@ -1872,7 +1919,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     legend->AddEntry(summary_graph1_map.at(Spot::N).get(), "N", "lp");
     legend->SetMargin(0.55f);
     legend->Draw();
-
+*/
 
     ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);

@@ -10,7 +10,7 @@ RHBM-GEM is a robust hierarchical Bayesian framework for Gaussian modeling and p
 
 **Distribution policy (default release profile)**
 1. Release builds define `EIGEN_MPL2_ONLY` to constrain Eigen header usage to MPL-2.0-only subsets.
-2. ROOT is optional and not required for non-plot workflows; release artifacts may be shipped without ROOT-linked binaries.
+2. ROOT and Boost are optional and not required for non-plot workflows; release artifacts may be shipped without these linked binaries.
 3. If binaries are distributed, include `LICENSE` and `THIRD_PARTY_NOTICES.md` in the package.
 4. If large `.sqlite` datasets are distributed, verify their source-data license terms separately.
 
@@ -22,10 +22,11 @@ RHBM-GEM is a robust hierarchical Bayesian framework for Gaussian modeling and p
    - `USE_SYSTEM_LIBS=OFF`
    - `USE_SYSTEM_LIBS=ON`
    - `CMAKE_DISABLE_FIND_PACKAGE_ROOT=TRUE`
+   - `CMAKE_DISABLE_FIND_PACKAGE_Boost=TRUE`
 
 ## Getting Started (macOS / Linux / Windows)
 
-This project uses CMake + C++17. By default it prefers system-installed Eigen3 / CLI11 / pybind11 / SQLite3; if any are missing, CMake automatically falls back to the bundled copies in `third_party/`. To force bundled deps, pass `-DUSE_SYSTEM_LIBS=OFF` during configure.
+This project uses CMake + C++17. By default it prefers system-installed Eigen3 / CLI11 / pybind11 / SQLite3; if any are missing, CMake automatically falls back to the bundled copies in `third_party/`. Boost support is controlled independently with `RHBM_GEM_BOOST_MODE` (`AUTO` by default). To force bundled deps for the bundled set, pass `-DUSE_SYSTEM_LIBS=OFF` during configure.
 
 **macOS (Homebrew)**
 1. Install Xcode Command Line Tools:
@@ -34,14 +35,14 @@ xcode-select --install
 ```
 2. Install dependencies (adjust as needed):
 ```bash
-brew install cmake eigen sqlite3 python pybind11 cli11 libomp root
+brew install cmake eigen sqlite3 python pybind11 cli11 libomp root boost
 ```
 
 **Linux (Ubuntu/Debian example)**
 1. Install dependencies (adjust as needed):
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake pkg-config python3 python3-dev libsqlite3-dev libeigen3-dev
+sudo apt install -y build-essential cmake pkg-config python3 python3-dev libsqlite3-dev libeigen3-dev libboost-dev
 ```
 2. If you want to build Python bindings, also install:
 ```bash
@@ -61,7 +62,7 @@ cmake --build build --config Release
 ```powershell
 git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
 & $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
-& $env:USERPROFILE\vcpkg\vcpkg.exe install eigen3 sqlite3 pybind11 cli11:x64-windows
+& $env:USERPROFILE\vcpkg\vcpkg.exe install eigen3 sqlite3 pybind11 cli11 boost:x64-windows
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
 cmake --build build --config Release
 ```
@@ -113,6 +114,26 @@ Without ROOT, build still succeeds, but plotting code paths are compiled out (`H
 3. `potential_analysis` study plots from `LocalPainter::PaintTemplate1` (for example alpha-scan figure outputs) will not be generated.
 4. Non-plotting workflows (data processing / analysis / simulation / dumping) remain available.
 
+**Boost (optional)**
+Boost is optional. In `AUTO` mode, CMake enables Boost features only when Boost is found.
+
+1. Build with default Boost behavior (`AUTO`):
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=AUTO
+```
+2. Force Boost ON (configure fails if missing):
+```bash
+cmake -S . -B build-boost-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON
+```
+3. Force Boost OFF:
+```bash
+cmake -S . -B build-boost-off -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=OFF
+```
+4. Require specific Boost components:
+```bash
+cmake -S . -B build-boost-components -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_GEM_BOOST_COMPONENTS="filesystem;system"
+```
+
 **Build, install, and run from scratch**
 1. From the project root:
 ```bash
@@ -152,7 +173,8 @@ cmake --install build --config Release --prefix "$env:USERPROFILE\AppData\Local\
 
 **Troubleshooting**
 1. If you do not have Eigen / SQLite3 / pybind11 / CLI11 installed, you can skip installing them; CMake will use the bundled versions in `third_party/`.
-2. To force bundled deps, configure with:
+2. Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` (default) or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is not available.
+3. To force bundled deps (where available), configure with:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 ```
@@ -186,7 +208,19 @@ cmake --build build-root-off -j
 ```bash
 cmake -S . -B build-root-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON
 ```
-6. If OpenMP is missing on Linux, install:
+6. Force Boost OFF:
+```bash
+cmake -S . -B build-boost-off -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=OFF
+```
+7. Force Boost ON (configure fails if Boost is unavailable):
+```bash
+cmake -S . -B build-boost-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON
+```
+8. Force Boost ON with required components:
+```bash
+cmake -S . -B build-boost-components -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_GEM_BOOST_COMPONENTS="filesystem;system"
+```
+9. If OpenMP is missing on Linux, install:
 ```bash
 sudo apt install -y libomp-dev
 ```
@@ -279,6 +313,8 @@ Beginner (most common):
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
 | `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `bindings/`. Set `OFF` for pure C++ builds without Python dependency. |
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. `ON` fails configure if unavailable. |
+| `RHBM_GEM_BOOST_MODE` | `AUTO` | Boost mode control: `AUTO`, `ON`, or `OFF`. `ON` fails configure if unavailable. |
+| `RHBM_GEM_BOOST_COMPONENTS` | empty | Semicolon-separated Boost components required when Boost is enabled (for example `filesystem;system`). |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. `ON` fails configure if unavailable. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for Python extension module (overrides layout). |
@@ -289,11 +325,12 @@ Advanced (debugging / environment control):
 |---|---|---|
 | `CMAKE_PREFIX_PATH` | `/opt/homebrew;/opt/homebrew/opt/libomp` | Extra package search prefixes for `find_package(...)`. |
 | `OpenMP_ROOT` | `/opt/homebrew/opt/libomp` | Help CMake find OpenMP on macOS/Homebrew. |
+| `Boost_ROOT` | `/opt/homebrew/opt/boost` | Help CMake find Boost when automatic detection fails. |
 | `Python_EXECUTABLE` | `/opt/homebrew/bin/python3` | Select Python interpreter used to build bindings and derive major/minor version for install layout. |
 
 Notes:
 1. For Eigen3 / CLI11 / pybind11 / SQLite3, `-DUSE_SYSTEM_LIBS=OFF` is usually simpler than setting multiple `CMAKE_DISABLE_FIND_PACKAGE_*` flags.
-2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
+2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_BOOST_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
 
 Examples:
 
@@ -307,8 +344,11 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 # Pure C++ build (skip Python bindings)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
 
-# Force ROOT/OpenMP requirements
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GEM_OPENMP_MODE=ON
+# Force ROOT/OpenMP/Boost requirements
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GEM_OPENMP_MODE=ON -DRHBM_GEM_BOOST_MODE=ON
+
+# Force Boost with specific components
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_GEM_BOOST_COMPONENTS="filesystem;system"
 
 # Install Python module into <prefix>/lib/pythonX.Y/site-packages (default)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON
