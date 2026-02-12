@@ -1741,8 +1741,8 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
 
         auto n1{ static_cast<double>(data_carbon.size()) };
         auto n2{ static_cast<double>(data_nitrogen.size()) };
-        auto s1_square{ width_carbon_std * width_carbon_std };
-        auto s2_square{ width_nitrogen_std * width_nitrogen_std };
+        //auto s1_square{ width_carbon_std * width_carbon_std };
+        //auto s2_square{ width_nitrogen_std * width_nitrogen_std };
         
         auto std_square_total{ 0.0 };
         for (auto & value : data_carbon)

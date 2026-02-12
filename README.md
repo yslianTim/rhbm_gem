@@ -140,6 +140,7 @@ cmake -S . -B build-boost-components -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
+   Build success should be judged by the build driver message and exit code (`0`), not by whether a visible progress line reaches exactly `100%`.
 2. Run the main executable:
 ```bash
 ./build/RHBM-GEM --help
