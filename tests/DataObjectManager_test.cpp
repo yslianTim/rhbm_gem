@@ -140,3 +140,38 @@ TEST(DataObjectManagerTest, LoadCifFileAltBOnlyDoesNotThrow)
     ASSERT_EQ(model->GetNumberOfAtom(), 1);
     EXPECT_EQ(model->GetAtomList().front()->GetIndicator(), "B");
 }
+
+TEST(DataObjectManagerTest, LoadCifFileInvalidSecondaryRangeDoesNotDropAtoms)
+{
+    DataObjectManager manager;
+    auto cif_path{
+        std::filesystem::path(__FILE__).parent_path() / "data/test_model_invalid_secondary_range.cif"
+    };
+    ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
+    auto model{ manager.GetTypedDataObject<ModelObject>("model") };
+    ASSERT_EQ(model->GetNumberOfAtom(), 1);
+}
+
+TEST(DataObjectManagerTest, LoadCifFileLoopMultilineAndQuotedToken)
+{
+    DataObjectManager manager;
+    auto cif_path{
+        std::filesystem::path(__FILE__).parent_path() / "data/test_model_loop_multiline.cif"
+    };
+    ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
+    auto model{ manager.GetTypedDataObject<ModelObject>("model") };
+    ASSERT_EQ(model->GetNumberOfAtom(), 1);
+    EXPECT_EQ(model->GetAtomList().front()->GetAtomID(), "CA A");
+}
+
+TEST(DataObjectManagerTest, LoadCifFileAuthSeqAlnumStructConnBuildsBond)
+{
+    DataObjectManager manager;
+    auto cif_path{
+        std::filesystem::path(__FILE__).parent_path() / "data/test_model_auth_seq_alnum_struct_conn.cif"
+    };
+    ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
+    auto model{ manager.GetTypedDataObject<ModelObject>("model") };
+    ASSERT_EQ(model->GetNumberOfAtom(), 2);
+    EXPECT_GE(model->GetNumberOfBond(), 1);
+}

@@ -7,8 +7,9 @@
 #include <memory>
 #include <functional>
 #include <unordered_map>
-#include <fstream>
 #include <array>
+#include <map>
+#include <optional>
 
 #include "GlobalEnumClass.hpp"
 #include "ModelFileFormatBase.hpp"
@@ -19,11 +20,29 @@ class AtomObject;
 
 class CifFormat : public ModelFileFormatBase
 {
+    struct ParsedLoopRow
+    {
+        std::vector<std::string> token_list;
+        size_t line_number;
+    };
+
+    struct ParsedLoopCategory
+    {
+        std::vector<std::string> column_name_list;
+        std::vector<ParsedLoopRow> row_list;
+    };
+
+    using ColumnIndexMap = std::map<std::string, size_t, std::less<>>;
+
     static constexpr float m_bond_searching_radius{ 2.0f };
     std::unique_ptr<AtomicModelDataBlock> m_data_block;
     bool m_find_chemical_component_entry{ false };
     bool m_find_component_atom_entry{ false };
     bool m_find_component_bond_entry{ false };
+    std::string m_cached_filename;
+    bool m_has_parsed_document{ false };
+    std::unordered_map<std::string, std::vector<ParsedLoopCategory>> m_loop_category_map;
+    std::unordered_map<std::string, std::vector<std::string>> m_data_item_map;
 
 public:
     CifFormat(void);
@@ -36,24 +55,28 @@ public:
     AtomicModelDataBlock * GetDataBlockPtr(void) override;
 
 private:
-    void LoadChemicalComponentBlock(std::ifstream & infile);
-    void LoadChemicalComponentAtomBlock(std::ifstream & infile);
-    void LoadChemicalComponentBondBlock(std::ifstream & infile);
-    void LoadDatabaseBlock(std::ifstream & infile);
-    void LoadEntityBlock(std::ifstream & infile);
-    void LoadPdbxData(std::ifstream & infile);
-    void LoadXRayResolutionInfo(std::ifstream & infile);
-    void LoadAtomTypeBlock(std::ifstream & infile);
-    void LoadStructureConformationBlock(std::ifstream & infile);
-    void LoadStructureConnectionBlock(std::ifstream & infile);
-    void LoadStructureSheetBlock(std::ifstream & infile);
-    void LoadAtomSiteBlock(std::ifstream & infile);
+    void LoadChemicalComponentBlock(void);
+    void LoadChemicalComponentAtomBlock(void);
+    void LoadChemicalComponentBondBlock(void);
+    void LoadDatabaseBlock(void);
+    void LoadEntityBlock(void);
+    void LoadPdbxData(void);
+    void LoadXRayResolutionInfo(void);
+    void LoadAtomTypeBlock(void);
+    void LoadStructureConformationBlock(void);
+    void LoadStructureConnectionBlock(void);
+    void LoadStructureSheetBlock(void);
+    void LoadAtomSiteBlock(void);
     void ConstructBondList(void);
-    void ParseLoopBlock(std::ifstream & infile,
+    void ParseLoopBlock(
         std::string_view data_block_prefix,
-        const std::function<void(const std::unordered_map<std::string, size_t> &,
+        const std::function<void(const ColumnIndexMap &,
                                  const std::vector<std::string> &)> & row_handler
     );
+    void EnsureParsedDocument(const std::string & filename);
+    void ParseMmCifDocument(const std::string & filename);
+    void ResetParsedDocument(void);
+    std::optional<std::string> GetFirstDataItemValue(std::string_view key) const;
     void WriteAtomSiteBlock(const ModelObject * model_object, std::ostream & stream, int model_par);
     void WriteAtomSiteBlockEntry(const AtomObject * atom,
         const std::array<float, 3> & position,

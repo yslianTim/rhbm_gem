@@ -22,10 +22,16 @@ AtomicModelDataBlock::~AtomicModelDataBlock()
 }
 
 void AtomicModelDataBlock::AddAtomObject(
-    int model_number, std::unique_ptr<AtomObject> atom_object)
+    int model_number,
+    std::unique_ptr<AtomObject> atom_object,
+    const std::string & raw_sequence_id_token)
 {
-    auto sequence_id_str{ std::to_string(atom_object->GetSequenceID()) };
-    sequence_id_str = (sequence_id_str == "-1") ? "." : sequence_id_str;
+    std::string sequence_id_str{ raw_sequence_id_token };
+    if (sequence_id_str.empty())
+    {
+        sequence_id_str = std::to_string(atom_object->GetSequenceID());
+        sequence_id_str = (sequence_id_str == "-1") ? "." : sequence_id_str;
+    }
     auto atom_tuple_key{ std::make_tuple(
         atom_object->GetChainID(),
         atom_object->GetComponentID(),
@@ -68,13 +74,13 @@ void AtomicModelDataBlock::AddSheetStrands(
 }
 
 void AtomicModelDataBlock::AddSheetRange(
-    const std::string & composite_sheet_id, const std::array<std::string, 4> & range)
+    const std::string & composite_sheet_id, const SheetRange & range)
 {
     m_struct_sheet_range_map[composite_sheet_id] = range;
 }
 
 void AtomicModelDataBlock::AddHelixRange(
-    const std::string & helix_id, const std::array<std::string, 5> & range)
+    const std::string & helix_id, const HelixRange & range)
 {
     m_struct_helix_range_map[helix_id] = range;
 }
@@ -129,13 +135,12 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 
     for (auto & [helix_id, range] : m_struct_helix_range_map)
     {
-        if (chain_id == range.at(0) || chain_id == range.at(2))
+        (void)helix_id;
+        if (chain_id == range.chain_id_beg || chain_id == range.chain_id_end)
         {
-            auto beg{ std::stoi(range.at(1)) };
-            auto end{ std::stoi(range.at(3)) };
-            if (sequence_id >= beg && sequence_id <= end)
+            if (sequence_id >= range.seq_id_beg && sequence_id <= range.seq_id_end)
             {
-                atom_object->SetStructure(ChemicalDataHelper::GetStructureFromString(range.at(4)));
+                atom_object->SetStructure(ChemicalDataHelper::GetStructureFromString(range.conf_type));
                 return;
             }
         }
@@ -143,11 +148,10 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 
     for (auto & [composite_sheet_id, range] : m_struct_sheet_range_map)
     {
-        if (chain_id == range.at(0) || chain_id == range.at(2))
+        (void)composite_sheet_id;
+        if (chain_id == range.chain_id_beg || chain_id == range.chain_id_end)
         {
-            auto beg{ std::stoi(range.at(1)) };
-            auto end{ std::stoi(range.at(3)) };
-            if (sequence_id >= beg && sequence_id <= end)
+            if (sequence_id >= range.seq_id_beg && sequence_id <= range.seq_id_end)
             {
                 atom_object->SetStructure(Structure::SHEET);
                 return;

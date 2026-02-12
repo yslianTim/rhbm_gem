@@ -23,6 +23,9 @@
 #include <optional>
 #include <initializer_list>
 #include <map>
+#include <fstream>
+#include <unordered_set>
+#include <cstdint>
 
 namespace
 {
@@ -34,27 +37,78 @@ bool IsMmCifMissingValue(const std::string & value)
 std::vector<std::string> SplitMmCifTokens(const std::string & line)
 {
     std::vector<std::string> token_list;
-    for (size_t pos = 0; pos < line.size();)
+    std::string current_token;
+    enum class State
     {
-        while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
-        if (pos >= line.size()) break;
+        IN_SPACE,
+        IN_UNQUOTED,
+        IN_SINGLE_QUOTE,
+        IN_DOUBLE_QUOTE
+    };
+    State state{ State::IN_SPACE };
 
-        const char first_char{ line[pos] };
-        if (first_char == '\'' || first_char == '"')
+    auto flush_token{
+        [&]()
         {
-            const char quote_char{ first_char };
-            ++pos;
-            const auto start{ pos };
-            while (pos < line.size() && line[pos] != quote_char) ++pos;
-            token_list.emplace_back(line.substr(start, pos - start));
-            if (pos < line.size()) ++pos;
+            if (current_token.empty()) return;
+            token_list.emplace_back(std::move(current_token));
+            current_token.clear();
+        }
+    };
+
+    for (size_t pos = 0; pos < line.size(); ++pos)
+    {
+        const char current_char{ line[pos] };
+        switch (state)
+        {
+        case State::IN_SPACE:
+            if (std::isspace(static_cast<unsigned char>(current_char)))
+            {
+                continue;
+            }
+            if (current_char == '\'')
+            {
+                state = State::IN_SINGLE_QUOTE;
+                continue;
+            }
+            if (current_char == '"')
+            {
+                state = State::IN_DOUBLE_QUOTE;
+                continue;
+            }
+            current_token.push_back(current_char);
+            state = State::IN_UNQUOTED;
+            continue;
+        case State::IN_UNQUOTED:
+            if (std::isspace(static_cast<unsigned char>(current_char)))
+            {
+                flush_token();
+                state = State::IN_SPACE;
+                continue;
+            }
+            current_token.push_back(current_char);
+            continue;
+        case State::IN_SINGLE_QUOTE:
+            if (current_char == '\'')
+            {
+                flush_token();
+                state = State::IN_SPACE;
+                continue;
+            }
+            current_token.push_back(current_char);
+            continue;
+        case State::IN_DOUBLE_QUOTE:
+            if (current_char == '"')
+            {
+                flush_token();
+                state = State::IN_SPACE;
+                continue;
+            }
+            current_token.push_back(current_char);
             continue;
         }
-
-        const auto start{ pos };
-        while (pos < line.size() && !std::isspace(static_cast<unsigned char>(line[pos]))) ++pos;
-        token_list.emplace_back(line.substr(start, pos - start));
     }
+    flush_token();
     return token_list;
 }
 
@@ -72,14 +126,15 @@ std::string BuildMmCifTokenPreview(const std::vector<std::string> & token_list, 
     return oss.str();
 }
 
+template <typename IndexMap>
 std::optional<std::string> GetTokenOptional(
-    const std::unordered_map<std::string, size_t> & index_map,
+    const IndexMap & index_map,
     const std::vector<std::string> & token_list,
     std::initializer_list<std::string_view> name_candidates)
 {
     for (const auto & name : name_candidates)
     {
-        auto iter{ index_map.find(std::string{name}) };
+        auto iter{ index_map.find(name) };
         if (iter == index_map.end()) continue;
         if (iter->second >= token_list.size()) continue;
         return token_list[iter->second];
@@ -137,48 +192,97 @@ float ParseFloatOrDefault(
     return default_value;
 }
 
-std::string BuildAtomAltLocKey(
-    int model_number,
-    const std::string & chain_id,
-    const std::string & comp_id,
-    const std::string & sequence_id,
-    const std::string & atom_id)
+std::optional<int> TryParseInt(const std::string & value)
 {
-    return std::to_string(model_number) + "|" + chain_id + "|" + comp_id + "|" + sequence_id + "|" + atom_id;
+    if (IsMmCifMissingValue(value)) return std::nullopt;
+    try
+    {
+        return std::stoi(value);
+    }
+    catch (const std::exception &)
+    {
+        return std::nullopt;
+    }
 }
 
-std::optional<std::string> ParseMmCifDataItemValue(
-    std::ifstream & infile, const std::string & line, std::string_view key)
+std::string_view TrimLeft(std::string_view value)
 {
-    if (line.rfind(key, 0) != 0) return std::nullopt;
-    auto token_list{ SplitMmCifTokens(line) };
-    if (token_list.size() >= 2) return token_list[1];
-    if (token_list.size() != 1) return std::string{};
-
-    std::string next_line;
-    while (std::getline(infile, next_line))
+    size_t pos{ 0 };
+    while (pos < value.size() && std::isspace(static_cast<unsigned char>(value[pos])))
     {
-        StringHelper::StripCarriageReturn(next_line);
-        if (next_line.empty()) continue;
-        if (next_line[0] == '#') return std::string{};
-        if (next_line[0] != ';')
-        {
-            auto next_tokens{ SplitMmCifTokens(next_line) };
-            return next_tokens.empty() ? std::string{} : next_tokens.front();
-        }
-
-        // Multi-line value starts with ';' and ends at the next line that starts with ';'.
-        std::string value{ next_line.substr(1) };
-        while (std::getline(infile, next_line))
-        {
-            StringHelper::StripCarriageReturn(next_line);
-            if (next_line.empty() == false && next_line[0] == ';') break;
-            if (!value.empty()) value += "\n";
-            value += next_line;
-        }
-        return value;
+        ++pos;
     }
-    return std::string{};
+    return value.substr(pos);
+}
+
+bool StartsWithToken(std::string_view line, std::string_view token)
+{
+    return line.rfind(token, 0) == 0;
+}
+
+std::string BuildLoopCategoryPrefix(const std::string & column_name)
+{
+    auto dot_pos{ column_name.find('.') };
+    if (dot_pos == std::string::npos) return column_name;
+    return column_name.substr(0, dot_pos + 1);
+}
+
+struct AtomAltLocKey
+{
+    int model_number;
+    std::string chain_id;
+    std::string comp_id;
+    std::string sequence_id_token;
+    std::string atom_id;
+
+    bool operator==(const AtomAltLocKey & other) const
+    {
+        return model_number == other.model_number &&
+               chain_id == other.chain_id &&
+               comp_id == other.comp_id &&
+               sequence_id_token == other.sequence_id_token &&
+               atom_id == other.atom_id;
+    }
+};
+
+struct AtomAltLocKeyHash
+{
+    size_t operator()(const AtomAltLocKey & key) const
+    {
+        size_t seed{ std::hash<int>{}(key.model_number) };
+        seed ^= std::hash<std::string>{}(key.chain_id) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= std::hash<std::string>{}(key.comp_id) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= std::hash<std::string>{}(key.sequence_id_token) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        seed ^= std::hash<std::string>{}(key.atom_id) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        return seed;
+    }
+};
+
+struct CanonicalAtomPair
+{
+    const AtomObject * atom_a;
+    const AtomObject * atom_b;
+
+    bool operator==(const CanonicalAtomPair & other) const
+    {
+        return atom_a == other.atom_a && atom_b == other.atom_b;
+    }
+};
+
+struct CanonicalAtomPairHash
+{
+    size_t operator()(const CanonicalAtomPair & pair) const
+    {
+        auto a{ reinterpret_cast<std::uintptr_t>(pair.atom_a) };
+        auto b{ reinterpret_cast<std::uintptr_t>(pair.atom_b) };
+        return std::hash<std::uintptr_t>{}(a ^ (b << 1));
+    }
+};
+
+CanonicalAtomPair BuildCanonicalAtomPair(const AtomObject * atom_1, const AtomObject * atom_2)
+{
+    if (atom_1 < atom_2) return {atom_1, atom_2};
+    return {atom_2, atom_1};
 }
 } // namespace
 
@@ -193,23 +297,245 @@ CifFormat::~CifFormat()
     Logger::Log(LogLevel::Debug, "CifFormat::~CifFormat() called");
 }
 
-void CifFormat::LoadHeader(const std::string & filename)
+void CifFormat::ResetParsedDocument(void)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadHeader() called");
+    m_loop_category_map.clear();
+    m_data_item_map.clear();
+    m_cached_filename.clear();
+    m_has_parsed_document = false;
+}
+
+void CifFormat::EnsureParsedDocument(const std::string & filename)
+{
+    if (m_has_parsed_document && m_cached_filename == filename) return;
+    ParseMmCifDocument(filename);
+}
+
+std::optional<std::string> CifFormat::GetFirstDataItemValue(std::string_view key) const
+{
+    auto iter{ m_data_item_map.find(std::string{key}) };
+    if (iter == m_data_item_map.end()) return std::nullopt;
+    if (iter->second.empty()) return std::nullopt;
+    return iter->second.front();
+}
+
+void CifFormat::ParseMmCifDocument(const std::string & filename)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::ParseMmCifDocument() called");
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
         Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
-        throw std::runtime_error("LoadHeader failed!");
+        throw std::runtime_error("ParseMmCifDocument failed!");
     }
 
-    LoadChemicalComponentBlock(infile);
-    LoadDatabaseBlock(infile);
-    LoadEntityBlock(infile);
-    LoadPdbxData(infile);
-    LoadAtomTypeBlock(infile);
-    LoadStructureConformationBlock(infile);
-    LoadStructureSheetBlock(infile);
+    std::vector<std::string> line_list;
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        StringHelper::StripCarriageReturn(line);
+        line_list.emplace_back(std::move(line));
+    }
+
+    ResetParsedDocument();
+    size_t line_idx{ 0 };
+    while (line_idx < line_list.size())
+    {
+        const auto & raw_line{ line_list[line_idx] };
+        const auto trimmed_line{ TrimLeft(raw_line) };
+        if (trimmed_line.empty() || trimmed_line.front() == '#')
+        {
+            ++line_idx;
+            continue;
+        }
+
+        if (trimmed_line == "loop_")
+        {
+            ++line_idx;
+            std::vector<std::string> column_name_list;
+            while (line_idx < line_list.size())
+            {
+                const auto & header_raw_line{ line_list[line_idx] };
+                const auto header_trimmed_line{ TrimLeft(header_raw_line) };
+                if (header_trimmed_line.empty())
+                {
+                    ++line_idx;
+                    continue;
+                }
+                if (header_trimmed_line.front() != '_') break;
+                auto header_token_list{ SplitMmCifTokens(std::string{header_trimmed_line}) };
+                if (!header_token_list.empty())
+                {
+                    column_name_list.emplace_back(header_token_list.front());
+                }
+                ++line_idx;
+            }
+            if (column_name_list.empty()) continue;
+
+            ParsedLoopCategory loop_category;
+            loop_category.column_name_list = column_name_list;
+            const auto expected_column_size{ loop_category.column_name_list.size() };
+            std::vector<std::string> row_token_list;
+            size_t row_start_line_number{ line_idx + 1 };
+
+            while (line_idx < line_list.size())
+            {
+                const auto & row_raw_line{ line_list[line_idx] };
+                const auto row_trimmed_line{ TrimLeft(row_raw_line) };
+                if (row_trimmed_line.empty())
+                {
+                    ++line_idx;
+                    continue;
+                }
+                if (row_trimmed_line.front() == '#')
+                {
+                    ++line_idx;
+                    break;
+                }
+                if (row_token_list.empty() &&
+                    (row_trimmed_line == "loop_" ||
+                     StartsWithToken(row_trimmed_line, "data_") ||
+                     row_trimmed_line.front() == '_'))
+                {
+                    break;
+                }
+                if (row_token_list.empty()) row_start_line_number = line_idx + 1;
+
+                if (!row_raw_line.empty() && row_raw_line.front() == ';')
+                {
+                    std::string multiline_value{ row_raw_line.substr(1) };
+                    ++line_idx;
+                    auto terminated{ false };
+                    while (line_idx < line_list.size())
+                    {
+                        const auto & multiline_raw_line{ line_list[line_idx] };
+                        if (!multiline_raw_line.empty() && multiline_raw_line.front() == ';')
+                        {
+                            terminated = true;
+                            break;
+                        }
+                        if (!multiline_value.empty()) multiline_value += "\n";
+                        multiline_value += multiline_raw_line;
+                        ++line_idx;
+                    }
+                    if (!terminated)
+                    {
+                        Logger::Log(LogLevel::Warning,
+                            "ParseMmCifDocument() unterminated multiline token in loop category "
+                            + BuildLoopCategoryPrefix(loop_category.column_name_list.front())
+                            + " near file line " + std::to_string(row_start_line_number) + ".");
+                        break;
+                    }
+                    row_token_list.emplace_back(std::move(multiline_value));
+                    ++line_idx; // consume the closing ';'
+                }
+                else
+                {
+                    auto token_list{ SplitMmCifTokens(std::string{row_trimmed_line}) };
+                    row_token_list.insert(row_token_list.end(), token_list.begin(), token_list.end());
+                    ++line_idx;
+                }
+
+                while (row_token_list.size() >= expected_column_size)
+                {
+                    std::vector<std::string> row_value_list(
+                        row_token_list.begin(),
+                        row_token_list.begin() + static_cast<std::ptrdiff_t>(expected_column_size));
+                    loop_category.row_list.emplace_back(
+                        ParsedLoopRow{ std::move(row_value_list), row_start_line_number });
+                    row_token_list.erase(
+                        row_token_list.begin(),
+                        row_token_list.begin() + static_cast<std::ptrdiff_t>(expected_column_size));
+                    row_start_line_number = line_idx + 1;
+                }
+            }
+
+            if (!row_token_list.empty())
+            {
+                Logger::Log(LogLevel::Warning,
+                    "ParseMmCifDocument() loop category "
+                    + BuildLoopCategoryPrefix(loop_category.column_name_list.front())
+                    + " ends with incomplete row (token count = "
+                    + std::to_string(row_token_list.size())
+                    + ", expected = " + std::to_string(expected_column_size) + ").");
+            }
+
+            auto category_prefix{ BuildLoopCategoryPrefix(loop_category.column_name_list.front()) };
+            m_loop_category_map[category_prefix].emplace_back(std::move(loop_category));
+            continue;
+        }
+
+        if (trimmed_line.front() == '_')
+        {
+            auto token_list{ SplitMmCifTokens(std::string{trimmed_line}) };
+            if (token_list.empty())
+            {
+                ++line_idx;
+                continue;
+            }
+
+            std::string key{ token_list.front() };
+            std::string value;
+            if (token_list.size() >= 2)
+            {
+                value = token_list[1];
+                m_data_item_map[key].emplace_back(std::move(value));
+                ++line_idx;
+                continue;
+            }
+
+            ++line_idx;
+            while (line_idx < line_list.size())
+            {
+                const auto & value_raw_line{ line_list[line_idx] };
+                const auto value_trimmed_line{ TrimLeft(value_raw_line) };
+                if (value_trimmed_line.empty())
+                {
+                    ++line_idx;
+                    continue;
+                }
+                if (value_trimmed_line.front() == '#') break;
+                if (!value_raw_line.empty() && value_raw_line.front() == ';')
+                {
+                    value = value_raw_line.substr(1);
+                    ++line_idx;
+                    while (line_idx < line_list.size())
+                    {
+                        const auto & multiline_raw_line{ line_list[line_idx] };
+                        if (!multiline_raw_line.empty() && multiline_raw_line.front() == ';') break;
+                        if (!value.empty()) value += "\n";
+                        value += multiline_raw_line;
+                        ++line_idx;
+                    }
+                    break;
+                }
+                auto value_token_list{ SplitMmCifTokens(std::string{value_trimmed_line}) };
+                value = value_token_list.empty() ? std::string{} : value_token_list.front();
+                break;
+            }
+            m_data_item_map[key].emplace_back(std::move(value));
+            ++line_idx;
+            continue;
+        }
+
+        ++line_idx;
+    }
+
+    m_cached_filename = filename;
+    m_has_parsed_document = true;
+}
+
+void CifFormat::LoadHeader(const std::string & filename)
+{
+    Logger::Log(LogLevel::Debug, "CifFormat::LoadHeader() called");
+    EnsureParsedDocument(filename);
+    LoadChemicalComponentBlock();
+    LoadDatabaseBlock();
+    LoadEntityBlock();
+    LoadPdbxData();
+    LoadAtomTypeBlock();
+    LoadStructureConformationBlock();
+    LoadStructureSheetBlock();
 
     if (m_find_component_bond_entry == false)
     {
@@ -253,24 +579,17 @@ void CifFormat::PrintHeader(void) const
 void CifFormat::LoadDataArray(const std::string & filename)
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadDataArray() called");
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
-        throw std::runtime_error("LoadDataArray failed!");
-    }
-    LoadAtomSiteBlock(infile);
+    EnsureParsedDocument(filename);
+    LoadAtomSiteBlock();
     ConstructBondList();
-    LoadStructureConnectionBlock(infile);
+    LoadStructureConnectionBlock();
 }
 
-void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
+void CifFormat::LoadChemicalComponentBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    ParseLoopBlock(infile, "_chem_comp.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_chem_comp.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
             auto comp_id{ token_list[index_map.at("id")] };
@@ -307,17 +626,15 @@ void CifFormat::LoadChemicalComponentBlock(std::ifstream & infile)
             m_find_chemical_component_entry = true;
         }
     );
-    LoadChemicalComponentAtomBlock(infile);
-    LoadChemicalComponentBondBlock(infile);
+    LoadChemicalComponentAtomBlock();
+    LoadChemicalComponentBondBlock();
 }
 
-void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
+void CifFormat::LoadChemicalComponentAtomBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentAtomBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    ParseLoopBlock(infile, "_chem_comp_atom.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_chem_comp_atom.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
             auto comp_id{ token_list[index_map.at("comp_id")] };
@@ -344,13 +661,11 @@ void CifFormat::LoadChemicalComponentAtomBlock(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
+void CifFormat::LoadChemicalComponentBondBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentBondBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    ParseLoopBlock(infile, "_chem_comp_bond.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_chem_comp_bond.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
             auto comp_id{ token_list[index_map.at("comp_id")] };
@@ -382,14 +697,12 @@ void CifFormat::LoadChemicalComponentBondBlock(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadDatabaseBlock(std::ifstream & infile)
+void CifFormat::LoadDatabaseBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadDatabaseBlock() called");
-    infile.clear();
-    infile.seekg(0);
     std::unordered_map<std::string, std::string> data_map;
-    ParseLoopBlock(infile, "_database_2.",
-        [&data_map](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_database_2.",
+        [&data_map](const ColumnIndexMap & index_map,
                     const std::vector<std::string> & token_list)
         {
             auto database_id{ GetTokenOptional(index_map, token_list, {"database_id"}) };
@@ -413,13 +726,11 @@ void CifFormat::LoadDatabaseBlock(std::ifstream & infile)
     }
 }
 
-void CifFormat::LoadEntityBlock(std::ifstream & infile)
+void CifFormat::LoadEntityBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadEntityBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    ParseLoopBlock(infile, "_entity.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_entity.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
             if (index_map.find("id") == index_map.end() ||
@@ -457,8 +768,8 @@ void CifFormat::LoadEntityBlock(std::ifstream & infile)
         }
     );
 
-    ParseLoopBlock(infile, "_struct_asym.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_struct_asym.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
             if (index_map.find("entity_id") == index_map.end() ||
@@ -485,52 +796,12 @@ void CifFormat::LoadEntityBlock(std::ifstream & infile)
         "Cannot parse complete entity/chain metadata from loop blocks. "
         "Trying key-value fallback for _entity/_struct_asym.");
 
-    infile.clear();
-    infile.seekg(0);
-
-    std::string entity_id;
-    std::string entity_type;
-    std::string molecules_size_raw;
-    std::string struct_asym_id;
-    std::string struct_asym_entity_id;
-    std::string line;
-    while (std::getline(infile, line))
-    {
-        StringHelper::StripCarriageReturn(line);
-
-        if (need_entity_fallback)
-        {
-            if (auto value{ ParseMmCifDataItemValue(infile, line, "_entity.id") })
-            {
-                entity_id = *value;
-                continue;
-            }
-            if (auto value{ ParseMmCifDataItemValue(infile, line, "_entity.type") })
-            {
-                entity_type = *value;
-                continue;
-            }
-            if (auto value{ ParseMmCifDataItemValue(infile, line, "_entity.pdbx_number_of_molecules") })
-            {
-                molecules_size_raw = *value;
-                continue;
-            }
-        }
-
-        if (need_chain_fallback)
-        {
-            if (auto value{ ParseMmCifDataItemValue(infile, line, "_struct_asym.id") })
-            {
-                struct_asym_id = *value;
-                continue;
-            }
-            if (auto value{ ParseMmCifDataItemValue(infile, line, "_struct_asym.entity_id") })
-            {
-                struct_asym_entity_id = *value;
-                continue;
-            }
-        }
-    }
+    std::string entity_id{ GetFirstDataItemValue("_entity.id").value_or("") };
+    std::string entity_type{ GetFirstDataItemValue("_entity.type").value_or("") };
+    std::string molecules_size_raw{
+        GetFirstDataItemValue("_entity.pdbx_number_of_molecules").value_or("") };
+    std::string struct_asym_id{ GetFirstDataItemValue("_struct_asym.id").value_or("") };
+    std::string struct_asym_entity_id{ GetFirstDataItemValue("_struct_asym.entity_id").value_or("") };
 
     if (need_entity_fallback)
     {
@@ -575,81 +846,117 @@ void CifFormat::LoadEntityBlock(std::ifstream & infile)
     }
 }
 
-void CifFormat::LoadPdbxData(std::ifstream & infile)
+void CifFormat::LoadPdbxData()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadPdbxData() called");
-    infile.clear();
-    infile.seekg(0);
-    std::string line, header, resolution, resolution_method;
     auto found_resolution{ false };
     auto found_resolution_method{ false };
-    while (std::getline(infile, line))
+
+    if (auto resolution_value{ GetFirstDataItemValue("_em_3d_reconstruction.resolution") })
     {
-        StringHelper::StripCarriageReturn(line);
-        if (line.find("_em_3d_reconstruction.resolution ") != std::string::npos)
+        if (!IsMmCifMissingValue(*resolution_value))
         {
-            std::istringstream iss(line);
-            iss >> header >> resolution;
-            m_data_block->SetResolution(resolution);
+            m_data_block->SetResolution(*resolution_value);
             found_resolution = true;
         }
-
-        if (line.find("_em_3d_reconstruction.resolution_method ") != std::string::npos)
+    }
+    if (auto resolution_method_value{
+            GetFirstDataItemValue("_em_3d_reconstruction.resolution_method") })
+    {
+        if (!IsMmCifMissingValue(*resolution_method_value))
         {
-            std::istringstream iss(line);
-            iss >> header;
-            iss >> std::quoted(resolution_method, '\'');
-            m_data_block->SetResolutionMethod(resolution_method);
+            m_data_block->SetResolutionMethod(*resolution_method_value);
             found_resolution_method = true;
         }
-
-        if (found_resolution && found_resolution_method) break;
     }
+
+    ParseLoopBlock("_em_3d_reconstruction.",
+        [this, &found_resolution, &found_resolution_method](
+            const ColumnIndexMap & index_map,
+            const std::vector<std::string> & token_list)
+        {
+            if (!found_resolution)
+            {
+                auto resolution_value{ GetTokenOptional(index_map, token_list, {"resolution"}) };
+                if (resolution_value.has_value() && !IsMmCifMissingValue(*resolution_value))
+                {
+                    m_data_block->SetResolution(*resolution_value);
+                    found_resolution = true;
+                }
+            }
+            if (!found_resolution_method)
+            {
+                auto resolution_method_value{
+                    GetTokenOptional(index_map, token_list, {"resolution_method"}) };
+                if (resolution_method_value.has_value() &&
+                    !IsMmCifMissingValue(*resolution_method_value))
+                {
+                    m_data_block->SetResolutionMethod(*resolution_method_value);
+                    found_resolution_method = true;
+                }
+            }
+        });
+
     if (!found_resolution || !found_resolution_method)
     {
-        LoadXRayResolutionInfo(infile);
+        LoadXRayResolutionInfo();
     }
 }
 
-void CifFormat::LoadXRayResolutionInfo(std::ifstream & infile)
+void CifFormat::LoadXRayResolutionInfo()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadXRayResolutionInfo() called");
-    infile.clear();
-    infile.seekg(0);
-    std::string line, header, resolution, resolution_method;
     auto found_resolution{ false };
     auto found_resolution_method{ false };
-    while (std::getline(infile, line))
+
+    if (auto resolution_value{ GetFirstDataItemValue("_refine.ls_d_res_high") })
     {
-        StringHelper::StripCarriageReturn(line);
-        if (line.find("_refine.ls_d_res_high ") != std::string::npos && !found_resolution)
+        if (!IsMmCifMissingValue(*resolution_value))
         {
-            std::istringstream iss(line);
-            iss >> header >> resolution;
-            m_data_block->SetResolution(resolution);
+            m_data_block->SetResolution(*resolution_value);
             found_resolution = true;
         }
-
-        if (line.find("_refine.pdbx_refine_id ") != std::string::npos && !found_resolution_method)
+    }
+    if (auto method_value{ GetFirstDataItemValue("_refine.pdbx_refine_id") })
+    {
+        if (!IsMmCifMissingValue(*method_value))
         {
-            std::istringstream iss(line);
-            iss >> header;
-            iss >> std::quoted(resolution_method, '\'');
-            m_data_block->SetResolutionMethod(resolution_method);
+            m_data_block->SetResolutionMethod(*method_value);
             found_resolution_method = true;
         }
-
-        if (found_resolution && found_resolution_method) break;
     }
+
+    ParseLoopBlock("_refine.",
+        [this, &found_resolution, &found_resolution_method](
+            const ColumnIndexMap & index_map,
+            const std::vector<std::string> & token_list)
+        {
+            if (!found_resolution)
+            {
+                auto resolution_value{ GetTokenOptional(index_map, token_list, {"ls_d_res_high"}) };
+                if (resolution_value.has_value() && !IsMmCifMissingValue(*resolution_value))
+                {
+                    m_data_block->SetResolution(*resolution_value);
+                    found_resolution = true;
+                }
+            }
+            if (!found_resolution_method)
+            {
+                auto method_value{ GetTokenOptional(index_map, token_list, {"pdbx_refine_id"}) };
+                if (method_value.has_value() && !IsMmCifMissingValue(*method_value))
+                {
+                    m_data_block->SetResolutionMethod(*method_value);
+                    found_resolution_method = true;
+                }
+            }
+        });
 }
 
-void CifFormat::LoadAtomTypeBlock(std::ifstream & infile)
+void CifFormat::LoadAtomTypeBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomTypeBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    ParseLoopBlock(infile, "_atom_type.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_atom_type.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
             auto element_type_string{ token_list[index_map.at("symbol")] };
@@ -659,35 +966,53 @@ void CifFormat::LoadAtomTypeBlock(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadStructureConformationBlock(std::ifstream & infile)
+void CifFormat::LoadStructureConformationBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureConformationBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    ParseLoopBlock(infile, "_struct_conf.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_struct_conf.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
-            auto helix_id{ token_list[index_map.at("id")] };
-            auto conf_type{ token_list[index_map.at("conf_type_id")] };
-            auto chain_id_beg{ token_list[index_map.at("beg_label_asym_id")] };
-            auto reisude_id_beg{ token_list[index_map.at("beg_label_seq_id")] };
-            auto chain_id_end{ token_list[index_map.at("end_label_asym_id")] };
-            auto reisude_id_end{ token_list[index_map.at("end_label_seq_id")] };
-            m_data_block->AddHelixRange(
-                helix_id,
-                {chain_id_beg, reisude_id_beg, chain_id_end, reisude_id_end, conf_type});
+            auto helix_id_opt{ GetTokenOptional(index_map, token_list, {"id"}) };
+            auto conf_type_opt{ GetTokenOptional(index_map, token_list, {"conf_type_id"}) };
+            auto chain_id_beg_opt{ GetTokenOptional(index_map, token_list, {"beg_label_asym_id"}) };
+            auto residue_id_beg_opt{ GetTokenOptional(index_map, token_list, {"beg_label_seq_id"}) };
+            auto chain_id_end_opt{ GetTokenOptional(index_map, token_list, {"end_label_asym_id"}) };
+            auto residue_id_end_opt{ GetTokenOptional(index_map, token_list, {"end_label_seq_id"}) };
+            if (!helix_id_opt.has_value() || !conf_type_opt.has_value() ||
+                !chain_id_beg_opt.has_value() || !residue_id_beg_opt.has_value() ||
+                !chain_id_end_opt.has_value() || !residue_id_end_opt.has_value())
+            {
+                return;
+            }
+
+            auto residue_id_beg{ TryParseInt(*residue_id_beg_opt) };
+            auto residue_id_end{ TryParseInt(*residue_id_end_opt) };
+            if (!residue_id_beg.has_value() || !residue_id_end.has_value())
+            {
+                Logger::Log(LogLevel::Warning,
+                    "LoadStructureConformationBlock(): invalid residue range in _struct_conf. "
+                    "row is skipped.");
+                return;
+            }
+
+            HelixRange range;
+            range.chain_id_beg = *chain_id_beg_opt;
+            range.seq_id_beg = *residue_id_beg;
+            range.chain_id_end = *chain_id_end_opt;
+            range.seq_id_end = *residue_id_end;
+            range.conf_type = *conf_type_opt;
+
+            m_data_block->AddHelixRange(*helix_id_opt, range);
         }
     );
 }
 
-void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
+void CifFormat::LoadStructureConnectionBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureConnectionBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    ParseLoopBlock(infile, "_struct_conn.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_struct_conn.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
             auto conn_id{ GetTokenOptional(index_map, token_list, {"id"}) };
@@ -800,50 +1125,75 @@ void CifFormat::LoadStructureConnectionBlock(std::ifstream & infile)
     );
 }
 
-void CifFormat::LoadStructureSheetBlock(std::ifstream & infile)
+void CifFormat::LoadStructureSheetBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureSheetBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    ParseLoopBlock(infile, "_struct_sheet.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_struct_sheet.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
-            auto sheet_id{ token_list[index_map.at("id")] };
-            auto strands_size{ std::stoi(token_list[index_map.at("number_strands")]) };
+            auto sheet_id_opt{ GetTokenOptional(index_map, token_list, {"id"}) };
+            auto strands_size_opt{ GetTokenOptional(index_map, token_list, {"number_strands"}) };
+            if (!sheet_id_opt.has_value() || !strands_size_opt.has_value()) return;
+            auto strands_size{
+                ParseIntOrDefault(*strands_size_opt, 0, "_struct_sheet.number_strands",
+                    "LoadStructureSheetBlock()")
+            };
+            if (strands_size <= 0) return;
+            auto sheet_id{ *sheet_id_opt };
             m_data_block->AddSheetStrands(sheet_id, strands_size);
         }
     );
 
-    ParseLoopBlock(infile, "_struct_sheet_range.",
-        [this](const std::unordered_map<std::string, size_t> & index_map,
+    ParseLoopBlock("_struct_sheet_range.",
+        [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
         {
-            auto sheet_id{ token_list[index_map.at("sheet_id")] };
-            auto range_id{ token_list[index_map.at("id")] };
+            auto sheet_id_opt{ GetTokenOptional(index_map, token_list, {"sheet_id"}) };
+            auto range_id_opt{ GetTokenOptional(index_map, token_list, {"id"}) };
+            auto chain_id_beg_opt{ GetTokenOptional(index_map, token_list, {"beg_label_asym_id"}) };
+            auto residue_id_beg_opt{ GetTokenOptional(index_map, token_list, {"beg_label_seq_id"}) };
+            auto chain_id_end_opt{ GetTokenOptional(index_map, token_list, {"end_label_asym_id"}) };
+            auto residue_id_end_opt{ GetTokenOptional(index_map, token_list, {"end_label_seq_id"}) };
+            if (!sheet_id_opt.has_value() || !range_id_opt.has_value() ||
+                !chain_id_beg_opt.has_value() || !residue_id_beg_opt.has_value() ||
+                !chain_id_end_opt.has_value() || !residue_id_end_opt.has_value())
+            {
+                return;
+            }
+
+            auto residue_id_beg{ TryParseInt(*residue_id_beg_opt) };
+            auto residue_id_end{ TryParseInt(*residue_id_end_opt) };
+            if (!residue_id_beg.has_value() || !residue_id_end.has_value())
+            {
+                Logger::Log(LogLevel::Warning,
+                    "LoadStructureSheetBlock(): invalid residue range in _struct_sheet_range. "
+                    "row is skipped.");
+                return;
+            }
+
+            auto sheet_id{ *sheet_id_opt };
+            auto range_id{ *range_id_opt };
             auto composite_sheet_id{ sheet_id + range_id };
-            auto chain_id_beg{ token_list[index_map.at("beg_label_asym_id")] };
-            auto reisude_id_beg{ token_list[index_map.at("beg_label_seq_id")] };
-            auto chain_id_end{ token_list[index_map.at("end_label_asym_id")] };
-            auto reisude_id_end{ token_list[index_map.at("end_label_seq_id")] };
-            m_data_block->AddSheetRange(
-                composite_sheet_id,
-                {chain_id_beg, reisude_id_beg, chain_id_end, reisude_id_end});
+            SheetRange range;
+            range.chain_id_beg = *chain_id_beg_opt;
+            range.seq_id_beg = *residue_id_beg;
+            range.chain_id_end = *chain_id_end_opt;
+            range.seq_id_end = *residue_id_end;
+            m_data_block->AddSheetRange(composite_sheet_id, range);
         }
     );
 }
 
-void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
+void CifFormat::LoadAtomSiteBlock()
 {
     Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomSiteBlock() called");
-    infile.clear();
-    infile.seekg(0);
-    std::map<std::string, AtomObject *> altloc_primary_atom_map;
+    std::unordered_map<AtomAltLocKey, AtomObject *, AtomAltLocKeyHash> altloc_primary_atom_map;
     size_t atom_site_row_count{ 0 };
     size_t atom_site_skip_count{ 0 };
-    ParseLoopBlock(infile, "_atom_site.",
+    ParseLoopBlock("_atom_site.",
         [this, &altloc_primary_atom_map, &atom_site_row_count, &atom_site_skip_count](
-            const std::unordered_map<std::string, size_t> & index_map,
+            const ColumnIndexMap & index_map,
             const std::vector<std::string> & token_list)
         {
             ++atom_site_row_count;
@@ -860,7 +1210,7 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             auto indicator{
                 GetTokenOptional(index_map, token_list, {"label_alt_id"}).value_or(".")
             };
-            auto sequence_id{
+            auto sequence_id_token{
                 GetTokenOptional(index_map, token_list, {"label_seq_id", "auth_seq_id"}).value_or(".")
             };
             auto serial_id{ GetTokenOptional(index_map, token_list, {"id"}).value_or(
@@ -905,8 +1255,10 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
                 ParseIntOrDefault(
                     model_number_str.value_or("1"), 1, "_atom_site.pdbx_PDB_model_num", context)
             };
+            if (IsMmCifMissingValue(sequence_id_token)) sequence_id_token = ".";
             auto sequence_id_value{
-                ParseIntOrDefault(sequence_id, -1, "_atom_site.(label/auth)_seq_id", context)
+                ParseIntOrDefault(
+                    sequence_id_token, -1, "_atom_site.(label/auth)_seq_id", context)
             };
             auto serial_id_value{ ParseIntOrDefault(serial_id, static_cast<int>(atom_site_row_count),
                 "_atom_site.id", context) };
@@ -940,15 +1292,16 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
             m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
             auto atom_key{ m_data_block->GetAtomKeySystemPtr()->GetAtomKey(atom_id) };
 
-            auto atom_altloc_key{
-                BuildAtomAltLocKey(model_number_id, chain_id, comp_id, sequence_id, atom_id)
+            AtomAltLocKey atom_altloc_key{
+                model_number_id, chain_id, comp_id, sequence_id_token, atom_id
             };
             auto add_atom_as_primary{
-                [&](std::unique_ptr<AtomObject> atom_object) -> AtomObject *
+                [&](std::unique_ptr<AtomObject> atom_object, const AtomAltLocKey & key) -> AtomObject *
                 {
                     auto raw_atom_ptr{ atom_object.get() };
-                    m_data_block->AddAtomObject(model_number_id, std::move(atom_object));
-                    altloc_primary_atom_map[atom_altloc_key] = raw_atom_ptr;
+                    m_data_block->AddAtomObject(
+                        model_number_id, std::move(atom_object), sequence_id_token);
+                    altloc_primary_atom_map[key] = raw_atom_ptr;
                     return raw_atom_ptr;
                 }
             };
@@ -983,12 +1336,12 @@ void CifFormat::LoadAtomSiteBlock(std::ifstream & infile)
 
             if (indicator == "." || indicator == "A")
             {
-                add_atom_as_primary(std::move(atom_object));
+                add_atom_as_primary(std::move(atom_object), atom_altloc_key);
                 return;
             }
 
             // First alternate indicator is not "A" (e.g. only "B"): treat as primary.
-            add_atom_as_primary(std::move(atom_object));
+            add_atom_as_primary(std::move(atom_object), atom_altloc_key);
         }
     );
     Logger::Log(LogLevel::Info,
@@ -1003,6 +1356,8 @@ void CifFormat::ConstructBondList(void)
     BuildPhosphodiesterBondEntry();
     const auto bond_count_before{ m_data_block->GetBondObjectList().size() };
     const auto & atom_object_map{ m_data_block->GetAtomObjectMap() };
+    auto bond_key_system{ m_data_block->GetBondKeySystemPtr() };
+    auto component_key_system{ m_data_block->GetComponentKeySystemPtr() };
     for (const auto & [model_number, atom_object_list] : atom_object_map)
     {
         if (atom_object_list.empty()) continue;
@@ -1013,6 +1368,8 @@ void CifFormat::ConstructBondList(void)
             atom_ptr_list.emplace_back(atom.get());
         }
         auto kd_tree_root{ KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0) };
+        std::unordered_set<CanonicalAtomPair, CanonicalAtomPairHash> processed_bond_pair_set;
+        processed_bond_pair_set.reserve(atom_object_list.size() * 2);
         for (const auto & atom : atom_object_list)
         {
             auto component_id_1{ atom->GetComponentID() };
@@ -1027,15 +1384,19 @@ void CifFormat::ConstructBondList(void)
             for (auto neighbor_atom : neighbor_atom_list)
             {
                 if (neighbor_atom == atom.get()) continue;
+                auto canonical_pair{ BuildCanonicalAtomPair(atom.get(), neighbor_atom) };
+                if (processed_bond_pair_set.find(canonical_pair) != processed_bond_pair_set.end())
+                {
+                    continue;
+                }
+                processed_bond_pair_set.insert(canonical_pair);
+
                 auto component_id_2{ neighbor_atom->GetComponentID() };
                 auto atom_id_2{ neighbor_atom->GetAtomID() };
                 auto sequence_id_2{ neighbor_atom->GetSequenceID() };
                 auto chain_id_2{ neighbor_atom->GetChainID() };
-                auto bond_key_system{ m_data_block->GetBondKeySystemPtr() };
                 if (bond_key_system->IsRegistedBond(atom_id_1, atom_id_2) == false) continue;
-                auto component_key_1{
-                    m_data_block->GetComponentKeySystemPtr()->GetComponentKey(component_id_1)
-                };
+                auto component_key_1{ component_key_system->GetComponentKey(component_id_1) };
                 auto bond_key{ bond_key_system->GetBondKey(atom_id_1, atom_id_2) };
                 if (m_data_block->HasComponentBondEntry(component_key_1, bond_key) == false) continue;
 
@@ -1177,128 +1538,53 @@ void CifFormat::WriteAtomSiteBlockEntry(
 }
 
 void CifFormat::ParseLoopBlock(
-    std::ifstream & infile, std::string_view data_block_prefix,
-    const std::function<void(const std::unordered_map<std::string, size_t> &,
+    std::string_view data_block_prefix,
+    const std::function<void(const ColumnIndexMap &,
                              const std::vector<std::string> &)> & table_handler)
 {
-    std::string line;
-    auto header_parsed{ false };
-    std::vector<std::string> data_column_list;
-    std::unordered_map<std::string, size_t> column_index_map;
-    size_t loop_row_number{ 0 };
-    size_t file_line_number{ 0 };
-    while (std::getline(infile, line))
+    auto category_iter{ m_loop_category_map.find(std::string{data_block_prefix}) };
+    if (category_iter == m_loop_category_map.end()) return;
+
+    for (const auto & category : category_iter->second)
     {
-        ++file_line_number;
-        StringHelper::StripCarriageReturn(line);
-        if (header_parsed == false)
+        ColumnIndexMap column_index_map;
+        for (size_t i = 0; i < category.column_name_list.size(); ++i)
         {
-            if (line.rfind(data_block_prefix, 0) == 0)
+            std::string short_name{ category.column_name_list[i] };
+            if (short_name.rfind(data_block_prefix, 0) == 0)
             {
-                auto pos{ line.find_first_of(" \t") }; // extract the token up to the first whitespace
-                std::string full_line{ (pos == std::string::npos) ? line : line.substr(0, pos) };
-                data_column_list.emplace_back(full_line.substr(data_block_prefix.size()));
-                continue;
+                short_name = short_name.substr(data_block_prefix.size());
             }
-            
-            if (data_column_list.empty() == true) continue;
-            column_index_map.reserve(data_column_list.size());
-            for (size_t i = 0; i < data_column_list.size(); i++)
-            {
-                column_index_map[data_column_list.at(i)] = i;
-            }
-            header_parsed = true;
-            
+            column_index_map[short_name] = i;
         }
-        if (header_parsed == true)
+
+        size_t loop_row_number{ 0 };
+        for (const auto & row : category.row_list)
         {
-            if (line.empty() || line[0] == '#') break;
-            if (line == "loop_" || line.rfind("data_", 0) == 0 || line[0] == '_') break;
-
-            const auto expected_column_size{ column_index_map.size() };
-            std::vector<std::string> token_list;
-            token_list.reserve(expected_column_size);
-
-            // initial tokens from this line
-            auto initial{ SplitMmCifTokens(line) };
-            token_list.insert(token_list.end(), initial.begin(), initial.end());
-
-            // now read continuation lines until we have all fields
-            bool in_multiline{ false };
-            std::string multiline_content;
-            std::string next_line;
-            while (token_list.size() < expected_column_size && std::getline(infile, next_line))
-            {
-                ++file_line_number;
-                StringHelper::StripCarriageReturn(next_line);
-                if (next_line.empty() == true) continue;
-                if (next_line == "loop_" || next_line.rfind("data_", 0) == 0 || next_line[0] == '_')
-                {
-                    break;
-                }
-                if (in_multiline == false && next_line[0] == ';')
-                {
-                    // start of multiline literal for the next field
-                    in_multiline = true;
-                    multiline_content.clear();
-                    // strip leading semicolon
-                    auto content{ next_line.substr(1) };
-                    if (content.empty() == false) multiline_content = content;
-                }
-                else if (in_multiline == true)
-                {
-                    if (next_line.empty() == false && next_line[0] == ';')
-                    {
-                        // end of multiline literal
-                        token_list.emplace_back(std::move(multiline_content));
-                        in_multiline = false;
-                    }
-                    else
-                    {
-                        // accumulate lines
-                        multiline_content += "\n" + next_line;
-                    }
-                }
-                else
-                {
-                    // normal continuation tokens
-                    auto more{ SplitMmCifTokens(next_line) };
-                    token_list.insert(token_list.end(), more.begin(), more.end());
-                }
-            }
-
             ++loop_row_number;
-            if (in_multiline)
+            if (row.token_list.size() != column_index_map.size())
             {
                 Logger::Log(LogLevel::Warning,
                     "ParseLoopBlock(" + std::string(data_block_prefix)
                     + ") row " + std::to_string(loop_row_number)
-                    + " has unterminated multiline token. Skip this row.");
+                    + " has token count " + std::to_string(row.token_list.size())
+                    + " but expects " + std::to_string(column_index_map.size())
+                    + " at file line " + std::to_string(row.line_number)
+                    + ". tokens = " + BuildMmCifTokenPreview(row.token_list));
                 continue;
             }
-            if (token_list.size() != expected_column_size)
-            {
-                Logger::Log(LogLevel::Warning,
-                    "ParseLoopBlock(" + std::string(data_block_prefix)
-                    + ") row " + std::to_string(loop_row_number)
-                    + " has token count " + std::to_string(token_list.size())
-                    + " but expects " + std::to_string(expected_column_size)
-                    + ". tokens = " + BuildMmCifTokenPreview(token_list));
-                continue;
-            }
-
             try
             {
-                table_handler(column_index_map, token_list);
+                table_handler(column_index_map, row.token_list);
             }
             catch (const std::exception & ex)
             {
                 Logger::Log(LogLevel::Warning,
                     "ParseLoopBlock(" + std::string(data_block_prefix)
                     + ") row " + std::to_string(loop_row_number)
-                    + " failed at file line " + std::to_string(file_line_number)
+                    + " failed at file line " + std::to_string(row.line_number)
                     + ": " + std::string(ex.what())
-                    + ". tokens = " + BuildMmCifTokenPreview(token_list));
+                    + ". tokens = " + BuildMmCifTokenPreview(row.token_list));
                 continue;
             }
         }
