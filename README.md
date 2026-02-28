@@ -52,7 +52,7 @@ sudo apt install -y pybind11-dev
 **Windows (PowerShell + Visual Studio 2022)**
 1. Install prerequisites:
    - Visual Studio 2022 (or Build Tools) with the `Desktop development with C++` workload
-   - CMake (>= 3.15), Python 3, and Git
+   - CMake (>= 3.18), Python 3, and Git
 2. Quick start using bundled dependencies (recommended on Windows):
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DUSE_SYSTEM_LIBS=OFF -DRHBM_GEM_ROOT_MODE=OFF

@@ -810,7 +810,7 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (m_options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : 0.7;
+        x_min[i] = (m_options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : -0.7;
         x_max[i] = (m_options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? 47.0 : 22.0;
     }
     auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(global_y_array, 0.3) };
