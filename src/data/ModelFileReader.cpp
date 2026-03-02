@@ -16,7 +16,7 @@ ModelFileReader::ModelFileReader(const std::string & filename) :
     {
         m_file_object = std::make_unique<PdbFormat>();
     }
-    else if (file_extension == ".cif")
+    else if (file_extension == ".cif" || file_extension == ".mmcif" || file_extension == ".mcif")
     {
         m_file_object = std::make_unique<CifFormat>();
     }
@@ -35,6 +35,12 @@ void ModelFileReader::Read(void)
 {
     Logger::Log(LogLevel::Debug, "ModelFileReader::Read() called");
     ReadHeader();
+    if (m_successfully_read_file == false)
+    {
+        Logger::Log(LogLevel::Error,
+            "ModelFileReader::Read() header parsing failed; skip reading data array.");
+        return;
+    }
     ReadDataArray();
 }
 

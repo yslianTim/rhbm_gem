@@ -294,6 +294,14 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
     Logger::Log(LogLevel::Info,
         "Number of selected bond = " + std::to_string(m_model_object->GetNumberOfSelectedBond()));
+    if (m_model_object->GetNumberOfAtom() > 0 &&
+        m_model_object->GetNumberOfSelectedAtom() == 0)
+    {
+        Logger::Log(LogLevel::Warning,
+            "No atoms are selected after symmetry filtering. "
+            "The input CIF may miss usable _entity/_struct_asym metadata. "
+            "Try '--asymmetry true' to bypass symmetry filtering.");
+    }
 }
 
 void PotentialAnalysisCommand::RunAtomMapValueSampling(void)

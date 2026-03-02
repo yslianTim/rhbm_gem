@@ -6,6 +6,8 @@
 #include "ChemicalComponentEntry.hpp"
 #include "Logger.hpp"
 
+#include <algorithm>
+
 AtomicModelDataBlock::AtomicModelDataBlock(void) :
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
@@ -20,10 +22,16 @@ AtomicModelDataBlock::~AtomicModelDataBlock()
 }
 
 void AtomicModelDataBlock::AddAtomObject(
-    int model_number, std::unique_ptr<AtomObject> atom_object)
+    int model_number,
+    std::unique_ptr<AtomObject> atom_object,
+    const std::string & raw_sequence_id_token)
 {
-    auto sequence_id_str{ std::to_string(atom_object->GetSequenceID()) };
-    sequence_id_str = (sequence_id_str == "-1") ? "." : sequence_id_str;
+    std::string sequence_id_str{ raw_sequence_id_token };
+    if (sequence_id_str.empty())
+    {
+        sequence_id_str = std::to_string(atom_object->GetSequenceID());
+        sequence_id_str = (sequence_id_str == "-1") ? "." : sequence_id_str;
+    }
     auto atom_tuple_key{ std::make_tuple(
         atom_object->GetChainID(),
         atom_object->GetComponentID(),
@@ -66,13 +74,13 @@ void AtomicModelDataBlock::AddSheetStrands(
 }
 
 void AtomicModelDataBlock::AddSheetRange(
-    const std::string & composite_sheet_id, const std::array<std::string, 4> & range)
+    const std::string & composite_sheet_id, const SheetRange & range)
 {
     m_struct_sheet_range_map[composite_sheet_id] = range;
 }
 
 void AtomicModelDataBlock::AddHelixRange(
-    const std::string & helix_id, const std::array<std::string, 5> & range)
+    const std::string & helix_id, const HelixRange & range)
 {
     m_struct_helix_range_map[helix_id] = range;
 }
@@ -127,13 +135,12 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 
     for (auto & [helix_id, range] : m_struct_helix_range_map)
     {
-        if (chain_id == range.at(0) || chain_id == range.at(2))
+        (void)helix_id;
+        if (chain_id == range.chain_id_beg || chain_id == range.chain_id_end)
         {
-            auto beg{ std::stoi(range.at(1)) };
-            auto end{ std::stoi(range.at(3)) };
-            if (sequence_id >= beg && sequence_id <= end)
+            if (sequence_id >= range.seq_id_beg && sequence_id <= range.seq_id_end)
             {
-                atom_object->SetStructure(ChemicalDataHelper::GetStructureFromString(range.at(4)));
+                atom_object->SetStructure(ChemicalDataHelper::GetStructureFromString(range.conf_type));
                 return;
             }
         }
@@ -141,11 +148,10 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 
     for (auto & [composite_sheet_id, range] : m_struct_sheet_range_map)
     {
-        if (chain_id == range.at(0) || chain_id == range.at(2))
+        (void)composite_sheet_id;
+        if (chain_id == range.chain_id_beg || chain_id == range.chain_id_end)
         {
-            auto beg{ std::stoi(range.at(1)) };
-            auto end{ std::stoi(range.at(3)) };
-            if (sequence_id >= beg && sequence_id <= end)
+            if (sequence_id >= range.seq_id_beg && sequence_id <= range.seq_id_end)
             {
                 atom_object->SetStructure(Structure::SHEET);
                 return;
@@ -158,7 +164,15 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
 
 std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::MoveAtomObjectList(int model_number)
 {
-    return std::move(m_atom_object_list_map.at(model_number));
+    auto iter{ m_atom_object_list_map.find(model_number) };
+    if (iter == m_atom_object_list_map.end())
+    {
+        Logger::Log(LogLevel::Warning,
+            "AtomicModelDataBlock::MoveAtomObjectList() - Model number "
+            + std::to_string(model_number) + " not found.");
+        return {};
+    }
+    return std::move(iter->second);
 }
 
 std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectList(void)
@@ -244,6 +258,24 @@ const std::vector<std::unique_ptr<BondObject>> & AtomicModelDataBlock::GetBondOb
     return m_bond_object_list;
 }
 
+std::vector<int> AtomicModelDataBlock::GetModelNumberList(void) const
+{
+    std::vector<int> model_number_list;
+    model_number_list.reserve(m_atom_object_list_map.size());
+    for (const auto & [model_number, _] : m_atom_object_list_map)
+    {
+        (void)_;
+        model_number_list.emplace_back(model_number);
+    }
+    std::sort(model_number_list.begin(), model_number_list.end());
+    return model_number_list;
+}
+
+bool AtomicModelDataBlock::HasModelNumber(int model_number) const
+{
+    return m_atom_object_list_map.find(model_number) != m_atom_object_list_map.end();
+}
+
 AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInTuple(
     int model_number,
     const std::string & chain_id,
@@ -271,6 +303,30 @@ AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInTuple(
         return nullptr;
     }
     return m_atom_object_in_tuple_map.at(model_number).at(atom_tuple_key);
+}
+
+AtomObject * AtomicModelDataBlock::GetAtomObjectPtrInAnyModel(
+    const std::string & chain_id,
+    const std::string & comp_id,
+    const std::string & seq_id,
+    const std::string & atom_id,
+    int * model_number) const
+{
+    auto atom_tuple_key{ std::make_tuple(chain_id, comp_id, seq_id, atom_id) };
+    auto model_number_list{ GetModelNumberList() };
+    for (const auto current_model_number : model_number_list)
+    {
+        auto model_iter{ m_atom_object_in_tuple_map.find(current_model_number) };
+        if (model_iter == m_atom_object_in_tuple_map.end()) continue;
+        auto atom_iter{ model_iter->second.find(atom_tuple_key) };
+        if (atom_iter == model_iter->second.end()) continue;
+        if (model_number != nullptr)
+        {
+            *model_number = current_model_number;
+        }
+        return atom_iter->second;
+    }
+    return nullptr;
 }
 
 ChemicalComponentEntry * AtomicModelDataBlock::GetChemicalComponentEntryPtr(ComponentKey key) const

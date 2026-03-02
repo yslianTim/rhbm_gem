@@ -19,6 +19,22 @@ class BondObject;
 class ChemicalComponentEntry;
 struct ComponentAtomEntry;
 struct ComponentBondEntry;
+struct SheetRange
+{
+    std::string chain_id_beg;
+    int seq_id_beg;
+    std::string chain_id_end;
+    int seq_id_end;
+};
+
+struct HelixRange
+{
+    std::string chain_id_beg;
+    int seq_id_beg;
+    std::string chain_id_end;
+    int seq_id_end;
+    std::string conf_type;
+};
 
 class AtomicModelDataBlock
 {
@@ -38,8 +54,8 @@ class AtomicModelDataBlock
     std::unordered_map<Entity, std::vector<std::string>> m_entity_id_list_map; // key: entity type
     
     std::unordered_map<std::string, int> m_struct_sheet_strand_map;
-    std::unordered_map<std::string, std::array<std::string, 5>> m_struct_helix_range_map;
-    std::unordered_map<std::string, std::array<std::string, 4>> m_struct_sheet_range_map;
+    std::unordered_map<std::string, HelixRange> m_struct_helix_range_map;
+    std::unordered_map<std::string, SheetRange> m_struct_sheet_range_map;
     std::vector<Element> m_element_type_list;
 
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
@@ -48,14 +64,17 @@ public:
     AtomicModelDataBlock(void);
     ~AtomicModelDataBlock();
 
-    void AddAtomObject(int model_number, std::unique_ptr<AtomObject> atom_object);
+    void AddAtomObject(
+        int model_number,
+        std::unique_ptr<AtomObject> atom_object,
+        const std::string & raw_sequence_id_token = "");
     void AddBondObject(std::unique_ptr<BondObject> bond_object);
     void AddEntityTypeInEntityMap(const std::string & entity_id, Entity entity);
     void AddChainIDInEntityMap(const std::string & entity_id, const std::string & chain_id);
     void AddMoleculesSizeInEntityMap(const std::string & entity_id, int molecules_size);
     void AddSheetStrands(const std::string & sheet_id, int strands_size);
-    void AddSheetRange(const std::string & composite_sheet_id, const std::array<std::string, 4> & range);
-    void AddHelixRange(const std::string & helix_id, const std::array<std::string, 5> & range);
+    void AddSheetRange(const std::string & composite_sheet_id, const SheetRange & range);
+    void AddHelixRange(const std::string & helix_id, const HelixRange & range);
     void AddElementType(const Element & element);
     void AddChemicalComponentEntry(ComponentKey comp_key, std::unique_ptr<ChemicalComponentEntry> entry);
     void AddComponentAtomEntry(
@@ -86,6 +105,8 @@ public:
     const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
     const std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> & GetAtomObjectMap(void) const;
     const std::vector<std::unique_ptr<BondObject>> & GetBondObjectList(void) const;
+    std::vector<int> GetModelNumberList(void) const;
+    bool HasModelNumber(int model_number) const;
     ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key) const;
     const ComponentBondEntry * GetComponentBondEntryPtr(ComponentKey comp_key, BondKey bond_key) const;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
@@ -97,6 +118,13 @@ public:
         const std::string & comp_id,
         const std::string & seq_id,
         const std::string & atom_id
+    ) const;
+    AtomObject * GetAtomObjectPtrInAnyModel(
+        const std::string & chain_id,
+        const std::string & comp_id,
+        const std::string & seq_id,
+        const std::string & atom_id,
+        int * model_number = nullptr
     ) const;
     ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }

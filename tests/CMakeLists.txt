@@ -1,4 +1,20 @@
-file(GLOB TEST_SOURCES CONFIGURE_DEPENDS *.cpp)
+set(TEST_SOURCES
+    ArrayStats_test.cpp
+    AtomSelector_test.cpp
+    ChemicalDataHelper_test.cpp
+    ChimeraXHelper_test.cpp
+    ComponentHelper_test.cpp
+    DataObjectManager_test.cpp
+    EigenMatrixUtility_test.cpp
+    ElectricPotential_test.cpp
+    FilePathHelper_test.cpp
+    GausLinearTransformHelper_test.cpp
+    KDTreeAlgorithm_test.cpp
+    Logger_test.cpp
+    MapFileIO_test.cpp
+    SphereSampler_test.cpp
+    StringHelper_test.cpp
+)
 
 set(TEST_EXEC_NAME unit_tests)
 add_executable(${TEST_EXEC_NAME} ${TEST_SOURCES})
@@ -25,4 +41,6 @@ set_target_properties(${TEST_EXEC_NAME} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
 )
 
-gtest_discover_tests(${TEST_EXEC_NAME})
+gtest_discover_tests(${TEST_EXEC_NAME}
+    DISCOVERY_MODE PRE_TEST
+)
