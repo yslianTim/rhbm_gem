@@ -5,10 +5,14 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
-#include <utility>
-#include <stdexcept>
-#include <sstream>
 #include <random>
+#include <sstream>
+#include <stdexcept>
+#include <utility>
+
+#ifdef HAVE_BOOST
+#include <boost/math/distributions/chi_squared.hpp>
+#endif
 
 using std::string;
 using std::vector;
@@ -39,6 +43,33 @@ int CheckedCastToInt(SizeType value)
         throw std::overflow_error("data_array size exceeds maximum int");
     }
     return static_cast<int>(value);
+}
+
+double CalculateChiSquareQuantile(int df)
+{
+#ifdef HAVE_BOOST
+    const boost::math::chi_squared_distribution<double> distribution(static_cast<double>(df));
+    return boost::math::quantile(distribution, 0.99);
+#else
+    switch (df)
+    {
+        case 1: return 6.63;  // 99th percentile
+        case 2: return 9.21;
+        case 3: return 11.34;
+        case 4: return 13.28;
+        case 5: return 15.09;
+        case 6: return 16.81;
+        case 7: return 18.48;
+        case 8: return 20.09;
+        case 9: return 21.67;
+        case 10: return 23.21;
+        default:
+            const double z{ 2.3263478740408408 }; // standard normal 0.99 quantile
+            const double d{ static_cast<double>(df) };
+            const double term{ 1.0 - 2.0 / (9.0 * d) + z * std::sqrt(2.0 / (9.0 * d)) };
+            return d * term * term * term;
+    }
+#endif
 }
 } // namespace
 
@@ -767,29 +798,7 @@ Eigen::Array<bool, Eigen::Dynamic, 1> HRLModelHelper::CalculateOutlierMemberFlag
     int basis_size,
     const Eigen::ArrayXd & statistical_distance_array)
 {
-    auto chi_square_quantile = [](int df)
-    {
-        switch (df)
-        {
-            case 1: return 6.63;  // 99th percentile
-            case 2: return 9.21;
-            case 3: return 11.34;
-            case 4: return 13.28;
-            case 5: return 15.09;
-            case 6: return 16.81;
-            case 7: return 18.48;
-            case 8: return 20.09;
-            case 9: return 21.67;
-            case 10: return 23.21;
-            default: // Wilson-Hilferty approximation
-                const double z{ 2.3263478740408408 }; // standard normal 0.99 quantile
-                const double d{ static_cast<double>(df) };
-                const double term{ 1.0 - 2.0 / (9.0 * d) + z * std::sqrt(2.0 / (9.0 * d)) };
-                return d * term * term * term;
-        }
-    };
-
-    return (statistical_distance_array > chi_square_quantile(basis_size));
+    return (statistical_distance_array > CalculateChiSquareQuantile(basis_size));
     //return ((m_omega_array/m_omega_sum) < 0.05/static_cast<double>(member_size));
 }
 
