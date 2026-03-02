@@ -398,6 +398,9 @@ Passing a larger value to `--verbose` enables all lower levels as well.
 
 # Overall Information for Developer
 
+For the repository-specific development conventions and code habits that are already in use, see [docs/development-guidelines.md](docs/development-guidelines.md).
+It summarizes project structure, naming/style patterns, command/data-layer design, logging, testing, and documentation update expectations.
+
 
 ## Data Object Manager
 
