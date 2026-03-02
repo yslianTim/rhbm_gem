@@ -9,7 +9,10 @@ set(TEST_SOURCES
     ElectricPotential_test.cpp
     FilePathHelper_test.cpp
     GausLinearTransformHelper_test.cpp
-    HRLModelHelper_test.cpp
+    HRLAlphaTrainer_test.cpp
+    HRLDataTransform_test.cpp
+    HRLGroupEstimator_test.cpp
+    HRLModelAlgorithms_test.cpp
     KDTreeAlgorithm_test.cpp
     Logger_test.cpp
     MapFileIO_test.cpp

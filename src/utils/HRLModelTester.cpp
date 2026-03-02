@@ -1,5 +1,7 @@
 #include "HRLModelTester.hpp"
-#include "HRLModelHelper.hpp"
+#include "HRLAlphaTrainer.hpp"
+#include "HRLDataTransform.hpp"
+#include "HRLModelAlgorithms.hpp"
 #include "GausLinearTransformHelper.hpp"
 #include "Constants.hpp"
 #include "Logger.hpp"
@@ -174,7 +176,11 @@ bool HRLModelTester::RunBetaMDPDETest(
         )
     };
     auto error_array{
-        HRLModelHelper::RunAlphaRTraining(train_data_entry_list, subset_size_alpha_r, train_alpha_r_list)
+        HRLAlphaTrainer::EvaluateAlphaR(
+            train_data_entry_list,
+            subset_size_alpha_r,
+            train_alpha_r_list
+        )
     };
     int error_min_id;
     error_array.minCoeff(&error_min_id);
@@ -191,25 +197,27 @@ bool HRLModelTester::RunBetaMDPDETest(
                 static_cast<size_t>(sampling_entry_size), gaus_true, data_error_sigma, outlier_ratio
             )
         };
-        auto data_array{ HRLModelHelper::BuildBasisVectorAndResponseArray(data_entry_list) };
-        const auto & X{ std::get<0>(data_array) };
-        const auto & y{ std::get<1>(data_array) };
+        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
+        HRLExecutionOptions options;
+        options.quiet_mode = true;
+        options.thread_size = thread_size;
 
         for (size_t j = 0; j < alpha_size; j++)
         {
-            Eigen::VectorXd beta_ols;
-            Eigen::VectorXd beta_mdpde;
-            double sigma_square;
-            Eigen::DiagonalMatrix<double, Eigen::Dynamic> W;
-            Eigen::DiagonalMatrix<double, Eigen::Dynamic> capital_sigma;
-            HRLModelHelper::AlgorithmBetaMDPDE(
-                local_alpha_r_list.at(j), X, y,
-                beta_ols, beta_mdpde, sigma_square, W, capital_sigma, true
+            const auto beta_result = HRLModelAlgorithms::EstimateBetaMDPDE(
+                local_alpha_r_list.at(j),
+                dataset.X,
+                dataset.y,
+                options
             );
 
             Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
-            auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(beta_ols, gaus_0) };
-            auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(beta_mdpde, gaus_0) };
+            auto gaus_ols{
+                GausLinearTransformHelper::BuildGaus3DModel(beta_result.beta_ols, gaus_0)
+            };
+            auto gaus_mdpde{
+                GausLinearTransformHelper::BuildGaus3DModel(beta_result.beta_mdpde, gaus_0)
+            };
             residual_matrix_ols_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
             residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
         }
@@ -280,7 +288,11 @@ bool HRLModelTester::RunMuMDPDETest(
         for (int m = 0; m < train_beta_matrix.cols(); m++) train_data_entry_list.emplace_back(train_beta_matrix.col(m));
 
         auto error_array{
-            HRLModelHelper::RunAlphaGTraining(train_data_entry_list, subset_size_alpha_g, train_alpha_g_list)
+            HRLAlphaTrainer::EvaluateAlphaG(
+                train_data_entry_list,
+                subset_size_alpha_g,
+                train_alpha_g_list
+            )
         };
         int error_min_id;
         error_array.minCoeff(&error_min_id);
@@ -305,30 +317,30 @@ bool HRLModelTester::RunMuMDPDETest(
             )
         };
         auto beta_matrix{ BuildBetaMatrix(random_gaus_array) };
+        HRLExecutionOptions options;
+        options.quiet_mode = true;
+        options.thread_size = thread_size;
 
         for (size_t j = 0; j < alpha_size; j++)
         {
-            Eigen::VectorXd mu_median;
-            Eigen::VectorXd mu_ols;
-            Eigen::VectorXd mu_mdpde;
-            Eigen::ArrayXd omega_array;
-            double omega_sum;
-            Eigen::MatrixXd capital_lambda;
-            std::vector<Eigen::MatrixXd> member_capital_lambda_list;
-            HRLModelHelper::AlgorithmMuMDPDE(
-                local_alpha_g_list.at(j), beta_matrix,
-                mu_median, mu_mdpde, omega_array, omega_sum,
-                capital_lambda, member_capital_lambda_list, true
+            const auto mdpde_result = HRLModelAlgorithms::EstimateMuMDPDE(
+                local_alpha_g_list.at(j),
+                beta_matrix,
+                options
             );
-            HRLModelHelper::AlgorithmMuMDPDE(
-                0.0, beta_matrix,
-                mu_median, mu_ols, omega_array, omega_sum,
-                capital_lambda, member_capital_lambda_list, true
+            const auto ols_result = HRLModelAlgorithms::EstimateMuMDPDE(
+                0.0,
+                beta_matrix,
+                options
             );
 
             Eigen::VectorXd gaus_0{ Eigen::VectorXd::Zero(m_gaus_par_size) };
-            auto gaus_ols{ GausLinearTransformHelper::BuildGaus3DModel(mu_ols, gaus_0) };
-            auto gaus_mdpde{ GausLinearTransformHelper::BuildGaus3DModel(mu_mdpde, gaus_0) };
+            auto gaus_ols{
+                GausLinearTransformHelper::BuildGaus3DModel(ols_result.mu_mdpde, gaus_0)
+            };
+            auto gaus_mdpde{
+                GausLinearTransformHelper::BuildGaus3DModel(mdpde_result.mu_mdpde, gaus_0)
+            };
             residual_matrix_median_list.at(j).col(i) = CalculateNormalizedResidual(gaus_ols, gaus_true);
             residual_matrix_mdpde_list.at(j).col(i) = CalculateNormalizedResidual(gaus_mdpde, gaus_true);
         }

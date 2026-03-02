@@ -1,5 +1,4 @@
 #include "HRLModelTestCommand.hpp"
-#include "HRLModelHelper.hpp"
 #include "HRLModelTester.hpp"
 #include "ArrayStats.hpp"
 #include "ScopeTimer.hpp"
