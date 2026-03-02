@@ -46,6 +46,7 @@ public:
 private:
     bool BuildDataObjectList(void);
     void RunResultDump(void);
+    void RunAtomOutlierDumping(void);
     void RunAtomPositionDumping(void);
     void RunMapValueDumping(void);
     void RunGausEstimatesDumping(void);

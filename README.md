@@ -12,7 +12,11 @@ This project uses CMake + C++17. By default it prefers system-installed Eigen3 /
 ```bash
 xcode-select --install
 ```
-2. Install dependencies (adjust as needed):
+2. Install Homebrew if `brew` is not available:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+3. Install dependencies (adjust as needed):
 ```bash
 brew install cmake eigen sqlite3 python pybind11 cli11 libomp root boost
 ```
@@ -113,13 +117,12 @@ cmake -S . -B build-boost-off -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=O
 cmake -S . -B build-boost-components -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_GEM_BOOST_COMPONENTS="filesystem;system"
 ```
 
-**Build, install, and run from scratch**
+**Installation**
 1. From the project root:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
-   Build success should be judged by the build driver message and exit code (`0`), not by whether a visible progress line reaches exactly `100%`.
 2. Run the main executable:
 ```bash
 ./build/RHBM-GEM --help

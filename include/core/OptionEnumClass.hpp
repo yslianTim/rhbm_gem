@@ -15,7 +15,8 @@ enum class PrinterType : int
 {
     ATOM_POSITION  = 0,
     MAP_VALUE      = 1,
-    GAUS_ESTIMATES = 2
+    GAUS_ESTIMATES = 2,
+    ATOM_OUTLIER   = 3
 };
 
 enum class PotentialModel : int
