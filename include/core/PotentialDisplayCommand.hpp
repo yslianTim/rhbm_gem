@@ -20,6 +20,21 @@ class ModelObject;
 class PotentialDisplayCommand : public CommandBase
 {
 public:
+    static constexpr std::string_view CommandName() { return "potential_display"; }
+    static constexpr std::string_view CommandDescription() { return "Run potential display"; }
+    static constexpr CommandSurface StaticCommandSurface()
+    {
+        return MakeCommandSurface(
+            CommonOption::Threading
+                | CommonOption::Verbose
+                | CommonOption::Database
+                | CommonOption::OutputFolder,
+            0u,
+            true,
+            true,
+            true);
+    }
+
     struct Options : public CommandOptions
     {
         PainterType painter_choice{ PainterType::MODEL };
@@ -43,9 +58,9 @@ private:
 public:
     PotentialDisplayCommand();
     ~PotentialDisplayCommand();
-    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ResetRuntimeState() override;
+    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 
@@ -60,6 +75,7 @@ public:
     void SetVetoElementType(const std::string & value);
 
 private:
+    bool ExecuteImpl() override;
     bool BuildDataObject();
     void RunDataObjectSelection();
     void RunDisplay();

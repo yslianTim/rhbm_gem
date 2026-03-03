@@ -3,7 +3,7 @@
 #include "ArrayStats.hpp"
 #include "ScopeTimer.hpp"
 #include "Logger.hpp"
-#include "CommandRegistry.hpp"
+#include "OptionEnumTraits.hpp"
 
 #include <random>
 #include <memory>
@@ -28,12 +28,6 @@
 #include <TEllipse.h>
 #endif
 
-namespace {
-rhbm_gem::CommandRegistrar<rhbm_gem::HRLModelTestCommand> registrar_model_test{
-    "model_test",
-    "Run HRL model simulation test"};
-}
-
 namespace rhbm_gem {
 
 HRLModelTestCommand::HRLModelTestCommand() :
@@ -43,20 +37,12 @@ HRLModelTestCommand::HRLModelTestCommand() :
 
 void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    RegisterDeprecatedDatabasePathAlias(cmd);
-    std::map<std::string, TesterType> tester_map
-    {
-        {"0", TesterType::BENCHMARK},         {"benchmark",      TesterType::BENCHMARK},
-        {"1", TesterType::DATA_OUTLIER},      {"data_outlier",   TesterType::DATA_OUTLIER},
-        {"2", TesterType::MEMBER_OUTLIER},    {"member_outlier", TesterType::MEMBER_OUTLIER},
-        {"3", TesterType::MODEL_ALPHA_DATA},  {"alpha_data",     TesterType::MODEL_ALPHA_DATA},
-        {"4", TesterType::MODEL_ALPHA_MEMBER},{"alpha_member",   TesterType::MODEL_ALPHA_MEMBER}
-    };
     cmd->add_option_function<TesterType>("-t,--tester",
         [&](TesterType value) { SetTesterChoice(value); },
         "Tester option")
         ->default_val(TesterType::DATA_OUTLIER)
-        ->transform(CLI::CheckedTransformer(tester_map, CLI::ignore_case));
+        ->transform(CLI::CheckedTransformer(
+            BuildEnumCLIMap<TesterType>(), CLI::ignore_case));
     cmd->add_option_function<double>("--fit-min",
         [&](double value) { SetFitRangeMinimum(value); },
         "Minimum fitting range")->default_val(m_options.fit_range_min);
@@ -71,9 +57,8 @@ void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Alpha value for G")->default_val(m_options.alpha_g);
 }
 
-bool HRLModelTestCommand::Execute()
+bool HRLModelTestCommand::ExecuteImpl()
 {
-    if (!EnsurePreparedForExecution()) return false;
     switch (m_options.tester_choice)
     {
         case TesterType::BENCHMARK:
@@ -519,7 +504,7 @@ void HRLModelTestCommand::PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ m_options.folder_path / name };
+    auto file_path{ BuildOutputPath(name, "") };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintDataOutlierResult");
 
     std::vector<std::string> title_y_list{
@@ -747,7 +732,7 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ m_options.folder_path / name };
+    auto file_path{ BuildOutputPath(name, "") };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintMemberOutlierResult");
 
     std::vector<std::string> title_y_list{

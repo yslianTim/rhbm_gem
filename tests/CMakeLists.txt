@@ -5,11 +5,16 @@ set(TEST_SOURCES
     ChemicalDataHelper_test.cpp
     ChimeraXHelper_test.cpp
     CommandBase_test.cpp
+    CommandExecutionContract_test.cpp
     CommandRegistry_test.cpp
+    CommandSurface_test.cpp
+    CommandValidationIssue_test.cpp
     ComponentHelper_test.cpp
     DataObjectManager_test.cpp
+    DocsSync_test.cpp
     EigenMatrixUtility_test.cpp
     ElectricPotential_test.cpp
+    EnumOptionTraits_test.cpp
     FilePathHelper_test.cpp
     GausLinearTransformHelper_test.cpp
     HRLAlphaTrainer_test.cpp
@@ -79,6 +84,6 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
             "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
             ${Python_EXECUTABLE}
             -c
-            "import rhbm_gem_module as m; assert hasattr(m.PrinterType, 'ATOM_OUTLIER')"
+            "import rhbm_gem_module as m; assert hasattr(m.PrinterType, 'ATOM_OUTLIER'); assert hasattr(m, 'PotentialAnalysisCommand'); assert hasattr(m, 'PotentialDisplayCommand'); assert hasattr(m, 'ResultDumpCommand'); assert hasattr(m, 'MapSimulationCommand'); assert not hasattr(m, 'MapVisualizationCommand'); assert not hasattr(m, 'PositionEstimationCommand'); assert not hasattr(m, 'HRLModelTestCommand')"
     )
 endif()

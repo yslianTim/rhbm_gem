@@ -39,7 +39,7 @@ flowchart TD
     P --> Q["ValidateOptions() + filesystem preflight"]
     Q --> R{"Has validation errors?"}
     R -- true --> S["Report issues and abort"]
-    R -- false --> T["Derived::Execute()"]
+    R -- false --> T["Derived::ExecuteImpl()"]
 
     T --> U["BuildDataObject*() phase"]
     U --> V["DataObjectManager"]
@@ -50,29 +50,34 @@ flowchart TD
 
 ## 3. Registration Model
 
-### 3.1 Static self-registration
+### 3.1 Explicit built-in manifest
 
-Every CLI command is registered locally in its own `.cpp` file through a namespace-scope `CommandRegistrar<T>` object.
+Built-in CLI commands are registered centrally through `RegisterBuiltInCommands()`.
 
-Current commands:
+The built-in manifest order is:
 
-- `potential_analysis`
-- `potential_display`
-- `result_dump`
-- `map_simulation`
-- `map_visualization`
-- `position_estimation`
-- `model_test`
+1. `potential_analysis`
+2. `potential_display`
+3. `result_dump`
+4. `map_simulation`
+5. `map_visualization`
+6. `position_estimation`
+7. `model_test`
 
-This keeps command discovery localized: adding a new command does not require editing a central switch statement.
+This makes help ordering deterministic and avoids relying on cross-translation-unit static initialization order for built-in behavior.
 
-### 3.2 Registry responsibilities
+### 3.2 Optional registrar path
+
+`CommandRegistrar<T>` still exists, but it is now intended for optional extension-style registration, tests, or future plugin-like integration. It is no longer the source of truth for built-in commands.
+
+### 3.3 Registry responsibilities
 
 `CommandRegistry` stores:
 
 - the command name
 - the user-facing description
 - a factory returning `std::unique_ptr<CommandBase>`
+- command surface metadata (`CommandSurface`)
 
 `Application` reads the registry and creates one CLI subcommand per registered entry.
 
@@ -84,10 +89,12 @@ All CLI commands derive from `CommandBase`.
 
 Each command must provide:
 
-- `bool Execute()`
+- `bool ExecuteImpl()`
 - `void RegisterCLIOptionsExtend(CLI::App * command)`
 - `const CommandOptions & GetOptions() const`
 - `CommandOptions & GetOptions()`
+
+`CommandBase::Execute()` is the public non-virtual wrapper. It is the single formal execution entry point for CLI callbacks, direct C++ callers, and Python bindings.
 
 ### 4.2 Shared base features
 
@@ -113,17 +120,14 @@ Base setters are not passive assignment helpers. They also normalize and validat
 
 ### 4.3 Common option capability mask
 
-`CommandBase` also exposes `GetCommonOptionMask()` so each concrete command can
-choose which shared base options it actually needs:
+`CommandBase` also exposes `CommandSurface` / `GetCommonOptionMask()` so each concrete command can choose which shared base options it actually needs:
 
 - `Threading`
 - `Verbose`
 - `Database`
 - `OutputFolder`
 
-File-only commands can still register a hidden deprecated `--database` alias
-for CLI compatibility without exposing it in help output or using it at
-runtime.
+File-only commands can still expose a hidden deprecated `--database` alias for CLI compatibility without showing it in help output or using it at runtime. This alias is driven from command surface metadata instead of being registered ad hoc inside each command.
 
 ### 4.4 Options pattern
 
@@ -158,6 +162,7 @@ sequenceDiagram
         Cmd-->>User: structured validation issues
     else valid options
         App->>Cmd: Execute()
+        Cmd->>Cmd: ExecuteImpl()
         Cmd->>Cmd: BuildDataObject*()
         Cmd->>DM: ProcessFile / LoadDataObject / SaveDataObject
         Cmd->>Cmd: Run workflow steps
@@ -170,8 +175,8 @@ Recommended command shape:
 1. `RegisterCLIOptionsExtend()` binds CLI options to setter functions.
 2. Setters normalize user input and register option-local validation issues when needed.
 3. `PrepareForExecution()` resets runtime state, clears command-local data objects, validates cross-field constraints, and performs filesystem preflight.
-4. `Execute()` starts by ensuring preparation has happened, then builds prerequisites.
-5. `Execute()` then runs the main workflow in clear phases.
+4. `Execute()` is the single public entry point. It prepares the command if needed, then calls `ExecuteImpl()`.
+5. `ExecuteImpl()` runs the main workflow in clear phases.
 6. Any persistence or file output happens after the main computation is ready.
 
 ## 6. Data Boundary
@@ -225,6 +230,7 @@ These commands primarily load previously saved `ModelObject` instances from the 
 
 ### 7.4 Command surface matrix
 
+<!-- BEGIN GENERATED: command-surface-matrix -->
 | Command | Uses database at runtime | Uses output folder | Exposed to Python | Hidden deprecated `--database` alias |
 | --- | --- | --- | --- | --- |
 | `potential_analysis` | yes | yes | yes | no |
@@ -234,6 +240,7 @@ These commands primarily load previously saved `ModelObject` instances from the 
 | `map_visualization` | no | yes | no | yes |
 | `position_estimation` | no | yes | no | yes |
 | `model_test` | no | yes | no | yes |
+<!-- END GENERATED: command-surface-matrix -->
 
 ## 8. Concrete Command Notes
 
@@ -342,9 +349,9 @@ When adding a new command, follow this checklist:
 4. Define `Options : CommandOptions`.
 5. Implement validation in setter methods, not in scattered workflow code.
 6. Implement `RegisterCLIOptionsExtend()` using setter callbacks.
-7. Keep `Execute()` phase-oriented: rely on `PrepareForExecution()`, then build prerequisites, then run the workflow.
+7. Keep `ExecuteImpl()` phase-oriented: rely on `CommandBase::Execute()` / `PrepareForExecution()`, then build prerequisites, then run the workflow.
 8. Use `DataObjectManager` as the boundary for file parsing and persistence.
-9. Add a namespace-scope `CommandRegistrar<YourCommand>` in the `.cpp` file.
+9. Add the command to `RegisterBuiltInCommands()` and define explicit `CommandSurface` metadata.
 10. Update bindings, examples, tests, and user-facing docs if the command is part of a supported public workflow.
 
 ## 11. What Future Contributors Should Avoid
@@ -352,6 +359,7 @@ When adding a new command, follow this checklist:
 Avoid these anti-patterns:
 
 - bypassing `CommandRegistry` and hard-coding new CLI subcommands in `Application`
+- re-introducing namespace-scope static registration for built-in commands
 - putting format-specific parsing logic directly inside a command
 - delaying basic validation until deep inside `Execute()`
 - mutating the filesystem during CLI parse instead of during preflight

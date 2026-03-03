@@ -16,6 +16,21 @@ class AtomObject;
 class PotentialAnalysisCommand : public CommandBase
 {
 public:
+    static constexpr std::string_view CommandName() { return "potential_analysis"; }
+    static constexpr std::string_view CommandDescription() { return "Run potential analysis"; }
+    static constexpr CommandSurface StaticCommandSurface()
+    {
+        return MakeCommandSurface(
+            CommonOption::Threading
+                | CommonOption::Verbose
+                | CommonOption::Database
+                | CommonOption::OutputFolder,
+            0u,
+            true,
+            true,
+            true);
+    }
+
     struct Options : public CommandOptions
     {
         bool use_training_alpha{ false };
@@ -44,10 +59,10 @@ private:
 public:
     PotentialAnalysisCommand();
     ~PotentialAnalysisCommand();
-    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
+    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 
@@ -68,6 +83,7 @@ public:
     void SetSamplingHeight(double value);
 
 private:
+    bool ExecuteImpl() override;
     bool BuildDataObject();
     void UpdateModelObjectForSimulation(ModelObject * model_object);
     void RunMapObjectPreprocessing();

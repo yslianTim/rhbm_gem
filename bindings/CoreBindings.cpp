@@ -1,38 +1,44 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl/filesystem.h>
+#include <string>
+
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
 #include "ResultDumpCommand.hpp"
 #include "MapSimulationCommand.hpp"
+#include "OptionEnumTraits.hpp"
 #include "OptionEnumClass.hpp"
+
+namespace {
+
+template <typename EnumType>
+void BindEnumEntries(pybind11::enum_<EnumType> & py_enum)
+{
+    for (const auto & entry : rhbm_gem::EnumOptionTraits<EnumType>::kBindingEntries)
+    {
+        const std::string name{ entry.token };
+        py_enum.value(name.c_str(), entry.value);
+    }
+}
+
+} // namespace
 
 PYBIND11_MODULE(rhbm_gem_module, m)
 {
-    pybind11::enum_<rhbm_gem::PainterType>(m, "PainterType")
-        .value("GAUS",       rhbm_gem::PainterType::GAUS)
-        .value("ATOM",       rhbm_gem::PainterType::ATOM)
-        .value("MODEL",      rhbm_gem::PainterType::MODEL)
-        .value("COMPARISON", rhbm_gem::PainterType::COMPARISON)
-        .value("DEMO",       rhbm_gem::PainterType::DEMO);
+    auto painter_type{ pybind11::enum_<rhbm_gem::PainterType>(m, "PainterType") };
+    BindEnumEntries(painter_type);
     pybind11::implicitly_convertible<int, rhbm_gem::PainterType>();
 
-    pybind11::enum_<rhbm_gem::PrinterType>(m, "PrinterType")
-        .value("ATOM_POSITION",  rhbm_gem::PrinterType::ATOM_POSITION)
-        .value("MAP_VALUE",      rhbm_gem::PrinterType::MAP_VALUE)
-        .value("GAUS_ESTIMATES", rhbm_gem::PrinterType::GAUS_ESTIMATES)
-        .value("ATOM_OUTLIER",   rhbm_gem::PrinterType::ATOM_OUTLIER);
+    auto printer_type{ pybind11::enum_<rhbm_gem::PrinterType>(m, "PrinterType") };
+    BindEnumEntries(printer_type);
     pybind11::implicitly_convertible<int, rhbm_gem::PrinterType>();
 
-    pybind11::enum_<rhbm_gem::PotentialModel>(m, "PotentialModel")
-        .value("SINGLE_GAUS",      rhbm_gem::PotentialModel::SINGLE_GAUS)
-        .value("FIVE_GAUS_CHARGE", rhbm_gem::PotentialModel::FIVE_GAUS_CHARGE)
-        .value("SINGLE_GAUS_USER", rhbm_gem::PotentialModel::SINGLE_GAUS_USER);
+    auto potential_model{ pybind11::enum_<rhbm_gem::PotentialModel>(m, "PotentialModel") };
+    BindEnumEntries(potential_model);
     pybind11::implicitly_convertible<int, rhbm_gem::PotentialModel>();
 
-    pybind11::enum_<rhbm_gem::PartialCharge>(m, "PartialCharge")
-        .value("NEUTRAL", rhbm_gem::PartialCharge::NEUTRAL)
-        .value("PARTIAL", rhbm_gem::PartialCharge::PARTIAL)
-        .value("AMBER",   rhbm_gem::PartialCharge::AMBER);
+    auto partial_charge{ pybind11::enum_<rhbm_gem::PartialCharge>(m, "PartialCharge") };
+    BindEnumEntries(partial_charge);
     pybind11::implicitly_convertible<int, rhbm_gem::PartialCharge>();
 
     pybind11::class_<rhbm_gem::PotentialAnalysisCommand>(m, "PotentialAnalysisCommand")

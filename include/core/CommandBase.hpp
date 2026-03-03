@@ -2,10 +2,14 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <typeinfo>
 #include <vector>
 
+#include "CommandMetadata.hpp"
 #include "DataObjectManager.hpp"
 #include "Logger.hpp"
 
@@ -16,42 +20,21 @@ namespace CLI
 
 namespace rhbm_gem {
 
+enum class ValidationPhase : std::uint8_t
+{
+    Parse = 0,
+    Prepare = 1,
+    Runtime = 2
+};
+
 struct ValidationIssue
 {
     std::string option_name;
+    ValidationPhase phase;
     LogLevel level;
     std::string message;
+    bool auto_corrected{ false };
 };
-
-enum class CommonOption : std::uint8_t
-{
-    Threading = 0,
-    Verbose = 1,
-    Database = 2,
-    OutputFolder = 3
-};
-
-using CommonOptionMask = std::uint32_t;
-
-constexpr CommonOptionMask ToMask(CommonOption option)
-{
-    return static_cast<CommonOptionMask>(1u << static_cast<std::uint8_t>(option));
-}
-
-constexpr CommonOptionMask operator|(CommonOption lhs, CommonOption rhs)
-{
-    return ToMask(lhs) | ToMask(rhs);
-}
-
-constexpr CommonOptionMask operator|(CommonOptionMask lhs, CommonOption rhs)
-{
-    return lhs | ToMask(rhs);
-}
-
-constexpr bool HasCommonOption(CommonOptionMask mask, CommonOption option)
-{
-    return (mask & ToMask(option)) != 0u;
-}
 
 struct CommandOptions
 {
@@ -65,19 +48,25 @@ class CommandBase
 {
 public:
     virtual ~CommandBase() = default;
-    virtual bool Execute() = 0;
+    bool Execute();
     virtual void RegisterCLIOptionsExtend(::CLI::App * command) = 0;
     virtual const CommandOptions & GetOptions() const = 0;
     virtual CommandOptions & GetOptions() = 0;
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
-    virtual CommonOptionMask GetCommonOptionMask() const
+    virtual CommandSurface GetCommandSurface() const
     {
-        return CommonOption::Threading
-             | CommonOption::Verbose
-             | CommonOption::Database
-             | CommonOption::OutputFolder;
+        return MakeCommandSurface(
+            CommonOption::Threading
+                | CommonOption::Verbose
+                | CommonOption::Database
+                | CommonOption::OutputFolder,
+            0u,
+            true,
+            true,
+            false);
     }
+    CommonOptionMask GetCommonOptionMask() const { return GetCommandSurface().common_options; }
 
     void RegisterCLIOptions(::CLI::App * command);
     bool PrepareForExecution();
@@ -86,7 +75,7 @@ public:
     void SetDatabasePath(const std::filesystem::path & path);
     void SetFolderPath(const std::filesystem::path & path);
     bool IsValidateOptions() const { return !HasValidationErrors(); }
-    bool HasValidationErrors() const;
+    bool HasValidationErrors(std::optional<ValidationPhase> phase = std::nullopt) const;
     void ReportValidationIssues() const;
     const std::vector<ValidationIssue> & GetValidationIssues() const { return m_validation_issues; }
     DataObjectManager * GetDataManagerPtr() { return &m_data_manager; }
@@ -98,10 +87,18 @@ protected:
 
     CommandBase() = default;
     void RegisterCLIOptionsBasic(::CLI::App * command);
-    void RegisterDeprecatedDatabasePathAlias(::CLI::App * command);
-    void AddValidationError(const std::string & option_name, const std::string & message);
-    void AddValidationWarning(const std::string & option_name, const std::string & message);
-    void ClearValidationIssuesForOption(std::string_view option_name);
+    void RegisterDeprecatedCommonAliases(::CLI::App * command);
+    void AddValidationError(
+        const std::string & option_name,
+        const std::string & message,
+        ValidationPhase phase = ValidationPhase::Prepare);
+    void AddValidationWarning(
+        const std::string & option_name,
+        const std::string & message,
+        ValidationPhase phase = ValidationPhase::Prepare);
+    void AddNormalizationWarning(const std::string & option_name, const std::string & message);
+    void ClearValidationIssues(std::string_view option_name, std::optional<ValidationPhase> phase);
+    void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt);
     void ValidateRequiredExistingPath(
         const std::filesystem::path & path,
         std::string_view option_name,
@@ -110,7 +107,65 @@ protected:
         const std::filesystem::path & path,
         std::string_view option_name,
         std::string_view label);
-    bool EnsurePreparedForExecution();
+    void RequireDatabaseManager();
+    std::filesystem::path BuildOutputPath(
+        std::string_view stem,
+        std::string_view extension) const;
+    virtual bool ExecuteImpl() = 0;
+
+    template <typename TypedDataObject>
+    std::shared_ptr<TypedDataObject> ProcessTypedFile(
+        const std::filesystem::path & path,
+        std::string_view key_tag,
+        std::string_view label)
+    {
+        auto * data_manager{ GetDataManagerPtr() };
+        const auto key{ std::string(key_tag) };
+        try
+        {
+            data_manager->ProcessFile(path, key);
+            return data_manager->GetTypedDataObject<TypedDataObject>(key);
+        }
+        catch (const std::exception & ex)
+        {
+            throw std::runtime_error(
+                "Failed to process " + std::string(label) + " from '" + path.string()
+                + "' as " + typeid(TypedDataObject).name() + ": " + ex.what());
+        }
+    }
+
+    template <typename TypedDataObject>
+    std::shared_ptr<TypedDataObject> OptionalProcessTypedFile(
+        const std::filesystem::path & path,
+        std::string_view key_tag,
+        std::string_view label)
+    {
+        if (path.empty())
+        {
+            return nullptr;
+        }
+        return ProcessTypedFile<TypedDataObject>(path, key_tag, label);
+    }
+
+    template <typename TypedDataObject>
+    std::shared_ptr<TypedDataObject> LoadTypedObject(
+        std::string_view key_tag,
+        std::string_view label)
+    {
+        auto * data_manager{ GetDataManagerPtr() };
+        const auto key{ std::string(key_tag) };
+        try
+        {
+            data_manager->LoadDataObject(key);
+            return data_manager->GetTypedDataObject<TypedDataObject>(key);
+        }
+        catch (const std::exception & ex)
+        {
+            throw std::runtime_error(
+                "Failed to load " + std::string(label) + " with key tag '"
+                + key + "': " + ex.what());
+        }
+    }
 
 private:
     bool m_deprecated_database_option_used{ false };
@@ -118,8 +173,10 @@ private:
 
     void AddValidationIssue(
         const std::string & option_name,
+        ValidationPhase phase,
         LogLevel level,
-        const std::string & message);
+        const std::string & message,
+        bool auto_corrected);
     void PrepareFilesystemTargets();
 };
 

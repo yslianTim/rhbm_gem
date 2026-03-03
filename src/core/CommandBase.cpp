@@ -3,13 +3,61 @@
 
 #include <CLI/CLI.hpp>
 #include <algorithm>
+#include <array>
+#include <string>
 #include <system_error>
 
 namespace rhbm_gem {
 
+namespace {
+
+constexpr std::array<std::string_view, 3> kValidationPhaseLabels{
+    "parse",
+    "prepare",
+    "runtime"
+};
+
+std::string BuildIssuePrefix(const ValidationIssue & issue)
+{
+    const auto phase_index{ static_cast<std::size_t>(issue.phase) };
+    const auto phase_label{
+        phase_index < kValidationPhaseLabels.size()
+            ? kValidationPhaseLabels[phase_index]
+            : std::string_view{"unknown"}
+    };
+    std::string prefix{ "[" + std::string(phase_label) };
+    if (issue.auto_corrected)
+    {
+        prefix += "; auto-corrected";
+    }
+    prefix += "]";
+    return prefix;
+}
+
+} // namespace
+
+bool CommandBase::Execute()
+{
+    Logger::SetLogLevel(GetOptions().verbose_level);
+    if (!m_is_prepared_for_execution && !PrepareForExecution())
+    {
+        return false;
+    }
+
+    const bool executed{ ExecuteImpl() };
+    m_is_prepared_for_execution = false;
+    if (!executed)
+    {
+        Logger::Log(LogLevel::Error,
+            "Command execution failed. Aborting command execution.");
+    }
+    return executed;
+}
+
 void CommandBase::RegisterCLIOptions(CLI::App * command)
 {
     RegisterCLIOptionsBasic(command);
+    RegisterDeprecatedCommonAliases(command);
     RegisterCLIOptionsExtend(command);
 }
 
@@ -44,8 +92,14 @@ void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
     }
 }
 
-void CommandBase::RegisterDeprecatedDatabasePathAlias(CLI::App * command)
+void CommandBase::RegisterDeprecatedCommonAliases(CLI::App * command)
 {
+    const auto deprecated_options{ GetCommandSurface().deprecated_hidden_options };
+    if (!HasCommonOption(deprecated_options, CommonOption::Database))
+    {
+        return;
+    }
+
     auto * hidden_group{ command->add_option_group("") };
     hidden_group->add_option_function<std::string>("--database",
         [&](const std::string & value)
@@ -61,12 +115,15 @@ bool CommandBase::PrepareForExecution()
     Logger::SetLogLevel(GetOptions().verbose_level);
     ResetRuntimeState();
     m_data_manager.ClearDataObjects();
+    ClearValidationIssues(ValidationPhase::Prepare);
+    ClearValidationIssues(ValidationPhase::Runtime);
 
-    ClearValidationIssuesForOption("--database (deprecated)");
+    ClearValidationIssues("--database (deprecated)", ValidationPhase::Prepare);
     if (m_deprecated_database_option_used &&
         !HasCommonOption(GetCommonOptionMask(), CommonOption::Database))
     {
-        AddValidationWarning("--database (deprecated)",
+        AddValidationWarning(
+            "--database (deprecated)",
             "This command ignores the deprecated hidden '--database' compatibility alias.");
     }
 
@@ -87,27 +144,27 @@ bool CommandBase::PrepareForExecution()
 void CommandBase::SetThreadSize(int value)
 {
     auto & options{ GetOptions() };
+    ClearValidationIssues("--jobs", ValidationPhase::Parse);
     if (value < 1)
     {
-        Logger::Log(LogLevel::Warning,
-            "Thread size must be positive. Using 1 instead.");
         options.thread_size = 1;
+        AddNormalizationWarning("--jobs",
+            "Thread size must be positive. Using 1 instead.");
+        return;
     }
-    else
-    {
-        options.thread_size = value;
-    }
+    options.thread_size = value;
 }
 
 void CommandBase::SetVerboseLevel(int value)
 {
     auto & options{ GetOptions() };
+    ClearValidationIssues("--verbose", ValidationPhase::Parse);
     if (value < static_cast<int>(LogLevel::Error) || value > static_cast<int>(LogLevel::Debug))
     {
-        Logger::Log(LogLevel::Warning,
+        options.verbose_level = static_cast<int>(LogLevel::Info);
+        AddNormalizationWarning("--verbose",
             "Invalid verbose level: " + std::to_string(value) +
             ", using default level 3 [Info]");
-        options.verbose_level = static_cast<int>(LogLevel::Info);
     }
     else
     {
@@ -127,41 +184,76 @@ void CommandBase::SetFolderPath(const std::filesystem::path & path)
     options.folder_path = std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
 }
 
-bool CommandBase::HasValidationErrors() const
-{
-    return std::any_of(
-        m_validation_issues.begin(),
-        m_validation_issues.end(),
-        [](const ValidationIssue & issue) { return issue.level == LogLevel::Error; });
-}
-
 void CommandBase::ReportValidationIssues() const
 {
     for (const auto & issue : m_validation_issues)
     {
-        Logger::Log(issue.level, "Option " + issue.option_name + ": " + issue.message);
+        Logger::Log(
+            issue.level,
+            BuildIssuePrefix(issue) + " Option " + issue.option_name + ": " + issue.message);
     }
 }
 
-void CommandBase::AddValidationError(const std::string & option_name, const std::string & message)
+bool CommandBase::HasValidationErrors(std::optional<ValidationPhase> phase) const
 {
-    AddValidationIssue(option_name, LogLevel::Error, message);
+    return std::any_of(
+        m_validation_issues.begin(),
+        m_validation_issues.end(),
+        [phase](const ValidationIssue & issue)
+        {
+            return issue.level == LogLevel::Error
+                && (!phase.has_value() || issue.phase == phase.value());
+        });
 }
 
-void CommandBase::AddValidationWarning(const std::string & option_name, const std::string & message)
+void CommandBase::AddValidationError(
+    const std::string & option_name,
+    const std::string & message,
+    ValidationPhase phase)
 {
-    AddValidationIssue(option_name, LogLevel::Warning, message);
+    AddValidationIssue(option_name, phase, LogLevel::Error, message, false);
 }
 
-void CommandBase::ClearValidationIssuesForOption(std::string_view option_name)
+void CommandBase::AddValidationWarning(
+    const std::string & option_name,
+    const std::string & message,
+    ValidationPhase phase)
+{
+    AddValidationIssue(option_name, phase, LogLevel::Warning, message, false);
+}
+
+void CommandBase::AddNormalizationWarning(
+    const std::string & option_name,
+    const std::string & message)
+{
+    AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Warning, message, true);
+}
+
+void CommandBase::ClearValidationIssues(
+    std::string_view option_name,
+    std::optional<ValidationPhase> phase)
 {
     m_validation_issues.erase(
         std::remove_if(
             m_validation_issues.begin(),
             m_validation_issues.end(),
-            [option_name](const ValidationIssue & issue)
+            [option_name, phase](const ValidationIssue & issue)
             {
-                return issue.option_name == option_name;
+                return issue.option_name == option_name
+                    && (!phase.has_value() || issue.phase == phase.value());
+            }),
+        m_validation_issues.end());
+}
+
+void CommandBase::ClearValidationIssues(std::optional<ValidationPhase> phase)
+{
+    m_validation_issues.erase(
+        std::remove_if(
+            m_validation_issues.begin(),
+            m_validation_issues.end(),
+            [phase](const ValidationIssue & issue)
+            {
+                return !phase.has_value() || issue.phase == phase.value();
             }),
         m_validation_issues.end());
 }
@@ -171,10 +263,13 @@ void CommandBase::ValidateRequiredExistingPath(
     std::string_view option_name,
     std::string_view label)
 {
-    ClearValidationIssuesForOption(option_name);
+    ClearValidationIssues(option_name, ValidationPhase::Parse);
     if (path.empty())
     {
-        AddValidationError(std::string(option_name), std::string(label) + " path is required.");
+        AddValidationError(
+            std::string(option_name),
+            std::string(label) + " path is required.",
+            ValidationPhase::Parse);
         return;
     }
 
@@ -183,7 +278,8 @@ void CommandBase::ValidateRequiredExistingPath(
     {
         AddValidationError(
             std::string(option_name),
-            std::string(label) + " does not exist: " + path.string());
+            std::string(label) + " does not exist: " + path.string(),
+            ValidationPhase::Parse);
     }
 }
 
@@ -192,7 +288,7 @@ void CommandBase::ValidateOptionalExistingPath(
     std::string_view option_name,
     std::string_view label)
 {
-    ClearValidationIssuesForOption(option_name);
+    ClearValidationIssues(option_name, ValidationPhase::Parse);
     if (path.empty()) return;
 
     std::error_code error_code;
@@ -200,28 +296,42 @@ void CommandBase::ValidateOptionalExistingPath(
     {
         AddValidationError(
             std::string(option_name),
-            std::string(label) + " does not exist: " + path.string());
+            std::string(label) + " does not exist: " + path.string(),
+            ValidationPhase::Parse);
     }
 }
 
 void CommandBase::AddValidationIssue(
     const std::string & option_name,
+    ValidationPhase phase,
     LogLevel level,
-    const std::string & message)
+    const std::string & message,
+    bool auto_corrected)
 {
-    ClearValidationIssuesForOption(option_name);
-    m_validation_issues.push_back(ValidationIssue{ option_name, level, message });
+    m_validation_issues.push_back(ValidationIssue{
+        option_name,
+        phase,
+        level,
+        message,
+        auto_corrected
+    });
 }
 
-bool CommandBase::EnsurePreparedForExecution()
+void CommandBase::RequireDatabaseManager()
 {
-    if (!m_is_prepared_for_execution && !PrepareForExecution())
-    {
-        return false;
-    }
+    m_data_manager.SetDatabaseManager(GetOptions().database_path);
+}
 
-    m_is_prepared_for_execution = false;
-    return true;
+std::filesystem::path CommandBase::BuildOutputPath(
+    std::string_view stem,
+    std::string_view extension) const
+{
+    std::string normalized_extension{ extension };
+    if (!normalized_extension.empty() && normalized_extension.front() != '.')
+    {
+        normalized_extension.insert(normalized_extension.begin(), '.');
+    }
+    return GetOptions().folder_path / (std::string(stem) + normalized_extension);
 }
 
 void CommandBase::PrepareFilesystemTargets()
@@ -230,7 +340,7 @@ void CommandBase::PrepareFilesystemTargets()
 
     if (HasCommonOption(common_options, CommonOption::Database))
     {
-        ClearValidationIssuesForOption("--database");
+        ClearValidationIssues("--database", ValidationPhase::Prepare);
         const auto parent_path{ GetOptions().database_path.parent_path() };
         if (!parent_path.empty() && !std::filesystem::exists(parent_path))
         {
@@ -238,16 +348,17 @@ void CommandBase::PrepareFilesystemTargets()
             std::filesystem::create_directories(parent_path, error_code);
             if (error_code)
             {
-                AddValidationError("--database",
+                AddValidationError(
+                    "--database",
                     "Failed to create parent directory '" + parent_path.string()
-                    + "': " + error_code.message());
+                        + "': " + error_code.message());
             }
         }
     }
 
     if (HasCommonOption(common_options, CommonOption::OutputFolder))
     {
-        ClearValidationIssuesForOption("--folder");
+        ClearValidationIssues("--folder", ValidationPhase::Prepare);
         const auto & folder_path{ GetOptions().folder_path };
         if (!folder_path.empty() && !std::filesystem::exists(folder_path))
         {
@@ -255,9 +366,10 @@ void CommandBase::PrepareFilesystemTargets()
             std::filesystem::create_directories(folder_path, error_code);
             if (error_code)
             {
-                AddValidationError("--folder",
+                AddValidationError(
+                    "--folder",
                     "Failed to create output directory '" + folder_path.string()
-                    + "': " + error_code.message());
+                        + "': " + error_code.message());
             }
         }
     }

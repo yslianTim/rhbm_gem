@@ -13,14 +13,10 @@
 #include "AtomSelector.hpp"
 #include "FilePathHelper.hpp"
 #include "Logger.hpp"
+#include "OptionEnumTraits.hpp"
 #include "ScopeTimer.hpp"
-#include "CommandRegistry.hpp"
 
 namespace {
-rhbm_gem::CommandRegistrar<rhbm_gem::PotentialDisplayCommand> registrar_potential_display{
-    "potential_display",
-    "Run potential display"};
-
 bool ParseReferenceModelKeyTagListMap(
     const std::string & value,
     std::unordered_map<std::string, std::vector<std::string>> & output_map,
@@ -80,18 +76,11 @@ PotentialDisplayCommand::~PotentialDisplayCommand()
 
 void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    std::map<std::string, PainterType> painter_map
-    {
-        {"0", PainterType::GAUS},       {"gaus",       PainterType::GAUS},
-        {"1", PainterType::MODEL},      {"model",      PainterType::MODEL},
-        {"2", PainterType::COMPARISON}, {"comparison", PainterType::COMPARISON},
-        {"3", PainterType::DEMO},       {"demo",       PainterType::DEMO},
-        {"4", PainterType::ATOM},       {"atom",       PainterType::ATOM},
-    };
     cmd->add_option_function<PainterType>("-p,--painter",
         [&](PainterType value) { SetPainterChoice(value); },
         "Painter choice")->required()
-        ->transform(CLI::CheckedTransformer(painter_map, CLI::ignore_case));
+        ->transform(CLI::CheckedTransformer(
+            BuildEnumCLIMap<PainterType>(), CLI::ignore_case));
     cmd->add_option_function<std::string>("-k,--model-keylist",
         [&](const std::string & value) { SetModelKeyTagList(value); },
         "List of model key tag to be display")->required();
@@ -119,9 +108,8 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Veto element type")->default_val(m_options.veto_element);
 }
 
-bool PotentialDisplayCommand::Execute()
+bool PotentialDisplayCommand::ExecuteImpl()
 {
-    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObject() == false) return false;
     RunDataObjectSelection();
     RunDisplay();
@@ -142,10 +130,13 @@ void PotentialDisplayCommand::SetPainterChoice(PainterType value)
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-    ClearValidationIssuesForOption("--model-keylist");
+    ClearValidationIssues("--model-keylist", ValidationPhase::Parse);
     if (m_options.model_key_tag_list.empty())
     {
-        AddValidationError("--model-keylist", "Model key list cannot be empty.");
+        AddValidationError(
+            "--model-keylist",
+            "Model key list cannot be empty.",
+            ValidationPhase::Parse);
     }
 }
 
@@ -153,13 +144,13 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
 {
     m_options.ref_model_key_tag_list = value;
     m_ref_model_key_tag_list_map.clear();
-    ClearValidationIssuesForOption("--ref-model-keylist");
+    ClearValidationIssues("--ref-model-keylist", ValidationPhase::Parse);
     if (value.empty()) return;
 
     std::string error_message;
     if (!ParseReferenceModelKeyTagListMap(value, m_ref_model_key_tag_list_map, error_message))
     {
-        AddValidationError("--ref-model-keylist", error_message);
+        AddValidationError("--ref-model-keylist", error_message, ValidationPhase::Parse);
         return;
     }
 
@@ -204,16 +195,14 @@ bool PotentialDisplayCommand::BuildDataObject()
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        auto data_manager{ GetDataManagerPtr() };
-        data_manager->SetDatabaseManager(m_options.database_path);
+        RequireDatabaseManager();
         auto model_size{ m_options.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");
         for (auto & key : m_options.model_key_tag_list)
         {
             Logger::ProgressBar(model_count, model_size);
-            data_manager->LoadDataObject(key);
-            m_model_object_list.emplace_back(data_manager->GetTypedDataObject<ModelObject>(key));
+            m_model_object_list.emplace_back(LoadTypedObject<ModelObject>(key, "model object"));
             model_count++;
         }
         for (auto & [map_key, key_tag_list] : m_ref_model_key_tag_list_map)
@@ -224,9 +213,8 @@ bool PotentialDisplayCommand::BuildDataObject()
             for (auto & key_tag : key_tag_list)
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
-                data_manager->LoadDataObject(key_tag);
                 m_ref_model_object_list_map[map_key].emplace_back(
-                    data_manager->GetTypedDataObject<ModelObject>(key_tag)
+                    LoadTypedObject<ModelObject>(key_tag, "reference model object")
                 );
                 ref_model_count++;
             }

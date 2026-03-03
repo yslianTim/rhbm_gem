@@ -5,7 +5,6 @@
 #include "ScopeTimer.hpp"
 #include "ArrayStats.hpp"
 #include "Logger.hpp"
-#include "CommandRegistry.hpp"
 #include "ChimeraXHelper.hpp"
 #include "FilePathHelper.hpp"
 
@@ -23,6 +22,7 @@
 #endif
 
 namespace {
+constexpr std::string_view kMapKey{ "map" };
 
 struct QuantizedPointHash
 {
@@ -35,10 +35,6 @@ struct QuantizedPointHash
     }
 };
 
-rhbm_gem::CommandRegistrar<rhbm_gem::PositionEstimationCommand> registrar_model_test{
-    "position_estimation",
-    "Run atom position estimation"
-};
 } // namespace
 
 namespace rhbm_gem {
@@ -53,7 +49,6 @@ PositionEstimationCommand::~PositionEstimationCommand() = default;
 
 void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    RegisterDeprecatedDatabasePathAlias(cmd);
     cmd->add_option_function<std::string>("-m,--map",
         [&](const std::string & value) { SetMapFilePath(value); },
         "Map file path")->required();
@@ -74,9 +69,8 @@ void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Tolerance for deduplicating points")->default_val(m_options.dedup_tolerance);
 }
 
-bool PositionEstimationCommand::Execute()
+bool PositionEstimationCommand::ExecuteImpl()
 {
-    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObject() == false) return false;
     if (BuildVoxelList() == false) return false;
     RunMapValueConvergence();
@@ -103,21 +97,23 @@ void PositionEstimationCommand::SetMapFilePath(const std::filesystem::path & pat
 void PositionEstimationCommand::SetIterationCount(int value)
 {
     m_options.iteration_count = value;
+    ClearValidationIssues("--iter", ValidationPhase::Parse);
     if (m_options.iteration_count <= 0)
     {
-        Logger::Log(LogLevel::Warning,
-            "Iteration count must be positive, reset to default 15");
         m_options.iteration_count = 15;
+        AddNormalizationWarning("--iter",
+            "Iteration count must be positive, reset to default 15");
     }
 }
 
 void PositionEstimationCommand::SetKNNSize(int value)
 {
+    ClearValidationIssues("--knn", ValidationPhase::Parse);
     if (value <= 0)
     {
-        Logger::Log(LogLevel::Warning,
-            "KNN size must be positive, reset to default 20");
         m_options.knn_size = 20;
+        AddNormalizationWarning("--knn",
+            "KNN size must be positive, reset to default 20");
         return;
     }
     m_options.knn_size = static_cast<size_t>(value);
@@ -126,44 +122,46 @@ void PositionEstimationCommand::SetKNNSize(int value)
 void PositionEstimationCommand::SetAlpha(double value)
 {
     m_options.alpha = static_cast<float>(value);
+    ClearValidationIssues("--alpha", ValidationPhase::Parse);
     if (m_options.alpha <= 0.0f)
     {
-        Logger::Log(LogLevel::Warning,
-            "Alpha must be positive, reset to default 2.0");
         m_options.alpha = 2.0f;
+        AddNormalizationWarning("--alpha",
+            "Alpha must be positive, reset to default 2.0");
     }
 }
 
 void PositionEstimationCommand::SetThresholdRatio(double value)
 {
     m_options.threshold_ratio = static_cast<float>(value);
+    ClearValidationIssues("--threshold", ValidationPhase::Parse);
     if (m_options.threshold_ratio <= 0.0f || m_options.threshold_ratio > 1.0f)
     {
-        Logger::Log(LogLevel::Warning,
-            "Threshold ratio must be in (0, 1], reset to default 0.01");
         m_options.threshold_ratio = 0.01f;
+        AddNormalizationWarning("--threshold",
+            "Threshold ratio must be in (0, 1], reset to default 0.01");
     }
 }
 
 void PositionEstimationCommand::SetDedupTolerance(double value)
 {
     m_options.dedup_tolerance = static_cast<float>(value);
+    ClearValidationIssues("--dedup-tolerance", ValidationPhase::Parse);
     if (m_options.dedup_tolerance <= 0.0f)
     {
-        Logger::Log(LogLevel::Warning,
-            "Dedup tolerance must be positive, reset to default 0.01");
         m_options.dedup_tolerance = 1.0e-2f;
+        AddNormalizationWarning("--dedup-tolerance",
+            "Dedup tolerance must be positive, reset to default 0.01");
     }
 }
 
 bool PositionEstimationCommand::BuildDataObject()
 {
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
-    auto data_manager{ GetDataManagerPtr() };
     try
     {
-        data_manager->ProcessFile(m_options.map_file_path, "map");
-        m_map_object = data_manager->GetTypedDataObject<MapObject>("map");
+        m_map_object = ProcessTypedFile<MapObject>(
+            m_options.map_file_path, kMapKey, "map file");
         m_map_object->MapValueArrayNormalization();
     }
     catch (const std::exception & e)
@@ -398,8 +396,8 @@ void PositionEstimationCommand::OutputPointList() const
         "Outputting point position list: " + std::to_string(m_position_list.size()) + " points.");
 
     auto map_file_name{
-        "point_list_" + FilePathHelper::GetFileName(m_options.map_file_path, false) + ".cmm" };
-    auto output_file{ m_options.folder_path / map_file_name };
+        "point_list_" + FilePathHelper::GetFileName(m_options.map_file_path, false) };
+    auto output_file{ BuildOutputPath(map_file_name, ".cmm") };
     ChimeraXHelper::WriteCMMPoints(m_position_list, output_file, 0.05f);
     Logger::Log(LogLevel::Info, "Output file: " + output_file.string());
 }

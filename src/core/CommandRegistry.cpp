@@ -15,7 +15,8 @@ CommandRegistry & CommandRegistry::Instance()
 bool CommandRegistry::RegisterCommand(
     const std::string & name,
     const std::string & description,
-    std::function<std::unique_ptr<CommandBase>()> factory)
+    std::function<std::unique_ptr<CommandBase>()> factory,
+    CommandSurface surface)
 {
     const auto duplicate_iter{
         std::find_if(
@@ -32,7 +33,12 @@ bool CommandRegistry::RegisterCommand(
         return false;
     }
 
-    m_commands.push_back(CommandInfo{ name, description, std::move(factory) });
+    m_commands.push_back(CommandInfo{
+        name,
+        description,
+        std::move(factory),
+        surface
+    });
     return true;
 }
 

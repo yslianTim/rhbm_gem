@@ -9,11 +9,13 @@
 
 #include "Application.hpp"
 #include "CommandRegistry.hpp"
+#include "RegisterBuiltInCommands.hpp"
 
 namespace rg = rhbm_gem;
 
 TEST(CommandRegistryTest, ContainsAllKnownCommandsWithoutDuplicates)
 {
+    rg::RegisterBuiltInCommands();
     const auto & commands{ rg::CommandRegistry::Instance().GetCommands() };
     std::vector<std::string> names;
     names.reserve(commands.size());
@@ -44,6 +46,7 @@ TEST(CommandRegistryTest, ContainsAllKnownCommandsWithoutDuplicates)
 
 TEST(CommandRegistryTest, ApplicationUsesRegistryOrderForSubcommands)
 {
+    rg::RegisterBuiltInCommands();
     CLI::App app{"RHBM-GEM"};
     rg::Application controller(app);
 

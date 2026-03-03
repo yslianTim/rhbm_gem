@@ -23,6 +23,20 @@ class AtomObject;
 class MapSimulationCommand : public CommandBase
 {
 public:
+    static constexpr std::string_view CommandName() { return "map_simulation"; }
+    static constexpr std::string_view CommandDescription() { return "Run map simulation command"; }
+    static constexpr CommandSurface StaticCommandSurface()
+    {
+        return MakeCommandSurface(
+            CommonOption::Threading
+                | CommonOption::Verbose
+                | CommonOption::OutputFolder,
+            ToMask(CommonOption::Database),
+            false,
+            true,
+            true);
+    }
+
     struct Options : public CommandOptions
     {
         std::filesystem::path model_file_path;
@@ -44,16 +58,10 @@ private:
 public:
     MapSimulationCommand();
     ~MapSimulationCommand();
-    bool Execute() override;
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
-    CommonOptionMask GetCommonOptionMask() const override
-    {
-        return CommonOption::Threading
-             | CommonOption::Verbose
-             | CommonOption::OutputFolder;
-    }
+    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 
@@ -66,6 +74,7 @@ public:
     void SetBlurringWidthList(const std::string & value);
 
 private:
+    bool ExecuteImpl() override;
     bool BuildDataObject();
     void RunMapSimulation();
     void BuildAtomList(ModelObject * model_object);

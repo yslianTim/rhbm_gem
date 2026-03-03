@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "CommandMetadata.hpp"
+
 namespace rhbm_gem {
 
 class CommandBase;
@@ -17,6 +19,7 @@ public:
         std::string name;
         std::string description;
         std::function<std::unique_ptr<CommandBase>()> factory;
+        CommandSurface surface;
     };
 
     static CommandRegistry & Instance();
@@ -24,7 +27,8 @@ public:
     bool RegisterCommand(
         const std::string & name,
         const std::string & description,
-        std::function<std::unique_ptr<CommandBase>()> factory
+        std::function<std::unique_ptr<CommandBase>()> factory,
+        CommandSurface surface
     );
 
     const std::vector<CommandInfo> &
@@ -38,12 +42,16 @@ template <typename CommandType>
 class CommandRegistrar
 {
 public:
-    CommandRegistrar(const std::string & name, const std::string & description)
+    CommandRegistrar(
+        const std::string & name,
+        const std::string & description,
+        CommandSurface surface)
     {
         CommandRegistry::Instance().RegisterCommand(
             name,
             description,
-            [](){ return std::make_unique<CommandType>(); }
+            [](){ return std::make_unique<CommandType>(); },
+            surface
         );
     }
 };

@@ -20,7 +20,6 @@ public:
         bool force_invalid{ false };
     };
 
-    bool Execute() override { return true; }
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
     const rg::CommandOptions & GetOptions() const override { return m_options; }
     rg::CommandOptions & GetOptions() override { return m_options; }
@@ -32,7 +31,7 @@ public:
 
     void ValidateOptions() override
     {
-        ClearValidationIssuesForOption("--test");
+        ClearValidationIssues("--test", rg::ValidationPhase::Prepare);
         if (m_options.force_invalid)
         {
             AddValidationError("--test", "forced invalid config");
@@ -40,6 +39,7 @@ public:
     }
 
 private:
+    bool ExecuteImpl() override { return true; }
     Options m_options{};
 };
 

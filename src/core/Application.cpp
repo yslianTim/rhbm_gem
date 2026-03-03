@@ -1,7 +1,8 @@
 #include "Application.hpp"
 #include "CommandBase.hpp"
-#include "ScopeTimer.hpp"
 #include "Logger.hpp"
+#include "RegisterBuiltInCommands.hpp"
+#include "ScopeTimer.hpp"
 
 #include <memory>
 #include <CLI/CLI.hpp>
@@ -12,6 +13,7 @@ Application::Application(CLI::App & app) :
     m_cli_app{ app }
 {
     m_cli_app.require_subcommand(1);
+    RegisterBuiltInCommands();
     RegisterAllCommands();
 }
 
@@ -36,17 +38,7 @@ void Application::RegisterCommand(
     auto shared_cmd{ std::shared_ptr<CommandBase>(std::move(command_object)) };
     command->callback([cmd = std::move(shared_cmd)]() {
         ScopeTimer timer("Command in Application");
-        const auto & options{ cmd->GetOptions() };
-        Logger::SetLogLevel(options.verbose_level);
-        if (!cmd->PrepareForExecution())
-        {
-            return;
-        }
-        if (cmd->Execute() == false)
-        {
-            Logger::Log(LogLevel::Error,
-                "Command execution failed. Aborting command execution.");
-        }
+        cmd->Execute();
     });
 }
 

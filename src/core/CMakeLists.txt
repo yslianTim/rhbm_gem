@@ -15,6 +15,7 @@ set(CORE_SOURCES
     PositionEstimationCommand.cpp
     PotentialAnalysisCommand.cpp
     PotentialDisplayCommand.cpp
+    RegisterBuiltInCommands.cpp
     ResultDumpCommand.cpp
 )
 

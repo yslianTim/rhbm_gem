@@ -19,6 +19,21 @@ class MapObject;
 class ResultDumpCommand : public CommandBase
 {
 public:
+    static constexpr std::string_view CommandName() { return "result_dump"; }
+    static constexpr std::string_view CommandDescription() { return "Run result dump"; }
+    static constexpr CommandSurface StaticCommandSurface()
+    {
+        return MakeCommandSurface(
+            CommonOption::Threading
+                | CommonOption::Verbose
+                | CommonOption::Database
+                | CommonOption::OutputFolder,
+            0u,
+            true,
+            true,
+            true);
+    }
+
     struct Options : public CommandOptions
     {
         PrinterType printer_choice{ PrinterType::GAUS_ESTIMATES };
@@ -36,10 +51,10 @@ private:
 public:
     ResultDumpCommand();
     ~ResultDumpCommand();
-    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
+    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 
@@ -48,6 +63,7 @@ public:
     void SetModelKeyTagList(const std::string & value);
 
 private:
+    bool ExecuteImpl() override;
     bool BuildDataObjectList();
     void RunResultDump();
     void RunAtomOutlierDumping();

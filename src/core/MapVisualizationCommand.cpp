@@ -10,7 +10,6 @@
 #include "ChemicalDataHelper.hpp"
 #include "GridSampler.hpp"
 #include "Logger.hpp"
-#include "CommandRegistry.hpp"
 #include "LocalPainter.hpp"
 
 #include <unordered_set>
@@ -27,15 +26,14 @@
 #endif
 
 namespace {
-rhbm_gem::CommandRegistrar<rhbm_gem::MapVisualizationCommand> registrar_map_visualization{
-    "map_visualization",
-    "Run map visualization"};
+constexpr std::string_view kModelKey{ "model" };
+constexpr std::string_view kMapKey{ "map" };
 }
 
 namespace rhbm_gem {
 
 MapVisualizationCommand::MapVisualizationCommand() :
-    CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
+    CommandBase(), m_options{}, m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
 }
@@ -48,7 +46,6 @@ MapVisualizationCommand::~MapVisualizationCommand()
 
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    RegisterDeprecatedDatabasePathAlias(cmd);
     cmd->add_option_function<std::string>("-a,--model",
         [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
@@ -66,9 +63,8 @@ void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Window size for sampling")->default_val(m_options.window_size);
 }
 
-bool MapVisualizationCommand::Execute()
+bool MapVisualizationCommand::ExecuteImpl()
 {
-    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
@@ -96,11 +92,12 @@ void MapVisualizationCommand::SetMapFilePath(const std::filesystem::path & path)
 void MapVisualizationCommand::SetSamplingSize(int value)
 {
     m_options.sampling_size = value;
+    ClearValidationIssues("--sampling", ValidationPhase::Parse);
     if (m_options.sampling_size <= 0)
     {
-        Logger::Log(LogLevel::Warning,
-            "Sampling size must be positive, reset to default value = 1500");
         m_options.sampling_size = 1500;
+        AddNormalizationWarning("--sampling",
+            "Sampling size must be positive, reset to default value = 1500");
     }
 }
 
@@ -112,11 +109,12 @@ void MapVisualizationCommand::SetWindowSize(double value)
 bool MapVisualizationCommand::BuildDataObject()
 {
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
-    auto data_manager{ GetDataManagerPtr() };
     try
     {
-        data_manager->ProcessFile(m_options.model_file_path, m_model_key_tag);
-        data_manager->ProcessFile(m_options.map_file_path, m_map_key_tag);
+        m_model_object = ProcessTypedFile<ModelObject>(
+            m_options.model_file_path, m_model_key_tag, "model file");
+        m_map_object = ProcessTypedFile<MapObject>(
+            m_options.map_file_path, m_map_key_tag, "map file");
     }
     catch (const std::exception & e)
     {
@@ -130,16 +128,12 @@ bool MapVisualizationCommand::BuildDataObject()
 void MapVisualizationCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
-    auto data_manager{ GetDataManagerPtr() };
-    m_map_object = data_manager->GetTypedDataObject<MapObject>(m_map_key_tag);
     m_map_object->MapValueArrayNormalization();
 }
 
 void MapVisualizationCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
-    auto data_manager{ GetDataManagerPtr() };
-    m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
     for (auto & atom : m_model_object->GetAtomList()) atom->SetSelectedFlag(true);
     for (auto & bond : m_model_object->GetBondList()) bond->SetSelectedFlag(true);
     m_model_object->Update();
@@ -285,9 +279,9 @@ std::filesystem::path MapVisualizationCommand::BuildOutputFilePath() const
     }
 
     const std::string file_name{
-        "map_slice_" + model_name + "_atom" + std::to_string(m_options.atom_serial_id) + ".pdf"
+        "map_slice_" + model_name + "_atom" + std::to_string(m_options.atom_serial_id)
     };
-    return m_options.folder_path / file_name;
+    return BuildOutputPath(file_name, ".pdf");
 }
 
 } // namespace rhbm_gem
