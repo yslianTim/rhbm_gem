@@ -48,24 +48,15 @@ struct CommandSurface
         | CommonOption::OutputFolder
     };
     CommonOptionMask deprecated_hidden_options{ 0u };
-    bool requires_database_manager{ true };
-    bool uses_output_folder{ true };
-    bool exposed_to_python{ false };
 };
 
 constexpr CommandSurface MakeCommandSurface(
     CommonOptionMask common_options,
-    CommonOptionMask deprecated_hidden_options,
-    bool requires_database_manager,
-    bool uses_output_folder,
-    bool exposed_to_python)
+    CommonOptionMask deprecated_hidden_options)
 {
     return CommandSurface{
         common_options,
-        deprecated_hidden_options,
-        requires_database_manager,
-        uses_output_folder,
-        exposed_to_python
+        deprecated_hidden_options
     };
 }
 

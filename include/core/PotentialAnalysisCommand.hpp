@@ -16,21 +16,6 @@ class AtomObject;
 class PotentialAnalysisCommand : public CommandBase
 {
 public:
-    static constexpr std::string_view CommandName() { return "potential_analysis"; }
-    static constexpr std::string_view CommandDescription() { return "Run potential analysis"; }
-    static constexpr CommandSurface StaticCommandSurface()
-    {
-        return MakeCommandSurface(
-            CommonOption::Threading
-                | CommonOption::Verbose
-                | CommonOption::Database
-                | CommonOption::OutputFolder,
-            0u,
-            true,
-            true,
-            true);
-    }
-
     struct Options : public CommandOptions
     {
         bool use_training_alpha{ false };
@@ -60,9 +45,9 @@ public:
     PotentialAnalysisCommand();
     ~PotentialAnalysisCommand();
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    CommandId GetCommandId() const override { return CommandId::PotentialAnalysis; }
     void ValidateOptions() override;
     void ResetRuntimeState() override;
-    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

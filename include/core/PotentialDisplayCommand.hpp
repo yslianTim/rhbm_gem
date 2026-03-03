@@ -20,21 +20,6 @@ class ModelObject;
 class PotentialDisplayCommand : public CommandBase
 {
 public:
-    static constexpr std::string_view CommandName() { return "potential_display"; }
-    static constexpr std::string_view CommandDescription() { return "Run potential display"; }
-    static constexpr CommandSurface StaticCommandSurface()
-    {
-        return MakeCommandSurface(
-            CommonOption::Threading
-                | CommonOption::Verbose
-                | CommonOption::Database
-                | CommonOption::OutputFolder,
-            0u,
-            true,
-            true,
-            true);
-    }
-
     struct Options : public CommandOptions
     {
         PainterType painter_choice{ PainterType::MODEL };
@@ -59,8 +44,8 @@ public:
     PotentialDisplayCommand();
     ~PotentialDisplayCommand();
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    CommandId GetCommandId() const override { return CommandId::PotentialDisplay; }
     void ResetRuntimeState() override;
-    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

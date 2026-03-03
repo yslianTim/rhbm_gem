@@ -13,31 +13,33 @@ CommandRegistry & CommandRegistry::Instance()
 }
 
 bool CommandRegistry::RegisterCommand(
-    const std::string & name,
-    const std::string & description,
-    std::function<std::unique_ptr<CommandBase>()> factory,
-    CommandSurface surface)
+    const CommandDescriptor & descriptor)
 {
     const auto duplicate_iter{
         std::find_if(
             m_commands.begin(),
             m_commands.end(),
-            [&name](const CommandRegistry::CommandInfo & info)
+            [&descriptor](const CommandRegistry::CommandInfo & info)
             {
-                return info.name == name;
+                return info.name == descriptor.name;
             })
     };
     if (duplicate_iter != m_commands.end())
     {
-        Logger::Log(LogLevel::Error, "Command [" + name + "] is already registered.");
+        Logger::Log(
+            LogLevel::Error,
+            "Command [" + std::string(descriptor.name) + "] is already registered.");
         return false;
     }
 
     m_commands.push_back(CommandInfo{
-        name,
-        description,
-        std::move(factory),
-        surface
+        descriptor.id,
+        std::string(descriptor.name),
+        std::string(descriptor.description),
+        descriptor.factory,
+        descriptor.surface,
+        descriptor.database_usage,
+        descriptor.binding_exposure
     });
     return true;
 }

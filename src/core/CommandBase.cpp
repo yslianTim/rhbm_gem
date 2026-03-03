@@ -54,6 +54,11 @@ bool CommandBase::Execute()
     return executed;
 }
 
+const CommandDescriptor & CommandBase::GetCommandDescriptor() const
+{
+    return FindCommandDescriptor(GetCommandId());
+}
+
 void CommandBase::RegisterCLIOptions(CLI::App * command)
 {
     RegisterCLIOptionsBasic(command);
@@ -94,7 +99,7 @@ void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
 
 void CommandBase::RegisterDeprecatedCommonAliases(CLI::App * command)
 {
-    const auto deprecated_options{ GetCommandSurface().deprecated_hidden_options };
+    const auto deprecated_options{ GetCommandDescriptor().surface.deprecated_hidden_options };
     if (!HasCommonOption(deprecated_options, CommonOption::Database))
     {
         return;
@@ -115,8 +120,7 @@ bool CommandBase::PrepareForExecution()
     Logger::SetLogLevel(GetOptions().verbose_level);
     ResetRuntimeState();
     m_data_manager.ClearDataObjects();
-    ClearValidationIssues(ValidationPhase::Prepare);
-    ClearValidationIssues(ValidationPhase::Runtime);
+    InvalidatePreparedState();
 
     ClearValidationIssues("--database (deprecated)", ValidationPhase::Prepare);
     if (m_deprecated_database_option_used &&
@@ -141,8 +145,16 @@ bool CommandBase::PrepareForExecution()
     return m_is_prepared_for_execution;
 }
 
+void CommandBase::InvalidatePreparedState()
+{
+    m_is_prepared_for_execution = false;
+    ClearValidationIssues(ValidationPhase::Prepare);
+    ClearValidationIssues(ValidationPhase::Runtime);
+}
+
 void CommandBase::SetThreadSize(int value)
 {
+    InvalidatePreparedState();
     auto & options{ GetOptions() };
     ClearValidationIssues("--jobs", ValidationPhase::Parse);
     if (value < 1)
@@ -157,6 +169,7 @@ void CommandBase::SetThreadSize(int value)
 
 void CommandBase::SetVerboseLevel(int value)
 {
+    InvalidatePreparedState();
     auto & options{ GetOptions() };
     ClearValidationIssues("--verbose", ValidationPhase::Parse);
     if (value < static_cast<int>(LogLevel::Error) || value > static_cast<int>(LogLevel::Debug))
@@ -174,12 +187,14 @@ void CommandBase::SetVerboseLevel(int value)
 
 void CommandBase::SetDatabasePath(const std::filesystem::path & path)
 {
+    InvalidatePreparedState();
     auto & options{ GetOptions() };
     options.database_path = path.empty() ? std::filesystem::path{} : path.lexically_normal();
 }
 
 void CommandBase::SetFolderPath(const std::filesystem::path & path)
 {
+    InvalidatePreparedState();
     auto & options{ GetOptions() };
     options.folder_path = std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
 }

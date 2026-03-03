@@ -94,26 +94,31 @@ bool HRLModelTestCommand::ExecuteImpl()
 
 void HRLModelTestCommand::SetTesterChoice(TesterType value)
 {
+    InvalidatePreparedState();
     m_options.tester_choice = value;
 }
 
 void HRLModelTestCommand::SetFitRangeMinimum(double value)
 {
+    InvalidatePreparedState();
     m_options.fit_range_min = value;
 }
 
 void HRLModelTestCommand::SetFitRangeMaximum(double value)
 {
+    InvalidatePreparedState();
     m_options.fit_range_max = value;
 }
 
 void HRLModelTestCommand::SetAlphaR(double value)
 {
+    InvalidatePreparedState();
     m_options.alpha_r = value;
 }
 
 void HRLModelTestCommand::SetAlphaG(double value)
 {
+    InvalidatePreparedState();
     m_options.alpha_g = value;
 }
 

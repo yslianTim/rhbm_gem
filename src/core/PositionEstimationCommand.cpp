@@ -90,12 +90,14 @@ void PositionEstimationCommand::ResetRuntimeState()
 
 void PositionEstimationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
+    InvalidatePreparedState();
     m_options.map_file_path = path;
     ValidateRequiredExistingPath(m_options.map_file_path, "--map", "Map file");
 }
 
 void PositionEstimationCommand::SetIterationCount(int value)
 {
+    InvalidatePreparedState();
     m_options.iteration_count = value;
     ClearValidationIssues("--iter", ValidationPhase::Parse);
     if (m_options.iteration_count <= 0)
@@ -108,6 +110,7 @@ void PositionEstimationCommand::SetIterationCount(int value)
 
 void PositionEstimationCommand::SetKNNSize(int value)
 {
+    InvalidatePreparedState();
     ClearValidationIssues("--knn", ValidationPhase::Parse);
     if (value <= 0)
     {
@@ -121,6 +124,7 @@ void PositionEstimationCommand::SetKNNSize(int value)
 
 void PositionEstimationCommand::SetAlpha(double value)
 {
+    InvalidatePreparedState();
     m_options.alpha = static_cast<float>(value);
     ClearValidationIssues("--alpha", ValidationPhase::Parse);
     if (m_options.alpha <= 0.0f)
@@ -133,6 +137,7 @@ void PositionEstimationCommand::SetAlpha(double value)
 
 void PositionEstimationCommand::SetThresholdRatio(double value)
 {
+    InvalidatePreparedState();
     m_options.threshold_ratio = static_cast<float>(value);
     ClearValidationIssues("--threshold", ValidationPhase::Parse);
     if (m_options.threshold_ratio <= 0.0f || m_options.threshold_ratio > 1.0f)
@@ -145,6 +150,7 @@ void PositionEstimationCommand::SetThresholdRatio(double value)
 
 void PositionEstimationCommand::SetDedupTolerance(double value)
 {
+    InvalidatePreparedState();
     m_options.dedup_tolerance = static_cast<float>(value);
     ClearValidationIssues("--dedup-tolerance", ValidationPhase::Parse);
     if (m_options.dedup_tolerance <= 0.0f)

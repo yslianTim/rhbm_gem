@@ -23,9 +23,12 @@ public:
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
     const rg::CommandOptions & GetOptions() const override { return m_options; }
     rg::CommandOptions & GetOptions() override { return m_options; }
+    rg::CommandId GetCommandId() const override { return rg::CommandId::PotentialAnalysis; }
+    bool Prepared() const { return IsPreparedForExecution(); }
 
     void SetForceInvalid(bool value)
     {
+        InvalidatePreparedState();
         m_options.force_invalid = value;
     }
 
@@ -74,4 +77,21 @@ TEST(CommandBaseTest, PrepareForExecutionReportsValidationIssues)
 
     ASSERT_FALSE(command.GetValidationIssues().empty());
     EXPECT_NE(error_output.find("Option --test: forced invalid config"), std::string::npos);
+}
+
+TEST(CommandBaseTest, BaseSettersInvalidatePreparedState)
+{
+    TestCommand command;
+
+    ASSERT_TRUE(command.PrepareForExecution());
+    EXPECT_TRUE(command.Prepared());
+
+    command.SetThreadSize(2);
+    EXPECT_FALSE(command.Prepared());
+
+    ASSERT_TRUE(command.PrepareForExecution());
+    EXPECT_TRUE(command.Prepared());
+
+    command.SetFolderPath("output");
+    EXPECT_FALSE(command.Prepared());
 }

@@ -22,9 +22,11 @@ public:
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
     const rg::CommandOptions & GetOptions() const override { return m_options; }
     rg::CommandOptions & GetOptions() override { return m_options; }
+    rg::CommandId GetCommandId() const override { return rg::CommandId::ModelTest; }
 
     void SetProblematicValue(int value)
     {
+        InvalidatePreparedState();
         ClearValidationIssues("--problem", rg::ValidationPhase::Parse);
         if (value <= 0)
         {
@@ -35,6 +37,7 @@ public:
 
     void SetPrepareError(bool value)
     {
+        InvalidatePreparedState();
         m_options.add_prepare_error = value;
     }
 

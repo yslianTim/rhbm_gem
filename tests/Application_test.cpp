@@ -5,6 +5,7 @@
 #include <CLI/CLI.hpp>
 
 #include "Application.hpp"
+#include "BuiltInCommandCatalog.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -33,4 +34,24 @@ TEST(ApplicationTest, FileOnlyCommandsHideDatabaseOptionFromHelp)
         potential_analysis->help(potential_analysis->get_name(), CLI::AppFormatMode::Sub)
     };
     EXPECT_NE(potential_analysis_help.find("--database"), std::string::npos);
+}
+
+TEST(ApplicationTest, HelpOrderMatchesBuiltInCommandCatalog)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::Application controller(app);
+
+    const auto subcommands{
+        app.get_subcommands([](CLI::App * subcommand)
+        {
+            return subcommand != nullptr && !subcommand->get_name().empty();
+        })
+    };
+
+    const auto & catalog{ rg::BuiltInCommandCatalog() };
+    ASSERT_EQ(subcommands.size(), catalog.size());
+    for (std::size_t index = 0; index < catalog.size(); ++index)
+    {
+        EXPECT_EQ(subcommands[index]->get_name(), catalog[index].name);
+    }
 }

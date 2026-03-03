@@ -79,18 +79,27 @@ void MapVisualizationCommand::ResetRuntimeState()
 
 void MapVisualizationCommand::SetModelFilePath(const std::filesystem::path & path)
 {
+    InvalidatePreparedState();
     m_options.model_file_path = path;
     ValidateRequiredExistingPath(m_options.model_file_path, "--model", "Model file");
 }
 
 void MapVisualizationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
+    InvalidatePreparedState();
     m_options.map_file_path = path;
     ValidateRequiredExistingPath(m_options.map_file_path, "--map", "Map file");
 }
 
+void MapVisualizationCommand::SetAtomSerialID(int value)
+{
+    InvalidatePreparedState();
+    m_options.atom_serial_id = value;
+}
+
 void MapVisualizationCommand::SetSamplingSize(int value)
 {
+    InvalidatePreparedState();
     m_options.sampling_size = value;
     ClearValidationIssues("--sampling", ValidationPhase::Parse);
     if (m_options.sampling_size <= 0)
@@ -103,6 +112,7 @@ void MapVisualizationCommand::SetSamplingSize(int value)
 
 void MapVisualizationCommand::SetWindowSize(double value)
 {
+    InvalidatePreparedState();
     m_options.window_size = value;
 }
 

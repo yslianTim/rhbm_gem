@@ -18,20 +18,6 @@ namespace rhbm_gem {
 class PositionEstimationCommand : public CommandBase
 {
 public:
-    static constexpr std::string_view CommandName() { return "position_estimation"; }
-    static constexpr std::string_view CommandDescription() { return "Run atom position estimation"; }
-    static constexpr CommandSurface StaticCommandSurface()
-    {
-        return MakeCommandSurface(
-            CommonOption::Threading
-                | CommonOption::Verbose
-                | CommonOption::OutputFolder,
-            ToMask(CommonOption::Database),
-            false,
-            true,
-            false);
-    }
-
     struct Options : public CommandOptions
     {
         int iteration_count{ 15 };
@@ -54,8 +40,8 @@ public:
     PositionEstimationCommand();
     ~PositionEstimationCommand() override;
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
+    CommandId GetCommandId() const override { return CommandId::PositionEstimation; }
     void ResetRuntimeState() override;
-    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

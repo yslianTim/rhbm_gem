@@ -8,6 +8,7 @@
 #include <CLI/CLI.hpp>
 
 #include "Application.hpp"
+#include "BuiltInCommandCatalog.hpp"
 #include "CommandRegistry.hpp"
 #include "RegisterBuiltInCommands.hpp"
 
@@ -27,19 +28,10 @@ TEST(CommandRegistryTest, ContainsAllKnownCommandsWithoutDuplicates)
     const std::unordered_set<std::string> unique_names(names.begin(), names.end());
     EXPECT_EQ(unique_names.size(), names.size());
 
-    const std::vector<std::string> expected_names{
-        "potential_analysis",
-        "potential_display",
-        "result_dump",
-        "map_simulation",
-        "map_visualization",
-        "position_estimation",
-        "model_test"
-    };
-    for (const auto & expected_name : expected_names)
+    for (const auto & expected_descriptor : rg::BuiltInCommandCatalog())
     {
         EXPECT_NE(
-            std::find(names.begin(), names.end(), expected_name),
+            std::find(names.begin(), names.end(), expected_descriptor.name),
             names.end());
     }
 }
@@ -63,4 +55,13 @@ TEST(CommandRegistryTest, ApplicationUsesRegistryOrderForSubcommands)
     {
         EXPECT_EQ(subcommands[index]->get_name(), commands[index].name);
     }
+}
+
+TEST(CommandRegistryTest, RejectsDuplicateBuiltInCommandRegistration)
+{
+    rg::RegisterBuiltInCommands();
+    auto & registry{ rg::CommandRegistry::Instance() };
+
+    EXPECT_FALSE(registry.RegisterCommand(
+        rg::FindCommandDescriptor(rg::CommandId::PotentialAnalysis)));
 }

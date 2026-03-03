@@ -16,20 +16,6 @@ class AtomObject;
 class MapVisualizationCommand : public CommandBase
 {
 public:
-    static constexpr std::string_view CommandName() { return "map_visualization"; }
-    static constexpr std::string_view CommandDescription() { return "Run map visualization"; }
-    static constexpr CommandSurface StaticCommandSurface()
-    {
-        return MakeCommandSurface(
-            CommonOption::Threading
-                | CommonOption::Verbose
-                | CommonOption::OutputFolder,
-            ToMask(CommonOption::Database),
-            false,
-            true,
-            false);
-    }
-
     struct Options : public CommandOptions
     {
         int atom_serial_id{ 1 };
@@ -49,14 +35,14 @@ public:
     MapVisualizationCommand();
     ~MapVisualizationCommand();
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    CommandId GetCommandId() const override { return CommandId::MapVisualization; }
     void ResetRuntimeState() override;
-    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);
-    void SetAtomSerialID(int value) { m_options.atom_serial_id = value; }
+    void SetAtomSerialID(int value);
     void SetSamplingSize(int value);
     void SetWindowSize(double value);
 

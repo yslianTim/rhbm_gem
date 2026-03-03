@@ -109,16 +109,19 @@ void MapSimulationCommand::ResetRuntimeState()
 
 void MapSimulationCommand::SetPotentialModelChoice(PotentialModel value)
 {
+    InvalidatePreparedState();
     m_options.potential_model_choice = value;
 }
 
 void MapSimulationCommand::SetPartialChargeChoice(PartialCharge value)
 {
+    InvalidatePreparedState();
     m_options.partial_charge_choice = value;
 }
 
 void MapSimulationCommand::SetCutoffDistance(double value)
 {
+    InvalidatePreparedState();
     m_options.cutoff_distance = value;
     ClearValidationIssues("--cut-off", ValidationPhase::Parse);
     if (m_options.cutoff_distance <= 0.0)
@@ -131,17 +134,20 @@ void MapSimulationCommand::SetCutoffDistance(double value)
 
 void MapSimulationCommand::SetModelFilePath(const std::filesystem::path & value)
 {
+    InvalidatePreparedState();
     m_options.model_file_path = value;
     ValidateRequiredExistingPath(m_options.model_file_path, "--model", "Model file");
 }
 
 void MapSimulationCommand::SetMapFileName(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.map_file_name = value;
 }
 
 void MapSimulationCommand::SetGridSpacing(double value)
 {
+    InvalidatePreparedState();
     m_options.grid_spacing = value;
     ClearValidationIssues("--grid-spacing", ValidationPhase::Parse);
     if (m_options.grid_spacing <= 0.0)
@@ -154,6 +160,7 @@ void MapSimulationCommand::SetGridSpacing(double value)
 
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
+    InvalidatePreparedState();
     ClearValidationIssues("--blurring-width", ValidationPhase::Parse);
     const auto parsed_list{ StringHelper::ParseListOption<double>(value, ',') };
     m_options.blurring_width_list.clear();

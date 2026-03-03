@@ -162,62 +162,74 @@ void PotentialAnalysisCommand::ResetRuntimeState()
 
 void PotentialAnalysisCommand::SetTrainingAlphaFlag(bool value)
 {
+    InvalidatePreparedState();
     m_options.use_training_alpha = value;
 }
 
 void PotentialAnalysisCommand::SetAsymmetryFlag(bool value)
 {
+    InvalidatePreparedState();
     m_options.is_asymmetry = value; 
 }
 void PotentialAnalysisCommand::SetSimulationFlag(bool value)
 {
+    InvalidatePreparedState();
     m_options.is_simulation = value;
 }
 
 void PotentialAnalysisCommand::SetSimulatedMapResolution(double value)
 {
+    InvalidatePreparedState();
     m_options.resolution_simulation = value;
 }
 
 void PotentialAnalysisCommand::SetFitRangeMinimum(double value)
 {
+    InvalidatePreparedState();
     m_options.fit_range_min = value;
 }
 
 void PotentialAnalysisCommand::SetFitRangeMaximum(double value)
 {
+    InvalidatePreparedState();
     m_options.fit_range_max = value;
 }
 
 void PotentialAnalysisCommand::SetAlphaR(double value)
 {
+    InvalidatePreparedState();
     m_options.alpha_r = value;
 }
 
 void PotentialAnalysisCommand::SetAlphaG(double value)
 {
+    InvalidatePreparedState();
     m_options.alpha_g = value;
 }
 
 void PotentialAnalysisCommand::SetModelFilePath(const std::filesystem::path & path)
 {
+    InvalidatePreparedState();
     m_options.model_file_path = path;
     ValidateRequiredExistingPath(m_options.model_file_path, "--model", "Model file");
 }
 
 void PotentialAnalysisCommand::SetMapFilePath(const std::filesystem::path & path)
 {
+    InvalidatePreparedState();
     m_options.map_file_path = path;
     ValidateRequiredExistingPath(m_options.map_file_path, "--map", "Map file");
 }
 
 void PotentialAnalysisCommand::SetSavedKeyTag(const std::string & tag)
 {
+    InvalidatePreparedState();
     m_options.saved_key_tag = tag;
 }
 
 void PotentialAnalysisCommand::SetSamplingSize(int value)
 {
+    InvalidatePreparedState();
     m_options.sampling_size = value;
     ClearValidationIssues("--sampling", ValidationPhase::Parse);
     if (m_options.sampling_size <= 0)
@@ -230,16 +242,19 @@ void PotentialAnalysisCommand::SetSamplingSize(int value)
 
 void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)
 {
+    InvalidatePreparedState();
     m_options.sampling_range_min = value;
 }
 
 void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
 {
+    InvalidatePreparedState();
     m_options.sampling_range_max = value;
 }
 
 void PotentialAnalysisCommand::SetSamplingHeight(double value)
 {
+    InvalidatePreparedState();
     m_options.sampling_height = value;
 }
 

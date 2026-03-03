@@ -124,11 +124,13 @@ void PotentialDisplayCommand::ResetRuntimeState()
 
 void PotentialDisplayCommand::SetPainterChoice(PainterType value)
 {
+    InvalidatePreparedState();
     m_options.painter_choice = value;
 }
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
     ClearValidationIssues("--model-keylist", ValidationPhase::Parse);
     if (m_options.model_key_tag_list.empty())
@@ -142,6 +144,7 @@ void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 
 void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.ref_model_key_tag_list = value;
     m_ref_model_key_tag_list_map.clear();
     ClearValidationIssues("--ref-model-keylist", ValidationPhase::Parse);
@@ -162,31 +165,37 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
 
 void PotentialDisplayCommand::SetPickChainID(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.pick_chain_id = value;
 }
 
 void PotentialDisplayCommand::SetVetoChainID(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.veto_chain_id = value;
 }
 
 void PotentialDisplayCommand::SetPickResidueType(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.pick_residue = value;
 }
 
 void PotentialDisplayCommand::SetVetoResidueType(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.veto_residue = value;
 }
 
 void PotentialDisplayCommand::SetPickElementType(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.pick_element = value;
 }
 
 void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.veto_element = value;
 }
 

@@ -23,20 +23,6 @@ class AtomObject;
 class MapSimulationCommand : public CommandBase
 {
 public:
-    static constexpr std::string_view CommandName() { return "map_simulation"; }
-    static constexpr std::string_view CommandDescription() { return "Run map simulation command"; }
-    static constexpr CommandSurface StaticCommandSurface()
-    {
-        return MakeCommandSurface(
-            CommonOption::Threading
-                | CommonOption::Verbose
-                | CommonOption::OutputFolder,
-            ToMask(CommonOption::Database),
-            false,
-            true,
-            true);
-    }
-
     struct Options : public CommandOptions
     {
         std::filesystem::path model_file_path;
@@ -59,9 +45,9 @@ public:
     MapSimulationCommand();
     ~MapSimulationCommand();
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
+    CommandId GetCommandId() const override { return CommandId::MapSimulation; }
     void ValidateOptions() override;
     void ResetRuntimeState() override;
-    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

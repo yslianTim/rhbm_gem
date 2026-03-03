@@ -2,6 +2,8 @@ set(TEST_SOURCES
     Application_test.cpp
     ArrayStats_test.cpp
     AtomSelector_test.cpp
+    BindingSurfaceParity_test.cpp
+    BuiltInCommandCatalog_test.cpp
     ChemicalDataHelper_test.cpp
     ChimeraXHelper_test.cpp
     CommandBase_test.cpp
@@ -27,6 +29,7 @@ set(TEST_SOURCES
     MapSimulationCommand_test.cpp
     MapVisualizationCommand_test.cpp
     PositionEstimationCommand_test.cpp
+    PreparedStateInvalidation_test.cpp
     PotentialDisplayCommand_test.cpp
     ResultDumpCommand_test.cpp
     ROOTHelper_test.cpp
@@ -84,6 +87,6 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
             "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
             ${Python_EXECUTABLE}
             -c
-            "import rhbm_gem_module as m; assert hasattr(m.PrinterType, 'ATOM_OUTLIER'); assert hasattr(m, 'PotentialAnalysisCommand'); assert hasattr(m, 'PotentialDisplayCommand'); assert hasattr(m, 'ResultDumpCommand'); assert hasattr(m, 'MapSimulationCommand'); assert not hasattr(m, 'MapVisualizationCommand'); assert not hasattr(m, 'PositionEstimationCommand'); assert not hasattr(m, 'HRLModelTestCommand')"
+            "import rhbm_gem_module as m; assert hasattr(m, 'LogLevel'); assert hasattr(m, 'ValidationPhase'); assert hasattr(m, 'ValidationIssue'); assert hasattr(m.PrinterType, 'ATOM_OUTLIER'); assert hasattr(m, 'PotentialAnalysisCommand'); assert hasattr(m, 'PotentialDisplayCommand'); assert hasattr(m, 'ResultDumpCommand'); assert hasattr(m, 'MapSimulationCommand'); assert not hasattr(m, 'MapVisualizationCommand'); assert not hasattr(m, 'PositionEstimationCommand'); assert not hasattr(m, 'HRLModelTestCommand'); cmd = m.MapSimulationCommand(); assert hasattr(cmd, 'PrepareForExecution'); assert hasattr(cmd, 'HasValidationErrors'); assert hasattr(cmd, 'GetValidationIssues')"
     )
 endif()

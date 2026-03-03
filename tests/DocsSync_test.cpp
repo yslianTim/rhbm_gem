@@ -5,17 +5,22 @@
 #include <sstream>
 #include <string>
 
-#include "CommandRegistry.hpp"
-#include "RegisterBuiltInCommands.hpp"
+#include "BuiltInCommandCatalog.hpp"
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-constexpr std::string_view kBeginMarker{
+constexpr std::string_view kManifestBeginMarker{
+    "<!-- BEGIN GENERATED: built-in-command-manifest -->"
+};
+constexpr std::string_view kManifestEndMarker{
+    "<!-- END GENERATED: built-in-command-manifest -->"
+};
+constexpr std::string_view kMatrixBeginMarker{
     "<!-- BEGIN GENERATED: command-surface-matrix -->"
 };
-constexpr std::string_view kEndMarker{
+constexpr std::string_view kMatrixEndMarker{
     "<!-- END GENERATED: command-surface-matrix -->"
 };
 
@@ -24,7 +29,18 @@ std::string YesNo(bool value)
     return value ? "yes" : "no";
 }
 
-std::string RenderSurfaceMatrix(const std::vector<rg::CommandRegistry::CommandInfo> & commands)
+std::string RenderManifest(const std::vector<rg::CommandDescriptor> & commands)
+{
+    std::ostringstream output;
+    std::size_t index{ 1 };
+    for (const auto & info : commands)
+    {
+        output << index++ << ". `" << info.name << "`\n";
+    }
+    return output.str();
+}
+
+std::string RenderSurfaceMatrix(const std::vector<rg::CommandDescriptor> & commands)
 {
     std::ostringstream output;
     output
@@ -34,10 +50,10 @@ std::string RenderSurfaceMatrix(const std::vector<rg::CommandRegistry::CommandIn
     {
         output
             << "| `" << info.name << "`"
-            << " | " << YesNo(info.surface.requires_database_manager)
-            << " | " << YesNo(info.surface.uses_output_folder)
-            << " | " << YesNo(info.surface.exposed_to_python)
-            << " | " << YesNo(HasCommonOption(
+            << " | " << YesNo(rg::UsesDatabaseAtRuntime(info.database_usage))
+            << " | " << YesNo(rg::UsesOutputFolder(info.surface))
+            << " | " << YesNo(rg::IsPythonPublic(info.binding_exposure))
+            << " | " << YesNo(rg::HasCommonOption(
                 info.surface.deprecated_hidden_options,
                 rg::CommonOption::Database))
             << " |\n";
@@ -45,12 +61,29 @@ std::string RenderSurfaceMatrix(const std::vector<rg::CommandRegistry::CommandIn
     return output.str();
 }
 
+std::string ReadGeneratedBlock(
+    const std::string & content,
+    std::string_view begin_marker,
+    std::string_view end_marker)
+{
+    const auto begin_pos{ content.find(begin_marker) };
+    EXPECT_NE(begin_pos, std::string::npos);
+    const auto end_pos{ content.find(end_marker) };
+    EXPECT_NE(end_pos, std::string::npos);
+    EXPECT_LT(begin_pos, end_pos);
+    if (begin_pos == std::string::npos || end_pos == std::string::npos || begin_pos >= end_pos)
+    {
+        return {};
+    }
+    const auto content_start{ begin_pos + begin_marker.size() };
+    return content.substr(content_start, end_pos - content_start);
+}
+
 } // namespace
 
-TEST(DocsSyncTest, CommandSurfaceMatrixMatchesRegistryMetadata)
+TEST(DocsSyncTest, GeneratedBlocksMatchBuiltInCommandCatalog)
 {
-    rg::RegisterBuiltInCommands();
-    const auto & commands{ rg::CommandRegistry::Instance().GetCommands() };
+    const auto & commands{ rg::BuiltInCommandCatalog() };
     const auto doc_path{
         std::filesystem::path(__FILE__).parent_path().parent_path()
         / "docs" / "developer" / "architecture" / "command-architecture.md"
@@ -63,17 +96,18 @@ TEST(DocsSyncTest, CommandSurfaceMatrixMatchesRegistryMetadata)
         std::istreambuf_iterator<char>()
     };
 
-    const auto begin_pos{ doc_content.find(kBeginMarker) };
-    ASSERT_NE(begin_pos, std::string::npos);
-    const auto end_pos{ doc_content.find(kEndMarker) };
-    ASSERT_NE(end_pos, std::string::npos);
-    ASSERT_LT(begin_pos, end_pos);
+    EXPECT_EQ(
+        ReadGeneratedBlock(doc_content, kManifestBeginMarker, kManifestEndMarker),
+        "\n" + RenderManifest(commands));
+    EXPECT_EQ(
+        ReadGeneratedBlock(doc_content, kMatrixBeginMarker, kMatrixEndMarker),
+        "\n" + RenderSurfaceMatrix(commands));
 
-    const auto content_start{ begin_pos + kBeginMarker.size() };
-    const std::string matrix_block{
-        doc_content.substr(content_start, end_pos - content_start)
-    };
-
-    const std::string expected_block{ "\n" + RenderSurfaceMatrix(commands) };
-    EXPECT_EQ(matrix_block, expected_block);
+    EXPECT_NE(
+        doc_content.find("Application callbacks invoke only `Execute()`."),
+        std::string::npos);
+    EXPECT_NE(
+        doc_content.find(
+            "`Execute()` internally decides whether `PrepareForExecution()` must run."),
+        std::string::npos);
 }

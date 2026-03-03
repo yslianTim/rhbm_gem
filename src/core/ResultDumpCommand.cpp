@@ -81,17 +81,20 @@ void ResultDumpCommand::ResetRuntimeState()
 
 void ResultDumpCommand::SetPrinterChoice(PrinterType value)
 {
+    InvalidatePreparedState();
     m_options.printer_choice = value;
 }
 
 void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)
 {
+    InvalidatePreparedState();
     m_options.map_file_path = path;
     ValidateOptionalExistingPath(m_options.map_file_path, "--map", "Map file");
 }
 
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
+    InvalidatePreparedState();
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
     ClearValidationIssues("--model-keylist", ValidationPhase::Parse);
     if (m_options.model_key_tag_list.empty())

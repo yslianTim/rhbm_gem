@@ -9,6 +9,7 @@
 #include <typeinfo>
 #include <vector>
 
+#include "BuiltInCommandCatalog.hpp"
 #include "CommandMetadata.hpp"
 #include "DataObjectManager.hpp"
 #include "Logger.hpp"
@@ -52,21 +53,22 @@ public:
     virtual void RegisterCLIOptionsExtend(::CLI::App * command) = 0;
     virtual const CommandOptions & GetOptions() const = 0;
     virtual CommandOptions & GetOptions() = 0;
+    virtual CommandId GetCommandId() const = 0;
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
-    virtual CommandSurface GetCommandSurface() const
+    const CommandDescriptor & GetCommandDescriptor() const;
+    CommonOptionMask GetCommonOptionMask() const
     {
-        return MakeCommandSurface(
-            CommonOption::Threading
-                | CommonOption::Verbose
-                | CommonOption::Database
-                | CommonOption::OutputFolder,
-            0u,
-            true,
-            true,
-            false);
+        return GetCommandDescriptor().surface.common_options;
     }
-    CommonOptionMask GetCommonOptionMask() const { return GetCommandSurface().common_options; }
+    DatabaseUsage GetDatabaseUsage() const
+    {
+        return GetCommandDescriptor().database_usage;
+    }
+    BindingExposure GetBindingExposure() const
+    {
+        return GetCommandDescriptor().binding_exposure;
+    }
 
     void RegisterCLIOptions(::CLI::App * command);
     bool PrepareForExecution();
@@ -86,6 +88,8 @@ protected:
     std::vector<ValidationIssue> m_validation_issues;
 
     CommandBase() = default;
+    void InvalidatePreparedState();
+    bool IsPreparedForExecution() const { return m_is_prepared_for_execution; }
     void RegisterCLIOptionsBasic(::CLI::App * command);
     void RegisterDeprecatedCommonAliases(::CLI::App * command);
     void AddValidationError(

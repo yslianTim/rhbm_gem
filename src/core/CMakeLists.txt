@@ -1,6 +1,7 @@
 set(CORE_SOURCES
     Application.cpp
     AtomPainter.cpp
+    BuiltInCommandCatalog.cpp
     CommandBase.cpp
     CommandRegistry.cpp
     ComparisonPainter.cpp

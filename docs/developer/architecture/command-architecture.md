@@ -33,19 +33,20 @@ flowchart TD
     K --> L["Command options updated / normalized"]
 
     E --> M["Subcommand callback"]
-    M --> N["CommandBase::PrepareForExecution()"]
-    N --> O["Logger::SetLogLevel(...)"]
-    O --> P["ResetRuntimeState() / ClearDataObjects()"]
-    P --> Q["ValidateOptions() + filesystem preflight"]
-    Q --> R{"Has validation errors?"}
-    R -- true --> S["Report issues and abort"]
-    R -- false --> T["Derived::ExecuteImpl()"]
+    M --> N["CommandBase::Execute()"]
+    N --> O["PrepareForExecution() if not already prepared"]
+    O --> P["Logger::SetLogLevel(...)"]
+    P --> Q["ResetRuntimeState() / ClearDataObjects()"]
+    Q --> R["ValidateOptions() + filesystem preflight"]
+    R --> S{"Has validation errors?"}
+    S -- true --> T["Report issues and abort"]
+    S -- false --> U["Derived::ExecuteImpl()"]
 
-    T --> U["BuildDataObject*() phase"]
-    U --> V["DataObjectManager"]
-    V --> W["FileProcessFactoryRegistry / DatabaseManager"]
-    T --> X["Workflow phase"]
-    X --> Y["Painters / writers / algorithms / persistence"]
+    U --> V["BuildDataObject*() phase"]
+    V --> W["DataObjectManager"]
+    W --> X["FileProcessFactoryRegistry / DatabaseManager"]
+    U --> Y["Workflow phase"]
+    Y --> Z["Painters / writers / algorithms / persistence"]
 ```
 
 ## 3. Registration Model
@@ -54,8 +55,9 @@ flowchart TD
 
 Built-in CLI commands are registered centrally through `RegisterBuiltInCommands()`.
 
-The built-in manifest order is:
+The built-in manifest order is generated from the built-in command catalog:
 
+<!-- BEGIN GENERATED: built-in-command-manifest -->
 1. `potential_analysis`
 2. `potential_display`
 3. `result_dump`
@@ -63,6 +65,7 @@ The built-in manifest order is:
 5. `map_visualization`
 6. `position_estimation`
 7. `model_test`
+<!-- END GENERATED: built-in-command-manifest -->
 
 This makes help ordering deterministic and avoids relying on cross-translation-unit static initialization order for built-in behavior.
 
@@ -74,10 +77,13 @@ This makes help ordering deterministic and avoids relying on cross-translation-u
 
 `CommandRegistry` stores:
 
+- the built-in `CommandId`
 - the command name
 - the user-facing description
 - a factory returning `std::unique_ptr<CommandBase>`
 - command surface metadata (`CommandSurface`)
+- database usage policy (`DatabaseUsage`)
+- binding exposure policy (`BindingExposure`)
 
 `Application` reads the registry and creates one CLI subcommand per registered entry.
 
@@ -93,6 +99,7 @@ Each command must provide:
 - `void RegisterCLIOptionsExtend(CLI::App * command)`
 - `const CommandOptions & GetOptions() const`
 - `CommandOptions & GetOptions()`
+- `CommandId GetCommandId() const`
 
 `CommandBase::Execute()` is the public non-virtual wrapper. It is the single formal execution entry point for CLI callbacks, direct C++ callers, and Python bindings.
 
@@ -120,7 +127,7 @@ Base setters are not passive assignment helpers. They also normalize and validat
 
 ### 4.3 Common option capability mask
 
-`CommandBase` also exposes `CommandSurface` / `GetCommonOptionMask()` so each concrete command can choose which shared base options it actually needs:
+`CommandBase` reads each command descriptor from the built-in command catalog and derives shared option behavior from `CommandSurface` / `GetCommonOptionMask()`:
 
 - `Threading`
 - `Verbose`
@@ -142,6 +149,8 @@ This is the preferred extension point for new command parameters.
 
 ## 5. Standard Execution Lifecycle
 
+Application callbacks invoke only `Execute()`. `Execute()` internally decides whether `PrepareForExecution()` must run.
+
 Most commands in this repository follow the same three-step shape:
 
 ```mermaid
@@ -155,13 +164,15 @@ sequenceDiagram
     User->>CLI: invoke subcommand with options
     CLI->>Cmd: setter callbacks populate / normalize Options
     CLI->>App: run subcommand callback
-    App->>Cmd: PrepareForExecution()
-    Cmd->>Cmd: ResetRuntimeState()
-    Cmd->>Cmd: ValidateOptions()
+    App->>Cmd: Execute()
+    alt command is not prepared for current options
+        Cmd->>Cmd: PrepareForExecution()
+        Cmd->>Cmd: ResetRuntimeState()
+        Cmd->>Cmd: ValidateOptions()
+    end
     alt validation failure
         Cmd-->>User: structured validation issues
     else valid options
-        App->>Cmd: Execute()
         Cmd->>Cmd: ExecuteImpl()
         Cmd->>Cmd: BuildDataObject*()
         Cmd->>DM: ProcessFile / LoadDataObject / SaveDataObject
@@ -174,10 +185,11 @@ Recommended command shape:
 
 1. `RegisterCLIOptionsExtend()` binds CLI options to setter functions.
 2. Setters normalize user input and register option-local validation issues when needed.
-3. `PrepareForExecution()` resets runtime state, clears command-local data objects, validates cross-field constraints, and performs filesystem preflight.
-4. `Execute()` is the single public entry point. It prepares the command if needed, then calls `ExecuteImpl()`.
-5. `ExecuteImpl()` runs the main workflow in clear phases.
-6. Any persistence or file output happens after the main computation is ready.
+3. `PrepareForExecution()` resets runtime state, clears command-local data objects, validates cross-field constraints, and performs filesystem preflight for the current option snapshot.
+4. Any option mutation after `PrepareForExecution()` invalidates the prepared state.
+5. `Execute()` is the single public entry point. It prepares the command if needed, then calls `ExecuteImpl()`.
+6. `ExecuteImpl()` runs the main workflow in clear phases.
+7. Any persistence or file output happens after the main computation is ready.
 
 ## 6. Data Boundary
 
@@ -196,7 +208,7 @@ Design intent:
 - commands decide *which* objects are needed and *when*
 - the data layer decides *how* files and persistence are implemented
 
-When a command needs database-backed objects, call `SetDatabaseManager()` before `LoadDataObject()` or `SaveDataObject()`.
+When a command needs database-backed objects, call `RequireDatabaseManager()` before `LoadDataObject()` or `SaveDataObject()`.
 
 ## 7. Current Command Families
 

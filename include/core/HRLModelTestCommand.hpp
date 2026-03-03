@@ -14,23 +14,6 @@ namespace rhbm_gem {
 class HRLModelTestCommand : public CommandBase
 {
 public:
-    static constexpr std::string_view CommandName() { return "model_test"; }
-    static constexpr std::string_view CommandDescription()
-    {
-        return "Run HRL model simulation test";
-    }
-    static constexpr CommandSurface StaticCommandSurface()
-    {
-        return MakeCommandSurface(
-            CommonOption::Threading
-                | CommonOption::Verbose
-                | CommonOption::OutputFolder,
-            ToMask(CommonOption::Database),
-            false,
-            true,
-            false);
-    }
-
     struct Options : public CommandOptions
     {
         TesterType tester_choice{ TesterType::BENCHMARK };
@@ -47,7 +30,7 @@ public:
     HRLModelTestCommand();
     ~HRLModelTestCommand() = default;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
+    CommandId GetCommandId() const override { return CommandId::ModelTest; }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

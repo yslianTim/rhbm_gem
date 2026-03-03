@@ -19,21 +19,6 @@ class MapObject;
 class ResultDumpCommand : public CommandBase
 {
 public:
-    static constexpr std::string_view CommandName() { return "result_dump"; }
-    static constexpr std::string_view CommandDescription() { return "Run result dump"; }
-    static constexpr CommandSurface StaticCommandSurface()
-    {
-        return MakeCommandSurface(
-            CommonOption::Threading
-                | CommonOption::Verbose
-                | CommonOption::Database
-                | CommonOption::OutputFolder,
-            0u,
-            true,
-            true,
-            true);
-    }
-
     struct Options : public CommandOptions
     {
         PrinterType printer_choice{ PrinterType::GAUS_ESTIMATES };
@@ -52,9 +37,9 @@ public:
     ResultDumpCommand();
     ~ResultDumpCommand();
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    CommandId GetCommandId() const override { return CommandId::ResultDump; }
     void ValidateOptions() override;
     void ResetRuntimeState() override;
-    CommandSurface GetCommandSurface() const override { return StaticCommandSurface(); }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 
