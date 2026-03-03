@@ -23,6 +23,7 @@ set(TEST_SOURCES
     EnumOptionTraits_test.cpp
     FilePathHelper_test.cpp
     GausLinearTransformHelper_test.cpp
+    HRLModelTestCommand_test.cpp
     HRLAlphaTrainer_test.cpp
     HRLDataTransform_test.cpp
     HRLGroupEstimator_test.cpp
@@ -33,6 +34,7 @@ set(TEST_SOURCES
     MapSimulationCommand_test.cpp
     MapVisualizationCommand_test.cpp
     PositionEstimationCommand_test.cpp
+    PotentialAnalysisCommand_test.cpp
     PreparedStateInvalidation_test.cpp
     PotentialDisplayCommand_test.cpp
     ResultDumpCommand_test.cpp
@@ -107,5 +109,13 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
             -c
             "import subprocess, sys; import rhbm_gem_module as m; public_names = [line.strip() for line in subprocess.check_output([sys.argv[1]], text=True).splitlines() if line.strip()]; assert public_names; assert hasattr(m, 'LogLevel'); assert hasattr(m, 'ValidationPhase'); assert hasattr(m, 'ValidationIssue'); assert hasattr(m.PrinterType, 'ATOM_OUTLIER'); assert all(hasattr(m, name) for name in public_names); assert all(all(hasattr(getattr(m, name)(), method) for method in ('PrepareForExecution', 'HasValidationErrors', 'GetValidationIssues')) for name in public_names)"
             "$<TARGET_FILE:command_catalog_binding_names_helper>"
+    )
+    add_test(
+        NAME bindings_invalid_enum_validation_test
+        COMMAND ${CMAKE_COMMAND} -E env
+            "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
+            ${Python_EXECUTABLE}
+            -c
+            "import rhbm_gem_module as m; dump = m.ResultDumpCommand(); dump.SetPrinterChoice(999); dump.SetModelKeyTagList('model'); assert not dump.PrepareForExecution(); assert any(issue.option_name == '--printer' and issue.phase == m.ValidationPhase.Parse for issue in dump.GetValidationIssues()); display = m.PotentialDisplayCommand(); display.SetPainterChoice(999); display.SetModelKeyTagList('model'); assert not display.PrepareForExecution(); assert any(issue.option_name == '--painter' and issue.phase == m.ValidationPhase.Parse for issue in display.GetValidationIssues())"
     )
 endif()

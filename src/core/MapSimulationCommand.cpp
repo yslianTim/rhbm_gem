@@ -130,12 +130,22 @@ void MapSimulationCommand::ResetRuntimeState()
 
 void MapSimulationCommand::SetPotentialModelChoice(PotentialModel value)
 {
-    MutateOptions([&]() { m_options.potential_model_choice = value; });
+    SetValidatedEnumOption(
+        m_options.potential_model_choice,
+        value,
+        "--potential-model",
+        PotentialModel::FIVE_GAUS_CHARGE,
+        "Potential model");
 }
 
 void MapSimulationCommand::SetPartialChargeChoice(PartialCharge value)
 {
-    MutateOptions([&]() { m_options.partial_charge_choice = value; });
+    SetValidatedEnumOption(
+        m_options.partial_charge_choice,
+        value,
+        "--charge",
+        PartialCharge::PARTIAL,
+        "Partial charge choice");
 }
 
 void MapSimulationCommand::SetCutoffDistance(double value)
@@ -277,11 +287,10 @@ double MapSimulationCommand::CalculateAtomCharge(AtomObject * atom) const
                 atom->GetStructure(), true);
         default:
             Logger::Log(LogLevel::Error,
-                "Invalid partial charge choice: "
+                "Invalid partial charge choice reached atom-charge calculation: "
                 + std::to_string(static_cast<int>(m_options.partial_charge_choice)));
-            break;
+            return 0.0;
     }
-    return 0.0;
 }
 
 void MapSimulationCommand::CalculateAtomRange()

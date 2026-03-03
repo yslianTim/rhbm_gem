@@ -31,6 +31,7 @@ public:
     ~HRLModelTestCommand() = default;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     CommandId GetCommandId() const override { return CommandId::ModelTest; }
+    void ValidateOptions() override;
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
 
 #include "CommandTestHelpers.hpp"
@@ -14,6 +15,29 @@ TEST(ResultDumpCommandTest, MapPrinterRequiresMapFile)
     command.SetModelKeyTagList("model");
 
     EXPECT_FALSE(command.PrepareForExecution());
+}
+
+TEST(ResultDumpCommandTest, InvalidPrinterChoiceBecomesValidationError)
+{
+    rg::ResultDumpCommand command;
+    command.SetPrinterChoice(static_cast<rg::PrinterType>(999));
+    command.SetModelKeyTagList("model");
+
+    EXPECT_FALSE(command.PrepareForExecution());
+
+    const auto & issues{ command.GetValidationIssues() };
+    const auto issue_iter{
+        std::find_if(
+            issues.begin(),
+            issues.end(),
+            [](const rg::ValidationIssue & issue)
+            {
+                return issue.option_name == "--printer";
+            })
+    };
+    ASSERT_NE(issue_iter, issues.end());
+    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
+    EXPECT_EQ(issue_iter->level, LogLevel::Error);
 }
 
 TEST(ResultDumpCommandTest, ExecuteTwiceDoesNotReuseStaleLoadedModels)

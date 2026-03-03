@@ -10,6 +10,7 @@
 #include <memory>
 #include <sstream>
 #include <vector>
+#include <cmath>
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -30,6 +31,20 @@
 #endif
 
 namespace rhbm_gem {
+
+namespace {
+
+bool IsFiniteNonNegative(double value)
+{
+    return std::isfinite(value) && value >= 0.0;
+}
+
+bool IsFinitePositive(double value)
+{
+    return std::isfinite(value) && value > 0.0;
+}
+
+} // namespace
 
 HRLModelTestCommand::HRLModelTestCommand() :
     CommandBase(), m_options{}
@@ -85,44 +100,109 @@ bool HRLModelTestCommand::ExecuteImpl()
             RunSimulationTestOnModelAlphaMember();
             break;
         default:
-            Logger::Log(LogLevel::Warning,
-                        "Invalid tester choice input : ["
+            Logger::Log(LogLevel::Error,
+                        "Invalid tester choice reached execution path: ["
                         + std::to_string(static_cast<int>(m_options.tester_choice)) + "]");
-            Logger::Log(LogLevel::Warning,
-                        "Available Tester Choices:\n"
-                        "  [0] Simulation Test on Benchmark\n"
-                        "  [1] Simulation Test on Data Outlier\n"
-                        "  [2] Simulation Test on Member Outlier\n"
-                        "  [3] Simulation Test on Model alpha_data\n"
-                        "  [4] Simulation Test on Model alpha_member");
-            break;
+            return false;
     }
     return true;
 }
 
+void HRLModelTestCommand::ValidateOptions()
+{
+    ResetPrepareIssues("--fit-range");
+    if (m_options.fit_range_min > m_options.fit_range_max)
+    {
+        AddValidationError(
+            "--fit-range",
+            "Expected --fit-min <= --fit-max.");
+    }
+}
+
 void HRLModelTestCommand::SetTesterChoice(TesterType value)
 {
-    MutateOptions([&]() { m_options.tester_choice = value; });
+    SetValidatedEnumOption(
+        m_options.tester_choice,
+        value,
+        "--tester",
+        TesterType::BENCHMARK,
+        "Tester choice");
 }
 
 void HRLModelTestCommand::SetFitRangeMinimum(double value)
 {
-    MutateOptions([&]() { m_options.fit_range_min = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--fit-min");
+        if (IsFiniteNonNegative(value))
+        {
+            m_options.fit_range_min = value;
+            return;
+        }
+
+        m_options.fit_range_min = 0.0;
+        AddValidationError(
+            "--fit-min",
+            "Minimum fitting range must be a finite non-negative value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void HRLModelTestCommand::SetFitRangeMaximum(double value)
 {
-    MutateOptions([&]() { m_options.fit_range_max = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--fit-max");
+        if (IsFiniteNonNegative(value))
+        {
+            m_options.fit_range_max = value;
+            return;
+        }
+
+        m_options.fit_range_max = 1.0;
+        AddValidationError(
+            "--fit-max",
+            "Maximum fitting range must be a finite non-negative value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void HRLModelTestCommand::SetAlphaR(double value)
 {
-    MutateOptions([&]() { m_options.alpha_r = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--alpha-r");
+        if (IsFinitePositive(value))
+        {
+            m_options.alpha_r = value;
+            return;
+        }
+
+        m_options.alpha_r = 0.1;
+        AddValidationError(
+            "--alpha-r",
+            "Alpha-R must be a finite positive value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void HRLModelTestCommand::SetAlphaG(double value)
 {
-    MutateOptions([&]() { m_options.alpha_g = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--alpha-g");
+        if (IsFinitePositive(value))
+        {
+            m_options.alpha_g = value;
+            return;
+        }
+
+        m_options.alpha_g = 0.2;
+        AddValidationError(
+            "--alpha-g",
+            "Alpha-G must be a finite positive value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void HRLModelTestCommand::RunSimulationTestOnBenchMark()

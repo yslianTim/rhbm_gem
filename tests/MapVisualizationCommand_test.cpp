@@ -1,9 +1,81 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include "CommandTestHelpers.hpp"
 #include "MapVisualizationCommand.hpp"
 
 namespace rg = rhbm_gem;
+
+TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesValidationErrorAtPrepare)
+{
+    rg::MapVisualizationCommand command;
+    command.SetAtomSerialID(0);
+
+    EXPECT_FALSE(command.PrepareForExecution());
+
+    const auto & issues{ command.GetValidationIssues() };
+    const auto issue_iter{
+        std::find_if(
+            issues.begin(),
+            issues.end(),
+            [](const rg::ValidationIssue & issue)
+            {
+                return issue.option_name == "--atom-id";
+            })
+    };
+    ASSERT_NE(issue_iter, issues.end());
+    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
+    EXPECT_EQ(issue_iter->level, LogLevel::Error);
+}
+
+TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesValidationErrorAtPrepare)
+{
+    rg::MapVisualizationCommand command;
+    command.SetWindowSize(0.0);
+
+    EXPECT_FALSE(command.PrepareForExecution());
+
+    const auto & issues{ command.GetValidationIssues() };
+    const auto issue_iter{
+        std::find_if(
+            issues.begin(),
+            issues.end(),
+            [](const rg::ValidationIssue & issue)
+            {
+                return issue.option_name == "--window-size";
+            })
+    };
+    ASSERT_NE(issue_iter, issues.end());
+    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
+    EXPECT_EQ(issue_iter->level, LogLevel::Error);
+}
+
+TEST(MapVisualizationCommandTest, SamplingSizeNormalizationUsesOptionsDefault)
+{
+    rg::MapVisualizationCommand command;
+    command.SetSamplingSize(0);
+
+    const auto & options{
+        static_cast<const rg::MapVisualizationCommand::Options &>(command.GetOptions())
+    };
+    EXPECT_EQ(options.sampling_size, 100);
+
+    const auto & issues{ command.GetValidationIssues() };
+    const auto issue_iter{
+        std::find_if(
+            issues.begin(),
+            issues.end(),
+            [](const rg::ValidationIssue & issue)
+            {
+                return issue.option_name == "--sampling";
+            })
+    };
+    ASSERT_NE(issue_iter, issues.end());
+    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
+    EXPECT_EQ(issue_iter->level, LogLevel::Warning);
+    EXPECT_TRUE(issue_iter->auto_corrected);
+}
 
 TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)
 {

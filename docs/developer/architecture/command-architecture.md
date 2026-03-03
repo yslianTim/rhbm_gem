@@ -119,8 +119,8 @@ Base setters are not passive assignment helpers. They also normalize and validat
 
 - `SetThreadSize()` clamps invalid values to `1`
 - `SetVerboseLevel()` restores an allowed log level when needed
-- `SetDatabasePath()` normalizes the path but does not create directories during parse
-- `SetFolderPath()` normalizes the path but does not create directories during parse
+- `SetDatabasePath()` lexically normalizes non-empty paths but does not create directories during parse
+- `SetFolderPath()` preserves the chosen folder path, ensures a trailing slash for non-empty values, and does not create directories during parse
 
 ### 4.3 Common option capability mask
 
@@ -144,6 +144,7 @@ Each concrete command follows the same pattern:
 5. Keep cross-field or semantic validation inside `ValidateOptions()`.
 
 This is the preferred extension point for new command parameters.
+Invalid enum or mode selections should be rejected from setter paths or `PrepareForExecution()`, not first discovered from a runtime `switch` default branch inside `ExecuteImpl()`.
 
 ## 5. Standard Execution Lifecycle
 
@@ -182,12 +183,13 @@ sequenceDiagram
 Recommended command shape:
 
 1. `RegisterCLIOptionsExtend()` binds CLI options to setter functions.
-2. Setters invalidate any previously prepared state, normalize user input, and register option-local validation issues when needed.
+2. Setters invalidate any previously prepared state, normalize user input when a safe fallback exists, and register parse-phase validation issues for invalid single-option inputs.
 3. `PrepareForExecution()` resets runtime state, clears command-local data objects, validates cross-field constraints, and performs filesystem preflight for the current option snapshot.
 4. Any option mutation after `PrepareForExecution()` invalidates the prepared state.
 5. `Execute()` is the single public entry point. It prepares the command if needed, then calls `ExecuteImpl()`.
-6. `ExecuteImpl()` runs the main workflow in clear phases.
-7. Any persistence or file output happens after the main computation is ready.
+6. `Execute()` clears the prepared flag after each run, so cached prepared state is only reusable between an explicit `PrepareForExecution()` call and the immediately following `Execute()`.
+7. `ExecuteImpl()` runs the main workflow in clear phases.
+8. Any persistence or file output happens after the main computation is ready.
 
 ## 6. Data Boundary
 
@@ -220,12 +222,12 @@ When a command needs database-backed objects, call `RequireDatabaseManager()` be
 
 ### 7.1 File-driven analysis commands
 
-These commands ingest files directly through `ProcessFile(...)`:
+These commands ingest files directly through `ProcessFile(...)`-backed helpers such as `ProcessTypedFile(...)`:
 
 | Command | Main inputs | Main phases | Main outputs |
 | --- | --- | --- | --- |
-| `potential_analysis` | model file, map file, database path | build objects, preprocess, sample, classify, fit, save | updated `ModelObject` persisted to database |
-| `map_simulation` | model file | build atom list, simulate maps | generated map files |
+| `potential_analysis` | model file, map file, database path | build objects, preprocess, sample atoms, classify atoms, fit atoms, save | updated `ModelObject` persisted to database |
+| `map_simulation` | model file, blurring width list | build atom list, simulate maps | generated `.map` files |
 | `map_visualization` | model file, map file | preprocess, sample around one atom, visualize | rendered plot/PDF output |
 | `position_estimation` | map file | threshold voxels, KD-tree, iterative convergence, deduplication | ChimeraX point file |
 
@@ -235,8 +237,8 @@ These commands primarily load previously saved `ModelObject` instances from the 
 
 | Command | Main inputs | Main phases | Main outputs |
 | --- | --- | --- | --- |
-| `potential_display` | model key list, optional reference groups | load models, apply selection, dispatch painter | painter-specific output files |
-| `result_dump` | model key list, optional map file | load models, collect selected atoms, dispatch dump mode | CSV, CIF, CMM and related dump files |
+| `potential_display` | painter choice, model key list, optional reference groups | load models, apply selection, dispatch painter | painter-specific output files |
+| `result_dump` | printer choice, model key list, optional map file | load models, collect selected atoms, dispatch dump mode | CSV, CIF, CMM and related dump files |
 
 ### 7.3 Standalone test harness command
 
@@ -268,15 +270,18 @@ This is the most representative end-to-end command in the repository.
 
 Architecture pattern:
 
-1. Parse model and map files.
+1. Parse model and map files and initialize `DatabaseManager` from the configured database path.
 2. Optionally adjust model metadata for simulated maps.
 3. Normalize map values.
-4. Prepare selected atoms and bonds.
+4. Prepare selected atoms and bonds and attach fresh local potential entries.
 5. Sample map values around atoms.
-6. Run classification and fitting logic.
+6. Run atom classification and atom fitting logic.
 7. Save the resulting `ModelObject` back to the database under a caller-controlled key.
 
 If you are adding another analysis-style command, this class is the closest reference implementation.
+
+Bond-oriented helpers (`RunBondMapValueSampling()`, `RunBondGroupClassification()`, `RunLocalBondFitting()`, `RunBondPotentialFitting()`) still exist in the class, but `ExecuteImpl()` does not currently invoke them.
+Command-local scalar setters on this class also demonstrate the intended split between parse-time single-field checks and prepare-time cross-field checks such as range ordering or simulation-only requirements.
 
 ### 8.2 `potential_display`
 
@@ -304,10 +309,12 @@ If a new export mode is needed, extending this command is usually a better fit t
 
 This command is intentionally file-driven and does not need a database-backed workflow for its core behavior.
 
-It shows that `CommandBase` can still be reused even when the command only needs:
+It shows that `CommandBase` can still be reused when a command needs typed file loading and output management but no database persistence:
 
 - common CLI options
 - logging level control
+- required input path validation
+- `ProcessTypedFile<ModelObject>()`
 - output folder management
 
 ### 8.5 `map_visualization`

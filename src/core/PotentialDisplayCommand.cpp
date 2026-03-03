@@ -142,7 +142,12 @@ void PotentialDisplayCommand::ResetRuntimeState()
 
 void PotentialDisplayCommand::SetPainterChoice(PainterType value)
 {
-    MutateOptions([&]() { m_options.painter_choice = value; });
+    SetValidatedEnumOption(
+        m_options.painter_choice,
+        value,
+        "--painter",
+        PainterType::MODEL,
+        "Painter choice");
 }
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)

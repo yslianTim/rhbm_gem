@@ -88,7 +88,12 @@ void ResultDumpCommand::ResetRuntimeState()
 
 void ResultDumpCommand::SetPrinterChoice(PrinterType value)
 {
-    MutateOptions([&]() { m_options.printer_choice = value; });
+    SetValidatedEnumOption(
+        m_options.printer_choice,
+        value,
+        "--printer",
+        PrinterType::GAUS_ESTIMATES,
+        "Printer choice");
 }
 
 void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)

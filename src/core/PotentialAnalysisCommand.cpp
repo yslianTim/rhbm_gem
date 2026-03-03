@@ -31,6 +31,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <limits>
+#include <cmath>
 #include <random>
 #include <sstream>
 
@@ -44,12 +45,22 @@ constexpr std::string_view kMapKey{ "map" };
 
 HRLExecutionOptions BuildHRLExecutionOptions(
     const rhbm_gem::PotentialAnalysisCommand::Options & options,
-    bool quiet_mode)
+bool quiet_mode)
 {
     HRLExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = options.thread_size;
     return execution_options;
+}
+
+bool IsFiniteNonNegative(double value)
+{
+    return std::isfinite(value) && value >= 0.0;
+}
+
+bool IsFinitePositive(double value)
+{
+    return std::isfinite(value) && value > 0.0;
 }
 }
 
@@ -170,6 +181,14 @@ bool PotentialAnalysisCommand::ExecuteImpl()
 
 void PotentialAnalysisCommand::ValidateOptions()
 {
+    ResetPrepareIssues("--sim-resolution");
+    if (m_options.is_simulation && m_options.resolution_simulation <= 0.0)
+    {
+        AddValidationError(
+            "--sim-resolution",
+            "Expected a positive simulated-map resolution when '--simulation true' is selected.");
+    }
+
     ResetPrepareIssues("--sampling-range");
     if (m_options.sampling_range_min > m_options.sampling_range_max)
     {
@@ -207,27 +226,97 @@ void PotentialAnalysisCommand::SetSimulationFlag(bool value)
 
 void PotentialAnalysisCommand::SetSimulatedMapResolution(double value)
 {
-    MutateOptions([&]() { m_options.resolution_simulation = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--sim-resolution");
+        if (IsFiniteNonNegative(value))
+        {
+            m_options.resolution_simulation = value;
+            return;
+        }
+
+        m_options.resolution_simulation = 0.0;
+        AddValidationError(
+            "--sim-resolution",
+            "Simulated-map resolution must be a finite non-negative value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetFitRangeMinimum(double value)
 {
-    MutateOptions([&]() { m_options.fit_range_min = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--fit-min");
+        if (IsFiniteNonNegative(value))
+        {
+            m_options.fit_range_min = value;
+            return;
+        }
+
+        m_options.fit_range_min = 0.0;
+        AddValidationError(
+            "--fit-min",
+            "Minimum fitting range must be a finite non-negative value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetFitRangeMaximum(double value)
 {
-    MutateOptions([&]() { m_options.fit_range_max = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--fit-max");
+        if (IsFiniteNonNegative(value))
+        {
+            m_options.fit_range_max = value;
+            return;
+        }
+
+        m_options.fit_range_max = 1.0;
+        AddValidationError(
+            "--fit-max",
+            "Maximum fitting range must be a finite non-negative value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetAlphaR(double value)
 {
-    MutateOptions([&]() { m_options.alpha_r = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--alpha-r");
+        if (IsFinitePositive(value))
+        {
+            m_options.alpha_r = value;
+            return;
+        }
+
+        m_options.alpha_r = 0.1;
+        AddValidationError(
+            "--alpha-r",
+            "Alpha-R must be a finite positive value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetAlphaG(double value)
 {
-    MutateOptions([&]() { m_options.alpha_g = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--alpha-g");
+        if (IsFinitePositive(value))
+        {
+            m_options.alpha_g = value;
+            return;
+        }
+
+        m_options.alpha_g = 0.2;
+        AddValidationError(
+            "--alpha-g",
+            "Alpha-G must be a finite positive value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetModelFilePath(const std::filesystem::path & path)
@@ -242,7 +331,21 @@ void PotentialAnalysisCommand::SetMapFilePath(const std::filesystem::path & path
 
 void PotentialAnalysisCommand::SetSavedKeyTag(const std::string & tag)
 {
-    MutateOptions([&]() { m_options.saved_key_tag = tag; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--save-key");
+        if (!tag.empty())
+        {
+            m_options.saved_key_tag = tag;
+            return;
+        }
+
+        m_options.saved_key_tag = "model";
+        AddValidationError(
+            "--save-key",
+            "Saved key tag cannot be empty.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetSamplingSize(int value)
@@ -258,17 +361,59 @@ void PotentialAnalysisCommand::SetSamplingSize(int value)
 
 void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)
 {
-    MutateOptions([&]() { m_options.sampling_range_min = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--sampling-min");
+        if (IsFiniteNonNegative(value))
+        {
+            m_options.sampling_range_min = value;
+            return;
+        }
+
+        m_options.sampling_range_min = 0.0;
+        AddValidationError(
+            "--sampling-min",
+            "Minimum sampling range must be a finite non-negative value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
 {
-    MutateOptions([&]() { m_options.sampling_range_max = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--sampling-max");
+        if (IsFiniteNonNegative(value))
+        {
+            m_options.sampling_range_max = value;
+            return;
+        }
+
+        m_options.sampling_range_max = 1.5;
+        AddValidationError(
+            "--sampling-max",
+            "Maximum sampling range must be a finite non-negative value.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetSamplingHeight(double value)
 {
-    MutateOptions([&]() { m_options.sampling_height = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--sampling-height");
+        if (IsFinitePositive(value))
+        {
+            m_options.sampling_height = value;
+            return;
+        }
+
+        m_options.sampling_height = 0.1;
+        AddValidationError(
+            "--sampling-height",
+            "Sampling height must be a finite positive value.",
+            ValidationPhase::Parse);
+    });
 }
 
 bool PotentialAnalysisCommand::BuildDataObject()

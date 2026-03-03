@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <typeinfo>
 #include <utility>
 #include <vector>
@@ -15,6 +16,7 @@
 #include "CommandMetadata.hpp"
 #include "DataObjectManager.hpp"
 #include "Logger.hpp"
+#include "OptionEnumTraits.hpp"
 
 namespace CLI
 {
@@ -151,6 +153,36 @@ protected:
 
             field = fallback_value;
             AddNormalizationWarning(std::string(option_name), warning_message);
+        });
+    }
+    template <typename EnumType>
+    void SetValidatedEnumOption(
+        EnumType & field,
+        EnumType raw_value,
+        std::string_view option_name,
+        EnumType fallback_value,
+        std::string_view label)
+    {
+        MutateOptions([&]()
+        {
+            ResetParseIssues(option_name);
+            using UnderlyingType = std::underlying_type_t<EnumType>;
+            const auto raw_numeric{ static_cast<UnderlyingType>(raw_value) };
+            for (const auto & entry : EnumOptionTraits<EnumType>::kBindingEntries)
+            {
+                if (static_cast<UnderlyingType>(entry.value) == raw_numeric)
+                {
+                    field = raw_value;
+                    return;
+                }
+            }
+
+            field = fallback_value;
+            AddValidationError(
+                std::string(option_name),
+                std::string(label) + " must be one of the supported values. Received: "
+                    + std::to_string(static_cast<long long>(raw_numeric)),
+                ValidationPhase::Parse);
         });
     }
     void RequireDatabaseManager();

@@ -21,6 +21,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <limits>
+#include <cmath>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -29,6 +30,11 @@
 namespace {
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
+
+bool IsFinitePositive(double value)
+{
+    return std::isfinite(value) && value > 0.0;
+}
 }
 
 namespace rhbm_gem {
@@ -102,7 +108,21 @@ void MapVisualizationCommand::SetMapFilePath(const std::filesystem::path & path)
 
 void MapVisualizationCommand::SetAtomSerialID(int value)
 {
-    MutateOptions([&]() { m_options.atom_serial_id = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--atom-id");
+        if (value > 0)
+        {
+            m_options.atom_serial_id = value;
+            return;
+        }
+
+        m_options.atom_serial_id = 1;
+        AddValidationError(
+            "--atom-id",
+            "Atom serial ID must be positive.",
+            ValidationPhase::Parse);
+    });
 }
 
 void MapVisualizationCommand::SetSamplingSize(int value)
@@ -112,13 +132,27 @@ void MapVisualizationCommand::SetSamplingSize(int value)
         value,
         "--sampling",
         [](int candidate) { return candidate > 0; },
-        1500,
-        "Sampling size must be positive, reset to default value = 1500");
+        100,
+        "Sampling size must be positive, reset to default value = 100");
 }
 
 void MapVisualizationCommand::SetWindowSize(double value)
 {
-    MutateOptions([&]() { m_options.window_size = value; });
+    MutateOptions([&]()
+    {
+        ResetParseIssues("--window-size");
+        if (IsFinitePositive(value))
+        {
+            m_options.window_size = value;
+            return;
+        }
+
+        m_options.window_size = 5.0;
+        AddValidationError(
+            "--window-size",
+            "Window size must be a finite positive value.",
+            ValidationPhase::Parse);
+    });
 }
 
 bool MapVisualizationCommand::BuildDataObject()
