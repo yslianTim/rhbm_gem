@@ -2,11 +2,13 @@
 
 This guide is for contributors and maintainers who need the full build surface: dependency selection, CMake parameters, feature-mode validation, and coverage workflows.
 
-If you only want to install and run the project, use [`../user/getting-started.md`](../user/getting-started.md).
+If you only want to install and run the project, use [`../user/getting-started.md`](../user/getting-started.md). For the end-user workflow, start with [`../user/getting-started.md#environment-setup`](../user/getting-started.md#environment-setup), then continue to [`../user/getting-started.md#installation`](../user/getting-started.md#installation), [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings), and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
 
 ## Dependency Strategy
 
 This project uses CMake + C++17. By default it prefers system-installed Eigen3, CLI11, pybind11, and SQLite3. If any are missing, CMake automatically falls back to the bundled copies in `third_party/`. Boost support is controlled independently with `RHBM_GEM_BOOST_MODE` (`AUTO` by default).
+
+The user guide's Windows workflow intentionally uses `-DUSE_SYSTEM_LIBS=OFF` and `-DRHBM_GEM_ROOT_MODE=OFF` for the simplest first-time setup. That is a documentation choice for end users, not a change to the project defaults described here.
 
 To force bundled dependencies where supported:
 
@@ -152,6 +154,8 @@ Notes:
 
 ## Validation Examples
 
+These examples are for validating configuration behavior and CMake options. For platform-specific end-user setup and install flows, use [`../user/getting-started.md#environment-setup`](../user/getting-started.md#environment-setup), [`../user/getting-started.md#installation`](../user/getting-started.md#installation), [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings), and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
+
 ```bash
 # Release build, no tests
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
@@ -177,6 +181,8 @@ PYTHONPATH="$HOME/.local/lib/python${PYVER}/site-packages" python3 -c "import rh
 # Keep the old libdir install style for the Python module
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR
 ```
+
+Note: The Python examples here demonstrate layout validation only. For the user-facing install and example flow, follow [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings) and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
 
 After installation, downstream CMake projects can consume this project with:
 

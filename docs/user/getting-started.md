@@ -1,16 +1,37 @@
 # Getting Started
 
-This guide is for end users who want to install RHBM-GEM, build it on their platform, verify the Python bindings, and run the supported examples.
+Use this guide to set up your environment, install RHBM-GEM, verify the Python bindings, and run the example workflows.
 
-If you are validating build matrices, collecting coverage, or tuning advanced CMake settings, use [`../developer/build-and-configuration.md`](../developer/build-and-configuration.md) instead.
+Follow the sections in this order:
 
-## Platforms
+1. Complete **Environment Setup** for your platform.
+2. Choose one **Installation** workflow.
+3. If needed, continue with **Python Bindings** and **Python Examples**.
 
-This project uses CMake + C++17. By default it prefers system-installed Eigen3, CLI11, pybind11, and SQLite3. If any of those are missing, CMake automatically falls back to the bundled copies in `third_party/`. Boost support is controlled independently with `RHBM_GEM_BOOST_MODE` (`AUTO` by default).
+If you need coverage, build-matrix validation, or advanced CMake settings, use [`../developer/build-and-configuration.md`](../developer/build-and-configuration.md) instead. For advanced dependency selection, feature-mode control, and custom Python install layouts, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy), [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters), and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
 
-## macOS (Homebrew)
+## Environment Setup
 
-1. Install Xcode Command Line Tools:
+RHBM-GEM uses CMake + C++17. Choose your platform first, then install any optional dependencies you need.
+
+| If you need... | Prepare... |
+| --- | --- |
+| A standard C++ build | A compiler toolchain, CMake, and the platform prerequisites for your OS |
+| Python bindings or Python examples | Python 3; on Linux also install `python3-dev` |
+| ROOT-based plots or figure output | ROOT on the platform where you will build |
+| Boost-backed features | Boost, or leave `RHBM_GEM_BOOST_MODE=AUTO` / set `RHBM_GEM_BOOST_MODE=OFF` |
+
+A few dependencies are optional:
+
+- `Eigen3`, `SQLite3`, `CLI11`, and `pybind11` are preferred from system packages, but CMake falls back to the bundled copies in `third_party/` when they are missing.
+- `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
+- `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
+
+For the full dependency policy and override flags such as `USE_SYSTEM_LIBS`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
+
+### macOS (Homebrew)
+
+1. Install Apple command line tools:
 
 ```bash
 xcode-select --install
@@ -22,64 +43,62 @@ xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-3. Install dependencies as needed:
+3. Install the base toolchain:
 
 ```bash
-brew install cmake eigen sqlite3 python pybind11 cli11 libomp root boost
+brew install cmake python libomp
 ```
 
-## Linux (Ubuntu/Debian example)
-
-1. Install dependencies:
+4. Optional: install system packages instead of using the bundled copies from `third_party/`:
 
 ```bash
-sudo apt update
-sudo apt install -y build-essential cmake pkg-config python3 python3-dev libsqlite3-dev libeigen3-dev libboost-dev
+brew install eigen sqlite3 pybind11 cli11
 ```
 
-2. If you want Python bindings, also install:
-
-```bash
-sudo apt install -y pybind11-dev
-```
-
-## Windows (PowerShell + Visual Studio 2022)
-
-1. Install prerequisites:
-   - Visual Studio 2022 (or Build Tools) with the `Desktop development with C++` workload
-   - CMake (>= 3.18), Python 3, and Git
-2. Quick start using bundled dependencies:
-
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DUSE_SYSTEM_LIBS=OFF -DRHBM_GEM_ROOT_MODE=OFF
-cmake --build build --config Release
-```
-
-3. Optional: use vcpkg dependencies instead of bundled copies:
-
-```powershell
-git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
-& $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
-& $env:USERPROFILE\vcpkg\vcpkg.exe install eigen3 sqlite3 pybind11 cli11 boost:x64-windows
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows
-cmake --build build --config Release
-```
-
-## ROOT
-
-RHBM-GEM can build without ROOT, but ROOT is recommended if you need plot or figure output.
-
-1. Install ROOT on macOS:
+5. Optional: install these only if you need the related features:
 
 ```bash
 brew install root
+brew install boost
 ```
 
-2. Install ROOT on Linux:
+6. If you installed ROOT, verify it before running CMake:
+
+```bash
+root-config --version
+root-config --prefix
+```
+
+Notes:
+
+- Install `root` only if you need plotting or figure output.
+- Install `boost` only if you need Boost-backed features.
+
+### Linux (Ubuntu/Debian example)
+
+1. Install the base toolchain:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake pkg-config python3
+```
+
+2. Optional: if you plan to use Python bindings, or you want distro packages instead of bundled copies, also install:
+
+```bash
+sudo apt install -y python3-dev libsqlite3-dev libeigen3-dev pybind11-dev
+```
+
+3. Optional: install these only if you need the related features:
+
+```bash
+sudo apt install -y libboost-dev
+```
+
+If you need ROOT, install it with either your distro package manager or conda:
 
 ```bash
 # Option A: package manager (if available on your distro)
-sudo apt update
 sudo apt install -y root-system
 
 # Option B: conda-forge
@@ -87,40 +106,64 @@ conda create -n emmap-root -c conda-forge root
 conda activate emmap-root
 ```
 
-3. Install ROOT on Windows:
-
-```powershell
-conda create -n emmap-root -c conda-forge root
-conda activate emmap-root
-```
-
-4. Verify ROOT:
+4. If you installed ROOT, verify it before running CMake:
 
 ```bash
 root-config --version
 root-config --prefix
 ```
 
-On Windows + conda:
+Notes:
+
+- If your distro does not package `CLI11`, CMake will use the bundled copy automatically.
+- If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
+
+### Windows (PowerShell + Visual Studio 2022)
+
+1. Install the required tools:
+   - Visual Studio 2022 (or Build Tools) with the `Desktop development with C++` workload
+   - CMake 3.18 or newer
+   - Python 3 if you plan to use Python bindings or examples
+   - Git if you plan to install optional packages with `vcpkg`
+
+2. For a basic build, use the bundled copies of `Eigen3`, `SQLite3`, `CLI11`, and `pybind11`.
+
+3. Optional: if you prefer `vcpkg` packages, or you need Boost-backed features, prepare them now:
+
+```powershell
+git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
+& $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
+& $env:USERPROFILE\vcpkg\vcpkg.exe install eigen3 sqlite3 pybind11 cli11 boost:x64-windows
+```
+
+4. Optional: if you need ROOT-based plots or figure output, install ROOT with conda-forge:
+
+```powershell
+conda create -n emmap-root -c conda-forge root
+conda activate emmap-root
+```
+
+5. If you installed ROOT, verify it before running CMake:
 
 ```powershell
 where.exe root.exe
 root.exe -b -q
 ```
 
-Without ROOT, build still succeeds, but ROOT-based plotting paths are compiled out.
+Notes:
 
-## Boost
-
-Boost is optional. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found. For a typical user install, the default `AUTO` mode is the safest choice.
+- The installation workflow later in this guide uses bundled third-party libraries by default, so you do not need `vcpkg` for a basic build.
+- If you use `vcpkg`, reuse the same toolchain arguments when you configure the project later.
+- If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
+- The project defaults are still documented in [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy). This guide chooses the simplest Windows path instead of listing every supported configuration.
 
 ## Installation
 
-Choose the workflow that matches your environment. Complete the platform-specific prerequisite section above first, then follow only one of the installation flows below.
+Finish **Environment Setup** first, then choose one installation workflow and follow only that workflow.
 
-### macOS and Linux end users
+### macOS and Linux: user-local install
 
-For most macOS and Linux users, installing under `~/.local` is the simplest option because it avoids administrator privileges and keeps the installed files in your home directory.
+For most people on macOS and Linux, `~/.local` is the easiest choice. It avoids administrator privileges and keeps the installed files in your home directory.
 
 1. Configure and build:
 
@@ -149,9 +192,9 @@ cmake --install build-local
 "$HOME/.local/bin/RHBM-GEM" --help
 ```
 
-### macOS and Linux administrators or shared systems
+### macOS and Linux: shared install
 
-If you are installing for a shared machine and want CMake's default install prefix instead of a user-local path, use a separate build directory for that workflow.
+Use this workflow on a shared machine, or when you want CMake's default install prefix instead of a user-local path.
 
 1. Configure and build:
 
@@ -172,11 +215,11 @@ cmake --build build -j
 cmake --install build
 ```
 
-Depending on your platform and install prefix, this step may require administrator privileges.
+Note: Depending on your platform and install prefix, this step may require administrator privileges.
 
-### Windows users (PowerShell + Visual Studio 2022)
+### Windows (PowerShell + Visual Studio 2022)
 
-Use this flow if you are building from a Visual Studio 2022 developer environment or a PowerShell session with the required MSVC tools available.
+Use this workflow in a Visual Studio 2022 developer environment, or in PowerShell after the required MSVC tools are available.
 
 1. Choose a per-user install location:
 
@@ -209,24 +252,38 @@ cmake --install build --config Release
 & "$InstallPrefix\bin\RHBM-GEM.exe" --help
 ```
 
-If you configured Windows builds with `vcpkg` in the platform setup section above, add the same toolchain arguments to the configure command in this workflow.
+Notes:
+
+- If you prepared Windows builds with `vcpkg` in **Environment Setup**, add the same toolchain arguments to the configure command in this workflow.
+- If you installed ROOT, remove `-DRHBM_GEM_ROOT_MODE=OFF` or replace it with `-DRHBM_GEM_ROOT_MODE=AUTO`.
+- This workflow intentionally uses `-DUSE_SYSTEM_LIBS=OFF` and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
 
 ## Python Bindings
 
-The canonical Python extension module name is `rhbm_gem_module`.
+The Python module is named `rhbm_gem_module`.
 
-Recommended quickstart:
+Complete **Installation** first. Then follow the Python binding workflow for your platform. Each workflow builds the module, installs it under your chosen prefix, and confirms that Python can import it.
+
+### macOS and Linux
+
+For most users, reuse the same `~/.local` install prefix from **Installation**.
+
+1. Configure, build, and install with Python bindings enabled:
 
 ```bash
 INSTALL_PREFIX="$HOME/.local"
 
-cmake -S . -B build \
+cmake -S . -B build-py \
   -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_PYTHON_BINDINGS=ON \
   -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}"
-cmake --build build -j
-cmake --install build
+cmake --build build-py -j
+cmake --install build-py
+```
 
+2. Find the installed `site-packages` directory and verify the import:
+
+```bash
 PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 PY_SITE="${INSTALL_PREFIX}/lib/python${PYVER}/site-packages"
 
@@ -234,18 +291,69 @@ PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 -c "import rhbm_gem_module as rgm; print(rgm.__file__)"
 ```
 
+Note: If you installed the project to a different prefix, update `INSTALL_PREFIX` before computing `PY_SITE`.
+
+For custom Python layouts such as `RHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR` or an explicit `RHBM_GEM_PYTHON_INSTALL_DIR`, see [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters) and [`../developer/build-and-configuration.md#validation-examples`](../developer/build-and-configuration.md#validation-examples).
+
+### Windows (PowerShell)
+
+Reuse the same install prefix from **Installation**, unless you intentionally chose a different location.
+
+1. Configure, build, and install with Python bindings enabled:
+
+```powershell
+$InstallPrefix = "$env:USERPROFILE\AppData\Local\RHBM-GEM"
+
+cmake -S . -B build-py `
+  -G "Visual Studio 17 2022" `
+  -A x64 `
+  -DUSE_SYSTEM_LIBS=OFF `
+  -DRHBM_GEM_ROOT_MODE=OFF `
+  -DBUILD_PYTHON_BINDINGS=ON `
+  -DCMAKE_INSTALL_PREFIX="$InstallPrefix"
+cmake --build build-py --config Release
+cmake --install build-py --config Release
+```
+
+2. Find the installed `site-packages` directory and verify the import:
+
+```powershell
+$PyVer = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+$PySite = "$InstallPrefix\lib\python$PyVer\site-packages"
+$env:PYTHONPATH = if ($env:PYTHONPATH) { "$PySite;$env:PYTHONPATH" } else { $PySite }
+
+python -c "import rhbm_gem_module as rgm; print(rgm.__file__)"
+```
+
+Notes:
+
+- If you prepared Windows builds with `vcpkg` in **Environment Setup**, add the same toolchain arguments to the configure command here.
+- If you installed ROOT, remove `-DRHBM_GEM_ROOT_MODE=OFF` or replace it with `-DRHBM_GEM_ROOT_MODE=AUTO`.
+- For custom Python install layouts, see [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
+
 ## Python Examples
 
-Run the examples from the source tree:
+Once the import check succeeds, continue with the example workflow for your platform. Each workflow runs the quickstart script, then the end-to-end pipeline from the source tree, and finally the installed copy of the same pipeline example.
+
+### macOS and Linux
+
+These commands assume `INSTALL_PREFIX` and `PY_SITE` are still set from **Python Bindings**.
+
+1. Run the quickstart example from the source tree:
 
 ```bash
 PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 examples/python/00_quickstart.py
+```
+
+2. Run the end-to-end pipeline example from the source tree:
+
+```bash
 PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
 ```
 
-Run the installed example:
+3. Run the installed copy of the pipeline example:
 
 ```bash
 PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
@@ -253,7 +361,30 @@ python3 "${INSTALL_PREFIX}/share/RHBM_GEM/examples/python/01_end_to_end_from_tes
   --workdir /tmp/rhbm_py_demo_installed
 ```
 
-Expected outputs for the pipeline example:
+### Windows (PowerShell)
+
+These commands assume `$InstallPrefix` and `$PySite` are still set from **Python Bindings**.
+
+1. Run the quickstart example from the source tree:
+
+```powershell
+python .\examples\python\00_quickstart.py
+```
+
+2. Run the end-to-end pipeline example from the source tree:
+
+```powershell
+python .\examples\python\01_end_to_end_from_test_data.py --workdir "$env:TEMP\rhbm_py_demo"
+```
+
+3. Run the installed copy of the pipeline example:
+
+```powershell
+python "$InstallPrefix\share\RHBM_GEM\examples\python\01_end_to_end_from_test_data.py" `
+  --workdir "$env:TEMP\rhbm_py_demo_installed"
+```
+
+The pipeline example should create:
 
 1. SQLite database: `<workdir>/demo.sqlite`
 2. Simulated map files: `<workdir>/maps/sim_map_*.map`
@@ -261,12 +392,14 @@ Expected outputs for the pipeline example:
 
 ## Troubleshooting
 
-1. If you do not have Eigen, SQLite3, pybind11, or CLI11 installed, you can skip installing them; CMake will use the bundled versions in `third_party/`.
-2. Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
+1. Missing `Eigen3`, `SQLite3`, `pybind11`, or `CLI11`
+   You can skip installing them; CMake will use the bundled versions in `third_party/`.
+2. Missing Boost
+   Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
 3. `ModuleNotFoundError: No module named 'rhbm_gem_module'`
-   Verify `BUILD_PYTHON_BINDINGS=ON`, run `cmake --install`, and ensure `PYTHONPATH` points to your actual install site-packages path.
-4. Install prefix mismatch (`/usr/local` vs `$HOME/.local`)
-   If you install under `/usr/local`, do not use `$HOME/.local/.../site-packages` in `PYTHONPATH`.
+   Verify `BUILD_PYTHON_BINDINGS=ON`, run `cmake --install`, and make sure `PYTHONPATH` points to the actual install `site-packages` path.
+4. Install prefix mismatch
+   If you install under a different prefix, recompute the `site-packages` path from that prefix instead of reusing the examples for `~/.local` or `%USERPROFILE%\AppData\Local\RHBM-GEM`.
 5. `Could not find sample model ...`
    Pass `--model /path/to/your_model.cif` explicitly.
 
