@@ -16,7 +16,6 @@ enum class CommandId
 enum class DatabaseUsage
 {
     Required = 0,
-    Optional,
     NotUsed
 };
 

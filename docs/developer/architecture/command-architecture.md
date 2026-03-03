@@ -124,7 +124,7 @@ Base setters are not passive assignment helpers. They also normalize and validat
 
 ### 4.3 Common option capability mask
 
-`CommandBase` reads each command descriptor from the built-in command catalog and derives shared option behavior from `CommandSurface` / `GetCommonOptionMask()`:
+`CommandBase` resolves each built-in descriptor internally from the built-in command catalog and derives shared option behavior from `CommandSurface`:
 
 - `Threading`
 - `Verbose`
@@ -144,6 +144,7 @@ Each concrete command follows the same pattern:
 This is the preferred extension point for new command parameters.
 The shared setter helper families for scalar normalization, scalar validation, and enum validation now live on `CommandBase`, so new commands should reuse those helpers before introducing command-local setter boilerplate.
 Invalid enum or mode selections should be rejected from setter paths or `PrepareForExecution()`, not first discovered from a runtime `switch` default branch inside `ExecuteImpl()`.
+Catalog metadata is intentionally consumed at the catalog / application / binding boundary. `CommandBase` no longer exposes public metadata accessor methods for that descriptor state.
 
 ## 5. Standard Execution Lifecycle
 
@@ -246,6 +247,8 @@ These commands primarily load previously saved `ModelObject` instances from the 
 | `model_test` | tester mode and fitting parameters | choose simulation scenario, run `HRLModelTester` workflows | logs and optional ROOT-based plots |
 
 `model_test` is still a `CommandBase` subclass for CLI consistency, but it does not currently rely on `DataObjectManager`.
+
+`potential_analysis` also contains an experimental bond-analysis path, but that implementation is isolated under `src/core/` as an internal feature-gated helper and is not part of the default public header surface.
 
 ### 7.4 Command surface matrix
 
@@ -390,6 +393,8 @@ When adding a new command, follow this checklist:
 8. Use `DataObjectManager` as the boundary for file parsing and persistence.
 9. Add a new `CommandDescriptor` entry to `BuiltInCommandCatalog()` with the command name, description, `CommandSurface`, `DatabaseUsage`, `BindingExposure`, and factory.
 10. Update bindings, examples, tests, and user-facing docs if the command is part of a supported public workflow.
+
+Experimental or internal-only helpers for a command should stay under `src/core/` and must not be promoted into `include/` unless they are intended to become supported public interfaces.
 
 ## 11. What Future Contributors Should Avoid
 

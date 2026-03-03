@@ -1,4 +1,5 @@
 #include "PotentialAnalysisBondWorkflow.hpp"
+#include "PotentialAnalysisExecutionOptions.hpp"
 
 #include "BondObject.hpp"
 #include "BondClassifier.hpp"
@@ -24,25 +25,7 @@
 #include <omp.h>
 #endif
 
-namespace {
-
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
-HRLExecutionOptions BuildHRLExecutionOptions(
-    const rhbm_gem::PotentialAnalysisCommand::Options & options,
-    bool quiet_mode)
-{
-    HRLExecutionOptions execution_options;
-    execution_options.quiet_mode = quiet_mode;
-    execution_options.thread_size = options.thread_size;
-    return execution_options;
-}
-#endif
-
-} // namespace
-
 namespace rhbm_gem::detail {
-
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
 
 namespace {
 
@@ -165,7 +148,7 @@ void RunLocalBondFitting(
                 universal_alpha_r,
                 dataset.X,
                 dataset.y,
-                BuildHRLExecutionOptions(context.options, true))
+                MakePotentialAnalysisExecutionOptions(context.options, true))
         };
 
         local_entry->SetBetaEstimateOLS(result.beta_ols);
@@ -247,7 +230,8 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                     data_weight_list,
                     data_covariance_list)
             };
-            HRLGroupEstimator estimator(BuildHRLExecutionOptions(context.options, true));
+            HRLGroupEstimator estimator(
+                MakePotentialAnalysisExecutionOptions(context.options, true));
             const auto result{ estimator.Estimate(input, context.options.alpha_g) };
 
             auto gaus_group_mean{
@@ -314,18 +298,12 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
 
 } // namespace
 
-#endif
-
 void RunPotentialAnalysisBondWorkflow(const PotentialAnalysisBondWorkflowContext & context)
 {
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
     RunBondMapValueSampling(context);
     RunBondGroupClassification(context);
     RunLocalBondFitting(context, context.options.alpha_r);
     RunBondPotentialFitting(context);
-#else
-    static_cast<void>(context);
-#endif
 }
 
 } // namespace rhbm_gem::detail

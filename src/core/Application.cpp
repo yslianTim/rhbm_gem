@@ -1,4 +1,5 @@
 #include "Application.hpp"
+#include "BuiltInCommandCatalog.hpp"
 #include "CommandBase.hpp"
 #include "Logger.hpp"
 #include "ScopeTimer.hpp"

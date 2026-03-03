@@ -10,6 +10,7 @@ set(TEST_SOURCES
     CommandCLIHelper_test.cpp
     CommandExecutionContract_test.cpp
     CommandOptionHelper_test.cpp
+    CommandDescriptorShape_test.cpp
     CommandScalarValidationHelper_test.cpp
     CommandSurface_test.cpp
     CommandValidationIssue_test.cpp
@@ -36,6 +37,7 @@ set(TEST_SOURCES
     PotentialAnalysisCommand_test.cpp
     PreparedStateInvalidation_test.cpp
     PotentialDisplayCommand_test.cpp
+    PublicHeaderSurface_test.cpp
     ResultDumpCommand_test.cpp
     ROOTHelper_test.cpp
     SphereSampler_test.cpp

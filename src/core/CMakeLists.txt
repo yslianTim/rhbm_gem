@@ -14,10 +14,15 @@ set(CORE_SOURCES
     ModelPainter.cpp
     PositionEstimationCommand.cpp
     PotentialAnalysisCommand.cpp
-    PotentialAnalysisBondWorkflow.cpp
     PotentialDisplayCommand.cpp
     ResultDumpCommand.cpp
 )
+
+if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
+    list(APPEND CORE_SOURCES
+        PotentialAnalysisBondWorkflow.cpp
+    )
+endif()
 
 add_library(core ${CORE_SOURCES})
 target_include_directories(core PUBLIC

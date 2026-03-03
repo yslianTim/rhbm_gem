@@ -1,4 +1,5 @@
 #include "CommandBase.hpp"
+#include "BuiltInCommandCatalog.hpp"
 #include "CommandOptionBinding.hpp"
 #include "FilePathHelper.hpp"
 
@@ -35,6 +36,16 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
     return prefix;
 }
 
+const CommandDescriptor & ResolveCommandDescriptor(const CommandBase & command)
+{
+    return FindCommandDescriptor(command.GetCommandId());
+}
+
+CommonOptionMask ResolveCommonOptions(const CommandBase & command)
+{
+    return ResolveCommandDescriptor(command).surface.common_options;
+}
+
 } // namespace
 
 bool CommandBase::Execute()
@@ -55,11 +66,6 @@ bool CommandBase::Execute()
     return executed;
 }
 
-const CommandDescriptor & CommandBase::GetCommandDescriptor() const
-{
-    return FindCommandDescriptor(GetCommandId());
-}
-
 void CommandBase::RegisterCLIOptions(CLI::App * command)
 {
     RegisterCLIOptionsBasic(command);
@@ -69,7 +75,7 @@ void CommandBase::RegisterCLIOptions(CLI::App * command)
 void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
 {
     auto & options{ GetOptions() };
-    const auto common_options{ GetCommonOptionMask() };
+    const auto common_options{ ResolveCommonOptions(*this) };
 
     if (HasCommonOption(common_options, CommonOption::Threading))
     {
@@ -371,7 +377,7 @@ std::filesystem::path CommandBase::BuildOutputPath(
 
 void CommandBase::PrepareFilesystemTargets()
 {
-    const auto common_options{ GetCommonOptionMask() };
+    const auto common_options{ ResolveCommonOptions(*this) };
 
     if (HasCommonOption(common_options, CommonOption::Database))
     {

@@ -1,5 +1,5 @@
 #include "PotentialAnalysisCommand.hpp"
-#include "PotentialAnalysisBondWorkflow.hpp"
+#include "PotentialAnalysisExecutionOptions.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
@@ -33,6 +33,10 @@
 #include <random>
 #include <sstream>
 
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
+#include "PotentialAnalysisBondWorkflow.hpp"
+#endif
+
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
@@ -40,16 +44,6 @@
 namespace {
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
-
-HRLExecutionOptions BuildHRLExecutionOptions(
-    const rhbm_gem::PotentialAnalysisCommand::Options & options,
-bool quiet_mode)
-{
-    HRLExecutionOptions execution_options;
-    execution_options.quiet_mode = quiet_mode;
-    execution_options.thread_size = options.thread_size;
-    return execution_options;
-}
 }
 
 namespace rhbm_gem {
@@ -587,7 +581,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                BuildHRLExecutionOptions(m_options, true)
+                detail::MakePotentialAnalysisExecutionOptions(m_options, true)
             )
         };
         
@@ -643,7 +637,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                BuildHRLExecutionOptions(m_options, true)
+                detail::MakePotentialAnalysisExecutionOptions(m_options, true)
             )
         };
         
@@ -689,7 +683,9 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
         auto local_entry{ atom_list[i]->GetLocalPotentialEntry() };
         const auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
-        const auto algorithm_options{ BuildHRLExecutionOptions(m_options, true) };
+        const auto algorithm_options{
+            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
+        };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
         for (int j = 0; j < alpha_size; j++)
@@ -759,7 +755,9 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
             );
         }
         const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(data_entry_list, true) };
-        const auto algorithm_options{ BuildHRLExecutionOptions(m_options, true) };
+        const auto algorithm_options{
+            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
+        };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
         for (int j = 0; j < alpha_size; j++)
@@ -819,7 +817,7 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
             universal_alpha_r,
             dataset.X,
             dataset.y,
-            BuildHRLExecutionOptions(m_options, true)
+            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
         );
 
         local_entry->SetBetaEstimateOLS(result.beta_ols);
@@ -905,7 +903,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
                 data_weight_list,
                 data_covariance_list
             );
-            HRLGroupEstimator estimator(BuildHRLExecutionOptions(m_options, true));
+            HRLGroupEstimator estimator(
+                detail::MakePotentialAnalysisExecutionOptions(m_options, true));
             const auto result = estimator.Estimate(input, alpha_g);
 
             auto gaus_group_mean{
@@ -972,12 +971,14 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
 
 void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled()
 {
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
     if (m_model_object == nullptr || m_map_object == nullptr) return;
     detail::RunPotentialAnalysisBondWorkflow(detail::PotentialAnalysisBondWorkflowContext{
         *m_model_object,
         *m_map_object,
         m_options
     });
+#endif
 }
 
 void PotentialAnalysisCommand::SaveDataObject()

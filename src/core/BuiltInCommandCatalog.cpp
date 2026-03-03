@@ -28,7 +28,10 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
             "PotentialAnalysisCommand",
-            []() { return std::make_unique<PotentialAnalysisCommand>(); }
+            []() -> std::unique_ptr<CommandBase>
+            {
+                return std::make_unique<PotentialAnalysisCommand>();
+            }
         },
         CommandDescriptor{
             CommandId::PotentialDisplay,
@@ -42,7 +45,10 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
             "PotentialDisplayCommand",
-            []() { return std::make_unique<PotentialDisplayCommand>(); }
+            []() -> std::unique_ptr<CommandBase>
+            {
+                return std::make_unique<PotentialDisplayCommand>();
+            }
         },
         CommandDescriptor{
             CommandId::ResultDump,
@@ -56,7 +62,10 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
             "ResultDumpCommand",
-            []() { return std::make_unique<ResultDumpCommand>(); }
+            []() -> std::unique_ptr<CommandBase>
+            {
+                return std::make_unique<ResultDumpCommand>();
+            }
         },
         CommandDescriptor{
             CommandId::MapSimulation,
@@ -69,7 +78,10 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             DatabaseUsage::NotUsed,
             BindingExposure::PythonPublic,
             "MapSimulationCommand",
-            []() { return std::make_unique<MapSimulationCommand>(); }
+            []() -> std::unique_ptr<CommandBase>
+            {
+                return std::make_unique<MapSimulationCommand>();
+            }
         },
         CommandDescriptor{
             CommandId::MapVisualization,
@@ -82,7 +94,10 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
             "",
-            []() { return std::make_unique<MapVisualizationCommand>(); }
+            []() -> std::unique_ptr<CommandBase>
+            {
+                return std::make_unique<MapVisualizationCommand>();
+            }
         },
         CommandDescriptor{
             CommandId::PositionEstimation,
@@ -95,7 +110,10 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
             "",
-            []() { return std::make_unique<PositionEstimationCommand>(); }
+            []() -> std::unique_ptr<CommandBase>
+            {
+                return std::make_unique<PositionEstimationCommand>();
+            }
         },
         CommandDescriptor{
             CommandId::ModelTest,
@@ -108,7 +126,10 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
             "",
-            []() { return std::make_unique<HRLModelTestCommand>(); }
+            []() -> std::unique_ptr<CommandBase>
+            {
+                return std::make_unique<HRLModelTestCommand>();
+            }
         }
     };
 

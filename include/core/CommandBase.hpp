@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <cmath>
 #include <filesystem>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -13,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "BuiltInCommandCatalog.hpp"
+#include "CommandId.hpp"
 #include "CommandMetadata.hpp"
 #include "DataObjectManager.hpp"
 #include "Logger.hpp"
@@ -61,19 +60,6 @@ public:
     virtual CommandId GetCommandId() const = 0;
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
-    const CommandDescriptor & GetCommandDescriptor() const;
-    CommonOptionMask GetCommonOptionMask() const
-    {
-        return GetCommandDescriptor().surface.common_options;
-    }
-    DatabaseUsage GetDatabaseUsage() const
-    {
-        return GetCommandDescriptor().database_usage;
-    }
-    BindingExposure GetBindingExposure() const
-    {
-        return GetCommandDescriptor().binding_exposure;
-    }
 
     void RegisterCLIOptions(::CLI::App * command);
     bool PrepareForExecution();

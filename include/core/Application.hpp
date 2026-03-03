@@ -1,17 +1,13 @@
 #pragma once
 
-#include <functional>
-#include <memory>
-#include <string>
-
-#include "BuiltInCommandCatalog.hpp"
-
 namespace CLI
 {
     class App;
 }
 
 namespace rhbm_gem {
+
+struct CommandDescriptor;
 
 class Application {
 public:

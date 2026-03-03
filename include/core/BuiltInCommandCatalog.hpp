@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -11,6 +10,7 @@
 namespace rhbm_gem {
 
 class CommandBase;
+using CommandFactory = std::unique_ptr<CommandBase>(*)();
 
 struct CommandDescriptor
 {
@@ -21,7 +21,7 @@ struct CommandDescriptor
     DatabaseUsage database_usage;
     BindingExposure binding_exposure;
     std::string_view python_binding_name;
-    std::function<std::unique_ptr<CommandBase>()> factory;
+    CommandFactory factory;
 };
 
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog();
