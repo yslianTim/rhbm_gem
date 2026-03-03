@@ -5,6 +5,8 @@
 
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance(void)
 {
     Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::Instance() called");
@@ -48,3 +50,5 @@ std::unique_ptr<FileProcessFactoryBase> FileProcessFactoryRegistry::CreateFactor
     }
     return (iter->second)();
 }
+
+} // namespace rhbm_gem

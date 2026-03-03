@@ -35,6 +35,8 @@
 #include <TH1.h>
 #endif
 
+namespace rhbm_gem {
+
 GausPainter::GausPainter(void) :
     m_folder_path{ "./" },
     m_atom_classifier{ std::make_unique<AtomClassifier>() },
@@ -1976,3 +1978,5 @@ std::unique_ptr<TPaveText> GausPainter::CreateResolutionPaveText(
     return pavetext;
 }
 #endif
+
+} // namespace rhbm_gem

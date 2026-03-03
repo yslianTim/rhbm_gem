@@ -5,6 +5,8 @@
 
 #include "DataObjectDAOBase.hpp"
 
+namespace rhbm_gem {
+
 class SQLiteWrapper;
 class MapObject;
 
@@ -19,3 +21,5 @@ public:
     std::unique_ptr<DataObjectBase> Load(const std::string & key_tag) override;
 
 };
+
+} // namespace rhbm_gem

@@ -8,6 +8,11 @@
 #include "MapFileWriter.hpp"
 #include "MapObject.hpp"
 
+namespace rg = rhbm_gem;
+using MapFileReader = rg::MapFileReader;
+using MapFileWriter = rg::MapFileWriter;
+using MapObject = rg::MapObject;
+
 TEST(MapFileIOTest, ReadWriteMapAndCCP4)
 {
     std::array<int, 3> grid_size{ 4, 4, 4 };

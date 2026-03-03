@@ -14,6 +14,8 @@
 #include "SQLiteColumnReader.hpp"
 #include "Logger.hpp"
 
+namespace rhbm_gem {
+
 class SQLiteWrapper
 {
     sqlite3 * m_database_ptr;
@@ -296,3 +298,5 @@ private:
     }
     
 };
+
+} // namespace rhbm_gem

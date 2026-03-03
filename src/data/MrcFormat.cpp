@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <algorithm>
 
+namespace rhbm_gem {
+
 MrcFormat::MrcFormat(void)
 {
     Logger::Log(LogLevel::Debug, "MrcFormat::MrcFormat() called");
@@ -375,3 +377,5 @@ void MrcFormat::ReorderedAxisRelatedParameters(void)
     m_header.axis[1] = 2;
     m_header.axis[2] = 3;
 }
+
+} // namespace rhbm_gem

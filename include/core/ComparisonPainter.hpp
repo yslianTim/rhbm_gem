@@ -1,17 +1,13 @@
 #pragma once
 
 #include <cstddef>
-#include <string>
-#include <vector>
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "GlobalEnumClass.hpp"
 #include "PainterBase.hpp"
-
-
-class ModelObject;
-class AtomClassifier;
 
 #ifdef HAVE_ROOT
 class TPad;
@@ -19,6 +15,11 @@ class TH2;
 class TPaveText;
 class TGraphErrors;
 #endif
+
+namespace rhbm_gem {
+
+class ModelObject;
+class AtomClassifier;
 
 class ComparisonPainter : public PainterBase
 {
@@ -41,10 +42,11 @@ private:
     void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
     void PainMapValueComparison(const std::string & name, ModelObject * model_object, const std::vector<ModelObject *> & ref_model_object_list);
 
-    #ifdef HAVE_ROOT
-    void BuildGausRatioToResolutionGraph(int par_id, size_t target_id, size_t reference_id, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, Residue residue=Residue::UNK);
-    void BuildAmplitudeRatioToWidthGraph(size_t target_id, size_t reference_id, TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, bool draw_index=false, Residue residue=Residue::UNK);
-    void BuildMapValueScatterGraph(GroupKey group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
-    #endif
-
+#ifdef HAVE_ROOT
+    void BuildGausRatioToResolutionGraph(int par_id, size_t target_id, size_t reference_id, ::TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, Residue residue=Residue::UNK);
+    void BuildAmplitudeRatioToWidthGraph(size_t target_id, size_t reference_id, ::TGraphErrors * graph, const std::vector<ModelObject *> & model_list, const std::string & class_key, bool draw_index=false, Residue residue=Residue::UNK);
+    void BuildMapValueScatterGraph(GroupKey group_key, ::TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size=15, double x_min=0.0, double x_max=1.5);
+#endif
 };
+
+} // namespace rhbm_gem

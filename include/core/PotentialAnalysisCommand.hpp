@@ -7,6 +7,8 @@
 
 #include "CommandBase.hpp"
 
+namespace rhbm_gem {
+
 class ModelObject;
 class MapObject;
 class AtomObject;
@@ -99,3 +101,5 @@ private:
     );
 
 };
+
+} // namespace rhbm_gem

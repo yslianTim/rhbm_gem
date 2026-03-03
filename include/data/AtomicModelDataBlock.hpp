@@ -14,6 +14,8 @@
 #include "AtomKeySystem.hpp"
 #include "BondKeySystem.hpp"
 
+namespace rhbm_gem {
+
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
@@ -136,3 +138,5 @@ public:
     std::unique_ptr<BondKeySystem> MoveBondKeySystem(void) { return std::move(m_bond_key_system); }
 
 };
+
+} // namespace rhbm_gem

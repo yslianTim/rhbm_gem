@@ -5,6 +5,8 @@
 #include <string>
 #include <unordered_map>
 
+namespace rhbm_gem {
+
 class CommandBase;
 
 class CommandRegistry
@@ -45,3 +47,5 @@ public:
         );
     }
 };
+
+} // namespace rhbm_gem

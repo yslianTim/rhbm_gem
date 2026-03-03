@@ -16,10 +16,10 @@ If a rule changes, update this document and any affected user-facing documentati
 - `[Required]` Public C++ interfaces belong under `include/`, implementations belong under the matching `src/` area, Python bindings belong under `bindings/`, runnable examples belong under `examples/python/`, tests belong under `tests/`, and test fixtures belong under `tests/data/`.
 - `[Required]` Keep module responsibilities clear: command orchestration in `core`, file formats and persistence in `data`, and reusable utilities or algorithms in `utils`.
 - `[Required]` New reusable utility or algorithm modules should prefer a focused namespace rather than expanding the global namespace.
+- `[Required]` Project-owned public types in `core` and `data` must live under the `rhbm_gem` namespace. New code must not introduce additional global `core` or `data` APIs.
 - `[Required]` Do not use `using namespace` in headers.
 - `[Recommended]` Keep a one-to-one header/source pairing for new classes unless there is a strong reason to group multiple small related types together.
 - `[Recommended]` Do not place project logic in `third_party/` unless you are intentionally maintaining vendored dependency code.
-- `[Legacy note]` Some older `core` and `data` APIs still live in the global namespace. This is tolerated for legacy code but should not be expanded as a preferred pattern.
 
 ## 3. Build, Dependencies, and Feature Gating
 
@@ -117,5 +117,4 @@ If a rule changes, update this document and any affected user-facing documentati
 ## 12. Legacy Notes
 
 - `[Legacy note]` Some existing files use parameterless `(void)` style. Preserve local consistency when touching those files, but do not treat this as a priority rule for new design.
-- `[Legacy note]` Some older modules remain in the global namespace. Do not use that as justification for adding more new global APIs.
 - `[Legacy note]` Some existing low-level helpers still use direct stream output instead of `Logger`. New code should not copy that pattern without a clear boundary-related reason.

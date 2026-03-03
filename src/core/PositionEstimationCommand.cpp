@@ -35,11 +35,13 @@ struct QuantizedPointHash
     }
 };
 
-CommandRegistrar<PositionEstimationCommand> registrar_model_test{
+rhbm_gem::CommandRegistrar<rhbm_gem::PositionEstimationCommand> registrar_model_test{
     "position_estimation",
     "Run atom position estimation"
 };
 } // namespace
+
+namespace rhbm_gem {
 
 PositionEstimationCommand::PositionEstimationCommand(void) :
     CommandBase(), m_options{}, m_selected_voxel_list{}, m_query_point_list{},
@@ -402,3 +404,5 @@ void PositionEstimationCommand::OutputPointList(void) const
     ChimeraXHelper::WriteCMMPoints(m_position_list, output_file, 0.05f);
     Logger::Log(LogLevel::Info, "Output file: " + output_file.string());
 }
+
+} // namespace rhbm_gem

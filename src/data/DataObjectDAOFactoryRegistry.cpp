@@ -3,6 +3,8 @@
 #include "Logger.hpp"
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 DataObjectDAOFactoryRegistry & DataObjectDAOFactoryRegistry::Instance(void)
 {
     static DataObjectDAOFactoryRegistry instance;
@@ -63,3 +65,5 @@ std::type_index DataObjectDAOFactoryRegistry::GetTypeIndex(const std::string & n
     }
     return iter->second;
 }
+
+} // namespace rhbm_gem

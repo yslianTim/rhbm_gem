@@ -7,6 +7,8 @@
 #include "AtomicModelDataBlock.hpp"
 #include "Logger.hpp"
 
+namespace rhbm_gem {
+
 ModelFileReader::ModelFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }
 {
@@ -80,3 +82,5 @@ AtomicModelDataBlock * ModelFileReader::GetDataBlockPtr(void)
     if (m_file_object == nullptr || m_successfully_read_file == false) return nullptr;
     return m_file_object->GetDataBlockPtr();
 }
+
+} // namespace rhbm_gem

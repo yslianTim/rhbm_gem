@@ -29,6 +29,8 @@
 #include <TH2.h>
 #endif
 
+namespace rhbm_gem {
+
 PotentialEntryIterator::PotentialEntryIterator(ModelObject * model_object) :
     m_atom_object{ nullptr }, m_bond_object{ nullptr }, m_model_object{ model_object },
     m_atom_local_entry{ nullptr }, m_bond_local_entry{ nullptr }
@@ -1590,3 +1592,4 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateBondGroupGausFunctionPrior(
     return ROOTHelper::CreateGaus2DFunctionIn1D("group_gaus_prior", amplitude, width);
 }
 #endif
+} // namespace rhbm_gem

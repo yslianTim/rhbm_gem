@@ -2,6 +2,8 @@
 
 #include <string>
 
+namespace rhbm_gem {
+
 class DataObjectBase;
 class PainterBase
 {
@@ -13,3 +15,5 @@ public:
     virtual void Painting(void) = 0;
 
 };
+
+} // namespace rhbm_gem

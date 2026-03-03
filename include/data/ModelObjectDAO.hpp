@@ -9,6 +9,8 @@
 
 #include "DataObjectDAOBase.hpp"
 
+namespace rhbm_gem {
+
 class SQLiteWrapper;
 class ModelObject;
 class AtomObject;
@@ -60,3 +62,5 @@ private:
     std::string SanitizeTableName(const std::string & key_tag) const;
     
 };
+
+} // namespace rhbm_gem

@@ -6,6 +6,8 @@
 #include <memory>
 #include <CLI/CLI.hpp>
 
+namespace rhbm_gem {
+
 Application::Application(CLI::App & app) :
     m_cli_app{ app }
 {
@@ -52,3 +54,5 @@ void Application::RegisterCommand(
         }
     });
 }
+
+} // namespace rhbm_gem

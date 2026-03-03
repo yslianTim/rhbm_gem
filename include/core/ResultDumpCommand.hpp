@@ -10,6 +10,8 @@
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
 
+namespace rhbm_gem {
+
 class AtomObject;
 class ModelObject;
 class MapObject;
@@ -53,3 +55,5 @@ private:
     void RunGroupGausEstimatesDumping(void);
 
 };
+
+} // namespace rhbm_gem

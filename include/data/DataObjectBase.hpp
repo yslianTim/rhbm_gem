@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 
+namespace rhbm_gem {
+
 class DataObjectVisitorBase;
 
 class DataObjectBase
@@ -16,3 +18,5 @@ public:
     virtual void SetKeyTag(const std::string & label) = 0;
     virtual std::string GetKeyTag(void) const = 0;
 };
+
+} // namespace rhbm_gem

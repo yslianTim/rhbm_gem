@@ -8,7 +8,9 @@
 #include <algorithm>
 #include <utility>
 
-MapInterpolationVisitor::MapInterpolationVisitor(SamplerBase * sampler) :
+namespace rhbm_gem {
+
+MapInterpolationVisitor::MapInterpolationVisitor(::SamplerBase * sampler) :
     m_sampler{ sampler }, m_position{ 0.0, 0.0, 0.0 }, m_axis_vector{ 0.0, 0.0, 0.0 }
 {
     Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::MapInterpolationVisitor() called.");
@@ -114,3 +116,5 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
     // Interpolate along z direction
     return cubic_interpolate(temp_z[0], temp_z[1], temp_z[2], temp_z[3], local.at(2));
 }
+
+} // namespace rhbm_gem

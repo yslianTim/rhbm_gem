@@ -38,6 +38,8 @@
 #include <boost/math/distributions/students_t.hpp>
 #endif
 
+namespace rhbm_gem {
+
 DemoPainter::DemoPainter(void) :
     m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
 {
@@ -2073,3 +2075,5 @@ void DemoPainter::BuildMapValueScatterGraph(
 }
 
 #endif
+
+} // namespace rhbm_gem

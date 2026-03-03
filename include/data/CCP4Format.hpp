@@ -7,6 +7,8 @@
 
 #include "MapFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class CCP4Format : public MapFileFormatBase
 {
     enum HEAD
@@ -86,3 +88,5 @@ private:
     void ReorderedAxisRelatedParameters(void);
     
 };
+
+} // namespace rhbm_gem

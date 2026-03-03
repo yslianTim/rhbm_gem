@@ -6,6 +6,8 @@
 
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 std::unique_ptr<DataObjectBase> MapObjectFactory::CreateDataObject(const std::string & filename)
 {
     Logger::Log(LogLevel::Debug, "MapObjectFactory::CreateDataObject() called");
@@ -38,3 +40,5 @@ void MapObjectFactory::OutputDataObject(const std::string & filename, DataObject
     auto file_writer{ std::make_unique<MapFileWriter>(filename, map_object) };
     file_writer->Write();
 }
+
+} // namespace rhbm_gem

@@ -7,6 +7,8 @@
 
 #include <cmath>
 
+namespace rhbm_gem {
+
 GroupPotentialEntry::GroupPotentialEntry(void)
 {
 
@@ -225,3 +227,5 @@ double GroupPotentialEntry::CalculateIntensityVariance(
         std::pow(-3.0 * amplitude * std::pow(Constants::two_pi, -1.5) * std::pow(width, -4) * sigma_width, 2)
     );
 }
+
+} // namespace rhbm_gem

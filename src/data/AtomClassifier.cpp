@@ -7,6 +7,8 @@
 
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 const std::unordered_map<Spot, short> AtomClassifier::m_main_chain_color_map
 {
     { Spot::CA, 633 }, // kRed+1
@@ -456,3 +458,5 @@ std::vector<GroupKey> AtomClassifier::GetNucleotideMainChainComponentAtomClassGr
     }
     return group_key_list;
 }
+
+} // namespace rhbm_gem

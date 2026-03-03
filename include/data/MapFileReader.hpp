@@ -7,6 +7,8 @@
 #include "FileReaderBase.hpp"
 #include "MapFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class MapFileReader : public FileReaderBase
 {
     bool m_successfully_read_file;
@@ -36,3 +38,5 @@ private:
     bool ReadMapValueArray(std::ifstream & stream);
 
 };
+
+} // namespace rhbm_gem

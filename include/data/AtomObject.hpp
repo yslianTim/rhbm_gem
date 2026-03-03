@@ -9,6 +9,8 @@
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
 
+namespace rhbm_gem {
+
 class LocalPotentialEntry;
 
 class AtomObject : public DataObjectBase
@@ -96,3 +98,5 @@ public:
     LocalPotentialEntry * GetLocalPotentialEntry(void) const { return m_local_potential_entry.get(); }
     
 };
+
+} // namespace rhbm_gem

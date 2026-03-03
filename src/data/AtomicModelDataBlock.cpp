@@ -8,6 +8,8 @@
 
 #include <algorithm>
 
+namespace rhbm_gem {
+
 AtomicModelDataBlock::AtomicModelDataBlock(void) :
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
@@ -376,3 +378,5 @@ bool AtomicModelDataBlock::HasComponentBondEntry(
     }
     return m_chemical_component_entry_map.at(comp_key)->HasComponentBondEntry(bond_key);
 }
+
+} // namespace rhbm_gem

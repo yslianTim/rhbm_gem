@@ -9,6 +9,8 @@
 
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 BondObject::BondObject(void) :
     m_key_tag{ "" },
     m_is_selected{ false }, m_bond_key{ 0 },
@@ -146,3 +148,5 @@ float BondObject::GetBondLength(void) const
     return ArrayStats<float>::ComputeNorm(
         m_atom_object_1->GetPositionRef(), m_atom_object_2->GetPositionRef());
 }
+
+} // namespace rhbm_gem

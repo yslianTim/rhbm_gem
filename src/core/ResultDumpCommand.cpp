@@ -24,10 +24,12 @@
 #include <fstream>
 
 namespace {
-CommandRegistrar<ResultDumpCommand> registrar_result_dump{
+rhbm_gem::CommandRegistrar<rhbm_gem::ResultDumpCommand> registrar_result_dump{
     "result_dump",
     "Run result dump"};
 }
+
+namespace rhbm_gem {
 
 ResultDumpCommand::ResultDumpCommand(void) :
     CommandBase(),
@@ -429,3 +431,5 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
         Logger::Log(LogLevel::Info, "Output file: " + output_path.string());
     }
 }
+
+} // namespace rhbm_gem

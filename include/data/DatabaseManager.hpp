@@ -7,6 +7,8 @@
 #include <typeindex>
 #include <mutex>
 
+namespace rhbm_gem {
+
 class SQLiteWrapper;
 class DataObjectBase;
 class DataObjectDAOBase;
@@ -30,3 +32,5 @@ public:
     std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const std::string & object_type);
     
 };
+
+} // namespace rhbm_gem

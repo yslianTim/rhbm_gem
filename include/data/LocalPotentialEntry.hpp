@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <Eigen/Dense>
 
+namespace rhbm_gem {
+
 class DataObjectBase;
 
 class LocalPotentialEntry
@@ -84,3 +86,5 @@ private:
     double CalculateIntensityVariance(double amplitude, double sigma_amplitude, double width, double sigma_width) const;
 
 };
+
+} // namespace rhbm_gem

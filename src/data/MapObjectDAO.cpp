@@ -9,7 +9,7 @@
 #include <vector>
 #include <cstring>
 
-namespace { DataObjectDAORegistrar<MapObject, MapObjectDAO> registrar_map_dao("map"); }
+namespace { rhbm_gem::DataObjectDAORegistrar<rhbm_gem::MapObject, rhbm_gem::MapObjectDAO> registrar_map_dao("map"); }
 
 namespace
 {
@@ -59,6 +59,8 @@ namespace
             map_value_array
         FROM map_list WHERE key_tag = ? LIMIT 1; )sql";
 }
+
+namespace rhbm_gem {
 
 MapObjectDAO::MapObjectDAO(SQLiteWrapper * database) : m_database{ database }
 {
@@ -147,3 +149,5 @@ std::unique_ptr<DataObjectBase> MapObjectDAO::Load(const std::string & key_tag)
     map_object->SetKeyTag(m_database->GetColumn<std::string>(0));
     return map_object;
 }
+
+} // namespace rhbm_gem

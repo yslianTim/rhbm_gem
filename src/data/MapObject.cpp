@@ -16,6 +16,8 @@
 #include <omp.h>
 #endif
 
+namespace rhbm_gem {
+
 MapObject::MapObject(void) :
     m_key_tag{ "" }, m_thread_size{ 1 },
     m_voxel_size{ 1 },
@@ -376,3 +378,5 @@ KDNode<GridNode> * MapObject::GetKDTreeRoot(void) const
     }
     return m_kd_tree_root.get();
 }
+
+} // namespace rhbm_gem

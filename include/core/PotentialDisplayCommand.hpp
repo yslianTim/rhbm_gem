@@ -10,9 +10,12 @@
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
 
+class AtomSelector;
+
+namespace rhbm_gem {
+
 class DataObjectManager;
 class ModelObject;
-class AtomSelector;
 
 class PotentialDisplayCommand : public CommandBase
 {
@@ -33,7 +36,7 @@ public:
 private:
     Options m_options;
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
-    std::unique_ptr<AtomSelector> m_atom_selector;
+    std::unique_ptr<::AtomSelector> m_atom_selector;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;
     std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;
 
@@ -61,3 +64,5 @@ private:
     void RunDisplay(void);
 
 };
+
+} // namespace rhbm_gem

@@ -10,6 +10,8 @@
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
 
+namespace rhbm_gem {
+
 class AtomObject;
 class AtomClassifier
 {
@@ -75,3 +77,5 @@ private:
     static bool IsValidMainChainMemberID(size_t member_id);
 
 };
+
+} // namespace rhbm_gem

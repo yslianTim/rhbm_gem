@@ -9,6 +9,8 @@
 
 #include "GlobalEnumClass.hpp"
 
+namespace rhbm_gem {
+
 class AtomObject;
 class BondObject;
 
@@ -61,3 +63,5 @@ private:
     double CalculateIntensityVariance(const std::tuple<double, double> & estimate, const std::tuple<double, double> & variance) const;
 
 };
+
+} // namespace rhbm_gem

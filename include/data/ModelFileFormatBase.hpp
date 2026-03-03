@@ -3,6 +3,8 @@
 #include <string>
 #include <ostream>
 
+namespace rhbm_gem {
+
 class AtomObject;
 class AtomicModelDataBlock;
 class ModelObject;
@@ -19,3 +21,5 @@ public:
     virtual AtomicModelDataBlock * GetDataBlockPtr(void) = 0;
 
 };
+
+} // namespace rhbm_gem

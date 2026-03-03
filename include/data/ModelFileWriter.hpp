@@ -4,6 +4,8 @@
 #include <string>
 #include "FileWriterBase.hpp"
 
+namespace rhbm_gem {
+
 class ModelFileFormatBase;
 class ModelObject;
 
@@ -20,3 +22,5 @@ public:
     void Write(void) override;
 
 };
+
+} // namespace rhbm_gem

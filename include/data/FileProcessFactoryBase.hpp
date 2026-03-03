@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 
+namespace rhbm_gem {
+
 class DataObjectBase;
 
 class FileProcessFactoryBase
@@ -30,3 +32,5 @@ public:
     std::unique_ptr<DataObjectBase> CreateDataObject(const std::string & filename) override;
     void OutputDataObject(const std::string & filename, DataObjectBase * data_object) override;
 };
+
+} // namespace rhbm_gem

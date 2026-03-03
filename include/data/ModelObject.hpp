@@ -1,24 +1,27 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <map>
 #include <memory>
 #include <string>
-#include <vector>
-#include <array>
 #include <tuple>
-#include <map>
 #include <unordered_map>
+#include <vector>
 
-#include "DataObjectBase.hpp"
-#include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
 #include "BondKeySystem.hpp"
+#include "ComponentKeySystem.hpp"
+#include "DataObjectBase.hpp"
+
+template <typename T> struct KDNode;
+
+namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
 class GroupPotentialEntry;
-template <typename T> struct KDNode;
 
 class ModelObject : public DataObjectBase
 {
@@ -30,11 +33,11 @@ class ModelObject : public DataObjectBase
     std::string m_resolution_method;
     double m_resolution;
     std::map<int, AtomObject*> m_serial_id_atom_map;
-    std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map; // key : entity_id
+    std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_atom_group_potential_entry_map;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_bond_group_potential_entry_map;
-    std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
+    std::unique_ptr<::KDNode<AtomObject>> m_kd_tree_root;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
     std::unique_ptr<ComponentKeySystem> m_component_key_system;
@@ -110,7 +113,7 @@ public:
     GetBondGroupPotentialEntryMap(void) const;
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
     GetChemicalComponentEntryMap(void) const;
-    KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
+    ::KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
     ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
     BondKeySystem * GetBondKeySystemPtr(void) { return m_bond_key_system.get(); }
@@ -119,5 +122,6 @@ public:
 private:
     void BuildSelectedAtomList(void);
     void BuildSelectedBondList(void);
-    
 };
+
+} // namespace rhbm_gem

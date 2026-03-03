@@ -6,6 +6,8 @@
 #include <typeindex>
 #include <unordered_map>
 
+namespace rhbm_gem {
+
 class SQLiteWrapper;
 class DataObjectDAOBase;
 
@@ -42,3 +44,5 @@ public:
             [](SQLiteWrapper* db){ return std::make_unique<DAOType>(db); });
     }
 };
+
+} // namespace rhbm_gem

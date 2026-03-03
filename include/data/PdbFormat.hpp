@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include "ModelFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class AtomicModelDataBlock;
 
 class PdbFormat : public ModelFileFormatBase
@@ -101,3 +103,5 @@ private:
     PDB_HEADER MapToHeaderType(const std::string & name) const;
 
 };
+
+} // namespace rhbm_gem

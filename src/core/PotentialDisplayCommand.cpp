@@ -17,10 +17,12 @@
 #include "CommandRegistry.hpp"
 
 namespace {
-CommandRegistrar<PotentialDisplayCommand> registrar_potential_display{
+rhbm_gem::CommandRegistrar<rhbm_gem::PotentialDisplayCommand> registrar_potential_display{
     "potential_display",
     "Run potential display"};
 }
+
+namespace rhbm_gem {
 
 PotentialDisplayCommand::PotentialDisplayCommand(void) :
     CommandBase(), m_options{},
@@ -346,3 +348,5 @@ void PotentialDisplayCommand::RunDisplay(void)
         painter->Painting();
     }
 }
+
+} // namespace rhbm_gem

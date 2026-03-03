@@ -8,6 +8,8 @@
 
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 const std::vector<short> BondClassifier::m_main_chain_member_color_list
 {   // [Color defined in ROOT style]
     // kRed+1, kViolet+1, kGreen+2, kAzure+2 
@@ -184,3 +186,5 @@ std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList
     }
     return group_key_list;
 }
+
+} // namespace rhbm_gem

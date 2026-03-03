@@ -18,10 +18,12 @@
 #include <limits>
 
 namespace {
-CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
+rhbm_gem::CommandRegistrar<rhbm_gem::MapSimulationCommand> registrar_map_simulation{
     "map_simulation",
     "Run map simulation command"};
 }
+
+namespace rhbm_gem {
 
 MapSimulationCommand::MapSimulationCommand(void) :
     CommandBase(), m_options{}, m_selected_atom_list{}, m_atom_charge_map{},
@@ -404,3 +406,5 @@ std::array<float, 3> MapSimulationCommand::CalculateOrigin(
         std::floor(m_atom_range_minimum[2] / grid_spacing[2]) * grid_spacing[2]
     };
 }
+
+} // namespace rhbm_gem

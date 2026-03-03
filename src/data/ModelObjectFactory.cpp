@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <unordered_set>
 
+namespace rhbm_gem {
+
 std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::string & filename)
 {
     Logger::Log(LogLevel::Debug, "ModelObjectFactory::CreateDataObject() called");
@@ -80,3 +82,5 @@ void ModelObjectFactory::OutputDataObject(const std::string & filename, DataObje
     auto file_writer{ std::make_unique<ModelFileWriter>(filename, model_object) };
     file_writer->Write();
 }
+
+} // namespace rhbm_gem

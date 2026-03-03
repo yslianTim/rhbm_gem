@@ -7,6 +7,8 @@
 
 #include "CommandBase.hpp"
 
+namespace rhbm_gem {
+
 class ModelObject;
 class MapObject;
 class AtomObject;
@@ -50,3 +52,5 @@ private:
     void RunAtomMapValueSampling(void);
 
 };
+
+} // namespace rhbm_gem

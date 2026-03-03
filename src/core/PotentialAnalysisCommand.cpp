@@ -38,12 +38,12 @@
 #endif
 
 namespace {
-CommandRegistrar<PotentialAnalysisCommand> registrar_potential_analysis{
+rhbm_gem::CommandRegistrar<rhbm_gem::PotentialAnalysisCommand> registrar_potential_analysis{
     "potential_analysis",
     "Run potential analysis"};
 
 HRLExecutionOptions BuildHRLExecutionOptions(
-    const PotentialAnalysisCommand::Options & options,
+    const rhbm_gem::PotentialAnalysisCommand::Options & options,
     bool quiet_mode)
 {
     HRLExecutionOptions execution_options;
@@ -52,6 +52,8 @@ HRLExecutionOptions BuildHRLExecutionOptions(
     return execution_options;
 }
 }
+
+namespace rhbm_gem {
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
@@ -1168,3 +1170,5 @@ void PotentialAnalysisCommand::SaveDataObject(void)
         }
     }
 }
+
+} // namespace rhbm_gem

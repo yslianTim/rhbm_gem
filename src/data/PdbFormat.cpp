@@ -9,6 +9,8 @@
 #include <cstring>
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 PdbFormat::PdbFormat(void) :
     m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
@@ -141,3 +143,4 @@ PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const
         return PDB_HEADER::UNK;
     }
 }
+} // namespace rhbm_gem

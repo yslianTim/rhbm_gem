@@ -28,10 +28,12 @@
 #endif
 
 namespace {
-CommandRegistrar<HRLModelTestCommand> registrar_model_test{
+rhbm_gem::CommandRegistrar<rhbm_gem::HRLModelTestCommand> registrar_model_test{
     "model_test",
     "Run HRL model simulation test"};
 }
+
+namespace rhbm_gem {
 
 HRLModelTestCommand::HRLModelTestCommand(void) :
     CommandBase(), m_options{}
@@ -963,3 +965,5 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     Logger::Log(LogLevel::Info, " Output file: " + file_path.string());
     #endif
 }
+
+} // namespace rhbm_gem

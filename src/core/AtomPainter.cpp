@@ -25,6 +25,8 @@
 #include <vector>
 #include <tuple>
 
+namespace rhbm_gem {
+
 AtomPainter::AtomPainter(void) :
     m_folder_path{ "./" }
 {
@@ -370,3 +372,5 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     #endif
 }
+
+} // namespace rhbm_gem

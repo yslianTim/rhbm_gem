@@ -5,6 +5,8 @@
 #include "DataObjectBase.hpp"
 #include "Logger.hpp"
 
+namespace rhbm_gem {
+
 DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
     m_database_path{ database_path },
     m_database{ nullptr }
@@ -95,3 +97,5 @@ std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
     m_dao_cache.emplace(type, dao);
     return dao;
 }
+
+} // namespace rhbm_gem

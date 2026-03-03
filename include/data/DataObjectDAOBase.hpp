@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 
+namespace rhbm_gem {
+
 class DataObjectBase;
 
 class DataObjectDAOBase
@@ -12,3 +14,5 @@ public:
     virtual void Save(const DataObjectBase * obj, const std::string & key_tag) = 0;
     virtual std::unique_ptr<DataObjectBase> Load(const std::string & key_tag) = 0;
 };
+
+} // namespace rhbm_gem

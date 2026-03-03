@@ -7,6 +7,8 @@
 #include <ostream>
 #include <array>
 
+namespace rhbm_gem {
+
 class MapFileFormatBase
 {
 public:
@@ -36,3 +38,5 @@ public:
                            const std::array<float, 3> & origin) = 0;
 
 };
+
+} // namespace rhbm_gem

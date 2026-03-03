@@ -9,6 +9,8 @@
 #include "ComponentKeySystem.hpp"
 #include "BondKeySystem.hpp"
 
+namespace rhbm_gem {
+
 class BondObject;
 class BondClassifier
 {
@@ -44,3 +46,5 @@ private:
     static bool IsValidMainChainMemberID(size_t id);
 
 };
+
+} // namespace rhbm_gem

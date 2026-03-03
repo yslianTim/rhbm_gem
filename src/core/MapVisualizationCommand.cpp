@@ -27,10 +27,12 @@
 #endif
 
 namespace {
-CommandRegistrar<MapVisualizationCommand> registrar_map_visualization{
+rhbm_gem::CommandRegistrar<rhbm_gem::MapVisualizationCommand> registrar_map_visualization{
     "map_visualization",
     "Run map visualization"};
 }
+
+namespace rhbm_gem {
 
 MapVisualizationCommand::MapVisualizationCommand(void) :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
@@ -219,3 +221,5 @@ void MapVisualizationCommand::RunAtomMapValueSampling(void)
     );
 
 }
+
+} // namespace rhbm_gem

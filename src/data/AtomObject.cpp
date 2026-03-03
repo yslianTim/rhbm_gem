@@ -8,6 +8,8 @@
 
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 AtomObject::AtomObject(void) :
     m_key_tag{ "" },
     m_is_selected{ false }, m_is_special_atom{ false },
@@ -190,3 +192,5 @@ bool AtomObject::IsMainChainAtom(void) const
     size_t dummy_id;
     return AtomClassifier::IsMainChainMember(m_spot, dummy_id);
 }
+
+} // namespace rhbm_gem

@@ -37,6 +37,8 @@
 #include <vector>
 #include <tuple>
 
+namespace rhbm_gem {
+
 ModelPainter::ModelPainter(void) :
     m_folder_path{ "./" },
     m_atom_classifier{ std::make_unique<AtomClassifier>() },
@@ -2191,3 +2193,5 @@ void ModelPainter::ModifyAxisLabelSideChain(
 }
 
 #endif
+
+} // namespace rhbm_gem

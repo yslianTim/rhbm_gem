@@ -9,6 +9,8 @@
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
 
+namespace rhbm_gem {
+
 class HRLModelTestCommand : public CommandBase
 {
 public:
@@ -66,3 +68,5 @@ private:
     );
 
 };
+
+} // namespace rhbm_gem

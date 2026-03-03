@@ -27,6 +27,8 @@
 #include <unordered_set>
 #include <cstdint>
 
+namespace rhbm_gem {
+
 namespace
 {
 bool IsMmCifMissingValue(const std::string & value)
@@ -1699,3 +1701,5 @@ void CifFormat::BuildPhosphodiesterBondEntry(void)
         m_data_block->AddComponentBondEntry(component_key, bond_key, bond_entry);
     }
 }
+
+} // namespace rhbm_gem

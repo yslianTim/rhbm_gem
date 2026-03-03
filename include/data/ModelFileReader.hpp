@@ -5,6 +5,8 @@
 #include <vector>
 #include "FileReaderBase.hpp"
 
+namespace rhbm_gem {
+
 class ModelFileFormatBase;
 class AtomObject;
 class AtomicModelDataBlock;
@@ -28,3 +30,5 @@ private:
     void ReadDataArray(void);
 
 };
+
+} // namespace rhbm_gem

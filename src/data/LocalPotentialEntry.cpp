@@ -5,6 +5,8 @@
 
 #include <cmath>
 
+namespace rhbm_gem {
+
 LocalPotentialEntry::LocalPotentialEntry(void) :
     m_alpha_r{ 0.0 }, m_basis_and_response_entry_list_tmp{}
 {
@@ -297,3 +299,5 @@ double LocalPotentialEntry::CalculateIntensityVariance(
         std::pow(-3.0 * amplitude * std::pow(Constants::two_pi, -1.5) * std::pow(width, -4) * sigma_width, 2)
     );
 }
+
+} // namespace rhbm_gem

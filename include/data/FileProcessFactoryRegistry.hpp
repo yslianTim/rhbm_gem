@@ -5,6 +5,8 @@
 #include <functional>
 #include <memory>
 
+namespace rhbm_gem {
+
 class FileProcessFactoryBase;
 
 class FileProcessFactoryRegistry
@@ -25,3 +27,5 @@ private:
     FileProcessFactoryRegistry(void) = default;
     
 };
+
+} // namespace rhbm_gem

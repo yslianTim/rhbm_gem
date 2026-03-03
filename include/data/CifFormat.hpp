@@ -14,6 +14,8 @@
 #include "GlobalEnumClass.hpp"
 #include "ModelFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class AtomicModelDataBlock;
 class ModelObject;
 class AtomObject;
@@ -97,3 +99,5 @@ private:
     void BuildPhosphodiesterBondEntry(void);
 
 };
+
+} // namespace rhbm_gem

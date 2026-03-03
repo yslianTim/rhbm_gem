@@ -9,6 +9,8 @@
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 
+namespace rhbm_gem {
+
 ModelObject::ModelObject(void) :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
@@ -414,3 +416,5 @@ bool ModelObject::HasStandardDNAComponent(void) const
     }
     return false;
 }
+
+} // namespace rhbm_gem

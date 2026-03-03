@@ -9,6 +9,8 @@
 
 #include <utility>
 
+namespace rhbm_gem {
+
 DataObjectManager::DataObjectManager(void) :
     m_db_manager{ nullptr }
 {
@@ -248,3 +250,5 @@ DataObjectManager::GetDataObjectMap(void) const
 {
     return m_data_object_map;
 }
+
+} // namespace rhbm_gem

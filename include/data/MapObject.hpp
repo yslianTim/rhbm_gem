@@ -1,14 +1,17 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
-#include <array>
 
 #include "DataObjectBase.hpp"
 
 template <typename T> struct KDNode;
+
+namespace rhbm_gem {
+
 class GridNode;
 
 class VoxelNode
@@ -34,7 +37,7 @@ class MapObject : public DataObjectBase
     std::array<float, 3> m_grid_spacing, m_origin, m_map_length;
     std::array<float, 3> m_overflow, m_underflow, m_upper_bound, m_lower_bound;
     std::unique_ptr<float[]> m_map_value_array;
-    std::unique_ptr<KDNode<GridNode>> m_kd_tree_root;
+    std::unique_ptr<::KDNode<GridNode>> m_kd_tree_root;
     std::vector<GridNode> m_grid_node_list;
 
 public:
@@ -70,7 +73,7 @@ public:
     float GetMapValueMin(void) const { return m_map_value_min; }
     float GetMapValueMax(void) const { return m_map_value_max; }
     float GetMapValueSD(void) const { return m_map_value_sd; }
-    KDNode<GridNode> * GetKDTreeRoot(void) const;
+    ::KDNode<GridNode> * GetKDTreeRoot(void) const;
     void SetThreadSize(int value) { m_thread_size = value; }
     void SetMapValueArray(std::unique_ptr<float[]> map_value_array);
     void MapValueArrayNormalization(void);
@@ -84,7 +87,6 @@ private:
     void CalculateMapValueMax(void);
     void CalculateMapValueSD(void);
     void BuildGridNodeList(void);
-
 };
 
 class GridNode
@@ -103,3 +105,5 @@ public:
     float GetValue(void) const { return m_map_object->GetMapValue(m_grid_index); }
     void SetGridIndex(size_t grid_index) { m_grid_index = grid_index; }
 };
+
+} // namespace rhbm_gem

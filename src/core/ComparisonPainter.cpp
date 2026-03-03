@@ -31,6 +31,8 @@
 
 #include <tuple>
 
+namespace rhbm_gem {
+
 ComparisonPainter::ComparisonPainter(void) :
     m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
 {
@@ -885,3 +887,5 @@ void ComparisonPainter::BuildMapValueScatterGraph(
     }
 }
 #endif
+
+} // namespace rhbm_gem

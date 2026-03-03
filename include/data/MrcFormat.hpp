@@ -7,6 +7,8 @@
 
 #include "MapFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class MrcFormat : public MapFileFormatBase
 {
     enum HEAD
@@ -97,3 +99,5 @@ private:
     void ReorderedAxisRelatedParameters(void);
     
 };
+
+} // namespace rhbm_gem

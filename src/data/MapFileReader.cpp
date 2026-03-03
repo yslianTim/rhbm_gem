@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cctype>
 
+namespace rhbm_gem {
+
 MapFileReader::MapFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }
 {
@@ -135,3 +137,5 @@ std::array<float, 3> MapFileReader::GetOriginArray(void) const
     }
     return m_file_format_helper->GetOrigin();
 }
+
+} // namespace rhbm_gem

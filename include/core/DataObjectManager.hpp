@@ -8,6 +8,8 @@
 #include <vector>
 #include <mutex>
 
+namespace rhbm_gem {
+
 class DatabaseManager;
 class FileProcessFactoryBase;
 class DataObjectBase;
@@ -54,3 +56,5 @@ public:
 private:
     bool AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object);
 };
+
+} // namespace rhbm_gem

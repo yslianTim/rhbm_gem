@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cmath>
 
+namespace rhbm_gem {
+
 CCP4Format::CCP4Format(void)
 {
     Logger::Log(LogLevel::Debug, "CCP4Format::CCP4Format() called");
@@ -392,3 +394,5 @@ void CCP4Format::ReorderedAxisRelatedParameters(void)
     m_header.axis[1] = 2;
     m_header.axis[2] = 3;
 }
+
+} // namespace rhbm_gem

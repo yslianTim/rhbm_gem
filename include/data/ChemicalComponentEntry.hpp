@@ -10,6 +10,8 @@
 #include "AtomKeySystem.hpp"
 #include "BondKeySystem.hpp"
 
+namespace rhbm_gem {
+
 struct ComponentAtomEntry
 {
     std::string atom_id;
@@ -69,3 +71,5 @@ public:
     const ComponentBondEntry * GetComponentBondEntryPtr(BondKey bond_key) const;
 
 };
+
+} // namespace rhbm_gem

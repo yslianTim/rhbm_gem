@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+namespace rhbm_gem {
+
 enum class PainterType : int
 {
     GAUS       = 0,
@@ -41,3 +43,5 @@ enum class TesterType : int
     MODEL_ALPHA_DATA = 3,
     MODEL_ALPHA_MEMBER = 4
 };
+
+} // namespace rhbm_gem

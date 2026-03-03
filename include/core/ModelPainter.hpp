@@ -1,22 +1,24 @@
 #pragma once
 
-#include <string>
-#include <vector>
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "GlobalEnumClass.hpp"
 #include "PainterBase.hpp"
-
-class ModelObject;
-class AtomClassifier;
-class BondClassifier;
 
 #ifdef HAVE_ROOT
 class TPad;
 class TH2;
 class TPaveText;
 #endif
+
+namespace rhbm_gem {
+
+class ModelObject;
+class AtomClassifier;
+class BondClassifier;
 
 class ModelPainter : public PainterBase
 {
@@ -48,18 +50,19 @@ private:
     void PaintBondGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomRankMainChain(ModelObject * model_object, const std::string & name);
 
-    #ifdef HAVE_ROOT
-    void PrintGausResultGlobalPad(TPad * pad, TH2 * hist, double left_margin, double right_margin, double bottom_margin, double top_margin, bool is_right_side_pad);
-    void PrintGausTitlePad(TPad * pad, TPaveText * text, const std::string & title, float text_size);
+#ifdef HAVE_ROOT
+    void PrintGausResultGlobalPad(::TPad * pad, ::TH2 * hist, double left_margin, double right_margin, double bottom_margin, double top_margin, bool is_right_side_pad);
+    void PrintGausTitlePad(::TPad * pad, ::TPaveText * text, const std::string & title, float text_size);
 
-    void PrintAmplitudePad(TPad * pad, TH2 * hist);
-    void PrintWidthPad(TPad * pad, TH2 * hist);
-    void PrintAmplitudeSummaryPad(TPad * pad, TH2 * hist);
-    void PrintAtomWidthSummaryPad(TPad * pad, TH2 * hist);
-    void PrintBondWidthSummaryPad(TPad * pad, TH2 * hist);
-    void PrintGausSummaryPad(TPad * pad, TH2 * hist);
+    void PrintAmplitudePad(::TPad * pad, ::TH2 * hist);
+    void PrintWidthPad(::TPad * pad, ::TH2 * hist);
+    void PrintAmplitudeSummaryPad(::TPad * pad, ::TH2 * hist);
+    void PrintAtomWidthSummaryPad(::TPad * pad, ::TH2 * hist);
+    void PrintBondWidthSummaryPad(::TPad * pad, ::TH2 * hist);
+    void PrintGausSummaryPad(::TPad * pad, ::TH2 * hist);
 
-    void ModifyAxisLabelSideChain(TPad * pad, TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
-    #endif
-
+    void ModifyAxisLabelSideChain(::TPad * pad, ::TH2 * hist, Residue residue, const std::vector<std::string> & label_list);
+#endif
 };
+
+} // namespace rhbm_gem

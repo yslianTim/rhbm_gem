@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <fstream>
 
+namespace rhbm_gem {
+
 ModelFileWriter::ModelFileWriter(
     const std::string & filename, const ModelObject * model_object, int model_par) :
     m_file_path{ filename }, m_model_object{ model_object }, m_model_par{ model_par }
@@ -55,3 +57,5 @@ void ModelFileWriter::Write(void)
             "ModelFileWriter::Write : " + std::string(ex.what()));
     }
 }
+
+} // namespace rhbm_gem

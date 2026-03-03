@@ -398,22 +398,23 @@ Passing a larger value to `--verbose` enables all lower levels as well.
 
 # Overall Information for Developer
 
-For the repository-specific development conventions and code habits that are already in use, see [docs/development-guidelines.md](docs/development-guidelines.md).
-It summarizes project structure, naming/style patterns, command/data-layer design, logging, testing, and documentation update expectations.
+For the repository-specific engineering rules for new and modified code, see [docs/development-guidelines.md](docs/development-guidelines.md).
+For a Traditional Chinese reference, see [docs/development-guidelines.zh-TW.md](docs/development-guidelines.zh-TW.md).
+These documents summarize project structure, naming/style patterns, command/data-layer design, logging, testing, and documentation update expectations.
 
 
 ## Data Object Manager
 
-Commands rely on `DataObjectManager` to load and store data objects. The manager instance is owned by `CommandBase` and shared with derived commands. A command lazily creates a `DataObjectManager` and initializes it with a database path via `SetDatabaseManager`.
+Commands rely on `rhbm_gem::DataObjectManager` to load and store data objects. The manager instance is owned by `rhbm_gem::CommandBase` and shared with derived commands. A command lazily creates a `rhbm_gem::DataObjectManager` and initializes it with a database path via `SetDatabaseManager`.
 
-`DataObjectManager` is not accessed concurrently. The database pointer and the internal data map are guarded by simple `std::mutex` members to keep the implementation straightforward.
+`rhbm_gem::DataObjectManager` is not accessed concurrently. The database pointer and the internal data map are guarded by simple `std::mutex` members to keep the implementation straightforward.
 
-`DatabaseManager` is safe for concurrent use. Operations like `SaveDataObject` and `LoadDataObject` lock an internal mutex so multiple threads can access the database simultaneously without interference.
+`rhbm_gem::DatabaseManager` is safe for concurrent use. Operations like `SaveDataObject` and `LoadDataObject` lock an internal mutex so multiple threads can access the database simultaneously without interference.
 
 ### File IO and persistence work through cooperating managers:
 
-- **DataObjectManager** selects a reader or writer based on file extension. It uses `FileProcessFactoryRegistry` to instantiate the appropriate factory. Commands load and save objects through it, delegating file operations and database access to `DatabaseManager`.
-- **DatabaseManager** wraps the SQLite database. DAO objects are created via `DataObjectDAOFactoryRegistry` and cached for reuse.
+- **`rhbm_gem::DataObjectManager`** selects a reader or writer based on file extension. It uses `rhbm_gem::FileProcessFactoryRegistry` to instantiate the appropriate factory. Commands load and save objects through it, delegating file operations and database access to `rhbm_gem::DatabaseManager`.
+- **`rhbm_gem::DatabaseManager`** wraps the SQLite database. DAO objects are created via `rhbm_gem::DataObjectDAOFactoryRegistry` and cached for reuse.
 
 Together these managers keep data loading and persistence separate from command logic.
 
