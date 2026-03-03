@@ -1,4 +1,5 @@
 #include "PotentialDisplayCommand.hpp"
+#include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
@@ -76,36 +77,53 @@ PotentialDisplayCommand::~PotentialDisplayCommand()
 
 void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    cmd->add_option_function<PainterType>("-p,--painter",
+    command_cli::AddEnumOption<PainterType>(
+        cmd, "-p,--painter",
         [&](PainterType value) { SetPainterChoice(value); },
-        "Painter choice")->required()
-        ->transform(CLI::CheckedTransformer(
-            BuildEnumCLIMap<PainterType>(), CLI::ignore_case));
-    cmd->add_option_function<std::string>("-k,--model-keylist",
+        "Painter choice",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        cmd, "-k,--model-keylist",
         [&](const std::string & value) { SetModelKeyTagList(value); },
-        "List of model key tag to be display")->required();
-    cmd->add_option_function<std::string>("-r,--ref-model-keylist",
+        "List of model key tag to be display",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        cmd, "-r,--ref-model-keylist",
         [&](const std::string & value) { SetRefModelKeyTagListMap(value); },
-        "List of reference model key tag to be display")
-        ->default_val(m_options.ref_model_key_tag_list);
-    cmd->add_option_function<std::string>("--pick-chain",
+        "List of reference model key tag to be display",
+        m_options.ref_model_key_tag_list);
+    command_cli::AddStringOption(
+        cmd, "--pick-chain",
         [&](const std::string & value) { SetPickChainID(value); },
-        "Pick chain ID")->default_val(m_options.pick_chain_id);
-    cmd->add_option_function<std::string>("--pick-residue",
+        "Pick chain ID",
+        m_options.pick_chain_id);
+    command_cli::AddStringOption(
+        cmd, "--pick-residue",
         [&](const std::string & value) { SetPickResidueType(value); },
-        "Pick residue type")->default_val(m_options.pick_residue);
-    cmd->add_option_function<std::string>("--pick-element",
+        "Pick residue type",
+        m_options.pick_residue);
+    command_cli::AddStringOption(
+        cmd, "--pick-element",
         [&](const std::string & value) { SetPickElementType(value); },
-        "Pick element type")->default_val(m_options.pick_element);
-    cmd->add_option_function<std::string>("--veto-chain",
+        "Pick element type",
+        m_options.pick_element);
+    command_cli::AddStringOption(
+        cmd, "--veto-chain",
         [&](const std::string & value) { SetVetoChainID(value); },
-        "Veto chain ID")->default_val(m_options.veto_chain_id);
-    cmd->add_option_function<std::string>("--veto-residue",
+        "Veto chain ID",
+        m_options.veto_chain_id);
+    command_cli::AddStringOption(
+        cmd, "--veto-residue",
         [&](const std::string & value) { SetVetoResidueType(value); },
-        "Veto residue type")->default_val(m_options.veto_residue);
-    cmd->add_option_function<std::string>("--veto-element",
+        "Veto residue type",
+        m_options.veto_residue);
+    command_cli::AddStringOption(
+        cmd, "--veto-element",
         [&](const std::string & value) { SetVetoElementType(value); },
-        "Veto element type")->default_val(m_options.veto_element);
+        "Veto element type",
+        m_options.veto_element);
 }
 
 bool PotentialDisplayCommand::ExecuteImpl()
@@ -124,79 +142,76 @@ void PotentialDisplayCommand::ResetRuntimeState()
 
 void PotentialDisplayCommand::SetPainterChoice(PainterType value)
 {
-    InvalidatePreparedState();
-    m_options.painter_choice = value;
+    MutateOptions([&]() { m_options.painter_choice = value; });
 }
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-    ClearValidationIssues("--model-keylist", ValidationPhase::Parse);
-    if (m_options.model_key_tag_list.empty())
+    MutateOptions([&]()
     {
-        AddValidationError(
-            "--model-keylist",
-            "Model key list cannot be empty.",
-            ValidationPhase::Parse);
-    }
+        m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+        ResetParseIssues("--model-keylist");
+        if (m_options.model_key_tag_list.empty())
+        {
+            AddValidationError(
+                "--model-keylist",
+                "Model key list cannot be empty.",
+                ValidationPhase::Parse);
+        }
+    });
 }
 
 void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.ref_model_key_tag_list = value;
-    m_ref_model_key_tag_list_map.clear();
-    ClearValidationIssues("--ref-model-keylist", ValidationPhase::Parse);
-    if (value.empty()) return;
-
-    std::string error_message;
-    if (!ParseReferenceModelKeyTagListMap(value, m_ref_model_key_tag_list_map, error_message))
+    MutateOptions([&]()
     {
-        AddValidationError("--ref-model-keylist", error_message, ValidationPhase::Parse);
-        return;
-    }
+        m_options.ref_model_key_tag_list = value;
+        m_ref_model_key_tag_list_map.clear();
+        ResetParseIssues("--ref-model-keylist");
+        if (value.empty()) return;
 
-    Logger::Log(
-        LogLevel::Debug,
-        "Parsed " + std::to_string(m_ref_model_key_tag_list_map.size())
-        + " reference model groups.");
+        std::string error_message;
+        if (!ParseReferenceModelKeyTagListMap(value, m_ref_model_key_tag_list_map, error_message))
+        {
+            AddValidationError("--ref-model-keylist", error_message, ValidationPhase::Parse);
+            return;
+        }
+
+        Logger::Log(
+            LogLevel::Debug,
+            "Parsed " + std::to_string(m_ref_model_key_tag_list_map.size())
+            + " reference model groups.");
+    });
 }
 
 void PotentialDisplayCommand::SetPickChainID(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.pick_chain_id = value;
+    MutateOptions([&]() { m_options.pick_chain_id = value; });
 }
 
 void PotentialDisplayCommand::SetVetoChainID(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.veto_chain_id = value;
+    MutateOptions([&]() { m_options.veto_chain_id = value; });
 }
 
 void PotentialDisplayCommand::SetPickResidueType(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.pick_residue = value;
+    MutateOptions([&]() { m_options.pick_residue = value; });
 }
 
 void PotentialDisplayCommand::SetVetoResidueType(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.veto_residue = value;
+    MutateOptions([&]() { m_options.veto_residue = value; });
 }
 
 void PotentialDisplayCommand::SetPickElementType(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.pick_element = value;
+    MutateOptions([&]() { m_options.pick_element = value; });
 }
 
 void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.veto_element = value;
+    MutateOptions([&]() { m_options.veto_element = value; });
 }
 
 bool PotentialDisplayCommand::BuildDataObject()

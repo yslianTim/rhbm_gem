@@ -43,3 +43,17 @@ TEST(BuiltInCommandCatalogTest, CommandIdsAndNamesAreUnique)
     EXPECT_EQ(unique_ids.size(), catalog.size());
     EXPECT_EQ(unique_names.size(), catalog.size());
 }
+
+TEST(BuiltInCommandCatalogTest, PythonBindingNamesMatchExposurePolicy)
+{
+    for (const auto & descriptor : rg::BuiltInCommandCatalog())
+    {
+        if (rg::IsPythonPublic(descriptor.binding_exposure))
+        {
+            EXPECT_FALSE(descriptor.python_binding_name.empty()) << descriptor.name;
+            continue;
+        }
+
+        EXPECT_TRUE(descriptor.python_binding_name.empty()) << descriptor.name;
+    }
+}

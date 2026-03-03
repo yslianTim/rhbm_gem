@@ -77,7 +77,8 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` `Execute()` should keep a clear phase boundary: validate and construct prerequisites first, then run the main workflow.
 - `[Required]` File parsing, database access, and DAO details belong in the data layer, not inside command orchestration logic.
 - `[Required]` Support for new file formats must update both the extension-based factory selection path and the corresponding format implementation.
-- `[Recommended]` Continue using the existing `CommandRegistrar<...>` registration model for new commands to keep registration localized and predictable.
+- `[Recommended]` New built-in commands should be added through `BuiltInCommandCatalog()` so command name, surface metadata, binding exposure, and docs sync all share one source of truth.
+- `[Recommended]` Reserve `CommandRegistrar<...>` for extension-style or test-only registration paths rather than built-in command definition.
 - `[Recommended]` Managers should remain the boundary objects that move data between commands, files, and persistence layers.
 
 ## 8. Testing and Regression Policy

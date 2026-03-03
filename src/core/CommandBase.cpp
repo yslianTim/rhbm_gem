@@ -1,4 +1,5 @@
 #include "CommandBase.hpp"
+#include "CommandOptionBinding.hpp"
 #include "FilePathHelper.hpp"
 
 #include <CLI/CLI.hpp>
@@ -73,27 +74,39 @@ void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
 
     if (HasCommonOption(common_options, CommonOption::Threading))
     {
-        command->add_option_function<int>("-j,--jobs",
+        command_cli::AddScalarOption<int>(
+            command,
+            "-j,--jobs",
             [&](int value) { SetThreadSize(value); },
-            "Number of threads")->default_val(options.thread_size);
+            "Number of threads",
+            options.thread_size);
     }
     if (HasCommonOption(common_options, CommonOption::Verbose))
     {
-        command->add_option_function<int>("-v,--verbose",
+        command_cli::AddScalarOption<int>(
+            command,
+            "-v,--verbose",
             [&](int value) { SetVerboseLevel(value); },
-            "Verbose level")->default_val(options.verbose_level);
+            "Verbose level",
+            options.verbose_level);
     }
     if (HasCommonOption(common_options, CommonOption::Database))
     {
-        command->add_option_function<std::string>("-d,--database",
-            [&](const std::string & value) { SetDatabasePath(value); },
-            "Database file path")->default_val(options.database_path.string());
+        command_cli::AddPathOption(
+            command,
+            "-d,--database",
+            [&](const std::filesystem::path & value) { SetDatabasePath(value); },
+            "Database file path",
+            options.database_path);
     }
     if (HasCommonOption(common_options, CommonOption::OutputFolder))
     {
-        command->add_option_function<std::string>("-o,--folder",
-            [&](const std::string & value) { SetFolderPath(value); },
-            "folder path for output files")->default_val(options.folder_path.string());
+        command_cli::AddPathOption(
+            command,
+            "-o,--folder",
+            [&](const std::filesystem::path & value) { SetFolderPath(value); },
+            "folder path for output files",
+            options.folder_path);
     }
 }
 
@@ -106,8 +119,10 @@ void CommandBase::RegisterDeprecatedCommonAliases(CLI::App * command)
     }
 
     auto * hidden_group{ command->add_option_group("") };
-    hidden_group->add_option_function<std::string>("--database",
-        [&](const std::string & value)
+    command_cli::AddPathOption(
+        hidden_group,
+        "--database",
+        [&](const std::filesystem::path & value)
         {
             m_deprecated_database_option_used = true;
             SetDatabasePath(value);
@@ -154,49 +169,48 @@ void CommandBase::InvalidatePreparedState()
 
 void CommandBase::SetThreadSize(int value)
 {
-    InvalidatePreparedState();
     auto & options{ GetOptions() };
-    ClearValidationIssues("--jobs", ValidationPhase::Parse);
-    if (value < 1)
-    {
-        options.thread_size = 1;
-        AddNormalizationWarning("--jobs",
-            "Thread size must be positive. Using 1 instead.");
-        return;
-    }
-    options.thread_size = value;
+    SetNormalizedScalarOption(
+        options.thread_size,
+        value,
+        "--jobs",
+        [](int candidate) { return candidate >= 1; },
+        1,
+        "Thread size must be positive. Using 1 instead.");
 }
 
 void CommandBase::SetVerboseLevel(int value)
 {
-    InvalidatePreparedState();
     auto & options{ GetOptions() };
-    ClearValidationIssues("--verbose", ValidationPhase::Parse);
-    if (value < static_cast<int>(LogLevel::Error) || value > static_cast<int>(LogLevel::Debug))
-    {
-        options.verbose_level = static_cast<int>(LogLevel::Info);
-        AddNormalizationWarning("--verbose",
-            "Invalid verbose level: " + std::to_string(value) +
-            ", using default level 3 [Info]");
-    }
-    else
-    {
-        options.verbose_level = value;
-    }
+    SetNormalizedScalarOption(
+        options.verbose_level,
+        value,
+        "--verbose",
+        [](int candidate)
+        {
+            return candidate >= static_cast<int>(LogLevel::Error)
+                && candidate <= static_cast<int>(LogLevel::Debug);
+        },
+        static_cast<int>(LogLevel::Info),
+        "Invalid verbose level: " + std::to_string(value) + ", using default level 3 [Info]");
 }
 
 void CommandBase::SetDatabasePath(const std::filesystem::path & path)
 {
-    InvalidatePreparedState();
     auto & options{ GetOptions() };
-    options.database_path = path.empty() ? std::filesystem::path{} : path.lexically_normal();
+    MutateOptions([&]()
+    {
+        options.database_path = path.empty() ? std::filesystem::path{} : path.lexically_normal();
+    });
 }
 
 void CommandBase::SetFolderPath(const std::filesystem::path & path)
 {
-    InvalidatePreparedState();
     auto & options{ GetOptions() };
-    options.folder_path = std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
+    MutateOptions([&]()
+    {
+        options.folder_path = std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
+    });
 }
 
 void CommandBase::ReportValidationIssues() const
@@ -242,6 +256,16 @@ void CommandBase::AddNormalizationWarning(
     const std::string & message)
 {
     AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Warning, message, true);
+}
+
+void CommandBase::ResetParseIssues(std::string_view option_name)
+{
+    ClearValidationIssues(option_name, ValidationPhase::Parse);
+}
+
+void CommandBase::ResetPrepareIssues(std::string_view option_name)
+{
+    ClearValidationIssues(option_name, ValidationPhase::Prepare);
 }
 
 void CommandBase::ClearValidationIssues(
@@ -314,6 +338,32 @@ void CommandBase::ValidateOptionalExistingPath(
             std::string(label) + " does not exist: " + path.string(),
             ValidationPhase::Parse);
     }
+}
+
+void CommandBase::SetRequiredExistingPathOption(
+    std::filesystem::path & field,
+    const std::filesystem::path & value,
+    std::string_view option_name,
+    std::string_view label)
+{
+    MutateOptions([&]()
+    {
+        field = value;
+        ValidateRequiredExistingPath(field, option_name, label);
+    });
+}
+
+void CommandBase::SetOptionalExistingPathOption(
+    std::filesystem::path & field,
+    const std::filesystem::path & value,
+    std::string_view option_name,
+    std::string_view label)
+{
+    MutateOptions([&]()
+    {
+        field = value;
+        ValidateOptionalExistingPath(field, option_name, label);
+    });
 }
 
 void CommandBase::AddValidationIssue(

@@ -71,7 +71,7 @@ This makes help ordering deterministic and avoids relying on cross-translation-u
 
 ### 3.2 Optional registrar path
 
-`CommandRegistrar<T>` still exists, but it is now intended for optional extension-style registration, tests, or future plugin-like integration. It is no longer the source of truth for built-in commands.
+`CommandRegistrar<T>` still exists, but it is now descriptor-aware and intended only for optional extension-style registration or tests. It is not part of the built-in command definition path.
 
 ### 3.3 Registry responsibilities
 
@@ -348,24 +348,23 @@ The CLI surface is driven by:
 
 The Python surface is separate and currently exposes only a subset of commands through `bindings/CoreBindings.cpp`.
 
-Public command classes currently exposed to Python:
-
+<!-- BEGIN GENERATED: python-public-command-surface -->
+### Python-public command classes
 - `PotentialAnalysisCommand`
 - `PotentialDisplayCommand`
 - `ResultDumpCommand`
 - `MapSimulationCommand`
 
-Shared diagnostics types currently exposed to Python:
-
+### Shared diagnostics types
 - `LogLevel`
 - `ValidationPhase`
 - `ValidationIssue`
 
-Each Python-public command also exposes:
-
+### Shared diagnostics methods on Python-public commands
 - `PrepareForExecution()`
 - `HasValidationErrors()`
 - `GetValidationIssues()`
+<!-- END GENERATED: python-public-command-surface -->
 
 Implication for future work:
 

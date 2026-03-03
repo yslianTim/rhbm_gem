@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "BuiltInCommandCatalog.hpp"
@@ -24,6 +25,7 @@ public:
         CommandSurface surface;
         DatabaseUsage database_usage;
         BindingExposure binding_exposure;
+        std::string python_binding_name;
     };
 
     static CommandRegistry & Instance();
@@ -41,20 +43,9 @@ template <typename CommandType>
 class CommandRegistrar
 {
 public:
-    CommandRegistrar(
-        const std::string & name,
-        const std::string & description,
-        CommandSurface surface)
+    explicit CommandRegistrar(CommandDescriptor descriptor)
     {
-        CommandRegistry::Instance().RegisterCommand(CommandDescriptor{
-            CommandType{}.GetCommandId(),
-            std::string_view{name},
-            std::string_view{description},
-            surface,
-            DatabaseUsage::Required,
-            BindingExposure::CliOnly,
-            [](){ return std::make_unique<CommandType>(); }
-        });
+        CommandRegistry::Instance().RegisterCommand(std::move(descriptor));
     }
 };
 

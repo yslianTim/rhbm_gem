@@ -1,4 +1,5 @@
 #include "PositionEstimationCommand.hpp"
+#include "CommandOptionBinding.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
 #include "KDTreeAlgorithm.hpp"
@@ -49,24 +50,37 @@ PositionEstimationCommand::~PositionEstimationCommand() = default;
 
 void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    cmd->add_option_function<std::string>("-m,--map",
-        [&](const std::string & value) { SetMapFilePath(value); },
-        "Map file path")->required();
-    cmd->add_option_function<int>("--iter",
+    command_cli::AddPathOption(
+        cmd, "-m,--map",
+        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
+        "Map file path",
+        std::nullopt,
+        true);
+    command_cli::AddScalarOption<int>(
+        cmd, "--iter",
         [&](int value) { SetIterationCount(value); },
-        "Iteration count for estimation")->default_val(m_options.iteration_count);
-    cmd->add_option_function<int>("--knn",
+        "Iteration count for estimation",
+        m_options.iteration_count);
+    command_cli::AddScalarOption<int>(
+        cmd, "--knn",
         [&](int value) { SetKNNSize(value); },
-        "KNN size for estimation")->default_val(m_options.knn_size);
-    cmd->add_option_function<double>("--alpha",
+        "KNN size for estimation",
+        static_cast<int>(m_options.knn_size));
+    command_cli::AddScalarOption<double>(
+        cmd, "--alpha",
         [&](double value) { SetAlpha(value); },
-        "Alpha value for robust regression")->default_val(m_options.alpha);
-    cmd->add_option_function<double>("--threshold",
+        "Alpha value for robust regression",
+        static_cast<double>(m_options.alpha));
+    command_cli::AddScalarOption<double>(
+        cmd, "--threshold",
         [&](double value) { SetThresholdRatio(value); },
-        "Ratio of threshold of map values")->default_val(m_options.threshold_ratio);
-    cmd->add_option_function<double>("--dedup-tolerance",
+        "Ratio of threshold of map values",
+        static_cast<double>(m_options.threshold_ratio));
+    command_cli::AddScalarOption<double>(
+        cmd, "--dedup-tolerance",
         [&](double value) { SetDedupTolerance(value); },
-        "Tolerance for deduplicating points")->default_val(m_options.dedup_tolerance);
+        "Tolerance for deduplicating points",
+        static_cast<double>(m_options.dedup_tolerance));
 }
 
 bool PositionEstimationCommand::ExecuteImpl()
@@ -90,75 +104,62 @@ void PositionEstimationCommand::ResetRuntimeState()
 
 void PositionEstimationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    InvalidatePreparedState();
-    m_options.map_file_path = path;
-    ValidateRequiredExistingPath(m_options.map_file_path, "--map", "Map file");
+    SetRequiredExistingPathOption(m_options.map_file_path, path, "--map", "Map file");
 }
 
 void PositionEstimationCommand::SetIterationCount(int value)
 {
-    InvalidatePreparedState();
-    m_options.iteration_count = value;
-    ClearValidationIssues("--iter", ValidationPhase::Parse);
-    if (m_options.iteration_count <= 0)
-    {
-        m_options.iteration_count = 15;
-        AddNormalizationWarning("--iter",
-            "Iteration count must be positive, reset to default 15");
-    }
+    SetNormalizedScalarOption(
+        m_options.iteration_count,
+        value,
+        "--iter",
+        [](int candidate) { return candidate > 0; },
+        15,
+        "Iteration count must be positive, reset to default 15");
 }
 
 void PositionEstimationCommand::SetKNNSize(int value)
 {
-    InvalidatePreparedState();
-    ClearValidationIssues("--knn", ValidationPhase::Parse);
-    if (value <= 0)
-    {
-        m_options.knn_size = 20;
-        AddNormalizationWarning("--knn",
-            "KNN size must be positive, reset to default 20");
-        return;
-    }
-    m_options.knn_size = static_cast<size_t>(value);
+    SetNormalizedScalarOption(
+        m_options.knn_size,
+        value,
+        "--knn",
+        [](int candidate) { return candidate > 0; },
+        static_cast<size_t>(20),
+        "KNN size must be positive, reset to default 20");
 }
 
 void PositionEstimationCommand::SetAlpha(double value)
 {
-    InvalidatePreparedState();
-    m_options.alpha = static_cast<float>(value);
-    ClearValidationIssues("--alpha", ValidationPhase::Parse);
-    if (m_options.alpha <= 0.0f)
-    {
-        m_options.alpha = 2.0f;
-        AddNormalizationWarning("--alpha",
-            "Alpha must be positive, reset to default 2.0");
-    }
+    SetNormalizedScalarOption(
+        m_options.alpha,
+        value,
+        "--alpha",
+        [](double candidate) { return candidate > 0.0; },
+        2.0f,
+        "Alpha must be positive, reset to default 2.0");
 }
 
 void PositionEstimationCommand::SetThresholdRatio(double value)
 {
-    InvalidatePreparedState();
-    m_options.threshold_ratio = static_cast<float>(value);
-    ClearValidationIssues("--threshold", ValidationPhase::Parse);
-    if (m_options.threshold_ratio <= 0.0f || m_options.threshold_ratio > 1.0f)
-    {
-        m_options.threshold_ratio = 0.01f;
-        AddNormalizationWarning("--threshold",
-            "Threshold ratio must be in (0, 1], reset to default 0.01");
-    }
+    SetNormalizedScalarOption(
+        m_options.threshold_ratio,
+        value,
+        "--threshold",
+        [](double candidate) { return candidate > 0.0 && candidate <= 1.0; },
+        0.01f,
+        "Threshold ratio must be in (0, 1], reset to default 0.01");
 }
 
 void PositionEstimationCommand::SetDedupTolerance(double value)
 {
-    InvalidatePreparedState();
-    m_options.dedup_tolerance = static_cast<float>(value);
-    ClearValidationIssues("--dedup-tolerance", ValidationPhase::Parse);
-    if (m_options.dedup_tolerance <= 0.0f)
-    {
-        m_options.dedup_tolerance = 1.0e-2f;
-        AddNormalizationWarning("--dedup-tolerance",
-            "Dedup tolerance must be positive, reset to default 0.01");
-    }
+    SetNormalizedScalarOption(
+        m_options.dedup_tolerance,
+        value,
+        "--dedup-tolerance",
+        [](double candidate) { return candidate > 0.0; },
+        1.0e-2f,
+        "Dedup tolerance must be positive, reset to default 0.01");
 }
 
 bool PositionEstimationCommand::BuildDataObject()

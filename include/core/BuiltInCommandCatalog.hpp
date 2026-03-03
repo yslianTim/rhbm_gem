@@ -20,11 +20,33 @@ struct CommandDescriptor
     CommandSurface surface;
     DatabaseUsage database_usage;
     BindingExposure binding_exposure;
+    std::string_view python_binding_name;
     std::function<std::unique_ptr<CommandBase>()> factory;
 };
 
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog();
 const CommandDescriptor & FindCommandDescriptor(CommandId command_id);
+
+template <typename CommandType>
+CommandDescriptor MakeExtensionCommandDescriptor(
+    std::string_view name,
+    std::string_view description,
+    CommandSurface surface,
+    DatabaseUsage database_usage,
+    BindingExposure binding_exposure,
+    std::string_view python_binding_name = {})
+{
+    return CommandDescriptor{
+        CommandType{}.GetCommandId(),
+        name,
+        description,
+        surface,
+        database_usage,
+        binding_exposure,
+        python_binding_name,
+        []() { return std::make_unique<CommandType>(); }
+    };
+}
 
 constexpr bool UsesDatabaseAtRuntime(DatabaseUsage usage)
 {

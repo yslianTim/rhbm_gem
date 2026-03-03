@@ -1,4 +1,5 @@
 #include "HRLModelTestCommand.hpp"
+#include "CommandOptionBinding.hpp"
 #include "HRLModelTester.hpp"
 #include "ArrayStats.hpp"
 #include "ScopeTimer.hpp"
@@ -37,24 +38,31 @@ HRLModelTestCommand::HRLModelTestCommand() :
 
 void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    cmd->add_option_function<TesterType>("-t,--tester",
+    command_cli::AddEnumOption<TesterType>(
+        cmd, "-t,--tester",
         [&](TesterType value) { SetTesterChoice(value); },
-        "Tester option")
-        ->default_val(TesterType::DATA_OUTLIER)
-        ->transform(CLI::CheckedTransformer(
-            BuildEnumCLIMap<TesterType>(), CLI::ignore_case));
-    cmd->add_option_function<double>("--fit-min",
+        "Tester option",
+        TesterType::DATA_OUTLIER);
+    command_cli::AddScalarOption<double>(
+        cmd, "--fit-min",
         [&](double value) { SetFitRangeMinimum(value); },
-        "Minimum fitting range")->default_val(m_options.fit_range_min);
-    cmd->add_option_function<double>("--fit-max",
+        "Minimum fitting range",
+        m_options.fit_range_min);
+    command_cli::AddScalarOption<double>(
+        cmd, "--fit-max",
         [&](double value) { SetFitRangeMaximum(value); },
-        "Maximum fitting range")->default_val(m_options.fit_range_max);
-    cmd->add_option_function<double>("--alpha-r",
+        "Maximum fitting range",
+        m_options.fit_range_max);
+    command_cli::AddScalarOption<double>(
+        cmd, "--alpha-r",
         [&](double value) { SetAlphaR(value); },
-        "Alpha value for R")->default_val(m_options.alpha_r);
-    cmd->add_option_function<double>("--alpha-g",
+        "Alpha value for R",
+        m_options.alpha_r);
+    command_cli::AddScalarOption<double>(
+        cmd, "--alpha-g",
         [&](double value) { SetAlphaG(value); },
-        "Alpha value for G")->default_val(m_options.alpha_g);
+        "Alpha value for G",
+        m_options.alpha_g);
 }
 
 bool HRLModelTestCommand::ExecuteImpl()
@@ -94,32 +102,27 @@ bool HRLModelTestCommand::ExecuteImpl()
 
 void HRLModelTestCommand::SetTesterChoice(TesterType value)
 {
-    InvalidatePreparedState();
-    m_options.tester_choice = value;
+    MutateOptions([&]() { m_options.tester_choice = value; });
 }
 
 void HRLModelTestCommand::SetFitRangeMinimum(double value)
 {
-    InvalidatePreparedState();
-    m_options.fit_range_min = value;
+    MutateOptions([&]() { m_options.fit_range_min = value; });
 }
 
 void HRLModelTestCommand::SetFitRangeMaximum(double value)
 {
-    InvalidatePreparedState();
-    m_options.fit_range_max = value;
+    MutateOptions([&]() { m_options.fit_range_max = value; });
 }
 
 void HRLModelTestCommand::SetAlphaR(double value)
 {
-    InvalidatePreparedState();
-    m_options.alpha_r = value;
+    MutateOptions([&]() { m_options.alpha_r = value; });
 }
 
 void HRLModelTestCommand::SetAlphaG(double value)
 {
-    InvalidatePreparedState();
-    m_options.alpha_g = value;
+    MutateOptions([&]() { m_options.alpha_g = value; });
 }
 
 void HRLModelTestCommand::RunSimulationTestOnBenchMark()

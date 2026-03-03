@@ -7,11 +7,15 @@ set(TEST_SOURCES
     ChemicalDataHelper_test.cpp
     ChimeraXHelper_test.cpp
     CommandBase_test.cpp
+    CommandCLIHelper_test.cpp
     CommandExecutionContract_test.cpp
+    CommandOptionHelper_test.cpp
+    CommandRegistrationPolicy_test.cpp
     CommandRegistry_test.cpp
     CommandSurface_test.cpp
     CommandValidationIssue_test.cpp
     ComponentHelper_test.cpp
+    ContributorGuidanceSync_test.cpp
     DataObjectManager_test.cpp
     DocsSync_test.cpp
     EigenMatrixUtility_test.cpp
@@ -66,6 +70,20 @@ gtest_discover_tests(${TEST_EXEC_NAME}
     DISCOVERY_MODE PRE_TEST
 )
 
+add_executable(command_catalog_binding_names_helper
+    CommandCatalogBindingNamesHelper.cpp
+)
+target_link_libraries(command_catalog_binding_names_helper PRIVATE
+    core
+    CompilerFlags
+)
+add_dependencies(${TEST_EXEC_NAME} command_catalog_binding_names_helper)
+set_target_properties(command_catalog_binding_names_helper PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+)
+
 add_test(
     NAME logging_style_guard
     COMMAND ${CMAKE_COMMAND}
@@ -87,6 +105,7 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
             "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
             ${Python_EXECUTABLE}
             -c
-            "import rhbm_gem_module as m; assert hasattr(m, 'LogLevel'); assert hasattr(m, 'ValidationPhase'); assert hasattr(m, 'ValidationIssue'); assert hasattr(m.PrinterType, 'ATOM_OUTLIER'); assert hasattr(m, 'PotentialAnalysisCommand'); assert hasattr(m, 'PotentialDisplayCommand'); assert hasattr(m, 'ResultDumpCommand'); assert hasattr(m, 'MapSimulationCommand'); assert not hasattr(m, 'MapVisualizationCommand'); assert not hasattr(m, 'PositionEstimationCommand'); assert not hasattr(m, 'HRLModelTestCommand'); cmd = m.MapSimulationCommand(); assert hasattr(cmd, 'PrepareForExecution'); assert hasattr(cmd, 'HasValidationErrors'); assert hasattr(cmd, 'GetValidationIssues')"
+            "import subprocess, sys; import rhbm_gem_module as m; public_names = [line.strip() for line in subprocess.check_output([sys.argv[1]], text=True).splitlines() if line.strip()]; assert public_names; assert hasattr(m, 'LogLevel'); assert hasattr(m, 'ValidationPhase'); assert hasattr(m, 'ValidationIssue'); assert hasattr(m.PrinterType, 'ATOM_OUTLIER'); assert all(hasattr(m, name) for name in public_names); assert all(all(hasattr(getattr(m, name)(), method) for method in ('PrepareForExecution', 'HasValidationErrors', 'GetValidationIssues')) for name in public_names)"
+            "$<TARGET_FILE:command_catalog_binding_names_helper>"
     )
 endif()

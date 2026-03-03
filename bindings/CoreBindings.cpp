@@ -1,8 +1,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
+#include <stdexcept>
 #include <string>
 
+#include "BuiltInCommandCatalog.hpp"
 #include "MapSimulationCommand.hpp"
 #include "OptionEnumClass.hpp"
 #include "OptionEnumTraits.hpp"
@@ -22,6 +24,25 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
         const std::string name{ entry.token };
         py_enum.value(name.c_str(), entry.value);
     }
+}
+
+template <typename CommandType>
+py::class_<CommandType> BindPythonPublicCommand(
+    py::module_ & module,
+    rhbm_gem::CommandId command_id)
+{
+    const auto & descriptor{ rhbm_gem::FindCommandDescriptor(command_id) };
+    if (!rhbm_gem::IsPythonPublic(descriptor.binding_exposure)
+        || descriptor.python_binding_name.empty())
+    {
+        throw std::runtime_error(
+            "Command descriptor is not configured for Python public binding: "
+            + std::string(descriptor.name));
+    }
+
+    return py::class_<CommandType>(
+        module,
+        std::string(descriptor.python_binding_name).c_str());
 }
 
 template <typename CommandType>
@@ -87,7 +108,8 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     py::implicitly_convertible<int, rhbm_gem::PartialCharge>();
 
     auto potential_analysis{
-        py::class_<rhbm_gem::PotentialAnalysisCommand>(m, "PotentialAnalysisCommand")
+        BindPythonPublicCommand<rhbm_gem::PotentialAnalysisCommand>(
+            m, rhbm_gem::CommandId::PotentialAnalysis)
     };
     potential_analysis
         .def(py::init<>())
@@ -110,7 +132,8 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(potential_analysis);
 
     auto potential_display{
-        py::class_<rhbm_gem::PotentialDisplayCommand>(m, "PotentialDisplayCommand")
+        BindPythonPublicCommand<rhbm_gem::PotentialDisplayCommand>(
+            m, rhbm_gem::CommandId::PotentialDisplay)
     };
     potential_display
         .def(py::init<>())
@@ -129,7 +152,8 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(potential_display);
 
     auto result_dump{
-        py::class_<rhbm_gem::ResultDumpCommand>(m, "ResultDumpCommand")
+        BindPythonPublicCommand<rhbm_gem::ResultDumpCommand>(
+            m, rhbm_gem::CommandId::ResultDump)
     };
     result_dump
         .def(py::init<>())
@@ -142,7 +166,8 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(result_dump);
 
     auto map_simulation{
-        py::class_<rhbm_gem::MapSimulationCommand>(m, "MapSimulationCommand")
+        BindPythonPublicCommand<rhbm_gem::MapSimulationCommand>(
+            m, rhbm_gem::CommandId::MapSimulation)
     };
     map_simulation
         .def(py::init<>())

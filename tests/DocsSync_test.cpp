@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -22,6 +23,12 @@ constexpr std::string_view kMatrixBeginMarker{
 };
 constexpr std::string_view kMatrixEndMarker{
     "<!-- END GENERATED: command-surface-matrix -->"
+};
+constexpr std::string_view kPythonBeginMarker{
+    "<!-- BEGIN GENERATED: python-public-command-surface -->"
+};
+constexpr std::string_view kPythonEndMarker{
+    "<!-- END GENERATED: python-public-command-surface -->"
 };
 
 std::string YesNo(bool value)
@@ -58,6 +65,42 @@ std::string RenderSurfaceMatrix(const std::vector<rg::CommandDescriptor> & comma
                 rg::CommonOption::Database))
             << " |\n";
     }
+    return output.str();
+}
+
+std::string RenderPythonPublicSurface(const std::vector<rg::CommandDescriptor> & commands)
+{
+    static constexpr std::array<std::string_view, 3> kDiagnosticsTypes{
+        "LogLevel",
+        "ValidationPhase",
+        "ValidationIssue"
+    };
+    static constexpr std::array<std::string_view, 3> kDiagnosticsMethods{
+        "PrepareForExecution()",
+        "HasValidationErrors()",
+        "GetValidationIssues()"
+    };
+
+    std::ostringstream output;
+    output << "### Python-public command classes\n";
+    for (const auto & descriptor : commands)
+    {
+        if (!rg::IsPythonPublic(descriptor.binding_exposure)) continue;
+        output << "- `" << descriptor.python_binding_name << "`\n";
+    }
+
+    output << "\n### Shared diagnostics types\n";
+    for (const auto type_name : kDiagnosticsTypes)
+    {
+        output << "- `" << type_name << "`\n";
+    }
+
+    output << "\n### Shared diagnostics methods on Python-public commands\n";
+    for (const auto method_name : kDiagnosticsMethods)
+    {
+        output << "- `" << method_name << "`\n";
+    }
+
     return output.str();
 }
 
@@ -102,6 +145,9 @@ TEST(DocsSyncTest, GeneratedBlocksMatchBuiltInCommandCatalog)
     EXPECT_EQ(
         ReadGeneratedBlock(doc_content, kMatrixBeginMarker, kMatrixEndMarker),
         "\n" + RenderSurfaceMatrix(commands));
+    EXPECT_EQ(
+        ReadGeneratedBlock(doc_content, kPythonBeginMarker, kPythonEndMarker),
+        "\n" + RenderPythonPublicSurface(commands));
 
     EXPECT_NE(
         doc_content.find("Application callbacks invoke only `Execute()`."),

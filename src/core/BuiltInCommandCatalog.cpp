@@ -28,6 +28,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 0u),
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
+            "PotentialAnalysisCommand",
             []() { return std::make_unique<PotentialAnalysisCommand>(); }
         },
         CommandDescriptor{
@@ -42,6 +43,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 0u),
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
+            "PotentialDisplayCommand",
             []() { return std::make_unique<PotentialDisplayCommand>(); }
         },
         CommandDescriptor{
@@ -56,6 +58,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 0u),
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
+            "ResultDumpCommand",
             []() { return std::make_unique<ResultDumpCommand>(); }
         },
         CommandDescriptor{
@@ -69,6 +72,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 ToMask(CommonOption::Database)),
             DatabaseUsage::NotUsed,
             BindingExposure::PythonPublic,
+            "MapSimulationCommand",
             []() { return std::make_unique<MapSimulationCommand>(); }
         },
         CommandDescriptor{
@@ -82,6 +86,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 ToMask(CommonOption::Database)),
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
+            "",
             []() { return std::make_unique<MapVisualizationCommand>(); }
         },
         CommandDescriptor{
@@ -95,6 +100,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 ToMask(CommonOption::Database)),
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
+            "",
             []() { return std::make_unique<PositionEstimationCommand>(); }
         },
         CommandDescriptor{
@@ -108,6 +114,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 ToMask(CommonOption::Database)),
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
+            "",
             []() { return std::make_unique<HRLModelTestCommand>(); }
         }
     };

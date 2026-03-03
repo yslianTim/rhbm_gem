@@ -39,7 +39,8 @@ bool CommandRegistry::RegisterCommand(
         descriptor.factory,
         descriptor.surface,
         descriptor.database_usage,
-        descriptor.binding_exposure
+        descriptor.binding_exposure,
+        std::string(descriptor.python_binding_name)
     });
     return true;
 }

@@ -34,6 +34,7 @@ void ExpectCommandInfoMatches(const rg::CommandDescriptor & descriptor)
         descriptor.surface.deprecated_hidden_options);
     EXPECT_EQ(info->database_usage, descriptor.database_usage);
     EXPECT_EQ(info->binding_exposure, descriptor.binding_exposure);
+    EXPECT_EQ(info->python_binding_name, descriptor.python_binding_name);
 }
 
 } // namespace

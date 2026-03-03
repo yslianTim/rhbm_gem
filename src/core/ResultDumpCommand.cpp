@@ -1,4 +1,5 @@
 #include "ResultDumpCommand.hpp"
+#include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
@@ -42,17 +43,23 @@ ResultDumpCommand::~ResultDumpCommand()
 
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    cmd->add_option_function<PrinterType>("-p,--printer",
+    command_cli::AddEnumOption<PrinterType>(
+        cmd, "-p,--printer",
         [&](PrinterType value) { SetPrinterChoice(value); },
-        "Printer choice")->required()
-        ->transform(CLI::CheckedTransformer(
-            BuildEnumCLIMap<PrinterType>(), CLI::ignore_case));
-    cmd->add_option_function<std::string>("-k,--model-keylist",
+        "Printer choice",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        cmd, "-k,--model-keylist",
         [&](const std::string & value) { SetModelKeyTagList(value); },
-        "List of model key tag to be display")->required();
-    cmd->add_option_function<std::string>("-m,--map",
-        [&](const std::string & value) { SetMapFilePath(value); },
-        "Map file path")->default_val(m_options.map_file_path.string());
+        "List of model key tag to be display",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        cmd, "-m,--map",
+        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
+        "Map file path",
+        m_options.map_file_path);
 }
 
 bool ResultDumpCommand::ExecuteImpl()
@@ -64,7 +71,7 @@ bool ResultDumpCommand::ExecuteImpl()
 
 void ResultDumpCommand::ValidateOptions()
 {
-    ClearValidationIssues("--map", ValidationPhase::Prepare);
+    ResetPrepareIssues("--map");
     if (m_options.printer_choice == PrinterType::MAP_VALUE && m_options.map_file_path.empty())
     {
         AddValidationError("--map",
@@ -81,29 +88,28 @@ void ResultDumpCommand::ResetRuntimeState()
 
 void ResultDumpCommand::SetPrinterChoice(PrinterType value)
 {
-    InvalidatePreparedState();
-    m_options.printer_choice = value;
+    MutateOptions([&]() { m_options.printer_choice = value; });
 }
 
 void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    InvalidatePreparedState();
-    m_options.map_file_path = path;
-    ValidateOptionalExistingPath(m_options.map_file_path, "--map", "Map file");
+    SetOptionalExistingPathOption(m_options.map_file_path, path, "--map", "Map file");
 }
 
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
-    InvalidatePreparedState();
-    m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-    ClearValidationIssues("--model-keylist", ValidationPhase::Parse);
-    if (m_options.model_key_tag_list.empty())
+    MutateOptions([&]()
     {
-        AddValidationError(
-            "--model-keylist",
-            "Model key list cannot be empty.",
-            ValidationPhase::Parse);
-    }
+        m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+        ResetParseIssues("--model-keylist");
+        if (m_options.model_key_tag_list.empty())
+        {
+            AddValidationError(
+                "--model-keylist",
+                "Model key list cannot be empty.",
+                ValidationPhase::Parse);
+        }
+    });
 }
 
 bool ResultDumpCommand::BuildDataObjectList()

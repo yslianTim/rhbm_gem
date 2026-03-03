@@ -2,11 +2,13 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <typeinfo>
+#include <utility>
 #include <vector>
 
 #include "BuiltInCommandCatalog.hpp"
@@ -90,6 +92,12 @@ protected:
     CommandBase() = default;
     void InvalidatePreparedState();
     bool IsPreparedForExecution() const { return m_is_prepared_for_execution; }
+    template <typename Mutator>
+    void MutateOptions(Mutator && mutator)
+    {
+        InvalidatePreparedState();
+        std::forward<Mutator>(mutator)();
+    }
     void RegisterCLIOptionsBasic(::CLI::App * command);
     void RegisterDeprecatedCommonAliases(::CLI::App * command);
     void AddValidationError(
@@ -101,6 +109,8 @@ protected:
         const std::string & message,
         ValidationPhase phase = ValidationPhase::Prepare);
     void AddNormalizationWarning(const std::string & option_name, const std::string & message);
+    void ResetParseIssues(std::string_view option_name);
+    void ResetPrepareIssues(std::string_view option_name);
     void ClearValidationIssues(std::string_view option_name, std::optional<ValidationPhase> phase);
     void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt);
     void ValidateRequiredExistingPath(
@@ -111,6 +121,38 @@ protected:
         const std::filesystem::path & path,
         std::string_view option_name,
         std::string_view label);
+    void SetRequiredExistingPathOption(
+        std::filesystem::path & field,
+        const std::filesystem::path & value,
+        std::string_view option_name,
+        std::string_view label);
+    void SetOptionalExistingPathOption(
+        std::filesystem::path & field,
+        const std::filesystem::path & value,
+        std::string_view option_name,
+        std::string_view label);
+    template <typename FieldType, typename RawType, typename Predicate>
+    void SetNormalizedScalarOption(
+        FieldType & field,
+        RawType raw_value,
+        std::string_view option_name,
+        Predicate is_valid,
+        FieldType fallback_value,
+        const std::string & warning_message)
+    {
+        MutateOptions([&]()
+        {
+            ResetParseIssues(option_name);
+            if (is_valid(raw_value))
+            {
+                field = static_cast<FieldType>(raw_value);
+                return;
+            }
+
+            field = fallback_value;
+            AddNormalizationWarning(std::string(option_name), warning_message);
+        });
+    }
     void RequireDatabaseManager();
     std::filesystem::path BuildOutputPath(
         std::string_view stem,

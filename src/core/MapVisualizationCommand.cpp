@@ -1,4 +1,5 @@
 #include "MapVisualizationCommand.hpp"
+#include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
@@ -46,21 +47,33 @@ MapVisualizationCommand::~MapVisualizationCommand()
 
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    cmd->add_option_function<std::string>("-a,--model",
-        [&](const std::string & value) { SetModelFilePath(value); },
-        "Model file path")->required();
-    cmd->add_option_function<std::string>("-m,--map",
-        [&](const std::string & value) { SetMapFilePath(value); },
-        "Map file path")->required();
-    cmd->add_option_function<int>("-i,--atom-id",
+    command_cli::AddPathOption(
+        cmd, "-a,--model",
+        [&](const std::filesystem::path & value) { SetModelFilePath(value); },
+        "Model file path",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        cmd, "-m,--map",
+        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
+        "Map file path",
+        std::nullopt,
+        true);
+    command_cli::AddScalarOption<int>(
+        cmd, "-i,--atom-id",
         [&](int value) { SetAtomSerialID(value); },
-        "Atom serial ID for visualization")->default_val(m_options.atom_serial_id);
-    cmd->add_option_function<int>("-s,--sampling",
+        "Atom serial ID for visualization",
+        m_options.atom_serial_id);
+    command_cli::AddScalarOption<int>(
+        cmd, "-s,--sampling",
         [&](int value) { SetSamplingSize(value); },
-        "Number of sampling points per atom")->default_val(m_options.sampling_size);
-    cmd->add_option_function<double>("--window-size",
+        "Number of sampling points per atom",
+        m_options.sampling_size);
+    command_cli::AddScalarOption<double>(
+        cmd, "--window-size",
         [&](double value) { SetWindowSize(value); },
-        "Window size for sampling")->default_val(m_options.window_size);
+        "Window size for sampling",
+        m_options.window_size);
 }
 
 bool MapVisualizationCommand::ExecuteImpl()
@@ -79,41 +92,33 @@ void MapVisualizationCommand::ResetRuntimeState()
 
 void MapVisualizationCommand::SetModelFilePath(const std::filesystem::path & path)
 {
-    InvalidatePreparedState();
-    m_options.model_file_path = path;
-    ValidateRequiredExistingPath(m_options.model_file_path, "--model", "Model file");
+    SetRequiredExistingPathOption(m_options.model_file_path, path, "--model", "Model file");
 }
 
 void MapVisualizationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    InvalidatePreparedState();
-    m_options.map_file_path = path;
-    ValidateRequiredExistingPath(m_options.map_file_path, "--map", "Map file");
+    SetRequiredExistingPathOption(m_options.map_file_path, path, "--map", "Map file");
 }
 
 void MapVisualizationCommand::SetAtomSerialID(int value)
 {
-    InvalidatePreparedState();
-    m_options.atom_serial_id = value;
+    MutateOptions([&]() { m_options.atom_serial_id = value; });
 }
 
 void MapVisualizationCommand::SetSamplingSize(int value)
 {
-    InvalidatePreparedState();
-    m_options.sampling_size = value;
-    ClearValidationIssues("--sampling", ValidationPhase::Parse);
-    if (m_options.sampling_size <= 0)
-    {
-        m_options.sampling_size = 1500;
-        AddNormalizationWarning("--sampling",
-            "Sampling size must be positive, reset to default value = 1500");
-    }
+    SetNormalizedScalarOption(
+        m_options.sampling_size,
+        value,
+        "--sampling",
+        [](int candidate) { return candidate > 0; },
+        1500,
+        "Sampling size must be positive, reset to default value = 1500");
 }
 
 void MapVisualizationCommand::SetWindowSize(double value)
 {
-    InvalidatePreparedState();
-    m_options.window_size = value;
+    MutateOptions([&]() { m_options.window_size = value; });
 }
 
 bool MapVisualizationCommand::BuildDataObject()
