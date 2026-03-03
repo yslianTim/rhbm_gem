@@ -10,8 +10,6 @@ set(TEST_SOURCES
     CommandCLIHelper_test.cpp
     CommandExecutionContract_test.cpp
     CommandOptionHelper_test.cpp
-    CommandRegistrationPolicy_test.cpp
-    CommandRegistry_test.cpp
     CommandScalarValidationHelper_test.cpp
     CommandSurface_test.cpp
     CommandValidationIssue_test.cpp
@@ -43,6 +41,12 @@ set(TEST_SOURCES
     SphereSampler_test.cpp
     StringHelper_test.cpp
 )
+
+if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
+    list(APPEND TEST_SOURCES
+        PotentialAnalysisExperimentalBondGate_test.cpp
+    )
+endif()
 
 set(TEST_EXEC_NAME unit_tests)
 add_executable(${TEST_EXEC_NAME} ${TEST_SOURCES})

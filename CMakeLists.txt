@@ -33,6 +33,8 @@ option(BUILD_TESTING "Build unit tests" ON)
 option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
 option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
 option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)
+option(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
+    "Enable experimental bond-analysis workflow in PotentialAnalysisCommand" OFF)
 set(RHBM_GEM_OPENMP_MODE "AUTO" CACHE STRING "OpenMP feature mode: AUTO, ON, or OFF")
 set_property(CACHE RHBM_GEM_OPENMP_MODE PROPERTY STRINGS AUTO ON OFF)
 set(RHBM_GEM_BOOST_MODE "AUTO" CACHE STRING "Boost feature mode: AUTO, ON, or OFF")

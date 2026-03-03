@@ -20,8 +20,8 @@ The command layer is not the place for file format parsing, DAO details, or low-
 ```mermaid
 flowchart TD
     A["main.cpp<br/>CLI::App app"] --> B["Application"]
-    B --> C["CommandRegistry::Instance()"]
-    C --> D["Registered CommandInfo entries"]
+    B --> C["BuiltInCommandCatalog()"]
+    C --> D["Built-in CommandDescriptor entries"]
 
     D --> E["Application::RegisterCommand(...)"]
     E --> F["Factory creates concrete CommandBase"]
@@ -53,7 +53,7 @@ flowchart TD
 
 ### 3.1 Explicit built-in manifest
 
-Built-in CLI commands are registered centrally through `RegisterBuiltInCommands()`, which iterates the built-in command catalog and registers each descriptor into `CommandRegistry`.
+Built-in CLI commands are defined centrally in `BuiltInCommandCatalog()`. `Application` iterates that catalog directly and creates one CLI subcommand per descriptor.
 
 The built-in manifest order is generated from the built-in command catalog:
 
@@ -69,9 +69,9 @@ The built-in manifest order is generated from the built-in command catalog:
 
 This makes help ordering deterministic and avoids relying on cross-translation-unit static initialization order for built-in behavior.
 
-### 3.2 Registry responsibilities
+### 3.2 Built-in descriptor responsibilities
 
-`CommandRegistry` stores:
+Each built-in `CommandDescriptor` stores:
 
 - the built-in `CommandId`
 - the command name
@@ -82,7 +82,7 @@ This makes help ordering deterministic and avoids relying on cross-translation-u
 - binding exposure policy (`BindingExposure`)
 - the Python binding name for Python-public commands
 
-`Application` reads the registry and creates one CLI subcommand per registered entry. The project does not currently provide a self-registration API for commands; built-in registration flows only through the built-in command catalog and `RegisterBuiltInCommands()`.
+The project does not currently provide a self-registration API for commands. Built-in CLI behavior flows only through the built-in command catalog.
 
 ## 4. Base Class Contract
 
@@ -130,8 +130,6 @@ Base setters are not passive assignment helpers. They also normalize and validat
 - `Verbose`
 - `Database`
 - `OutputFolder`
-
-File-only commands can still expose a hidden deprecated `--database` alias for CLI compatibility without showing it in help output or using it at runtime. This alias is driven from command surface metadata instead of being registered ad hoc inside each command.
 
 ### 4.4 Options pattern
 
@@ -252,15 +250,15 @@ These commands primarily load previously saved `ModelObject` instances from the 
 ### 7.4 Command surface matrix
 
 <!-- BEGIN GENERATED: command-surface-matrix -->
-| Command | Uses database at runtime | Uses output folder | Exposed to Python | Hidden deprecated `--database` alias |
-| --- | --- | --- | --- | --- |
-| `potential_analysis` | yes | yes | yes | no |
-| `potential_display` | yes | yes | yes | no |
-| `result_dump` | yes | yes | yes | no |
-| `map_simulation` | no | yes | yes | yes |
-| `map_visualization` | no | yes | no | yes |
-| `position_estimation` | no | yes | no | yes |
-| `model_test` | no | yes | no | yes |
+| Command | Uses database at runtime | Uses output folder | Exposed to Python |
+| --- | --- | --- | --- |
+| `potential_analysis` | yes | yes | yes |
+| `potential_display` | yes | yes | yes |
+| `result_dump` | yes | yes | yes |
+| `map_simulation` | no | yes | yes |
+| `map_visualization` | no | yes | no |
+| `position_estimation` | no | yes | no |
+| `model_test` | no | yes | no |
 <!-- END GENERATED: command-surface-matrix -->
 
 ## 8. Concrete Command Notes
@@ -281,7 +279,7 @@ Architecture pattern:
 
 If you are adding another analysis-style command, this class is the closest reference implementation.
 
-Bond-oriented helpers (`RunBondMapValueSampling()`, `RunBondGroupClassification()`, `RunLocalBondFitting()`, `RunBondPotentialFitting()`) still exist in the class, but `ExecuteImpl()` does not currently invoke them.
+Bond-oriented analysis is currently isolated behind the experimental build flag `RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS` and is disabled by default, so it is not part of the default command contract.
 Command-local scalar setters on this class also demonstrate the intended split between parse-time single-field checks and prepare-time cross-field checks such as range ordering or simulation-only requirements.
 
 ### 8.2 `potential_display`
@@ -348,7 +346,7 @@ The CLI surface is driven by:
 
 - `main.cpp`
 - `Application`
-- `CommandRegistry`
+- `BuiltInCommandCatalog()`
 - concrete `CommandBase` subclasses
 
 The Python surface is separate and currently exposes only a subset of commands through `bindings/CoreBindings.cpp`.
@@ -397,9 +395,8 @@ When adding a new command, follow this checklist:
 
 Avoid these anti-patterns:
 
-- bypassing `CommandRegistry` and hard-coding new CLI subcommands in `Application`
+- bypassing `BuiltInCommandCatalog()` and hard-coding new CLI subcommands in `Application`
 - re-introducing namespace-scope static registration for built-in commands
-- treating `RegisterBuiltInCommands()` as the built-in source of truth instead of the built-in command catalog
 - putting format-specific parsing logic directly inside a command
 - delaying basic validation until deep inside `Execute()`
 - mutating the filesystem during CLI parse instead of during preflight
@@ -413,8 +410,6 @@ For future command work, inspect these files first:
 
 - `include/core/CommandBase.hpp`
 - `src/core/CommandBase.cpp`
-- `include/core/CommandRegistry.hpp`
-- `src/core/CommandRegistry.cpp`
 - `include/core/BuiltInCommandCatalog.hpp`
 - `src/core/BuiltInCommandCatalog.cpp`
 - `include/core/Application.hpp`

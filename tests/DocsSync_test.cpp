@@ -51,8 +51,8 @@ std::string RenderSurfaceMatrix(const std::vector<rg::CommandDescriptor> & comma
 {
     std::ostringstream output;
     output
-        << "| Command | Uses database at runtime | Uses output folder | Exposed to Python | Hidden deprecated `--database` alias |\n"
-        << "| --- | --- | --- | --- | --- |\n";
+        << "| Command | Uses database at runtime | Uses output folder | Exposed to Python |\n"
+        << "| --- | --- | --- | --- |\n";
     for (const auto & info : commands)
     {
         output
@@ -60,9 +60,6 @@ std::string RenderSurfaceMatrix(const std::vector<rg::CommandDescriptor> & comma
             << " | " << YesNo(rg::UsesDatabaseAtRuntime(info.database_usage))
             << " | " << YesNo(rg::UsesOutputFolder(info.surface))
             << " | " << YesNo(rg::IsPythonPublic(info.binding_exposure))
-            << " | " << YesNo(rg::HasCommonOption(
-                info.surface.deprecated_hidden_options,
-                rg::CommonOption::Database))
             << " |\n";
     }
     return output.str();
@@ -161,6 +158,6 @@ TEST(DocsSyncTest, GeneratedBlocksMatchBuiltInCommandCatalog)
         std::string::npos);
     EXPECT_NE(
         doc_content.find(
-            "The project does not currently provide a self-registration API for commands;"),
+            "The project does not currently provide a self-registration API for commands."),
         std::string::npos);
 }

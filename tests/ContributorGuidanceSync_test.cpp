@@ -22,9 +22,8 @@ TEST(ContributorGuidanceSyncTest, DevelopmentGuidelinesMatchCatalogBasedRegistra
     EXPECT_NE(
         doc_content.find("New built-in commands should be added through `BuiltInCommandCatalog()`"),
         std::string::npos);
-    EXPECT_NE(
-        doc_content.find(
-            "Tests that need fake command registration should construct a `CommandDescriptor` explicitly"),
+    EXPECT_EQ(
+        doc_content.find("fake command registration"),
         std::string::npos);
     EXPECT_EQ(
         doc_content.find("CommandRegistrar<...>"),

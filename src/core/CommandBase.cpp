@@ -63,7 +63,6 @@ const CommandDescriptor & CommandBase::GetCommandDescriptor() const
 void CommandBase::RegisterCLIOptions(CLI::App * command)
 {
     RegisterCLIOptionsBasic(command);
-    RegisterDeprecatedCommonAliases(command);
     RegisterCLIOptionsExtend(command);
 }
 
@@ -110,41 +109,12 @@ void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
     }
 }
 
-void CommandBase::RegisterDeprecatedCommonAliases(CLI::App * command)
-{
-    const auto deprecated_options{ GetCommandDescriptor().surface.deprecated_hidden_options };
-    if (!HasCommonOption(deprecated_options, CommonOption::Database))
-    {
-        return;
-    }
-
-    auto * hidden_group{ command->add_option_group("") };
-    command_cli::AddPathOption(
-        hidden_group,
-        "--database",
-        [&](const std::filesystem::path & value)
-        {
-            m_deprecated_database_option_used = true;
-            SetDatabasePath(value);
-        },
-        "Deprecated hidden database compatibility alias");
-}
-
 bool CommandBase::PrepareForExecution()
 {
     Logger::SetLogLevel(GetOptions().verbose_level);
     ResetRuntimeState();
     m_data_manager.ClearDataObjects();
     InvalidatePreparedState();
-
-    ClearValidationIssues("--database (deprecated)", ValidationPhase::Prepare);
-    if (m_deprecated_database_option_used &&
-        !HasCommonOption(GetCommonOptionMask(), CommonOption::Database))
-    {
-        AddValidationWarning(
-            "--database (deprecated)",
-            "This command ignores the deprecated hidden '--database' compatibility alias.");
-    }
 
     ValidateOptions();
     if (HasValidationErrors())

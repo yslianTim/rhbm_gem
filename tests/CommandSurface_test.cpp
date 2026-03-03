@@ -1,103 +1,80 @@
 #include <gtest/gtest.h>
 
 #include "BuiltInCommandCatalog.hpp"
-#include "CommandRegistry.hpp"
-#include "RegisterBuiltInCommands.hpp"
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-const rg::CommandRegistry::CommandInfo * FindCommand(rg::CommandId id)
+const rg::CommandDescriptor * FindCommand(rg::CommandId id)
 {
-    rg::RegisterBuiltInCommands();
-    const auto & commands{ rg::CommandRegistry::Instance().GetCommands() };
-    for (const auto & info : commands)
+    for (const auto & descriptor : rg::BuiltInCommandCatalog())
     {
-        if (info.id == id)
+        if (descriptor.id == id)
         {
-            return &info;
+            return &descriptor;
         }
     }
     return nullptr;
 }
 
-void ExpectCommandInfoMatches(const rg::CommandDescriptor & descriptor)
-{
-    const auto * info{ FindCommand(descriptor.id) };
-    ASSERT_NE(info, nullptr);
-    EXPECT_EQ(info->name, descriptor.name);
-    EXPECT_EQ(info->description, descriptor.description);
-    EXPECT_EQ(info->surface.common_options, descriptor.surface.common_options);
-    EXPECT_EQ(
-        info->surface.deprecated_hidden_options,
-        descriptor.surface.deprecated_hidden_options);
-    EXPECT_EQ(info->database_usage, descriptor.database_usage);
-    EXPECT_EQ(info->binding_exposure, descriptor.binding_exposure);
-    EXPECT_EQ(info->python_binding_name, descriptor.python_binding_name);
-}
-
 } // namespace
 
-TEST(CommandSurfaceTest, RegistrySurfacesMatchBuiltInCommandCatalog)
+TEST(CommandSurfaceTest, BuiltInCommandSurfacePoliciesMatchExpectedMetadata)
 {
-    for (const auto & descriptor : rg::BuiltInCommandCatalog())
-    {
-        ExpectCommandInfoMatches(descriptor);
-    }
-}
-
-TEST(CommandSurfaceTest, BuiltInCommandMetadataMatchesExpectedSurfacePolicies)
-{
-    const auto & potential_analysis{
-        rg::FindCommandDescriptor(rg::CommandId::PotentialAnalysis)
-    };
+    const auto * potential_analysis{ FindCommand(rg::CommandId::PotentialAnalysis) };
+    ASSERT_NE(potential_analysis, nullptr);
     EXPECT_TRUE(rg::HasCommonOption(
-        potential_analysis.surface.common_options, rg::CommonOption::Database));
-    EXPECT_EQ(potential_analysis.database_usage, rg::DatabaseUsage::Required);
-    EXPECT_EQ(potential_analysis.binding_exposure, rg::BindingExposure::PythonPublic);
+        potential_analysis->surface.common_options,
+        rg::CommonOption::Database));
+    EXPECT_EQ(potential_analysis->database_usage, rg::DatabaseUsage::Required);
+    EXPECT_EQ(potential_analysis->binding_exposure, rg::BindingExposure::PythonPublic);
 
-    const auto & potential_display{
-        rg::FindCommandDescriptor(rg::CommandId::PotentialDisplay)
-    };
+    const auto * potential_display{ FindCommand(rg::CommandId::PotentialDisplay) };
+    ASSERT_NE(potential_display, nullptr);
     EXPECT_TRUE(rg::HasCommonOption(
-        potential_display.surface.common_options, rg::CommonOption::Database));
-    EXPECT_EQ(potential_display.database_usage, rg::DatabaseUsage::Required);
-    EXPECT_EQ(potential_display.binding_exposure, rg::BindingExposure::PythonPublic);
+        potential_display->surface.common_options,
+        rg::CommonOption::Database));
+    EXPECT_EQ(potential_display->database_usage, rg::DatabaseUsage::Required);
+    EXPECT_EQ(potential_display->binding_exposure, rg::BindingExposure::PythonPublic);
 
-    const auto & result_dump{
-        rg::FindCommandDescriptor(rg::CommandId::ResultDump)
-    };
+    const auto * result_dump{ FindCommand(rg::CommandId::ResultDump) };
+    ASSERT_NE(result_dump, nullptr);
     EXPECT_TRUE(rg::HasCommonOption(
-        result_dump.surface.common_options, rg::CommonOption::Database));
-    EXPECT_EQ(result_dump.database_usage, rg::DatabaseUsage::Required);
-    EXPECT_EQ(result_dump.binding_exposure, rg::BindingExposure::PythonPublic);
+        result_dump->surface.common_options,
+        rg::CommonOption::Database));
+    EXPECT_EQ(result_dump->database_usage, rg::DatabaseUsage::Required);
+    EXPECT_EQ(result_dump->binding_exposure, rg::BindingExposure::PythonPublic);
 
-    const auto & map_simulation{
-        rg::FindCommandDescriptor(rg::CommandId::MapSimulation)
-    };
+    const auto * map_simulation{ FindCommand(rg::CommandId::MapSimulation) };
+    ASSERT_NE(map_simulation, nullptr);
     EXPECT_FALSE(rg::HasCommonOption(
-        map_simulation.surface.common_options, rg::CommonOption::Database));
-    EXPECT_TRUE(rg::HasCommonOption(
-        map_simulation.surface.deprecated_hidden_options, rg::CommonOption::Database));
-    EXPECT_EQ(map_simulation.database_usage, rg::DatabaseUsage::NotUsed);
-    EXPECT_EQ(map_simulation.binding_exposure, rg::BindingExposure::PythonPublic);
+        map_simulation->surface.common_options,
+        rg::CommonOption::Database));
+    EXPECT_EQ(map_simulation->database_usage, rg::DatabaseUsage::NotUsed);
+    EXPECT_EQ(map_simulation->binding_exposure, rg::BindingExposure::PythonPublic);
 
-    const auto & map_visualization{
-        rg::FindCommandDescriptor(rg::CommandId::MapVisualization)
-    };
-    EXPECT_EQ(map_visualization.database_usage, rg::DatabaseUsage::NotUsed);
-    EXPECT_EQ(map_visualization.binding_exposure, rg::BindingExposure::CliOnly);
+    const auto * map_visualization{ FindCommand(rg::CommandId::MapVisualization) };
+    ASSERT_NE(map_visualization, nullptr);
+    EXPECT_FALSE(rg::HasCommonOption(
+        map_visualization->surface.common_options,
+        rg::CommonOption::Database));
+    EXPECT_EQ(map_visualization->database_usage, rg::DatabaseUsage::NotUsed);
+    EXPECT_EQ(map_visualization->binding_exposure, rg::BindingExposure::CliOnly);
 
-    const auto & position_estimation{
-        rg::FindCommandDescriptor(rg::CommandId::PositionEstimation)
-    };
-    EXPECT_EQ(position_estimation.database_usage, rg::DatabaseUsage::NotUsed);
-    EXPECT_EQ(position_estimation.binding_exposure, rg::BindingExposure::CliOnly);
+    const auto * position_estimation{ FindCommand(rg::CommandId::PositionEstimation) };
+    ASSERT_NE(position_estimation, nullptr);
+    EXPECT_FALSE(rg::HasCommonOption(
+        position_estimation->surface.common_options,
+        rg::CommonOption::Database));
+    EXPECT_EQ(position_estimation->database_usage, rg::DatabaseUsage::NotUsed);
+    EXPECT_EQ(position_estimation->binding_exposure, rg::BindingExposure::CliOnly);
 
-    const auto & model_test{
-        rg::FindCommandDescriptor(rg::CommandId::ModelTest)
-    };
-    EXPECT_EQ(model_test.database_usage, rg::DatabaseUsage::NotUsed);
-    EXPECT_EQ(model_test.binding_exposure, rg::BindingExposure::CliOnly);
+    const auto * model_test{ FindCommand(rg::CommandId::ModelTest) };
+    ASSERT_NE(model_test, nullptr);
+    EXPECT_FALSE(rg::HasCommonOption(
+        model_test->surface.common_options,
+        rg::CommonOption::Database));
+    EXPECT_EQ(model_test->database_usage, rg::DatabaseUsage::NotUsed);
+    EXPECT_EQ(model_test->binding_exposure, rg::BindingExposure::CliOnly);
 }

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <functional>
+#include <memory>
 #include <string>
 
-#include "CommandRegistry.hpp"
+#include "BuiltInCommandCatalog.hpp"
 
 namespace CLI
 {
@@ -11,20 +13,16 @@ namespace CLI
 
 namespace rhbm_gem {
 
-class Application
-{
-    ::CLI::App & m_cli_app;
-
+class Application {
 public:
     Application(::CLI::App & app);
     ~Application() = default;
 
 private:
+    ::CLI::App & m_cli_app;
+
     void RegisterAllCommands();
-    void RegisterCommand(
-        const std::string & name,
-        const std::string & description,
-        std::function<std::unique_ptr<CommandBase>()> factory);
+    void RegisterCommand(const CommandDescriptor & descriptor);
 };
 
 } // namespace rhbm_gem

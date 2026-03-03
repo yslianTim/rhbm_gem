@@ -24,8 +24,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 CommonOption::Threading
                     | CommonOption::Verbose
                     | CommonOption::Database
-                    | CommonOption::OutputFolder,
-                0u),
+                    | CommonOption::OutputFolder),
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
             "PotentialAnalysisCommand",
@@ -39,8 +38,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 CommonOption::Threading
                     | CommonOption::Verbose
                     | CommonOption::Database
-                    | CommonOption::OutputFolder,
-                0u),
+                    | CommonOption::OutputFolder),
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
             "PotentialDisplayCommand",
@@ -54,8 +52,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 CommonOption::Threading
                     | CommonOption::Verbose
                     | CommonOption::Database
-                    | CommonOption::OutputFolder,
-                0u),
+                    | CommonOption::OutputFolder),
             DatabaseUsage::Required,
             BindingExposure::PythonPublic,
             "ResultDumpCommand",
@@ -68,8 +65,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             MakeCommandSurface(
                 CommonOption::Threading
                     | CommonOption::Verbose
-                    | CommonOption::OutputFolder,
-                ToMask(CommonOption::Database)),
+                    | CommonOption::OutputFolder),
             DatabaseUsage::NotUsed,
             BindingExposure::PythonPublic,
             "MapSimulationCommand",
@@ -82,8 +78,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             MakeCommandSurface(
                 CommonOption::Threading
                     | CommonOption::Verbose
-                    | CommonOption::OutputFolder,
-                ToMask(CommonOption::Database)),
+                    | CommonOption::OutputFolder),
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
             "",
@@ -96,8 +91,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             MakeCommandSurface(
                 CommonOption::Threading
                     | CommonOption::Verbose
-                    | CommonOption::OutputFolder,
-                ToMask(CommonOption::Database)),
+                    | CommonOption::OutputFolder),
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
             "",
@@ -110,8 +104,7 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
             MakeCommandSurface(
                 CommonOption::Threading
                     | CommonOption::Verbose
-                    | CommonOption::OutputFolder,
-                ToMask(CommonOption::Database)),
+                    | CommonOption::OutputFolder),
             DatabaseUsage::NotUsed,
             BindingExposure::CliOnly,
             "",

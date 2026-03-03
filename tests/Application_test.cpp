@@ -9,7 +9,7 @@
 
 namespace rg = rhbm_gem;
 
-TEST(ApplicationTest, FileOnlyCommandsHideDatabaseOptionFromHelp)
+TEST(ApplicationTest, FileOnlyCommandsDoNotExposeDatabaseOption)
 {
     CLI::App app{"RHBM-GEM"};
     rg::Application controller(app);

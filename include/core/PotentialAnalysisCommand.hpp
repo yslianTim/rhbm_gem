@@ -74,9 +74,7 @@ private:
     void RunMapObjectPreprocessing();
     void RunModelObjectPreprocessing();
     void RunAtomMapValueSampling();
-    void RunBondMapValueSampling();
     void RunAtomGroupClassification();
-    void RunBondGroupClassification();
     void RunAtomAlphaTraining();
     double TrainUniversalAlphaR(
         const std::vector<AtomObject *> & atom_list,
@@ -89,9 +87,8 @@ private:
         const std::vector<double> & alpha_list
     );
     void RunLocalAtomFitting(double universal_alpha_r);
-    void RunLocalBondFitting(double universal_alpha_r);
     void RunAtomPotentialFitting();
-    void RunBondPotentialFitting();
+    void RunExperimentalBondWorkflowIfEnabled();
     void SaveDataObject();
 
     void StudyAtomLocalFittingViaAlphaR(

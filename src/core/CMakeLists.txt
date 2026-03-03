@@ -3,7 +3,6 @@ set(CORE_SOURCES
     AtomPainter.cpp
     BuiltInCommandCatalog.cpp
     CommandBase.cpp
-    CommandRegistry.cpp
     ComparisonPainter.cpp
     DataObjectManager.cpp
     DemoPainter.cpp
@@ -15,8 +14,8 @@ set(CORE_SOURCES
     ModelPainter.cpp
     PositionEstimationCommand.cpp
     PotentialAnalysisCommand.cpp
+    PotentialAnalysisBondWorkflow.cpp
     PotentialDisplayCommand.cpp
-    RegisterBuiltInCommands.cpp
     ResultDumpCommand.cpp
 )
 
@@ -33,6 +32,10 @@ target_link_libraries(core PUBLIC
 target_link_libraries(core PRIVATE
     $<BUILD_INTERFACE:CompilerFlags>
 )
+
+if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
+    target_compile_definitions(core PRIVATE RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
+endif()
 
 set_target_properties(core PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"

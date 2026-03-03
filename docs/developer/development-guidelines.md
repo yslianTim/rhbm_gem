@@ -78,7 +78,6 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` File parsing, database access, and DAO details belong in the data layer, not inside command orchestration logic.
 - `[Required]` Support for new file formats must update both the extension-based factory selection path and the corresponding format implementation.
 - `[Recommended]` New built-in commands should be added through `BuiltInCommandCatalog()` so command name, surface metadata, binding exposure, and docs sync all share one source of truth.
-- `[Recommended]` Tests that need fake command registration should construct a `CommandDescriptor` explicitly and call `CommandRegistry::RegisterCommand(...)` directly.
 - `[Recommended]` Managers should remain the boundary objects that move data between commands, files, and persistence layers.
 
 ## 8. Testing and Regression Policy

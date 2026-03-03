@@ -102,7 +102,6 @@ protected:
         std::forward<Mutator>(mutator)();
     }
     void RegisterCLIOptionsBasic(::CLI::App * command);
-    void RegisterDeprecatedCommonAliases(::CLI::App * command);
     void AddValidationError(
         const std::string & option_name,
         const std::string & message,
@@ -329,7 +328,6 @@ protected:
     }
 
 private:
-    bool m_deprecated_database_option_used{ false };
     bool m_is_prepared_for_execution{ false };
 
     void AddValidationIssue(

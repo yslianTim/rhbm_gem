@@ -47,16 +47,12 @@ struct CommandSurface
         | CommonOption::Database
         | CommonOption::OutputFolder
     };
-    CommonOptionMask deprecated_hidden_options{ 0u };
 };
 
-constexpr CommandSurface MakeCommandSurface(
-    CommonOptionMask common_options,
-    CommonOptionMask deprecated_hidden_options)
+constexpr CommandSurface MakeCommandSurface(CommonOptionMask common_options)
 {
     return CommandSurface{
-        common_options,
-        deprecated_hidden_options
+        common_options
     };
 }
 
