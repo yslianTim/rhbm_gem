@@ -396,30 +396,12 @@ Passing a larger value to `--verbose` enables all lower levels as well.
    - `CMAKE_DISABLE_FIND_PACKAGE_Boost=TRUE`
 
 
-# Overall Information for Developer
+# Developer Documentation
 
-For the repository-specific engineering rules for new and modified code, see [docs/development-guidelines.md](docs/development-guidelines.md).
-For a Traditional Chinese reference, see [docs/development-guidelines.zh-TW.md](docs/development-guidelines.zh-TW.md).
-These documents summarize project structure, naming/style patterns, command/data-layer design, logging, testing, and documentation update expectations.
+Repository-internal design, extension rules, and developer-facing architecture notes are maintained under [`docs/`](docs/).
 
+Start here:
 
-## Data Object Manager
-
-Commands rely on `rhbm_gem::DataObjectManager` to load and store data objects. The manager instance is owned by `rhbm_gem::CommandBase` and shared with derived commands. A command lazily creates a `rhbm_gem::DataObjectManager` and initializes it with a database path via `SetDatabaseManager`.
-
-`rhbm_gem::DataObjectManager` is not accessed concurrently. The database pointer and the internal data map are guarded by simple `std::mutex` members to keep the implementation straightforward.
-
-`rhbm_gem::DatabaseManager` is safe for concurrent use. Operations like `SaveDataObject` and `LoadDataObject` lock an internal mutex so multiple threads can access the database simultaneously without interference.
-
-### File IO and persistence work through cooperating managers:
-
-- **`rhbm_gem::DataObjectManager`** selects a reader or writer based on file extension. It uses `rhbm_gem::FileProcessFactoryRegistry` to instantiate the appropriate factory. Commands load and save objects through it, delegating file operations and database access to `rhbm_gem::DatabaseManager`.
-- **`rhbm_gem::DatabaseManager`** wraps the SQLite database. DAO objects are created via `rhbm_gem::DataObjectDAOFactoryRegistry` and cached for reuse.
-
-Together these managers keep data loading and persistence separate from command logic.
-
-
-
-## Unit Tests (via GoogleTest v1.17.0)
-
-The test suite automatically includes any immediate `.cpp` file in `tests/` directory.
+- [`docs/development-guidelines.md`](docs/development-guidelines.md) for repository-wide engineering rules and change expectations.
+- [`docs/architecture/command-architecture.md`](docs/architecture/command-architecture.md) for command registration, execution flow, and extension patterns.
+- [`docs/architecture/dataobject-io-architecture.md`](docs/architecture/dataobject-io-architecture.md) for DataObject file I/O, SQLite persistence, and related constraints.
