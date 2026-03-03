@@ -875,7 +875,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
                 ROOTHelper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
                 ROOTHelper::SetFillAttribute(result_text[i][j].get(), 4000);
                 result_text[i][j]->AddText(
-                    Form("A = %.2f,   #tau = %.2f", gaus_prior->GetParameter(0), gaus_prior->GetParameter(2))
+                    Form("A = %.2f,   #tau = %.2f", gaus_prior->GetParameter(0), gaus_prior->GetParameter(1))
                 );
                 result_text[i][j]->Draw();
             }
