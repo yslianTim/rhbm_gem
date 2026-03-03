@@ -38,19 +38,16 @@ MapVisualizationCommand::MapVisualizationCommand(void) :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::MapVisualizationCommand() called.");
 }
 
 MapVisualizationCommand::~MapVisualizationCommand()
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::~MapVisualizationCommand() called.");
     m_map_object.reset();
     m_model_object.reset();
 }
 
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::RegisterCLIOptionsExtend() called.");
     cmd->add_option_function<std::string>("-a,--model",
         [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
@@ -70,7 +67,6 @@ void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool MapVisualizationCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::Execute() called.");
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
@@ -119,7 +115,6 @@ void MapVisualizationCommand::SetWindowSize(double value)
 
 bool MapVisualizationCommand::BuildDataObject(void)
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::BuildDataObject() called");
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
@@ -139,7 +134,6 @@ bool MapVisualizationCommand::BuildDataObject(void)
 
 void MapVisualizationCommand::RunMapObjectPreprocessing(void)
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::RunMapObjectPreprocessing() called");
     ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
     m_map_object = data_manager->GetTypedDataObject<MapObject>(m_map_key_tag);
@@ -148,7 +142,6 @@ void MapVisualizationCommand::RunMapObjectPreprocessing(void)
 
 void MapVisualizationCommand::RunModelObjectPreprocessing(void)
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::RunModelObjectPreprocessing() called");
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
     m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
@@ -163,7 +156,6 @@ void MapVisualizationCommand::RunModelObjectPreprocessing(void)
 
 void MapVisualizationCommand::RunAtomMapValueSampling(void)
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::RunAtomMapValueSampling() called");
     ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
     if (m_map_object == nullptr) return;
     auto sampler{ std::make_unique<GridSampler>() };

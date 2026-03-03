@@ -11,13 +11,11 @@ namespace rhbm_gem {
 
 MrcFormat::MrcFormat(void)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::MrcFormat() called");
     InitHeader();
 }
 
 void MrcFormat::InitHeader(void)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::InitHeader() called");
     std::memset(&m_header, 0, sizeof(m_header));
     std::fill_n(m_header.array_size,        3, 1);
     m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
@@ -55,7 +53,6 @@ void MrcFormat::InitHeader(void)
 
 void MrcFormat::LoadHeader(std::istream & stream)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::LoadHeader() called");
     stream.seekg(0, std::ios::beg);
     stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
     if (!stream)
@@ -66,7 +63,6 @@ void MrcFormat::LoadHeader(std::istream & stream)
 
 void MrcFormat::SaveHeader(std::ostream & stream)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::SaveHeader() called");
     stream.seekp(0, std::ios::beg);
     stream.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
     if (!stream)
@@ -144,7 +140,6 @@ size_t MrcFormat::GetElementSize(void) const
 
 void MrcFormat::LoadDataArray(std::istream & stream)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::LoadDataArray() called");
     // Ensure we start reading data from the beginning of the file
     stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
@@ -235,7 +230,6 @@ void MrcFormat::LoadDataArray(std::istream & stream)
 
 void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::SaveDataArray() called");
     size_t expected_voxels{ static_cast<size_t>(m_header.array_size[0]) *
                             static_cast<size_t>(m_header.array_size[1]) *
                             static_cast<size_t>(m_header.array_size[2]) };
@@ -325,7 +319,6 @@ void MrcFormat::SetHeader(const std::array<int, 3> & grid_size,
 
 void MrcFormat::ReorderedAxisRelatedParameters(void)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::ReorderedAxisRelatedParameters() called");
     if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
     {
         Logger::Log(LogLevel::Debug,

@@ -13,12 +13,10 @@ namespace rhbm_gem {
 MapInterpolationVisitor::MapInterpolationVisitor(::SamplerBase * sampler) :
     m_sampler{ sampler }, m_position{ 0.0, 0.0, 0.0 }, m_axis_vector{ 0.0, 0.0, 0.0 }
 {
-    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::MapInterpolationVisitor() called.");
 }
 
 void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 {
-    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::VisitMapObject() called.");
     if (data_object == nullptr) return;
     m_sampling_data_list.clear();
     if (m_sampler == nullptr)
@@ -38,14 +36,12 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 
 std::vector<std::tuple<float, float>> && MapInterpolationVisitor::MoveSamplingDataList(void)
 {
-    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::MoveSamplingDataList() called.");
     return std::move(m_sampling_data_list);
 }
 
 float MapInterpolationVisitor::MakeInterpolationInMapObject(
     MapObject * data_object, const std::array<float, 3> & position)
 {
-    Logger::Log(LogLevel::Debug, "MapInterpolationVisitor::MakeInterpolationInMapObject() called.");
     if (data_object == nullptr)
     {
         Logger::Log(LogLevel::Warning,

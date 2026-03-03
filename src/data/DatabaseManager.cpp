@@ -11,7 +11,6 @@ DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
     m_database_path{ database_path },
     m_database{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "DatabaseManager::DatabaseManager() called");
     if (m_database_path.empty()) m_database_path = "database.sqlite";
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
     m_database->Execute(
@@ -20,13 +19,11 @@ DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
 
 DatabaseManager::~DatabaseManager()
 {
-    Logger::Log(LogLevel::Debug, "DatabaseManager::~DatabaseManager() called");
 }
 
 void DatabaseManager::SaveDataObject(
     const DataObjectBase * data_object, const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "DatabaseManager::SaveDataObject() called");
     std::lock_guard<std::mutex> lock(m_db_mutex);
     auto dao{ CreateDataObjectDAO(data_object) };
     dao->Save(data_object, key_tag);
@@ -47,7 +44,6 @@ void DatabaseManager::SaveDataObject(
 std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "DatabaseManager::LoadDataObject() called");
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->Prepare(
@@ -72,7 +68,6 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
 std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
     const DataObjectBase * data_object)
 {
-    Logger::Log(LogLevel::Debug, "DatabaseManager::CreateDataObjectDAO() called");
     if (data_object == nullptr)
     {
         throw std::runtime_error("Null data object pointer provided.");
@@ -84,7 +79,6 @@ std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
 std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
     const std::string & object_type)
 {
-    Logger::Log(LogLevel::Debug, "DatabaseManager::CreateDataObjectDAO() called");
     auto type{ DataObjectDAOFactoryRegistry::Instance().GetTypeIndex(object_type) };
     std::lock_guard<std::mutex> lock(m_mutex);
     auto iter{ m_dao_cache.find(type) };

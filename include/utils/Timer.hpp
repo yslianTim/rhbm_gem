@@ -18,11 +18,11 @@ public:
 
     void Reset(void) { start_time = std::chrono::steady_clock::now(); }
 
-    void Print(const std::string & text) const
+    void Print(const std::string & text, LogLevel level = LogLevel::Debug) const
     {
         std::ostringstream oss;
         oss << text << " took " << Elapsed() << " " << UnitString();
-        Logger::Log(LogLevel::Notice, oss.str());
+        Logger::Log(level, oss.str());
     }
 
     double Elapsed(void) const
@@ -43,7 +43,7 @@ public:
         else return "Unknown";
     }
 
-    void PrintFormatted(const std::string & text) const
+    void PrintFormatted(const std::string & text, LogLevel level = LogLevel::Debug) const
     {
         auto now{ std::chrono::steady_clock::now() };
         auto elapsed_time{ now - start_time };
@@ -77,6 +77,6 @@ public:
         {
             oss << microseconds_part.count() << " us";
         }
-        Logger::Log(LogLevel::Notice, oss.str());
+        Logger::Log(level, oss.str());
     }
 };

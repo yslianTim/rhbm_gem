@@ -31,9 +31,9 @@ TEST_F(AtomSelectorTest, PrintOutputsPopulatedSets)
     selector.VetoResidueType("GLY");
     selector.VetoElementType("O");
 
-    testing::internal::CaptureStdout();
-    selector.Print();
-    std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string output{ selector.Describe() };
+    Logger::SetLogLevel(LogLevel::Info);
+    EXPECT_NO_THROW(selector.Print());
 
     EXPECT_NE(output.find("Atomic Picking List"), std::string::npos);
     EXPECT_NE(output.find("Atomic Vetoing List"), std::string::npos);
@@ -49,15 +49,50 @@ TEST_F(AtomSelectorTest, PrintOutputsHeadersWithEmptySets)
 {
     AtomSelector selector;
 
-    testing::internal::CaptureStdout();
-    selector.Print();
-    std::string output{ testing::internal::GetCapturedStdout() };
+    const std::string output{ selector.Describe() };
+    Logger::SetLogLevel(LogLevel::Info);
+    EXPECT_NO_THROW(selector.Print());
 
     EXPECT_NE(output.find("Atomic Picking List"), std::string::npos);
     EXPECT_NE(output.find("Atomic Vetoing List"), std::string::npos);
     EXPECT_NE(output.find(" - Chain set: \n"), std::string::npos);
     EXPECT_NE(output.find(" - Residue set: \n"), std::string::npos);
     EXPECT_NE(output.find(" - Element set: \n"), std::string::npos);
+}
+
+TEST_F(AtomSelectorTest, DescribeReturnsPopulatedSets)
+{
+    AtomSelector selector;
+    selector.PickChainID("A");
+    selector.PickResidueType("ALA");
+    selector.PickElementType("C");
+    selector.VetoChainID("B");
+    selector.VetoResidueType("GLY");
+    selector.VetoElementType("O");
+
+    const std::string description{ selector.Describe() };
+
+    EXPECT_NE(description.find("Atomic Picking List"), std::string::npos);
+    EXPECT_NE(description.find("Atomic Vetoing List"), std::string::npos);
+    EXPECT_NE(description.find(" - Chain set: A, "), std::string::npos);
+    EXPECT_NE(description.find("ALA"), std::string::npos);
+    EXPECT_NE(description.find(" - Element set: C, "), std::string::npos);
+    EXPECT_NE(description.find("B"), std::string::npos);
+    EXPECT_NE(description.find("GLY"), std::string::npos);
+    EXPECT_NE(description.find("O"), std::string::npos);
+}
+
+TEST_F(AtomSelectorTest, DescribeReturnsHeadersWithEmptySets)
+{
+    AtomSelector selector;
+
+    const std::string description{ selector.Describe() };
+
+    EXPECT_NE(description.find("Atomic Picking List"), std::string::npos);
+    EXPECT_NE(description.find("Atomic Vetoing List"), std::string::npos);
+    EXPECT_NE(description.find(" - Chain set: \n"), std::string::npos);
+    EXPECT_NE(description.find(" - Residue set: \n"), std::string::npos);
+    EXPECT_NE(description.find(" - Element set: \n"), std::string::npos);
 }
 
 TEST_F(AtomSelectorTest, DefaultSelectionIsTrue)

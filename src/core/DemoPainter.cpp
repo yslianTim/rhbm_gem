@@ -33,6 +33,7 @@
 #include <tuple>
 #include <cmath>
 #include <limits>
+#include <sstream>
 
 #ifdef HAVE_BOOST
 #include <boost/math/distributions/students_t.hpp>
@@ -1777,17 +1778,19 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
         }
         #endif
 
-        std::cout << "Width estimate in Model: " << model_object->GetPdbID() << std::endl;
-        std::cout << " - Alpha_Carbon :"<< std::endl;
-        for (auto & value : width_array_map[i].at(Spot::CA)) std::cout << value << std::endl;
-        std::cout << " - Carbon :"<< std::endl;
-        for (auto & value : width_array_map[i].at(Spot::C)) std::cout << value << std::endl;
-        std::cout << " - Nitrogen :"<< std::endl;
-        for (auto & value : width_array_map[i].at(Spot::N)) std::cout << value << std::endl;
-        std::cout << "  t-value: " << t_value << "  dof: " << dof << "  p-value: " << p_value << std::endl;
-        std::cout << "  Carbon mean: " << width_carbon_mean << "  S.D.: " << width_carbon_std <<"  data size (n1): "<< n1 << std::endl;
-        std::cout << "  Nitrogen mean: " << width_nitrogen_mean << "  S.D.: " << width_nitrogen_std <<"  data size (n2): "<< n2 << std::endl;
-        std::cout << "  Total S.D.: " << std::sqrt(std_square_total) << std::endl;
+        std::ostringstream width_summary;
+        width_summary << "Width estimate summary for model " << model_object->GetPdbID()
+                      << ": t-value=" << t_value
+                      << ", dof=" << dof
+                      << ", p-value=" << p_value
+                      << ", carbon mean=" << width_carbon_mean
+                      << ", carbon sd=" << width_carbon_std
+                      << ", carbon n=" << n1
+                      << ", nitrogen mean=" << width_nitrogen_mean
+                      << ", nitrogen sd=" << width_nitrogen_std
+                      << ", nitrogen n=" << n2
+                      << ", total sd=" << std::sqrt(std_square_total);
+        Logger::Log(LogLevel::Debug, width_summary.str());
         
     }
 

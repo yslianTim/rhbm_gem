@@ -32,6 +32,7 @@
 #include <stdexcept>
 #include <limits>
 #include <random>
+#include <sstream>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -59,19 +60,16 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::PotentialAnalysisCommand() called.");
 }
 
 PotentialAnalysisCommand::~PotentialAnalysisCommand()
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::~PotentialAnalysisCommand() called.");
     m_map_object.reset();
     m_model_object.reset();
 }
 
 void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RegisterCLIOptionsExtend() called.");
     cmd->add_option_function<std::string>("-a,--model",
         [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
@@ -123,7 +121,6 @@ void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool PotentialAnalysisCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::Execute() called.");
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
@@ -236,7 +233,6 @@ void PotentialAnalysisCommand::SetSamplingHeight(double value)
 
 bool PotentialAnalysisCommand::BuildDataObject(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::BuildDataObject() called");
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
@@ -261,7 +257,6 @@ bool PotentialAnalysisCommand::BuildDataObject(void)
 
 void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * model_object)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::UpdateModelObjectForSimulation() called");
     if (model_object == nullptr) return;
     if (m_options.resolution_simulation == 0.0)
     {
@@ -277,7 +272,6 @@ void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * mode
 
 void PotentialAnalysisCommand::RunMapObjectPreprocessing(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunMapObjectPreprocessing() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
     m_map_object = data_manager->GetTypedDataObject<MapObject>(m_map_key_tag);
@@ -286,7 +280,6 @@ void PotentialAnalysisCommand::RunMapObjectPreprocessing(void)
 
 void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunModelObjectPreprocessing() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
     m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
@@ -321,7 +314,6 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
 
 void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomMapValueSampling() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
     if (m_map_object == nullptr) return;
     auto sampler{ std::make_unique<SphereSampler>() };
@@ -382,7 +374,6 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
 
 void PotentialAnalysisCommand::RunBondMapValueSampling(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondMapValueSampling() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunBondMapValueSampling");
     if (m_map_object == nullptr) return;
     auto sampler{ std::make_unique<CylinderSampler>() };
@@ -454,7 +445,6 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
 
 void PotentialAnalysisCommand::RunAtomGroupClassification(void)
 {
-    Logger::Log(LogLevel::Debug, "RunAtomGroupClassification() called");
     ScopeTimer timer("RunAtomGroupClassification");
     if (m_map_object == nullptr) return;
 
@@ -478,7 +468,6 @@ void PotentialAnalysisCommand::RunAtomGroupClassification(void)
 
 void PotentialAnalysisCommand::RunBondGroupClassification(void)
 {
-    Logger::Log(LogLevel::Debug, "RunBondGroupClassification() called");
     ScopeTimer timer("RunBondGroupClassification");
     if (m_map_object == nullptr) return;
 
@@ -502,7 +491,6 @@ void PotentialAnalysisCommand::RunBondGroupClassification(void)
 
 void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomAlphaTraining() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     if (m_map_object == nullptr) return;
 
@@ -618,8 +606,10 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
     beta_error_sum_array.minCoeff(&error_min_id);
     auto alpha_r_error{ alpha_list.at(static_cast<size_t>(error_min_id)) };
 
-    std::cout << "\nAlpha_R Training Results Summary:";
-    std::cout << " - Minimum Beta Error Sum Alpha_R: " << alpha_r_error << "\n";
+    Logger::Log(
+        LogLevel::Info,
+        "Alpha_R Training Results Summary: minimum beta error sum alpha_r = "
+        + std::to_string(alpha_r_error));
 
     return alpha_r_error;
 }
@@ -672,8 +662,10 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     mu_error_sum_array.minCoeff(&error_min_id);
     auto alpha_g_error{ alpha_list.at(static_cast<size_t>(error_min_id)) };
 
-    std::cout << "\nAlpha_G Training Results Summary:";
-    std::cout << " - Minimum Mu Error Sum Alpha_G: " << alpha_g_error << "\n";
+    Logger::Log(
+        LogLevel::Info,
+        "Alpha_G Training Results Summary: minimum mu error sum alpha_g = "
+        + std::to_string(alpha_g_error));
 
     return alpha_g_error;
 }
@@ -682,7 +674,6 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     const std::vector<AtomObject *> & atom_list,
     const std::vector<double> & alpha_list)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR() called");
     ScopeTimer timer("PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR");
     if (m_model_object == nullptr) return;
 
@@ -737,14 +728,15 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
         "/Users/yslian/Downloads/alpha_r_bias.pdf"
     );
 
-    std::cout << gaus_bias_matrix << std::endl;
+    std::ostringstream alpha_r_bias_stream;
+    alpha_r_bias_stream << "Alpha_R bias matrix:\n" << gaus_bias_matrix;
+    Logger::Log(LogLevel::Debug, alpha_r_bias_stream.str());
 }
 
 void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
     const std::vector<std::vector<AtomObject *>> & atom_list_set,
     const std::vector<double> & alpha_list)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG() called");
     ScopeTimer timer("PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG");
     if (m_model_object == nullptr) return;
 
@@ -801,12 +793,13 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
         gaus_bias_matrix, alpha_list, "#alpha_{g}", "Deviation with Mean",
         "/Users/yslian/Downloads/alpha_g_bias.pdf"
     );
-    std::cout << gaus_bias_matrix << std::endl;
+    std::ostringstream alpha_g_bias_stream;
+    alpha_g_bias_stream << "Alpha_G bias matrix:\n" << gaus_bias_matrix;
+    Logger::Log(LogLevel::Debug, alpha_g_bias_stream.str());
 }
 
 void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunLocalAtomFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
     if (m_model_object == nullptr) return;
 
@@ -860,7 +853,6 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
 
 void PotentialAnalysisCommand::RunLocalBondFitting(double universal_alpha_r)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunLocalBondFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalBondFitting");
     if (m_model_object == nullptr) return;
 
@@ -914,7 +906,6 @@ void PotentialAnalysisCommand::RunLocalBondFitting(double universal_alpha_r)
 
 void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunAtomPotentialFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFitting");
     if (m_model_object == nullptr) return;
     const int basis_size{ 2 };
@@ -1035,7 +1026,6 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
 
 void PotentialAnalysisCommand::RunBondPotentialFitting(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::RunBondPotentialFitting() called");
     ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
     if (m_model_object == nullptr) return;
     const int basis_size{ 2 };
@@ -1154,7 +1144,6 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
 
 void PotentialAnalysisCommand::SaveDataObject(void)
 {
-    Logger::Log(LogLevel::Debug, "PotentialAnalysisCommand::SaveDataObject() called");
     ScopeTimer timer("PotentialAnalysisCommand::SaveDataObject");
     if (m_model_object == nullptr) return;
 

@@ -5,12 +5,10 @@ namespace rhbm_gem {
 
 ChemicalComponentEntry::ChemicalComponentEntry(void)
 {
-    Logger::Log(LogLevel::Debug, "ChemicalComponentEntry::ChemicalComponentEntry() called");
 }
 
 ChemicalComponentEntry::~ChemicalComponentEntry()
 {
-    Logger::Log(LogLevel::Debug, "ChemicalComponentEntry::~ChemicalComponentEntry() called");
 }
 
 void ChemicalComponentEntry::SetComponentAtomEntryMap(

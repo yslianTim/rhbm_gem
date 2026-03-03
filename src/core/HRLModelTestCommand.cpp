@@ -7,6 +7,7 @@
 
 #include <random>
 #include <memory>
+#include <sstream>
 #include <vector>
 
 #ifdef HAVE_ROOT
@@ -38,12 +39,10 @@ namespace rhbm_gem {
 HRLModelTestCommand::HRLModelTestCommand(void) :
     CommandBase(), m_options{}
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::HRLModelTestCommand() called.");
 }
 
 void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RegisterCLIOptionsExtend() called.");
     std::map<std::string, TesterType> tester_map
     {
         {"0", TesterType::BENCHMARK},         {"benchmark",      TesterType::BENCHMARK},
@@ -73,7 +72,6 @@ void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool HRLModelTestCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::Execute() called.");
     switch (m_options.tester_choice)
     {
         case TesterType::BENCHMARK:
@@ -134,7 +132,6 @@ void HRLModelTestCommand::SetAlphaG(double value)
 
 void HRLModelTestCommand::RunSimulationTestOnBenchMark(void)
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnBenchMark() called");
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
 
     const int gaus_par_size{ 3 };
@@ -163,25 +160,29 @@ void HRLModelTestCommand::RunSimulationTestOnBenchMark(void)
         model_par_prior, sampling_entry_size, error_sigma, outlier_ratio, m_options.thread_size
     );
 
-    std::cout <<"OLS:   "
-              << residual_mean_ols_list.front()(0) <<" +- "
-              << residual_sigma_ols_list.front()(0) <<" , "
-              << residual_mean_ols_list.front()(1) <<" +- "
-              << residual_sigma_ols_list.front()(1) <<" , "
-              << residual_mean_ols_list.front()(2) <<" +- "
-              << residual_sigma_ols_list.front()(2) << std::endl;
-    std::cout <<"MDODE: "
-              << residual_mean_mdpde_list.front()(0) <<" +- "
-              << residual_sigma_mdpde_list.front()(0) <<" , "
-              << residual_mean_mdpde_list.front()(1) <<" +- "
-              << residual_sigma_mdpde_list.front()(1) <<" , "
-              << residual_mean_mdpde_list.front()(2) <<" +- "
-              << residual_sigma_mdpde_list.front()(2) << std::endl;
+    std::ostringstream ols_stream;
+    ols_stream << "OLS: "
+               << residual_mean_ols_list.front()(0) << " +- "
+               << residual_sigma_ols_list.front()(0) << " , "
+               << residual_mean_ols_list.front()(1) << " +- "
+               << residual_sigma_ols_list.front()(1) << " , "
+               << residual_mean_ols_list.front()(2) << " +- "
+               << residual_sigma_ols_list.front()(2);
+    Logger::Log(LogLevel::Info, ols_stream.str());
+
+    std::ostringstream mdpde_stream;
+    mdpde_stream << "MDPDE: "
+                 << residual_mean_mdpde_list.front()(0) << " +- "
+                 << residual_sigma_mdpde_list.front()(0) << " , "
+                 << residual_mean_mdpde_list.front()(1) << " +- "
+                 << residual_sigma_mdpde_list.front()(1) << " , "
+                 << residual_mean_mdpde_list.front()(2) << " +- "
+                 << residual_sigma_mdpde_list.front()(2);
+    Logger::Log(LogLevel::Info, mdpde_stream.str());
 }
 
 void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnDataOutlier() called");
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnDataOutlier");
 
     const int gaus_par_size{ 3 };
@@ -260,7 +261,6 @@ void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)
 
 void HRLModelTestCommand::RunSimulationTestOnMemberOutlier(void)
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnMemberOutlier() called");
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnMemberOutlier");
 
     const int gaus_par_size{ 3 };
@@ -354,7 +354,6 @@ void HRLModelTestCommand::RunSimulationTestOnMemberOutlier(void)
 
 void HRLModelTestCommand::RunSimulationTestOnModelAlphaData(void)
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnModelAlphaData() called");
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
 
     const int gaus_par_size{ 3 };
@@ -425,7 +424,6 @@ void HRLModelTestCommand::RunSimulationTestOnModelAlphaData(void)
 
 void HRLModelTestCommand::RunSimulationTestOnModelAlphaMember(void)
 {
-    Logger::Log(LogLevel::Debug, "HRLModelTestCommand::RunSimulationTestOnModelAlphaMember() called");
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
 
     const int gaus_par_size{ 3 };

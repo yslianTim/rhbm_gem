@@ -15,12 +15,10 @@ AtomicModelDataBlock::AtomicModelDataBlock(void) :
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
     m_bond_key_system{ std::make_unique<BondKeySystem>() }
 {
-    Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::AtomicModelDataBlock() called");
 }
 
 AtomicModelDataBlock::~AtomicModelDataBlock()
 {
-    Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::~AtomicModelDataBlock() called");
 }
 
 void AtomicModelDataBlock::AddAtomObject(
@@ -103,7 +101,6 @@ void AtomicModelDataBlock::AddComponentAtomEntry(
     AtomKey atom_key,
     const ComponentAtomEntry & atom_entry)
 {
-    Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::AddComponentAtomEntry() called");
     if (HasChemicalComponentEntry(comp_key) == false)
     {
         Logger::Log(LogLevel::Warning,
@@ -119,7 +116,6 @@ void AtomicModelDataBlock::AddComponentBondEntry(
     BondKey bond_key,
     const ComponentBondEntry & bond_entry)
 {
-    Logger::Log(LogLevel::Debug, "AtomicModelDataBlock::AddComponentBondEntry() called");
     if (HasChemicalComponentEntry(comp_key) == false)
     {
         Logger::Log(LogLevel::Warning,

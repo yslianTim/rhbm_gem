@@ -291,12 +291,10 @@ CanonicalAtomPair BuildCanonicalAtomPair(const AtomObject * atom_1, const AtomOb
 CifFormat::CifFormat(void) :
     m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::CifFormat() called");
 }
 
 CifFormat::~CifFormat()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::~CifFormat() called");
 }
 
 void CifFormat::ResetParsedDocument(void)
@@ -323,7 +321,6 @@ std::optional<std::string> CifFormat::GetFirstDataItemValue(std::string_view key
 
 void CifFormat::ParseMmCifDocument(const std::string & filename)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::ParseMmCifDocument() called");
     std::ifstream infile{ filename, std::ios::binary };
     if (!infile)
     {
@@ -529,7 +526,6 @@ void CifFormat::ParseMmCifDocument(const std::string & filename)
 
 void CifFormat::LoadHeader(const std::string & filename)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadHeader() called");
     EnsureParsedDocument(filename);
     LoadChemicalComponentBlock();
     LoadDatabaseBlock();
@@ -549,7 +545,6 @@ void CifFormat::LoadHeader(const std::string & filename)
 
 void CifFormat::PrintHeader(void) const
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::PrintHeader() called");
     std::ostringstream oss;
     oss << "CIF Header Information:\n";
     oss <<"#Entities = "<< m_data_block->GetEntityTypeMap().size() << "\n";
@@ -580,7 +575,6 @@ void CifFormat::PrintHeader(void) const
 
 void CifFormat::LoadDataArray(const std::string & filename)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadDataArray() called");
     EnsureParsedDocument(filename);
     LoadAtomSiteBlock();
     ConstructBondList();
@@ -589,7 +583,6 @@ void CifFormat::LoadDataArray(const std::string & filename)
 
 void CifFormat::LoadChemicalComponentBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentBlock() called");
     ParseLoopBlock("_chem_comp.",
         [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
@@ -634,7 +627,6 @@ void CifFormat::LoadChemicalComponentBlock()
 
 void CifFormat::LoadChemicalComponentAtomBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentAtomBlock() called");
     ParseLoopBlock("_chem_comp_atom.",
         [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
@@ -665,7 +657,6 @@ void CifFormat::LoadChemicalComponentAtomBlock()
 
 void CifFormat::LoadChemicalComponentBondBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadChemicalComponentBondBlock() called");
     ParseLoopBlock("_chem_comp_bond.",
         [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
@@ -701,7 +692,6 @@ void CifFormat::LoadChemicalComponentBondBlock()
 
 void CifFormat::LoadDatabaseBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadDatabaseBlock() called");
     std::unordered_map<std::string, std::string> data_map;
     ParseLoopBlock("_database_2.",
         [&data_map](const ColumnIndexMap & index_map,
@@ -730,7 +720,6 @@ void CifFormat::LoadDatabaseBlock()
 
 void CifFormat::LoadEntityBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadEntityBlock() called");
     ParseLoopBlock("_entity.",
         [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
@@ -850,7 +839,6 @@ void CifFormat::LoadEntityBlock()
 
 void CifFormat::LoadPdbxData()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadPdbxData() called");
     auto found_resolution{ false };
     auto found_resolution_method{ false };
 
@@ -907,7 +895,6 @@ void CifFormat::LoadPdbxData()
 
 void CifFormat::LoadXRayResolutionInfo()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadXRayResolutionInfo() called");
     auto found_resolution{ false };
     auto found_resolution_method{ false };
 
@@ -956,7 +943,6 @@ void CifFormat::LoadXRayResolutionInfo()
 
 void CifFormat::LoadAtomTypeBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomTypeBlock() called");
     ParseLoopBlock("_atom_type.",
         [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
@@ -970,7 +956,6 @@ void CifFormat::LoadAtomTypeBlock()
 
 void CifFormat::LoadStructureConformationBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureConformationBlock() called");
     ParseLoopBlock("_struct_conf.",
         [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
@@ -1012,7 +997,6 @@ void CifFormat::LoadStructureConformationBlock()
 
 void CifFormat::LoadStructureConnectionBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureConnectionBlock() called");
     ParseLoopBlock("_struct_conn.",
         [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
@@ -1129,7 +1113,6 @@ void CifFormat::LoadStructureConnectionBlock()
 
 void CifFormat::LoadStructureSheetBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadStructureSheetBlock() called");
     ParseLoopBlock("_struct_sheet.",
         [this](const ColumnIndexMap & index_map,
                const std::vector<std::string> & token_list)
@@ -1189,7 +1172,6 @@ void CifFormat::LoadStructureSheetBlock()
 
 void CifFormat::LoadAtomSiteBlock()
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::LoadAtomSiteBlock() called");
     std::unordered_map<AtomAltLocKey, AtomObject *, AtomAltLocKeyHash> altloc_primary_atom_map;
     size_t atom_site_row_count{ 0 };
     size_t atom_site_skip_count{ 0 };
@@ -1353,7 +1335,6 @@ void CifFormat::LoadAtomSiteBlock()
 
 void CifFormat::ConstructBondList(void)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::ConstructBondList() called");
     BuildPepetideBondEntry();
     BuildPhosphodiesterBondEntry();
     const auto bond_count_before{ m_data_block->GetBondObjectList().size() };
@@ -1439,9 +1420,6 @@ void CifFormat::ConstructBondList(void)
                 m_data_block->AddBondObject(std::move(bond_object));
             }
         }
-        Logger::Log(LogLevel::Debug,
-            "ConstructBondList() processed model " + std::to_string(model_number)
-            + " with " + std::to_string(atom_object_list.size()) + " atoms.");
     }
     Logger::Log(LogLevel::Info,
         "Construct " + std::to_string(m_data_block->GetBondObjectList().size() - bond_count_before)
@@ -1455,7 +1433,6 @@ AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
 
 void CifFormat::SaveHeader(const ModelObject * model_object, std::ostream & stream)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::SaveHeader() called");
     if (model_object == nullptr) return;
     stream << "data_" << model_object->GetKeyTag() << '\n';
     stream << "#\n";
@@ -1464,7 +1441,6 @@ void CifFormat::SaveHeader(const ModelObject * model_object, std::ostream & stre
 void CifFormat::SaveDataArray(
     const ModelObject * model_object, std::ostream & stream, int model_par)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::SaveDataArray() called");
     if (model_object == nullptr) return;
 
     WriteAtomSiteBlock(model_object, stream, model_par);
@@ -1473,7 +1449,6 @@ void CifFormat::SaveDataArray(
 void CifFormat::WriteAtomSiteBlock(
     const ModelObject * model_object, std::ostream & stream, int model_par)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::WriteAtomSiteBlock() called");
     stream << "loop_\n";
     stream << "_atom_site.group_PDB\n";
     stream << "_atom_site.id\n";
@@ -1595,7 +1570,6 @@ void CifFormat::ParseLoopBlock(
 
 void CifFormat::BuildDefaultChemicalComponentEntry(const std::string & comp_id)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultChemicalComponentEntry() called");
     auto entry{ std::make_unique<ChemicalComponentEntry>() };
     entry->SetComponentId(comp_id);
     entry->SetComponentName("");
@@ -1616,7 +1590,6 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     const std::string & atom_id,
     const std::string & element_symbol)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentAtomEntry() called");
     auto component_key{ m_data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id) };
 
     m_data_block->GetAtomKeySystemPtr()->RegisterAtom(atom_id);
@@ -1633,7 +1606,6 @@ void CifFormat::BuildDefaultComponentAtomEntry(
 
 void CifFormat::BuildDefaultComponentBondEntry(void)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::BuildDefaultComponentBondEntry() called");
     for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto comp_id{ ChemicalDataHelper::GetLabel(residue) };
@@ -1658,7 +1630,6 @@ void CifFormat::BuildDefaultComponentBondEntry(void)
 
 void CifFormat::BuildPepetideBondEntry(void)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::BuildPepetideBondEntry() called");
     for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         auto comp_id{ ChemicalDataHelper::GetLabel(residue) };
@@ -1681,7 +1652,6 @@ void CifFormat::BuildPepetideBondEntry(void)
 
 void CifFormat::BuildPhosphodiesterBondEntry(void)
 {
-    Logger::Log(LogLevel::Debug, "CifFormat::BuildPhosphodiesterBondEntry() called");
     for (auto & residue : ChemicalDataHelper::GetStandardNucleotideList())
     {
         auto comp_id{ ChemicalDataHelper::GetLabel(residue) };

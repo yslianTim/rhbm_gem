@@ -35,17 +35,14 @@ ResultDumpCommand::ResultDumpCommand(void) :
     CommandBase(),
     m_map_key_tag{"map"}, m_map_object{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::ResultDumpCommand() called");
 }
 
 ResultDumpCommand::~ResultDumpCommand()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::~ResultDumpCommand() called");
 }
 
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RegisterCLIOptionsExtend() called");
     std::map<std::string, PrinterType> printer_map
     {
         {"0", PrinterType::ATOM_POSITION},  {"atom_pos", PrinterType::ATOM_POSITION},
@@ -67,7 +64,6 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool ResultDumpCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::Execute() called");
     if (BuildDataObjectList() == false) return false;
     RunResultDump();
     return true;
@@ -102,7 +98,6 @@ void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 
 bool ResultDumpCommand::BuildDataObjectList(void)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::BuildDataObjectList() called");
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
@@ -140,7 +135,6 @@ bool ResultDumpCommand::BuildDataObjectList(void)
 
 void ResultDumpCommand::RunResultDump(void)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunResultDump() called");
     ScopeTimer timer("ResultDumpCommand::RunResultDump");
     Logger::Log(LogLevel::Info,
         "Total number of model object sets to be dump: "
@@ -176,7 +170,6 @@ void ResultDumpCommand::RunResultDump(void)
 
 void ResultDumpCommand::RunAtomOutlierDumping(void)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunAtomOutlierDumping() called");
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -236,7 +229,6 @@ void ResultDumpCommand::RunAtomOutlierDumping(void)
 
 void ResultDumpCommand::RunAtomPositionDumping(void)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunAtomPositionDumping() called");
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -268,7 +260,6 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
 
 void ResultDumpCommand::RunMapValueDumping(void)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunMapValueDumping() called");
     if (m_map_object == nullptr)
     {
         Logger::Log(LogLevel::Error, "Please give the path of map file via -m option.");
@@ -336,7 +327,6 @@ void ResultDumpCommand::RunMapValueDumping(void)
 
 void ResultDumpCommand::RunGausEstimatesDumping(void)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunGausEstimatesDumping() called");
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -391,7 +381,6 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
 
 void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunGroupGausEstimatesDumping() called");
 
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 

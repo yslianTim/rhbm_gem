@@ -16,6 +16,7 @@ set(TEST_SOURCES
     KDTreeAlgorithm_test.cpp
     Logger_test.cpp
     MapFileIO_test.cpp
+    ROOTHelper_test.cpp
     SphereSampler_test.cpp
     StringHelper_test.cpp
 )
@@ -47,4 +48,11 @@ set_target_properties(${TEST_EXEC_NAME} PROPERTIES
 
 gtest_discover_tests(${TEST_EXEC_NAME}
     DISCOVERY_MODE PRE_TEST
+)
+
+add_test(
+    NAME logging_style_guard
+    COMMAND ${CMAKE_COMMAND}
+        -DPROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}
+        -P ${PROJECT_SOURCE_DIR}/cmake/LoggingStyleGuard.cmake
 )

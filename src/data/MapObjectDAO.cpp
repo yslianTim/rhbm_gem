@@ -64,17 +64,14 @@ namespace rhbm_gem {
 
 MapObjectDAO::MapObjectDAO(SQLiteWrapper * database) : m_database{ database }
 {
-    Logger::Log(LogLevel::Debug, "MapObjectDAO::MapObjectDAO() called");
 }
 
 MapObjectDAO::~MapObjectDAO()
 {
-    Logger::Log(LogLevel::Debug, "MapObjectDAO::~MapObjectDAO() called");
 }
 
 void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "MapObjectDAO::Save() called");
     auto map_object{ dynamic_cast<const MapObject *>(data_object) };
     if (!map_object)
     {
@@ -109,7 +106,6 @@ void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & 
 
 std::unique_ptr<DataObjectBase> MapObjectDAO::Load(const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "MapObjectDAO::Load() called");
     m_database->Prepare(std::string(SELECT_SQL));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);

@@ -148,39 +148,25 @@ void ModelObject::SetChemicalComponentEntryMap(
 
 void ModelObject::SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system)
 {
-    if (m_component_key_system != nullptr)
-    {
-        Logger::Log(LogLevel::Debug, "Remove the old ComponentKeySystem.");
-        m_component_key_system = nullptr;
-    }
+    if (m_component_key_system != nullptr) m_component_key_system = nullptr;
     m_component_key_system = std::move(component_key_system);
 }
 
 void ModelObject::SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system)
 {
-    if (m_atom_key_system != nullptr)
-    {
-        Logger::Log(LogLevel::Debug, "Remove the old AtomKeySystem.");
-        m_atom_key_system = nullptr;
-    }
+    if (m_atom_key_system != nullptr) m_atom_key_system = nullptr;
     m_atom_key_system = std::move(atom_key_system);
 }
 
 void ModelObject::SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system)
 {
-    if (m_bond_key_system != nullptr)
-    {
-        Logger::Log(LogLevel::Debug, "Remove the old BondKeySystem.");
-        m_bond_key_system = nullptr;
-    }
+    if (m_bond_key_system != nullptr) m_bond_key_system = nullptr;
     m_bond_key_system = std::move(bond_key_system);
 }
 
 void ModelObject::BuildKDTreeRoot(void)
 {
     if (m_kd_tree_root != nullptr) return;
-    Logger::Log(LogLevel::Debug, "Building KDTree for ModelObject..., including"
-                + std::to_string(m_atom_list.size()) + " atoms.");
     std::vector<AtomObject *> atom_ptr_list;
     atom_ptr_list.reserve(m_atom_list.size());
     for (auto & atom : m_atom_list)

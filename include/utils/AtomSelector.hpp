@@ -15,6 +15,7 @@ class AtomSelector
 public:
     AtomSelector(void);
     ~AtomSelector() = default;
+    std::string Describe(void) const;
     void Print(void) const;
     bool GetSelectionFlag(const std::string &, Residue, Element) const;
     void VetoChainID(const std::string & name);

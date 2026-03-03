@@ -14,7 +14,6 @@ namespace rhbm_gem {
 
 std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::string & filename)
 {
-    Logger::Log(LogLevel::Debug, "ModelObjectFactory::CreateDataObject() called");
     auto file_reader{ std::make_unique<ModelFileReader>(filename) };
     file_reader->Read();
     if (file_reader->IsSuccessfullyRead() == false) return nullptr;
@@ -72,7 +71,6 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
 
 void ModelObjectFactory::OutputDataObject(const std::string & filename, DataObjectBase * data_object)
 {
-    Logger::Log(LogLevel::Debug, "ModelObjectFactory::OutputDataObject() called");
     auto model_object{ dynamic_cast<ModelObject *>(data_object) };
     if (model_object == nullptr)
     {

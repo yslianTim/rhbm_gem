@@ -47,12 +47,10 @@ PositionEstimationCommand::PositionEstimationCommand(void) :
     CommandBase(), m_options{}, m_selected_voxel_list{}, m_query_point_list{},
     m_position_list{}, m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::PositionEstimationCommand() called.");
 }
 
 void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RegisterCLIOptionsExtend() called.");
     cmd->add_option_function<std::string>("-m,--map",
         [&](const std::string & value) { SetMapFilePath(value); },
         "Map file path")->required();
@@ -75,7 +73,6 @@ void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool PositionEstimationCommand::Execute(void)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::Execute() called.");
     if (BuildDataObject() == false) return false;
     if (BuildVoxelList() == false) return false;
     RunMapValueConvergence();
@@ -153,7 +150,6 @@ void PositionEstimationCommand::SetDedupTolerance(double value)
 
 bool PositionEstimationCommand::BuildDataObject(void)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildDataObject() called");
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
@@ -174,7 +170,6 @@ bool PositionEstimationCommand::BuildDataObject(void)
 
 bool PositionEstimationCommand::BuildVoxelList(void)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildVoxelList() called");
     ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
     m_selected_voxel_list.clear();
     auto array_size{ m_map_object->GetMapValueArraySize() };
@@ -242,7 +237,6 @@ bool PositionEstimationCommand::BuildVoxelList(void)
 
 void PositionEstimationCommand::RunMapValueConvergence(void)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunMapValueConvergence() called");
     ScopeTimer timer("PositionEstimationCommand::RunMapValueConvergence");
 
     auto knn_size{ m_options.knn_size };
@@ -340,7 +334,6 @@ void PositionEstimationCommand::UpdatePointPosition(size_t index, size_t knn_siz
 
 void PositionEstimationCommand::RunUniquePointList(float tolerance)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunUniquePointList() called");
     ScopeTimer timer("PositionEstimationCommand::RunUniquePointList");
     if (m_query_point_list.empty())
     {
@@ -388,7 +381,6 @@ void PositionEstimationCommand::RunUniquePointList(float tolerance)
 
 void PositionEstimationCommand::OutputPointList(void) const
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::OutputPointList() called");
     ScopeTimer timer("PositionEstimationCommand::OutputPointList");
     if (m_position_list.empty())
     {

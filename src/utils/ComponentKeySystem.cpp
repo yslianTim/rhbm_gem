@@ -11,7 +11,6 @@ const ComponentKey ComponentKeySystem::k_max_key{ std::numeric_limits<ComponentK
 ComponentKeySystem::ComponentKeySystem(void) :
     m_next_dynamic_key{ k_dynamic_base }
 {
-    Logger::Log(LogLevel::Debug, "ComponentKeySystem::ComponentKeySystem() called");
     const auto & build_in_residue_map{ ChemicalDataHelper::GetResidueMap() };
     for (const auto & [component_id, residue] : build_in_residue_map)
     {
@@ -26,17 +25,14 @@ ComponentKeySystem::ComponentKeySystem(const ComponentKeySystem & other) :
     m_id_to_key_map{ other.m_id_to_key_map },
     m_key_to_id_map{ other.m_key_to_id_map }
 {
-    Logger::Log(LogLevel::Debug, "ComponentKeySystem copy ctor called");
 }
 
 ComponentKeySystem::~ComponentKeySystem(void)
 {
-    Logger::Log(LogLevel::Debug, "ComponentKeySystem::~ComponentKeySystem() called");
 }
 
 void ComponentKeySystem::RegisterComponent(const std::string & component_id)
 {
-    Logger::Log(LogLevel::Debug, "ComponentKeySystem::RegisterComponent() called for " + component_id);
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(component_id) != m_id_to_key_map.end()) return;
     if (m_next_dynamic_key >= k_max_key)
@@ -55,7 +51,6 @@ void ComponentKeySystem::RegisterComponent(const std::string & component_id)
 void ComponentKeySystem::RegisterComponent(
     const std::string & component_id, ComponentKey component_key)
 {
-    Logger::Log(LogLevel::Debug, "ComponentKeySystem::RegisterComponent() called for " + component_id);
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(component_id) != m_id_to_key_map.end()) return;
     m_id_to_key_map[component_id] = component_key;

@@ -66,7 +66,6 @@ If a rule changes, update this document and any affected user-facing documentati
 - `[Recommended]` Use `Debug` logging selectively for high-value flow tracing rather than logging every function entry.
 - `[Recommended]` Prefer logs that describe state changes, important parameters, expensive-step boundaries, or actionable failure context.
 - `[Recommended]` Use direct `std::cout` or `std::cerr` only in low-level helpers, third-party integration boundaries, tests, or short-lived diagnostics where using `Logger` would be inappropriate.
-- `[Legacy note]` Some existing helpers still emit direct stream output or overly chatty trace logs. New code should move away from that style.
 
 ## 7. Command and Data Layer Responsibilities
 
@@ -117,4 +116,3 @@ If a rule changes, update this document and any affected user-facing documentati
 ## 12. Legacy Notes
 
 - `[Legacy note]` Some existing files use parameterless `(void)` style. Preserve local consistency when touching those files, but do not treat this as a priority rule for new design.
-- `[Legacy note]` Some existing low-level helpers still use direct stream output instead of `Logger`. New code should not copy that pattern without a clear boundary-related reason.

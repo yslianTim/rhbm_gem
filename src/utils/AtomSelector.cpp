@@ -2,7 +2,6 @@
 #include "ChemicalDataHelper.hpp"
 #include "Logger.hpp"
 
-#include <iostream>
 #include <sstream>
 
 AtomSelector::AtomSelector(void)
@@ -10,7 +9,7 @@ AtomSelector::AtomSelector(void)
 
 }
 
-void AtomSelector::Print(void) const
+std::string AtomSelector::Describe(void) const
 {
     std::ostringstream oss;
     oss<<"Atomic Picking List:\n";
@@ -31,7 +30,12 @@ void AtomSelector::Print(void) const
     for (auto & element : veto_element_set) oss << ChemicalDataHelper::GetLabel(element) <<", ";
     oss <<"\n";
 
-    std::cout << oss.str() << std::endl;
+    return oss.str();
+}
+
+void AtomSelector::Print(void) const
+{
+    Logger::Log(LogLevel::Info, Describe());
 }
 
 bool AtomSelector::GetSelectionFlag(

@@ -15,7 +15,6 @@ bool DataObjectDAOFactoryRegistry::RegisterFactory(
     std::type_index type, const std::string & name,
     std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)> factory)
 {
-    Logger::Log(LogLevel::Debug, "DataObjectDAOFactoryRegistry::RegisterFactory() called");
     FactoryInfo info{ name, std::move(factory) };
     m_factory_map[type] = std::move(info);
     m_name_map.emplace(name, type);
@@ -25,7 +24,6 @@ bool DataObjectDAOFactoryRegistry::RegisterFactory(
 std::unique_ptr<DataObjectDAOBase> DataObjectDAOFactoryRegistry::CreateDAO(
     std::type_index type, SQLiteWrapper * db) const
 {
-    Logger::Log(LogLevel::Debug, "DataObjectDAOFactoryRegistry::CreateDAO() called");
     auto iter{ m_factory_map.find(type) };
     if (iter == m_factory_map.end())
     {
@@ -37,7 +35,6 @@ std::unique_ptr<DataObjectDAOBase> DataObjectDAOFactoryRegistry::CreateDAO(
 std::unique_ptr<DataObjectDAOBase> DataObjectDAOFactoryRegistry::CreateDAO(
     const std::string & name, SQLiteWrapper * db) const
 {
-    Logger::Log(LogLevel::Debug, "DataObjectDAOFactoryRegistry::CreateDAO() called");
     auto iter{ m_name_map.find(name) };
     if (iter == m_name_map.end())
     {

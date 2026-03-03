@@ -11,14 +11,12 @@ namespace rhbm_gem {
 Application::Application(CLI::App & app) :
     m_cli_app{ app }
 {
-    Logger::Log(LogLevel::Debug, "Application::Application() called");
     m_cli_app.require_subcommand(1);
     RegisterAllCommands();
 }
 
 void Application::RegisterAllCommands(void)
 {
-    Logger::Log(LogLevel::Debug, "Application::RegisterAllCommands() called");
     const auto & commands{ CommandRegistry::Instance().GetCommands() };
     for (const auto & [name, info] : commands)
     {
@@ -31,7 +29,6 @@ void Application::RegisterCommand(
     const std::string & description,
     std::function<std::unique_ptr<CommandBase>()> factory)
 {
-    Logger::Log(LogLevel::Debug, "Application::RegisterCommand() called");
     auto command_object{ factory() };
     CLI::App * command{ m_cli_app.add_subcommand(name, description) };
     command_object->RegisterCLIOptions(command);

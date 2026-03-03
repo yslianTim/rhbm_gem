@@ -12,7 +12,6 @@
 #include <memory>
 #include <stdexcept>
 #include <sstream>
-#include <iostream>
 
 namespace
 {
@@ -302,7 +301,6 @@ bool HRLModelTester::RunMuMDPDETest(
     std::sort(alpha_g_train_list.begin(), alpha_g_train_list.end());
     auto alpha_g_train{ alpha_g_train_list.at(alpha_g_train_list.size() / 2) };
     local_alpha_g_list.emplace_back(alpha_g_train);
-    std::cout <<"alpha_g_train: " << alpha_g_train << std::endl;
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
