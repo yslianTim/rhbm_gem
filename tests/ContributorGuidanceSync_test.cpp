@@ -24,10 +24,9 @@ TEST(ContributorGuidanceSyncTest, DevelopmentGuidelinesMatchCatalogBasedRegistra
         std::string::npos);
     EXPECT_NE(
         doc_content.find(
-            "Reserve `CommandRegistrar<...>` for extension-style or test-only registration paths"),
+            "Tests that need fake command registration should construct a `CommandDescriptor` explicitly"),
         std::string::npos);
     EXPECT_EQ(
-        doc_content.find(
-            "Continue using the existing `CommandRegistrar<...>` registration model for new commands"),
+        doc_content.find("CommandRegistrar<...>"),
         std::string::npos);
 }

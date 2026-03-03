@@ -156,4 +156,11 @@ TEST(DocsSyncTest, GeneratedBlocksMatchBuiltInCommandCatalog)
         doc_content.find(
             "`Execute()` internally decides whether `PrepareForExecution()` must run."),
         std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("CommandRegistrar<"),
+        std::string::npos);
+    EXPECT_NE(
+        doc_content.find(
+            "The project does not currently provide a self-registration API for commands;"),
+        std::string::npos);
 }

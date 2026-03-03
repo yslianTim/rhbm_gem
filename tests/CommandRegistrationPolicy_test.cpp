@@ -1,7 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <type_traits>
-
 #include <CLI/CLI.hpp>
 
 #include "BuiltInCommandCatalog.hpp"
@@ -30,30 +28,23 @@ private:
     Options m_options{};
 };
 
-static_assert(
-    std::is_constructible_v<
-        rg::CommandRegistrar<ExtensionCommand>,
-        rg::CommandDescriptor>);
-static_assert(
-    !std::is_constructible_v<
-        rg::CommandRegistrar<ExtensionCommand>,
-        std::string,
-        std::string,
-        rg::CommandSurface>);
-
 } // namespace
 
-TEST(CommandRegistrationPolicyTest, ExtensionDescriptorFactoryCapturesExplicitMetadata)
+TEST(CommandRegistrationPolicyTest, CommandDescriptorDirectRegistrationCapturesExplicitMetadata)
 {
     const auto descriptor{
-        rg::MakeExtensionCommandDescriptor<ExtensionCommand>(
+        rg::CommandDescriptor{
+            rg::CommandId::ModelTest,
             "test_extension_command",
             "Test extension command",
             rg::MakeCommandSurface(
                 rg::ToMask(rg::CommonOption::Verbose),
                 rg::ToMask(rg::CommonOption::Database)),
             rg::DatabaseUsage::Optional,
-            rg::BindingExposure::CliOnly)
+            rg::BindingExposure::CliOnly,
+            "",
+            []() { return std::make_unique<ExtensionCommand>(); }
+        }
     };
 
     EXPECT_EQ(descriptor.id, rg::CommandId::ModelTest);
@@ -70,4 +61,26 @@ TEST(CommandRegistrationPolicyTest, ExtensionDescriptorFactoryCapturesExplicitMe
     auto command{ descriptor.factory() };
     ASSERT_NE(command, nullptr);
     EXPECT_EQ(command->GetCommandId(), rg::CommandId::ModelTest);
+}
+
+TEST(CommandRegistrationPolicyTest, RegistryAcceptsDirectDescriptorRegistration)
+{
+    const auto descriptor{
+        rg::CommandDescriptor{
+            rg::CommandId::ModelTest,
+            "test_extension_command_direct_registration",
+            "Test direct registry registration",
+            rg::MakeCommandSurface(
+                rg::ToMask(rg::CommonOption::Verbose),
+                rg::ToMask(rg::CommonOption::Database)),
+            rg::DatabaseUsage::Optional,
+            rg::BindingExposure::CliOnly,
+            "",
+            []() { return std::make_unique<ExtensionCommand>(); }
+        }
+    };
+
+    auto & registry{ rg::CommandRegistry::Instance() };
+    EXPECT_TRUE(registry.RegisterCommand(descriptor));
+    EXPECT_FALSE(registry.RegisterCommand(descriptor));
 }

@@ -69,11 +69,7 @@ The built-in manifest order is generated from the built-in command catalog:
 
 This makes help ordering deterministic and avoids relying on cross-translation-unit static initialization order for built-in behavior.
 
-### 3.2 Optional registrar path
-
-`CommandRegistrar<T>` still exists, but it is now descriptor-aware and intended only for optional extension-style registration or tests. It is not part of the built-in command definition path.
-
-### 3.3 Registry responsibilities
+### 3.2 Registry responsibilities
 
 `CommandRegistry` stores:
 
@@ -84,8 +80,9 @@ This makes help ordering deterministic and avoids relying on cross-translation-u
 - command surface metadata (`CommandSurface`)
 - database usage policy (`DatabaseUsage`)
 - binding exposure policy (`BindingExposure`)
+- the Python binding name for Python-public commands
 
-`Application` reads the registry and creates one CLI subcommand per registered entry.
+`Application` reads the registry and creates one CLI subcommand per registered entry. The project does not currently provide a self-registration API for commands; built-in registration flows only through the built-in command catalog and `RegisterBuiltInCommands()`.
 
 ## 4. Base Class Contract
 

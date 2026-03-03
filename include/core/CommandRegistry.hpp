@@ -3,7 +3,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "BuiltInCommandCatalog.hpp"
@@ -37,16 +36,6 @@ public:
 
 private:
     std::vector<CommandInfo> m_commands;
-};
-
-template <typename CommandType>
-class CommandRegistrar
-{
-public:
-    explicit CommandRegistrar(CommandDescriptor descriptor)
-    {
-        CommandRegistry::Instance().RegisterCommand(std::move(descriptor));
-    }
 };
 
 } // namespace rhbm_gem
