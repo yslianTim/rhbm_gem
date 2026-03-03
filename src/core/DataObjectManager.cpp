@@ -11,7 +11,7 @@
 
 namespace rhbm_gem {
 
-DataObjectManager::DataObjectManager(void) :
+DataObjectManager::DataObjectManager() :
     m_db_manager{ nullptr }
 {
     FileProcessFactoryRegistry::Instance().RegisterDefaultFactories();
@@ -230,14 +230,14 @@ std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(
     return iter->second;
 }
 
-DatabaseManager * DataObjectManager::GetDatabaseManager(void) const
+DatabaseManager * DataObjectManager::GetDatabaseManager() const
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     return m_db_manager.get();
 }
 
 const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> &
-DataObjectManager::GetDataObjectMap(void) const
+DataObjectManager::GetDataObjectMap() const
 {
     return m_data_object_map;
 }

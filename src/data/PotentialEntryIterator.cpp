@@ -253,7 +253,7 @@ std::unordered_map<int, AtomObject *> PotentialEntryIterator::GetAtomObjectMap(
 }
 
 std::vector<std::tuple<float, float>>
-PotentialEntryIterator::GetLinearModelDistanceAndMapValueList(void) const
+PotentialEntryIterator::GetLinearModelDistanceAndMapValueList() const
 {
     Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
     const auto & data_array{ GetDistanceAndMapValueList() };
@@ -273,7 +273,7 @@ PotentialEntryIterator::GetLinearModelDistanceAndMapValueList(void) const
 }
 
 const std::vector<std::tuple<float, float>> &
-PotentialEntryIterator::GetDistanceAndMapValueList(void) const
+PotentialEntryIterator::GetDistanceAndMapValueList() const
 {
     if (IsAtomLocalEntryAvailable() == true)
     {
@@ -350,7 +350,7 @@ std::tuple<float, float> PotentialEntryIterator::GetBinnedMapValueRange(
     return ArrayStats<float>::ComputeScalingRangeTuple(map_value_array, static_cast<float>(margin_rate));
 }
 
-double PotentialEntryIterator::GetAmplitudeEstimateMDPDE(void) const
+double PotentialEntryIterator::GetAmplitudeEstimateMDPDE() const
 {
     if (IsAtomLocalEntryAvailable() == true)
     {
@@ -389,7 +389,7 @@ double PotentialEntryIterator::GetAmplitudeVariancePosterior(const std::string &
     return 0.0;
 }
 
-double PotentialEntryIterator::GetWidthEstimateMDPDE(void) const
+double PotentialEntryIterator::GetWidthEstimateMDPDE() const
 {
     if (IsAtomLocalEntryAvailable() == true)
     {
@@ -428,7 +428,7 @@ double PotentialEntryIterator::GetWidthVariancePosterior(const std::string & cla
     return 0.0;
 }
 
-double PotentialEntryIterator::GetAlphaR(void) const
+double PotentialEntryIterator::GetAlphaR() const
 {
     if (IsAtomLocalEntryAvailable() == true)
     {
@@ -494,7 +494,7 @@ double PotentialEntryIterator::GetBondAlphaG(
     return m_model_object->GetBondGroupPotentialEntry(class_key)->GetAlphaG(group_key);
 }
 
-bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
+bool PotentialEntryIterator::IsAtomObjectAvailable() const
 {
     if (m_atom_object == nullptr)
     {
@@ -504,7 +504,7 @@ bool PotentialEntryIterator::IsAtomObjectAvailable(void) const
     return true;
 }
 
-bool PotentialEntryIterator::IsBondObjectAvailable(void) const
+bool PotentialEntryIterator::IsBondObjectAvailable() const
 {
     if (m_bond_object == nullptr)
     {
@@ -514,7 +514,7 @@ bool PotentialEntryIterator::IsBondObjectAvailable(void) const
     return true;
 }
 
-bool PotentialEntryIterator::IsAtomLocalEntryAvailable(void) const
+bool PotentialEntryIterator::IsAtomLocalEntryAvailable() const
 {
     if (m_atom_local_entry == nullptr)
     {
@@ -523,7 +523,7 @@ bool PotentialEntryIterator::IsAtomLocalEntryAvailable(void) const
     return true;
 }
 
-bool PotentialEntryIterator::IsBondLocalEntryAvailable(void) const
+bool PotentialEntryIterator::IsBondLocalEntryAvailable() const
 {
     if (m_bond_local_entry == nullptr)
     {
@@ -532,7 +532,7 @@ bool PotentialEntryIterator::IsBondLocalEntryAvailable(void) const
     return true;
 }
 
-bool PotentialEntryIterator::IsModelObjectAvailable(void) const
+bool PotentialEntryIterator::IsModelObjectAvailable() const
 {
     if (m_model_object == nullptr)
     {
@@ -1361,7 +1361,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateGausEstimateScatterG
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateDistanceToMapValueGraph(void)
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateDistanceToMapValueGraph()
 {
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
@@ -1373,7 +1373,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateDistanceToMapValueGr
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateLinearModelDistanceToMapValueGraph(void)
+std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateLinearModelDistanceToMapValueGraph()
 {
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
@@ -1478,7 +1478,7 @@ std::unique_ptr<TGraphErrors> PotentialEntryIterator::CreateAtomXYPositionTomogr
     return graph;
 }
 
-std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalLinearModelFunctionOLS(void) const
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalLinearModelFunctionOLS() const
 {
     if (IsAtomLocalEntryAvailable() == false)
     {
@@ -1489,7 +1489,7 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalLinearModelFunctionO
     return ROOTHelper::CreateLinearModelFunction("linear", beta_0, beta_1);
 }
 
-std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalLinearModelFunctionMDPDE(void) const
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalLinearModelFunctionMDPDE() const
 {
     if (IsAtomLocalEntryAvailable() == false)
     {
@@ -1500,7 +1500,7 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalLinearModelFunctionM
     return ROOTHelper::CreateLinearModelFunction("linear", beta_0, beta_1);
 }
 
-std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalGausFunctionOLS(void) const
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalGausFunctionOLS() const
 {
     if (IsAtomLocalEntryAvailable() == false)
     {
@@ -1511,7 +1511,7 @@ std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalGausFunctionOLS(void
     return ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width);
 }
 
-std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalGausFunctionMDPDE(void) const
+std::unique_ptr<TF1> PotentialEntryIterator::CreateAtomLocalGausFunctionMDPDE() const
 {
     if (IsAtomLocalEntryAvailable() == false)
     {

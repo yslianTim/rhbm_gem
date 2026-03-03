@@ -117,7 +117,7 @@ const std::unordered_map<Element, std::array<double, 5>> ElectricPotential::b_ne
     {Element::ZINC,      {   0.0876,   0.8650,   3.8612,  18.8726,  64.7016 }}  // neutral
 };
 
-ElectricPotential::ElectricPotential(void) :
+ElectricPotential::ElectricPotential() :
     m_model_choice{ ModelChoice::SINGLE_GAUS }, m_blurring_width{ 0.5 }
 {
 

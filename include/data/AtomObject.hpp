@@ -34,17 +34,17 @@ class AtomObject : public DataObjectBase
     std::unique_ptr<LocalPotentialEntry> m_local_potential_entry;
 
 public:
-    AtomObject(void);
+    AtomObject();
     ~AtomObject();
     AtomObject(const AtomObject & other);
-    std::unique_ptr<DataObjectBase> Clone(void) const override;
-    void Display(void) const override;
-    void Update(void) override;
+    std::unique_ptr<DataObjectBase> Clone() const override;
+    void Display() const override;
+    void Update() override;
     void Accept(DataObjectVisitorBase * visitor) override;
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
-    std::string GetKeyTag(void) const override { return m_key_tag; }
+    std::string GetKeyTag() const override { return m_key_tag; }
 
-    std::unique_ptr<AtomObject> AtomObjectClone(void) const;
+    std::unique_ptr<AtomObject> AtomObjectClone() const;
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialAtomFlag(bool value) { m_is_special_atom = value; }
     void SetSerialID(int value) { m_serial_id = value; }
@@ -71,31 +71,31 @@ public:
     void AddAlternateOccupancy(const std::string & indicator, float value);
     void AddAlternateTemperature(const std::string & indicator, float value);
 
-    std::string GetInfo(void) const;
-    ComponentKey GetComponentKey(void) const { return m_component_key; }
-    AtomKey GetAtomKey(void) const { return m_atom_key; }
-    Element GetElement(void) const;
-    Residue GetResidue(void) const;
-    Spot GetSpot(void) const;
-    Structure GetStructure(void) const;
-    bool IsUnknownAtom(void) const;
-    bool IsMainChainAtom(void) const;
-    bool GetSelectedFlag(void) const { return m_is_selected; }
-    bool GetSpecialAtomFlag(void) const { return m_is_special_atom; }
-    int GetSerialID(void) const { return m_serial_id; }
-    int GetSequenceID(void) const { return m_residue_id; }
-    std::string GetComponentID(void) const { return m_component_id; }
-    std::string GetAtomID(void) const { return m_atom_id; }
-    std::string GetChainID(void) const { return m_chain_id; }
-    std::string GetIndicator(void) const { return m_indicator; }
-    float GetOccupancy(void) const { return m_occupancy; }
-    float GetTemperature(void) const { return m_temperature; }
-    std::array<float, 3> GetPosition(void) const { return m_position; }
-    const std::array<float, 3> & GetPositionRef(void) const { return m_position; }
-    const std::unordered_map<std::string, std::array<float, 3>> & GetAlternatePositions(void) const;
-    const std::unordered_map<std::string, float> & GetAlternateOccupancies(void) const;
-    const std::unordered_map<std::string, float> & GetAlternateTemperatures(void) const;
-    LocalPotentialEntry * GetLocalPotentialEntry(void) const { return m_local_potential_entry.get(); }
+    std::string GetInfo() const;
+    ComponentKey GetComponentKey() const { return m_component_key; }
+    AtomKey GetAtomKey() const { return m_atom_key; }
+    Element GetElement() const;
+    Residue GetResidue() const;
+    Spot GetSpot() const;
+    Structure GetStructure() const;
+    bool IsUnknownAtom() const;
+    bool IsMainChainAtom() const;
+    bool GetSelectedFlag() const { return m_is_selected; }
+    bool GetSpecialAtomFlag() const { return m_is_special_atom; }
+    int GetSerialID() const { return m_serial_id; }
+    int GetSequenceID() const { return m_residue_id; }
+    std::string GetComponentID() const { return m_component_id; }
+    std::string GetAtomID() const { return m_atom_id; }
+    std::string GetChainID() const { return m_chain_id; }
+    std::string GetIndicator() const { return m_indicator; }
+    float GetOccupancy() const { return m_occupancy; }
+    float GetTemperature() const { return m_temperature; }
+    std::array<float, 3> GetPosition() const { return m_position; }
+    const std::array<float, 3> & GetPositionRef() const { return m_position; }
+    const std::unordered_map<std::string, std::array<float, 3>> & GetAlternatePositions() const;
+    const std::unordered_map<std::string, float> & GetAlternateOccupancies() const;
+    const std::unordered_map<std::string, float> & GetAlternateTemperatures() const;
+    LocalPotentialEntry * GetLocalPotentialEntry() const { return m_local_potential_entry.get(); }
     
 };
 

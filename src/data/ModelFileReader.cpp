@@ -31,7 +31,7 @@ ModelFileReader::~ModelFileReader()
 {
 }
 
-void ModelFileReader::Read(void)
+void ModelFileReader::Read()
 {
     ReadHeader();
     if (m_successfully_read_file == false)
@@ -43,7 +43,7 @@ void ModelFileReader::Read(void)
     ReadDataArray();
 }
 
-void ModelFileReader::ReadHeader(void)
+void ModelFileReader::ReadHeader()
 {
     try
     {
@@ -58,7 +58,7 @@ void ModelFileReader::ReadHeader(void)
     }
 }
 
-void ModelFileReader::ReadDataArray(void)
+void ModelFileReader::ReadDataArray()
 {
     try
     {
@@ -72,7 +72,7 @@ void ModelFileReader::ReadDataArray(void)
     }
 }
 
-AtomicModelDataBlock * ModelFileReader::GetDataBlockPtr(void)
+AtomicModelDataBlock * ModelFileReader::GetDataBlockPtr()
 {
     if (m_file_object == nullptr || m_successfully_read_file == false) return nullptr;
     return m_file_object->GetDataBlockPtr();

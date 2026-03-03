@@ -11,7 +11,7 @@
 
 namespace rhbm_gem {
 
-ModelObject::ModelObject(void) :
+ModelObject::ModelObject() :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
@@ -56,7 +56,7 @@ std::unique_ptr<DataObjectBase> ModelObject::Clone() const
     return std::make_unique<ModelObject>(*this);
 }
 
-void ModelObject::Display(void) const
+void ModelObject::Display() const
 {
     Logger::Log(LogLevel::Info, "ModelObject Display: " + GetKeyTag());
     Logger::Log(LogLevel::Info,
@@ -80,7 +80,7 @@ void ModelObject::Display(void) const
     }
 }
 
-void ModelObject::Update(void)
+void ModelObject::Update()
 {
     for (auto & atom : m_atom_list)
     {
@@ -164,7 +164,7 @@ void ModelObject::SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_syste
     m_bond_key_system = std::move(bond_key_system);
 }
 
-void ModelObject::BuildKDTreeRoot(void)
+void ModelObject::BuildKDTreeRoot()
 {
     if (m_kd_tree_root != nullptr) return;
     std::vector<AtomObject *> atom_ptr_list;
@@ -176,7 +176,7 @@ void ModelObject::BuildKDTreeRoot(void)
     m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0);
 }
 
-std::array<float, 3> ModelObject::GetCenterOfMassPosition(void)
+std::array<float, 3> ModelObject::GetCenterOfMassPosition()
 {
     if (m_center_of_mass_position != nullptr)
     {
@@ -247,30 +247,30 @@ ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(ComponentKey key
 }
 
 const std::map<int, AtomObject *> &
-ModelObject::GetSerialIDAtomMap(void) const
+ModelObject::GetSerialIDAtomMap() const
 {
     return m_serial_id_atom_map;
 }
 
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-ModelObject::GetAtomGroupPotentialEntryMap(void) const
+ModelObject::GetAtomGroupPotentialEntryMap() const
 {
     return m_atom_group_potential_entry_map;
 }
 
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-ModelObject::GetBondGroupPotentialEntryMap(void) const
+ModelObject::GetBondGroupPotentialEntryMap() const
 {
     return m_bond_group_potential_entry_map;
 }
 
 const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
-ModelObject::GetChemicalComponentEntryMap(void) const
+ModelObject::GetChemicalComponentEntryMap() const
 {
     return m_chemical_component_entry_map;
 }
 
-void ModelObject::BuildSelectedAtomList(void)
+void ModelObject::BuildSelectedAtomList()
 {
     m_selected_atom_list.clear();
     m_selected_atom_list.reserve(m_atom_list.size());
@@ -281,7 +281,7 @@ void ModelObject::BuildSelectedAtomList(void)
     }
 }
 
-void ModelObject::BuildSelectedBondList(void)
+void ModelObject::BuildSelectedBondList()
 {
     m_selected_bond_list.clear();
     m_selected_bond_list.reserve(m_bond_list.size());
@@ -360,7 +360,7 @@ void ModelObject::FilterBondFromSymmetry(bool is_asymmetry)
     }
 }
 
-std::vector<ComponentKey> ModelObject::GetComponentKeyList(void) const
+std::vector<ComponentKey> ModelObject::GetComponentKeyList() const
 {
     std::vector<ComponentKey> component_key_list;
     component_key_list.reserve(m_chemical_component_entry_map.size());
@@ -371,7 +371,7 @@ std::vector<ComponentKey> ModelObject::GetComponentKeyList(void) const
     return component_key_list;
 }
 
-bool ModelObject::HasStandardRNAComponent(void) const
+bool ModelObject::HasStandardRNAComponent() const
 {
     for (const auto & [component_key, entry] : m_chemical_component_entry_map)
     {
@@ -387,7 +387,7 @@ bool ModelObject::HasStandardRNAComponent(void) const
     return false;
 }
 
-bool ModelObject::HasStandardDNAComponent(void) const
+bool ModelObject::HasStandardDNAComponent() const
 {
     for (const auto & [component_key, entry] : m_chemical_component_entry_map)
     {

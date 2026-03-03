@@ -63,7 +63,7 @@ class AtomicModelDataBlock
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
 
 public:
-    AtomicModelDataBlock(void);
+    AtomicModelDataBlock();
     ~AtomicModelDataBlock();
 
     void AddAtomObject(
@@ -96,22 +96,22 @@ public:
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetStructureInfo(AtomObject * atom_object);
 
-    const std::string & GetPdbID(void) const;
-    const std::string & GetEmdID(void) const;
-    double GetResolution(void) const;
-    const std::string & GetResolutionMethod(void) const;
-    const std::vector<Element> & GetElementTypeList(void) const;
-    const std::unordered_map<std::string, Entity> & GetEntityTypeMap(void) const;
-    const std::unordered_map<std::string, int> & GetMoleculesSizeMap(void) const;
-    const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap(void) const;
-    const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap(void) const;
-    const std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> & GetAtomObjectMap(void) const;
-    const std::vector<std::unique_ptr<BondObject>> & GetBondObjectList(void) const;
-    std::vector<int> GetModelNumberList(void) const;
+    const std::string & GetPdbID() const;
+    const std::string & GetEmdID() const;
+    double GetResolution() const;
+    const std::string & GetResolutionMethod() const;
+    const std::vector<Element> & GetElementTypeList() const;
+    const std::unordered_map<std::string, Entity> & GetEntityTypeMap() const;
+    const std::unordered_map<std::string, int> & GetMoleculesSizeMap() const;
+    const std::unordered_map<Entity, std::vector<std::string>> & GetEntityIDListMap() const;
+    const std::unordered_map<std::string, std::vector<std::string>> & GetChainIDListMap() const;
+    const std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> & GetAtomObjectMap() const;
+    const std::vector<std::unique_ptr<BondObject>> & GetBondObjectList() const;
+    std::vector<int> GetModelNumberList() const;
     bool HasModelNumber(int model_number) const;
     ChemicalComponentEntry * GetChemicalComponentEntryPtr(ComponentKey key) const;
     const ComponentBondEntry * GetComponentBondEntryPtr(ComponentKey comp_key, BondKey bond_key) const;
-    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap(void);
+    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & GetChemicalComponentEntryMap();
     bool HasChemicalComponentEntry(ComponentKey comp_key) const;
     bool HasComponentBondEntry(ComponentKey comp_key, BondKey bond_key) const;
     AtomObject * GetAtomObjectPtrInTuple(
@@ -128,14 +128,14 @@ public:
         const std::string & atom_id,
         int * model_number = nullptr
     ) const;
-    ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
-    AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
-    BondKeySystem * GetBondKeySystemPtr(void) { return m_bond_key_system.get(); }
+    ComponentKeySystem * GetComponentKeySystemPtr() { return m_component_key_system.get(); }
+    AtomKeySystem * GetAtomKeySystemPtr() { return m_atom_key_system.get(); }
+    BondKeySystem * GetBondKeySystemPtr() { return m_bond_key_system.get(); }
     std::vector<std::unique_ptr<AtomObject>> MoveAtomObjectList(int model_number=1);
-    std::vector<std::unique_ptr<BondObject>> MoveBondObjectList(void);
-    std::unique_ptr<ComponentKeySystem> MoveComponentKeySystem(void) { return std::move(m_component_key_system); }
-    std::unique_ptr<AtomKeySystem> MoveAtomKeySystem(void) { return std::move(m_atom_key_system); }
-    std::unique_ptr<BondKeySystem> MoveBondKeySystem(void) { return std::move(m_bond_key_system); }
+    std::vector<std::unique_ptr<BondObject>> MoveBondObjectList();
+    std::unique_ptr<ComponentKeySystem> MoveComponentKeySystem() { return std::move(m_component_key_system); }
+    std::unique_ptr<AtomKeySystem> MoveAtomKeySystem() { return std::move(m_atom_key_system); }
+    std::unique_ptr<BondKeySystem> MoveBondKeySystem() { return std::move(m_bond_key_system); }
 
 };
 

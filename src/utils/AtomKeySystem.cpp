@@ -9,7 +9,7 @@
 const AtomKey AtomKeySystem::k_dynamic_base{ 10000 };
 const AtomKey AtomKeySystem::k_max_key{ std::numeric_limits<AtomKey>::max() };
 
-AtomKeySystem::AtomKeySystem(void) :
+AtomKeySystem::AtomKeySystem() :
     m_next_dynamic_key{ k_dynamic_base }
 {
     const auto & build_in_spot_map{ ChemicalDataHelper::GetSpotMap() };

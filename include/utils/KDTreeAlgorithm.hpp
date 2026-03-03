@@ -45,7 +45,7 @@ class KDTreeAlgorithm
     };
 
 public:
-    KDTreeAlgorithm(void) = default;
+    KDTreeAlgorithm() = default;
     ~KDTreeAlgorithm() {}
     static std::unique_ptr<KDNode<NodeType>> BuildKDTree(
         std::vector<NodeType *> & node_list,

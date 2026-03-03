@@ -30,12 +30,12 @@ class GausPainter : public PainterBase
     std::unique_ptr<BondClassifier> m_bond_classifier;
 
 public:
-    GausPainter(void);
+    GausPainter();
     ~GausPainter();
     void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
-    void Painting(void) override;
+    void Painting() override;
 #ifdef HAVE_ROOT
     static void RemodelAxisLabels(::TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
 #endif

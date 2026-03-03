@@ -34,7 +34,7 @@ rhbm_gem::CommandRegistrar<rhbm_gem::MapVisualizationCommand> registrar_map_visu
 
 namespace rhbm_gem {
 
-MapVisualizationCommand::MapVisualizationCommand(void) :
+MapVisualizationCommand::MapVisualizationCommand() :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
@@ -65,7 +65,7 @@ void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Window size for sampling")->default_val(m_options.window_size);
 }
 
-bool MapVisualizationCommand::Execute(void)
+bool MapVisualizationCommand::Execute()
 {
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
@@ -113,7 +113,7 @@ void MapVisualizationCommand::SetWindowSize(double value)
     m_options.window_size = value;
 }
 
-bool MapVisualizationCommand::BuildDataObject(void)
+bool MapVisualizationCommand::BuildDataObject()
 {
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
@@ -132,7 +132,7 @@ bool MapVisualizationCommand::BuildDataObject(void)
     return true;
 }
 
-void MapVisualizationCommand::RunMapObjectPreprocessing(void)
+void MapVisualizationCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
@@ -140,7 +140,7 @@ void MapVisualizationCommand::RunMapObjectPreprocessing(void)
     m_map_object->MapValueArrayNormalization();
 }
 
-void MapVisualizationCommand::RunModelObjectPreprocessing(void)
+void MapVisualizationCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
@@ -154,7 +154,7 @@ void MapVisualizationCommand::RunModelObjectPreprocessing(void)
         "Number of selected bond = " + std::to_string(m_model_object->GetNumberOfSelectedBond()));
 }
 
-void MapVisualizationCommand::RunAtomMapValueSampling(void)
+void MapVisualizationCommand::RunAtomMapValueSampling()
 {
     ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
     if (m_map_object == nullptr) return;

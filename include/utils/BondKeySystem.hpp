@@ -22,7 +22,7 @@ class BondKeySystem
     std::unordered_set<std::string> m_veto_bond_id_set;
     
 public:
-    BondKeySystem(void);
+    BondKeySystem();
     ~BondKeySystem();
     BondKeySystem(const BondKeySystem & other);
 

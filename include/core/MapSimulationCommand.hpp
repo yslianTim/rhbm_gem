@@ -42,12 +42,12 @@ private:
     std::array<float, 3> m_atom_range_minimum, m_atom_range_maximum;
 
 public:
-    MapSimulationCommand(void);
+    MapSimulationCommand();
     ~MapSimulationCommand();
-    bool Execute(void) override;
+    bool Execute() override;
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
-    const CommandOptions & GetOptions(void) const override { return m_options; }
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
 
     void SetPotentialModelChoice(PotentialModel value);
     void SetPartialChargeChoice(PartialCharge value);
@@ -58,12 +58,12 @@ public:
     void SetBlurringWidthList(const std::string & value);
 
 private:
-    bool BuildDataObject(void);
-    void RunMapSimulation(void);
+    bool BuildDataObject();
+    void RunMapSimulation();
     void BuildAtomList(ModelObject * model_object);
     double CalculateAtomCharge(AtomObject * atom) const;
-    void CalculateAtomRange(void);
-    std::unique_ptr<MapObject> CreateMapObject(void);
+    void CalculateAtomRange();
+    std::unique_ptr<MapObject> CreateMapObject();
     void PopulateMapValueArray(MapObject * map_object, double blurring_width);
     std::array<int, 3> CalculateGridSize(const std::array<float, 3> & grid_spacing) const;
     std::array<float, 3> CalculateOrigin(const std::array<float, 3> & grid_spacing) const;

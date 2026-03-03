@@ -8,7 +8,7 @@
 const ComponentKey ComponentKeySystem::k_dynamic_base{ 30 };
 const ComponentKey ComponentKeySystem::k_max_key{ std::numeric_limits<ComponentKey>::max() };
 
-ComponentKeySystem::ComponentKeySystem(void) :
+ComponentKeySystem::ComponentKeySystem() :
     m_next_dynamic_key{ k_dynamic_base }
 {
     const auto & build_in_residue_map{ ChemicalDataHelper::GetResidueMap() };
@@ -27,7 +27,7 @@ ComponentKeySystem::ComponentKeySystem(const ComponentKeySystem & other) :
 {
 }
 
-ComponentKeySystem::~ComponentKeySystem(void)
+ComponentKeySystem::~ComponentKeySystem()
 {
 }
 

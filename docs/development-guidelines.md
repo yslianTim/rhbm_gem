@@ -37,6 +37,7 @@ If a rule changes, update this document and any affected user-facing documentati
 - `[Required]` Prefer readability and local consistency over low-value style trivia.
 - `[Required]` Headers use `#pragma once`.
 - `[Required]` Types, classes, and functions use clear PascalCase names. Member variables use the `m_` prefix.
+- `[Required]` Project-owned C++ declarations and definitions for zero-argument functions use empty parameter lists `()`; do not use parameterless `(void)` style.
 - `[Required]` New code should preserve const-correctness and narrow interfaces to the minimum mutable surface required.
 - `[Required]` Avoid exposing unnecessary implementation details in public headers.
 - `[Recommended]` Continue using `enum class`, `explicit`, `override`, `= default`, `nullptr`, brace initialization, and `const auto` where they improve clarity.
@@ -112,7 +113,3 @@ If a rule changes, update this document and any affected user-facing documentati
 - `[Recommended]` Add a static-analysis baseline such as `clang-tidy` when the false-positive budget and maintenance cost are acceptable.
 - `[Recommended]` Build out feature-matrix CI coverage for representative `AUTO`, `ON`, and `OFF` combinations of ROOT, Boost, and OpenMP.
 - `[Recommended]` Evaluate a project-wide namespace strategy if the public API surface continues to grow.
-
-## 12. Legacy Notes
-
-- `[Legacy note]` Some existing files use parameterless `(void)` style. Preserve local consistency when touching those files, but do not treat this as a priority rule for new design.

@@ -26,8 +26,8 @@ public:
     ~DatabaseManager();
     void SaveDataObject(const DataObjectBase * data_object, const std::string & key_tag);
     std::unique_ptr<DataObjectBase> LoadDataObject(const std::string & key_tag);
-    const std::filesystem::path & GetDatabasePath(void) const { return m_database_path; }
-    SQLiteWrapper * GetDatabase(void) { return m_database.get(); }
+    const std::filesystem::path & GetDatabasePath() const { return m_database_path; }
+    SQLiteWrapper * GetDatabase() { return m_database.get(); }
     std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const DataObjectBase * data_object);
     std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const std::string & object_type);
     

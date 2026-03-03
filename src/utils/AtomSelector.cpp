@@ -4,12 +4,12 @@
 
 #include <sstream>
 
-AtomSelector::AtomSelector(void)
+AtomSelector::AtomSelector()
 {
 
 }
 
-std::string AtomSelector::Describe(void) const
+std::string AtomSelector::Describe() const
 {
     std::ostringstream oss;
     oss<<"Atomic Picking List:\n";
@@ -33,7 +33,7 @@ std::string AtomSelector::Describe(void) const
     return oss.str();
 }
 
-void AtomSelector::Print(void) const
+void AtomSelector::Print() const
 {
     Logger::Log(LogLevel::Info, Describe());
 }

@@ -13,7 +13,7 @@ class GausLinearTransformHelper
 {
 
 public:
-    GausLinearTransformHelper(void) = default;
+    GausLinearTransformHelper() = default;
     ~GausLinearTransformHelper() = default;
 
     static double GetGaussianResponseAtDistance(double distance, double width, int dimension=3);

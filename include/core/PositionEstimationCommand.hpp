@@ -37,12 +37,12 @@ private:
     std::shared_ptr<MapObject> m_map_object;
 
 public:
-    PositionEstimationCommand(void);
+    PositionEstimationCommand();
     ~PositionEstimationCommand() = default;
-    bool Execute(void) override;
+    bool Execute() override;
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
-    const CommandOptions & GetOptions(void) const override { return m_options; }
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
 
     void SetMapFilePath(const std::filesystem::path & path);
     void SetIterationCount(int value);
@@ -52,12 +52,12 @@ public:
     void SetDedupTolerance(double value);
 
 private:
-    bool BuildDataObject(void);
-    bool BuildVoxelList(void);
-    void RunMapValueConvergence(void);
+    bool BuildDataObject();
+    bool BuildVoxelList();
+    void RunMapValueConvergence();
     void UpdatePointPosition(size_t index, size_t knn_size);
     void RunUniquePointList(float tolerance);
-    void OutputPointList(void) const;
+    void OutputPointList() const;
 };
 
 } // namespace rhbm_gem

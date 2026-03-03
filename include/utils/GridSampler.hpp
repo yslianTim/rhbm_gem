@@ -13,14 +13,14 @@ class GridSampler : public SamplerBase
     std::array<float, 3> m_reference_u_vector;
 
 public:
-    GridSampler(void);
+    GridSampler();
     ~GridSampler() = default;
 
-    void Print(void) const override;
+    void Print() const override;
     std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
         const std::array<float, 3> & reference_position,
         const std::array<float, 3> & axis_vector) const override;
-    unsigned int GetSamplingSize(void) const override { return m_sampling_size * m_sampling_size; }
+    unsigned int GetSamplingSize() const override { return m_sampling_size * m_sampling_size; }
     void SetSamplingSize(unsigned int value) override { m_sampling_size = value; }
     void SetWindowSize(float value) { m_window_size = value; }
     void SetReferenceUVector(const std::array<float, 3> & value) { m_reference_u_vector = value; }

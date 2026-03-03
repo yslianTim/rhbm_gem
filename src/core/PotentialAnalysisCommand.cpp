@@ -56,7 +56,7 @@ HRLExecutionOptions BuildHRLExecutionOptions(
 
 namespace rhbm_gem {
 
-PotentialAnalysisCommand::PotentialAnalysisCommand(void) :
+PotentialAnalysisCommand::PotentialAnalysisCommand() :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
@@ -119,7 +119,7 @@ void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Alpha value for G")->default_val(m_options.alpha_g);
 }
 
-bool PotentialAnalysisCommand::Execute(void)
+bool PotentialAnalysisCommand::Execute()
 {
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
@@ -231,7 +231,7 @@ void PotentialAnalysisCommand::SetSamplingHeight(double value)
     m_options.sampling_height = value;
 }
 
-bool PotentialAnalysisCommand::BuildDataObject(void)
+bool PotentialAnalysisCommand::BuildDataObject()
 {
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
@@ -270,7 +270,7 @@ void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * mode
     model_object->SetResolutionMethod("Blurring Width");
 }
 
-void PotentialAnalysisCommand::RunMapObjectPreprocessing(void)
+void PotentialAnalysisCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
@@ -278,7 +278,7 @@ void PotentialAnalysisCommand::RunMapObjectPreprocessing(void)
     m_map_object->MapValueArrayNormalization();
 }
 
-void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
+void PotentialAnalysisCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
@@ -312,7 +312,7 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing(void)
     }
 }
 
-void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
+void PotentialAnalysisCommand::RunAtomMapValueSampling()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
     if (m_map_object == nullptr) return;
@@ -372,7 +372,7 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling(void)
 #endif
 }
 
-void PotentialAnalysisCommand::RunBondMapValueSampling(void)
+void PotentialAnalysisCommand::RunBondMapValueSampling()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunBondMapValueSampling");
     if (m_map_object == nullptr) return;
@@ -443,7 +443,7 @@ void PotentialAnalysisCommand::RunBondMapValueSampling(void)
 #endif
 }
 
-void PotentialAnalysisCommand::RunAtomGroupClassification(void)
+void PotentialAnalysisCommand::RunAtomGroupClassification()
 {
     ScopeTimer timer("RunAtomGroupClassification");
     if (m_map_object == nullptr) return;
@@ -466,7 +466,7 @@ void PotentialAnalysisCommand::RunAtomGroupClassification(void)
     }
 }
 
-void PotentialAnalysisCommand::RunBondGroupClassification(void)
+void PotentialAnalysisCommand::RunBondGroupClassification()
 {
     ScopeTimer timer("RunBondGroupClassification");
     if (m_map_object == nullptr) return;
@@ -489,7 +489,7 @@ void PotentialAnalysisCommand::RunBondGroupClassification(void)
     }
 }
 
-void PotentialAnalysisCommand::RunAtomAlphaTraining(void)
+void PotentialAnalysisCommand::RunAtomAlphaTraining()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomAlphaTraining");
     if (m_map_object == nullptr) return;
@@ -904,7 +904,7 @@ void PotentialAnalysisCommand::RunLocalBondFitting(double universal_alpha_r)
     }
 }
 
-void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
+void PotentialAnalysisCommand::RunAtomPotentialFitting()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomPotentialFitting");
     if (m_model_object == nullptr) return;
@@ -1024,7 +1024,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting(void)
     }
 }
 
-void PotentialAnalysisCommand::RunBondPotentialFitting(void)
+void PotentialAnalysisCommand::RunBondPotentialFitting()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
     if (m_model_object == nullptr) return;
@@ -1142,7 +1142,7 @@ void PotentialAnalysisCommand::RunBondPotentialFitting(void)
     }
 }
 
-void PotentialAnalysisCommand::SaveDataObject(void)
+void PotentialAnalysisCommand::SaveDataObject()
 {
     ScopeTimer timer("PotentialAnalysisCommand::SaveDataObject");
     if (m_model_object == nullptr) return;

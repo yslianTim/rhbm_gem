@@ -47,29 +47,29 @@ class CifFormat : public ModelFileFormatBase
     std::unordered_map<std::string, std::vector<std::string>> m_data_item_map;
 
 public:
-    CifFormat(void);
+    CifFormat();
     ~CifFormat();
     void LoadHeader(const std::string & filename) override;
-    void PrintHeader(void) const override;
+    void PrintHeader() const override;
     void LoadDataArray(const std::string & filename) override;
     void SaveHeader(const ModelObject * model_object, std::ostream & stream) override;
     void SaveDataArray(const ModelObject * model_object, std::ostream & stream, int par) override;
-    AtomicModelDataBlock * GetDataBlockPtr(void) override;
+    AtomicModelDataBlock * GetDataBlockPtr() override;
 
 private:
-    void LoadChemicalComponentBlock(void);
-    void LoadChemicalComponentAtomBlock(void);
-    void LoadChemicalComponentBondBlock(void);
-    void LoadDatabaseBlock(void);
-    void LoadEntityBlock(void);
-    void LoadPdbxData(void);
-    void LoadXRayResolutionInfo(void);
-    void LoadAtomTypeBlock(void);
-    void LoadStructureConformationBlock(void);
-    void LoadStructureConnectionBlock(void);
-    void LoadStructureSheetBlock(void);
-    void LoadAtomSiteBlock(void);
-    void ConstructBondList(void);
+    void LoadChemicalComponentBlock();
+    void LoadChemicalComponentAtomBlock();
+    void LoadChemicalComponentBondBlock();
+    void LoadDatabaseBlock();
+    void LoadEntityBlock();
+    void LoadPdbxData();
+    void LoadXRayResolutionInfo();
+    void LoadAtomTypeBlock();
+    void LoadStructureConformationBlock();
+    void LoadStructureConnectionBlock();
+    void LoadStructureSheetBlock();
+    void LoadAtomSiteBlock();
+    void ConstructBondList();
     void ParseLoopBlock(
         std::string_view data_block_prefix,
         const std::function<void(const ColumnIndexMap &,
@@ -77,7 +77,7 @@ private:
     );
     void EnsureParsedDocument(const std::string & filename);
     void ParseMmCifDocument(const std::string & filename);
-    void ResetParsedDocument(void);
+    void ResetParsedDocument();
     std::optional<std::string> GetFirstDataItemValue(std::string_view key) const;
     void WriteAtomSiteBlock(const ModelObject * model_object, std::ostream & stream, int model_par);
     void WriteAtomSiteBlockEntry(const AtomObject * atom,
@@ -94,9 +94,9 @@ private:
         const std::string & atom_id,
         const std::string & element_symbol
     );
-    void BuildDefaultComponentBondEntry(void);
-    void BuildPepetideBondEntry(void);
-    void BuildPhosphodiesterBondEntry(void);
+    void BuildDefaultComponentBondEntry();
+    void BuildPepetideBondEntry();
+    void BuildPhosphodiesterBondEntry();
 
 };
 

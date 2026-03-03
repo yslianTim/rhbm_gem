@@ -23,12 +23,12 @@ class AtomPainter : public PainterBase
     std::string m_folder_path;
 
 public:
-    AtomPainter(void);
+    AtomPainter();
     ~AtomPainter();
     void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
-    void Painting(void) override;
+    void Painting() override;
 
 private:
     void PaintDemoPlot(const std::string & name);

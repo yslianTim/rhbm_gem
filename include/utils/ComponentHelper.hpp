@@ -18,7 +18,7 @@ class ComponentHelper
     static const std::unordered_map<Residue, std::vector<double>> m_sheet_partial_charge_map;
 
 public:
-    ComponentHelper(void) = default;
+    ComponentHelper() = default;
     ~ComponentHelper() = default;
 
     static size_t GetAtomCount(Residue residue);

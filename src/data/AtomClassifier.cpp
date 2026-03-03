@@ -141,7 +141,7 @@ const std::vector<std::string> AtomClassifier::m_main_chain_member_label_list
     "C2'", "C1'"
 };
 
-AtomClassifier::AtomClassifier(void)
+AtomClassifier::AtomClassifier()
 {
 
 }
@@ -164,7 +164,7 @@ bool AtomClassifier::IsMainChainMember(Spot spot, size_t & main_chain_member_id)
     return false;
 }
 
-size_t AtomClassifier::GetMainChainMemberCount(void)
+size_t AtomClassifier::GetMainChainMemberCount()
 {
     return m_main_chain_member_count;
 }

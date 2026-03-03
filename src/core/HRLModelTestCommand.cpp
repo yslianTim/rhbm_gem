@@ -36,7 +36,7 @@ rhbm_gem::CommandRegistrar<rhbm_gem::HRLModelTestCommand> registrar_model_test{
 
 namespace rhbm_gem {
 
-HRLModelTestCommand::HRLModelTestCommand(void) :
+HRLModelTestCommand::HRLModelTestCommand() :
     CommandBase(), m_options{}
 {
 }
@@ -70,7 +70,7 @@ void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Alpha value for G")->default_val(m_options.alpha_g);
 }
 
-bool HRLModelTestCommand::Execute(void)
+bool HRLModelTestCommand::Execute()
 {
     switch (m_options.tester_choice)
     {
@@ -130,7 +130,7 @@ void HRLModelTestCommand::SetAlphaG(double value)
     m_options.alpha_g = value;
 }
 
-void HRLModelTestCommand::RunSimulationTestOnBenchMark(void)
+void HRLModelTestCommand::RunSimulationTestOnBenchMark()
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
 
@@ -181,7 +181,7 @@ void HRLModelTestCommand::RunSimulationTestOnBenchMark(void)
     Logger::Log(LogLevel::Info, mdpde_stream.str());
 }
 
-void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)
+void HRLModelTestCommand::RunSimulationTestOnDataOutlier()
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnDataOutlier");
 
@@ -259,7 +259,7 @@ void HRLModelTestCommand::RunSimulationTestOnDataOutlier(void)
     );
 }
 
-void HRLModelTestCommand::RunSimulationTestOnMemberOutlier(void)
+void HRLModelTestCommand::RunSimulationTestOnMemberOutlier()
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnMemberOutlier");
 
@@ -352,7 +352,7 @@ void HRLModelTestCommand::RunSimulationTestOnMemberOutlier(void)
     );
 }
 
-void HRLModelTestCommand::RunSimulationTestOnModelAlphaData(void)
+void HRLModelTestCommand::RunSimulationTestOnModelAlphaData()
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
 
@@ -422,7 +422,7 @@ void HRLModelTestCommand::RunSimulationTestOnModelAlphaData(void)
     );
 }
 
-void HRLModelTestCommand::RunSimulationTestOnModelAlphaMember(void)
+void HRLModelTestCommand::RunSimulationTestOnModelAlphaMember()
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
 

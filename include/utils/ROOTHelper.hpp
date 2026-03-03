@@ -31,16 +31,16 @@ class ROOTHelper
 {
 
 public:
-    ROOTHelper(void) = default;
+    ROOTHelper() = default;
     ~ROOTHelper() = default;
     #ifdef HAVE_ROOT
     static std::unique_ptr<TCanvas> CreateCanvas(const std::string & name, const std::string & title, int width=600, int height=600);
     static std::unique_ptr<TPad> CreatePad(const std::string & name, const std::string & title, double x_low, double y_low, double x_up, double y_up);
     static std::unique_ptr<TH1D> CreateHist1D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max);
     static std::unique_ptr<TH2D> CreateHist2D(const std::string & name, const std::string & title, int x_bin, double x_min, double x_max, int y_bin, double y_min, double y_max);
-    static std::unique_ptr<TGraphErrors> CreateGraphErrors(void);
+    static std::unique_ptr<TGraphErrors> CreateGraphErrors();
     static std::unique_ptr<TGraphErrors> CreateGraphErrors(const int & point_size);
-    static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(void);
+    static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors();
     static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size);
     static std::unique_ptr<TGraph2DErrors> CreateGraph2DErrors(const int & point_size, std::vector<double> & x, std::vector<double> & y, std::vector<double> & z);
     static std::unique_ptr<TPaveText> CreatePaveText(double x1, double y1, double x2, double y2, std::string option="nbNDC", bool in_partition=false);

@@ -3,7 +3,7 @@
 
 namespace rhbm_gem {
 
-ChemicalComponentEntry::ChemicalComponentEntry(void)
+ChemicalComponentEntry::ChemicalComponentEntry()
 {
 }
 

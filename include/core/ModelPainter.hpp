@@ -29,12 +29,12 @@ class ModelPainter : public PainterBase
     std::unique_ptr<BondClassifier> m_bond_classifier;
 
 public:
-    ModelPainter(void);
+    ModelPainter();
     ~ModelPainter();
     void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
-    void Painting(void) override;
+    void Painting() override;
 
 private:
     void PaintAtomGroupGausMainChain(ModelObject * model_object, const std::string & name);

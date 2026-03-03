@@ -5,7 +5,7 @@
 
 namespace rhbm_gem {
 
-DataObjectDAOFactoryRegistry & DataObjectDAOFactoryRegistry::Instance(void)
+DataObjectDAOFactoryRegistry & DataObjectDAOFactoryRegistry::Instance()
 {
     static DataObjectDAOFactoryRegistry instance;
     return instance;

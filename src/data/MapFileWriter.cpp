@@ -38,7 +38,7 @@ MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map
     }
 }
 
-void MapFileWriter::Write(void)
+void MapFileWriter::Write()
 {
     if (m_map_object == nullptr)
     {

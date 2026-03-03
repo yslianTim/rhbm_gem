@@ -32,12 +32,12 @@ private:
     std::shared_ptr<ModelObject> m_model_object;
 
 public:
-    MapVisualizationCommand(void);
+    MapVisualizationCommand();
     ~MapVisualizationCommand();
-    bool Execute(void) override;
+    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    const CommandOptions & GetOptions(void) const override { return m_options; }
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
 
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);
@@ -46,10 +46,10 @@ public:
     void SetWindowSize(double value);
 
 private:
-    bool BuildDataObject(void);
-    void RunMapObjectPreprocessing(void);
-    void RunModelObjectPreprocessing(void);
-    void RunAtomMapValueSampling(void);
+    bool BuildDataObject();
+    void RunMapObjectPreprocessing();
+    void RunModelObjectPreprocessing();
+    void RunAtomMapValueSampling();
 
 };
 

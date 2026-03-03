@@ -25,7 +25,7 @@ rhbm_gem::CommandRegistrar<rhbm_gem::MapSimulationCommand> registrar_map_simulat
 
 namespace rhbm_gem {
 
-MapSimulationCommand::MapSimulationCommand(void) :
+MapSimulationCommand::MapSimulationCommand() :
     CommandBase(), m_options{}, m_selected_atom_list{}, m_atom_charge_map{},
     m_model_object{ nullptr },
     m_atom_range_minimum{
@@ -84,7 +84,7 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Blurring width (list) setting")->default_val(m_options.blurring_width_list);
 }
 
-bool MapSimulationCommand::Execute(void)
+bool MapSimulationCommand::Execute()
 {
     if (BuildDataObject() == false) return false;
     CalculateAtomRange();
@@ -160,7 +160,7 @@ void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
     }
 }
 
-bool MapSimulationCommand::BuildDataObject(void)
+bool MapSimulationCommand::BuildDataObject()
 {
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
@@ -179,7 +179,7 @@ bool MapSimulationCommand::BuildDataObject(void)
     return true;
 }
 
-void MapSimulationCommand::RunMapSimulation(void)
+void MapSimulationCommand::RunMapSimulation()
 {
     ScopeTimer timer("MapSimulationCommand::RunMapSimulation");
     
@@ -252,7 +252,7 @@ double MapSimulationCommand::CalculateAtomCharge(AtomObject * atom) const
     return 0.0;
 }
 
-void MapSimulationCommand::CalculateAtomRange(void)
+void MapSimulationCommand::CalculateAtomRange()
 {
     if (m_selected_atom_list.empty())
     {
@@ -279,7 +279,7 @@ void MapSimulationCommand::CalculateAtomRange(void)
     m_atom_range_maximum[2] += static_cast<float>(m_options.cutoff_distance);
 }
 
-std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject(void)
+std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
 {
     ScopeTimer timer("MapSimulationCommand::CreateMapObject");
     std::array<float, 3> grid_spacing{

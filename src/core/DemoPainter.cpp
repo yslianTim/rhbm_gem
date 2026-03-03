@@ -41,7 +41,7 @@
 
 namespace rhbm_gem {
 
-DemoPainter::DemoPainter(void) :
+DemoPainter::DemoPainter() :
     m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
 {
 
@@ -79,7 +79,7 @@ void DemoPainter::AddReferenceDataObject(DataObjectBase * data_object, const std
     m_ref_model_object_list_map[label].push_back(model_object);
 }
 
-void DemoPainter::Painting(void)
+void DemoPainter::Painting()
 {
     Logger::Log(LogLevel::Info, "DemoPainter::Painting() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);

@@ -19,7 +19,7 @@ class ModelFileWriter : public FileWriterBase
 public:
     ModelFileWriter(const std::string & filename, const ModelObject * model_object, int model_par = 0);
     ~ModelFileWriter();
-    void Write(void) override;
+    void Write() override;
 
 };
 

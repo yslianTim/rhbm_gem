@@ -32,7 +32,7 @@ MapFileReader::MapFileReader(const std::string & filename) :
     }
 }
 
-void MapFileReader::Read(void)
+void MapFileReader::Read()
 {
     std::ifstream file{ m_file_path, std::ios::binary };
     if (!file)
@@ -86,7 +86,7 @@ bool MapFileReader::ReadMapValueArray(std::ifstream & stream)
     }
 }
 
-std::unique_ptr<float[]> MapFileReader::GetMapValueArray(void)
+std::unique_ptr<float[]> MapFileReader::GetMapValueArray()
 {
     if (m_file_format_helper == nullptr || m_successfully_read_file == false)
     {
@@ -99,7 +99,7 @@ std::unique_ptr<float[]> MapFileReader::GetMapValueArray(void)
     return m_file_format_helper->GetDataArray();
 }
 
-std::array<int, 3> MapFileReader::GetGridSizeArray(void) const
+std::array<int, 3> MapFileReader::GetGridSizeArray() const
 {
     if (m_file_format_helper == nullptr || m_successfully_read_file == false)
     {
@@ -112,7 +112,7 @@ std::array<int, 3> MapFileReader::GetGridSizeArray(void) const
     return m_file_format_helper->GetGridSize();
 }
 
-std::array<float, 3> MapFileReader::GetGridSpacingArray(void) const
+std::array<float, 3> MapFileReader::GetGridSpacingArray() const
 {
     if (m_file_format_helper == nullptr || m_successfully_read_file == false)
     {
@@ -125,7 +125,7 @@ std::array<float, 3> MapFileReader::GetGridSpacingArray(void) const
     return m_file_format_helper->GetGridSpacing();
 }
 
-std::array<float, 3> MapFileReader::GetOriginArray(void) const
+std::array<float, 3> MapFileReader::GetOriginArray() const
 {
     if (m_file_format_helper == nullptr || m_successfully_read_file == false)
     {

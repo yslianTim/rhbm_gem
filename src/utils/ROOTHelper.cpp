@@ -62,7 +62,7 @@ std::unique_ptr<TH2D> ROOTHelper::CreateHist2D(
     return std::make_unique<TH2D>(name.data(), title.data(), x_bin, x_min, x_max, y_bin, y_min, y_max);
 }
 
-std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(void)
+std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors()
 {
     return std::make_unique<TGraphErrors>();
 }
@@ -72,7 +72,7 @@ std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(const int & point_si
     return std::make_unique<TGraphErrors>(point_size);
 }
 
-std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors(void)
+std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors()
 {
     return std::make_unique<TGraph2DErrors>();
 }

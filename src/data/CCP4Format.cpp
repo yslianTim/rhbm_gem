@@ -9,12 +9,12 @@
 
 namespace rhbm_gem {
 
-CCP4Format::CCP4Format(void)
+CCP4Format::CCP4Format()
 {
     InitHeader();
 }
 
-void CCP4Format::InitHeader(void)
+void CCP4Format::InitHeader()
 {
     std::memset(&m_header, 0, sizeof(m_header));
     std::fill_n(m_header.array_size, 3, 1);
@@ -66,7 +66,7 @@ void CCP4Format::SaveHeader(std::ostream & stream)
     }
 }
 
-void CCP4Format::PrintHeader(void) const
+void CCP4Format::PrintHeader() const
 {
     Logger::Log(LogLevel::Debug,
         "CCP4 Header Information:\n"
@@ -129,7 +129,7 @@ void CCP4Format::PrintHeader(void) const
     );
 }
 
-size_t CCP4Format::GetElementSize(void) const
+size_t CCP4Format::GetElementSize() const
 {
     switch (static_cast<MODE>(m_header.mode))
     {
@@ -274,12 +274,12 @@ void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & s
     }
 }
 
-std::unique_ptr<float[]> CCP4Format::GetDataArray(void)
+std::unique_ptr<float[]> CCP4Format::GetDataArray()
 {
     return std::move(m_data_array);
 }
 
-std::array<int, 3> CCP4Format::GetGridSize(void)
+std::array<int, 3> CCP4Format::GetGridSize()
 {
     // Return data array size in X, Y, Z order (CCP4Header::array_size)
     std::array<int, 3> grid_size{
@@ -290,7 +290,7 @@ std::array<int, 3> CCP4Format::GetGridSize(void)
     return grid_size;
 }
 
-std::array<float, 3> CCP4Format::GetGridSpacing(void)
+std::array<float, 3> CCP4Format::GetGridSpacing()
 {
     if (m_header.grid_size[0] == 0 || m_header.grid_size[1] == 0 || m_header.grid_size[2] == 0)
     {
@@ -304,7 +304,7 @@ std::array<float, 3> CCP4Format::GetGridSpacing(void)
     return grid_spacing;
 }
 
-std::array<float, 3> CCP4Format::GetOrigin(void)
+std::array<float, 3> CCP4Format::GetOrigin()
 {
     auto grid_spacing{ GetGridSpacing() };
     std::array<float, 3> origin{
@@ -338,7 +338,7 @@ void CCP4Format::SetHeader(const std::array<int, 3> & grid_size,
     }
 }
 
-void CCP4Format::ReorderedAxisRelatedParameters(void)
+void CCP4Format::ReorderedAxisRelatedParameters()
 {
     if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
     {

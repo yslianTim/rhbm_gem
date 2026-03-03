@@ -4,7 +4,7 @@
 
 namespace rhbm_gem {
 
-CommandRegistry & CommandRegistry::Instance(void)
+CommandRegistry & CommandRegistry::Instance()
 {
     static CommandRegistry instance;
     return instance;

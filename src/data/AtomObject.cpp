@@ -10,7 +10,7 @@
 
 namespace rhbm_gem {
 
-AtomObject::AtomObject(void) :
+AtomObject::AtomObject() :
     m_key_tag{ "" },
     m_is_selected{ false }, m_is_special_atom{ false },
     m_serial_id{ 0 }, m_residue_id{ 0 },
@@ -50,12 +50,12 @@ std::unique_ptr<DataObjectBase> AtomObject::Clone() const
     return std::make_unique<AtomObject>(*this);
 }
 
-void AtomObject::Display(void) const
+void AtomObject::Display() const
 {
     Logger::Log(LogLevel::Info, "AtomObject Display: " + GetInfo());
 }
 
-void AtomObject::Update(void)
+void AtomObject::Update()
 {
     Logger::Log(LogLevel::Info, "AtomObject Update: " + GetInfo());
 }
@@ -65,7 +65,7 @@ void AtomObject::Accept(DataObjectVisitorBase * visitor)
     visitor->VisitAtomObject(this);
 }
 
-std::unique_ptr<AtomObject> AtomObject::AtomObjectClone(void) const
+std::unique_ptr<AtomObject> AtomObject::AtomObjectClone() const
 {
     auto base_clone{ this->Clone() };
     auto derived_ptr{ dynamic_cast<AtomObject*>(base_clone.release()) };
@@ -115,7 +115,7 @@ void AtomObject::SetPosition(float x, float y, float z)
     m_position.at(2) = z;
 }
 
-std::string AtomObject::GetInfo(void) const
+std::string AtomObject::GetInfo() const
 {
     return "[Serial ID] " + std::to_string(m_serial_id) + " " +
            "[Residue ID] " + std::to_string(m_residue_id) + " " +
@@ -155,30 +155,30 @@ void AtomObject::AddAlternateTemperature(
     m_alternate_temperature_map[indicator] = value;
 }
 
-Element AtomObject::GetElement(void) const { return m_element; }
-Residue AtomObject::GetResidue(void) const { return m_residue; }
-Spot AtomObject::GetSpot(void) const { return m_spot; }
-Structure AtomObject::GetStructure(void) const { return m_structure; }
+Element AtomObject::GetElement() const { return m_element; }
+Residue AtomObject::GetResidue() const { return m_residue; }
+Spot AtomObject::GetSpot() const { return m_spot; }
+Structure AtomObject::GetStructure() const { return m_structure; }
 
 const std::unordered_map<std::string, std::array<float, 3>> &
-AtomObject::GetAlternatePositions(void) const
+AtomObject::GetAlternatePositions() const
 {
     return m_alternate_position_map;
 }
 
 const std::unordered_map<std::string, float> &
-AtomObject::GetAlternateOccupancies(void) const
+AtomObject::GetAlternateOccupancies() const
 {
     return m_alternate_occupancy_map;
 }
 
 const std::unordered_map<std::string, float> &
-AtomObject::GetAlternateTemperatures(void) const
+AtomObject::GetAlternateTemperatures() const
 {
     return m_alternate_temperature_map;
 }
 
-bool AtomObject::IsUnknownAtom(void) const
+bool AtomObject::IsUnknownAtom() const
 {
     if (m_element == Element::UNK || m_residue == Residue::UNK || m_spot == Spot::UNK)
     {
@@ -187,7 +187,7 @@ bool AtomObject::IsUnknownAtom(void) const
     return false;
 }
 
-bool AtomObject::IsMainChainAtom(void) const
+bool AtomObject::IsMainChainAtom() const
 {
     size_t dummy_id;
     return AtomClassifier::IsMainChainMember(m_spot, dummy_id);

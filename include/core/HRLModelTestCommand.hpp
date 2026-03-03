@@ -27,12 +27,12 @@ private:
     Options m_options;
 
 public:
-    HRLModelTestCommand(void);
+    HRLModelTestCommand();
     ~HRLModelTestCommand() = default;
-    bool Execute(void) override;
+    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    const CommandOptions & GetOptions(void) const override { return m_options; }
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
 
     void SetTesterChoice(TesterType value);
     void SetFitRangeMinimum(double value);
@@ -41,11 +41,11 @@ public:
     void SetAlphaG(double value);
 
 private:
-    void RunSimulationTestOnBenchMark(void);
-    void RunSimulationTestOnDataOutlier(void);
-    void RunSimulationTestOnMemberOutlier(void);
-    void RunSimulationTestOnModelAlphaData(void);
-    void RunSimulationTestOnModelAlphaMember(void);
+    void RunSimulationTestOnBenchMark();
+    void RunSimulationTestOnDataOutlier();
+    void RunSimulationTestOnMemberOutlier();
+    void RunSimulationTestOnModelAlphaData();
+    void RunSimulationTestOnModelAlphaMember();
     void PrintDataOutlierResult(
         const std::string & name,
         const std::vector<double> & outlier_list,

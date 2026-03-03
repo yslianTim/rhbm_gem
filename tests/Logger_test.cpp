@@ -10,7 +10,7 @@
 class LoggerLogLevelTest : public ::testing::TestWithParam<LogLevel>
 {
 protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -104,7 +104,7 @@ struct LoggerSuppressionTestCase
 class LoggerSuppressionTest : public ::testing::TestWithParam<LoggerSuppressionTestCase>
 {
 protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -188,7 +188,7 @@ TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
 class LoggerUnknownLevelAboveDebugTest : public ::testing::TestWithParam<LogLevel>
 {
     protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -298,7 +298,7 @@ struct LoggerOutputTestCase
 class LoggerOutputTest : public ::testing::TestWithParam<LoggerOutputTestCase>
 {
 protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -373,7 +373,7 @@ struct LoggerLevelPairTestCase
 class LoggerLevelPairTest : public ::testing::TestWithParam<LoggerLevelPairTestCase>
 {
 protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }

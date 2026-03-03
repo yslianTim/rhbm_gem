@@ -20,14 +20,14 @@ class ModelFileReader : public FileReaderBase
 public:
     ModelFileReader(const std::string & filename);
     ~ModelFileReader();
-    void Read(void) override;
-    bool IsSuccessfullyRead(void) const override { return m_successfully_read_file; }
+    void Read() override;
+    bool IsSuccessfullyRead() const override { return m_successfully_read_file; }
 
-    AtomicModelDataBlock * GetDataBlockPtr(void);
+    AtomicModelDataBlock * GetDataBlockPtr();
 
 private:
-    void ReadHeader(void);
-    void ReadDataArray(void);
+    void ReadHeader();
+    void ReadDataArray();
 
 };
 

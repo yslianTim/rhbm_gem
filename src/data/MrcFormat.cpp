@@ -9,12 +9,12 @@
 
 namespace rhbm_gem {
 
-MrcFormat::MrcFormat(void)
+MrcFormat::MrcFormat()
 {
     InitHeader();
 }
 
-void MrcFormat::InitHeader(void)
+void MrcFormat::InitHeader()
 {
     std::memset(&m_header, 0, sizeof(m_header));
     std::fill_n(m_header.array_size,        3, 1);
@@ -71,7 +71,7 @@ void MrcFormat::SaveHeader(std::ostream & stream)
     }
 }
 
-void MrcFormat::PrintHeader(void) const
+void MrcFormat::PrintHeader() const
 {
     Logger::Log(LogLevel::Debug,
         "MRC Header Information:\n"
@@ -115,7 +115,7 @@ void MrcFormat::PrintHeader(void) const
     );
 }
 
-size_t MrcFormat::GetElementSize(void) const
+size_t MrcFormat::GetElementSize() const
 {
     switch (static_cast<MODE>(m_header.mode))
     {
@@ -255,12 +255,12 @@ void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & st
     }
 }
 
-std::unique_ptr<float[]> MrcFormat::GetDataArray(void)
+std::unique_ptr<float[]> MrcFormat::GetDataArray()
 {
     return std::move(m_data_array);
 }
 
-std::array<int, 3> MrcFormat::GetGridSize(void)
+std::array<int, 3> MrcFormat::GetGridSize()
 {
     std::array<int, 3> grid_size{
         m_header.array_size[0],
@@ -270,7 +270,7 @@ std::array<int, 3> MrcFormat::GetGridSize(void)
     return grid_size;
 }
 
-std::array<float, 3> MrcFormat::GetGridSpacing(void)
+std::array<float, 3> MrcFormat::GetGridSpacing()
 {
     if (m_header.grid_size[0] == 0 || m_header.grid_size[1] == 0 || m_header.grid_size[2] == 0)
     {
@@ -284,7 +284,7 @@ std::array<float, 3> MrcFormat::GetGridSpacing(void)
     return grid_spacing;
 }
 
-std::array<float, 3> MrcFormat::GetOrigin(void)
+std::array<float, 3> MrcFormat::GetOrigin()
 {
     std::array<float, 3> origin{
         m_header.origin[0],
@@ -317,7 +317,7 @@ void MrcFormat::SetHeader(const std::array<int, 3> & grid_size,
     std::memcpy(m_header.origin, origin.data(), sizeof(m_header.origin));
 }
 
-void MrcFormat::ReorderedAxisRelatedParameters(void)
+void MrcFormat::ReorderedAxisRelatedParameters()
 {
     if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
     {

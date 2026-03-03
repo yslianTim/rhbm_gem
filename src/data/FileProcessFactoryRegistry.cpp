@@ -7,13 +7,13 @@
 
 namespace rhbm_gem {
 
-FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance(void)
+FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance()
 {
     static FileProcessFactoryRegistry instance;
     return instance;
 }
 
-void FileProcessFactoryRegistry::RegisterDefaultFactories(void)
+void FileProcessFactoryRegistry::RegisterDefaultFactories()
 {
     RegisterFactory(".pdb",  []() { return std::make_unique<ModelObjectFactory>(); });
     RegisterFactory(".cif",  []() { return std::make_unique<ModelObjectFactory>(); });

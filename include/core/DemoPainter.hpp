@@ -29,12 +29,12 @@ class DemoPainter : public PainterBase
     std::unique_ptr<AtomClassifier> m_atom_classifier;
 
 public:
-    DemoPainter(void);
+    DemoPainter();
     ~DemoPainter();
     void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
-    void Painting(void) override;
+    void Painting() override;
 
 private:
     void PainMapValueComparisonSingle(const std::string & name, ModelObject * model_object, ModelObject * ref_model_object);

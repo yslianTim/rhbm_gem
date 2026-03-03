@@ -6,7 +6,7 @@ struct TestNode
 {
     std::array<double, 3> m_position;
     TestNode(double x, double y, double z) : m_position{ x, y, z } {}
-    const std::array<double, 3> & GetPosition(void) const { return m_position; }
+    const std::array<double, 3> & GetPosition() const { return m_position; }
 };
 
 std::unique_ptr<KDNode<TestNode>> BuildSimpleTree(
@@ -209,12 +209,12 @@ TEST(KDTreeAlgorithmTest, KNearestNeighborsPrunesFarSubtree)
         std::array<double, 3> m_position;
         mutable bool m_visited{ false };
         TrackingNode(double x, double y, double z) : m_position{ x, y, z } {}
-        const std::array<double, 3> & GetPosition(void) const
+        const std::array<double, 3> & GetPosition() const
         {
             m_visited = true;
             return m_position;
         }
-        void Reset(void) { m_visited = false; }
+        void Reset() { m_visited = false; }
     };
 
     std::vector<TrackingNode> node_list{
@@ -322,12 +322,12 @@ TEST(KDTreeAlgorithmTest, RangeSearchDirectionalPruning)
         std::array<double, 3> m_position;
         mutable bool m_visited{ false };
         TrackingNode(double x, double y, double z) : m_position{ x, y, z } {}
-        const std::array<double, 3> & GetPosition(void) const
+        const std::array<double, 3> & GetPosition() const
         {
             m_visited = true;
             return m_position;
         }
-        void Reset(void) { m_visited = false; }
+        void Reset() { m_visited = false; }
     };
 
     std::vector<TrackingNode> node_list{

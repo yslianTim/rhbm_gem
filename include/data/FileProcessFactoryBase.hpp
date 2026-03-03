@@ -18,7 +18,7 @@ public:
 class ModelObjectFactory : public FileProcessFactoryBase
 {
 public:
-    ModelObjectFactory(void) = default;
+    ModelObjectFactory() = default;
     ~ModelObjectFactory() = default;
     std::unique_ptr<DataObjectBase> CreateDataObject(const std::string & filename) override;
     void OutputDataObject(const std::string & filename, DataObjectBase * data_object) override;
@@ -27,7 +27,7 @@ public:
 class MapObjectFactory : public FileProcessFactoryBase
 {
 public:
-    MapObjectFactory(void) = default;
+    MapObjectFactory() = default;
     ~MapObjectFactory() = default;
     std::unique_ptr<DataObjectBase> CreateDataObject(const std::string & filename) override;
     void OutputDataObject(const std::string & filename, DataObjectBase * data_object) override;

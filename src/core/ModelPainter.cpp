@@ -39,7 +39,7 @@
 
 namespace rhbm_gem {
 
-ModelPainter::ModelPainter(void) :
+ModelPainter::ModelPainter() :
     m_folder_path{ "./" },
     m_atom_classifier{ std::make_unique<AtomClassifier>() },
     m_bond_classifier{ std::make_unique<BondClassifier>() }
@@ -79,7 +79,7 @@ void ModelPainter::AddReferenceDataObject(DataObjectBase * data_object, const st
     m_ref_model_object_list_map[label].push_back(model_object);
 }
 
-void ModelPainter::Painting(void)
+void ModelPainter::Painting()
 {
     Logger::Log(LogLevel::Info, "ModelPainter::Painting() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);

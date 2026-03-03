@@ -34,25 +34,25 @@ private:
     std::shared_ptr<MapObject> m_map_object;
 
 public:
-    ResultDumpCommand(void);
+    ResultDumpCommand();
     ~ResultDumpCommand();
-    bool Execute(void) override;
+    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    const CommandOptions & GetOptions(void) const override { return m_options; }
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
 
     void SetPrinterChoice(PrinterType value);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetModelKeyTagList(const std::string & value);
 
 private:
-    bool BuildDataObjectList(void);
-    void RunResultDump(void);
-    void RunAtomOutlierDumping(void);
-    void RunAtomPositionDumping(void);
-    void RunMapValueDumping(void);
-    void RunGausEstimatesDumping(void);
-    void RunGroupGausEstimatesDumping(void);
+    bool BuildDataObjectList();
+    void RunResultDump();
+    void RunAtomOutlierDumping();
+    void RunAtomPositionDumping();
+    void RunMapValueDumping();
+    void RunGausEstimatesDumping();
+    void RunGroupGausEstimatesDumping();
 
 };
 

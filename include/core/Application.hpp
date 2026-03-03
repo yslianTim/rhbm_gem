@@ -20,7 +20,7 @@ public:
     ~Application() = default;
 
 private:
-    void RegisterAllCommands(void);
+    void RegisterAllCommands();
     void RegisterCommand(
         const std::string & name,
         const std::string & description,

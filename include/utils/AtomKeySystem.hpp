@@ -19,7 +19,7 @@ class AtomKeySystem
     std::unordered_map<AtomKey, std::string> m_key_to_id_map;
     
 public:
-    AtomKeySystem(void);
+    AtomKeySystem();
     ~AtomKeySystem();
     AtomKeySystem(const AtomKeySystem & other);
 

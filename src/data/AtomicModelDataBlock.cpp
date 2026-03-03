@@ -10,7 +10,7 @@
 
 namespace rhbm_gem {
 
-AtomicModelDataBlock::AtomicModelDataBlock(void) :
+AtomicModelDataBlock::AtomicModelDataBlock() :
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
     m_bond_key_system{ std::make_unique<BondKeySystem>() }
@@ -173,7 +173,7 @@ std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::MoveAtomObjectLis
     return std::move(iter->second);
 }
 
-std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectList(void)
+std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectList()
 {
     if (m_bond_object_list.empty())
     {
@@ -182,17 +182,17 @@ std::vector<std::unique_ptr<BondObject>> AtomicModelDataBlock::MoveBondObjectLis
     return std::move(m_bond_object_list);
 }
 
-const std::string & AtomicModelDataBlock::GetPdbID(void) const
+const std::string & AtomicModelDataBlock::GetPdbID() const
 {
     return m_model_id;
 }
 
-const std::string & AtomicModelDataBlock::GetEmdID(void) const
+const std::string & AtomicModelDataBlock::GetEmdID() const
 {
     return m_map_id;
 }
 
-double AtomicModelDataBlock::GetResolution(void) const
+double AtomicModelDataBlock::GetResolution() const
 {
     double resolution_value;
     try
@@ -211,52 +211,52 @@ double AtomicModelDataBlock::GetResolution(void) const
     return resolution_value;
 }
 
-const std::string & AtomicModelDataBlock::GetResolutionMethod(void) const
+const std::string & AtomicModelDataBlock::GetResolutionMethod() const
 {
     return m_resolution_method;
 }
 
-const std::vector<Element> & AtomicModelDataBlock::GetElementTypeList(void) const
+const std::vector<Element> & AtomicModelDataBlock::GetElementTypeList() const
 {
     return m_element_type_list;
 }
 
 const std::unordered_map<std::string, Entity> &
-AtomicModelDataBlock::GetEntityTypeMap(void) const
+AtomicModelDataBlock::GetEntityTypeMap() const
 {
     return m_entity_type_map;
 }
 
 const std::unordered_map<std::string, int> &
-AtomicModelDataBlock::GetMoleculesSizeMap(void) const
+AtomicModelDataBlock::GetMoleculesSizeMap() const
 {
     return m_molecules_size_map;
 }
 
 const std::unordered_map<Entity, std::vector<std::string>> &
-AtomicModelDataBlock::GetEntityIDListMap(void) const
+AtomicModelDataBlock::GetEntityIDListMap() const
 {
     return m_entity_id_list_map;
 }
 
 const std::unordered_map<std::string, std::vector<std::string>> &
-AtomicModelDataBlock::GetChainIDListMap(void) const
+AtomicModelDataBlock::GetChainIDListMap() const
 {
     return m_chain_id_list_map;
 }
 
 const std::unordered_map<int, std::vector<std::unique_ptr<AtomObject>>> &
-AtomicModelDataBlock::GetAtomObjectMap(void) const
+AtomicModelDataBlock::GetAtomObjectMap() const
 {
     return m_atom_object_list_map;
 }
 
-const std::vector<std::unique_ptr<BondObject>> & AtomicModelDataBlock::GetBondObjectList(void) const
+const std::vector<std::unique_ptr<BondObject>> & AtomicModelDataBlock::GetBondObjectList() const
 {
     return m_bond_object_list;
 }
 
-std::vector<int> AtomicModelDataBlock::GetModelNumberList(void) const
+std::vector<int> AtomicModelDataBlock::GetModelNumberList() const
 {
     std::vector<int> model_number_list;
     model_number_list.reserve(m_atom_object_list_map.size());
@@ -355,7 +355,7 @@ const ComponentBondEntry * AtomicModelDataBlock::GetComponentBondEntryPtr(
 }
 
 std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
-AtomicModelDataBlock::GetChemicalComponentEntryMap(void)
+AtomicModelDataBlock::GetChemicalComponentEntryMap()
 {
     return m_chemical_component_entry_map;
 }

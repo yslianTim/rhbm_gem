@@ -41,12 +41,12 @@ private:
     std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;
 
 public:
-    PotentialDisplayCommand(void);
+    PotentialDisplayCommand();
     ~PotentialDisplayCommand();
-    bool Execute(void) override;
+    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    const CommandOptions & GetOptions(void) const override { return m_options; }
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
 
     void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);
@@ -59,9 +59,9 @@ public:
     void SetVetoElementType(const std::string & value);
 
 private:
-    bool BuildDataObject(void);
-    void RunDataObjectSelection(void);
-    void RunDisplay(void);
+    bool BuildDataObject();
+    void RunDataObjectSelection();
+    void RunDisplay();
 
 };
 

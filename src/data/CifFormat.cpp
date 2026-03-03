@@ -288,7 +288,7 @@ CanonicalAtomPair BuildCanonicalAtomPair(const AtomObject * atom_1, const AtomOb
 }
 } // namespace
 
-CifFormat::CifFormat(void) :
+CifFormat::CifFormat() :
     m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
 }
@@ -297,7 +297,7 @@ CifFormat::~CifFormat()
 {
 }
 
-void CifFormat::ResetParsedDocument(void)
+void CifFormat::ResetParsedDocument()
 {
     m_loop_category_map.clear();
     m_data_item_map.clear();
@@ -543,7 +543,7 @@ void CifFormat::LoadHeader(const std::string & filename)
     }
 }
 
-void CifFormat::PrintHeader(void) const
+void CifFormat::PrintHeader() const
 {
     std::ostringstream oss;
     oss << "CIF Header Information:\n";
@@ -1333,7 +1333,7 @@ void CifFormat::LoadAtomSiteBlock()
         + ", skipped rows = " + std::to_string(atom_site_skip_count) + ".");
 }
 
-void CifFormat::ConstructBondList(void)
+void CifFormat::ConstructBondList()
 {
     BuildPepetideBondEntry();
     BuildPhosphodiesterBondEntry();
@@ -1426,7 +1426,7 @@ void CifFormat::ConstructBondList(void)
         + " bonds (total " + std::to_string(m_data_block->GetBondObjectList().size()) + ").");
 }
 
-AtomicModelDataBlock * CifFormat::GetDataBlockPtr(void)
+AtomicModelDataBlock * CifFormat::GetDataBlockPtr()
 {
     return m_data_block.get();
 }
@@ -1604,7 +1604,7 @@ void CifFormat::BuildDefaultComponentAtomEntry(
     m_data_block->AddComponentAtomEntry(component_key, atom_key, atom_entry);
 }
 
-void CifFormat::BuildDefaultComponentBondEntry(void)
+void CifFormat::BuildDefaultComponentBondEntry()
 {
     for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
@@ -1628,7 +1628,7 @@ void CifFormat::BuildDefaultComponentBondEntry(void)
     }
 }
 
-void CifFormat::BuildPepetideBondEntry(void)
+void CifFormat::BuildPepetideBondEntry()
 {
     for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
     {
@@ -1650,7 +1650,7 @@ void CifFormat::BuildPepetideBondEntry(void)
     }
 }
 
-void CifFormat::BuildPhosphodiesterBondEntry(void)
+void CifFormat::BuildPhosphodiesterBondEntry()
 {
     for (auto & residue : ChemicalDataHelper::GetStandardNucleotideList())
     {

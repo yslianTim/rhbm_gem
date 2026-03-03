@@ -31,7 +31,7 @@ rhbm_gem::CommandRegistrar<rhbm_gem::ResultDumpCommand> registrar_result_dump{
 
 namespace rhbm_gem {
 
-ResultDumpCommand::ResultDumpCommand(void) :
+ResultDumpCommand::ResultDumpCommand() :
     CommandBase(),
     m_map_key_tag{"map"}, m_map_object{ nullptr }
 {
@@ -62,7 +62,7 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Map file path")->default_val(m_options.map_file_path.string());
 }
 
-bool ResultDumpCommand::Execute(void)
+bool ResultDumpCommand::Execute()
 {
     if (BuildDataObjectList() == false) return false;
     RunResultDump();
@@ -96,7 +96,7 @@ void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
     }
 }
 
-bool ResultDumpCommand::BuildDataObjectList(void)
+bool ResultDumpCommand::BuildDataObjectList()
 {
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     auto data_manager{ GetDataManagerPtr() };
@@ -133,7 +133,7 @@ bool ResultDumpCommand::BuildDataObjectList(void)
     return true;
 }
 
-void ResultDumpCommand::RunResultDump(void)
+void ResultDumpCommand::RunResultDump()
 {
     ScopeTimer timer("ResultDumpCommand::RunResultDump");
     Logger::Log(LogLevel::Info,
@@ -168,7 +168,7 @@ void ResultDumpCommand::RunResultDump(void)
     }
 }
 
-void ResultDumpCommand::RunAtomOutlierDumping(void)
+void ResultDumpCommand::RunAtomOutlierDumping()
 {
 
     for (const auto & model_object : m_model_object_list)
@@ -227,7 +227,7 @@ void ResultDumpCommand::RunAtomOutlierDumping(void)
     }
 }
 
-void ResultDumpCommand::RunAtomPositionDumping(void)
+void ResultDumpCommand::RunAtomPositionDumping()
 {
 
     for (const auto & model_object : m_model_object_list)
@@ -258,7 +258,7 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
     }
 }
 
-void ResultDumpCommand::RunMapValueDumping(void)
+void ResultDumpCommand::RunMapValueDumping()
 {
     if (m_map_object == nullptr)
     {
@@ -325,7 +325,7 @@ void ResultDumpCommand::RunMapValueDumping(void)
     }
 }
 
-void ResultDumpCommand::RunGausEstimatesDumping(void)
+void ResultDumpCommand::RunGausEstimatesDumping()
 {
 
     for (const auto & model_object : m_model_object_list)
@@ -379,7 +379,7 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
     }
 }
 
-void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
+void ResultDumpCommand::RunGroupGausEstimatesDumping()
 {
 
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };

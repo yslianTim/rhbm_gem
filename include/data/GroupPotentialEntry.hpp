@@ -26,7 +26,7 @@ class GroupPotentialEntry
     std::unordered_map<GroupKey, double> m_alpha_g_map;
 
 public:
-    GroupPotentialEntry(void);
+    GroupPotentialEntry();
     ~GroupPotentialEntry();
     void InsertGroupKey(GroupKey group_key);
     void ReserveAtomObjectPtrList(GroupKey group_key, int size);
@@ -54,7 +54,7 @@ public:
     double GetGausEstimateMDPDE(GroupKey group_key, int par_id) const;
     double GetGausEstimatePrior(GroupKey group_key, int par_id) const;
     double GetGausVariancePrior(GroupKey group_key, int par_id) const;
-    const std::unordered_set<GroupKey> & GetGroupKeySet(void) const;
+    const std::unordered_set<GroupKey> & GetGroupKeySet() const;
 
 private:
     double GetGausEstimateFromTuple(const std::tuple<double, double> & estimate, int par_id) const;

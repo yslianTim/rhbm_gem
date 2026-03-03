@@ -43,7 +43,7 @@ rhbm_gem::CommandRegistrar<rhbm_gem::PositionEstimationCommand> registrar_model_
 
 namespace rhbm_gem {
 
-PositionEstimationCommand::PositionEstimationCommand(void) :
+PositionEstimationCommand::PositionEstimationCommand() :
     CommandBase(), m_options{}, m_selected_voxel_list{}, m_query_point_list{},
     m_position_list{}, m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {
@@ -71,7 +71,7 @@ void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Tolerance for deduplicating points")->default_val(m_options.dedup_tolerance);
 }
 
-bool PositionEstimationCommand::Execute(void)
+bool PositionEstimationCommand::Execute()
 {
     if (BuildDataObject() == false) return false;
     if (BuildVoxelList() == false) return false;
@@ -148,7 +148,7 @@ void PositionEstimationCommand::SetDedupTolerance(double value)
     }
 }
 
-bool PositionEstimationCommand::BuildDataObject(void)
+bool PositionEstimationCommand::BuildDataObject()
 {
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
@@ -168,7 +168,7 @@ bool PositionEstimationCommand::BuildDataObject(void)
     return true;
 }
 
-bool PositionEstimationCommand::BuildVoxelList(void)
+bool PositionEstimationCommand::BuildVoxelList()
 {
     ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
     m_selected_voxel_list.clear();
@@ -235,7 +235,7 @@ bool PositionEstimationCommand::BuildVoxelList(void)
     return true;
 }
 
-void PositionEstimationCommand::RunMapValueConvergence(void)
+void PositionEstimationCommand::RunMapValueConvergence()
 {
     ScopeTimer timer("PositionEstimationCommand::RunMapValueConvergence");
 
@@ -379,7 +379,7 @@ void PositionEstimationCommand::RunUniquePointList(float tolerance)
     m_query_point_list.shrink_to_fit();
 }
 
-void PositionEstimationCommand::OutputPointList(void) const
+void PositionEstimationCommand::OutputPointList() const
 {
     ScopeTimer timer("PositionEstimationCommand::OutputPointList");
     if (m_position_list.empty())

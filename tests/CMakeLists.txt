@@ -56,3 +56,10 @@ add_test(
         -DPROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}
         -P ${PROJECT_SOURCE_DIR}/cmake/LoggingStyleGuard.cmake
 )
+
+add_test(
+    NAME parameterless_void_style_guard
+    COMMAND ${CMAKE_COMMAND}
+        -DPROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}
+        -P ${PROJECT_SOURCE_DIR}/cmake/ParameterlessVoidStyleGuard.cmake
+)

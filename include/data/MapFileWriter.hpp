@@ -20,7 +20,7 @@ class MapFileWriter : public FileWriterBase
 public:
     explicit MapFileWriter(const std::string & filename, const MapObject * map_object);
     ~MapFileWriter() = default;
-    void Write(void) override;
+    void Write() override;
 
 private:
     void WriteHeader(std::ostream & stream);

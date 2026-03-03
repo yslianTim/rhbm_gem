@@ -20,7 +20,7 @@ class Logger
     static std::mutex m_stream_mutex;
 
 public:
-    static LogLevel GetLogLevel(void) { return m_current_level.load(); }
+    static LogLevel GetLogLevel() { return m_current_level.load(); }
     static void SetLogLevel(int level);
     static void SetLogLevel(LogLevel level);
     static void Log(LogLevel level, const std::string & message);

@@ -9,7 +9,7 @@
 
 namespace rhbm_gem {
 
-GroupPotentialEntry::GroupPotentialEntry(void)
+GroupPotentialEntry::GroupPotentialEntry()
 {
 
 }
@@ -120,7 +120,7 @@ double GroupPotentialEntry::GetAlphaG(GroupKey group_key) const
     return m_alpha_g_map.at(group_key);
 }
 
-const std::unordered_set<GroupKey> & GroupPotentialEntry::GetGroupKeySet(void) const
+const std::unordered_set<GroupKey> & GroupPotentialEntry::GetGroupKeySet() const
 {
     return m_group_key_set;
 }

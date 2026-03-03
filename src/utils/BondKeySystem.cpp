@@ -9,7 +9,7 @@
 const BondKey BondKeySystem::k_dynamic_base{ 10000 };
 const BondKey BondKeySystem::k_max_key{ std::numeric_limits<BondKey>::max() };
 
-BondKeySystem::BondKeySystem(void) :
+BondKeySystem::BondKeySystem() :
     m_next_dynamic_key{ k_dynamic_base }
 {
     for (const auto & [bond_id, link] : ChemicalDataHelper::GetLinkMap())

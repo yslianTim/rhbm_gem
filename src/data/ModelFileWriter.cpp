@@ -34,7 +34,7 @@ ModelFileWriter::~ModelFileWriter()
 {
 }
 
-void ModelFileWriter::Write(void)
+void ModelFileWriter::Write()
 {
     if (m_model_object == nullptr || m_file_object == nullptr) return;
     std::ofstream outfile{ m_file_path, std::ios::binary };

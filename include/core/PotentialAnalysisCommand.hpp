@@ -42,12 +42,12 @@ private:
     std::shared_ptr<ModelObject> m_model_object;
 
 public:
-    PotentialAnalysisCommand(void);
+    PotentialAnalysisCommand();
     ~PotentialAnalysisCommand();
-    bool Execute(void) override;
+    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    const CommandOptions & GetOptions(void) const override { return m_options; }
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
 
     void SetTrainingAlphaFlag(bool value);
     void SetAsymmetryFlag(bool value);
@@ -66,15 +66,15 @@ public:
     void SetSamplingHeight(double value);
 
 private:
-    bool BuildDataObject(void);
+    bool BuildDataObject();
     void UpdateModelObjectForSimulation(ModelObject * model_object);
-    void RunMapObjectPreprocessing(void);
-    void RunModelObjectPreprocessing(void);
-    void RunAtomMapValueSampling(void);
-    void RunBondMapValueSampling(void);
-    void RunAtomGroupClassification(void);
-    void RunBondGroupClassification(void);
-    void RunAtomAlphaTraining(void);
+    void RunMapObjectPreprocessing();
+    void RunModelObjectPreprocessing();
+    void RunAtomMapValueSampling();
+    void RunBondMapValueSampling();
+    void RunAtomGroupClassification();
+    void RunBondGroupClassification();
+    void RunAtomAlphaTraining();
     double TrainUniversalAlphaR(
         const std::vector<AtomObject *> & atom_list,
         const size_t subset_size,
@@ -87,9 +87,9 @@ private:
     );
     void RunLocalAtomFitting(double universal_alpha_r);
     void RunLocalBondFitting(double universal_alpha_r);
-    void RunAtomPotentialFitting(void);
-    void RunBondPotentialFitting(void);
-    void SaveDataObject(void);
+    void RunAtomPotentialFitting();
+    void RunBondPotentialFitting();
+    void SaveDataObject();
 
     void StudyAtomLocalFittingViaAlphaR(
         const std::vector<AtomObject *> & atom_list,

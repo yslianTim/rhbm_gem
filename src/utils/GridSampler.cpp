@@ -11,14 +11,14 @@
 
 using Eigen::Vector3f;
 
-GridSampler::GridSampler(void) :
+GridSampler::GridSampler() :
     m_sampling_size{ 10 },
     m_window_size{ 5.0 },
     m_reference_u_vector{ 1.0, 0.0, 0.0 }
 {
 }
 
-void GridSampler::Print(void) const
+void GridSampler::Print() const
 {
     std::ostringstream oss;
     oss << "GridSampler Configuration:\n"

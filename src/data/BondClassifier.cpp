@@ -47,7 +47,7 @@ const std::vector<std::string> BondClassifier::m_main_chain_member_label_list
     "C-N"
 };
 
-BondClassifier::BondClassifier(void)
+BondClassifier::BondClassifier()
 {
 
 }
@@ -70,7 +70,7 @@ bool BondClassifier::IsMainChainMember(Link link, size_t & main_chain_member_id)
     return false;
 }
 
-size_t BondClassifier::GetMainChainMemberCount(void)
+size_t BondClassifier::GetMainChainMemberCount()
 {
     return m_main_chain_member_count;
 }

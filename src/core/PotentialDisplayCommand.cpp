@@ -24,7 +24,7 @@ rhbm_gem::CommandRegistrar<rhbm_gem::PotentialDisplayCommand> registrar_potentia
 
 namespace rhbm_gem {
 
-PotentialDisplayCommand::PotentialDisplayCommand(void) :
+PotentialDisplayCommand::PotentialDisplayCommand() :
     CommandBase(), m_options{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
@@ -75,7 +75,7 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Veto element type")->default_val(m_options.veto_element);
 }
 
-bool PotentialDisplayCommand::Execute(void)
+bool PotentialDisplayCommand::Execute()
 {
     if (BuildDataObject() == false) return false;
     RunDataObjectSelection();
@@ -172,7 +172,7 @@ void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
     m_options.veto_element = value;
 }
 
-bool PotentialDisplayCommand::BuildDataObject(void)
+bool PotentialDisplayCommand::BuildDataObject()
 {
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
@@ -217,7 +217,7 @@ bool PotentialDisplayCommand::BuildDataObject(void)
     return true;
 }
 
-void PotentialDisplayCommand::RunDataObjectSelection(void)
+void PotentialDisplayCommand::RunDataObjectSelection()
 {
     ScopeTimer timer{ "PotentialDisplayCommand::RunDataObjectSelection" };
     if (m_atom_selector == nullptr) return;
@@ -242,7 +242,7 @@ void PotentialDisplayCommand::RunDataObjectSelection(void)
     }
 }
 
-void PotentialDisplayCommand::RunDisplay(void)
+void PotentialDisplayCommand::RunDisplay()
 {
     ScopeTimer timer{ "PotentialDisplayCommand::RunDisplay" };
     std::unique_ptr<PainterBase> painter{ nullptr };
