@@ -14,25 +14,25 @@ class Timer final
     std::chrono::time_point<std::chrono::steady_clock> start_time;
 
 public:
-    Timer(void) : start_time{ std::chrono::steady_clock::now() } {}
+    Timer() : start_time{ std::chrono::steady_clock::now() } {}
 
-    void Reset(void) { start_time = std::chrono::steady_clock::now(); }
+    void Reset() { start_time = std::chrono::steady_clock::now(); }
 
-    void Print(const std::string & text) const
+    void Print(const std::string & text, LogLevel level = LogLevel::Debug) const
     {
         std::ostringstream oss;
         oss << text << " took " << Elapsed() << " " << UnitString();
-        Logger::Log(LogLevel::Notice, oss.str());
+        Logger::Log(level, oss.str());
     }
 
-    double Elapsed(void) const
+    double Elapsed() const
     {
         auto end_time{ std::chrono::steady_clock::now() };
         auto duration{ std::chrono::duration_cast<DurationUnit>(end_time - start_time) };
         return static_cast<double>(duration.count());
     }
 
-    std::string UnitString(void) const
+    std::string UnitString() const
     {
         if constexpr (std::is_same_v<DurationUnit, std::chrono::nanoseconds>) return "ns";
         else if constexpr (std::is_same_v<DurationUnit, std::chrono::microseconds>) return "us";
@@ -43,7 +43,7 @@ public:
         else return "Unknown";
     }
 
-    void PrintFormatted(const std::string & text) const
+    void PrintFormatted(const std::string & text, LogLevel level = LogLevel::Debug) const
     {
         auto now{ std::chrono::steady_clock::now() };
         auto elapsed_time{ now - start_time };
@@ -77,6 +77,6 @@ public:
         {
             oss << microseconds_part.count() << " us";
         }
-        Logger::Log(LogLevel::Notice, oss.str());
+        Logger::Log(level, oss.str());
     }
 };

@@ -27,28 +27,27 @@
 #endif
 
 namespace {
-CommandRegistrar<MapVisualizationCommand> registrar_map_visualization{
+rhbm_gem::CommandRegistrar<rhbm_gem::MapVisualizationCommand> registrar_map_visualization{
     "map_visualization",
     "Run map visualization"};
 }
 
-MapVisualizationCommand::MapVisualizationCommand(void) :
+namespace rhbm_gem {
+
+MapVisualizationCommand::MapVisualizationCommand() :
     CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::MapVisualizationCommand() called.");
 }
 
 MapVisualizationCommand::~MapVisualizationCommand()
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::~MapVisualizationCommand() called.");
     m_map_object.reset();
     m_model_object.reset();
 }
 
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::RegisterCLIOptionsExtend() called.");
     cmd->add_option_function<std::string>("-a,--model",
         [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
@@ -66,9 +65,8 @@ void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Window size for sampling")->default_val(m_options.window_size);
 }
 
-bool MapVisualizationCommand::Execute(void)
+bool MapVisualizationCommand::Execute()
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::Execute() called.");
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
@@ -115,9 +113,8 @@ void MapVisualizationCommand::SetWindowSize(double value)
     m_options.window_size = value;
 }
 
-bool MapVisualizationCommand::BuildDataObject(void)
+bool MapVisualizationCommand::BuildDataObject()
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::BuildDataObject() called");
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
@@ -135,18 +132,16 @@ bool MapVisualizationCommand::BuildDataObject(void)
     return true;
 }
 
-void MapVisualizationCommand::RunMapObjectPreprocessing(void)
+void MapVisualizationCommand::RunMapObjectPreprocessing()
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::RunMapObjectPreprocessing() called");
     ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
     m_map_object = data_manager->GetTypedDataObject<MapObject>(m_map_key_tag);
     m_map_object->MapValueArrayNormalization();
 }
 
-void MapVisualizationCommand::RunModelObjectPreprocessing(void)
+void MapVisualizationCommand::RunModelObjectPreprocessing()
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::RunModelObjectPreprocessing() called");
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
     auto data_manager{ GetDataManagerPtr() };
     m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
@@ -159,9 +154,8 @@ void MapVisualizationCommand::RunModelObjectPreprocessing(void)
         "Number of selected bond = " + std::to_string(m_model_object->GetNumberOfSelectedBond()));
 }
 
-void MapVisualizationCommand::RunAtomMapValueSampling(void)
+void MapVisualizationCommand::RunAtomMapValueSampling()
 {
-    Logger::Log(LogLevel::Debug, "MapVisualizationCommand::RunAtomMapValueSampling() called");
     ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
     if (m_map_object == nullptr) return;
     auto sampler{ std::make_unique<GridSampler>() };
@@ -219,3 +213,5 @@ void MapVisualizationCommand::RunAtomMapValueSampling(void)
     );
 
 }
+
+} // namespace rhbm_gem

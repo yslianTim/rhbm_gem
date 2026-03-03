@@ -17,26 +17,25 @@
 #include "CommandRegistry.hpp"
 
 namespace {
-CommandRegistrar<PotentialDisplayCommand> registrar_potential_display{
+rhbm_gem::CommandRegistrar<rhbm_gem::PotentialDisplayCommand> registrar_potential_display{
     "potential_display",
     "Run potential display"};
 }
 
-PotentialDisplayCommand::PotentialDisplayCommand(void) :
+namespace rhbm_gem {
+
+PotentialDisplayCommand::PotentialDisplayCommand() :
     CommandBase(), m_options{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::PotentialDisplayCommand() called");
 }
 
 PotentialDisplayCommand::~PotentialDisplayCommand()
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::~PotentialDisplayCommand() called");
 }
 
 void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RegisterCLIOptionsExtend() called");
     std::map<std::string, PainterType> painter_map
     {
         {"0", PainterType::GAUS},       {"gaus",       PainterType::GAUS},
@@ -76,9 +75,8 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Veto element type")->default_val(m_options.veto_element);
 }
 
-bool PotentialDisplayCommand::Execute(void)
+bool PotentialDisplayCommand::Execute()
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::Execute() called");
     if (BuildDataObject() == false) return false;
     RunDataObjectSelection();
     RunDisplay();
@@ -138,17 +136,10 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
         pos = end_block + 1;
     }
 
-    // Print the parsed model key tag list
-    Logger::Log(LogLevel::Debug, "Parsed reference model key tag list:");
-    for (const auto & [group_name, key_tags] : m_ref_model_key_tag_list_map)
-    {
-        std::string message{ "Group: [" + group_name + "] -> " };
-        for (const auto & key_tag : key_tags)
-        {
-            message += key_tag + " ";
-        }
-        Logger::Log(LogLevel::Debug, message);
-    }
+    Logger::Log(
+        LogLevel::Debug,
+        "Parsed " + std::to_string(m_ref_model_key_tag_list_map.size())
+        + " reference model groups.");
 }
 
 void PotentialDisplayCommand::SetPickChainID(const std::string & value)
@@ -181,9 +172,8 @@ void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
     m_options.veto_element = value;
 }
 
-bool PotentialDisplayCommand::BuildDataObject(void)
+bool PotentialDisplayCommand::BuildDataObject()
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::BuildDataObject() called");
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
@@ -227,9 +217,8 @@ bool PotentialDisplayCommand::BuildDataObject(void)
     return true;
 }
 
-void PotentialDisplayCommand::RunDataObjectSelection(void)
+void PotentialDisplayCommand::RunDataObjectSelection()
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RunDataObjectSelection() called");
     ScopeTimer timer{ "PotentialDisplayCommand::RunDataObjectSelection" };
     if (m_atom_selector == nullptr) return;
     m_atom_selector->PickChainID(m_options.pick_chain_id);
@@ -253,9 +242,8 @@ void PotentialDisplayCommand::RunDataObjectSelection(void)
     }
 }
 
-void PotentialDisplayCommand::RunDisplay(void)
+void PotentialDisplayCommand::RunDisplay()
 {
-    Logger::Log(LogLevel::Debug, "PotentialDisplayCommand::RunDisplay() called");
     ScopeTimer timer{ "PotentialDisplayCommand::RunDisplay" };
     std::unique_ptr<PainterBase> painter{ nullptr };
     switch (m_options.painter_choice)
@@ -346,3 +334,5 @@ void PotentialDisplayCommand::RunDisplay(void)
         painter->Painting();
     }
 }
+
+} // namespace rhbm_gem

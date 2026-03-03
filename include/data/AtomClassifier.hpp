@@ -10,6 +10,8 @@
 #include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
 
+namespace rhbm_gem {
+
 class AtomObject;
 class AtomClassifier
 {
@@ -34,11 +36,11 @@ class AtomClassifier
     static const std::vector<std::string> m_main_chain_member_title_list;
 
 public:
-    AtomClassifier(void);
+    AtomClassifier();
     ~AtomClassifier();
 
     static bool IsMainChainMember(Spot spot, size_t & main_chain_member_id);
-    static size_t GetMainChainMemberCount(void);
+    static size_t GetMainChainMemberCount();
     static Element GetMainChainElement(size_t member_id);
     static Spot GetMainChainSpot(size_t member_id);
     static Spot GetNucleotideMainChainSpot(size_t member_id);
@@ -75,3 +77,5 @@ private:
     static bool IsValidMainChainMemberID(size_t member_id);
 
 };
+
+} // namespace rhbm_gem

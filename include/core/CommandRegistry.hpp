@@ -5,6 +5,8 @@
 #include <string>
 #include <unordered_map>
 
+namespace rhbm_gem {
+
 class CommandBase;
 
 class CommandRegistry
@@ -17,7 +19,7 @@ public:
         std::function<std::unique_ptr<CommandBase>()> factory;
     };
 
-    static CommandRegistry & Instance(void);
+    static CommandRegistry & Instance();
 
     bool RegisterCommand(
         const std::string & name,
@@ -26,7 +28,7 @@ public:
     );
 
     const std::unordered_map<std::string, CommandInfo> &
-    GetCommands(void) const { return m_commands; }
+    GetCommands() const { return m_commands; }
 
 private:
     std::unordered_map<std::string, CommandInfo> m_commands;
@@ -45,3 +47,5 @@ public:
         );
     }
 };
+
+} // namespace rhbm_gem

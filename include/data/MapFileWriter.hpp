@@ -7,6 +7,8 @@
 #include "FileWriterBase.hpp"
 #include "MapFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class MapObject;
 
 class MapFileWriter : public FileWriterBase
@@ -18,10 +20,12 @@ class MapFileWriter : public FileWriterBase
 public:
     explicit MapFileWriter(const std::string & filename, const MapObject * map_object);
     ~MapFileWriter() = default;
-    void Write(void) override;
+    void Write() override;
 
 private:
     void WriteHeader(std::ostream & stream);
     void WriteMapValueArray(std::ostream & stream);
 
 };
+
+} // namespace rhbm_gem

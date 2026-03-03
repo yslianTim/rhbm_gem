@@ -9,7 +9,9 @@
 
 #include <stdexcept>
 
-BondObject::BondObject(void) :
+namespace rhbm_gem {
+
+BondObject::BondObject() :
     m_key_tag{ "" },
     m_is_selected{ false }, m_bond_key{ 0 },
     m_bond_type{ BondType::UNK }, m_bond_order{ BondOrder::UNK },
@@ -78,12 +80,12 @@ std::unique_ptr<DataObjectBase> BondObject::Clone() const
     return std::make_unique<BondObject>(*this);
 }
 
-void BondObject::Display(void) const
+void BondObject::Display() const
 {
     Logger::Log(LogLevel::Info, "BondObject Display: " + GetInfo());
 }
 
-void BondObject::Update(void)
+void BondObject::Update()
 {
     Logger::Log(LogLevel::Info, "BondObject Update: " + GetInfo());
 }
@@ -93,7 +95,7 @@ void BondObject::Accept(DataObjectVisitorBase * visitor)
     visitor->VisitBondObject(this);
 }
 
-std::unique_ptr<BondObject> BondObject::BondObjectClone(void) const
+std::unique_ptr<BondObject> BondObject::BondObjectClone() const
 {
     auto base_clone{ this->Clone() };
     auto derived_ptr{ dynamic_cast<BondObject*>(base_clone.release()) };
@@ -104,7 +106,7 @@ std::unique_ptr<BondObject> BondObject::BondObjectClone(void) const
     return std::unique_ptr<BondObject>(derived_ptr);
 }
 
-std::string BondObject::GetInfo(void) const
+std::string BondObject::GetInfo() const
 {
     return "[Component ID1] " + m_atom_object_1->GetComponentID() + " " +
            "[Component ID2] " + m_atom_object_2->GetComponentID() + " " +
@@ -120,17 +122,17 @@ std::string BondObject::GetInfo(void) const
            std::to_string(m_bond_vector.at(2)) + ")";
 }
 
-ComponentKey BondObject::GetComponentKey(void) const
+ComponentKey BondObject::GetComponentKey() const
 {
     return m_atom_object_1->GetComponentKey();
 }
 
-AtomKey BondObject::GetAtomKey1(void) const
+AtomKey BondObject::GetAtomKey1() const
 {
     return m_atom_object_1->GetAtomKey();
 }
 
-AtomKey BondObject::GetAtomKey2(void) const
+AtomKey BondObject::GetAtomKey2() const
 {
     return m_atom_object_2->GetAtomKey();
 }
@@ -140,9 +142,11 @@ void BondObject::AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> ent
     m_local_potential_entry = std::move(entry);
 }
 
-float BondObject::GetBondLength(void) const
+float BondObject::GetBondLength() const
 {
     if (m_atom_object_1 == nullptr || m_atom_object_2 == nullptr) return 0.0f;
     return ArrayStats<float>::ComputeNorm(
         m_atom_object_1->GetPositionRef(), m_atom_object_2->GetPositionRef());
 }
+
+} // namespace rhbm_gem

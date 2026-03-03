@@ -12,13 +12,13 @@
 
 using Eigen::Vector3f;
 
-CylinderSampler::CylinderSampler(void) :
+CylinderSampler::CylinderSampler() :
     m_sampling_size{ 10 },
     m_distance_min{ 0.0 }, m_distance_max{ 1.0 }, m_height{ 0.1 }
 {
 }
 
-void CylinderSampler::Print(void) const
+void CylinderSampler::Print() const
 {
     std::ostringstream oss;
     oss << "CylinderSampler Configuration:\n"

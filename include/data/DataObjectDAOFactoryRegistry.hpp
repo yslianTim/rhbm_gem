@@ -6,6 +6,8 @@
 #include <typeindex>
 #include <unordered_map>
 
+namespace rhbm_gem {
+
 class SQLiteWrapper;
 class DataObjectDAOBase;
 
@@ -21,7 +23,7 @@ class DataObjectDAOFactoryRegistry
     std::unordered_map<std::string, std::type_index> m_name_map;
 
 public:
-    static DataObjectDAOFactoryRegistry & Instance(void);
+    static DataObjectDAOFactoryRegistry & Instance();
     bool RegisterFactory(std::type_index type, const std::string & name,
                          std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)> factory);
     std::unique_ptr<DataObjectDAOBase> CreateDAO(std::type_index type, SQLiteWrapper * db) const;
@@ -42,3 +44,5 @@ public:
             [](SQLiteWrapper* db){ return std::make_unique<DAOType>(db); });
     }
 };
+
+} // namespace rhbm_gem

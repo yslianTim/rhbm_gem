@@ -9,7 +9,7 @@
 #include <vector>
 #include <cstring>
 
-namespace { DataObjectDAORegistrar<MapObject, MapObjectDAO> registrar_map_dao("map"); }
+namespace { rhbm_gem::DataObjectDAORegistrar<rhbm_gem::MapObject, rhbm_gem::MapObjectDAO> registrar_map_dao("map"); }
 
 namespace
 {
@@ -60,19 +60,18 @@ namespace
         FROM map_list WHERE key_tag = ? LIMIT 1; )sql";
 }
 
+namespace rhbm_gem {
+
 MapObjectDAO::MapObjectDAO(SQLiteWrapper * database) : m_database{ database }
 {
-    Logger::Log(LogLevel::Debug, "MapObjectDAO::MapObjectDAO() called");
 }
 
 MapObjectDAO::~MapObjectDAO()
 {
-    Logger::Log(LogLevel::Debug, "MapObjectDAO::~MapObjectDAO() called");
 }
 
 void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "MapObjectDAO::Save() called");
     auto map_object{ dynamic_cast<const MapObject *>(data_object) };
     if (!map_object)
     {
@@ -107,7 +106,6 @@ void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & 
 
 std::unique_ptr<DataObjectBase> MapObjectDAO::Load(const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "MapObjectDAO::Load() called");
     m_database->Prepare(std::string(SELECT_SQL));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
@@ -147,3 +145,5 @@ std::unique_ptr<DataObjectBase> MapObjectDAO::Load(const std::string & key_tag)
     map_object->SetKeyTag(m_database->GetColumn<std::string>(0));
     return map_object;
 }
+
+} // namespace rhbm_gem

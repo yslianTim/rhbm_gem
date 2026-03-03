@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include "ModelFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class AtomicModelDataBlock;
 
 class PdbFormat : public ModelFileFormatBase
@@ -86,14 +88,14 @@ class PdbFormat : public ModelFileFormatBase
     std::unique_ptr<AtomicModelDataBlock> m_data_block;
 
 public:
-    PdbFormat(void);
+    PdbFormat();
     ~PdbFormat();
     void LoadHeader(const std::string & filename) override;
-    void PrintHeader(void) const override;
+    void PrintHeader() const override;
     void LoadDataArray(const std::string & filename) override;
     void SaveHeader(const ModelObject * model_object, std::ostream & stream) override;
     void SaveDataArray(const ModelObject * model_object, std::ostream & stream, int par) override;
-    AtomicModelDataBlock * GetDataBlockPtr(void) override;
+    AtomicModelDataBlock * GetDataBlockPtr() override;
 
 private:
     void LoadAtomSiteData(const std::string & filename);
@@ -101,3 +103,5 @@ private:
     PDB_HEADER MapToHeaderType(const std::string & name) const;
 
 };
+
+} // namespace rhbm_gem

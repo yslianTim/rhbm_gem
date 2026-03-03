@@ -5,6 +5,8 @@
 #include <functional>
 #include <memory>
 
+namespace rhbm_gem {
+
 class FileProcessFactoryBase;
 
 class FileProcessFactoryRegistry
@@ -14,14 +16,16 @@ class FileProcessFactoryRegistry
         std::function<std::unique_ptr<FileProcessFactoryBase>()>> m_factory_map;
 
 public:
-    static FileProcessFactoryRegistry & Instance(void);
-    void RegisterDefaultFactories(void);
+    static FileProcessFactoryRegistry & Instance();
+    void RegisterDefaultFactories();
     void RegisterFactory(
         const std::string & extension,
         std::function<std::unique_ptr<FileProcessFactoryBase>()> creator);
     std::unique_ptr<FileProcessFactoryBase> CreateFactory(const std::string & extension) const;
 
 private:
-    FileProcessFactoryRegistry(void) = default;
+    FileProcessFactoryRegistry() = default;
     
 };
+
+} // namespace rhbm_gem

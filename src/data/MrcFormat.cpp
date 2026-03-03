@@ -7,15 +7,15 @@
 #include <stdexcept>
 #include <algorithm>
 
-MrcFormat::MrcFormat(void)
+namespace rhbm_gem {
+
+MrcFormat::MrcFormat()
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::MrcFormat() called");
     InitHeader();
 }
 
-void MrcFormat::InitHeader(void)
+void MrcFormat::InitHeader()
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::InitHeader() called");
     std::memset(&m_header, 0, sizeof(m_header));
     std::fill_n(m_header.array_size,        3, 1);
     m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
@@ -53,7 +53,6 @@ void MrcFormat::InitHeader(void)
 
 void MrcFormat::LoadHeader(std::istream & stream)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::LoadHeader() called");
     stream.seekg(0, std::ios::beg);
     stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
     if (!stream)
@@ -64,7 +63,6 @@ void MrcFormat::LoadHeader(std::istream & stream)
 
 void MrcFormat::SaveHeader(std::ostream & stream)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::SaveHeader() called");
     stream.seekp(0, std::ios::beg);
     stream.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
     if (!stream)
@@ -73,7 +71,7 @@ void MrcFormat::SaveHeader(std::ostream & stream)
     }
 }
 
-void MrcFormat::PrintHeader(void) const
+void MrcFormat::PrintHeader() const
 {
     Logger::Log(LogLevel::Debug,
         "MRC Header Information:\n"
@@ -117,7 +115,7 @@ void MrcFormat::PrintHeader(void) const
     );
 }
 
-size_t MrcFormat::GetElementSize(void) const
+size_t MrcFormat::GetElementSize() const
 {
     switch (static_cast<MODE>(m_header.mode))
     {
@@ -142,7 +140,6 @@ size_t MrcFormat::GetElementSize(void) const
 
 void MrcFormat::LoadDataArray(std::istream & stream)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::LoadDataArray() called");
     // Ensure we start reading data from the beginning of the file
     stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
@@ -233,7 +230,6 @@ void MrcFormat::LoadDataArray(std::istream & stream)
 
 void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::SaveDataArray() called");
     size_t expected_voxels{ static_cast<size_t>(m_header.array_size[0]) *
                             static_cast<size_t>(m_header.array_size[1]) *
                             static_cast<size_t>(m_header.array_size[2]) };
@@ -259,12 +255,12 @@ void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & st
     }
 }
 
-std::unique_ptr<float[]> MrcFormat::GetDataArray(void)
+std::unique_ptr<float[]> MrcFormat::GetDataArray()
 {
     return std::move(m_data_array);
 }
 
-std::array<int, 3> MrcFormat::GetGridSize(void)
+std::array<int, 3> MrcFormat::GetGridSize()
 {
     std::array<int, 3> grid_size{
         m_header.array_size[0],
@@ -274,7 +270,7 @@ std::array<int, 3> MrcFormat::GetGridSize(void)
     return grid_size;
 }
 
-std::array<float, 3> MrcFormat::GetGridSpacing(void)
+std::array<float, 3> MrcFormat::GetGridSpacing()
 {
     if (m_header.grid_size[0] == 0 || m_header.grid_size[1] == 0 || m_header.grid_size[2] == 0)
     {
@@ -288,7 +284,7 @@ std::array<float, 3> MrcFormat::GetGridSpacing(void)
     return grid_spacing;
 }
 
-std::array<float, 3> MrcFormat::GetOrigin(void)
+std::array<float, 3> MrcFormat::GetOrigin()
 {
     std::array<float, 3> origin{
         m_header.origin[0],
@@ -321,9 +317,8 @@ void MrcFormat::SetHeader(const std::array<int, 3> & grid_size,
     std::memcpy(m_header.origin, origin.data(), sizeof(m_header.origin));
 }
 
-void MrcFormat::ReorderedAxisRelatedParameters(void)
+void MrcFormat::ReorderedAxisRelatedParameters()
 {
-    Logger::Log(LogLevel::Debug, "MrcFormat::ReorderedAxisRelatedParameters() called");
     if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
     {
         Logger::Log(LogLevel::Debug,
@@ -375,3 +370,5 @@ void MrcFormat::ReorderedAxisRelatedParameters(void)
     m_header.axis[1] = 2;
     m_header.axis[2] = 3;
 }
+
+} // namespace rhbm_gem

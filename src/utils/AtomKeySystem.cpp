@@ -9,10 +9,9 @@
 const AtomKey AtomKeySystem::k_dynamic_base{ 10000 };
 const AtomKey AtomKeySystem::k_max_key{ std::numeric_limits<AtomKey>::max() };
 
-AtomKeySystem::AtomKeySystem(void) :
+AtomKeySystem::AtomKeySystem() :
     m_next_dynamic_key{ k_dynamic_base }
 {
-    Logger::Log(LogLevel::Debug, "AtomKeySystem::AtomKeySystem() called");
     const auto & build_in_spot_map{ ChemicalDataHelper::GetSpotMap() };
     for (const auto & [atom_id, spot] : build_in_spot_map)
     {
@@ -27,17 +26,14 @@ AtomKeySystem::AtomKeySystem(const AtomKeySystem & other) :
     m_id_to_key_map{ other.m_id_to_key_map },
     m_key_to_id_map{ other.m_key_to_id_map }
 {
-    Logger::Log(LogLevel::Debug, "AtomKeySystem copy ctor called");
 }
 
 AtomKeySystem::~AtomKeySystem()
 {
-    Logger::Log(LogLevel::Debug, "AtomKeySystem::~AtomKeySystem() called");
 }
 
 void AtomKeySystem::RegisterAtom(const std::string & atom_id)
 {
-    Logger::Log(LogLevel::Debug, "AtomKeySystem::RegisterAtom() called for " + atom_id);
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(atom_id) != m_id_to_key_map.end()) return;
     if (m_next_dynamic_key >= k_max_key)
@@ -55,7 +51,6 @@ void AtomKeySystem::RegisterAtom(const std::string & atom_id)
 
 void AtomKeySystem::RegisterAtom(const std::string & atom_id, AtomKey atom_key)
 {
-    Logger::Log(LogLevel::Debug, "AtomKeySystem::RegisterAtom() called for " + atom_id);
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(atom_id) != m_id_to_key_map.end()) return;
     m_id_to_key_map[atom_id] = atom_key;

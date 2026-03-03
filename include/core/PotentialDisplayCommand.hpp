@@ -10,9 +10,12 @@
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
 
+class AtomSelector;
+
+namespace rhbm_gem {
+
 class DataObjectManager;
 class ModelObject;
-class AtomSelector;
 
 class PotentialDisplayCommand : public CommandBase
 {
@@ -33,17 +36,17 @@ public:
 private:
     Options m_options;
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
-    std::unique_ptr<AtomSelector> m_atom_selector;
+    std::unique_ptr<::AtomSelector> m_atom_selector;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;
     std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;
 
 public:
-    PotentialDisplayCommand(void);
+    PotentialDisplayCommand();
     ~PotentialDisplayCommand();
-    bool Execute(void) override;
+    bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    const CommandOptions & GetOptions(void) const override { return m_options; }
-    CommandOptions & GetOptions(void) override { return m_options; }
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
 
     void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);
@@ -56,8 +59,10 @@ public:
     void SetVetoElementType(const std::string & value);
 
 private:
-    bool BuildDataObject(void);
-    void RunDataObjectSelection(void);
-    void RunDisplay(void);
+    bool BuildDataObject();
+    void RunDataObjectSelection();
+    void RunDisplay();
 
 };
+
+} // namespace rhbm_gem

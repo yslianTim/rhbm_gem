@@ -13,9 +13,10 @@ class AtomSelector
     std::unordered_set<Element> veto_element_set, pick_element_set;
 
 public:
-    AtomSelector(void);
+    AtomSelector();
     ~AtomSelector() = default;
-    void Print(void) const;
+    std::string Describe() const;
+    void Print() const;
     bool GetSelectionFlag(const std::string &, Residue, Element) const;
     void VetoChainID(const std::string & name);
     void VetoResidueType(const std::string & name);

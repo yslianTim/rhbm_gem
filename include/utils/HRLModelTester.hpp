@@ -16,7 +16,7 @@ class HRLModelTester
     double m_x_min, m_x_max;
 
 public:
-    HRLModelTester(void) = delete;
+    HRLModelTester() = delete;
     explicit HRLModelTester(int gaus_par_size, int linear_basis_size, int replica_size);
     ~HRLModelTester() = default;
 

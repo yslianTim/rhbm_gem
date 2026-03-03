@@ -18,12 +18,14 @@
 #include <limits>
 
 namespace {
-CommandRegistrar<MapSimulationCommand> registrar_map_simulation{
+rhbm_gem::CommandRegistrar<rhbm_gem::MapSimulationCommand> registrar_map_simulation{
     "map_simulation",
     "Run map simulation command"};
 }
 
-MapSimulationCommand::MapSimulationCommand(void) :
+namespace rhbm_gem {
+
+MapSimulationCommand::MapSimulationCommand() :
     CommandBase(), m_options{}, m_selected_atom_list{}, m_atom_charge_map{},
     m_model_object{ nullptr },
     m_atom_range_minimum{
@@ -35,17 +37,14 @@ MapSimulationCommand::MapSimulationCommand(void) :
         std::numeric_limits<float>::lowest(),
         std::numeric_limits<float>::lowest() }
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::MapSimulationCommand() called");
 }
 
 MapSimulationCommand::~MapSimulationCommand()
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::~MapSimulationCommand() called");
 }
 
 void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RegisterCLIOptionsExtend() called");
     cmd->add_option_function<std::string>("-a,--model",
         [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
@@ -85,9 +84,8 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Blurring width (list) setting")->default_val(m_options.blurring_width_list);
 }
 
-bool MapSimulationCommand::Execute(void)
+bool MapSimulationCommand::Execute()
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::Execute() called");
     if (BuildDataObject() == false) return false;
     CalculateAtomRange();
     RunMapSimulation();
@@ -162,9 +160,8 @@ void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
     }
 }
 
-bool MapSimulationCommand::BuildDataObject(void)
+bool MapSimulationCommand::BuildDataObject()
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::BuildDataObject() called");
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
@@ -182,9 +179,8 @@ bool MapSimulationCommand::BuildDataObject(void)
     return true;
 }
 
-void MapSimulationCommand::RunMapSimulation(void)
+void MapSimulationCommand::RunMapSimulation()
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::RunMapSimulation() called");
     ScopeTimer timer("MapSimulationCommand::RunMapSimulation");
     
     Logger::Log(LogLevel::Info,
@@ -208,7 +204,6 @@ void MapSimulationCommand::RunMapSimulation(void)
 
 void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::BuildAtomList() called");
     m_selected_atom_list.clear();
     m_selected_atom_list.reserve(model_object->GetNumberOfAtom());
     m_atom_charge_map.clear();
@@ -234,7 +229,6 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
 
 double MapSimulationCommand::CalculateAtomCharge(AtomObject * atom) const
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::CalculateAtomCharge() called");
     switch (m_options.partial_charge_choice)
     {
         case PartialCharge::NEUTRAL:
@@ -258,9 +252,8 @@ double MapSimulationCommand::CalculateAtomCharge(AtomObject * atom) const
     return 0.0;
 }
 
-void MapSimulationCommand::CalculateAtomRange(void)
+void MapSimulationCommand::CalculateAtomRange()
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::CalculateAtomRange() called");
     if (m_selected_atom_list.empty())
     {
         Logger::Log(LogLevel::Warning, "No atoms selected. Atom range cannot be calculated.");
@@ -286,9 +279,8 @@ void MapSimulationCommand::CalculateAtomRange(void)
     m_atom_range_maximum[2] += static_cast<float>(m_options.cutoff_distance);
 }
 
-std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject(void)
+std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::CreateMapObject() called");
     ScopeTimer timer("MapSimulationCommand::CreateMapObject");
     std::array<float, 3> grid_spacing{
         static_cast<float>(m_options.grid_spacing),
@@ -312,7 +304,6 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject(void)
 
 void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double blurring_width)
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::PopulateMapValueArray() called");
     ScopeTimer timer("MapSimulationCommand::PopulateMapValueArray");
     Logger::Log(LogLevel::Info,
         " /- Start map value array production with blurring width = "+
@@ -397,10 +388,11 @@ std::array<int, 3> MapSimulationCommand::CalculateGridSize(
 std::array<float, 3> MapSimulationCommand::CalculateOrigin(
     const std::array<float, 3> & grid_spacing) const
 {
-    Logger::Log(LogLevel::Debug, "MapSimulationCommand::CalculateOrigin() called");
     return {
         std::floor(m_atom_range_minimum[0] / grid_spacing[0]) * grid_spacing[0],
         std::floor(m_atom_range_minimum[1] / grid_spacing[1]) * grid_spacing[1],
         std::floor(m_atom_range_minimum[2] / grid_spacing[2]) * grid_spacing[2]
     };
 }
+
+} // namespace rhbm_gem

@@ -9,11 +9,12 @@
 #include <stdexcept>
 #include <fstream>
 
+namespace rhbm_gem {
+
 ModelFileWriter::ModelFileWriter(
     const std::string & filename, const ModelObject * model_object, int model_par) :
     m_file_path{ filename }, m_model_object{ model_object }, m_model_par{ model_par }
 {
-    Logger::Log(LogLevel::Debug, "ModelFileWriter::ModelFileWriter() called");
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     if      (file_extension == ".pdb")
     {
@@ -31,12 +32,10 @@ ModelFileWriter::ModelFileWriter(
 
 ModelFileWriter::~ModelFileWriter()
 {
-    Logger::Log(LogLevel::Debug, "ModelFileWriter::~ModelFileWriter() called");
 }
 
-void ModelFileWriter::Write(void)
+void ModelFileWriter::Write()
 {
-    Logger::Log(LogLevel::Debug, "ModelFileWriter::Write() called");
     if (m_model_object == nullptr || m_file_object == nullptr) return;
     std::ofstream outfile{ m_file_path, std::ios::binary };
     if (!outfile)
@@ -55,3 +54,5 @@ void ModelFileWriter::Write(void)
             "ModelFileWriter::Write : " + std::string(ex.what()));
     }
 }
+
+} // namespace rhbm_gem

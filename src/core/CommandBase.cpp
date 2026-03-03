@@ -5,6 +5,8 @@
 #include <CLI/CLI.hpp>
 #include <system_error>
 
+namespace rhbm_gem {
+
 void CommandBase::RegisterCLIOptions(CLI::App * command)
 {
     RegisterCLIOptionsBasic(command);
@@ -99,3 +101,5 @@ void CommandBase::SetFolderPath(const std::filesystem::path & path)
         }
     }
 }
+
+} // namespace rhbm_gem

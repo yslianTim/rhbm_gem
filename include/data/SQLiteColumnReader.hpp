@@ -8,6 +8,8 @@
 #include <tuple>
 #include <cstring>
 
+namespace rhbm_gem {
+
 template<typename T>
 struct SQLiteColumnReader
 {
@@ -194,3 +196,5 @@ struct SQLiteColumnReader<std::vector<std::tuple<double, double>>>
         return result;
     }
 };
+
+} // namespace rhbm_gem

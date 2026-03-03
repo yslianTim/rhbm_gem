@@ -16,7 +16,9 @@
 #include <omp.h>
 #endif
 
-MapObject::MapObject(void) :
+namespace rhbm_gem {
+
+MapObject::MapObject() :
     m_key_tag{ "" }, m_thread_size{ 1 },
     m_voxel_size{ 1 },
     m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
@@ -25,7 +27,6 @@ MapObject::MapObject(void) :
     m_map_length{}, m_overflow{}, m_underflow{ m_origin }, m_upper_bound{}, m_lower_bound{},
     m_map_value_array{ nullptr }, m_kd_tree_root{ nullptr }, m_grid_node_list{}
 {
-    Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
 }
 
 MapObject::MapObject(
@@ -41,7 +42,6 @@ MapObject::MapObject(
     m_map_value_array{ std::make_unique<float[]>(m_voxel_size) },
     m_kd_tree_root{ nullptr }, m_grid_node_list{}
 {
-    Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
     for (size_t i = 0; i < 3; i++)
     {
         m_map_length.at(i) = static_cast<float>(m_grid_size.at(i)) * m_grid_spacing.at(i);
@@ -65,7 +65,6 @@ MapObject::MapObject(
     m_map_value_array{ std::move(map_value_array) },
     m_kd_tree_root{ nullptr }, m_grid_node_list{}
 {
-    Logger::Log(LogLevel::Debug, "MapObject::MapObject() called");
     for (size_t i = 0; i < 3; i++)
     {
         m_map_length.at(i) = static_cast<float>(m_grid_size.at(i)) * m_grid_spacing.at(i);
@@ -101,7 +100,7 @@ std::unique_ptr<DataObjectBase> MapObject::Clone() const
     return std::make_unique<MapObject>(*this);
 }
 
-void MapObject::Display(void) const
+void MapObject::Display() const
 {
     std::ostringstream oss;
     oss << "MapObject Display:\n";
@@ -133,7 +132,7 @@ void MapObject::Display(void) const
     Logger::Log(LogLevel::Info, oss.str());
 }
 
-void MapObject::Update(void)
+void MapObject::Update()
 {
     CalculateMapValueMin();
     CalculateMapValueMax();
@@ -273,33 +272,32 @@ void MapObject::CheckPosition(const std::array<float, 3> & position) const
     }
 }
 
-void MapObject::CalculateMapValueMean(void)
+void MapObject::CalculateMapValueMean()
 {
     m_map_value_mean = ArrayStats<float>::ComputeMean(
         m_map_value_array.get(), m_voxel_size, m_thread_size);
 }
 
-void MapObject::CalculateMapValueMin(void)
+void MapObject::CalculateMapValueMin()
 {
     m_map_value_min = ArrayStats<float>::ComputeMin(
         m_map_value_array.get(), m_voxel_size, m_thread_size);
 }
 
-void MapObject::CalculateMapValueMax(void)
+void MapObject::CalculateMapValueMax()
 {
     m_map_value_max = ArrayStats<float>::ComputeMax(
         m_map_value_array.get(), m_voxel_size, m_thread_size);
 }
 
-void MapObject::CalculateMapValueSD(void)
+void MapObject::CalculateMapValueSD()
 {
     m_map_value_sd = ArrayStats<float>::ComputeStandardDeviation(
         m_map_value_array.get(), m_voxel_size, m_map_value_mean, m_thread_size);
 }
 
-void MapObject::MapValueArrayNormalization(void)
+void MapObject::MapValueArrayNormalization()
 {
-    Logger::Log(LogLevel::Debug, "MapObject::MapValueArrayNormalization() called");
     if (m_map_value_sd == 0.0f)
     {
         Logger::Log(LogLevel::Warning,
@@ -314,9 +312,8 @@ void MapObject::MapValueArrayNormalization(void)
     Update();
 }
 
-void MapObject::BuildKDTreeRoot(void)
+void MapObject::BuildKDTreeRoot()
 {
-    Logger::Log(LogLevel::Debug, "MapObject::BuildKDTreeRoot() called");
     ScopeTimer timer("MapObject::BuildKDTreeRoot");
     if (m_kd_tree_root != nullptr) return;
 
@@ -333,9 +330,8 @@ void MapObject::BuildKDTreeRoot(void)
     m_kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(m_grid_node_list, 0, m_thread_size, true);
 }
 
-void MapObject::BuildGridNodeList(void)
+void MapObject::BuildGridNodeList()
 {
-    Logger::Log(LogLevel::Debug, "MapObject::BuildGridNodeList() called");
     m_grid_node_list.clear();
     m_grid_node_list.reserve(m_voxel_size);
 
@@ -365,7 +361,7 @@ void MapObject::BuildGridNodeList(void)
 #endif
 }
 
-KDNode<GridNode> * MapObject::GetKDTreeRoot(void) const
+KDNode<GridNode> * MapObject::GetKDTreeRoot() const
 {
     if (m_kd_tree_root == nullptr)
     {
@@ -376,3 +372,5 @@ KDNode<GridNode> * MapObject::GetKDTreeRoot(void) const
     }
     return m_kd_tree_root.get();
 }
+
+} // namespace rhbm_gem

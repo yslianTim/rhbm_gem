@@ -1,0 +1,11 @@
+# User Documentation
+
+Start here if you want to set up your environment, install RHBM-GEM, and run it without digging through developer-facing design notes.
+
+## Recommended Reading Order
+
+1. Read [`getting-started.md`](getting-started.md) to set up your environment, install the project, verify the Python bindings, and troubleshoot common setup issues.
+2. Run [`../../examples/python/00_quickstart.py`](../../examples/python/00_quickstart.py) for a short Python smoke test after installation.
+3. Run [`../../examples/python/01_end_to_end_from_test_data.py`](../../examples/python/01_end_to_end_from_test_data.py) for the full example workflow with the bundled test data.
+
+If you need to change project internals, extend commands, or understand the repository architecture, switch to [`../developer/README.md`](../developer/README.md).

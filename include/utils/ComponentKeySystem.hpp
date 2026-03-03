@@ -17,7 +17,7 @@ class ComponentKeySystem
     std::unordered_map<ComponentKey, std::string> m_key_to_id_map;
     
 public:
-    ComponentKeySystem(void);
+    ComponentKeySystem();
     ~ComponentKeySystem();
     ComponentKeySystem(const ComponentKeySystem & other);
 

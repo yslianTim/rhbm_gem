@@ -20,11 +20,11 @@
 #include <TEllipse.h>
 #endif
 
-LocalPainter::LocalPainter(void)
+LocalPainter::LocalPainter()
 {
 }
 
-LocalPainter::~LocalPainter(void)
+LocalPainter::~LocalPainter()
 {
 }
 

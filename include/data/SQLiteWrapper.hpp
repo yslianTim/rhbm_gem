@@ -14,6 +14,8 @@
 #include "SQLiteColumnReader.hpp"
 #include "Logger.hpp"
 
+namespace rhbm_gem {
+
 class SQLiteWrapper
 {
     sqlite3 * m_database_ptr;
@@ -157,11 +159,11 @@ public:
     SQLiteWrapper(const SQLiteWrapper &) = delete;
     SQLiteWrapper & operator=(const SQLiteWrapper &) = delete;
 
-    static int StepDone(void) { return SQLITE_DONE; }
-    static int StepRow(void) { return SQLITE_ROW; }
-    std::string ErrorMessage(void) const { return std::string(sqlite3_errmsg(m_database_ptr)); }
+    static int StepDone() { return SQLITE_DONE; }
+    static int StepRow() { return SQLITE_ROW; }
+    std::string ErrorMessage() const { return std::string(sqlite3_errmsg(m_database_ptr)); }
 
-    void Reset(void)
+    void Reset()
     {
         if (m_statement_ptr == nullptr)
         {
@@ -171,7 +173,7 @@ public:
         sqlite3_clear_bindings(m_statement_ptr);
     }
 
-    int StepNext(void)
+    int StepNext()
     {
         if (m_statement_ptr == nullptr)
         {
@@ -202,7 +204,7 @@ public:
         }
     }
 
-    void StepOnce(void)
+    void StepOnce()
     {
         if (m_statement_ptr == nullptr)
         {
@@ -216,7 +218,7 @@ public:
         }
     }
     
-    void Finalize(void)
+    void Finalize()
     {
         if (m_statement_ptr)
         {
@@ -296,3 +298,5 @@ private:
     }
     
 };
+
+} // namespace rhbm_gem

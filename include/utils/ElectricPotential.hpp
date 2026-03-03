@@ -28,7 +28,7 @@ class ElectricPotential
     double m_blurring_width;
 
 public:
-    ElectricPotential(void);
+    ElectricPotential();
     ~ElectricPotential() = default;
     
     void SetModelChoice(int value);

@@ -7,15 +7,15 @@
 #include <algorithm>
 #include <cmath>
 
-CCP4Format::CCP4Format(void)
+namespace rhbm_gem {
+
+CCP4Format::CCP4Format()
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::CCP4Format() called");
     InitHeader();
 }
 
-void CCP4Format::InitHeader(void)
+void CCP4Format::InitHeader()
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::InitHeader() called");
     std::memset(&m_header, 0, sizeof(m_header));
     std::fill_n(m_header.array_size, 3, 1);
     m_header.mode = static_cast<int>(MODE::SIGNED_FLOAT32);
@@ -47,7 +47,6 @@ void CCP4Format::InitHeader(void)
 
 void CCP4Format::LoadHeader(std::istream & stream)
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::LoadHeader() called");
     stream.seekg(0, std::ios::beg);
     stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
     PrintHeader();
@@ -59,7 +58,6 @@ void CCP4Format::LoadHeader(std::istream & stream)
 
 void CCP4Format::SaveHeader(std::ostream & stream)
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::SaveHeader() called");
     stream.seekp(0, std::ios::beg);
     stream.write(reinterpret_cast<const char*>(&m_header), sizeof(m_header));
     if (!stream)
@@ -68,7 +66,7 @@ void CCP4Format::SaveHeader(std::ostream & stream)
     }
 }
 
-void CCP4Format::PrintHeader(void) const
+void CCP4Format::PrintHeader() const
 {
     Logger::Log(LogLevel::Debug,
         "CCP4 Header Information:\n"
@@ -131,7 +129,7 @@ void CCP4Format::PrintHeader(void) const
     );
 }
 
-size_t CCP4Format::GetElementSize(void) const
+size_t CCP4Format::GetElementSize() const
 {
     switch (static_cast<MODE>(m_header.mode))
     {
@@ -152,7 +150,6 @@ size_t CCP4Format::GetElementSize(void) const
 
 void CCP4Format::LoadDataArray(std::istream & stream)
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::LoadDataArray() called");
     // Position stream at start of data section
     stream.seekg(HEAD::SIZE_HEADER, std::ios::beg);
     
@@ -237,7 +234,6 @@ void CCP4Format::LoadDataArray(std::istream & stream)
 
 void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::SaveDataArray() called");
     size_t expected_voxels{
         static_cast<size_t>(m_header.array_size[0]) *
         static_cast<size_t>(m_header.array_size[1]) *
@@ -278,12 +274,12 @@ void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & s
     }
 }
 
-std::unique_ptr<float[]> CCP4Format::GetDataArray(void)
+std::unique_ptr<float[]> CCP4Format::GetDataArray()
 {
     return std::move(m_data_array);
 }
 
-std::array<int, 3> CCP4Format::GetGridSize(void)
+std::array<int, 3> CCP4Format::GetGridSize()
 {
     // Return data array size in X, Y, Z order (CCP4Header::array_size)
     std::array<int, 3> grid_size{
@@ -294,7 +290,7 @@ std::array<int, 3> CCP4Format::GetGridSize(void)
     return grid_size;
 }
 
-std::array<float, 3> CCP4Format::GetGridSpacing(void)
+std::array<float, 3> CCP4Format::GetGridSpacing()
 {
     if (m_header.grid_size[0] == 0 || m_header.grid_size[1] == 0 || m_header.grid_size[2] == 0)
     {
@@ -308,7 +304,7 @@ std::array<float, 3> CCP4Format::GetGridSpacing(void)
     return grid_spacing;
 }
 
-std::array<float, 3> CCP4Format::GetOrigin(void)
+std::array<float, 3> CCP4Format::GetOrigin()
 {
     auto grid_spacing{ GetGridSpacing() };
     std::array<float, 3> origin{
@@ -342,9 +338,8 @@ void CCP4Format::SetHeader(const std::array<int, 3> & grid_size,
     }
 }
 
-void CCP4Format::ReorderedAxisRelatedParameters(void)
+void CCP4Format::ReorderedAxisRelatedParameters()
 {
-    Logger::Log(LogLevel::Debug, "CCP4Format::ReorderedAxisRelatedParameters() called");
     if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
     {
         Logger::Log(LogLevel::Debug,
@@ -392,3 +387,5 @@ void CCP4Format::ReorderedAxisRelatedParameters(void)
     m_header.axis[1] = 2;
     m_header.axis[2] = 3;
 }
+
+} // namespace rhbm_gem

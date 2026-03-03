@@ -7,13 +7,13 @@
 #include <stdexcept>
 #include <sstream>
 
-SphereSampler::SphereSampler(void) :
+SphereSampler::SphereSampler() :
     m_sampling_size{ 10 }, m_distance_min{ 0.0 }, m_distance_max{ 1.0 }
 {
 
 }
 
-void SphereSampler::Print(void) const
+void SphereSampler::Print() const
 {
     std::ostringstream oss;
     oss << "SphereSampler Configuration:\n"

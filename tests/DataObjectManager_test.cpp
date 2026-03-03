@@ -6,6 +6,10 @@
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
 
+namespace rg = rhbm_gem;
+using DataObjectManager = rg::DataObjectManager;
+using ModelObject = rg::ModelObject;
+
 TEST(DataObjectManagerTest, LoadCifFile)
 {
     DataObjectManager manager;

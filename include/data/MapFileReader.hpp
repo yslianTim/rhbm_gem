@@ -7,6 +7,8 @@
 #include "FileReaderBase.hpp"
 #include "MapFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class MapFileReader : public FileReaderBase
 {
     bool m_successfully_read_file;
@@ -16,8 +18,8 @@ class MapFileReader : public FileReaderBase
 public:
     explicit MapFileReader(const std::string & filename);
     ~MapFileReader() = default;
-    void Read(void) override;
-    bool IsSuccessfullyRead(void) const override { return m_successfully_read_file; }
+    void Read() override;
+    bool IsSuccessfullyRead() const override { return m_successfully_read_file; }
 
     /**
      * @brief  Obtain the map value array read from file.
@@ -26,13 +28,15 @@ public:
      * After a successful call the reader no longer stores the voxel data
      * and subsequent calls will return an empty pointer.
      */
-    std::unique_ptr<float[]> GetMapValueArray(void);
-    std::array<int, 3> GetGridSizeArray(void) const;
-    std::array<float, 3> GetGridSpacingArray(void) const;
-    std::array<float, 3> GetOriginArray(void) const;
+    std::unique_ptr<float[]> GetMapValueArray();
+    std::array<int, 3> GetGridSizeArray() const;
+    std::array<float, 3> GetGridSpacingArray() const;
+    std::array<float, 3> GetOriginArray() const;
 
 private:
     bool ReadHeader(std::ifstream & stream);
     bool ReadMapValueArray(std::ifstream & stream);
 
 };
+
+} // namespace rhbm_gem

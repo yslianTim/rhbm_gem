@@ -7,6 +7,8 @@
 
 #include "MapFileFormatBase.hpp"
 
+namespace rhbm_gem {
+
 class CCP4Format : public MapFileFormatBase
 {
     enum HEAD
@@ -63,26 +65,28 @@ class CCP4Format : public MapFileFormatBase
     std::unique_ptr<float[]> m_data_array;
 
 public:
-    CCP4Format(void);
+    CCP4Format();
     ~CCP4Format() = default;
-    void InitHeader(void) override;
+    void InitHeader() override;
     void LoadHeader(std::istream & stream) override;
     void SaveHeader(std::ostream & stream) override;
-    void PrintHeader(void) const override;
+    void PrintHeader() const override;
     void LoadDataArray(std::istream & stream) override;
     void SaveDataArray(const float * data, size_t size, std::ostream & stream) override;
-    std::unique_ptr<float[]> GetDataArray(void) override;
-    std::array<int, 3> GetGridSize(void) override;
-    std::array<float, 3> GetGridSpacing(void) override;
-    std::array<float, 3> GetOrigin(void) override;
+    std::unique_ptr<float[]> GetDataArray() override;
+    std::array<int, 3> GetGridSize() override;
+    std::array<float, 3> GetGridSpacing() override;
+    std::array<float, 3> GetOrigin() override;
     void SetHeader(const std::array<int, 3> & grid_size,
                    const std::array<float, 3> & grid_spacing,
                    const std::array<float, 3> & origin) override;
 
-    const CCP4Header & GetHeader(void) const { return m_header; }
+    const CCP4Header & GetHeader() const { return m_header; }
     
 private:
-    size_t GetElementSize(void) const;
-    void ReorderedAxisRelatedParameters(void);
+    size_t GetElementSize() const;
+    void ReorderedAxisRelatedParameters();
     
 };
+
+} // namespace rhbm_gem

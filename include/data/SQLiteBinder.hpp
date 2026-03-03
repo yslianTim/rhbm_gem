@@ -6,6 +6,8 @@
 #include <vector>
 #include <tuple>
 
+namespace rhbm_gem {
+
 template<typename T>
 struct SQLiteBinder
 {
@@ -190,3 +192,5 @@ struct SQLiteBinder<std::vector<std::tuple<double, double>>>
         );
     }
 };
+
+} // namespace rhbm_gem

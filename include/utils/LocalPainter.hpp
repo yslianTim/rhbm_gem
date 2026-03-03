@@ -8,7 +8,7 @@
 class LocalPainter
 {
 public:
-    LocalPainter(void);
+    LocalPainter();
     ~LocalPainter();
 
     static void PaintTemplate1(

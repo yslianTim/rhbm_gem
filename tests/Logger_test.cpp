@@ -4,11 +4,13 @@
 #include <vector>
 
 #include "Logger.hpp"
+#include "ScopeTimer.hpp"
+#include "Timer.hpp"
 
 class LoggerLogLevelTest : public ::testing::TestWithParam<LogLevel>
 {
 protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -102,7 +104,7 @@ struct LoggerSuppressionTestCase
 class LoggerSuppressionTest : public ::testing::TestWithParam<LoggerSuppressionTestCase>
 {
 protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -186,7 +188,7 @@ TEST(LoggerTest, UnknownLogLevelDefaultsToDiagnostic)
 class LoggerUnknownLevelAboveDebugTest : public ::testing::TestWithParam<LogLevel>
 {
     protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -296,7 +298,7 @@ struct LoggerOutputTestCase
 class LoggerOutputTest : public ::testing::TestWithParam<LoggerOutputTestCase>
 {
 protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -371,7 +373,7 @@ struct LoggerLevelPairTestCase
 class LoggerLevelPairTest : public ::testing::TestWithParam<LoggerLevelPairTestCase>
 {
 protected:
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(LogLevel::Info);
     }
@@ -448,4 +450,36 @@ TEST(LoggerTest, ProgressPercentOnlyUpdatesOnChange)
     EXPECT_EQ('\n', out.back());
     const auto newline_count{ std::count(out.begin(), out.end(), '\n') };
     EXPECT_EQ(static_cast<std::size_t>(1), newline_count);
+}
+
+TEST(LoggerTest, ScopeTimerDefaultIsSuppressedAtInfo)
+{
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    {
+        ScopeTimer timer("suppressed timer");
+    }
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    EXPECT_TRUE(out.empty());
+}
+
+TEST(LoggerTest, ScopeTimerDefaultAppearsAtDebug)
+{
+    Logger::SetLogLevel(LogLevel::Debug);
+    testing::internal::CaptureStdout();
+    {
+        ScopeTimer timer("visible timer");
+    }
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    EXPECT_NE(out.find("visible timer took"), std::string::npos);
+}
+
+TEST(LoggerTest, TimerPrintFormattedHonorsExplicitLogLevel)
+{
+    Logger::SetLogLevel(LogLevel::Info);
+    testing::internal::CaptureStdout();
+    Timer<> timer;
+    timer.PrintFormatted("explicit timer", LogLevel::Info);
+    const std::string out{ testing::internal::GetCapturedStdout() };
+    EXPECT_NE(out.find("explicit timer took"), std::string::npos);
 }

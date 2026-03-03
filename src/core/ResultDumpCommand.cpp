@@ -15,6 +15,7 @@
 #include "AtomClassifier.hpp"
 #include "StringHelper.hpp"
 #include "ModelFileWriter.hpp"
+#include "ChimeraXHelper.hpp"
 #include "Logger.hpp"
 #include "CommandRegistry.hpp"
 #include "AtomKeySystem.hpp"
@@ -23,31 +24,31 @@
 #include <fstream>
 
 namespace {
-CommandRegistrar<ResultDumpCommand> registrar_result_dump{
+rhbm_gem::CommandRegistrar<rhbm_gem::ResultDumpCommand> registrar_result_dump{
     "result_dump",
     "Run result dump"};
 }
 
-ResultDumpCommand::ResultDumpCommand(void) :
+namespace rhbm_gem {
+
+ResultDumpCommand::ResultDumpCommand() :
     CommandBase(),
     m_map_key_tag{"map"}, m_map_object{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::ResultDumpCommand() called");
 }
 
 ResultDumpCommand::~ResultDumpCommand()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::~ResultDumpCommand() called");
 }
 
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RegisterCLIOptionsExtend() called");
     std::map<std::string, PrinterType> printer_map
     {
-        {"0", PrinterType::ATOM_POSITION},  {"atom", PrinterType::ATOM_POSITION},
-        {"1", PrinterType::MAP_VALUE},      {"map",  PrinterType::MAP_VALUE},
-        {"2", PrinterType::GAUS_ESTIMATES}, {"gaus", PrinterType::GAUS_ESTIMATES}
+        {"0", PrinterType::ATOM_POSITION},  {"atom_pos", PrinterType::ATOM_POSITION},
+        {"1", PrinterType::MAP_VALUE},      {"map",      PrinterType::MAP_VALUE},
+        {"2", PrinterType::GAUS_ESTIMATES}, {"gaus",     PrinterType::GAUS_ESTIMATES},
+        {"3", PrinterType::ATOM_OUTLIER},   {"atom_out", PrinterType::ATOM_OUTLIER}
     };
     cmd->add_option_function<PrinterType>("-p,--printer",
         [&](PrinterType value) { SetPrinterChoice(value); },
@@ -61,9 +62,8 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Map file path")->default_val(m_options.map_file_path.string());
 }
 
-bool ResultDumpCommand::Execute(void)
+bool ResultDumpCommand::Execute()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::Execute() called");
     if (BuildDataObjectList() == false) return false;
     RunResultDump();
     return true;
@@ -96,9 +96,8 @@ void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
     }
 }
 
-bool ResultDumpCommand::BuildDataObjectList(void)
+bool ResultDumpCommand::BuildDataObjectList()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::BuildDataObjectList() called");
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
@@ -134,9 +133,8 @@ bool ResultDumpCommand::BuildDataObjectList(void)
     return true;
 }
 
-void ResultDumpCommand::RunResultDump(void)
+void ResultDumpCommand::RunResultDump()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunResultDump() called");
     ScopeTimer timer("ResultDumpCommand::RunResultDump");
     Logger::Log(LogLevel::Info,
         "Total number of model object sets to be dump: "
@@ -153,6 +151,9 @@ void ResultDumpCommand::RunResultDump(void)
             RunGroupGausEstimatesDumping();
             RunGausEstimatesDumping();
             break;
+        case PrinterType::ATOM_OUTLIER:
+            RunAtomOutlierDumping();
+            break;
         default:
             Logger::Log(LogLevel::Warning,
                         "Invalid printer choice input : ["
@@ -161,14 +162,73 @@ void ResultDumpCommand::RunResultDump(void)
                         "Available Printer Choices:\n"
                         "  [0] AtomPositionDumping\n"
                         "  [1] MapValueDumping\n"
-                        "  [2] GausEstimatesDumping");
+                        "  [2] GausEstimatesDumping\n"
+                        "  [3] AtomOutlierDumping");
             break;
     }
 }
 
-void ResultDumpCommand::RunAtomPositionDumping(void)
+void ResultDumpCommand::RunAtomOutlierDumping()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunAtomPositionDumping() called");
+
+    for (const auto & model_object : m_model_object_list)
+    {
+        auto key_tag{ model_object->GetKeyTag() };
+        std::unordered_map<std::string, std::vector<std::array<float,3>>> outlier_position_map;
+        std::string file_name{ "atom_outlier_list_"+ model_object->GetPdbID() +".csv" };
+        std::filesystem::path output_path{ m_options.folder_path / file_name };
+        std::ofstream outfile(output_path);
+        if (!outfile.is_open())
+        {
+            Logger::Log(LogLevel::Error,
+                        "Could not open file " + output_path.string() + " for writing.\n");
+            return;
+        }
+        outfile << "SerialID,ClassType,Residue,Element,Spot\n";
+        for (auto & atom : m_selected_atom_list_map.at(key_tag))
+        {
+            for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+            {
+                const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+                if (atom->GetLocalPotentialEntry()->GetOutlierTag(class_key) == false) continue;
+                outfile << atom->GetSerialID() <<','
+                        << class_key <<','
+                        << ChemicalDataHelper::GetLabel(atom->GetResidue()) <<','
+                        << ChemicalDataHelper::GetLabel(atom->GetElement()) <<','
+                        << atom->GetAtomID() <<'\n';
+                if (atom->IsMainChainAtom()) // Only output main chain atom for outlier display
+                {
+                    if (atom->GetElement() == Element::OXYGEN) continue;
+                    outlier_position_map[class_key].emplace_back(atom->GetPosition());
+                }
+            }
+        }
+        outfile.close();
+        Logger::Log(LogLevel::Info, "Output file: " + output_path.string());
+
+        for (const auto & [class_key, position_list] : outlier_position_map)
+        {
+            std::string class_file_name{ "atom_outlier_position_" + class_key + "_" + model_object->GetPdbID() + ".cmm" };
+            std::filesystem::path class_output_path{ m_options.folder_path / class_file_name };
+            std::string marker_set_name{ class_key + "_" + model_object->GetPdbID() };
+            if (!ChimeraXHelper::WriteCMMPoints(
+                    position_list,
+                    class_output_path.string(),
+                    1.0f,
+                    {},
+                    marker_set_name))
+            {
+                Logger::Log(LogLevel::Error,
+                    "Could not open file " + class_output_path.string() + " for writing.\n");
+                continue;
+            }
+            Logger::Log(LogLevel::Info, "Output file: " + class_output_path.string());
+        }
+    }
+}
+
+void ResultDumpCommand::RunAtomPositionDumping()
+{
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -198,9 +258,8 @@ void ResultDumpCommand::RunAtomPositionDumping(void)
     }
 }
 
-void ResultDumpCommand::RunMapValueDumping(void)
+void ResultDumpCommand::RunMapValueDumping()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunMapValueDumping() called");
     if (m_map_object == nullptr)
     {
         Logger::Log(LogLevel::Error, "Please give the path of map file via -m option.");
@@ -266,9 +325,8 @@ void ResultDumpCommand::RunMapValueDumping(void)
     }
 }
 
-void ResultDumpCommand::RunGausEstimatesDumping(void)
+void ResultDumpCommand::RunGausEstimatesDumping()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunGausEstimatesDumping() called");
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -321,9 +379,8 @@ void ResultDumpCommand::RunGausEstimatesDumping(void)
     }
 }
 
-void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
+void ResultDumpCommand::RunGroupGausEstimatesDumping()
 {
-    Logger::Log(LogLevel::Debug, "ResultDumpCommand::RunGroupGausEstimatesDumping() called");
 
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
@@ -363,3 +420,5 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping(void)
         Logger::Log(LogLevel::Info, "Output file: " + output_path.string());
     }
 }
+
+} // namespace rhbm_gem

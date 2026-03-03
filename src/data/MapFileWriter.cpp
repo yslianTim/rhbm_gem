@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cctype>
 
+namespace rhbm_gem {
+
 MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map_object) :
     m_file_path{ filename }, m_map_object{ map_object }
 {
@@ -36,7 +38,7 @@ MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map
     }
 }
 
-void MapFileWriter::Write(void)
+void MapFileWriter::Write()
 {
     if (m_map_object == nullptr)
     {
@@ -84,3 +86,5 @@ void MapFileWriter::WriteMapValueArray(std::ostream & stream)
         Logger::Log(LogLevel::Error, ex.what());
     }
 }
+
+} // namespace rhbm_gem

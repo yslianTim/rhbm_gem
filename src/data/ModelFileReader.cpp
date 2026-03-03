@@ -7,10 +7,11 @@
 #include "AtomicModelDataBlock.hpp"
 #include "Logger.hpp"
 
+namespace rhbm_gem {
+
 ModelFileReader::ModelFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }
 {
-    Logger::Log(LogLevel::Debug, "ModelFileReader::ModelFileReader() called");
     auto file_extension{ FilePathHelper::GetExtension(filename) };
     if      (file_extension == ".pdb")
     {
@@ -28,12 +29,10 @@ ModelFileReader::ModelFileReader(const std::string & filename) :
 
 ModelFileReader::~ModelFileReader()
 {
-    Logger::Log(LogLevel::Debug, "ModelFileReader::~ModelFileReader() called");
 }
 
-void ModelFileReader::Read(void)
+void ModelFileReader::Read()
 {
-    Logger::Log(LogLevel::Debug, "ModelFileReader::Read() called");
     ReadHeader();
     if (m_successfully_read_file == false)
     {
@@ -44,9 +43,8 @@ void ModelFileReader::Read(void)
     ReadDataArray();
 }
 
-void ModelFileReader::ReadHeader(void)
+void ModelFileReader::ReadHeader()
 {
-    Logger::Log(LogLevel::Debug, "ModelFileReader::ReadHeader() called");
     try
     {
         m_file_object->LoadHeader(m_file_path);
@@ -60,9 +58,8 @@ void ModelFileReader::ReadHeader(void)
     }
 }
 
-void ModelFileReader::ReadDataArray(void)
+void ModelFileReader::ReadDataArray()
 {
-    Logger::Log(LogLevel::Debug, "ModelFileReader::ReadDataArray() called");
     try
     {
         m_file_object->LoadDataArray(m_file_path);
@@ -75,8 +72,10 @@ void ModelFileReader::ReadDataArray(void)
     }
 }
 
-AtomicModelDataBlock * ModelFileReader::GetDataBlockPtr(void)
+AtomicModelDataBlock * ModelFileReader::GetDataBlockPtr()
 {
     if (m_file_object == nullptr || m_successfully_read_file == false) return nullptr;
     return m_file_object->GetDataBlockPtr();
 }
+
+} // namespace rhbm_gem

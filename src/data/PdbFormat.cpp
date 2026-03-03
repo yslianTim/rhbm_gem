@@ -9,7 +9,9 @@
 #include <cstring>
 #include <stdexcept>
 
-PdbFormat::PdbFormat(void) :
+namespace rhbm_gem {
+
+PdbFormat::PdbFormat() :
     m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
 
@@ -30,7 +32,7 @@ void PdbFormat::LoadHeader(const std::string & filename)
     }
 }
 
-void PdbFormat::PrintHeader(void) const
+void PdbFormat::PrintHeader() const
 {
 
 }
@@ -110,7 +112,7 @@ void PdbFormat::ScanAtomEntry(char * line, bool is_special, int model_number)
     m_data_block->AddAtomObject(model_number, std::move(atom_object));
 }
 
-AtomicModelDataBlock * PdbFormat::GetDataBlockPtr(void)
+AtomicModelDataBlock * PdbFormat::GetDataBlockPtr()
 {
     return m_data_block.get();
 }
@@ -141,3 +143,4 @@ PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const
         return PDB_HEADER::UNK;
     }
 }
+} // namespace rhbm_gem

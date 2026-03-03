@@ -9,21 +9,20 @@
 
 #include <utility>
 
-DataObjectManager::DataObjectManager(void) :
+namespace rhbm_gem {
+
+DataObjectManager::DataObjectManager() :
     m_db_manager{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::DataObjectManager() called");
     FileProcessFactoryRegistry::Instance().RegisterDefaultFactories();
 }
 
 DataObjectManager::~DataObjectManager()
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::~DataObjectManager() called");
 }
 
 void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::SetDatabaseManager() called");
     std::lock_guard<std::mutex> lock(m_db_mutex);
     if (m_db_manager && m_db_manager->GetDatabasePath() == dbname)
     {
@@ -42,7 +41,6 @@ void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
 void DataObjectManager::ProcessFile(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::ProcessFile() called");
     try
     {
         auto extension{ FilePathHelper::GetExtension(filename) };
@@ -67,7 +65,6 @@ void DataObjectManager::ProcessFile(
 void DataObjectManager::ProduceFile(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::ProduceFile() called");
     if (HasDataObject(key_tag) == false)
     {
         Logger::Log(LogLevel::Warning,
@@ -84,7 +81,6 @@ void DataObjectManager::ProduceFile(
 bool DataObjectManager::AddDataObject(
     const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object)
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::AddDataObject() called");
     if (!data_object)
     {
         Logger::Log(LogLevel::Error, "AddDataObject(): nullptr provided for key tag: " + key_tag);
@@ -109,7 +105,6 @@ bool DataObjectManager::HasDataObject(const std::string & key_tag) const
 
 void DataObjectManager::LoadDataObject(const std::string & key_tag)
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::LoadDataObject() called");
     std::unique_ptr<DataObjectBase> data_object;
     {
         std::lock_guard<std::mutex> lock(m_db_mutex);
@@ -139,7 +134,6 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
 void DataObjectManager::SaveDataObject(
     const std::string & key_tag, const std::string & renamed_key_tag) const
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::SaveDataObject() called");
     std::lock_guard<std::mutex> db_lock(m_db_mutex);
     if (m_db_manager == nullptr)
     {
@@ -181,7 +175,6 @@ void DataObjectManager::SaveDataObject(
 void DataObjectManager::Accept(
     DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list)
 {
-    Logger::Log(LogLevel::Debug, "DataObjectManager::Accept() called");
     std::vector<DataObjectBase *> data_object_list;
     {
         std::lock_guard<std::mutex> lock(m_map_mutex);
@@ -237,14 +230,16 @@ std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(
     return iter->second;
 }
 
-DatabaseManager * DataObjectManager::GetDatabaseManager(void) const
+DatabaseManager * DataObjectManager::GetDatabaseManager() const
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     return m_db_manager.get();
 }
 
 const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> &
-DataObjectManager::GetDataObjectMap(void) const
+DataObjectManager::GetDataObjectMap() const
 {
     return m_data_object_map;
 }
+
+} // namespace rhbm_gem

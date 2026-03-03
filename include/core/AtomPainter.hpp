@@ -1,17 +1,20 @@
 #pragma once
 
 #include <string>
-#include <vector>
 #include <unordered_map>
-#include "PainterBase.hpp"
+#include <vector>
 
-class AtomObject;
+#include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
 class TPad;
 class TH2;
 class TPaveText;
 #endif
+
+namespace rhbm_gem {
+
+class AtomObject;
 
 class AtomPainter : public PainterBase
 {
@@ -20,15 +23,16 @@ class AtomPainter : public PainterBase
     std::string m_folder_path;
 
 public:
-    AtomPainter(void);
+    AtomPainter();
     ~AtomPainter();
     void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
-    void Painting(void) override;
+    void Painting() override;
 
 private:
     void PaintDemoPlot(const std::string & name);
     void PaintAtomSamplingDataSummary(const std::string & name);
-
 };
+
+} // namespace rhbm_gem

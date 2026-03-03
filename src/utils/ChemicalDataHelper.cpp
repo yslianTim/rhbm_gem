@@ -531,32 +531,32 @@ int ChemicalDataHelper::GetAtomicNumber(Element element)
     return static_cast<int>(element);
 }
 
-size_t ChemicalDataHelper::GetGroupAtomClassCount(void)
+size_t ChemicalDataHelper::GetGroupAtomClassCount()
 {
     return m_group_atom_class_key_list.size();
 }
 
-size_t ChemicalDataHelper::GetGroupBondClassCount(void)
+size_t ChemicalDataHelper::GetGroupBondClassCount()
 {
     return m_group_bond_class_key_list.size();
 }
 
-size_t ChemicalDataHelper::GetStandardResidueCount(void)
+size_t ChemicalDataHelper::GetStandardResidueCount()
 {
     return m_standard_amino_acid_list.size() + m_standard_nucleotide_list.size();
 }
 
-size_t ChemicalDataHelper::GetStandardAminoAcidCount(void)
+size_t ChemicalDataHelper::GetStandardAminoAcidCount()
 {
     return m_standard_amino_acid_list.size();
 }
 
-size_t ChemicalDataHelper::GetStandardNucleotideCount(void)
+size_t ChemicalDataHelper::GetStandardNucleotideCount()
 {
     return m_standard_nucleotide_list.size();
 }
 
-size_t ChemicalDataHelper::GetElementCount(void)
+size_t ChemicalDataHelper::GetElementCount()
 {
     return m_element_map.size();
 }
@@ -579,67 +579,67 @@ const std::string & ChemicalDataHelper::GetGroupBondClassKey(size_t class_id)
     return m_group_bond_class_key_list.at(class_id);
 }
 
-const std::string & ChemicalDataHelper::GetSimpleAtomClassKey(void)
+const std::string & ChemicalDataHelper::GetSimpleAtomClassKey()
 {
     return m_group_atom_class_key_list.at(0);
 }
 
-const std::string & ChemicalDataHelper::GetComponentAtomClassKey(void)
+const std::string & ChemicalDataHelper::GetComponentAtomClassKey()
 {
     return m_group_atom_class_key_list.at(1);
 }
 
-const std::string & ChemicalDataHelper::GetStructureAtomClassKey(void)
+const std::string & ChemicalDataHelper::GetStructureAtomClassKey()
 {
     return m_group_atom_class_key_list.at(2);
 }
 
-const std::string & ChemicalDataHelper::GetSimpleBondClassKey(void)
+const std::string & ChemicalDataHelper::GetSimpleBondClassKey()
 {
     return m_group_bond_class_key_list.at(0);
 }
 
-const std::string & ChemicalDataHelper::GetComponentBondClassKey(void)
+const std::string & ChemicalDataHelper::GetComponentBondClassKey()
 {
     return m_group_bond_class_key_list.at(1);
 }
 
-const std::vector<Residue> & ChemicalDataHelper::GetStandardAminoAcidList(void)
+const std::vector<Residue> & ChemicalDataHelper::GetStandardAminoAcidList()
 {
     return m_standard_amino_acid_list;
 }
 
-const std::vector<Residue> & ChemicalDataHelper::GetStandardNucleotideList(void)
+const std::vector<Residue> & ChemicalDataHelper::GetStandardNucleotideList()
 {
     return m_standard_nucleotide_list;
 }
 
-const std::vector<Element> & ChemicalDataHelper::GetStandardElementList(void)
+const std::vector<Element> & ChemicalDataHelper::GetStandardElementList()
 {
     return m_standard_element_list;
 }
 
-const std::unordered_map<std::string_view, Residue> & ChemicalDataHelper::GetResidueMap(void)
+const std::unordered_map<std::string_view, Residue> & ChemicalDataHelper::GetResidueMap()
 {
     return m_residue_map;
 }
 
-const std::unordered_map<std::string_view, Element> & ChemicalDataHelper::GetElementMap(void)
+const std::unordered_map<std::string_view, Element> & ChemicalDataHelper::GetElementMap()
 {
     return m_element_map;
 }
 
-const std::unordered_map<std::string_view, Spot> & ChemicalDataHelper::GetSpotMap(void)
+const std::unordered_map<std::string_view, Spot> & ChemicalDataHelper::GetSpotMap()
 {
     return m_spot_map;
 }
 
-const std::unordered_map<std::string_view, Link> & ChemicalDataHelper::GetLinkMap(void)
+const std::unordered_map<std::string_view, Link> & ChemicalDataHelper::GetLinkMap()
 {
     return m_link_map;
 }
 
-const std::unordered_map<Element, std::string> & ChemicalDataHelper::GetElementLabelMap(void)
+const std::unordered_map<Element, std::string> & ChemicalDataHelper::GetElementLabelMap()
 {
     return m_element_label_map;
 }

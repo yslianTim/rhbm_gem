@@ -25,7 +25,9 @@
 #include <vector>
 #include <tuple>
 
-AtomPainter::AtomPainter(void) :
+namespace rhbm_gem {
+
+AtomPainter::AtomPainter() :
     m_folder_path{ "./" }
 {
 
@@ -67,7 +69,7 @@ void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std
     m_ref_atom_object_map[label] = atom_obj;
 }
 
-void AtomPainter::Painting(void)
+void AtomPainter::Painting()
 {
     Logger::Log(LogLevel::Info, "AtomPainter::Painting() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
@@ -370,3 +372,5 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
     #endif
 }
+
+} // namespace rhbm_gem

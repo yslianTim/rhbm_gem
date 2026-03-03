@@ -8,88 +8,88 @@
 
 PYBIND11_MODULE(rhbm_gem_module, m)
 {
-    pybind11::enum_<PainterType>(m, "PainterType")
-        .value("GAUS",       PainterType::GAUS)
-        .value("ATOM",       PainterType::ATOM)
-        .value("MODEL",      PainterType::MODEL)
-        .value("COMPARISON", PainterType::COMPARISON)
-        .value("DEMO",       PainterType::DEMO);
-    pybind11::implicitly_convertible<int, PainterType>();
+    pybind11::enum_<rhbm_gem::PainterType>(m, "PainterType")
+        .value("GAUS",       rhbm_gem::PainterType::GAUS)
+        .value("ATOM",       rhbm_gem::PainterType::ATOM)
+        .value("MODEL",      rhbm_gem::PainterType::MODEL)
+        .value("COMPARISON", rhbm_gem::PainterType::COMPARISON)
+        .value("DEMO",       rhbm_gem::PainterType::DEMO);
+    pybind11::implicitly_convertible<int, rhbm_gem::PainterType>();
 
-    pybind11::enum_<PrinterType>(m, "PrinterType")
-        .value("ATOM_POSITION",  PrinterType::ATOM_POSITION)
-        .value("MAP_VALUE",      PrinterType::MAP_VALUE)
-        .value("GAUS_ESTIMATES", PrinterType::GAUS_ESTIMATES);
-    pybind11::implicitly_convertible<int, PrinterType>();
+    pybind11::enum_<rhbm_gem::PrinterType>(m, "PrinterType")
+        .value("ATOM_POSITION",  rhbm_gem::PrinterType::ATOM_POSITION)
+        .value("MAP_VALUE",      rhbm_gem::PrinterType::MAP_VALUE)
+        .value("GAUS_ESTIMATES", rhbm_gem::PrinterType::GAUS_ESTIMATES);
+    pybind11::implicitly_convertible<int, rhbm_gem::PrinterType>();
 
-    pybind11::enum_<PotentialModel>(m, "PotentialModel")
-        .value("SINGLE_GAUS",      PotentialModel::SINGLE_GAUS)
-        .value("FIVE_GAUS_CHARGE", PotentialModel::FIVE_GAUS_CHARGE)
-        .value("SINGLE_GAUS_USER", PotentialModel::SINGLE_GAUS_USER);
-    pybind11::implicitly_convertible<int, PotentialModel>();
+    pybind11::enum_<rhbm_gem::PotentialModel>(m, "PotentialModel")
+        .value("SINGLE_GAUS",      rhbm_gem::PotentialModel::SINGLE_GAUS)
+        .value("FIVE_GAUS_CHARGE", rhbm_gem::PotentialModel::FIVE_GAUS_CHARGE)
+        .value("SINGLE_GAUS_USER", rhbm_gem::PotentialModel::SINGLE_GAUS_USER);
+    pybind11::implicitly_convertible<int, rhbm_gem::PotentialModel>();
 
-    pybind11::enum_<PartialCharge>(m, "PartialCharge")
-        .value("NEUTRAL", PartialCharge::NEUTRAL)
-        .value("PARTIAL", PartialCharge::PARTIAL)
-        .value("AMBER",   PartialCharge::AMBER);
-    pybind11::implicitly_convertible<int, PartialCharge>();
+    pybind11::enum_<rhbm_gem::PartialCharge>(m, "PartialCharge")
+        .value("NEUTRAL", rhbm_gem::PartialCharge::NEUTRAL)
+        .value("PARTIAL", rhbm_gem::PartialCharge::PARTIAL)
+        .value("AMBER",   rhbm_gem::PartialCharge::AMBER);
+    pybind11::implicitly_convertible<int, rhbm_gem::PartialCharge>();
 
-    pybind11::class_<PotentialAnalysisCommand>(m, "PotentialAnalysisCommand")
+    pybind11::class_<rhbm_gem::PotentialAnalysisCommand>(m, "PotentialAnalysisCommand")
         .def(pybind11::init<>())
-        .def("Execute",                 &PotentialAnalysisCommand::Execute)
-        .def("SetAsymmetryFlag",        &PotentialAnalysisCommand::SetAsymmetryFlag)
-        .def("SetFitRangeMinimum",      &PotentialAnalysisCommand::SetFitRangeMinimum)
-        .def("SetFitRangeMaximum",      &PotentialAnalysisCommand::SetFitRangeMaximum)
-        .def("SetAlphaR",               &PotentialAnalysisCommand::SetAlphaR)
-        .def("SetAlphaG",               &PotentialAnalysisCommand::SetAlphaG)
-        .def("SetDatabasePath",         &PotentialAnalysisCommand::SetDatabasePath)
-        .def("SetModelFilePath",        &PotentialAnalysisCommand::SetModelFilePath)
-        .def("SetMapFilePath",          &PotentialAnalysisCommand::SetMapFilePath)
-        .def("SetSavedKeyTag",          &PotentialAnalysisCommand::SetSavedKeyTag)
-        .def("SetThreadSize",           &PotentialAnalysisCommand::SetThreadSize)
-        .def("SetSamplingSize",         &PotentialAnalysisCommand::SetSamplingSize)
-        .def("SetSamplingRangeMinimum", &PotentialAnalysisCommand::SetSamplingRangeMinimum)
-        .def("SetSamplingRangeMaximum", &PotentialAnalysisCommand::SetSamplingRangeMaximum)
-        .def("SetSimulationFlag",       &PotentialAnalysisCommand::SetSimulationFlag)
-        .def("SetSimulatedMapResolution",&PotentialAnalysisCommand::SetSimulatedMapResolution)
+        .def("Execute",                  &rhbm_gem::PotentialAnalysisCommand::Execute)
+        .def("SetAsymmetryFlag",         &rhbm_gem::PotentialAnalysisCommand::SetAsymmetryFlag)
+        .def("SetFitRangeMinimum",       &rhbm_gem::PotentialAnalysisCommand::SetFitRangeMinimum)
+        .def("SetFitRangeMaximum",       &rhbm_gem::PotentialAnalysisCommand::SetFitRangeMaximum)
+        .def("SetAlphaR",                &rhbm_gem::PotentialAnalysisCommand::SetAlphaR)
+        .def("SetAlphaG",                &rhbm_gem::PotentialAnalysisCommand::SetAlphaG)
+        .def("SetDatabasePath",          &rhbm_gem::PotentialAnalysisCommand::SetDatabasePath)
+        .def("SetModelFilePath",         &rhbm_gem::PotentialAnalysisCommand::SetModelFilePath)
+        .def("SetMapFilePath",           &rhbm_gem::PotentialAnalysisCommand::SetMapFilePath)
+        .def("SetSavedKeyTag",           &rhbm_gem::PotentialAnalysisCommand::SetSavedKeyTag)
+        .def("SetThreadSize",            &rhbm_gem::PotentialAnalysisCommand::SetThreadSize)
+        .def("SetSamplingSize",          &rhbm_gem::PotentialAnalysisCommand::SetSamplingSize)
+        .def("SetSamplingRangeMinimum",  &rhbm_gem::PotentialAnalysisCommand::SetSamplingRangeMinimum)
+        .def("SetSamplingRangeMaximum",  &rhbm_gem::PotentialAnalysisCommand::SetSamplingRangeMaximum)
+        .def("SetSimulationFlag",        &rhbm_gem::PotentialAnalysisCommand::SetSimulationFlag)
+        .def("SetSimulatedMapResolution",&rhbm_gem::PotentialAnalysisCommand::SetSimulatedMapResolution)
         ;
 
-    pybind11::class_<PotentialDisplayCommand>(m, "PotentialDisplayCommand")
+    pybind11::class_<rhbm_gem::PotentialDisplayCommand>(m, "PotentialDisplayCommand")
         .def(pybind11::init<>())
-        .def("Execute",                 &PotentialDisplayCommand::Execute)
-        .def("SetPainterChoice",        &PotentialDisplayCommand::SetPainterChoice)
-        .def("SetModelKeyTagList",      &PotentialDisplayCommand::SetModelKeyTagList)
-        .def("SetRefModelKeyTagListMap",&PotentialDisplayCommand::SetRefModelKeyTagListMap)
-        .def("SetDatabasePath",         &PotentialDisplayCommand::SetDatabasePath)
-        .def("SetFolderPath",           &PotentialDisplayCommand::SetFolderPath)
-        .def("SetPickChainID",          &PotentialDisplayCommand::SetPickChainID)
-        .def("SetPickResidueType",      &PotentialDisplayCommand::SetPickResidueType)
-        .def("SetPickElementType",      &PotentialDisplayCommand::SetPickElementType)
-        .def("SetVetoChainID",          &PotentialDisplayCommand::SetVetoChainID)
-        .def("SetVetoResidueType",      &PotentialDisplayCommand::SetVetoResidueType)
-        .def("SetVetoElementType",      &PotentialDisplayCommand::SetVetoElementType)
+        .def("Execute",                 &rhbm_gem::PotentialDisplayCommand::Execute)
+        .def("SetPainterChoice",        &rhbm_gem::PotentialDisplayCommand::SetPainterChoice)
+        .def("SetModelKeyTagList",      &rhbm_gem::PotentialDisplayCommand::SetModelKeyTagList)
+        .def("SetRefModelKeyTagListMap",&rhbm_gem::PotentialDisplayCommand::SetRefModelKeyTagListMap)
+        .def("SetDatabasePath",         &rhbm_gem::PotentialDisplayCommand::SetDatabasePath)
+        .def("SetFolderPath",           &rhbm_gem::PotentialDisplayCommand::SetFolderPath)
+        .def("SetPickChainID",          &rhbm_gem::PotentialDisplayCommand::SetPickChainID)
+        .def("SetPickResidueType",      &rhbm_gem::PotentialDisplayCommand::SetPickResidueType)
+        .def("SetPickElementType",      &rhbm_gem::PotentialDisplayCommand::SetPickElementType)
+        .def("SetVetoChainID",          &rhbm_gem::PotentialDisplayCommand::SetVetoChainID)
+        .def("SetVetoResidueType",      &rhbm_gem::PotentialDisplayCommand::SetVetoResidueType)
+        .def("SetVetoElementType",      &rhbm_gem::PotentialDisplayCommand::SetVetoElementType)
         ;
 
-    pybind11::class_<ResultDumpCommand>(m, "ResultDumpCommand")
+    pybind11::class_<rhbm_gem::ResultDumpCommand>(m, "ResultDumpCommand")
         .def(pybind11::init<>())
-        .def("Execute",                 &ResultDumpCommand::Execute)
-        .def("SetPrinterChoice",        &ResultDumpCommand::SetPrinterChoice)
-        .def("SetModelKeyTagList",      &ResultDumpCommand::SetModelKeyTagList)
-        .def("SetDatabasePath",         &ResultDumpCommand::SetDatabasePath)
-        .def("SetMapFilePath",          &ResultDumpCommand::SetMapFilePath)
-        .def("SetFolderPath",           &ResultDumpCommand::SetFolderPath)
+        .def("Execute",                 &rhbm_gem::ResultDumpCommand::Execute)
+        .def("SetPrinterChoice",        &rhbm_gem::ResultDumpCommand::SetPrinterChoice)
+        .def("SetModelKeyTagList",      &rhbm_gem::ResultDumpCommand::SetModelKeyTagList)
+        .def("SetDatabasePath",         &rhbm_gem::ResultDumpCommand::SetDatabasePath)
+        .def("SetMapFilePath",          &rhbm_gem::ResultDumpCommand::SetMapFilePath)
+        .def("SetFolderPath",           &rhbm_gem::ResultDumpCommand::SetFolderPath)
         ;
 
-    pybind11::class_<MapSimulationCommand>(m, "MapSimulationCommand")
+    pybind11::class_<rhbm_gem::MapSimulationCommand>(m, "MapSimulationCommand")
         .def(pybind11::init<>())
-        .def("Execute",                 &MapSimulationCommand::Execute)
-        .def("SetFolderPath",           &MapSimulationCommand::SetFolderPath)
-        .def("SetModelFilePath",        &MapSimulationCommand::SetModelFilePath)
-        .def("SetThreadSize",           &MapSimulationCommand::SetThreadSize)
-        .def("SetPotentialModelChoice", &MapSimulationCommand::SetPotentialModelChoice)
-        .def("SetPartialChargeChoice",  &MapSimulationCommand::SetPartialChargeChoice)
-        .def("SetCutoffDistance",       &MapSimulationCommand::SetCutoffDistance)
-        .def("SetGridSpacing",          &MapSimulationCommand::SetGridSpacing)
-        .def("SetBlurringWidthList",    &MapSimulationCommand::SetBlurringWidthList)
+        .def("Execute",                 &rhbm_gem::MapSimulationCommand::Execute)
+        .def("SetFolderPath",           &rhbm_gem::MapSimulationCommand::SetFolderPath)
+        .def("SetModelFilePath",        &rhbm_gem::MapSimulationCommand::SetModelFilePath)
+        .def("SetThreadSize",           &rhbm_gem::MapSimulationCommand::SetThreadSize)
+        .def("SetPotentialModelChoice", &rhbm_gem::MapSimulationCommand::SetPotentialModelChoice)
+        .def("SetPartialChargeChoice",  &rhbm_gem::MapSimulationCommand::SetPartialChargeChoice)
+        .def("SetCutoffDistance",       &rhbm_gem::MapSimulationCommand::SetCutoffDistance)
+        .def("SetGridSpacing",          &rhbm_gem::MapSimulationCommand::SetGridSpacing)
+        .def("SetBlurringWidthList",    &rhbm_gem::MapSimulationCommand::SetBlurringWidthList)
         ;
 }

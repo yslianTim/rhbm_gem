@@ -35,22 +35,22 @@ struct QuantizedPointHash
     }
 };
 
-CommandRegistrar<PositionEstimationCommand> registrar_model_test{
+rhbm_gem::CommandRegistrar<rhbm_gem::PositionEstimationCommand> registrar_model_test{
     "position_estimation",
     "Run atom position estimation"
 };
 } // namespace
 
-PositionEstimationCommand::PositionEstimationCommand(void) :
+namespace rhbm_gem {
+
+PositionEstimationCommand::PositionEstimationCommand() :
     CommandBase(), m_options{}, m_selected_voxel_list{}, m_query_point_list{},
     m_position_list{}, m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::PositionEstimationCommand() called.");
 }
 
 void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RegisterCLIOptionsExtend() called.");
     cmd->add_option_function<std::string>("-m,--map",
         [&](const std::string & value) { SetMapFilePath(value); },
         "Map file path")->required();
@@ -71,9 +71,8 @@ void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Tolerance for deduplicating points")->default_val(m_options.dedup_tolerance);
 }
 
-bool PositionEstimationCommand::Execute(void)
+bool PositionEstimationCommand::Execute()
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::Execute() called.");
     if (BuildDataObject() == false) return false;
     if (BuildVoxelList() == false) return false;
     RunMapValueConvergence();
@@ -149,9 +148,8 @@ void PositionEstimationCommand::SetDedupTolerance(double value)
     }
 }
 
-bool PositionEstimationCommand::BuildDataObject(void)
+bool PositionEstimationCommand::BuildDataObject()
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildDataObject() called");
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
     data_manager->SetDatabaseManager(m_options.database_path);
@@ -170,9 +168,8 @@ bool PositionEstimationCommand::BuildDataObject(void)
     return true;
 }
 
-bool PositionEstimationCommand::BuildVoxelList(void)
+bool PositionEstimationCommand::BuildVoxelList()
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::BuildVoxelList() called");
     ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
     m_selected_voxel_list.clear();
     auto array_size{ m_map_object->GetMapValueArraySize() };
@@ -238,9 +235,8 @@ bool PositionEstimationCommand::BuildVoxelList(void)
     return true;
 }
 
-void PositionEstimationCommand::RunMapValueConvergence(void)
+void PositionEstimationCommand::RunMapValueConvergence()
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunMapValueConvergence() called");
     ScopeTimer timer("PositionEstimationCommand::RunMapValueConvergence");
 
     auto knn_size{ m_options.knn_size };
@@ -338,7 +334,6 @@ void PositionEstimationCommand::UpdatePointPosition(size_t index, size_t knn_siz
 
 void PositionEstimationCommand::RunUniquePointList(float tolerance)
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::RunUniquePointList() called");
     ScopeTimer timer("PositionEstimationCommand::RunUniquePointList");
     if (m_query_point_list.empty())
     {
@@ -384,9 +379,8 @@ void PositionEstimationCommand::RunUniquePointList(float tolerance)
     m_query_point_list.shrink_to_fit();
 }
 
-void PositionEstimationCommand::OutputPointList(void) const
+void PositionEstimationCommand::OutputPointList() const
 {
-    Logger::Log(LogLevel::Debug, "PositionEstimationCommand::OutputPointList() called");
     ScopeTimer timer("PositionEstimationCommand::OutputPointList");
     if (m_position_list.empty())
     {
@@ -402,3 +396,5 @@ void PositionEstimationCommand::OutputPointList(void) const
     ChimeraXHelper::WriteCMMPoints(m_position_list, output_file, 0.05f);
     Logger::Log(LogLevel::Info, "Output file: " + output_file.string());
 }
+
+} // namespace rhbm_gem

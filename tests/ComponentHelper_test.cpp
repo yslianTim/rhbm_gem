@@ -8,12 +8,12 @@ class ComponentHelperTest : public ::testing::Test
 {
 protected:
     LogLevel m_prev_level{};
-    void SetUp(void) override
+    void SetUp() override
     {
         m_prev_level = Logger::GetLogLevel();
         Logger::SetLogLevel(LogLevel::Error);
     }
-    void TearDown(void) override
+    void TearDown() override
     {
         Logger::SetLogLevel(m_prev_level);
     }

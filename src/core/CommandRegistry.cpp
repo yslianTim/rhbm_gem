@@ -2,7 +2,9 @@
 #include "CommandBase.hpp"
 #include "Logger.hpp"
 
-CommandRegistry & CommandRegistry::Instance(void)
+namespace rhbm_gem {
+
+CommandRegistry & CommandRegistry::Instance()
 {
     static CommandRegistry instance;
     return instance;
@@ -22,3 +24,5 @@ bool CommandRegistry::RegisterCommand(
     m_commands.emplace(name, CommandInfo{name, description, std::move(factory)});
     return true;
 }
+
+} // namespace rhbm_gem

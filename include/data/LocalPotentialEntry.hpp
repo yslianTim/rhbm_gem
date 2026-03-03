@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <Eigen/Dense>
 
+namespace rhbm_gem {
+
 class DataObjectBase;
 
 class LocalPotentialEntry
@@ -26,7 +28,7 @@ class LocalPotentialEntry
     std::vector<Eigen::VectorXd> m_basis_and_response_entry_list_tmp;
 
 public:
-    LocalPotentialEntry(void);
+    LocalPotentialEntry();
     ~LocalPotentialEntry();
 
     void SetAlphaR(double value) { m_alpha_r = value; }
@@ -37,7 +39,7 @@ public:
     void SetDataCovariance(const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & value) { m_data_covariance_tmp = value; }
     void AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list);
     void AddBasisAndResponseEntryList(std::vector<Eigen::VectorXd> && list);
-    void ClearDistanceAndMapValueList(void);
+    void ClearDistanceAndMapValueList();
     void AddGausEstimateOLS(double v0, double v1);
     void AddGausEstimateMDPDE(double v0, double v1);
     void AddGausEstimatePosterior(const std::string & key, double v0, double v1);
@@ -45,29 +47,29 @@ public:
     void AddOutlierTag(const std::string & key, bool value);
     void AddStatisticalDistance(const std::string & key, double value);
 
-    int GetDistanceAndMapValueListSize(void) const;
-    int GetBasisAndResponseEntryListSize(void) const;
-    double GetAlphaR(void) const { return m_alpha_r; }
-    double GetSigmaSquare(void) const { return m_sigma_square_tmp; }
-    const Eigen::VectorXd & GetBetaEstimateOLS(void) const { return m_beta_ols_tmp; }
-    const Eigen::VectorXd & GetBetaEstimateMDPDE(void) const { return m_beta_mdpde_tmp; }
-    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataWeight(void) const { return m_data_weight_tmp; }
-    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataCovariance(void) const { return m_data_covariance_tmp; }
-    const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList(void) const;
-    const std::vector<Eigen::VectorXd> & GetBasisAndResponseEntryList(void) const;
-    double GetMapValueNearCenter(void) const;
-    double GetMomentZeroEstimate(void) const;
-    double GetMomentTwoEstimate(void) const;
+    int GetDistanceAndMapValueListSize() const;
+    int GetBasisAndResponseEntryListSize() const;
+    double GetAlphaR() const { return m_alpha_r; }
+    double GetSigmaSquare() const { return m_sigma_square_tmp; }
+    const Eigen::VectorXd & GetBetaEstimateOLS() const { return m_beta_ols_tmp; }
+    const Eigen::VectorXd & GetBetaEstimateMDPDE() const { return m_beta_mdpde_tmp; }
+    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataWeight() const { return m_data_weight_tmp; }
+    const Eigen::DiagonalMatrix<double, Eigen::Dynamic> & GetDataCovariance() const { return m_data_covariance_tmp; }
+    const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList() const;
+    const std::vector<Eigen::VectorXd> & GetBasisAndResponseEntryList() const;
+    double GetMapValueNearCenter() const;
+    double GetMomentZeroEstimate() const;
+    double GetMomentTwoEstimate() const;
     double GetBetaEstimateOLS(int par_id) const;
     double GetBetaEstimateMDPDE(int par_id) const;
     double GetGausEstimateOLS(int par_id) const;
-    double GetAmplitudeEstimateOLS(void) const;
-    double GetWidthEstimateOLS(void) const;
-    double GetIntensityEstimateOLS(void) const;
+    double GetAmplitudeEstimateOLS() const;
+    double GetWidthEstimateOLS() const;
+    double GetIntensityEstimateOLS() const;
     double GetGausEstimateMDPDE(int par_id) const;
-    double GetAmplitudeEstimateMDPDE(void) const;
-    double GetWidthEstimateMDPDE(void) const;
-    double GetIntensityEstimateMDPDE(void) const;
+    double GetAmplitudeEstimateMDPDE() const;
+    double GetWidthEstimateMDPDE() const;
+    double GetIntensityEstimateMDPDE() const;
     double GetGausEstimatePosterior(const std::string & key, int par_id) const;
     double GetAmplitudeEstimatePosterior(const std::string & key) const;
     double GetWidthEstimatePosterior(const std::string & key) const;
@@ -84,3 +86,5 @@ private:
     double CalculateIntensityVariance(double amplitude, double sigma_amplitude, double width, double sigma_width) const;
 
 };
+
+} // namespace rhbm_gem

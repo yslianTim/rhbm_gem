@@ -1,24 +1,27 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <map>
 #include <memory>
 #include <string>
-#include <vector>
-#include <array>
 #include <tuple>
-#include <map>
 #include <unordered_map>
+#include <vector>
 
-#include "DataObjectBase.hpp"
-#include "ComponentKeySystem.hpp"
 #include "AtomKeySystem.hpp"
 #include "BondKeySystem.hpp"
+#include "ComponentKeySystem.hpp"
+#include "DataObjectBase.hpp"
+
+template <typename T> struct KDNode;
+
+namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
 class GroupPotentialEntry;
-template <typename T> struct KDNode;
 
 class ModelObject : public DataObjectBase
 {
@@ -30,11 +33,11 @@ class ModelObject : public DataObjectBase
     std::string m_resolution_method;
     double m_resolution;
     std::map<int, AtomObject*> m_serial_id_atom_map;
-    std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map; // key : entity_id
+    std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_atom_group_potential_entry_map;
     std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_bond_group_potential_entry_map;
-    std::unique_ptr<KDNode<AtomObject>> m_kd_tree_root;
+    std::unique_ptr<::KDNode<AtomObject>> m_kd_tree_root;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
     std::unique_ptr<ComponentKeySystem> m_component_key_system;
@@ -42,16 +45,16 @@ class ModelObject : public DataObjectBase
     std::unique_ptr<BondKeySystem> m_bond_key_system;
 
 public:
-    ModelObject(void);
+    ModelObject();
     explicit ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_list);
     ~ModelObject();
     ModelObject(const ModelObject & other);
-    std::unique_ptr<DataObjectBase> Clone(void) const override;
-    void Display(void) const override;
-    void Update(void) override;
+    std::unique_ptr<DataObjectBase> Clone() const override;
+    void Display() const override;
+    void Update() override;
     void Accept(DataObjectVisitorBase * visitor) override;
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
-    std::string GetKeyTag(void) const override { return m_key_tag; }
+    std::string GetKeyTag() const override { return m_key_tag; }
 
     void AddAtom(std::unique_ptr<AtomObject> atom);
     void AddBond(std::unique_ptr<BondObject> bond);
@@ -77,25 +80,25 @@ public:
     void SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system);
     void SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system);
     void SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system);
-    void BuildKDTreeRoot(void);
+    void BuildKDTreeRoot();
     void FilterAtomFromSymmetry(bool is_asymmetry);
     void FilterBondFromSymmetry(bool is_asymmetry);
 
-    bool HasStandardRNAComponent(void) const;
-    bool HasStandardDNAComponent(void) const;
-    size_t GetNumberOfAtom(void) const { return m_atom_list.size(); }
-    size_t GetNumberOfBond(void) const { return m_bond_list.size(); }
-    size_t GetNumberOfSelectedAtom(void) const { return m_selected_atom_list.size(); }
-    size_t GetNumberOfSelectedBond(void) const { return m_selected_bond_list.size(); }
-    const std::vector<std::unique_ptr<AtomObject>> & GetAtomList(void) const { return m_atom_list; }
-    const std::vector<std::unique_ptr<BondObject>> & GetBondList(void) const { return m_bond_list; }
-    const std::vector<AtomObject *> & GetSelectedAtomList(void) const { return m_selected_atom_list; }
-    const std::vector<BondObject *> & GetSelectedBondList(void) const { return m_selected_bond_list; }
-    std::string GetPdbID(void) const { return m_pdb_id; }
-    std::string GetEmdID(void) const { return m_emd_id; }
-    double GetResolution(void) const { return m_resolution; }
-    std::string GetResolutionMethod(void) const { return m_resolution_method; }
-    std::array<float, 3> GetCenterOfMassPosition(void);
+    bool HasStandardRNAComponent() const;
+    bool HasStandardDNAComponent() const;
+    size_t GetNumberOfAtom() const { return m_atom_list.size(); }
+    size_t GetNumberOfBond() const { return m_bond_list.size(); }
+    size_t GetNumberOfSelectedAtom() const { return m_selected_atom_list.size(); }
+    size_t GetNumberOfSelectedBond() const { return m_selected_bond_list.size(); }
+    const std::vector<std::unique_ptr<AtomObject>> & GetAtomList() const { return m_atom_list; }
+    const std::vector<std::unique_ptr<BondObject>> & GetBondList() const { return m_bond_list; }
+    const std::vector<AtomObject *> & GetSelectedAtomList() const { return m_selected_atom_list; }
+    const std::vector<BondObject *> & GetSelectedBondList() const { return m_selected_bond_list; }
+    std::string GetPdbID() const { return m_pdb_id; }
+    std::string GetEmdID() const { return m_emd_id; }
+    double GetResolution() const { return m_resolution; }
+    std::string GetResolutionMethod() const { return m_resolution_method; }
+    std::array<float, 3> GetCenterOfMassPosition();
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
@@ -103,21 +106,22 @@ public:
     GroupPotentialEntry * GetAtomGroupPotentialEntry(const std::string & class_key) const;
     GroupPotentialEntry * GetBondGroupPotentialEntry(const std::string & class_key) const;
     ChemicalComponentEntry * GetChemicalComponentEntry(ComponentKey key) const;
-    const std::map<int, AtomObject *> & GetSerialIDAtomMap(void) const;
+    const std::map<int, AtomObject *> & GetSerialIDAtomMap() const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-    GetAtomGroupPotentialEntryMap(void) const;
+    GetAtomGroupPotentialEntryMap() const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-    GetBondGroupPotentialEntryMap(void) const;
+    GetBondGroupPotentialEntryMap() const;
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
-    GetChemicalComponentEntryMap(void) const;
-    KDNode<AtomObject> * GetKDTreeRoot(void) const { return m_kd_tree_root.get(); }
-    ComponentKeySystem * GetComponentKeySystemPtr(void) { return m_component_key_system.get(); }
-    AtomKeySystem * GetAtomKeySystemPtr(void) { return m_atom_key_system.get(); }
-    BondKeySystem * GetBondKeySystemPtr(void) { return m_bond_key_system.get(); }
-    std::vector<ComponentKey> GetComponentKeyList(void) const;
+    GetChemicalComponentEntryMap() const;
+    ::KDNode<AtomObject> * GetKDTreeRoot() const { return m_kd_tree_root.get(); }
+    ComponentKeySystem * GetComponentKeySystemPtr() { return m_component_key_system.get(); }
+    AtomKeySystem * GetAtomKeySystemPtr() { return m_atom_key_system.get(); }
+    BondKeySystem * GetBondKeySystemPtr() { return m_bond_key_system.get(); }
+    std::vector<ComponentKey> GetComponentKeyList() const;
 
 private:
-    void BuildSelectedAtomList(void);
-    void BuildSelectedBondList(void);
-    
+    void BuildSelectedAtomList();
+    void BuildSelectedBondList();
 };
+
+} // namespace rhbm_gem

@@ -7,6 +7,8 @@
 
 #include <stdexcept>
 
+namespace rhbm_gem {
+
 const std::unordered_map<Spot, short> AtomClassifier::m_main_chain_color_map
 {
     { Spot::CA, 633 }, // kRed+1
@@ -139,7 +141,7 @@ const std::vector<std::string> AtomClassifier::m_main_chain_member_label_list
     "C2'", "C1'"
 };
 
-AtomClassifier::AtomClassifier(void)
+AtomClassifier::AtomClassifier()
 {
 
 }
@@ -162,7 +164,7 @@ bool AtomClassifier::IsMainChainMember(Spot spot, size_t & main_chain_member_id)
     return false;
 }
 
-size_t AtomClassifier::GetMainChainMemberCount(void)
+size_t AtomClassifier::GetMainChainMemberCount()
 {
     return m_main_chain_member_count;
 }
@@ -456,3 +458,5 @@ std::vector<GroupKey> AtomClassifier::GetNucleotideMainChainComponentAtomClassGr
     }
     return group_key_list;
 }
+
+} // namespace rhbm_gem

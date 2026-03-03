@@ -5,16 +5,16 @@
 
 #include <stdexcept>
 
-FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance(void)
+namespace rhbm_gem {
+
+FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance()
 {
-    Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::Instance() called");
     static FileProcessFactoryRegistry instance;
     return instance;
 }
 
-void FileProcessFactoryRegistry::RegisterDefaultFactories(void)
+void FileProcessFactoryRegistry::RegisterDefaultFactories()
 {
-    Logger::Log(LogLevel::Debug, "FileProcessFactoryRegistry::RegisterDefaultFactories() called");
     RegisterFactory(".pdb",  []() { return std::make_unique<ModelObjectFactory>(); });
     RegisterFactory(".cif",  []() { return std::make_unique<ModelObjectFactory>(); });
     RegisterFactory(".mmcif",[]() { return std::make_unique<ModelObjectFactory>(); });
@@ -27,8 +27,6 @@ void FileProcessFactoryRegistry::RegisterDefaultFactories(void)
 void FileProcessFactoryRegistry::RegisterFactory(
     const std::string & extension, std::function<std::unique_ptr<FileProcessFactoryBase>()> creator)
 {
-    Logger::Log(LogLevel::Debug,
-        "FileProcessFactoryRegistry::RegisterFactory() called for extension: " + extension);
     auto normalized_extension{ extension };
     StringHelper::ToLowerCase(normalized_extension);
     m_factory_map[normalized_extension] = std::move(creator);
@@ -37,8 +35,6 @@ void FileProcessFactoryRegistry::RegisterFactory(
 std::unique_ptr<FileProcessFactoryBase> FileProcessFactoryRegistry::CreateFactory(
     const std::string & extension) const
 {
-    Logger::Log(LogLevel::Debug,
-        "FileProcessFactoryRegistry::CreateFactory() called for extension: " + extension);
     auto normalized_extension{ extension };
     StringHelper::ToLowerCase(normalized_extension);
     auto iter{ m_factory_map.find(normalized_extension) };
@@ -48,3 +44,5 @@ std::unique_ptr<FileProcessFactoryBase> FileProcessFactoryRegistry::CreateFactor
     }
     return (iter->second)();
 }
+
+} // namespace rhbm_gem

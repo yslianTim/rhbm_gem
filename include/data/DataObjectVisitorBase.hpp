@@ -1,5 +1,7 @@
 #pragma once
 
+namespace rhbm_gem {
+
 class AtomObject;
 class BondObject;
 class ModelObject;
@@ -14,3 +16,5 @@ public:
     virtual void VisitModelObject(ModelObject * data_object){ (void)data_object; }
     virtual void VisitMapObject(MapObject * data_object) { (void)data_object; }
 };
+
+} // namespace rhbm_gem

@@ -7,7 +7,7 @@ int main(int argc, char * argv[])
 {
     CLI::App app{"RHBM-GEM"};
 
-    Application app_controller(app);
+    rhbm_gem::Application app_controller(app);
 
     CLI11_PARSE(app, argc, argv);
 

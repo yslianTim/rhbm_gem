@@ -5,7 +5,9 @@
 
 #include <cmath>
 
-LocalPotentialEntry::LocalPotentialEntry(void) :
+namespace rhbm_gem {
+
+LocalPotentialEntry::LocalPotentialEntry() :
     m_alpha_r{ 0.0 }, m_basis_and_response_entry_list_tmp{}
 {
 
@@ -26,7 +28,7 @@ void LocalPotentialEntry::AddBasisAndResponseEntryList(std::vector<Eigen::Vector
     m_basis_and_response_entry_list_tmp = std::move(list);
 }
 
-void LocalPotentialEntry::ClearDistanceAndMapValueList(void)
+void LocalPotentialEntry::ClearDistanceAndMapValueList()
 {
     m_distance_and_map_value_list.clear();
     m_distance_and_map_value_list.shrink_to_fit();
@@ -62,22 +64,22 @@ void LocalPotentialEntry::AddStatisticalDistance(const std::string & key, double
     m_statistical_distance_map[key] = value;
 }
 
-int LocalPotentialEntry::GetDistanceAndMapValueListSize(void) const
+int LocalPotentialEntry::GetDistanceAndMapValueListSize() const
 {
     return static_cast<int>(m_distance_and_map_value_list.size());
 }
 
-int LocalPotentialEntry::GetBasisAndResponseEntryListSize(void) const
+int LocalPotentialEntry::GetBasisAndResponseEntryListSize() const
 {
     return static_cast<int>(m_basis_and_response_entry_list_tmp.size());
 }
 
-const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList(void) const
+const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList() const
 {
     return m_distance_and_map_value_list;
 }
 
-const std::vector<Eigen::VectorXd> & LocalPotentialEntry::GetBasisAndResponseEntryList(void) const
+const std::vector<Eigen::VectorXd> & LocalPotentialEntry::GetBasisAndResponseEntryList() const
 {
     if (m_basis_and_response_entry_list_tmp.empty())
     {
@@ -86,7 +88,7 @@ const std::vector<Eigen::VectorXd> & LocalPotentialEntry::GetBasisAndResponseEnt
     return m_basis_and_response_entry_list_tmp;
 }
 
-double LocalPotentialEntry::GetMapValueNearCenter(void) const
+double LocalPotentialEntry::GetMapValueNearCenter() const
 {
     const auto & data_list{ GetDistanceAndMapValueList() };
     if (data_list.empty()) return 0.0;
@@ -102,7 +104,7 @@ double LocalPotentialEntry::GetMapValueNearCenter(void) const
     return sum/static_cast<double>(count);
 }
 
-double LocalPotentialEntry::GetMomentZeroEstimate(void) const
+double LocalPotentialEntry::GetMomentZeroEstimate() const
 {
     auto data_size{ GetDistanceAndMapValueListSize() };
     if (data_size == 0) return 0.0;
@@ -119,7 +121,7 @@ double LocalPotentialEntry::GetMomentZeroEstimate(void) const
     return y_sum/static_cast<double>(count);
 }
 
-double LocalPotentialEntry::GetMomentTwoEstimate(void) const
+double LocalPotentialEntry::GetMomentTwoEstimate() const
 {
     auto data_size{ GetDistanceAndMapValueListSize() };
     if (data_size == 0) return 0.0;
@@ -171,17 +173,17 @@ double LocalPotentialEntry::GetGausEstimateOLS(int par_id) const
     }
 }
 
-double LocalPotentialEntry::GetAmplitudeEstimateOLS(void) const
+double LocalPotentialEntry::GetAmplitudeEstimateOLS() const
 {
     return std::get<0>(m_gaus_estimate_ols);
 }
 
-double LocalPotentialEntry::GetWidthEstimateOLS(void) const
+double LocalPotentialEntry::GetWidthEstimateOLS() const
 {
     return std::get<1>(m_gaus_estimate_ols);
 }
 
-double LocalPotentialEntry::GetIntensityEstimateOLS(void) const
+double LocalPotentialEntry::GetIntensityEstimateOLS() const
 {
     return CalculateIntensityEstimate(GetAmplitudeEstimateOLS(), GetWidthEstimateOLS());
 }
@@ -199,17 +201,17 @@ double LocalPotentialEntry::GetGausEstimateMDPDE(int par_id) const
     }
 }
 
-double LocalPotentialEntry::GetAmplitudeEstimateMDPDE(void) const
+double LocalPotentialEntry::GetAmplitudeEstimateMDPDE() const
 {
     return std::get<0>(m_gaus_estimate_mdpde);
 }
 
-double LocalPotentialEntry::GetWidthEstimateMDPDE(void) const
+double LocalPotentialEntry::GetWidthEstimateMDPDE() const
 {
     return std::get<1>(m_gaus_estimate_mdpde);
 }
 
-double LocalPotentialEntry::GetIntensityEstimateMDPDE(void) const
+double LocalPotentialEntry::GetIntensityEstimateMDPDE() const
 {
     return CalculateIntensityEstimate(GetAmplitudeEstimateMDPDE(), GetWidthEstimateMDPDE());
 }
@@ -297,3 +299,5 @@ double LocalPotentialEntry::CalculateIntensityVariance(
         std::pow(-3.0 * amplitude * std::pow(Constants::two_pi, -1.5) * std::pow(width, -4) * sigma_width, 2)
     );
 }
+
+} // namespace rhbm_gem

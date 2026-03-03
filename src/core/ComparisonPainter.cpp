@@ -31,7 +31,9 @@
 
 #include <tuple>
 
-ComparisonPainter::ComparisonPainter(void) :
+namespace rhbm_gem {
+
+ComparisonPainter::ComparisonPainter() :
     m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
 {
 
@@ -70,7 +72,7 @@ void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, con
     m_ref_model_object_list_map[label].emplace_back(model_object);
 }
 
-void ComparisonPainter::Painting(void)
+void ComparisonPainter::Painting()
 {
     Logger::Log(LogLevel::Info, "ComparisonPainter::Painting() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
@@ -885,3 +887,5 @@ void ComparisonPainter::BuildMapValueScatterGraph(
     }
 }
 #endif
+
+} // namespace rhbm_gem

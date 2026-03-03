@@ -23,7 +23,8 @@
 
 namespace
 {
-    DataObjectDAORegistrar<ModelObject, ModelObjectDAO> registrar_model_dao("model");
+    rhbm_gem::DataObjectDAORegistrar<rhbm_gem::ModelObject, rhbm_gem::ModelObjectDAO>
+        registrar_model_dao("model");
 }
 
 namespace
@@ -386,6 +387,8 @@ namespace
     constexpr std::string_view TABLE_EXISTS_SQL =
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;";
 }
+
+namespace rhbm_gem {
 
 ModelObjectDAO::ModelObjectDAO(SQLiteWrapper * database) :
     m_database{ database }, m_table_cache{}
@@ -1263,3 +1266,5 @@ std::string ModelObjectDAO::SanitizeTableName(const std::string & key_tag) const
     }
     return sanitized_key_tag;
 }
+
+} // namespace rhbm_gem

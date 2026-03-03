@@ -1,14 +1,14 @@
 #include "ChemicalComponentEntry.hpp"
 #include "Logger.hpp"
 
-ChemicalComponentEntry::ChemicalComponentEntry(void)
+namespace rhbm_gem {
+
+ChemicalComponentEntry::ChemicalComponentEntry()
 {
-    Logger::Log(LogLevel::Debug, "ChemicalComponentEntry::ChemicalComponentEntry() called");
 }
 
 ChemicalComponentEntry::~ChemicalComponentEntry()
 {
-    Logger::Log(LogLevel::Debug, "ChemicalComponentEntry::~ChemicalComponentEntry() called");
 }
 
 void ChemicalComponentEntry::SetComponentAtomEntryMap(
@@ -70,3 +70,5 @@ const ComponentBondEntry * ChemicalComponentEntry::GetComponentBondEntryPtr(Bond
     }
     return &m_component_bond_entry_map.at(bond_key);
 }   
+
+} // namespace rhbm_gem

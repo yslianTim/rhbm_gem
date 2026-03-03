@@ -10,7 +10,10 @@ set(UTILS_SOURCES
     FilePathHelper.cpp
     GausLinearTransformHelper.cpp
     GridSampler.cpp
-    HRLModelHelper.cpp
+    HRLAlphaTrainer.cpp
+    HRLDataTransform.cpp
+    HRLGroupEstimator.cpp
+    HRLModelAlgorithms.cpp
     HRLModelTester.cpp
     LocalPainter.cpp
     Logger.cpp

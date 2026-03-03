@@ -1,16 +1,12 @@
 #pragma once
 
-#include <string>
-#include <vector>
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "GlobalEnumClass.hpp"
 #include "PainterBase.hpp"
-
-class ModelObject;
-class AtomClassifier;
-class BondClassifier;
 
 #ifdef HAVE_ROOT
 class TPad;
@@ -18,6 +14,12 @@ class TH2;
 class TAxis;
 class TPaveText;
 #endif
+
+namespace rhbm_gem {
+
+class ModelObject;
+class AtomClassifier;
+class BondClassifier;
 
 class GausPainter : public PainterBase
 {
@@ -28,15 +30,15 @@ class GausPainter : public PainterBase
     std::unique_ptr<BondClassifier> m_bond_classifier;
 
 public:
-    GausPainter(void);
+    GausPainter();
     ~GausPainter();
     void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
-    void Painting(void) override;
-    #ifdef HAVE_ROOT
-    static void RemodelAxisLabels(TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
-    #endif
+    void Painting() override;
+#ifdef HAVE_ROOT
+    static void RemodelAxisLabels(::TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
+#endif
 
 private:
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
@@ -47,10 +49,11 @@ private:
     void PaintAtomGroupGausAminoAcidMainChainStructure(ModelObject * model_object, const std::string & name);
     void PaintAtomLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
 
-    #ifdef HAVE_ROOT
-    void RemodelFrameInPad(TH2 * frame, TPad * pad, double x_tick_length, double y_tick_length);
-    std::unique_ptr<TPaveText> CreateDataInfoPaveText(ModelObject * model_object) const;
-    std::unique_ptr<TPaveText> CreateResolutionPaveText(ModelObject * model_object) const;
-    #endif
-
+#ifdef HAVE_ROOT
+    void RemodelFrameInPad(::TH2 * frame, ::TPad * pad, double x_tick_length, double y_tick_length);
+    std::unique_ptr<::TPaveText> CreateDataInfoPaveText(ModelObject * model_object) const;
+    std::unique_ptr<::TPaveText> CreateResolutionPaveText(ModelObject * model_object) const;
+#endif
 };
+
+} // namespace rhbm_gem

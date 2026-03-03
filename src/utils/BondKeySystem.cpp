@@ -9,10 +9,9 @@
 const BondKey BondKeySystem::k_dynamic_base{ 10000 };
 const BondKey BondKeySystem::k_max_key{ std::numeric_limits<BondKey>::max() };
 
-BondKeySystem::BondKeySystem(void) :
+BondKeySystem::BondKeySystem() :
     m_next_dynamic_key{ k_dynamic_base }
 {
-    Logger::Log(LogLevel::Debug, "BondKeySystem::BondKeySystem() called");
     for (const auto & [bond_id, link] : ChemicalDataHelper::GetLinkMap())
     {
         auto bond_key{ static_cast<BondKey>(link) };
@@ -27,18 +26,15 @@ BondKeySystem::BondKeySystem(const BondKeySystem & other) :
     m_id_to_key_map{ other.m_id_to_key_map },
     m_key_to_id_map{ other.m_key_to_id_map }
 {
-    Logger::Log(LogLevel::Debug, "BondKeySystem::BondKeySystem() called");
 }
 
 BondKeySystem::~BondKeySystem()
 {
-    Logger::Log(LogLevel::Debug, "BondKeySystem::~BondKeySystem() called");
 }
 
 void BondKeySystem::RegisterBond(
     const std::string & bond_id)
 {
-    Logger::Log(LogLevel::Debug, "BondKeySystem::RegisterBond() called");
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(bond_id) != m_id_to_key_map.end()) return;
     if (m_next_dynamic_key >= k_max_key)
@@ -64,7 +60,6 @@ void BondKeySystem::RegisterBond(
 void BondKeySystem::RegisterBond(
     const std::string & bond_id, BondKey bond_key)
 {
-    Logger::Log(LogLevel::Debug, "BondKeySystem::RegisterBond() called");
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_id_to_key_map.find(bond_id) != m_id_to_key_map.end()) return;
     m_id_to_key_map[bond_id] = bond_key;

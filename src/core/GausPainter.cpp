@@ -35,7 +35,9 @@
 #include <TH1.h>
 #endif
 
-GausPainter::GausPainter(void) :
+namespace rhbm_gem {
+
+GausPainter::GausPainter() :
     m_folder_path{ "./" },
     m_atom_classifier{ std::make_unique<AtomClassifier>() },
     m_bond_classifier{ std::make_unique<BondClassifier>() }
@@ -75,7 +77,7 @@ void GausPainter::AddReferenceDataObject(DataObjectBase * data_object, const std
     m_ref_model_object_list_map[label].push_back(model_object);
 }
 
-void GausPainter::Painting(void)
+void GausPainter::Painting()
 {
     Logger::Log(LogLevel::Info, "GausPainter::Painting() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
@@ -1976,3 +1978,5 @@ std::unique_ptr<TPaveText> GausPainter::CreateResolutionPaveText(
     return pavetext;
 }
 #endif
+
+} // namespace rhbm_gem

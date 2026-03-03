@@ -7,7 +7,9 @@
 
 #include <cmath>
 
-GroupPotentialEntry::GroupPotentialEntry(void)
+namespace rhbm_gem {
+
+GroupPotentialEntry::GroupPotentialEntry()
 {
 
 }
@@ -118,7 +120,7 @@ double GroupPotentialEntry::GetAlphaG(GroupKey group_key) const
     return m_alpha_g_map.at(group_key);
 }
 
-const std::unordered_set<GroupKey> & GroupPotentialEntry::GetGroupKeySet(void) const
+const std::unordered_set<GroupKey> & GroupPotentialEntry::GetGroupKeySet() const
 {
     return m_group_key_set;
 }
@@ -225,3 +227,5 @@ double GroupPotentialEntry::CalculateIntensityVariance(
         std::pow(-3.0 * amplitude * std::pow(Constants::two_pi, -1.5) * std::pow(width, -4) * sigma_width, 2)
     );
 }
+
+} // namespace rhbm_gem

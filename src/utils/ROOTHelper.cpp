@@ -30,6 +30,8 @@
 #include <TTree.h>
 #include <TROOT.h>
 
+#include <stdexcept>
+
 using namespace ROOT;
 
 std::unique_ptr<TCanvas> ROOTHelper::CreateCanvas(
@@ -60,7 +62,7 @@ std::unique_ptr<TH2D> ROOTHelper::CreateHist2D(
     return std::make_unique<TH2D>(name.data(), title.data(), x_bin, x_min, x_max, y_bin, y_min, y_max);
 }
 
-std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(void)
+std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors()
 {
     return std::make_unique<TGraphErrors>();
 }
@@ -70,7 +72,7 @@ std::unique_ptr<TGraphErrors> ROOTHelper::CreateGraphErrors(const int & point_si
     return std::make_unique<TGraphErrors>(point_size);
 }
 
-std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors(void)
+std::unique_ptr<TGraph2DErrors> ROOTHelper::CreateGraph2DErrors()
 {
     return std::make_unique<TGraph2DErrors>();
 }
@@ -193,10 +195,14 @@ void ROOTHelper::SetPadMarginAttribute(
 void ROOTHelper::SetPadMarginInCanvas(
     TVirtualPad * pad, double left, double right, double bottom, double top)
 {
+    if (pad == nullptr)
+    {
+        throw std::invalid_argument("ROOTHelper::SetPadMarginInCanvas() requires a non-null pad.");
+    }
     if (pad->GetCanvas() == nullptr)
     {
-        std::cerr << "Error: TPad is not in any TCanvas! Please Draw() this pad first." << std::endl;
-        return;
+        throw std::runtime_error(
+            "ROOTHelper::SetPadMarginInCanvas() requires the pad to be attached to a canvas.");
     }
     pad->GetCanvas()->Update();
 
@@ -224,16 +230,15 @@ void ROOTHelper::SetPaveTextMarginInCanvas(
 {
     if (!pave)
     {
-        std::cerr << "Error: TPaveText pointer is null." << std::endl;
-        return;
+        throw std::invalid_argument(
+            "ROOTHelper::SetPaveTextMarginInCanvas() requires a non-null TPaveText.");
     }
-    pave->Draw();
-
     if (!pad)
     {
-        std::cerr << "Error: TVirtualPad pointer is null." << std::endl;
-        return;
+        throw std::invalid_argument(
+            "ROOTHelper::SetPaveTextMarginInCanvas() requires a non-null TVirtualPad.");
     }
+    pave->Draw();
     if (pad->GetCanvas()) pad->GetCanvas()->Update();
 
     double x1_canvas{ pad->GetXlowNDC() + left };          
@@ -252,15 +257,15 @@ void ROOTHelper::SetLegendMarginInCanvas(
 {
     if (!legend)
     {
-        std::cerr << "Error: TLegend pointer is null." << std::endl;
-        return;
+        throw std::invalid_argument(
+            "ROOTHelper::SetLegendMarginInCanvas() requires a non-null TLegend.");
     }
     //legend->Draw();
 
     if (!pad)
     {
-        std::cerr << "Error: TVirtualPad pointer is null." << std::endl;
-        return;
+        throw std::invalid_argument(
+            "ROOTHelper::SetLegendMarginInCanvas() requires a non-null TVirtualPad.");
     }
     if (pad->GetCanvas()) pad->GetCanvas()->Update();
 
