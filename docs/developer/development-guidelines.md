@@ -69,8 +69,8 @@ If a rule changes, update this document and any affected user-facing documentati
 
 ## 7. Command and Data Layer Responsibilities
 
-See `docs/architecture/command-architecture.md` for the current command topology, lifecycle diagrams, and repository-specific command extension patterns.
-See `docs/architecture/dataobject-io-architecture.md` for the current DataObject file/database I/O topology, extension points, and persistence constraints.
+See [`./architecture/command-architecture.md`](./architecture/command-architecture.md) for the current command topology, lifecycle diagrams, and repository-specific command extension patterns.
+See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-io-architecture.md) for the current DataObject file/database I/O topology, extension points, and persistence constraints.
 
 - `[Required]` New CLI commands should derive from `CommandBase` and keep command-specific configuration in an `Options : CommandOptions` structure.
 - `[Required]` Setters are responsible for validating user input, normalizing values when appropriate, and marking invalid configurations before execution starts.

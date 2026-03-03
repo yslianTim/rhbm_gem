@@ -2,7 +2,7 @@
 
 This document describes how command classes are structured in this repository, how they are wired into the CLI, and what implementation rules new commands are expected to follow.
 
-Use this document together with `docs/development-guidelines.md`, especially Section 7.
+Use this document together with [`../development-guidelines.md`](../development-guidelines.md), especially Section 7. Editable diagram sources for this area live under [`./diagrams/`](./diagrams/).
 
 ## 1. Purpose
 

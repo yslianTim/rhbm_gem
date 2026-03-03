@@ -11,8 +11,10 @@ It focuses on how `ModelObject` and `MapObject` move through:
 
 Use this document together with:
 
-- `docs/development-guidelines.md`
-- `docs/architecture/command-architecture.md`
+- [`../development-guidelines.md`](../development-guidelines.md)
+- [`./command-architecture.md`](./command-architecture.md)
+
+Editable diagram sources for this area live under [`./diagrams/`](./diagrams/).
 
 ## 1. Scope and Intent
 
