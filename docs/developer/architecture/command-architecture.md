@@ -34,8 +34,8 @@ flowchart TD
 
     E --> M["Subcommand callback"]
     M --> N["CommandBase::Execute()"]
-    N --> O["PrepareForExecution() if not already prepared"]
-    O --> P["Logger::SetLogLevel(...)"]
+    N --> O["Logger::SetLogLevel(...)"]
+    O --> P["PrepareForExecution() if not already prepared"]
     P --> Q["ResetRuntimeState() / ClearDataObjects()"]
     Q --> R["ValidateOptions() + filesystem preflight"]
     R --> S{"Has validation errors?"}
@@ -53,7 +53,7 @@ flowchart TD
 
 ### 3.1 Explicit built-in manifest
 
-Built-in CLI commands are registered centrally through `RegisterBuiltInCommands()`.
+Built-in CLI commands are registered centrally through `RegisterBuiltInCommands()`, which iterates the built-in command catalog and registers each descriptor into `CommandRegistry`.
 
 The built-in manifest order is generated from the built-in command catalog:
 
@@ -108,7 +108,7 @@ Each command must provide:
 `CommandBase` already owns:
 
 - `DataObjectManager m_data_manager`
-- a `ValidationIssue` collection for preflight diagnostics
+- a `ValidationIssue` collection for parse / prepare / runtime diagnostics
 - base CLI options in `CommandOptions`
 
 Shared base options:
@@ -143,7 +143,8 @@ Each concrete command follows the same pattern:
 1. Define `struct Options : public CommandOptions`.
 2. Store one `Options m_options`.
 3. Return `m_options` from both `GetOptions()` overloads.
-4. Keep command-specific validation inside setter methods.
+4. Keep option-local normalization and validation inside setter methods.
+5. Keep cross-field or semantic validation inside `ValidateOptions()`.
 
 This is the preferred extension point for new command parameters.
 
@@ -184,7 +185,7 @@ sequenceDiagram
 Recommended command shape:
 
 1. `RegisterCLIOptionsExtend()` binds CLI options to setter functions.
-2. Setters normalize user input and register option-local validation issues when needed.
+2. Setters invalidate any previously prepared state, normalize user input, and register option-local validation issues when needed.
 3. `PrepareForExecution()` resets runtime state, clears command-local data objects, validates cross-field constraints, and performs filesystem preflight for the current option snapshot.
 4. Any option mutation after `PrepareForExecution()` invalidates the prepared state.
 5. `Execute()` is the single public entry point. It prepares the command if needed, then calls `ExecuteImpl()`.
@@ -193,9 +194,17 @@ Recommended command shape:
 
 ## 6. Data Boundary
 
-`DataObjectManager` is the command layer's gateway for moving data between files, memory, visitors, and the database.
+`DataObjectManager` is the command layer's gateway for moving data between files, memory, visitors, and the database. Most commands access it through thin `CommandBase` helpers instead of calling the manager directly.
 
-Core operations used by commands:
+Preferred command-facing helpers on `CommandBase`:
+
+- `ProcessTypedFile<T>(path, key_tag, label)`
+- `OptionalProcessTypedFile<T>(path, key_tag, label)`
+- `LoadTypedObject<T>(key_tag, label)`
+- `RequireDatabaseManager()`
+- `BuildOutputPath(stem, extension)`
+
+Underlying `DataObjectManager` operations still include:
 
 - `ProcessFile(path, key_tag)` for parsing model or map files into in-memory data objects
 - `LoadDataObject(key_tag)` for loading previously saved objects from SQLite
@@ -208,7 +217,7 @@ Design intent:
 - commands decide *which* objects are needed and *when*
 - the data layer decides *how* files and persistence are implemented
 
-When a command needs database-backed objects, call `RequireDatabaseManager()` before `LoadDataObject()` or `SaveDataObject()`.
+When a command needs database-backed objects, call `RequireDatabaseManager()` before `LoadTypedObject()` or any direct `LoadDataObject()` / `SaveDataObject()` usage.
 
 ## 7. Current Command Families
 
@@ -337,12 +346,26 @@ The CLI surface is driven by:
 - `CommandRegistry`
 - concrete `CommandBase` subclasses
 
-The Python surface is separate and currently exposes only a subset of commands through `bindings/CoreBindings.cpp`:
+The Python surface is separate and currently exposes only a subset of commands through `bindings/CoreBindings.cpp`.
+
+Public command classes currently exposed to Python:
 
 - `PotentialAnalysisCommand`
 - `PotentialDisplayCommand`
 - `ResultDumpCommand`
 - `MapSimulationCommand`
+
+Shared diagnostics types currently exposed to Python:
+
+- `LogLevel`
+- `ValidationPhase`
+- `ValidationIssue`
+
+Each Python-public command also exposes:
+
+- `PrepareForExecution()`
+- `HasValidationErrors()`
+- `GetValidationIssues()`
 
 Implication for future work:
 
@@ -359,11 +382,11 @@ When adding a new command, follow this checklist:
 2. Add the implementation under `src/core/`.
 3. Derive from `CommandBase`.
 4. Define `Options : CommandOptions`.
-5. Implement validation in setter methods, not in scattered workflow code.
+5. Implement option-local validation in setter methods and cross-field validation in `ValidateOptions()`, not in scattered workflow code.
 6. Implement `RegisterCLIOptionsExtend()` using setter callbacks.
 7. Keep `ExecuteImpl()` phase-oriented: rely on `CommandBase::Execute()` / `PrepareForExecution()`, then build prerequisites, then run the workflow.
 8. Use `DataObjectManager` as the boundary for file parsing and persistence.
-9. Add the command to `RegisterBuiltInCommands()` and define explicit `CommandSurface` metadata.
+9. Add a new `CommandDescriptor` entry to `BuiltInCommandCatalog()` with the command name, description, `CommandSurface`, `DatabaseUsage`, `BindingExposure`, and factory.
 10. Update bindings, examples, tests, and user-facing docs if the command is part of a supported public workflow.
 
 ## 11. What Future Contributors Should Avoid
@@ -372,6 +395,7 @@ Avoid these anti-patterns:
 
 - bypassing `CommandRegistry` and hard-coding new CLI subcommands in `Application`
 - re-introducing namespace-scope static registration for built-in commands
+- treating `RegisterBuiltInCommands()` as the built-in source of truth instead of the built-in command catalog
 - putting format-specific parsing logic directly inside a command
 - delaying basic validation until deep inside `Execute()`
 - mutating the filesystem during CLI parse instead of during preflight
@@ -387,6 +411,8 @@ For future command work, inspect these files first:
 - `src/core/CommandBase.cpp`
 - `include/core/CommandRegistry.hpp`
 - `src/core/CommandRegistry.cpp`
+- `include/core/BuiltInCommandCatalog.hpp`
+- `src/core/BuiltInCommandCatalog.cpp`
 - `include/core/Application.hpp`
 - `src/core/Application.cpp`
 - `include/core/PotentialAnalysisCommand.hpp`
@@ -397,3 +423,4 @@ For future command work, inspect these files first:
 - `src/core/ResultDumpCommand.cpp`
 - `include/core/DataObjectManager.hpp`
 - `src/core/DataObjectManager.cpp`
+- `bindings/CoreBindings.cpp`
