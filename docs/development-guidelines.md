@@ -1,15 +1,14 @@
 # Development Guidelines
 
-This document defines the preferred engineering rules for new code and for any existing code that is being modified. It is not a literal description of every legacy pattern already present in the repository. Legacy code does not need immediate repo-wide cleanup, but touched code should move toward these rules whenever practical.
+This document defines the preferred engineering rules for new code and for any existing code that is being modified.
+The goal of these guidelines is engineering quality: maintainability, correctness, diagnosability, testability, and safe evolution of public interfaces.
 
 If a rule changes, update this document and any affected user-facing documentation, especially `README.md`.
 
-## 1. Purpose and Rule Levels
+## 1. Rule Levels
 
 - `[Required]` Rules that new code and modified code are expected to follow.
 - `[Recommended]` Rules that should be applied when working in the affected area unless there is a good reason not to.
-- `[Legacy note]` Existing historical patterns that may still appear in the codebase but are not preferred for new development.
-- The goal of these guidelines is engineering quality: maintainability, correctness, diagnosability, testability, and safe evolution of public interfaces.
 
 ## 2. Project Structure and Module Boundaries
 
