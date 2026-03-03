@@ -69,6 +69,8 @@ If a rule changes, update this document and any affected user-facing documentati
 
 ## 7. Command and Data Layer Responsibilities
 
+See `docs/architecture/command-architecture.md` for the current command topology, lifecycle diagrams, and repository-specific command extension patterns.
+
 - `[Required]` New CLI commands should derive from `CommandBase` and keep command-specific configuration in an `Options : CommandOptions` structure.
 - `[Required]` Setters are responsible for validating user input, normalizing values when appropriate, and marking invalid configurations before execution starts.
 - `[Required]` `Execute()` should keep a clear phase boundary: validate and construct prerequisites first, then run the main workflow.
