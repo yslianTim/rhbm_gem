@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -133,6 +134,7 @@ protected:
         const std::filesystem::path & value,
         std::string_view option_name,
         std::string_view label);
+    // Invalid input is normalized to a fallback value and recorded as a parse warning.
     template <typename FieldType, typename RawType, typename Predicate>
     void SetNormalizedScalarOption(
         FieldType & field,
@@ -155,6 +157,87 @@ protected:
             AddNormalizationWarning(std::string(option_name), warning_message);
         });
     }
+    // Invalid input falls back to a safe value and is recorded as a parse error.
+    template <typename FieldType, typename RawType, typename Predicate>
+    void SetValidatedScalarOption(
+        FieldType & field,
+        RawType raw_value,
+        std::string_view option_name,
+        Predicate is_valid,
+        FieldType fallback_value,
+        const std::string & error_message)
+    {
+        MutateOptions([&]()
+        {
+            ResetParseIssues(option_name);
+            if (is_valid(raw_value))
+            {
+                field = static_cast<FieldType>(raw_value);
+                return;
+            }
+
+            field = fallback_value;
+            AddValidationError(
+                std::string(option_name),
+                error_message,
+                ValidationPhase::Parse);
+        });
+    }
+    template <typename FieldType, typename RawType>
+    void SetFinitePositiveScalarOption(
+        FieldType & field,
+        RawType raw_value,
+        std::string_view option_name,
+        FieldType fallback_value,
+        const std::string & error_message)
+    {
+        SetValidatedScalarOption(
+            field,
+            raw_value,
+            option_name,
+            [](RawType candidate)
+            {
+                return std::isfinite(static_cast<long double>(candidate)) && candidate > 0;
+            },
+            fallback_value,
+            error_message);
+    }
+    template <typename FieldType, typename RawType>
+    void SetFiniteNonNegativeScalarOption(
+        FieldType & field,
+        RawType raw_value,
+        std::string_view option_name,
+        FieldType fallback_value,
+        const std::string & error_message)
+    {
+        SetValidatedScalarOption(
+            field,
+            raw_value,
+            option_name,
+            [](RawType candidate)
+            {
+                return std::isfinite(static_cast<long double>(candidate)) && candidate >= 0;
+            },
+            fallback_value,
+            error_message);
+    }
+    template <typename FieldType, typename RawType>
+    void SetPositiveScalarOption(
+        FieldType & field,
+        RawType raw_value,
+        std::string_view option_name,
+        FieldType fallback_value,
+        const std::string & error_message)
+    {
+        SetValidatedScalarOption(
+            field,
+            raw_value,
+            option_name,
+            [](RawType candidate) { return candidate > 0; },
+            fallback_value,
+            error_message);
+    }
+    // Invalid enum input falls back to a safe value and is recorded as a parse error.
     template <typename EnumType>
     void SetValidatedEnumOption(
         EnumType & field,

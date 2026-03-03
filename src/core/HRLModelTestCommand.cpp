@@ -10,7 +10,6 @@
 #include <memory>
 #include <sstream>
 #include <vector>
-#include <cmath>
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -31,20 +30,6 @@
 #endif
 
 namespace rhbm_gem {
-
-namespace {
-
-bool IsFiniteNonNegative(double value)
-{
-    return std::isfinite(value) && value >= 0.0;
-}
-
-bool IsFinitePositive(double value)
-{
-    return std::isfinite(value) && value > 0.0;
-}
-
-} // namespace
 
 HRLModelTestCommand::HRLModelTestCommand() :
     CommandBase(), m_options{}
@@ -131,78 +116,42 @@ void HRLModelTestCommand::SetTesterChoice(TesterType value)
 
 void HRLModelTestCommand::SetFitRangeMinimum(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--fit-min");
-        if (IsFiniteNonNegative(value))
-        {
-            m_options.fit_range_min = value;
-            return;
-        }
-
-        m_options.fit_range_min = 0.0;
-        AddValidationError(
-            "--fit-min",
-            "Minimum fitting range must be a finite non-negative value.",
-            ValidationPhase::Parse);
-    });
+    SetFiniteNonNegativeScalarOption(
+        m_options.fit_range_min,
+        value,
+        "--fit-min",
+        0.0,
+        "Minimum fitting range must be a finite non-negative value.");
 }
 
 void HRLModelTestCommand::SetFitRangeMaximum(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--fit-max");
-        if (IsFiniteNonNegative(value))
-        {
-            m_options.fit_range_max = value;
-            return;
-        }
-
-        m_options.fit_range_max = 1.0;
-        AddValidationError(
-            "--fit-max",
-            "Maximum fitting range must be a finite non-negative value.",
-            ValidationPhase::Parse);
-    });
+    SetFiniteNonNegativeScalarOption(
+        m_options.fit_range_max,
+        value,
+        "--fit-max",
+        1.0,
+        "Maximum fitting range must be a finite non-negative value.");
 }
 
 void HRLModelTestCommand::SetAlphaR(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--alpha-r");
-        if (IsFinitePositive(value))
-        {
-            m_options.alpha_r = value;
-            return;
-        }
-
-        m_options.alpha_r = 0.1;
-        AddValidationError(
-            "--alpha-r",
-            "Alpha-R must be a finite positive value.",
-            ValidationPhase::Parse);
-    });
+    SetFinitePositiveScalarOption(
+        m_options.alpha_r,
+        value,
+        "--alpha-r",
+        0.1,
+        "Alpha-R must be a finite positive value.");
 }
 
 void HRLModelTestCommand::SetAlphaG(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--alpha-g");
-        if (IsFinitePositive(value))
-        {
-            m_options.alpha_g = value;
-            return;
-        }
-
-        m_options.alpha_g = 0.2;
-        AddValidationError(
-            "--alpha-g",
-            "Alpha-G must be a finite positive value.",
-            ValidationPhase::Parse);
-    });
+    SetFinitePositiveScalarOption(
+        m_options.alpha_g,
+        value,
+        "--alpha-g",
+        0.2,
+        "Alpha-G must be a finite positive value.");
 }
 
 void HRLModelTestCommand::RunSimulationTestOnBenchMark()

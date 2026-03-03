@@ -144,6 +144,7 @@ Each concrete command follows the same pattern:
 5. Keep cross-field or semantic validation inside `ValidateOptions()`.
 
 This is the preferred extension point for new command parameters.
+The shared setter helper families for scalar normalization, scalar validation, and enum validation now live on `CommandBase`, so new commands should reuse those helpers before introducing command-local setter boilerplate.
 Invalid enum or mode selections should be rejected from setter paths or `PrepareForExecution()`, not first discovered from a runtime `switch` default branch inside `ExecuteImpl()`.
 
 ## 5. Standard Execution Lifecycle

@@ -12,6 +12,7 @@ set(TEST_SOURCES
     CommandOptionHelper_test.cpp
     CommandRegistrationPolicy_test.cpp
     CommandRegistry_test.cpp
+    CommandScalarValidationHelper_test.cpp
     CommandSurface_test.cpp
     CommandValidationIssue_test.cpp
     ComponentHelper_test.cpp

@@ -31,7 +31,6 @@
 #include <iterator>
 #include <stdexcept>
 #include <limits>
-#include <cmath>
 #include <random>
 #include <sstream>
 
@@ -51,16 +50,6 @@ bool quiet_mode)
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = options.thread_size;
     return execution_options;
-}
-
-bool IsFiniteNonNegative(double value)
-{
-    return std::isfinite(value) && value >= 0.0;
-}
-
-bool IsFinitePositive(double value)
-{
-    return std::isfinite(value) && value > 0.0;
 }
 }
 
@@ -226,97 +215,52 @@ void PotentialAnalysisCommand::SetSimulationFlag(bool value)
 
 void PotentialAnalysisCommand::SetSimulatedMapResolution(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--sim-resolution");
-        if (IsFiniteNonNegative(value))
-        {
-            m_options.resolution_simulation = value;
-            return;
-        }
-
-        m_options.resolution_simulation = 0.0;
-        AddValidationError(
-            "--sim-resolution",
-            "Simulated-map resolution must be a finite non-negative value.",
-            ValidationPhase::Parse);
-    });
+    SetFiniteNonNegativeScalarOption(
+        m_options.resolution_simulation,
+        value,
+        "--sim-resolution",
+        0.0,
+        "Simulated-map resolution must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetFitRangeMinimum(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--fit-min");
-        if (IsFiniteNonNegative(value))
-        {
-            m_options.fit_range_min = value;
-            return;
-        }
-
-        m_options.fit_range_min = 0.0;
-        AddValidationError(
-            "--fit-min",
-            "Minimum fitting range must be a finite non-negative value.",
-            ValidationPhase::Parse);
-    });
+    SetFiniteNonNegativeScalarOption(
+        m_options.fit_range_min,
+        value,
+        "--fit-min",
+        0.0,
+        "Minimum fitting range must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetFitRangeMaximum(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--fit-max");
-        if (IsFiniteNonNegative(value))
-        {
-            m_options.fit_range_max = value;
-            return;
-        }
-
-        m_options.fit_range_max = 1.0;
-        AddValidationError(
-            "--fit-max",
-            "Maximum fitting range must be a finite non-negative value.",
-            ValidationPhase::Parse);
-    });
+    SetFiniteNonNegativeScalarOption(
+        m_options.fit_range_max,
+        value,
+        "--fit-max",
+        1.0,
+        "Maximum fitting range must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetAlphaR(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--alpha-r");
-        if (IsFinitePositive(value))
-        {
-            m_options.alpha_r = value;
-            return;
-        }
-
-        m_options.alpha_r = 0.1;
-        AddValidationError(
-            "--alpha-r",
-            "Alpha-R must be a finite positive value.",
-            ValidationPhase::Parse);
-    });
+    SetFinitePositiveScalarOption(
+        m_options.alpha_r,
+        value,
+        "--alpha-r",
+        0.1,
+        "Alpha-R must be a finite positive value.");
 }
 
 void PotentialAnalysisCommand::SetAlphaG(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--alpha-g");
-        if (IsFinitePositive(value))
-        {
-            m_options.alpha_g = value;
-            return;
-        }
-
-        m_options.alpha_g = 0.2;
-        AddValidationError(
-            "--alpha-g",
-            "Alpha-G must be a finite positive value.",
-            ValidationPhase::Parse);
-    });
+    SetFinitePositiveScalarOption(
+        m_options.alpha_g,
+        value,
+        "--alpha-g",
+        0.2,
+        "Alpha-G must be a finite positive value.");
 }
 
 void PotentialAnalysisCommand::SetModelFilePath(const std::filesystem::path & path)
@@ -361,59 +305,32 @@ void PotentialAnalysisCommand::SetSamplingSize(int value)
 
 void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--sampling-min");
-        if (IsFiniteNonNegative(value))
-        {
-            m_options.sampling_range_min = value;
-            return;
-        }
-
-        m_options.sampling_range_min = 0.0;
-        AddValidationError(
-            "--sampling-min",
-            "Minimum sampling range must be a finite non-negative value.",
-            ValidationPhase::Parse);
-    });
+    SetFiniteNonNegativeScalarOption(
+        m_options.sampling_range_min,
+        value,
+        "--sampling-min",
+        0.0,
+        "Minimum sampling range must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--sampling-max");
-        if (IsFiniteNonNegative(value))
-        {
-            m_options.sampling_range_max = value;
-            return;
-        }
-
-        m_options.sampling_range_max = 1.5;
-        AddValidationError(
-            "--sampling-max",
-            "Maximum sampling range must be a finite non-negative value.",
-            ValidationPhase::Parse);
-    });
+    SetFiniteNonNegativeScalarOption(
+        m_options.sampling_range_max,
+        value,
+        "--sampling-max",
+        1.5,
+        "Maximum sampling range must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetSamplingHeight(double value)
 {
-    MutateOptions([&]()
-    {
-        ResetParseIssues("--sampling-height");
-        if (IsFinitePositive(value))
-        {
-            m_options.sampling_height = value;
-            return;
-        }
-
-        m_options.sampling_height = 0.1;
-        AddValidationError(
-            "--sampling-height",
-            "Sampling height must be a finite positive value.",
-            ValidationPhase::Parse);
-    });
+    SetFinitePositiveScalarOption(
+        m_options.sampling_height,
+        value,
+        "--sampling-height",
+        0.1,
+        "Sampling height must be a finite positive value.");
 }
 
 bool PotentialAnalysisCommand::BuildDataObject()
