@@ -17,8 +17,8 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 | If you need... | Prepare... |
 | --- | --- |
 | A standard C++ build | A compiler toolchain, CMake, and the platform prerequisites for your OS |
-| Python bindings or Python examples | Python 3; on Linux also install `python3-dev` |
-| ROOT-based plots or figure output | ROOT on the platform where you will build |
+| Python interface or Python examples | Python 3; on Linux also install `python3-dev` |
+| Plots or figure output | ROOT on the platform where you will build |
 | Boost-backed features | Boost, or leave `RHBM_GEM_BOOST_MODE=AUTO` / set `RHBM_GEM_BOOST_MODE=OFF` |
 
 A few dependencies are optional:
@@ -49,13 +49,13 @@ xcode-select --install
 brew install cmake python libomp
 ```
 
-4. Optional: install system packages instead of using the bundled copies from `third_party/`:
+4. Optional (Recommended): install system packages instead of using the bundled copies from `third_party/`:
 
 ```bash
 brew install eigen sqlite3 pybind11 cli11
 ```
 
-5. Optional: install these only if you need the related features:
+5. Optional (Recommended): install these only if you need the related features:
 
 ```bash
 brew install root
