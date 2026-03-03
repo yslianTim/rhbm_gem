@@ -116,14 +116,51 @@ Boost is optional. In `AUTO` mode, CMake enables Boost-backed features only when
 
 ## Installation
 
-1. Configure and build from the project root:
+Choose the workflow that matches your environment. Complete the platform-specific prerequisite section above first, then follow only one of the installation flows below.
+
+### macOS and Linux end users
+
+For most macOS and Linux users, installing under `~/.local` is the simplest option because it avoids administrator privileges and keeps the installed files in your home directory.
+
+1. Configure and build:
+
+```bash
+cmake -S . -B build-local \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+cmake --build build-local -j
+```
+
+2. Verify the executable from the build tree:
+
+```bash
+./build-local/RHBM-GEM --help
+```
+
+3. Install to your user-local prefix:
+
+```bash
+cmake --install build-local
+```
+
+4. Verify the installed executable:
+
+```bash
+"$HOME/.local/bin/RHBM-GEM" --help
+```
+
+### macOS and Linux administrators or shared systems
+
+If you are installing for a shared machine and want CMake's default install prefix instead of a user-local path, use a separate build directory for that workflow.
+
+1. Configure and build:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
-2. Run the main executable:
+2. Verify the executable from the build tree:
 
 ```bash
 ./build/RHBM-GEM --help
@@ -135,29 +172,44 @@ cmake --build build -j
 cmake --install build
 ```
 
-4. Install to a custom user path:
+Depending on your platform and install prefix, this step may require administrator privileges.
 
-```bash
-cmake -S . -B build-local -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
-cmake --build build-local -j
-cmake --install build-local
-```
+### Windows users (PowerShell + Visual Studio 2022)
 
-5. Run the installed executable:
+Use this flow if you are building from a Visual Studio 2022 developer environment or a PowerShell session with the required MSVC tools available.
 
-```bash
-"$HOME/.local/bin/RHBM-GEM" --help
-```
-
-Windows PowerShell equivalent:
+1. Choose a per-user install location:
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DUSE_SYSTEM_LIBS=OFF -DRHBM_GEM_ROOT_MODE=OFF
-cmake --build build --config Release
-.\build\Release\RHBM-GEM.exe --help
-cmake --install build --config Release --prefix "$env:USERPROFILE\AppData\Local\RHBM-GEM"
-& "$env:USERPROFILE\AppData\Local\RHBM-GEM\bin\RHBM-GEM.exe" --help
+$InstallPrefix = "$env:USERPROFILE\AppData\Local\RHBM-GEM"
 ```
+
+2. Configure and build:
+
+```powershell
+cmake -S . -B build `
+  -G "Visual Studio 17 2022" `
+  -A x64 `
+  -DUSE_SYSTEM_LIBS=OFF `
+  -DRHBM_GEM_ROOT_MODE=OFF `
+  -DCMAKE_INSTALL_PREFIX="$InstallPrefix"
+cmake --build build --config Release
+```
+
+3. Verify the executable from the build tree:
+
+```powershell
+.\build\Release\RHBM-GEM.exe --help
+```
+
+4. Install and verify the installed executable:
+
+```powershell
+cmake --install build --config Release
+& "$InstallPrefix\bin\RHBM-GEM.exe" --help
+```
+
+If you configured Windows builds with `vcpkg` in the platform setup section above, add the same toolchain arguments to the configure command in this workflow.
 
 ## Python Bindings
 
