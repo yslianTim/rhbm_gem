@@ -1,0 +1,121 @@
+#pragma once
+
+#include <chrono>
+#include <cstdint>
+#include <filesystem>
+#include <stdexcept>
+#include <string>
+
+#include "AtomObject.hpp"
+#include "DataObjectManager.hpp"
+#include "LocalPotentialEntry.hpp"
+#include "MapSimulationCommand.hpp"
+#include "ModelObject.hpp"
+
+namespace command_test {
+
+inline std::filesystem::path TestDataPath(const std::string & file_name)
+{
+    return std::filesystem::path(__FILE__).parent_path() / "data" / file_name;
+}
+
+inline std::filesystem::path MakeUniqueTempDir(const std::string & prefix)
+{
+    const auto timestamp{
+        static_cast<std::uint64_t>(
+            std::chrono::steady_clock::now().time_since_epoch().count())
+    };
+    const auto path{
+        std::filesystem::temp_directory_path()
+        / (prefix + "_" + std::to_string(timestamp))
+    };
+    std::filesystem::create_directories(path);
+    return path;
+}
+
+class ScopedTempDir
+{
+public:
+    explicit ScopedTempDir(const std::string & prefix) :
+        m_path{ MakeUniqueTempDir(prefix) }
+    {
+    }
+
+    ~ScopedTempDir()
+    {
+        std::error_code error_code;
+        std::filesystem::remove_all(m_path, error_code);
+    }
+
+    const std::filesystem::path & path() const
+    {
+        return m_path;
+    }
+
+private:
+    std::filesystem::path m_path;
+};
+
+inline void SeedSavedModel(
+    const std::filesystem::path & database_path,
+    const std::filesystem::path & model_path,
+    const std::string & saved_key,
+    const std::string & pdb_id)
+{
+    rhbm_gem::DataObjectManager manager;
+    manager.SetDatabaseManager(database_path);
+    manager.ProcessFile(model_path, "model");
+    auto model{ manager.GetTypedDataObject<rhbm_gem::ModelObject>("model") };
+    model->SetPdbID(pdb_id);
+    for (auto & atom : model->GetAtomList())
+    {
+        atom->AddLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+    }
+    manager.SaveDataObject("model", saved_key);
+}
+
+inline std::filesystem::path GenerateMapFile(
+    const std::filesystem::path & output_dir,
+    const std::filesystem::path & model_path,
+    const std::string & map_name = "sim_map",
+    const std::string & blurring_widths = "1.0")
+{
+    rhbm_gem::MapSimulationCommand command;
+    command.SetFolderPath(output_dir);
+    command.SetMapFileName(map_name);
+    command.SetModelFilePath(model_path);
+    command.SetBlurringWidthList(blurring_widths);
+    if (!command.Execute())
+    {
+        throw std::runtime_error("Failed to generate map fixture.");
+    }
+
+    for (const auto & entry : std::filesystem::directory_iterator(output_dir))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".map")
+        {
+            return entry.path();
+        }
+    }
+
+    throw std::runtime_error("Generated map fixture was not found.");
+}
+
+inline std::size_t CountFilesWithExtension(
+    const std::filesystem::path & directory,
+    const std::string & extension)
+{
+    if (!std::filesystem::exists(directory)) return 0;
+
+    std::size_t count{ 0 };
+    for (const auto & entry : std::filesystem::directory_iterator(directory))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == extension)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+} // namespace command_test

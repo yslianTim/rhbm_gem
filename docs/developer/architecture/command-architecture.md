@@ -30,19 +30,22 @@ flowchart TD
     G --> I["Derived::RegisterCLIOptionsExtend(...)"]
 
     J["CLI11 parse"] --> K["Option setter callbacks"]
-    K --> L["Command options updated / validated"]
+    K --> L["Command options updated / normalized"]
 
     E --> M["Subcommand callback"]
-    M --> N["Logger::SetLogLevel(...)"]
-    N --> O{"IsValidateOptions()"}
-    O -- false --> P["Abort before Execute()"]
-    O -- true --> Q["Derived::Execute()"]
+    M --> N["CommandBase::PrepareForExecution()"]
+    N --> O["Logger::SetLogLevel(...)"]
+    O --> P["ResetRuntimeState() / ClearDataObjects()"]
+    P --> Q["ValidateOptions() + filesystem preflight"]
+    Q --> R{"Has validation errors?"}
+    R -- true --> S["Report issues and abort"]
+    R -- false --> T["Derived::Execute()"]
 
-    Q --> R["BuildDataObject*() phase"]
-    R --> S["DataObjectManager"]
-    S --> T["FileProcessFactoryRegistry / DatabaseManager"]
-    Q --> U["Workflow phase"]
-    U --> V["Painters / writers / algorithms / persistence"]
+    T --> U["BuildDataObject*() phase"]
+    U --> V["DataObjectManager"]
+    V --> W["FileProcessFactoryRegistry / DatabaseManager"]
+    T --> X["Workflow phase"]
+    X --> Y["Painters / writers / algorithms / persistence"]
 ```
 
 ## 3. Registration Model
@@ -91,7 +94,7 @@ Each command must provide:
 `CommandBase` already owns:
 
 - `DataObjectManager m_data_manager`
-- `bool m_valiate_options`
+- a `ValidationIssue` collection for preflight diagnostics
 - base CLI options in `CommandOptions`
 
 Shared base options:
@@ -105,10 +108,24 @@ Base setters are not passive assignment helpers. They also normalize and validat
 
 - `SetThreadSize()` clamps invalid values to `1`
 - `SetVerboseLevel()` restores an allowed log level when needed
-- `SetDatabasePath()` creates parent directories and marks the command invalid on failure
-- `SetFolderPath()` normalizes the path, creates directories, and marks the command invalid on failure
+- `SetDatabasePath()` normalizes the path but does not create directories during parse
+- `SetFolderPath()` normalizes the path but does not create directories during parse
 
-### 4.3 Options pattern
+### 4.3 Common option capability mask
+
+`CommandBase` also exposes `GetCommonOptionMask()` so each concrete command can
+choose which shared base options it actually needs:
+
+- `Threading`
+- `Verbose`
+- `Database`
+- `OutputFolder`
+
+File-only commands can still register a hidden deprecated `--database` alias
+for CLI compatibility without exposing it in help output or using it at
+runtime.
+
+### 4.4 Options pattern
 
 Each concrete command follows the same pattern:
 
@@ -121,7 +138,7 @@ This is the preferred extension point for new command parameters.
 
 ## 5. Standard Execution Lifecycle
 
-Most commands in this repository follow the same two-phase shape:
+Most commands in this repository follow the same three-step shape:
 
 ```mermaid
 sequenceDiagram
@@ -132,13 +149,13 @@ sequenceDiagram
     participant DM as DataObjectManager
 
     User->>CLI: invoke subcommand with options
-    CLI->>Cmd: setter callbacks populate Options
+    CLI->>Cmd: setter callbacks populate / normalize Options
     CLI->>App: run subcommand callback
-    App->>Cmd: GetOptions()
-    App->>App: Logger::SetLogLevel(...)
-    App->>Cmd: IsValidateOptions()
-    alt invalid options
-        App-->>User: log error and abort
+    App->>Cmd: PrepareForExecution()
+    Cmd->>Cmd: ResetRuntimeState()
+    Cmd->>Cmd: ValidateOptions()
+    alt validation failure
+        Cmd-->>User: structured validation issues
     else valid options
         App->>Cmd: Execute()
         Cmd->>Cmd: BuildDataObject*()
@@ -151,10 +168,11 @@ sequenceDiagram
 Recommended command shape:
 
 1. `RegisterCLIOptionsExtend()` binds CLI options to setter functions.
-2. Setters validate user input early and update `m_valiate_options` when necessary.
-3. `Execute()` starts by building prerequisites.
-4. `Execute()` then runs the main workflow in clear phases.
-5. Any persistence or file output happens after the main computation is ready.
+2. Setters normalize user input and register option-local validation issues when needed.
+3. `PrepareForExecution()` resets runtime state, clears command-local data objects, validates cross-field constraints, and performs filesystem preflight.
+4. `Execute()` starts by ensuring preparation has happened, then builds prerequisites.
+5. `Execute()` then runs the main workflow in clear phases.
+6. Any persistence or file output happens after the main computation is ready.
 
 ## 6. Data Boundary
 
@@ -204,6 +222,18 @@ These commands primarily load previously saved `ModelObject` instances from the 
 | `model_test` | tester mode and fitting parameters | choose simulation scenario, run `HRLModelTester` workflows | logs and optional ROOT-based plots |
 
 `model_test` is still a `CommandBase` subclass for CLI consistency, but it does not currently rely on `DataObjectManager`.
+
+### 7.4 Command surface matrix
+
+| Command | Uses database at runtime | Uses output folder | Exposed to Python | Hidden deprecated `--database` alias |
+| --- | --- | --- | --- | --- |
+| `potential_analysis` | yes | yes | yes | no |
+| `potential_display` | yes | yes | yes | no |
+| `result_dump` | yes | yes | yes | no |
+| `map_simulation` | no | yes | yes | yes |
+| `map_visualization` | no | yes | no | yes |
+| `position_estimation` | no | yes | no | yes |
+| `model_test` | no | yes | no | yes |
 
 ## 8. Concrete Command Notes
 
@@ -299,6 +329,7 @@ Implication for future work:
 
 - adding a new CLI command does not automatically expose it to Python
 - if a command is intended to be public from Python, bindings must be updated explicitly
+- bound command instances call `Execute()` directly, so `Execute()` must remain safe for repeated calls on the same instance
 - CLI-only commands should remain documented as such
 
 ## 10. Implementation Rules For New Commands
@@ -311,7 +342,7 @@ When adding a new command, follow this checklist:
 4. Define `Options : CommandOptions`.
 5. Implement validation in setter methods, not in scattered workflow code.
 6. Implement `RegisterCLIOptionsExtend()` using setter callbacks.
-7. Keep `Execute()` phase-oriented: build prerequisites first, then run the workflow.
+7. Keep `Execute()` phase-oriented: rely on `PrepareForExecution()`, then build prerequisites, then run the workflow.
 8. Use `DataObjectManager` as the boundary for file parsing and persistence.
 9. Add a namespace-scope `CommandRegistrar<YourCommand>` in the `.cpp` file.
 10. Update bindings, examples, tests, and user-facing docs if the command is part of a supported public workflow.
@@ -323,6 +354,7 @@ Avoid these anti-patterns:
 - bypassing `CommandRegistry` and hard-coding new CLI subcommands in `Application`
 - putting format-specific parsing logic directly inside a command
 - delaying basic validation until deep inside `Execute()`
+- mutating the filesystem during CLI parse instead of during preflight
 - mixing CLI parsing concerns with algorithm implementation details
 - letting commands manipulate database internals directly instead of using `DataObjectManager`
 - introducing multiple unrelated responsibilities into one command when an existing mode switch or strategy object is a better extension point

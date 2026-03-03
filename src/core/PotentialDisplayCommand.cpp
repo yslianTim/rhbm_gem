@@ -20,6 +20,50 @@ namespace {
 rhbm_gem::CommandRegistrar<rhbm_gem::PotentialDisplayCommand> registrar_potential_display{
     "potential_display",
     "Run potential display"};
+
+bool ParseReferenceModelKeyTagListMap(
+    const std::string & value,
+    std::unordered_map<std::string, std::vector<std::string>> & output_map,
+    std::string & error_message)
+{
+    output_map.clear();
+    size_t pos{ 0 };
+    const size_t len{ value.size() };
+
+    while (pos < len)
+    {
+        if (value[pos] != '[')
+        {
+            error_message = "Expected '[' at position " + std::to_string(pos) + ".";
+            output_map.clear();
+            return false;
+        }
+
+        const size_t end_name{ value.find(']', pos + 1) };
+        if (end_name == std::string::npos)
+        {
+            error_message = "Expected ']' after reference group name.";
+            output_map.clear();
+            return false;
+        }
+
+        std::string group_name{ value.substr(pos + 1, end_name - (pos + 1)) };
+        const size_t start_members{ end_name + 1 };
+        size_t end_block{ value.find(';', start_members) };
+        if (end_block == std::string::npos)
+        {
+            end_block = len;
+        }
+
+        std::string members_string{ value.substr(start_members, end_block - start_members) };
+        output_map.emplace(
+            std::move(group_name),
+            StringHelper::SplitStringLineFromDelimiter(members_string, ','));
+        pos = end_block + 1;
+    }
+
+    return true;
+}
 }
 
 namespace rhbm_gem {
@@ -77,10 +121,17 @@ void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool PotentialDisplayCommand::Execute()
 {
+    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObject() == false) return false;
     RunDataObjectSelection();
     RunDisplay();
     return true;
+}
+
+void PotentialDisplayCommand::ResetRuntimeState()
+{
+    m_model_object_list.clear();
+    m_ref_model_object_list_map.clear();
 }
 
 void PotentialDisplayCommand::SetPainterChoice(PainterType value)
@@ -91,49 +142,25 @@ void PotentialDisplayCommand::SetPainterChoice(PainterType value)
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+    ClearValidationIssuesForOption("--model-keylist");
     if (m_options.model_key_tag_list.empty())
     {
-        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
-        m_valiate_options = false;
+        AddValidationError("--model-keylist", "Model key list cannot be empty.");
     }
 }
 
 void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value)
 {
+    m_options.ref_model_key_tag_list = value;
     m_ref_model_key_tag_list_map.clear();
-    size_t pos{ 0 };
-    size_t len{ value.size() };
+    ClearValidationIssuesForOption("--ref-model-keylist");
+    if (value.empty()) return;
 
-    while (pos < len)
+    std::string error_message;
+    if (!ParseReferenceModelKeyTagListMap(value, m_ref_model_key_tag_list_map, error_message))
     {
-        // Find '[' for start of group name
-        if (value[pos] != '[')
-        {
-            throw std::runtime_error("Parser Error : expect '['");
-        }
-        // Find ']' for end of group name
-        size_t end_name{ value.find(']', pos+1) };
-        if (end_name == std::string::npos)
-        {
-            throw std::runtime_error("Parser Error : expect ']'");
-        }
-        std::string group_name{ value.substr(pos+1, end_name - (pos+1)) };
-
-        // Find the start of members after ']'
-        size_t start_members{ end_name + 1 };
-        size_t end_block{ value.find(';', start_members) };
-        if (end_block == std::string::npos)
-        {
-            end_block = len;
-        }
-        std::string members_string{ value.substr(start_members, end_block - start_members) };
-
-        m_ref_model_key_tag_list_map.emplace(
-            std::move(group_name),
-            StringHelper::SplitStringLineFromDelimiter(members_string, ','));
-
-        // Jump to the next block, which is after the semicolon
-        pos = end_block + 1;
+        AddValidationError("--ref-model-keylist", error_message);
+        return;
     }
 
     Logger::Log(

@@ -19,7 +19,8 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     pybind11::enum_<rhbm_gem::PrinterType>(m, "PrinterType")
         .value("ATOM_POSITION",  rhbm_gem::PrinterType::ATOM_POSITION)
         .value("MAP_VALUE",      rhbm_gem::PrinterType::MAP_VALUE)
-        .value("GAUS_ESTIMATES", rhbm_gem::PrinterType::GAUS_ESTIMATES);
+        .value("GAUS_ESTIMATES", rhbm_gem::PrinterType::GAUS_ESTIMATES)
+        .value("ATOM_OUTLIER",   rhbm_gem::PrinterType::ATOM_OUTLIER);
     pybind11::implicitly_convertible<int, rhbm_gem::PrinterType>();
 
     pybind11::enum_<rhbm_gem::PotentialModel>(m, "PotentialModel")

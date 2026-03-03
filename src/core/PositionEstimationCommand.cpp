@@ -49,8 +49,11 @@ PositionEstimationCommand::PositionEstimationCommand() :
 {
 }
 
+PositionEstimationCommand::~PositionEstimationCommand() = default;
+
 void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
+    RegisterDeprecatedDatabasePathAlias(cmd);
     cmd->add_option_function<std::string>("-m,--map",
         [&](const std::string & value) { SetMapFilePath(value); },
         "Map file path")->required();
@@ -73,6 +76,7 @@ void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool PositionEstimationCommand::Execute()
 {
+    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObject() == false) return false;
     if (BuildVoxelList() == false) return false;
     RunMapValueConvergence();
@@ -81,15 +85,19 @@ bool PositionEstimationCommand::Execute()
     return true;
 }
 
+void PositionEstimationCommand::ResetRuntimeState()
+{
+    m_selected_voxel_list.clear();
+    m_query_point_list.clear();
+    m_position_list.clear();
+    m_kd_tree_root.reset();
+    m_map_object.reset();
+}
+
 void PositionEstimationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
     m_options.map_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Map file does not exist: " + m_options.map_file_path.string());
-        m_valiate_options = false;
-    }
+    ValidateRequiredExistingPath(m_options.map_file_path, "--map", "Map file");
 }
 
 void PositionEstimationCommand::SetIterationCount(int value)
@@ -152,7 +160,6 @@ bool PositionEstimationCommand::BuildDataObject()
 {
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
-    data_manager->SetDatabaseManager(m_options.database_path);
     try
     {
         data_manager->ProcessFile(m_options.map_file_path, "map");

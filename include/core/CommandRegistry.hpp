@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <vector>
 
 namespace rhbm_gem {
 
@@ -27,11 +27,11 @@ public:
         std::function<std::unique_ptr<CommandBase>()> factory
     );
 
-    const std::unordered_map<std::string, CommandInfo> &
+    const std::vector<CommandInfo> &
     GetCommands() const { return m_commands; }
 
 private:
-    std::unordered_map<std::string, CommandInfo> m_commands;
+    std::vector<CommandInfo> m_commands;
 };
 
 template <typename CommandType>

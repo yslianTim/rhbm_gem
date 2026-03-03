@@ -121,6 +121,7 @@ void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool PotentialAnalysisCommand::Execute()
 {
+    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
@@ -137,6 +138,29 @@ bool PotentialAnalysisCommand::Execute()
     //RunBondPotentialFitting();
     SaveDataObject();
     return true;
+}
+
+void PotentialAnalysisCommand::ValidateOptions()
+{
+    ClearValidationIssuesForOption("--sampling-range");
+    if (m_options.sampling_range_min > m_options.sampling_range_max)
+    {
+        AddValidationError("--sampling-range",
+            "Expected --sampling-min <= --sampling-max.");
+    }
+
+    ClearValidationIssuesForOption("--fit-range");
+    if (m_options.fit_range_min > m_options.fit_range_max)
+    {
+        AddValidationError("--fit-range",
+            "Expected --fit-min <= --fit-max.");
+    }
+}
+
+void PotentialAnalysisCommand::ResetRuntimeState()
+{
+    m_map_object.reset();
+    m_model_object.reset();
 }
 
 void PotentialAnalysisCommand::SetTrainingAlphaFlag(bool value)
@@ -181,23 +205,13 @@ void PotentialAnalysisCommand::SetAlphaG(double value)
 void PotentialAnalysisCommand::SetModelFilePath(const std::filesystem::path & path)
 {
     m_options.model_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Model file does not exist: " + m_options.model_file_path.string());
-        m_valiate_options = false;
-    }
+    ValidateRequiredExistingPath(m_options.model_file_path, "--model", "Model file");
 }
 
 void PotentialAnalysisCommand::SetMapFilePath(const std::filesystem::path & path)
 {
     m_options.map_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Map file does not exist: " + m_options.map_file_path.string());
-        m_valiate_options = false;
-    }
+    ValidateRequiredExistingPath(m_options.map_file_path, "--map", "Map file");
 }
 
 void PotentialAnalysisCommand::SetSavedKeyTag(const std::string & tag)

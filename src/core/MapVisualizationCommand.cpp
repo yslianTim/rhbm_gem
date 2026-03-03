@@ -48,6 +48,7 @@ MapVisualizationCommand::~MapVisualizationCommand()
 
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
+    RegisterDeprecatedDatabasePathAlias(cmd);
     cmd->add_option_function<std::string>("-a,--model",
         [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
@@ -67,34 +68,29 @@ void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool MapVisualizationCommand::Execute()
 {
+    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
-    RunAtomMapValueSampling();
+    return RunAtomMapValueSampling();
+}
 
-    return true;
+void MapVisualizationCommand::ResetRuntimeState()
+{
+    m_map_object.reset();
+    m_model_object.reset();
 }
 
 void MapVisualizationCommand::SetModelFilePath(const std::filesystem::path & path)
 {
     m_options.model_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Model file does not exist: " + m_options.model_file_path.string());
-        m_valiate_options = false;
-    }
+    ValidateRequiredExistingPath(m_options.model_file_path, "--model", "Model file");
 }
 
 void MapVisualizationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
     m_options.map_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Map file does not exist: " + m_options.map_file_path.string());
-        m_valiate_options = false;
-    }
+    ValidateRequiredExistingPath(m_options.map_file_path, "--map", "Map file");
 }
 
 void MapVisualizationCommand::SetSamplingSize(int value)
@@ -117,7 +113,6 @@ bool MapVisualizationCommand::BuildDataObject()
 {
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     auto data_manager{ GetDataManagerPtr() };
-    data_manager->SetDatabaseManager(m_options.database_path);
     try
     {
         data_manager->ProcessFile(m_options.model_file_path, m_model_key_tag);
@@ -154,10 +149,14 @@ void MapVisualizationCommand::RunModelObjectPreprocessing()
         "Number of selected bond = " + std::to_string(m_model_object->GetNumberOfSelectedBond()));
 }
 
-void MapVisualizationCommand::RunAtomMapValueSampling()
+bool MapVisualizationCommand::RunAtomMapValueSampling()
 {
     ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
-    if (m_map_object == nullptr) return;
+    if (m_map_object == nullptr || m_model_object == nullptr)
+    {
+        Logger::Log(LogLevel::Error, "Map or model object is unavailable for visualization.");
+        return false;
+    }
     auto sampler{ std::make_unique<GridSampler>() };
     sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
     sampler->SetWindowSize(static_cast<float>(m_options.window_size));
@@ -174,14 +173,63 @@ void MapVisualizationCommand::RunAtomMapValueSampling()
     for (auto & bond : bond_list)
     {
         bond_map[bond->GetAtomSerialID1()].emplace_back(bond);
+        bond_map[bond->GetAtomSerialID2()].emplace_back(bond);
     }
-    auto target_atom_position{ atom_map.at(m_options.atom_serial_id)->GetPosition() };
-    auto reference_u_vector{ bond_map.at(m_options.atom_serial_id).at(1)->GetBondVector() };
-    bond_map.at(m_options.atom_serial_id).at(1)->Display();
+
+    const auto atom_iter{ atom_map.find(m_options.atom_serial_id) };
+    if (atom_iter == atom_map.end())
+    {
+        Logger::Log(LogLevel::Error,
+            "Cannot find atom serial ID " + std::to_string(m_options.atom_serial_id)
+            + " in the selected atom list.");
+        return false;
+    }
+
+    const auto bond_iter{ bond_map.find(m_options.atom_serial_id) };
+    if (bond_iter == bond_map.end() || bond_iter->second.empty())
+    {
+        Logger::Log(LogLevel::Error,
+            "Cannot derive a bond context for atom serial ID "
+            + std::to_string(m_options.atom_serial_id) + ".");
+        return false;
+    }
+
+    auto target_atom_position{ atom_iter->second->GetPosition() };
+    std::array<float, 3> reference_u_vector{ 0.0f, 0.0f, 0.0f };
+    bool found_reference_bond{ false };
+    for (const auto * bond : bond_iter->second)
+    {
+        const auto bond_vector{ bond->GetBondVector() };
+        const Eigen::Map<const Eigen::Vector3f> candidate_vector(bond_vector.data());
+        if (candidate_vector.norm() == 0.0f) continue;
+        reference_u_vector = bond_vector;
+        found_reference_bond = true;
+        break;
+    }
+    if (!found_reference_bond)
+    {
+        Logger::Log(LogLevel::Error,
+            "Cannot visualize atom serial ID " + std::to_string(m_options.atom_serial_id)
+            + " because all available bond vectors are degenerate.");
+        return false;
+    }
+
     const Eigen::Map<const Eigen::Vector3f> eigen_u_vector(reference_u_vector.data());
     Eigen::Vector3f u_vector{ eigen_u_vector.normalized() };
     Eigen::Vector3f v_vector{ Eigen::Vector3f{0.0, 0.0, 1.0} };
     Eigen::Vector3f n_vector{ u_vector.cross(v_vector) };
+    if (n_vector.norm() == 0.0f)
+    {
+        v_vector = Eigen::Vector3f{1.0, 0.0, 0.0};
+        n_vector = u_vector.cross(v_vector);
+        if (n_vector.norm() == 0.0f)
+        {
+            Logger::Log(LogLevel::Error,
+                "Cannot construct a stable visualization axis for atom serial ID "
+                + std::to_string(m_options.atom_serial_id) + ".");
+            return false;
+        }
+    }
     sampler->SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
     MapInterpolationVisitor interpolation_visitor{ sampler.get() };
@@ -190,6 +238,11 @@ void MapVisualizationCommand::RunAtomMapValueSampling()
     interpolation_visitor.SetAxisVector({n_vector(0), n_vector(1), n_vector(2)});
     m_map_object->Accept(&interpolation_visitor);
     auto & sampling_data_list{ interpolation_visitor.GetSamplingDataList() };
+    if (sampling_data_list.empty())
+    {
+        Logger::Log(LogLevel::Error, "Map sampling produced no data points.");
+        return false;
+    }
     std::vector<double> map_value_list;
     map_value_list.reserve(sampling_data_list.size());
     for (auto & [distance, value] : sampling_data_list)
@@ -209,9 +262,32 @@ void MapVisualizationCommand::RunAtomMapValueSampling()
         "#font[2]{u} Position #[]{#AA}",
         "#font[2]{v} Position #[]{#AA}",
         "Normalized Map Value",
-        "/Users/yslian/Downloads/test_2d_slice_map.pdf"
+        BuildOutputFilePath().string()
     );
 
+    return true;
+}
+
+std::filesystem::path MapVisualizationCommand::BuildOutputFilePath() const
+{
+    std::string model_name;
+    if (m_model_object && !m_model_object->GetPdbID().empty())
+    {
+        model_name = m_model_object->GetPdbID();
+    }
+    else
+    {
+        model_name = FilePathHelper::GetFileName(m_options.model_file_path, false);
+        if (model_name.empty())
+        {
+            model_name = "model";
+        }
+    }
+
+    const std::string file_name{
+        "map_slice_" + model_name + "_atom" + std::to_string(m_options.atom_serial_id) + ".pdf"
+    };
+    return m_options.folder_path / file_name;
 }
 
 } // namespace rhbm_gem

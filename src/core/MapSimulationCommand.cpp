@@ -45,6 +45,7 @@ MapSimulationCommand::~MapSimulationCommand()
 
 void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
+    RegisterDeprecatedDatabasePathAlias(cmd);
     cmd->add_option_function<std::string>("-a,--model",
         [&](const std::string & value) { SetModelFilePath(value); },
         "Model file path")->required();
@@ -86,10 +87,38 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool MapSimulationCommand::Execute()
 {
+    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObject() == false) return false;
     CalculateAtomRange();
     RunMapSimulation();
     return true;
+}
+
+void MapSimulationCommand::ValidateOptions()
+{
+    ClearValidationIssuesForOption("--blurring-width");
+    if (m_options.blurring_width_list.empty())
+    {
+        AddValidationError("--blurring-width",
+            "At least one positive blurring width is required.");
+    }
+}
+
+void MapSimulationCommand::ResetRuntimeState()
+{
+    m_selected_atom_list.clear();
+    m_atom_charge_map.clear();
+    m_model_object.reset();
+    m_atom_range_minimum = {
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max()
+    };
+    m_atom_range_maximum = {
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest()
+    };
 }
 
 void MapSimulationCommand::SetPotentialModelChoice(PotentialModel value)
@@ -116,12 +145,7 @@ void MapSimulationCommand::SetCutoffDistance(double value)
 void MapSimulationCommand::SetModelFilePath(const std::filesystem::path & value)
 {
     m_options.model_file_path = value;
-    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Model file does not exist: " + m_options.model_file_path.string());
-        m_valiate_options = false;
-    }
+    ValidateRequiredExistingPath(m_options.model_file_path, "--model", "Model file");
 }
 
 void MapSimulationCommand::SetMapFileName(const std::string & value)
@@ -142,21 +166,19 @@ void MapSimulationCommand::SetGridSpacing(double value)
 
 void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
-    m_options.blurring_width_list = StringHelper::ParseListOption<double>(value, ',');
-    for (auto width : m_options.blurring_width_list)
+    const auto parsed_list{ StringHelper::ParseListOption<double>(value, ',') };
+    m_options.blurring_width_list.clear();
+    m_options.blurring_width_list.reserve(parsed_list.size());
+    for (const auto width : parsed_list)
     {
         if (width <= 0.0)
         {
             Logger::Log(LogLevel::Warning,
-                "Blurring width must be positive, erase current setting : "
+                "Blurring width must be positive, dropping current setting: "
                 + std::to_string(width));
-            m_options.blurring_width_list.erase(
-                std::remove(
-                    m_options.blurring_width_list.begin(),
-                    m_options.blurring_width_list.end(), width),
-                m_options.blurring_width_list.end()
-            );
+            continue;
         }
+        m_options.blurring_width_list.push_back(width);
     }
 }
 

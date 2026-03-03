@@ -20,6 +20,7 @@
 #include "CommandRegistry.hpp"
 #include "AtomKeySystem.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <fstream>
 
@@ -64,9 +65,26 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool ResultDumpCommand::Execute()
 {
+    if (!EnsurePreparedForExecution()) return false;
     if (BuildDataObjectList() == false) return false;
     RunResultDump();
     return true;
+}
+
+void ResultDumpCommand::ValidateOptions()
+{
+    if (m_options.printer_choice == PrinterType::MAP_VALUE && m_options.map_file_path.empty())
+    {
+        AddValidationError("--map",
+            "A map file is required when '--printer map' is selected.");
+    }
+}
+
+void ResultDumpCommand::ResetRuntimeState()
+{
+    m_selected_atom_list_map.clear();
+    m_model_object_list.clear();
+    m_map_object.reset();
 }
 
 void ResultDumpCommand::SetPrinterChoice(PrinterType value)
@@ -77,22 +95,16 @@ void ResultDumpCommand::SetPrinterChoice(PrinterType value)
 void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)
 {
     m_options.map_file_path = path;
-    if (!m_options.map_file_path.empty() &&
-        !FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Map file does not exist: " + m_options.map_file_path.string());
-        m_valiate_options = false;
-    }
+    ValidateOptionalExistingPath(m_options.map_file_path, "--map", "Map file");
 }
 
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
     m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+    ClearValidationIssuesForOption("--model-keylist");
     if (m_options.model_key_tag_list.empty())
     {
-        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
-        m_valiate_options = false;
+        AddValidationError("--model-keylist", "Model key list cannot be empty.");
     }
 }
 
@@ -139,6 +151,20 @@ void ResultDumpCommand::RunResultDump()
     Logger::Log(LogLevel::Info,
         "Total number of model object sets to be dump: "
         + std::to_string(m_options.model_key_tag_list.size()));
+
+    const bool has_selected_atoms{
+        std::any_of(
+            m_selected_atom_list_map.begin(),
+            m_selected_atom_list_map.end(),
+            [](const auto & entry) { return !entry.second.empty(); })
+    };
+    if (!has_selected_atoms)
+    {
+        Logger::Log(LogLevel::Warning,
+            "No selected atoms with local potential entries were found. Skipping dump.");
+        return;
+    }
+
     switch (m_options.printer_choice)
     {
         case PrinterType::ATOM_POSITION:
@@ -272,6 +298,12 @@ void ResultDumpCommand::RunMapValueDumping()
     {
         auto key_tag{ model_object->GetKeyTag() };
         auto atom_size{ m_selected_atom_list_map.at(key_tag).size() };
+        if (atom_size == 0)
+        {
+            Logger::Log(LogLevel::Warning,
+                "No selected atoms found for key tag [" + key_tag + "]. Skipping map-value dump.");
+            continue;
+        }
         std::array<float, 3> atom_range_min, atom_range_max;
         std::vector<float> x_list, y_list, z_list;
         x_list.reserve(atom_size);

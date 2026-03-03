@@ -38,6 +38,8 @@ public:
     ~ResultDumpCommand();
     bool Execute() override;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    void ValidateOptions() override;
+    void ResetRuntimeState() override;
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

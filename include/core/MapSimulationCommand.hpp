@@ -46,6 +46,14 @@ public:
     ~MapSimulationCommand();
     bool Execute() override;
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
+    void ValidateOptions() override;
+    void ResetRuntimeState() override;
+    CommonOptionMask GetCommonOptionMask() const override
+    {
+        return CommonOption::Threading
+             | CommonOption::Verbose
+             | CommonOption::OutputFolder;
+    }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

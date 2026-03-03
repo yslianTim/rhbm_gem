@@ -38,9 +38,16 @@ private:
 
 public:
     PositionEstimationCommand();
-    ~PositionEstimationCommand() = default;
+    ~PositionEstimationCommand() override;
     bool Execute() override;
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
+    void ResetRuntimeState() override;
+    CommonOptionMask GetCommonOptionMask() const override
+    {
+        return CommonOption::Threading
+             | CommonOption::Verbose
+             | CommonOption::OutputFolder;
+    }
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
 

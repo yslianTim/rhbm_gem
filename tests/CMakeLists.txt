@@ -1,8 +1,11 @@
 set(TEST_SOURCES
+    Application_test.cpp
     ArrayStats_test.cpp
     AtomSelector_test.cpp
     ChemicalDataHelper_test.cpp
     ChimeraXHelper_test.cpp
+    CommandBase_test.cpp
+    CommandRegistry_test.cpp
     ComponentHelper_test.cpp
     DataObjectManager_test.cpp
     EigenMatrixUtility_test.cpp
@@ -16,6 +19,11 @@ set(TEST_SOURCES
     KDTreeAlgorithm_test.cpp
     Logger_test.cpp
     MapFileIO_test.cpp
+    MapSimulationCommand_test.cpp
+    MapVisualizationCommand_test.cpp
+    PositionEstimationCommand_test.cpp
+    PotentialDisplayCommand_test.cpp
+    ResultDumpCommand_test.cpp
     ROOTHelper_test.cpp
     SphereSampler_test.cpp
     StringHelper_test.cpp
@@ -63,3 +71,14 @@ add_test(
         -DPROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}
         -P ${PROJECT_SOURCE_DIR}/cmake/ParameterlessVoidStyleGuard.cmake
 )
+
+if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABLE)
+    add_test(
+        NAME bindings_smoke_test
+        COMMAND ${CMAKE_COMMAND} -E env
+            "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
+            ${Python_EXECUTABLE}
+            -c
+            "import rhbm_gem_module as m; assert hasattr(m.PrinterType, 'ATOM_OUTLIER')"
+    )
+endif()

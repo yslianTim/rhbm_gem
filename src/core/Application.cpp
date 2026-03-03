@@ -18,7 +18,7 @@ Application::Application(CLI::App & app) :
 void Application::RegisterAllCommands()
 {
     const auto & commands{ CommandRegistry::Instance().GetCommands() };
-    for (const auto & [name, info] : commands)
+    for (const auto & info : commands)
     {
         RegisterCommand(info.name, info.description, info.factory);
     }
@@ -38,10 +38,8 @@ void Application::RegisterCommand(
         ScopeTimer timer("Command in Application");
         const auto & options{ cmd->GetOptions() };
         Logger::SetLogLevel(options.verbose_level);
-        if (cmd->IsValidateOptions() == false)
+        if (!cmd->PrepareForExecution())
         {
-            Logger::Log(LogLevel::Error,
-                "Invalid command options detected. Aborting command execution.");
             return;
         }
         if (cmd->Execute() == false)

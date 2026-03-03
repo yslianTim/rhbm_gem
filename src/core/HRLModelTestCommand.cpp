@@ -43,6 +43,7 @@ HRLModelTestCommand::HRLModelTestCommand() :
 
 void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
+    RegisterDeprecatedDatabasePathAlias(cmd);
     std::map<std::string, TesterType> tester_map
     {
         {"0", TesterType::BENCHMARK},         {"benchmark",      TesterType::BENCHMARK},
@@ -72,6 +73,7 @@ void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool HRLModelTestCommand::Execute()
 {
+    if (!EnsurePreparedForExecution()) return false;
     switch (m_options.tester_choice)
     {
         case TesterType::BENCHMARK:
