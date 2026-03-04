@@ -77,7 +77,10 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` Setters are responsible for validating user input, normalizing values when appropriate, and marking invalid configurations before execution starts.
 - `[Required]` `Execute()` should keep a clear phase boundary: validate and construct prerequisites first, then run the main workflow.
 - `[Required]` File parsing, database access, and DAO details belong in the data layer, not inside command orchestration logic.
-- `[Required]` Support for new file formats must update both the extension-based factory selection path and the corresponding format implementation.
+- `[Required]` Supported file-format matrices must be defined through `FileFormatRegistry`; do not scatter extension truth across unrelated registries or readers and writers.
+- `[Required]` Support for a new file format must update `FileFormatRegistry`, the corresponding backend implementation, regression tests, and the developer documentation support matrix in the same change.
+- `[Required]` Database schema evolution must use SQLite `PRAGMA user_version` and be coordinated through `DatabaseSchemaManager`.
+- `[Required]` `DatabaseManager` owns transaction boundaries for normal save and load flows. DAO implementations must not open their own transactions.
 - `[Required]` New built-in commands should be added through `BuiltInCommandCatalog()` and must provide a Python binding name there so CLI registration, bindings, and docs sync share one source of truth for built-in naming while the concrete command type remains the source of shared common-option policy.
 - `[Required]` New built-in commands must ship both CLI registration and Python binding updates in the same change unless the command is intentionally not part of the built-in catalog.
 - `[Required]` Built-in catalog metadata and registration helpers are internal implementation details. Keep them under `src/`, not `include/`, unless the project intentionally promotes them to a supported public API.
@@ -94,6 +97,7 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` Tests must be deterministic and must not depend on machine-specific state or previously generated local artifacts.
 - `[Required]` Tests that create files or directories must clean them up.
 - `[Required]` If a feature is controlled by optional dependencies or feature modes, add coverage for the enabled or disabled behavior that the change affects.
+- `[Required]` Schema, migration, or persistence-contract changes must include regression coverage for bootstrap or migration behavior, rollback behavior when a save or migration fails, and round-trip behavior for any newly persisted state.
 - `[Recommended]` Use minimal fixtures that reproduce only the behavior under test.
 - `[Recommended]` Resolve fixture paths relative to the test source, for example via `std::filesystem::path(__FILE__).parent_path()`.
 - `[Recommended]` Use temporary files or temporary directories for generated output.

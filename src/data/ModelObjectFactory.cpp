@@ -65,6 +65,7 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
     model_object->SetChemicalComponentEntryMap(data_block->GetChemicalComponentEntryMap());
     model_object->SetComponentKeySystem(data_block->MoveComponentKeySystem());
     model_object->SetAtomKeySystem(data_block->MoveAtomKeySystem());
+    model_object->SetBondKeySystem(data_block->MoveBondKeySystem());
     model_object->SetBondList(std::move(filtered_bond_list));
     return model_object;
 }

@@ -1,5 +1,6 @@
 #include "ModelFileWriter.hpp"
 #include "FilePathHelper.hpp"
+#include "FileFormatRegistry.hpp"
 #include "ModelFileFormatBase.hpp"
 #include "PdbFormat.hpp"
 #include "CifFormat.hpp"
@@ -15,12 +16,18 @@ ModelFileWriter::ModelFileWriter(
     const std::string & filename, const ModelObject * model_object, int model_par) :
     m_file_path{ filename }, m_model_object{ model_object }, m_model_par{ model_par }
 {
-    auto file_extension{ FilePathHelper::GetExtension(filename) };
-    if      (file_extension == ".pdb")
+    const auto & descriptor{
+        FileFormatRegistry::Instance().LookupForWrite(FilePathHelper::GetExtension(filename)) };
+    if (descriptor.kind != DataObjectKind::Model || !descriptor.model_backend.has_value())
+    {
+        throw std::runtime_error("Unsupported model file format");
+    }
+
+    if (descriptor.model_backend == ModelFormatBackend::Pdb)
     {
         m_file_object = std::make_unique<PdbFormat>();
     }
-    else if (file_extension == ".cif")
+    else if (descriptor.model_backend == ModelFormatBackend::Cif)
     {
         m_file_object = std::make_unique<CifFormat>();
     }

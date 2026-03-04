@@ -98,6 +98,8 @@ public:
     std::string GetEmdID() const { return m_emd_id; }
     double GetResolution() const { return m_resolution; }
     std::string GetResolutionMethod() const { return m_resolution_method; }
+    const std::unordered_map<std::string, std::vector<std::string>> &
+    GetChainIDListMap() const { return m_chain_id_list_map; }
     std::array<float, 3> GetCenterOfMassPosition();
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);

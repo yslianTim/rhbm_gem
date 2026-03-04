@@ -17,6 +17,7 @@ class MapObjectDAO : public DataObjectDAOBase
 public:
     explicit MapObjectDAO(SQLiteWrapper * database);
     ~MapObjectDAO();
+    static void EnsureSchema(SQLiteWrapper & database);
     void Save(const DataObjectBase * data_object, const std::string & key_tag) override;
     std::unique_ptr<DataObjectBase> Load(const std::string & key_tag) override;
 

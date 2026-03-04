@@ -1,28 +1,29 @@
 #include "MapFileReader.hpp"
 #include "FilePathHelper.hpp"
+#include "FileFormatRegistry.hpp"
 #include "MapFileFormatBase.hpp"
 #include "MrcFormat.hpp"
 #include "CCP4Format.hpp"
 #include "Logger.hpp"
 
 #include <stdexcept>
-#include <algorithm>
-#include <cctype>
-
 namespace rhbm_gem {
 
 MapFileReader::MapFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }
 {
-    auto file_extension{ FilePathHelper::GetExtension(filename) };
-    std::transform(file_extension.begin(), file_extension.end(),
-                   file_extension.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if      (file_extension == ".mrc")
+    const auto & descriptor{
+        FileFormatRegistry::Instance().LookupForRead(FilePathHelper::GetExtension(filename)) };
+    if (descriptor.kind != DataObjectKind::Map || !descriptor.map_backend.has_value())
+    {
+        throw std::runtime_error("Unsupported map file format");
+    }
+
+    if (descriptor.map_backend == MapFormatBackend::Mrc)
     {
         m_file_format_helper = std::make_unique<MrcFormat>();
     }
-    else if (file_extension == ".map" || file_extension == ".ccp4")
+    else if (descriptor.map_backend == MapFormatBackend::Ccp4)
     {
         m_file_format_helper = std::make_unique<CCP4Format>();
     }

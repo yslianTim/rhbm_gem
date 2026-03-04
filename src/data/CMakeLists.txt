@@ -8,9 +8,12 @@ set(DATA_SOURCES
     ChemicalComponentEntry.cpp
     CifFormat.cpp
     DataObjectDAOFactoryRegistry.cpp
+    DatabaseSchemaManager.cpp
     DatabaseManager.cpp
+    FileFormatRegistry.cpp
     FileProcessFactoryRegistry.cpp
     GroupPotentialEntry.cpp
+    LegacyModelObjectDAO.cpp
     LocalPotentialEntry.cpp
     MapFileReader.cpp
     MapFileWriter.cpp
@@ -21,6 +24,7 @@ set(DATA_SOURCES
     ModelFileWriter.cpp
     ModelObject.cpp
     ModelObjectDAO.cpp
+    ModelObjectDAOv2.cpp
     ModelObjectFactory.cpp
     MrcFormat.cpp
     PdbFormat.cpp

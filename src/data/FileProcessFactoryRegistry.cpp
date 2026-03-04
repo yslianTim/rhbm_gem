@@ -1,5 +1,6 @@
 #include "FileProcessFactoryRegistry.hpp"
 #include "FileProcessFactoryBase.hpp"
+#include "FileFormatRegistry.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 
@@ -15,13 +16,19 @@ FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance()
 
 void FileProcessFactoryRegistry::RegisterDefaultFactories()
 {
-    RegisterFactory(".pdb",  []() { return std::make_unique<ModelObjectFactory>(); });
-    RegisterFactory(".cif",  []() { return std::make_unique<ModelObjectFactory>(); });
-    RegisterFactory(".mmcif",[]() { return std::make_unique<ModelObjectFactory>(); });
-    RegisterFactory(".mcif", []() { return std::make_unique<ModelObjectFactory>(); });
-    RegisterFactory(".mrc",  []() { return std::make_unique<MapObjectFactory>(); });
-    RegisterFactory(".map",  []() { return std::make_unique<MapObjectFactory>(); });
-    RegisterFactory(".ccp4", []() { return std::make_unique<MapObjectFactory>(); });
+    m_factory_map.clear();
+    for (const auto & descriptor : FileFormatRegistry::Instance().GetAllDescriptors())
+    {
+        switch (descriptor.kind)
+        {
+        case DataObjectKind::Model:
+            RegisterFactory(descriptor.extension, []() { return std::make_unique<ModelObjectFactory>(); });
+            break;
+        case DataObjectKind::Map:
+            RegisterFactory(descriptor.extension, []() { return std::make_unique<MapObjectFactory>(); });
+            break;
+        }
+    }
 }
 
 void FileProcessFactoryRegistry::RegisterFactory(

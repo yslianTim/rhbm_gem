@@ -70,6 +70,11 @@ MapObjectDAO::~MapObjectDAO()
 {
 }
 
+void MapObjectDAO::EnsureSchema(SQLiteWrapper & database)
+{
+    database.Execute(std::string(CREATE_TABLE_SQL));
+}
+
 void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & key_tag)
 {
     auto map_object{ dynamic_cast<const MapObject *>(data_object) };
@@ -78,8 +83,7 @@ void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & 
         throw std::runtime_error("MapObjectDAO::Save() failed: object is not a MapObject instance.");
     }
 
-    SQLiteWrapper::TransactionGuard transaction(*m_database);
-    m_database->Execute(std::string(CREATE_TABLE_SQL));
+    EnsureSchema(*m_database);
     m_database->Prepare(std::string(INSERT_SQL));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
