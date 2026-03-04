@@ -3,7 +3,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "FileReaderBase.hpp"
 
 namespace rhbm_gem {
 
@@ -11,17 +10,16 @@ class ModelFileFormatBase;
 class AtomObject;
 class AtomicModelDataBlock;
 
-class ModelFileReader : public FileReaderBase
+class ModelFileReader
 {
-    bool m_successfully_read_file;
     std::string m_file_path;
     std::unique_ptr<ModelFileFormatBase> m_file_object;
+    bool m_has_loaded_data;
 
 public:
     ModelFileReader(const std::string & filename);
     ~ModelFileReader();
-    void Read() override;
-    bool IsSuccessfullyRead() const override { return m_successfully_read_file; }
+    void Read();
 
     AtomicModelDataBlock * GetDataBlockPtr();
 

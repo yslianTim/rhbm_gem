@@ -2,8 +2,6 @@
 #include "FileProcessFactoryBase.hpp"
 #include "FileFormatRegistry.hpp"
 #include "StringHelper.hpp"
-#include "Logger.hpp"
-
 #include <stdexcept>
 
 namespace rhbm_gem {
@@ -14,21 +12,11 @@ FileProcessFactoryRegistry & FileProcessFactoryRegistry::Instance()
     return instance;
 }
 
-void FileProcessFactoryRegistry::RegisterDefaultFactories()
+void FileProcessFactoryRegistry::UnregisterFactory(const std::string & extension)
 {
-    m_factory_map.clear();
-    for (const auto & descriptor : FileFormatRegistry::Instance().GetAllDescriptors())
-    {
-        switch (descriptor.kind)
-        {
-        case DataObjectKind::Model:
-            RegisterFactory(descriptor.extension, []() { return std::make_unique<ModelObjectFactory>(); });
-            break;
-        case DataObjectKind::Map:
-            RegisterFactory(descriptor.extension, []() { return std::make_unique<MapObjectFactory>(); });
-            break;
-        }
-    }
+    auto normalized_extension{ extension };
+    StringHelper::ToLowerCase(normalized_extension);
+    m_factory_map.erase(normalized_extension);
 }
 
 void FileProcessFactoryRegistry::RegisterFactory(

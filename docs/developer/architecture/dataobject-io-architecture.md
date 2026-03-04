@@ -35,7 +35,7 @@ This subsystem currently treats only these types as top-level I/O units:
 - `DatabaseSchemaManager`: schema-version detection, normalized v2 bootstrap, and legacy v1 to v2 migration
 - `DataObjectDAOFactoryRegistry`: map runtime types and stored type names to DAO implementations
 - `ModelObjectDAO` (`ModelObjectDAOv2`): normalized v2 persistence for `ModelObject`
-- `LegacyModelObjectDAO`: legacy v1 read path used only for migration
+- `LegacyModelObjectReader`: internal legacy v1 read path used only for migration
 - `MapObjectDAO`: flat persistence for `MapObject`
 - `FileFormatBackendFactory`: shared helper that builds concrete parser or writer backends from `FileFormatRegistry`
 - `SQLiteWrapper`: SQL execution, prepared statements, typed bind or read helpers, and RAII transaction handling
@@ -97,7 +97,7 @@ flowchart LR
         L --> N["DataObjectDAOFactoryRegistry"]
         N --> O["ModelObjectDAOv2"]
         N --> P2["MapObjectDAO"]
-        M --> Q["LegacyModelObjectDAO (migration only)"]
+        M --> Q["LegacyModelObjectReader (migration only)"]
         O --> R["SQLiteWrapper"]
         P2 --> R
         Q --> R
@@ -135,7 +135,7 @@ Current descriptors:
 1. if an explicit override was registered with `RegisterFactory(...)`, use that override
 2. otherwise ask `FileFormatRegistry` for the descriptor and instantiate the default top-level factory from `descriptor.kind`
 
-This means normal application startup no longer needs `RegisterDefaultFactories()` or global one-time registration just to make built-in formats work.
+There is no default factory registration step anymore. Built-in behavior is always derived from `FileFormatRegistry`, and `FileProcessFactoryRegistry` only exists for explicit overrides.
 
 Readers and writers then use `FileFormatBackendFactory` plus `FileFormatRegistry` to choose the concrete backend implementation.
 
@@ -151,6 +151,8 @@ Readers and writers then use `FileFormatBackendFactory` plus `FileFormatRegistry
 
 If parsing fails, `DataObjectManager` wraps the lower-level exception with the file path and requested `key_tag`.
 
+Readers and factories are now throw-on-failure. They do not use `nullptr` as a normal error signal.
+
 ### 5.3 `ProduceFile(...)`
 
 `DataObjectManager::ProduceFile(...)`:
@@ -163,6 +165,7 @@ Current behavior to keep in mind:
 
 - missing in-memory keys do not throw; the manager logs a warning and returns
 - output format is selected from the target filename, not from the source filename
+- once write dispatch begins, lower-level writer failures are rethrown with file path and `key_tag` context
 
 ## 6. Model File Pipeline
 
@@ -326,18 +329,17 @@ This is an intentional contract change from the legacy design: DAO implementatio
 
 ### 8.3 Schema Versioning and Migration
 
-`DatabaseSchemaManager` uses SQLite `PRAGMA user_version` as the single schema-version source and makes its decision through `InspectSchemaState()`.
+`DatabaseSchemaManager` uses SQLite `PRAGMA user_version` as the single schema-version source. When `user_version == 0`, it runs an internal unversioned-schema inspection step before deciding whether bootstrap, repair, migration, or fail-fast behavior is safe.
 
 Current versions:
 
 - `DatabaseSchemaVersion::LegacyV1 = 1`
 - `DatabaseSchemaVersion::NormalizedV2 = 2`
 
-Schema states:
+Internal unversioned schema states:
 
 - `Empty`
 - `LegacyV1`
-- `NormalizedV2`
 - `ManagedButUnversioned`
 - `MixedUnknown`
 
@@ -364,7 +366,7 @@ Migration is open-time and in-place:
 2. create normalized v2 tables
 3. read model keys from legacy `model_list` as the authoritative source
 4. compare against any existing `object_metadata` model rows and log mismatches
-5. load each legacy model through `LegacyModelObjectDAO`
+5. load each legacy model through `LegacyModelObjectReader`
 6. save it through `ModelObjectDAOv2`
 7. repair `object_metadata`
 8. drop only the legacy tables explicitly owned by the migrated keys
@@ -394,7 +396,7 @@ DataObjectDAORegistrar<DataObjectType, DAOType>("stable_name")
 
 The string name is persisted in `object_metadata.object_type`, so it must remain stable once databases exist on disk.
 
-`LegacyModelObjectDAO` is intentionally not the registered DAO for `"model"`. It exists only as an internal migration reader.
+Legacy v1 model loading is intentionally not part of the registered DAO surface. It exists only as an internal migration reader under `src/data/legacy/`.
 
 ## 9. `ModelObject` Persistence Schema
 
@@ -402,7 +404,7 @@ The string name is persisted in `object_metadata.object_type`, so it must remain
 
 - `ModelObjectDAO` is the public DAO registered for model persistence
 - `ModelObjectDAO` is currently a thin wrapper around `ModelObjectDAOv2`
-- `LegacyModelObjectDAO` reads legacy v1 layout only and is used by migration code
+- `LegacyModelObjectReader` reads legacy v1 layout only and is used by migration code
 
 ### 9.2 Normalized V2 Tables
 
@@ -411,8 +413,11 @@ The string name is persisted in `object_metadata.object_type`, so it must remain
 Implementation is intentionally split:
 
 - `ModelObjectDAOv2.cpp`: orchestration only
+- `include/data/ModelObjectDAOv2.hpp`: minimal public DAO facade
 - `src/data/model_io/ModelSchemaSql.hpp`: shared SQL constants and scoped table lists
+- `src/data/model_io/ModelStructurePersistence.hpp`: internal structure persistence declarations
 - `src/data/model_io/ModelStructurePersistence.cpp`: structural save or load logic
+- `src/data/model_io/ModelAnalysisPersistence.hpp`: internal analysis persistence declarations
 - `src/data/model_io/ModelAnalysisPersistence.cpp`: local or posterior or group analysis save or load logic
 - `src/data/model_io/SQLiteStatementBatch.hpp`: small prepared-statement helper for repeated insert patterns
 
@@ -441,11 +446,11 @@ The important design change is that persistence no longer creates per-key tables
 
 `ModelObjectDAOv2::Save(...)` uses scoped replacement by `key_tag`:
 
-- ensure fixed tables exist
+- assume normalized v2 tables already exist
 - delete only rows for the current `key_tag`
 - insert current rows again into each table
 
-It does not clear whole tables for other objects.
+It does not clear whole tables for other objects, and it does not try to bootstrap schema on its own.
 
 ### 9.4 What Survives a Database Round-Trip
 
@@ -536,12 +541,14 @@ Start with these files when debugging or extending this subsystem:
 - `src/data/DataObjectDAOFactoryRegistry.cpp`
 - `include/data/ModelObjectDAO.hpp`
 - `include/data/ModelObjectDAOv2.hpp`
-- `include/data/LegacyModelObjectDAO.hpp`
 - `src/data/ModelObjectDAO.cpp`
 - `src/data/ModelObjectDAOv2.cpp`
-- `src/data/LegacyModelObjectDAO.cpp`
+- `src/data/legacy/LegacyModelObjectReader.hpp`
+- `src/data/legacy/LegacyModelObjectReader.cpp`
 - `src/data/model_io/ModelSchemaSql.hpp`
+- `src/data/model_io/ModelStructurePersistence.hpp`
 - `src/data/model_io/ModelStructurePersistence.cpp`
+- `src/data/model_io/ModelAnalysisPersistence.hpp`
 - `src/data/model_io/ModelAnalysisPersistence.cpp`
 - `src/data/model_io/SQLiteStatementBatch.hpp`
 - `include/data/MapObjectDAO.hpp`
@@ -584,6 +591,7 @@ For a new database-persisted top-level object:
 - `ProcessFile(...)` and `LoadDataObject(...)` replace an existing in-memory `key_tag`.
 - `ClearDataObjects()` only clears the in-memory map; it does not delete database rows.
 - `ProduceFile(...)` warns and returns when the key is missing; it does not throw.
+- readers and writers fail with exceptions; they do not report normal failures through `nullptr` or `IsSuccessfullyRead()`
 - `SaveDataObject(original, renamed)` saves under a new database key but leaves the in-memory object under `original`.
 - model write support is intentionally narrower than model read support
 - parser-only metadata still does not become full `ModelObject` domain state just because it existed during file parsing

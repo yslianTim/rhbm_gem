@@ -14,8 +14,8 @@ set(DATA_SOURCES
     FileFormatRegistry.cpp
     FileProcessFactoryRegistry.cpp
     GroupPotentialEntry.cpp
-    LegacyModelObjectDAO.cpp
     LocalPotentialEntry.cpp
+    legacy/LegacyModelObjectReader.cpp
     MapFileReader.cpp
     MapFileWriter.cpp
     MapObject.cpp

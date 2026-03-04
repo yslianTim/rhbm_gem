@@ -12,12 +12,6 @@ enum class DataObjectKind
     Map
 };
 
-enum class FileFormatOperation
-{
-    Read,
-    Write
-};
-
 enum class ModelFormatBackend
 {
     Pdb,

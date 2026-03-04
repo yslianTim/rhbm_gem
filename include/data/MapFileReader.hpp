@@ -4,22 +4,20 @@
 #include <string>
 #include <array>
 #include <fstream>
-#include "FileReaderBase.hpp"
 #include "MapFileFormatBase.hpp"
 
 namespace rhbm_gem {
 
-class MapFileReader : public FileReaderBase
+class MapFileReader
 {
-    bool m_successfully_read_file;
     std::string m_file_path;
     std::unique_ptr<MapFileFormatBase> m_file_format_helper;
+    bool m_has_loaded_data;
 
 public:
     explicit MapFileReader(const std::string & filename);
     ~MapFileReader() = default;
-    void Read() override;
-    bool IsSuccessfullyRead() const override { return m_successfully_read_file; }
+    void Read();
 
     /**
      * @brief  Obtain the map value array read from file.
@@ -34,8 +32,8 @@ public:
     std::array<float, 3> GetOriginArray() const;
 
 private:
-    bool ReadHeader(std::ifstream & stream);
-    bool ReadMapValueArray(std::ifstream & stream);
+    void ReadHeader(std::ifstream & stream);
+    void ReadMapValueArray(std::ifstream & stream);
 
 };
 

@@ -4,7 +4,6 @@
 #include "FileFormatRegistry.hpp"
 #include "MapFileFormatBase.hpp"
 #include "MapObject.hpp"
-#include "Logger.hpp"
 
 #include <fstream>
 #include <stdexcept>
@@ -35,8 +34,7 @@ void MapFileWriter::Write()
     std::ofstream file{ m_file_path, std::ios::binary | std::ios::trunc };
     if (!file)
     {
-        Logger::Log(LogLevel::Error, "Cannot open the file: " + m_file_path);
-        return;
+        throw std::runtime_error("Cannot open the file: " + m_file_path);
     }
     WriteHeader(file);
     WriteMapValueArray(file);
@@ -44,35 +42,21 @@ void MapFileWriter::Write()
 
 void MapFileWriter::WriteHeader(std::ostream & stream)
 {
-    try
-    {
-        m_file_format_helper->SetHeader(
-            m_map_object->GetGridSize(),
-            m_map_object->GetGridSpacing(),
-            m_map_object->GetOrigin()
-        );
-        m_file_format_helper->SaveHeader(stream);
-        m_file_format_helper->PrintHeader();
-    }
-    catch (const std::exception & ex)
-    {
-        Logger::Log(LogLevel::Error, ex.what());
-    }
+    m_file_format_helper->SetHeader(
+        m_map_object->GetGridSize(),
+        m_map_object->GetGridSpacing(),
+        m_map_object->GetOrigin()
+    );
+    m_file_format_helper->SaveHeader(stream);
+    m_file_format_helper->PrintHeader();
 }
 
 void MapFileWriter::WriteMapValueArray(std::ostream & stream)
 {
-    try
-    {
-        m_file_format_helper->SaveDataArray(
-            m_map_object->GetMapValueArray(),
-            m_map_object->GetMapValueArraySize(),
-            stream);
-    }
-    catch (const std::exception & ex)
-    {
-        Logger::Log(LogLevel::Error, ex.what());
-    }
+    m_file_format_helper->SaveDataArray(
+        m_map_object->GetMapValueArray(),
+        m_map_object->GetMapValueArraySize(),
+        stream);
 }
 
 } // namespace rhbm_gem

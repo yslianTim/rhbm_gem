@@ -4,14 +4,13 @@
 #include <string>
 #include <array>
 #include <ostream>
-#include "FileWriterBase.hpp"
 #include "MapFileFormatBase.hpp"
 
 namespace rhbm_gem {
 
 class MapObject;
 
-class MapFileWriter : public FileWriterBase
+class MapFileWriter
 {
     std::string m_file_path;
     std::unique_ptr<MapFileFormatBase> m_file_format_helper;
@@ -20,7 +19,7 @@ class MapFileWriter : public FileWriterBase
 public:
     explicit MapFileWriter(const std::string & filename, const MapObject * map_object);
     ~MapFileWriter() = default;
-    void Write() override;
+    void Write();
 
 private:
     void WriteHeader(std::ostream & stream);

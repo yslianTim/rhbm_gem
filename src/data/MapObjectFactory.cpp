@@ -12,13 +12,6 @@ std::unique_ptr<DataObjectBase> MapObjectFactory::CreateDataObject(const std::st
 {
     auto file_reader{ std::make_unique<MapFileReader>(filename) };
     file_reader->Read();
-    if (file_reader->IsSuccessfullyRead() == false)
-    {
-        Logger::Log(LogLevel::Error,
-            "MapObjectFactory::CreateDataObject : "
-            "Failed to read map file: " + filename);
-        return nullptr;
-    }
     return std::make_unique<MapObject>(
         file_reader->GetGridSizeArray(),
         file_reader->GetGridSpacingArray(),

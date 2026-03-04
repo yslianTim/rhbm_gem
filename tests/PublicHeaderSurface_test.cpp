@@ -95,3 +95,61 @@ TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHo
     EXPECT_EQ(header_content.find("OptionalProcessTypedFile"), std::string::npos);
     EXPECT_EQ(header_content.find("LoadTypedObject"), std::string::npos);
 }
+
+TEST(PublicHeaderSurfaceTest, LegacyModelObjectDaoHeaderIsNotPublic)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto leaked_header{
+        project_root / "include" / "data" / "LegacyModelObjectDAO.hpp"
+    };
+
+    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+}
+
+TEST(PublicHeaderSurfaceTest, FileReaderBaseHeaderIsNotPublic)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto leaked_header{
+        project_root / "include" / "data" / "FileReaderBase.hpp"
+    };
+
+    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+}
+
+TEST(PublicHeaderSurfaceTest, FileWriterBaseHeaderIsNotPublic)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto leaked_header{
+        project_root / "include" / "data" / "FileWriterBase.hpp"
+    };
+
+    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+}
+
+TEST(PublicHeaderSurfaceTest, ModelObjectDaoV2HeaderNoLongerLeaksPersistenceHelpers)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto header_path{
+        project_root / "include" / "data" / "ModelObjectDAOv2.hpp"
+    };
+
+    std::ifstream header_stream(header_path);
+    ASSERT_TRUE(header_stream.is_open());
+    const std::string header_content{
+        std::istreambuf_iterator<char>(header_stream),
+        std::istreambuf_iterator<char>()
+    };
+
+    EXPECT_EQ(header_content.find("DeleteRowsForKey"), std::string::npos);
+    EXPECT_EQ(header_content.find("SaveModelObjectRow"), std::string::npos);
+    EXPECT_EQ(header_content.find("LoadAtomLocalPotentialEntryMap"), std::string::npos);
+    EXPECT_EQ(header_content.find("GroupPotentialEntry"), std::string::npos);
+}

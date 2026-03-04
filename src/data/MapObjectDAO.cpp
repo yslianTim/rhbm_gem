@@ -83,7 +83,6 @@ void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & 
         throw std::runtime_error("MapObjectDAO::Save() failed: object is not a MapObject instance.");
     }
 
-    EnsureSchema(*m_database);
     m_database->Prepare(std::string(INSERT_SQL));
     SQLiteWrapper::StatementGuard guard(*m_database);
 

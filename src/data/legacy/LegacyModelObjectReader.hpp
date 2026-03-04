@@ -2,12 +2,11 @@
 
 #include <map>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#include "DataObjectDAOBase.hpp"
 
 namespace rhbm_gem {
 
@@ -16,44 +15,25 @@ class ModelObject;
 class AtomObject;
 class BondObject;
 class LocalPotentialEntry;
-class GroupPotentialEntry;
 
-class LegacyModelObjectDAO : public DataObjectDAOBase
+class LegacyModelObjectReader
 {
     SQLiteWrapper * m_database;
     mutable std::unordered_set<std::string> m_table_cache;
 
 public:
-    // Migration-only reader or writer for the legacy v1 per-key table layout.
-    // New persistence features should target ModelObjectDAOv2 instead of extending this class.
-    explicit LegacyModelObjectDAO(SQLiteWrapper * db_manager);
-    ~LegacyModelObjectDAO();
+    explicit LegacyModelObjectReader(SQLiteWrapper * database);
 
-    void Save(const DataObjectBase * obj, const std::string & key_tag) override;
-    std::unique_ptr<DataObjectBase> Load(const std::string & key_tag) override;
+    std::unique_ptr<ModelObject> Load(const std::string & key_tag);
 
 private:
-    void SaveAtomObjectList(const ModelObject * model_obj, const std::string & table_name);
-    void SaveBondObjectList(const ModelObject * model_obj, const std::string & table_name);
     std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(const std::string & key_tag);
     std::vector<std::unique_ptr<BondObject>> LoadBondObjectList(
-        const std::string & key_tag, const ModelObject * model_obj);
+        const std::string & key_tag, const ModelObject * model_object);
 
-    void SaveChemicalComponentEntryList(const ModelObject * model_obj, const std::string & table_name);
-    void SaveComponentAtomEntryList(const ModelObject * model_obj, const std::string & table_name);
-    void SaveComponentBondEntryList(const ModelObject * model_obj, const std::string & table_name);
     void LoadChemicalComponentEntryList(ModelObject * model_obj, const std::string & table_name);
     void LoadComponentAtomEntryList(ModelObject * model_obj, const std::string & table_name);
     void LoadComponentBondEntryList(ModelObject * model_obj, const std::string & table_name);
-
-    void SaveAtomLocalPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
-    void SaveBondLocalPotentialEntryList(const ModelObject * model_obj, const std::string & table_name);
-    void SaveAtomLocalPotentialEntrySubList(
-        const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
-    void SaveBondLocalPotentialEntrySubList(
-        const ModelObject * model_obj, const std::string & table_name, const std::string & class_key);
-    void SaveAtomGroupPotentialEntryList(const GroupPotentialEntry * group_entry, const std::string & table_name);
-    void SaveBondGroupPotentialEntryList(const GroupPotentialEntry * group_entry, const std::string & table_name);
 
     std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>>
     LoadAtomLocalPotentialEntryMap(const std::string & table_name);

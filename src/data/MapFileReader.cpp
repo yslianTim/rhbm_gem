@@ -9,7 +9,9 @@
 namespace rhbm_gem {
 
 MapFileReader::MapFileReader(const std::string & filename) :
-    m_successfully_read_file{ false }, m_file_path{ filename }
+    m_file_path{ filename },
+    m_file_format_helper{ nullptr },
+    m_has_loaded_data{ false }
 {
     const auto & descriptor{
         FileFormatRegistry::Instance().LookupForRead(FilePathHelper::GetExtension(filename)) };
@@ -22,106 +24,59 @@ MapFileReader::MapFileReader(const std::string & filename) :
 
 void MapFileReader::Read()
 {
+    m_has_loaded_data = false;
     std::ifstream file{ m_file_path, std::ios::binary };
     if (!file)
     {
-        Logger::Log(LogLevel::Error, "Cannot open the file: " + m_file_path);
-        m_successfully_read_file = false;
-        return;
+        throw std::runtime_error("Cannot open the file: " + m_file_path);
     }
-    bool header_success{ ReadHeader(file) };
-    bool data_success{ false };
-    if (header_success == true)
-    {
-        data_success = ReadMapValueArray(file);
-    }
-    m_successfully_read_file = header_success && data_success;
+    ReadHeader(file);
+    ReadMapValueArray(file);
+    m_has_loaded_data = true;
 }
 
-bool MapFileReader::ReadHeader(std::ifstream & stream)
+void MapFileReader::ReadHeader(std::ifstream & stream)
 {
-    try
-    {
-        m_file_format_helper->LoadHeader(stream);
-        return true;
-    }
-    catch (const std::exception & ex)
-    {
-        Logger::Log(LogLevel::Error,
-            "MapFileReader::ReadHeader : "
-            "Failed to read header from file '" + m_file_path + "' -> " +
-            ex.what()
-        );
-        return false;
-    }
+    m_file_format_helper->LoadHeader(stream);
 }
 
-bool MapFileReader::ReadMapValueArray(std::ifstream & stream)
+void MapFileReader::ReadMapValueArray(std::ifstream & stream)
 {
-    try
-    {
-        m_file_format_helper->LoadDataArray(stream);
-        return true;
-    }
-    catch (const std::exception & ex)
-    {
-        Logger::Log(LogLevel::Error,
-            "MapFileReader::ReadMapValueArray : "
-            "Failed to read map value array from file '" + m_file_path + "' -> " +
-            ex.what()
-        );
-        return false;
-    }
+    m_file_format_helper->LoadDataArray(stream);
 }
 
 std::unique_ptr<float[]> MapFileReader::GetMapValueArray()
 {
-    if (m_file_format_helper == nullptr || m_successfully_read_file == false)
+    if (m_file_format_helper == nullptr || !m_has_loaded_data)
     {
-        Logger::Log(LogLevel::Error,
-            "MapFileReader::GetMapValueArray : "
-            "no data available or read failed."
-        );
-        return nullptr;
+        throw std::runtime_error("MapFileReader::GetMapValueArray(): no data available.");
     }
     return m_file_format_helper->GetDataArray();
 }
 
 std::array<int, 3> MapFileReader::GetGridSizeArray() const
 {
-    if (m_file_format_helper == nullptr || m_successfully_read_file == false)
+    if (m_file_format_helper == nullptr || !m_has_loaded_data)
     {
-        Logger::Log(LogLevel::Error,
-            "MapFileReader::GetGridSizeArray : "
-            "no grid size available or read failed."
-        );
-        return {};
+        throw std::runtime_error("MapFileReader::GetGridSizeArray(): no data available.");
     }
     return m_file_format_helper->GetGridSize();
 }
 
 std::array<float, 3> MapFileReader::GetGridSpacingArray() const
 {
-    if (m_file_format_helper == nullptr || m_successfully_read_file == false)
+    if (m_file_format_helper == nullptr || !m_has_loaded_data)
     {
-        Logger::Log(LogLevel::Error,
-            "MapFileReader::GetGridSpacingArray : "
-            "no grid spacing available or read failed."
-        );
-        return {};
+        throw std::runtime_error("MapFileReader::GetGridSpacingArray(): no data available.");
     }
     return m_file_format_helper->GetGridSpacing();
 }
 
 std::array<float, 3> MapFileReader::GetOriginArray() const
 {
-    if (m_file_format_helper == nullptr || m_successfully_read_file == false)
+    if (m_file_format_helper == nullptr || !m_has_loaded_data)
     {
-        Logger::Log(LogLevel::Error,
-            "MapFileReader::GetOriginArray : "
-            "no origin available or read failed."
-        );
-        return {};
+        throw std::runtime_error("MapFileReader::GetOriginArray(): no data available.");
     }
     return m_file_format_helper->GetOrigin();
 }

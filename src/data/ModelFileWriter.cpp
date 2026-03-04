@@ -4,7 +4,6 @@
 #include "FileFormatRegistry.hpp"
 #include "ModelFileFormatBase.hpp"
 #include "ModelObject.hpp"
-#include "Logger.hpp"
 
 #include <stdexcept>
 #include <fstream>
@@ -30,23 +29,21 @@ ModelFileWriter::~ModelFileWriter()
 
 void ModelFileWriter::Write()
 {
-    if (m_model_object == nullptr || m_file_object == nullptr) return;
+    if (m_model_object == nullptr)
+    {
+        throw std::invalid_argument("ModelFileWriter::Write(): model_object is null");
+    }
+    if (m_file_object == nullptr)
+    {
+        throw std::runtime_error("ModelFileWriter::Write(): file backend is not initialized");
+    }
     std::ofstream outfile{ m_file_path, std::ios::binary };
     if (!outfile)
     {
-        Logger::Log(LogLevel::Error, "Cannot open the file: " + m_file_path);
-        return;
+        throw std::runtime_error("Cannot open the file: " + m_file_path);
     }
-    try
-    {
-        m_file_object->SaveHeader(m_model_object, outfile);
-        m_file_object->SaveDataArray(m_model_object, outfile, m_model_par);
-    }
-    catch (const std::exception & ex)
-    {
-        Logger::Log(LogLevel::Error,
-            "ModelFileWriter::Write : " + std::string(ex.what()));
-    }
+    m_file_object->SaveHeader(m_model_object, outfile);
+    m_file_object->SaveDataArray(m_model_object, outfile, m_model_par);
 }
 
 } // namespace rhbm_gem

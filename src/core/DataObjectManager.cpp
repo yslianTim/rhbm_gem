@@ -51,10 +51,6 @@ void DataObjectManager::ProcessFile(
         auto extension{ FilePathHelper::GetExtension(filename) };
         auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(extension) };
         auto data_object{ factory->CreateDataObject(filename) };
-        if (!data_object)
-        {
-            throw std::runtime_error("Failed to create data object");
-        }
         data_object->SetKeyTag(key_tag);
         data_object->Display();
         std::shared_ptr<DataObjectBase> shared_object{ std::move(data_object) };
@@ -77,10 +73,18 @@ void DataObjectManager::ProduceFile(
                     "no file will be produced.");
         return;
     }
-    auto data_object{ GetDataObject(key_tag) };
-    auto extension{ FilePathHelper::GetExtension(filename) };
-    auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(extension) };
-    factory->OutputDataObject(filename, data_object.get());
+    try
+    {
+        auto data_object{ GetDataObject(key_tag) };
+        auto extension{ FilePathHelper::GetExtension(filename) };
+        auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(extension) };
+        factory->OutputDataObject(filename, data_object.get());
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error("Failed to produce file '" + filename.string() +
+                                 "' for key tag '" + key_tag + "': " + ex.what());
+    }
 }
 
 bool DataObjectManager::AddDataObject(
