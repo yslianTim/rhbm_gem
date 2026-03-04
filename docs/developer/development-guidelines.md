@@ -70,6 +70,7 @@ If a rule changes, update this document and any affected user-facing documentati
 ## 7. Command and Data Layer Responsibilities
 
 See [`./architecture/command-architecture.md`](./architecture/command-architecture.md) for the current command topology, lifecycle diagrams, and repository-specific command extension patterns.
+See [`./adding-a-command.md`](./adding-a-command.md) for a practical built-in command implementation template.
 See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-io-architecture.md) for the current DataObject file/database I/O topology, extension points, and persistence constraints.
 
 - `[Required]` New CLI commands should derive from `CommandBase`, keep command-specific configuration in an `Options : CommandOptions` structure, and declare their shared common-option surface on the concrete command type.
