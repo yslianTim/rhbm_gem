@@ -4,7 +4,6 @@
 #include <string_view>
 #include <vector>
 
-#include "CommandId.hpp"
 #include "CommandMetadata.hpp"
 
 namespace rhbm_gem {

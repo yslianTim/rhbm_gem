@@ -29,6 +29,18 @@ TEST(PublicHeaderSurfaceTest, BuiltInCommandCatalogHeaderIsNotPublic)
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
 }
 
+TEST(PublicHeaderSurfaceTest, CommandIdHeaderIsNotPublic)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto leaked_header{
+        project_root / "include" / "core" / "CommandId.hpp"
+    };
+
+    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+}
+
 TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceWrapper)
 {
     const auto project_root{
@@ -47,6 +59,8 @@ TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceW
 
     EXPECT_EQ(header_content.find("struct CommandSurface"), std::string::npos);
     EXPECT_EQ(header_content.find("MakeCommandSurface"), std::string::npos);
+    EXPECT_NE(header_content.find("enum class CommandId"), std::string::npos);
+    EXPECT_NE(header_content.find("enum class CommonOption"), std::string::npos);
 }
 
 TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHooks)

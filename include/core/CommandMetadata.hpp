@@ -4,6 +4,17 @@
 
 namespace rhbm_gem {
 
+enum class CommandId
+{
+    PotentialAnalysis = 0,
+    PotentialDisplay,
+    ResultDump,
+    MapSimulation,
+    MapVisualization,
+    PositionEstimation,
+    ModelTest
+};
+
 enum class CommonOption : std::uint8_t
 {
     Threading = 0,

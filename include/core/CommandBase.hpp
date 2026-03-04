@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 
-#include "CommandId.hpp"
 #include "CommandMetadata.hpp"
 #include "DataObjectManager.hpp"
 #include "Logger.hpp"
