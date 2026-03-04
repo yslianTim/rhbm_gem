@@ -1,8 +1,8 @@
 # Command Architecture
 
-This document describes the current command-system architecture after the catalog-driven refactor. It focuses on how commands are registered, how option parsing and validation are layered, and how concrete commands should interact with the rest of the codebase.
+This document describes the current command-system architecture after the catalog-driven refactor and the later cleanup passes. It focuses on the actual registration path, the `CommandBase` lifecycle contract, and the current extension points that command authors should use.
 
-Use this document together with [`../development-guidelines.md`](../development-guidelines.md), especially the contributor guidance for adding new built-in commands. Editable diagram sources for this area live under [`./diagrams/`](./diagrams/).
+Use this document together with [`../development-guidelines.md`](../development-guidelines.md). Editable diagram sources for this area live under [`./diagrams/`](./diagrams/).
 
 ## 1. Purpose
 
@@ -20,13 +20,14 @@ It is not responsible for:
 
 - low-level file format parsing
 - database implementation details
-- heavy numerical or domain algorithms
+- numerical kernels or domain algorithms
+- painter or printer implementations
 
-Those concerns should stay behind `DataObjectManager`, file processors, writers, and domain-specific helpers.
+Those concerns stay behind `DataObjectManager`, file processors, writers, and domain-specific helpers.
 
 ## 2. Runtime Topology
 
-The command system is assembled explicitly at process startup. The registration flow is:
+The command system is assembled explicitly at process startup.
 
 ```mermaid
 flowchart TD
@@ -37,8 +38,8 @@ flowchart TD
     E --> F["descriptor.factory()"]
     F --> G["Concrete CommandBase subclass"]
     G --> H["CommandBase::RegisterCLIOptions()"]
-    H --> I["RegisterCLIOptionsBasic()"]
-    H --> J["RegisterCLIOptionsExtend()"]
+    H --> I["Register shared options from CommandSurface"]
+    H --> J["Register command-specific options"]
 
     K["CLI11 parse"] --> L["Setter callbacks"]
     L --> M["Options updated / parse-phase issues recorded"]
@@ -46,26 +47,25 @@ flowchart TD
     C --> N["CLI subcommand callback"]
     N --> O["CommandBase::Execute()"]
     O --> P["PrepareForExecution() if needed"]
-    P --> Q["ResetRuntimeState()"]
-    Q --> R["m_data_manager.ClearDataObjects()"]
-    R --> S["ValidateOptions()"]
-    S --> T["RunFilesystemPreflight()"]
-    T --> U{"Any validation errors?"}
-    U -- yes --> V["Report issues and abort"]
-    U -- no --> W["ExecuteImpl()"]
-    W --> X["ProcessTypedFile / LoadTypedObject / SaveDataObject / writers"]
+    P --> Q["BeginPreparationPass()"]
+    Q --> R["RunValidationPass()"]
+    R --> S["RunFilesystemPreflight()"]
+    S --> T{"Validation errors remain?"}
+    T -- yes --> U["Report issues and abort"]
+    T -- no --> V["ExecuteImpl()"]
+    V --> W["ProcessTypedFile / LoadTypedObject / writers / database I/O"]
 ```
 
-Two structural consequences matter for contributors:
+Two structural consequences matter:
 
 - there is one command instance per registered CLI subcommand
-- command registration order is defined only by `BuiltInCommandCatalog()`
+- built-in registration order is defined only by `BuiltInCommandCatalog()`
 
 ## 3. Registration Model
 
 ### 3.1 Process entry points
 
-The CLI entry point is small by design:
+The CLI entry point is intentionally small:
 
 - `src/main.cpp` creates `CLI::App`
 - `Application` receives that `CLI::App`
@@ -80,11 +80,11 @@ The CLI entry point is small by design:
 5. bind the subcommand callback to `CommandBase::Execute()`
 6. convert `Execute() == false` into `CLI::RuntimeError(1)` so command failure reaches the process exit code
 
-This is the entire built-in registration path. There is no secondary registry hidden elsewhere.
+There is no secondary registration path hidden elsewhere.
 
 ### 3.2 Built-in command catalog
 
-Built-in CLI commands are defined centrally in `BuiltInCommandCatalog()`. `Application` iterates that catalog directly and creates one CLI subcommand per descriptor.
+Built-in commands are defined centrally in `BuiltInCommandCatalog()`. The declarations live in `src/core/BuiltInCommandCatalogInternal.hpp`, not under `include/`.
 
 The built-in manifest order is generated from the built-in command catalog:
 
@@ -98,59 +98,65 @@ The built-in manifest order is generated from the built-in command catalog:
 7. `model_test`
 <!-- END GENERATED: built-in-command-manifest -->
 
-This gives deterministic help ordering and avoids any dependence on cross-translation-unit static initialization order.
+This gives deterministic CLI help ordering and avoids dependence on cross-translation-unit static initialization order.
+
+The project does not currently provide a self-registration API for commands.
 The built-in catalog is an internal registration mechanism, not an installed public C++ API.
 
 ### 3.3 Descriptor responsibilities
 
-Each built-in `CommandDescriptor` stores:
+Each internal `CommandDescriptor` stores:
 
 - the built-in `CommandId`
 - the command name
 - the user-facing description
-- the command factory returning `std::unique_ptr<CommandBase>`
 - `CommandSurface` metadata for shared option exposure
-- the Python binding name for the built-in command class exposed through `bindings/CoreBindings.cpp`
+- the Python binding class name for that built-in command
+- the factory returning `std::unique_ptr<CommandBase>`
 
-In the current implementation, built-in descriptors are constructed through small catalog helper functions in `BuiltInCommandCatalog.cpp`. The descriptor keeps only the authoritative fields, and the command surface policy is interpreted directly from those fields:
+The descriptor deliberately stores only authoritative metadata. In the current design:
 
-- database usage from whether `CommandSurface` includes `CommonOption::Database`
-- Python class naming from the descriptor's `python_binding_name`
+- database usage is inferred from `CommandSurface`
+- output-folder support is inferred from `CommandSurface`
+- Python class naming is read directly from `python_binding_name`
 
 Database usage is derived directly from whether `CommandSurface` includes `CommonOption::Database`.
 All built-in commands must provide a Python binding name in the built-in catalog.
 
-The project does not currently provide a self-registration API for commands. Built-in CLI behavior flows only through the built-in command catalog.
-The catalog declarations now live in `src/core/BuiltInCommandCatalogInternal.hpp` because they are consumed only by core wiring, bindings, and tests.
-
 ## 4. `CommandBase` Contract
 
-All built-in commands derive from `CommandBase`.
+All built-in commands derive from `CommandBase`. In practice, every current built-in uses `CommandWithOptions<OptionsT, CommandId::...>` so the base class can provide the standard `GetOptions()` and `GetCommandId()` boilerplate.
 
-### 4.1 Required overrides
+### 4.1 Public command contract
 
 Every concrete command must provide:
 
 - `bool ExecuteImpl()`
 - `void RegisterCLIOptionsExtend(CLI::App * command)`
-- `const CommandOptions & GetOptions() const`
-- `CommandOptions & GetOptions()`
-- `CommandId GetCommandId() const`
 
-Optional lifecycle hooks are:
+Concrete commands usually also override:
 
 - `void ValidateOptions()`
 - `void ResetRuntimeState()`
 
-`CommandBase::Execute()` is the public non-virtual wrapper. It is the only supported execution entry point for CLI callbacks, direct C++ callers, and Python bindings.
+The public entry points shared by CLI and Python are:
+
+- `Execute()`
+- `PrepareForExecution()`
+- `HasValidationErrors()`
+- `GetValidationIssues()`
+- shared setters inherited from `CommandBase`
+- command-specific setters defined on each concrete command
+
+`Execute()` is the only supported execution entry point for CLI callbacks, direct C++ callers, and Python bindings.
 
 ### 4.2 Shared base state
 
-`CommandBase` already owns and manages:
+`CommandBase` owns and manages:
 
 - `DataObjectManager m_data_manager`
 - `std::vector<ValidationIssue> m_validation_issues`
-- the prepared-state flag `m_is_prepared_for_execution`
+- internal prepared-state tracking
 - base option fields inherited from `CommandOptions`
 
 Shared base options are:
@@ -160,7 +166,7 @@ Shared base options are:
 - `database_path`
 - `folder_path`
 
-### 4.3 Common-option surface
+### 4.3 Shared option surface
 
 Each command inherits only the common CLI options enabled by its `CommandSurface` metadata:
 
@@ -169,69 +175,68 @@ Each command inherits only the common CLI options enabled by its `CommandSurface
 - `CommonOption::Database`
 - `CommonOption::OutputFolder`
 
-`CommandBase::RegisterCLIOptionsBasic(...)` inspects the current command descriptor through `FindCommandDescriptor(GetCommandId())` and registers only the applicable base options.
+`CommandBase::RegisterCLIOptions(...)` first registers shared options from the catalog surface and then delegates to `RegisterCLIOptionsExtend(...)` for command-local options.
 
 This means:
 
-- commands do not manually duplicate shared option definitions
-- adding or removing a shared option from a command is a catalog-level change
+- commands do not duplicate shared option definitions
+- enabling or disabling a shared option is a catalog-level change
+- command headers do not need to know how shared CLI11 bindings are wired
 
-### 4.4 Setter pattern and option ownership
+### 4.4 Supported extension surface
 
-The intended pattern for command-local options is:
+Command authors should use the protected helper surface that is still intended for real command implementations:
 
-1. define a command-specific options type derived from `CommandOptions`
-2. derive the concrete command from `CommandWithOptions<Options, CommandId::...>` when the standard storage pattern is sufficient
-3. expose `using Options = ...` on the command when a stable command-local options name is useful
-4. mutate option fields only through setters
-5. let setters invalidate prepared state via `MutateOptions(...)`
-
-Concrete setters should use the shared helper families on `CommandBase` when possible:
-
+- `MutateOptions(...)`
+- `AddValidationError(...)`
+- `AddNormalizationWarning(...)`
+- `ResetParseIssues(...)`
+- `ResetPrepareIssues(...)`
+- `SetRequiredExistingPathOption(...)`
+- `SetOptionalExistingPathOption(...)`
 - `SetNormalizedScalarOption(...)`
-- `SetValidatedScalarOption(...)`
 - `SetFinitePositiveScalarOption(...)`
 - `SetFiniteNonNegativeScalarOption(...)`
 - `SetPositiveScalarOption(...)`
 - `SetValidatedEnumOption(...)`
-- `SetRequiredExistingPathOption(...)`
-- `SetOptionalExistingPathOption(...)`
+- `RequireDatabaseManager()`
+- `BuildOutputPath(...)`
+- `ProcessTypedFile<T>(...)`
+- `OptionalProcessTypedFile<T>(...)`
+- `LoadTypedObject<T>(...)`
 
-This keeps command code consistent in three areas:
+These helpers exist so command code stays focused on orchestration instead of repeating parse validation, filesystem handling, or typed object plumbing.
 
-- parse-time diagnostics are attached to the correct option name
-- invalid input falls back in a deliberate and reviewable way
-- any option change clears prepared-state assumptions automatically
+### 4.5 Internal base mechanics
+
+Some `CommandBase` functions are intentionally internal implementation detail, not command extension API. That includes the prepared-state machinery, shared option registration internals, generic scalar-validation internals, and filesystem validation helpers.
+
+Command code should treat these behaviors as part of the base-class contract, not something to call directly.
 
 ## 5. Validation and Execution Lifecycle
 
-Application callbacks invoke only `Execute()`. `Execute()` internally decides whether `PrepareForExecution()` must run.
-
-The lifecycle is:
+Application callbacks invoke only `Execute()`.
+`Execute()` internally decides whether `PrepareForExecution()` must run.
 
 ```mermaid
 sequenceDiagram
-    participant User as User / CLI
-    participant CLI as CLI11
-    participant App as Application
+    participant User as User / CLI / Python
+    participant Entry as Application or Binding Caller
     participant Cmd as Concrete Command
 
-    User->>CLI: invoke subcommand with options
-    CLI->>Cmd: setter callbacks mutate options
-    CLI->>App: run subcommand callback
-    App->>Cmd: Execute()
+    User->>Cmd: setters mutate options
+    Entry->>Cmd: Execute()
     alt not prepared
         Cmd->>Cmd: PrepareForExecution()
-        Cmd->>Cmd: ResetRuntimeState()
-        Cmd->>Cmd: Clear data-manager cache
-        Cmd->>Cmd: ValidateOptions()
+        Cmd->>Cmd: BeginPreparationPass()
+        Cmd->>Cmd: RunValidationPass()
         Cmd->>Cmd: RunFilesystemPreflight()
     end
     alt validation errors exist
         Cmd-->>User: ReportValidationIssues()
     else ready
         Cmd->>Cmd: ExecuteImpl()
-        Cmd-->>App: true / false
+        Cmd-->>Entry: true / false
     end
 ```
 
@@ -242,38 +247,43 @@ Validation issues are explicitly tagged by phase:
 | Phase | Where it usually happens | Typical responsibility |
 | --- | --- | --- |
 | `Parse` | setter callbacks | single-field checks, enum validation, required-path existence checks, safe fallback warnings |
-| `Prepare` | `ValidateOptions()` and `RunFilesystemPreflight()` | cross-field constraints, mode-specific requirements, directory preflight |
+| `Prepare` | `ValidateOptions()` and filesystem preflight | cross-field constraints, mode-specific requirements, directory preflight |
 | `Runtime` | `ExecuteImpl()` or deeper runtime helpers | unexpected workflow failures after preparation |
 
-Two practical rules follow from this split:
+Two practical rules follow:
 
 - single-option validation belongs in setters whenever possible
 - cross-field or mode-dependent validation belongs in `ValidateOptions()`
 
 ### 5.2 What `PrepareForExecution()` actually does
 
-`PrepareForExecution()` is more than a boolean guard. In the current implementation it:
+`PrepareForExecution()` orchestrates three internal steps:
 
-1. runs `BeginPreparationPass()`
-2. applies the selected log level
-3. calls `ResetRuntimeState()`
-4. clears all cached data objects from `m_data_manager`
-5. invalidates any previous prepared state
-6. runs `RunValidationPass()`
-7. calls `ValidateOptions()`
-8. reports issues and aborts early if any validation error already exists
-9. runs `RunFilesystemPreflight()`
-10. performs directory preflight for database/output targets and reports any resulting issues
-11. marks the command prepared only if no errors remain
+1. `BeginPreparationPass()`
+2. `RunValidationPass()`
+3. `RunFilesystemPreflight()`
+
+The actual work performed is:
+
+1. apply the selected log level
+2. call `ResetRuntimeState()`
+3. clear all cached data objects from `m_data_manager`
+4. invalidate any previous prepared state
+5. run `ValidateOptions()`
+6. report issues and abort early if validation errors already exist
+7. create the parent directory for `database_path` when the command surface uses the database option
+8. create `folder_path` when the command surface uses the output-folder option
+9. report any remaining issues
+10. mark the command prepared only if no errors remain
 
 ### 5.3 Prepared-state invalidation
 
-Any setter path should call `MutateOptions(...)` directly or indirectly. That invalidates the prepared flag and clears `Prepare` and `Runtime` issues so the next execution works from a fresh option snapshot.
+Any setter path should call `MutateOptions(...)` directly or indirectly. That invalidates prepared-state assumptions and clears `Prepare` and `Runtime` issues so the next execution works from a fresh option snapshot.
 
-`Execute()` also clears the prepared flag after every run, so prepared state is intentionally short-lived:
+`Execute()` also clears prepared state after every run, so preparation is intentionally short-lived:
 
 - explicit `PrepareForExecution()` can be reused by the immediately following `Execute()`
-- prepared state is not a long-term cache across multiple executions
+- prepared state is not intended as a multi-run cache
 
 ### 5.4 Filesystem preflight
 
@@ -296,21 +306,19 @@ Preferred command-facing helpers on `CommandBase` are:
 - `RequireDatabaseManager()`
 - `BuildOutputPath(stem, extension)`
 
-These helpers exist to keep command code focused on orchestration:
+These helpers keep command code focused on orchestration:
 
 - commands decide which objects are needed
 - commands decide when those objects should be loaded or saved
-- `DataObjectManager` and related processors decide how the file/database operations are implemented
+- `DataObjectManager` and related processors decide how file or database operations are implemented
 
-When database-backed objects are needed, `RequireDatabaseManager()` must be called before `LoadTypedObject(...)` or any direct `LoadDataObject(...)` / `SaveDataObject(...)` use.
+When database-backed objects are needed, `RequireDatabaseManager()` must run before `LoadTypedObject(...)` or any direct `LoadDataObject(...)` / `SaveDataObject(...)` use.
 
 ## 7. Current Command Families
 
-The current commands are not all shaped identically. After the refactor they share a base lifecycle, but their data access patterns fall into three clear families.
+The current commands share one base lifecycle but fall into three practical families.
 
 ### 7.1 File-driven analysis and generation
-
-These commands primarily start from input files and use `ProcessTypedFile(...)`:
 
 | Command | Primary inputs | Main phases | Main outputs |
 | --- | --- | --- | --- |
@@ -321,20 +329,18 @@ These commands primarily start from input files and use `ProcessTypedFile(...)`:
 
 ### 7.2 Database-driven presentation and export
 
-These commands primarily load previously saved `ModelObject` instances from SQLite:
-
 | Command | Primary inputs | Main phases | Main outputs |
 | --- | --- | --- | --- |
 | `potential_display` | painter choice, model key list, optional reference groups | load models, apply atom selection, dispatch painter | painter-specific output files |
 | `result_dump` | printer choice, model key list, optional map file | load models, collect atoms with local potential entries, dispatch dump mode | CSV, CMM, CIF-related exports depending on mode |
 
-### 7.3 Standalone algorithm/test harness
+### 7.3 Standalone algorithm and test harness
 
 | Command | Primary inputs | Main phases | Main outputs |
 | --- | --- | --- | --- |
 | `model_test` | tester mode and fitting parameters | choose tester workflow and run synthetic experiments | logs and optional ROOT-backed plots |
 
-`model_test` still inherits from `CommandBase` for a consistent CLI surface, but it does not rely on `DataObjectManager` for its main workflow.
+`model_test` still inherits from `CommandBase` for consistent options, validation, diagnostics, and execution flow even though its main workflow does not depend on `DataObjectManager`.
 
 ### 7.4 Command surface matrix
 
@@ -354,36 +360,27 @@ These commands primarily load previously saved `ModelObject` instances from SQLi
 
 ### 8.1 `potential_analysis`
 
-This is still the best reference implementation for a full command lifecycle.
+`potential_analysis` is still the best reference implementation for a full command lifecycle.
 
-In current code it:
+Its workflow is:
 
-1. requires a database manager
-2. parses the model and map files
-3. optionally rewrites model metadata for simulation mode
-4. normalizes map values
-5. selects atoms and bonds, attaching fresh local-potential entries
-6. samples map values around selected atoms
-7. classifies atoms into group structures
-8. runs either alpha training or direct local fitting
-9. runs potential fitting
-10. optionally runs the experimental bond workflow when compiled in
-11. saves the analyzed model back to SQLite under `saved_key_tag`
+1. require a database manager
+2. parse the model and map files
+3. optionally rewrite model metadata for simulation mode
+4. normalize map values
+5. select atoms and bonds, attaching fresh local-potential entries
+6. sample map values around selected atoms
+7. classify atoms into group structures
+8. run either alpha training or direct local fitting
+9. run potential fitting
+10. optionally run the experimental bond workflow when compiled in
+11. save the analyzed model back to SQLite under `saved_key_tag`
 
-This command also demonstrates the intended split between:
-
-- parse-phase scalar validation in setters
-- prepare-phase cross-field checks in `ValidateOptions()`
-
-Current prepare-time checks are:
-
-- `--simulation true` requires a positive `--sim-resolution`
-- `--sampling-min <= --sampling-max`
-- `--fit-min <= --fit-max`
+It also demonstrates the preferred split between parse-phase setter validation and prepare-phase cross-field checks.
 
 ### 8.2 `potential_display`
 
-This is the clearest example of the "load saved models, then dispatch a strategy object" pattern.
+`potential_display` is the clearest example of the "load saved models, then dispatch a strategy object" pattern.
 
 Its workflow is:
 
@@ -394,11 +391,9 @@ Its workflow is:
 5. instantiate a `PainterBase` subtype from `PainterType`
 6. feed selected data into the painter
 
-This is the preferred extension point for new display/reporting flows that consume stored analysis results.
-
 ### 8.3 `result_dump`
 
-This command is structurally similar to `potential_display`, but its dispatch point is export mode rather than painter strategy.
+`result_dump` is structurally similar to `potential_display`, but its dispatch point is export mode rather than painter strategy.
 
 Its workflow is:
 
@@ -408,30 +403,28 @@ Its workflow is:
 4. collect atoms that already contain local-potential entries
 5. dispatch to a dump mode selected by `PrinterType`
 
-The important mode-dependent validation is in `ValidateOptions()`:
+The important mode-dependent prepare rule is:
 
 - `PrinterType::MAP_VALUE` requires `--map`
 
-If new output formats are needed, extending `PrinterType` and this command is usually better than introducing a separate top-level command.
-
 ### 8.4 `map_simulation`
 
-`map_simulation` is intentionally file-driven and does not touch the database.
+`map_simulation` is intentionally file-driven and does not use the database surface.
 
 It demonstrates:
 
-- required input-path validation through a setter
+- required input-path validation through setters
 - list-style parsing and normalization for `--blurring-width`
 - generation of multiple output artifacts from one parsed model
 - use of `BuildOutputPath(...)` without any database dependency
 
-Its key prepare-time rule is simple:
+Its key prepare-time rule is:
 
 - at least one positive blurring width must remain after parsing and normalization
 
 ### 8.5 `map_visualization`
 
-`map_visualization` is a focused analysis/visualization command rather than a general report generator.
+`map_visualization` is a focused analysis and visualization command with one main output artifact.
 
 It currently:
 
@@ -442,8 +435,6 @@ It currently:
 5. derives a local reference frame from a non-degenerate bond vector
 6. samples a 2D local slice
 7. writes a PDF named like `map_slice_<model>_atom<id>.pdf`
-
-This is a good reference when adding a specialized command with a small, self-contained workflow and one output artifact.
 
 ### 8.6 `position_estimation`
 
@@ -458,24 +449,22 @@ It currently:
 5. quantizes and deduplicates the converged points
 6. writes `point_list_<mapname>.cmm`
 
-This command is a good reference for algorithm-heavy flows that still fit the shared command lifecycle cleanly.
-
 ### 8.7 `model_test`
 
-`model_test` is a CLI-facing wrapper around synthetic tester workflows.
+`model_test` is a command wrapper around synthetic tester workflows.
 
 It demonstrates that `CommandBase` is still useful even when a command mostly needs:
 
-- shared CLI options
+- shared options
 - enum-based mode dispatch
 - validation helpers
-- consistent logging and timing
+- consistent logging and diagnostics
 
 Its main prepare-time rule is:
 
 - `--fit-min <= --fit-max`
 
-## 9. CLI vs Python Binding Surface
+## 9. CLI and Python Surface
 
 The CLI surface is driven by:
 
@@ -484,7 +473,7 @@ The CLI surface is driven by:
 - `BuiltInCommandCatalog()`
 - concrete `CommandBase` subclasses
 
-The Python surface is generated from the same built-in command catalog. Every built-in command currently has a Python class in `bindings/CoreBindings.cpp`.
+The Python surface is generated from the same built-in command catalog. Every built-in command has a Python class in `bindings/CoreBindings.cpp`.
 
 <!-- BEGIN GENERATED: built-in-python-command-surface -->
 ### Built-in Python command classes
@@ -518,23 +507,23 @@ Implications for future work:
 
 When adding a new built-in command, follow this order:
 
-1. add the public interface under `include/core/`
+1. add the public command interface under `include/core/`
 2. add the implementation under `src/core/`
-3. derive from `CommandBase`
+3. derive from `CommandBase`, usually via `CommandWithOptions<Options, CommandId::...>`
 4. define a command-local options type derived from `CommandOptions`
-5. prefer `CommandWithOptions<Options, CommandId::...>` unless the command has an unusual storage need
-6. use setter helpers on `CommandBase` before adding custom validation boilerplate
-7. keep single-field validation in setters
-8. keep cross-field or mode-dependent validation in `ValidateOptions()`
-9. keep runtime caches and transient pointers resettable through `ResetRuntimeState()`
-10. keep `ExecuteImpl()` phase-oriented and orchestration-focused
-11. use `DataObjectManager` helper paths for parsing, loading, and persistence
-12. add a `CommandDescriptor` entry to `BuiltInCommandCatalog()`
-13. update bindings, tests, docs, and examples when adding or changing a built-in command
+5. add command-specific setters and use `CommandBase` helper families before adding custom boilerplate
+6. keep single-field validation in setters
+7. keep cross-field or mode-dependent validation in `ValidateOptions()`
+8. keep transient caches and pointers resettable through `ResetRuntimeState()`
+9. keep `ExecuteImpl()` phase-oriented and orchestration-focused
+10. use `DataObjectManager` helper paths for parsing, loading, and persistence
+11. add the built-in descriptor entry to `BuiltInCommandCatalog()`
+12. add the Python binding in `bindings/CoreBindings.cpp`
+13. update tests, docs, and examples in the same change
 
 A useful mental model is:
 
-- catalog decides whether the command exists and which common options it gets
+- the catalog decides whether the built-in command exists and which shared options it gets
 - the command class decides option semantics and workflow sequencing
 - the data layer decides how files and persistence are implemented
 
