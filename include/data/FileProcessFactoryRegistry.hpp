@@ -17,6 +17,8 @@ class FileProcessFactoryRegistry
 
 public:
     static FileProcessFactoryRegistry & Instance();
+    // Compatibility helper for tests or explicit bulk overrides. Normal built-in
+    // dispatch should rely on FileFormatRegistry fallback in CreateFactory().
     void RegisterDefaultFactories();
     void RegisterFactory(
         const std::string & extension,
@@ -25,7 +27,6 @@ public:
 
 private:
     FileProcessFactoryRegistry() = default;
-    
 };
 
 } // namespace rhbm_gem

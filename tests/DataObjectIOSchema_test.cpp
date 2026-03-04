@@ -5,6 +5,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "CommandTestHelpers.hpp"
@@ -14,6 +15,9 @@
 #include "DataObjectDAOFactoryRegistry.hpp"
 #include "DataObjectManager.hpp"
 #include "DatabaseManager.hpp"
+#include "FileFormatRegistry.hpp"
+#include "FileProcessFactoryBase.hpp"
+#include "FileProcessFactoryRegistry.hpp"
 #include "LegacyModelObjectDAO.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "MapFileReader.hpp"
@@ -53,6 +57,18 @@ int GetUserVersion(const std::filesystem::path & database_path)
     const auto rc{ database.StepNext() };
     if (rc != rg::SQLiteWrapper::StepRow()) return 0;
     return database.GetColumn<int>(0);
+}
+
+void SetUserVersion(const std::filesystem::path & database_path, int user_version)
+{
+    rg::SQLiteWrapper database{ database_path };
+    database.Execute("PRAGMA user_version = " + std::to_string(user_version) + ";");
+}
+
+void ExecuteSql(const std::filesystem::path & database_path, const std::string & sql)
+{
+    rg::SQLiteWrapper database{ database_path };
+    database.Execute(sql);
 }
 
 bool HasTable(const std::filesystem::path & database_path, const std::string & table_name)
@@ -168,6 +184,20 @@ public:
 rg::DataObjectDAORegistrar<FailingDataObject, FailingDataObjectDAO>
     registrar_failing_dao("failing");
 
+class OverrideFileFactory final : public rg::FileProcessFactoryBase
+{
+public:
+    std::unique_ptr<rg::DataObjectBase> CreateDataObject(const std::string & /*filename*/) override
+    {
+        return std::make_unique<FailingDataObject>();
+    }
+
+    void OutputDataObject(
+        const std::string & /*filename*/, rg::DataObjectBase * /*data_object*/) override
+    {
+    }
+};
+
 } // namespace
 
 TEST(DataObjectIOSchemaTest, EmptyDatabaseBootstrapsNormalizedSchema)
@@ -263,7 +293,6 @@ TEST(DataObjectIOSchemaTest, MapOnlyLegacyDatabaseRemainsLoadable)
         rg::SQLiteWrapper database{ database_path };
         rg::MapObjectDAO map_dao{ &database };
         map_dao.Save(&map_object, "map_only");
-        UpsertObjectMetadata(database, "map_only", "map");
     }
 
     rg::DataObjectManager manager;
@@ -273,6 +302,56 @@ TEST(DataObjectIOSchemaTest, MapOnlyLegacyDatabaseRemainsLoadable)
     auto loaded_map{ manager.GetTypedDataObject<rg::MapObject>("map_only") };
     EXPECT_EQ(loaded_map->GetGridSize(), grid_size);
     EXPECT_EQ(GetUserVersion(database_path), 2);
+}
+
+TEST(DataObjectIOSchemaTest, UnknownSchemaVersionThrows)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_unknown_version" };
+    const auto database_path{ temp_dir.path() / "unknown.sqlite" };
+
+    SetUserVersion(database_path, 99);
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+}
+
+TEST(DataObjectIOSchemaTest, ManagedButUnversionedMapOnlyDatabaseRepairsAndUpgradesToV2)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_unversioned_map" };
+    const auto database_path{ temp_dir.path() / "managed_unversioned.sqlite" };
+
+    std::array<int, 3> grid_size{ 2, 2, 2 };
+    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
+    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
+    auto values{ std::make_unique<float[]>(8) };
+    for (size_t i = 0; i < 8; i++) values[i] = static_cast<float>(i) * 2.0f;
+    rg::MapObject map_object{ grid_size, grid_spacing, origin, std::move(values) };
+
+    {
+        rg::SQLiteWrapper database{ database_path };
+        rg::MapObjectDAO map_dao{ &database };
+        map_dao.Save(&map_object, "map_only");
+    }
+
+    rg::DataObjectManager manager;
+    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
+    EXPECT_EQ(manager.GetDatabaseManager()->GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+    ASSERT_NO_THROW(manager.LoadDataObject("map_only"));
+    EXPECT_EQ(manager.GetTypedDataObject<rg::MapObject>("map_only")->GetGridSize(), grid_size);
+    EXPECT_EQ(CountRows(database_path, "object_metadata"), 1);
+}
+
+TEST(DataObjectIOSchemaTest, NormalizedV2DatabaseMissingRequiredTableThrows)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_missing_v2_table" };
+    const auto database_path{ temp_dir.path() / "missing_v2.sqlite" };
+
+    {
+        rg::DatabaseManager database_manager{ database_path };
+        EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+    }
+    ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
+    SetUserVersion(database_path, 2);
+
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
 }
 
 TEST(DataObjectIOSchemaTest, DistinctUnsanitizedKeysDoNotCollideInV2Schema)
@@ -297,6 +376,73 @@ TEST(DataObjectIOSchemaTest, DistinctUnsanitizedKeysDoNotCollideInV2Schema)
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("a-b")->GetPdbID(), "MODEL_A");
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("a_b")->GetPdbID(), "MODEL_B");
     EXPECT_EQ(CountRows(database_path, "model_object"), 2);
+}
+
+TEST(DataObjectIOSchemaTest, LegacyMigrationUsesModelListWhenMetadataIncomplete)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_partial_metadata" };
+    const auto database_path{ temp_dir.path() / "partial_metadata.sqlite" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+
+    SeedLegacyModel(database_path, model_path, "key_a", "MODEL_A");
+    SeedLegacyModel(database_path, model_path, "key_b", "MODEL_B");
+    ExecuteSql(
+        database_path,
+        "DELETE FROM object_metadata WHERE key_tag = 'key_b' AND object_type = 'model';");
+
+    rg::DataObjectManager manager;
+    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
+    ASSERT_NO_THROW(manager.LoadDataObject("key_a"));
+    ASSERT_NO_THROW(manager.LoadDataObject("key_b"));
+    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("key_a")->GetPdbID(), "MODEL_A");
+    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("key_b")->GetPdbID(), "MODEL_B");
+    EXPECT_EQ(CountRows(database_path, "model_object"), 2);
+    EXPECT_EQ(CountRows(database_path, "object_metadata"), 2);
+}
+
+TEST(DataObjectIOSchemaTest, LegacyMigrationIgnoresMetadataOnlyGhostKeys)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_ghost_metadata" };
+    const auto database_path{ temp_dir.path() / "ghost_metadata.sqlite" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+
+    SeedLegacyModel(database_path, model_path, "real_model", "REAL");
+    {
+        rg::SQLiteWrapper database{ database_path };
+        UpsertObjectMetadata(database, "ghost_model", "model");
+    }
+
+    rg::DataObjectManager manager;
+    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
+    ASSERT_NO_THROW(manager.LoadDataObject("real_model"));
+    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("real_model")->GetPdbID(), "REAL");
+    EXPECT_THROW(manager.LoadDataObject("ghost_model"), std::runtime_error);
+    EXPECT_EQ(CountRows(database_path, "model_object"), 1);
+    EXPECT_EQ(CountRows(database_path, "object_metadata"), 1);
+}
+
+TEST(DataObjectIOSchemaTest, LegacyMigrationDropsOnlyOwnedTables)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_owned_table_drop" };
+    const auto database_path{ temp_dir.path() / "owned_drop.sqlite" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+
+    SeedLegacyModel(database_path, model_path, "legacy_model", "LEGACY");
+    ExecuteSql(database_path, "CREATE TABLE custom_atom_list_in_notes (value INTEGER);");
+
+    rg::DataObjectManager manager;
+    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
+    EXPECT_TRUE(HasTable(database_path, "custom_atom_list_in_notes"));
+    EXPECT_FALSE(HasTable(database_path, "atom_list_in_legacy_model"));
+}
+
+TEST(DataObjectIOSchemaTest, MixedUnknownSchemaFailsFast)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_mixed_unknown" };
+    const auto database_path{ temp_dir.path() / "mixed_unknown.sqlite" };
+
+    ExecuteSql(database_path, "CREATE TABLE foreign_table (id INTEGER PRIMARY KEY);");
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
 }
 
 TEST(DataObjectIOSchemaTest, ChainMetadataPersistsAcrossDatabaseRoundTrip)
@@ -388,6 +534,50 @@ TEST(DataObjectIOSchemaTest, UppercaseExtensionsDispatchCorrectly)
     rg::MapFileReader reader{ uppercase_map_path.string() };
     ASSERT_NO_THROW(reader.Read());
     EXPECT_EQ(reader.GetGridSizeArray(), grid_size);
+}
+
+TEST(DataObjectIOSchemaTest, DataObjectManagerDoesNotRequireDefaultFactoryRegistration)
+{
+    rg::DataObjectManager manager;
+    ASSERT_NO_THROW(manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model"));
+    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
+}
+
+TEST(DataObjectIOSchemaTest, CustomFactoryOverrideTakesPrecedenceOverDescriptorFallback)
+{
+    auto & registry{ rg::FileProcessFactoryRegistry::Instance() };
+    registry.RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
+
+    auto factory{ registry.CreateFactory(".cif") };
+    auto data_object{ factory->CreateDataObject("ignored.cif") };
+    EXPECT_NE(dynamic_cast<FailingDataObject *>(data_object.get()), nullptr);
+
+    registry.RegisterDefaultFactories();
+}
+
+TEST(DataObjectIOSchemaTest, FileFormatDescriptorsAreUniqueAndConsistent)
+{
+    std::unordered_set<std::string> extension_set;
+    for (const auto & descriptor : rg::FileFormatRegistry::Instance().GetAllDescriptors())
+    {
+        EXPECT_TRUE(extension_set.insert(descriptor.extension).second);
+        if (descriptor.kind == rg::DataObjectKind::Model)
+        {
+            EXPECT_TRUE(descriptor.model_backend.has_value());
+            EXPECT_FALSE(descriptor.map_backend.has_value());
+        }
+        else
+        {
+            EXPECT_TRUE(descriptor.map_backend.has_value());
+            EXPECT_FALSE(descriptor.model_backend.has_value());
+        }
+
+        if (descriptor.extension == ".mmcif" || descriptor.extension == ".mcif")
+        {
+            EXPECT_TRUE(descriptor.supports_read);
+            EXPECT_FALSE(descriptor.supports_write);
+        }
+    }
 }
 
 TEST(DataObjectIOSchemaTest, ModelWriteSupportMatrixRejectsMmcifOutput)

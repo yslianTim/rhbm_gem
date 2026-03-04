@@ -1,9 +1,8 @@
 #include "MapFileWriter.hpp"
+#include "FileFormatBackendFactory.hpp"
 #include "FilePathHelper.hpp"
 #include "FileFormatRegistry.hpp"
 #include "MapFileFormatBase.hpp"
-#include "MrcFormat.hpp"
-#include "CCP4Format.hpp"
 #include "MapObject.hpp"
 #include "Logger.hpp"
 
@@ -24,19 +23,7 @@ MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map
     {
         throw std::runtime_error("Unsupported map file format");
     }
-
-    if (descriptor.map_backend == MapFormatBackend::Mrc)
-    {
-        m_file_format_helper = std::make_unique<MrcFormat>();
-    }
-    else if (descriptor.map_backend == MapFormatBackend::Ccp4)
-    {
-        m_file_format_helper = std::make_unique<CCP4Format>();
-    }
-    else
-    {
-        throw std::runtime_error("Unsupported file format");
-    }
+    m_file_format_helper = CreateMapFileFormatBackend(*descriptor.map_backend);
 }
 
 void MapFileWriter::Write()

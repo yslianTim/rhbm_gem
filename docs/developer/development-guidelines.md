@@ -78,9 +78,12 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` `Execute()` should keep a clear phase boundary: validate and construct prerequisites first, then run the main workflow.
 - `[Required]` File parsing, database access, and DAO details belong in the data layer, not inside command orchestration logic.
 - `[Required]` Supported file-format matrices must be defined through `FileFormatRegistry`; do not scatter extension truth across unrelated registries or readers and writers.
+- `[Required]` `FileProcessFactoryRegistry` is an override seam, not the default source of built-in format support. Default factory selection must remain derivable from `FileFormatRegistry`.
 - `[Required]` Support for a new file format must update `FileFormatRegistry`, the corresponding backend implementation, regression tests, and the developer documentation support matrix in the same change.
 - `[Required]` Database schema evolution must use SQLite `PRAGMA user_version` and be coordinated through `DatabaseSchemaManager`.
+- `[Required]` `DatabaseManager` should make schema bootstrap, validation, migration, and repair a one-shot initialization concern for each database handle. Do not re-run schema repair logic in normal save or load hot paths.
 - `[Required]` `DatabaseManager` owns transaction boundaries for normal save and load flows. DAO implementations must not open their own transactions.
+- `[Required]` Legacy model migration scope must be derived from authoritative legacy payload tables such as `model_list`, not from `object_metadata` alone. Databases with mixed unknown unmanaged tables must fail fast instead of being silently upgraded.
 - `[Required]` New built-in commands should be added through `BuiltInCommandCatalog()` and must provide a Python binding name there so CLI registration, bindings, and docs sync share one source of truth for built-in naming while the concrete command type remains the source of shared common-option policy.
 - `[Required]` New built-in commands must ship both CLI registration and Python binding updates in the same change unless the command is intentionally not part of the built-in catalog.
 - `[Required]` Built-in catalog metadata and registration helpers are internal implementation details. Keep them under `src/`, not `include/`, unless the project intentionally promotes them to a supported public API.

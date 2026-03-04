@@ -24,6 +24,8 @@ class LegacyModelObjectDAO : public DataObjectDAOBase
     mutable std::unordered_set<std::string> m_table_cache;
 
 public:
+    // Migration-only reader or writer for the legacy v1 per-key table layout.
+    // New persistence features should target ModelObjectDAOv2 instead of extending this class.
     explicit LegacyModelObjectDAO(SQLiteWrapper * db_manager);
     ~LegacyModelObjectDAO();
 

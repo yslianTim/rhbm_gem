@@ -21,6 +21,7 @@ class DatabaseManager
     std::unique_ptr<SQLiteWrapper> m_database;
     std::unordered_map<std::type_index, std::shared_ptr<DataObjectDAOBase>> m_dao_cache;
     DatabaseSchemaVersion m_schema_version;
+    bool m_schema_ready;
     mutable std::mutex m_mutex;     // Protects m_dao_cache
     mutable std::mutex m_db_mutex;  // Protects database operations
 

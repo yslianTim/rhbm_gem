@@ -27,7 +27,7 @@ This subsystem currently treats only these types as top-level I/O units:
 
 - `DataObjectManager`: command-facing orchestration and in-memory ownership
 - `FileFormatRegistry`: single source of truth for supported file extensions and backend dispatch
-- `FileProcessFactoryRegistry`: choose the top-level factory (`ModelObjectFactory` or `MapObjectFactory`) from the normalized extension
+- `FileProcessFactoryRegistry`: optional override layer for choosing the top-level factory (`ModelObjectFactory` or `MapObjectFactory`) from the normalized extension
 - `ModelObjectFactory` / `MapObjectFactory`: build or write the concrete object
 - `ModelFileReader` / `ModelFileWriter`: select model parser or writer backend from `FileFormatRegistry`
 - `MapFileReader` / `MapFileWriter`: select map parser or writer backend from `FileFormatRegistry`
@@ -37,6 +37,7 @@ This subsystem currently treats only these types as top-level I/O units:
 - `ModelObjectDAO` (`ModelObjectDAOv2`): normalized v2 persistence for `ModelObject`
 - `LegacyModelObjectDAO`: legacy v1 read path used only for migration
 - `MapObjectDAO`: flat persistence for `MapObject`
+- `FileFormatBackendFactory`: shared helper that builds concrete parser or writer backends from `FileFormatRegistry`
 - `SQLiteWrapper`: SQL execution, prepared statements, typed bind or read helpers, and RAII transaction handling
 
 ## 3. Recommended Call Path
@@ -129,12 +130,14 @@ Current descriptors:
 | model | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` |
 | map | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` |
 
-`FileProcessFactoryRegistry::RegisterDefaultFactories()` no longer owns the format matrix. It only maps each registered extension to the correct top-level factory:
+`FileProcessFactoryRegistry` is no longer the source of default format behavior. Its runtime contract is:
 
-- model extensions -> `ModelObjectFactory`
-- map extensions -> `MapObjectFactory`
+1. if an explicit override was registered with `RegisterFactory(...)`, use that override
+2. otherwise ask `FileFormatRegistry` for the descriptor and instantiate the default top-level factory from `descriptor.kind`
 
-Readers and writers then ask `FileFormatRegistry` again to choose the backend implementation.
+This means normal application startup no longer needs `RegisterDefaultFactories()` or global one-time registration just to make built-in formats work.
+
+Readers and writers then use `FileFormatBackendFactory` plus `FileFormatRegistry` to choose the concrete backend implementation.
 
 ### 5.2 `ProcessFile(...)`
 
@@ -301,7 +304,7 @@ CREATE TABLE IF NOT EXISTS object_metadata (
 
 Save flow:
 
-1. ensure schema is ready
+1. rely on the schema that was already prepared when `DatabaseManager` opened the database
 2. open a single transaction
 3. create or reuse the DAO for the runtime object type
 4. call `dao->Save(...)`
@@ -310,7 +313,7 @@ Save flow:
 
 Load flow:
 
-1. ensure schema is ready
+1. rely on the schema that was already prepared when `DatabaseManager` opened the database
 2. open a single transaction
 3. read `object_type` from `object_metadata`
 4. resolve the DAO from `DataObjectDAOFactoryRegistry`
@@ -319,39 +322,62 @@ Load flow:
 
 This is an intentional contract change from the legacy design: DAO implementations are transaction-free. `DatabaseManager` is the only transaction owner for normal save or load operations.
 
+`DatabaseManager` also treats schema initialization as a one-shot concern per instance. Bootstrap, migration, validation, and metadata repair happen when the database handle is opened, not on every hot-path save or load.
+
 ### 8.3 Schema Versioning and Migration
 
-`DatabaseSchemaManager` uses SQLite `PRAGMA user_version` as the single schema-version source.
+`DatabaseSchemaManager` uses SQLite `PRAGMA user_version` as the single schema-version source and makes its decision through `InspectSchemaState()`.
 
 Current versions:
 
 - `DatabaseSchemaVersion::LegacyV1 = 1`
 - `DatabaseSchemaVersion::NormalizedV2 = 2`
 
+Schema states:
+
+- `Empty`
+- `LegacyV1`
+- `NormalizedV2`
+- `ManagedButUnversioned`
+- `MixedUnknown`
+
 `EnsureSchema()` behavior:
 
-1. read `PRAGMA user_version`
-2. if the value is `0` and the database is empty, bootstrap normalized v2
-3. if the value is `0` and legacy model tables exist, treat the database as legacy v1 and migrate
-4. if the value is `1`, migrate to v2
-5. if the value is `2`, ensure the normalized schema exists
-6. any other version is rejected as unsupported
+1. if `PRAGMA user_version == 1`, migrate legacy v1 to v2
+2. if `PRAGMA user_version == 2`, run `ValidateNormalizedV2Schema()` only
+3. if `PRAGMA user_version` is any other non-zero value, reject the database as unsupported
+4. if `PRAGMA user_version == 0`, inspect table state:
+   - `Empty`: create normalized v2 tables, set version to `2`, validate
+   - `LegacyV1`: migrate to v2
+   - `ManagedButUnversioned`: create any missing managed tables, run `RepairManagedMetadata()`, set version to `2`, validate
+   - `MixedUnknown`: fail fast instead of silently adopting the database
+
+Important intent:
+
+- a healthy v2 database is validated, not rewritten
+- metadata repair is reserved for managed-but-unversioned recovery, not ordinary hot-path save/load
+- databases with unknown unmanaged tables are not silently claimed by this subsystem
 
 Migration is open-time and in-place:
 
 1. open one transaction
 2. create normalized v2 tables
-3. load each legacy model through `LegacyModelObjectDAO`
-4. save it through `ModelObjectDAOv2`
-5. upsert `object_metadata`
-6. drop legacy model tables
-7. set `PRAGMA user_version = 2`
+3. read model keys from legacy `model_list` as the authoritative source
+4. compare against any existing `object_metadata` model rows and log mismatches
+5. load each legacy model through `LegacyModelObjectDAO`
+6. save it through `ModelObjectDAOv2`
+7. repair `object_metadata`
+8. drop only the legacy tables explicitly owned by the migrated keys
+9. set `PRAGMA user_version = 2`
+10. validate normalized v2
 
 Current migration limits:
 
 - missing legacy metadata that was never persisted, such as historical `chain_id_list_map`, cannot be recovered
 - historical sanitize collisions in legacy per-key tables cannot be repaired automatically
 - map persistence stays on the existing `map_list` schema; only model persistence is migrated to normalized v2
+- partial or stale legacy `object_metadata` does not decide migration scope; `model_list` does
+- legacy cleanup is explicit-key based, not broad table-name pattern sweeping
 
 ### 8.4 DAO Registration
 
@@ -381,6 +407,14 @@ The string name is persisted in `object_metadata.object_type`, so it must remain
 ### 9.2 Normalized V2 Tables
 
 `ModelObjectDAOv2` persists all model rows into fixed shared tables keyed by `key_tag`.
+
+Implementation is intentionally split:
+
+- `ModelObjectDAOv2.cpp`: orchestration only
+- `src/data/model_io/ModelSchemaSql.hpp`: shared SQL constants and scoped table lists
+- `src/data/model_io/ModelStructurePersistence.cpp`: structural save or load logic
+- `src/data/model_io/ModelAnalysisPersistence.cpp`: local or posterior or group analysis save or load logic
+- `src/data/model_io/SQLiteStatementBatch.hpp`: small prepared-statement helper for repeated insert patterns
 
 Core tables:
 
@@ -486,6 +520,8 @@ Start with these files when debugging or extending this subsystem:
 - `src/data/FileFormatRegistry.cpp`
 - `include/data/FileProcessFactoryRegistry.hpp`
 - `src/data/FileProcessFactoryRegistry.cpp`
+- `include/data/FileFormatBackendFactory.hpp`
+- `src/data/FileFormatBackendFactory.cpp`
 - `src/data/ModelObjectFactory.cpp`
 - `src/data/MapObjectFactory.cpp`
 - `src/data/ModelFileReader.cpp`
@@ -504,6 +540,10 @@ Start with these files when debugging or extending this subsystem:
 - `src/data/ModelObjectDAO.cpp`
 - `src/data/ModelObjectDAOv2.cpp`
 - `src/data/LegacyModelObjectDAO.cpp`
+- `src/data/model_io/ModelSchemaSql.hpp`
+- `src/data/model_io/ModelStructurePersistence.cpp`
+- `src/data/model_io/ModelAnalysisPersistence.cpp`
+- `src/data/model_io/SQLiteStatementBatch.hpp`
 - `include/data/MapObjectDAO.hpp`
 - `src/data/MapObjectDAO.cpp`
 - `include/data/SQLiteWrapper.hpp`
@@ -516,9 +556,11 @@ For a new model or map format:
 
 1. implement or extend the appropriate `*Format` backend
 2. add or update the descriptor in `FileFormatRegistry`
-3. update reader or writer code only if the new descriptor needs a new backend enum or backend branch
+3. update `FileFormatBackendFactory` only if the new descriptor needs a new backend enum or backend branch
 4. add read and write tests for the supported matrix
 5. update this document's support matrix
+
+Do not add built-in format truth to `FileProcessFactoryRegistry`; that registry is now only the override seam.
 
 If the format parses into a different intermediate shape, decide whether it still fits the current factory contract or whether a new assembly seam is needed.
 

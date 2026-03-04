@@ -45,11 +45,21 @@ std::unique_ptr<FileProcessFactoryBase> FileProcessFactoryRegistry::CreateFactor
     auto normalized_extension{ extension };
     StringHelper::ToLowerCase(normalized_extension);
     auto iter{ m_factory_map.find(normalized_extension) };
-    if (iter == m_factory_map.end())
+    if (iter != m_factory_map.end())
     {
-        throw std::runtime_error("Unsupported file format: " + extension);
+        return (iter->second)();
     }
-    return (iter->second)();
+
+    const auto & descriptor{ FileFormatRegistry::Instance().Lookup(normalized_extension) };
+    switch (descriptor.kind)
+    {
+    case DataObjectKind::Model:
+        return std::make_unique<ModelObjectFactory>();
+    case DataObjectKind::Map:
+        return std::make_unique<MapObjectFactory>();
+    }
+
+    throw std::runtime_error("Unsupported file format: " + extension);
 }
 
 } // namespace rhbm_gem

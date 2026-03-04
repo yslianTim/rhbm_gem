@@ -10,6 +10,7 @@ set(DATA_SOURCES
     DataObjectDAOFactoryRegistry.cpp
     DatabaseSchemaManager.cpp
     DatabaseManager.cpp
+    FileFormatBackendFactory.cpp
     FileFormatRegistry.cpp
     FileProcessFactoryRegistry.cpp
     GroupPotentialEntry.cpp
@@ -26,6 +27,8 @@ set(DATA_SOURCES
     ModelObjectDAO.cpp
     ModelObjectDAOv2.cpp
     ModelObjectFactory.cpp
+    model_io/ModelAnalysisPersistence.cpp
+    model_io/ModelStructurePersistence.cpp
     MrcFormat.cpp
     PdbFormat.cpp
     PotentialEntryIterator.cpp

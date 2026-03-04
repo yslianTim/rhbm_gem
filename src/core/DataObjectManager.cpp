@@ -7,7 +7,6 @@
 #include "DatabaseManager.hpp"
 #include "Logger.hpp"
 
-#include <mutex>
 #include <utility>
 
 namespace rhbm_gem {
@@ -15,11 +14,6 @@ namespace rhbm_gem {
 DataObjectManager::DataObjectManager() :
     m_db_manager{ nullptr }
 {
-    static std::once_flag register_factories_once;
-    std::call_once(register_factories_once, []()
-    {
-        FileProcessFactoryRegistry::Instance().RegisterDefaultFactories();
-    });
 }
 
 DataObjectManager::~DataObjectManager()

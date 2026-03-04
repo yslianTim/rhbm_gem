@@ -1,9 +1,8 @@
 #include "ModelFileWriter.hpp"
+#include "FileFormatBackendFactory.hpp"
 #include "FilePathHelper.hpp"
 #include "FileFormatRegistry.hpp"
 #include "ModelFileFormatBase.hpp"
-#include "PdbFormat.hpp"
-#include "CifFormat.hpp"
 #include "ModelObject.hpp"
 #include "Logger.hpp"
 
@@ -22,19 +21,7 @@ ModelFileWriter::ModelFileWriter(
     {
         throw std::runtime_error("Unsupported model file format");
     }
-
-    if (descriptor.model_backend == ModelFormatBackend::Pdb)
-    {
-        m_file_object = std::make_unique<PdbFormat>();
-    }
-    else if (descriptor.model_backend == ModelFormatBackend::Cif)
-    {
-        m_file_object = std::make_unique<CifFormat>();
-    }
-    else
-    {
-        throw std::runtime_error("Unsupported file format");
-    }
+    m_file_object = CreateModelFileFormatBackend(*descriptor.model_backend);
 }
 
 ModelFileWriter::~ModelFileWriter()
