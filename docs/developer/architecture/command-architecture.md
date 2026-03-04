@@ -1,6 +1,6 @@
 # Command Architecture
 
-This document describes the current command-system architecture after the catalog-driven refactor and the later cleanup passes. It focuses on the actual registration path, the `CommandBase` lifecycle contract, and the current extension points that command authors should use.
+This document describes the current command-system architecture after the catalog-driven refactor and the later cleanup passes. It focuses on the actual registration path, the `CommandBase` lifecycle contract, and the extension points that command authors should use today.
 
 Use this document together with [`../development-guidelines.md`](../development-guidelines.md). Editable diagram sources for this area live under [`./diagrams/`](./diagrams/).
 
@@ -24,6 +24,18 @@ It is not responsible for:
 - painter or printer implementations
 
 Those concerns stay behind `DataObjectManager`, file processors, writers, and domain-specific helpers.
+
+## 1.1 Source of Truth by Concern
+
+The current design is easiest to understand when each concern is mapped to exactly one owner:
+
+- `BuiltInCommandCatalog()` decides whether a built-in command exists and what its public CLI/Python names are.
+- The concrete command type decides its `CommandId` and shared `CommonOptionMask`.
+- `CommandBase` decides the shared execution lifecycle and diagnostics model.
+- Concrete command setters and `ValidateOptions()` decide option semantics.
+- `DataObjectManager` and command-local workflow code decide how files, database objects, and output artifacts are processed.
+
+If a change duplicates one of those responsibilities in another layer, it is usually pushing the architecture in the wrong direction.
 
 ## 2. Runtime Topology
 
@@ -125,14 +137,20 @@ The descriptor deliberately stores only authoritative metadata. In the current d
 
 Database usage is derived directly from whether the built-in descriptor's `common_options` mask includes `CommonOption::Database`.
 All built-in commands must provide a Python binding name in the built-in catalog.
+The lightweight public metadata header is `include/core/CommandMetadata.hpp`; it now carries both `CommandId` and the shared common-option types. `CommandId.hpp` no longer exists as a separate public header.
 
 ## 4. `CommandBase` Contract
 
 All built-in commands derive from `CommandBase`. In practice, every current built-in uses `CommandWithOptions<OptionsT, CommandId::..., CommonOptions...>` so the base class can keep the raw options object and command id as internal implementation detail while the command type itself remains the source of its shared-option surface.
 
-### 4.1 Public command contract
+### 4.1 Public caller contract vs. override hooks
 
-Every concrete command must implement:
+There are two different contracts to keep separate when reading command code:
+
+- the public caller-facing API on `CommandBase`
+- the protected override hooks that concrete commands must implement
+
+Every concrete command must implement these protected hooks:
 
 - `bool ExecuteImpl()`
 - `void RegisterCLIOptionsExtend(CLI::App * command)`
@@ -148,10 +166,17 @@ The public entry points shared by CLI and Python are:
 - `PrepareForExecution()`
 - `HasValidationErrors()`
 - `GetValidationIssues()`
+
+The public C++ command contract also includes:
+
 - shared setters inherited from `CommandBase`
 - command-specific setters defined on each concrete command
 
+Python bindings then expose the relevant setters for each concrete built-in command explicitly in `bindings/CoreBindings.cpp`.
+
 `Execute()` is the only supported execution entry point for CLI callbacks, direct C++ callers, and Python bindings. Raw option access, command-id introspection, and CLI-registration hooks are internal mechanics rather than caller-facing API.
+
+In practice, outside code should never call `RegisterCLIOptionsExtend(...)`, `ValidateOptions()`, `ResetRuntimeState()`, or `ExecuteImpl()` directly. Those are subclass plumbing, not user-facing command operations.
 
 ### 4.2 Shared base state
 
@@ -218,6 +243,11 @@ Base convenience helpers built on top of that core API:
 - `BuildOutputPath(...)`
 
 This split is intentional: command authors should think of the validation and issue helpers as the primary extension API, while the path, scalar, enum, database, and output helpers are convenience layers that keep common command code terse.
+
+As a rule of thumb:
+
+- if a setter mainly needs to mutate state or add/remove issues, start from `MutateOptions(...)`, `AddValidationError(...)`, and the issue-reset helpers
+- if a setter matches an already-supported pattern such as "required existing path", "positive scalar with fallback", or "validated enum", prefer the convenience helper instead of open-coding the pattern
 
 ### 4.5 Internal base mechanics
 
@@ -322,6 +352,8 @@ These helpers keep command code focused on orchestration:
 - `DataObjectManager` and related processors decide how file or database operations are implemented
 
 When database-backed objects are needed, `RequireDatabaseManager()` must run before any direct `LoadDataObject(...)` / `SaveDataObject(...)` use.
+
+Some commands also use internal `src/core` helpers such as `CommandDataAccessInternal.hpp` to avoid repeating typed file/database loading boilerplate. Those helpers are intentionally internal and are not part of the supported `CommandBase` extension surface described in this document.
 
 ## 7. Current Command Families
 
@@ -486,6 +518,7 @@ The CLI surface is driven by:
 
 The Python surface is generated from the same built-in command catalog. Every built-in command has a Python class in `bindings/CoreBindings.cpp`.
 Python support for built-in commands is not an optional surface-policy dimension. It is a built-in catalog contract that always accompanies CLI registration.
+The binding code remains hand-written on purpose; the catalog supplies naming and built-in membership, not automatic setter generation.
 
 <!-- BEGIN GENERATED: built-in-python-command-surface -->
 ### Built-in Python command classes
@@ -564,6 +597,7 @@ For future command work, inspect these files first:
 - `src/core/BuiltInCommandCatalogInternal.hpp`
 - `src/core/BuiltInCommandCatalog.cpp`
 - `include/core/CommandMetadata.hpp`
+- `src/core/CommandDataAccessInternal.hpp`
 - `include/core/CommandOptionBinding.hpp`
 - `include/core/DataObjectManager.hpp`
 - `src/core/DataObjectManager.cpp`
