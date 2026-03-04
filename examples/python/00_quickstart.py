@@ -38,13 +38,22 @@ def main() -> int:
     print("Imported module: rhbm_gem_module")
     print("")
     print("Available enums:")
-    for enum_name in ("PotentialModel", "PartialCharge", "PainterType", "PrinterType"):
+    for enum_name in (
+        "PotentialModel",
+        "PartialCharge",
+        "PainterType",
+        "PrinterType",
+        "TesterType",
+    ):
         print_enum_members(enum_name)
     print("")
 
     commands = [
+        rgm.HRLModelTestCommand(),
         rgm.MapSimulationCommand(),
+        rgm.MapVisualizationCommand(),
         rgm.PotentialAnalysisCommand(),
+        rgm.PositionEstimationCommand(),
         rgm.ResultDumpCommand(),
         rgm.PotentialDisplayCommand(),
     ]

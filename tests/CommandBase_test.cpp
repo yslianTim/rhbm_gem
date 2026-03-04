@@ -12,38 +12,48 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class TestCommand final : public rg::CommandBase
+struct TestCommandOptions : public rg::CommandOptions
+{
+    bool force_invalid{ false };
+};
+
+class TestCommand final
+    : public rg::CommandWithOptions<TestCommandOptions, rg::CommandId::PotentialAnalysis>
 {
 public:
-    struct Options : public rg::CommandOptions
-    {
-        bool force_invalid{ false };
-    };
+    using Options = TestCommandOptions;
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-    const rg::CommandOptions & GetOptions() const override { return m_options; }
-    rg::CommandOptions & GetOptions() override { return m_options; }
-    rg::CommandId GetCommandId() const override { return rg::CommandId::PotentialAnalysis; }
-    bool Prepared() const { return IsPreparedForExecution(); }
+    int validate_count{ 0 };
+    int reset_count{ 0 };
+    int execute_count{ 0 };
 
     void SetForceInvalid(bool value)
     {
-        InvalidatePreparedState();
-        m_options.force_invalid = value;
+        MutateOptions([&]() { m_options.force_invalid = value; });
     }
 
     void ValidateOptions() override
     {
-        ClearValidationIssues("--test", rg::ValidationPhase::Prepare);
+        ++validate_count;
+        ResetPrepareIssues("--test");
         if (m_options.force_invalid)
         {
             AddValidationError("--test", "forced invalid config");
         }
     }
 
+    void ResetRuntimeState() override
+    {
+        ++reset_count;
+    }
+
 private:
-    bool ExecuteImpl() override { return true; }
-    Options m_options{};
+    bool ExecuteImpl() override
+    {
+        ++execute_count;
+        return true;
+    }
 };
 
 } // namespace
@@ -84,14 +94,38 @@ TEST(CommandBaseTest, BaseSettersInvalidatePreparedState)
     TestCommand command;
 
     ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_TRUE(command.Prepared());
+    EXPECT_EQ(command.validate_count, 1);
+    EXPECT_EQ(command.reset_count, 1);
 
     command.SetThreadSize(2);
-    EXPECT_FALSE(command.Prepared());
+    ASSERT_TRUE(command.Execute());
+    EXPECT_EQ(command.validate_count, 2);
+    EXPECT_EQ(command.reset_count, 2);
+    EXPECT_EQ(command.execute_count, 1);
 
     ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_TRUE(command.Prepared());
+    EXPECT_EQ(command.validate_count, 3);
+    EXPECT_EQ(command.reset_count, 3);
 
     command.SetFolderPath("output");
-    EXPECT_FALSE(command.Prepared());
+    ASSERT_TRUE(command.Execute());
+    EXPECT_EQ(command.validate_count, 4);
+    EXPECT_EQ(command.reset_count, 4);
+    EXPECT_EQ(command.execute_count, 2);
+}
+
+TEST(CommandBaseTest, ValidationFailureSkipsFilesystemPreflight)
+{
+    command_test::ScopedTempDir temp_dir{"command_base_prepare_validation_failure"};
+    const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
+    const auto folder_path{ temp_dir.path() / "out" };
+
+    TestCommand command;
+    command.SetDatabasePath(database_path);
+    command.SetFolderPath(folder_path);
+    command.SetForceInvalid(true);
+
+    ASSERT_FALSE(command.PrepareForExecution());
+    EXPECT_FALSE(std::filesystem::exists(database_path.parent_path()));
+    EXPECT_FALSE(std::filesystem::exists(folder_path));
 }

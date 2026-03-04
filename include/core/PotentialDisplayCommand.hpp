@@ -17,24 +17,26 @@ namespace rhbm_gem {
 class DataObjectManager;
 class ModelObject;
 
-class PotentialDisplayCommand : public CommandBase
+struct PotentialDisplayCommandOptions : public CommandOptions
+{
+    PainterType painter_choice{ PainterType::MODEL };
+    std::vector<std::string> model_key_tag_list{};
+    std::string ref_model_key_tag_list{ "" };
+    std::string pick_chain_id{ "" };
+    std::string veto_chain_id{ "" };
+    std::string pick_residue{ "" };
+    std::string veto_residue{ "" };
+    std::string pick_element{ "" };
+    std::string veto_element{ "" };
+};
+
+class PotentialDisplayCommand
+    : public CommandWithOptions<PotentialDisplayCommandOptions, CommandId::PotentialDisplay>
 {
 public:
-    struct Options : public CommandOptions
-    {
-        PainterType painter_choice{ PainterType::MODEL };
-        std::vector<std::string> model_key_tag_list{};
-        std::string ref_model_key_tag_list{ "" };
-        std::string pick_chain_id{ "" };
-        std::string veto_chain_id{ "" };
-        std::string pick_residue{ "" };
-        std::string veto_residue{ "" };
-        std::string pick_element{ "" };
-        std::string veto_element{ "" };
-    };
+    using Options = PotentialDisplayCommandOptions;
 
 private:
-    Options m_options;
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     std::unique_ptr<::AtomSelector> m_atom_selector;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;
@@ -44,10 +46,7 @@ public:
     PotentialDisplayCommand();
     ~PotentialDisplayCommand();
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    CommandId GetCommandId() const override { return CommandId::PotentialDisplay; }
     void ResetRuntimeState() override;
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
 
     void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);

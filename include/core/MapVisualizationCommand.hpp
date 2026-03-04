@@ -13,20 +13,22 @@ class ModelObject;
 class MapObject;
 class AtomObject;
 
-class MapVisualizationCommand : public CommandBase
+struct MapVisualizationCommandOptions : public CommandOptions
+{
+    int atom_serial_id{ 1 };
+    int sampling_size{ 100 };
+    double window_size{ 5.0 };
+    std::filesystem::path model_file_path;
+    std::filesystem::path map_file_path;
+};
+
+class MapVisualizationCommand
+    : public CommandWithOptions<MapVisualizationCommandOptions, CommandId::MapVisualization>
 {
 public:
-    struct Options : public CommandOptions
-    {
-        int atom_serial_id{ 1 };
-        int sampling_size{ 100 };
-        double window_size{ 5.0 };
-        std::filesystem::path model_file_path;
-        std::filesystem::path map_file_path;
-    };
+    using Options = MapVisualizationCommandOptions;
 
 private:
-    Options m_options;
     std::string m_model_key_tag, m_map_key_tag;
     std::shared_ptr<MapObject> m_map_object;
     std::shared_ptr<ModelObject> m_model_object;
@@ -35,10 +37,7 @@ public:
     MapVisualizationCommand();
     ~MapVisualizationCommand();
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    CommandId GetCommandId() const override { return CommandId::MapVisualization; }
     void ResetRuntimeState() override;
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
 
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);

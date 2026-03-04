@@ -13,16 +13,4 @@ enum class CommandId
     ModelTest
 };
 
-enum class DatabaseUsage
-{
-    Required = 0,
-    NotUsed
-};
-
-enum class BindingExposure
-{
-    PythonPublic = 0,
-    CliOnly
-};
-
 } // namespace rhbm_gem

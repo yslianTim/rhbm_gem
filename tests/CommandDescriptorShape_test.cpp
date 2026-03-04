@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "BuiltInCommandCatalog.hpp"
+#include "BuiltInCommandCatalogInternal.hpp"
 #include "CommandBase.hpp"
 
 namespace rg = rhbm_gem;

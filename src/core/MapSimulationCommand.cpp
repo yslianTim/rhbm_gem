@@ -36,8 +36,7 @@ std::string SerializeBlurringWidths(const std::vector<double> & widths)
 namespace rhbm_gem {
 
 MapSimulationCommand::MapSimulationCommand() :
-    CommandBase(), m_options{}, m_selected_atom_list{}, m_atom_charge_map{},
-    m_model_object{ nullptr },
+    m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),
         std::numeric_limits<float>::max(),

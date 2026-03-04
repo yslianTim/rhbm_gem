@@ -49,7 +49,7 @@ flowchart TD
     P --> Q["ResetRuntimeState()"]
     Q --> R["m_data_manager.ClearDataObjects()"]
     R --> S["ValidateOptions()"]
-    S --> T["PrepareFilesystemTargets()"]
+    S --> T["RunFilesystemPreflight()"]
     T --> U{"Any validation errors?"}
     U -- yes --> V["Report issues and abort"]
     U -- no --> W["ExecuteImpl()"]
@@ -71,13 +71,14 @@ The CLI entry point is small by design:
 - `Application` receives that `CLI::App`
 - `Application` requires exactly one subcommand and registers all built-in commands
 
-`Application::RegisterCommand(...)` performs the real wiring:
+`Application` performs the real wiring in `src/core/Application.cpp`:
 
 1. create a command instance through `CommandDescriptor::factory`
 2. add a CLI11 subcommand using the descriptor name and description
 3. call `CommandBase::RegisterCLIOptions(...)`
 4. store the command in a `shared_ptr`
 5. bind the subcommand callback to `CommandBase::Execute()`
+6. convert `Execute() == false` into `CLI::RuntimeError(1)` so command failure reaches the process exit code
 
 This is the entire built-in registration path. There is no secondary registry hidden elsewhere.
 
@@ -98,6 +99,7 @@ The built-in manifest order is generated from the built-in command catalog:
 <!-- END GENERATED: built-in-command-manifest -->
 
 This gives deterministic help ordering and avoids any dependence on cross-translation-unit static initialization order.
+The built-in catalog is an internal registration mechanism, not an installed public C++ API.
 
 ### 3.3 Descriptor responsibilities
 
@@ -108,11 +110,18 @@ Each built-in `CommandDescriptor` stores:
 - the user-facing description
 - the command factory returning `std::unique_ptr<CommandBase>`
 - `CommandSurface` metadata for shared option exposure
-- `DatabaseUsage`
-- `BindingExposure`
-- the Python binding name when the command is Python-public
+- the Python binding name for the built-in command class exposed through `bindings/CoreBindings.cpp`
+
+In the current implementation, built-in descriptors are constructed through small catalog helper functions in `BuiltInCommandCatalog.cpp`. The descriptor keeps only the authoritative fields, and the command surface policy is interpreted directly from those fields:
+
+- database usage from whether `CommandSurface` includes `CommonOption::Database`
+- Python class naming from the descriptor's `python_binding_name`
+
+Database usage is derived directly from whether `CommandSurface` includes `CommonOption::Database`.
+All built-in commands must provide a Python binding name in the built-in catalog.
 
 The project does not currently provide a self-registration API for commands. Built-in CLI behavior flows only through the built-in command catalog.
+The catalog declarations now live in `src/core/BuiltInCommandCatalogInternal.hpp` because they are consumed only by core wiring, bindings, and tests.
 
 ## 4. `CommandBase` Contract
 
@@ -171,10 +180,10 @@ This means:
 
 The intended pattern for command-local options is:
 
-1. define `struct Options : public CommandOptions`
-2. store one `Options m_options`
-3. return `m_options` from both `GetOptions()` overloads
-4. mutate fields only through setters
+1. define a command-specific options type derived from `CommandOptions`
+2. derive the concrete command from `CommandWithOptions<Options, CommandId::...>` when the standard storage pattern is sufficient
+3. expose `using Options = ...` on the command when a stable command-local options name is useful
+4. mutate option fields only through setters
 5. let setters invalidate prepared state via `MutateOptions(...)`
 
 Concrete setters should use the shared helper families on `CommandBase` when possible:
@@ -216,7 +225,7 @@ sequenceDiagram
         Cmd->>Cmd: ResetRuntimeState()
         Cmd->>Cmd: Clear data-manager cache
         Cmd->>Cmd: ValidateOptions()
-        Cmd->>Cmd: PrepareFilesystemTargets()
+        Cmd->>Cmd: RunFilesystemPreflight()
     end
     alt validation errors exist
         Cmd-->>User: ReportValidationIssues()
@@ -233,7 +242,7 @@ Validation issues are explicitly tagged by phase:
 | Phase | Where it usually happens | Typical responsibility |
 | --- | --- | --- |
 | `Parse` | setter callbacks | single-field checks, enum validation, required-path existence checks, safe fallback warnings |
-| `Prepare` | `ValidateOptions()` and `PrepareFilesystemTargets()` | cross-field constraints, mode-specific requirements, directory preflight |
+| `Prepare` | `ValidateOptions()` and `RunFilesystemPreflight()` | cross-field constraints, mode-specific requirements, directory preflight |
 | `Runtime` | `ExecuteImpl()` or deeper runtime helpers | unexpected workflow failures after preparation |
 
 Two practical rules follow from this split:
@@ -245,14 +254,17 @@ Two practical rules follow from this split:
 
 `PrepareForExecution()` is more than a boolean guard. In the current implementation it:
 
-1. applies the selected log level
-2. calls `ResetRuntimeState()`
-3. clears all cached data objects from `m_data_manager`
-4. invalidates any previous prepared state
-5. runs `ValidateOptions()`
-6. reports issues and aborts early if any validation error already exists
-7. runs `PrepareFilesystemTargets()`
-8. reports issues again and marks the command prepared only if no errors remain
+1. runs `BeginPreparationPass()`
+2. applies the selected log level
+3. calls `ResetRuntimeState()`
+4. clears all cached data objects from `m_data_manager`
+5. invalidates any previous prepared state
+6. runs `RunValidationPass()`
+7. calls `ValidateOptions()`
+8. reports issues and aborts early if any validation error already exists
+9. runs `RunFilesystemPreflight()`
+10. performs directory preflight for database/output targets and reports any resulting issues
+11. marks the command prepared only if no errors remain
 
 ### 5.3 Prepared-state invalidation
 
@@ -265,7 +277,7 @@ Any setter path should call `MutateOptions(...)` directly or indirectly. That in
 
 ### 5.4 Filesystem preflight
 
-`PrepareFilesystemTargets()` is the only shared place where base filesystem side effects happen before `ExecuteImpl()`:
+`RunFilesystemPreflight()` is the shared place where base filesystem side effects happen before `ExecuteImpl()`:
 
 - if the command uses the database surface, it creates the parent directory of `database_path` when needed
 - if the command uses the output-folder surface, it creates `folder_path` when needed
@@ -333,9 +345,9 @@ These commands primarily load previously saved `ModelObject` instances from SQLi
 | `potential_display` | yes | yes | yes |
 | `result_dump` | yes | yes | yes |
 | `map_simulation` | no | yes | yes |
-| `map_visualization` | no | yes | no |
-| `position_estimation` | no | yes | no |
-| `model_test` | no | yes | no |
+| `map_visualization` | no | yes | yes |
+| `position_estimation` | no | yes | yes |
+| `model_test` | no | yes | yes |
 <!-- END GENERATED: command-surface-matrix -->
 
 ## 8. Concrete Command Notes
@@ -472,30 +484,33 @@ The CLI surface is driven by:
 - `BuiltInCommandCatalog()`
 - concrete `CommandBase` subclasses
 
-The Python surface is separate and currently exposes only a subset of commands through `bindings/CoreBindings.cpp`.
+The Python surface is generated from the same built-in command catalog. Every built-in command currently has a Python class in `bindings/CoreBindings.cpp`.
 
-<!-- BEGIN GENERATED: python-public-command-surface -->
-### Python-public command classes
+<!-- BEGIN GENERATED: built-in-python-command-surface -->
+### Built-in Python command classes
 - `PotentialAnalysisCommand`
 - `PotentialDisplayCommand`
 - `ResultDumpCommand`
 - `MapSimulationCommand`
+- `MapVisualizationCommand`
+- `PositionEstimationCommand`
+- `HRLModelTestCommand`
 
 ### Shared diagnostics types
 - `LogLevel`
 - `ValidationPhase`
 - `ValidationIssue`
 
-### Shared diagnostics methods on Python-public commands
+### Shared diagnostics methods on built-in Python commands
 - `PrepareForExecution()`
 - `HasValidationErrors()`
 - `GetValidationIssues()`
-<!-- END GENERATED: python-public-command-surface -->
+<!-- END GENERATED: built-in-python-command-surface -->
 
 Implications for future work:
 
-- adding a new CLI command does not automatically expose it to Python
-- `BindingExposure` and `python_binding_name` must stay consistent with `bindings/CoreBindings.cpp`
+- adding a new built-in command requires a Python binding in the same change
+- `python_binding_name` must stay consistent with `bindings/CoreBindings.cpp`
 - Python-bound commands call the same `Execute()` path as the CLI
 - `PrepareForExecution()` diagnostics are part of the current Python-facing contract
 
@@ -506,8 +521,8 @@ When adding a new built-in command, follow this order:
 1. add the public interface under `include/core/`
 2. add the implementation under `src/core/`
 3. derive from `CommandBase`
-4. define `Options : CommandOptions`
-5. implement setters for all command-local options
+4. define a command-local options type derived from `CommandOptions`
+5. prefer `CommandWithOptions<Options, CommandId::...>` unless the command has an unusual storage need
 6. use setter helpers on `CommandBase` before adding custom validation boilerplate
 7. keep single-field validation in setters
 8. keep cross-field or mode-dependent validation in `ValidateOptions()`
@@ -515,7 +530,7 @@ When adding a new built-in command, follow this order:
 10. keep `ExecuteImpl()` phase-oriented and orchestration-focused
 11. use `DataObjectManager` helper paths for parsing, loading, and persistence
 12. add a `CommandDescriptor` entry to `BuiltInCommandCatalog()`
-13. update bindings, tests, and docs when the command is part of a public workflow
+13. update bindings, tests, docs, and examples when adding or changing a built-in command
 
 A useful mental model is:
 
@@ -544,7 +559,7 @@ For future command work, inspect these files first:
 - `src/core/Application.cpp`
 - `include/core/CommandBase.hpp`
 - `src/core/CommandBase.cpp`
-- `include/core/BuiltInCommandCatalog.hpp`
+- `src/core/BuiltInCommandCatalogInternal.hpp`
 - `src/core/BuiltInCommandCatalog.cpp`
 - `include/core/CommandMetadata.hpp`
 - `include/core/CommandOptionBinding.hpp`

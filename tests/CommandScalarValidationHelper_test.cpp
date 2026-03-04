@@ -12,32 +12,23 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class CommandScalarValidationHelperCommand final : public rg::CommandBase
+struct CommandScalarValidationHelperCommandOptions : public rg::CommandOptions
+{
+    double finite_positive_value{ 2.0 };
+    double finite_non_negative_value{ 0.0 };
+    int positive_count{ 1 };
+    double command_local_value{ 1.25 };
+};
+
+class CommandScalarValidationHelperCommand final
+    : public rg::CommandWithOptions<
+          CommandScalarValidationHelperCommandOptions,
+          rg::CommandId::ModelTest>
 {
 public:
-    struct Options : public rg::CommandOptions
-    {
-        double validated_value{ 1.25 };
-        double finite_positive_value{ 2.0 };
-        double finite_non_negative_value{ 0.0 };
-        int positive_count{ 1 };
-    };
+    using Options = CommandScalarValidationHelperCommandOptions;
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-    const rg::CommandOptions & GetOptions() const override { return m_options; }
-    rg::CommandOptions & GetOptions() override { return m_options; }
-    rg::CommandId GetCommandId() const override { return rg::CommandId::ModelTest; }
-
-    void SetValidatedValue(double value)
-    {
-        SetValidatedScalarOption(
-            m_options.validated_value,
-            value,
-            "--validated",
-            [](double candidate) { return candidate == 3.5; },
-            1.25,
-            "Validated value must equal 3.5.");
-    }
 
     void SetFinitePositiveValue(double value)
     {
@@ -69,15 +60,32 @@ public:
             "Positive count must be positive.");
     }
 
-    double ValidatedValue() const { return m_options.validated_value; }
+    void SetCommandLocalValidatedValue(double value)
+    {
+        MutateOptions([&]()
+        {
+            ResetParseIssues("--validated");
+            if (value == 3.5)
+            {
+                m_options.command_local_value = value;
+                return;
+            }
+
+            m_options.command_local_value = 1.25;
+            AddValidationError(
+                "--validated",
+                "Validated value must equal 3.5.",
+                rg::ValidationPhase::Parse);
+        });
+    }
+
+    double CommandLocalValidatedValue() const { return m_options.command_local_value; }
     double FinitePositiveValue() const { return m_options.finite_positive_value; }
     double FiniteNonNegativeValue() const { return m_options.finite_non_negative_value; }
     int PositiveCountValue() const { return m_options.positive_count; }
 
 private:
     bool ExecuteImpl() override { return true; }
-
-    Options m_options{};
 };
 
 const rg::ValidationIssue * FindIssue(
@@ -99,13 +107,13 @@ const rg::ValidationIssue * FindIssue(
 
 } // namespace
 
-TEST(CommandScalarValidationHelperTest, ValidatedScalarOptionRejectsInvalidInputWithParseError)
+TEST(CommandScalarValidationHelperTest, CommandLocalValidationPatternRejectsInvalidInputWithParseError)
 {
     CommandScalarValidationHelperCommand command;
 
-    command.SetValidatedValue(2.0);
+    command.SetCommandLocalValidatedValue(2.0);
 
-    EXPECT_DOUBLE_EQ(command.ValidatedValue(), 1.25);
+    EXPECT_DOUBLE_EQ(command.CommandLocalValidatedValue(), 1.25);
     const auto * issue{ FindIssue(command, "--validated") };
     ASSERT_NE(issue, nullptr);
     EXPECT_EQ(issue->phase, rg::ValidationPhase::Parse);
@@ -113,16 +121,16 @@ TEST(CommandScalarValidationHelperTest, ValidatedScalarOptionRejectsInvalidInput
     EXPECT_FALSE(issue->auto_corrected);
 }
 
-TEST(CommandScalarValidationHelperTest, ValidatedScalarOptionAcceptsValidInputAndClearsPriorIssue)
+TEST(CommandScalarValidationHelperTest, CommandLocalValidationPatternAcceptsValidInputAndClearsPriorIssue)
 {
     CommandScalarValidationHelperCommand command;
 
-    command.SetValidatedValue(2.0);
+    command.SetCommandLocalValidatedValue(2.0);
     ASSERT_NE(FindIssue(command, "--validated"), nullptr);
 
-    command.SetValidatedValue(3.5);
+    command.SetCommandLocalValidatedValue(3.5);
 
-    EXPECT_DOUBLE_EQ(command.ValidatedValue(), 3.5);
+    EXPECT_DOUBLE_EQ(command.CommandLocalValidatedValue(), 3.5);
     EXPECT_EQ(FindIssue(command, "--validated"), nullptr);
 }
 

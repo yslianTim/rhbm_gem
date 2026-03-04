@@ -11,29 +11,25 @@
 
 namespace rhbm_gem {
 
-class HRLModelTestCommand : public CommandBase
+struct HRLModelTestCommandOptions : public CommandOptions
+{
+    TesterType tester_choice{ TesterType::BENCHMARK };
+    double fit_range_min{ 0.0 };
+    double fit_range_max{ 1.0 };
+    double alpha_r{ 0.1 };
+    double alpha_g{ 0.2 };
+};
+
+class HRLModelTestCommand
+    : public CommandWithOptions<HRLModelTestCommandOptions, CommandId::ModelTest>
 {
 public:
-    struct Options : public CommandOptions
-    {
-        TesterType tester_choice{ TesterType::BENCHMARK };
-        double fit_range_min{ 0.0 };
-        double fit_range_max{ 1.0 };
-        double alpha_r{ 0.1 };
-        double alpha_g{ 0.2 };
-    };
+    using Options = HRLModelTestCommandOptions;
 
-private:
-    Options m_options;
-
-public:
     HRLModelTestCommand();
     ~HRLModelTestCommand() = default;
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    CommandId GetCommandId() const override { return CommandId::ModelTest; }
     void ValidateOptions() override;
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
 
     void SetTesterChoice(TesterType value);
     void SetFitRangeMinimum(double value);

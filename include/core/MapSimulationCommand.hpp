@@ -20,22 +20,24 @@ class ModelObject;
 class MapObject;
 class AtomObject;
 
-class MapSimulationCommand : public CommandBase
+struct MapSimulationCommandOptions : public CommandOptions
+{
+    std::filesystem::path model_file_path;
+    std::string map_file_name{"sim_map"};
+    PotentialModel potential_model_choice{ PotentialModel::FIVE_GAUS_CHARGE };
+    PartialCharge partial_charge_choice{ PartialCharge::PARTIAL };
+    double cutoff_distance{ 5.0 };
+    double grid_spacing{ 0.5 };
+    std::vector<double> blurring_width_list{};
+};
+
+class MapSimulationCommand
+    : public CommandWithOptions<MapSimulationCommandOptions, CommandId::MapSimulation>
 {
 public:
-    struct Options : public CommandOptions
-    {
-        std::filesystem::path model_file_path;
-        std::string map_file_name{"sim_map"};
-        PotentialModel potential_model_choice{ PotentialModel::FIVE_GAUS_CHARGE };
-        PartialCharge partial_charge_choice{ PartialCharge::PARTIAL };
-        double cutoff_distance{ 5.0 };
-        double grid_spacing{ 0.5 };
-        std::vector<double> blurring_width_list{};
-    };
+    using Options = MapSimulationCommandOptions;
 
 private:
-    Options m_options;
     std::vector<AtomObject *> m_selected_atom_list;
     std::unordered_map<int, double> m_atom_charge_map;
     std::shared_ptr<ModelObject> m_model_object;
@@ -45,11 +47,8 @@ public:
     MapSimulationCommand();
     ~MapSimulationCommand();
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
-    CommandId GetCommandId() const override { return CommandId::MapSimulation; }
     void ValidateOptions() override;
     void ResetRuntimeState() override;
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
 
     void SetPotentialModelChoice(PotentialModel value);
     void SetPartialChargeChoice(PartialCharge value);

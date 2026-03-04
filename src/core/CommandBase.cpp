@@ -1,5 +1,5 @@
 #include "CommandBase.hpp"
-#include "BuiltInCommandCatalog.hpp"
+#include "BuiltInCommandCatalogInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "FilePathHelper.hpp"
 
@@ -117,23 +117,13 @@ void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
 
 bool CommandBase::PrepareForExecution()
 {
-    Logger::SetLogLevel(GetOptions().verbose_level);
-    ResetRuntimeState();
-    m_data_manager.ClearDataObjects();
-    InvalidatePreparedState();
-
-    ValidateOptions();
-    if (HasValidationErrors())
+    BeginPreparationPass();
+    if (!RunValidationPass())
     {
-        ReportValidationIssues();
-        m_is_prepared_for_execution = false;
         return false;
     }
 
-    PrepareFilesystemTargets();
-    ReportValidationIssues();
-    m_is_prepared_for_execution = !HasValidationErrors();
-    return m_is_prepared_for_execution;
+    return RunFilesystemPreflight();
 }
 
 void CommandBase::InvalidatePreparedState()
@@ -217,14 +207,6 @@ void CommandBase::AddValidationError(
     ValidationPhase phase)
 {
     AddValidationIssue(option_name, phase, LogLevel::Error, message, false);
-}
-
-void CommandBase::AddValidationWarning(
-    const std::string & option_name,
-    const std::string & message,
-    ValidationPhase phase)
-{
-    AddValidationIssue(option_name, phase, LogLevel::Warning, message, false);
 }
 
 void CommandBase::AddNormalizationWarning(
@@ -375,7 +357,28 @@ std::filesystem::path CommandBase::BuildOutputPath(
     return GetOptions().folder_path / (std::string(stem) + normalized_extension);
 }
 
-void CommandBase::PrepareFilesystemTargets()
+void CommandBase::BeginPreparationPass()
+{
+    Logger::SetLogLevel(GetOptions().verbose_level);
+    ResetRuntimeState();
+    m_data_manager.ClearDataObjects();
+    InvalidatePreparedState();
+}
+
+bool CommandBase::RunValidationPass()
+{
+    ValidateOptions();
+    if (HasValidationErrors())
+    {
+        ReportValidationIssues();
+        m_is_prepared_for_execution = false;
+        return false;
+    }
+
+    return true;
+}
+
+bool CommandBase::RunFilesystemPreflight()
 {
     const auto common_options{ ResolveCommonOptions(*this) };
 
@@ -414,6 +417,10 @@ void CommandBase::PrepareFilesystemTargets()
             }
         }
     }
+
+    ReportValidationIssues();
+    m_is_prepared_for_execution = !HasValidationErrors();
+    return m_is_prepared_for_execution;
 }
 
 } // namespace rhbm_gem

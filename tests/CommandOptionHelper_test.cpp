@@ -13,21 +13,25 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class CommandOptionHelperCommand final : public rg::CommandBase
+struct CommandOptionHelperCommandOptions : public rg::CommandOptions
+{
+    std::filesystem::path required_path;
+    std::filesystem::path optional_path;
+    int count{ 1 };
+    int mode{ 0 };
+};
+
+class CommandOptionHelperCommand final
+    : public rg::CommandWithOptions<CommandOptionHelperCommandOptions, rg::CommandId::ModelTest>
 {
 public:
-    struct Options : public rg::CommandOptions
-    {
-        std::filesystem::path required_path;
-        std::filesystem::path optional_path;
-        int count{ 1 };
-        int mode{ 0 };
-    };
+    using Options = CommandOptionHelperCommandOptions;
+
+    int validate_count{ 0 };
+    int reset_count{ 0 };
+    int execute_count{ 0 };
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-    const rg::CommandOptions & GetOptions() const override { return m_options; }
-    rg::CommandOptions & GetOptions() override { return m_options; }
-    rg::CommandId GetCommandId() const override { return rg::CommandId::ModelTest; }
 
     void SetMode(int value)
     {
@@ -55,13 +59,24 @@ public:
             "Count must be positive, reset to default 4");
     }
 
-    bool Prepared() const { return IsPreparedForExecution(); }
     int Count() const { return m_options.count; }
 
-private:
-    bool ExecuteImpl() override { return true; }
+    void ValidateOptions() override
+    {
+        ++validate_count;
+    }
 
-    Options m_options{};
+    void ResetRuntimeState() override
+    {
+        ++reset_count;
+    }
+
+private:
+    bool ExecuteImpl() override
+    {
+        ++execute_count;
+        return true;
+    }
 };
 
 } // namespace
@@ -71,10 +86,15 @@ TEST(CommandOptionHelperTest, MutateOptionsInvalidatesPreparedState)
     CommandOptionHelperCommand command;
 
     ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_TRUE(command.Prepared());
+    EXPECT_EQ(command.validate_count, 1);
+    EXPECT_EQ(command.reset_count, 1);
 
     command.SetMode(3);
-    EXPECT_FALSE(command.Prepared());
+
+    ASSERT_TRUE(command.Execute());
+    EXPECT_EQ(command.validate_count, 2);
+    EXPECT_EQ(command.reset_count, 2);
+    EXPECT_EQ(command.execute_count, 1);
 }
 
 TEST(CommandOptionHelperTest, PathHelpersValidateRequiredAndOptionalInputs)

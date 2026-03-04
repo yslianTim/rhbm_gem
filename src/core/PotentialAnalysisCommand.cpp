@@ -49,7 +49,7 @@ constexpr std::string_view kMapKey{ "map" };
 namespace rhbm_gem {
 
 PotentialAnalysisCommand::PotentialAnalysisCommand() :
-    CommandBase(), m_options{}, m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
+    m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
 }
@@ -986,8 +986,7 @@ void PotentialAnalysisCommand::SaveDataObject()
     ScopeTimer timer("PotentialAnalysisCommand::SaveDataObject");
     if (m_model_object == nullptr) return;
 
-    auto data_manager{ GetDataManagerPtr() };
-    data_manager->SaveDataObject(m_model_key_tag, m_options.saved_key_tag);
+    m_data_manager.SaveDataObject(m_model_key_tag, m_options.saved_key_tag);
 
     for (auto atom : m_model_object->GetSelectedAtomList())
     {

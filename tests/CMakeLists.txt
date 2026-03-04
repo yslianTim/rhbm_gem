@@ -2,7 +2,6 @@ set(TEST_SOURCES
     Application_test.cpp
     ArrayStats_test.cpp
     AtomSelector_test.cpp
-    BindingSurfaceParity_test.cpp
     BuiltInCommandCatalog_test.cpp
     ChemicalDataHelper_test.cpp
     ChimeraXHelper_test.cpp
@@ -67,7 +66,10 @@ else()
 endif()
 target_link_libraries(${TEST_EXEC_NAME} PRIVATE ${GTEST_MAIN_TARGET})
 
-target_include_directories(${TEST_EXEC_NAME} PRIVATE "${PROJECT_BINARY_DIR}")
+target_include_directories(${TEST_EXEC_NAME} PRIVATE
+    "${PROJECT_BINARY_DIR}"
+    "${PROJECT_SOURCE_DIR}/src/core"
+)
 
 set_target_properties(${TEST_EXEC_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
@@ -85,6 +87,9 @@ add_executable(command_catalog_binding_names_helper
 target_link_libraries(command_catalog_binding_names_helper PRIVATE
     core
     CompilerFlags
+)
+target_include_directories(command_catalog_binding_names_helper PRIVATE
+    "${PROJECT_SOURCE_DIR}/src/core"
 )
 add_dependencies(${TEST_EXEC_NAME} command_catalog_binding_names_helper)
 set_target_properties(command_catalog_binding_names_helper PROPERTIES
@@ -114,7 +119,7 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
             "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
             ${Python_EXECUTABLE}
             -c
-            "import subprocess, sys; import rhbm_gem_module as m; public_names = [line.strip() for line in subprocess.check_output([sys.argv[1]], text=True).splitlines() if line.strip()]; assert public_names; assert hasattr(m, 'LogLevel'); assert hasattr(m, 'ValidationPhase'); assert hasattr(m, 'ValidationIssue'); assert hasattr(m.PrinterType, 'ATOM_OUTLIER'); assert all(hasattr(m, name) for name in public_names); assert all(all(hasattr(getattr(m, name)(), method) for method in ('PrepareForExecution', 'HasValidationErrors', 'GetValidationIssues')) for name in public_names)"
+            "import subprocess, sys; import rhbm_gem_module as m; public_names = [line.strip() for line in subprocess.check_output([sys.argv[1]], text=True).splitlines() if line.strip()]; assert len(public_names) == 7; assert hasattr(m, 'LogLevel'); assert hasattr(m, 'ValidationPhase'); assert hasattr(m, 'ValidationIssue'); assert hasattr(m.PrinterType, 'ATOM_OUTLIER'); assert hasattr(m, 'TesterType'); assert hasattr(m.TesterType, 'BENCHMARK'); assert all(hasattr(m, name) for name in public_names); instances = [getattr(m, name)() for name in public_names]; assert all(all(hasattr(instance, method) for method in ('PrepareForExecution', 'HasValidationErrors', 'GetValidationIssues')) for instance in instances); assert hasattr(m.MapVisualizationCommand(), 'SetModelFilePath'); assert hasattr(m.MapVisualizationCommand(), 'SetMapFilePath'); assert hasattr(m.MapVisualizationCommand(), 'SetAtomSerialID'); assert hasattr(m.MapVisualizationCommand(), 'SetSamplingSize'); assert hasattr(m.MapVisualizationCommand(), 'SetWindowSize'); assert hasattr(m.PositionEstimationCommand(), 'SetMapFilePath'); assert hasattr(m.PositionEstimationCommand(), 'SetIterationCount'); assert hasattr(m.PositionEstimationCommand(), 'SetKNNSize'); assert hasattr(m.PositionEstimationCommand(), 'SetAlpha'); assert hasattr(m.PositionEstimationCommand(), 'SetThresholdRatio'); assert hasattr(m.PositionEstimationCommand(), 'SetDedupTolerance'); assert hasattr(m.HRLModelTestCommand(), 'SetTesterChoice'); assert hasattr(m.HRLModelTestCommand(), 'SetFitRangeMinimum'); assert hasattr(m.HRLModelTestCommand(), 'SetFitRangeMaximum'); assert hasattr(m.HRLModelTestCommand(), 'SetAlphaR'); assert hasattr(m.HRLModelTestCommand(), 'SetAlphaG')"
             "$<TARGET_FILE:command_catalog_binding_names_helper>"
     )
     add_test(
@@ -123,6 +128,6 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
             "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
             ${Python_EXECUTABLE}
             -c
-            "import rhbm_gem_module as m; dump = m.ResultDumpCommand(); dump.SetPrinterChoice(999); dump.SetModelKeyTagList('model'); assert not dump.PrepareForExecution(); assert any(issue.option_name == '--printer' and issue.phase == m.ValidationPhase.Parse for issue in dump.GetValidationIssues()); display = m.PotentialDisplayCommand(); display.SetPainterChoice(999); display.SetModelKeyTagList('model'); assert not display.PrepareForExecution(); assert any(issue.option_name == '--painter' and issue.phase == m.ValidationPhase.Parse for issue in display.GetValidationIssues())"
+            "import rhbm_gem_module as m; dump = m.ResultDumpCommand(); dump.SetPrinterChoice(999); dump.SetModelKeyTagList('model'); assert not dump.PrepareForExecution(); assert any(issue.option_name == '--printer' and issue.phase == m.ValidationPhase.Parse for issue in dump.GetValidationIssues()); display = m.PotentialDisplayCommand(); display.SetPainterChoice(999); display.SetModelKeyTagList('model'); assert not display.PrepareForExecution(); assert any(issue.option_name == '--painter' and issue.phase == m.ValidationPhase.Parse for issue in display.GetValidationIssues()); model_test = m.HRLModelTestCommand(); model_test.SetTesterChoice(999); assert not model_test.PrepareForExecution(); assert any(issue.option_name == '--tester' and issue.phase == m.ValidationPhase.Parse for issue in model_test.GetValidationIssues())"
     )
 endif()

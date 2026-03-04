@@ -66,7 +66,6 @@ bool ParseReferenceModelKeyTagListMap(
 namespace rhbm_gem {
 
 PotentialDisplayCommand::PotentialDisplayCommand() :
-    CommandBase(), m_options{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 }

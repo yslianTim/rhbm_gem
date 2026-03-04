@@ -11,40 +11,40 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class ValidationIssueCommand final : public rg::CommandBase
+struct ValidationIssueCommandOptions : public rg::CommandOptions
+{
+    bool add_prepare_error{ false };
+};
+
+class ValidationIssueCommand final
+    : public rg::CommandWithOptions<ValidationIssueCommandOptions, rg::CommandId::ModelTest>
 {
 public:
-    struct Options : public rg::CommandOptions
-    {
-        bool add_prepare_error{ false };
-    };
+    using Options = ValidationIssueCommandOptions;
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-    const rg::CommandOptions & GetOptions() const override { return m_options; }
-    rg::CommandOptions & GetOptions() override { return m_options; }
-    rg::CommandId GetCommandId() const override { return rg::CommandId::ModelTest; }
 
     void SetProblematicValue(int value)
     {
-        InvalidatePreparedState();
-        ClearValidationIssues("--problem", rg::ValidationPhase::Parse);
-        if (value <= 0)
+        MutateOptions([&]()
         {
-            AddNormalizationWarning("--problem", "normalized to 1");
-            AddNormalizationWarning("--problem", "clamped to safe range");
-        }
+            ResetParseIssues("--problem");
+            if (value <= 0)
+            {
+                AddNormalizationWarning("--problem", "normalized to 1");
+                AddNormalizationWarning("--problem", "clamped to safe range");
+            }
+        });
     }
 
     void SetPrepareError(bool value)
     {
-        InvalidatePreparedState();
-        m_options.add_prepare_error = value;
+        MutateOptions([&]() { m_options.add_prepare_error = value; });
     }
 
     void ValidateOptions() override
     {
-        ClearValidationIssues("--problem", rg::ValidationPhase::Prepare);
-        AddValidationWarning("--problem", "prepare warning");
+        ResetPrepareIssues("--problem");
         if (m_options.add_prepare_error)
         {
             AddValidationError("--problem", "semantic validation failed");
@@ -53,8 +53,6 @@ public:
 
 private:
     bool ExecuteImpl() override { return true; }
-
-    Options m_options{};
 };
 
 } // namespace
@@ -68,7 +66,7 @@ TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
     EXPECT_FALSE(command.PrepareForExecution());
 
     const auto & issues{ command.GetValidationIssues() };
-    ASSERT_EQ(issues.size(), 4u);
+    ASSERT_EQ(issues.size(), 3u);
 
     const auto parse_warning_count{
         std::count_if(
@@ -80,17 +78,6 @@ TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
                     && issue.phase == rg::ValidationPhase::Parse
                     && issue.level == LogLevel::Warning
                     && issue.auto_corrected;
-            })
-    };
-    const auto prepare_warning_count{
-        std::count_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssue & issue)
-            {
-                return issue.option_name == "--problem"
-                    && issue.phase == rg::ValidationPhase::Prepare
-                    && issue.level == LogLevel::Warning;
             })
     };
     const auto prepare_error_count{
@@ -106,7 +93,6 @@ TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
     };
 
     EXPECT_EQ(parse_warning_count, 2);
-    EXPECT_EQ(prepare_warning_count, 1);
     EXPECT_EQ(prepare_error_count, 1);
 }
 

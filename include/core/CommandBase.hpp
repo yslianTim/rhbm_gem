@@ -67,48 +67,28 @@ public:
     void SetVerboseLevel(int value);
     void SetDatabasePath(const std::filesystem::path & path);
     void SetFolderPath(const std::filesystem::path & path);
-    bool IsValidateOptions() const { return !HasValidationErrors(); }
     bool HasValidationErrors(std::optional<ValidationPhase> phase = std::nullopt) const;
     void ReportValidationIssues() const;
     const std::vector<ValidationIssue> & GetValidationIssues() const { return m_validation_issues; }
-    DataObjectManager * GetDataManagerPtr() { return &m_data_manager; }
-    const DataObjectManager * GetDataManagerPtr() const { return &m_data_manager; }
 
 protected:
     DataObjectManager m_data_manager;
     std::vector<ValidationIssue> m_validation_issues;
 
     CommandBase() = default;
-    void InvalidatePreparedState();
-    bool IsPreparedForExecution() const { return m_is_prepared_for_execution; }
     template <typename Mutator>
     void MutateOptions(Mutator && mutator)
     {
         InvalidatePreparedState();
         std::forward<Mutator>(mutator)();
     }
-    void RegisterCLIOptionsBasic(::CLI::App * command);
     void AddValidationError(
-        const std::string & option_name,
-        const std::string & message,
-        ValidationPhase phase = ValidationPhase::Prepare);
-    void AddValidationWarning(
         const std::string & option_name,
         const std::string & message,
         ValidationPhase phase = ValidationPhase::Prepare);
     void AddNormalizationWarning(const std::string & option_name, const std::string & message);
     void ResetParseIssues(std::string_view option_name);
     void ResetPrepareIssues(std::string_view option_name);
-    void ClearValidationIssues(std::string_view option_name, std::optional<ValidationPhase> phase);
-    void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt);
-    void ValidateRequiredExistingPath(
-        const std::filesystem::path & path,
-        std::string_view option_name,
-        std::string_view label);
-    void ValidateOptionalExistingPath(
-        const std::filesystem::path & path,
-        std::string_view option_name,
-        std::string_view label);
     void SetRequiredExistingPathOption(
         std::filesystem::path & field,
         const std::filesystem::path & value,
@@ -140,32 +120,6 @@ protected:
 
             field = fallback_value;
             AddNormalizationWarning(std::string(option_name), warning_message);
-        });
-    }
-    // Invalid input falls back to a safe value and is recorded as a parse error.
-    template <typename FieldType, typename RawType, typename Predicate>
-    void SetValidatedScalarOption(
-        FieldType & field,
-        RawType raw_value,
-        std::string_view option_name,
-        Predicate is_valid,
-        FieldType fallback_value,
-        const std::string & error_message)
-    {
-        MutateOptions([&]()
-        {
-            ResetParseIssues(option_name);
-            if (is_valid(raw_value))
-            {
-                field = static_cast<FieldType>(raw_value);
-                return;
-            }
-
-            field = fallback_value;
-            AddValidationError(
-                std::string(option_name),
-                error_message,
-                ValidationPhase::Parse);
         });
     }
     template <typename FieldType, typename RawType>
@@ -265,12 +219,11 @@ protected:
         std::string_view key_tag,
         std::string_view label)
     {
-        auto * data_manager{ GetDataManagerPtr() };
         const auto key{ std::string(key_tag) };
         try
         {
-            data_manager->ProcessFile(path, key);
-            return data_manager->GetTypedDataObject<TypedDataObject>(key);
+            m_data_manager.ProcessFile(path, key);
+            return m_data_manager.GetTypedDataObject<TypedDataObject>(key);
         }
         catch (const std::exception & ex)
         {
@@ -298,12 +251,11 @@ protected:
         std::string_view key_tag,
         std::string_view label)
     {
-        auto * data_manager{ GetDataManagerPtr() };
         const auto key{ std::string(key_tag) };
         try
         {
-            data_manager->LoadDataObject(key);
-            return data_manager->GetTypedDataObject<TypedDataObject>(key);
+            m_data_manager.LoadDataObject(key);
+            return m_data_manager.GetTypedDataObject<TypedDataObject>(key);
         }
         catch (const std::exception & ex)
         {
@@ -315,6 +267,47 @@ protected:
 
 private:
     bool m_is_prepared_for_execution{ false };
+    void InvalidatePreparedState();
+    void RegisterCLIOptionsBasic(::CLI::App * command);
+    void BeginPreparationPass();
+    bool RunValidationPass();
+    bool RunFilesystemPreflight();
+    void ClearValidationIssues(std::string_view option_name, std::optional<ValidationPhase> phase);
+    void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt);
+    // Invalid input falls back to a safe value and is recorded as a parse error.
+    template <typename FieldType, typename RawType, typename Predicate>
+    void SetValidatedScalarOption(
+        FieldType & field,
+        RawType raw_value,
+        std::string_view option_name,
+        Predicate is_valid,
+        FieldType fallback_value,
+        const std::string & error_message)
+    {
+        MutateOptions([&]()
+        {
+            ResetParseIssues(option_name);
+            if (is_valid(raw_value))
+            {
+                field = static_cast<FieldType>(raw_value);
+                return;
+            }
+
+            field = fallback_value;
+            AddValidationError(
+                std::string(option_name),
+                error_message,
+                ValidationPhase::Parse);
+        });
+    }
+    void ValidateRequiredExistingPath(
+        const std::filesystem::path & path,
+        std::string_view option_name,
+        std::string_view label);
+    void ValidateOptionalExistingPath(
+        const std::filesystem::path & path,
+        std::string_view option_name,
+        std::string_view label);
 
     void AddValidationIssue(
         const std::string & option_name,
@@ -322,7 +315,20 @@ private:
         LogLevel level,
         const std::string & message,
         bool auto_corrected);
-    void PrepareFilesystemTargets();
+};
+
+template <typename OptionsT, CommandId IdValue>
+class CommandWithOptions : public CommandBase
+{
+protected:
+    OptionsT m_options{};
+
+public:
+    using Options = OptionsT;
+
+    const CommandOptions & GetOptions() const override { return m_options; }
+    CommandOptions & GetOptions() override { return m_options; }
+    CommandId GetCommandId() const override { return IdValue; }
 };
 
 } // namespace rhbm_gem

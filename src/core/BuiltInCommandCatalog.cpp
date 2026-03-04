@@ -1,4 +1,4 @@
-#include "BuiltInCommandCatalog.hpp"
+#include "BuiltInCommandCatalogInternal.hpp"
 
 #include "HRLModelTestCommand.hpp"
 #include "MapSimulationCommand.hpp"
@@ -13,10 +13,38 @@
 
 namespace rhbm_gem {
 
+namespace {
+
+CommandDescriptor MakeBuiltInDescriptor(
+    CommandId id,
+    std::string_view name,
+    std::string_view description,
+    CommandSurface surface,
+    std::string_view python_binding_name,
+    CommandFactory factory)
+{
+    if (python_binding_name.empty())
+    {
+        throw std::runtime_error(
+            "Built-in command descriptors must provide a Python binding name.");
+    }
+
+    return CommandDescriptor{
+        id,
+        name,
+        description,
+        surface,
+        python_binding_name,
+        factory
+    };
+}
+
+} // namespace
+
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
 {
     static const std::vector<CommandDescriptor> catalog{
-        CommandDescriptor{
+        MakeBuiltInDescriptor(
             CommandId::PotentialAnalysis,
             "potential_analysis",
             "Run potential analysis",
@@ -25,15 +53,12 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                     | CommonOption::Verbose
                     | CommonOption::Database
                     | CommonOption::OutputFolder),
-            DatabaseUsage::Required,
-            BindingExposure::PythonPublic,
             "PotentialAnalysisCommand",
             []() -> std::unique_ptr<CommandBase>
             {
                 return std::make_unique<PotentialAnalysisCommand>();
-            }
-        },
-        CommandDescriptor{
+            }),
+        MakeBuiltInDescriptor(
             CommandId::PotentialDisplay,
             "potential_display",
             "Run potential display",
@@ -42,15 +67,12 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                     | CommonOption::Verbose
                     | CommonOption::Database
                     | CommonOption::OutputFolder),
-            DatabaseUsage::Required,
-            BindingExposure::PythonPublic,
             "PotentialDisplayCommand",
             []() -> std::unique_ptr<CommandBase>
             {
                 return std::make_unique<PotentialDisplayCommand>();
-            }
-        },
-        CommandDescriptor{
+            }),
+        MakeBuiltInDescriptor(
             CommandId::ResultDump,
             "result_dump",
             "Run result dump",
@@ -59,15 +81,12 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                     | CommonOption::Verbose
                     | CommonOption::Database
                     | CommonOption::OutputFolder),
-            DatabaseUsage::Required,
-            BindingExposure::PythonPublic,
             "ResultDumpCommand",
             []() -> std::unique_ptr<CommandBase>
             {
                 return std::make_unique<ResultDumpCommand>();
-            }
-        },
-        CommandDescriptor{
+            }),
+        MakeBuiltInDescriptor(
             CommandId::MapSimulation,
             "map_simulation",
             "Run map simulation command",
@@ -75,15 +94,12 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 CommonOption::Threading
                     | CommonOption::Verbose
                     | CommonOption::OutputFolder),
-            DatabaseUsage::NotUsed,
-            BindingExposure::PythonPublic,
             "MapSimulationCommand",
             []() -> std::unique_ptr<CommandBase>
             {
                 return std::make_unique<MapSimulationCommand>();
-            }
-        },
-        CommandDescriptor{
+            }),
+        MakeBuiltInDescriptor(
             CommandId::MapVisualization,
             "map_visualization",
             "Run map visualization",
@@ -91,15 +107,12 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 CommonOption::Threading
                     | CommonOption::Verbose
                     | CommonOption::OutputFolder),
-            DatabaseUsage::NotUsed,
-            BindingExposure::CliOnly,
-            "",
+            "MapVisualizationCommand",
             []() -> std::unique_ptr<CommandBase>
             {
                 return std::make_unique<MapVisualizationCommand>();
-            }
-        },
-        CommandDescriptor{
+            }),
+        MakeBuiltInDescriptor(
             CommandId::PositionEstimation,
             "position_estimation",
             "Run atom position estimation",
@@ -107,15 +120,12 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 CommonOption::Threading
                     | CommonOption::Verbose
                     | CommonOption::OutputFolder),
-            DatabaseUsage::NotUsed,
-            BindingExposure::CliOnly,
-            "",
+            "PositionEstimationCommand",
             []() -> std::unique_ptr<CommandBase>
             {
                 return std::make_unique<PositionEstimationCommand>();
-            }
-        },
-        CommandDescriptor{
+            }),
+        MakeBuiltInDescriptor(
             CommandId::ModelTest,
             "model_test",
             "Run HRL model simulation test",
@@ -123,14 +133,11 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
                 CommonOption::Threading
                     | CommonOption::Verbose
                     | CommonOption::OutputFolder),
-            DatabaseUsage::NotUsed,
-            BindingExposure::CliOnly,
-            "",
+            "HRLModelTestCommand",
             []() -> std::unique_ptr<CommandBase>
             {
                 return std::make_unique<HRLModelTestCommand>();
-            }
-        }
+            })
     };
 
     return catalog;

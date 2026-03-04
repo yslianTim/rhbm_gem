@@ -22,6 +22,9 @@ TEST(ContributorGuidanceSyncTest, DevelopmentGuidelinesMatchCatalogBasedRegistra
     EXPECT_NE(
         doc_content.find("New built-in commands should be added through `BuiltInCommandCatalog()`"),
         std::string::npos);
+    EXPECT_NE(
+        doc_content.find("Built-in catalog metadata and registration helpers are internal"),
+        std::string::npos);
     EXPECT_EQ(
         doc_content.find("fake command registration"),
         std::string::npos);

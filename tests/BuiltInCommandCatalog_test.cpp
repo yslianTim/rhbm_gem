@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
-#include "BuiltInCommandCatalog.hpp"
+#include "BuiltInCommandCatalogInternal.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -44,16 +46,58 @@ TEST(BuiltInCommandCatalogTest, CommandIdsAndNamesAreUnique)
     EXPECT_EQ(unique_names.size(), catalog.size());
 }
 
-TEST(BuiltInCommandCatalogTest, PythonBindingNamesMatchExposurePolicy)
+TEST(BuiltInCommandCatalogTest, FactoriesAreNonNull)
 {
     for (const auto & descriptor : rg::BuiltInCommandCatalog())
     {
-        if (rg::IsPythonPublic(descriptor.binding_exposure))
-        {
-            EXPECT_FALSE(descriptor.python_binding_name.empty()) << descriptor.name;
-            continue;
-        }
+        EXPECT_NE(descriptor.factory, nullptr) << descriptor.name;
+    }
+}
 
-        EXPECT_TRUE(descriptor.python_binding_name.empty()) << descriptor.name;
+TEST(BuiltInCommandCatalogTest, AllBuiltInCommandsProvidePythonBindingNames)
+{
+    static constexpr std::array<std::string_view, 7> kExpectedPythonCommandNames{
+        "potential_analysis",
+        "potential_display",
+        "result_dump",
+        "map_simulation",
+        "map_visualization",
+        "position_estimation",
+        "model_test"
+    };
+
+    std::vector<std::string> actual_names;
+    for (const auto & descriptor : rg::BuiltInCommandCatalog())
+    {
+        EXPECT_FALSE(descriptor.python_binding_name.empty()) << descriptor.name;
+        actual_names.emplace_back(descriptor.name);
+    }
+
+    ASSERT_EQ(actual_names.size(), kExpectedPythonCommandNames.size());
+    for (std::size_t index = 0; index < kExpectedPythonCommandNames.size(); ++index)
+    {
+        EXPECT_EQ(actual_names[index], kExpectedPythonCommandNames[index]);
+    }
+}
+
+TEST(BuiltInCommandCatalogTest, DatabaseEnabledCommandSetMatchesExpectedSurface)
+{
+    static constexpr std::array<std::string_view, 3> kExpectedDatabaseCommandNames{
+        "potential_analysis",
+        "potential_display",
+        "result_dump"
+    };
+
+    std::vector<std::string> actual_names;
+    for (const auto & descriptor : rg::BuiltInCommandCatalog())
+    {
+        if (!rg::UsesDatabaseAtRuntime(descriptor.surface)) continue;
+        actual_names.emplace_back(descriptor.name);
+    }
+
+    ASSERT_EQ(actual_names.size(), kExpectedDatabaseCommandNames.size());
+    for (std::size_t index = 0; index < kExpectedDatabaseCommandNames.size(); ++index)
+    {
+        EXPECT_EQ(actual_names[index], kExpectedDatabaseCommandNames[index]);
     }
 }

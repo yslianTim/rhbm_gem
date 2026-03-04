@@ -5,8 +5,9 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <string_view>
 
-#include "BuiltInCommandCatalog.hpp"
+#include "BuiltInCommandCatalogInternal.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -25,10 +26,10 @@ constexpr std::string_view kMatrixEndMarker{
     "<!-- END GENERATED: command-surface-matrix -->"
 };
 constexpr std::string_view kPythonBeginMarker{
-    "<!-- BEGIN GENERATED: python-public-command-surface -->"
+    "<!-- BEGIN GENERATED: built-in-python-command-surface -->"
 };
 constexpr std::string_view kPythonEndMarker{
-    "<!-- END GENERATED: python-public-command-surface -->"
+    "<!-- END GENERATED: built-in-python-command-surface -->"
 };
 
 std::string YesNo(bool value)
@@ -57,15 +58,15 @@ std::string RenderSurfaceMatrix(const std::vector<rg::CommandDescriptor> & comma
     {
         output
             << "| `" << info.name << "`"
-            << " | " << YesNo(rg::UsesDatabaseAtRuntime(info.database_usage))
+            << " | " << YesNo(rg::UsesDatabaseAtRuntime(info.surface))
             << " | " << YesNo(rg::UsesOutputFolder(info.surface))
-            << " | " << YesNo(rg::IsPythonPublic(info.binding_exposure))
+            << " | yes"
             << " |\n";
     }
     return output.str();
 }
 
-std::string RenderPythonPublicSurface(const std::vector<rg::CommandDescriptor> & commands)
+std::string RenderBuiltInPythonSurface(const std::vector<rg::CommandDescriptor> & commands)
 {
     static constexpr std::array<std::string_view, 3> kDiagnosticsTypes{
         "LogLevel",
@@ -79,10 +80,9 @@ std::string RenderPythonPublicSurface(const std::vector<rg::CommandDescriptor> &
     };
 
     std::ostringstream output;
-    output << "### Python-public command classes\n";
+    output << "### Built-in Python command classes\n";
     for (const auto & descriptor : commands)
     {
-        if (!rg::IsPythonPublic(descriptor.binding_exposure)) continue;
         output << "- `" << descriptor.python_binding_name << "`\n";
     }
 
@@ -92,7 +92,7 @@ std::string RenderPythonPublicSurface(const std::vector<rg::CommandDescriptor> &
         output << "- `" << type_name << "`\n";
     }
 
-    output << "\n### Shared diagnostics methods on Python-public commands\n";
+    output << "\n### Shared diagnostics methods on built-in Python commands\n";
     for (const auto method_name : kDiagnosticsMethods)
     {
         output << "- `" << method_name << "`\n";
@@ -144,7 +144,7 @@ TEST(DocsSyncTest, GeneratedBlocksMatchBuiltInCommandCatalog)
         "\n" + RenderSurfaceMatrix(commands));
     EXPECT_EQ(
         ReadGeneratedBlock(doc_content, kPythonBeginMarker, kPythonEndMarker),
-        "\n" + RenderPythonPublicSurface(commands));
+        "\n" + RenderBuiltInPythonSurface(commands));
 
     EXPECT_NE(
         doc_content.find("Application callbacks invoke only `Execute()`."),
@@ -159,5 +159,35 @@ TEST(DocsSyncTest, GeneratedBlocksMatchBuiltInCommandCatalog)
     EXPECT_NE(
         doc_content.find(
             "The project does not currently provide a self-registration API for commands."),
+        std::string::npos);
+    EXPECT_NE(
+        doc_content.find(
+            "Database usage is derived directly from whether `CommandSurface` includes `CommonOption::Database`."),
+        std::string::npos);
+    EXPECT_NE(
+        doc_content.find(
+            "All built-in commands must provide a Python binding name in the built-in catalog."),
+        std::string::npos);
+    EXPECT_NE(
+        doc_content.find(
+            "The built-in catalog is an internal registration mechanism, not an installed public C++ API."),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("DatabaseUsage"),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("BindingExposure"),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("Python-public command classes"),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("subset of commands through `bindings/CoreBindings.cpp`"),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("include/core/BuiltInCommandCatalog.hpp"),
+        std::string::npos);
+    EXPECT_NE(
+        doc_content.find("src/core/BuiltInCommandCatalogInternal.hpp"),
         std::string::npos);
 }

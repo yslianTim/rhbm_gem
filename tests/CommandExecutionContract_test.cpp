@@ -10,14 +10,17 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class LifecycleCommand final : public rg::CommandBase
+struct LifecycleCommandOptions : public rg::CommandOptions
+{
+    bool fail_prepare{ false };
+    bool fail_execute{ false };
+};
+
+class LifecycleCommand final
+    : public rg::CommandWithOptions<LifecycleCommandOptions, rg::CommandId::ModelTest>
 {
 public:
-    struct Options : public rg::CommandOptions
-    {
-        bool fail_prepare{ false };
-        bool fail_execute{ false };
-    };
+    using Options = LifecycleCommandOptions;
 
     int validate_count{ 0 };
     int reset_count{ 0 };
@@ -25,25 +28,20 @@ public:
     std::vector<int> runtime_state{};
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-    const rg::CommandOptions & GetOptions() const override { return m_options; }
-    rg::CommandOptions & GetOptions() override { return m_options; }
-    rg::CommandId GetCommandId() const override { return rg::CommandId::ModelTest; }
 
     void SetFailPrepare(bool value)
     {
-        InvalidatePreparedState();
-        m_options.fail_prepare = value;
+        MutateOptions([&]() { m_options.fail_prepare = value; });
     }
     void SetFailExecute(bool value)
     {
-        InvalidatePreparedState();
-        m_options.fail_execute = value;
+        MutateOptions([&]() { m_options.fail_execute = value; });
     }
 
     void ValidateOptions() override
     {
         ++validate_count;
-        ClearValidationIssues("--contract", rg::ValidationPhase::Prepare);
+        ResetPrepareIssues("--contract");
         if (m_options.fail_prepare)
         {
             AddValidationError("--contract", "prepare failed");
@@ -67,8 +65,6 @@ private:
         runtime_state.push_back(1);
         return !m_options.fail_execute;
     }
-
-    Options m_options{};
 };
 
 } // namespace

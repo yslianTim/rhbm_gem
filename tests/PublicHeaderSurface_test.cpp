@@ -13,3 +13,15 @@ TEST(PublicHeaderSurfaceTest, ExperimentalBondWorkflowHeaderIsNotPublic)
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
 }
+
+TEST(PublicHeaderSurfaceTest, BuiltInCommandCatalogHeaderIsNotPublic)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto leaked_header{
+        project_root / "include" / "core" / "BuiltInCommandCatalog.hpp"
+    };
+
+    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+}

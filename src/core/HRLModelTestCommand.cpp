@@ -31,10 +31,7 @@
 
 namespace rhbm_gem {
 
-HRLModelTestCommand::HRLModelTestCommand() :
-    CommandBase(), m_options{}
-{
-}
+HRLModelTestCommand::HRLModelTestCommand() = default;
 
 void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {

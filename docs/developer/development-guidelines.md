@@ -77,7 +77,9 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` `Execute()` should keep a clear phase boundary: validate and construct prerequisites first, then run the main workflow.
 - `[Required]` File parsing, database access, and DAO details belong in the data layer, not inside command orchestration logic.
 - `[Required]` Support for new file formats must update both the extension-based factory selection path and the corresponding format implementation.
-- `[Recommended]` New built-in commands should be added through `BuiltInCommandCatalog()` so command name, surface metadata, binding exposure, and docs sync all share one source of truth.
+- `[Required]` New built-in commands should be added through `BuiltInCommandCatalog()` and must provide a Python binding name there so CLI registration, bindings, and docs sync share one source of truth.
+- `[Required]` New built-in commands must ship both CLI registration and Python binding updates in the same change unless the command is intentionally not part of the built-in catalog.
+- `[Required]` Built-in catalog metadata and registration helpers are internal implementation details. Keep them under `src/`, not `include/`, unless the project intentionally promotes them to a supported public API.
 - `[Recommended]` Managers should remain the boundary objects that move data between commands, files, and persistence layers.
 - `[Recommended]` Experimental or internal command helpers should stay under `src/`, not `include/`, unless they are intentionally part of the supported public interface.
 

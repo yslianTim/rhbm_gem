@@ -8,30 +8,27 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class PreparedStateCommand final : public rg::CommandBase
+struct PreparedStateCommandOptions : public rg::CommandOptions
+{
+    int mode{ 0 };
+};
+
+class PreparedStateCommand final
+    : public rg::CommandWithOptions<PreparedStateCommandOptions, rg::CommandId::ModelTest>
 {
 public:
-    struct Options : public rg::CommandOptions
-    {
-        int mode{ 0 };
-    };
+    using Options = PreparedStateCommandOptions;
 
     int validate_count{ 0 };
     int reset_count{ 0 };
     int execute_count{ 0 };
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-    const rg::CommandOptions & GetOptions() const override { return m_options; }
-    rg::CommandOptions & GetOptions() override { return m_options; }
-    rg::CommandId GetCommandId() const override { return rg::CommandId::ModelTest; }
 
     void SetMode(int value)
     {
-        InvalidatePreparedState();
-        m_options.mode = value;
+        MutateOptions([&]() { m_options.mode = value; });
     }
-
-    bool Prepared() const { return IsPreparedForExecution(); }
 
     void ValidateOptions() override
     {
@@ -49,8 +46,6 @@ private:
         ++execute_count;
         return true;
     }
-
-    Options m_options{};
 };
 
 } // namespace
@@ -60,12 +55,10 @@ TEST(PreparedStateInvalidationTest, BaseOptionMutationInvalidatesPreparedState)
     PreparedStateCommand command;
 
     ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_TRUE(command.Prepared());
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.reset_count, 1);
 
     command.SetThreadSize(3);
-    EXPECT_FALSE(command.Prepared());
 
     ASSERT_TRUE(command.Execute());
     EXPECT_EQ(command.validate_count, 2);
@@ -78,10 +71,10 @@ TEST(PreparedStateInvalidationTest, ConcreteOptionMutationInvalidatesPreparedSta
     PreparedStateCommand command;
 
     ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_TRUE(command.Prepared());
+    EXPECT_EQ(command.validate_count, 1);
+    EXPECT_EQ(command.reset_count, 1);
 
     command.SetMode(1);
-    EXPECT_FALSE(command.Prepared());
 
     ASSERT_TRUE(command.Execute());
     EXPECT_EQ(command.validate_count, 2);

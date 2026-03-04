@@ -4,10 +4,13 @@
 #include <stdexcept>
 #include <string>
 
-#include "BuiltInCommandCatalog.hpp"
+#include "BuiltInCommandCatalogInternal.hpp"
+#include "HRLModelTestCommand.hpp"
 #include "MapSimulationCommand.hpp"
+#include "MapVisualizationCommand.hpp"
 #include "OptionEnumClass.hpp"
 #include "OptionEnumTraits.hpp"
+#include "PositionEstimationCommand.hpp"
 #include "PotentialAnalysisCommand.hpp"
 #include "PotentialDisplayCommand.hpp"
 #include "ResultDumpCommand.hpp"
@@ -27,16 +30,15 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
 }
 
 template <typename CommandType>
-py::class_<CommandType> BindPythonPublicCommand(
+py::class_<CommandType> BindBuiltInCommand(
     py::module_ & module,
     rhbm_gem::CommandId command_id)
 {
     const auto & descriptor{ rhbm_gem::FindCommandDescriptor(command_id) };
-    if (!rhbm_gem::IsPythonPublic(descriptor.binding_exposure)
-        || descriptor.python_binding_name.empty())
+    if (descriptor.python_binding_name.empty())
     {
         throw std::runtime_error(
-            "Command descriptor is not configured for Python public binding: "
+            "Built-in command descriptor is missing a Python binding name: "
             + std::string(descriptor.name));
     }
 
@@ -107,8 +109,12 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindEnumEntries(partial_charge);
     py::implicitly_convertible<int, rhbm_gem::PartialCharge>();
 
+    auto tester_type{ py::enum_<rhbm_gem::TesterType>(m, "TesterType") };
+    BindEnumEntries(tester_type);
+    py::implicitly_convertible<int, rhbm_gem::TesterType>();
+
     auto potential_analysis{
-        BindPythonPublicCommand<rhbm_gem::PotentialAnalysisCommand>(
+        BindBuiltInCommand<rhbm_gem::PotentialAnalysisCommand>(
             m, rhbm_gem::CommandId::PotentialAnalysis)
     };
     potential_analysis
@@ -132,7 +138,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(potential_analysis);
 
     auto potential_display{
-        BindPythonPublicCommand<rhbm_gem::PotentialDisplayCommand>(
+        BindBuiltInCommand<rhbm_gem::PotentialDisplayCommand>(
             m, rhbm_gem::CommandId::PotentialDisplay)
     };
     potential_display
@@ -152,7 +158,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(potential_display);
 
     auto result_dump{
-        BindPythonPublicCommand<rhbm_gem::ResultDumpCommand>(
+        BindBuiltInCommand<rhbm_gem::ResultDumpCommand>(
             m, rhbm_gem::CommandId::ResultDump)
     };
     result_dump
@@ -166,7 +172,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(result_dump);
 
     auto map_simulation{
-        BindPythonPublicCommand<rhbm_gem::MapSimulationCommand>(
+        BindBuiltInCommand<rhbm_gem::MapSimulationCommand>(
             m, rhbm_gem::CommandId::MapSimulation)
     };
     map_simulation
@@ -181,4 +187,51 @@ PYBIND11_MODULE(rhbm_gem_module, m)
         .def("SetGridSpacing",          &rhbm_gem::MapSimulationCommand::SetGridSpacing)
         .def("SetBlurringWidthList",    &rhbm_gem::MapSimulationCommand::SetBlurringWidthList);
     BindCommandDiagnostics(map_simulation);
+
+    auto map_visualization{
+        BindBuiltInCommand<rhbm_gem::MapVisualizationCommand>(
+            m, rhbm_gem::CommandId::MapVisualization)
+    };
+    map_visualization
+        .def(py::init<>())
+        .def("Execute",          &rhbm_gem::MapVisualizationCommand::Execute)
+        .def("SetFolderPath",    &rhbm_gem::MapVisualizationCommand::SetFolderPath)
+        .def("SetModelFilePath", &rhbm_gem::MapVisualizationCommand::SetModelFilePath)
+        .def("SetMapFilePath",   &rhbm_gem::MapVisualizationCommand::SetMapFilePath)
+        .def("SetAtomSerialID",  &rhbm_gem::MapVisualizationCommand::SetAtomSerialID)
+        .def("SetSamplingSize",  &rhbm_gem::MapVisualizationCommand::SetSamplingSize)
+        .def("SetWindowSize",    &rhbm_gem::MapVisualizationCommand::SetWindowSize);
+    BindCommandDiagnostics(map_visualization);
+
+    auto position_estimation{
+        BindBuiltInCommand<rhbm_gem::PositionEstimationCommand>(
+            m, rhbm_gem::CommandId::PositionEstimation)
+    };
+    position_estimation
+        .def(py::init<>())
+        .def("Execute",           &rhbm_gem::PositionEstimationCommand::Execute)
+        .def("SetFolderPath",     &rhbm_gem::PositionEstimationCommand::SetFolderPath)
+        .def("SetThreadSize",     &rhbm_gem::PositionEstimationCommand::SetThreadSize)
+        .def("SetMapFilePath",    &rhbm_gem::PositionEstimationCommand::SetMapFilePath)
+        .def("SetIterationCount", &rhbm_gem::PositionEstimationCommand::SetIterationCount)
+        .def("SetKNNSize",        &rhbm_gem::PositionEstimationCommand::SetKNNSize)
+        .def("SetAlpha",          &rhbm_gem::PositionEstimationCommand::SetAlpha)
+        .def("SetThresholdRatio", &rhbm_gem::PositionEstimationCommand::SetThresholdRatio)
+        .def("SetDedupTolerance", &rhbm_gem::PositionEstimationCommand::SetDedupTolerance);
+    BindCommandDiagnostics(position_estimation);
+
+    auto model_test{
+        BindBuiltInCommand<rhbm_gem::HRLModelTestCommand>(
+            m, rhbm_gem::CommandId::ModelTest)
+    };
+    model_test
+        .def(py::init<>())
+        .def("Execute",            &rhbm_gem::HRLModelTestCommand::Execute)
+        .def("SetThreadSize",      &rhbm_gem::HRLModelTestCommand::SetThreadSize)
+        .def("SetTesterChoice",    &rhbm_gem::HRLModelTestCommand::SetTesterChoice)
+        .def("SetFitRangeMinimum", &rhbm_gem::HRLModelTestCommand::SetFitRangeMinimum)
+        .def("SetFitRangeMaximum", &rhbm_gem::HRLModelTestCommand::SetFitRangeMaximum)
+        .def("SetAlphaR",          &rhbm_gem::HRLModelTestCommand::SetAlphaR)
+        .def("SetAlphaG",          &rhbm_gem::HRLModelTestCommand::SetAlphaG);
+    BindCommandDiagnostics(model_test);
 }

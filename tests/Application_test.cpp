@@ -5,7 +5,7 @@
 #include <CLI/CLI.hpp>
 
 #include "Application.hpp"
-#include "BuiltInCommandCatalog.hpp"
+#include "BuiltInCommandCatalogInternal.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -54,4 +54,14 @@ TEST(ApplicationTest, HelpOrderMatchesBuiltInCommandCatalog)
     {
         EXPECT_EQ(subcommands[index]->get_name(), catalog[index].name);
     }
+}
+
+TEST(ApplicationTest, CommandFailurePropagatesAsRuntimeError)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::Application controller(app);
+
+    EXPECT_THROW(
+        app.parse("map_simulation --model missing.cif --blurring-width 1.0", false),
+        CLI::RuntimeError);
 }
