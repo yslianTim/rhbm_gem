@@ -23,7 +23,12 @@ struct MapVisualizationCommandOptions : public CommandOptions
 };
 
 class MapVisualizationCommand
-    : public CommandWithOptions<MapVisualizationCommandOptions, CommandId::MapVisualization>
+    : public CommandWithOptions<
+          MapVisualizationCommandOptions,
+          CommandId::MapVisualization,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::OutputFolder>
 {
 public:
     using Options = MapVisualizationCommandOptions;
@@ -36,9 +41,6 @@ private:
 public:
     MapVisualizationCommand();
     ~MapVisualizationCommand();
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    void ResetRuntimeState() override;
-
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetAtomSerialID(int value);
@@ -46,6 +48,8 @@ public:
     void SetWindowSize(double value);
 
 private:
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();
     void RunMapObjectPreprocessing();

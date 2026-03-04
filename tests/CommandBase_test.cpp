@@ -18,7 +18,13 @@ struct TestCommandOptions : public rg::CommandOptions
 };
 
 class TestCommand final
-    : public rg::CommandWithOptions<TestCommandOptions, rg::CommandId::PotentialAnalysis>
+    : public rg::CommandWithOptions<
+          TestCommandOptions,
+          rg::CommandId::ModelTest,
+          rg::CommonOption::Threading
+              | rg::CommonOption::Verbose
+              | rg::CommonOption::Database
+              | rg::CommonOption::OutputFolder>
 {
 public:
     using Options = TestCommandOptions;

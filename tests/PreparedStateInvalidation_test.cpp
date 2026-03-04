@@ -14,7 +14,12 @@ struct PreparedStateCommandOptions : public rg::CommandOptions
 };
 
 class PreparedStateCommand final
-    : public rg::CommandWithOptions<PreparedStateCommandOptions, rg::CommandId::ModelTest>
+    : public rg::CommandWithOptions<
+          PreparedStateCommandOptions,
+          rg::CommandId::ModelTest,
+          rg::CommonOption::Threading
+              | rg::CommonOption::Verbose
+              | rg::CommonOption::OutputFolder>
 {
 public:
     using Options = PreparedStateCommandOptions;

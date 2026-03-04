@@ -23,7 +23,10 @@ struct CommandScalarValidationHelperCommandOptions : public rg::CommandOptions
 class CommandScalarValidationHelperCommand final
     : public rg::CommandWithOptions<
           CommandScalarValidationHelperCommandOptions,
-          rg::CommandId::ModelTest>
+          rg::CommandId::ModelTest,
+          rg::CommonOption::Threading
+              | rg::CommonOption::Verbose
+              | rg::CommonOption::OutputFolder>
 {
 public:
     using Options = CommandScalarValidationHelperCommandOptions;

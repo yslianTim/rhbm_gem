@@ -1,5 +1,4 @@
 #include "CommandBase.hpp"
-#include "BuiltInCommandCatalogInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "FilePathHelper.hpp"
 
@@ -18,6 +17,10 @@ constexpr std::array<std::string_view, 3> kValidationPhaseLabels{
     "prepare",
     "runtime"
 };
+constexpr std::string_view kJobsOption{ "--jobs" };
+constexpr std::string_view kVerboseOption{ "--verbose" };
+constexpr std::string_view kDatabaseOption{ "--database" };
+constexpr std::string_view kFolderOption{ "--folder" };
 
 std::string BuildIssuePrefix(const ValidationIssue & issue)
 {
@@ -36,24 +39,19 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
     return prefix;
 }
 
-const CommandDescriptor & ResolveCommandDescriptor(const CommandBase & command)
-{
-    return FindCommandDescriptor(command.GetCommandId());
-}
-
-CommonOptionMask ResolveCommonOptions(const CommandBase & command)
-{
-    return ResolveCommandDescriptor(command).surface.common_options;
-}
-
 } // namespace
 
 bool CommandBase::Execute()
 {
-    Logger::SetLogLevel(GetOptions().verbose_level);
-    if (!m_is_prepared_for_execution && !PrepareForExecution())
+    const bool was_prepared{ m_is_prepared_for_execution };
+    if (!was_prepared && !PrepareForExecution())
     {
         return false;
+    }
+
+    if (was_prepared)
+    {
+        Logger::SetLogLevel(GetOptions().verbose_level);
     }
 
     const bool executed{ ExecuteImpl() };
@@ -75,7 +73,7 @@ void CommandBase::RegisterCLIOptions(CLI::App * command)
 void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
 {
     auto & options{ GetOptions() };
-    const auto common_options{ ResolveCommonOptions(*this) };
+    const auto common_options{ GetCommonOptionsMask() };
 
     if (HasCommonOption(common_options, CommonOption::Threading))
     {
@@ -139,7 +137,7 @@ void CommandBase::SetThreadSize(int value)
     SetNormalizedScalarOption(
         options.thread_size,
         value,
-        "--jobs",
+        kJobsOption,
         [](int candidate) { return candidate >= 1; },
         1,
         "Thread size must be positive. Using 1 instead.");
@@ -151,7 +149,7 @@ void CommandBase::SetVerboseLevel(int value)
     SetNormalizedScalarOption(
         options.verbose_level,
         value,
-        "--verbose",
+        kVerboseOption,
         [](int candidate)
         {
             return candidate >= static_cast<int>(LogLevel::Error)
@@ -202,7 +200,7 @@ bool CommandBase::HasValidationErrors(std::optional<ValidationPhase> phase) cons
 }
 
 void CommandBase::AddValidationError(
-    const std::string & option_name,
+    std::string_view option_name,
     const std::string & message,
     ValidationPhase phase)
 {
@@ -210,7 +208,7 @@ void CommandBase::AddValidationError(
 }
 
 void CommandBase::AddNormalizationWarning(
-    const std::string & option_name,
+    std::string_view option_name,
     const std::string & message)
 {
     AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Warning, message, true);
@@ -325,14 +323,14 @@ void CommandBase::SetOptionalExistingPathOption(
 }
 
 void CommandBase::AddValidationIssue(
-    const std::string & option_name,
+    std::string_view option_name,
     ValidationPhase phase,
     LogLevel level,
     const std::string & message,
     bool auto_corrected)
 {
     m_validation_issues.push_back(ValidationIssue{
-        option_name,
+        std::string(option_name),
         phase,
         level,
         message,
@@ -380,11 +378,11 @@ bool CommandBase::RunValidationPass()
 
 bool CommandBase::RunFilesystemPreflight()
 {
-    const auto common_options{ ResolveCommonOptions(*this) };
+    const auto common_options{ GetCommonOptionsMask() };
 
     if (HasCommonOption(common_options, CommonOption::Database))
     {
-        ClearValidationIssues("--database", ValidationPhase::Prepare);
+        ClearValidationIssues(kDatabaseOption, ValidationPhase::Prepare);
         const auto parent_path{ GetOptions().database_path.parent_path() };
         if (!parent_path.empty() && !std::filesystem::exists(parent_path))
         {
@@ -393,7 +391,7 @@ bool CommandBase::RunFilesystemPreflight()
             if (error_code)
             {
                 AddValidationError(
-                    "--database",
+                    kDatabaseOption,
                     "Failed to create parent directory '" + parent_path.string()
                         + "': " + error_code.message());
             }
@@ -402,7 +400,7 @@ bool CommandBase::RunFilesystemPreflight()
 
     if (HasCommonOption(common_options, CommonOption::OutputFolder))
     {
-        ClearValidationIssues("--folder", ValidationPhase::Prepare);
+        ClearValidationIssues(kFolderOption, ValidationPhase::Prepare);
         const auto & folder_path{ GetOptions().folder_path };
         if (!folder_path.empty() && !std::filesystem::exists(folder_path))
         {
@@ -411,7 +409,7 @@ bool CommandBase::RunFilesystemPreflight()
             if (error_code)
             {
                 AddValidationError(
-                    "--folder",
+                    kFolderOption,
                     "Failed to create output directory '" + folder_path.string()
                         + "': " + error_code.message());
             }

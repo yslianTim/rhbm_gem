@@ -72,14 +72,16 @@ If a rule changes, update this document and any affected user-facing documentati
 See [`./architecture/command-architecture.md`](./architecture/command-architecture.md) for the current command topology, lifecycle diagrams, and repository-specific command extension patterns.
 See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-io-architecture.md) for the current DataObject file/database I/O topology, extension points, and persistence constraints.
 
-- `[Required]` New CLI commands should derive from `CommandBase` and keep command-specific configuration in an `Options : CommandOptions` structure.
+- `[Required]` New CLI commands should derive from `CommandBase`, keep command-specific configuration in an `Options : CommandOptions` structure, and declare their shared common-option surface on the concrete command type.
 - `[Required]` Setters are responsible for validating user input, normalizing values when appropriate, and marking invalid configurations before execution starts.
 - `[Required]` `Execute()` should keep a clear phase boundary: validate and construct prerequisites first, then run the main workflow.
 - `[Required]` File parsing, database access, and DAO details belong in the data layer, not inside command orchestration logic.
 - `[Required]` Support for new file formats must update both the extension-based factory selection path and the corresponding format implementation.
-- `[Required]` New built-in commands should be added through `BuiltInCommandCatalog()` and must provide a Python binding name there so CLI registration, bindings, and docs sync share one source of truth.
+- `[Required]` New built-in commands should be added through `BuiltInCommandCatalog()` and must provide a Python binding name there so CLI registration, bindings, and docs sync share one source of truth for built-in naming while the concrete command type remains the source of shared common-option policy.
 - `[Required]` New built-in commands must ship both CLI registration and Python binding updates in the same change unless the command is intentionally not part of the built-in catalog.
 - `[Required]` Built-in catalog metadata and registration helpers are internal implementation details. Keep them under `src/`, not `include/`, unless the project intentionally promotes them to a supported public API.
+- `[Required]` Do not expose registration hooks, raw option introspection, or internal lifecycle methods as caller-facing command APIs.
+- `[Recommended]` Within `CommandBase`, treat option mutation and validation-issue helpers as the primary extension API; use the scalar, path, enum, database, and output helpers as convenience layers built on top of that core API.
 - `[Recommended]` Managers should remain the boundary objects that move data between commands, files, and persistence layers.
 - `[Recommended]` Experimental or internal command helpers should stay under `src/`, not `include/`, unless they are intentionally part of the supported public interface.
 

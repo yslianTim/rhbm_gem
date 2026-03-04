@@ -26,7 +26,12 @@ struct PositionEstimationCommandOptions : public CommandOptions
 };
 
 class PositionEstimationCommand
-    : public CommandWithOptions<PositionEstimationCommandOptions, CommandId::PositionEstimation>
+    : public CommandWithOptions<
+          PositionEstimationCommandOptions,
+          CommandId::PositionEstimation,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::OutputFolder>
 {
 public:
     using Options = PositionEstimationCommandOptions;
@@ -41,9 +46,6 @@ private:
 public:
     PositionEstimationCommand();
     ~PositionEstimationCommand() override;
-    void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
-    void ResetRuntimeState() override;
-
     void SetMapFilePath(const std::filesystem::path & path);
     void SetIterationCount(int value);
     void SetKNNSize(int value);
@@ -52,6 +54,8 @@ public:
     void SetDedupTolerance(double value);
 
 private:
+    void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
+    void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();
     bool BuildVoxelList();

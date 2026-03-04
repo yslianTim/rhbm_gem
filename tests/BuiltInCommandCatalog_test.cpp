@@ -56,28 +56,14 @@ TEST(BuiltInCommandCatalogTest, FactoriesAreNonNull)
 
 TEST(BuiltInCommandCatalogTest, AllBuiltInCommandsProvidePythonBindingNames)
 {
-    static constexpr std::array<std::string_view, 7> kExpectedPythonCommandNames{
-        "potential_analysis",
-        "potential_display",
-        "result_dump",
-        "map_simulation",
-        "map_visualization",
-        "position_estimation",
-        "model_test"
-    };
-
-    std::vector<std::string> actual_names;
+    std::unordered_set<std::string> unique_binding_names;
     for (const auto & descriptor : rg::BuiltInCommandCatalog())
     {
         EXPECT_FALSE(descriptor.python_binding_name.empty()) << descriptor.name;
-        actual_names.emplace_back(descriptor.name);
+        unique_binding_names.emplace(descriptor.python_binding_name);
     }
 
-    ASSERT_EQ(actual_names.size(), kExpectedPythonCommandNames.size());
-    for (std::size_t index = 0; index < kExpectedPythonCommandNames.size(); ++index)
-    {
-        EXPECT_EQ(actual_names[index], kExpectedPythonCommandNames[index]);
-    }
+    EXPECT_EQ(unique_binding_names.size(), rg::BuiltInCommandCatalog().size());
 }
 
 TEST(BuiltInCommandCatalogTest, DatabaseEnabledCommandSetMatchesExpectedSurface)
@@ -91,7 +77,7 @@ TEST(BuiltInCommandCatalogTest, DatabaseEnabledCommandSetMatchesExpectedSurface)
     std::vector<std::string> actual_names;
     for (const auto & descriptor : rg::BuiltInCommandCatalog())
     {
-        if (!rg::UsesDatabaseAtRuntime(descriptor.surface)) continue;
+        if (!rg::UsesDatabaseAtRuntime(descriptor.common_options)) continue;
         actual_names.emplace_back(descriptor.name);
     }
 

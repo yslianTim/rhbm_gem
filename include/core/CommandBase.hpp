@@ -3,12 +3,10 @@
 #include <cstdint>
 #include <cmath>
 #include <filesystem>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <typeinfo>
 #include <utility>
 #include <vector>
 
@@ -54,21 +52,12 @@ class CommandBase
 public:
     virtual ~CommandBase() = default;
     bool Execute();
-    virtual void RegisterCLIOptionsExtend(::CLI::App * command) = 0;
-    virtual const CommandOptions & GetOptions() const = 0;
-    virtual CommandOptions & GetOptions() = 0;
-    virtual CommandId GetCommandId() const = 0;
-    virtual void ValidateOptions() {}
-    virtual void ResetRuntimeState() {}
-
-    void RegisterCLIOptions(::CLI::App * command);
     bool PrepareForExecution();
     void SetThreadSize(int value);
     void SetVerboseLevel(int value);
     void SetDatabasePath(const std::filesystem::path & path);
     void SetFolderPath(const std::filesystem::path & path);
     bool HasValidationErrors(std::optional<ValidationPhase> phase = std::nullopt) const;
-    void ReportValidationIssues() const;
     const std::vector<ValidationIssue> & GetValidationIssues() const { return m_validation_issues; }
 
 protected:
@@ -76,6 +65,14 @@ protected:
     std::vector<ValidationIssue> m_validation_issues;
 
     CommandBase() = default;
+
+    // Concrete command lifecycle hooks.
+    virtual void RegisterCLIOptionsExtend(::CLI::App * command) = 0;
+    virtual void ValidateOptions() {}
+    virtual void ResetRuntimeState() {}
+    virtual bool ExecuteImpl() = 0;
+
+    // Core command extension API used by concrete command setters and validators.
     template <typename Mutator>
     void MutateOptions(Mutator && mutator)
     {
@@ -83,12 +80,14 @@ protected:
         std::forward<Mutator>(mutator)();
     }
     void AddValidationError(
-        const std::string & option_name,
+        std::string_view option_name,
         const std::string & message,
         ValidationPhase phase = ValidationPhase::Prepare);
-    void AddNormalizationWarning(const std::string & option_name, const std::string & message);
+    void AddNormalizationWarning(std::string_view option_name, const std::string & message);
     void ResetParseIssues(std::string_view option_name);
     void ResetPrepareIssues(std::string_view option_name);
+
+    // Base convenience helpers built on top of the core extension API.
     void SetRequiredExistingPathOption(
         std::filesystem::path & field,
         const std::filesystem::path & value,
@@ -211,67 +210,23 @@ protected:
     std::filesystem::path BuildOutputPath(
         std::string_view stem,
         std::string_view extension) const;
-    virtual bool ExecuteImpl() = 0;
-
-    template <typename TypedDataObject>
-    std::shared_ptr<TypedDataObject> ProcessTypedFile(
-        const std::filesystem::path & path,
-        std::string_view key_tag,
-        std::string_view label)
-    {
-        const auto key{ std::string(key_tag) };
-        try
-        {
-            m_data_manager.ProcessFile(path, key);
-            return m_data_manager.GetTypedDataObject<TypedDataObject>(key);
-        }
-        catch (const std::exception & ex)
-        {
-            throw std::runtime_error(
-                "Failed to process " + std::string(label) + " from '" + path.string()
-                + "' as " + typeid(TypedDataObject).name() + ": " + ex.what());
-        }
-    }
-
-    template <typename TypedDataObject>
-    std::shared_ptr<TypedDataObject> OptionalProcessTypedFile(
-        const std::filesystem::path & path,
-        std::string_view key_tag,
-        std::string_view label)
-    {
-        if (path.empty())
-        {
-            return nullptr;
-        }
-        return ProcessTypedFile<TypedDataObject>(path, key_tag, label);
-    }
-
-    template <typename TypedDataObject>
-    std::shared_ptr<TypedDataObject> LoadTypedObject(
-        std::string_view key_tag,
-        std::string_view label)
-    {
-        const auto key{ std::string(key_tag) };
-        try
-        {
-            m_data_manager.LoadDataObject(key);
-            return m_data_manager.GetTypedDataObject<TypedDataObject>(key);
-        }
-        catch (const std::exception & ex)
-        {
-            throw std::runtime_error(
-                "Failed to load " + std::string(label) + " with key tag '"
-                + key + "': " + ex.what());
-        }
-    }
 
 private:
+    friend class Application;
+
+    virtual const CommandOptions & GetOptions() const = 0;
+    virtual CommandOptions & GetOptions() = 0;
+    virtual CommandId GetCommandId() const = 0;
+    virtual CommonOptionMask GetCommonOptionsMask() const = 0;
+
     bool m_is_prepared_for_execution{ false };
     void InvalidatePreparedState();
+    void RegisterCLIOptions(::CLI::App * command);
     void RegisterCLIOptionsBasic(::CLI::App * command);
     void BeginPreparationPass();
     bool RunValidationPass();
     bool RunFilesystemPreflight();
+    void ReportValidationIssues() const;
     void ClearValidationIssues(std::string_view option_name, std::optional<ValidationPhase> phase);
     void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt);
     // Invalid input falls back to a safe value and is recorded as a parse error.
@@ -310,14 +265,14 @@ private:
         std::string_view label);
 
     void AddValidationIssue(
-        const std::string & option_name,
+        std::string_view option_name,
         ValidationPhase phase,
         LogLevel level,
         const std::string & message,
         bool auto_corrected);
 };
 
-template <typename OptionsT, CommandId IdValue>
+template <typename OptionsT, CommandId IdValue, CommonOptionMask CommonOptionsValue>
 class CommandWithOptions : public CommandBase
 {
 protected:
@@ -325,10 +280,14 @@ protected:
 
 public:
     using Options = OptionsT;
+    static constexpr CommandId kCommandId{ IdValue };
+    static constexpr CommonOptionMask kCommonOptions{ CommonOptionsValue };
 
+private:
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
-    CommandId GetCommandId() const override { return IdValue; }
+    CommandId GetCommandId() const override { return kCommandId; }
+    CommonOptionMask GetCommonOptionsMask() const override { return kCommonOptions; }
 };
 
 } // namespace rhbm_gem

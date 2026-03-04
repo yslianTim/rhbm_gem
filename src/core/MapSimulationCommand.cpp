@@ -1,4 +1,5 @@
 #include "MapSimulationCommand.hpp"
+#include "CommandDataAccessInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
@@ -20,6 +21,16 @@
 
 namespace {
 constexpr std::string_view kModelKey{ "model" };
+constexpr std::string_view kModelFlags{ "-a,--model" };
+constexpr std::string_view kModelOption{ "--model" };
+constexpr std::string_view kMapNameFlags{ "-n,--name" };
+constexpr std::string_view kCutoffFlags{ "-c,--cut-off" };
+constexpr std::string_view kPotentialModelOption{ "--potential-model" };
+constexpr std::string_view kChargeOption{ "--charge" };
+constexpr std::string_view kCutoffOption{ "--cut-off" };
+constexpr std::string_view kGridSpacingFlags{ "-g,--grid-spacing" };
+constexpr std::string_view kGridSpacingOption{ "--grid-spacing" };
+constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
 
 std::string SerializeBlurringWidths(const std::vector<double> & widths)
 {
@@ -55,38 +66,38 @@ MapSimulationCommand::~MapSimulationCommand()
 void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     command_cli::AddPathOption(
-        cmd, "-a,--model",
+        cmd, kModelFlags,
         [&](const std::filesystem::path & value) { SetModelFilePath(value); },
         "Model file path",
         std::nullopt,
         true);
     command_cli::AddStringOption(
-        cmd, "-n,--name",
+        cmd, kMapNameFlags,
         [&](const std::string & value) { SetMapFileName(value); },
         "File name for output map files",
         m_options.map_file_name);
     command_cli::AddEnumOption<PotentialModel>(
-        cmd, "--potential-model",
+        cmd, kPotentialModelOption,
         [&](PotentialModel value) { SetPotentialModelChoice(value); },
         "Atomic potential model option",
         PotentialModel::FIVE_GAUS_CHARGE);
     command_cli::AddEnumOption<PartialCharge>(
-        cmd, "--charge",
+        cmd, kChargeOption,
         [&](PartialCharge value) { SetPartialChargeChoice(value); },
         "Partial charge table option",
         PartialCharge::PARTIAL);
     command_cli::AddScalarOption<double>(
-        cmd, "-c,--cut-off",
+        cmd, kCutoffFlags,
         [&](double value) { SetCutoffDistance(value); },
         "Cutoff distance",
         m_options.cutoff_distance);
     command_cli::AddScalarOption<double>(
-        cmd, "-g,--grid-spacing",
+        cmd, kGridSpacingFlags,
         [&](double value) { SetGridSpacing(value); },
         "Grid spacing",
         m_options.grid_spacing);
     command_cli::AddStringOption(
-        cmd, "--blurring-width",
+        cmd, kBlurringWidthOption,
         [&](const std::string & value) { SetBlurringWidthList(value); },
         "Blurring width (list) setting",
         SerializeBlurringWidths(m_options.blurring_width_list));
@@ -102,10 +113,10 @@ bool MapSimulationCommand::ExecuteImpl()
 
 void MapSimulationCommand::ValidateOptions()
 {
-    ResetPrepareIssues("--blurring-width");
+    ResetPrepareIssues(kBlurringWidthOption);
     if (m_options.blurring_width_list.empty())
     {
-        AddValidationError("--blurring-width",
+        AddValidationError(kBlurringWidthOption,
             "At least one positive blurring width is required.");
     }
 }
@@ -132,7 +143,7 @@ void MapSimulationCommand::SetPotentialModelChoice(PotentialModel value)
     SetValidatedEnumOption(
         m_options.potential_model_choice,
         value,
-        "--potential-model",
+        kPotentialModelOption,
         PotentialModel::FIVE_GAUS_CHARGE,
         "Potential model");
 }
@@ -142,7 +153,7 @@ void MapSimulationCommand::SetPartialChargeChoice(PartialCharge value)
     SetValidatedEnumOption(
         m_options.partial_charge_choice,
         value,
-        "--charge",
+        kChargeOption,
         PartialCharge::PARTIAL,
         "Partial charge choice");
 }
@@ -152,7 +163,7 @@ void MapSimulationCommand::SetCutoffDistance(double value)
     SetNormalizedScalarOption(
         m_options.cutoff_distance,
         value,
-        "--cut-off",
+        kCutoffOption,
         [](double candidate) { return candidate > 0.0; },
         5.0,
         "Cutoff distance must be positive, reset to default 5.0");
@@ -160,7 +171,7 @@ void MapSimulationCommand::SetCutoffDistance(double value)
 
 void MapSimulationCommand::SetModelFilePath(const std::filesystem::path & value)
 {
-    SetRequiredExistingPathOption(m_options.model_file_path, value, "--model", "Model file");
+    SetRequiredExistingPathOption(m_options.model_file_path, value, kModelOption, "Model file");
 }
 
 void MapSimulationCommand::SetMapFileName(const std::string & value)
@@ -173,7 +184,7 @@ void MapSimulationCommand::SetGridSpacing(double value)
     SetNormalizedScalarOption(
         m_options.grid_spacing,
         value,
-        "--grid-spacing",
+        kGridSpacingOption,
         [](double candidate) { return candidate > 0.0; },
         0.5,
         "Grid spacing must be positive, reset to default 0.5");
@@ -183,7 +194,7 @@ void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
 {
     MutateOptions([&]()
     {
-        ResetParseIssues("--blurring-width");
+        ResetParseIssues(kBlurringWidthOption);
         const auto parsed_list{ StringHelper::ParseListOption<double>(value, ',') };
         m_options.blurring_width_list.clear();
         m_options.blurring_width_list.reserve(parsed_list.size());
@@ -191,7 +202,7 @@ void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
         {
             if (width <= 0.0)
             {
-                AddNormalizationWarning("--blurring-width",
+                AddNormalizationWarning(kBlurringWidthOption,
                     "Blurring width must be positive, dropping current setting: "
                         + std::to_string(width));
                 continue;
@@ -206,8 +217,8 @@ bool MapSimulationCommand::BuildDataObject()
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
-        m_model_object = ProcessTypedFile<ModelObject>(
-            m_options.model_file_path, kModelKey, "model file");
+        m_model_object = command_data_access::ProcessTypedFile<ModelObject>(
+            m_data_manager, m_options.model_file_path, kModelKey, "model file");
         BuildAtomList(m_model_object.get());
     }
     catch(const std::exception & e)

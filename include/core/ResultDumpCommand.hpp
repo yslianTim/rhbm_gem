@@ -23,7 +23,14 @@ struct ResultDumpCommandOptions : public CommandOptions
     std::filesystem::path map_file_path{ "" };
 };
 
-class ResultDumpCommand : public CommandWithOptions<ResultDumpCommandOptions, CommandId::ResultDump>
+class ResultDumpCommand
+    : public CommandWithOptions<
+          ResultDumpCommandOptions,
+          CommandId::ResultDump,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::Database
+              | CommonOption::OutputFolder>
 {
 public:
     using Options = ResultDumpCommandOptions;
@@ -37,15 +44,14 @@ private:
 public:
     ResultDumpCommand();
     ~ResultDumpCommand();
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    void ValidateOptions() override;
-    void ResetRuntimeState() override;
-
     void SetPrinterChoice(PrinterType value);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetModelKeyTagList(const std::string & value);
 
 private:
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    void ValidateOptions() override;
+    void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObjectList();
     void RunResultDump();

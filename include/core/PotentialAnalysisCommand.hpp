@@ -33,7 +33,13 @@ struct PotentialAnalysisCommandOptions : public CommandOptions
 };
 
 class PotentialAnalysisCommand
-    : public CommandWithOptions<PotentialAnalysisCommandOptions, CommandId::PotentialAnalysis>
+    : public CommandWithOptions<
+          PotentialAnalysisCommandOptions,
+          CommandId::PotentialAnalysis,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::Database
+              | CommonOption::OutputFolder>
 {
 public:
     using Options = PotentialAnalysisCommandOptions;
@@ -46,10 +52,6 @@ private:
 public:
     PotentialAnalysisCommand();
     ~PotentialAnalysisCommand();
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    void ValidateOptions() override;
-    void ResetRuntimeState() override;
-
     void SetTrainingAlphaFlag(bool value);
     void SetAsymmetryFlag(bool value);
     void SetSimulationFlag(bool value);
@@ -67,6 +69,9 @@ public:
     void SetSamplingHeight(double value);
 
 private:
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    void ValidateOptions() override;
+    void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();
     void UpdateModelObjectForSimulation(ModelObject * model_object);

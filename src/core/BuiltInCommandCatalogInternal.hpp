@@ -17,7 +17,7 @@ struct CommandDescriptor
     CommandId id;
     std::string_view name;
     std::string_view description;
-    CommandSurface surface;
+    CommonOptionMask common_options;
     std::string_view python_binding_name;
     CommandFactory factory;
 };
@@ -25,14 +25,14 @@ struct CommandDescriptor
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog();
 const CommandDescriptor & FindCommandDescriptor(CommandId command_id);
 
-constexpr bool UsesDatabaseAtRuntime(const CommandSurface & surface)
+constexpr bool UsesDatabaseAtRuntime(CommonOptionMask common_options)
 {
-    return HasCommonOption(surface.common_options, CommonOption::Database);
+    return HasCommonOption(common_options, CommonOption::Database);
 }
 
-constexpr bool UsesOutputFolder(const CommandSurface & surface)
+constexpr bool UsesOutputFolder(CommonOptionMask common_options)
 {
-    return HasCommonOption(surface.common_options, CommonOption::OutputFolder);
+    return HasCommonOption(common_options, CommonOption::OutputFolder);
 }
 
 } // namespace rhbm_gem

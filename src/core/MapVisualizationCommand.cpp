@@ -1,4 +1,5 @@
 #include "MapVisualizationCommand.hpp"
+#include "CommandDataAccessInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
@@ -29,6 +30,15 @@
 namespace {
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
+constexpr std::string_view kModelFlags{ "-a,--model" };
+constexpr std::string_view kModelOption{ "--model" };
+constexpr std::string_view kMapFlags{ "-m,--map" };
+constexpr std::string_view kMapOption{ "--map" };
+constexpr std::string_view kAtomIdFlags{ "-i,--atom-id" };
+constexpr std::string_view kAtomIdOption{ "--atom-id" };
+constexpr std::string_view kSamplingFlags{ "-s,--sampling" };
+constexpr std::string_view kSamplingOption{ "--sampling" };
+constexpr std::string_view kWindowSizeOption{ "--window-size" };
 }
 
 namespace rhbm_gem {
@@ -48,29 +58,29 @@ MapVisualizationCommand::~MapVisualizationCommand()
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     command_cli::AddPathOption(
-        cmd, "-a,--model",
+        cmd, kModelFlags,
         [&](const std::filesystem::path & value) { SetModelFilePath(value); },
         "Model file path",
         std::nullopt,
         true);
     command_cli::AddPathOption(
-        cmd, "-m,--map",
+        cmd, kMapFlags,
         [&](const std::filesystem::path & value) { SetMapFilePath(value); },
         "Map file path",
         std::nullopt,
         true);
     command_cli::AddScalarOption<int>(
-        cmd, "-i,--atom-id",
+        cmd, kAtomIdFlags,
         [&](int value) { SetAtomSerialID(value); },
         "Atom serial ID for visualization",
         m_options.atom_serial_id);
     command_cli::AddScalarOption<int>(
-        cmd, "-s,--sampling",
+        cmd, kSamplingFlags,
         [&](int value) { SetSamplingSize(value); },
         "Number of sampling points per atom",
         m_options.sampling_size);
     command_cli::AddScalarOption<double>(
-        cmd, "--window-size",
+        cmd, kWindowSizeOption,
         [&](double value) { SetWindowSize(value); },
         "Window size for sampling",
         m_options.window_size);
@@ -92,12 +102,12 @@ void MapVisualizationCommand::ResetRuntimeState()
 
 void MapVisualizationCommand::SetModelFilePath(const std::filesystem::path & path)
 {
-    SetRequiredExistingPathOption(m_options.model_file_path, path, "--model", "Model file");
+    SetRequiredExistingPathOption(m_options.model_file_path, path, kModelOption, "Model file");
 }
 
 void MapVisualizationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    SetRequiredExistingPathOption(m_options.map_file_path, path, "--map", "Map file");
+    SetRequiredExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
 }
 
 void MapVisualizationCommand::SetAtomSerialID(int value)
@@ -105,7 +115,7 @@ void MapVisualizationCommand::SetAtomSerialID(int value)
     SetPositiveScalarOption(
         m_options.atom_serial_id,
         value,
-        "--atom-id",
+        kAtomIdOption,
         1,
         "Atom serial ID must be positive.");
 }
@@ -115,7 +125,7 @@ void MapVisualizationCommand::SetSamplingSize(int value)
     SetNormalizedScalarOption(
         m_options.sampling_size,
         value,
-        "--sampling",
+        kSamplingOption,
         [](int candidate) { return candidate > 0; },
         100,
         "Sampling size must be positive, reset to default value = 100");
@@ -126,7 +136,7 @@ void MapVisualizationCommand::SetWindowSize(double value)
     SetFinitePositiveScalarOption(
         m_options.window_size,
         value,
-        "--window-size",
+        kWindowSizeOption,
         5.0,
         "Window size must be a finite positive value.");
 }
@@ -136,10 +146,10 @@ bool MapVisualizationCommand::BuildDataObject()
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        m_model_object = ProcessTypedFile<ModelObject>(
-            m_options.model_file_path, m_model_key_tag, "model file");
-        m_map_object = ProcessTypedFile<MapObject>(
-            m_options.map_file_path, m_map_key_tag, "map file");
+        m_model_object = command_data_access::ProcessTypedFile<ModelObject>(
+            m_data_manager, m_options.model_file_path, m_model_key_tag, "model file");
+        m_map_object = command_data_access::ProcessTypedFile<MapObject>(
+            m_data_manager, m_options.map_file_path, m_map_key_tag, "map file");
     }
     catch (const std::exception & e)
     {

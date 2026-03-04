@@ -56,6 +56,30 @@ TEST(ApplicationTest, HelpOrderMatchesBuiltInCommandCatalog)
     }
 }
 
+TEST(ApplicationTest, SharedOptionsMatchBuiltInCommandMetadata)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::Application controller(app);
+
+    for (const auto & descriptor : rg::BuiltInCommandCatalog())
+    {
+        auto * subcommand{ app.get_subcommand(std::string(descriptor.name)) };
+        ASSERT_NE(subcommand, nullptr) << descriptor.name;
+
+        const std::string help_text{
+            subcommand->help(subcommand->get_name(), CLI::AppFormatMode::Sub)
+        };
+        EXPECT_EQ(
+            help_text.find("--database") != std::string::npos,
+            rg::UsesDatabaseAtRuntime(descriptor.common_options))
+            << descriptor.name;
+        EXPECT_EQ(
+            help_text.find("--folder") != std::string::npos,
+            rg::UsesOutputFolder(descriptor.common_options))
+            << descriptor.name;
+    }
+}
+
 TEST(ApplicationTest, CommandFailurePropagatesAsRuntimeError)
 {
     CLI::App app{"RHBM-GEM"};

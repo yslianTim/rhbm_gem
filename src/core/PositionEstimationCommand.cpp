@@ -1,4 +1,5 @@
 #include "PositionEstimationCommand.hpp"
+#include "CommandDataAccessInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
@@ -24,6 +25,13 @@
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };
+constexpr std::string_view kMapFlags{ "-m,--map" };
+constexpr std::string_view kMapOption{ "--map" };
+constexpr std::string_view kIterationOption{ "--iter" };
+constexpr std::string_view kKnnOption{ "--knn" };
+constexpr std::string_view kAlphaOption{ "--alpha" };
+constexpr std::string_view kThresholdOption{ "--threshold" };
+constexpr std::string_view kDedupToleranceOption{ "--dedup-tolerance" };
 
 struct QuantizedPointHash
 {
@@ -51,33 +59,33 @@ PositionEstimationCommand::~PositionEstimationCommand() = default;
 void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     command_cli::AddPathOption(
-        cmd, "-m,--map",
+        cmd, kMapFlags,
         [&](const std::filesystem::path & value) { SetMapFilePath(value); },
         "Map file path",
         std::nullopt,
         true);
     command_cli::AddScalarOption<int>(
-        cmd, "--iter",
+        cmd, kIterationOption,
         [&](int value) { SetIterationCount(value); },
         "Iteration count for estimation",
         m_options.iteration_count);
     command_cli::AddScalarOption<int>(
-        cmd, "--knn",
+        cmd, kKnnOption,
         [&](int value) { SetKNNSize(value); },
         "KNN size for estimation",
         static_cast<int>(m_options.knn_size));
     command_cli::AddScalarOption<double>(
-        cmd, "--alpha",
+        cmd, kAlphaOption,
         [&](double value) { SetAlpha(value); },
         "Alpha value for robust regression",
         static_cast<double>(m_options.alpha));
     command_cli::AddScalarOption<double>(
-        cmd, "--threshold",
+        cmd, kThresholdOption,
         [&](double value) { SetThresholdRatio(value); },
         "Ratio of threshold of map values",
         static_cast<double>(m_options.threshold_ratio));
     command_cli::AddScalarOption<double>(
-        cmd, "--dedup-tolerance",
+        cmd, kDedupToleranceOption,
         [&](double value) { SetDedupTolerance(value); },
         "Tolerance for deduplicating points",
         static_cast<double>(m_options.dedup_tolerance));
@@ -104,7 +112,7 @@ void PositionEstimationCommand::ResetRuntimeState()
 
 void PositionEstimationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    SetRequiredExistingPathOption(m_options.map_file_path, path, "--map", "Map file");
+    SetRequiredExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
 }
 
 void PositionEstimationCommand::SetIterationCount(int value)
@@ -112,7 +120,7 @@ void PositionEstimationCommand::SetIterationCount(int value)
     SetNormalizedScalarOption(
         m_options.iteration_count,
         value,
-        "--iter",
+        kIterationOption,
         [](int candidate) { return candidate > 0; },
         15,
         "Iteration count must be positive, reset to default 15");
@@ -123,7 +131,7 @@ void PositionEstimationCommand::SetKNNSize(int value)
     SetNormalizedScalarOption(
         m_options.knn_size,
         value,
-        "--knn",
+        kKnnOption,
         [](int candidate) { return candidate > 0; },
         static_cast<size_t>(20),
         "KNN size must be positive, reset to default 20");
@@ -134,7 +142,7 @@ void PositionEstimationCommand::SetAlpha(double value)
     SetNormalizedScalarOption(
         m_options.alpha,
         value,
-        "--alpha",
+        kAlphaOption,
         [](double candidate) { return candidate > 0.0; },
         2.0f,
         "Alpha must be positive, reset to default 2.0");
@@ -145,7 +153,7 @@ void PositionEstimationCommand::SetThresholdRatio(double value)
     SetNormalizedScalarOption(
         m_options.threshold_ratio,
         value,
-        "--threshold",
+        kThresholdOption,
         [](double candidate) { return candidate > 0.0 && candidate <= 1.0; },
         0.01f,
         "Threshold ratio must be in (0, 1], reset to default 0.01");
@@ -156,7 +164,7 @@ void PositionEstimationCommand::SetDedupTolerance(double value)
     SetNormalizedScalarOption(
         m_options.dedup_tolerance,
         value,
-        "--dedup-tolerance",
+        kDedupToleranceOption,
         [](double candidate) { return candidate > 0.0; },
         1.0e-2f,
         "Dedup tolerance must be positive, reset to default 0.01");
@@ -167,8 +175,8 @@ bool PositionEstimationCommand::BuildDataObject()
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
-        m_map_object = ProcessTypedFile<MapObject>(
-            m_options.map_file_path, kMapKey, "map file");
+        m_map_object = command_data_access::ProcessTypedFile<MapObject>(
+            m_data_manager, m_options.map_file_path, kMapKey, "map file");
         m_map_object->MapValueArrayNormalization();
     }
     catch (const std::exception & e)

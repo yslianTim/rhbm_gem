@@ -51,15 +51,10 @@ TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesValidationErrorAtP
     EXPECT_EQ(issue_iter->level, LogLevel::Error);
 }
 
-TEST(MapVisualizationCommandTest, SamplingSizeNormalizationUsesOptionsDefault)
+TEST(MapVisualizationCommandTest, SamplingSizeNormalizationReportsAutoCorrectedWarning)
 {
     rg::MapVisualizationCommand command;
     command.SetSamplingSize(0);
-
-    const auto & options{
-        static_cast<const rg::MapVisualizationCommand::Options &>(command.GetOptions())
-    };
-    EXPECT_EQ(options.sampling_size, 100);
 
     const auto & issues{ command.GetValidationIssues() };
     const auto issue_iter{

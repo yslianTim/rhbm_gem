@@ -37,8 +37,8 @@ flowchart TD
     D --> E["CommandDescriptor"]
     E --> F["descriptor.factory()"]
     F --> G["Concrete CommandBase subclass"]
-    G --> H["CommandBase::RegisterCLIOptions()"]
-    H --> I["Register shared options from CommandSurface"]
+    G --> H["CommandBase shared CLI option registration"]
+    H --> I["Register shared options from command type common-option mask"]
     H --> J["Register command-specific options"]
 
     K["CLI11 parse"] --> L["Setter callbacks"]
@@ -51,9 +51,9 @@ flowchart TD
     Q --> R["RunValidationPass()"]
     R --> S["RunFilesystemPreflight()"]
     S --> T{"Validation errors remain?"}
-    T -- yes --> U["Report issues and abort"]
+    T -- yes --> U["Emit validation diagnostics and abort"]
     T -- no --> V["ExecuteImpl()"]
-    V --> W["ProcessTypedFile / LoadTypedObject / writers / database I/O"]
+    V --> W["DataObjectManager / writers / database I/O"]
 ```
 
 Two structural consequences matter:
@@ -75,7 +75,7 @@ The CLI entry point is intentionally small:
 
 1. create a command instance through `CommandDescriptor::factory`
 2. add a CLI11 subcommand using the descriptor name and description
-3. call `CommandBase::RegisterCLIOptions(...)`
+3. call the base-class CLI registration path to add shared and command-local options
 4. store the command in a `shared_ptr`
 5. bind the subcommand callback to `CommandBase::Execute()`
 6. convert `Execute() == false` into `CLI::RuntimeError(1)` so command failure reaches the process exit code
@@ -110,26 +110,29 @@ Each internal `CommandDescriptor` stores:
 - the built-in `CommandId`
 - the command name
 - the user-facing description
-- `CommandSurface` metadata for shared option exposure
+- the mirrored `common_options` mask used by shared option and docs/test helpers
 - the Python binding class name for that built-in command
 - the factory returning `std::unique_ptr<CommandBase>`
 
 The descriptor deliberately stores only authoritative metadata. In the current design:
 
-- database usage is inferred from `CommandSurface`
-- output-folder support is inferred from `CommandSurface`
+- common-option policy is declared on the concrete command type and mirrored into the built-in catalog
+- database usage is inferred from `common_options`
+- output-folder support is inferred from `common_options`
 - Python class naming is read directly from `python_binding_name`
 
-Database usage is derived directly from whether `CommandSurface` includes `CommonOption::Database`.
+`BuiltInCommandCatalog.cpp` now builds descriptors from the concrete command type, so the catalog no longer hand-maintains `CommandId`, common-option surface, and factory wiring separately for each built-in.
+
+Database usage is derived directly from whether the built-in descriptor's `common_options` mask includes `CommonOption::Database`.
 All built-in commands must provide a Python binding name in the built-in catalog.
 
 ## 4. `CommandBase` Contract
 
-All built-in commands derive from `CommandBase`. In practice, every current built-in uses `CommandWithOptions<OptionsT, CommandId::...>` so the base class can provide the standard `GetOptions()` and `GetCommandId()` boilerplate.
+All built-in commands derive from `CommandBase`. In practice, every current built-in uses `CommandWithOptions<OptionsT, CommandId::..., CommonOptions...>` so the base class can keep the raw options object and command id as internal implementation detail while the command type itself remains the source of its shared-option surface.
 
 ### 4.1 Public command contract
 
-Every concrete command must provide:
+Every concrete command must implement:
 
 - `bool ExecuteImpl()`
 - `void RegisterCLIOptionsExtend(CLI::App * command)`
@@ -148,7 +151,7 @@ The public entry points shared by CLI and Python are:
 - shared setters inherited from `CommandBase`
 - command-specific setters defined on each concrete command
 
-`Execute()` is the only supported execution entry point for CLI callbacks, direct C++ callers, and Python bindings.
+`Execute()` is the only supported execution entry point for CLI callbacks, direct C++ callers, and Python bindings. Raw option access, command-id introspection, and CLI-registration hooks are internal mechanics rather than caller-facing API.
 
 ### 4.2 Shared base state
 
@@ -168,30 +171,42 @@ Shared base options are:
 
 ### 4.3 Shared option surface
 
-Each command inherits only the common CLI options enabled by its `CommandSurface` metadata:
+Each command inherits only the common CLI options declared on its concrete command type and mirrored into catalog `common_options` metadata:
 
 - `CommonOption::Threading`
 - `CommonOption::Verbose`
 - `CommonOption::Database`
 - `CommonOption::OutputFolder`
 
-`CommandBase::RegisterCLIOptions(...)` first registers shared options from the catalog surface and then delegates to `RegisterCLIOptionsExtend(...)` for command-local options.
+The base registration path first registers shared options from the command type's common-option declaration and then delegates to `RegisterCLIOptionsExtend(...)` for command-local options.
 
 This means:
 
 - commands do not duplicate shared option definitions
-- enabling or disabling a shared option is a catalog-level change
+- enabling or disabling a shared option is a command-type declaration change that the catalog mirrors automatically for registration, bindings, docs sync, and tests
 - command headers do not need to know how shared CLI11 bindings are wired
 
-### 4.4 Supported extension surface
+### 4.4 Protected Surface Categories
 
-Command authors should use the protected helper surface that is still intended for real command implementations:
+The remaining protected surface on `CommandBase` now falls into three distinct groups.
+
+Lifecycle hooks that concrete commands override:
+
+- `RegisterCLIOptionsExtend(...)`
+- `ValidateOptions()`
+- `ResetRuntimeState()`
+- `ExecuteImpl()`
+
+Core command extension API that command-local setters and validators are expected to call directly:
 
 - `MutateOptions(...)`
 - `AddValidationError(...)`
 - `AddNormalizationWarning(...)`
 - `ResetParseIssues(...)`
 - `ResetPrepareIssues(...)`
+
+Base convenience helpers built on top of that core API:
+
 - `SetRequiredExistingPathOption(...)`
 - `SetOptionalExistingPathOption(...)`
 - `SetNormalizedScalarOption(...)`
@@ -201,11 +216,8 @@ Command authors should use the protected helper surface that is still intended f
 - `SetValidatedEnumOption(...)`
 - `RequireDatabaseManager()`
 - `BuildOutputPath(...)`
-- `ProcessTypedFile<T>(...)`
-- `OptionalProcessTypedFile<T>(...)`
-- `LoadTypedObject<T>(...)`
 
-These helpers exist so command code stays focused on orchestration instead of repeating parse validation, filesystem handling, or typed object plumbing.
+This split is intentional: command authors should think of the validation and issue helpers as the primary extension API, while the path, scalar, enum, database, and output helpers are convenience layers that keep common command code terse.
 
 ### 4.5 Internal base mechanics
 
@@ -233,7 +245,7 @@ sequenceDiagram
         Cmd->>Cmd: RunFilesystemPreflight()
     end
     alt validation errors exist
-        Cmd-->>User: ReportValidationIssues()
+        Cmd-->>User: emit validation diagnostics
     else ready
         Cmd->>Cmd: ExecuteImpl()
         Cmd-->>Entry: true / false
@@ -271,8 +283,8 @@ The actual work performed is:
 4. invalidate any previous prepared state
 5. run `ValidateOptions()`
 6. report issues and abort early if validation errors already exist
-7. create the parent directory for `database_path` when the command surface uses the database option
-8. create `folder_path` when the command surface uses the output-folder option
+7. create the parent directory for `database_path` when the command's common-option mask includes the database option
+8. create `folder_path` when the command's common-option mask includes the output-folder option
 9. report any remaining issues
 10. mark the command prepared only if no errors remain
 
@@ -289,8 +301,8 @@ Any setter path should call `MutateOptions(...)` directly or indirectly. That in
 
 `RunFilesystemPreflight()` is the shared place where base filesystem side effects happen before `ExecuteImpl()`:
 
-- if the command uses the database surface, it creates the parent directory of `database_path` when needed
-- if the command uses the output-folder surface, it creates `folder_path` when needed
+- if the command's common-option mask includes `CommonOption::Database`, it creates the parent directory of `database_path` when needed
+- if the command's common-option mask includes `CommonOption::OutputFolder`, it creates `folder_path` when needed
 
 Setter paths do not create directories. They only normalize values or record validation issues.
 
@@ -300,19 +312,16 @@ Setter paths do not create directories. They only normalize values or record val
 
 Preferred command-facing helpers on `CommandBase` are:
 
-- `ProcessTypedFile<T>(path, key_tag, label)`
-- `OptionalProcessTypedFile<T>(path, key_tag, label)`
-- `LoadTypedObject<T>(key_tag, label)`
 - `RequireDatabaseManager()`
 - `BuildOutputPath(stem, extension)`
 
 These helpers keep command code focused on orchestration:
 
-- commands decide which objects are needed
+- commands decide which files, objects, and persistence operations are needed
 - commands decide when those objects should be loaded or saved
 - `DataObjectManager` and related processors decide how file or database operations are implemented
 
-When database-backed objects are needed, `RequireDatabaseManager()` must run before `LoadTypedObject(...)` or any direct `LoadDataObject(...)` / `SaveDataObject(...)` use.
+When database-backed objects are needed, `RequireDatabaseManager()` must run before any direct `LoadDataObject(...)` / `SaveDataObject(...)` use.
 
 ## 7. Current Command Families
 
@@ -344,16 +353,18 @@ The current commands share one base lifecycle but fall into three practical fami
 
 ### 7.4 Command surface matrix
 
+This matrix covers only the runtime-facing shared option policy. Python bindings are a separate built-in contract and are listed in Section 9.
+
 <!-- BEGIN GENERATED: command-surface-matrix -->
-| Command | Uses database at runtime | Uses output folder | Exposed to Python |
-| --- | --- | --- | --- |
-| `potential_analysis` | yes | yes | yes |
-| `potential_display` | yes | yes | yes |
-| `result_dump` | yes | yes | yes |
-| `map_simulation` | no | yes | yes |
-| `map_visualization` | no | yes | yes |
-| `position_estimation` | no | yes | yes |
-| `model_test` | no | yes | yes |
+| Command | Uses database at runtime | Uses output folder |
+| --- | --- | --- |
+| `potential_analysis` | yes | yes |
+| `potential_display` | yes | yes |
+| `result_dump` | yes | yes |
+| `map_simulation` | no | yes |
+| `map_visualization` | no | yes |
+| `position_estimation` | no | yes |
+| `model_test` | no | yes |
 <!-- END GENERATED: command-surface-matrix -->
 
 ## 8. Concrete Command Notes
@@ -474,6 +485,7 @@ The CLI surface is driven by:
 - concrete `CommandBase` subclasses
 
 The Python surface is generated from the same built-in command catalog. Every built-in command has a Python class in `bindings/CoreBindings.cpp`.
+Python support for built-in commands is not an optional surface-policy dimension. It is a built-in catalog contract that always accompanies CLI registration.
 
 <!-- BEGIN GENERATED: built-in-python-command-surface -->
 ### Built-in Python command classes
@@ -523,7 +535,8 @@ When adding a new built-in command, follow this order:
 
 A useful mental model is:
 
-- the catalog decides whether the built-in command exists and which shared options it gets
+- the catalog decides whether the built-in command exists and what its public names are
+- the command type declares which shared options it gets
 - the command class decides option semantics and workflow sequencing
 - the data layer decides how files and persistence are implemented
 

@@ -31,7 +31,13 @@ struct PotentialDisplayCommandOptions : public CommandOptions
 };
 
 class PotentialDisplayCommand
-    : public CommandWithOptions<PotentialDisplayCommandOptions, CommandId::PotentialDisplay>
+    : public CommandWithOptions<
+          PotentialDisplayCommandOptions,
+          CommandId::PotentialDisplay,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::Database
+              | CommonOption::OutputFolder>
 {
 public:
     using Options = PotentialDisplayCommandOptions;
@@ -45,9 +51,6 @@ private:
 public:
     PotentialDisplayCommand();
     ~PotentialDisplayCommand();
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    void ResetRuntimeState() override;
-
     void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
@@ -59,6 +62,8 @@ public:
     void SetVetoElementType(const std::string & value);
 
 private:
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();
     void RunDataObjectSelection();

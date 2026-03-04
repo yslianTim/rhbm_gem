@@ -1,4 +1,5 @@
 #include "ResultDumpCommand.hpp"
+#include "CommandDataAccessInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
@@ -27,6 +28,12 @@
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };
+constexpr std::string_view kPrinterFlags{ "-p,--printer" };
+constexpr std::string_view kPrinterOption{ "--printer" };
+constexpr std::string_view kModelKeyListFlags{ "-k,--model-keylist" };
+constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
+constexpr std::string_view kMapFlags{ "-m,--map" };
+constexpr std::string_view kMapOption{ "--map" };
 }
 
 namespace rhbm_gem {
@@ -43,19 +50,19 @@ ResultDumpCommand::~ResultDumpCommand()
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     command_cli::AddEnumOption<PrinterType>(
-        cmd, "-p,--printer",
+        cmd, kPrinterFlags,
         [&](PrinterType value) { SetPrinterChoice(value); },
         "Printer choice",
         std::nullopt,
         true);
     command_cli::AddStringOption(
-        cmd, "-k,--model-keylist",
+        cmd, kModelKeyListFlags,
         [&](const std::string & value) { SetModelKeyTagList(value); },
         "List of model key tag to be display",
         std::nullopt,
         true);
     command_cli::AddPathOption(
-        cmd, "-m,--map",
+        cmd, kMapFlags,
         [&](const std::filesystem::path & value) { SetMapFilePath(value); },
         "Map file path",
         m_options.map_file_path);
@@ -70,10 +77,10 @@ bool ResultDumpCommand::ExecuteImpl()
 
 void ResultDumpCommand::ValidateOptions()
 {
-    ResetPrepareIssues("--map");
+    ResetPrepareIssues(kMapOption);
     if (m_options.printer_choice == PrinterType::MAP_VALUE && m_options.map_file_path.empty())
     {
-        AddValidationError("--map",
+        AddValidationError(kMapOption,
             "A map file is required when '--printer map' is selected.");
     }
 }
@@ -90,14 +97,14 @@ void ResultDumpCommand::SetPrinterChoice(PrinterType value)
     SetValidatedEnumOption(
         m_options.printer_choice,
         value,
-        "--printer",
+        kPrinterOption,
         PrinterType::GAUS_ESTIMATES,
         "Printer choice");
 }
 
 void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    SetOptionalExistingPathOption(m_options.map_file_path, path, "--map", "Map file");
+    SetOptionalExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
 }
 
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
@@ -105,11 +112,11 @@ void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
     MutateOptions([&]()
     {
         m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-        ResetParseIssues("--model-keylist");
+        ResetParseIssues(kModelKeyListOption);
         if (m_options.model_key_tag_list.empty())
         {
             AddValidationError(
-                "--model-keylist",
+                kModelKeyListOption,
                 "Model key list cannot be empty.",
                 ValidationPhase::Parse);
         }
@@ -122,12 +129,13 @@ bool ResultDumpCommand::BuildDataObjectList()
     try
     {
         RequireDatabaseManager();
-        m_map_object = OptionalProcessTypedFile<MapObject>(
-            m_options.map_file_path, m_map_key_tag, "map file");
+        m_map_object = command_data_access::OptionalProcessTypedFile<MapObject>(
+            m_data_manager, m_options.map_file_path, m_map_key_tag, "map file");
         m_selected_atom_list_map.clear();
         for (auto & key : m_options.model_key_tag_list)
         {
-            auto model_object{ LoadTypedObject<ModelObject>(key, "model object") };
+            auto model_object{ command_data_access::LoadTypedObject<ModelObject>(
+                m_data_manager, key, "model object") };
             m_model_object_list.emplace_back(model_object);
             for (auto & atom : model_object->GetAtomList())
             {

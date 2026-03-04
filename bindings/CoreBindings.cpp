@@ -31,10 +31,9 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
 
 template <typename CommandType>
 py::class_<CommandType> BindBuiltInCommand(
-    py::module_ & module,
-    rhbm_gem::CommandId command_id)
+    py::module_ & module)
 {
-    const auto & descriptor{ rhbm_gem::FindCommandDescriptor(command_id) };
+    const auto & descriptor{ rhbm_gem::FindCommandDescriptor(CommandType::kCommandId) };
     if (descriptor.python_binding_name.empty())
     {
         throw std::runtime_error(
@@ -114,8 +113,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     py::implicitly_convertible<int, rhbm_gem::TesterType>();
 
     auto potential_analysis{
-        BindBuiltInCommand<rhbm_gem::PotentialAnalysisCommand>(
-            m, rhbm_gem::CommandId::PotentialAnalysis)
+        BindBuiltInCommand<rhbm_gem::PotentialAnalysisCommand>(m)
     };
     potential_analysis
         .def(py::init<>())
@@ -138,8 +136,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(potential_analysis);
 
     auto potential_display{
-        BindBuiltInCommand<rhbm_gem::PotentialDisplayCommand>(
-            m, rhbm_gem::CommandId::PotentialDisplay)
+        BindBuiltInCommand<rhbm_gem::PotentialDisplayCommand>(m)
     };
     potential_display
         .def(py::init<>())
@@ -158,8 +155,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(potential_display);
 
     auto result_dump{
-        BindBuiltInCommand<rhbm_gem::ResultDumpCommand>(
-            m, rhbm_gem::CommandId::ResultDump)
+        BindBuiltInCommand<rhbm_gem::ResultDumpCommand>(m)
     };
     result_dump
         .def(py::init<>())
@@ -172,8 +168,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(result_dump);
 
     auto map_simulation{
-        BindBuiltInCommand<rhbm_gem::MapSimulationCommand>(
-            m, rhbm_gem::CommandId::MapSimulation)
+        BindBuiltInCommand<rhbm_gem::MapSimulationCommand>(m)
     };
     map_simulation
         .def(py::init<>())
@@ -189,8 +184,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(map_simulation);
 
     auto map_visualization{
-        BindBuiltInCommand<rhbm_gem::MapVisualizationCommand>(
-            m, rhbm_gem::CommandId::MapVisualization)
+        BindBuiltInCommand<rhbm_gem::MapVisualizationCommand>(m)
     };
     map_visualization
         .def(py::init<>())
@@ -204,8 +198,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(map_visualization);
 
     auto position_estimation{
-        BindBuiltInCommand<rhbm_gem::PositionEstimationCommand>(
-            m, rhbm_gem::CommandId::PositionEstimation)
+        BindBuiltInCommand<rhbm_gem::PositionEstimationCommand>(m)
     };
     position_estimation
         .def(py::init<>())
@@ -221,8 +214,7 @@ PYBIND11_MODULE(rhbm_gem_module, m)
     BindCommandDiagnostics(position_estimation);
 
     auto model_test{
-        BindBuiltInCommand<rhbm_gem::HRLModelTestCommand>(
-            m, rhbm_gem::CommandId::ModelTest)
+        BindBuiltInCommand<rhbm_gem::HRLModelTestCommand>(m)
     };
     model_test
         .def(py::init<>())

@@ -52,15 +52,14 @@ std::string RenderSurfaceMatrix(const std::vector<rg::CommandDescriptor> & comma
 {
     std::ostringstream output;
     output
-        << "| Command | Uses database at runtime | Uses output folder | Exposed to Python |\n"
-        << "| --- | --- | --- | --- |\n";
+        << "| Command | Uses database at runtime | Uses output folder |\n"
+        << "| --- | --- | --- |\n";
     for (const auto & info : commands)
     {
         output
             << "| `" << info.name << "`"
-            << " | " << YesNo(rg::UsesDatabaseAtRuntime(info.surface))
-            << " | " << YesNo(rg::UsesOutputFolder(info.surface))
-            << " | yes"
+            << " | " << YesNo(rg::UsesDatabaseAtRuntime(info.common_options))
+            << " | " << YesNo(rg::UsesOutputFolder(info.common_options))
             << " |\n";
     }
     return output.str();
@@ -162,7 +161,7 @@ TEST(DocsSyncTest, GeneratedBlocksMatchBuiltInCommandCatalog)
         std::string::npos);
     EXPECT_NE(
         doc_content.find(
-            "Database usage is derived directly from whether `CommandSurface` includes `CommonOption::Database`."),
+            "Database usage is derived directly from whether the built-in descriptor's `common_options` mask includes `CommonOption::Database`."),
         std::string::npos);
     EXPECT_NE(
         doc_content.find(
@@ -185,7 +184,22 @@ TEST(DocsSyncTest, GeneratedBlocksMatchBuiltInCommandCatalog)
         doc_content.find("subset of commands through `bindings/CoreBindings.cpp`"),
         std::string::npos);
     EXPECT_EQ(
+        doc_content.find("Exposed to Python"),
+        std::string::npos);
+    EXPECT_EQ(
         doc_content.find("include/core/BuiltInCommandCatalog.hpp"),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("CommandSurface"),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("ProcessTypedFile"),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("OptionalProcessTypedFile"),
+        std::string::npos);
+    EXPECT_EQ(
+        doc_content.find("LoadTypedObject"),
         std::string::npos);
     EXPECT_NE(
         doc_content.find("src/core/BuiltInCommandCatalogInternal.hpp"),

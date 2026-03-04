@@ -39,21 +39,4 @@ constexpr bool HasCommonOption(CommonOptionMask mask, CommonOption option)
     return (mask & ToMask(option)) != 0u;
 }
 
-struct CommandSurface
-{
-    CommonOptionMask common_options{
-        CommonOption::Threading
-        | CommonOption::Verbose
-        | CommonOption::Database
-        | CommonOption::OutputFolder
-    };
-};
-
-constexpr CommandSurface MakeCommandSurface(CommonOptionMask common_options)
-{
-    return CommandSurface{
-        common_options
-    };
-}
-
 } // namespace rhbm_gem

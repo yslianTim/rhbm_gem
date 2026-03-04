@@ -21,16 +21,18 @@ struct HRLModelTestCommandOptions : public CommandOptions
 };
 
 class HRLModelTestCommand
-    : public CommandWithOptions<HRLModelTestCommandOptions, CommandId::ModelTest>
+    : public CommandWithOptions<
+          HRLModelTestCommandOptions,
+          CommandId::ModelTest,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::OutputFolder>
 {
 public:
     using Options = HRLModelTestCommandOptions;
 
     HRLModelTestCommand();
     ~HRLModelTestCommand() = default;
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    void ValidateOptions() override;
-
     void SetTesterChoice(TesterType value);
     void SetFitRangeMinimum(double value);
     void SetFitRangeMaximum(double value);
@@ -38,6 +40,8 @@ public:
     void SetAlphaG(double value);
 
 private:
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    void ValidateOptions() override;
     bool ExecuteImpl() override;
     void RunSimulationTestOnBenchMark();
     void RunSimulationTestOnDataOutlier();

@@ -32,7 +32,12 @@ struct MapSimulationCommandOptions : public CommandOptions
 };
 
 class MapSimulationCommand
-    : public CommandWithOptions<MapSimulationCommandOptions, CommandId::MapSimulation>
+    : public CommandWithOptions<
+          MapSimulationCommandOptions,
+          CommandId::MapSimulation,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::OutputFolder>
 {
 public:
     using Options = MapSimulationCommandOptions;
@@ -46,10 +51,6 @@ private:
 public:
     MapSimulationCommand();
     ~MapSimulationCommand();
-    void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
-    void ValidateOptions() override;
-    void ResetRuntimeState() override;
-
     void SetPotentialModelChoice(PotentialModel value);
     void SetPartialChargeChoice(PartialCharge value);
     void SetCutoffDistance(double value);
@@ -59,6 +60,9 @@ public:
     void SetBlurringWidthList(const std::string & value);
 
 private:
+    void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
+    void ValidateOptions() override;
+    void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();
     void RunMapSimulation();

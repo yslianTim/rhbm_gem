@@ -15,13 +15,15 @@ namespace rhbm_gem {
 
 namespace {
 
+template <typename CommandType>
 CommandDescriptor MakeBuiltInDescriptor(
-    CommandId id,
     std::string_view name,
     std::string_view description,
-    CommandSurface surface,
     std::string_view python_binding_name,
-    CommandFactory factory)
+    CommandFactory factory = []() -> std::unique_ptr<CommandBase>
+    {
+        return std::make_unique<CommandType>();
+    })
 {
     if (python_binding_name.empty())
     {
@@ -30,10 +32,10 @@ CommandDescriptor MakeBuiltInDescriptor(
     }
 
     return CommandDescriptor{
-        id,
+        CommandType::kCommandId,
         name,
         description,
-        surface,
+        CommandType::kCommonOptions,
         python_binding_name,
         factory
     };
@@ -44,100 +46,34 @@ CommandDescriptor MakeBuiltInDescriptor(
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
 {
     static const std::vector<CommandDescriptor> catalog{
-        MakeBuiltInDescriptor(
-            CommandId::PotentialAnalysis,
+        MakeBuiltInDescriptor<PotentialAnalysisCommand>(
             "potential_analysis",
             "Run potential analysis",
-            MakeCommandSurface(
-                CommonOption::Threading
-                    | CommonOption::Verbose
-                    | CommonOption::Database
-                    | CommonOption::OutputFolder),
-            "PotentialAnalysisCommand",
-            []() -> std::unique_ptr<CommandBase>
-            {
-                return std::make_unique<PotentialAnalysisCommand>();
-            }),
-        MakeBuiltInDescriptor(
-            CommandId::PotentialDisplay,
+            "PotentialAnalysisCommand"),
+        MakeBuiltInDescriptor<PotentialDisplayCommand>(
             "potential_display",
             "Run potential display",
-            MakeCommandSurface(
-                CommonOption::Threading
-                    | CommonOption::Verbose
-                    | CommonOption::Database
-                    | CommonOption::OutputFolder),
-            "PotentialDisplayCommand",
-            []() -> std::unique_ptr<CommandBase>
-            {
-                return std::make_unique<PotentialDisplayCommand>();
-            }),
-        MakeBuiltInDescriptor(
-            CommandId::ResultDump,
+            "PotentialDisplayCommand"),
+        MakeBuiltInDescriptor<ResultDumpCommand>(
             "result_dump",
             "Run result dump",
-            MakeCommandSurface(
-                CommonOption::Threading
-                    | CommonOption::Verbose
-                    | CommonOption::Database
-                    | CommonOption::OutputFolder),
-            "ResultDumpCommand",
-            []() -> std::unique_ptr<CommandBase>
-            {
-                return std::make_unique<ResultDumpCommand>();
-            }),
-        MakeBuiltInDescriptor(
-            CommandId::MapSimulation,
+            "ResultDumpCommand"),
+        MakeBuiltInDescriptor<MapSimulationCommand>(
             "map_simulation",
             "Run map simulation command",
-            MakeCommandSurface(
-                CommonOption::Threading
-                    | CommonOption::Verbose
-                    | CommonOption::OutputFolder),
-            "MapSimulationCommand",
-            []() -> std::unique_ptr<CommandBase>
-            {
-                return std::make_unique<MapSimulationCommand>();
-            }),
-        MakeBuiltInDescriptor(
-            CommandId::MapVisualization,
+            "MapSimulationCommand"),
+        MakeBuiltInDescriptor<MapVisualizationCommand>(
             "map_visualization",
             "Run map visualization",
-            MakeCommandSurface(
-                CommonOption::Threading
-                    | CommonOption::Verbose
-                    | CommonOption::OutputFolder),
-            "MapVisualizationCommand",
-            []() -> std::unique_ptr<CommandBase>
-            {
-                return std::make_unique<MapVisualizationCommand>();
-            }),
-        MakeBuiltInDescriptor(
-            CommandId::PositionEstimation,
+            "MapVisualizationCommand"),
+        MakeBuiltInDescriptor<PositionEstimationCommand>(
             "position_estimation",
             "Run atom position estimation",
-            MakeCommandSurface(
-                CommonOption::Threading
-                    | CommonOption::Verbose
-                    | CommonOption::OutputFolder),
-            "PositionEstimationCommand",
-            []() -> std::unique_ptr<CommandBase>
-            {
-                return std::make_unique<PositionEstimationCommand>();
-            }),
-        MakeBuiltInDescriptor(
-            CommandId::ModelTest,
+            "PositionEstimationCommand"),
+        MakeBuiltInDescriptor<HRLModelTestCommand>(
             "model_test",
             "Run HRL model simulation test",
-            MakeCommandSurface(
-                CommonOption::Threading
-                    | CommonOption::Verbose
-                    | CommonOption::OutputFolder),
-            "HRLModelTestCommand",
-            []() -> std::unique_ptr<CommandBase>
-            {
-                return std::make_unique<HRLModelTestCommand>();
-            })
+            "HRLModelTestCommand")
     };
 
     return catalog;
