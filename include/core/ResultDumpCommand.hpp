@@ -16,18 +16,26 @@ class AtomObject;
 class ModelObject;
 class MapObject;
 
-class ResultDumpCommand : public CommandBase
+struct ResultDumpCommandOptions : public CommandOptions
+{
+    PrinterType printer_choice{ PrinterType::GAUS_ESTIMATES };
+    std::vector<std::string> model_key_tag_list{};
+    std::filesystem::path map_file_path{ "" };
+};
+
+class ResultDumpCommand
+    : public CommandWithOptions<
+          ResultDumpCommandOptions,
+          CommandId::ResultDump,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::Database
+              | CommonOption::OutputFolder>
 {
 public:
-    struct Options : public CommandOptions
-    {
-        PrinterType printer_choice{ PrinterType::GAUS_ESTIMATES };
-        std::vector<std::string> model_key_tag_list{};
-        std::filesystem::path map_file_path{ "" };
-    };
+    using Options = ResultDumpCommandOptions;
 
 private:
-    Options m_options{};
     std::string m_map_key_tag;
     std::unordered_map<std::string, std::vector<AtomObject *>> m_selected_atom_list_map;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;
@@ -36,16 +44,15 @@ private:
 public:
     ResultDumpCommand();
     ~ResultDumpCommand();
-    bool Execute() override;
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
-
     void SetPrinterChoice(PrinterType value);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetModelKeyTagList(const std::string & value);
 
 private:
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    void ValidateOptions() override;
+    void ResetRuntimeState() override;
+    bool ExecuteImpl() override;
     bool BuildDataObjectList();
     void RunResultDump();
     void RunAtomOutlierDumping();

@@ -11,29 +11,28 @@
 
 namespace rhbm_gem {
 
-class HRLModelTestCommand : public CommandBase
+struct HRLModelTestCommandOptions : public CommandOptions
+{
+    TesterType tester_choice{ TesterType::BENCHMARK };
+    double fit_range_min{ 0.0 };
+    double fit_range_max{ 1.0 };
+    double alpha_r{ 0.1 };
+    double alpha_g{ 0.2 };
+};
+
+class HRLModelTestCommand
+    : public CommandWithOptions<
+          HRLModelTestCommandOptions,
+          CommandId::ModelTest,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::OutputFolder>
 {
 public:
-    struct Options : public CommandOptions
-    {
-        TesterType tester_choice{ TesterType::BENCHMARK };
-        double fit_range_min{ 0.0 };
-        double fit_range_max{ 1.0 };
-        double alpha_r{ 0.1 };
-        double alpha_g{ 0.2 };
-    };
+    using Options = HRLModelTestCommandOptions;
 
-private:
-    Options m_options;
-
-public:
     HRLModelTestCommand();
     ~HRLModelTestCommand() = default;
-    bool Execute() override;
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
-
     void SetTesterChoice(TesterType value);
     void SetFitRangeMinimum(double value);
     void SetFitRangeMaximum(double value);
@@ -41,6 +40,9 @@ public:
     void SetAlphaG(double value);
 
 private:
+    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
+    void ValidateOptions() override;
+    bool ExecuteImpl() override;
     void RunSimulationTestOnBenchMark();
     void RunSimulationTestOnDataOutlier();
     void RunSimulationTestOnMemberOutlier();

@@ -1,4 +1,6 @@
 #include "MapVisualizationCommand.hpp"
+#include "CommandDataAccessInternal.hpp"
+#include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
@@ -10,7 +12,6 @@
 #include "ChemicalDataHelper.hpp"
 #include "GridSampler.hpp"
 #include "Logger.hpp"
-#include "CommandRegistry.hpp"
 #include "LocalPainter.hpp"
 
 #include <unordered_set>
@@ -27,15 +28,23 @@
 #endif
 
 namespace {
-rhbm_gem::CommandRegistrar<rhbm_gem::MapVisualizationCommand> registrar_map_visualization{
-    "map_visualization",
-    "Run map visualization"};
+constexpr std::string_view kModelKey{ "model" };
+constexpr std::string_view kMapKey{ "map" };
+constexpr std::string_view kModelFlags{ "-a,--model" };
+constexpr std::string_view kModelOption{ "--model" };
+constexpr std::string_view kMapFlags{ "-m,--map" };
+constexpr std::string_view kMapOption{ "--map" };
+constexpr std::string_view kAtomIdFlags{ "-i,--atom-id" };
+constexpr std::string_view kAtomIdOption{ "--atom-id" };
+constexpr std::string_view kSamplingFlags{ "-s,--sampling" };
+constexpr std::string_view kSamplingOption{ "--sampling" };
+constexpr std::string_view kWindowSizeOption{ "--window-size" };
 }
 
 namespace rhbm_gem {
 
 MapVisualizationCommand::MapVisualizationCommand() :
-    CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
+    m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
 }
@@ -48,80 +57,99 @@ MapVisualizationCommand::~MapVisualizationCommand()
 
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    cmd->add_option_function<std::string>("-a,--model",
-        [&](const std::string & value) { SetModelFilePath(value); },
-        "Model file path")->required();
-    cmd->add_option_function<std::string>("-m,--map",
-        [&](const std::string & value) { SetMapFilePath(value); },
-        "Map file path")->required();
-    cmd->add_option_function<int>("-i,--atom-id",
+    command_cli::AddPathOption(
+        cmd, kModelFlags,
+        [&](const std::filesystem::path & value) { SetModelFilePath(value); },
+        "Model file path",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        cmd, kMapFlags,
+        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
+        "Map file path",
+        std::nullopt,
+        true);
+    command_cli::AddScalarOption<int>(
+        cmd, kAtomIdFlags,
         [&](int value) { SetAtomSerialID(value); },
-        "Atom serial ID for visualization")->default_val(m_options.atom_serial_id);
-    cmd->add_option_function<int>("-s,--sampling",
+        "Atom serial ID for visualization",
+        m_options.atom_serial_id);
+    command_cli::AddScalarOption<int>(
+        cmd, kSamplingFlags,
         [&](int value) { SetSamplingSize(value); },
-        "Number of sampling points per atom")->default_val(m_options.sampling_size);
-    cmd->add_option_function<double>("--window-size",
+        "Number of sampling points per atom",
+        m_options.sampling_size);
+    command_cli::AddScalarOption<double>(
+        cmd, kWindowSizeOption,
         [&](double value) { SetWindowSize(value); },
-        "Window size for sampling")->default_val(m_options.window_size);
+        "Window size for sampling",
+        m_options.window_size);
 }
 
-bool MapVisualizationCommand::Execute()
+bool MapVisualizationCommand::ExecuteImpl()
 {
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
     RunModelObjectPreprocessing();
-    RunAtomMapValueSampling();
+    return RunAtomMapValueSampling();
+}
 
-    return true;
+void MapVisualizationCommand::ResetRuntimeState()
+{
+    m_map_object.reset();
+    m_model_object.reset();
 }
 
 void MapVisualizationCommand::SetModelFilePath(const std::filesystem::path & path)
 {
-    m_options.model_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Model file does not exist: " + m_options.model_file_path.string());
-        m_valiate_options = false;
-    }
+    SetRequiredExistingPathOption(m_options.model_file_path, path, kModelOption, "Model file");
 }
 
 void MapVisualizationCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    m_options.map_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Map file does not exist: " + m_options.map_file_path.string());
-        m_valiate_options = false;
-    }
+    SetRequiredExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
+}
+
+void MapVisualizationCommand::SetAtomSerialID(int value)
+{
+    SetPositiveScalarOption(
+        m_options.atom_serial_id,
+        value,
+        kAtomIdOption,
+        1,
+        "Atom serial ID must be positive.");
 }
 
 void MapVisualizationCommand::SetSamplingSize(int value)
 {
-    m_options.sampling_size = value;
-    if (m_options.sampling_size <= 0)
-    {
-        Logger::Log(LogLevel::Warning,
-            "Sampling size must be positive, reset to default value = 1500");
-        m_options.sampling_size = 1500;
-    }
+    SetNormalizedScalarOption(
+        m_options.sampling_size,
+        value,
+        kSamplingOption,
+        [](int candidate) { return candidate > 0; },
+        100,
+        "Sampling size must be positive, reset to default value = 100");
 }
 
 void MapVisualizationCommand::SetWindowSize(double value)
 {
-    m_options.window_size = value;
+    SetFinitePositiveScalarOption(
+        m_options.window_size,
+        value,
+        kWindowSizeOption,
+        5.0,
+        "Window size must be a finite positive value.");
 }
 
 bool MapVisualizationCommand::BuildDataObject()
 {
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
-    auto data_manager{ GetDataManagerPtr() };
-    data_manager->SetDatabaseManager(m_options.database_path);
     try
     {
-        data_manager->ProcessFile(m_options.model_file_path, m_model_key_tag);
-        data_manager->ProcessFile(m_options.map_file_path, m_map_key_tag);
+        m_model_object = command_data_access::ProcessTypedFile<ModelObject>(
+            m_data_manager, m_options.model_file_path, m_model_key_tag, "model file");
+        m_map_object = command_data_access::ProcessTypedFile<MapObject>(
+            m_data_manager, m_options.map_file_path, m_map_key_tag, "map file");
     }
     catch (const std::exception & e)
     {
@@ -135,16 +163,12 @@ bool MapVisualizationCommand::BuildDataObject()
 void MapVisualizationCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
-    auto data_manager{ GetDataManagerPtr() };
-    m_map_object = data_manager->GetTypedDataObject<MapObject>(m_map_key_tag);
     m_map_object->MapValueArrayNormalization();
 }
 
 void MapVisualizationCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
-    auto data_manager{ GetDataManagerPtr() };
-    m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
     for (auto & atom : m_model_object->GetAtomList()) atom->SetSelectedFlag(true);
     for (auto & bond : m_model_object->GetBondList()) bond->SetSelectedFlag(true);
     m_model_object->Update();
@@ -154,10 +178,14 @@ void MapVisualizationCommand::RunModelObjectPreprocessing()
         "Number of selected bond = " + std::to_string(m_model_object->GetNumberOfSelectedBond()));
 }
 
-void MapVisualizationCommand::RunAtomMapValueSampling()
+bool MapVisualizationCommand::RunAtomMapValueSampling()
 {
     ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
-    if (m_map_object == nullptr) return;
+    if (m_map_object == nullptr || m_model_object == nullptr)
+    {
+        Logger::Log(LogLevel::Error, "Map or model object is unavailable for visualization.");
+        return false;
+    }
     auto sampler{ std::make_unique<GridSampler>() };
     sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
     sampler->SetWindowSize(static_cast<float>(m_options.window_size));
@@ -174,14 +202,63 @@ void MapVisualizationCommand::RunAtomMapValueSampling()
     for (auto & bond : bond_list)
     {
         bond_map[bond->GetAtomSerialID1()].emplace_back(bond);
+        bond_map[bond->GetAtomSerialID2()].emplace_back(bond);
     }
-    auto target_atom_position{ atom_map.at(m_options.atom_serial_id)->GetPosition() };
-    auto reference_u_vector{ bond_map.at(m_options.atom_serial_id).at(1)->GetBondVector() };
-    bond_map.at(m_options.atom_serial_id).at(1)->Display();
+
+    const auto atom_iter{ atom_map.find(m_options.atom_serial_id) };
+    if (atom_iter == atom_map.end())
+    {
+        Logger::Log(LogLevel::Error,
+            "Cannot find atom serial ID " + std::to_string(m_options.atom_serial_id)
+            + " in the selected atom list.");
+        return false;
+    }
+
+    const auto bond_iter{ bond_map.find(m_options.atom_serial_id) };
+    if (bond_iter == bond_map.end() || bond_iter->second.empty())
+    {
+        Logger::Log(LogLevel::Error,
+            "Cannot derive a bond context for atom serial ID "
+            + std::to_string(m_options.atom_serial_id) + ".");
+        return false;
+    }
+
+    auto target_atom_position{ atom_iter->second->GetPosition() };
+    std::array<float, 3> reference_u_vector{ 0.0f, 0.0f, 0.0f };
+    bool found_reference_bond{ false };
+    for (const auto * bond : bond_iter->second)
+    {
+        const auto bond_vector{ bond->GetBondVector() };
+        const Eigen::Map<const Eigen::Vector3f> candidate_vector(bond_vector.data());
+        if (candidate_vector.norm() == 0.0f) continue;
+        reference_u_vector = bond_vector;
+        found_reference_bond = true;
+        break;
+    }
+    if (!found_reference_bond)
+    {
+        Logger::Log(LogLevel::Error,
+            "Cannot visualize atom serial ID " + std::to_string(m_options.atom_serial_id)
+            + " because all available bond vectors are degenerate.");
+        return false;
+    }
+
     const Eigen::Map<const Eigen::Vector3f> eigen_u_vector(reference_u_vector.data());
     Eigen::Vector3f u_vector{ eigen_u_vector.normalized() };
     Eigen::Vector3f v_vector{ Eigen::Vector3f{0.0, 0.0, 1.0} };
     Eigen::Vector3f n_vector{ u_vector.cross(v_vector) };
+    if (n_vector.norm() == 0.0f)
+    {
+        v_vector = Eigen::Vector3f{1.0, 0.0, 0.0};
+        n_vector = u_vector.cross(v_vector);
+        if (n_vector.norm() == 0.0f)
+        {
+            Logger::Log(LogLevel::Error,
+                "Cannot construct a stable visualization axis for atom serial ID "
+                + std::to_string(m_options.atom_serial_id) + ".");
+            return false;
+        }
+    }
     sampler->SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
     MapInterpolationVisitor interpolation_visitor{ sampler.get() };
@@ -190,6 +267,11 @@ void MapVisualizationCommand::RunAtomMapValueSampling()
     interpolation_visitor.SetAxisVector({n_vector(0), n_vector(1), n_vector(2)});
     m_map_object->Accept(&interpolation_visitor);
     auto & sampling_data_list{ interpolation_visitor.GetSamplingDataList() };
+    if (sampling_data_list.empty())
+    {
+        Logger::Log(LogLevel::Error, "Map sampling produced no data points.");
+        return false;
+    }
     std::vector<double> map_value_list;
     map_value_list.reserve(sampling_data_list.size());
     for (auto & [distance, value] : sampling_data_list)
@@ -209,9 +291,32 @@ void MapVisualizationCommand::RunAtomMapValueSampling()
         "#font[2]{u} Position #[]{#AA}",
         "#font[2]{v} Position #[]{#AA}",
         "Normalized Map Value",
-        "/Users/yslian/Downloads/test_2d_slice_map.pdf"
+        BuildOutputFilePath().string()
     );
 
+    return true;
+}
+
+std::filesystem::path MapVisualizationCommand::BuildOutputFilePath() const
+{
+    std::string model_name;
+    if (m_model_object && !m_model_object->GetPdbID().empty())
+    {
+        model_name = m_model_object->GetPdbID();
+    }
+    else
+    {
+        model_name = FilePathHelper::GetFileName(m_options.model_file_path, false);
+        if (model_name.empty())
+        {
+            model_name = "model";
+        }
+    }
+
+    const std::string file_name{
+        "map_slice_" + model_name + "_atom" + std::to_string(m_options.atom_serial_id)
+    };
+    return BuildOutputPath(file_name, ".pdf");
 }
 
 } // namespace rhbm_gem

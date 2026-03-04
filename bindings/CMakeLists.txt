@@ -37,6 +37,7 @@ if(NOT IS_ABSOLUTE "${RHBM_GEM_PYTHON_MODULE_INSTALL_DIR}")
 endif()
 
 target_link_libraries(${BINDINGS_MODULE_TARGET} PRIVATE core data utils CompilerFlags)
+target_include_directories(${BINDINGS_MODULE_TARGET} PRIVATE "${PROJECT_SOURCE_DIR}/src/core")
 
 set_target_properties(${BINDINGS_MODULE_TARGET} PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"

@@ -1,4 +1,6 @@
 #include "PotentialDisplayCommand.hpp"
+#include "CommandDataAccessInternal.hpp"
+#include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
@@ -13,19 +15,71 @@
 #include "AtomSelector.hpp"
 #include "FilePathHelper.hpp"
 #include "Logger.hpp"
+#include "OptionEnumTraits.hpp"
 #include "ScopeTimer.hpp"
-#include "CommandRegistry.hpp"
 
 namespace {
-rhbm_gem::CommandRegistrar<rhbm_gem::PotentialDisplayCommand> registrar_potential_display{
-    "potential_display",
-    "Run potential display"};
+constexpr std::string_view kPainterFlags{ "-p,--painter" };
+constexpr std::string_view kPainterOption{ "--painter" };
+constexpr std::string_view kModelKeyListFlags{ "-k,--model-keylist" };
+constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
+constexpr std::string_view kRefModelKeyListFlags{ "-r,--ref-model-keylist" };
+constexpr std::string_view kRefModelKeyListOption{ "--ref-model-keylist" };
+constexpr std::string_view kPickChainOption{ "--pick-chain" };
+constexpr std::string_view kPickResidueOption{ "--pick-residue" };
+constexpr std::string_view kPickElementOption{ "--pick-element" };
+constexpr std::string_view kVetoChainOption{ "--veto-chain" };
+constexpr std::string_view kVetoResidueOption{ "--veto-residue" };
+constexpr std::string_view kVetoElementOption{ "--veto-element" };
+
+bool ParseReferenceModelKeyTagListMap(
+    const std::string & value,
+    std::unordered_map<std::string, std::vector<std::string>> & output_map,
+    std::string & error_message)
+{
+    output_map.clear();
+    size_t pos{ 0 };
+    const size_t len{ value.size() };
+
+    while (pos < len)
+    {
+        if (value[pos] != '[')
+        {
+            error_message = "Expected '[' at position " + std::to_string(pos) + ".";
+            output_map.clear();
+            return false;
+        }
+
+        const size_t end_name{ value.find(']', pos + 1) };
+        if (end_name == std::string::npos)
+        {
+            error_message = "Expected ']' after reference group name.";
+            output_map.clear();
+            return false;
+        }
+
+        std::string group_name{ value.substr(pos + 1, end_name - (pos + 1)) };
+        const size_t start_members{ end_name + 1 };
+        size_t end_block{ value.find(';', start_members) };
+        if (end_block == std::string::npos)
+        {
+            end_block = len;
+        }
+
+        std::string members_string{ value.substr(start_members, end_block - start_members) };
+        output_map.emplace(
+            std::move(group_name),
+            StringHelper::SplitStringLineFromDelimiter(members_string, ','));
+        pos = end_block + 1;
+    }
+
+    return true;
+}
 }
 
 namespace rhbm_gem {
 
 PotentialDisplayCommand::PotentialDisplayCommand() :
-    CommandBase(), m_options{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 }
@@ -36,46 +90,56 @@ PotentialDisplayCommand::~PotentialDisplayCommand()
 
 void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    std::map<std::string, PainterType> painter_map
-    {
-        {"0", PainterType::GAUS},       {"gaus",       PainterType::GAUS},
-        {"1", PainterType::MODEL},      {"model",      PainterType::MODEL},
-        {"2", PainterType::COMPARISON}, {"comparison", PainterType::COMPARISON},
-        {"3", PainterType::DEMO},       {"demo",       PainterType::DEMO},
-        {"4", PainterType::ATOM},       {"atom",       PainterType::ATOM},
-    };
-    cmd->add_option_function<PainterType>("-p,--painter",
+    command_cli::AddEnumOption<PainterType>(
+        cmd, kPainterFlags,
         [&](PainterType value) { SetPainterChoice(value); },
-        "Painter choice")->required()
-        ->transform(CLI::CheckedTransformer(painter_map, CLI::ignore_case));
-    cmd->add_option_function<std::string>("-k,--model-keylist",
+        "Painter choice",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        cmd, kModelKeyListFlags,
         [&](const std::string & value) { SetModelKeyTagList(value); },
-        "List of model key tag to be display")->required();
-    cmd->add_option_function<std::string>("-r,--ref-model-keylist",
+        "List of model key tag to be display",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        cmd, kRefModelKeyListFlags,
         [&](const std::string & value) { SetRefModelKeyTagListMap(value); },
-        "List of reference model key tag to be display")
-        ->default_val(m_options.ref_model_key_tag_list);
-    cmd->add_option_function<std::string>("--pick-chain",
+        "List of reference model key tag to be display",
+        m_options.ref_model_key_tag_list);
+    command_cli::AddStringOption(
+        cmd, kPickChainOption,
         [&](const std::string & value) { SetPickChainID(value); },
-        "Pick chain ID")->default_val(m_options.pick_chain_id);
-    cmd->add_option_function<std::string>("--pick-residue",
+        "Pick chain ID",
+        m_options.pick_chain_id);
+    command_cli::AddStringOption(
+        cmd, kPickResidueOption,
         [&](const std::string & value) { SetPickResidueType(value); },
-        "Pick residue type")->default_val(m_options.pick_residue);
-    cmd->add_option_function<std::string>("--pick-element",
+        "Pick residue type",
+        m_options.pick_residue);
+    command_cli::AddStringOption(
+        cmd, kPickElementOption,
         [&](const std::string & value) { SetPickElementType(value); },
-        "Pick element type")->default_val(m_options.pick_element);
-    cmd->add_option_function<std::string>("--veto-chain",
+        "Pick element type",
+        m_options.pick_element);
+    command_cli::AddStringOption(
+        cmd, kVetoChainOption,
         [&](const std::string & value) { SetVetoChainID(value); },
-        "Veto chain ID")->default_val(m_options.veto_chain_id);
-    cmd->add_option_function<std::string>("--veto-residue",
+        "Veto chain ID",
+        m_options.veto_chain_id);
+    command_cli::AddStringOption(
+        cmd, kVetoResidueOption,
         [&](const std::string & value) { SetVetoResidueType(value); },
-        "Veto residue type")->default_val(m_options.veto_residue);
-    cmd->add_option_function<std::string>("--veto-element",
+        "Veto residue type",
+        m_options.veto_residue);
+    command_cli::AddStringOption(
+        cmd, kVetoElementOption,
         [&](const std::string & value) { SetVetoElementType(value); },
-        "Veto element type")->default_val(m_options.veto_element);
+        "Veto element type",
+        m_options.veto_element);
 }
 
-bool PotentialDisplayCommand::Execute()
+bool PotentialDisplayCommand::ExecuteImpl()
 {
     if (BuildDataObject() == false) return false;
     RunDataObjectSelection();
@@ -83,93 +147,89 @@ bool PotentialDisplayCommand::Execute()
     return true;
 }
 
+void PotentialDisplayCommand::ResetRuntimeState()
+{
+    m_model_object_list.clear();
+    m_ref_model_object_list_map.clear();
+}
+
 void PotentialDisplayCommand::SetPainterChoice(PainterType value)
 {
-    m_options.painter_choice = value;
+    SetValidatedEnumOption(
+        m_options.painter_choice,
+        value,
+        kPainterOption,
+        PainterType::MODEL,
+        "Painter choice");
 }
 
 void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
 {
-    m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-    if (m_options.model_key_tag_list.empty())
+    MutateOptions([&]()
     {
-        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
-        m_valiate_options = false;
-    }
+        m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+        ResetParseIssues(kModelKeyListOption);
+        if (m_options.model_key_tag_list.empty())
+        {
+            AddValidationError(
+                kModelKeyListOption,
+                "Model key list cannot be empty.",
+                ValidationPhase::Parse);
+        }
+    });
 }
 
 void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value)
 {
-    m_ref_model_key_tag_list_map.clear();
-    size_t pos{ 0 };
-    size_t len{ value.size() };
-
-    while (pos < len)
+    MutateOptions([&]()
     {
-        // Find '[' for start of group name
-        if (value[pos] != '[')
+        m_options.ref_model_key_tag_list = value;
+        m_ref_model_key_tag_list_map.clear();
+        ResetParseIssues(kRefModelKeyListOption);
+        if (value.empty()) return;
+
+        std::string error_message;
+        if (!ParseReferenceModelKeyTagListMap(value, m_ref_model_key_tag_list_map, error_message))
         {
-            throw std::runtime_error("Parser Error : expect '['");
+            AddValidationError(kRefModelKeyListOption, error_message, ValidationPhase::Parse);
+            return;
         }
-        // Find ']' for end of group name
-        size_t end_name{ value.find(']', pos+1) };
-        if (end_name == std::string::npos)
-        {
-            throw std::runtime_error("Parser Error : expect ']'");
-        }
-        std::string group_name{ value.substr(pos+1, end_name - (pos+1)) };
 
-        // Find the start of members after ']'
-        size_t start_members{ end_name + 1 };
-        size_t end_block{ value.find(';', start_members) };
-        if (end_block == std::string::npos)
-        {
-            end_block = len;
-        }
-        std::string members_string{ value.substr(start_members, end_block - start_members) };
-
-        m_ref_model_key_tag_list_map.emplace(
-            std::move(group_name),
-            StringHelper::SplitStringLineFromDelimiter(members_string, ','));
-
-        // Jump to the next block, which is after the semicolon
-        pos = end_block + 1;
-    }
-
-    Logger::Log(
-        LogLevel::Debug,
-        "Parsed " + std::to_string(m_ref_model_key_tag_list_map.size())
-        + " reference model groups.");
+        Logger::Log(
+            LogLevel::Debug,
+            "Parsed " + std::to_string(m_ref_model_key_tag_list_map.size())
+            + " reference model groups.");
+    });
 }
 
 void PotentialDisplayCommand::SetPickChainID(const std::string & value)
 {
-    m_options.pick_chain_id = value;
+    MutateOptions([&]() { m_options.pick_chain_id = value; });
 }
 
 void PotentialDisplayCommand::SetVetoChainID(const std::string & value)
 {
-    m_options.veto_chain_id = value;
+    MutateOptions([&]() { m_options.veto_chain_id = value; });
 }
 
 void PotentialDisplayCommand::SetPickResidueType(const std::string & value)
 {
-    m_options.pick_residue = value;
+    MutateOptions([&]() { m_options.pick_residue = value; });
 }
 
 void PotentialDisplayCommand::SetVetoResidueType(const std::string & value)
 {
-    m_options.veto_residue = value;
+    MutateOptions([&]() { m_options.veto_residue = value; });
 }
 
 void PotentialDisplayCommand::SetPickElementType(const std::string & value)
 {
-    m_options.pick_element = value;
+    MutateOptions([&]() { m_options.pick_element = value; });
 }
 
 void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
 {
-    m_options.veto_element = value;
+    MutateOptions([&]() { m_options.veto_element = value; });
 }
 
 bool PotentialDisplayCommand::BuildDataObject()
@@ -177,16 +237,16 @@ bool PotentialDisplayCommand::BuildDataObject()
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        auto data_manager{ GetDataManagerPtr() };
-        data_manager->SetDatabaseManager(m_options.database_path);
+        RequireDatabaseManager();
         auto model_size{ m_options.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");
         for (auto & key : m_options.model_key_tag_list)
         {
             Logger::ProgressBar(model_count, model_size);
-            data_manager->LoadDataObject(key);
-            m_model_object_list.emplace_back(data_manager->GetTypedDataObject<ModelObject>(key));
+            m_model_object_list.emplace_back(
+                command_data_access::LoadTypedObject<ModelObject>(
+                    m_data_manager, key, "model object"));
             model_count++;
         }
         for (auto & [map_key, key_tag_list] : m_ref_model_key_tag_list_map)
@@ -197,10 +257,9 @@ bool PotentialDisplayCommand::BuildDataObject()
             for (auto & key_tag : key_tag_list)
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
-                data_manager->LoadDataObject(key_tag);
                 m_ref_model_object_list_map[map_key].emplace_back(
-                    data_manager->GetTypedDataObject<ModelObject>(key_tag)
-                );
+                    command_data_access::LoadTypedObject<ModelObject>(
+                        m_data_manager, key_tag, "reference model object"));
                 ref_model_count++;
             }
         }

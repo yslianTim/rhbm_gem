@@ -1,4 +1,5 @@
 #include "DatabaseManager.hpp"
+#include "DatabaseSchemaManager.hpp"
 #include "SQLiteWrapper.hpp"
 #include "DataObjectDAOBase.hpp"
 #include "DataObjectDAOFactoryRegistry.hpp"
@@ -9,12 +10,12 @@ namespace rhbm_gem {
 
 DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
     m_database_path{ database_path },
-    m_database{ nullptr }
+    m_database{ nullptr },
+    m_schema_version{ DatabaseSchemaVersion::NormalizedV2 }
 {
     if (m_database_path.empty()) m_database_path = "database.sqlite";
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
-    m_database->Execute(
-        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
+    EnsureSchema();
 }
 
 DatabaseManager::~DatabaseManager()
@@ -25,10 +26,11 @@ void DatabaseManager::SaveDataObject(
     const DataObjectBase * data_object, const std::string & key_tag)
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
+    EnsureSchema();
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
     auto dao{ CreateDataObjectDAO(data_object) };
     dao->Save(data_object, key_tag);
 
-    SQLiteWrapper::TransactionGuard transaction(*m_database);
     std::string type_name{
         DataObjectDAOFactoryRegistry::Instance().GetTypeName(std::type_index(typeid(*data_object)))
     };
@@ -45,6 +47,7 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     const std::string & key_tag)
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
+    EnsureSchema();
     SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->Prepare(
         "SELECT object_type FROM object_metadata WHERE key_tag = ? LIMIT 1;");
@@ -90,6 +93,12 @@ std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
     std::shared_ptr<DataObjectDAOBase> dao{ std::move(dao_unique) };
     m_dao_cache.emplace(type, dao);
     return dao;
+}
+
+void DatabaseManager::EnsureSchema()
+{
+    DatabaseSchemaManager schema_manager{ m_database.get() };
+    m_schema_version = schema_manager.EnsureSchema();
 }
 
 } // namespace rhbm_gem

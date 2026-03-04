@@ -1,4 +1,7 @@
 #include "PotentialAnalysisCommand.hpp"
+#include "PotentialAnalysisExecutionOptions.hpp"
+#include "CommandDataAccessInternal.hpp"
+#include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
@@ -15,12 +18,9 @@
 #include "GroupPotentialEntry.hpp"
 #include "ChemicalDataHelper.hpp"
 #include "AtomClassifier.hpp"
-#include "BondClassifier.hpp"
 #include "GausLinearTransformHelper.hpp"
 #include "SphereSampler.hpp"
-#include "CylinderSampler.hpp"
 #include "Logger.hpp"
-#include "CommandRegistry.hpp"
 #include "LocalPainter.hpp"
 
 #include <unordered_set>
@@ -34,30 +34,45 @@
 #include <random>
 #include <sstream>
 
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
+#include "PotentialAnalysisBondWorkflow.hpp"
+#endif
+
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
 
 namespace {
-rhbm_gem::CommandRegistrar<rhbm_gem::PotentialAnalysisCommand> registrar_potential_analysis{
-    "potential_analysis",
-    "Run potential analysis"};
-
-HRLExecutionOptions BuildHRLExecutionOptions(
-    const rhbm_gem::PotentialAnalysisCommand::Options & options,
-    bool quiet_mode)
-{
-    HRLExecutionOptions execution_options;
-    execution_options.quiet_mode = quiet_mode;
-    execution_options.thread_size = options.thread_size;
-    return execution_options;
-}
+constexpr std::string_view kModelKey{ "model" };
+constexpr std::string_view kMapKey{ "map" };
+constexpr std::string_view kModelFlags{ "-a,--model" };
+constexpr std::string_view kModelOption{ "--model" };
+constexpr std::string_view kMapFlags{ "-m,--map" };
+constexpr std::string_view kMapOption{ "--map" };
+constexpr std::string_view kSimulationOption{ "--simulation" };
+constexpr std::string_view kSimResolutionFlags{ "-r,--sim-resolution" };
+constexpr std::string_view kSimResolutionOption{ "--sim-resolution" };
+constexpr std::string_view kSaveKeyFlags{ "-k,--save-key" };
+constexpr std::string_view kSaveKeyOption{ "--save-key" };
+constexpr std::string_view kTrainingAlphaOption{ "--training-alpha" };
+constexpr std::string_view kAsymmetryOption{ "--asymmetry" };
+constexpr std::string_view kSamplingFlags{ "-s,--sampling" };
+constexpr std::string_view kSamplingOption{ "--sampling" };
+constexpr std::string_view kSamplingMinOption{ "--sampling-min" };
+constexpr std::string_view kSamplingMaxOption{ "--sampling-max" };
+constexpr std::string_view kSamplingHeightOption{ "--sampling-height" };
+constexpr std::string_view kFitMinOption{ "--fit-min" };
+constexpr std::string_view kFitMaxOption{ "--fit-max" };
+constexpr std::string_view kAlphaROption{ "--alpha-r" };
+constexpr std::string_view kAlphaGOption{ "--alpha-g" };
+constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
+constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 }
 
 namespace rhbm_gem {
 
 PotentialAnalysisCommand::PotentialAnalysisCommand() :
-    CommandBase(), m_options{}, m_model_key_tag{"model"}, m_map_key_tag{"map"},
+    m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
 }
@@ -70,56 +85,86 @@ PotentialAnalysisCommand::~PotentialAnalysisCommand()
 
 void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    cmd->add_option_function<std::string>("-a,--model",
-        [&](const std::string & value) { SetModelFilePath(value); },
-        "Model file path")->required();
-    cmd->add_option_function<std::string>("-m,--map",
-        [&](const std::string & value) { SetMapFilePath(value); },
-        "Map file path")->required();
-    cmd->add_option_function<bool>("--simulation",
+    command_cli::AddPathOption(
+        cmd, kModelFlags,
+        [&](const std::filesystem::path & value) { SetModelFilePath(value); },
+        "Model file path",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        cmd, kMapFlags,
+        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
+        "Map file path",
+        std::nullopt,
+        true);
+    command_cli::AddScalarOption<bool>(
+        cmd, kSimulationOption,
         [&](bool value) { SetSimulationFlag(value); },
-        "Simulation flag")->default_val(m_options.is_simulation);
-    cmd->add_option_function<double>("-r,--sim-resolution",
+        "Simulation flag",
+        m_options.is_simulation);
+    command_cli::AddScalarOption<double>(
+        cmd, kSimResolutionFlags,
         [&](double value) { SetSimulatedMapResolution(value); },
-        "Set simulated map's resolution (blurring width)")
-        ->default_val(m_options.resolution_simulation);
-    cmd->add_option_function<std::string>("-k,--save-key",
+        "Set simulated map's resolution (blurring width)",
+        m_options.resolution_simulation);
+    command_cli::AddStringOption(
+        cmd, kSaveKeyFlags,
         [&](const std::string & value) { SetSavedKeyTag(value); },
-        "New key tag for saving ModelObject results into database")
-        ->default_val(m_options.saved_key_tag);
-    cmd->add_option_function<bool>("--training-alpha",
+        "New key tag for saving ModelObject results into database",
+        m_options.saved_key_tag);
+    command_cli::AddScalarOption<bool>(
+        cmd, kTrainingAlphaOption,
         [&](bool value) { SetTrainingAlphaFlag(value); },
-        "Turn On/Off alpha training flag")->default_val(m_options.use_training_alpha);
-    cmd->add_option_function<bool>("--asymmetry",
+        "Turn On/Off alpha training flag",
+        m_options.use_training_alpha);
+    command_cli::AddScalarOption<bool>(
+        cmd, kAsymmetryOption,
         [&](bool value) { SetAsymmetryFlag(value); },
-        "Turn On/Off asymmetry flag")->default_val(m_options.is_asymmetry);
-    cmd->add_option_function<int>("-s,--sampling",
+        "Turn On/Off asymmetry flag",
+        m_options.is_asymmetry);
+    command_cli::AddScalarOption<int>(
+        cmd, kSamplingFlags,
         [&](int value) { SetSamplingSize(value); },
-        "Number of sampling points per atom")->default_val(m_options.sampling_size);
-    cmd->add_option_function<double>("--sampling-min",
+        "Number of sampling points per atom",
+        m_options.sampling_size);
+    command_cli::AddScalarOption<double>(
+        cmd, kSamplingMinOption,
         [&](double value) { SetSamplingRangeMinimum(value); },
-        "Minimum sampling range")->default_val(m_options.sampling_range_min);
-    cmd->add_option_function<double>("--sampling-max",
+        "Minimum sampling range",
+        m_options.sampling_range_min);
+    command_cli::AddScalarOption<double>(
+        cmd, kSamplingMaxOption,
         [&](double value) { SetSamplingRangeMaximum(value); },
-        "Maximum sampling range")->default_val(m_options.sampling_range_max);
-    cmd->add_option_function<double>("--sampling-height",
+        "Maximum sampling range",
+        m_options.sampling_range_max);
+    command_cli::AddScalarOption<double>(
+        cmd, kSamplingHeightOption,
         [&](double value) { SetSamplingHeight(value); },
-        "Maximum sampling height")->default_val(m_options.sampling_height);
-    cmd->add_option_function<double>("--fit-min",
+        "Maximum sampling height",
+        m_options.sampling_height);
+    command_cli::AddScalarOption<double>(
+        cmd, kFitMinOption,
         [&](double value) { SetFitRangeMinimum(value); },
-        "Minimum fitting range")->default_val(m_options.fit_range_min);
-    cmd->add_option_function<double>("--fit-max",
+        "Minimum fitting range",
+        m_options.fit_range_min);
+    command_cli::AddScalarOption<double>(
+        cmd, kFitMaxOption,
         [&](double value) { SetFitRangeMaximum(value); },
-        "Maximum fitting range")->default_val(m_options.fit_range_max);
-    cmd->add_option_function<double>("--alpha-r",
+        "Maximum fitting range",
+        m_options.fit_range_max);
+    command_cli::AddScalarOption<double>(
+        cmd, kAlphaROption,
         [&](double value) { SetAlphaR(value); },
-        "Alpha value for R")->default_val(m_options.alpha_r);
-    cmd->add_option_function<double>("--alpha-g",
+        "Alpha value for R",
+        m_options.alpha_r);
+    command_cli::AddScalarOption<double>(
+        cmd, kAlphaGOption,
         [&](double value) { SetAlphaG(value); },
-        "Alpha value for G")->default_val(m_options.alpha_g);
+        "Alpha value for G",
+        m_options.alpha_g);
 }
 
-bool PotentialAnalysisCommand::Execute()
+bool PotentialAnalysisCommand::ExecuteImpl()
 {
     if (BuildDataObject() == false) return false;
     RunMapObjectPreprocessing();
@@ -130,120 +175,189 @@ bool PotentialAnalysisCommand::Execute()
     if (m_options.use_training_alpha) RunAtomAlphaTraining();
     else RunLocalAtomFitting(m_options.alpha_r);
     RunAtomPotentialFitting();
-
-    //RunBondMapValueSampling();
-    //RunBondGroupClassification();
-    //RunLocalBondFitting();
-    //RunBondPotentialFitting();
+    RunExperimentalBondWorkflowIfEnabled();
     SaveDataObject();
     return true;
 }
 
+void PotentialAnalysisCommand::ValidateOptions()
+{
+    ResetPrepareIssues(kSimResolutionOption);
+    if (m_options.is_simulation && m_options.resolution_simulation <= 0.0)
+    {
+        AddValidationError(
+            kSimResolutionOption,
+            "Expected a positive simulated-map resolution when '--simulation true' is selected.");
+    }
+
+    ResetPrepareIssues(kSamplingRangeIssue);
+    if (m_options.sampling_range_min > m_options.sampling_range_max)
+    {
+        AddValidationError(kSamplingRangeIssue,
+            "Expected --sampling-min <= --sampling-max.");
+    }
+
+    ResetPrepareIssues(kFitRangeIssue);
+    if (m_options.fit_range_min > m_options.fit_range_max)
+    {
+        AddValidationError(kFitRangeIssue,
+            "Expected --fit-min <= --fit-max.");
+    }
+}
+
+void PotentialAnalysisCommand::ResetRuntimeState()
+{
+    m_map_object.reset();
+    m_model_object.reset();
+}
+
 void PotentialAnalysisCommand::SetTrainingAlphaFlag(bool value)
 {
-    m_options.use_training_alpha = value;
+    MutateOptions([&]() { m_options.use_training_alpha = value; });
 }
 
 void PotentialAnalysisCommand::SetAsymmetryFlag(bool value)
 {
-    m_options.is_asymmetry = value; 
+    MutateOptions([&]() { m_options.is_asymmetry = value; });
 }
 void PotentialAnalysisCommand::SetSimulationFlag(bool value)
 {
-    m_options.is_simulation = value;
+    MutateOptions([&]() { m_options.is_simulation = value; });
 }
 
 void PotentialAnalysisCommand::SetSimulatedMapResolution(double value)
 {
-    m_options.resolution_simulation = value;
+    SetFiniteNonNegativeScalarOption(
+        m_options.resolution_simulation,
+        value,
+        kSimResolutionOption,
+        0.0,
+        "Simulated-map resolution must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetFitRangeMinimum(double value)
 {
-    m_options.fit_range_min = value;
+    SetFiniteNonNegativeScalarOption(
+        m_options.fit_range_min,
+        value,
+        kFitMinOption,
+        0.0,
+        "Minimum fitting range must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetFitRangeMaximum(double value)
 {
-    m_options.fit_range_max = value;
+    SetFiniteNonNegativeScalarOption(
+        m_options.fit_range_max,
+        value,
+        kFitMaxOption,
+        1.0,
+        "Maximum fitting range must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetAlphaR(double value)
 {
-    m_options.alpha_r = value;
+    SetFinitePositiveScalarOption(
+        m_options.alpha_r,
+        value,
+        kAlphaROption,
+        0.1,
+        "Alpha-R must be a finite positive value.");
 }
 
 void PotentialAnalysisCommand::SetAlphaG(double value)
 {
-    m_options.alpha_g = value;
+    SetFinitePositiveScalarOption(
+        m_options.alpha_g,
+        value,
+        kAlphaGOption,
+        0.2,
+        "Alpha-G must be a finite positive value.");
 }
 
 void PotentialAnalysisCommand::SetModelFilePath(const std::filesystem::path & path)
 {
-    m_options.model_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.model_file_path, "Model file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Model file does not exist: " + m_options.model_file_path.string());
-        m_valiate_options = false;
-    }
+    SetRequiredExistingPathOption(m_options.model_file_path, path, kModelOption, "Model file");
 }
 
 void PotentialAnalysisCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    m_options.map_file_path = path;
-    if (!FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Map file does not exist: " + m_options.map_file_path.string());
-        m_valiate_options = false;
-    }
+    SetRequiredExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
 }
 
 void PotentialAnalysisCommand::SetSavedKeyTag(const std::string & tag)
 {
-    m_options.saved_key_tag = tag;
+    MutateOptions([&]()
+    {
+        ResetParseIssues(kSaveKeyOption);
+        if (!tag.empty())
+        {
+            m_options.saved_key_tag = tag;
+            return;
+        }
+
+        m_options.saved_key_tag = "model";
+        AddValidationError(
+            kSaveKeyOption,
+            "Saved key tag cannot be empty.",
+            ValidationPhase::Parse);
+    });
 }
 
 void PotentialAnalysisCommand::SetSamplingSize(int value)
 {
-    m_options.sampling_size = value;
-    if (m_options.sampling_size <= 0)
-    {
-        Logger::Log(LogLevel::Warning,
-            "Sampling size must be positive, reset to default value = 1500");
-        m_options.sampling_size = 1500;
-    }
+    SetNormalizedScalarOption(
+        m_options.sampling_size,
+        value,
+        kSamplingOption,
+        [](int candidate) { return candidate > 0; },
+        1500,
+        "Sampling size must be positive, reset to default value = 1500");
 }
 
 void PotentialAnalysisCommand::SetSamplingRangeMinimum(double value)
 {
-    m_options.sampling_range_min = value;
+    SetFiniteNonNegativeScalarOption(
+        m_options.sampling_range_min,
+        value,
+        kSamplingMinOption,
+        0.0,
+        "Minimum sampling range must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetSamplingRangeMaximum(double value)
 {
-    m_options.sampling_range_max = value;
+    SetFiniteNonNegativeScalarOption(
+        m_options.sampling_range_max,
+        value,
+        kSamplingMaxOption,
+        1.5,
+        "Maximum sampling range must be a finite non-negative value.");
 }
 
 void PotentialAnalysisCommand::SetSamplingHeight(double value)
 {
-    m_options.sampling_height = value;
+    SetFinitePositiveScalarOption(
+        m_options.sampling_height,
+        value,
+        kSamplingHeightOption,
+        0.1,
+        "Sampling height must be a finite positive value.");
 }
 
 bool PotentialAnalysisCommand::BuildDataObject()
 {
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
-    auto data_manager{ GetDataManagerPtr() };
-    data_manager->SetDatabaseManager(m_options.database_path);
     try
     {
-        data_manager->ProcessFile(m_options.model_file_path, m_model_key_tag);
-        data_manager->ProcessFile(m_options.map_file_path, m_map_key_tag);
+        RequireDatabaseManager();
+        m_model_object = command_data_access::ProcessTypedFile<ModelObject>(
+            m_data_manager, m_options.model_file_path, m_model_key_tag, "model file");
+        m_map_object = command_data_access::ProcessTypedFile<MapObject>(
+            m_data_manager, m_options.map_file_path, m_map_key_tag, "map file");
         if (m_options.is_simulation == true)
         {
-            auto model_object{ data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag) };
-            UpdateModelObjectForSimulation(model_object.get());
+            UpdateModelObjectForSimulation(m_model_object.get());
         }
     }
     catch (const std::exception & e)
@@ -273,16 +387,12 @@ void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * mode
 void PotentialAnalysisCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
-    auto data_manager{ GetDataManagerPtr() };
-    m_map_object = data_manager->GetTypedDataObject<MapObject>(m_map_key_tag);
     m_map_object->MapValueArrayNormalization();
 }
 
 void PotentialAnalysisCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
-    auto data_manager{ GetDataManagerPtr() };
-    m_model_object = data_manager->GetTypedDataObject<ModelObject>(m_model_key_tag);
     for (auto & atom : m_model_object->GetAtomList()) atom->SetSelectedFlag(true);
     for (auto & bond : m_model_object->GetBondList()) bond->SetSelectedFlag(true);
     m_model_object->FilterAtomFromSymmetry(m_options.is_asymmetry);
@@ -372,77 +482,6 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling()
 #endif
 }
 
-void PotentialAnalysisCommand::RunBondMapValueSampling()
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunBondMapValueSampling");
-    if (m_map_object == nullptr) return;
-    auto sampler{ std::make_unique<CylinderSampler>() };
-    sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
-    sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
-    sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
-    sampler->SetHeight(m_options.sampling_height);
-    sampler->Print();
-    
-    const auto & bond_list{ m_model_object->GetSelectedBondList() };
-    auto bond_size{ bond_list.size() };
-    size_t bond_count{ 0 };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel num_threads(m_options.thread_size)
-    {
-        MapInterpolationVisitor interpolation_visitor{ sampler.get() };
-        #pragma omp for
-        for (size_t i = 0; i < bond_size; i++)
-        {
-            auto bond{ bond_list[i] };
-            auto entry{ bond->GetLocalPotentialEntry() };
-            auto bond_vector{ bond->GetBondVector() };
-            auto bond_position{ bond->GetPosition() };
-            auto adjusted_rate{ 0.0f };
-            std::array<float, 3> adjusted_position{
-                bond_position[0] + 0.5f * bond_vector[0] * adjusted_rate,
-                bond_position[1] + 0.5f * bond_vector[1] * adjusted_rate,
-                bond_position[2] + 0.5f * bond_vector[2] * adjusted_rate
-            };
-            interpolation_visitor.SetPosition(adjusted_position);
-            interpolation_visitor.SetAxisVector(bond_vector);
-            m_map_object->Accept(&interpolation_visitor);
-            entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
-            entry->AddBasisAndResponseEntryList(
-                GausLinearTransformHelper::MapValueTransform(
-                    entry->GetDistanceAndMapValueList(),
-                    m_options.fit_range_min, m_options.fit_range_max)
-            );
-            entry->SetAlphaR(m_options.alpha_r);
-            #pragma omp critical
-            {
-                bond_count++;
-                Logger::ProgressPercent(bond_count, bond_size);
-            }
-        }
-    }
-#else
-    MapInterpolationVisitor interpolation_visitor{ sampler.get() };
-    for (size_t i = 0; i < bond_size; i++)
-    {
-        auto bond{ bond_list[i] };
-        auto entry{ bond->GetLocalPotentialEntry() };
-        interpolation_visitor.SetPosition(bond->GetPosition());
-        interpolation_visitor.SetAxisVector(bond->GetBondVector());
-        m_map_object->Accept(&interpolation_visitor);
-        entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
-        entry->AddBasisAndResponseEntryList(
-            GausLinearTransformHelper::MapValueTransform(
-                entry->GetDistanceAndMapValueList(),
-                m_options.fit_range_min, m_options.fit_range_max)
-        );
-        entry->SetAlphaR(m_options.alpha_r);
-        bond_count++;
-        Logger::ProgressPercent(bond_count, bond_size);
-    }
-#endif
-}
-
 void PotentialAnalysisCommand::RunAtomGroupClassification()
 {
     ScopeTimer timer("RunAtomGroupClassification");
@@ -461,29 +500,6 @@ void PotentialAnalysisCommand::RunAtomGroupClassification()
         }
         auto group_size{ group_potential_entry->GetGroupKeySet().size() };
         m_model_object->AddAtomGroupPotentialEntry(class_key, group_potential_entry);
-        Logger::Log(LogLevel::Info,
-            " - Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
-    }
-}
-
-void PotentialAnalysisCommand::RunBondGroupClassification()
-{
-    ScopeTimer timer("RunBondGroupClassification");
-    if (m_map_object == nullptr) return;
-
-    Logger::Log(LogLevel::Info, "Bond Classification Summary:");
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
-        for (auto bond : m_model_object->GetSelectedBondList())
-        {
-            auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
-            group_potential_entry->AddBondObjectPtr(group_key, bond);
-            group_potential_entry->InsertGroupKey(group_key);
-        }
-        auto group_size{ group_potential_entry->GetGroupKeySet().size() };
-        m_model_object->AddBondGroupPotentialEntry(class_key, group_potential_entry);
         Logger::Log(LogLevel::Info,
             " - Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
     }
@@ -588,7 +604,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                BuildHRLExecutionOptions(m_options, true)
+                detail::MakePotentialAnalysisExecutionOptions(m_options, true)
             )
         };
         
@@ -644,7 +660,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                BuildHRLExecutionOptions(m_options, true)
+                detail::MakePotentialAnalysisExecutionOptions(m_options, true)
             )
         };
         
@@ -690,7 +706,9 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
         auto local_entry{ atom_list[i]->GetLocalPotentialEntry() };
         const auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
-        const auto algorithm_options{ BuildHRLExecutionOptions(m_options, true) };
+        const auto algorithm_options{
+            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
+        };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
         for (int j = 0; j < alpha_size; j++)
@@ -760,7 +778,9 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
             );
         }
         const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(data_entry_list, true) };
-        const auto algorithm_options{ BuildHRLExecutionOptions(m_options, true) };
+        const auto algorithm_options{
+            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
+        };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
         for (int j = 0; j < alpha_size; j++)
@@ -820,7 +840,7 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
             universal_alpha_r,
             dataset.X,
             dataset.y,
-            BuildHRLExecutionOptions(m_options, true)
+            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
         );
 
         local_entry->SetBetaEstimateOLS(result.beta_ols);
@@ -847,59 +867,6 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
         {
             atom_count++;
             Logger::ProgressPercent(atom_count, selected_atom_size);
-        }
-    }
-}
-
-void PotentialAnalysisCommand::RunLocalBondFitting(double universal_alpha_r)
-{
-    ScopeTimer timer("PotentialAnalysisCommand::RunLocalBondFitting");
-    if (m_model_object == nullptr) return;
-
-    std::atomic<size_t> atom_count{ 0 };
-    auto & selected_bond_list{ m_model_object->GetSelectedBondList() };
-    auto selected_bond_size{ selected_bond_list.size() };
-    Logger::Log(LogLevel::Info,
-        "Run Local bond fitting for "+ std::to_string(selected_bond_size) +" bonds.");
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
-#endif
-    for (size_t i = 0; i < selected_bond_size; i++)
-    {
-        auto local_entry{ selected_bond_list[i]->GetLocalPotentialEntry() };
-        auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
-        const auto result = HRLModelAlgorithms::EstimateBetaMDPDE(
-            universal_alpha_r,
-            dataset.X,
-            dataset.y,
-            BuildHRLExecutionOptions(m_options, true)
-        );
-
-        local_entry->SetBetaEstimateOLS(result.beta_ols);
-        local_entry->SetBetaEstimateMDPDE(result.beta_mdpde);
-        local_entry->SetSigmaSquare(result.sigma_square);
-        local_entry->SetDataWeight(result.data_weight);
-        local_entry->SetDataCovariance(result.data_covariance);
-
-        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-        model_par_init(0) = local_entry->GetMomentZeroEstimate();
-        model_par_init(1) = local_entry->GetMomentTwoEstimate();
-        auto gaus_ols{
-            GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
-        };
-        auto gaus_mdpde{
-            GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
-        };
-        local_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
-        local_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
-
-        #ifdef USE_OPENMP
-            #pragma omp critical
-        #endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, selected_bond_size);
         }
     }
 }
@@ -959,7 +926,8 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
                 data_weight_list,
                 data_covariance_list
             );
-            HRLGroupEstimator estimator(BuildHRLExecutionOptions(m_options, true));
+            HRLGroupEstimator estimator(
+                detail::MakePotentialAnalysisExecutionOptions(m_options, true));
             const auto result = estimator.Estimate(input, alpha_g);
 
             auto gaus_group_mean{
@@ -1024,122 +992,16 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
     }
 }
 
-void PotentialAnalysisCommand::RunBondPotentialFitting()
+void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled()
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunBondPotentialFitting");
-    if (m_model_object == nullptr) return;
-    const int basis_size{ 2 };
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        Logger::Log(LogLevel::Info, "Class type: " + class_key);
-
-        // Group Bond Potential Fitting
-        auto group_potential_entry{ m_model_object->GetBondGroupPotentialEntry(class_key) };
-        const auto & key_set{ group_potential_entry->GetGroupKeySet() };
-        std::vector<GroupKey> group_keys(key_set.begin(), key_set.end());
-        auto group_key_size{ group_keys.size() };
-        std::atomic<size_t> key_count{ 0 };
-
-#ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
+    if (m_model_object == nullptr || m_map_object == nullptr) return;
+    detail::RunPotentialAnalysisBondWorkflow(detail::PotentialAnalysisBondWorkflowContext{
+        *m_model_object,
+        *m_map_object,
+        m_options
+    });
 #endif
-        for (size_t idx = 0; idx < group_key_size; idx++)
-        {
-            auto group_key{ group_keys[idx] };
-            const auto & bond_list{ group_potential_entry->GetBondObjectPtrList(group_key) };
-            auto group_size{ bond_list.size() };
-            std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
-            std::vector<Eigen::VectorXd> beta_mdpde_list;
-            std::vector<double> sigma_square_list;
-            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_weight_list;
-            std::vector<Eigen::DiagonalMatrix<double, Eigen::Dynamic>> data_covariance_list;
-            data_entry_list.reserve(group_size);
-            beta_mdpde_list.reserve(group_size);
-            sigma_square_list.reserve(group_size);
-            data_weight_list.reserve(group_size);
-            data_covariance_list.reserve(group_size);
-            for (const auto & bond : bond_list)
-            {
-                auto entry{ bond->GetLocalPotentialEntry() };
-                data_entry_list.emplace_back(entry->GetBasisAndResponseEntryList());
-                beta_mdpde_list.emplace_back(entry->GetBetaEstimateMDPDE());
-                sigma_square_list.emplace_back(entry->GetSigmaSquare());
-                data_weight_list.emplace_back(entry->GetDataWeight());
-                data_covariance_list.emplace_back(entry->GetDataCovariance());
-            }
-            auto alpha_g{ m_options.alpha_g };
-            const auto input = HRLDataTransform::BuildGroupInput(
-                basis_size,
-                data_entry_list,
-                beta_mdpde_list,
-                sigma_square_list,
-                data_weight_list,
-                data_covariance_list
-            );
-            HRLGroupEstimator estimator(BuildHRLExecutionOptions(m_options, true));
-            const auto result = estimator.Estimate(input, alpha_g);
-
-            auto gaus_group_mean{
-                GausLinearTransformHelper::BuildGaus2DModel(result.mu_mean)
-            };
-
-            auto gaus_group_mdpde{
-                GausLinearTransformHelper::BuildGaus2DModel(result.mu_mdpde)
-            };
-
-            auto gaus_prior{
-                GausLinearTransformHelper::BuildGaus2DModelWithVariance(
-                    result.mu_prior, result.capital_lambda)
-            };
-            auto prior_estimate{ std::get<0>(gaus_prior) };
-            auto prior_variance{ std::get<1>(gaus_prior) };
-
-            auto count{ 0 };
-            for (const auto & bond : bond_list)
-            {
-                auto bond_entry{ bond->GetLocalPotentialEntry() };
-                const auto beta_vector_posterior{
-                    result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
-                };
-                const auto & sigma_matrix_posterior{
-                    result.capital_sigma_posterior_list.at(static_cast<std::size_t>(count))
-                };
-                auto gaus_posterior{
-                    GausLinearTransformHelper::BuildGaus2DModelWithVariance(
-                        beta_vector_posterior, sigma_matrix_posterior)
-                };
-                auto posterior_estimate{ std::get<0>(gaus_posterior) };
-                auto posterior_variance{ std::get<1>(gaus_posterior) };
-                bond_entry->AddGausEstimatePosterior(class_key, posterior_estimate(0), posterior_estimate(1));
-                bond_entry->AddGausVariancePosterior(class_key, posterior_variance(0), posterior_variance(1));
-                bond_entry->AddOutlierTag(class_key, result.outlier_flag_array(count));
-                bond_entry->AddStatisticalDistance(class_key, result.statistical_distance_array(count));
-                count++;
-            }
-
-#ifdef USE_OPENMP
-            #pragma omp critical
-#endif
-            {
-                group_potential_entry->AddGausEstimateMean(
-                    group_key, gaus_group_mean(0), gaus_group_mean(1)
-                );
-                group_potential_entry->AddGausEstimateMDPDE(
-                    group_key, gaus_group_mdpde(0), gaus_group_mdpde(1)
-                );
-                group_potential_entry->AddGausEstimatePrior(
-                    group_key, prior_estimate(0), prior_estimate(1)
-                );
-                group_potential_entry->AddGausVariancePrior(
-                    group_key, prior_variance(0), prior_variance(1)
-                );
-                group_potential_entry->AddAlphaG(group_key, m_options.alpha_g);
-                key_count++;
-                Logger::ProgressBar(key_count, group_key_size);
-            }
-        }
-    }
 }
 
 void PotentialAnalysisCommand::SaveDataObject()
@@ -1147,8 +1009,7 @@ void PotentialAnalysisCommand::SaveDataObject()
     ScopeTimer timer("PotentialAnalysisCommand::SaveDataObject");
     if (m_model_object == nullptr) return;
 
-    auto data_manager{ GetDataManagerPtr() };
-    data_manager->SaveDataObject(m_model_key_tag, m_options.saved_key_tag);
+    m_data_manager.SaveDataObject(m_model_key_tag, m_options.saved_key_tag);
 
     for (auto atom : m_model_object->GetSelectedAtomList())
     {

@@ -1,7 +1,8 @@
 #include "Application.hpp"
+#include "BuiltInCommandCatalogInternal.hpp"
 #include "CommandBase.hpp"
-#include "ScopeTimer.hpp"
 #include "Logger.hpp"
+#include "ScopeTimer.hpp"
 
 #include <memory>
 #include <CLI/CLI.hpp>
@@ -17,39 +18,25 @@ Application::Application(CLI::App & app) :
 
 void Application::RegisterAllCommands()
 {
-    const auto & commands{ CommandRegistry::Instance().GetCommands() };
-    for (const auto & [name, info] : commands)
+    for (const auto & descriptor : BuiltInCommandCatalog())
     {
-        RegisterCommand(info.name, info.description, info.factory);
+        auto command_object{ descriptor.factory() };
+        CLI::App * command{
+            m_cli_app.add_subcommand(
+                std::string(descriptor.name),
+                std::string(descriptor.description))
+        };
+        command_object->RegisterCLIOptions(command);
+
+        auto shared_cmd{ std::shared_ptr<CommandBase>(std::move(command_object)) };
+        command->callback([cmd = std::move(shared_cmd)]() {
+            ScopeTimer timer("Command in Application");
+            if (!cmd->Execute())
+            {
+                throw CLI::RuntimeError(1);
+            }
+        });
     }
-}
-
-void Application::RegisterCommand(
-    const std::string & name,
-    const std::string & description,
-    std::function<std::unique_ptr<CommandBase>()> factory)
-{
-    auto command_object{ factory() };
-    CLI::App * command{ m_cli_app.add_subcommand(name, description) };
-    command_object->RegisterCLIOptions(command);
-
-    auto shared_cmd{ std::shared_ptr<CommandBase>(std::move(command_object)) };
-    command->callback([cmd = std::move(shared_cmd)]() {
-        ScopeTimer timer("Command in Application");
-        const auto & options{ cmd->GetOptions() };
-        Logger::SetLogLevel(options.verbose_level);
-        if (cmd->IsValidateOptions() == false)
-        {
-            Logger::Log(LogLevel::Error,
-                "Invalid command options detected. Aborting command execution.");
-            return;
-        }
-        if (cmd->Execute() == false)
-        {
-            Logger::Log(LogLevel::Error,
-                "Command execution failed. Aborting command execution.");
-        }
-    });
 }
 
 } // namespace rhbm_gem

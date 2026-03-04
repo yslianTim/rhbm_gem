@@ -1,5 +1,6 @@
 #include "ModelFileReader.hpp"
 #include "FilePathHelper.hpp"
+#include "FileFormatRegistry.hpp"
 #include "ModelFileFormatBase.hpp"
 #include "PdbFormat.hpp"
 #include "CifFormat.hpp"
@@ -12,12 +13,18 @@ namespace rhbm_gem {
 ModelFileReader::ModelFileReader(const std::string & filename) :
     m_successfully_read_file{ false }, m_file_path{ filename }
 {
-    auto file_extension{ FilePathHelper::GetExtension(filename) };
-    if      (file_extension == ".pdb")
+    const auto & descriptor{
+        FileFormatRegistry::Instance().LookupForRead(FilePathHelper::GetExtension(filename)) };
+    if (descriptor.kind != DataObjectKind::Model || !descriptor.model_backend.has_value())
+    {
+        throw std::runtime_error("Unsupported model file format");
+    }
+
+    if (descriptor.model_backend == ModelFormatBackend::Pdb)
     {
         m_file_object = std::make_unique<PdbFormat>();
     }
-    else if (file_extension == ".cif" || file_extension == ".mmcif" || file_extension == ".mcif")
+    else if (descriptor.model_backend == ModelFormatBackend::Cif)
     {
         m_file_object = std::make_unique<CifFormat>();
     }

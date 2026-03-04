@@ -1,4 +1,6 @@
 #include "ResultDumpCommand.hpp"
+#include "CommandDataAccessInternal.hpp"
+#include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
@@ -17,23 +19,27 @@
 #include "ModelFileWriter.hpp"
 #include "ChimeraXHelper.hpp"
 #include "Logger.hpp"
-#include "CommandRegistry.hpp"
 #include "AtomKeySystem.hpp"
+#include "OptionEnumTraits.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <fstream>
 
 namespace {
-rhbm_gem::CommandRegistrar<rhbm_gem::ResultDumpCommand> registrar_result_dump{
-    "result_dump",
-    "Run result dump"};
+constexpr std::string_view kMapKey{ "map" };
+constexpr std::string_view kPrinterFlags{ "-p,--printer" };
+constexpr std::string_view kPrinterOption{ "--printer" };
+constexpr std::string_view kModelKeyListFlags{ "-k,--model-keylist" };
+constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
+constexpr std::string_view kMapFlags{ "-m,--map" };
+constexpr std::string_view kMapOption{ "--map" };
 }
 
 namespace rhbm_gem {
 
 ResultDumpCommand::ResultDumpCommand() :
-    CommandBase(),
-    m_map_key_tag{"map"}, m_map_object{ nullptr }
+    m_map_key_tag{ kMapKey }, m_map_object{ nullptr }
 {
 }
 
@@ -43,76 +49,93 @@ ResultDumpCommand::~ResultDumpCommand()
 
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    std::map<std::string, PrinterType> printer_map
-    {
-        {"0", PrinterType::ATOM_POSITION},  {"atom_pos", PrinterType::ATOM_POSITION},
-        {"1", PrinterType::MAP_VALUE},      {"map",      PrinterType::MAP_VALUE},
-        {"2", PrinterType::GAUS_ESTIMATES}, {"gaus",     PrinterType::GAUS_ESTIMATES},
-        {"3", PrinterType::ATOM_OUTLIER},   {"atom_out", PrinterType::ATOM_OUTLIER}
-    };
-    cmd->add_option_function<PrinterType>("-p,--printer",
+    command_cli::AddEnumOption<PrinterType>(
+        cmd, kPrinterFlags,
         [&](PrinterType value) { SetPrinterChoice(value); },
-        "Printer choice")->required()
-        ->transform(CLI::CheckedTransformer(printer_map, CLI::ignore_case));
-    cmd->add_option_function<std::string>("-k,--model-keylist",
+        "Printer choice",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        cmd, kModelKeyListFlags,
         [&](const std::string & value) { SetModelKeyTagList(value); },
-        "List of model key tag to be display")->required();
-    cmd->add_option_function<std::string>("-m,--map",
-        [&](const std::string & value) { SetMapFilePath(value); },
-        "Map file path")->default_val(m_options.map_file_path.string());
+        "List of model key tag to be display",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        cmd, kMapFlags,
+        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
+        "Map file path",
+        m_options.map_file_path);
 }
 
-bool ResultDumpCommand::Execute()
+bool ResultDumpCommand::ExecuteImpl()
 {
     if (BuildDataObjectList() == false) return false;
     RunResultDump();
     return true;
 }
 
+void ResultDumpCommand::ValidateOptions()
+{
+    ResetPrepareIssues(kMapOption);
+    if (m_options.printer_choice == PrinterType::MAP_VALUE && m_options.map_file_path.empty())
+    {
+        AddValidationError(kMapOption,
+            "A map file is required when '--printer map' is selected.");
+    }
+}
+
+void ResultDumpCommand::ResetRuntimeState()
+{
+    m_selected_atom_list_map.clear();
+    m_model_object_list.clear();
+    m_map_object.reset();
+}
+
 void ResultDumpCommand::SetPrinterChoice(PrinterType value)
 {
-    m_options.printer_choice = value;
+    SetValidatedEnumOption(
+        m_options.printer_choice,
+        value,
+        kPrinterOption,
+        PrinterType::GAUS_ESTIMATES,
+        "Printer choice");
 }
 
 void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)
 {
-    m_options.map_file_path = path;
-    if (!m_options.map_file_path.empty() &&
-        !FilePathHelper::EnsureFileExists(m_options.map_file_path, "Map file"))
-    {
-        Logger::Log(LogLevel::Error,
-            "Map file does not exist: " + m_options.map_file_path.string());
-        m_valiate_options = false;
-    }
+    SetOptionalExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
 }
 
 void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
 {
-    m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-    if (m_options.model_key_tag_list.empty())
+    MutateOptions([&]()
     {
-        Logger::Log(LogLevel::Error, "Model key list cannot be empty");
-        m_valiate_options = false;
-    }
+        m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
+        ResetParseIssues(kModelKeyListOption);
+        if (m_options.model_key_tag_list.empty())
+        {
+            AddValidationError(
+                kModelKeyListOption,
+                "Model key list cannot be empty.",
+                ValidationPhase::Parse);
+        }
+    });
 }
 
 bool ResultDumpCommand::BuildDataObjectList()
 {
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
-    auto data_manager{ GetDataManagerPtr() };
-    data_manager->SetDatabaseManager(m_options.database_path);
     try
     {
-        if (!m_options.map_file_path.empty())
-        {
-            data_manager->ProcessFile(m_options.map_file_path, "map");
-            m_map_object = data_manager->GetTypedDataObject<MapObject>("map");
-        }
+        RequireDatabaseManager();
+        m_map_object = command_data_access::OptionalProcessTypedFile<MapObject>(
+            m_data_manager, m_options.map_file_path, m_map_key_tag, "map file");
         m_selected_atom_list_map.clear();
         for (auto & key : m_options.model_key_tag_list)
         {
-            data_manager->LoadDataObject(key);
-            auto model_object{ data_manager->GetTypedDataObject<ModelObject>(key) };
+            auto model_object{ command_data_access::LoadTypedObject<ModelObject>(
+                m_data_manager, key, "model object") };
             m_model_object_list.emplace_back(model_object);
             for (auto & atom : model_object->GetAtomList())
             {
@@ -139,6 +162,20 @@ void ResultDumpCommand::RunResultDump()
     Logger::Log(LogLevel::Info,
         "Total number of model object sets to be dump: "
         + std::to_string(m_options.model_key_tag_list.size()));
+
+    const bool has_selected_atoms{
+        std::any_of(
+            m_selected_atom_list_map.begin(),
+            m_selected_atom_list_map.end(),
+            [](const auto & entry) { return !entry.second.empty(); })
+    };
+    if (!has_selected_atoms)
+    {
+        Logger::Log(LogLevel::Warning,
+            "No selected atoms with local potential entries were found. Skipping dump.");
+        return;
+    }
+
     switch (m_options.printer_choice)
     {
         case PrinterType::ATOM_POSITION:
@@ -175,8 +212,8 @@ void ResultDumpCommand::RunAtomOutlierDumping()
     {
         auto key_tag{ model_object->GetKeyTag() };
         std::unordered_map<std::string, std::vector<std::array<float,3>>> outlier_position_map;
-        std::string file_name{ "atom_outlier_list_"+ model_object->GetPdbID() +".csv" };
-        std::filesystem::path output_path{ m_options.folder_path / file_name };
+        const std::string file_name{ "atom_outlier_list_" + model_object->GetPdbID() };
+        std::filesystem::path output_path{ BuildOutputPath(file_name, ".csv") };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -208,8 +245,10 @@ void ResultDumpCommand::RunAtomOutlierDumping()
 
         for (const auto & [class_key, position_list] : outlier_position_map)
         {
-            std::string class_file_name{ "atom_outlier_position_" + class_key + "_" + model_object->GetPdbID() + ".cmm" };
-            std::filesystem::path class_output_path{ m_options.folder_path / class_file_name };
+            const std::string class_file_name{
+                "atom_outlier_position_" + class_key + "_" + model_object->GetPdbID()
+            };
+            std::filesystem::path class_output_path{ BuildOutputPath(class_file_name, ".cmm") };
             std::string marker_set_name{ class_key + "_" + model_object->GetPdbID() };
             if (!ChimeraXHelper::WriteCMMPoints(
                     position_list,
@@ -233,8 +272,8 @@ void ResultDumpCommand::RunAtomPositionDumping()
     for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
-        std::string file_name{ "atom_position_list_"+ model_object->GetPdbID() +".csv" };
-        std::filesystem::path output_path{ m_options.folder_path / file_name };
+        const std::string file_name{ "atom_position_list_" + model_object->GetPdbID() };
+        std::filesystem::path output_path{ BuildOutputPath(file_name, ".csv") };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -272,6 +311,12 @@ void ResultDumpCommand::RunMapValueDumping()
     {
         auto key_tag{ model_object->GetKeyTag() };
         auto atom_size{ m_selected_atom_list_map.at(key_tag).size() };
+        if (atom_size == 0)
+        {
+            Logger::Log(LogLevel::Warning,
+                "No selected atoms found for key tag [" + key_tag + "]. Skipping map-value dump.");
+            continue;
+        }
         std::array<float, 3> atom_range_min, atom_range_max;
         std::vector<float> x_list, y_list, z_list;
         x_list.reserve(atom_size);
@@ -290,10 +335,10 @@ void ResultDumpCommand::RunMapValueDumping()
         atom_range_max.at(1) = ArrayStats<float>::ComputeMax(y_list.data(), atom_size) + margin;
         atom_range_max.at(2) = ArrayStats<float>::ComputeMax(z_list.data(), atom_size) + margin;
 
-        std::string file_name{
-            "map_value_list_"+ model_object->GetEmdID() +"_"+ model_object->GetPdbID() +".csv"
+        const std::string file_name{
+            "map_value_list_" + model_object->GetEmdID() + "_" + model_object->GetPdbID()
         };
-        std::filesystem::path output_path{ m_options.folder_path / file_name };
+        std::filesystem::path output_path{ BuildOutputPath(file_name, ".csv") };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {
@@ -331,8 +376,8 @@ void ResultDumpCommand::RunGausEstimatesDumping()
     for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
-        std::string csv_file_name{ "atom_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::filesystem::path output_csv_file{ m_options.folder_path / csv_file_name };
+        const std::string csv_file_name{ "atom_gaus_list_" + model_object->GetPdbID() };
+        std::filesystem::path output_csv_file{ BuildOutputPath(csv_file_name, ".csv") };
         std::ofstream outfile(output_csv_file);
         if (!outfile.is_open())
         {
@@ -359,20 +404,24 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         Logger::Log(LogLevel::Info, "Output file: " + output_csv_file.string());
 
         // Output result to mmCIF file
-        std::string amplitude_file_name{ model_object->GetPdbID() +"_gaus_amplitude.cif" };
-        std::filesystem::path output_amplitude_cif_file{ m_options.folder_path / amplitude_file_name };
+        const std::string amplitude_file_name{ model_object->GetPdbID() + "_gaus_amplitude" };
+        std::filesystem::path output_amplitude_cif_file{
+            BuildOutputPath(amplitude_file_name, ".cif")
+        };
         ModelFileWriter amplitude_writer{ output_amplitude_cif_file.string(), model_object.get(), 0 };
         amplitude_writer.Write();
         Logger::Log(LogLevel::Info, "Output file: " + output_amplitude_cif_file.string());
 
-        std::string width_file_name{ model_object->GetPdbID() +"_gaus_width.cif" };
-        std::filesystem::path output_width_cif_file{ m_options.folder_path / width_file_name };
+        const std::string width_file_name{ model_object->GetPdbID() + "_gaus_width" };
+        std::filesystem::path output_width_cif_file{ BuildOutputPath(width_file_name, ".cif") };
         ModelFileWriter width_writer{ output_width_cif_file.string(), model_object.get(), 1 };
         width_writer.Write();
         Logger::Log(LogLevel::Info, "Output file: " + output_width_cif_file.string());
 
-        std::string intensity_file_name{ model_object->GetPdbID() +"_gaus_intensity.cif" };
-        std::filesystem::path output_intensity_cif_file{ m_options.folder_path / intensity_file_name };
+        const std::string intensity_file_name{ model_object->GetPdbID() + "_gaus_intensity" };
+        std::filesystem::path output_intensity_cif_file{
+            BuildOutputPath(intensity_file_name, ".cif")
+        };
         ModelFileWriter intensity_writer{ output_intensity_cif_file.string(), model_object.get(), 2 };
         intensity_writer.Write();
         Logger::Log(LogLevel::Info, "Output file: " + output_intensity_cif_file.string());
@@ -389,8 +438,8 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
         auto key_tag{ model_object->GetKeyTag() };
         auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object.get()) };
 
-        std::string file_name{ "group_gaus_list_"+ model_object->GetPdbID() +".csv" };
-        std::filesystem::path output_path{ m_options.folder_path / file_name };
+        const std::string file_name{ "group_gaus_list_" + model_object->GetPdbID() };
+        std::filesystem::path output_path{ BuildOutputPath(file_name, ".csv") };
         std::ofstream outfile(output_path);
         if (!outfile.is_open())
         {

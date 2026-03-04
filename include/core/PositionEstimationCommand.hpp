@@ -15,21 +15,28 @@ template <typename T> struct KDNode;
 
 namespace rhbm_gem {
 
-class PositionEstimationCommand : public CommandBase
+struct PositionEstimationCommandOptions : public CommandOptions
+{
+    int iteration_count{ 15 };
+    size_t knn_size{ 20 };
+    float alpha{ 2.0 };
+    float threshold_ratio{ 0.01f };
+    float dedup_tolerance{ 1.0e-2f };
+    std::filesystem::path map_file_path;
+};
+
+class PositionEstimationCommand
+    : public CommandWithOptions<
+          PositionEstimationCommandOptions,
+          CommandId::PositionEstimation,
+          CommonOption::Threading
+              | CommonOption::Verbose
+              | CommonOption::OutputFolder>
 {
 public:
-    struct Options : public CommandOptions
-    {
-        int iteration_count{ 15 };
-        size_t knn_size{ 20 };
-        float alpha{ 2.0 };
-        float threshold_ratio{ 0.01f };
-        float dedup_tolerance{ 1.0e-2f };
-        std::filesystem::path map_file_path;
-    };
+    using Options = PositionEstimationCommandOptions;
 
 private:
-    Options m_options;
     std::vector<VoxelNode> m_selected_voxel_list;
     std::vector<VoxelNode> m_query_point_list;
     std::vector<std::array<float, 3>> m_position_list;
@@ -38,12 +45,7 @@ private:
 
 public:
     PositionEstimationCommand();
-    ~PositionEstimationCommand() = default;
-    bool Execute() override;
-    void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
-
+    ~PositionEstimationCommand() override;
     void SetMapFilePath(const std::filesystem::path & path);
     void SetIterationCount(int value);
     void SetKNNSize(int value);
@@ -52,6 +54,9 @@ public:
     void SetDedupTolerance(double value);
 
 private:
+    void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
+    void ResetRuntimeState() override;
+    bool ExecuteImpl() override;
     bool BuildDataObject();
     bool BuildVoxelList();
     void RunMapValueConvergence();

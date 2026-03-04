@@ -1,0 +1,128 @@
+#include <gtest/gtest.h>
+
+#include <vector>
+
+#include <CLI/CLI.hpp>
+
+#include "CommandBase.hpp"
+
+namespace rg = rhbm_gem;
+
+namespace {
+
+struct LifecycleCommandOptions : public rg::CommandOptions
+{
+    bool fail_prepare{ false };
+    bool fail_execute{ false };
+};
+
+class LifecycleCommand final
+    : public rg::CommandWithOptions<
+          LifecycleCommandOptions,
+          rg::CommandId::ModelTest,
+          rg::CommonOption::Threading
+              | rg::CommonOption::Verbose
+              | rg::CommonOption::OutputFolder>
+{
+public:
+    using Options = LifecycleCommandOptions;
+
+    int validate_count{ 0 };
+    int reset_count{ 0 };
+    int execute_impl_count{ 0 };
+    std::vector<int> runtime_state{};
+
+    void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
+
+    void SetFailPrepare(bool value)
+    {
+        MutateOptions([&]() { m_options.fail_prepare = value; });
+    }
+    void SetFailExecute(bool value)
+    {
+        MutateOptions([&]() { m_options.fail_execute = value; });
+    }
+
+    void ValidateOptions() override
+    {
+        ++validate_count;
+        ResetPrepareIssues("--contract");
+        if (m_options.fail_prepare)
+        {
+            AddValidationError("--contract", "prepare failed");
+        }
+    }
+
+    void ResetRuntimeState() override
+    {
+        ++reset_count;
+        runtime_state.clear();
+    }
+
+private:
+    bool ExecuteImpl() override
+    {
+        ++execute_impl_count;
+        if (!runtime_state.empty())
+        {
+            return false;
+        }
+        runtime_state.push_back(1);
+        return !m_options.fail_execute;
+    }
+};
+
+} // namespace
+
+TEST(CommandExecutionContractTest, ExecuteRunsPrepareBeforeExecuteImpl)
+{
+    LifecycleCommand command;
+    command.SetFailPrepare(true);
+
+    EXPECT_FALSE(command.Execute());
+    EXPECT_EQ(command.validate_count, 1);
+    EXPECT_EQ(command.reset_count, 1);
+    EXPECT_EQ(command.execute_impl_count, 0);
+}
+
+TEST(CommandExecutionContractTest, ExplicitPrepareSkipsDuplicatePreflightInsideExecute)
+{
+    LifecycleCommand command;
+
+    ASSERT_TRUE(command.PrepareForExecution());
+    EXPECT_EQ(command.validate_count, 1);
+    EXPECT_EQ(command.reset_count, 1);
+
+    ASSERT_TRUE(command.Execute());
+    EXPECT_EQ(command.validate_count, 1);
+    EXPECT_EQ(command.reset_count, 1);
+    EXPECT_EQ(command.execute_impl_count, 1);
+}
+
+TEST(CommandExecutionContractTest, RepeatedExecuteResetsRuntimeStateBetweenRuns)
+{
+    LifecycleCommand command;
+
+    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Execute());
+
+    EXPECT_EQ(command.validate_count, 2);
+    EXPECT_EQ(command.reset_count, 2);
+    EXPECT_EQ(command.execute_impl_count, 2);
+}
+
+TEST(CommandExecutionContractTest, MutatingOptionsAfterPrepareForExecutionForcesAnotherPreflight)
+{
+    LifecycleCommand command;
+
+    ASSERT_TRUE(command.PrepareForExecution());
+    EXPECT_EQ(command.validate_count, 1);
+    EXPECT_EQ(command.reset_count, 1);
+
+    command.SetThreadSize(4);
+
+    ASSERT_TRUE(command.Execute());
+    EXPECT_EQ(command.validate_count, 2);
+    EXPECT_EQ(command.reset_count, 2);
+    EXPECT_EQ(command.execute_impl_count, 1);
+}

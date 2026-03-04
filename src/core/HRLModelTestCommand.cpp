@@ -1,9 +1,10 @@
 #include "HRLModelTestCommand.hpp"
+#include "CommandOptionBinding.hpp"
 #include "HRLModelTester.hpp"
 #include "ArrayStats.hpp"
 #include "ScopeTimer.hpp"
 #include "Logger.hpp"
-#include "CommandRegistry.hpp"
+#include "OptionEnumTraits.hpp"
 
 #include <random>
 #include <memory>
@@ -28,49 +29,50 @@
 #include <TEllipse.h>
 #endif
 
-namespace {
-rhbm_gem::CommandRegistrar<rhbm_gem::HRLModelTestCommand> registrar_model_test{
-    "model_test",
-    "Run HRL model simulation test"};
-}
-
 namespace rhbm_gem {
 
-HRLModelTestCommand::HRLModelTestCommand() :
-    CommandBase(), m_options{}
-{
-}
+namespace {
+constexpr std::string_view kTesterFlags{ "-t,--tester" };
+constexpr std::string_view kTesterOption{ "--tester" };
+constexpr std::string_view kFitMinOption{ "--fit-min" };
+constexpr std::string_view kFitMaxOption{ "--fit-max" };
+constexpr std::string_view kFitRangeIssue{ "--fit-range" };
+constexpr std::string_view kAlphaROption{ "--alpha-r" };
+constexpr std::string_view kAlphaGOption{ "--alpha-g" };
+} // namespace
+
+HRLModelTestCommand::HRLModelTestCommand() = default;
 
 void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
-    std::map<std::string, TesterType> tester_map
-    {
-        {"0", TesterType::BENCHMARK},         {"benchmark",      TesterType::BENCHMARK},
-        {"1", TesterType::DATA_OUTLIER},      {"data_outlier",   TesterType::DATA_OUTLIER},
-        {"2", TesterType::MEMBER_OUTLIER},    {"member_outlier", TesterType::MEMBER_OUTLIER},
-        {"3", TesterType::MODEL_ALPHA_DATA},  {"alpha_data",     TesterType::MODEL_ALPHA_DATA},
-        {"4", TesterType::MODEL_ALPHA_MEMBER},{"alpha_member",   TesterType::MODEL_ALPHA_MEMBER}
-    };
-    cmd->add_option_function<TesterType>("-t,--tester",
+    command_cli::AddEnumOption<TesterType>(
+        cmd, kTesterFlags,
         [&](TesterType value) { SetTesterChoice(value); },
-        "Tester option")
-        ->default_val(TesterType::DATA_OUTLIER)
-        ->transform(CLI::CheckedTransformer(tester_map, CLI::ignore_case));
-    cmd->add_option_function<double>("--fit-min",
+        "Tester option",
+        TesterType::DATA_OUTLIER);
+    command_cli::AddScalarOption<double>(
+        cmd, kFitMinOption,
         [&](double value) { SetFitRangeMinimum(value); },
-        "Minimum fitting range")->default_val(m_options.fit_range_min);
-    cmd->add_option_function<double>("--fit-max",
+        "Minimum fitting range",
+        m_options.fit_range_min);
+    command_cli::AddScalarOption<double>(
+        cmd, kFitMaxOption,
         [&](double value) { SetFitRangeMaximum(value); },
-        "Maximum fitting range")->default_val(m_options.fit_range_max);
-    cmd->add_option_function<double>("--alpha-r",
+        "Maximum fitting range",
+        m_options.fit_range_max);
+    command_cli::AddScalarOption<double>(
+        cmd, kAlphaROption,
         [&](double value) { SetAlphaR(value); },
-        "Alpha value for R")->default_val(m_options.alpha_r);
-    cmd->add_option_function<double>("--alpha-g",
+        "Alpha value for R",
+        m_options.alpha_r);
+    command_cli::AddScalarOption<double>(
+        cmd, kAlphaGOption,
         [&](double value) { SetAlphaG(value); },
-        "Alpha value for G")->default_val(m_options.alpha_g);
+        "Alpha value for G",
+        m_options.alpha_g);
 }
 
-bool HRLModelTestCommand::Execute()
+bool HRLModelTestCommand::ExecuteImpl()
 {
     switch (m_options.tester_choice)
     {
@@ -90,44 +92,73 @@ bool HRLModelTestCommand::Execute()
             RunSimulationTestOnModelAlphaMember();
             break;
         default:
-            Logger::Log(LogLevel::Warning,
-                        "Invalid tester choice input : ["
+            Logger::Log(LogLevel::Error,
+                        "Invalid tester choice reached execution path: ["
                         + std::to_string(static_cast<int>(m_options.tester_choice)) + "]");
-            Logger::Log(LogLevel::Warning,
-                        "Available Tester Choices:\n"
-                        "  [0] Simulation Test on Benchmark\n"
-                        "  [1] Simulation Test on Data Outlier\n"
-                        "  [2] Simulation Test on Member Outlier\n"
-                        "  [3] Simulation Test on Model alpha_data\n"
-                        "  [4] Simulation Test on Model alpha_member");
-            break;
+            return false;
     }
     return true;
 }
 
+void HRLModelTestCommand::ValidateOptions()
+{
+    ResetPrepareIssues(kFitRangeIssue);
+    if (m_options.fit_range_min > m_options.fit_range_max)
+    {
+        AddValidationError(
+            kFitRangeIssue,
+            "Expected --fit-min <= --fit-max.");
+    }
+}
+
 void HRLModelTestCommand::SetTesterChoice(TesterType value)
 {
-    m_options.tester_choice = value;
+    SetValidatedEnumOption(
+        m_options.tester_choice,
+        value,
+        kTesterOption,
+        TesterType::BENCHMARK,
+        "Tester choice");
 }
 
 void HRLModelTestCommand::SetFitRangeMinimum(double value)
 {
-    m_options.fit_range_min = value;
+    SetFiniteNonNegativeScalarOption(
+        m_options.fit_range_min,
+        value,
+        kFitMinOption,
+        0.0,
+        "Minimum fitting range must be a finite non-negative value.");
 }
 
 void HRLModelTestCommand::SetFitRangeMaximum(double value)
 {
-    m_options.fit_range_max = value;
+    SetFiniteNonNegativeScalarOption(
+        m_options.fit_range_max,
+        value,
+        kFitMaxOption,
+        1.0,
+        "Maximum fitting range must be a finite non-negative value.");
 }
 
 void HRLModelTestCommand::SetAlphaR(double value)
 {
-    m_options.alpha_r = value;
+    SetFinitePositiveScalarOption(
+        m_options.alpha_r,
+        value,
+        kAlphaROption,
+        0.1,
+        "Alpha-R must be a finite positive value.");
 }
 
 void HRLModelTestCommand::SetAlphaG(double value)
 {
-    m_options.alpha_g = value;
+    SetFinitePositiveScalarOption(
+        m_options.alpha_g,
+        value,
+        kAlphaGOption,
+        0.2,
+        "Alpha-G must be a finite positive value.");
 }
 
 void HRLModelTestCommand::RunSimulationTestOnBenchMark()
@@ -517,7 +548,7 @@ void HRLModelTestCommand::PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ m_options.folder_path / name };
+    auto file_path{ BuildOutputPath(name, "") };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintDataOutlierResult");
 
     std::vector<std::string> title_y_list{
@@ -745,7 +776,7 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ m_options.folder_path / name };
+    auto file_path{ BuildOutputPath(name, "") };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintMemberOutlierResult");
 
     std::vector<std::string> title_y_list{

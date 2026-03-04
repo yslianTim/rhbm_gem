@@ -25,6 +25,7 @@ class DataObjectManager
 public:
     DataObjectManager();
     ~DataObjectManager();
+    void ClearDataObjects();
     void SetDatabaseManager(const std::filesystem::path & dbname);
     void ProcessFile(const std::filesystem::path & filename, const std::string & key_tag);
     void ProduceFile(const std::filesystem::path & filename, const std::string & key_tag);
