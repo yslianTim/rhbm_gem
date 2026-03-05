@@ -10,7 +10,6 @@
 #include <string>
 #include <thread>
 #include <tuple>
-#include <type_traits>
 #include <vector>
 
 #include "AtomObject.hpp"
@@ -19,9 +18,8 @@
 #include "BondObject.hpp"
 #include "ComparisonPainter.hpp"
 #include "CommandTestHelpers.hpp"
-#include "DataObjectManager.hpp"
 #include "DataObjectDispatch.hpp"
-#include "DataObjectVisitor.hpp"
+#include "DataObjectManager.hpp"
 #include "DataObjectWorkflowOps.hpp"
 #include "DemoPainter.hpp"
 #include "FileProcessFactoryBase.hpp"
@@ -37,109 +35,18 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class EventVisitor : public rg::DataObjectVisitor
+class BlockingModelCallback
 {
 public:
-    std::vector<std::string> events;
-
-    void VisitAtomObject(rg::AtomObject & data_object) override
+    void operator()(rg::DataObjectBase & data_object)
     {
-        (void)data_object;
-        events.emplace_back("Atom");
-    }
+        auto * model{ rg::AsModelObject(data_object) };
+        if (model == nullptr) return;
 
-    void VisitBondObject(rg::BondObject & data_object) override
-    {
-        (void)data_object;
-        events.emplace_back("Bond");
-    }
-
-    void VisitModelObject(rg::ModelObject & data_object) override
-    {
-        (void)data_object;
-        events.emplace_back("Model");
-    }
-
-    void VisitMapObject(rg::MapObject & data_object) override
-    {
-        (void)data_object;
-        events.emplace_back("Map");
-    }
-};
-
-class ConstEventVisitor : public rg::ConstDataObjectVisitor
-{
-public:
-    std::vector<std::string> events;
-
-    void VisitAtomObject(const rg::AtomObject & data_object) override
-    {
-        (void)data_object;
-        events.emplace_back("Atom");
-    }
-
-    void VisitBondObject(const rg::BondObject & data_object) override
-    {
-        (void)data_object;
-        events.emplace_back("Bond");
-    }
-
-    void VisitModelObject(const rg::ModelObject & data_object) override
-    {
-        (void)data_object;
-        events.emplace_back("Model");
-    }
-
-    void VisitMapObject(const rg::MapObject & data_object) override
-    {
-        (void)data_object;
-        events.emplace_back("Map");
-    }
-};
-
-class ModelKeyVisitor : public rg::DataObjectVisitor
-{
-public:
-    std::vector<std::string> keys;
-
-    void VisitAtomObject(rg::AtomObject & data_object) override { (void)data_object; }
-    void VisitBondObject(rg::BondObject & data_object) override { (void)data_object; }
-    void VisitMapObject(rg::MapObject & data_object) override { (void)data_object; }
-
-    void VisitModelObject(rg::ModelObject & data_object) override
-    {
-        keys.push_back(data_object.GetKeyTag());
-    }
-};
-
-class ConstModelKeyVisitor : public rg::ConstDataObjectVisitor
-{
-public:
-    std::vector<std::string> keys;
-
-    void VisitAtomObject(const rg::AtomObject & data_object) override { (void)data_object; }
-    void VisitBondObject(const rg::BondObject & data_object) override { (void)data_object; }
-    void VisitMapObject(const rg::MapObject & data_object) override { (void)data_object; }
-
-    void VisitModelObject(const rg::ModelObject & data_object) override
-    {
-        keys.push_back(data_object.GetKeyTag());
-    }
-};
-
-class BlockingModelVisitor : public rg::DataObjectVisitor
-{
-public:
-    void VisitAtomObject(rg::AtomObject & data_object) override { (void)data_object; }
-    void VisitBondObject(rg::BondObject & data_object) override { (void)data_object; }
-    void VisitMapObject(rg::MapObject & data_object) override { (void)data_object; }
-
-    void VisitModelObject(rg::ModelObject & data_object) override
-    {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_started = true;
-            m_key = data_object.GetKeyTag();
+            m_key = model->GetKeyTag();
         }
         m_cv_started.notify_all();
 
@@ -233,153 +140,84 @@ rg::MapObject MakeMapObject()
 
 } // namespace
 
-TEST(DataObjectVisitorArchitectureTest, VisitorInterfacesAreAbstract)
-{
-    EXPECT_TRUE((std::is_abstract_v<rg::DataObjectVisitor>));
-    EXPECT_TRUE((std::is_abstract_v<rg::ConstDataObjectVisitor>));
-}
-
-TEST(DataObjectVisitorArchitectureTest, ConcreteAcceptDispatchesToMatchingMutableVisitMethod)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
-    rg::AtomObject atom;
-    rg::BondObject bond;
-    EventVisitor visitor;
-
-    atom.Accept(visitor);
-    bond.Accept(visitor);
-    map.Accept(visitor);
-    model->Traverse(visitor, rg::ModelVisitMode::SelfOnly);
-
-    EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Atom", "Bond", "Map", "Model" }));
-}
-
-TEST(DataObjectVisitorArchitectureTest, ConcreteAcceptDispatchesToMatchingConstVisitMethod)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
-    const rg::AtomObject atom;
-    const rg::BondObject bond;
-    const rg::ModelObject & model_ref{ *model };
-    const rg::MapObject & map_ref{ map };
-    ConstEventVisitor visitor;
-
-    atom.Accept(visitor);
-    bond.Accept(visitor);
-    map_ref.Accept(visitor);
-    model_ref.Traverse(visitor, rg::ModelVisitMode::SelfOnly);
-
-    EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Atom", "Bond", "Map", "Model" }));
-}
-
-TEST(DataObjectVisitorArchitectureTest, ModelLegacyAcceptVisitsAtomsThenModel)
-{
-    auto model{ MakeModelWithBond() };
-    EventVisitor visitor;
-
-    model->Accept(visitor);
-
-    EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Atom", "Atom", "Model" }));
-}
-
-TEST(DataObjectVisitorArchitectureTest, ModelVisitModeBondsThenSelfVisitsBondsAndModelOnly)
-{
-    auto model{ MakeModelWithBond() };
-    EventVisitor visitor;
-
-    model->Traverse(visitor, rg::ModelVisitMode::BondsThenSelf);
-
-    EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Bond", "Model" }));
-}
-
-TEST(DataObjectVisitorArchitectureTest, ModelVisitModeAtomsAndBondsThenSelfVisitsAllInOrder)
-{
-    auto model{ MakeModelWithBond() };
-    EventVisitor visitor;
-
-    model->Traverse(visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
-
-    EXPECT_EQ(
-        visitor.events,
-        (std::vector<std::string>{ "Atom", "Atom", "Bond", "Model" }));
-}
-
-TEST(DataObjectVisitorArchitectureTest, ModelVisitModeSelfOnlyVisitsOnlyModel)
-{
-    auto model{ MakeModelWithBond() };
-    EventVisitor visitor;
-
-    model->Traverse(visitor, rg::ModelVisitMode::SelfOnly);
-
-    EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Model" }));
-}
-
-TEST(DataObjectVisitorArchitectureTest, ManagerAcceptDeterministicOrderByDefault)
+TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectDeterministicOrderByDefault)
 {
     rg::DataObjectManager manager;
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
 
-    rg::DataObjectManager::VisitOptions options;
-    options.model_visit_mode = rg::ModelVisitMode::SelfOnly;
+    rg::DataObjectManager::IterateOptions options;
+    std::vector<std::string> keys;
+    manager.ForEachDataObject(
+        [&keys](const rg::DataObjectBase & data_object)
+        {
+            if (const auto * model{ rg::AsModelObject(data_object) })
+            {
+                keys.push_back(model->GetKeyTag());
+            }
+        },
+        {},
+        options);
 
-    ModelKeyVisitor visitor;
-    manager.Accept(visitor, {}, options);
-
-    EXPECT_EQ(visitor.keys, (std::vector<std::string>{ "a_model", "b_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{ "a_model", "b_model" }));
 }
 
-TEST(DataObjectVisitorArchitectureTest, ManagerAcceptPreservesInputKeyOrderWhenKeyListProvided)
+TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectPreservesInputKeyOrder)
 {
     rg::DataObjectManager manager;
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
 
-    rg::DataObjectManager::VisitOptions options;
-    options.model_visit_mode = rg::ModelVisitMode::SelfOnly;
+    std::vector<std::string> keys;
+    manager.ForEachDataObject(
+        [&keys](const rg::DataObjectBase & data_object)
+        {
+            if (const auto * model{ rg::AsModelObject(data_object) })
+            {
+                keys.push_back(model->GetKeyTag());
+            }
+        },
+        { "b_model", "a_model" });
 
-    ModelKeyVisitor visitor;
-    manager.Accept(visitor, { "b_model", "a_model" }, options);
-
-    EXPECT_EQ(visitor.keys, (std::vector<std::string>{ "b_model", "a_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{ "b_model", "a_model" }));
 }
 
-TEST(DataObjectVisitorArchitectureTest, ConstManagerAcceptWorksWithConstVisitor)
+TEST(DataObjectDispatchIterationArchitectureTest, ConstManagerForEachDataObjectWorks)
 {
     rg::DataObjectManager manager;
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
-
-    rg::DataObjectManager::VisitOptions options;
-    options.model_visit_mode = rg::ModelVisitMode::SelfOnly;
 
     const rg::DataObjectManager & const_manager{ manager };
-    ConstModelKeyVisitor visitor;
-    const_manager.Accept(visitor, {}, options);
+    std::vector<std::string> keys;
+    const_manager.ForEachDataObject(
+        [&keys](const rg::DataObjectBase & data_object)
+        {
+            if (const auto * model{ rg::AsModelObject(data_object) })
+            {
+                keys.push_back(model->GetKeyTag());
+            }
+        });
 
-    EXPECT_EQ(visitor.keys, (std::vector<std::string>{ "a_model", "b_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{ "a_model", "b_model" }));
 }
 
-TEST(DataObjectVisitorArchitectureTest, ManagerAcceptUsesSnapshotSoClearCanRunConcurrently)
+TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectUsesSnapshotSoClearCanRunConcurrently)
 {
     rg::DataObjectManager manager;
     manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model");
 
-    rg::DataObjectManager::VisitOptions options;
-    options.model_visit_mode = rg::ModelVisitMode::SelfOnly;
-
-    BlockingModelVisitor visitor;
+    BlockingModelCallback callback;
     std::exception_ptr worker_error;
     std::thread worker(
         [&]
         {
             try
             {
-                manager.Accept(visitor, { "model" }, options);
+                manager.ForEachDataObject(std::ref(callback), { "model" });
             }
             catch (...)
             {
@@ -387,33 +225,27 @@ TEST(DataObjectVisitorArchitectureTest, ManagerAcceptUsesSnapshotSoClearCanRunCo
             }
         });
 
-    ASSERT_TRUE(visitor.WaitStarted(std::chrono::seconds(2)));
+    ASSERT_TRUE(callback.WaitStarted(std::chrono::seconds(2)));
     manager.ClearDataObjects();
-    visitor.Release();
+    callback.Release();
     worker.join();
 
     EXPECT_EQ(worker_error, nullptr);
-    EXPECT_EQ(visitor.Key(), "model");
+    EXPECT_EQ(callback.Key(), "model");
 }
 
-TEST(DataObjectVisitorArchitectureTest, ManagerAcceptTraversalMatchesDirectAcceptForSamePolicy)
+TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectRejectsEmptyCallback)
 {
     rg::DataObjectManager manager;
-    manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model");
-    auto model{ manager.GetTypedDataObject<rg::ModelObject>("model") };
+    std::function<void(rg::DataObjectBase &)> mutable_callback;
+    EXPECT_THROW(manager.ForEachDataObject(mutable_callback), std::runtime_error);
 
-    EventVisitor direct_visitor;
-    model->Traverse(direct_visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
-
-    rg::DataObjectManager::VisitOptions options;
-    options.model_visit_mode = rg::ModelVisitMode::AtomsAndBondsThenSelf;
-    EventVisitor manager_visitor;
-    manager.Accept(manager_visitor, { "model" }, options);
-
-    EXPECT_EQ(manager_visitor.events, direct_visitor.events);
+    const rg::DataObjectManager & const_manager{ manager };
+    std::function<void(const rg::DataObjectBase &)> const_callback;
+    EXPECT_THROW(const_manager.ForEachDataObject(const_callback), std::runtime_error);
 }
 
-TEST(DataObjectVisitorArchitectureTest, SampleMapValuesProducesSamplingOutput)
+TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesProducesSamplingOutput)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
@@ -425,7 +257,7 @@ TEST(DataObjectVisitorArchitectureTest, SampleMapValuesProducesSamplingOutput)
     EXPECT_FLOAT_EQ(std::get<0>(sampling_data.front()), 0.0f);
 }
 
-TEST(DataObjectVisitorArchitectureTest, SampleMapValuesIsStatelessAcrossCalls)
+TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesIsStatelessAcrossCalls)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
@@ -440,7 +272,7 @@ TEST(DataObjectVisitorArchitectureTest, SampleMapValuesIsStatelessAcrossCalls)
     EXPECT_EQ(second.size(), 1);
 }
 
-TEST(DataObjectVisitorArchitectureTest, AtomPainterDispatchesByVisitorAndRejectsUnsupportedType)
+TEST(DataObjectDispatchIterationArchitectureTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType)
 {
     rg::AtomPainter painter;
     rg::AtomObject atom;
@@ -454,7 +286,7 @@ TEST(DataObjectVisitorArchitectureTest, AtomPainterDispatchesByVisitorAndRejects
     EXPECT_THROW(painter.AddReferenceDataObject(model.get(), "ref"), std::runtime_error);
 }
 
-TEST(DataObjectVisitorArchitectureTest, ModelBasedPaintersDispatchByVisitorAndRejectUnsupportedType)
+TEST(DataObjectDispatchIterationArchitectureTest, ModelBasedPaintersDispatchByTypedIngestionAndRejectUnsupportedType)
 {
     auto model{ MakeModelWithBond() };
     rg::AtomObject atom;
@@ -480,7 +312,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelBasedPaintersDispatchByVisitorAndRe
     EXPECT_THROW(demo_painter.AddDataObject(&atom), std::runtime_error);
 }
 
-TEST(DataObjectVisitorArchitectureTest, PainterNullIngestUsesModeSpecificErrorMessage)
+TEST(DataObjectDispatchIterationArchitectureTest, PainterNullIngestUsesModeSpecificErrorMessage)
 {
     rg::ModelPainter painter;
 
@@ -505,7 +337,7 @@ TEST(DataObjectVisitorArchitectureTest, PainterNullIngestUsesModeSpecificErrorMe
     }
 }
 
-TEST(DataObjectVisitorArchitectureTest, NormalizeMapObjectNormalizesMapValues)
+TEST(DataObjectDispatchIterationArchitectureTest, NormalizeMapObjectNormalizesMapValues)
 {
     auto map{ MakeMapObject() };
     const auto original_value{ map.GetMapValue(0) };
@@ -517,7 +349,7 @@ TEST(DataObjectVisitorArchitectureTest, NormalizeMapObjectNormalizesMapValues)
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
 }
 
-TEST(DataObjectVisitorArchitectureTest, PrepareModelObjectSelectsAndInitializesLocalEntries)
+TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAndInitializesLocalEntries)
 {
     auto model{ MakeModelWithBond() };
     for (auto & atom : model->GetAtomList()) atom->SetSelectedFlag(false);
@@ -549,7 +381,7 @@ TEST(DataObjectVisitorArchitectureTest, PrepareModelObjectSelectsAndInitializesL
     }
 }
 
-TEST(DataObjectVisitorArchitectureTest, PrepareModelObjectSelectsAllWhenRequested)
+TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAllWhenRequested)
 {
     auto model{ MakeModelWithBond() };
     rg::ModelPreparationOptions options;
@@ -562,7 +394,7 @@ TEST(DataObjectVisitorArchitectureTest, PrepareModelObjectSelectsAllWhenRequeste
     EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
 }
 
-TEST(DataObjectVisitorArchitectureTest, ApplyModelSelectionSelectsByAtomSelectorRules)
+TEST(DataObjectDispatchIterationArchitectureTest, ApplyModelSelectionSelectsByAtomSelectorRules)
 {
     auto model{ MakeModelWithBond() };
     auto & atom_list{ model->GetAtomList() };
@@ -580,7 +412,26 @@ TEST(DataObjectVisitorArchitectureTest, ApplyModelSelectionSelectsByAtomSelector
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
 }
 
-TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchExpectHelpersResolveModelAndMap)
+TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchAsHelpersResolveModelAndMap)
+{
+    auto model{ MakeModelWithBond() };
+    auto map{ MakeMapObject() };
+    rg::AtomObject atom;
+
+    EXPECT_EQ(rg::AsModelObject(*model), model.get());
+    EXPECT_EQ(rg::AsMapObject(*model), nullptr);
+    EXPECT_EQ(rg::AsMapObject(map), &map);
+    EXPECT_EQ(rg::AsModelObject(map), nullptr);
+    EXPECT_EQ(rg::AsModelObject(atom), nullptr);
+    EXPECT_EQ(rg::AsMapObject(atom), nullptr);
+
+    const rg::DataObjectBase & const_model_ref{ *model };
+    const rg::DataObjectBase & const_map_ref{ map };
+    EXPECT_EQ(rg::AsModelObject(const_model_ref), model.get());
+    EXPECT_EQ(rg::AsMapObject(const_map_ref), &map);
+}
+
+TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchExpectHelpersResolveModelAndMap)
 {
     auto model{ MakeModelWithBond() };
     auto map{ MakeMapObject() };
@@ -591,7 +442,7 @@ TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchExpectHelpersResolveMo
     EXPECT_EQ(&map_ref, &map);
 }
 
-TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchThrowsOnUnsupportedTargetType)
+TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchThrowsOnUnsupportedTargetType)
 {
     rg::AtomObject atom;
     EXPECT_THROW(
@@ -602,7 +453,7 @@ TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchThrowsOnUnsupportedTar
         std::runtime_error);
 }
 
-TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchCatalogTypeNameUsesStableTopLevelNames)
+TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchCatalogTypeNameUsesStableTopLevelNames)
 {
     auto model{ MakeModelWithBond() };
     auto map{ MakeMapObject() };
@@ -613,7 +464,7 @@ TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchCatalogTypeNameUsesSta
     EXPECT_THROW((void)rg::GetCatalogTypeName(atom), std::runtime_error);
 }
 
-TEST(DataObjectVisitorArchitectureTest, FileProcessFactoryOutputRejectsWrongObjectTypeThroughDispatch)
+TEST(DataObjectDispatchIterationArchitectureTest, FileProcessFactoryOutputRejectsWrongObjectTypeThroughDispatch)
 {
     rg::ModelObjectFactory model_factory;
     rg::MapObjectFactory map_factory;
@@ -627,7 +478,7 @@ TEST(DataObjectVisitorArchitectureTest, FileProcessFactoryOutputRejectsWrongObje
         std::runtime_error);
 }
 
-TEST(DataObjectVisitorArchitectureTest, CollectModelAtomsSupportsSelectionAndEntryFilters)
+TEST(DataObjectDispatchIterationArchitectureTest, CollectModelAtomsSupportsSelectionAndEntryFilters)
 {
     auto model{ MakeModelWithBond() };
     auto & atoms{ model->GetAtomList() };
@@ -652,7 +503,7 @@ TEST(DataObjectVisitorArchitectureTest, CollectModelAtomsSupportsSelectionAndEnt
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
-TEST(DataObjectVisitorArchitectureTest, PrepareSimulationAtomsCollectsAtomChargeAndRange)
+TEST(DataObjectDispatchIterationArchitectureTest, PrepareSimulationAtomsCollectsAtomChargeAndRange)
 {
     auto model{ MakeModelWithBond() };
     rg::SimulationAtomPreparationOptions options;
@@ -672,7 +523,7 @@ TEST(DataObjectVisitorArchitectureTest, PrepareSimulationAtomsCollectsAtomCharge
     EXPECT_FLOAT_EQ(range_max[0], 1.0f);
 }
 
-TEST(DataObjectVisitorArchitectureTest, BuildModelAtomBondContextBuildsSelectedContextMaps)
+TEST(DataObjectDispatchIterationArchitectureTest, BuildModelAtomBondContextBuildsSelectedContextMaps)
 {
     auto model{ MakeModelWithBond() };
     auto & atoms{ model->GetAtomList() };

@@ -1,13 +1,13 @@
-# DataObject Traversal and Typed Operations Manual
+# DataObject Iteration and Typed Dispatch Manual
 
-This manual documents the current post-refactor architecture for `DataObject` traversal and runtime type handling.
+This manual documents the current post-refactor architecture for `DataObject`
+iteration and runtime type handling.
 
 Use this document when you need to:
 
-- traverse `DataObject` instances via visitor
-- select `ModelVisitMode` for model traversal
-- implement command workflows and painter ingestion
-- perform runtime type dispatch without visitor plumbing
+- iterate manager-owned `DataObject` batches
+- perform runtime type checks for top-level objects (`ModelObject`, `MapObject`)
+- implement command workflows and painter ingestion with typed APIs
 
 Read with:
 
@@ -16,79 +16,91 @@ Read with:
 
 ## 1. Design Boundary
 
-`DataObjectVisitor` is now a traversal extension point only.
+`DataObjectVisitor` and model traversal mode plumbing were removed.
 
-The following areas are intentionally typed APIs (not visitor-based):
+The architecture now uses:
 
-- workflow orchestration
-- map sampling/inference utilities
-- painter ingestion and reference ingestion
-- runtime type dispatch helpers
+- manager-owned callback iteration (`DataObjectManager::ForEachDataObject`)
+- centralized typed runtime dispatch (`DataObjectDispatch`)
+- command-local typed workflow APIs (`DataObjectWorkflowOps`, `MapSampling`, ...)
 
 ## 2. Core Contracts
 
 ### 2.1 `DataObjectBase`
 
-All `DataObject` types implement only:
+All `DataObject` types now implement only:
 
 ```cpp
-virtual void Accept(DataObjectVisitor & visitor) = 0;
-virtual void Accept(ConstDataObjectVisitor & visitor) const = 0;
+virtual std::unique_ptr<DataObjectBase> Clone() const = 0;
+virtual void Display() const = 0;
+virtual void Update() = 0;
+virtual void SetKeyTag(const std::string & label) = 0;
+virtual std::string GetKeyTag() const = 0;
 ```
 
-There is no base-level `Accept(..., ModelVisitMode)` overload.
+There is no visitor `Accept(...)` contract in `DataObjectBase`.
 
-### 2.2 `ModelObject` Traversal API
+### 2.2 `ModelObject`
 
-`ModelObject` provides explicit mode-aware traversal:
+`ModelObject` no longer exposes framework-level `Traverse(...)` overloads.
+
+Atom/bond operations are handled through typed model APIs:
+
+- `GetAtomList()`
+- `GetBondList()`
+- `GetSelectedAtomList()`
+- `GetSelectedBondList()`
+
+### 2.3 Manager Batch Iteration
+
+`DataObjectManager` provides callback-based traversal:
 
 ```cpp
-void Traverse(DataObjectVisitor & visitor, ModelVisitMode mode);
-void Traverse(ConstDataObjectVisitor & visitor, ModelVisitMode mode) const;
+struct IterateOptions
+{
+    bool deterministic_order{ true };
+};
+
+void ForEachDataObject(
+    const std::function<void(DataObjectBase &)> & callback,
+    const std::vector<std::string> & key_tag_list = {},
+    const IterateOptions & options = {});
+
+void ForEachDataObject(
+    const std::function<void(const DataObjectBase &)> & callback,
+    const std::vector<std::string> & key_tag_list = {},
+    const IterateOptions & options = {}) const;
 ```
 
-Compatibility behavior:
+Behavior:
 
-- `ModelObject::Accept(visitor)` preserves legacy `AtomsThenSelf`
+- default traversal is deterministic by key sort when `key_tag_list` is empty
+- when `key_tag_list` is provided, caller order is preserved
+- iteration is snapshot-based, so concurrent map mutation does not invalidate traversal
 
-`ModelVisitMode` order:
+## 3. Typed Runtime Dispatch
 
-| Mode | Visit order |
-| --- | --- |
-| `AtomsThenSelf` | all atoms -> model |
-| `BondsThenSelf` | all bonds -> model |
-| `AtomsAndBondsThenSelf` | all atoms -> all bonds -> model |
-| `SelfOnly` | model only |
+`DataObjectDispatch` provides two dispatch layers:
 
-### 2.3 Non-model Objects
+Non-throwing probe helpers:
 
-`AtomObject`, `BondObject`, and `MapObject` only expose plain `Accept(visitor)` and do not implement mode overloads.
+- `AsModelObject(...)`
+- `AsMapObject(...)`
 
-## 3. Manager Traversal Policy
-
-`DataObjectManager::Accept(..., VisitOptions)` keeps traversal policy centralization:
-
-- `VisitOptions.model_visit_mode` is applied only when object dynamic type is `ModelObject` by calling `Traverse(...)`
-- all other object types use plain `Accept(visitor)`
-- deterministic key ordering and caller-specified key ordering behavior is unchanged
-
-## 4. Typed Runtime Dispatch
-
-`DataObjectDispatch` now uses centralized `dynamic_cast` helpers internally.
-
-Public API remains:
+Throwing expectation helpers:
 
 - `ExpectModelObject(...)`
 - `ExpectMapObject(...)`
+
+Catalog naming helper:
+
 - `GetCatalogTypeName(...)`
 
-Error semantics are preserved, including `expected X but got Y` style messages.
+Error semantics for expectation helpers are preserved in `expected X but got Y` style.
 
-## 5. Typed Workflow Operations
+## 4. Typed Workflow Operations
 
-Visitor-based workflow classes were replaced by typed operation functions.
-
-### 5.1 DataObject workflow ops
+Workflow logic remains typed and visitor-free.
 
 `src/core/DataObjectWorkflowOps.*` exports:
 
@@ -99,16 +111,6 @@ Visitor-based workflow classes were replaced by typed operation functions.
 - `PrepareSimulationAtoms`
 - `BuildModelAtomBondContext`
 
-Options/data contracts retained:
-
-- `ModelPreparationOptions`
-- `ModelAtomCollectorOptions`
-- `SimulationAtomPreparationOptions`
-- `SimulationAtomPreparationResult`
-- `ModelAtomBondContext`
-
-### 5.2 Potential analysis workflow ops
-
 `src/core/PotentialAnalysisWorkflowOps.*` exports:
 
 - `RunAtomSampling`
@@ -117,32 +119,11 @@ Options/data contracts retained:
 - `RunBondSampling`
 - `RunBondGrouping`
 
-Command/bond workflow callers now invoke these functions directly.
+`include/core/MapSampling.hpp` provides stateless map sampling through `SampleMapValues(...)`.
 
-## 6. Stateless Map Sampling
+## 5. Painter Ingestion Boundary
 
-Visitor/stateful map interpolation was replaced by:
-
-```cpp
-std::vector<SamplingDataTuple> SampleMapValues(
-    const MapObject & map,
-    const SamplerBase & sampler,
-    const std::array<double, 3> & position,
-    const std::array<double, 3> & axis_vector);
-```
-
-Location:
-
-- `include/core/MapSampling.hpp`
-- `src/core/MapSampling.cpp`
-
-`MapInterpolationVisitor` and `MapSamplingWorkflow` are removed.
-
-## 7. Painter Ingestion Boundary
-
-Built-in painters no longer inherit `DataObjectVisitor`.
-
-Affected painters:
+Built-in painters ingest typed objects via `PainterIngestionInternal.hpp`:
 
 - `AtomPainter`
 - `ModelPainter`
@@ -150,41 +131,39 @@ Affected painters:
 - `ComparisonPainter`
 - `DemoPainter`
 
-`AddDataObject(...)` and `AddReferenceDataObject(...)` now route through typed ingest helpers in `src/core/PainterIngestionInternal.hpp` using `dynamic_cast` and preserving existing null/type mismatch error semantics.
+`AddDataObject(...)` and `AddReferenceDataObject(...)` use `dynamic_cast`-based typed checks and preserve existing null/type mismatch error semantics.
 
-## 8. Extension Guidance
+## 6. Extension Guidance
 
-### 8.1 When to use visitor
+### 6.1 When to use manager iteration
 
-Use visitor only when you truly need polymorphic traversal over heterogeneous `DataObject` trees.
+Use `DataObjectManager::ForEachDataObject(...)` when ownership of batch selection and ordering belongs to manager-level key policies.
 
-### 8.2 When not to use visitor
+### 6.2 When to use direct typed access
 
-Prefer typed API for:
+Prefer typed APIs for:
 
 - command-local pipelines
-- algorithms with single supported input type
-- painter ingestion and validation
-- type expectation checks and error shaping
+- algorithms with known input types
+- atom/bond workflows inside `ModelObject`
+- runtime expectation checks with explicit error shaping
 
-### 8.3 Adding a new `DataObject` subtype
+### 6.3 Adding a new top-level `DataObject` subtype
 
 1. Add concrete subtype derived from `DataObjectBase`.
-2. Implement only const/non-const `Accept(visitor)`.
-3. Add visit methods to both visitor interfaces if traversal support is needed.
-4. Extend typed dispatch helpers/ops where relevant.
-5. Update tests and this manual.
+2. Extend `DataObjectDispatch` with probe/expect helpers if needed.
+3. Extend I/O and persistence layers (`FileFormatRegistry`, DAO/managed store descriptors) where relevant.
+4. Add tests for typed dispatch, manager iteration behavior, and persistence round-trip.
+5. Update this manual.
 
-## 9. Key Files
+## 7. Key Files
 
-Core traversal contracts:
+Core contracts:
 
 - `include/data/DataObjectBase.hpp`
-- `include/data/DataObjectVisitor.hpp`
 - `include/data/ModelObject.hpp`
-- `src/data/ModelObject.cpp`
 
-Traversal orchestration:
+Manager iteration:
 
 - `include/core/DataObjectManager.hpp`
 - `src/core/DataObjectManager.cpp`
@@ -203,4 +182,4 @@ Typed dispatch and ops:
 
 Regression tests:
 
-- `tests/DataObjectVisitorArchitecture_test.cpp`
+- `tests/DataObjectDispatchIterationArchitecture_test.cpp`

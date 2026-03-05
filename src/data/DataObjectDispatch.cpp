@@ -22,53 +22,78 @@ const char * ResolveDataObjectTypeName(const DataObjectBase & data_object)
     return "unsupported DataObject type";
 }
 
-template <typename ExpectedType>
-const ExpectedType & ExpectDataObjectType(
-    const DataObjectBase & data_object,
-    std::string_view context,
-    const char * expected_type)
+} // namespace
+
+ModelObject * AsModelObject(DataObjectBase & data_object) noexcept
 {
-    if (auto typed_object{ dynamic_cast<const ExpectedType *>(&data_object) })
-    {
-        return *typed_object;
-    }
-    throw std::runtime_error(
-        std::string(context) + ": expected " + expected_type + " but got "
-        + ResolveDataObjectTypeName(data_object) + ".");
+    return dynamic_cast<ModelObject *>(&data_object);
 }
 
-} // namespace
+const ModelObject * AsModelObject(const DataObjectBase & data_object) noexcept
+{
+    return dynamic_cast<const ModelObject *>(&data_object);
+}
+
+MapObject * AsMapObject(DataObjectBase & data_object) noexcept
+{
+    return dynamic_cast<MapObject *>(&data_object);
+}
+
+const MapObject * AsMapObject(const DataObjectBase & data_object) noexcept
+{
+    return dynamic_cast<const MapObject *>(&data_object);
+}
 
 const ModelObject & ExpectModelObject(
     const DataObjectBase & data_object,
     std::string_view context)
 {
-    return ExpectDataObjectType<ModelObject>(data_object, context, "ModelObject");
+    if (auto typed_object{ AsModelObject(data_object) })
+    {
+        return *typed_object;
+    }
+    throw std::runtime_error(
+        std::string(context) + ": expected ModelObject but got "
+        + ResolveDataObjectTypeName(data_object) + ".");
 }
 
 ModelObject & ExpectModelObject(
     DataObjectBase & data_object,
     std::string_view context)
 {
-    const auto & const_ref{
-        ExpectModelObject(static_cast<const DataObjectBase &>(data_object), context) };
-    return const_cast<ModelObject &>(const_ref);
+    if (auto typed_object{ AsModelObject(data_object) })
+    {
+        return *typed_object;
+    }
+    throw std::runtime_error(
+        std::string(context) + ": expected ModelObject but got "
+        + ResolveDataObjectTypeName(data_object) + ".");
 }
 
 const MapObject & ExpectMapObject(
     const DataObjectBase & data_object,
     std::string_view context)
 {
-    return ExpectDataObjectType<MapObject>(data_object, context, "MapObject");
+    if (auto typed_object{ AsMapObject(data_object) })
+    {
+        return *typed_object;
+    }
+    throw std::runtime_error(
+        std::string(context) + ": expected MapObject but got "
+        + ResolveDataObjectTypeName(data_object) + ".");
 }
 
 MapObject & ExpectMapObject(
     DataObjectBase & data_object,
     std::string_view context)
 {
-    const auto & const_ref{
-        ExpectMapObject(static_cast<const DataObjectBase &>(data_object), context) };
-    return const_cast<MapObject &>(const_ref);
+    if (auto typed_object{ AsMapObject(data_object) })
+    {
+        return *typed_object;
+    }
+    throw std::runtime_error(
+        std::string(context) + ": expected MapObject but got "
+        + ResolveDataObjectTypeName(data_object) + ".");
 }
 
 std::string GetCatalogTypeName(const DataObjectBase & data_object)

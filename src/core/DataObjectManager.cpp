@@ -3,8 +3,6 @@
 #include "FileProcessFactoryResolver.hpp"
 #include "FilePathHelper.hpp"
 #include "DataObjectBase.hpp"
-#include "DataObjectVisitor.hpp"
-#include "ModelObject.hpp"
 #include "DatabaseManager.hpp"
 #include "Logger.hpp"
 
@@ -257,53 +255,53 @@ void DataObjectManager::SaveDataObject(
     m_db_manager->SaveDataObject(data_object.get(), saved_key_tag);
 }
 
-void DataObjectManager::Accept(
-    DataObjectVisitor & visitor,
+void DataObjectManager::ForEachDataObject(
+    const std::function<void(DataObjectBase &)> & callback,
     const std::vector<std::string> & key_tag_list)
 {
-    Accept(visitor, key_tag_list, VisitOptions{});
+    ForEachDataObject(callback, key_tag_list, IterateOptions{});
 }
 
-void DataObjectManager::Accept(
-    DataObjectVisitor & visitor,
+void DataObjectManager::ForEachDataObject(
+    const std::function<void(DataObjectBase &)> & callback,
     const std::vector<std::string> & key_tag_list,
-    const VisitOptions & options)
+    const IterateOptions & options)
 {
+    if (!callback)
+    {
+        throw std::runtime_error("ForEachDataObject(): callback is empty.");
+    }
+
     auto data_object_list{ BuildDataObjectSnapshot<std::shared_ptr<DataObjectBase>>(
         m_data_object_map, m_map_mutex, key_tag_list, options.deterministic_order) };
     for (auto & data_object : data_object_list)
     {
-        if (auto model_object{ std::dynamic_pointer_cast<ModelObject>(data_object) })
-        {
-            model_object->Traverse(visitor, options.model_visit_mode);
-            continue;
-        }
-        data_object->Accept(visitor);
+        callback(*data_object);
     }
 }
 
-void DataObjectManager::Accept(
-    ConstDataObjectVisitor & visitor,
+void DataObjectManager::ForEachDataObject(
+    const std::function<void(const DataObjectBase &)> & callback,
     const std::vector<std::string> & key_tag_list) const
 {
-    Accept(visitor, key_tag_list, VisitOptions{});
+    ForEachDataObject(callback, key_tag_list, IterateOptions{});
 }
 
-void DataObjectManager::Accept(
-    ConstDataObjectVisitor & visitor,
+void DataObjectManager::ForEachDataObject(
+    const std::function<void(const DataObjectBase &)> & callback,
     const std::vector<std::string> & key_tag_list,
-    const VisitOptions & options) const
+    const IterateOptions & options) const
 {
+    if (!callback)
+    {
+        throw std::runtime_error("ForEachDataObject() const: callback is empty.");
+    }
+
     auto data_object_list{ BuildDataObjectSnapshot<std::shared_ptr<const DataObjectBase>>(
         m_data_object_map, m_map_mutex, key_tag_list, options.deterministic_order) };
     for (const auto & data_object : data_object_list)
     {
-        if (auto model_object{ std::dynamic_pointer_cast<const ModelObject>(data_object) })
-        {
-            model_object->Traverse(visitor, options.model_visit_mode);
-            continue;
-        }
-        data_object->Accept(visitor);
+        callback(*data_object);
     }
 }
 

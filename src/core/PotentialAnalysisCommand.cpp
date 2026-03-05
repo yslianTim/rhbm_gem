@@ -22,7 +22,6 @@
 #include "GausLinearTransformHelper.hpp"
 #include "Logger.hpp"
 #include "LocalPainter.hpp"
-#include "ModelVisitMode.hpp"
 
 #include <unordered_set>
 #include <tuple>

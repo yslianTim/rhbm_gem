@@ -16,7 +16,7 @@ set(TEST_SOURCES
     ComponentHelper_test.cpp
     DataObjectManager_test.cpp
     DataObjectIOSchema_test.cpp
-    DataObjectVisitorArchitecture_test.cpp
+    DataObjectDispatchIterationArchitecture_test.cpp
     EigenMatrixUtility_test.cpp
     ElectricPotential_test.cpp
     EnumOptionTraits_test.cpp

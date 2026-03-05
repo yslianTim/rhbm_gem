@@ -7,8 +7,7 @@
 #include <stdexcept>
 #include <vector>
 #include <mutex>
-
-#include "ModelVisitMode.hpp"
+#include <functional>
 
 namespace rhbm_gem {
 
@@ -16,8 +15,6 @@ class DatabaseManager;
 class FileProcessFactoryBase;
 class FileProcessFactoryResolver;
 class DataObjectBase;
-class DataObjectVisitor;
-class ConstDataObjectVisitor;
 
 class DataObjectManager
 {
@@ -28,10 +25,9 @@ class DataObjectManager
     mutable std::mutex m_db_mutex;  // protects m_db_manager
 
 public:
-    struct VisitOptions
+    struct IterateOptions
     {
         bool deterministic_order{ true };
-        ModelVisitMode model_visit_mode{ ModelVisitMode::AtomsThenSelf };
     };
 
     DataObjectManager();
@@ -44,20 +40,20 @@ public:
     bool HasDataObject(const std::string & key_tag) const;
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
-    void Accept(
-        DataObjectVisitor & visitor,
+    void ForEachDataObject(
+        const std::function<void(DataObjectBase &)> & callback,
         const std::vector<std::string> & key_tag_list={});
-    void Accept(
-        DataObjectVisitor & visitor,
+    void ForEachDataObject(
+        const std::function<void(DataObjectBase &)> & callback,
         const std::vector<std::string> & key_tag_list,
-        const VisitOptions & options);
-    void Accept(
-        ConstDataObjectVisitor & visitor,
+        const IterateOptions & options);
+    void ForEachDataObject(
+        const std::function<void(const DataObjectBase &)> & callback,
         const std::vector<std::string> & key_tag_list={}) const;
-    void Accept(
-        ConstDataObjectVisitor & visitor,
+    void ForEachDataObject(
+        const std::function<void(const DataObjectBase &)> & callback,
         const std::vector<std::string> & key_tag_list,
-        const VisitOptions & options) const;
+        const IterateOptions & options) const;
     std::shared_ptr<DataObjectBase> GetDataObject(const std::string & key_tag);
     std::shared_ptr<const DataObjectBase> GetDataObject(const std::string & key_tag) const;
     template <typename TypedDataObject>

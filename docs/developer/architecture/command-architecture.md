@@ -268,8 +268,8 @@ Preferred command-facing entry points are:
 - `m_data_manager.SaveDataObject(...)`
 - `m_data_manager.GetTypedDataObject(...)`
 - `command_data_loader::*` helpers from `src/core/CommandDataLoaderInternal.hpp`
-- `DataObjectBase::Accept(visitor)` / `ModelObject::Traverse(visitor, mode)` for traversal extension points
-- `m_data_manager.Accept(visitor, ...)` for manager-owned traversal batches
+- `DataObjectDispatch` helpers (`As*`, `Expect*`) for runtime type checks
+- `m_data_manager.ForEachDataObject(callback, ...)` for manager-owned traversal batches
 
 Current preferred internal loading facade is
 [`src/core/CommandDataLoaderInternal.hpp`](../../../src/core/CommandDataLoaderInternal.hpp),

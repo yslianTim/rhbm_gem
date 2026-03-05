@@ -9,6 +9,11 @@ class DataObjectBase;
 class ModelObject;
 class MapObject;
 
+ModelObject * AsModelObject(DataObjectBase & data_object) noexcept;
+const ModelObject * AsModelObject(const DataObjectBase & data_object) noexcept;
+MapObject * AsMapObject(DataObjectBase & data_object) noexcept;
+const MapObject * AsMapObject(const DataObjectBase & data_object) noexcept;
+
 const ModelObject & ExpectModelObject(
     const DataObjectBase & data_object,
     std::string_view context);

@@ -1,7 +1,6 @@
 #include "ModelObject.hpp"
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
-#include "DataObjectVisitor.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "ChemicalComponentEntry.hpp"
 #include "KDTreeAlgorithm.hpp"
@@ -10,38 +9,6 @@
 #include "Logger.hpp"
 
 namespace rhbm_gem {
-namespace {
-
-template <typename VisitorType, typename AtomListType, typename BondListType, typename VisitSelfFunc>
-void TraverseModelByMode(
-    VisitorType & visitor,
-    const AtomListType & atom_list,
-    const BondListType & bond_list,
-    ModelVisitMode mode,
-    VisitSelfFunc && visit_self)
-{
-    switch (mode)
-    {
-    case ModelVisitMode::AtomsThenSelf:
-        for (const auto & atom : atom_list) atom->Accept(visitor);
-        visit_self();
-        break;
-    case ModelVisitMode::BondsThenSelf:
-        for (const auto & bond : bond_list) bond->Accept(visitor);
-        visit_self();
-        break;
-    case ModelVisitMode::AtomsAndBondsThenSelf:
-        for (const auto & atom : atom_list) atom->Accept(visitor);
-        for (const auto & bond : bond_list) bond->Accept(visitor);
-        visit_self();
-        break;
-    case ModelVisitMode::SelfOnly:
-        visit_self();
-        break;
-    }
-}
-
-} // namespace
 
 ModelObject::ModelObject() :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
@@ -120,36 +87,6 @@ void ModelObject::Update()
     }
     BuildSelectedAtomList();
     BuildSelectedBondList();
-}
-
-void ModelObject::Accept(DataObjectVisitor & visitor)
-{
-    Traverse(visitor, ModelVisitMode::AtomsThenSelf);
-}
-
-void ModelObject::Accept(ConstDataObjectVisitor & visitor) const
-{
-    Traverse(visitor, ModelVisitMode::AtomsThenSelf);
-}
-
-void ModelObject::Traverse(DataObjectVisitor & visitor, ModelVisitMode mode)
-{
-    TraverseModelByMode(
-        visitor,
-        m_atom_list,
-        m_bond_list,
-        mode,
-        [this, &visitor]() { visitor.VisitModelObject(*this); });
-}
-
-void ModelObject::Traverse(ConstDataObjectVisitor & visitor, ModelVisitMode mode) const
-{
-    TraverseModelByMode(
-        visitor,
-        m_atom_list,
-        m_bond_list,
-        mode,
-        [this, &visitor]() { visitor.VisitModelObject(*this); });
 }
 
 void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)

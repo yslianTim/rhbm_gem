@@ -262,26 +262,26 @@ DataObjectDAORegistrar<DataObjectType, DAOType>("stable_name")
 
 `stable_name` is persisted in `object_catalog.object_type`; treat it as on-disk ABI.
 
-### 6.5 Visitor Traversal Integration
+### 6.5 Iteration and Typed Dispatch Integration
 
-I/O and persistence workflows hand off loaded/stored objects to traversal workflows through
-`DataObjectManager::Accept(...)` and command-local `DataObjectBase::Accept(...)` paths.
+I/O and persistence workflows hand off loaded/stored objects through manager callback iteration
+and typed dispatch helpers.
 
 Current integration contract:
 
-- Visitor interfaces are split into mutable (`DataObjectVisitor`) and read-only (`ConstDataObjectVisitor`) paths (`include/data/DataObjectVisitor.hpp`).
-- `DataObjectManager::Accept(...)` defaults to deterministic key order traversal when `key_tag_list` is empty.
-- `DataObjectManager::Accept(...)` provides both default options and explicit `VisitOptions` overloads for mutable/const visitor flows.
-- Model traversal policy is controlled by `VisitOptions.model_visit_mode`; manager dispatches to
-  `ModelObject::Traverse(visitor, mode)` only when the dynamic object type is model, otherwise it calls plain `Accept(visitor)`.
-- `DataObjectDispatch` (`include/data/DataObjectDispatch.hpp`) provides centralized runtime typed dispatch
-  for top-level object expectations (`ExpectModelObject`, `ExpectMapObject`) and
-  catalog naming (`GetCatalogTypeName`) via internal `dynamic_cast` helpers.
+- `DataObjectManager::ForEachDataObject(...)` defaults to deterministic key order traversal when
+  `key_tag_list` is empty.
+- `DataObjectManager::ForEachDataObject(...)` provides mutable and const callback paths.
+- `DataObjectManager::ForEachDataObject(...)` uses snapshot iteration semantics so map mutation
+  (for example `ClearDataObjects()`) can proceed concurrently without invalidating traversal.
+- `DataObjectDispatch` (`include/data/DataObjectDispatch.hpp`) provides centralized runtime typed dispatch:
+  `AsModelObject`, `AsMapObject`, `ExpectModelObject`, `ExpectMapObject`, and `GetCatalogTypeName`.
 - Core command workflows prefer command-local typed operation APIs
   (for example `NormalizeMapObject(...)`, `PrepareModelObject(...)`,
-  `RunAtomSampling(...)`, `SampleMapValues(...)`) over command-local visitor classes.
-- Use `DataObjectManager::Accept(...)` when traversal ownership belongs to manager-level key selection/order policies;
-  use direct object traversal (`Accept` / `Traverse`) or typed ops for command-local workflows.
+  `RunAtomSampling(...)`, `SampleMapValues(...)`).
+- Use `DataObjectManager::ForEachDataObject(...)` when traversal ownership belongs to manager-level
+  key selection/order policies; use direct typed APIs (`GetTypedDataObject`, `Expect*`, model lists)
+  for command-local workflows.
 
 ## 7. Persistence Details by Object
 

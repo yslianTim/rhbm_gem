@@ -341,8 +341,6 @@ public:
 
     void Display() const override {}
     void Update() override {}
-    void Accept(rg::DataObjectVisitor & /*visitor*/) override {}
-    void Accept(rg::ConstDataObjectVisitor & /*visitor*/) const override {}
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 };

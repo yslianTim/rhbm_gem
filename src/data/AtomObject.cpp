@@ -1,6 +1,5 @@
 #include "AtomObject.hpp"
 #include "ChemicalDataHelper.hpp"
-#include "DataObjectVisitor.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
@@ -58,16 +57,6 @@ void AtomObject::Display() const
 void AtomObject::Update()
 {
     Logger::Log(LogLevel::Info, "AtomObject Update: " + GetInfo());
-}
-
-void AtomObject::Accept(DataObjectVisitor & visitor)
-{
-    visitor.VisitAtomObject(*this);
-}
-
-void AtomObject::Accept(ConstDataObjectVisitor & visitor) const
-{
-    visitor.VisitAtomObject(*this);
 }
 
 std::unique_ptr<AtomObject> AtomObject::AtomObjectClone() const

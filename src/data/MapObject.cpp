@@ -1,5 +1,4 @@
 #include "MapObject.hpp"
-#include "DataObjectVisitor.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "ScopeTimer.hpp"
 #include "ArrayStats.hpp"
@@ -139,16 +138,6 @@ void MapObject::Update()
     CalculateMapValueMax();
     CalculateMapValueMean();
     CalculateMapValueSD();
-}
-
-void MapObject::Accept(DataObjectVisitor & visitor)
-{
-    visitor.VisitMapObject(*this);
-}
-
-void MapObject::Accept(ConstDataObjectVisitor & visitor) const
-{
-    visitor.VisitMapObject(*this);
 }
 
 void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)

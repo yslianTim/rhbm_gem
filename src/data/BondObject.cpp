@@ -1,6 +1,5 @@
 #include "BondObject.hpp"
 #include "AtomObject.hpp"
-#include "DataObjectVisitor.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "GlobalEnumClass.hpp"
 #include "AtomClassifier.hpp"
@@ -88,16 +87,6 @@ void BondObject::Display() const
 void BondObject::Update()
 {
     Logger::Log(LogLevel::Info, "BondObject Update: " + GetInfo());
-}
-
-void BondObject::Accept(DataObjectVisitor & visitor)
-{
-    visitor.VisitBondObject(*this);
-}
-
-void BondObject::Accept(ConstDataObjectVisitor & visitor) const
-{
-    visitor.VisitBondObject(*this);
 }
 
 std::unique_ptr<BondObject> BondObject::BondObjectClone() const
