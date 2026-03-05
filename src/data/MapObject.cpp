@@ -151,18 +151,6 @@ void MapObject::Accept(ConstDataObjectVisitor & visitor) const
     visitor.VisitMapObject(*this);
 }
 
-void MapObject::Accept(DataObjectVisitor & visitor, ModelVisitMode model_mode)
-{
-    (void)model_mode;
-    Accept(visitor);
-}
-
-void MapObject::Accept(ConstDataObjectVisitor & visitor, ModelVisitMode model_mode) const
-{
-    (void)model_mode;
-    Accept(visitor);
-}
-
 void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
 {
     if (m_map_value_array != nullptr && m_map_value_mean != 0.0f)

@@ -1,6 +1,6 @@
 #include "PotentialAnalysisBondWorkflow.hpp"
 #include "PotentialAnalysisExecutionOptions.hpp"
-#include "PotentialAnalysisWorkflowVisitors.hpp"
+#include "PotentialAnalysisWorkflowOps.hpp"
 
 #include "BondObject.hpp"
 #include "ChemicalDataHelper.hpp"
@@ -12,7 +12,6 @@
 #include "LocalPotentialEntry.hpp"
 #include "Logger.hpp"
 #include "MapObject.hpp"
-#include "ModelVisitMode.hpp"
 #include "ModelObject.hpp"
 #include "ScopeTimer.hpp"
 
@@ -30,14 +29,12 @@ namespace {
 
 void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & context)
 {
-    BondSamplingVisitor visitor{ context.map_object, context.options };
-    context.model_object.Accept(visitor, ModelVisitMode::SelfOnly);
+    RunBondSampling(context.model_object, context.map_object, context.options);
 }
 
 void RunBondGroupClassification(const PotentialAnalysisBondWorkflowContext & context)
 {
-    BondGroupingVisitor visitor;
-    context.model_object.Accept(visitor, ModelVisitMode::SelfOnly);
+    RunBondGrouping(context.model_object);
 }
 
 void RunLocalBondFitting(

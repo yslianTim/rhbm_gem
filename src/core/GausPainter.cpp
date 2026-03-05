@@ -58,41 +58,29 @@ void GausPainter::SetFolder(const std::string & folder_path)
 
 void GausPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject(
+    painter_internal::AddDataObject<ModelObject>(
         data_object,
-        *this,
         m_ingest_mode,
         IngestMode::Data,
         IngestMode::Reference,
         m_ingest_label,
-        "GausPainter");
+        "GausPainter",
+        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
 }
 
 void GausPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject(
+    painter_internal::AddReferenceDataObject<ModelObject>(
         data_object,
         label,
-        *this,
         m_ingest_mode,
         IngestMode::Reference,
         m_ingest_label,
-        "GausPainter");
+        "GausPainter",
+        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
 }
 
-void GausPainter::VisitAtomObject(AtomObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void GausPainter::VisitBondObject(BondObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void GausPainter::VisitModelObject(ModelObject & data_object)
+void GausPainter::IngestModelObject(ModelObject & data_object)
 {
     if (m_ingest_mode == IngestMode::Reference)
     {
@@ -100,20 +88,6 @@ void GausPainter::VisitModelObject(ModelObject & data_object)
         return;
     }
     m_model_object_list.push_back(&data_object);
-}
-
-void GausPainter::VisitMapObject(MapObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void GausPainter::ThrowInvalidType() const
-{
-    painter_internal::ThrowInvalidTypeForMode(
-        m_ingest_mode,
-        IngestMode::Reference,
-        "GausPainter");
 }
 
 void GausPainter::Painting()

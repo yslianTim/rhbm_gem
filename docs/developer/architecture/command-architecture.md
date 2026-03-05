@@ -268,18 +268,18 @@ Preferred command-facing entry points are:
 - `m_data_manager.SaveDataObject(...)`
 - `m_data_manager.GetTypedDataObject(...)`
 - `command_data_loader::*` helpers from `src/core/CommandDataLoaderInternal.hpp`
-- `DataObjectBase::Accept(visitor, ...)` for command-local traversal/preprocessing
+- `DataObjectBase::Accept(visitor)` / `ModelObject::Traverse(visitor, mode)` for traversal extension points
 - `m_data_manager.Accept(visitor, ...)` for manager-owned traversal batches
 
 Current preferred internal loading facade is
 [`src/core/CommandDataLoaderInternal.hpp`](../../../src/core/CommandDataLoaderInternal.hpp),
 which exposes non-template model/map loading helpers for command call sites.
 
-Current command-local visitor workflows include:
+Current command-local typed workflow APIs include:
 
-- map preprocessing via `MapNormalizeVisitor`
-- model preprocessing via `ModelPreparationVisitor`
-- map sampling orchestration via `MapSamplingWorkflow`
+- map/model preprocessing via `DataObjectWorkflowOps` (`NormalizeMapObject`, `PrepareModelObject`, ...)
+- potential analysis flows via `PotentialAnalysisWorkflowOps`
+- map sampling via stateless `SampleMapValues(...)`
 
 The command should decide:
 

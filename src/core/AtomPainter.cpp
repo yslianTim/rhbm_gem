@@ -46,29 +46,29 @@ void AtomPainter::SetFolder(const std::string & folder_path)
 
 void AtomPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject(
+    painter_internal::AddDataObject<AtomObject>(
         data_object,
-        *this,
         m_ingest_mode,
         IngestMode::Data,
         IngestMode::Reference,
         m_ingest_label,
-        "AtomPainter");
+        "AtomPainter",
+        [this](AtomObject & typed_data_object) { IngestAtomObject(typed_data_object); });
 }
 
 void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject(
+    painter_internal::AddReferenceDataObject<AtomObject>(
         data_object,
         label,
-        *this,
         m_ingest_mode,
         IngestMode::Reference,
         m_ingest_label,
-        "AtomPainter");
+        "AtomPainter",
+        [this](AtomObject & typed_data_object) { IngestAtomObject(typed_data_object); });
 }
 
-void AtomPainter::VisitAtomObject(AtomObject & data_object)
+void AtomPainter::IngestAtomObject(AtomObject & data_object)
 {
     if (data_object.GetLocalPotentialEntry() == nullptr) return;
     if (data_object.GetSelectedFlag() == false) return;
@@ -78,32 +78,6 @@ void AtomPainter::VisitAtomObject(AtomObject & data_object)
         return;
     }
     m_atom_object_list.push_back(&data_object);
-}
-
-void AtomPainter::VisitBondObject(BondObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void AtomPainter::VisitModelObject(ModelObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void AtomPainter::VisitMapObject(MapObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void AtomPainter::ThrowInvalidType() const
-{
-    painter_internal::ThrowInvalidTypeForMode(
-        m_ingest_mode,
-        IngestMode::Reference,
-        "AtomPainter");
 }
 
 void AtomPainter::Painting()

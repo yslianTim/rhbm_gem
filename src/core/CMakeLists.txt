@@ -4,18 +4,18 @@ set(CORE_SOURCES
     BuiltInCommandCatalog.cpp
     CommandBase.cpp
     ComparisonPainter.cpp
-    DataObjectWorkflowVisitors.cpp
+    DataObjectWorkflowOps.cpp
     DataObjectManager.cpp
     DemoPainter.cpp
     GausPainter.cpp
     HRLModelTestCommand.cpp
-    MapInterpolationVisitor.cpp
+    MapSampling.cpp
     MapSimulationCommand.cpp
     MapVisualizationCommand.cpp
     ModelPainter.cpp
     PositionEstimationCommand.cpp
     PotentialAnalysisCommand.cpp
-    PotentialAnalysisWorkflowVisitors.cpp
+    PotentialAnalysisWorkflowOps.cpp
     PotentialDisplayCommand.cpp
     ResultDumpCommand.cpp
 )

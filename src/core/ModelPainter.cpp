@@ -60,41 +60,29 @@ void ModelPainter::SetFolder(const std::string & folder_path)
 
 void ModelPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject(
+    painter_internal::AddDataObject<ModelObject>(
         data_object,
-        *this,
         m_ingest_mode,
         IngestMode::Data,
         IngestMode::Reference,
         m_ingest_label,
-        "ModelPainter");
+        "ModelPainter",
+        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
 }
 
 void ModelPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject(
+    painter_internal::AddReferenceDataObject<ModelObject>(
         data_object,
         label,
-        *this,
         m_ingest_mode,
         IngestMode::Reference,
         m_ingest_label,
-        "ModelPainter");
+        "ModelPainter",
+        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
 }
 
-void ModelPainter::VisitAtomObject(AtomObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void ModelPainter::VisitBondObject(BondObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void ModelPainter::VisitModelObject(ModelObject & data_object)
+void ModelPainter::IngestModelObject(ModelObject & data_object)
 {
     if (m_ingest_mode == IngestMode::Reference)
     {
@@ -102,20 +90,6 @@ void ModelPainter::VisitModelObject(ModelObject & data_object)
         return;
     }
     m_model_object_list.push_back(&data_object);
-}
-
-void ModelPainter::VisitMapObject(MapObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void ModelPainter::ThrowInvalidType() const
-{
-    painter_internal::ThrowInvalidTypeForMode(
-        m_ingest_mode,
-        IngestMode::Reference,
-        "ModelPainter");
 }
 
 void ModelPainter::Painting()

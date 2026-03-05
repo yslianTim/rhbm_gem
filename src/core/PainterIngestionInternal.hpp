@@ -3,10 +3,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "DataObjectBase.hpp"
-#include "DataObjectVisitor.hpp"
-#include "ModelVisitMode.hpp"
 
 namespace rhbm_gem::painter_internal {
 
@@ -23,15 +22,15 @@ template <typename IngestMode>
         std::string(painter_name) + "::" + method_name + "(): invalid data_object type");
 }
 
-template <typename IngestMode>
+template <typename ExpectedType, typename IngestMode, typename OnTypedDataObject>
 void AddDataObject(
     DataObjectBase * data_object,
-    DataObjectVisitor & visitor,
     IngestMode & ingest_mode,
     IngestMode data_mode,
     IngestMode reference_mode,
     std::string & ingest_label,
-    std::string_view painter_name)
+    std::string_view painter_name,
+    OnTypedDataObject && on_typed_data_object)
 {
     ingest_mode = data_mode;
     ingest_label.clear();
@@ -39,18 +38,23 @@ void AddDataObject(
     {
         ThrowInvalidTypeForMode(ingest_mode, reference_mode, painter_name);
     }
-    data_object->Accept(visitor, ModelVisitMode::SelfOnly);
+    auto typed_data_object{ dynamic_cast<ExpectedType *>(data_object) };
+    if (typed_data_object == nullptr)
+    {
+        ThrowInvalidTypeForMode(ingest_mode, reference_mode, painter_name);
+    }
+    std::forward<OnTypedDataObject>(on_typed_data_object)(*typed_data_object);
 }
 
-template <typename IngestMode>
+template <typename ExpectedType, typename IngestMode, typename OnTypedDataObject>
 void AddReferenceDataObject(
     DataObjectBase * data_object,
     const std::string & label,
-    DataObjectVisitor & visitor,
     IngestMode & ingest_mode,
     IngestMode reference_mode,
     std::string & ingest_label,
-    std::string_view painter_name)
+    std::string_view painter_name,
+    OnTypedDataObject && on_typed_data_object)
 {
     ingest_mode = reference_mode;
     ingest_label = label;
@@ -58,7 +62,12 @@ void AddReferenceDataObject(
     {
         ThrowInvalidTypeForMode(ingest_mode, reference_mode, painter_name);
     }
-    data_object->Accept(visitor, ModelVisitMode::SelfOnly);
+    auto typed_data_object{ dynamic_cast<ExpectedType *>(data_object) };
+    if (typed_data_object == nullptr)
+    {
+        ThrowInvalidTypeForMode(ingest_mode, reference_mode, painter_name);
+    }
+    std::forward<OnTypedDataObject>(on_typed_data_object)(*typed_data_object);
 }
 
 } // namespace rhbm_gem::painter_internal

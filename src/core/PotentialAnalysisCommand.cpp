@@ -7,8 +7,8 @@
 #include "BondObject.hpp"
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
-#include "DataObjectWorkflowVisitors.hpp"
-#include "PotentialAnalysisWorkflowVisitors.hpp"
+#include "DataObjectWorkflowOps.hpp"
+#include "PotentialAnalysisWorkflowOps.hpp"
 #include "HRLAlphaTrainer.hpp"
 #include "HRLDataTransform.hpp"
 #include "HRLGroupEstimator.hpp"
@@ -421,15 +421,13 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing()
 void PotentialAnalysisCommand::RunAtomMapValueSampling()
 {
     if (m_map_object == nullptr || m_model_object == nullptr) return;
-    AtomSamplingVisitor visitor{ *m_map_object, m_options };
-    m_model_object->Accept(visitor, ModelVisitMode::SelfOnly);
+    RunAtomSampling(*m_model_object, *m_map_object, m_options);
 }
 
 void PotentialAnalysisCommand::RunAtomGroupClassification()
 {
     if (m_map_object == nullptr || m_model_object == nullptr) return;
-    AtomGroupingVisitor visitor;
-    m_model_object->Accept(visitor, ModelVisitMode::SelfOnly);
+    RunAtomGrouping(*m_model_object);
 }
 
 void PotentialAnalysisCommand::RunAtomAlphaTraining()
@@ -748,8 +746,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
 void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
 {
     if (m_model_object == nullptr) return;
-    LocalFittingVisitor visitor{ m_options, universal_alpha_r };
-    m_model_object->Accept(visitor, ModelVisitMode::SelfOnly);
+    rhbm_gem::RunLocalAtomFitting(*m_model_object, m_options, universal_alpha_r);
 }
 
 void PotentialAnalysisCommand::RunAtomPotentialFitting()

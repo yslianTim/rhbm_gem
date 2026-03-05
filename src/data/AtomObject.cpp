@@ -70,18 +70,6 @@ void AtomObject::Accept(ConstDataObjectVisitor & visitor) const
     visitor.VisitAtomObject(*this);
 }
 
-void AtomObject::Accept(DataObjectVisitor & visitor, ModelVisitMode model_mode)
-{
-    (void)model_mode;
-    Accept(visitor);
-}
-
-void AtomObject::Accept(ConstDataObjectVisitor & visitor, ModelVisitMode model_mode) const
-{
-    (void)model_mode;
-    Accept(visitor);
-}
-
 std::unique_ptr<AtomObject> AtomObject::AtomObjectClone() const
 {
     auto base_clone{ this->Clone() };

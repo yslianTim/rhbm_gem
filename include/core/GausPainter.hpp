@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "GlobalEnumClass.hpp"
-#include "DataObjectVisitor.hpp"
 #include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
@@ -22,7 +21,7 @@ class ModelObject;
 class AtomClassifier;
 class BondClassifier;
 
-class GausPainter : public PainterBase, public DataObjectVisitor
+class GausPainter : public PainterBase
 {
     std::string m_folder_path;
     std::vector<ModelObject *> m_model_object_list;
@@ -40,16 +39,12 @@ public:
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting() override;
-    void VisitAtomObject(AtomObject & data_object) override;
-    void VisitBondObject(BondObject & data_object) override;
-    void VisitModelObject(ModelObject & data_object) override;
-    void VisitMapObject(MapObject & data_object) override;
 #ifdef HAVE_ROOT
     static void RemodelAxisLabels(::TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
 #endif
 
 private:
-    [[noreturn]] void ThrowInvalidType() const;
+    void IngestModelObject(ModelObject & data_object);
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);

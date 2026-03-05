@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "GlobalEnumClass.hpp"
-#include "DataObjectVisitor.hpp"
 #include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
@@ -22,7 +21,7 @@ namespace rhbm_gem {
 class ModelObject;
 class AtomClassifier;
 
-class DemoPainter : public PainterBase, public DataObjectVisitor
+class DemoPainter : public PainterBase
 {
     std::string m_folder_path;
     std::vector<ModelObject *> m_model_object_list;
@@ -39,13 +38,9 @@ public:
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting() override;
-    void VisitAtomObject(AtomObject & data_object) override;
-    void VisitBondObject(BondObject & data_object) override;
-    void VisitModelObject(ModelObject & data_object) override;
-    void VisitMapObject(MapObject & data_object) override;
 
 private:
-    [[noreturn]] void ThrowInvalidType() const;
+    void IngestModelObject(ModelObject & data_object);
     void PainMapValueComparisonSingle(const std::string & name, ModelObject * model_object, ModelObject * ref_model_object);
     void PaintAtomMapValueExample(ModelObject * model_object, const std::string & name);
     void PaintGroupGausMainChainSummary(const std::vector<ModelObject *> & model_list, const std::string & name);

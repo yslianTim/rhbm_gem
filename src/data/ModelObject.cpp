@@ -124,15 +124,15 @@ void ModelObject::Update()
 
 void ModelObject::Accept(DataObjectVisitor & visitor)
 {
-    Accept(visitor, ModelVisitMode::AtomsThenSelf);
+    Traverse(visitor, ModelVisitMode::AtomsThenSelf);
 }
 
 void ModelObject::Accept(ConstDataObjectVisitor & visitor) const
 {
-    Accept(visitor, ModelVisitMode::AtomsThenSelf);
+    Traverse(visitor, ModelVisitMode::AtomsThenSelf);
 }
 
-void ModelObject::Accept(DataObjectVisitor & visitor, ModelVisitMode mode)
+void ModelObject::Traverse(DataObjectVisitor & visitor, ModelVisitMode mode)
 {
     TraverseModelByMode(
         visitor,
@@ -142,7 +142,7 @@ void ModelObject::Accept(DataObjectVisitor & visitor, ModelVisitMode mode)
         [this, &visitor]() { visitor.VisitModelObject(*this); });
 }
 
-void ModelObject::Accept(ConstDataObjectVisitor & visitor, ModelVisitMode mode) const
+void ModelObject::Traverse(ConstDataObjectVisitor & visitor, ModelVisitMode mode) const
 {
     TraverseModelByMode(
         visitor,

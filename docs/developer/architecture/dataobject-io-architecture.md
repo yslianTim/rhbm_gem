@@ -272,18 +272,16 @@ Current integration contract:
 - Visitor interfaces are split into mutable (`DataObjectVisitor`) and read-only (`ConstDataObjectVisitor`) paths (`include/data/DataObjectVisitor.hpp`).
 - `DataObjectManager::Accept(...)` defaults to deterministic key order traversal when `key_tag_list` is empty.
 - `DataObjectManager::Accept(...)` provides both default options and explicit `VisitOptions` overloads for mutable/const visitor flows.
-- Model traversal policy is controlled by `VisitOptions.model_visit_mode` and forwarded through the policy-aware
-  `DataObjectBase::Accept(visitor, model_mode)` contract (no manager-side RTTI dispatch).
-- `MapInterpolationVisitor` is a read-only map visitor (`ConstDataObjectVisitor`) used by map analysis commands.
-- `MapNormalizeVisitor` and `ModelPreparationVisitor` are mutable command workflow visitors for preprocessing.
-- `DataObjectDispatch` (`include/data/DataObjectDispatch.hpp`) provides visitor-based typed dispatch
+- Model traversal policy is controlled by `VisitOptions.model_visit_mode`; manager dispatches to
+  `ModelObject::Traverse(visitor, mode)` only when the dynamic object type is model, otherwise it calls plain `Accept(visitor)`.
+- `DataObjectDispatch` (`include/data/DataObjectDispatch.hpp`) provides centralized runtime typed dispatch
   for top-level object expectations (`ExpectModelObject`, `ExpectMapObject`) and
-  catalog naming (`GetCatalogTypeName`) without RTTI (`dynamic_cast` / `typeid`).
-- Core command workflows currently prefer command-local visitor facades
+  catalog naming (`GetCatalogTypeName`) via internal `dynamic_cast` helpers.
+- Core command workflows prefer command-local typed operation APIs
   (for example `NormalizeMapObject(...)`, `PrepareModelObject(...)`,
-  `MapSamplingWorkflow`) over manager-level traversal.
+  `RunAtomSampling(...)`, `SampleMapValues(...)`) over command-local visitor classes.
 - Use `DataObjectManager::Accept(...)` when traversal ownership belongs to manager-level key selection/order policies;
-  use direct object `Accept(...)` for command-local typed workflows.
+  use direct object traversal (`Accept` / `Traverse`) or typed ops for command-local workflows.
 
 ## 7. Persistence Details by Object
 

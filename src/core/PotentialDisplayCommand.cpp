@@ -13,8 +13,7 @@
 #include "DemoPainter.hpp"
 #include "StringHelper.hpp"
 #include "AtomSelector.hpp"
-#include "DataObjectWorkflowVisitors.hpp"
-#include "ModelVisitMode.hpp"
+#include "DataObjectWorkflowOps.hpp"
 #include "FilePathHelper.hpp"
 #include "Logger.hpp"
 #include "OptionEnumTraits.hpp"
@@ -342,9 +341,8 @@ void PotentialDisplayCommand::RunDisplay()
             {
                 ModelAtomCollectorOptions collector_options;
                 collector_options.selected_only = true;
-                ModelSelectedAtomCollectorVisitor collector{ collector_options };
-                model_object->Accept(collector, ModelVisitMode::SelfOnly);
-                for (auto * atom : collector.GetAtomList())
+                auto atom_list{ CollectModelAtoms(*model_object, collector_options) };
+                for (auto * atom : atom_list)
                 {
                     painter->AddDataObject(atom);
                 }

@@ -4,6 +4,7 @@
 #include "FilePathHelper.hpp"
 #include "DataObjectBase.hpp"
 #include "DataObjectVisitor.hpp"
+#include "ModelObject.hpp"
 #include "DatabaseManager.hpp"
 #include "Logger.hpp"
 
@@ -272,7 +273,12 @@ void DataObjectManager::Accept(
         m_data_object_map, m_map_mutex, key_tag_list, options.deterministic_order) };
     for (auto & data_object : data_object_list)
     {
-        data_object->Accept(visitor, options.model_visit_mode);
+        if (auto model_object{ std::dynamic_pointer_cast<ModelObject>(data_object) })
+        {
+            model_object->Traverse(visitor, options.model_visit_mode);
+            continue;
+        }
+        data_object->Accept(visitor);
     }
 }
 
@@ -292,7 +298,12 @@ void DataObjectManager::Accept(
         m_data_object_map, m_map_mutex, key_tag_list, options.deterministic_order) };
     for (const auto & data_object : data_object_list)
     {
-        data_object->Accept(visitor, options.model_visit_mode);
+        if (auto model_object{ std::dynamic_pointer_cast<const ModelObject>(data_object) })
+        {
+            model_object->Traverse(visitor, options.model_visit_mode);
+            continue;
+        }
+        data_object->Accept(visitor);
     }
 }
 

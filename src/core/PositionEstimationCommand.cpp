@@ -3,7 +3,7 @@
 #include "CommandOptionBinding.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
-#include "DataObjectWorkflowVisitors.hpp"
+#include "DataObjectWorkflowOps.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "ScopeTimer.hpp"
 #include "ArrayStats.hpp"

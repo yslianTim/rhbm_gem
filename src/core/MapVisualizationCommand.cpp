@@ -6,8 +6,8 @@
 #include "BondObject.hpp"
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
-#include "DataObjectWorkflowVisitors.hpp"
-#include "ModelVisitMode.hpp"
+#include "DataObjectWorkflowOps.hpp"
+#include "MapSampling.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
 #include "ChemicalDataHelper.hpp"
@@ -194,10 +194,9 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     sampler->SetWindowSize(static_cast<float>(m_options.window_size));
     sampler->Print();
     
-    ModelAtomBondContextVisitor context_visitor;
-    m_model_object->Accept(context_visitor, ModelVisitMode::SelfOnly);
-    const auto & atom_map{ context_visitor.GetAtomMap() };
-    const auto & bond_map{ context_visitor.GetBondMap() };
+    auto context{ BuildModelAtomBondContext(*m_model_object) };
+    const auto & atom_map{ context.atom_map };
+    const auto & bond_map{ context.bond_map };
 
     const auto atom_iter{ atom_map.find(m_options.atom_serial_id) };
     if (atom_iter == atom_map.end())
@@ -255,10 +254,10 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     }
     sampler->SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
-    MapSamplingWorkflow sampling_workflow{ sampler.get() };
     auto sampling_data_list{
-        sampling_workflow.Sample(
+        SampleMapValues(
             *m_map_object,
+            *sampler,
             target_atom_position,
             {n_vector(0), n_vector(1), n_vector(2)})
     };

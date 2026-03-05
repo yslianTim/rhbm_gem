@@ -52,41 +52,29 @@ void ComparisonPainter::SetFolder(const std::string & folder_path)
 
 void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject(
+    painter_internal::AddDataObject<ModelObject>(
         data_object,
-        *this,
         m_ingest_mode,
         IngestMode::Data,
         IngestMode::Reference,
         m_ingest_label,
-        "ComparisonPainter");
+        "ComparisonPainter",
+        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
 }
 
 void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject(
+    painter_internal::AddReferenceDataObject<ModelObject>(
         data_object,
         label,
-        *this,
         m_ingest_mode,
         IngestMode::Reference,
         m_ingest_label,
-        "ComparisonPainter");
+        "ComparisonPainter",
+        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
 }
 
-void ComparisonPainter::VisitAtomObject(AtomObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void ComparisonPainter::VisitBondObject(BondObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void ComparisonPainter::VisitModelObject(ModelObject & data_object)
+void ComparisonPainter::IngestModelObject(ModelObject & data_object)
 {
     if (m_ingest_mode == IngestMode::Reference)
     {
@@ -95,20 +83,6 @@ void ComparisonPainter::VisitModelObject(ModelObject & data_object)
     }
     m_model_object_list.emplace_back(&data_object);
     m_resolution_list.emplace_back(data_object.GetResolution());
-}
-
-void ComparisonPainter::VisitMapObject(MapObject & data_object)
-{
-    (void)data_object;
-    ThrowInvalidType();
-}
-
-void ComparisonPainter::ThrowInvalidType() const
-{
-    painter_internal::ThrowInvalidTypeForMode(
-        m_ingest_mode,
-        IngestMode::Reference,
-        "ComparisonPainter");
 }
 
 void ComparisonPainter::Painting()

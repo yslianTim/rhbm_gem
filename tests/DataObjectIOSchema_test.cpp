@@ -343,15 +343,6 @@ public:
     void Update() override {}
     void Accept(rg::DataObjectVisitor & /*visitor*/) override {}
     void Accept(rg::ConstDataObjectVisitor & /*visitor*/) const override {}
-    void Accept(rg::DataObjectVisitor & visitor, rg::ModelVisitMode /*model_mode*/) override
-    {
-        Accept(visitor);
-    }
-    void Accept(
-        rg::ConstDataObjectVisitor & visitor, rg::ModelVisitMode /*model_mode*/) const override
-    {
-        Accept(visitor);
-    }
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 };

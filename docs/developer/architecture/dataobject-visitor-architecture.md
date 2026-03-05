@@ -1,106 +1,57 @@
-# DataObject Visitor Developer Manual
+# DataObject Traversal and Typed Operations Manual
 
-This manual describes how the current `DataObject` visitor system works and how to extend it safely.
+This manual documents the current post-refactor architecture for `DataObject` traversal and runtime type handling.
 
 Use this document when you need to:
 
-- traverse `DataObject` instances through `Accept(...)`
-- choose a `ModelVisitMode` for `ModelObject` traversal
-- run visitors through `DataObjectManager`
-- implement a new visitor or add a new `DataObject` subtype
+- traverse `DataObject` instances via visitor
+- select `ModelVisitMode` for model traversal
+- implement command workflows and painter ingestion
+- perform runtime type dispatch without visitor plumbing
 
 Read with:
 
 - [`./command-architecture.md`](./command-architecture.md)
 - [`./dataobject-io-architecture.md`](./dataobject-io-architecture.md)
 
-## 1. Scope
+## 1. Design Boundary
 
-This document covers runtime dispatch and traversal only:
+`DataObjectVisitor` is now a traversal extension point only.
 
-- `DataObjectBase`
-- `DataObjectVisitor` and `ConstDataObjectVisitor`
-- concrete objects: `AtomObject`, `BondObject`, `ModelObject`, `MapObject`
-- manager traversal entry points: `DataObjectManager::Accept(...)`
-- built-in workflow visitors used by commands
+The following areas are intentionally typed APIs (not visitor-based):
 
-Persistence and file/database pipelines are out of scope.
+- workflow orchestration
+- map sampling/inference utilities
+- painter ingestion and reference ingestion
+- runtime type dispatch helpers
 
-## 2. Quick Start
+## 2. Core Contracts
 
-Direct traversal from a concrete/top-level object:
+### 2.1 `DataObjectBase`
 
-```cpp
-MyVisitor visitor;  // custom DataObjectVisitor implementation
-model.Accept(visitor, ModelVisitMode::AtomsAndBondsThenSelf);
-```
-
-Manager-level traversal with explicit policy:
-
-```cpp
-DataObjectManager manager;
-DataObjectManager::VisitOptions options;
-options.deterministic_order = true;
-options.model_visit_mode = ModelVisitMode::SelfOnly;
-
-MyVisitor visitor;  // custom DataObjectVisitor implementation
-manager.Accept(visitor, {}, options);
-```
-
-## 3. Core Contracts
-
-### 3.1 `DataObjectBase`
-
-All `DataObject` types must implement:
+All `DataObject` types implement only:
 
 ```cpp
 virtual void Accept(DataObjectVisitor & visitor) = 0;
 virtual void Accept(ConstDataObjectVisitor & visitor) const = 0;
-virtual void Accept(DataObjectVisitor & visitor, ModelVisitMode model_mode) = 0;
-virtual void Accept(ConstDataObjectVisitor & visitor, ModelVisitMode model_mode) const = 0;
 ```
 
-Rules:
+There is no base-level `Accept(..., ModelVisitMode)` overload.
 
-- visitor is passed by reference (non-null by type)
-- `model_mode` is meaningful for `ModelObject`
-- non-model objects accept `model_mode` but ignore it
+### 2.2 `ModelObject` Traversal API
 
-### 3.2 Visitor Interfaces
+`ModelObject` provides explicit mode-aware traversal:
 
-Two pure-virtual contracts exist:
+```cpp
+void Traverse(DataObjectVisitor & visitor, ModelVisitMode mode);
+void Traverse(ConstDataObjectVisitor & visitor, ModelVisitMode mode) const;
+```
 
-- `DataObjectVisitor` (mutable)
-- `ConstDataObjectVisitor` (read-only)
+Compatibility behavior:
 
-Both require full coverage:
+- `ModelObject::Accept(visitor)` preserves legacy `AtomsThenSelf`
 
-- `VisitAtomObject(...)`
-- `VisitBondObject(...)`
-- `VisitModelObject(...)`
-- `VisitMapObject(...)`
-
-There is no default no-op handler.
-
-### 3.3 Dispatch Model
-
-Dispatch is double dispatch:
-
-1. caller holds `DataObjectBase` polymorphically
-2. `Accept(...)` resolves by object dynamic type
-3. concrete object calls `visitor.VisitXxxObject(*this)`
-4. visitor implementation resolves by visitor dynamic type
-
-## 4. Traversal Rules by Object Type
-
-| Object type | `Accept(visitor)` behavior | `Accept(visitor, model_mode)` behavior |
-| --- | --- | --- |
-| `AtomObject` | `VisitAtomObject(*this)` | same as left (`model_mode` ignored) |
-| `BondObject` | `VisitBondObject(*this)` | same as left (`model_mode` ignored) |
-| `MapObject` | `VisitMapObject(*this)` | same as left (`model_mode` ignored) |
-| `ModelObject` | equivalent to `AtomsThenSelf` | follows `ModelVisitMode` |
-
-`ModelVisitMode` traversal order:
+`ModelVisitMode` order:
 
 | Mode | Visit order |
 | --- | --- |
@@ -109,177 +60,147 @@ Dispatch is double dispatch:
 | `AtomsAndBondsThenSelf` | all atoms -> all bonds -> model |
 | `SelfOnly` | model only |
 
-Compatibility behavior: `model.Accept(visitor)` keeps legacy `AtomsThenSelf` behavior.
+### 2.3 Non-model Objects
 
-## 5. Manager Traversal (`DataObjectManager`)
+`AtomObject`, `BondObject`, and `MapObject` only expose plain `Accept(visitor)` and do not implement mode overloads.
 
-Overloads exist for both mutable and const visitors:
+## 3. Manager Traversal Policy
+
+`DataObjectManager::Accept(..., VisitOptions)` keeps traversal policy centralization:
+
+- `VisitOptions.model_visit_mode` is applied only when object dynamic type is `ModelObject` by calling `Traverse(...)`
+- all other object types use plain `Accept(visitor)`
+- deterministic key ordering and caller-specified key ordering behavior is unchanged
+
+## 4. Typed Runtime Dispatch
+
+`DataObjectDispatch` now uses centralized `dynamic_cast` helpers internally.
+
+Public API remains:
+
+- `ExpectModelObject(...)`
+- `ExpectMapObject(...)`
+- `GetCatalogTypeName(...)`
+
+Error semantics are preserved, including `expected X but got Y` style messages.
+
+## 5. Typed Workflow Operations
+
+Visitor-based workflow classes were replaced by typed operation functions.
+
+### 5.1 DataObject workflow ops
+
+`src/core/DataObjectWorkflowOps.*` exports:
+
+- `NormalizeMapObject`
+- `PrepareModelObject`
+- `ApplyModelSelection`
+- `CollectModelAtoms`
+- `PrepareSimulationAtoms`
+- `BuildModelAtomBondContext`
+
+Options/data contracts retained:
+
+- `ModelPreparationOptions`
+- `ModelAtomCollectorOptions`
+- `SimulationAtomPreparationOptions`
+- `SimulationAtomPreparationResult`
+- `ModelAtomBondContext`
+
+### 5.2 Potential analysis workflow ops
+
+`src/core/PotentialAnalysisWorkflowOps.*` exports:
+
+- `RunAtomSampling`
+- `RunAtomGrouping`
+- `RunLocalAtomFitting`
+- `RunBondSampling`
+- `RunBondGrouping`
+
+Command/bond workflow callers now invoke these functions directly.
+
+## 6. Stateless Map Sampling
+
+Visitor/stateful map interpolation was replaced by:
 
 ```cpp
-void Accept(DataObjectVisitor & visitor,
-            const std::vector<std::string> & key_tag_list = {});
-
-void Accept(DataObjectVisitor & visitor,
-            const std::vector<std::string> & key_tag_list,
-            const VisitOptions & options);
-
-void Accept(ConstDataObjectVisitor & visitor,
-            const std::vector<std::string> & key_tag_list = {}) const;
-
-void Accept(ConstDataObjectVisitor & visitor,
-            const std::vector<std::string> & key_tag_list,
-            const VisitOptions & options) const;
+std::vector<SamplingDataTuple> SampleMapValues(
+    const MapObject & map,
+    const SamplerBase & sampler,
+    const std::array<double, 3> & position,
+    const std::array<double, 3> & axis_vector);
 ```
 
-`VisitOptions`:
+Location:
 
-- `bool deterministic_order = true`
-- `ModelVisitMode model_visit_mode = ModelVisitMode::AtomsThenSelf`
+- `include/core/MapSampling.hpp`
+- `src/core/MapSampling.cpp`
 
-Operational behavior:
+`MapInterpolationVisitor` and `MapSamplingWorkflow` are removed.
 
-- traversal uses a snapshot of `shared_ptr` entries built under lock
-- actual `Accept(...)` calls run after lock release
-- empty `key_tag_list` + `deterministic_order=true`: key-sorted traversal
-- empty `key_tag_list` + `deterministic_order=false`: underlying `unordered_map` iteration order
-- non-empty `key_tag_list`: preserves caller order
-- missing keys emit warning logs and are skipped
+## 7. Painter Ingestion Boundary
 
-## 6. Built-in Workflow Visitors
+Built-in painters no longer inherit `DataObjectVisitor`.
 
-Current production visitors in `core` are:
+Affected painters:
 
-- `MapInterpolationVisitor` (`ConstDataObjectVisitor`)
-- `MapNormalizeVisitor` (`DataObjectVisitor`)
-- `ModelPreparationVisitor` (`DataObjectVisitor`)
-- `ModelSelectionVisitor` (`DataObjectVisitor`)
-- `ModelSelectedAtomCollectorVisitor` (`DataObjectVisitor`)
-- `SimulationAtomPreparationVisitor` (`DataObjectVisitor`)
-- `ModelAtomBondContextVisitor` (`DataObjectVisitor`)
-- `AtomSamplingVisitor` (`DataObjectVisitor`)
-- `AtomGroupingVisitor` (`DataObjectVisitor`)
-- `LocalFittingVisitor` (`DataObjectVisitor`)
-- `BondSamplingVisitor` (`DataObjectVisitor`)
-- `BondGroupingVisitor` (`DataObjectVisitor`)
+- `AtomPainter`
+- `ModelPainter`
+- `GausPainter`
+- `ComparisonPainter`
+- `DemoPainter`
 
-### 6.1 `MapInterpolationVisitor`
+`AddDataObject(...)` and `AddReferenceDataObject(...)` now route through typed ingest helpers in `src/core/PainterIngestionInternal.hpp` using `dynamic_cast` and preserving existing null/type mismatch error semantics.
 
-Supported visit target:
+## 8. Extension Guidance
 
-- `VisitMapObject(const MapObject&)`
+### 8.1 When to use visitor
 
-Unsupported targets:
+Use visitor only when you truly need polymorphic traversal over heterogeneous `DataObject` trees.
 
-- `VisitAtomObject(...)`, `VisitBondObject(...)`, `VisitModelObject(...)` throw `std::logic_error`
+### 8.2 When not to use visitor
 
-State and output APIs:
+Prefer typed API for:
 
-- `SetPosition(...)`
-- `SetAxisVector(...)`
-- `GetSamplingDataList()` for read-only access
-- `ConsumeSamplingDataList()` for move-out transfer
+- command-local pipelines
+- algorithms with single supported input type
+- painter ingestion and validation
+- type expectation checks and error shaping
 
-Behavior notes:
+### 8.3 Adding a new `DataObject` subtype
 
-- every `VisitMapObject(...)` clears previous sampling output first
-- null sampler logs warning and returns empty output
-- visitor instances are stateful; reuse intentionally and consume/reset output between runs
+1. Add concrete subtype derived from `DataObjectBase`.
+2. Implement only const/non-const `Accept(visitor)`.
+3. Add visit methods to both visitor interfaces if traversal support is needed.
+4. Extend typed dispatch helpers/ops where relevant.
+5. Update tests and this manual.
 
-### 6.2 `MapNormalizeVisitor`
+## 9. Key Files
 
-Supported visit target:
-
-- `VisitMapObject(MapObject&)`
-
-Behavior:
-
-- calls `MapObject::MapValueArrayNormalization()`
-- unsupported targets throw `std::logic_error`
-
-### 6.3 `ModelPreparationVisitor`
-
-Supported visit target:
-
-- `VisitModelObject(ModelObject&)`
-
-Behavior:
-
-- option-driven preprocessing for model workflows
-- supports select-all, optional symmetry filtering, `Update()`, and optional
-  local-potential-entry initialization for selected atoms/bonds
-- unsupported targets throw `std::logic_error`
-
-### 6.4 `MapSamplingWorkflow`
-
-`MapSamplingWorkflow` is a helper wrapper that reuses an internal
-`MapInterpolationVisitor` instance.
-
-Behavior:
-
-- sets position/axis vector
-- executes `map.Accept(visitor)`
-- returns sampled tuples via `ConsumeSamplingDataList()`
-
-### 6.5 Painter Ingestion Callbacks
-
-Built-in painters (`AtomPainter`, `ModelPainter`, `GausPainter`,
-`ComparisonPainter`, `DemoPainter`) implement `DataObjectVisitor` for
-ingestion dispatch.
-
-Usage rule:
-
-- call `AddDataObject(...)` / `AddReferenceDataObject(...)` from command workflows
-- treat `Visit*Object(...)` overrides as callback-only implementation details
-
-## 7. Extension Playbook
-
-### 7.1 Add a New Visitor
-
-1. Derive from `DataObjectVisitor` or `ConstDataObjectVisitor`.
-2. Implement all required `Visit*Object(...)` methods.
-3. Keep mutable state explicit and reset/consume per logical run.
-4. Add/adjust tests for traversal order and visited-type behavior.
-
-### 7.2 Add a New `DataObject` Type
-
-1. Add new concrete type derived from `DataObjectBase`.
-2. Implement all four `Accept(...)` overloads.
-3. Add new visit methods to both visitor interfaces.
-4. Update all visitor implementations and compile-failing call sites.
-5. Add/adjust architecture tests and docs.
-
-## 8. Key Files
-
-Core contracts:
+Core traversal contracts:
 
 - `include/data/DataObjectBase.hpp`
 - `include/data/DataObjectVisitor.hpp`
-- `include/data/ModelVisitMode.hpp`
-
-Concrete `Accept(...)` behavior:
-
-- `src/data/AtomObject.cpp`
-- `src/data/BondObject.cpp`
+- `include/data/ModelObject.hpp`
 - `src/data/ModelObject.cpp`
-- `src/data/MapObject.cpp`
 
-Manager traversal:
+Traversal orchestration:
 
 - `include/core/DataObjectManager.hpp`
 - `src/core/DataObjectManager.cpp`
 
-Active visitor and call sites:
+Typed dispatch and ops:
 
-- `include/core/MapInterpolationVisitor.hpp`
-- `src/core/MapInterpolationVisitor.cpp`
-- `src/core/DataObjectWorkflowVisitors.hpp`
-- `src/core/DataObjectWorkflowVisitors.cpp`
-- `src/core/PotentialAnalysisWorkflowVisitors.hpp`
-- `src/core/PotentialAnalysisWorkflowVisitors.cpp`
-- `src/core/PotentialAnalysisCommand.cpp`
-- `src/core/PotentialAnalysisBondWorkflow.cpp`
-- `src/core/MapVisualizationCommand.cpp`
+- `include/data/DataObjectDispatch.hpp`
+- `src/data/DataObjectDispatch.cpp`
+- `src/core/DataObjectWorkflowOps.hpp`
+- `src/core/DataObjectWorkflowOps.cpp`
+- `src/core/PotentialAnalysisWorkflowOps.hpp`
+- `src/core/PotentialAnalysisWorkflowOps.cpp`
+- `include/core/MapSampling.hpp`
+- `src/core/MapSampling.cpp`
+- `src/core/PainterIngestionInternal.hpp`
 
-Architecture regression tests:
+Regression tests:
 
 - `tests/DataObjectVisitorArchitecture_test.cpp`

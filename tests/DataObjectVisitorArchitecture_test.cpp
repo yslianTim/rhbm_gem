@@ -22,13 +22,13 @@
 #include "DataObjectManager.hpp"
 #include "DataObjectDispatch.hpp"
 #include "DataObjectVisitor.hpp"
-#include "DataObjectWorkflowVisitors.hpp"
+#include "DataObjectWorkflowOps.hpp"
 #include "DemoPainter.hpp"
 #include "FileProcessFactoryBase.hpp"
 #include "GausPainter.hpp"
 #include "LocalPotentialEntry.hpp"
-#include "MapInterpolationVisitor.hpp"
 #include "MapObject.hpp"
+#include "MapSampling.hpp"
 #include "ModelObject.hpp"
 #include "ModelPainter.hpp"
 #include "SamplerBase.hpp"
@@ -250,7 +250,7 @@ TEST(DataObjectVisitorArchitectureTest, ConcreteAcceptDispatchesToMatchingMutabl
     atom.Accept(visitor);
     bond.Accept(visitor);
     map.Accept(visitor);
-    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
+    model->Traverse(visitor, rg::ModelVisitMode::SelfOnly);
 
     EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Atom", "Bond", "Map", "Model" }));
 }
@@ -268,7 +268,7 @@ TEST(DataObjectVisitorArchitectureTest, ConcreteAcceptDispatchesToMatchingConstV
     atom.Accept(visitor);
     bond.Accept(visitor);
     map_ref.Accept(visitor);
-    model_ref.Accept(visitor, rg::ModelVisitMode::SelfOnly);
+    model_ref.Traverse(visitor, rg::ModelVisitMode::SelfOnly);
 
     EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Atom", "Bond", "Map", "Model" }));
 }
@@ -288,7 +288,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelVisitModeBondsThenSelfVisitsBondsAn
     auto model{ MakeModelWithBond() };
     EventVisitor visitor;
 
-    model->Accept(visitor, rg::ModelVisitMode::BondsThenSelf);
+    model->Traverse(visitor, rg::ModelVisitMode::BondsThenSelf);
 
     EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Bond", "Model" }));
 }
@@ -298,7 +298,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelVisitModeAtomsAndBondsThenSelfVisit
     auto model{ MakeModelWithBond() };
     EventVisitor visitor;
 
-    model->Accept(visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
+    model->Traverse(visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
 
     EXPECT_EQ(
         visitor.events,
@@ -310,7 +310,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelVisitModeSelfOnlyVisitsOnlyModel)
     auto model{ MakeModelWithBond() };
     EventVisitor visitor;
 
-    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
+    model->Traverse(visitor, rg::ModelVisitMode::SelfOnly);
 
     EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Model" }));
 }
@@ -403,7 +403,7 @@ TEST(DataObjectVisitorArchitectureTest, ManagerAcceptTraversalMatchesDirectAccep
     auto model{ manager.GetTypedDataObject<rg::ModelObject>("model") };
 
     EventVisitor direct_visitor;
-    model->Accept(direct_visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
+    model->Traverse(direct_visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
 
     rg::DataObjectManager::VisitOptions options;
     options.model_visit_mode = rg::ModelVisitMode::AtomsAndBondsThenSelf;
@@ -413,46 +413,31 @@ TEST(DataObjectVisitorArchitectureTest, ManagerAcceptTraversalMatchesDirectAccep
     EXPECT_EQ(manager_visitor.events, direct_visitor.events);
 }
 
-TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorFailsFastOnUnsupportedDataObjectType)
-{
-    SinglePointSampler sampler;
-    rg::MapInterpolationVisitor visitor{ &sampler };
-    rg::AtomObject atom;
-
-    EXPECT_THROW(atom.Accept(visitor), std::logic_error);
-}
-
-TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorConsumeSamplingDataClearsState)
+TEST(DataObjectVisitorArchitectureTest, SampleMapValuesProducesSamplingOutput)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
-    rg::MapInterpolationVisitor visitor{ &sampler };
-    visitor.SetPosition({ 0.0f, 0.0f, 0.0f });
-    visitor.SetAxisVector({ 1.0f, 0.0f, 0.0f });
+    const auto sampling_data{
+        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f })
+    };
 
-    map.Accept(visitor);
-    ASSERT_FALSE(visitor.GetSamplingDataList().empty());
-
-    auto sampled_data{ visitor.ConsumeSamplingDataList() };
-    EXPECT_FALSE(sampled_data.empty());
-    EXPECT_TRUE(visitor.GetSamplingDataList().empty());
+    ASSERT_EQ(sampling_data.size(), 1);
+    EXPECT_FLOAT_EQ(std::get<0>(sampling_data.front()), 0.0f);
 }
 
-TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorClearsStaleOutputBeforeSampling)
+TEST(DataObjectVisitorArchitectureTest, SampleMapValuesIsStatelessAcrossCalls)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
-    rg::MapInterpolationVisitor visitor{ &sampler };
+    const auto first{
+        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f })
+    };
+    const auto second{
+        rg::SampleMapValues(map, sampler, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f })
+    };
 
-    visitor.SetPosition({ 0.0f, 0.0f, 0.0f });
-    visitor.SetAxisVector({ 1.0f, 0.0f, 0.0f });
-    map.Accept(visitor);
-    ASSERT_EQ(visitor.GetSamplingDataList().size(), 1);
-
-    visitor.SetPosition({ 1.0f, 1.0f, 1.0f });
-    visitor.SetAxisVector({ 0.0f, 1.0f, 0.0f });
-    map.Accept(visitor);
-    EXPECT_EQ(visitor.GetSamplingDataList().size(), 1);
+    EXPECT_EQ(first.size(), 1);
+    EXPECT_EQ(second.size(), 1);
 }
 
 TEST(DataObjectVisitorArchitectureTest, AtomPainterDispatchesByVisitorAndRejectsUnsupportedType)
@@ -520,20 +505,7 @@ TEST(DataObjectVisitorArchitectureTest, PainterNullIngestUsesModeSpecificErrorMe
     }
 }
 
-TEST(DataObjectVisitorArchitectureTest, MapNormalizeVisitorNormalizesMapValues)
-{
-    auto map{ MakeMapObject() };
-    const auto original_value{ map.GetMapValue(0) };
-    const auto original_sd{ map.GetMapValueSD() };
-    ASSERT_GT(original_sd, 0.0f);
-
-    rg::MapNormalizeVisitor visitor;
-    map.Accept(visitor);
-
-    EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
-}
-
-TEST(DataObjectVisitorArchitectureTest, NormalizeMapObjectFacadeNormalizesMapValues)
+TEST(DataObjectVisitorArchitectureTest, NormalizeMapObjectNormalizesMapValues)
 {
     auto map{ MakeMapObject() };
     const auto original_value{ map.GetMapValue(0) };
@@ -545,7 +517,7 @@ TEST(DataObjectVisitorArchitectureTest, NormalizeMapObjectFacadeNormalizesMapVal
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
 }
 
-TEST(DataObjectVisitorArchitectureTest, ModelPreparationVisitorSelectsAndInitializesLocalEntries)
+TEST(DataObjectVisitorArchitectureTest, PrepareModelObjectSelectsAndInitializesLocalEntries)
 {
     auto model{ MakeModelWithBond() };
     for (auto & atom : model->GetAtomList()) atom->SetSelectedFlag(false);
@@ -561,8 +533,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelPreparationVisitorSelectsAndInitial
     options.initialize_atom_local_entries = true;
     options.initialize_bond_local_entries = true;
 
-    rg::ModelPreparationVisitor visitor{ options };
-    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
+    rg::PrepareModelObject(*model, options);
 
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
     EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
@@ -578,7 +549,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelPreparationVisitorSelectsAndInitial
     }
 }
 
-TEST(DataObjectVisitorArchitectureTest, PrepareModelObjectFacadeUsesSelfOnlyTraversalPolicy)
+TEST(DataObjectVisitorArchitectureTest, PrepareModelObjectSelectsAllWhenRequested)
 {
     auto model{ MakeModelWithBond() };
     rg::ModelPreparationOptions options;
@@ -607,20 +578,6 @@ TEST(DataObjectVisitorArchitectureTest, ApplyModelSelectionSelectsByAtomSelector
 
     EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
-}
-
-TEST(DataObjectVisitorArchitectureTest, MapSamplingWorkflowProducesSamplingOutput)
-{
-    auto map{ MakeMapObject() };
-    SinglePointSampler sampler;
-    rg::MapSamplingWorkflow workflow{ &sampler };
-
-    const auto sampling_data{
-        workflow.Sample(map, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f })
-    };
-
-    ASSERT_EQ(sampling_data.size(), 1);
-    EXPECT_FLOAT_EQ(std::get<0>(sampling_data.front()), 0.0f);
 }
 
 TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchExpectHelpersResolveModelAndMap)
@@ -670,7 +627,7 @@ TEST(DataObjectVisitorArchitectureTest, FileProcessFactoryOutputRejectsWrongObje
         std::runtime_error);
 }
 
-TEST(DataObjectVisitorArchitectureTest, ModelSelectedAtomCollectorVisitorSupportsSelectionAndEntryFilters)
+TEST(DataObjectVisitorArchitectureTest, CollectModelAtomsSupportsSelectionAndEntryFilters)
 {
     auto model{ MakeModelWithBond() };
     auto & atoms{ model->GetAtomList() };
@@ -683,42 +640,39 @@ TEST(DataObjectVisitorArchitectureTest, ModelSelectedAtomCollectorVisitorSupport
     rg::ModelAtomCollectorOptions selected_only_options;
     selected_only_options.selected_only = true;
     selected_only_options.require_local_potential_entry = false;
-    rg::ModelSelectedAtomCollectorVisitor selected_only_collector{ selected_only_options };
-    model->Accept(selected_only_collector, rg::ModelVisitMode::SelfOnly);
-    ASSERT_EQ(selected_only_collector.GetAtomList().size(), 1);
-    EXPECT_EQ(selected_only_collector.GetAtomList().front(), atoms[0].get());
+    const auto selected_only_atoms{ rg::CollectModelAtoms(*model, selected_only_options) };
+    ASSERT_EQ(selected_only_atoms.size(), 1);
+    EXPECT_EQ(selected_only_atoms.front(), atoms[0].get());
 
     rg::ModelAtomCollectorOptions require_entry_options;
     require_entry_options.selected_only = false;
     require_entry_options.require_local_potential_entry = true;
-    rg::ModelSelectedAtomCollectorVisitor require_entry_collector{ require_entry_options };
-    model->Accept(require_entry_collector, rg::ModelVisitMode::SelfOnly);
-    ASSERT_EQ(require_entry_collector.GetAtomList().size(), 1);
-    EXPECT_EQ(require_entry_collector.GetAtomList().front(), atoms[0].get());
+    const auto require_entry_atoms{ rg::CollectModelAtoms(*model, require_entry_options) };
+    ASSERT_EQ(require_entry_atoms.size(), 1);
+    EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
-TEST(DataObjectVisitorArchitectureTest, SimulationAtomPreparationVisitorCollectsAtomChargeAndRange)
+TEST(DataObjectVisitorArchitectureTest, PrepareSimulationAtomsCollectsAtomChargeAndRange)
 {
     auto model{ MakeModelWithBond() };
     rg::SimulationAtomPreparationOptions options;
     options.partial_charge_choice = rg::PartialCharge::NEUTRAL;
     options.include_unknown_atoms = true;
 
-    rg::SimulationAtomPreparationVisitor visitor{ options };
-    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
-    ASSERT_TRUE(visitor.HasAtom());
-    EXPECT_EQ(visitor.GetAtomList().size(), 2);
-    ASSERT_EQ(visitor.GetAtomChargeMap().size(), 2);
-    EXPECT_DOUBLE_EQ(visitor.GetAtomChargeMap().at(1), 0.0);
-    EXPECT_DOUBLE_EQ(visitor.GetAtomChargeMap().at(2), 0.0);
+    const auto result{ rg::PrepareSimulationAtoms(*model, options) };
+    ASSERT_TRUE(result.has_atom);
+    EXPECT_EQ(result.atom_list.size(), 2);
+    ASSERT_EQ(result.atom_charge_map.size(), 2);
+    EXPECT_DOUBLE_EQ(result.atom_charge_map.at(1), 0.0);
+    EXPECT_DOUBLE_EQ(result.atom_charge_map.at(2), 0.0);
 
-    const auto range_min{ visitor.GetRangeMinimum() };
-    const auto range_max{ visitor.GetRangeMaximum() };
+    const auto range_min{ result.range_minimum };
+    const auto range_max{ result.range_maximum };
     EXPECT_FLOAT_EQ(range_min[0], 0.0f);
     EXPECT_FLOAT_EQ(range_max[0], 1.0f);
 }
 
-TEST(DataObjectVisitorArchitectureTest, ModelAtomBondContextVisitorBuildsSelectedContextMaps)
+TEST(DataObjectVisitorArchitectureTest, BuildModelAtomBondContextBuildsSelectedContextMaps)
 {
     auto model{ MakeModelWithBond() };
     auto & atoms{ model->GetAtomList() };
@@ -730,12 +684,11 @@ TEST(DataObjectVisitorArchitectureTest, ModelAtomBondContextVisitorBuildsSelecte
     bonds[0]->SetSelectedFlag(true);
     model->Update();
 
-    rg::ModelAtomBondContextVisitor visitor;
-    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
-    ASSERT_EQ(visitor.GetAtomMap().size(), 2);
-    ASSERT_EQ(visitor.GetBondMap().size(), 2);
-    EXPECT_EQ(visitor.GetAtomMap().at(1), atoms[0].get());
-    EXPECT_EQ(visitor.GetAtomMap().at(2), atoms[1].get());
-    EXPECT_EQ(visitor.GetBondMap().at(1).size(), 1);
-    EXPECT_EQ(visitor.GetBondMap().at(2).size(), 1);
+    const auto context{ rg::BuildModelAtomBondContext(*model) };
+    ASSERT_EQ(context.atom_map.size(), 2);
+    ASSERT_EQ(context.bond_map.size(), 2);
+    EXPECT_EQ(context.atom_map.at(1), atoms[0].get());
+    EXPECT_EQ(context.atom_map.at(2), atoms[1].get());
+    EXPECT_EQ(context.bond_map.at(1).size(), 1);
+    EXPECT_EQ(context.bond_map.at(2).size(), 1);
 }

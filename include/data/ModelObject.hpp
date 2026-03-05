@@ -55,8 +55,8 @@ public:
     void Update() override;
     void Accept(DataObjectVisitor & visitor) override;
     void Accept(ConstDataObjectVisitor & visitor) const override;
-    void Accept(DataObjectVisitor & visitor, ModelVisitMode mode) override;
-    void Accept(ConstDataObjectVisitor & visitor, ModelVisitMode mode) const override;
+    void Traverse(DataObjectVisitor & visitor, ModelVisitMode mode);
+    void Traverse(ConstDataObjectVisitor & visitor, ModelVisitMode mode) const;
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 

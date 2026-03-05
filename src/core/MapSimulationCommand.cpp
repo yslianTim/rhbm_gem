@@ -6,7 +6,7 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 #include "MapFileWriter.hpp"
-#include "DataObjectWorkflowVisitors.hpp"
+#include "DataObjectWorkflowOps.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
 #include "ElectricPotential.hpp"
@@ -15,7 +15,6 @@
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 #include "OptionEnumTraits.hpp"
-#include "ModelVisitMode.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -265,15 +264,14 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
     SimulationAtomPreparationOptions options;
     options.partial_charge_choice = m_options.partial_charge_choice;
     options.include_unknown_atoms = true;
-    SimulationAtomPreparationVisitor visitor{ options };
-    model_object->Accept(visitor, ModelVisitMode::SelfOnly);
+    auto result{ PrepareSimulationAtoms(*model_object, options) };
 
-    m_selected_atom_list = visitor.GetAtomList();
-    m_atom_charge_map = visitor.GetAtomChargeMap();
-    if (visitor.HasAtom())
+    m_selected_atom_list = result.atom_list;
+    m_atom_charge_map = result.atom_charge_map;
+    if (result.has_atom)
     {
-        m_atom_range_minimum = visitor.GetRangeMinimum();
-        m_atom_range_maximum = visitor.GetRangeMaximum();
+        m_atom_range_minimum = result.range_minimum;
+        m_atom_range_maximum = result.range_maximum;
         m_atom_range_minimum[0] -= static_cast<float>(m_options.cutoff_distance);
         m_atom_range_minimum[1] -= static_cast<float>(m_options.cutoff_distance);
         m_atom_range_minimum[2] -= static_cast<float>(m_options.cutoff_distance);
