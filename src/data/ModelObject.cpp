@@ -9,6 +9,8 @@
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 
+#include <stdexcept>
+
 namespace rhbm_gem {
 
 ModelObject::ModelObject() :
@@ -92,11 +94,35 @@ void ModelObject::Update()
 
 void ModelObject::Accept(DataObjectVisitorBase * visitor)
 {
-    for (const auto & atom : m_atom_list)
+    Accept(visitor, ModelVisitMode::AtomsThenSelf);
+}
+
+void ModelObject::Accept(DataObjectVisitorBase * visitor, ModelVisitMode mode)
+{
+    if (visitor == nullptr)
     {
-        atom->Accept(visitor);
+        throw std::invalid_argument("ModelObject::Accept(): visitor is null.");
     }
-    visitor->VisitModelObject(this);
+
+    switch (mode)
+    {
+    case ModelVisitMode::AtomsThenSelf:
+        for (const auto & atom : m_atom_list) atom->Accept(visitor);
+        visitor->VisitModelObject(this);
+        break;
+    case ModelVisitMode::BondsThenSelf:
+        for (const auto & bond : m_bond_list) bond->Accept(visitor);
+        visitor->VisitModelObject(this);
+        break;
+    case ModelVisitMode::AtomsAndBondsThenSelf:
+        for (const auto & atom : m_atom_list) atom->Accept(visitor);
+        for (const auto & bond : m_bond_list) bond->Accept(visitor);
+        visitor->VisitModelObject(this);
+        break;
+    case ModelVisitMode::SelfOnly:
+        visitor->VisitModelObject(this);
+        break;
+    }
 }
 
 void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)

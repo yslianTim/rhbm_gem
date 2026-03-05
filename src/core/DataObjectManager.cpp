@@ -4,9 +4,12 @@
 #include "FilePathHelper.hpp"
 #include "DataObjectBase.hpp"
 #include "DataObjectVisitorBase.hpp"
+#include "ModelObject.hpp"
 #include "DatabaseManager.hpp"
 #include "Logger.hpp"
 
+#include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 namespace rhbm_gem {
@@ -195,16 +198,52 @@ void DataObjectManager::SaveDataObject(
 void DataObjectManager::Accept(
     DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list)
 {
-    std::vector<DataObjectBase *> data_object_list;
+    Accept(visitor, key_tag_list, VisitOptions{});
+}
+
+void DataObjectManager::Accept(
+    DataObjectVisitorBase * visitor,
+    const std::vector<std::string> & key_tag_list,
+    const VisitOptions & options)
+{
+    if (visitor == nullptr)
+    {
+        throw std::invalid_argument("DataObjectManager::Accept(): visitor is null.");
+    }
+
+    std::vector<std::shared_ptr<DataObjectBase>> data_object_list;
     {
         std::lock_guard<std::mutex> lock(m_map_mutex);
         if (key_tag_list.empty())
         {
-            for (auto & [key, data_object] : m_data_object_map)
+            if (options.deterministic_order)
             {
-                if (data_object)
+                std::vector<std::string> key_list;
+                key_list.reserve(m_data_object_map.size());
+                for (const auto & [key, data_object] : m_data_object_map)
                 {
-                    data_object_list.push_back(data_object.get());
+                    (void)data_object;
+                    key_list.push_back(key);
+                }
+                std::sort(key_list.begin(), key_list.end());
+                for (const auto & key : key_list)
+                {
+                    auto iter{ m_data_object_map.find(key) };
+                    if (iter != m_data_object_map.end() && iter->second)
+                    {
+                        data_object_list.push_back(iter->second);
+                    }
+                }
+            }
+            else
+            {
+                for (auto & [key, data_object] : m_data_object_map)
+                {
+                    (void)key;
+                    if (data_object)
+                    {
+                        data_object_list.push_back(data_object);
+                    }
                 }
             }
         }
@@ -220,14 +259,21 @@ void DataObjectManager::Accept(
                 }
                 if (iter->second)
                 {
-                    data_object_list.push_back(iter->second.get());
+                    data_object_list.push_back(iter->second);
                 }
             }
         }
     }
-    for (auto * data_object : data_object_list)
+    for (auto & data_object : data_object_list)
     {
-        data_object->Accept(visitor);
+        if (auto * model_object{ dynamic_cast<ModelObject *>(data_object.get()) })
+        {
+            model_object->Accept(visitor, options.model_visit_mode);
+        }
+        else
+        {
+            data_object->Accept(visitor);
+        }
     }
 }
 

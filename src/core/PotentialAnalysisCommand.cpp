@@ -447,7 +447,7 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling()
             auto entry{ atom->GetLocalPotentialEntry() };
             interpolation_visitor.SetPosition(atom->GetPosition());
             m_map_object->Accept(&interpolation_visitor);
-            entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
+            entry->AddDistanceAndMapValueList(interpolation_visitor.ConsumeSamplingDataList());
             entry->AddBasisAndResponseEntryList(
                 GausLinearTransformHelper::MapValueTransform(
                     entry->GetDistanceAndMapValueList(),
@@ -469,7 +469,7 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling()
         auto entry{ atom->GetLocalPotentialEntry() };
         interpolation_visitor.SetPosition(atom->GetPosition());
         m_map_object->Accept(&interpolation_visitor);
-        entry->AddDistanceAndMapValueList(interpolation_visitor.MoveSamplingDataList());
+        entry->AddDistanceAndMapValueList(interpolation_visitor.ConsumeSamplingDataList());
         entry->AddBasisAndResponseEntryList(
             GausLinearTransformHelper::MapValueTransform(
                 entry->GetDistanceAndMapValueList(),

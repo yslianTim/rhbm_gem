@@ -8,6 +8,8 @@
 #include <vector>
 #include <mutex>
 
+#include "ModelVisitMode.hpp"
+
 namespace rhbm_gem {
 
 class DatabaseManager;
@@ -25,6 +27,12 @@ class DataObjectManager
     mutable std::mutex m_db_mutex;  // protects m_db_manager
 
 public:
+    struct VisitOptions
+    {
+        bool deterministic_order{ false };
+        ModelVisitMode model_visit_mode{ ModelVisitMode::AtomsThenSelf };
+    };
+
     DataObjectManager();
     explicit DataObjectManager(std::shared_ptr<const FileProcessFactoryResolver> file_factory_resolver);
     ~DataObjectManager();
@@ -36,6 +44,10 @@ public:
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list={});
+    void Accept(
+        DataObjectVisitorBase * visitor,
+        const std::vector<std::string> & key_tag_list,
+        const VisitOptions & options);
     std::shared_ptr<DataObjectBase> GetDataObject(const std::string & key_tag);
     std::shared_ptr<const DataObjectBase> GetDataObject(const std::string & key_tag) const;
     template <typename TypedDataObject>

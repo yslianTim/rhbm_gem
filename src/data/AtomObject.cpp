@@ -62,6 +62,10 @@ void AtomObject::Update()
 
 void AtomObject::Accept(DataObjectVisitorBase * visitor)
 {
+    if (visitor == nullptr)
+    {
+        throw std::invalid_argument("AtomObject::Accept(): visitor is null.");
+    }
     visitor->VisitAtomObject(this);
 }
 

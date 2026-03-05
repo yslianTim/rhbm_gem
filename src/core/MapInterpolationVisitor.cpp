@@ -17,8 +17,9 @@ MapInterpolationVisitor::MapInterpolationVisitor(::SamplerBase * sampler) :
 
 void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 {
-    if (data_object == nullptr) return;
     m_sampling_data_list.clear();
+    m_point_list.clear();
+    if (data_object == nullptr) return;
     if (m_sampler == nullptr)
     {
         Logger::Log(LogLevel::Warning, "Cannot find any Sampler, skip interpolation.");
@@ -35,6 +36,11 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
 }
 
 std::vector<std::tuple<float, float>> && MapInterpolationVisitor::MoveSamplingDataList()
+{
+    return std::move(m_sampling_data_list);
+}
+
+std::vector<std::tuple<float, float>> MapInterpolationVisitor::ConsumeSamplingDataList()
 {
     return std::move(m_sampling_data_list);
 }

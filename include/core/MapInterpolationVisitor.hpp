@@ -9,7 +9,7 @@ class SamplerBase;
 
 namespace rhbm_gem {
 
-class MapInterpolationVisitor : public DataObjectVisitorBase
+class MapInterpolationVisitor : public StrictDataObjectVisitorBase
 {
     ::SamplerBase * m_sampler;
     std::array<float, 3> m_position, m_axis_vector;
@@ -24,6 +24,7 @@ public:
     void SetPosition(const std::array<float, 3> & position) { m_position = position; };
     void SetAxisVector(const std::array<float, 3> & axis_vector) { m_axis_vector = axis_vector; };
     const std::vector<std::tuple<float, float>> & GetSamplingDataList() const { return m_sampling_data_list; }
+    std::vector<std::tuple<float, float>> ConsumeSamplingDataList();
     std::vector<std::tuple<float, float>> && MoveSamplingDataList();
 
 private:

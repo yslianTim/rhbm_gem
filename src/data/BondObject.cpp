@@ -92,6 +92,10 @@ void BondObject::Update()
 
 void BondObject::Accept(DataObjectVisitorBase * visitor)
 {
+    if (visitor == nullptr)
+    {
+        throw std::invalid_argument("BondObject::Accept(): visitor is null.");
+    }
     visitor->VisitBondObject(this);
 }
 

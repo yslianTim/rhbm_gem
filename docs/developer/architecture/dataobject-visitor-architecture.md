@@ -19,7 +19,7 @@ Read with:
 This guide focuses on runtime traversal and operation dispatch for:
 
 - `DataObjectBase`
-- `DataObjectVisitorBase`
+- `DataObjectVisitorBase` and `StrictDataObjectVisitorBase`
 - concrete data objects (`AtomObject`, `BondObject`, `ModelObject`, `MapObject`)
 - manager-level traversal (`DataObjectManager::Accept`)
 - current production visitor (`MapInterpolationVisitor`)
@@ -44,7 +44,12 @@ Current base contract (`include/data/DataObjectBase.hpp`):
 - visitor dispatch (`Accept`)
 - key tag identity (`SetKeyTag`, `GetKeyTag`)
 
-### 2.2 `DataObjectVisitorBase`
+Null-safety rule:
+
+- concrete `Accept()` implementations now validate `visitor != nullptr`
+- invalid input throws `std::invalid_argument` with method context
+
+### 2.2 Visitor Base Types
 
 `DataObjectVisitorBase` declares one virtual method per known concrete type:
 
@@ -53,11 +58,18 @@ Current base contract (`include/data/DataObjectBase.hpp`):
 - `VisitModelObject(ModelObject *)`
 - `VisitMapObject(MapObject *)`
 
-Important design choice:
+By design, these default to no-op. This keeps visitor extension low-friction, but missing overrides can fail silently.
 
-- all `Visit*` default to no-op, not pure virtual
-- a new visitor can override only the types it needs
-- missing overrides fail silently (no compile-time enforcement)
+To make this safer, the project also provides `StrictDataObjectVisitorBase`:
+
+- derives from `DataObjectVisitorBase`
+- overrides all `Visit*Object(...)`
+- default behavior is fail-fast (`std::logic_error`)
+
+Recommended usage:
+
+- derive from `StrictDataObjectVisitorBase` for new logic-heavy visitors
+- derive from `DataObjectVisitorBase` only when intentional no-op coverage is required
 
 ## 3. Dispatch Model (Double Dispatch)
 
@@ -88,34 +100,63 @@ sequenceDiagram
 | `AtomObject` | `visitor->VisitAtomObject(this)` | single-node dispatch |
 | `BondObject` | `visitor->VisitBondObject(this)` | single-node dispatch |
 | `MapObject` | `visitor->VisitMapObject(this)` | single-node dispatch |
-| `ModelObject` | iterate `m_atom_list`, call each atom `Accept()`, then `VisitModelObject(this)` | visits atoms first, then model; does not visit bonds |
+| `ModelObject` | legacy default = atoms then model | backward-compatible default remains |
 
-`ModelObject::Accept()` detail is important for extension:
+### 4.1 `ModelObject` Traversal Policy
 
-- `BondObject` instances in `m_bond_list` are not traversed by model-level accept.
-- A visitor expecting bond callbacks will not get them from `model_object.Accept(...)` today.
+`ModelObject` now has explicit traversal control:
+
+```cpp
+void Accept(DataObjectVisitorBase * visitor, ModelVisitMode mode);
+```
+
+`ModelVisitMode` values:
+
+- `AtomsThenSelf` (legacy default)
+- `BondsThenSelf`
+- `AtomsAndBondsThenSelf`
+- `SelfOnly`
+
+Compatibility rule:
+
+- existing `ModelObject::Accept(visitor)` calls remain unchanged and map to `AtomsThenSelf`
 
 ## 5. Manager-Level Traversal: `DataObjectManager::Accept`
 
 `DataObjectManager` provides batch traversal over in-memory top-level objects.
 
+Public APIs:
+
+```cpp
+void Accept(DataObjectVisitorBase * visitor,
+            const std::vector<std::string> & key_tag_list = {});
+
+void Accept(DataObjectVisitorBase * visitor,
+            const std::vector<std::string> & key_tag_list,
+            const VisitOptions & options);
+```
+
+`VisitOptions`:
+
+- `bool deterministic_order`
+- `ModelVisitMode model_visit_mode`
+
 Behavior summary:
 
-- if `key_tag_list` is empty, visits all objects in `m_data_object_map`
-- if `key_tag_list` is provided, visits only matched keys
-- missing key logs warning and continues
-- object pointers are copied under `m_map_mutex`, then visited after lock release
+- `visitor == nullptr` throws `std::invalid_argument`
+- traversal takes a `std::shared_ptr<DataObjectBase>` snapshot under lock
+- snapshot is visited after lock release (prevents use-after-free when map mutates concurrently)
+- if `key_tag_list` is empty:
+  - `deterministic_order == false`: follow `unordered_map` iteration (not stable)
+  - `deterministic_order == true`: sort by key tag before visiting
+- if `key_tag_list` is provided:
+  - process in caller-provided order
+  - missing key logs warning and continues
 
-Implications:
+Model-specific behavior in manager traversal:
 
-- lock hold time is short (good for contention)
-- traversal order for full-map mode follows `unordered_map` iteration (non-deterministic order)
-- `visitor == nullptr` is not guarded and will crash when dereferenced
-
-Current usage status:
-
-- as of now, project runtime paths mostly call `typed_object->Accept(...)` directly
-- `DataObjectManager::Accept(...)` exists as a generic extension point, but has no active core call site
+- when visiting a `ModelObject`, manager applies `options.model_visit_mode`
+- non-model objects use their normal `Accept(visitor)` path
 
 ## 6. Production Visitor Example: `MapInterpolationVisitor`
 
@@ -123,7 +164,7 @@ Current usage status:
 
 Design:
 
-- derives from `DataObjectVisitorBase`
+- derives from `StrictDataObjectVisitorBase`
 - overrides only `VisitMapObject(MapObject *)`
 - keeps mutable per-call state:
   - sampler pointer (`SamplerBase *`)
@@ -132,16 +173,18 @@ Design:
 
 `VisitMapObject(...)` flow:
 
-1. clear previous sampling output
-2. validate `MapObject*` and sampler pointer
-3. generate sample points (`sampler->GenerateSamplingPoints(...)`)
-4. run tricubic interpolation per point
-5. store `(distance, map_value)` list
+1. clear stale outputs (`m_sampling_data_list`, `m_point_list`)
+2. handle null map pointer (return after clear)
+3. validate sampler pointer
+4. generate sample points (`sampler->GenerateSamplingPoints(...)`)
+5. run tricubic interpolation per point
+6. store `(distance, map_value)` list
 
-Notable API semantics:
+Output APIs:
 
-- `MoveSamplingDataList()` returns rvalue reference and transfers ownership
-- callers usually consume once per sampling iteration
+- `GetSamplingDataList()` for read-only access
+- `ConsumeSamplingDataList()` for move-out by value (recommended)
+- `MoveSamplingDataList()` kept for compatibility
 
 ### 6.1 Runtime Call Chains
 
@@ -151,12 +194,7 @@ Main usages:
 - `PotentialAnalysisBondWorkflow::RunBondMapValueSampling`
 - `MapVisualizationCommand::Run`
 
-All three follow the same pattern:
-
-1. configure sampler
-2. set visitor input (`SetPosition`, optional `SetAxisVector`)
-3. call `map_object->Accept(&visitor)`
-4. consume result list
+Sampling workflows now consume output via `ConsumeSamplingDataList()`.
 
 ## 7. Threading and Lifetime Expectations
 
@@ -168,7 +206,7 @@ Current parallel code correctly uses one visitor instance per OpenMP thread (ins
 
 ### 7.2 Raw Pointer Contract
 
-Visitor APIs use raw pointers for both visited object and external dependencies.
+Visitor APIs use raw pointers for visited objects and external dependencies.
 
 Caller responsibilities:
 
@@ -180,39 +218,43 @@ Caller responsibilities:
 
 ### 8.1 Add a New Visitor
 
-1. Derive from `DataObjectVisitorBase`.
-2. Override only required `Visit*Object` methods.
+1. Derive from `StrictDataObjectVisitorBase` (recommended) or `DataObjectVisitorBase`.
+2. Override required `Visit*Object` methods.
 3. Keep visitor state explicit and reset per operation if reused.
 4. Call through concrete object `Accept(...)` or `DataObjectManager::Accept(...)`.
-5. Add focused tests for visited-type coverage and output state reset.
+5. Add focused tests for visited-type coverage, ordering, and state reset.
 
 ### 8.2 Add a New `DataObject` Type
 
 1. Derive from `DataObjectBase` and implement all pure virtual methods.
-2. Add a new `VisitNewTypeObject(NewTypeObject *)` method in `DataObjectVisitorBase`.
+2. Add a new `VisitNewTypeObject(NewTypeObject *)` method in both visitor base classes.
 3. Implement `NewTypeObject::Accept(...)` to call that visitor method.
-4. Update any aggregate traversals that should include this new type.
+4. Update aggregate traversals/policies that should include this new type.
 5. Update architecture docs and diagrams.
 
-Compatibility note:
+## 9. Migration Notes
 
-- because `DataObjectVisitorBase` methods default to no-op, existing visitors continue compiling after step 2.
-- this also means new type handling can be accidentally omitted; add tests intentionally.
+- Existing code calling `ModelObject::Accept(visitor)` remains valid.
+- Existing code calling `DataObjectManager::Accept(visitor, keys)` remains valid.
+- Existing code calling `MapInterpolationVisitor::MoveSamplingDataList()` remains valid.
+- New code should prefer:
+  - `ModelObject::Accept(visitor, mode)` when traversal semantics matter
+  - `DataObjectManager::Accept(..., options)` when deterministic ordering or model policy is required
+  - `MapInterpolationVisitor::ConsumeSamplingDataList()` for safe move-out semantics
 
-## 9. Known Constraints and Gotchas
+## 10. Known Constraints and Gotchas
 
-- `Accept()` implementations do not guard `visitor == nullptr`.
-- `ModelObject::Accept()` currently skips bond traversal.
-- full-map traversal order in `DataObjectManager::Accept()` is not stable.
-- default no-op `Visit*` methods can hide missing behavior.
-- visitor interfaces are mutable-only today (`const` traversal is not modeled).
+- Base visitor no-op methods can still hide missing behavior if non-strict base is used.
+- `unordered_map` order remains non-deterministic unless `deterministic_order=true`.
+- Visitor interfaces are mutable-only today (`const` traversal is not modeled).
 
-## 10. Key Files
+## 11. Key Files
 
 Core interfaces:
 
 - `include/data/DataObjectBase.hpp`
 - `include/data/DataObjectVisitorBase.hpp`
+- `include/data/ModelVisitMode.hpp`
 
 Concrete dispatch:
 

@@ -11,6 +11,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
+#include <stdexcept>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -142,6 +143,10 @@ void MapObject::Update()
 
 void MapObject::Accept(DataObjectVisitorBase * visitor)
 {
+    if (visitor == nullptr)
+    {
+        throw std::invalid_argument("MapObject::Accept(): visitor is null.");
+    }
     visitor->VisitMapObject(this);
 }
 

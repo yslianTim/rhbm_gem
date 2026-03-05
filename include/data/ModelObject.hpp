@@ -13,6 +13,7 @@
 #include "BondKeySystem.hpp"
 #include "ComponentKeySystem.hpp"
 #include "DataObjectBase.hpp"
+#include "ModelVisitMode.hpp"
 
 template <typename T> struct KDNode;
 
@@ -53,6 +54,7 @@ public:
     void Display() const override;
     void Update() override;
     void Accept(DataObjectVisitorBase * visitor) override;
+    void Accept(DataObjectVisitorBase * visitor, ModelVisitMode mode);
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 
