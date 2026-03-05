@@ -61,6 +61,7 @@ See:
 - [`./architecture/command-architecture.md`](./architecture/command-architecture.md)
 - [`./adding-a-command.md`](./adding-a-command.md)
 - [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-io-architecture.md)
+- [`./architecture/dataobject-visitor-architecture.md`](./architecture/dataobject-visitor-architecture.md)
 
 Command-layer principles:
 

@@ -13,6 +13,7 @@ Read with:
 
 - [`../development-guidelines.md`](../development-guidelines.md)
 - [`./command-architecture.md`](./command-architecture.md)
+- [`./dataobject-visitor-architecture.md`](./dataobject-visitor-architecture.md)
 
 ## 1. Scope
 
