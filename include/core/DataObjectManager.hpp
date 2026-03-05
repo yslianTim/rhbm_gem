@@ -16,7 +16,8 @@ class DatabaseManager;
 class FileProcessFactoryBase;
 class FileProcessFactoryResolver;
 class DataObjectBase;
-class DataObjectVisitorBase;
+class DataObjectVisitor;
+class ConstDataObjectVisitor;
 
 class DataObjectManager
 {
@@ -29,9 +30,10 @@ class DataObjectManager
 public:
     struct VisitOptions
     {
-        bool deterministic_order{ false };
+        bool deterministic_order{ true };
         ModelVisitMode model_visit_mode{ ModelVisitMode::AtomsThenSelf };
     };
+    static const VisitOptions kDefaultVisitOptions;
 
     DataObjectManager();
     explicit DataObjectManager(std::shared_ptr<const FileProcessFactoryResolver> file_factory_resolver);
@@ -43,11 +45,14 @@ public:
     bool HasDataObject(const std::string & key_tag) const;
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
-    void Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list={});
     void Accept(
-        DataObjectVisitorBase * visitor,
-        const std::vector<std::string> & key_tag_list,
-        const VisitOptions & options);
+        DataObjectVisitor & visitor,
+        const std::vector<std::string> & key_tag_list={},
+        const VisitOptions & options=kDefaultVisitOptions);
+    void Accept(
+        ConstDataObjectVisitor & visitor,
+        const std::vector<std::string> & key_tag_list={},
+        const VisitOptions & options=kDefaultVisitOptions) const;
     std::shared_ptr<DataObjectBase> GetDataObject(const std::string & key_tag);
     std::shared_ptr<const DataObjectBase> GetDataObject(const std::string & key_tag) const;
     template <typename TypedDataObject>

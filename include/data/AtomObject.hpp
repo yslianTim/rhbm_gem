@@ -40,7 +40,10 @@ public:
     std::unique_ptr<DataObjectBase> Clone() const override;
     void Display() const override;
     void Update() override;
-    void Accept(DataObjectVisitorBase * visitor) override;
+    void Accept(DataObjectVisitor & visitor) override;
+    void Accept(ConstDataObjectVisitor & visitor) const override;
+    void Accept(DataObjectVisitor & visitor, ModelVisitMode model_mode) override;
+    void Accept(ConstDataObjectVisitor & visitor, ModelVisitMode model_mode) const override;
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 

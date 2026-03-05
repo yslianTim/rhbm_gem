@@ -6,6 +6,7 @@
 #include "Logger.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 namespace rhbm_gem {
@@ -15,11 +16,31 @@ MapInterpolationVisitor::MapInterpolationVisitor(::SamplerBase * sampler) :
 {
 }
 
-void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
+void MapInterpolationVisitor::VisitAtomObject(const AtomObject & data_object)
+{
+    (void)data_object;
+    throw std::logic_error(
+        "MapInterpolationVisitor supports MapObject only.");
+}
+
+void MapInterpolationVisitor::VisitBondObject(const BondObject & data_object)
+{
+    (void)data_object;
+    throw std::logic_error(
+        "MapInterpolationVisitor supports MapObject only.");
+}
+
+void MapInterpolationVisitor::VisitModelObject(const ModelObject & data_object)
+{
+    (void)data_object;
+    throw std::logic_error(
+        "MapInterpolationVisitor supports MapObject only.");
+}
+
+void MapInterpolationVisitor::VisitMapObject(const MapObject & data_object)
 {
     m_sampling_data_list.clear();
     m_point_list.clear();
-    if (data_object == nullptr) return;
     if (m_sampler == nullptr)
     {
         Logger::Log(LogLevel::Warning, "Cannot find any Sampler, skip interpolation.");
@@ -35,29 +56,17 @@ void MapInterpolationVisitor::VisitMapObject(MapObject * data_object)
     }
 }
 
-std::vector<std::tuple<float, float>> && MapInterpolationVisitor::MoveSamplingDataList()
-{
-    return std::move(m_sampling_data_list);
-}
-
 std::vector<std::tuple<float, float>> MapInterpolationVisitor::ConsumeSamplingDataList()
 {
     return std::move(m_sampling_data_list);
 }
 
 float MapInterpolationVisitor::MakeInterpolationInMapObject(
-    MapObject * data_object, const std::array<float, 3> & position)
+    const MapObject & data_object, const std::array<float, 3> & position)
 {
-    if (data_object == nullptr)
-    {
-        Logger::Log(LogLevel::Warning,
-            "Input data object is nullptr, skip interpolation and return 0.");
-        return 0.0f;
-    }
-
-    auto index{ data_object->GetIndexFromPosition(position) };
-    auto origin{ data_object->GetOrigin() };
-    auto grid_spacing{ data_object->GetGridSpacing() };
+    auto index{ data_object.GetIndexFromPosition(position) };
+    auto origin{ data_object.GetOrigin() };
+    auto grid_spacing{ data_object.GetGridSpacing() };
 
     std::array<float, 3> local;
     for (size_t i = 0; i < 3; i++)
@@ -79,7 +88,7 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
 
     // Collect 64 points for interpolation
     std::array<std::array<std::array<float, 4>, 4>, 4> values;
-    const auto grid_size{ data_object->GetGridSize() };
+    const auto grid_size{ data_object.GetGridSize() };
     for (int i = -1; i < 3; i++)
     {
         for (int j = -1; j < 3; j++)
@@ -92,7 +101,7 @@ float MapInterpolationVisitor::MakeInterpolationInMapObject(
                 int xi{ std::clamp(index.at(0) + i, 0, grid_size.at(0) - 1) };
                 int yj{ std::clamp(index.at(1) + j, 0, grid_size.at(1) - 1) };
                 int zk{ std::clamp(index.at(2) + k, 0, grid_size.at(2) - 1) };
-                values[i_next][j_next][k_next] = data_object->GetMapValue(xi, yj, zk);
+                values[i_next][j_next][k_next] = data_object.GetMapValue(xi, yj, zk);
             }
         }
     }

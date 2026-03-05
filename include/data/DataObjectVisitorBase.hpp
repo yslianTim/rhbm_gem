@@ -1,8 +1,5 @@
 #pragma once
 
-#include <stdexcept>
-#include <string>
-
 namespace rhbm_gem {
 
 class AtomObject;
@@ -10,48 +7,24 @@ class BondObject;
 class ModelObject;
 class MapObject;
 
-class DataObjectVisitorBase
+class DataObjectVisitor
 {
 public:
-    virtual ~DataObjectVisitorBase() = default;
-    virtual void VisitAtomObject(AtomObject * data_object) { (void)data_object; }
-    virtual void VisitBondObject(BondObject * data_object) { (void)data_object; }
-    virtual void VisitModelObject(ModelObject * data_object){ (void)data_object; }
-    virtual void VisitMapObject(MapObject * data_object) { (void)data_object; }
+    virtual ~DataObjectVisitor() = default;
+    virtual void VisitAtomObject(AtomObject & data_object) = 0;
+    virtual void VisitBondObject(BondObject & data_object) = 0;
+    virtual void VisitModelObject(ModelObject & data_object) = 0;
+    virtual void VisitMapObject(MapObject & data_object) = 0;
 };
 
-class StrictDataObjectVisitorBase : public DataObjectVisitorBase
+class ConstDataObjectVisitor
 {
 public:
-    ~StrictDataObjectVisitorBase() override = default;
-
-    void VisitAtomObject(AtomObject * data_object) override
-    {
-        (void)data_object;
-        throw std::logic_error(
-            "StrictDataObjectVisitorBase::VisitAtomObject() is not implemented.");
-    }
-
-    void VisitBondObject(BondObject * data_object) override
-    {
-        (void)data_object;
-        throw std::logic_error(
-            "StrictDataObjectVisitorBase::VisitBondObject() is not implemented.");
-    }
-
-    void VisitModelObject(ModelObject * data_object) override
-    {
-        (void)data_object;
-        throw std::logic_error(
-            "StrictDataObjectVisitorBase::VisitModelObject() is not implemented.");
-    }
-
-    void VisitMapObject(MapObject * data_object) override
-    {
-        (void)data_object;
-        throw std::logic_error(
-            "StrictDataObjectVisitorBase::VisitMapObject() is not implemented.");
-    }
+    virtual ~ConstDataObjectVisitor() = default;
+    virtual void VisitAtomObject(const AtomObject & data_object) = 0;
+    virtual void VisitBondObject(const BondObject & data_object) = 0;
+    virtual void VisitModelObject(const ModelObject & data_object) = 0;
+    virtual void VisitMapObject(const MapObject & data_object) = 0;
 };
 
 } // namespace rhbm_gem

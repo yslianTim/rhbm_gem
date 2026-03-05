@@ -262,6 +262,19 @@ DataObjectDAORegistrar<DataObjectType, DAOType>("stable_name")
 
 `stable_name` is persisted in `object_catalog.object_type`; treat it as on-disk ABI.
 
+### 6.5 Visitor Traversal Integration
+
+I/O and persistence workflows hand off loaded/stored objects to traversal workflows through
+`DataObjectManager::Accept(...)`.
+
+Current integration contract:
+
+- Visitor interfaces are split into mutable (`DataObjectVisitor`) and read-only (`ConstDataObjectVisitor`) paths.
+- `DataObjectManager::Accept(...)` defaults to deterministic key order traversal when `key_tag_list` is empty.
+- Model traversal policy is controlled by `VisitOptions.model_visit_mode` and forwarded through the policy-aware
+  `DataObjectBase::Accept(visitor, model_mode)` contract (no manager-side RTTI dispatch).
+- `MapInterpolationVisitor` is a read-only map visitor (`ConstDataObjectVisitor`) used by map analysis commands.
+
 ## 7. Persistence Details by Object
 
 ### 7.1 `ModelObject` (Normalized v2)

@@ -60,13 +60,26 @@ void AtomObject::Update()
     Logger::Log(LogLevel::Info, "AtomObject Update: " + GetInfo());
 }
 
-void AtomObject::Accept(DataObjectVisitorBase * visitor)
+void AtomObject::Accept(DataObjectVisitor & visitor)
 {
-    if (visitor == nullptr)
-    {
-        throw std::invalid_argument("AtomObject::Accept(): visitor is null.");
-    }
-    visitor->VisitAtomObject(this);
+    visitor.VisitAtomObject(*this);
+}
+
+void AtomObject::Accept(ConstDataObjectVisitor & visitor) const
+{
+    visitor.VisitAtomObject(*this);
+}
+
+void AtomObject::Accept(DataObjectVisitor & visitor, ModelVisitMode model_mode)
+{
+    (void)model_mode;
+    Accept(visitor);
+}
+
+void AtomObject::Accept(ConstDataObjectVisitor & visitor, ModelVisitMode model_mode) const
+{
+    (void)model_mode;
+    Accept(visitor);
 }
 
 std::unique_ptr<AtomObject> AtomObject::AtomObjectClone() const

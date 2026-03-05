@@ -4,15 +4,15 @@
 #include "FilePathHelper.hpp"
 #include "DataObjectBase.hpp"
 #include "DataObjectVisitorBase.hpp"
-#include "ModelObject.hpp"
 #include "DatabaseManager.hpp"
 #include "Logger.hpp"
 
 #include <algorithm>
-#include <stdexcept>
 #include <utility>
 
 namespace rhbm_gem {
+
+const DataObjectManager::VisitOptions DataObjectManager::kDefaultVisitOptions{};
 
 DataObjectManager::DataObjectManager() :
     DataObjectManager(CreateDefaultFileProcessFactoryResolver())
@@ -196,21 +196,10 @@ void DataObjectManager::SaveDataObject(
 }
 
 void DataObjectManager::Accept(
-    DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list)
-{
-    Accept(visitor, key_tag_list, VisitOptions{});
-}
-
-void DataObjectManager::Accept(
-    DataObjectVisitorBase * visitor,
+    DataObjectVisitor & visitor,
     const std::vector<std::string> & key_tag_list,
     const VisitOptions & options)
 {
-    if (visitor == nullptr)
-    {
-        throw std::invalid_argument("DataObjectManager::Accept(): visitor is null.");
-    }
-
     std::vector<std::shared_ptr<DataObjectBase>> data_object_list;
     {
         std::lock_guard<std::mutex> lock(m_map_mutex);
@@ -266,14 +255,71 @@ void DataObjectManager::Accept(
     }
     for (auto & data_object : data_object_list)
     {
-        if (auto * model_object{ dynamic_cast<ModelObject *>(data_object.get()) })
+        data_object->Accept(visitor, options.model_visit_mode);
+    }
+}
+
+void DataObjectManager::Accept(
+    ConstDataObjectVisitor & visitor,
+    const std::vector<std::string> & key_tag_list,
+    const VisitOptions & options) const
+{
+    std::vector<std::shared_ptr<const DataObjectBase>> data_object_list;
+    {
+        std::lock_guard<std::mutex> lock(m_map_mutex);
+        if (key_tag_list.empty())
         {
-            model_object->Accept(visitor, options.model_visit_mode);
+            if (options.deterministic_order)
+            {
+                std::vector<std::string> key_list;
+                key_list.reserve(m_data_object_map.size());
+                for (const auto & [key, data_object] : m_data_object_map)
+                {
+                    (void)data_object;
+                    key_list.push_back(key);
+                }
+                std::sort(key_list.begin(), key_list.end());
+                for (const auto & key : key_list)
+                {
+                    auto iter{ m_data_object_map.find(key) };
+                    if (iter != m_data_object_map.end() && iter->second)
+                    {
+                        data_object_list.push_back(iter->second);
+                    }
+                }
+            }
+            else
+            {
+                for (const auto & [key, data_object] : m_data_object_map)
+                {
+                    (void)key;
+                    if (data_object)
+                    {
+                        data_object_list.push_back(data_object);
+                    }
+                }
+            }
         }
         else
         {
-            data_object->Accept(visitor);
+            for (const auto & key : key_tag_list)
+            {
+                auto iter{ m_data_object_map.find(key) };
+                if (iter == m_data_object_map.end())
+                {
+                    Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
+                    continue;
+                }
+                if (iter->second)
+                {
+                    data_object_list.push_back(iter->second);
+                }
+            }
         }
+    }
+    for (const auto & data_object : data_object_list)
+    {
+        data_object->Accept(visitor, options.model_visit_mode);
     }
 }
 

@@ -265,7 +265,7 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     
     interpolation_visitor.SetPosition(target_atom_position);
     interpolation_visitor.SetAxisVector({n_vector(0), n_vector(1), n_vector(2)});
-    m_map_object->Accept(&interpolation_visitor);
+    m_map_object->Accept(interpolation_visitor);
     auto & sampling_data_list{ interpolation_visitor.GetSamplingDataList() };
     if (sampling_data_list.empty())
     {

@@ -90,13 +90,26 @@ void BondObject::Update()
     Logger::Log(LogLevel::Info, "BondObject Update: " + GetInfo());
 }
 
-void BondObject::Accept(DataObjectVisitorBase * visitor)
+void BondObject::Accept(DataObjectVisitor & visitor)
 {
-    if (visitor == nullptr)
-    {
-        throw std::invalid_argument("BondObject::Accept(): visitor is null.");
-    }
-    visitor->VisitBondObject(this);
+    visitor.VisitBondObject(*this);
+}
+
+void BondObject::Accept(ConstDataObjectVisitor & visitor) const
+{
+    visitor.VisitBondObject(*this);
+}
+
+void BondObject::Accept(DataObjectVisitor & visitor, ModelVisitMode model_mode)
+{
+    (void)model_mode;
+    Accept(visitor);
+}
+
+void BondObject::Accept(ConstDataObjectVisitor & visitor, ModelVisitMode model_mode) const
+{
+    (void)model_mode;
+    Accept(visitor);
 }
 
 std::unique_ptr<BondObject> BondObject::BondObjectClone() const

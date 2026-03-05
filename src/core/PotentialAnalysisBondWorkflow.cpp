@@ -62,7 +62,7 @@ void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & contex
             };
             interpolation_visitor.SetPosition(adjusted_position);
             interpolation_visitor.SetAxisVector(bond_vector);
-            context.map_object.Accept(&interpolation_visitor);
+            context.map_object.Accept(interpolation_visitor);
             entry->AddDistanceAndMapValueList(interpolation_visitor.ConsumeSamplingDataList());
             entry->AddBasisAndResponseEntryList(
                 GausLinearTransformHelper::MapValueTransform(
@@ -85,7 +85,7 @@ void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & contex
         auto entry{ bond->GetLocalPotentialEntry() };
         interpolation_visitor.SetPosition(bond->GetPosition());
         interpolation_visitor.SetAxisVector(bond->GetBondVector());
-        context.map_object.Accept(&interpolation_visitor);
+        context.map_object.Accept(interpolation_visitor);
         entry->AddDistanceAndMapValueList(interpolation_visitor.ConsumeSamplingDataList());
         entry->AddBasisAndResponseEntryList(
             GausLinearTransformHelper::MapValueTransform(

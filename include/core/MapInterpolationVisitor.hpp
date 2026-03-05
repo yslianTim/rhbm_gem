@@ -9,7 +9,7 @@ class SamplerBase;
 
 namespace rhbm_gem {
 
-class MapInterpolationVisitor : public StrictDataObjectVisitorBase
+class MapInterpolationVisitor : public ConstDataObjectVisitor
 {
     ::SamplerBase * m_sampler;
     std::array<float, 3> m_position, m_axis_vector;
@@ -19,16 +19,19 @@ class MapInterpolationVisitor : public StrictDataObjectVisitorBase
 public:
     explicit MapInterpolationVisitor(::SamplerBase * sampler);
     ~MapInterpolationVisitor() = default;
-    void VisitMapObject(MapObject * data_object) override;
+    void VisitAtomObject(const AtomObject & data_object) override;
+    void VisitBondObject(const BondObject & data_object) override;
+    void VisitModelObject(const ModelObject & data_object) override;
+    void VisitMapObject(const MapObject & data_object) override;
 
     void SetPosition(const std::array<float, 3> & position) { m_position = position; };
     void SetAxisVector(const std::array<float, 3> & axis_vector) { m_axis_vector = axis_vector; };
     const std::vector<std::tuple<float, float>> & GetSamplingDataList() const { return m_sampling_data_list; }
     std::vector<std::tuple<float, float>> ConsumeSamplingDataList();
-    std::vector<std::tuple<float, float>> && MoveSamplingDataList();
 
 private:
-    float MakeInterpolationInMapObject(MapObject * data_object, const std::array<float, 3> & position);
+    float MakeInterpolationInMapObject(
+        const MapObject & data_object, const std::array<float, 3> & position);
 
 };
 

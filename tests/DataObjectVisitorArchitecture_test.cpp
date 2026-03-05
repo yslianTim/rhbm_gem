@@ -6,9 +6,11 @@
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 #include "AtomObject.hpp"
@@ -25,56 +27,109 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class EventVisitor : public rg::DataObjectVisitorBase
+class EventVisitor : public rg::DataObjectVisitor
 {
 public:
     std::vector<std::string> events;
 
-    void VisitAtomObject(rg::AtomObject * data_object) override
+    void VisitAtomObject(rg::AtomObject & data_object) override
     {
         (void)data_object;
         events.emplace_back("Atom");
     }
 
-    void VisitBondObject(rg::BondObject * data_object) override
+    void VisitBondObject(rg::BondObject & data_object) override
     {
         (void)data_object;
         events.emplace_back("Bond");
     }
 
-    void VisitModelObject(rg::ModelObject * data_object) override
+    void VisitModelObject(rg::ModelObject & data_object) override
     {
         (void)data_object;
         events.emplace_back("Model");
     }
 
-    void VisitMapObject(rg::MapObject * data_object) override
+    void VisitMapObject(rg::MapObject & data_object) override
     {
         (void)data_object;
         events.emplace_back("Map");
     }
 };
 
-class ModelKeyVisitor : public rg::DataObjectVisitorBase
+class ConstEventVisitor : public rg::ConstDataObjectVisitor
+{
+public:
+    std::vector<std::string> events;
+
+    void VisitAtomObject(const rg::AtomObject & data_object) override
+    {
+        (void)data_object;
+        events.emplace_back("Atom");
+    }
+
+    void VisitBondObject(const rg::BondObject & data_object) override
+    {
+        (void)data_object;
+        events.emplace_back("Bond");
+    }
+
+    void VisitModelObject(const rg::ModelObject & data_object) override
+    {
+        (void)data_object;
+        events.emplace_back("Model");
+    }
+
+    void VisitMapObject(const rg::MapObject & data_object) override
+    {
+        (void)data_object;
+        events.emplace_back("Map");
+    }
+};
+
+class ModelKeyVisitor : public rg::DataObjectVisitor
 {
 public:
     std::vector<std::string> keys;
 
-    void VisitModelObject(rg::ModelObject * data_object) override
+    void VisitAtomObject(rg::AtomObject & data_object) override { (void)data_object; }
+    void VisitBondObject(rg::BondObject & data_object) override { (void)data_object; }
+    void VisitMapObject(rg::MapObject & data_object) override { (void)data_object; }
+
+    void VisitModelObject(rg::ModelObject & data_object) override
     {
-        keys.push_back(data_object->GetKeyTag());
+        keys.push_back(data_object.GetKeyTag());
     }
 };
 
-class BlockingModelVisitor : public rg::DataObjectVisitorBase
+class ConstModelKeyVisitor : public rg::ConstDataObjectVisitor
 {
 public:
-    void VisitModelObject(rg::ModelObject * data_object) override
+    std::vector<std::string> keys;
+
+    void VisitAtomObject(const rg::AtomObject & data_object) override { (void)data_object; }
+    void VisitBondObject(const rg::BondObject & data_object) override { (void)data_object; }
+    void VisitMapObject(const rg::MapObject & data_object) override { (void)data_object; }
+
+    void VisitModelObject(const rg::ModelObject & data_object) override
+    {
+        keys.push_back(data_object.GetKeyTag());
+    }
+};
+
+class BlockingModelVisitor : public rg::DataObjectVisitor
+{
+public:
+    void VisitAtomObject(rg::AtomObject & data_object) override { (void)data_object; }
+    void VisitBondObject(rg::BondObject & data_object) override { (void)data_object; }
+    void VisitMapObject(rg::MapObject & data_object) override { (void)data_object; }
+
+    void VisitModelObject(rg::ModelObject & data_object) override
     {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_started = true;
-            m_key = data_object->GetKeyTag();
+            m_key = data_object.GetKeyTag();
         }
         m_cv_started.notify_all();
 
@@ -132,10 +187,6 @@ private:
     unsigned int m_sampling_size{ 1 };
 };
 
-class EmptyStrictVisitor : public rg::StrictDataObjectVisitorBase
-{
-};
-
 std::unique_ptr<rg::ModelObject> MakeModelWithBond()
 {
     std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
@@ -172,7 +223,13 @@ rg::MapObject MakeMapObject()
 
 } // namespace
 
-TEST(DataObjectVisitorArchitectureTest, ConcreteAcceptDispatchesToMatchingVisitMethod)
+TEST(DataObjectVisitorArchitectureTest, VisitorInterfacesAreAbstract)
+{
+    EXPECT_TRUE((std::is_abstract_v<rg::DataObjectVisitor>));
+    EXPECT_TRUE((std::is_abstract_v<rg::ConstDataObjectVisitor>));
+}
+
+TEST(DataObjectVisitorArchitectureTest, ConcreteAcceptDispatchesToMatchingMutableVisitMethod)
 {
     auto model{ MakeModelWithBond() };
     auto map{ MakeMapObject() };
@@ -180,10 +237,28 @@ TEST(DataObjectVisitorArchitectureTest, ConcreteAcceptDispatchesToMatchingVisitM
     rg::BondObject bond;
     EventVisitor visitor;
 
-    atom.Accept(&visitor);
-    bond.Accept(&visitor);
-    map.Accept(&visitor);
-    model->Accept(&visitor, rg::ModelVisitMode::SelfOnly);
+    atom.Accept(visitor);
+    bond.Accept(visitor);
+    map.Accept(visitor);
+    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
+
+    EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Atom", "Bond", "Map", "Model" }));
+}
+
+TEST(DataObjectVisitorArchitectureTest, ConcreteAcceptDispatchesToMatchingConstVisitMethod)
+{
+    auto model{ MakeModelWithBond() };
+    auto map{ MakeMapObject() };
+    const rg::AtomObject atom;
+    const rg::BondObject bond;
+    const rg::ModelObject & model_ref{ *model };
+    const rg::MapObject & map_ref{ map };
+    ConstEventVisitor visitor;
+
+    atom.Accept(visitor);
+    bond.Accept(visitor);
+    map_ref.Accept(visitor);
+    model_ref.Accept(visitor, rg::ModelVisitMode::SelfOnly);
 
     EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Atom", "Bond", "Map", "Model" }));
 }
@@ -193,7 +268,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelLegacyAcceptVisitsAtomsThenModel)
     auto model{ MakeModelWithBond() };
     EventVisitor visitor;
 
-    model->Accept(&visitor);
+    model->Accept(visitor);
 
     EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Atom", "Atom", "Model" }));
 }
@@ -203,7 +278,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelVisitModeBondsThenSelfVisitsBondsAn
     auto model{ MakeModelWithBond() };
     EventVisitor visitor;
 
-    model->Accept(&visitor, rg::ModelVisitMode::BondsThenSelf);
+    model->Accept(visitor, rg::ModelVisitMode::BondsThenSelf);
 
     EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Bond", "Model" }));
 }
@@ -213,7 +288,7 @@ TEST(DataObjectVisitorArchitectureTest, ModelVisitModeAtomsAndBondsThenSelfVisit
     auto model{ MakeModelWithBond() };
     EventVisitor visitor;
 
-    model->Accept(&visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
+    model->Accept(visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
 
     EXPECT_EQ(
         visitor.events,
@@ -225,30 +300,12 @@ TEST(DataObjectVisitorArchitectureTest, ModelVisitModeSelfOnlyVisitsOnlyModel)
     auto model{ MakeModelWithBond() };
     EventVisitor visitor;
 
-    model->Accept(&visitor, rg::ModelVisitMode::SelfOnly);
+    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
 
     EXPECT_EQ(visitor.events, (std::vector<std::string>{ "Model" }));
 }
 
-TEST(DataObjectVisitorArchitectureTest, NullVisitorThrowsInvalidArgumentOnAllAcceptEntrypoints)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
-    rg::AtomObject atom;
-    rg::BondObject bond;
-    rg::DataObjectManager manager;
-    manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model");
-
-    auto * null_visitor{ static_cast<rg::DataObjectVisitorBase *>(nullptr) };
-    EXPECT_THROW(atom.Accept(null_visitor), std::invalid_argument);
-    EXPECT_THROW(bond.Accept(null_visitor), std::invalid_argument);
-    EXPECT_THROW(map.Accept(null_visitor), std::invalid_argument);
-    EXPECT_THROW(model->Accept(null_visitor), std::invalid_argument);
-    EXPECT_THROW(model->Accept(null_visitor, rg::ModelVisitMode::SelfOnly), std::invalid_argument);
-    EXPECT_THROW(manager.Accept(null_visitor), std::invalid_argument);
-}
-
-TEST(DataObjectVisitorArchitectureTest, ManagerAcceptDeterministicOrderSortsKeysWhenKeyListIsEmpty)
+TEST(DataObjectVisitorArchitectureTest, ManagerAcceptDeterministicOrderByDefault)
 {
     rg::DataObjectManager manager;
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
@@ -256,11 +313,10 @@ TEST(DataObjectVisitorArchitectureTest, ManagerAcceptDeterministicOrderSortsKeys
     manager.ProcessFile(model_path, "a_model");
 
     rg::DataObjectManager::VisitOptions options;
-    options.deterministic_order = true;
     options.model_visit_mode = rg::ModelVisitMode::SelfOnly;
 
     ModelKeyVisitor visitor;
-    manager.Accept(&visitor, {}, options);
+    manager.Accept(visitor, {}, options);
 
     EXPECT_EQ(visitor.keys, (std::vector<std::string>{ "a_model", "b_model" }));
 }
@@ -273,13 +329,29 @@ TEST(DataObjectVisitorArchitectureTest, ManagerAcceptPreservesInputKeyOrderWhenK
     manager.ProcessFile(model_path, "a_model");
 
     rg::DataObjectManager::VisitOptions options;
-    options.deterministic_order = true;
     options.model_visit_mode = rg::ModelVisitMode::SelfOnly;
 
     ModelKeyVisitor visitor;
-    manager.Accept(&visitor, { "b_model", "a_model" }, options);
+    manager.Accept(visitor, { "b_model", "a_model" }, options);
 
     EXPECT_EQ(visitor.keys, (std::vector<std::string>{ "b_model", "a_model" }));
+}
+
+TEST(DataObjectVisitorArchitectureTest, ConstManagerAcceptWorksWithConstVisitor)
+{
+    rg::DataObjectManager manager;
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    manager.ProcessFile(model_path, "b_model");
+    manager.ProcessFile(model_path, "a_model");
+
+    rg::DataObjectManager::VisitOptions options;
+    options.model_visit_mode = rg::ModelVisitMode::SelfOnly;
+
+    const rg::DataObjectManager & const_manager{ manager };
+    ConstModelKeyVisitor visitor;
+    const_manager.Accept(visitor, {}, options);
+
+    EXPECT_EQ(visitor.keys, (std::vector<std::string>{ "a_model", "b_model" }));
 }
 
 TEST(DataObjectVisitorArchitectureTest, ManagerAcceptUsesSnapshotSoClearCanRunConcurrently)
@@ -297,7 +369,7 @@ TEST(DataObjectVisitorArchitectureTest, ManagerAcceptUsesSnapshotSoClearCanRunCo
         {
             try
             {
-                manager.Accept(&visitor, { "model" }, options);
+                manager.Accept(visitor, { "model" }, options);
             }
             catch (...)
             {
@@ -314,21 +386,13 @@ TEST(DataObjectVisitorArchitectureTest, ManagerAcceptUsesSnapshotSoClearCanRunCo
     EXPECT_EQ(visitor.Key(), "model");
 }
 
-TEST(DataObjectVisitorArchitectureTest, StrictVisitorThrowsWhenTypeHandlerIsNotOverridden)
-{
-    rg::AtomObject atom;
-    EmptyStrictVisitor visitor;
-
-    EXPECT_THROW(atom.Accept(&visitor), std::logic_error);
-}
-
 TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorFailsFastOnUnsupportedDataObjectType)
 {
     SinglePointSampler sampler;
     rg::MapInterpolationVisitor visitor{ &sampler };
     rg::AtomObject atom;
 
-    EXPECT_THROW(atom.Accept(&visitor), std::logic_error);
+    EXPECT_THROW(atom.Accept(visitor), std::logic_error);
 }
 
 TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorConsumeSamplingDataClearsState)
@@ -339,7 +403,7 @@ TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorConsumeSamplingDa
     visitor.SetPosition({ 0.0f, 0.0f, 0.0f });
     visitor.SetAxisVector({ 1.0f, 0.0f, 0.0f });
 
-    map.Accept(&visitor);
+    map.Accept(visitor);
     ASSERT_FALSE(visitor.GetSamplingDataList().empty());
 
     auto sampled_data{ visitor.ConsumeSamplingDataList() };
@@ -347,17 +411,19 @@ TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorConsumeSamplingDa
     EXPECT_TRUE(visitor.GetSamplingDataList().empty());
 }
 
-TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorNullMapVisitClearsStaleOutput)
+TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorClearsStaleOutputBeforeSampling)
 {
     auto map{ MakeMapObject() };
     SinglePointSampler sampler;
     rg::MapInterpolationVisitor visitor{ &sampler };
+
     visitor.SetPosition({ 0.0f, 0.0f, 0.0f });
     visitor.SetAxisVector({ 1.0f, 0.0f, 0.0f });
+    map.Accept(visitor);
+    ASSERT_EQ(visitor.GetSamplingDataList().size(), 1);
 
-    map.Accept(&visitor);
-    ASSERT_FALSE(visitor.GetSamplingDataList().empty());
-
-    visitor.VisitMapObject(nullptr);
-    EXPECT_TRUE(visitor.GetSamplingDataList().empty());
+    visitor.SetPosition({ 1.0f, 1.0f, 1.0f });
+    visitor.SetAxisVector({ 0.0f, 1.0f, 0.0f });
+    map.Accept(visitor);
+    EXPECT_EQ(visitor.GetSamplingDataList().size(), 1);
 }

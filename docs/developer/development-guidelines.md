@@ -3,8 +3,6 @@
 This document defines the engineering principles for new code and for any existing code being modified.
 The goal is stable, maintainable, and diagnosable software that can evolve safely.
 
-If project-wide rules change, update this document and any affected user-facing documentation (especially `README.md`).
-
 ## 1. Rule Levels
 
 - `[Required]` Expected for all new code and modified code.
