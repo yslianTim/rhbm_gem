@@ -37,11 +37,13 @@ void OverrideableFileProcessFactoryResolver::RegisterFactory(
     const std::string & extension,
     std::function<std::unique_ptr<FileProcessFactoryBase>()> creator)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_factory_map[NormalizeExtension(extension)] = std::move(creator);
 }
 
 void OverrideableFileProcessFactoryResolver::UnregisterFactory(const std::string & extension)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_factory_map.erase(NormalizeExtension(extension));
 }
 
@@ -49,10 +51,18 @@ std::unique_ptr<FileProcessFactoryBase> OverrideableFileProcessFactoryResolver::
     const std::string & extension) const
 {
     const auto normalized_extension{ NormalizeExtension(extension) };
-    const auto iter{ m_factory_map.find(normalized_extension) };
-    if (iter != m_factory_map.end())
+    std::function<std::unique_ptr<FileProcessFactoryBase>()> creator;
     {
-        return (iter->second)();
+        std::lock_guard<std::mutex> lock(m_mutex);
+        const auto iter{ m_factory_map.find(normalized_extension) };
+        if (iter != m_factory_map.end())
+        {
+            creator = iter->second;
+        }
+    }
+    if (creator)
+    {
+        return creator();
     }
 
     DefaultFileProcessFactoryResolver default_resolver;

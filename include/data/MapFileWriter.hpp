@@ -21,10 +21,6 @@ public:
     ~MapFileWriter() = default;
     void Write();
 
-private:
-    void WriteHeader(std::ostream & stream);
-    void WriteMapValueArray(std::ostream & stream);
-
 };
 
 } // namespace rhbm_gem

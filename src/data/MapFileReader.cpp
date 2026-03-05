@@ -3,7 +3,6 @@
 #include "FilePathHelper.hpp"
 #include "FileFormatRegistry.hpp"
 #include "MapFileFormatBase.hpp"
-#include "Logger.hpp"
 
 #include <stdexcept>
 namespace rhbm_gem {
@@ -30,19 +29,12 @@ void MapFileReader::Read()
     {
         throw std::runtime_error("Cannot open the file: " + m_file_path);
     }
-    ReadHeader(file);
-    ReadMapValueArray(file);
+    if (m_file_format_helper == nullptr)
+    {
+        throw std::runtime_error("MapFileReader::Read(): file backend is not initialized.");
+    }
+    m_file_format_helper->Read(file, m_file_path);
     m_has_loaded_data = true;
-}
-
-void MapFileReader::ReadHeader(std::ifstream & stream)
-{
-    m_file_format_helper->LoadHeader(stream);
-}
-
-void MapFileReader::ReadMapValueArray(std::ifstream & stream)
-{
-    m_file_format_helper->LoadDataArray(stream);
 }
 
 std::unique_ptr<float[]> MapFileReader::GetMapValueArray()

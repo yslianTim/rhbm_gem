@@ -31,10 +31,6 @@ public:
     std::array<float, 3> GetGridSpacingArray() const;
     std::array<float, 3> GetOriginArray() const;
 
-private:
-    void ReadHeader(std::ifstream & stream);
-    void ReadMapValueArray(std::ifstream & stream);
-
 };
 
 } // namespace rhbm_gem

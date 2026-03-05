@@ -1,13 +1,17 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <atomic>
 #include <cctype>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -33,9 +37,6 @@
 #include "ModelObjectDAO.hpp"
 #include "SQLiteWrapper.hpp"
 
-#include "../src/data/model_io/ModelSchemaSql.hpp"
-#include "../src/data/persistence/MapStoreSql.hpp"
-
 namespace rg = rhbm_gem;
 
 namespace {
@@ -43,51 +44,6 @@ namespace {
 constexpr const char * kUpsertObjectMetadataSql =
     "INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?) "
     "ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;";
-
-std::string ReplaceAll(std::string value, std::string_view from, std::string_view to)
-{
-    std::size_t search_pos{ 0 };
-    while ((search_pos = value.find(from, search_pos)) != std::string::npos)
-    {
-        value.replace(search_pos, from.size(), to);
-        search_pos += to.size();
-    }
-    return value;
-}
-
-std::string BuildLegacyMetadataBasedCreateSql(std::string sql)
-{
-    sql = ReplaceAll(
-        std::move(sql),
-        " REFERENCES object_catalog(key_tag) ON DELETE CASCADE",
-        "");
-    sql = ReplaceAll(
-        std::move(sql),
-        ",\n        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE",
-        "");
-    return sql;
-}
-
-void CreateLegacyMetadataBasedV2Tables(
-    rg::SQLiteWrapper & database,
-    bool include_model_tables,
-    bool include_map_table)
-{
-    database.Execute(
-        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
-    if (include_model_tables)
-    {
-        for (const auto create_sql : rg::model_io::kCreateModelTableSqlList)
-        {
-            database.Execute(BuildLegacyMetadataBasedCreateSql(std::string(create_sql)));
-        }
-    }
-    if (include_map_table)
-    {
-        database.Execute(
-            BuildLegacyMetadataBasedCreateSql(std::string(rg::persistence::kCreateMapTableSql)));
-    }
-}
 
 void UpsertObjectMetadata(
     rg::SQLiteWrapper & database,
@@ -103,31 +59,62 @@ void UpsertObjectMetadata(
     database.StepOnce();
 }
 
-void CreateLegacyMetadataBasedV2MapDatabase(
+void CreateLegacyMapListWithoutForeignKeyTable(
     const std::filesystem::path & database_path,
     const rg::MapObject & map_object,
-    int user_version)
+    const std::string & key_tag)
 {
     rg::SQLiteWrapper database{ database_path };
-    CreateLegacyMetadataBasedV2Tables(database, false, true);
-    rg::MapObjectDAO map_dao{ &database };
-    map_dao.Save(&map_object, "map_only");
-    UpsertObjectMetadata(database, "map_only", "map");
-    database.Execute("PRAGMA user_version = " + std::to_string(user_version) + ";");
+    database.Execute("DROP TABLE IF EXISTS map_list;");
+    database.Execute(
+        "CREATE TABLE map_list ("
+        "key_tag TEXT PRIMARY KEY, "
+        "grid_size_x INTEGER, grid_size_y INTEGER, grid_size_z INTEGER, "
+        "grid_spacing_x DOUBLE, grid_spacing_y DOUBLE, grid_spacing_z DOUBLE, "
+        "origin_x DOUBLE, origin_y DOUBLE, origin_z DOUBLE, "
+        "map_value_array BLOB"
+        ");");
+
+    auto grid_size{ map_object.GetGridSize() };
+    auto grid_spacing{ map_object.GetGridSpacing() };
+    auto origin{ map_object.GetOrigin() };
+    std::vector<float> values(map_object.GetMapValueArraySize());
+    std::memcpy(values.data(), map_object.GetMapValueArray(), values.size() * sizeof(float));
+
+    database.Prepare(
+        "INSERT INTO map_list("
+        "key_tag, grid_size_x, grid_size_y, grid_size_z, "
+        "grid_spacing_x, grid_spacing_y, grid_spacing_z, "
+        "origin_x, origin_y, origin_z, map_value_array"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+    rg::SQLiteWrapper::StatementGuard guard(database);
+    database.Bind<std::string>(1, key_tag);
+    database.Bind<int>(2, grid_size[0]);
+    database.Bind<int>(3, grid_size[1]);
+    database.Bind<int>(4, grid_size[2]);
+    database.Bind<double>(5, grid_spacing[0]);
+    database.Bind<double>(6, grid_spacing[1]);
+    database.Bind<double>(7, grid_spacing[2]);
+    database.Bind<double>(8, origin[0]);
+    database.Bind<double>(9, origin[1]);
+    database.Bind<double>(10, origin[2]);
+    database.Bind<std::vector<float>>(11, values);
+    database.StepOnce();
 }
 
-void CreateLegacyMetadataBasedV2ModelDatabase(
-    const std::filesystem::path & database_path,
-    const rg::ModelObject & model_object,
-    const std::string & key_tag,
-    int user_version)
+void CreateVersion2MetadataBasedMapShapeDatabase(const std::filesystem::path & database_path)
 {
+    std::array<int, 3> grid_size{ 2, 2, 2 };
+    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
+    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
+    auto values{ std::make_unique<float[]>(8) };
+    for (size_t i = 0; i < 8; i++) values[i] = static_cast<float>(i);
+    rg::MapObject map_object{ grid_size, grid_spacing, origin, std::move(values) };
+
+    CreateLegacyMapListWithoutForeignKeyTable(database_path, map_object, "map_only");
     rg::SQLiteWrapper database{ database_path };
-    CreateLegacyMetadataBasedV2Tables(database, true, false);
-    rg::ModelObjectDAO model_dao{ &database };
-    model_dao.Save(&model_object, key_tag);
-    UpsertObjectMetadata(database, key_tag, "model");
-    database.Execute("PRAGMA user_version = " + std::to_string(user_version) + ";");
+    UpsertObjectMetadata(database, "map_only", "map");
+    database.Execute("PRAGMA user_version = 2;");
 }
 
 int GetUserVersion(const std::filesystem::path & database_path)
@@ -184,6 +171,38 @@ int CountRows(
         throw std::runtime_error("Failed to count rows in " + table_name);
     }
     return database.GetColumn<int>(0);
+}
+
+bool HasForeignKey(
+    const std::filesystem::path & database_path,
+    const std::string & table_name,
+    const std::string & from_column,
+    const std::string & referenced_table,
+    const std::string & referenced_column,
+    const std::string & on_delete)
+{
+    rg::SQLiteWrapper database{ database_path };
+    database.Prepare("PRAGMA foreign_key_list(" + table_name + ");");
+    rg::SQLiteWrapper::StatementGuard guard(database);
+    while (true)
+    {
+        const auto rc{ database.StepNext() };
+        if (rc == rg::SQLiteWrapper::StepDone())
+        {
+            return false;
+        }
+        if (rc != rg::SQLiteWrapper::StepRow())
+        {
+            throw std::runtime_error("Failed to inspect foreign_key_list for " + table_name);
+        }
+        if (database.GetColumn<std::string>(3) == from_column &&
+            database.GetColumn<std::string>(2) == referenced_table &&
+            database.GetColumn<std::string>(4) == referenced_column &&
+            database.GetColumn<std::string>(6) == on_delete)
+        {
+            return true;
+        }
+    }
 }
 
 std::string SanitizeLegacyKey(const std::string & key_tag)
@@ -438,28 +457,6 @@ TEST(DataObjectIOSchemaTest, FailedLegacyMigrationRollsBackToLegacyState)
     EXPECT_EQ(GetUserVersion(database_path), 0);
 }
 
-TEST(DataObjectIOSchemaTest, MapOnlyLegacyMetadataBasedV2DatabaseRemainsLoadable)
-{
-    const command_test::ScopedTempDir temp_dir{ "schema_map_only" };
-    const auto database_path{ temp_dir.path() / "map_only.sqlite" };
-    const auto expected_map{ MakeTinyMapObject() };
-    const auto expected_grid_size{ expected_map.GetGridSize() };
-
-    CreateLegacyMetadataBasedV2MapDatabase(database_path, expected_map, 2);
-
-    rg::DataObjectManager manager;
-    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    EXPECT_EQ(
-        manager.GetDatabaseManager()->GetSchemaVersion(),
-        rg::DatabaseSchemaVersion::NormalizedV2);
-    ASSERT_NO_THROW(manager.LoadDataObject("map_only"));
-    auto loaded_map{ manager.GetTypedDataObject<rg::MapObject>("map_only") };
-    EXPECT_EQ(loaded_map->GetGridSize(), expected_grid_size);
-    EXPECT_TRUE(HasTable(database_path, "object_catalog"));
-    EXPECT_FALSE(HasTable(database_path, "object_metadata"));
-    EXPECT_EQ(GetUserVersion(database_path), 2);
-}
-
 TEST(DataObjectIOSchemaTest, UnknownSchemaVersionThrows)
 {
     const command_test::ScopedTempDir temp_dir{ "schema_unknown_version" };
@@ -469,43 +466,98 @@ TEST(DataObjectIOSchemaTest, UnknownSchemaVersionThrows)
     EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
 }
 
-TEST(DataObjectIOSchemaTest, ManagedButUnversionedMapOnlyDatabaseRepairsAndUpgradesToV2)
+TEST(DataObjectIOSchemaTest, Version2WithObjectMetadataFailsFast)
 {
-    const command_test::ScopedTempDir temp_dir{ "schema_unversioned_map" };
-    const auto database_path{ temp_dir.path() / "managed_unversioned.sqlite" };
-    const auto expected_map{ MakeTinyMapObject(2.0f) };
-    const auto expected_grid_size{ expected_map.GetGridSize() };
+    const command_test::ScopedTempDir temp_dir{ "schema_v2_metadata_row" };
+    const auto database_path{ temp_dir.path() / "metadata_row.sqlite" };
+    const auto map_object{ MakeTinyMapObject() };
 
-    CreateLegacyMetadataBasedV2MapDatabase(database_path, expected_map, 0);
+    {
+        rg::DatabaseManager database_manager{ database_path };
+        database_manager.SaveDataObject(&map_object, "map_only");
+    }
 
-    rg::DataObjectManager manager;
-    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    EXPECT_EQ(
-        manager.GetDatabaseManager()->GetSchemaVersion(),
-        rg::DatabaseSchemaVersion::NormalizedV2);
-    ASSERT_NO_THROW(manager.LoadDataObject("map_only"));
-    EXPECT_EQ(manager.GetTypedDataObject<rg::MapObject>("map_only")->GetGridSize(), expected_grid_size);
-    EXPECT_EQ(CountRows(database_path, "object_catalog"), 1);
-    EXPECT_FALSE(HasTable(database_path, "object_metadata"));
+    ExecuteSql(
+        database_path,
+        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
+    ExecuteSql(
+        database_path,
+        "INSERT INTO object_metadata(key_tag, object_type) VALUES ('map_only', 'map');");
+    SetUserVersion(database_path, 2);
+
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
 }
 
-TEST(DataObjectIOSchemaTest, LegacyMetadataBasedV2DatabaseUpgradesToFinalV2)
+TEST(DataObjectIOSchemaTest, Version2MetadataBasedShapeFailsFast)
 {
-    const command_test::ScopedTempDir temp_dir{ "schema_legacy_v2_upgrade" };
-    const auto database_path{ temp_dir.path() / "legacy_v2.sqlite" };
-    const auto model{ LoadFixtureModel(command_test::TestDataPath("test_model.cif")) };
+    const command_test::ScopedTempDir temp_dir{ "schema_v2_metadata_shape" };
+    const auto database_path{ temp_dir.path() / "metadata_shape.sqlite" };
 
-    CreateLegacyMetadataBasedV2ModelDatabase(database_path, *model, "legacy_v2_model", 2);
+    CreateVersion2MetadataBasedMapShapeDatabase(database_path);
+
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+}
+
+TEST(DataObjectIOSchemaTest, ManagedButUnversionedDatabaseFailsFast)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_unversioned_nonlegacy" };
+    const auto database_path{ temp_dir.path() / "managed_unversioned.sqlite" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+
+    {
+        rg::DataObjectManager manager;
+        manager.SetDatabaseManager(database_path);
+        manager.ProcessFile(model_path, "model");
+        manager.SaveDataObject("model");
+    }
+
+    SetUserVersion(database_path, 0);
+
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+}
+
+TEST(DataObjectIOSchemaTest, FinalV2CatalogDatabaseRemainsLoadable)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_final_v2_loadable" };
+    const auto database_path{ temp_dir.path() / "final_v2.sqlite" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto map_object{ MakeTinyMapObject(3.0f) };
+
+    {
+        rg::DataObjectManager manager;
+        manager.SetDatabaseManager(database_path);
+        manager.ProcessFile(model_path, "model");
+        manager.SaveDataObject("model");
+        manager.GetDatabaseManager()->SaveDataObject(&map_object, "map");
+    }
+
+    SetUserVersion(database_path, 2);
 
     rg::DataObjectManager manager;
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    ASSERT_NO_THROW(manager.LoadDataObject("legacy_v2_model"));
-    EXPECT_EQ(
-        manager.GetTypedDataObject<rg::ModelObject>("legacy_v2_model")->GetPdbID(),
-        model->GetPdbID());
-    EXPECT_TRUE(HasTable(database_path, "object_catalog"));
-    EXPECT_FALSE(HasTable(database_path, "object_metadata"));
-    EXPECT_EQ(CountRows(database_path, "object_catalog"), 1);
+    ASSERT_NO_THROW(manager.LoadDataObject("model"));
+    ASSERT_NO_THROW(manager.LoadDataObject("map"));
+    EXPECT_NE(manager.GetTypedDataObject<rg::ModelObject>("model"), nullptr);
+    EXPECT_NE(manager.GetTypedDataObject<rg::MapObject>("map"), nullptr);
+}
+
+TEST(DataObjectIOSchemaTest, ShadowSchemaBuildDoesNotUseIdentifierRewrite)
+{
+    const auto source_path{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+        / "src" / "data" / "persistence" / "ManagedStoreRegistry.cpp"
+    };
+
+    std::ifstream source_stream{ source_path };
+    ASSERT_TRUE(source_stream.good()) << "Cannot open source file: " << source_path;
+    std::string source_code{
+        std::istreambuf_iterator<char>(source_stream),
+        std::istreambuf_iterator<char>()
+    };
+
+    EXPECT_EQ(source_code.find("ReplaceIdentifier("), std::string::npos);
+    EXPECT_EQ(source_code.find("BuildShadowModelSql("), std::string::npos);
+    EXPECT_EQ(source_code.find("BuildShadowMapSql("), std::string::npos);
 }
 
 TEST(DataObjectIOSchemaTest, CatalogLookupLoadsCorrectDaoType)
@@ -528,26 +580,6 @@ TEST(DataObjectIOSchemaTest, CatalogLookupLoadsCorrectDaoType)
     EXPECT_NE(dynamic_cast<rg::MapObject *>(manager.GetDataObject("map").get()), nullptr);
 }
 
-TEST(DataObjectIOSchemaTest, GhostMetadataRowsDoNotSurviveFinalV2Upgrade)
-{
-    const command_test::ScopedTempDir temp_dir{ "schema_legacy_v2_ghost" };
-    const auto database_path{ temp_dir.path() / "legacy_v2_ghost.sqlite" };
-    const auto model{ LoadFixtureModel(command_test::TestDataPath("test_model.cif")) };
-
-    CreateLegacyMetadataBasedV2ModelDatabase(database_path, *model, "real_model", 2);
-    {
-        rg::SQLiteWrapper database{ database_path };
-        UpsertObjectMetadata(database, "ghost_model", "model");
-    }
-
-    rg::DataObjectManager manager;
-    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    ASSERT_NO_THROW(manager.LoadDataObject("real_model"));
-    EXPECT_THROW(manager.LoadDataObject("ghost_model"), std::runtime_error);
-    EXPECT_EQ(CountRows(database_path, "object_catalog"), 1);
-    EXPECT_FALSE(HasTable(database_path, "object_metadata"));
-}
-
 TEST(DataObjectIOSchemaTest, NormalizedV2DatabaseMissingRequiredTableThrows)
 {
     const command_test::ScopedTempDir temp_dir{ "schema_missing_v2_table" };
@@ -560,6 +592,39 @@ TEST(DataObjectIOSchemaTest, NormalizedV2DatabaseMissingRequiredTableThrows)
     ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
     SetUserVersion(database_path, 2);
 
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+}
+
+TEST(DataObjectIOSchemaTest, FinalV2SchemaValidationRejectsMissingForeignKeys)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_missing_fk" };
+    const auto database_path{ temp_dir.path() / "missing_fk.sqlite" };
+
+    {
+        rg::DatabaseManager database_manager{ database_path };
+        EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+    }
+
+    ExecuteSql(database_path, "DROP TABLE map_list;");
+    ExecuteSql(
+        database_path,
+        "CREATE TABLE map_list ("
+        "key_tag TEXT PRIMARY KEY, "
+        "grid_size_x INTEGER, grid_size_y INTEGER, grid_size_z INTEGER, "
+        "grid_spacing_x DOUBLE, grid_spacing_y DOUBLE, grid_spacing_z DOUBLE, "
+        "origin_x DOUBLE, origin_y DOUBLE, origin_z DOUBLE, "
+        "map_value_array BLOB"
+        ");");
+    SetUserVersion(database_path, 2);
+
+    EXPECT_FALSE(
+        HasForeignKey(
+            database_path,
+            "map_list",
+            "key_tag",
+            "object_catalog",
+            "key_tag",
+            "CASCADE"));
     EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
 }
 
@@ -644,6 +709,43 @@ TEST(DataObjectIOSchemaTest, LegacyMigrationDropsOnlyOwnedTables)
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
     EXPECT_TRUE(HasTable(database_path, "custom_atom_list_in_notes"));
     EXPECT_FALSE(HasTable(database_path, "atom_list_in_legacy_model"));
+}
+
+TEST(DataObjectIOSchemaTest, LegacyV1MapListWithoutFkIsRebuiltToFinalV2Shape)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_legacy_map_fk_rebuild" };
+    const auto database_path{ temp_dir.path() / "legacy_map_fk.sqlite" };
+    const auto map_object{ MakeTinyMapObject(4.0f) };
+
+    CopyLegacyFixtureDatabase(database_path);
+    CreateLegacyMapListWithoutForeignKeyTable(database_path, map_object, "legacy_map");
+    SetUserVersion(database_path, 1);
+
+    EXPECT_FALSE(
+        HasForeignKey(
+            database_path,
+            "map_list",
+            "key_tag",
+            "object_catalog",
+            "key_tag",
+            "CASCADE"));
+
+    rg::DataObjectManager manager;
+    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
+    EXPECT_EQ(
+        manager.GetDatabaseManager()->GetSchemaVersion(),
+        rg::DatabaseSchemaVersion::NormalizedV2);
+    EXPECT_TRUE(
+        HasForeignKey(
+            database_path,
+            "map_list",
+            "key_tag",
+            "object_catalog",
+            "key_tag",
+            "CASCADE"));
+    ASSERT_NO_THROW(manager.LoadDataObject("legacy_map"));
+    EXPECT_EQ(manager.GetTypedDataObject<rg::MapObject>("legacy_map")->GetGridSize(), map_object.GetGridSize());
+    EXPECT_EQ(GetUserVersion(database_path), 2);
 }
 
 TEST(DataObjectIOSchemaTest, MixedUnknownSchemaFailsFast)
@@ -868,6 +970,78 @@ TEST(DataObjectIOSchemaTest, FileFormatDescriptorsAreUniqueAndConsistent)
             EXPECT_FALSE(descriptor.supports_write);
         }
     }
+}
+
+TEST(DataObjectIOSchemaTest, FileFormatRegistryIndexMatchesDescriptorSource)
+{
+    const auto & registry{ rg::FileFormatRegistry::Instance() };
+    for (const auto & descriptor : registry.GetAllDescriptors())
+    {
+        const auto & looked_up_lower{ registry.Lookup(descriptor.extension) };
+        EXPECT_EQ(looked_up_lower.extension, descriptor.extension);
+        EXPECT_EQ(looked_up_lower.kind, descriptor.kind);
+        EXPECT_EQ(looked_up_lower.supports_read, descriptor.supports_read);
+        EXPECT_EQ(looked_up_lower.supports_write, descriptor.supports_write);
+        EXPECT_EQ(looked_up_lower.model_backend, descriptor.model_backend);
+        EXPECT_EQ(looked_up_lower.map_backend, descriptor.map_backend);
+
+        auto upper_extension{ descriptor.extension };
+        for (auto & ch : upper_extension)
+        {
+            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        }
+        const auto & looked_up_upper{ registry.Lookup(upper_extension) };
+        EXPECT_EQ(looked_up_upper.extension, descriptor.extension);
+    }
+}
+
+TEST(DataObjectIOSchemaTest, ResolverConcurrentOverrideAndLookupIsSafe)
+{
+    rg::OverrideableFileProcessFactoryResolver resolver;
+    constexpr int kIterationCount{ 800 };
+    std::atomic<bool> writer_done{ false };
+    std::atomic<int> failure_count{ 0 };
+
+    std::thread writer{
+        [&]()
+        {
+            for (int i = 0; i < kIterationCount; i++)
+            {
+                resolver.RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
+                resolver.UnregisterFactory(".cif");
+            }
+            writer_done = true;
+        }
+    };
+
+    auto reader_task{
+        [&]()
+        {
+            while (!writer_done.load())
+            {
+                try
+                {
+                    auto factory{ resolver.CreateFactory(".cif") };
+                    if (!factory)
+                    {
+                        ++failure_count;
+                    }
+                }
+                catch (const std::exception &)
+                {
+                    ++failure_count;
+                }
+            }
+        }
+    };
+
+    std::thread reader_a{ reader_task };
+    std::thread reader_b{ reader_task };
+
+    writer.join();
+    reader_a.join();
+    reader_b.join();
+    EXPECT_EQ(failure_count.load(), 0);
 }
 
 TEST(DataObjectIOSchemaTest, ModelWriteSupportMatrixRejectsMmcifOutput)

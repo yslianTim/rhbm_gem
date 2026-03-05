@@ -17,15 +17,40 @@ namespace
         { ".ccp4", rhbm_gem::DataObjectKind::Map, true, true, std::nullopt, rhbm_gem::MapFormatBackend::Ccp4 }
     };
 
-    const std::unordered_map<std::string, std::size_t> k_descriptor_index_map{
-        { ".pdb", 0 },
-        { ".cif", 1 },
-        { ".mmcif", 2 },
-        { ".mcif", 3 },
-        { ".mrc", 4 },
-        { ".map", 5 },
-        { ".ccp4", 6 }
-    };
+    const std::unordered_map<std::string, std::size_t> & GetDescriptorIndexMap()
+    {
+        static const auto k_descriptor_index_map{
+            []()
+            {
+                std::unordered_map<std::string, std::size_t> index_map;
+                index_map.reserve(k_descriptors.size());
+                for (size_t i = 0; i < k_descriptors.size(); i++)
+                {
+                    const auto & descriptor{ k_descriptors.at(i) };
+                    const auto [iter, inserted]{ index_map.emplace(descriptor.extension, i) };
+                    if (!inserted)
+                    {
+                        throw std::runtime_error(
+                            "Duplicate file format descriptor extension: " + descriptor.extension);
+                    }
+                    if (descriptor.kind == rhbm_gem::DataObjectKind::Model &&
+                        !descriptor.model_backend.has_value())
+                    {
+                        throw std::runtime_error(
+                            "Model descriptor must define model backend: " + descriptor.extension);
+                    }
+                    if (descriptor.kind == rhbm_gem::DataObjectKind::Map &&
+                        !descriptor.map_backend.has_value())
+                    {
+                        throw std::runtime_error(
+                            "Map descriptor must define map backend: " + descriptor.extension);
+                    }
+                }
+                return index_map;
+            }()
+        };
+        return k_descriptor_index_map;
+    }
 }
 
 namespace rhbm_gem {
@@ -40,8 +65,9 @@ const FileFormatDescriptor & FileFormatRegistry::Lookup(const std::string & exte
 {
     auto normalized_extension{ extension };
     StringHelper::ToLowerCase(normalized_extension);
-    const auto iter{ k_descriptor_index_map.find(normalized_extension) };
-    if (iter != k_descriptor_index_map.end())
+    const auto & descriptor_index_map{ GetDescriptorIndexMap() };
+    const auto iter{ descriptor_index_map.find(normalized_extension) };
+    if (iter != descriptor_index_map.end())
     {
         return k_descriptors.at(iter->second);
     }

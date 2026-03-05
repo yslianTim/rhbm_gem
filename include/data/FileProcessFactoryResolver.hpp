@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -26,6 +27,7 @@ public:
 
 class OverrideableFileProcessFactoryResolver : public FileProcessFactoryResolver
 {
+    mutable std::mutex m_mutex;
     std::unordered_map<
         std::string,
         std::function<std::unique_ptr<FileProcessFactoryBase>()>> m_factory_map;

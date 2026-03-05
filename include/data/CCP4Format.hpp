@@ -67,23 +67,25 @@ class CCP4Format : public MapFileFormatBase
 public:
     CCP4Format();
     ~CCP4Format() = default;
-    void InitHeader() override;
-    void LoadHeader(std::istream & stream) override;
-    void SaveHeader(std::ostream & stream) override;
-    void PrintHeader() const override;
-    void LoadDataArray(std::istream & stream) override;
-    void SaveDataArray(const float * data, size_t size, std::ostream & stream) override;
+    void Read(std::istream & stream, const std::string & source_name) override;
+    void Write(const MapObject & map_object, std::ostream & stream) override;
     std::unique_ptr<float[]> GetDataArray() override;
     std::array<int, 3> GetGridSize() override;
     std::array<float, 3> GetGridSpacing() override;
     std::array<float, 3> GetOrigin() override;
-    void SetHeader(const std::array<int, 3> & grid_size,
-                   const std::array<float, 3> & grid_spacing,
-                   const std::array<float, 3> & origin) override;
 
     const CCP4Header & GetHeader() const { return m_header; }
     
 private:
+    void InitHeader();
+    void LoadHeader(std::istream & stream);
+    void SaveHeader(std::ostream & stream);
+    void PrintHeader() const;
+    void LoadDataArray(std::istream & stream);
+    void SaveDataArray(const float * data, size_t size, std::ostream & stream);
+    void SetHeader(const std::array<int, 3> & grid_size,
+                   const std::array<float, 3> & grid_spacing,
+                   const std::array<float, 3> & origin);
     size_t GetElementSize() const;
     void ReorderedAxisRelatedParameters();
     

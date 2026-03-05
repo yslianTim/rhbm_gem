@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <memory>
 #include <string>
 #include <istream>
@@ -9,16 +8,14 @@
 
 namespace rhbm_gem {
 
+class MapObject;
+
 class MapFileFormatBase
 {
 public:
     virtual ~MapFileFormatBase() = default;
-    virtual void InitHeader() = 0;
-    virtual void LoadHeader(std::istream & stream) = 0;
-    virtual void SaveHeader(std::ostream & stream) = 0;
-    virtual void PrintHeader() const = 0;
-    virtual void LoadDataArray(std::istream & stream) = 0;
-    virtual void SaveDataArray(const float * data, size_t size, std::ostream & stream) = 0;
+    virtual void Read(std::istream & stream, const std::string & source_name) = 0;
+    virtual void Write(const MapObject & map_object, std::ostream & stream) = 0;
 
     /**
      * @brief  Retrieve the voxel data array owned by this object.
@@ -33,9 +30,6 @@ public:
     virtual std::array<int, 3> GetGridSize() = 0;
     virtual std::array<float, 3> GetGridSpacing() = 0;
     virtual std::array<float, 3> GetOrigin() = 0;
-    virtual void SetHeader(const std::array<int, 3> & grid_size,
-                           const std::array<float, 3> & grid_spacing,
-                           const std::array<float, 3> & origin) = 0;
 
 };
 

@@ -1,5 +1,6 @@
 #include "CCP4Format.hpp"
 #include "Logger.hpp"
+#include "MapObject.hpp"
 
 #include <fstream>
 #include <cstring>
@@ -12,6 +13,47 @@ namespace rhbm_gem {
 CCP4Format::CCP4Format()
 {
     InitHeader();
+}
+
+void CCP4Format::Read(std::istream & stream, const std::string & source_name)
+{
+    m_data_array.reset();
+    InitHeader();
+    if (!stream)
+    {
+        throw std::runtime_error("CCP4Format::Read() failed: invalid input stream.");
+    }
+
+    try
+    {
+        LoadHeader(stream);
+        PrintHeader();
+        LoadDataArray(stream);
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error("CCP4Format::Read() failed for '" + source_name
+                                 + "': " + ex.what());
+    }
+}
+
+void CCP4Format::Write(const MapObject & map_object, std::ostream & stream)
+{
+    if (!stream)
+    {
+        throw std::runtime_error("CCP4Format::Write() failed: invalid output stream.");
+    }
+    const float * data{ map_object.GetMapValueArray() };
+    if (data == nullptr)
+    {
+        throw std::runtime_error("CCP4Format::Write() failed: map value array is null.");
+    }
+
+    InitHeader();
+    SetHeader(map_object.GetGridSize(), map_object.GetGridSpacing(), map_object.GetOrigin());
+    SaveHeader(stream);
+    PrintHeader();
+    SaveDataArray(data, map_object.GetMapValueArraySize(), stream);
 }
 
 void CCP4Format::InitHeader()
@@ -49,7 +91,6 @@ void CCP4Format::LoadHeader(std::istream & stream)
 {
     stream.seekg(0, std::ios::beg);
     stream.read(reinterpret_cast<char*>(&m_header), sizeof(m_header));
-    PrintHeader();
     if (!stream)
     {
         throw std::runtime_error("LoadHeader failed!");

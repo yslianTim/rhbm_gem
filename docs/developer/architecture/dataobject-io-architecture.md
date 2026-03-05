@@ -127,6 +127,8 @@ Extension normalization happens in `FilePathHelper::GetExtension(...)`. The resu
 - whether write is supported
 - concrete backend selection (`ModelFormatBackend` or `MapFormatBackend`)
 
+Lookup indexing is generated from the descriptor list at initialization time, with duplicate-extension checks. There is no second manually maintained extension-index table.
+
 Current descriptors:
 
 | Kind | Read | Write |
@@ -145,6 +147,8 @@ There is no default factory registration step anymore. Built-in behavior is alwa
 
 - injected through `DataObjectManager(std::shared_ptr<const FileProcessFactoryResolver>)`
 - or, for compatibility and tests, routed through `FileProcessFactoryRegistry`
+
+`OverrideableFileProcessFactoryResolver` protects override registration and lookup with internal synchronization. Concurrent register/unregister and factory creation are supported by contract.
 
 Readers and writers then use `FileFormatBackendFactory` plus `FileFormatRegistry` to choose the concrete backend implementation.
 
@@ -280,6 +284,19 @@ Components:
 - `.mrc` -> `MapFormatBackend::Mrc`
 - `.map`, `.ccp4` -> `MapFormatBackend::Ccp4`
 
+Current contract of `MapFileFormatBase`:
+
+```cpp
+virtual void Read(std::istream & stream, const std::string & source_name) = 0;
+virtual void Write(const MapObject & map_object, std::ostream & stream) = 0;
+virtual std::unique_ptr<float[]> GetDataArray() = 0;
+```
+
+Important current intent:
+
+- map backends use the same single stream-based read/write orchestration model as model backends
+- map parsing/writing should not be split into separate public header/data operations at reader/writer level
+
 `MapObjectFactory::CreateDataObject(...)` builds `MapObject` directly from:
 
 - grid size
@@ -354,43 +371,29 @@ This is an intentional contract change from the legacy design: DAO implementatio
 
 ### 8.3 Schema Versioning and Migration
 
-`DatabaseSchemaManager` uses SQLite `PRAGMA user_version` as the single schema-version source. It also treats `user_version == 2` as potentially one of two shapes:
-
-- final normalized v2: catalog-based and valid for runtime
-- legacy unreleased v2: metadata-based and rebuilt in place to the final catalog-based shape
-
-When `user_version == 0`, it runs an internal unversioned-schema inspection step before deciding whether bootstrap, rebuild, migration, or fail-fast behavior is safe.
+`DatabaseSchemaManager` uses SQLite `PRAGMA user_version` as the single schema-version source.
 
 Current versions:
 
 - `DatabaseSchemaVersion::LegacyV1 = 1`
 - `DatabaseSchemaVersion::NormalizedV2 = 2`
 
-Internal unversioned schema states:
-
-- `Empty`
-- `LegacyV1`
-- `ManagedButUnversioned`
-- `MixedUnknown`
-
 `EnsureSchema()` behavior:
 
 1. if `PRAGMA user_version == 1`, migrate legacy v1 to v2
-2. if `PRAGMA user_version == 2`:
-   - if the schema is already catalog-based, validate only
-   - if the schema is the unreleased metadata-based v2 shape, rebuild it in place into the final catalog-based v2 shape
+2. if `PRAGMA user_version == 2`, validate the final catalog-based v2 schema only
 3. if `PRAGMA user_version` is any other non-zero value, reject the database as unsupported
-4. if `PRAGMA user_version == 0`, inspect table state:
+4. if `PRAGMA user_version == 0`:
    - `Empty`: create normalized v2 tables, set version to `2`, validate
    - `LegacyV1`: migrate directly to the final catalog-based v2
-   - `ManagedButUnversioned`: rebuild managed payload tables into the final catalog-based v2 shape and set version to `2`
-   - `MixedUnknown`: fail fast instead of silently adopting the database
+   - any other non-empty non-legacy shape: fail fast
 
 Important intent:
 
-- a healthy v2 database is validated, not rewritten
-- `object_metadata` is treated only as legacy input during migration or upgrade; it is not part of the runtime schema anymore
-- databases with unknown unmanaged tables are not silently claimed by this subsystem
+- v2 now has one accepted runtime shape: final catalog-based v2
+- any `user_version == 2` database retaining `object_metadata` is rejected, not upgraded in place
+- unversioned non-empty databases are not silently claimed unless they are recognized legacy v1
+- final v2 validation checks not only required table presence but also primary-key and foreign-key shape on managed tables
 
 Final normalized v2 root ownership:
 
@@ -399,26 +402,24 @@ Final normalized v2 root ownership:
 - `map_list.key_tag` references `object_catalog(key_tag) ON DELETE CASCADE`
 - all `model_*` child tables reference `model_object(key_tag) ON DELETE CASCADE`
 
-Migration or rebuild is open-time and in-place:
+Migration is open-time and in-place:
 
 1. open one transaction
-2. create final-v2 shadow or canonical tables, depending on the source shape
+2. create final-v2 shadow or canonical tables
 3. build or supplement `object_catalog` from authoritative payload roots
 4. load legacy v1 models through `LegacyModelObjectReader` when applicable
 5. save migrated models through `ModelObjectDAOv2`
-6. preserve only payload-backed keys; ghost metadata rows do not survive
-7. drop only the legacy tables explicitly owned by the migrated keys
-8. remove legacy `object_metadata`
-9. set `PRAGMA user_version = 2`
-10. validate the final catalog-based v2 schema
+6. drop only the legacy tables explicitly owned by the migrated keys
+7. remove legacy `object_metadata` if present
+8. set `PRAGMA user_version = 2`
+9. validate the final catalog-based v2 schema
 
 Current migration limits:
 
-- missing legacy metadata that was never persisted, such as historical `chain_id_list_map`, cannot be recovered
 - historical sanitize collisions in legacy per-key tables cannot be repaired automatically
-- partial or stale legacy `object_metadata` does not decide migration scope; `model_list` does
 - legacy cleanup is explicit-key based, not broad table-name pattern sweeping
-- managed store rebuild currently runs through `ManagedStoreRegistry`, which provides per-object schema creation, validation, key listing, and shadow-table copy or rename behavior
+- managed store rebuild currently runs through `ManagedStoreRegistry`, which provides per-object schema creation, validation, key listing (including suffixed shadow roots), and shadow-table copy or rename behavior
+- shadow DDL is emitted explicitly per managed store and table; migration no longer relies on broad SQL-identifier rewrite passes
 
 ### 8.4 DAO Registration
 

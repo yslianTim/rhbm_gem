@@ -36,27 +36,11 @@ void MapFileWriter::Write()
     {
         throw std::runtime_error("Cannot open the file: " + m_file_path);
     }
-    WriteHeader(file);
-    WriteMapValueArray(file);
-}
-
-void MapFileWriter::WriteHeader(std::ostream & stream)
-{
-    m_file_format_helper->SetHeader(
-        m_map_object->GetGridSize(),
-        m_map_object->GetGridSpacing(),
-        m_map_object->GetOrigin()
-    );
-    m_file_format_helper->SaveHeader(stream);
-    m_file_format_helper->PrintHeader();
-}
-
-void MapFileWriter::WriteMapValueArray(std::ostream & stream)
-{
-    m_file_format_helper->SaveDataArray(
-        m_map_object->GetMapValueArray(),
-        m_map_object->GetMapValueArraySize(),
-        stream);
+    if (m_file_format_helper == nullptr)
+    {
+        throw std::runtime_error("MapFileWriter::Write(): file backend is not initialized.");
+    }
+    m_file_format_helper->Write(*m_map_object, file);
 }
 
 } // namespace rhbm_gem

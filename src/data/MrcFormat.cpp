@@ -1,5 +1,6 @@
 #include "MrcFormat.hpp"
 #include "Logger.hpp"
+#include "MapObject.hpp"
 
 #include <sstream>
 #include <fstream>
@@ -12,6 +13,47 @@ namespace rhbm_gem {
 MrcFormat::MrcFormat()
 {
     InitHeader();
+}
+
+void MrcFormat::Read(std::istream & stream, const std::string & source_name)
+{
+    m_data_array.reset();
+    InitHeader();
+    if (!stream)
+    {
+        throw std::runtime_error("MrcFormat::Read() failed: invalid input stream.");
+    }
+
+    try
+    {
+        LoadHeader(stream);
+        PrintHeader();
+        LoadDataArray(stream);
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error("MrcFormat::Read() failed for '" + source_name
+                                 + "': " + ex.what());
+    }
+}
+
+void MrcFormat::Write(const MapObject & map_object, std::ostream & stream)
+{
+    if (!stream)
+    {
+        throw std::runtime_error("MrcFormat::Write() failed: invalid output stream.");
+    }
+    const float * data{ map_object.GetMapValueArray() };
+    if (data == nullptr)
+    {
+        throw std::runtime_error("MrcFormat::Write() failed: map value array is null.");
+    }
+
+    InitHeader();
+    SetHeader(map_object.GetGridSize(), map_object.GetGridSpacing(), map_object.GetOrigin());
+    SaveHeader(stream);
+    PrintHeader();
+    SaveDataArray(data, map_object.GetMapValueArraySize(), stream);
 }
 
 void MrcFormat::InitHeader()
