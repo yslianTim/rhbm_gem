@@ -2,6 +2,7 @@
 #include "MapFileReader.hpp"
 #include "MapFileWriter.hpp"
 #include "MapObject.hpp"
+#include "DataObjectDispatch.hpp"
 #include "Logger.hpp"
 
 #include <stdexcept>
@@ -20,15 +21,13 @@ std::unique_ptr<DataObjectBase> MapObjectFactory::CreateDataObject(const std::st
     );
 }
 
-void MapObjectFactory::OutputDataObject(const std::string & filename, DataObjectBase * data_object)
+void MapObjectFactory::OutputDataObject(
+    const std::string & filename,
+    const DataObjectBase & data_object)
 {
-    auto map_object{ dynamic_cast<MapObject *>(data_object) };
-    if (map_object == nullptr)
-    {
-        throw std::runtime_error(
-            "MapObjectFactory::OutputDataObject : invalid data_object type");
-    }
-    auto file_writer{ std::make_unique<MapFileWriter>(filename, map_object) };
+    const auto & map_object{
+        ExpectMapObject(data_object, "MapObjectFactory::OutputDataObject()") };
+    auto file_writer{ std::make_unique<MapFileWriter>(filename, &map_object) };
     file_writer->Write();
 }
 

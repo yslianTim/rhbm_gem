@@ -33,7 +33,6 @@ public:
     DatabaseSchemaVersion GetSchemaVersion() const { return m_schema_version; }
 
 private:
-    std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const DataObjectBase * data_object);
     std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const std::string & object_type);
 };
 

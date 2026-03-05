@@ -14,6 +14,7 @@
 #include "StringHelper.hpp"
 #include "AtomSelector.hpp"
 #include "DataObjectWorkflowVisitors.hpp"
+#include "ModelVisitMode.hpp"
 #include "FilePathHelper.hpp"
 #include "Logger.hpp"
 #include "OptionEnumTraits.hpp"
@@ -339,10 +340,13 @@ void PotentialDisplayCommand::RunDisplay()
             painter = std::make_unique<AtomPainter>();
             for (const auto & model_object : m_model_object_list)
             {
-                for (auto & atom : model_object->GetAtomList())
+                ModelAtomCollectorOptions collector_options;
+                collector_options.selected_only = true;
+                ModelSelectedAtomCollectorVisitor collector{ collector_options };
+                model_object->Accept(collector, ModelVisitMode::SelfOnly);
+                for (auto * atom : collector.GetAtomList())
                 {
-                    if (atom->GetSelectedFlag() == false) continue;
-                    painter->AddDataObject(atom.get());
+                    painter->AddDataObject(atom);
                 }
             }
             m_atom_selector->Print();

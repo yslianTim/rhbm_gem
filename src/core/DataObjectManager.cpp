@@ -147,7 +147,7 @@ void DataObjectManager::ProduceFile(
     {
         auto data_object{ GetDataObject(key_tag) };
         auto factory{ CreateFileFactory(filename) };
-        factory->OutputDataObject(filename, data_object.get());
+        factory->OutputDataObject(filename, *data_object);
     }
     catch (const std::exception & ex)
     {

@@ -152,6 +152,15 @@ Current production visitors in `core` are:
 - `MapInterpolationVisitor` (`ConstDataObjectVisitor`)
 - `MapNormalizeVisitor` (`DataObjectVisitor`)
 - `ModelPreparationVisitor` (`DataObjectVisitor`)
+- `ModelSelectionVisitor` (`DataObjectVisitor`)
+- `ModelSelectedAtomCollectorVisitor` (`DataObjectVisitor`)
+- `SimulationAtomPreparationVisitor` (`DataObjectVisitor`)
+- `ModelAtomBondContextVisitor` (`DataObjectVisitor`)
+- `AtomSamplingVisitor` (`DataObjectVisitor`)
+- `AtomGroupingVisitor` (`DataObjectVisitor`)
+- `LocalFittingVisitor` (`DataObjectVisitor`)
+- `BondSamplingVisitor` (`DataObjectVisitor`)
+- `BondGroupingVisitor` (`DataObjectVisitor`)
 
 ### 6.1 `MapInterpolationVisitor`
 
@@ -265,6 +274,8 @@ Active visitor and call sites:
 - `src/core/MapInterpolationVisitor.cpp`
 - `src/core/DataObjectWorkflowVisitors.hpp`
 - `src/core/DataObjectWorkflowVisitors.cpp`
+- `src/core/PotentialAnalysisWorkflowVisitors.hpp`
+- `src/core/PotentialAnalysisWorkflowVisitors.cpp`
 - `src/core/PotentialAnalysisCommand.cpp`
 - `src/core/PotentialAnalysisBondWorkflow.cpp`
 - `src/core/MapVisualizationCommand.cpp`

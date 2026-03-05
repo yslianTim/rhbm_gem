@@ -21,6 +21,8 @@
 #include "Logger.hpp"
 #include "AtomKeySystem.hpp"
 #include "OptionEnumTraits.hpp"
+#include "DataObjectWorkflowVisitors.hpp"
+#include "ModelVisitMode.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -137,11 +139,12 @@ bool ResultDumpCommand::BuildDataObjectList()
             auto model_object{ command_data_loader::LoadModelObject(
                 m_data_manager, key, "model object") };
             m_model_object_list.emplace_back(model_object);
-            for (auto & atom : model_object->GetAtomList())
-            {
-                if (atom->GetLocalPotentialEntry() == nullptr) continue;
-                m_selected_atom_list_map[key].emplace_back(atom.get());
-            }
+            ModelAtomCollectorOptions collector_options;
+            collector_options.selected_only = false;
+            collector_options.require_local_potential_entry = true;
+            ModelSelectedAtomCollectorVisitor collector{ collector_options };
+            model_object->Accept(collector, ModelVisitMode::SelfOnly);
+            m_selected_atom_list_map[key] = collector.GetAtomList();
             Logger::Log(LogLevel::Info,
                 "Selected atoms for key tag [" + key + "]: "
                 + std::to_string(m_selected_atom_list_map[key].size()));

@@ -8,6 +8,7 @@ set(DATA_SOURCES
     ChemicalComponentEntry.cpp
     CifFormat.cpp
     DataObjectDAOFactoryRegistry.cpp
+    DataObjectDispatch.cpp
     DatabaseSchemaManager.cpp
     DatabaseManager.cpp
     FileFormatBackendFactory.cpp

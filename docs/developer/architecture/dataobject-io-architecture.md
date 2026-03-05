@@ -276,6 +276,9 @@ Current integration contract:
   `DataObjectBase::Accept(visitor, model_mode)` contract (no manager-side RTTI dispatch).
 - `MapInterpolationVisitor` is a read-only map visitor (`ConstDataObjectVisitor`) used by map analysis commands.
 - `MapNormalizeVisitor` and `ModelPreparationVisitor` are mutable command workflow visitors for preprocessing.
+- `DataObjectDispatch` (`include/data/DataObjectDispatch.hpp`) provides visitor-based typed dispatch
+  for top-level object expectations (`ExpectModelObject`, `ExpectMapObject`) and
+  catalog naming (`GetCatalogTypeName`) without RTTI (`dynamic_cast` / `typeid`).
 - Core command workflows currently prefer command-local visitor facades
   (for example `NormalizeMapObject(...)`, `PrepareModelObject(...)`,
   `MapSamplingWorkflow`) over manager-level traversal.

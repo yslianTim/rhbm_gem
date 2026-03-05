@@ -8,6 +8,7 @@
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
 #include "DataObjectWorkflowVisitors.hpp"
+#include "PotentialAnalysisWorkflowVisitors.hpp"
 #include "HRLAlphaTrainer.hpp"
 #include "HRLDataTransform.hpp"
 #include "HRLGroupEstimator.hpp"
@@ -19,9 +20,9 @@
 #include "ChemicalDataHelper.hpp"
 #include "AtomClassifier.hpp"
 #include "GausLinearTransformHelper.hpp"
-#include "SphereSampler.hpp"
 #include "Logger.hpp"
 #include "LocalPainter.hpp"
+#include "ModelVisitMode.hpp"
 
 #include <unordered_set>
 #include <tuple>
@@ -419,83 +420,16 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing()
 
 void PotentialAnalysisCommand::RunAtomMapValueSampling()
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
-    if (m_map_object == nullptr) return;
-    auto sampler{ std::make_unique<SphereSampler>() };
-    sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
-    sampler->SetDistanceRangeMinimum(m_options.sampling_range_min);
-    sampler->SetDistanceRangeMaximum(m_options.sampling_range_max);
-    sampler->Print();
-    
-    const auto & atom_list{ m_model_object->GetSelectedAtomList() };
-    auto atom_size{ atom_list.size() };
-    size_t atom_count{ 0 };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel num_threads(m_options.thread_size)
-    {
-        MapSamplingWorkflow sampling_workflow{ sampler.get() };
-        #pragma omp for
-        for (size_t i = 0; i < atom_size; i++)
-        {
-            auto atom{ atom_list[i] };
-            auto entry{ atom->GetLocalPotentialEntry() };
-            entry->AddDistanceAndMapValueList(
-                sampling_workflow.Sample(*m_map_object, atom->GetPosition()));
-            entry->AddBasisAndResponseEntryList(
-                GausLinearTransformHelper::MapValueTransform(
-                    entry->GetDistanceAndMapValueList(),
-                    m_options.fit_range_min, m_options.fit_range_max)
-            );
-            if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
-            #pragma omp critical
-            {
-                atom_count++;
-                Logger::ProgressPercent(atom_count, atom_size);
-            }
-        }
-    }
-#else
-    MapSamplingWorkflow sampling_workflow{ sampler.get() };
-    for (size_t i = 0; i < atom_size; i++)
-    {
-        auto atom{ atom_list[i] };
-        auto entry{ atom->GetLocalPotentialEntry() };
-        entry->AddDistanceAndMapValueList(
-            sampling_workflow.Sample(*m_map_object, atom->GetPosition()));
-        entry->AddBasisAndResponseEntryList(
-            GausLinearTransformHelper::MapValueTransform(
-                entry->GetDistanceAndMapValueList(),
-                m_options.fit_range_min, m_options.fit_range_max)
-        );
-        if (m_options.use_training_alpha == false) entry->SetAlphaR(m_options.alpha_r);
-        atom_count++;
-        Logger::ProgressPercent(atom_count, atom_size);
-    }
-#endif
+    if (m_map_object == nullptr || m_model_object == nullptr) return;
+    AtomSamplingVisitor visitor{ *m_map_object, m_options };
+    m_model_object->Accept(visitor, ModelVisitMode::SelfOnly);
 }
 
 void PotentialAnalysisCommand::RunAtomGroupClassification()
 {
-    ScopeTimer timer("RunAtomGroupClassification");
-    if (m_map_object == nullptr) return;
-
-    Logger::Log(LogLevel::Info, "Atom Classification Summary:");
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        auto group_potential_entry( std::make_unique<GroupPotentialEntry>() );
-        for (auto atom : m_model_object->GetSelectedAtomList())
-        {
-            auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-            group_potential_entry->AddAtomObjectPtr(group_key, atom);
-            group_potential_entry->InsertGroupKey(group_key);
-        }
-        auto group_size{ group_potential_entry->GetGroupKeySet().size() };
-        m_model_object->AddAtomGroupPotentialEntry(class_key, group_potential_entry);
-        Logger::Log(LogLevel::Info,
-            " - Class type: " + class_key + " include " + std::to_string(group_size) + " groups.");
-    }
+    if (m_map_object == nullptr || m_model_object == nullptr) return;
+    AtomGroupingVisitor visitor;
+    m_model_object->Accept(visitor, ModelVisitMode::SelfOnly);
 }
 
 void PotentialAnalysisCommand::RunAtomAlphaTraining()
@@ -813,55 +747,9 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
 
 void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
 {
-    ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
     if (m_model_object == nullptr) return;
-
-    std::atomic<size_t> atom_count{ 0 };
-    auto & selected_atom_list{ m_model_object->GetSelectedAtomList() };
-    auto selected_atom_size{ selected_atom_list.size() };
-    Logger::Log(LogLevel::Info,
-        "Run Local atom fitting for "+ std::to_string(selected_atom_size) +" atoms.");
-#ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
-#endif
-    for (size_t i = 0; i < selected_atom_size; i++)
-    {
-        auto local_entry{ selected_atom_list[i]->GetLocalPotentialEntry() };
-        auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
-        const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
-        const auto result = HRLModelAlgorithms::EstimateBetaMDPDE(
-            universal_alpha_r,
-            dataset.X,
-            dataset.y,
-            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
-        );
-
-        local_entry->SetBetaEstimateOLS(result.beta_ols);
-        local_entry->SetBetaEstimateMDPDE(result.beta_mdpde);
-        local_entry->SetSigmaSquare(result.sigma_square);
-        local_entry->SetDataWeight(result.data_weight);
-        local_entry->SetDataCovariance(result.data_covariance);
-
-        Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-        model_par_init(0) = local_entry->GetMomentZeroEstimate();
-        model_par_init(1) = local_entry->GetMomentTwoEstimate();
-        auto gaus_ols{
-            GausLinearTransformHelper::BuildGaus3DModel(result.beta_ols, model_par_init)
-        };
-        auto gaus_mdpde{
-            GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
-        };
-        local_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
-        local_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
-
-        #ifdef USE_OPENMP
-            #pragma omp critical
-        #endif
-        {
-            atom_count++;
-            Logger::ProgressPercent(atom_count, selected_atom_size);
-        }
-    }
+    LocalFittingVisitor visitor{ m_options, universal_alpha_r };
+    m_model_object->Accept(visitor, ModelVisitMode::SelfOnly);
 }
 
 void PotentialAnalysisCommand::RunAtomPotentialFitting()

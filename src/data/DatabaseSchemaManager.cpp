@@ -553,7 +553,7 @@ namespace
         {
             auto model_object{ legacy_reader.Load(key_tag) };
             UpsertObjectCatalogRows(database, { key_tag }, "model");
-            v2_dao.Save(model_object.get(), key_tag);
+            v2_dao.Save(*model_object, key_tag);
         }
 
         const auto legacy_map_keys{ BuildLegacyMapKeyList(legacy_map_rows) };

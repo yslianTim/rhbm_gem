@@ -15,6 +15,7 @@ set(CORE_SOURCES
     ModelPainter.cpp
     PositionEstimationCommand.cpp
     PotentialAnalysisCommand.cpp
+    PotentialAnalysisWorkflowVisitors.cpp
     PotentialDisplayCommand.cpp
     ResultDumpCommand.cpp
 )

@@ -3,6 +3,7 @@
 #include "MapObject.hpp"
 #include "DataObjectBase.hpp"
 #include "DataObjectDAOFactoryRegistry.hpp"
+#include "DataObjectDispatch.hpp"
 #include "Logger.hpp"
 #include "persistence/MapStoreSql.hpp"
 
@@ -27,22 +28,18 @@ void MapObjectDAO::EnsureSchema(SQLiteWrapper & database)
     database.Execute(std::string(persistence::kCreateMapTableSql));
 }
 
-void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & key_tag)
+void MapObjectDAO::Save(const DataObjectBase & data_object, const std::string & key_tag)
 {
-    auto map_object{ dynamic_cast<const MapObject *>(data_object) };
-    if (!map_object)
-    {
-        throw std::runtime_error("MapObjectDAO::Save() failed: object is not a MapObject instance.");
-    }
+    const auto & map_object{ ExpectMapObject(data_object, "MapObjectDAO::Save()") };
 
     m_database->Prepare(std::string(persistence::kInsertMapSql));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
-    auto grid_size{ map_object->GetGridSize() };
-    auto grid_spacing{ map_object->GetGridSpacing() };
-    auto origin{ map_object->GetOrigin() };
-    std::vector<float> values(map_object->GetMapValueArraySize());
-    std::memcpy(values.data(), map_object->GetMapValueArray(), values.size() * sizeof(float));
+    auto grid_size{ map_object.GetGridSize() };
+    auto grid_spacing{ map_object.GetGridSpacing() };
+    auto origin{ map_object.GetOrigin() };
+    std::vector<float> values(map_object.GetMapValueArraySize());
+    std::memcpy(values.data(), map_object.GetMapValueArray(), values.size() * sizeof(float));
 
     m_database->Bind<std::string>(1, key_tag);
     m_database->Bind<int>(2, grid_size[0]);

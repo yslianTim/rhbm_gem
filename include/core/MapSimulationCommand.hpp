@@ -67,8 +67,6 @@ private:
     bool BuildDataObject();
     void RunMapSimulation();
     void BuildAtomList(ModelObject * model_object);
-    double CalculateAtomCharge(AtomObject * atom) const;
-    void CalculateAtomRange();
     std::unique_ptr<MapObject> CreateMapObject();
     void PopulateMapValueArray(MapObject * map_object, double blurring_width);
     std::array<int, 3> CalculateGridSize(const std::array<float, 3> & grid_spacing) const;

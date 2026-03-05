@@ -20,9 +20,11 @@
 #include "ComparisonPainter.hpp"
 #include "CommandTestHelpers.hpp"
 #include "DataObjectManager.hpp"
+#include "DataObjectDispatch.hpp"
 #include "DataObjectVisitor.hpp"
 #include "DataObjectWorkflowVisitors.hpp"
 #include "DemoPainter.hpp"
+#include "FileProcessFactoryBase.hpp"
 #include "GausPainter.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "MapInterpolationVisitor.hpp"
@@ -619,4 +621,121 @@ TEST(DataObjectVisitorArchitectureTest, MapSamplingWorkflowProducesSamplingOutpu
 
     ASSERT_EQ(sampling_data.size(), 1);
     EXPECT_FLOAT_EQ(std::get<0>(sampling_data.front()), 0.0f);
+}
+
+TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchExpectHelpersResolveModelAndMap)
+{
+    auto model{ MakeModelWithBond() };
+    auto map{ MakeMapObject() };
+
+    const auto & model_ref{ rg::ExpectModelObject(*model, "dispatch-test-model") };
+    const auto & map_ref{ rg::ExpectMapObject(map, "dispatch-test-map") };
+    EXPECT_EQ(&model_ref, model.get());
+    EXPECT_EQ(&map_ref, &map);
+}
+
+TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchThrowsOnUnsupportedTargetType)
+{
+    rg::AtomObject atom;
+    EXPECT_THROW(
+        (void)rg::ExpectModelObject(atom, "dispatch-test-model"),
+        std::runtime_error);
+    EXPECT_THROW(
+        (void)rg::ExpectMapObject(atom, "dispatch-test-map"),
+        std::runtime_error);
+}
+
+TEST(DataObjectVisitorArchitectureTest, DataObjectDispatchCatalogTypeNameUsesStableTopLevelNames)
+{
+    auto model{ MakeModelWithBond() };
+    auto map{ MakeMapObject() };
+    rg::AtomObject atom;
+
+    EXPECT_EQ(rg::GetCatalogTypeName(*model), "model");
+    EXPECT_EQ(rg::GetCatalogTypeName(map), "map");
+    EXPECT_THROW((void)rg::GetCatalogTypeName(atom), std::runtime_error);
+}
+
+TEST(DataObjectVisitorArchitectureTest, FileProcessFactoryOutputRejectsWrongObjectTypeThroughDispatch)
+{
+    rg::ModelObjectFactory model_factory;
+    rg::MapObjectFactory map_factory;
+    rg::AtomObject atom;
+
+    EXPECT_THROW(
+        model_factory.OutputDataObject("unused.pdb", atom),
+        std::runtime_error);
+    EXPECT_THROW(
+        map_factory.OutputDataObject("unused.map", atom),
+        std::runtime_error);
+}
+
+TEST(DataObjectVisitorArchitectureTest, ModelSelectedAtomCollectorVisitorSupportsSelectionAndEntryFilters)
+{
+    auto model{ MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    ASSERT_EQ(atoms.size(), 2);
+    atoms[0]->SetSelectedFlag(true);
+    atoms[1]->SetSelectedFlag(false);
+    atoms[0]->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+    model->Update();
+
+    rg::ModelAtomCollectorOptions selected_only_options;
+    selected_only_options.selected_only = true;
+    selected_only_options.require_local_potential_entry = false;
+    rg::ModelSelectedAtomCollectorVisitor selected_only_collector{ selected_only_options };
+    model->Accept(selected_only_collector, rg::ModelVisitMode::SelfOnly);
+    ASSERT_EQ(selected_only_collector.GetAtomList().size(), 1);
+    EXPECT_EQ(selected_only_collector.GetAtomList().front(), atoms[0].get());
+
+    rg::ModelAtomCollectorOptions require_entry_options;
+    require_entry_options.selected_only = false;
+    require_entry_options.require_local_potential_entry = true;
+    rg::ModelSelectedAtomCollectorVisitor require_entry_collector{ require_entry_options };
+    model->Accept(require_entry_collector, rg::ModelVisitMode::SelfOnly);
+    ASSERT_EQ(require_entry_collector.GetAtomList().size(), 1);
+    EXPECT_EQ(require_entry_collector.GetAtomList().front(), atoms[0].get());
+}
+
+TEST(DataObjectVisitorArchitectureTest, SimulationAtomPreparationVisitorCollectsAtomChargeAndRange)
+{
+    auto model{ MakeModelWithBond() };
+    rg::SimulationAtomPreparationOptions options;
+    options.partial_charge_choice = rg::PartialCharge::NEUTRAL;
+    options.include_unknown_atoms = true;
+
+    rg::SimulationAtomPreparationVisitor visitor{ options };
+    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
+    ASSERT_TRUE(visitor.HasAtom());
+    EXPECT_EQ(visitor.GetAtomList().size(), 2);
+    ASSERT_EQ(visitor.GetAtomChargeMap().size(), 2);
+    EXPECT_DOUBLE_EQ(visitor.GetAtomChargeMap().at(1), 0.0);
+    EXPECT_DOUBLE_EQ(visitor.GetAtomChargeMap().at(2), 0.0);
+
+    const auto range_min{ visitor.GetRangeMinimum() };
+    const auto range_max{ visitor.GetRangeMaximum() };
+    EXPECT_FLOAT_EQ(range_min[0], 0.0f);
+    EXPECT_FLOAT_EQ(range_max[0], 1.0f);
+}
+
+TEST(DataObjectVisitorArchitectureTest, ModelAtomBondContextVisitorBuildsSelectedContextMaps)
+{
+    auto model{ MakeModelWithBond() };
+    auto & atoms{ model->GetAtomList() };
+    auto & bonds{ model->GetBondList() };
+    ASSERT_EQ(atoms.size(), 2);
+    ASSERT_EQ(bonds.size(), 1);
+    atoms[0]->SetSelectedFlag(true);
+    atoms[1]->SetSelectedFlag(true);
+    bonds[0]->SetSelectedFlag(true);
+    model->Update();
+
+    rg::ModelAtomBondContextVisitor visitor;
+    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
+    ASSERT_EQ(visitor.GetAtomMap().size(), 2);
+    ASSERT_EQ(visitor.GetBondMap().size(), 2);
+    EXPECT_EQ(visitor.GetAtomMap().at(1), atoms[0].get());
+    EXPECT_EQ(visitor.GetAtomMap().at(2), atoms[1].get());
+    EXPECT_EQ(visitor.GetBondMap().at(1).size(), 1);
+    EXPECT_EQ(visitor.GetBondMap().at(2).size(), 1);
 }

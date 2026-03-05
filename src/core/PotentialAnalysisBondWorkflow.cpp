@@ -1,10 +1,9 @@
 #include "PotentialAnalysisBondWorkflow.hpp"
 #include "PotentialAnalysisExecutionOptions.hpp"
+#include "PotentialAnalysisWorkflowVisitors.hpp"
 
 #include "BondObject.hpp"
-#include "BondClassifier.hpp"
 #include "ChemicalDataHelper.hpp"
-#include "CylinderSampler.hpp"
 #include "GausLinearTransformHelper.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "HRLDataTransform.hpp"
@@ -12,8 +11,8 @@
 #include "HRLModelAlgorithms.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "Logger.hpp"
-#include "DataObjectWorkflowVisitors.hpp"
 #include "MapObject.hpp"
+#include "ModelVisitMode.hpp"
 #include "ModelObject.hpp"
 #include "ScopeTimer.hpp"
 
@@ -31,98 +30,14 @@ namespace {
 
 void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & context)
 {
-    ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
-    auto sampler{ std::make_unique<CylinderSampler>() };
-    sampler->SetSamplingSize(static_cast<unsigned int>(context.options.sampling_size));
-    sampler->SetDistanceRangeMinimum(context.options.sampling_range_min);
-    sampler->SetDistanceRangeMaximum(context.options.sampling_range_max);
-    sampler->SetHeight(context.options.sampling_height);
-    sampler->Print();
-
-    const auto & bond_list{ context.model_object.GetSelectedBondList() };
-    const auto bond_size{ bond_list.size() };
-    size_t bond_count{ 0 };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel num_threads(context.options.thread_size)
-    {
-        MapSamplingWorkflow sampling_workflow{ sampler.get() };
-        #pragma omp for
-        for (size_t i = 0; i < bond_size; i++)
-        {
-            auto bond{ bond_list[i] };
-            auto entry{ bond->GetLocalPotentialEntry() };
-            auto bond_vector{ bond->GetBondVector() };
-            auto bond_position{ bond->GetPosition() };
-            constexpr float adjusted_rate{ 0.0f };
-            std::array<float, 3> adjusted_position{
-                bond_position[0] + 0.5f * bond_vector[0] * adjusted_rate,
-                bond_position[1] + 0.5f * bond_vector[1] * adjusted_rate,
-                bond_position[2] + 0.5f * bond_vector[2] * adjusted_rate
-            };
-            entry->AddDistanceAndMapValueList(
-                sampling_workflow.Sample(
-                    context.map_object,
-                    adjusted_position,
-                    bond_vector));
-            entry->AddBasisAndResponseEntryList(
-                GausLinearTransformHelper::MapValueTransform(
-                    entry->GetDistanceAndMapValueList(),
-                    context.options.fit_range_min,
-                    context.options.fit_range_max));
-            entry->SetAlphaR(context.options.alpha_r);
-            #pragma omp critical
-            {
-                bond_count++;
-                Logger::ProgressPercent(bond_count, bond_size);
-            }
-        }
-    }
-#else
-    MapSamplingWorkflow sampling_workflow{ sampler.get() };
-    for (size_t i = 0; i < bond_size; i++)
-    {
-        auto bond{ bond_list[i] };
-        auto entry{ bond->GetLocalPotentialEntry() };
-        entry->AddDistanceAndMapValueList(
-            sampling_workflow.Sample(
-                context.map_object,
-                bond->GetPosition(),
-                bond->GetBondVector()));
-        entry->AddBasisAndResponseEntryList(
-            GausLinearTransformHelper::MapValueTransform(
-                entry->GetDistanceAndMapValueList(),
-                context.options.fit_range_min,
-                context.options.fit_range_max));
-        entry->SetAlphaR(context.options.alpha_r);
-        bond_count++;
-        Logger::ProgressPercent(bond_count, bond_size);
-    }
-#endif
+    BondSamplingVisitor visitor{ context.map_object, context.options };
+    context.model_object.Accept(visitor, ModelVisitMode::SelfOnly);
 }
 
 void RunBondGroupClassification(const PotentialAnalysisBondWorkflowContext & context)
 {
-    ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondGroupClassification");
-
-    Logger::Log(LogLevel::Info, "Bond Classification Summary:");
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
-        for (auto bond : context.model_object.GetSelectedBondList())
-        {
-            auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
-            group_potential_entry->AddBondObjectPtr(group_key, bond);
-            group_potential_entry->InsertGroupKey(group_key);
-        }
-        const auto group_size{ group_potential_entry->GetGroupKeySet().size() };
-        context.model_object.AddBondGroupPotentialEntry(class_key, group_potential_entry);
-        Logger::Log(
-            LogLevel::Info,
-            " - Class type: " + class_key + " include "
-                + std::to_string(group_size) + " groups.");
-    }
+    BondGroupingVisitor visitor;
+    context.model_object.Accept(visitor, ModelVisitMode::SelfOnly);
 }
 
 void RunLocalBondFitting(

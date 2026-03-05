@@ -363,7 +363,7 @@ class FailingDataObjectDAO final : public rg::DataObjectDAOBase
 public:
     explicit FailingDataObjectDAO(rg::SQLiteWrapper * database) : m_database{ database } {}
 
-    void Save(const rg::DataObjectBase * /*obj*/, const std::string & key_tag) override
+    void Save(const rg::DataObjectBase & /*obj*/, const std::string & key_tag) override
     {
         m_database->Execute("CREATE TABLE IF NOT EXISTS failing_payload (key_tag TEXT PRIMARY KEY);");
         m_database->Prepare("INSERT INTO failing_payload(key_tag) VALUES (?);");
@@ -391,7 +391,7 @@ public:
     }
 
     void OutputDataObject(
-        const std::string & /*filename*/, rg::DataObjectBase * /*data_object*/) override
+        const std::string & /*filename*/, const rg::DataObjectBase & /*data_object*/) override
     {
     }
 };
@@ -1226,7 +1226,7 @@ TEST(DataObjectIOSchemaTest, ModelDaoSaveDoesNotCreateSchemaImplicitly)
     rg::SQLiteWrapper database{ database_path };
     rg::ModelObjectDAO dao{ &database };
 
-    EXPECT_THROW(dao.Save(model.get(), "model"), std::runtime_error);
+    EXPECT_THROW(dao.Save(*model, "model"), std::runtime_error);
     EXPECT_FALSE(HasTable(database_path, "model_object"));
 }
 
@@ -1239,7 +1239,7 @@ TEST(DataObjectIOSchemaTest, MapDaoSaveDoesNotCreateSchemaImplicitly)
     rg::SQLiteWrapper database{ database_path };
     rg::MapObjectDAO dao{ &database };
 
-    EXPECT_THROW(dao.Save(&map_object, "map"), std::runtime_error);
+    EXPECT_THROW(dao.Save(map_object, "map"), std::runtime_error);
     EXPECT_FALSE(HasTable(database_path, "map_list"));
 }
 

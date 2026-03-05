@@ -4,6 +4,7 @@
 #include "DataObjectDAOBase.hpp"
 #include "DataObjectDAOFactoryRegistry.hpp"
 #include "DataObjectBase.hpp"
+#include "DataObjectDispatch.hpp"
 #include "Logger.hpp"
 
 namespace rhbm_gem {
@@ -26,11 +27,13 @@ DatabaseManager::~DatabaseManager()
 void DatabaseManager::SaveDataObject(
     const DataObjectBase * data_object, const std::string & key_tag)
 {
+    if (data_object == nullptr)
+    {
+        throw std::runtime_error("Null data object pointer provided.");
+    }
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
-    std::string type_name{
-        DataObjectDAOFactoryRegistry::Instance().GetTypeName(std::type_index(typeid(*data_object)))
-    };
+    auto type_name{ GetCatalogTypeName(*data_object) };
     m_database->Prepare(
         "INSERT INTO object_catalog(key_tag, object_type) VALUES (?, ?) "
         "ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;");
@@ -39,8 +42,8 @@ void DatabaseManager::SaveDataObject(
     m_database->Bind<std::string>(2, type_name);
     m_database->StepOnce();
 
-    auto dao{ CreateDataObjectDAO(data_object) };
-    dao->Save(data_object, key_tag);
+    auto dao{ CreateDataObjectDAO(type_name) };
+    dao->Save(*data_object, key_tag);
 }
 
 std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
@@ -65,17 +68,6 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     auto type_name{ m_database->GetColumn<std::string>(0) };
     auto dao{ CreateDataObjectDAO(type_name) };
     return dao->Load(key_tag);
-}
-
-std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
-    const DataObjectBase * data_object)
-{
-    if (data_object == nullptr)
-    {
-        throw std::runtime_error("Null data object pointer provided.");
-    }
-    auto type{ std::type_index(typeid(*data_object)) };
-    return CreateDataObjectDAO(DataObjectDAOFactoryRegistry::Instance().GetTypeName(type));
 }
 
 std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(

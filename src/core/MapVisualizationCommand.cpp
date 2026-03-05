@@ -7,6 +7,7 @@
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
 #include "DataObjectWorkflowVisitors.hpp"
+#include "ModelVisitMode.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
 #include "ChemicalDataHelper.hpp"
@@ -193,19 +194,10 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     sampler->SetWindowSize(static_cast<float>(m_options.window_size));
     sampler->Print();
     
-    const auto & atom_list{ m_model_object->GetSelectedAtomList() };
-    const auto & bond_list{ m_model_object->GetSelectedBondList() };
-    std::unordered_map<int, AtomObject*> atom_map;
-    std::unordered_map<int, std::vector<BondObject*>> bond_map;
-    for (auto & atom : atom_list)
-    {
-        atom_map.emplace(atom->GetSerialID(), atom);
-    }
-    for (auto & bond : bond_list)
-    {
-        bond_map[bond->GetAtomSerialID1()].emplace_back(bond);
-        bond_map[bond->GetAtomSerialID2()].emplace_back(bond);
-    }
+    ModelAtomBondContextVisitor context_visitor;
+    m_model_object->Accept(context_visitor, ModelVisitMode::SelfOnly);
+    const auto & atom_map{ context_visitor.GetAtomMap() };
+    const auto & bond_map{ context_visitor.GetBondMap() };
 
     const auto atom_iter{ atom_map.find(m_options.atom_serial_id) };
     if (atom_iter == atom_map.end())

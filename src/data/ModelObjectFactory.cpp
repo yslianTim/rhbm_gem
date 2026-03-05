@@ -5,6 +5,7 @@
 #include "AtomObject.hpp"
 #include "BondObject.hpp"
 #include "AtomicModelDataBlock.hpp"
+#include "DataObjectDispatch.hpp"
 #include "Logger.hpp"
 
 #include <stdexcept>
@@ -69,15 +70,13 @@ std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::
     return model_object;
 }
 
-void ModelObjectFactory::OutputDataObject(const std::string & filename, DataObjectBase * data_object)
+void ModelObjectFactory::OutputDataObject(
+    const std::string & filename,
+    const DataObjectBase & data_object)
 {
-    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
-    if (model_object == nullptr)
-    {
-        throw std::runtime_error(
-            "ModelObjectFactory::OutputDataObject(): invalid data_object type");
-    }
-    auto file_writer{ std::make_unique<ModelFileWriter>(filename, model_object) };
+    const auto & model_object{
+        ExpectModelObject(data_object, "ModelObjectFactory::OutputDataObject()") };
+    auto file_writer{ std::make_unique<ModelFileWriter>(filename, &model_object) };
     file_writer->Write();
 }
 

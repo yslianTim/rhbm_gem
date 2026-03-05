@@ -1,6 +1,7 @@
 #include "ModelObjectDAOv2.hpp"
 
 #include "DataObjectBase.hpp"
+#include "DataObjectDispatch.hpp"
 #include "ModelObject.hpp"
 #include "SQLiteWrapper.hpp"
 
@@ -48,22 +49,17 @@ void ModelObjectDAOv2::EnsureSchema(SQLiteWrapper & database)
     }
 }
 
-void ModelObjectDAOv2::Save(const DataObjectBase * obj, const std::string & key_tag)
+void ModelObjectDAOv2::Save(const DataObjectBase & obj, const std::string & key_tag)
 {
-    auto model_obj{ dynamic_cast<const ModelObject *>(obj) };
-    if (!model_obj)
-    {
-        throw std::runtime_error(
-            "ModelObjectDAOv2::Save() failed: object is not a ModelObject instance.");
-    }
+    const auto & model_obj{ ExpectModelObject(obj, "ModelObjectDAOv2::Save()") };
 
     for (const auto table_name : model_io::kModelTablesScopedByKey)
     {
         DeleteRowsForKey(*m_database, std::string(table_name), key_tag);
     }
 
-    model_io::SaveStructure(*m_database, *model_obj, key_tag);
-    model_io::SaveAnalysis(*m_database, *model_obj, key_tag);
+    model_io::SaveStructure(*m_database, model_obj, key_tag);
+    model_io::SaveAnalysis(*m_database, model_obj, key_tag);
 }
 
 std::unique_ptr<DataObjectBase> ModelObjectDAOv2::Load(const std::string & key_tag)

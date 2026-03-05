@@ -6,15 +6,16 @@
 #include "ModelObject.hpp"
 #include "MapObject.hpp"
 #include "MapFileWriter.hpp"
+#include "DataObjectWorkflowVisitors.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
 #include "ElectricPotential.hpp"
 #include "KDTreeAlgorithm.hpp"
-#include "ComponentHelper.hpp"
 #include "ArrayStats.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
 #include "OptionEnumTraits.hpp"
+#include "ModelVisitMode.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -106,7 +107,6 @@ void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 bool MapSimulationCommand::ExecuteImpl()
 {
     if (BuildDataObject() == false) return false;
-    CalculateAtomRange();
     RunMapSimulation();
     return true;
 }
@@ -256,78 +256,36 @@ void MapSimulationCommand::RunMapSimulation()
 
 void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
 {
-    m_selected_atom_list.clear();
-    m_selected_atom_list.reserve(model_object->GetNumberOfAtom());
-    m_atom_charge_map.clear();
-    for (auto & atom : model_object->GetAtomList())
+    if (model_object == nullptr)
     {
-        if (atom->IsUnknownAtom() == true)
-        {
-            //Logger::Log(LogLevel::Warning,
-            //    "Unknown atom found in the model object: Serial-ID = "
-            //    + std::to_string(atom->GetSerialID()) +
-            //    ", this atom will be ignored in the simulation.");
-            //continue;
-        }
-        m_selected_atom_list.emplace_back(atom.get());
-        m_atom_charge_map.emplace(atom->GetSerialID(), CalculateAtomCharge(atom.get()));
+        Logger::Log(LogLevel::Error, "MapSimulationCommand::BuildAtomList(): model object is null.");
+        return;
+    }
+
+    SimulationAtomPreparationOptions options;
+    options.partial_charge_choice = m_options.partial_charge_choice;
+    options.include_unknown_atoms = true;
+    SimulationAtomPreparationVisitor visitor{ options };
+    model_object->Accept(visitor, ModelVisitMode::SelfOnly);
+
+    m_selected_atom_list = visitor.GetAtomList();
+    m_atom_charge_map = visitor.GetAtomChargeMap();
+    if (visitor.HasAtom())
+    {
+        m_atom_range_minimum = visitor.GetRangeMinimum();
+        m_atom_range_maximum = visitor.GetRangeMaximum();
+        m_atom_range_minimum[0] -= static_cast<float>(m_options.cutoff_distance);
+        m_atom_range_minimum[1] -= static_cast<float>(m_options.cutoff_distance);
+        m_atom_range_minimum[2] -= static_cast<float>(m_options.cutoff_distance);
+        m_atom_range_maximum[0] += static_cast<float>(m_options.cutoff_distance);
+        m_atom_range_maximum[1] += static_cast<float>(m_options.cutoff_distance);
+        m_atom_range_maximum[2] += static_cast<float>(m_options.cutoff_distance);
     }
 
     Logger::Log(LogLevel::Info,
         "Number of selected atoms to be simulated = "
         + std::to_string(m_selected_atom_list.size()) +" / "
         + std::to_string(model_object->GetNumberOfAtom()) + " atoms.");
-}
-
-double MapSimulationCommand::CalculateAtomCharge(AtomObject * atom) const
-{
-    switch (m_options.partial_charge_choice)
-    {
-        case PartialCharge::NEUTRAL:
-            return 0.0;
-        case PartialCharge::PARTIAL:
-            return ComponentHelper::GetPartialCharge(
-                atom->GetResidue(),
-                atom->GetSpot(),
-                atom->GetStructure());
-        case PartialCharge::AMBER:
-            return ComponentHelper::GetPartialCharge(
-                atom->GetResidue(),
-                atom->GetSpot(),
-                atom->GetStructure(), true);
-        default:
-            Logger::Log(LogLevel::Error,
-                "Invalid partial charge choice reached atom-charge calculation: "
-                + std::to_string(static_cast<int>(m_options.partial_charge_choice)));
-            return 0.0;
-    }
-}
-
-void MapSimulationCommand::CalculateAtomRange()
-{
-    if (m_selected_atom_list.empty())
-    {
-        Logger::Log(LogLevel::Warning, "No atoms selected. Atom range cannot be calculated.");
-        return;
-    }
-
-    for (const auto & atom : m_selected_atom_list)
-    {
-        const auto & atom_position{ atom->GetPositionRef() };
-        m_atom_range_minimum[0] = std::min(m_atom_range_minimum[0], atom_position[0]);
-        m_atom_range_minimum[1] = std::min(m_atom_range_minimum[1], atom_position[1]);
-        m_atom_range_minimum[2] = std::min(m_atom_range_minimum[2], atom_position[2]);
-        m_atom_range_maximum[0] = std::max(m_atom_range_maximum[0], atom_position[0]);
-        m_atom_range_maximum[1] = std::max(m_atom_range_maximum[1], atom_position[1]);
-        m_atom_range_maximum[2] = std::max(m_atom_range_maximum[2], atom_position[2]);
-    }
-
-    m_atom_range_minimum[0] -= static_cast<float>(m_options.cutoff_distance);
-    m_atom_range_minimum[1] -= static_cast<float>(m_options.cutoff_distance);
-    m_atom_range_minimum[2] -= static_cast<float>(m_options.cutoff_distance);
-    m_atom_range_maximum[0] += static_cast<float>(m_options.cutoff_distance);
-    m_atom_range_maximum[1] += static_cast<float>(m_options.cutoff_distance);
-    m_atom_range_maximum[2] += static_cast<float>(m_options.cutoff_distance);
 }
 
 std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
