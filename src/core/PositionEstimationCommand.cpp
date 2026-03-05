@@ -3,6 +3,7 @@
 #include "CommandOptionBinding.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
+#include "DataObjectWorkflowVisitors.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "ScopeTimer.hpp"
 #include "ArrayStats.hpp"
@@ -177,7 +178,8 @@ bool PositionEstimationCommand::BuildDataObject()
     {
         m_map_object = command_data_access::ProcessTypedFile<MapObject>(
             m_data_manager, m_options.map_file_path, kMapKey, "map file");
-        m_map_object->MapValueArrayNormalization();
+        MapNormalizeVisitor normalize_visitor;
+        m_map_object->Accept(normalize_visitor);
     }
     catch (const std::exception & e)
     {

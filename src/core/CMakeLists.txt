@@ -4,6 +4,7 @@ set(CORE_SOURCES
     BuiltInCommandCatalog.cpp
     CommandBase.cpp
     ComparisonPainter.cpp
+    DataObjectWorkflowVisitors.cpp
     DataObjectManager.cpp
     DemoPainter.cpp
     GausPainter.cpp

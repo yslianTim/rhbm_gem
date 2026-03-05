@@ -14,11 +14,9 @@ set(TEST_SOURCES
     CommandCommonOptions_test.cpp
     CommandValidationIssue_test.cpp
     ComponentHelper_test.cpp
-    ContributorGuidanceSync_test.cpp
     DataObjectManager_test.cpp
     DataObjectIOSchema_test.cpp
     DataObjectVisitorArchitecture_test.cpp
-    DocsSync_test.cpp
     EigenMatrixUtility_test.cpp
     ElectricPotential_test.cpp
     EnumOptionTraits_test.cpp

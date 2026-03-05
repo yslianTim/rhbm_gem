@@ -7,7 +7,7 @@
 #include "BondObject.hpp"
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
-#include "MapInterpolationVisitor.hpp"
+#include "DataObjectWorkflowVisitors.hpp"
 #include "HRLAlphaTrainer.hpp"
 #include "HRLDataTransform.hpp"
 #include "HRLGroupEstimator.hpp"
@@ -387,27 +387,24 @@ void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * mode
 void PotentialAnalysisCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
-    m_map_object->MapValueArrayNormalization();
+    MapNormalizeVisitor normalize_visitor;
+    m_map_object->Accept(normalize_visitor);
 }
 
 void PotentialAnalysisCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
-    for (auto & atom : m_model_object->GetAtomList()) atom->SetSelectedFlag(true);
-    for (auto & bond : m_model_object->GetBondList()) bond->SetSelectedFlag(true);
-    m_model_object->FilterAtomFromSymmetry(m_options.is_asymmetry);
-    m_model_object->FilterBondFromSymmetry(m_options.is_asymmetry);
-    m_model_object->Update();
-    for (auto & atom : m_model_object->GetSelectedAtomList())
-    {
-        auto local_potential_entry{ std::make_unique<LocalPotentialEntry>() };
-        atom->AddLocalPotentialEntry(std::move(local_potential_entry));
-    }
-    for (auto & bond : m_model_object->GetSelectedBondList())
-    {
-        auto local_potential_entry{ std::make_unique<LocalPotentialEntry>() };
-        bond->AddLocalPotentialEntry(std::move(local_potential_entry));
-    }
+    ModelPreparationOptions options;
+    options.select_all_atoms = true;
+    options.select_all_bonds = true;
+    options.apply_atom_symmetry_filter = true;
+    options.apply_bond_symmetry_filter = true;
+    options.asymmetry_flag = m_options.is_asymmetry;
+    options.update_model = true;
+    options.initialize_atom_local_entries = true;
+    options.initialize_bond_local_entries = true;
+    ModelPreparationVisitor model_preparation_visitor{ options };
+    m_model_object->Accept(model_preparation_visitor, ModelVisitMode::SelfOnly);
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
     Logger::Log(LogLevel::Info,
@@ -439,15 +436,14 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling()
 #ifdef USE_OPENMP
     #pragma omp parallel num_threads(m_options.thread_size)
     {
-        MapInterpolationVisitor interpolation_visitor{ sampler.get() };
+        MapSamplingWorkflow sampling_workflow{ sampler.get() };
         #pragma omp for
         for (size_t i = 0; i < atom_size; i++)
         {
             auto atom{ atom_list[i] };
             auto entry{ atom->GetLocalPotentialEntry() };
-            interpolation_visitor.SetPosition(atom->GetPosition());
-            m_map_object->Accept(interpolation_visitor);
-            entry->AddDistanceAndMapValueList(interpolation_visitor.ConsumeSamplingDataList());
+            entry->AddDistanceAndMapValueList(
+                sampling_workflow.Sample(*m_map_object, atom->GetPosition()));
             entry->AddBasisAndResponseEntryList(
                 GausLinearTransformHelper::MapValueTransform(
                     entry->GetDistanceAndMapValueList(),
@@ -462,14 +458,13 @@ void PotentialAnalysisCommand::RunAtomMapValueSampling()
         }
     }
 #else
-    MapInterpolationVisitor interpolation_visitor{ sampler.get() };
+    MapSamplingWorkflow sampling_workflow{ sampler.get() };
     for (size_t i = 0; i < atom_size; i++)
     {
         auto atom{ atom_list[i] };
         auto entry{ atom->GetLocalPotentialEntry() };
-        interpolation_visitor.SetPosition(atom->GetPosition());
-        m_map_object->Accept(interpolation_visitor);
-        entry->AddDistanceAndMapValueList(interpolation_visitor.ConsumeSamplingDataList());
+        entry->AddDistanceAndMapValueList(
+            sampling_workflow.Sample(*m_map_object, atom->GetPosition()));
         entry->AddBasisAndResponseEntryList(
             GausLinearTransformHelper::MapValueTransform(
                 entry->GetDistanceAndMapValueList(),

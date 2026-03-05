@@ -267,8 +267,16 @@ Preferred command-facing entry points are:
 - `m_data_manager.LoadDataObject(...)`
 - `m_data_manager.SaveDataObject(...)`
 - `m_data_manager.GetTypedDataObject(...)`
+- `DataObjectBase::Accept(visitor, ...)` for command-local traversal/preprocessing
+- `m_data_manager.Accept(visitor, ...)` for manager-owned traversal batches
 
 Some commands also use internal typed-access helpers from [`src/core/CommandDataAccessInternal.hpp`](../../../src/core/CommandDataAccessInternal.hpp) to reduce boilerplate. Those helpers are intentionally internal and are not part of the supported `CommandBase` extension surface.
+
+Current command-local visitor workflows include:
+
+- map preprocessing via `MapNormalizeVisitor`
+- model preprocessing via `ModelPreparationVisitor`
+- map sampling orchestration via `MapSamplingWorkflow`
 
 The command should decide:
 

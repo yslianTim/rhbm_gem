@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "GlobalEnumClass.hpp"
+#include "DataObjectVisitor.hpp"
 #include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
@@ -21,13 +22,16 @@ class ModelObject;
 class AtomClassifier;
 class BondClassifier;
 
-class GausPainter : public PainterBase
+class GausPainter : public PainterBase, public DataObjectVisitor
 {
     std::string m_folder_path;
     std::vector<ModelObject *> m_model_object_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
     std::unique_ptr<BondClassifier> m_bond_classifier;
+    enum class IngestMode { Data, Reference };
+    IngestMode m_ingest_mode{ IngestMode::Data };
+    std::string m_ingest_label;
 
 public:
     GausPainter();
@@ -36,11 +40,16 @@ public:
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting() override;
+    void VisitAtomObject(AtomObject & data_object) override;
+    void VisitBondObject(BondObject & data_object) override;
+    void VisitModelObject(ModelObject & data_object) override;
+    void VisitMapObject(MapObject & data_object) override;
 #ifdef HAVE_ROOT
     static void RemodelAxisLabels(::TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
 #endif
 
 private:
+    [[noreturn]] void ThrowInvalidType() const;
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);

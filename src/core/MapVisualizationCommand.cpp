@@ -6,7 +6,7 @@
 #include "BondObject.hpp"
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
-#include "MapInterpolationVisitor.hpp"
+#include "DataObjectWorkflowVisitors.hpp"
 #include "ScopeTimer.hpp"
 #include "FilePathHelper.hpp"
 #include "ChemicalDataHelper.hpp"
@@ -163,15 +163,19 @@ bool MapVisualizationCommand::BuildDataObject()
 void MapVisualizationCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
-    m_map_object->MapValueArrayNormalization();
+    MapNormalizeVisitor normalize_visitor;
+    m_map_object->Accept(normalize_visitor);
 }
 
 void MapVisualizationCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
-    for (auto & atom : m_model_object->GetAtomList()) atom->SetSelectedFlag(true);
-    for (auto & bond : m_model_object->GetBondList()) bond->SetSelectedFlag(true);
-    m_model_object->Update();
+    ModelPreparationOptions options;
+    options.select_all_atoms = true;
+    options.select_all_bonds = true;
+    options.update_model = true;
+    ModelPreparationVisitor model_preparation_visitor{ options };
+    m_model_object->Accept(model_preparation_visitor, ModelVisitMode::SelfOnly);
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
     Logger::Log(LogLevel::Info,
@@ -261,12 +265,13 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     }
     sampler->SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
-    MapInterpolationVisitor interpolation_visitor{ sampler.get() };
-    
-    interpolation_visitor.SetPosition(target_atom_position);
-    interpolation_visitor.SetAxisVector({n_vector(0), n_vector(1), n_vector(2)});
-    m_map_object->Accept(interpolation_visitor);
-    auto & sampling_data_list{ interpolation_visitor.GetSamplingDataList() };
+    MapSamplingWorkflow sampling_workflow{ sampler.get() };
+    auto sampling_data_list{
+        sampling_workflow.Sample(
+            *m_map_object,
+            target_atom_position,
+            {n_vector(0), n_vector(1), n_vector(2)})
+    };
     if (sampling_data_list.empty())
     {
         Logger::Log(LogLevel::Error, "Map sampling produced no data points.");

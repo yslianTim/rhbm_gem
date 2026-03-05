@@ -12,7 +12,7 @@
 #include "HRLModelAlgorithms.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "Logger.hpp"
-#include "MapInterpolationVisitor.hpp"
+#include "DataObjectWorkflowVisitors.hpp"
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
 #include "ScopeTimer.hpp"
@@ -46,7 +46,7 @@ void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & contex
 #ifdef USE_OPENMP
     #pragma omp parallel num_threads(context.options.thread_size)
     {
-        MapInterpolationVisitor interpolation_visitor{ sampler.get() };
+        MapSamplingWorkflow sampling_workflow{ sampler.get() };
         #pragma omp for
         for (size_t i = 0; i < bond_size; i++)
         {
@@ -60,10 +60,11 @@ void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & contex
                 bond_position[1] + 0.5f * bond_vector[1] * adjusted_rate,
                 bond_position[2] + 0.5f * bond_vector[2] * adjusted_rate
             };
-            interpolation_visitor.SetPosition(adjusted_position);
-            interpolation_visitor.SetAxisVector(bond_vector);
-            context.map_object.Accept(interpolation_visitor);
-            entry->AddDistanceAndMapValueList(interpolation_visitor.ConsumeSamplingDataList());
+            entry->AddDistanceAndMapValueList(
+                sampling_workflow.Sample(
+                    context.map_object,
+                    adjusted_position,
+                    bond_vector));
             entry->AddBasisAndResponseEntryList(
                 GausLinearTransformHelper::MapValueTransform(
                     entry->GetDistanceAndMapValueList(),
@@ -78,15 +79,16 @@ void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & contex
         }
     }
 #else
-    MapInterpolationVisitor interpolation_visitor{ sampler.get() };
+    MapSamplingWorkflow sampling_workflow{ sampler.get() };
     for (size_t i = 0; i < bond_size; i++)
     {
         auto bond{ bond_list[i] };
         auto entry{ bond->GetLocalPotentialEntry() };
-        interpolation_visitor.SetPosition(bond->GetPosition());
-        interpolation_visitor.SetAxisVector(bond->GetBondVector());
-        context.map_object.Accept(interpolation_visitor);
-        entry->AddDistanceAndMapValueList(interpolation_visitor.ConsumeSamplingDataList());
+        entry->AddDistanceAndMapValueList(
+            sampling_workflow.Sample(
+                context.map_object,
+                bond->GetPosition(),
+                bond->GetBondVector()));
         entry->AddBasisAndResponseEntryList(
             GausLinearTransformHelper::MapValueTransform(
                 entry->GetDistanceAndMapValueList(),

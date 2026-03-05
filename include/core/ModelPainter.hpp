@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "GlobalEnumClass.hpp"
+#include "DataObjectVisitor.hpp"
 #include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
@@ -20,13 +21,16 @@ class ModelObject;
 class AtomClassifier;
 class BondClassifier;
 
-class ModelPainter : public PainterBase
+class ModelPainter : public PainterBase, public DataObjectVisitor
 {
     std::string m_folder_path;
     std::vector<ModelObject *> m_model_object_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
     std::unique_ptr<BondClassifier> m_bond_classifier;
+    enum class IngestMode { Data, Reference };
+    IngestMode m_ingest_mode{ IngestMode::Data };
+    std::string m_ingest_label;
 
 public:
     ModelPainter();
@@ -35,8 +39,13 @@ public:
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting() override;
+    void VisitAtomObject(AtomObject & data_object) override;
+    void VisitBondObject(BondObject & data_object) override;
+    void VisitModelObject(ModelObject & data_object) override;
+    void VisitMapObject(MapObject & data_object) override;
 
 private:
+    [[noreturn]] void ThrowInvalidType() const;
     void PaintAtomGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintBondGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausNucleotideMainChain(ModelObject * model_object, const std::string & name);

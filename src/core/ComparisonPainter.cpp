@@ -51,25 +51,63 @@ void ComparisonPainter::SetFolder(const std::string & folder_path)
 
 void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
 {
-    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
-    if (model_object == nullptr)
+    if (data_object == nullptr)
     {
-        throw std::runtime_error(
-            "ComparisonPainter::AddDataObject(): invalid data_object type");
+        ThrowInvalidType();
     }
-    m_model_object_list.emplace_back(model_object);
-    m_resolution_list.emplace_back(model_object->GetResolution());
+    m_ingest_mode = IngestMode::Data;
+    data_object->Accept(*this, ModelVisitMode::SelfOnly);
 }
 
 void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
-    if (model_object == nullptr)
+    if (data_object == nullptr)
+    {
+        ThrowInvalidType();
+    }
+    m_ingest_mode = IngestMode::Reference;
+    m_ingest_label = label;
+    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+}
+
+void ComparisonPainter::VisitAtomObject(AtomObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void ComparisonPainter::VisitBondObject(BondObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void ComparisonPainter::VisitModelObject(ModelObject & data_object)
+{
+    if (m_ingest_mode == IngestMode::Reference)
+    {
+        m_ref_model_object_list_map[m_ingest_label].emplace_back(&data_object);
+        return;
+    }
+    m_model_object_list.emplace_back(&data_object);
+    m_resolution_list.emplace_back(data_object.GetResolution());
+}
+
+void ComparisonPainter::VisitMapObject(MapObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void ComparisonPainter::ThrowInvalidType() const
+{
+    if (m_ingest_mode == IngestMode::Reference)
     {
         throw std::runtime_error(
             "ComparisonPainter::AddReferenceDataObject(): invalid data_object type");
     }
-    m_ref_model_object_list_map[label].emplace_back(model_object);
+    throw std::runtime_error(
+        "ComparisonPainter::AddDataObject(): invalid data_object type");
 }
 
 void ComparisonPainter::Painting()

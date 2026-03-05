@@ -265,7 +265,7 @@ DataObjectDAORegistrar<DataObjectType, DAOType>("stable_name")
 ### 6.5 Visitor Traversal Integration
 
 I/O and persistence workflows hand off loaded/stored objects to traversal workflows through
-`DataObjectManager::Accept(...)`.
+`DataObjectManager::Accept(...)` and command-local `DataObjectBase::Accept(...)` paths.
 
 Current integration contract:
 
@@ -275,6 +275,9 @@ Current integration contract:
 - Model traversal policy is controlled by `VisitOptions.model_visit_mode` and forwarded through the policy-aware
   `DataObjectBase::Accept(visitor, model_mode)` contract (no manager-side RTTI dispatch).
 - `MapInterpolationVisitor` is a read-only map visitor (`ConstDataObjectVisitor`) used by map analysis commands.
+- `MapNormalizeVisitor` and `ModelPreparationVisitor` are mutable command workflow visitors for preprocessing.
+- Use `DataObjectManager::Accept(...)` when traversal ownership belongs to manager-level key selection/order policies;
+  use direct object `Accept(...)` for command-local typed workflows.
 
 ## 7. Persistence Details by Object
 

@@ -45,28 +45,64 @@ void AtomPainter::SetFolder(const std::string & folder_path)
 
 void AtomPainter::AddDataObject(DataObjectBase * data_object)
 {
-    auto atom_obj{ dynamic_cast<AtomObject *>(data_object) };
-    if (atom_obj == nullptr)
+    if (data_object == nullptr)
     {
-        throw std::runtime_error(
-            "AtomPainter::AddDataObject(): invalid data_object type");
+        ThrowInvalidType();
     }
-    if (atom_obj->GetLocalPotentialEntry() == nullptr) return;
-    if (atom_obj->GetSelectedFlag() == false) return;
-    m_atom_object_list.push_back(atom_obj);
+    m_ingest_mode = IngestMode::Data;
+    data_object->Accept(*this, ModelVisitMode::SelfOnly);
 }
 
 void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    auto atom_obj{ dynamic_cast<AtomObject *>(data_object) };
-    if (atom_obj == nullptr)
+    if (data_object == nullptr)
+    {
+        ThrowInvalidType();
+    }
+    m_ingest_mode = IngestMode::Reference;
+    m_ingest_label = label;
+    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+}
+
+void AtomPainter::VisitAtomObject(AtomObject & data_object)
+{
+    if (data_object.GetLocalPotentialEntry() == nullptr) return;
+    if (data_object.GetSelectedFlag() == false) return;
+    if (m_ingest_mode == IngestMode::Reference)
+    {
+        m_ref_atom_object_map[m_ingest_label] = &data_object;
+        return;
+    }
+    m_atom_object_list.push_back(&data_object);
+}
+
+void AtomPainter::VisitBondObject(BondObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void AtomPainter::VisitModelObject(ModelObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void AtomPainter::VisitMapObject(MapObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void AtomPainter::ThrowInvalidType() const
+{
+    if (m_ingest_mode == IngestMode::Reference)
     {
         throw std::runtime_error(
             "AtomPainter::AddReferenceDataObject(): invalid data_object type");
     }
-    if (atom_obj->GetLocalPotentialEntry() == nullptr) return;
-    if (atom_obj->GetSelectedFlag() == false) return;
-    m_ref_atom_object_map[label] = atom_obj;
+    throw std::runtime_error(
+        "AtomPainter::AddDataObject(): invalid data_object type");
 }
 
 void AtomPainter::Painting()

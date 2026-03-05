@@ -22,7 +22,7 @@ This document covers runtime dispatch and traversal only:
 - `DataObjectVisitor` and `ConstDataObjectVisitor`
 - concrete objects: `AtomObject`, `BondObject`, `ModelObject`, `MapObject`
 - manager traversal entry points: `DataObjectManager::Accept(...)`
-- map sampling visitor: `MapInterpolationVisitor`
+- built-in workflow visitors used by commands
 
 Persistence and file/database pipelines are out of scope.
 
@@ -145,13 +145,19 @@ Operational behavior:
 - non-empty `key_tag_list`: preserves caller order
 - missing keys emit warning logs and are skipped
 
-## 6. `MapInterpolationVisitor` Usage
+## 6. Built-in Workflow Visitors
 
-`MapInterpolationVisitor` is the active production `ConstDataObjectVisitor` implementation.
+Current production visitors in `core` are:
+
+- `MapInterpolationVisitor` (`ConstDataObjectVisitor`)
+- `MapNormalizeVisitor` (`DataObjectVisitor`)
+- `ModelPreparationVisitor` (`DataObjectVisitor`)
+
+### 6.1 `MapInterpolationVisitor`
 
 Supported visit target:
 
-- `VisitMapObject(const MapObject &)`
+- `VisitMapObject(const MapObject&)`
 
 Unsupported targets:
 
@@ -169,6 +175,41 @@ Behavior notes:
 - every `VisitMapObject(...)` clears previous sampling output first
 - null sampler logs warning and returns empty output
 - visitor instances are stateful; reuse intentionally and consume/reset output between runs
+
+### 6.2 `MapNormalizeVisitor`
+
+Supported visit target:
+
+- `VisitMapObject(MapObject&)`
+
+Behavior:
+
+- calls `MapObject::MapValueArrayNormalization()`
+- unsupported targets throw `std::logic_error`
+
+### 6.3 `ModelPreparationVisitor`
+
+Supported visit target:
+
+- `VisitModelObject(ModelObject&)`
+
+Behavior:
+
+- option-driven preprocessing for model workflows
+- supports select-all, optional symmetry filtering, `Update()`, and optional
+  local-potential-entry initialization for selected atoms/bonds
+- unsupported targets throw `std::logic_error`
+
+### 6.4 `MapSamplingWorkflow`
+
+`MapSamplingWorkflow` is a helper wrapper that reuses an internal
+`MapInterpolationVisitor` instance.
+
+Behavior:
+
+- sets position/axis vector
+- executes `map.Accept(visitor)`
+- returns sampled tuples via `ConsumeSamplingDataList()`
 
 ## 7. Extension Playbook
 
@@ -211,6 +252,8 @@ Active visitor and call sites:
 
 - `include/core/MapInterpolationVisitor.hpp`
 - `src/core/MapInterpolationVisitor.cpp`
+- `src/core/DataObjectWorkflowVisitors.hpp`
+- `src/core/DataObjectWorkflowVisitors.cpp`
 - `src/core/PotentialAnalysisCommand.cpp`
 - `src/core/PotentialAnalysisBondWorkflow.cpp`
 - `src/core/MapVisualizationCommand.cpp`

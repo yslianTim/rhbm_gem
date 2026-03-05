@@ -14,13 +14,20 @@
 #include <vector>
 
 #include "AtomObject.hpp"
+#include "AtomPainter.hpp"
 #include "BondObject.hpp"
+#include "ComparisonPainter.hpp"
 #include "CommandTestHelpers.hpp"
 #include "DataObjectManager.hpp"
 #include "DataObjectVisitor.hpp"
+#include "DataObjectWorkflowVisitors.hpp"
+#include "DemoPainter.hpp"
+#include "GausPainter.hpp"
+#include "LocalPotentialEntry.hpp"
 #include "MapInterpolationVisitor.hpp"
 #include "MapObject.hpp"
 #include "ModelObject.hpp"
+#include "ModelPainter.hpp"
 #include "SamplerBase.hpp"
 
 namespace rg = rhbm_gem;
@@ -426,4 +433,104 @@ TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorClearsStaleOutput
     visitor.SetAxisVector({ 0.0f, 1.0f, 0.0f });
     map.Accept(visitor);
     EXPECT_EQ(visitor.GetSamplingDataList().size(), 1);
+}
+
+TEST(DataObjectVisitorArchitectureTest, AtomPainterDispatchesByVisitorAndRejectsUnsupportedType)
+{
+    rg::AtomPainter painter;
+    rg::AtomObject atom;
+    atom.SetSelectedFlag(true);
+    atom.AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+    EXPECT_NO_THROW(painter.AddDataObject(&atom));
+    EXPECT_NO_THROW(painter.AddReferenceDataObject(&atom, "ref"));
+
+    auto model{ MakeModelWithBond() };
+    EXPECT_THROW(painter.AddDataObject(model.get()), std::runtime_error);
+    EXPECT_THROW(painter.AddReferenceDataObject(model.get(), "ref"), std::runtime_error);
+}
+
+TEST(DataObjectVisitorArchitectureTest, ModelBasedPaintersDispatchByVisitorAndRejectUnsupportedType)
+{
+    auto model{ MakeModelWithBond() };
+    rg::AtomObject atom;
+
+    rg::ModelPainter model_painter;
+    EXPECT_NO_THROW(model_painter.AddDataObject(model.get()));
+    EXPECT_NO_THROW(model_painter.AddReferenceDataObject(model.get(), "ref"));
+    EXPECT_THROW(model_painter.AddDataObject(&atom), std::runtime_error);
+
+    rg::GausPainter gaus_painter;
+    EXPECT_NO_THROW(gaus_painter.AddDataObject(model.get()));
+    EXPECT_NO_THROW(gaus_painter.AddReferenceDataObject(model.get(), "ref"));
+    EXPECT_THROW(gaus_painter.AddDataObject(&atom), std::runtime_error);
+
+    rg::ComparisonPainter comparison_painter;
+    EXPECT_NO_THROW(comparison_painter.AddDataObject(model.get()));
+    EXPECT_NO_THROW(comparison_painter.AddReferenceDataObject(model.get(), "ref"));
+    EXPECT_THROW(comparison_painter.AddDataObject(&atom), std::runtime_error);
+
+    rg::DemoPainter demo_painter;
+    EXPECT_NO_THROW(demo_painter.AddDataObject(model.get()));
+    EXPECT_NO_THROW(demo_painter.AddReferenceDataObject(model.get(), "ref"));
+    EXPECT_THROW(demo_painter.AddDataObject(&atom), std::runtime_error);
+}
+
+TEST(DataObjectVisitorArchitectureTest, MapNormalizeVisitorNormalizesMapValues)
+{
+    auto map{ MakeMapObject() };
+    const auto original_value{ map.GetMapValue(0) };
+    const auto original_sd{ map.GetMapValueSD() };
+    ASSERT_GT(original_sd, 0.0f);
+
+    rg::MapNormalizeVisitor visitor;
+    map.Accept(visitor);
+
+    EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
+}
+
+TEST(DataObjectVisitorArchitectureTest, ModelPreparationVisitorSelectsAndInitializesLocalEntries)
+{
+    auto model{ MakeModelWithBond() };
+    for (auto & atom : model->GetAtomList()) atom->SetSelectedFlag(false);
+    for (auto & bond : model->GetBondList()) bond->SetSelectedFlag(false);
+    model->Update();
+    ASSERT_EQ(model->GetNumberOfSelectedAtom(), 0);
+    ASSERT_EQ(model->GetNumberOfSelectedBond(), 0);
+
+    rg::ModelPreparationOptions options;
+    options.select_all_atoms = true;
+    options.select_all_bonds = true;
+    options.update_model = true;
+    options.initialize_atom_local_entries = true;
+    options.initialize_bond_local_entries = true;
+
+    rg::ModelPreparationVisitor visitor{ options };
+    model->Accept(visitor, rg::ModelVisitMode::SelfOnly);
+
+    EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
+    EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
+    for (const auto * atom : model->GetSelectedAtomList())
+    {
+        ASSERT_NE(atom, nullptr);
+        EXPECT_NE(atom->GetLocalPotentialEntry(), nullptr);
+    }
+    for (const auto * bond : model->GetSelectedBondList())
+    {
+        ASSERT_NE(bond, nullptr);
+        EXPECT_NE(bond->GetLocalPotentialEntry(), nullptr);
+    }
+}
+
+TEST(DataObjectVisitorArchitectureTest, MapSamplingWorkflowProducesSamplingOutput)
+{
+    auto map{ MakeMapObject() };
+    SinglePointSampler sampler;
+    rg::MapSamplingWorkflow workflow{ &sampler };
+
+    const auto sampling_data{
+        workflow.Sample(map, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f })
+    };
+
+    ASSERT_EQ(sampling_data.size(), 1);
+    EXPECT_FLOAT_EQ(std::get<0>(sampling_data.front()), 0.0f);
 }

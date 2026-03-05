@@ -59,24 +59,62 @@ void ModelPainter::SetFolder(const std::string & folder_path)
 
 void ModelPainter::AddDataObject(DataObjectBase * data_object)
 {
-    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
-    if (model_object == nullptr)
+    if (data_object == nullptr)
     {
-        throw std::runtime_error(
-            "ModelPainter::AddDataObject(): invalid data_object type");
+        ThrowInvalidType();
     }
-    m_model_object_list.push_back(model_object);
+    m_ingest_mode = IngestMode::Data;
+    data_object->Accept(*this, ModelVisitMode::SelfOnly);
 }
 
 void ModelPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    auto model_object{ dynamic_cast<ModelObject *>(data_object) };
-    if (model_object == nullptr)
+    if (data_object == nullptr)
+    {
+        ThrowInvalidType();
+    }
+    m_ingest_mode = IngestMode::Reference;
+    m_ingest_label = label;
+    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+}
+
+void ModelPainter::VisitAtomObject(AtomObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void ModelPainter::VisitBondObject(BondObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void ModelPainter::VisitModelObject(ModelObject & data_object)
+{
+    if (m_ingest_mode == IngestMode::Reference)
+    {
+        m_ref_model_object_list_map[m_ingest_label].push_back(&data_object);
+        return;
+    }
+    m_model_object_list.push_back(&data_object);
+}
+
+void ModelPainter::VisitMapObject(MapObject & data_object)
+{
+    (void)data_object;
+    ThrowInvalidType();
+}
+
+void ModelPainter::ThrowInvalidType() const
+{
+    if (m_ingest_mode == IngestMode::Reference)
     {
         throw std::runtime_error(
             "ModelPainter::AddReferenceDataObject(): invalid data_object type");
     }
-    m_ref_model_object_list_map[label].push_back(model_object);
+    throw std::runtime_error(
+        "ModelPainter::AddDataObject(): invalid data_object type");
 }
 
 void ModelPainter::Painting()

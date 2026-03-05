@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "GlobalEnumClass.hpp"
+#include "DataObjectVisitor.hpp"
 #include "PainterBase.hpp"
 
 #ifdef HAVE_ROOT
@@ -21,12 +22,15 @@ namespace rhbm_gem {
 class ModelObject;
 class AtomClassifier;
 
-class DemoPainter : public PainterBase
+class DemoPainter : public PainterBase, public DataObjectVisitor
 {
     std::string m_folder_path;
     std::vector<ModelObject *> m_model_object_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
+    enum class IngestMode { Data, Reference };
+    IngestMode m_ingest_mode{ IngestMode::Data };
+    std::string m_ingest_label;
 
 public:
     DemoPainter();
@@ -35,8 +39,13 @@ public:
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting() override;
+    void VisitAtomObject(AtomObject & data_object) override;
+    void VisitBondObject(BondObject & data_object) override;
+    void VisitModelObject(ModelObject & data_object) override;
+    void VisitMapObject(MapObject & data_object) override;
 
 private:
+    [[noreturn]] void ThrowInvalidType() const;
     void PainMapValueComparisonSingle(const std::string & name, ModelObject * model_object, ModelObject * ref_model_object);
     void PaintAtomMapValueExample(ModelObject * model_object, const std::string & name);
     void PaintGroupGausMainChainSummary(const std::vector<ModelObject *> & model_list, const std::string & name);
