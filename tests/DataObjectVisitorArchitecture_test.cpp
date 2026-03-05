@@ -17,7 +17,7 @@
 #include "BondObject.hpp"
 #include "CommandTestHelpers.hpp"
 #include "DataObjectManager.hpp"
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitor.hpp"
 #include "MapInterpolationVisitor.hpp"
 #include "MapObject.hpp"
 #include "ModelObject.hpp"

@@ -3,7 +3,7 @@
 #include <vector>
 #include <array>
 #include <tuple>
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitor.hpp"
 
 class SamplerBase;
 
@@ -14,7 +14,6 @@ class MapInterpolationVisitor : public ConstDataObjectVisitor
     ::SamplerBase * m_sampler;
     std::array<float, 3> m_position, m_axis_vector;
     std::vector<std::tuple<float, float>> m_sampling_data_list;
-    std::vector<std::tuple<float, std::array<float, 3>>> m_point_list;
 
 public:
     explicit MapInterpolationVisitor(::SamplerBase * sampler);

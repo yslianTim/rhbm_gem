@@ -33,7 +33,6 @@ public:
         bool deterministic_order{ true };
         ModelVisitMode model_visit_mode{ ModelVisitMode::AtomsThenSelf };
     };
-    static const VisitOptions kDefaultVisitOptions;
 
     DataObjectManager();
     explicit DataObjectManager(std::shared_ptr<const FileProcessFactoryResolver> file_factory_resolver);
@@ -47,12 +46,18 @@ public:
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
     void Accept(
         DataObjectVisitor & visitor,
-        const std::vector<std::string> & key_tag_list={},
-        const VisitOptions & options=kDefaultVisitOptions);
+        const std::vector<std::string> & key_tag_list={});
+    void Accept(
+        DataObjectVisitor & visitor,
+        const std::vector<std::string> & key_tag_list,
+        const VisitOptions & options);
     void Accept(
         ConstDataObjectVisitor & visitor,
-        const std::vector<std::string> & key_tag_list={},
-        const VisitOptions & options=kDefaultVisitOptions) const;
+        const std::vector<std::string> & key_tag_list={}) const;
+    void Accept(
+        ConstDataObjectVisitor & visitor,
+        const std::vector<std::string> & key_tag_list,
+        const VisitOptions & options) const;
     std::shared_ptr<DataObjectBase> GetDataObject(const std::string & key_tag);
     std::shared_ptr<const DataObjectBase> GetDataObject(const std::string & key_tag) const;
     template <typename TypedDataObject>

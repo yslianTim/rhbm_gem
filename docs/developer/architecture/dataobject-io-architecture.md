@@ -269,8 +269,9 @@ I/O and persistence workflows hand off loaded/stored objects to traversal workfl
 
 Current integration contract:
 
-- Visitor interfaces are split into mutable (`DataObjectVisitor`) and read-only (`ConstDataObjectVisitor`) paths.
+- Visitor interfaces are split into mutable (`DataObjectVisitor`) and read-only (`ConstDataObjectVisitor`) paths (`include/data/DataObjectVisitor.hpp`).
 - `DataObjectManager::Accept(...)` defaults to deterministic key order traversal when `key_tag_list` is empty.
+- `DataObjectManager::Accept(...)` provides both default options and explicit `VisitOptions` overloads for mutable/const visitor flows.
 - Model traversal policy is controlled by `VisitOptions.model_visit_mode` and forwarded through the policy-aware
   `DataObjectBase::Accept(visitor, model_mode)` contract (no manager-side RTTI dispatch).
 - `MapInterpolationVisitor` is a read-only map visitor (`ConstDataObjectVisitor`) used by map analysis commands.

@@ -1,5 +1,5 @@
 #include "MapObject.hpp"
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitor.hpp"
 #include "KDTreeAlgorithm.hpp"
 #include "ScopeTimer.hpp"
 #include "ArrayStats.hpp"

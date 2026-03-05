@@ -111,12 +111,18 @@ Public APIs:
 
 ```cpp
 void Accept(DataObjectVisitor & visitor,
-            const std::vector<std::string> & key_tag_list = {},
-            const VisitOptions & options = {});
+            const std::vector<std::string> & key_tag_list = {});
+
+void Accept(DataObjectVisitor & visitor,
+            const std::vector<std::string> & key_tag_list,
+            const VisitOptions & options);
 
 void Accept(ConstDataObjectVisitor & visitor,
-            const std::vector<std::string> & key_tag_list = {},
-            const VisitOptions & options = {}) const;
+            const std::vector<std::string> & key_tag_list = {}) const;
+
+void Accept(ConstDataObjectVisitor & visitor,
+            const std::vector<std::string> & key_tag_list,
+            const VisitOptions & options) const;
 ```
 
 `VisitOptions`:
@@ -184,7 +190,7 @@ State/output API:
 Core interfaces:
 
 - `include/data/DataObjectBase.hpp`
-- `include/data/DataObjectVisitorBase.hpp`
+- `include/data/DataObjectVisitor.hpp`
 - `include/data/ModelVisitMode.hpp`
 
 Concrete dispatch:

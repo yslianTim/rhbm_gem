@@ -40,16 +40,15 @@ void MapInterpolationVisitor::VisitModelObject(const ModelObject & data_object)
 void MapInterpolationVisitor::VisitMapObject(const MapObject & data_object)
 {
     m_sampling_data_list.clear();
-    m_point_list.clear();
     if (m_sampler == nullptr)
     {
         Logger::Log(LogLevel::Warning, "Cannot find any Sampler, skip interpolation.");
         return;
     }
 
-    m_point_list = m_sampler->GenerateSamplingPoints(m_position, m_axis_vector);
-    m_sampling_data_list.reserve(m_point_list.size());
-    for (auto & [distance, point] : m_point_list)
+    const auto sampling_points{ m_sampler->GenerateSamplingPoints(m_position, m_axis_vector) };
+    m_sampling_data_list.reserve(sampling_points.size());
+    for (const auto & [distance, point] : sampling_points)
     {
         auto map_value{ MakeInterpolationInMapObject(data_object, point) };
         m_sampling_data_list.emplace_back(std::make_tuple(distance, map_value));

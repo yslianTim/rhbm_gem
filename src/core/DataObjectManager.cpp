@@ -3,7 +3,7 @@
 #include "FileProcessFactoryResolver.hpp"
 #include "FilePathHelper.hpp"
 #include "DataObjectBase.hpp"
-#include "DataObjectVisitorBase.hpp"
+#include "DataObjectVisitor.hpp"
 #include "DatabaseManager.hpp"
 #include "Logger.hpp"
 
@@ -11,8 +11,69 @@
 #include <utility>
 
 namespace rhbm_gem {
+namespace {
 
-const DataObjectManager::VisitOptions DataObjectManager::kDefaultVisitOptions{};
+template <typename SharedPtrType>
+std::vector<SharedPtrType> BuildDataObjectSnapshot(
+    const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> & data_object_map,
+    std::mutex & map_mutex,
+    const std::vector<std::string> & key_tag_list,
+    bool deterministic_order)
+{
+    std::vector<SharedPtrType> data_object_list;
+    std::lock_guard<std::mutex> lock(map_mutex);
+    if (key_tag_list.empty())
+    {
+        if (deterministic_order)
+        {
+            std::vector<std::string> key_list;
+            key_list.reserve(data_object_map.size());
+            for (const auto & [key, data_object] : data_object_map)
+            {
+                (void)data_object;
+                key_list.push_back(key);
+            }
+            std::sort(key_list.begin(), key_list.end());
+            for (const auto & key : key_list)
+            {
+                auto iter{ data_object_map.find(key) };
+                if (iter != data_object_map.end() && iter->second)
+                {
+                    data_object_list.push_back(iter->second);
+                }
+            }
+        }
+        else
+        {
+            for (const auto & [key, data_object] : data_object_map)
+            {
+                (void)key;
+                if (data_object)
+                {
+                    data_object_list.push_back(data_object);
+                }
+            }
+        }
+        return data_object_list;
+    }
+
+    for (const auto & key : key_tag_list)
+    {
+        auto iter{ data_object_map.find(key) };
+        if (iter == data_object_map.end())
+        {
+            Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
+            continue;
+        }
+        if (iter->second)
+        {
+            data_object_list.push_back(iter->second);
+        }
+    }
+    return data_object_list;
+}
+
+} // namespace
 
 DataObjectManager::DataObjectManager() :
     DataObjectManager(CreateDefaultFileProcessFactoryResolver())
@@ -197,62 +258,18 @@ void DataObjectManager::SaveDataObject(
 
 void DataObjectManager::Accept(
     DataObjectVisitor & visitor,
+    const std::vector<std::string> & key_tag_list)
+{
+    Accept(visitor, key_tag_list, VisitOptions{});
+}
+
+void DataObjectManager::Accept(
+    DataObjectVisitor & visitor,
     const std::vector<std::string> & key_tag_list,
     const VisitOptions & options)
 {
-    std::vector<std::shared_ptr<DataObjectBase>> data_object_list;
-    {
-        std::lock_guard<std::mutex> lock(m_map_mutex);
-        if (key_tag_list.empty())
-        {
-            if (options.deterministic_order)
-            {
-                std::vector<std::string> key_list;
-                key_list.reserve(m_data_object_map.size());
-                for (const auto & [key, data_object] : m_data_object_map)
-                {
-                    (void)data_object;
-                    key_list.push_back(key);
-                }
-                std::sort(key_list.begin(), key_list.end());
-                for (const auto & key : key_list)
-                {
-                    auto iter{ m_data_object_map.find(key) };
-                    if (iter != m_data_object_map.end() && iter->second)
-                    {
-                        data_object_list.push_back(iter->second);
-                    }
-                }
-            }
-            else
-            {
-                for (auto & [key, data_object] : m_data_object_map)
-                {
-                    (void)key;
-                    if (data_object)
-                    {
-                        data_object_list.push_back(data_object);
-                    }
-                }
-            }
-        }
-        else
-        {
-            for (const auto & key : key_tag_list)
-            {
-                auto iter{ m_data_object_map.find(key) };
-                if (iter == m_data_object_map.end())
-                {
-                    Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
-                    continue;
-                }
-                if (iter->second)
-                {
-                    data_object_list.push_back(iter->second);
-                }
-            }
-        }
-    }
+    auto data_object_list{ BuildDataObjectSnapshot<std::shared_ptr<DataObjectBase>>(
+        m_data_object_map, m_map_mutex, key_tag_list, options.deterministic_order) };
     for (auto & data_object : data_object_list)
     {
         data_object->Accept(visitor, options.model_visit_mode);
@@ -261,62 +278,18 @@ void DataObjectManager::Accept(
 
 void DataObjectManager::Accept(
     ConstDataObjectVisitor & visitor,
+    const std::vector<std::string> & key_tag_list) const
+{
+    Accept(visitor, key_tag_list, VisitOptions{});
+}
+
+void DataObjectManager::Accept(
+    ConstDataObjectVisitor & visitor,
     const std::vector<std::string> & key_tag_list,
     const VisitOptions & options) const
 {
-    std::vector<std::shared_ptr<const DataObjectBase>> data_object_list;
-    {
-        std::lock_guard<std::mutex> lock(m_map_mutex);
-        if (key_tag_list.empty())
-        {
-            if (options.deterministic_order)
-            {
-                std::vector<std::string> key_list;
-                key_list.reserve(m_data_object_map.size());
-                for (const auto & [key, data_object] : m_data_object_map)
-                {
-                    (void)data_object;
-                    key_list.push_back(key);
-                }
-                std::sort(key_list.begin(), key_list.end());
-                for (const auto & key : key_list)
-                {
-                    auto iter{ m_data_object_map.find(key) };
-                    if (iter != m_data_object_map.end() && iter->second)
-                    {
-                        data_object_list.push_back(iter->second);
-                    }
-                }
-            }
-            else
-            {
-                for (const auto & [key, data_object] : m_data_object_map)
-                {
-                    (void)key;
-                    if (data_object)
-                    {
-                        data_object_list.push_back(data_object);
-                    }
-                }
-            }
-        }
-        else
-        {
-            for (const auto & key : key_tag_list)
-            {
-                auto iter{ m_data_object_map.find(key) };
-                if (iter == m_data_object_map.end())
-                {
-                    Logger::Log(LogLevel::Warning, "Cannot find the data object with key tag: " + key);
-                    continue;
-                }
-                if (iter->second)
-                {
-                    data_object_list.push_back(iter->second);
-                }
-            }
-        }
-    }
+    auto data_object_list{ BuildDataObjectSnapshot<std::shared_ptr<const DataObjectBase>>(
+        m_data_object_map, m_map_mutex, key_tag_list, options.deterministic_order) };
     for (const auto & data_object : data_object_list)
     {
         data_object->Accept(visitor, options.model_visit_mode);
