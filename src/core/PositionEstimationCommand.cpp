@@ -1,5 +1,5 @@
 #include "PositionEstimationCommand.hpp"
-#include "CommandDataAccessInternal.hpp"
+#include "CommandDataLoaderInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "MapObject.hpp"
 #include "DataObjectManager.hpp"
@@ -176,10 +176,9 @@ bool PositionEstimationCommand::BuildDataObject()
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
-        m_map_object = command_data_access::ProcessTypedFile<MapObject>(
+        m_map_object = command_data_loader::ProcessMapFile(
             m_data_manager, m_options.map_file_path, kMapKey, "map file");
-        MapNormalizeVisitor normalize_visitor;
-        m_map_object->Accept(normalize_visitor);
+        NormalizeMapObject(*m_map_object);
     }
     catch (const std::exception & e)
     {

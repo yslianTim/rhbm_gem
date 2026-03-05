@@ -11,6 +11,7 @@
 #include "GlobalEnumClass.hpp"
 #include "DataObjectManager.hpp"
 #include "Logger.hpp"
+#include "PainterIngestionInternal.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -51,23 +52,26 @@ void ComparisonPainter::SetFolder(const std::string & folder_path)
 
 void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
 {
-    if (data_object == nullptr)
-    {
-        ThrowInvalidType();
-    }
-    m_ingest_mode = IngestMode::Data;
-    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+    painter_internal::AddDataObject(
+        data_object,
+        *this,
+        m_ingest_mode,
+        IngestMode::Data,
+        IngestMode::Reference,
+        m_ingest_label,
+        "ComparisonPainter");
 }
 
 void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    if (data_object == nullptr)
-    {
-        ThrowInvalidType();
-    }
-    m_ingest_mode = IngestMode::Reference;
-    m_ingest_label = label;
-    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+    painter_internal::AddReferenceDataObject(
+        data_object,
+        label,
+        *this,
+        m_ingest_mode,
+        IngestMode::Reference,
+        m_ingest_label,
+        "ComparisonPainter");
 }
 
 void ComparisonPainter::VisitAtomObject(AtomObject & data_object)
@@ -101,13 +105,10 @@ void ComparisonPainter::VisitMapObject(MapObject & data_object)
 
 void ComparisonPainter::ThrowInvalidType() const
 {
-    if (m_ingest_mode == IngestMode::Reference)
-    {
-        throw std::runtime_error(
-            "ComparisonPainter::AddReferenceDataObject(): invalid data_object type");
-    }
-    throw std::runtime_error(
-        "ComparisonPainter::AddDataObject(): invalid data_object type");
+    painter_internal::ThrowInvalidTypeForMode(
+        m_ingest_mode,
+        IngestMode::Reference,
+        "ComparisonPainter");
 }
 
 void ComparisonPainter::Painting()

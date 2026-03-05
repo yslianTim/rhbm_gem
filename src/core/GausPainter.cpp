@@ -15,6 +15,7 @@
 #include "AtomKeySystem.hpp"
 #include "StringHelper.hpp"
 #include "Logger.hpp"
+#include "PainterIngestionInternal.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -57,23 +58,26 @@ void GausPainter::SetFolder(const std::string & folder_path)
 
 void GausPainter::AddDataObject(DataObjectBase * data_object)
 {
-    if (data_object == nullptr)
-    {
-        ThrowInvalidType();
-    }
-    m_ingest_mode = IngestMode::Data;
-    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+    painter_internal::AddDataObject(
+        data_object,
+        *this,
+        m_ingest_mode,
+        IngestMode::Data,
+        IngestMode::Reference,
+        m_ingest_label,
+        "GausPainter");
 }
 
 void GausPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    if (data_object == nullptr)
-    {
-        ThrowInvalidType();
-    }
-    m_ingest_mode = IngestMode::Reference;
-    m_ingest_label = label;
-    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+    painter_internal::AddReferenceDataObject(
+        data_object,
+        label,
+        *this,
+        m_ingest_mode,
+        IngestMode::Reference,
+        m_ingest_label,
+        "GausPainter");
 }
 
 void GausPainter::VisitAtomObject(AtomObject & data_object)
@@ -106,13 +110,10 @@ void GausPainter::VisitMapObject(MapObject & data_object)
 
 void GausPainter::ThrowInvalidType() const
 {
-    if (m_ingest_mode == IngestMode::Reference)
-    {
-        throw std::runtime_error(
-            "GausPainter::AddReferenceDataObject(): invalid data_object type");
-    }
-    throw std::runtime_error(
-        "GausPainter::AddDataObject(): invalid data_object type");
+    painter_internal::ThrowInvalidTypeForMode(
+        m_ingest_mode,
+        IngestMode::Reference,
+        "GausPainter");
 }
 
 void GausPainter::Painting()

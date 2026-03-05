@@ -1,5 +1,5 @@
 #include "PotentialDisplayCommand.hpp"
-#include "CommandDataAccessInternal.hpp"
+#include "CommandDataLoaderInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
@@ -13,6 +13,7 @@
 #include "DemoPainter.hpp"
 #include "StringHelper.hpp"
 #include "AtomSelector.hpp"
+#include "DataObjectWorkflowVisitors.hpp"
 #include "FilePathHelper.hpp"
 #include "Logger.hpp"
 #include "OptionEnumTraits.hpp"
@@ -74,6 +75,25 @@ bool ParseReferenceModelKeyTagListMap(
     }
 
     return true;
+}
+
+void IngestModelSetsToPainter(
+    rhbm_gem::PainterBase & painter,
+    const std::vector<std::shared_ptr<rhbm_gem::ModelObject>> & model_object_list,
+    const std::unordered_map<std::string, std::vector<std::shared_ptr<rhbm_gem::ModelObject>>> &
+        ref_model_object_list_map)
+{
+    for (const auto & model_object : model_object_list)
+    {
+        painter.AddDataObject(model_object.get());
+    }
+    for (const auto & [class_key, ref_model_list] : ref_model_object_list_map)
+    {
+        for (const auto & model_object : ref_model_list)
+        {
+            painter.AddReferenceDataObject(model_object.get(), class_key);
+        }
+    }
 }
 }
 
@@ -245,7 +265,7 @@ bool PotentialDisplayCommand::BuildDataObject()
         {
             Logger::ProgressBar(model_count, model_size);
             m_model_object_list.emplace_back(
-                command_data_access::LoadTypedObject<ModelObject>(
+                command_data_loader::LoadModelObject(
                     m_data_manager, key, "model object"));
             model_count++;
         }
@@ -258,7 +278,7 @@ bool PotentialDisplayCommand::BuildDataObject()
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
                 m_ref_model_object_list_map[map_key].emplace_back(
-                    command_data_access::LoadTypedObject<ModelObject>(
+                    command_data_loader::LoadModelObject(
                         m_data_manager, key_tag, "reference model object"));
                 ref_model_count++;
             }
@@ -289,15 +309,7 @@ void PotentialDisplayCommand::RunDataObjectSelection()
 
     for (const auto & model_object : m_model_object_list)
     {
-        for (auto & atom : model_object->GetAtomList())
-        {
-            atom->SetSelectedFlag(
-                m_atom_selector->GetSelectionFlag(
-                    atom->GetChainID(),
-                    atom->GetResidue(),
-                    atom->GetElement())
-            );
-        }
+        ApplyModelSelection(*model_object, *m_atom_selector);
     }
 }
 
@@ -309,59 +321,19 @@ void PotentialDisplayCommand::RunDisplay()
     {
         case PainterType::GAUS:
             painter = std::make_unique<GausPainter>();
-            for (const auto & model_object : m_model_object_list)
-            {
-                painter->AddDataObject(model_object.get());
-            }
-            for (auto & [class_key, model_object_list] : m_ref_model_object_list_map)
-            {
-                for (const auto & model_object : model_object_list)
-                {
-                    painter->AddReferenceDataObject(model_object.get(), class_key);
-                }
-            }
+            IngestModelSetsToPainter(*painter, m_model_object_list, m_ref_model_object_list_map);
             break;
         case PainterType::MODEL:
             painter = std::make_unique<ModelPainter>();
-            for (const auto & model_object : m_model_object_list)
-            {
-                painter->AddDataObject(model_object.get());
-            }
-            for (auto & [class_key, model_object_list] : m_ref_model_object_list_map)
-            {
-                for (const auto & model_object : model_object_list)
-                {
-                    painter->AddReferenceDataObject(model_object.get(), class_key);
-                }
-            }
+            IngestModelSetsToPainter(*painter, m_model_object_list, m_ref_model_object_list_map);
             break;
         case PainterType::COMPARISON:
             painter = std::make_unique<ComparisonPainter>();
-            for (const auto & model_object : m_model_object_list)
-            {
-                painter->AddDataObject(model_object.get());
-            }
-            for (auto & [class_key, model_object_list] : m_ref_model_object_list_map)
-            {
-                for (const auto & model_object : model_object_list)
-                {
-                    painter->AddReferenceDataObject(model_object.get(), class_key);
-                }
-            }
+            IngestModelSetsToPainter(*painter, m_model_object_list, m_ref_model_object_list_map);
             break;
         case PainterType::DEMO:
             painter = std::make_unique<DemoPainter>();
-            for (const auto & model_object : m_model_object_list)
-            {
-                painter->AddDataObject(model_object.get());
-            }
-            for (auto & [class_key, model_object_list] : m_ref_model_object_list_map)
-            {
-                for (const auto & model_object : model_object_list)
-                {
-                    painter->AddReferenceDataObject(model_object.get(), class_key);
-                }
-            }
+            IngestModelSetsToPainter(*painter, m_model_object_list, m_ref_model_object_list_map);
             break;
         case PainterType::ATOM:
             painter = std::make_unique<AtomPainter>();

@@ -1,5 +1,5 @@
 #include "MapVisualizationCommand.hpp"
-#include "CommandDataAccessInternal.hpp"
+#include "CommandDataLoaderInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
@@ -146,9 +146,9 @@ bool MapVisualizationCommand::BuildDataObject()
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        m_model_object = command_data_access::ProcessTypedFile<ModelObject>(
+        m_model_object = command_data_loader::ProcessModelFile(
             m_data_manager, m_options.model_file_path, m_model_key_tag, "model file");
-        m_map_object = command_data_access::ProcessTypedFile<MapObject>(
+        m_map_object = command_data_loader::ProcessMapFile(
             m_data_manager, m_options.map_file_path, m_map_key_tag, "map file");
     }
     catch (const std::exception & e)
@@ -163,8 +163,7 @@ bool MapVisualizationCommand::BuildDataObject()
 void MapVisualizationCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
-    MapNormalizeVisitor normalize_visitor;
-    m_map_object->Accept(normalize_visitor);
+    NormalizeMapObject(*m_map_object);
 }
 
 void MapVisualizationCommand::RunModelObjectPreprocessing()
@@ -174,8 +173,7 @@ void MapVisualizationCommand::RunModelObjectPreprocessing()
     options.select_all_atoms = true;
     options.select_all_bonds = true;
     options.update_model = true;
-    ModelPreparationVisitor model_preparation_visitor{ options };
-    m_model_object->Accept(model_preparation_visitor, ModelVisitMode::SelfOnly);
+    PrepareModelObject(*m_model_object, options);
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
     Logger::Log(LogLevel::Info,

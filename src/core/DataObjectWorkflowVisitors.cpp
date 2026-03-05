@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "AtomObject.hpp"
+#include "AtomSelector.hpp"
 #include "BondObject.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "MapObject.hpp"
@@ -122,6 +123,45 @@ void ModelPreparationVisitor::VisitMapObject(MapObject & data_object)
     ThrowUnsupportedType("ModelPreparationVisitor", "ModelObject");
 }
 
+ModelSelectionVisitor::ModelSelectionVisitor(::AtomSelector * selector) :
+    m_selector{ selector }
+{
+}
+
+void ModelSelectionVisitor::VisitAtomObject(AtomObject & data_object)
+{
+    (void)data_object;
+    ThrowUnsupportedType("ModelSelectionVisitor", "ModelObject");
+}
+
+void ModelSelectionVisitor::VisitBondObject(BondObject & data_object)
+{
+    (void)data_object;
+    ThrowUnsupportedType("ModelSelectionVisitor", "ModelObject");
+}
+
+void ModelSelectionVisitor::VisitModelObject(ModelObject & data_object)
+{
+    if (m_selector == nullptr)
+    {
+        throw std::logic_error("ModelSelectionVisitor requires a non-null AtomSelector.");
+    }
+    for (auto & atom : data_object.GetAtomList())
+    {
+        atom->SetSelectedFlag(
+            m_selector->GetSelectionFlag(
+                atom->GetChainID(),
+                atom->GetResidue(),
+                atom->GetElement()));
+    }
+}
+
+void ModelSelectionVisitor::VisitMapObject(MapObject & data_object)
+{
+    (void)data_object;
+    ThrowUnsupportedType("ModelSelectionVisitor", "ModelObject");
+}
+
 MapSamplingWorkflow::MapSamplingWorkflow(::SamplerBase * sampler) :
     m_interpolation_visitor{ sampler }
 {
@@ -136,6 +176,24 @@ std::vector<std::tuple<float, float>> MapSamplingWorkflow::Sample(
     m_interpolation_visitor.SetAxisVector(axis_vector);
     map_object.Accept(m_interpolation_visitor);
     return m_interpolation_visitor.ConsumeSamplingDataList();
+}
+
+void NormalizeMapObject(MapObject & map_object)
+{
+    MapNormalizeVisitor visitor;
+    map_object.Accept(visitor);
+}
+
+void PrepareModelObject(ModelObject & model_object, const ModelPreparationOptions & options)
+{
+    ModelPreparationVisitor visitor{ options };
+    model_object.Accept(visitor, ModelVisitMode::SelfOnly);
+}
+
+void ApplyModelSelection(ModelObject & model_object, ::AtomSelector & selector)
+{
+    ModelSelectionVisitor visitor{ &selector };
+    model_object.Accept(visitor, ModelVisitMode::SelfOnly);
 }
 
 } // namespace rhbm_gem

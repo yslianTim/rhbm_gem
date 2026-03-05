@@ -1,5 +1,5 @@
 #include "MapSimulationCommand.hpp"
-#include "CommandDataAccessInternal.hpp"
+#include "CommandDataLoaderInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
@@ -217,7 +217,7 @@ bool MapSimulationCommand::BuildDataObject()
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
-        m_model_object = command_data_access::ProcessTypedFile<ModelObject>(
+        m_model_object = command_data_loader::ProcessModelFile(
             m_data_manager, m_options.model_file_path, kModelKey, "model file");
         BuildAtomList(m_model_object.get());
     }

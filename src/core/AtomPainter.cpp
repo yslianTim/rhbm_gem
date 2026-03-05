@@ -5,6 +5,7 @@
 #include "FilePathHelper.hpp"
 #include "ArrayStats.hpp"
 #include "Logger.hpp"
+#include "PainterIngestionInternal.hpp"
 
 #ifdef HAVE_ROOT
 #include "ROOTHelper.hpp"
@@ -45,23 +46,26 @@ void AtomPainter::SetFolder(const std::string & folder_path)
 
 void AtomPainter::AddDataObject(DataObjectBase * data_object)
 {
-    if (data_object == nullptr)
-    {
-        ThrowInvalidType();
-    }
-    m_ingest_mode = IngestMode::Data;
-    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+    painter_internal::AddDataObject(
+        data_object,
+        *this,
+        m_ingest_mode,
+        IngestMode::Data,
+        IngestMode::Reference,
+        m_ingest_label,
+        "AtomPainter");
 }
 
 void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    if (data_object == nullptr)
-    {
-        ThrowInvalidType();
-    }
-    m_ingest_mode = IngestMode::Reference;
-    m_ingest_label = label;
-    data_object->Accept(*this, ModelVisitMode::SelfOnly);
+    painter_internal::AddReferenceDataObject(
+        data_object,
+        label,
+        *this,
+        m_ingest_mode,
+        IngestMode::Reference,
+        m_ingest_label,
+        "AtomPainter");
 }
 
 void AtomPainter::VisitAtomObject(AtomObject & data_object)
@@ -96,13 +100,10 @@ void AtomPainter::VisitMapObject(MapObject & data_object)
 
 void AtomPainter::ThrowInvalidType() const
 {
-    if (m_ingest_mode == IngestMode::Reference)
-    {
-        throw std::runtime_error(
-            "AtomPainter::AddReferenceDataObject(): invalid data_object type");
-    }
-    throw std::runtime_error(
-        "AtomPainter::AddDataObject(): invalid data_object type");
+    painter_internal::ThrowInvalidTypeForMode(
+        m_ingest_mode,
+        IngestMode::Reference,
+        "AtomPainter");
 }
 
 void AtomPainter::Painting()

@@ -1,5 +1,5 @@
 #include "ResultDumpCommand.hpp"
-#include "CommandDataAccessInternal.hpp"
+#include "CommandDataLoaderInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "AtomObject.hpp"
@@ -129,12 +129,12 @@ bool ResultDumpCommand::BuildDataObjectList()
     try
     {
         RequireDatabaseManager();
-        m_map_object = command_data_access::OptionalProcessTypedFile<MapObject>(
+        m_map_object = command_data_loader::OptionalProcessMapFile(
             m_data_manager, m_options.map_file_path, m_map_key_tag, "map file");
         m_selected_atom_list_map.clear();
         for (auto & key : m_options.model_key_tag_list)
         {
-            auto model_object{ command_data_access::LoadTypedObject<ModelObject>(
+            auto model_object{ command_data_loader::LoadModelObject(
                 m_data_manager, key, "model object") };
             m_model_object_list.emplace_back(model_object);
             for (auto & atom : model_object->GetAtomList())

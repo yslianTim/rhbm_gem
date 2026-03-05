@@ -15,6 +15,7 @@
 
 #include "AtomObject.hpp"
 #include "AtomPainter.hpp"
+#include "AtomSelector.hpp"
 #include "BondObject.hpp"
 #include "ComparisonPainter.hpp"
 #include "CommandTestHelpers.hpp"
@@ -393,6 +394,23 @@ TEST(DataObjectVisitorArchitectureTest, ManagerAcceptUsesSnapshotSoClearCanRunCo
     EXPECT_EQ(visitor.Key(), "model");
 }
 
+TEST(DataObjectVisitorArchitectureTest, ManagerAcceptTraversalMatchesDirectAcceptForSamePolicy)
+{
+    rg::DataObjectManager manager;
+    manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model");
+    auto model{ manager.GetTypedDataObject<rg::ModelObject>("model") };
+
+    EventVisitor direct_visitor;
+    model->Accept(direct_visitor, rg::ModelVisitMode::AtomsAndBondsThenSelf);
+
+    rg::DataObjectManager::VisitOptions options;
+    options.model_visit_mode = rg::ModelVisitMode::AtomsAndBondsThenSelf;
+    EventVisitor manager_visitor;
+    manager.Accept(manager_visitor, { "model" }, options);
+
+    EXPECT_EQ(manager_visitor.events, direct_visitor.events);
+}
+
 TEST(DataObjectVisitorArchitectureTest, MapInterpolationVisitorFailsFastOnUnsupportedDataObjectType)
 {
     SinglePointSampler sampler;
@@ -475,6 +493,31 @@ TEST(DataObjectVisitorArchitectureTest, ModelBasedPaintersDispatchByVisitorAndRe
     EXPECT_THROW(demo_painter.AddDataObject(&atom), std::runtime_error);
 }
 
+TEST(DataObjectVisitorArchitectureTest, PainterNullIngestUsesModeSpecificErrorMessage)
+{
+    rg::ModelPainter painter;
+
+    try
+    {
+        painter.AddDataObject(nullptr);
+        FAIL() << "Expected AddDataObject(nullptr) to throw.";
+    }
+    catch (const std::runtime_error & ex)
+    {
+        EXPECT_NE(std::string(ex.what()).find("AddDataObject"), std::string::npos);
+    }
+
+    try
+    {
+        painter.AddReferenceDataObject(nullptr, "ref");
+        FAIL() << "Expected AddReferenceDataObject(nullptr, ...) to throw.";
+    }
+    catch (const std::runtime_error & ex)
+    {
+        EXPECT_NE(std::string(ex.what()).find("AddReferenceDataObject"), std::string::npos);
+    }
+}
+
 TEST(DataObjectVisitorArchitectureTest, MapNormalizeVisitorNormalizesMapValues)
 {
     auto map{ MakeMapObject() };
@@ -484,6 +527,18 @@ TEST(DataObjectVisitorArchitectureTest, MapNormalizeVisitorNormalizesMapValues)
 
     rg::MapNormalizeVisitor visitor;
     map.Accept(visitor);
+
+    EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
+}
+
+TEST(DataObjectVisitorArchitectureTest, NormalizeMapObjectFacadeNormalizesMapValues)
+{
+    auto map{ MakeMapObject() };
+    const auto original_value{ map.GetMapValue(0) };
+    const auto original_sd{ map.GetMapValueSD() };
+    ASSERT_GT(original_sd, 0.0f);
+
+    rg::NormalizeMapObject(map);
 
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
 }
@@ -519,6 +574,37 @@ TEST(DataObjectVisitorArchitectureTest, ModelPreparationVisitorSelectsAndInitial
         ASSERT_NE(bond, nullptr);
         EXPECT_NE(bond->GetLocalPotentialEntry(), nullptr);
     }
+}
+
+TEST(DataObjectVisitorArchitectureTest, PrepareModelObjectFacadeUsesSelfOnlyTraversalPolicy)
+{
+    auto model{ MakeModelWithBond() };
+    rg::ModelPreparationOptions options;
+    options.select_all_atoms = true;
+    options.select_all_bonds = true;
+    options.update_model = true;
+
+    EXPECT_NO_THROW(rg::PrepareModelObject(*model, options));
+    EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
+    EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
+}
+
+TEST(DataObjectVisitorArchitectureTest, ApplyModelSelectionSelectsByAtomSelectorRules)
+{
+    auto model{ MakeModelWithBond() };
+    auto & atom_list{ model->GetAtomList() };
+    ASSERT_EQ(atom_list.size(), 2);
+    atom_list.at(0)->SetChainID("A");
+    atom_list.at(1)->SetChainID("B");
+    atom_list.at(0)->SetSelectedFlag(false);
+    atom_list.at(1)->SetSelectedFlag(true);
+
+    ::AtomSelector selector;
+    selector.PickChainID("A");
+    rg::ApplyModelSelection(*model, selector);
+
+    EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
+    EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
 }
 
 TEST(DataObjectVisitorArchitectureTest, MapSamplingWorkflowProducesSamplingOutput)

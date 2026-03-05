@@ -117,7 +117,7 @@ This is the smallest useful implementation shape. It shows where option registra
 ```cpp
 #include "ExampleCommand.hpp"
 
-#include "CommandDataAccessInternal.hpp"
+#include "CommandDataLoaderInternal.hpp"
 #include "CommandOptionBinding.hpp"
 #include "DataObjectManager.hpp"
 #include "Logger.hpp"
@@ -232,7 +232,7 @@ bool ExampleCommand::BuildDataObject()
     ScopeTimer timer("ExampleCommand::BuildDataObject");
     try
     {
-        m_model_object = command_data_access::ProcessTypedFile<ModelObject>(
+        m_model_object = command_data_loader::ProcessModelFile(
             m_data_manager,
             m_options.input_file_path,
             kInputKey,
@@ -305,7 +305,9 @@ Use the existing command-facing boundaries rather than building a parallel loadi
 
 For file-driven commands:
 
-- prefer `command_data_access::ProcessTypedFile<T>(...)`
+- prefer non-template loaders from `CommandDataLoaderInternal.hpp`, for example
+  `command_data_loader::ProcessModelFile(...)` and
+  `command_data_loader::ProcessMapFile(...)`
 - use `m_data_manager` as the owner of processed objects
 
 For database-backed commands:

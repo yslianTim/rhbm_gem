@@ -51,3 +51,25 @@ TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError)
     EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(issue_iter->level, LogLevel::Error);
 }
+
+TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareValidation)
+{
+    rg::PotentialDisplayCommand command;
+    command.SetPainterChoice(rg::PainterType::MODEL);
+    command.SetModelKeyTagList("model_key");
+    command.SetRefModelKeyTagListMap("[with_charge]ref_a,ref_b;[no_charge]ref_c");
+
+    EXPECT_TRUE(command.PrepareForExecution());
+
+    const auto & issues{ command.GetValidationIssues() };
+    const auto issue_iter{
+        std::find_if(
+            issues.begin(),
+            issues.end(),
+            [](const rg::ValidationIssue & issue)
+            {
+                return issue.option_name == "--ref-model-keylist" && issue.level == LogLevel::Error;
+            })
+    };
+    EXPECT_EQ(issue_iter, issues.end());
+}

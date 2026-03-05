@@ -211,6 +211,17 @@ Behavior:
 - executes `map.Accept(visitor)`
 - returns sampled tuples via `ConsumeSamplingDataList()`
 
+### 6.5 Painter Ingestion Callbacks
+
+Built-in painters (`AtomPainter`, `ModelPainter`, `GausPainter`,
+`ComparisonPainter`, `DemoPainter`) implement `DataObjectVisitor` for
+ingestion dispatch.
+
+Usage rule:
+
+- call `AddDataObject(...)` / `AddReferenceDataObject(...)` from command workflows
+- treat `Visit*Object(...)` overrides as callback-only implementation details
+
 ## 7. Extension Playbook
 
 ### 7.1 Add a New Visitor
