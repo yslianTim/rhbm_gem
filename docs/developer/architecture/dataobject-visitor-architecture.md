@@ -1,13 +1,13 @@
-# DataObject Visitor Architecture Guide
+# DataObject Visitor Developer Manual
 
-This document describes the current Visitor architecture around `DataObjectBase`.
+This manual describes how the current `DataObject` visitor system works and how to extend it safely.
 
 Use this document when you need to:
 
-- understand how `Accept()` and `Visit*Object()` are wired
-- add a new visitor implementation
-- extend `DataObjectBase` with a new concrete type
-- reason about traversal order and const/non-const visitation contracts
+- traverse `DataObject` instances through `Accept(...)`
+- choose a `ModelVisitMode` for `ModelObject` traversal
+- run visitors through `DataObjectManager`
+- implement a new visitor or add a new `DataObject` subtype
 
 Read with:
 
@@ -16,21 +16,42 @@ Read with:
 
 ## 1. Scope
 
-This guide focuses on runtime traversal and operation dispatch for:
+This document covers runtime dispatch and traversal only:
 
 - `DataObjectBase`
-- visitor interfaces (`DataObjectVisitor`, `ConstDataObjectVisitor`)
-- concrete data objects (`AtomObject`, `BondObject`, `ModelObject`, `MapObject`)
-- manager-level traversal (`DataObjectManager::Accept`)
-- active map sampling visitor (`MapInterpolationVisitor`)
+- `DataObjectVisitor` and `ConstDataObjectVisitor`
+- concrete objects: `AtomObject`, `BondObject`, `ModelObject`, `MapObject`
+- manager traversal entry points: `DataObjectManager::Accept(...)`
+- map sampling visitor: `MapInterpolationVisitor`
 
-Persistence internals are out of scope. See `dataobject-io-architecture.md` for DB/file pipelines.
+Persistence and file/database pipelines are out of scope.
 
-## 2. Core Contracts
+## 2. Quick Start
 
-### 2.1 `DataObjectBase`
+Direct traversal from a concrete/top-level object:
 
-`DataObjectBase` now exposes reference-based, non-null visitor APIs with both mutable and const paths:
+```cpp
+MyVisitor visitor;  // custom DataObjectVisitor implementation
+model.Accept(visitor, ModelVisitMode::AtomsAndBondsThenSelf);
+```
+
+Manager-level traversal with explicit policy:
+
+```cpp
+DataObjectManager manager;
+DataObjectManager::VisitOptions options;
+options.deterministic_order = true;
+options.model_visit_mode = ModelVisitMode::SelfOnly;
+
+MyVisitor visitor;  // custom DataObjectVisitor implementation
+manager.Accept(visitor, {}, options);
+```
+
+## 3. Core Contracts
+
+### 3.1 `DataObjectBase`
+
+All `DataObject` types must implement:
 
 ```cpp
 virtual void Accept(DataObjectVisitor & visitor) = 0;
@@ -39,75 +60,60 @@ virtual void Accept(DataObjectVisitor & visitor, ModelVisitMode model_mode) = 0;
 virtual void Accept(ConstDataObjectVisitor & visitor, ModelVisitMode model_mode) const = 0;
 ```
 
-`model_mode` is consumed by `ModelObject` and ignored by non-model objects.
+Rules:
 
-### 2.2 Visitor Interfaces
+- visitor is passed by reference (non-null by type)
+- `model_mode` is meaningful for `ModelObject`
+- non-model objects accept `model_mode` but ignore it
 
-Two visitor interfaces are provided:
+### 3.2 Visitor Interfaces
 
-- `DataObjectVisitor` (mutable traversal)
-- `ConstDataObjectVisitor` (read-only traversal)
+Two pure-virtual contracts exist:
 
-Both are pure virtual and require full type coverage:
+- `DataObjectVisitor` (mutable)
+- `ConstDataObjectVisitor` (read-only)
+
+Both require full coverage:
 
 - `VisitAtomObject(...)`
 - `VisitBondObject(...)`
 - `VisitModelObject(...)`
 - `VisitMapObject(...)`
 
-Design implication:
+There is no default no-op handler.
 
-- missing handler implementation is now a compile-time error
-- there is no no-op default behavior
+### 3.3 Dispatch Model
 
-## 3. Dispatch Model
-
-The project uses double dispatch:
+Dispatch is double dispatch:
 
 1. caller holds `DataObjectBase` polymorphically
-2. concrete `Accept(...)` resolves by object dynamic type
-3. `Accept(...)` calls `visitor.VisitXxxObject(*this)`
-4. concrete visitor logic resolves by visitor dynamic type
+2. `Accept(...)` resolves by object dynamic type
+3. concrete object calls `visitor.VisitXxxObject(*this)`
+4. visitor implementation resolves by visitor dynamic type
 
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant Base as DataObjectBase
-    participant Obj as ConcreteObject
-    participant V as Visitor
+## 4. Traversal Rules by Object Type
 
-    Caller->>Base: Accept(V)
-    Base->>Obj: virtual dispatch
-    Obj->>V: VisitXxxObject(*this)
-```
-
-## 4. Concrete Object Behavior
-
-| Concrete type | `Accept(visitor)` behavior | `model_mode` handling |
+| Object type | `Accept(visitor)` behavior | `Accept(visitor, model_mode)` behavior |
 | --- | --- | --- |
-| `AtomObject` | `VisitAtomObject(*this)` | ignored |
-| `BondObject` | `VisitBondObject(*this)` | ignored |
-| `MapObject` | `VisitMapObject(*this)` | ignored |
-| `ModelObject` | legacy default = `AtomsThenSelf` | applies selected `ModelVisitMode` |
+| `AtomObject` | `VisitAtomObject(*this)` | same as left (`model_mode` ignored) |
+| `BondObject` | `VisitBondObject(*this)` | same as left (`model_mode` ignored) |
+| `MapObject` | `VisitMapObject(*this)` | same as left (`model_mode` ignored) |
+| `ModelObject` | equivalent to `AtomsThenSelf` | follows `ModelVisitMode` |
 
-## 5. `ModelObject` Traversal Policy
+`ModelVisitMode` traversal order:
 
-`ModelVisitMode` values:
+| Mode | Visit order |
+| --- | --- |
+| `AtomsThenSelf` | all atoms -> model |
+| `BondsThenSelf` | all bonds -> model |
+| `AtomsAndBondsThenSelf` | all atoms -> all bonds -> model |
+| `SelfOnly` | model only |
 
-- `AtomsThenSelf` (legacy default)
-- `BondsThenSelf`
-- `AtomsAndBondsThenSelf`
-- `SelfOnly`
+Compatibility behavior: `model.Accept(visitor)` keeps legacy `AtomsThenSelf` behavior.
 
-Compatibility rule:
+## 5. Manager Traversal (`DataObjectManager`)
 
-- existing `model.Accept(visitor)` still maps to `AtomsThenSelf`
-
-Both mutable and const visitor flows support the same policy matrix.
-
-## 6. Manager Traversal (`DataObjectManager`)
-
-Public APIs:
+Overloads exist for both mutable and const visitors:
 
 ```cpp
 void Accept(DataObjectVisitor & visitor,
@@ -130,70 +136,66 @@ void Accept(ConstDataObjectVisitor & visitor,
 - `bool deterministic_order = true`
 - `ModelVisitMode model_visit_mode = ModelVisitMode::AtomsThenSelf`
 
-Behavior:
+Operational behavior:
 
-- snapshot uses `shared_ptr` under lock, traversal runs after lock release
-- empty `key_tag_list`:
-  - `deterministic_order = true`: key-sorted traversal
-  - `deterministic_order = false`: underlying map iteration order
-- non-empty `key_tag_list`: preserve caller-provided order
-- missing key logs warning and continues
-- manager dispatches through policy-aware base `Accept(...)` without RTTI branching
+- traversal uses a snapshot of `shared_ptr` entries built under lock
+- actual `Accept(...)` calls run after lock release
+- empty `key_tag_list` + `deterministic_order=true`: key-sorted traversal
+- empty `key_tag_list` + `deterministic_order=false`: underlying `unordered_map` iteration order
+- non-empty `key_tag_list`: preserves caller order
+- missing keys emit warning logs and are skipped
 
-## 7. `MapInterpolationVisitor`
+## 6. `MapInterpolationVisitor` Usage
 
-`MapInterpolationVisitor` is a `ConstDataObjectVisitor` implementation used by map analysis workflows.
+`MapInterpolationVisitor` is the active production `ConstDataObjectVisitor` implementation.
 
-Contract:
+Supported visit target:
 
-- only `VisitMapObject(const MapObject &)` is supported
-- `VisitAtomObject`, `VisitBondObject`, `VisitModelObject` throw `std::logic_error`
+- `VisitMapObject(const MapObject &)`
 
-State/output API:
+Unsupported targets:
 
+- `VisitAtomObject(...)`, `VisitBondObject(...)`, `VisitModelObject(...)` throw `std::logic_error`
+
+State and output APIs:
+
+- `SetPosition(...)`
+- `SetAxisVector(...)`
 - `GetSamplingDataList()` for read-only access
 - `ConsumeSamplingDataList()` for move-out transfer
 
-`MoveSamplingDataList()` has been removed.
+Behavior notes:
 
-## 8. Extension Guide
+- every `VisitMapObject(...)` clears previous sampling output first
+- null sampler logs warning and returns empty output
+- visitor instances are stateful; reuse intentionally and consume/reset output between runs
 
-### 8.1 Add a New Visitor
+## 7. Extension Playbook
+
+### 7.1 Add a New Visitor
 
 1. Derive from `DataObjectVisitor` or `ConstDataObjectVisitor`.
 2. Implement all required `Visit*Object(...)` methods.
-3. Keep visitor state explicit and reset on each logical run.
-4. Add tests for visited-type coverage and traversal order assumptions.
+3. Keep mutable state explicit and reset/consume per logical run.
+4. Add/adjust tests for traversal order and visited-type behavior.
 
-### 8.2 Add a New `DataObject` Type
+### 7.2 Add a New `DataObject` Type
 
-1. Derive from `DataObjectBase` and implement all required `Accept(...)` variants.
-2. Add new pure-virtual visit methods to both visitor interfaces.
-3. Update all visitors and tests to satisfy the new compile-time contract.
-4. Update architecture docs and diagrams.
+1. Add new concrete type derived from `DataObjectBase`.
+2. Implement all four `Accept(...)` overloads.
+3. Add new visit methods to both visitor interfaces.
+4. Update all visitor implementations and compile-failing call sites.
+5. Add/adjust architecture tests and docs.
 
-## 9. Migration Notes (Breaking)
+## 8. Key Files
 
-- `DataObjectVisitorBase` and `StrictDataObjectVisitorBase` are removed.
-- Visitor passing changed from pointer to reference.
-- Null visitor checks are removed as a runtime concern; non-null is a type-level guarantee.
-- `MapInterpolationVisitor::MoveSamplingDataList()` is removed; use `ConsumeSamplingDataList()`.
-
-## 10. Known Constraints
-
-- visitor interfaces require explicit full coverage, which increases boilerplate for small visitors
-- map iteration non-determinism is still possible when `deterministic_order=false`
-- const and non-const visitor implementations are separate contracts by design
-
-## 11. Key Files
-
-Core interfaces:
+Core contracts:
 
 - `include/data/DataObjectBase.hpp`
 - `include/data/DataObjectVisitor.hpp`
 - `include/data/ModelVisitMode.hpp`
 
-Concrete dispatch:
+Concrete `Accept(...)` behavior:
 
 - `src/data/AtomObject.cpp`
 - `src/data/BondObject.cpp`
@@ -212,3 +214,7 @@ Active visitor and call sites:
 - `src/core/PotentialAnalysisCommand.cpp`
 - `src/core/PotentialAnalysisBondWorkflow.cpp`
 - `src/core/MapVisualizationCommand.cpp`
+
+Architecture regression tests:
+
+- `tests/DataObjectVisitorArchitecture_test.cpp`
