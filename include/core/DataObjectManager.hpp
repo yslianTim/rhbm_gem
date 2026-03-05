@@ -38,7 +38,6 @@ public:
     void Accept(DataObjectVisitorBase * visitor, const std::vector<std::string> & key_tag_list={});
     std::shared_ptr<DataObjectBase> GetDataObject(const std::string & key_tag);
     std::shared_ptr<const DataObjectBase> GetDataObject(const std::string & key_tag) const;
-    DatabaseManager * GetDatabaseManager() const;
     template <typename TypedDataObject>
     std::shared_ptr<TypedDataObject> GetTypedDataObject(const std::string & key_tag)
     {
@@ -55,7 +54,6 @@ public:
         if (!typed_object) throw std::runtime_error("Invalid data type for " + key_tag);
         return typed_object;
     }
-    const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> & GetDataObjectMap() const;
 
 private:
     bool AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object);

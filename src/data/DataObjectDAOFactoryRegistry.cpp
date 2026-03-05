@@ -15,8 +15,16 @@ bool DataObjectDAOFactoryRegistry::RegisterFactory(
     std::type_index type, const std::string & name,
     std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)> factory)
 {
+    if (m_factory_map.find(type) != m_factory_map.end())
+    {
+        throw std::runtime_error("DataObjectDAO factory type already registered: " + std::string(type.name()));
+    }
+    if (m_name_map.find(name) != m_name_map.end())
+    {
+        throw std::runtime_error("DataObjectDAO factory name already registered: " + name);
+    }
     FactoryInfo info{ name, std::move(factory) };
-    m_factory_map[type] = std::move(info);
+    m_factory_map.emplace(type, std::move(info));
     m_name_map.emplace(name, type);
     return true;
 }

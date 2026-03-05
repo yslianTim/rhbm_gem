@@ -1,6 +1,7 @@
 #include "MrcFormat.hpp"
 #include "Logger.hpp"
 #include "MapObject.hpp"
+#include "map_io/MapAxisOrderHelper.hpp"
 
 #include <sstream>
 #include <fstream>
@@ -191,11 +192,17 @@ void MrcFormat::LoadDataArray(std::istream & stream)
         stream.seekg(m_header.extra_size, std::ios::cur);
     }
     
-    size_t num_voxels{
-        static_cast<size_t>(m_header.array_size[0]) *
-        static_cast<size_t>(m_header.array_size[1]) *
-        static_cast<size_t>(m_header.array_size[2])
+    const std::array<int, 3> array_size{
+        m_header.array_size[0],
+        m_header.array_size[1],
+        m_header.array_size[2]
     };
+    const std::array<int, 3> axis_order{
+        m_header.axis[0],
+        m_header.axis[1],
+        m_header.axis[2]
+    };
+    const size_t num_voxels{ map_io::CountVoxelCount(array_size) };
     
     size_t element_size{ GetElementSize() };
     size_t total_bytes{ num_voxels * element_size };
@@ -216,53 +223,16 @@ void MrcFormat::LoadDataArray(std::istream & stream)
             throw std::runtime_error("Unsupported MODE in LoadDataArray");
     }
 
-    if (m_header.axis[0] == 1 && m_header.axis[1] == 2 && m_header.axis[2] == 3)
+    if (map_io::IsCanonicalAxisOrder(axis_order))
     {
         // Data is already in X->Y->Z order, no reordering needed
         m_data_array = std::move(raw_data);
         return;
     }
 
-    // Build mapping from X/Y/Z axis to column/row/section positions
-    int axis_to_index[3];
-    for (int i = 0; i < 3; i++)
-    {
-        // axis values are 1-based, convert to 0-based indices
-        axis_to_index[m_header.axis[i] - 1] = i;
-    }
-
-    // Determine dimension sizes in canonical X,Y,Z order
-    size_t dims[3]{
-        static_cast<size_t>(m_header.array_size[axis_to_index[0]]),
-        static_cast<size_t>(m_header.array_size[axis_to_index[1]]),
-        static_cast<size_t>(m_header.array_size[axis_to_index[2]])
+    auto reordered_array{
+        map_io::ReorderToCanonicalXYZ(raw_data.get(), array_size, axis_order)
     };
-
-    // Compute strides for each axis in the source buffer
-    size_t src_stride[3];
-    size_t stride_acc{ 1 };
-    for (int i = 0; i < 3; ++i)
-    {
-        src_stride[m_header.axis[i] - 1] = stride_acc;
-        stride_acc *= static_cast<size_t>(m_header.array_size[i]);
-    }
-
-    // Allocate destination array and reorder data into X->Y->Z order
-    auto reordered_array{ std::make_unique<float[]>(num_voxels) };
-    for (size_t z = 0; z < dims[2]; z++)
-    {
-        size_t src_off_z{ z * src_stride[2] };
-        size_t dst_off_z{ z * dims[0] * dims[1] };
-        for (size_t y = 0; y < dims[1]; y++)
-        {
-            size_t src_off_y{ src_off_z + y * src_stride[1] };
-            size_t dst_off_y{ dst_off_z + y * dims[0] };
-            for (size_t x = 0; x < dims[0]; x++)
-            {
-                reordered_array[dst_off_y + x] = raw_data[src_off_y + x * src_stride[0]];
-            }
-        }
-    }
 
     // Update header to reflect canonical axis order and dimensions
     ReorderedAxisRelatedParameters();
@@ -272,9 +242,12 @@ void MrcFormat::LoadDataArray(std::istream & stream)
 
 void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & stream)
 {
-    size_t expected_voxels{ static_cast<size_t>(m_header.array_size[0]) *
-                            static_cast<size_t>(m_header.array_size[1]) *
-                            static_cast<size_t>(m_header.array_size[2]) };
+    const std::array<int, 3> array_size{
+        m_header.array_size[0],
+        m_header.array_size[1],
+        m_header.array_size[2]
+    };
+    size_t expected_voxels{ map_io::CountVoxelCount(array_size) };
     if (size != expected_voxels)
     {
         throw std::runtime_error("SaveDataArray: voxel count does not match header");

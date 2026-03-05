@@ -23,6 +23,7 @@ namespace
     struct TableColumnInfo
     {
         std::string name;
+        int not_null;
         int primary_key_index;
     };
 
@@ -105,6 +106,7 @@ namespace
             column_info_list.push_back(
                 TableColumnInfo{
                     database.GetColumn<std::string>(1),
+                    database.GetColumn<int>(3),
                     database.GetColumn<int>(5)
                 });
         }
@@ -222,262 +224,6 @@ namespace
         }
     }
 
-    std::string BuildCreateModelShadowTableSql(
-        std::string_view canonical_table_name,
-        const std::string & suffix)
-    {
-        const auto table_name{ std::string(canonical_table_name) + suffix };
-        const auto object_catalog_table_name{ "object_catalog" + suffix };
-        const auto model_root_table_name{ "model_object" + suffix };
-
-        if (canonical_table_name == "model_object")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT PRIMARY KEY REFERENCES " + object_catalog_table_name + "(key_tag) ON DELETE CASCADE, "
-                "atom_size INTEGER, "
-                "pdb_id TEXT, "
-                "emd_id TEXT, "
-                "map_resolution DOUBLE, "
-                "resolution_method TEXT"
-                ");";
-        }
-        if (canonical_table_name == "model_chain_map")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "entity_id TEXT, "
-                "chain_ordinal INTEGER, "
-                "chain_id TEXT, "
-                "PRIMARY KEY (key_tag, entity_id, chain_ordinal), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_component")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "component_key INTEGER, "
-                "id TEXT, "
-                "name TEXT, "
-                "type TEXT, "
-                "formula TEXT, "
-                "molecular_weight DOUBLE, "
-                "is_standard_monomer INTEGER, "
-                "PRIMARY KEY (key_tag, component_key), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_component_atom")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "component_key INTEGER, "
-                "atom_key INTEGER, "
-                "atom_id TEXT, "
-                "element_type INTEGER, "
-                "aromatic_atom_flag INTEGER, "
-                "stereo_config INTEGER, "
-                "PRIMARY KEY (key_tag, component_key, atom_key), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_component_bond")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "component_key INTEGER, "
-                "bond_key INTEGER, "
-                "bond_id TEXT, "
-                "bond_type INTEGER, "
-                "bond_order INTEGER, "
-                "aromatic_atom_flag INTEGER, "
-                "stereo_config INTEGER, "
-                "PRIMARY KEY (key_tag, component_key, bond_key), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_atom")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "serial_id INTEGER, "
-                "sequence_id INTEGER, "
-                "component_id TEXT, "
-                "atom_id TEXT, "
-                "chain_id TEXT, "
-                "indicator TEXT, "
-                "occupancy DOUBLE, "
-                "temperature DOUBLE, "
-                "element INTEGER, "
-                "structure INTEGER, "
-                "is_special_atom INTEGER, "
-                "position_x DOUBLE, "
-                "position_y DOUBLE, "
-                "position_z DOUBLE, "
-                "component_key INTEGER, "
-                "atom_key INTEGER, "
-                "PRIMARY KEY (key_tag, serial_id), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_bond")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "atom_serial_id_1 INTEGER, "
-                "atom_serial_id_2 INTEGER, "
-                "bond_key INTEGER, "
-                "bond_type INTEGER, "
-                "bond_order INTEGER, "
-                "is_special_bond INTEGER, "
-                "PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_atom_local_potential")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "serial_id INTEGER, "
-                "sampling_size INTEGER, "
-                "distance_and_map_value_list BLOB, "
-                "amplitude_estimate_ols DOUBLE, "
-                "width_estimate_ols DOUBLE, "
-                "amplitude_estimate_mdpde DOUBLE, "
-                "width_estimate_mdpde DOUBLE, "
-                "alpha_r DOUBLE, "
-                "PRIMARY KEY (key_tag, serial_id), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_bond_local_potential")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "atom_serial_id_1 INTEGER, "
-                "atom_serial_id_2 INTEGER, "
-                "sampling_size INTEGER, "
-                "distance_and_map_value_list BLOB, "
-                "amplitude_estimate_ols DOUBLE, "
-                "width_estimate_ols DOUBLE, "
-                "amplitude_estimate_mdpde DOUBLE, "
-                "width_estimate_mdpde DOUBLE, "
-                "alpha_r DOUBLE, "
-                "PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_atom_posterior")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "class_key TEXT, "
-                "serial_id INTEGER, "
-                "amplitude_estimate_posterior DOUBLE, "
-                "width_estimate_posterior DOUBLE, "
-                "amplitude_variance_posterior DOUBLE, "
-                "width_variance_posterior DOUBLE, "
-                "outlier_tag INTEGER, "
-                "statistical_distance DOUBLE, "
-                "PRIMARY KEY (key_tag, class_key, serial_id), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_bond_posterior")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "class_key TEXT, "
-                "atom_serial_id_1 INTEGER, "
-                "atom_serial_id_2 INTEGER, "
-                "amplitude_estimate_posterior DOUBLE, "
-                "width_estimate_posterior DOUBLE, "
-                "amplitude_variance_posterior DOUBLE, "
-                "width_variance_posterior DOUBLE, "
-                "outlier_tag INTEGER, "
-                "statistical_distance DOUBLE, "
-                "PRIMARY KEY (key_tag, class_key, atom_serial_id_1, atom_serial_id_2), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_atom_group_potential")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "class_key TEXT, "
-                "group_key INTEGER, "
-                "member_size INTEGER, "
-                "amplitude_estimate_mean DOUBLE, "
-                "width_estimate_mean DOUBLE, "
-                "amplitude_estimate_mdpde DOUBLE, "
-                "width_estimate_mdpde DOUBLE, "
-                "amplitude_estimate_prior DOUBLE, "
-                "width_estimate_prior DOUBLE, "
-                "amplitude_variance_prior DOUBLE, "
-                "width_variance_prior DOUBLE, "
-                "alpha_g DOUBLE, "
-                "PRIMARY KEY (key_tag, class_key, group_key), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-        if (canonical_table_name == "model_bond_group_potential")
-        {
-            return
-                "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-                "key_tag TEXT, "
-                "class_key TEXT, "
-                "group_key INTEGER, "
-                "member_size INTEGER, "
-                "amplitude_estimate_mean DOUBLE, "
-                "width_estimate_mean DOUBLE, "
-                "amplitude_estimate_mdpde DOUBLE, "
-                "width_estimate_mdpde DOUBLE, "
-                "amplitude_estimate_prior DOUBLE, "
-                "width_estimate_prior DOUBLE, "
-                "amplitude_variance_prior DOUBLE, "
-                "width_variance_prior DOUBLE, "
-                "alpha_g DOUBLE, "
-                "PRIMARY KEY (key_tag, class_key, group_key), "
-                "FOREIGN KEY(key_tag) REFERENCES " + model_root_table_name + "(key_tag) ON DELETE CASCADE"
-                ");";
-        }
-
-        throw std::runtime_error(
-            "Unsupported model table for shadow schema build: " + std::string(canonical_table_name));
-    }
-
-    std::string BuildCreateMapShadowTableSql(const std::string & suffix)
-    {
-        const auto table_name{ "map_list" + suffix };
-        const auto object_catalog_table_name{ "object_catalog" + suffix };
-        return
-            "CREATE TABLE IF NOT EXISTS " + table_name + " ("
-            "key_tag TEXT PRIMARY KEY REFERENCES " + object_catalog_table_name + "(key_tag) ON DELETE CASCADE, "
-            "grid_size_x INTEGER, "
-            "grid_size_y INTEGER, "
-            "grid_size_z INTEGER, "
-            "grid_spacing_x DOUBLE, "
-            "grid_spacing_y DOUBLE, "
-            "grid_spacing_z DOUBLE, "
-            "origin_x DOUBLE, "
-            "origin_y DOUBLE, "
-            "origin_z DOUBLE, "
-            "map_value_array BLOB"
-            ");";
-    }
-
     void EnsureModelSchema(rhbm_gem::SQLiteWrapper & database)
     {
         rhbm_gem::ModelObjectDAOv2::EnsureSchema(database);
@@ -534,63 +280,6 @@ namespace
         return QueryKeyList(database, "SELECT key_tag FROM model_object ORDER BY key_tag;");
     }
 
-    std::vector<std::string> ListModelKeysWithSuffix(
-        rhbm_gem::SQLiteWrapper & database,
-        const std::string & suffix)
-    {
-        const auto table_name{ "model_object" + suffix };
-        if (!HasTable(database, table_name))
-        {
-            return {};
-        }
-        return QueryKeyList(database, "SELECT key_tag FROM " + table_name + " ORDER BY key_tag;");
-    }
-
-    void CreateModelShadowTables(rhbm_gem::SQLiteWrapper & database, const std::string & suffix)
-    {
-        for (const auto table_name : rhbm_gem::model_io::kModelCanonicalTableNames)
-        {
-            database.Execute(BuildCreateModelShadowTableSql(table_name, suffix));
-        }
-    }
-
-    void CopyModelIntoShadowTables(rhbm_gem::SQLiteWrapper & database, const std::string & suffix)
-    {
-        for (const auto table_name : rhbm_gem::model_io::kModelCanonicalTableNames)
-        {
-            if (!HasTable(database, std::string(table_name)))
-            {
-                continue;
-            }
-            database.Execute(
-                "INSERT INTO " + std::string(table_name) + suffix +
-                " SELECT * FROM " + std::string(table_name) + ";");
-        }
-    }
-
-    void DropAndRenameModelShadowTables(
-        rhbm_gem::SQLiteWrapper & database,
-        const std::string & suffix)
-    {
-        for (const auto table_name : rhbm_gem::model_io::kModelCanonicalTableNames)
-        {
-            if (HasTable(database, std::string(table_name)))
-            {
-                database.Execute("DROP TABLE " + std::string(table_name) + ";");
-            }
-        }
-        for (const auto table_name : rhbm_gem::model_io::kModelCanonicalTableNames)
-        {
-            const auto shadow_table_name{ std::string(table_name) + suffix };
-            if (!HasTable(database, shadow_table_name))
-            {
-                continue;
-            }
-            database.Execute(
-                "ALTER TABLE " + shadow_table_name + " RENAME TO " + std::string(table_name) + ";");
-        }
-    }
-
     void EnsureMapSchema(rhbm_gem::SQLiteWrapper & database)
     {
         rhbm_gem::MapObjectDAO::EnsureSchema(database);
@@ -612,44 +301,6 @@ namespace
         return QueryKeyList(database, "SELECT key_tag FROM map_list ORDER BY key_tag;");
     }
 
-    std::vector<std::string> ListMapKeysWithSuffix(
-        rhbm_gem::SQLiteWrapper & database,
-        const std::string & suffix)
-    {
-        const auto table_name{ "map_list" + suffix };
-        if (!HasTable(database, table_name))
-        {
-            return {};
-        }
-        return QueryKeyList(database, "SELECT key_tag FROM " + table_name + " ORDER BY key_tag;");
-    }
-
-    void CreateMapShadowTables(rhbm_gem::SQLiteWrapper & database, const std::string & suffix)
-    {
-        database.Execute(BuildCreateMapShadowTableSql(suffix));
-    }
-
-    void CopyMapIntoShadowTables(rhbm_gem::SQLiteWrapper & database, const std::string & suffix)
-    {
-        if (!HasTable(database, "map_list"))
-        {
-            return;
-        }
-        database.Execute("INSERT INTO map_list" + suffix + " SELECT * FROM map_list;");
-    }
-
-    void DropAndRenameMapShadowTables(rhbm_gem::SQLiteWrapper & database, const std::string & suffix)
-    {
-        if (HasTable(database, "map_list"))
-        {
-            database.Execute("DROP TABLE map_list;");
-        }
-        if (HasTable(database, "map_list" + suffix))
-        {
-            database.Execute("ALTER TABLE map_list" + suffix + " RENAME TO map_list;");
-        }
-    }
-
     std::vector<std::string_view> BuildModelManagedTableNameList()
     {
         return {
@@ -665,7 +316,7 @@ namespace
             rhbm_gem::persistence::kMapCanonicalTableNames.end()
         };
     }
-}
+} // namespace
 
 namespace rhbm_gem::persistence {
 
@@ -677,22 +328,14 @@ const std::vector<ManagedStoreDescriptor> & GetAllManagedStoreDescriptors()
             BuildModelManagedTableNameList(),
             EnsureModelSchema,
             ValidateModelSchema,
-            ListModelKeys,
-            ListModelKeysWithSuffix,
-            CreateModelShadowTables,
-            CopyModelIntoShadowTables,
-            DropAndRenameModelShadowTables
+            ListModelKeys
         },
         {
             "map",
             BuildMapManagedTableNameList(),
             EnsureMapSchema,
             ValidateMapSchema,
-            ListMapKeys,
-            ListMapKeysWithSuffix,
-            CreateMapShadowTables,
-            CopyMapIntoShadowTables,
-            DropAndRenameMapShadowTables
+            ListMapKeys
         }
     };
     return k_descriptors;

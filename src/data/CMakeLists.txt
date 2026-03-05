@@ -12,13 +12,13 @@ set(DATA_SOURCES
     DatabaseManager.cpp
     FileFormatBackendFactory.cpp
     FileFormatRegistry.cpp
-    FileProcessFactoryRegistry.cpp
     FileProcessFactoryResolver.cpp
     GroupPotentialEntry.cpp
     LocalPotentialEntry.cpp
     legacy/LegacyModelObjectReader.cpp
     MapFileReader.cpp
     MapFileWriter.cpp
+    map_io/MapAxisOrderHelper.cpp
     MapObject.cpp
     MapObjectDAO.cpp
     MapObjectFactory.cpp

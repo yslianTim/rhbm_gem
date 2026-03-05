@@ -25,7 +25,6 @@
 #include "DatabaseManager.hpp"
 #include "FileFormatRegistry.hpp"
 #include "FileProcessFactoryBase.hpp"
-#include "FileProcessFactoryRegistry.hpp"
 #include "FileProcessFactoryResolver.hpp"
 #include "LocalPotentialEntry.hpp"
 #include "MapFileReader.hpp"
@@ -136,6 +135,15 @@ void SetUserVersion(const std::filesystem::path & database_path, int user_versio
 void ExecuteSql(const std::filesystem::path & database_path, const std::string & sql)
 {
     rg::SQLiteWrapper database{ database_path };
+    database.Execute(sql);
+}
+
+void ExecuteSqlWithForeignKeysOff(
+    const std::filesystem::path & database_path,
+    const std::string & sql)
+{
+    rg::SQLiteWrapper database{ database_path };
+    database.Execute("PRAGMA foreign_keys = OFF;");
     database.Execute(sql);
 }
 
@@ -308,6 +316,19 @@ rg::MapObject MakeTinyMapObject(float scale = 1.0f)
     return rg::MapObject{ grid_size, grid_spacing, origin, std::move(values) };
 }
 
+void SaveTinyMapThroughManager(
+    rg::DataObjectManager & manager,
+    const std::filesystem::path & map_path,
+    const std::string & key_tag,
+    float scale = 1.0f)
+{
+    auto map_object{ MakeTinyMapObject(scale) };
+    rg::MapFileWriter writer{ map_path.string(), &map_object };
+    writer.Write();
+    manager.ProcessFile(map_path, key_tag);
+    manager.SaveDataObject(key_tag);
+}
+
 class FailingDataObject final : public rg::DataObjectBase
 {
     std::string m_key_tag;
@@ -367,20 +388,26 @@ public:
 
 class ScopedFactoryOverride
 {
+    rg::OverrideableFileProcessFactoryResolver * m_resolver;
     std::string m_extension;
 
 public:
     ScopedFactoryOverride(
+        rg::OverrideableFileProcessFactoryResolver & resolver,
         const std::string & extension,
         std::function<std::unique_ptr<rg::FileProcessFactoryBase>()> creator) :
+        m_resolver{ &resolver },
         m_extension{ extension }
     {
-        rg::FileProcessFactoryRegistry::Instance().RegisterFactory(m_extension, std::move(creator));
+        m_resolver->RegisterFactory(m_extension, std::move(creator));
     }
 
     ~ScopedFactoryOverride()
     {
-        rg::FileProcessFactoryRegistry::Instance().UnregisterFactory(m_extension);
+        if (m_resolver != nullptr)
+        {
+            m_resolver->UnregisterFactory(m_extension);
+        }
     }
 };
 
@@ -426,9 +453,8 @@ TEST(DataObjectIOSchemaTest, LegacyFixtureMigratesToNormalizedSchema)
 
     rg::DataObjectManager manager;
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    EXPECT_EQ(
-        manager.GetDatabaseManager()->GetSchemaVersion(),
-        rg::DatabaseSchemaVersion::NormalizedV2);
+    rg::DatabaseManager verifier{ database_path };
+    EXPECT_EQ(verifier.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
 
     ASSERT_NO_THROW(manager.LoadDataObject("legacy_model"));
     auto model{ manager.GetTypedDataObject<rg::ModelObject>("legacy_model") };
@@ -521,14 +547,14 @@ TEST(DataObjectIOSchemaTest, FinalV2CatalogDatabaseRemainsLoadable)
     const command_test::ScopedTempDir temp_dir{ "schema_final_v2_loadable" };
     const auto database_path{ temp_dir.path() / "final_v2.sqlite" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto map_object{ MakeTinyMapObject(3.0f) };
+    const auto map_path{ temp_dir.path() / "map_only.map" };
 
     {
         rg::DataObjectManager manager;
         manager.SetDatabaseManager(database_path);
         manager.ProcessFile(model_path, "model");
         manager.SaveDataObject("model");
-        manager.GetDatabaseManager()->SaveDataObject(&map_object, "map");
+        SaveTinyMapThroughManager(manager, map_path, "map", 3.0f);
     }
 
     SetUserVersion(database_path, 2);
@@ -565,13 +591,13 @@ TEST(DataObjectIOSchemaTest, CatalogLookupLoadsCorrectDaoType)
     const command_test::ScopedTempDir temp_dir{ "schema_catalog_lookup" };
     const auto database_path{ temp_dir.path() / "catalog_lookup.sqlite" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto map_object{ MakeTinyMapObject() };
+    const auto map_path{ temp_dir.path() / "map_only.map" };
 
     rg::DataObjectManager manager;
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     manager.SaveDataObject("model");
-    manager.GetDatabaseManager()->SaveDataObject(&map_object, "map");
+    SaveTinyMapThroughManager(manager, map_path, "map");
     manager.ClearDataObjects();
 
     ASSERT_NO_THROW(manager.LoadDataObject("model"));
@@ -625,6 +651,47 @@ TEST(DataObjectIOSchemaTest, FinalV2SchemaValidationRejectsMissingForeignKeys)
             "object_catalog",
             "key_tag",
             "CASCADE"));
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+}
+
+TEST(DataObjectIOSchemaTest, FinalV2SchemaValidationRejectsMissingRequiredCatalogColumns)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_bad_catalog_columns" };
+    const auto database_path{ temp_dir.path() / "bad_catalog_columns.sqlite" };
+
+    {
+        rg::DatabaseManager database_manager{ database_path };
+        EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+    }
+
+    ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
+    ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY);");
+    SetUserVersion(database_path, 2);
+
+    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+}
+
+TEST(DataObjectIOSchemaTest, FinalV2SchemaValidationRejectsUnknownObjectTypeValue)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_bad_catalog_type" };
+    const auto database_path{ temp_dir.path() / "bad_catalog_type.sqlite" };
+
+    {
+        rg::DatabaseManager database_manager{ database_path };
+        EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+    }
+
+    ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
+    ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY, object_type TEXT NOT NULL);");
+    ExecuteSqlWithForeignKeysOff(
+        database_path,
+        "INSERT INTO object_catalog(key_tag, object_type) VALUES ('unknown_root', 'unknown');");
+    SetUserVersion(database_path, 2);
+
     EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
 }
 
@@ -711,7 +778,7 @@ TEST(DataObjectIOSchemaTest, LegacyMigrationDropsOnlyOwnedTables)
     EXPECT_FALSE(HasTable(database_path, "atom_list_in_legacy_model"));
 }
 
-TEST(DataObjectIOSchemaTest, LegacyV1MapListWithoutFkIsRebuiltToFinalV2Shape)
+TEST(DataObjectIOSchemaTest, LegacyV1MapListWithoutFkIsMigratedToFinalV2WithoutGenericRebuild)
 {
     const command_test::ScopedTempDir temp_dir{ "schema_legacy_map_fk_rebuild" };
     const auto database_path{ temp_dir.path() / "legacy_map_fk.sqlite" };
@@ -732,9 +799,7 @@ TEST(DataObjectIOSchemaTest, LegacyV1MapListWithoutFkIsRebuiltToFinalV2Shape)
 
     rg::DataObjectManager manager;
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    EXPECT_EQ(
-        manager.GetDatabaseManager()->GetSchemaVersion(),
-        rg::DatabaseSchemaVersion::NormalizedV2);
+    EXPECT_EQ(GetUserVersion(database_path), 2);
     EXPECT_TRUE(
         HasForeignKey(
             database_path,
@@ -764,7 +829,8 @@ TEST(DataObjectIOSchemaTest, ForeignKeyRejectsOrphanModelChildRows)
     rg::DatabaseManager database_manager{ database_path };
 
     EXPECT_THROW(
-        database_manager.GetDatabase()->Execute(
+        ExecuteSql(
+            database_path,
             "INSERT INTO model_chain_map(key_tag, entity_id, chain_ordinal, chain_id) "
             "VALUES ('missing', '1', 0, 'A');"),
         std::runtime_error);
@@ -781,8 +847,7 @@ TEST(DataObjectIOSchemaTest, DeletingCatalogRootCascadesPayloadRows)
     manager.ProcessFile(model_path, "model");
     manager.SaveDataObject("model");
 
-    manager.GetDatabaseManager()->GetDatabase()->Execute(
-        "DELETE FROM object_catalog WHERE key_tag = 'model';");
+    ExecuteSql(database_path, "DELETE FROM object_catalog WHERE key_tag = 'model';");
 
     EXPECT_EQ(CountRows(database_path, "object_catalog"), 0);
     EXPECT_EQ(CountRows(database_path, "model_object"), 0);
@@ -876,7 +941,8 @@ TEST(DataObjectIOSchemaTest, UppercaseExtensionsDispatchCorrectly)
 
 TEST(DataObjectIOSchemaTest, BuiltInFormatsStillWorkWithoutAnyRegistrationStep)
 {
-    auto factory{ rg::FileProcessFactoryRegistry::Instance().CreateFactory(".cif") };
+    rg::DefaultFileProcessFactoryResolver resolver;
+    auto factory{ resolver.CreateFactory(".cif") };
     auto data_object{ factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
     EXPECT_NE(dynamic_cast<rg::ModelObject *>(data_object.get()), nullptr);
 }
@@ -898,19 +964,19 @@ TEST(DataObjectIOSchemaTest, InjectedOverrideTakesPrecedenceOverDescriptorFallba
     EXPECT_NE(dynamic_cast<FailingDataObject *>(manager.GetDataObject("override").get()), nullptr);
 }
 
-TEST(DataObjectIOSchemaTest, FileProcessFactoryRegistryOverrideCanBeRemoved)
+TEST(DataObjectIOSchemaTest, ResolverInjectionSupportsOverrideWithoutGlobalRegistry)
 {
-    auto & registry{ rg::FileProcessFactoryRegistry::Instance() };
-    registry.RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
+    rg::OverrideableFileProcessFactoryResolver resolver;
+    resolver.RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
 
-    auto override_factory{ registry.CreateFactory(".cif") };
+    auto override_factory{ resolver.CreateFactory(".cif") };
     auto override_object{
         override_factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
     EXPECT_NE(dynamic_cast<FailingDataObject *>(override_object.get()), nullptr);
 
-    registry.UnregisterFactory(".cif");
+    resolver.UnregisterFactory(".cif");
 
-    auto default_factory{ registry.CreateFactory(".cif") };
+    auto default_factory{ resolver.CreateFactory(".cif") };
     auto default_object{
         default_factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
     EXPECT_NE(dynamic_cast<rg::ModelObject *>(default_object.get()), nullptr);
@@ -918,12 +984,14 @@ TEST(DataObjectIOSchemaTest, FileProcessFactoryRegistryOverrideCanBeRemoved)
 
 TEST(DataObjectIOSchemaTest, CustomFactoryOverrideTakesPrecedenceOverDescriptorFallback)
 {
+    rg::OverrideableFileProcessFactoryResolver resolver;
     ScopedFactoryOverride override{
+        resolver,
         ".cif",
         []() { return std::make_unique<OverrideFileFactory>(); }
     };
 
-    auto factory{ rg::FileProcessFactoryRegistry::Instance().CreateFactory(".cif") };
+    auto factory{ resolver.CreateFactory(".cif") };
     auto data_object{
         factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
     EXPECT_NE(dynamic_cast<FailingDataObject *>(data_object.get()), nullptr);
@@ -931,18 +999,20 @@ TEST(DataObjectIOSchemaTest, CustomFactoryOverrideTakesPrecedenceOverDescriptorF
 
 TEST(DataObjectIOSchemaTest, CustomFactoryOverrideDoesNotLeakAcrossTests)
 {
+    rg::OverrideableFileProcessFactoryResolver resolver;
     {
         ScopedFactoryOverride override{
+            resolver,
             ".cif",
             []() { return std::make_unique<OverrideFileFactory>(); }
         };
-        auto factory{ rg::FileProcessFactoryRegistry::Instance().CreateFactory(".cif") };
+        auto factory{ resolver.CreateFactory(".cif") };
         auto data_object{
             factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
         EXPECT_NE(dynamic_cast<FailingDataObject *>(data_object.get()), nullptr);
     }
 
-    auto factory{ rg::FileProcessFactoryRegistry::Instance().CreateFactory(".cif") };
+    auto factory{ resolver.CreateFactory(".cif") };
     auto data_object{ factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
     EXPECT_NE(dynamic_cast<rg::ModelObject *>(data_object.get()), nullptr);
 }
@@ -1044,14 +1114,61 @@ TEST(DataObjectIOSchemaTest, ResolverConcurrentOverrideAndLookupIsSafe)
     EXPECT_EQ(failure_count.load(), 0);
 }
 
-TEST(DataObjectIOSchemaTest, ModelWriteSupportMatrixRejectsMmcifOutput)
+TEST(DataObjectIOSchemaTest, PdbWriteProducesNonEmptyOutput)
+{
+    const command_test::ScopedTempDir temp_dir{ "pdb_write_non_empty" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto output_path{ temp_dir.path() / "output.pdb" };
+
+    rg::DataObjectManager manager;
+    manager.ProcessFile(model_path, "model");
+    ASSERT_NO_THROW(manager.ProduceFile(output_path, "model"));
+
+    std::ifstream output_stream{ output_path };
+    ASSERT_TRUE(output_stream.is_open());
+    const std::string output_content{
+        std::istreambuf_iterator<char>(output_stream),
+        std::istreambuf_iterator<char>()
+    };
+    EXPECT_FALSE(output_content.empty());
+    EXPECT_NE(output_content.find("ATOM"), std::string::npos);
+}
+
+TEST(DataObjectIOSchemaTest, PdbWriteRoundTripBasicFields)
+{
+    const command_test::ScopedTempDir temp_dir{ "pdb_write_roundtrip" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto output_path{ temp_dir.path() / "roundtrip.pdb" };
+
+    rg::DataObjectManager manager;
+    manager.ProcessFile(model_path, "source");
+    auto source_model{ manager.GetTypedDataObject<rg::ModelObject>("source") };
+    ASSERT_NO_THROW(manager.ProduceFile(output_path, "source"));
+    ASSERT_NO_THROW(manager.ProcessFile(output_path, "roundtrip"));
+
+    auto roundtrip_model{ manager.GetTypedDataObject<rg::ModelObject>("roundtrip") };
+    ASSERT_GT(roundtrip_model->GetNumberOfAtom(), 0);
+    EXPECT_EQ(roundtrip_model->GetNumberOfAtom(), source_model->GetNumberOfAtom());
+    EXPECT_EQ(
+        roundtrip_model->GetAtomList().front()->GetSerialID(),
+        source_model->GetAtomList().front()->GetSerialID());
+    EXPECT_EQ(
+        roundtrip_model->GetAtomList().front()->GetChainID(),
+        source_model->GetAtomList().front()->GetChainID());
+}
+
+TEST(DataObjectIOSchemaTest, ModelWriteSupportMatrixStillAcceptsPdbAndCifOnly)
 {
     const command_test::ScopedTempDir temp_dir{ "schema_output_matrix" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto pdb_output_path{ temp_dir.path() / "supported_output.pdb" };
+    const auto cif_output_path{ temp_dir.path() / "supported_output.cif" };
     const auto output_path{ temp_dir.path() / "unsupported_output.mmcif" };
 
     rg::DataObjectManager manager;
     manager.ProcessFile(model_path, "model");
+    EXPECT_NO_THROW(manager.ProduceFile(pdb_output_path, "model"));
+    EXPECT_NO_THROW(manager.ProduceFile(cif_output_path, "model"));
     EXPECT_THROW(manager.ProduceFile(output_path, "model"), std::runtime_error);
 }
 
@@ -1084,7 +1201,7 @@ TEST(DataObjectIOSchemaTest, DatabaseManagerConstructorEnsuresSchemaAndHotPathDo
     manager.ProcessFile(model_path, "model");
     EXPECT_TRUE(HasTable(database_path, "model_object"));
 
-    manager.GetDatabaseManager()->GetDatabase()->Execute("DROP TABLE model_object;");
+    ExecuteSql(database_path, "DROP TABLE model_object;");
     EXPECT_FALSE(HasTable(database_path, "model_object"));
     EXPECT_THROW(manager.SaveDataObject("model"), std::runtime_error);
     EXPECT_FALSE(HasTable(database_path, "model_object"));

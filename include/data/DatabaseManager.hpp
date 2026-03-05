@@ -31,7 +31,8 @@ public:
     std::unique_ptr<DataObjectBase> LoadDataObject(const std::string & key_tag);
     const std::filesystem::path & GetDatabasePath() const { return m_database_path; }
     DatabaseSchemaVersion GetSchemaVersion() const { return m_schema_version; }
-    SQLiteWrapper * GetDatabase() { return m_database.get(); }
+
+private:
     std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const DataObjectBase * data_object);
     std::shared_ptr<DataObjectDAOBase> CreateDataObjectDAO(const std::string & object_type);
 };

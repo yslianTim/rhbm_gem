@@ -79,7 +79,8 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` File parsing, database access, and DAO details belong in the data layer, not inside command orchestration logic.
 - `[Required]` Supported file-format matrices must be defined through `FileFormatRegistry`; do not scatter extension truth across unrelated registries or readers and writers.
 - `[Required]` Built-in top-level file factory selection must remain derivable from `FileFormatRegistry` through a resolver. Do not make global mutable registries the default source of built-in format behavior.
-- `[Required]` `FileProcessFactoryRegistry` is an override seam, not the default source of built-in format support. Default factory selection must remain derivable from `FileFormatRegistry`.
+- `[Required]` Explicit file-factory overrides should be injected through `OverrideableFileProcessFactoryResolver`, not through global singleton registries.
+- `[Required]` Do not expose test-only debug accessors (for example raw database handles or manager-internal object maps) on command-facing manager public interfaces.
 - `[Required]` File readers, writers, and factories in the data layer should use throw-on-failure contracts. Do not rely on `nullptr`, `IsSuccessfullyRead()`, or similar success flags for normal error propagation.
 - `[Required]` Model-format backends should use the stream-based `ModelFileFormatBase::Read()` and `Write()` contract. Do not reintroduce filename-based split parsing such as separate header/data opens on the same file path.
 - `[Required]` Map-format backends should use the stream-based `MapFileFormatBase::Read()` and `Write()` contract. Do not expose split header/data orchestration from `MapFileReader` or `MapFileWriter`.
@@ -93,7 +94,7 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` Managed store schema knowledge should live behind the descriptor registry under `src/data/persistence/`, not as ad hoc model/map-specific branching spread across unrelated schema-manager call sites.
 - `[Required]` Managed-store schema validation must verify schema shape (primary keys and foreign keys), not only table existence.
 - `[Required]` Legacy model migration scope must be derived from authoritative legacy payload tables such as `model_list`, not from `object_metadata` alone. For `user_version == 0`, any non-empty non-legacy schema must fail fast instead of being silently upgraded.
-- `[Required]` Shadow-table rebuild logic must use explicit table plans from managed descriptors. Do not depend on broad SQL identifier text-rewrite helpers for migration DDL.
+- `[Required]` Legacy v1 to final v2 migration should follow direct canonical-table migration; do not reintroduce generic shadow-rebuild orchestration for normal admission flow.
 - `[Required]` Legacy compatibility readers that exist only for migration must stay under `src/` as internal implementation details, not under the supported public `include/` surface.
 - `[Required]` Keep `ModelObjectDAOv2.hpp` as a minimal façade. SQL helpers and persistence-detail declarations belong under `src/data/model_io/`, not in the public header.
 - `[Required]` New built-in commands should be added through `BuiltInCommandCatalog()` and must provide a Python binding name there so CLI registration, bindings, and docs sync share one source of truth for built-in naming while the concrete command type remains the source of shared common-option policy.

@@ -1,12 +1,17 @@
 #define _CRT_SECURE_NO_WARNINGS // To disable deprecation warnings for sscanf
 #include "PdbFormat.hpp"
 #include "AtomObject.hpp"
+#include "ChemicalDataHelper.hpp"
+#include "LocalPotentialEntry.hpp"
+#include "ModelObject.hpp"
 #include "StringHelper.hpp"
 #include "AtomicModelDataBlock.hpp"
 #include "Logger.hpp"
 
 #include <fstream>
+#include <algorithm>
 #include <cstring>
+#include <cstdio>
 #include <stdexcept>
 
 namespace rhbm_gem {
@@ -103,9 +108,69 @@ AtomicModelDataBlock * PdbFormat::GetDataBlockPtr()
 
 void PdbFormat::Write(const ModelObject & model_object, std::ostream & stream, int par)
 {
-    (void)model_object;
-    (void)stream;
-    (void)par;
+    if (!stream)
+    {
+        throw std::runtime_error("PdbFormat::Write() failed: invalid output stream.");
+    }
+
+    for (const auto & atom_ptr : model_object.GetAtomList())
+    {
+        const auto * atom{ atom_ptr.get() };
+        if (atom == nullptr)
+        {
+            continue;
+        }
+
+        const auto group_pdb{ atom->GetSpecialAtomFlag() ? "HETATM" : "ATOM" };
+        auto atom_name{ atom->GetAtomID() };
+        if (atom_name.size() > 4) atom_name = atom_name.substr(0, 4);
+        auto component_id{ atom->GetComponentID() };
+        auto residue_name{ component_id.substr(0, std::min<size_t>(3, component_id.size())) };
+        std::string segment_id{ component_id.substr(0, std::min<size_t>(4, component_id.size())) };
+        if (segment_id.empty()) segment_id = "UNK";
+        auto element_symbol{ ChemicalDataHelper::GetLabel(atom->GetElement()) };
+        if (element_symbol.size() > 2) element_symbol = element_symbol.substr(0, 2);
+
+        const auto indicator{ atom->GetIndicator() };
+        const auto alt_loc{
+            (indicator.empty() || indicator == ".") ? ' ' : indicator.front()
+        };
+        const auto chain_id{ atom->GetChainID().empty() ? ' ' : atom->GetChainID().front() };
+        const auto sequence_id{ atom->GetSequenceID() < 0 ? 0 : atom->GetSequenceID() };
+        const auto position{ atom->GetPosition() };
+        const auto occupancy{ atom->GetOccupancy() };
+        float b_factor{ atom->GetTemperature() };
+        if (atom->GetLocalPotentialEntry() != nullptr)
+        {
+            b_factor = static_cast<float>(atom->GetLocalPotentialEntry()->GetGausEstimateMDPDE(par));
+        }
+
+        char line[128];
+        std::snprintf(
+            line,
+            sizeof(line),
+            "%-6s%5d %-4s%c%3s %c%4d    %8.3f%8.3f%8.3f%6.2f%6.2f      %-4s%2s",
+            group_pdb,
+            atom->GetSerialID(),
+            atom_name.c_str(),
+            alt_loc,
+            residue_name.c_str(),
+            chain_id,
+            sequence_id,
+            position[0],
+            position[1],
+            position[2],
+            occupancy,
+            b_factor,
+            segment_id.c_str(),
+            element_symbol.c_str());
+        stream << line << '\n';
+    }
+    stream << "END\n";
+    if (!stream)
+    {
+        throw std::runtime_error("PdbFormat::Write() failed while writing output.");
+    }
 }
 
 PdbFormat::PDB_HEADER PdbFormat::MapToHeaderType(const std::string & name) const

@@ -48,10 +48,6 @@ void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
         return;
     }
     m_db_manager = std::make_unique<DatabaseManager>(dbname);
-    if (!m_db_manager->GetDatabase())
-    {
-        throw std::runtime_error("Failed to initialize database manager with path: " + dbname.string());
-    }
 }
 
 void DataObjectManager::ProcessFile(
@@ -252,18 +248,6 @@ std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(
         throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
     }
     return iter->second;
-}
-
-DatabaseManager * DataObjectManager::GetDatabaseManager() const
-{
-    std::lock_guard<std::mutex> lock(m_db_mutex);
-    return m_db_manager.get();
-}
-
-const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> &
-DataObjectManager::GetDataObjectMap() const
-{
-    return m_data_object_map;
 }
 
 } // namespace rhbm_gem

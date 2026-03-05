@@ -132,6 +132,57 @@ TEST(PublicHeaderSurfaceTest, FileWriterBaseHeaderIsNotPublic)
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
 }
 
+TEST(PublicHeaderSurfaceTest, FileProcessFactoryRegistryHeaderIsNotPublic)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto leaked_header{
+        project_root / "include" / "data" / "FileProcessFactoryRegistry.hpp"
+    };
+
+    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+}
+
+TEST(PublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugAccessors)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto header_path{
+        project_root / "include" / "core" / "DataObjectManager.hpp"
+    };
+
+    std::ifstream header_stream(header_path);
+    ASSERT_TRUE(header_stream.is_open());
+    const std::string header_content{
+        std::istreambuf_iterator<char>(header_stream),
+        std::istreambuf_iterator<char>()
+    };
+
+    EXPECT_EQ(header_content.find("GetDatabaseManager"), std::string::npos);
+    EXPECT_EQ(header_content.find("GetDataObjectMap"), std::string::npos);
+}
+
+TEST(PublicHeaderSurfaceTest, DatabaseManagerHeaderDoesNotExposeRawDatabaseAccessor)
+{
+    const auto project_root{
+        std::filesystem::path(__FILE__).parent_path().parent_path()
+    };
+    const auto header_path{
+        project_root / "include" / "data" / "DatabaseManager.hpp"
+    };
+
+    std::ifstream header_stream(header_path);
+    ASSERT_TRUE(header_stream.is_open());
+    const std::string header_content{
+        std::istreambuf_iterator<char>(header_stream),
+        std::istreambuf_iterator<char>()
+    };
+
+    EXPECT_EQ(header_content.find("GetDatabase()"), std::string::npos);
+}
+
 TEST(PublicHeaderSurfaceTest, ModelObjectDaoV2HeaderNoLongerLeaksPersistenceHelpers)
 {
     const auto project_root{
