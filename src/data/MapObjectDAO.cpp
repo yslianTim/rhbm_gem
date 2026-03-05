@@ -4,61 +4,13 @@
 #include "DataObjectBase.hpp"
 #include "DataObjectDAOFactoryRegistry.hpp"
 #include "Logger.hpp"
+#include "persistence/MapStoreSql.hpp"
 
 #include <stdexcept>
 #include <vector>
 #include <cstring>
 
 namespace { rhbm_gem::DataObjectDAORegistrar<rhbm_gem::MapObject, rhbm_gem::MapObjectDAO> registrar_map_dao("map"); }
-
-namespace
-{
-    constexpr std::string_view CREATE_TABLE_SQL = R"sql(
-        CREATE TABLE IF NOT EXISTS map_list (
-            key_tag TEXT PRIMARY KEY,
-            grid_size_x INTEGER,
-            grid_size_y INTEGER,
-            grid_size_z INTEGER,
-            grid_spacing_x DOUBLE,
-            grid_spacing_y DOUBLE,
-            grid_spacing_z DOUBLE,
-            origin_x DOUBLE,
-            origin_y DOUBLE,
-            origin_z DOUBLE,
-            map_value_array BLOB
-        ) )sql";
-
-    constexpr std::string_view INSERT_SQL = R"sql(
-        INSERT INTO map_list (
-            key_tag,
-            grid_size_x, grid_size_y, grid_size_z,
-            grid_spacing_x, grid_spacing_y, grid_spacing_z,
-            origin_x, origin_y, origin_z,
-            map_value_array
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(key_tag) DO UPDATE SET
-            key_tag = excluded.key_tag,
-            grid_size_x = excluded.grid_size_x,
-            grid_size_y = excluded.grid_size_y,
-            grid_size_z = excluded.grid_size_z,
-            grid_spacing_x = excluded.grid_spacing_x,
-            grid_spacing_y = excluded.grid_spacing_y,
-            grid_spacing_z = excluded.grid_spacing_z,
-            origin_x = excluded.origin_x,
-            origin_y = excluded.origin_y,
-            origin_z = excluded.origin_z,
-            map_value_array = excluded.map_value_array
-        )sql";
-
-    constexpr std::string_view SELECT_SQL = R"sql(
-        SELECT
-            key_tag,
-            grid_size_x, grid_size_y, grid_size_z,
-            grid_spacing_x, grid_spacing_y, grid_spacing_z,
-            origin_x, origin_y, origin_z,
-            map_value_array
-        FROM map_list WHERE key_tag = ? LIMIT 1; )sql";
-}
 
 namespace rhbm_gem {
 
@@ -72,7 +24,7 @@ MapObjectDAO::~MapObjectDAO()
 
 void MapObjectDAO::EnsureSchema(SQLiteWrapper & database)
 {
-    database.Execute(std::string(CREATE_TABLE_SQL));
+    database.Execute(std::string(persistence::kCreateMapTableSql));
 }
 
 void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & key_tag)
@@ -83,7 +35,7 @@ void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & 
         throw std::runtime_error("MapObjectDAO::Save() failed: object is not a MapObject instance.");
     }
 
-    m_database->Prepare(std::string(INSERT_SQL));
+    m_database->Prepare(std::string(persistence::kInsertMapSql));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
     auto grid_size{ map_object->GetGridSize() };
@@ -109,7 +61,7 @@ void MapObjectDAO::Save(const DataObjectBase * data_object, const std::string & 
 
 std::unique_ptr<DataObjectBase> MapObjectDAO::Load(const std::string & key_tag)
 {
-    m_database->Prepare(std::string(SELECT_SQL));
+    m_database->Prepare(std::string(persistence::kSelectMapSql));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
 

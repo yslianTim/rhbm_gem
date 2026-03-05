@@ -297,18 +297,14 @@ CifFormat::~CifFormat()
 {
 }
 
-void CifFormat::ResetParsedDocument()
+void CifFormat::ResetReadState()
 {
+    m_data_block = std::make_unique<AtomicModelDataBlock>();
+    m_find_chemical_component_entry = false;
+    m_find_component_atom_entry = false;
+    m_find_component_bond_entry = false;
     m_loop_category_map.clear();
     m_data_item_map.clear();
-    m_cached_filename.clear();
-    m_has_parsed_document = false;
-}
-
-void CifFormat::EnsureParsedDocument(const std::string & filename)
-{
-    if (m_has_parsed_document && m_cached_filename == filename) return;
-    ParseMmCifDocument(filename);
 }
 
 std::optional<std::string> CifFormat::GetFirstDataItemValue(std::string_view key) const
@@ -319,24 +315,23 @@ std::optional<std::string> CifFormat::GetFirstDataItemValue(std::string_view key
     return iter->second.front();
 }
 
-void CifFormat::ParseMmCifDocument(const std::string & filename)
+void CifFormat::ParseMmCifDocument(std::istream & stream, const std::string & source_name)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
+    if (!stream)
     {
-        Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
+        Logger::Log(LogLevel::Error, "Cannot open the file: " + source_name);
         throw std::runtime_error("ParseMmCifDocument failed!");
     }
 
     std::vector<std::string> line_list;
     std::string line;
-    while (std::getline(infile, line))
+    while (std::getline(stream, line))
     {
         StringHelper::StripCarriageReturn(line);
         line_list.emplace_back(std::move(line));
     }
 
-    ResetParsedDocument();
+    ResetReadState();
     size_t line_idx{ 0 };
     while (line_idx < line_list.size())
     {
@@ -520,13 +515,11 @@ void CifFormat::ParseMmCifDocument(const std::string & filename)
         ++line_idx;
     }
 
-    m_cached_filename = filename;
-    m_has_parsed_document = true;
 }
 
-void CifFormat::LoadHeader(const std::string & filename)
+void CifFormat::Read(std::istream & stream, const std::string & source_name)
 {
-    EnsureParsedDocument(filename);
+    ParseMmCifDocument(stream, source_name);
     LoadChemicalComponentBlock();
     LoadDatabaseBlock();
     LoadEntityBlock();
@@ -541,16 +534,20 @@ void CifFormat::LoadHeader(const std::string & filename)
             "No component bond entry found in the CIF file. Build default component bond entries.");
         BuildDefaultComponentBondEntry();
     }
+    LoadAtomSiteBlock();
+    ConstructBondList();
+    LoadStructureConnectionBlock();
+    LogHeaderSummary();
 }
 
-void CifFormat::PrintHeader() const
+void CifFormat::LogHeaderSummary() const
 {
     std::ostringstream oss;
     oss << "CIF Header Information:\n";
-    oss <<"#Entities = "<< m_data_block->GetEntityTypeMap().size() << "\n";
-    for (auto & [entity_id, chain_id] : m_data_block->GetChainIDListMap())
+    oss << "#Entities = " << m_data_block->GetEntityTypeMap().size() << "\n";
+    for (const auto & [entity_id, chain_id] : m_data_block->GetChainIDListMap())
     {
-        oss <<"[" << entity_id <<"] : ";
+        oss << "[" << entity_id << "] : ";
         for (size_t i = 0; i < chain_id.size(); i++)
         {
             oss << chain_id.at(i);
@@ -559,11 +556,11 @@ void CifFormat::PrintHeader() const
         oss << "\n";
     }
 
-    auto element_size{ m_data_block->GetElementTypeList().size() };
-    oss <<"#Elementry types = "<< element_size << "\n";
-    oss <<"Element type list : ";
+    const auto element_size{ m_data_block->GetElementTypeList().size() };
+    oss << "#Elementry types = " << element_size << "\n";
+    oss << "Element type list : ";
     size_t count{ 0 };
-    for (auto element : m_data_block->GetElementTypeList())
+    for (const auto element : m_data_block->GetElementTypeList())
     {
         oss << ChemicalDataHelper::GetLabel(element);
         if (count < element_size - 1) oss << ",";
@@ -571,14 +568,6 @@ void CifFormat::PrintHeader() const
     }
     oss << "\n";
     Logger::Log(LogLevel::Info, oss.str());
-}
-
-void CifFormat::LoadDataArray(const std::string & filename)
-{
-    EnsureParsedDocument(filename);
-    LoadAtomSiteBlock();
-    ConstructBondList();
-    LoadStructureConnectionBlock();
 }
 
 void CifFormat::LoadChemicalComponentBlock()
@@ -1431,23 +1420,15 @@ AtomicModelDataBlock * CifFormat::GetDataBlockPtr()
     return m_data_block.get();
 }
 
-void CifFormat::SaveHeader(const ModelObject * model_object, std::ostream & stream)
+void CifFormat::Write(const ModelObject & model_object, std::ostream & stream, int model_par)
 {
-    if (model_object == nullptr) return;
-    stream << "data_" << model_object->GetKeyTag() << '\n';
+    stream << "data_" << model_object.GetKeyTag() << '\n';
     stream << "#\n";
-}
-
-void CifFormat::SaveDataArray(
-    const ModelObject * model_object, std::ostream & stream, int model_par)
-{
-    if (model_object == nullptr) return;
-
     WriteAtomSiteBlock(model_object, stream, model_par);
 }
 
 void CifFormat::WriteAtomSiteBlock(
-    const ModelObject * model_object, std::ostream & stream, int model_par)
+    const ModelObject & model_object, std::ostream & stream, int model_par)
 {
     stream << "loop_\n";
     stream << "_atom_site.group_PDB\n";
@@ -1466,7 +1447,7 @@ void CifFormat::WriteAtomSiteBlock(
     stream << "_atom_site.pdbx_PDB_model_num\n";
 
     const int model_number{ 1 };
-    for (const auto & atom_ptr : model_object->GetAtomList())
+    for (const auto & atom_ptr : model_object.GetAtomList())
     {
         const AtomObject * atom{ atom_ptr.get() };
         if (atom->GetLocalPotentialEntry() == nullptr) continue;

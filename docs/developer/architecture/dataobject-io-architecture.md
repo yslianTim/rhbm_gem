@@ -27,16 +27,18 @@ This subsystem currently treats only these types as top-level I/O units:
 
 - `DataObjectManager`: command-facing orchestration and in-memory ownership
 - `FileFormatRegistry`: single source of truth for supported file extensions and backend dispatch
-- `FileProcessFactoryRegistry`: optional override layer for choosing the top-level factory (`ModelObjectFactory` or `MapObjectFactory`) from the normalized extension
+- `FileProcessFactoryResolver`: default built-in factory selection from the normalized extension
+- `FileProcessFactoryRegistry`: compatibility wrapper around an overrideable resolver for tests and explicit overrides
 - `ModelObjectFactory` / `MapObjectFactory`: build or write the concrete object
 - `ModelFileReader` / `ModelFileWriter`: select model parser or writer backend from `FileFormatRegistry`
 - `MapFileReader` / `MapFileWriter`: select map parser or writer backend from `FileFormatRegistry`
 - `DatabaseManager`: own the SQLite connection, schema bootstrap or migration, and cross-table transaction boundaries
-- `DatabaseSchemaManager`: schema-version detection, normalized v2 bootstrap, and legacy v1 to v2 migration
+- `DatabaseSchemaManager`: schema-version detection, final normalized v2 bootstrap, legacy-shape upgrade, and legacy v1 migration
 - `DataObjectDAOFactoryRegistry`: map runtime types and stored type names to DAO implementations
 - `ModelObjectDAO` (`ModelObjectDAOv2`): normalized v2 persistence for `ModelObject`
 - `LegacyModelObjectReader`: internal legacy v1 read path used only for migration
 - `MapObjectDAO`: flat persistence for `MapObject`
+- `ManagedStoreRegistry`: internal descriptor registry for model or map store schema, key listing, shadow-table rebuild, and validation
 - `FileFormatBackendFactory`: shared helper that builds concrete parser or writer backends from `FileFormatRegistry`
 - `SQLiteWrapper`: SQL execution, prepared statements, typed bind or read helpers, and RAII transaction handling
 
@@ -80,7 +82,8 @@ flowchart LR
 
     subgraph F["File I/O"]
         B --> C["FilePathHelper::GetExtension"]
-        C --> D["FileProcessFactoryRegistry"]
+        C --> D["FileProcessFactoryResolver"]
+        D -. optional override .-> D2["FileProcessFactoryRegistry"]
         D --> E["ModelObjectFactory"]
         D --> F2["MapObjectFactory"]
         E --> G["ModelFileReader / ModelFileWriter"]
@@ -94,6 +97,7 @@ flowchart LR
     subgraph P["SQLite persistence"]
         B --> L["DatabaseManager"]
         L --> M["DatabaseSchemaManager"]
+        M --> M2["ManagedStoreRegistry"]
         L --> N["DataObjectDAOFactoryRegistry"]
         N --> O["ModelObjectDAOv2"]
         N --> P2["MapObjectDAO"]
@@ -130,12 +134,17 @@ Current descriptors:
 | model | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` |
 | map | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` |
 
-`FileProcessFactoryRegistry` is no longer the source of default format behavior. Its runtime contract is:
+`DataObjectManager` now resolves built-in file behavior through `FileProcessFactoryResolver`. The default resolver is immutable and derives built-in factories only from `FileFormatRegistry`.
+
+`FileProcessFactoryRegistry` remains only as a compatibility wrapper around an overrideable resolver. Its runtime contract is:
 
 1. if an explicit override was registered with `RegisterFactory(...)`, use that override
 2. otherwise ask `FileFormatRegistry` for the descriptor and instantiate the default top-level factory from `descriptor.kind`
 
-There is no default factory registration step anymore. Built-in behavior is always derived from `FileFormatRegistry`, and `FileProcessFactoryRegistry` only exists for explicit overrides.
+There is no default factory registration step anymore. Built-in behavior is always derived from `FileFormatRegistry`, and explicit overrides are either:
+
+- injected through `DataObjectManager(std::shared_ptr<const FileProcessFactoryResolver>)`
+- or, for compatibility and tests, routed through `FileProcessFactoryRegistry`
 
 Readers and writers then use `FileFormatBackendFactory` plus `FileFormatRegistry` to choose the concrete backend implementation.
 
@@ -144,7 +153,7 @@ Readers and writers then use `FileFormatBackendFactory` plus `FileFormatRegistry
 `DataObjectManager::ProcessFile(...)`:
 
 1. gets the normalized extension
-2. asks `FileProcessFactoryRegistry` for a factory
+2. asks its configured `FileProcessFactoryResolver` for a factory
 3. calls `CreateDataObject(...)`
 4. sets the resulting object's `key_tag`
 5. inserts or replaces it in the in-memory map
@@ -177,12 +186,26 @@ Model import is split into three layers:
 2. `ModelFileFormatBase` implementations (`PdbFormat`, `CifFormat`)
 3. `ModelObjectFactory`
 
-`ModelFileReader` asks `FileFormatRegistry` for the backend:
+`ModelFileReader` asks `FileFormatRegistry` for the backend and then performs a single stream-based read:
 
 - `.pdb` -> `ModelFormatBackend::Pdb`
 - `.cif`, `.mmcif`, `.mcif` -> `ModelFormatBackend::Cif`
 
 The format implementation parses into `AtomicModelDataBlock`, not directly into `ModelObject`.
+
+Current contract of `ModelFileFormatBase`:
+
+```cpp
+virtual void Read(std::istream & stream, const std::string & source_name) = 0;
+virtual void Write(const ModelObject & model_object, std::ostream & stream, int model_par) = 0;
+virtual AtomicModelDataBlock * GetDataBlockPtr() = 0;
+```
+
+Important current intent:
+
+- model backends no longer use filename-based split loading
+- PDB import no longer opens the same file twice for header and atom parsing
+- CIF parsing now keeps the parsed document in instance-local state instead of caching by filename
 
 That intermediate block owns:
 
@@ -292,16 +315,17 @@ Database persistence enters through:
 
 - the SQLite connection
 - schema bootstrap and migration via `DatabaseSchemaManager`
-- the `object_metadata` dispatch table
+- the `object_catalog` dispatch table
 - a DAO cache keyed by `std::type_index`
 - the cross-table transaction boundary for save and load
 
-`object_metadata` is the polymorphic dispatch table:
+`object_catalog` is the canonical polymorphic dispatch table:
 
 ```sql
-CREATE TABLE IF NOT EXISTS object_metadata (
+CREATE TABLE IF NOT EXISTS object_catalog (
     key_tag TEXT PRIMARY KEY,
-    object_type TEXT
+    object_type TEXT NOT NULL,
+    CHECK (object_type IN ('model', 'map'))
 );
 ```
 
@@ -309,27 +333,33 @@ Save flow:
 
 1. rely on the schema that was already prepared when `DatabaseManager` opened the database
 2. open a single transaction
-3. create or reuse the DAO for the runtime object type
-4. call `dao->Save(...)`
-5. upsert `(key_tag, object_type)` into `object_metadata`
-6. commit on scope exit
+3. resolve the stable stored type name from `DataObjectDAOFactoryRegistry`
+4. upsert `(key_tag, object_type)` into `object_catalog`
+5. create or reuse the DAO for the runtime object type
+6. call `dao->Save(...)`
+7. commit on scope exit
 
 Load flow:
 
 1. rely on the schema that was already prepared when `DatabaseManager` opened the database
 2. open a single transaction
-3. read `object_type` from `object_metadata`
+3. read `object_type` from `object_catalog`
 4. resolve the DAO from `DataObjectDAOFactoryRegistry`
 5. call `dao->Load(key_tag)`
 6. return the reconstructed object
 
 This is an intentional contract change from the legacy design: DAO implementations are transaction-free. `DatabaseManager` is the only transaction owner for normal save or load operations.
 
-`DatabaseManager` also treats schema initialization as a one-shot concern per instance. Bootstrap, migration, validation, and metadata repair happen when the database handle is opened, not on every hot-path save or load.
+`DatabaseManager` also treats schema initialization as a one-shot concern per instance. Bootstrap, migration, validation, and any required legacy-shape rebuild happen when the database handle is opened, not on every hot-path save or load.
 
 ### 8.3 Schema Versioning and Migration
 
-`DatabaseSchemaManager` uses SQLite `PRAGMA user_version` as the single schema-version source. When `user_version == 0`, it runs an internal unversioned-schema inspection step before deciding whether bootstrap, repair, migration, or fail-fast behavior is safe.
+`DatabaseSchemaManager` uses SQLite `PRAGMA user_version` as the single schema-version source. It also treats `user_version == 2` as potentially one of two shapes:
+
+- final normalized v2: catalog-based and valid for runtime
+- legacy unreleased v2: metadata-based and rebuilt in place to the final catalog-based shape
+
+When `user_version == 0`, it runs an internal unversioned-schema inspection step before deciding whether bootstrap, rebuild, migration, or fail-fast behavior is safe.
 
 Current versions:
 
@@ -346,40 +376,49 @@ Internal unversioned schema states:
 `EnsureSchema()` behavior:
 
 1. if `PRAGMA user_version == 1`, migrate legacy v1 to v2
-2. if `PRAGMA user_version == 2`, run `ValidateNormalizedV2Schema()` only
+2. if `PRAGMA user_version == 2`:
+   - if the schema is already catalog-based, validate only
+   - if the schema is the unreleased metadata-based v2 shape, rebuild it in place into the final catalog-based v2 shape
 3. if `PRAGMA user_version` is any other non-zero value, reject the database as unsupported
 4. if `PRAGMA user_version == 0`, inspect table state:
    - `Empty`: create normalized v2 tables, set version to `2`, validate
-   - `LegacyV1`: migrate to v2
-   - `ManagedButUnversioned`: create any missing managed tables, run `RepairManagedMetadata()`, set version to `2`, validate
+   - `LegacyV1`: migrate directly to the final catalog-based v2
+   - `ManagedButUnversioned`: rebuild managed payload tables into the final catalog-based v2 shape and set version to `2`
    - `MixedUnknown`: fail fast instead of silently adopting the database
 
 Important intent:
 
 - a healthy v2 database is validated, not rewritten
-- metadata repair is reserved for managed-but-unversioned recovery, not ordinary hot-path save/load
+- `object_metadata` is treated only as legacy input during migration or upgrade; it is not part of the runtime schema anymore
 - databases with unknown unmanaged tables are not silently claimed by this subsystem
 
-Migration is open-time and in-place:
+Final normalized v2 root ownership:
+
+- `object_catalog(key_tag, object_type)` is the only polymorphic dispatch root
+- `model_object.key_tag` references `object_catalog(key_tag) ON DELETE CASCADE`
+- `map_list.key_tag` references `object_catalog(key_tag) ON DELETE CASCADE`
+- all `model_*` child tables reference `model_object(key_tag) ON DELETE CASCADE`
+
+Migration or rebuild is open-time and in-place:
 
 1. open one transaction
-2. create normalized v2 tables
-3. read model keys from legacy `model_list` as the authoritative source
-4. compare against any existing `object_metadata` model rows and log mismatches
-5. load each legacy model through `LegacyModelObjectReader`
-6. save it through `ModelObjectDAOv2`
-7. repair `object_metadata`
-8. drop only the legacy tables explicitly owned by the migrated keys
+2. create final-v2 shadow or canonical tables, depending on the source shape
+3. build or supplement `object_catalog` from authoritative payload roots
+4. load legacy v1 models through `LegacyModelObjectReader` when applicable
+5. save migrated models through `ModelObjectDAOv2`
+6. preserve only payload-backed keys; ghost metadata rows do not survive
+7. drop only the legacy tables explicitly owned by the migrated keys
+8. remove legacy `object_metadata`
 9. set `PRAGMA user_version = 2`
-10. validate normalized v2
+10. validate the final catalog-based v2 schema
 
 Current migration limits:
 
 - missing legacy metadata that was never persisted, such as historical `chain_id_list_map`, cannot be recovered
 - historical sanitize collisions in legacy per-key tables cannot be repaired automatically
-- map persistence stays on the existing `map_list` schema; only model persistence is migrated to normalized v2
 - partial or stale legacy `object_metadata` does not decide migration scope; `model_list` does
 - legacy cleanup is explicit-key based, not broad table-name pattern sweeping
+- managed store rebuild currently runs through `ManagedStoreRegistry`, which provides per-object schema creation, validation, key listing, and shadow-table copy or rename behavior
 
 ### 8.4 DAO Registration
 
@@ -394,7 +433,7 @@ The registration mechanism is:
 DataObjectDAORegistrar<DataObjectType, DAOType>("stable_name")
 ```
 
-The string name is persisted in `object_metadata.object_type`, so it must remain stable once databases exist on disk.
+The string name is persisted in `object_catalog.object_type`, so it must remain stable once databases exist on disk.
 
 Legacy v1 model loading is intentionally not part of the registered DAO surface. It exists only as an internal migration reader under `src/data/legacy/`.
 
@@ -481,7 +520,7 @@ Not persisted as standalone public state:
 
 ## 10. `MapObject` Persistence Schema
 
-`MapObjectDAO` keeps the existing flat schema:
+`MapObjectDAO` keeps a single shared table:
 
 - `map_list`
 
@@ -579,7 +618,7 @@ For a new database-persisted top-level object:
 2. implement a `DataObjectDAOBase` subclass
 3. register it with `DataObjectDAORegistrar<...>("stable_name")`
 4. ensure the DAO stays transaction-free
-5. extend `DatabaseSchemaManager` if schema bootstrap or migration must create new tables
+5. add a `ManagedStoreDescriptor` entry so schema creation, validation, key listing, and rebuild behavior are available to `DatabaseSchemaManager`
 6. decide whether it also needs file factories and readers or writers
 7. add round-trip tests for save and load
 8. document the schema and support matrix here

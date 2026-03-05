@@ -7,7 +7,7 @@ namespace rhbm_gem::model_io {
 
 inline constexpr std::string_view kCreateModelObjectTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_object (
-        key_tag TEXT PRIMARY KEY,
+        key_tag TEXT PRIMARY KEY REFERENCES object_catalog(key_tag) ON DELETE CASCADE,
         atom_size INTEGER,
         pdb_id TEXT,
         emd_id TEXT,
@@ -22,7 +22,8 @@ inline constexpr std::string_view kCreateModelChainMapTableSql = R"sql(
         entity_id TEXT,
         chain_ordinal INTEGER,
         chain_id TEXT,
-        PRIMARY KEY (key_tag, entity_id, chain_ordinal)
+        PRIMARY KEY (key_tag, entity_id, chain_ordinal),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -36,7 +37,8 @@ inline constexpr std::string_view kCreateModelComponentTableSql = R"sql(
         formula TEXT,
         molecular_weight DOUBLE,
         is_standard_monomer INTEGER,
-        PRIMARY KEY (key_tag, component_key)
+        PRIMARY KEY (key_tag, component_key),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -49,7 +51,8 @@ inline constexpr std::string_view kCreateModelComponentAtomTableSql = R"sql(
         element_type INTEGER,
         aromatic_atom_flag INTEGER,
         stereo_config INTEGER,
-        PRIMARY KEY (key_tag, component_key, atom_key)
+        PRIMARY KEY (key_tag, component_key, atom_key),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -63,7 +66,8 @@ inline constexpr std::string_view kCreateModelComponentBondTableSql = R"sql(
         bond_order INTEGER,
         aromatic_atom_flag INTEGER,
         stereo_config INTEGER,
-        PRIMARY KEY (key_tag, component_key, bond_key)
+        PRIMARY KEY (key_tag, component_key, bond_key),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -86,7 +90,8 @@ inline constexpr std::string_view kCreateModelAtomTableSql = R"sql(
         position_z DOUBLE,
         component_key INTEGER,
         atom_key INTEGER,
-        PRIMARY KEY (key_tag, serial_id)
+        PRIMARY KEY (key_tag, serial_id),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -99,7 +104,8 @@ inline constexpr std::string_view kCreateModelBondTableSql = R"sql(
         bond_type INTEGER,
         bond_order INTEGER,
         is_special_bond INTEGER,
-        PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2)
+        PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -114,7 +120,8 @@ inline constexpr std::string_view kCreateModelAtomLocalTableSql = R"sql(
         amplitude_estimate_mdpde DOUBLE,
         width_estimate_mdpde DOUBLE,
         alpha_r DOUBLE,
-        PRIMARY KEY (key_tag, serial_id)
+        PRIMARY KEY (key_tag, serial_id),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -130,7 +137,8 @@ inline constexpr std::string_view kCreateModelBondLocalTableSql = R"sql(
         amplitude_estimate_mdpde DOUBLE,
         width_estimate_mdpde DOUBLE,
         alpha_r DOUBLE,
-        PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2)
+        PRIMARY KEY (key_tag, atom_serial_id_1, atom_serial_id_2),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -145,7 +153,8 @@ inline constexpr std::string_view kCreateModelAtomPosteriorTableSql = R"sql(
         width_variance_posterior DOUBLE,
         outlier_tag INTEGER,
         statistical_distance DOUBLE,
-        PRIMARY KEY (key_tag, class_key, serial_id)
+        PRIMARY KEY (key_tag, class_key, serial_id),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -161,7 +170,8 @@ inline constexpr std::string_view kCreateModelBondPosteriorTableSql = R"sql(
         width_variance_posterior DOUBLE,
         outlier_tag INTEGER,
         statistical_distance DOUBLE,
-        PRIMARY KEY (key_tag, class_key, atom_serial_id_1, atom_serial_id_2)
+        PRIMARY KEY (key_tag, class_key, atom_serial_id_1, atom_serial_id_2),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -180,7 +190,8 @@ inline constexpr std::string_view kCreateModelAtomGroupTableSql = R"sql(
         amplitude_variance_prior DOUBLE,
         width_variance_prior DOUBLE,
         alpha_g DOUBLE,
-        PRIMARY KEY (key_tag, class_key, group_key)
+        PRIMARY KEY (key_tag, class_key, group_key),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
 
@@ -199,9 +210,26 @@ inline constexpr std::string_view kCreateModelBondGroupTableSql = R"sql(
         amplitude_variance_prior DOUBLE,
         width_variance_prior DOUBLE,
         alpha_g DOUBLE,
-        PRIMARY KEY (key_tag, class_key, group_key)
+        PRIMARY KEY (key_tag, class_key, group_key),
+        FOREIGN KEY(key_tag) REFERENCES model_object(key_tag) ON DELETE CASCADE
     )
 )sql";
+
+inline constexpr std::array<std::string_view, 13> kModelCanonicalTableNames{
+    "model_object",
+    "model_chain_map",
+    "model_component",
+    "model_component_atom",
+    "model_component_bond",
+    "model_atom",
+    "model_bond",
+    "model_atom_local_potential",
+    "model_bond_local_potential",
+    "model_atom_posterior",
+    "model_bond_posterior",
+    "model_atom_group_potential",
+    "model_bond_group_potential"
+};
 
 inline constexpr std::string_view kUpsertModelObjectSql = R"sql(
     INSERT INTO model_object (

@@ -1,11 +1,12 @@
 #include "DatabaseSchemaManager.hpp"
 
 #include "Logger.hpp"
-#include "MapObjectDAO.hpp"
 #include "ModelObject.hpp"
 #include "ModelObjectDAOv2.hpp"
 #include "SQLiteWrapper.hpp"
-#include "DataObjectBase.hpp"
+#include "model_io/ModelSchemaSql.hpp"
+#include "persistence/ManagedStoreRegistry.hpp"
+#include "persistence/MapStoreSql.hpp"
 
 #include "ChemicalDataHelper.hpp"
 #include "legacy/LegacyModelObjectReader.hpp"
@@ -36,23 +37,18 @@ namespace
     constexpr std::string_view kDatabaseEmptySql =
         "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
     constexpr std::string_view kPragmaUserVersionSql = "PRAGMA user_version;";
-    constexpr std::string_view kCreateObjectMetadataSql =
-        "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);";
-    constexpr std::string_view kUpsertObjectMetadataSql = R"sql(
-        INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?)
-        ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;
-    )sql";
     constexpr std::string_view kLegacyModelKeyListSql = "SELECT key_tag FROM model_list;";
-    constexpr std::string_view kModelMetadataKeyListSql =
-        "SELECT key_tag FROM object_metadata WHERE object_type = 'model';";
-    constexpr std::string_view kMapMetadataKeyListSql =
-        "SELECT key_tag FROM object_metadata WHERE object_type = 'map';";
-    constexpr std::string_view kMapKeyListSql = "SELECT key_tag FROM map_list;";
-    constexpr std::string_view kModelV2KeyListSql = "SELECT key_tag FROM model_object;";
-    constexpr std::string_view kDeleteObjectMetadataSql =
-        "DELETE FROM object_metadata WHERE key_tag = ? AND object_type = ?;";
+    constexpr std::string_view kLegacyModelMetadataKeyListSql =
+        "SELECT key_tag FROM object_metadata WHERE object_type = 'model' ORDER BY key_tag;";
+    constexpr std::string_view kLegacyMapMetadataKeyListSql =
+        "SELECT key_tag FROM object_metadata WHERE object_type = 'map' ORDER BY key_tag;";
 
-    constexpr std::array<std::string_view, 15> kNormalizedV2RequiredTables{
+    constexpr std::string_view kFinalCatalogTableName = "object_catalog";
+    constexpr std::string_view kObjectCatalogShadowSuffix = "_final_v2";
+    constexpr std::string_view kManagedObjectMetadataTableName = "object_metadata";
+
+    constexpr std::array<std::string_view, 16> kKnownManagedTableNames{
+        "object_catalog",
         "object_metadata",
         "model_object",
         "model_chain_map",
@@ -71,10 +67,11 @@ namespace
     };
 
     std::vector<std::string> QuerySingleStringColumn(
-        rhbm_gem::SQLiteWrapper & database, std::string_view sql)
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & sql)
     {
         std::vector<std::string> values;
-        database.Prepare(std::string(sql));
+        database.Prepare(sql);
         rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
         while (true)
         {
@@ -92,9 +89,11 @@ namespace
         return values;
     }
 
-    int QueryUserVersion(rhbm_gem::SQLiteWrapper & database)
+    int QuerySingleInt(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & sql)
     {
-        database.Prepare(std::string(kPragmaUserVersionSql));
+        database.Prepare(sql);
         rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
         const auto rc{ database.StepNext() };
         if (rc == rhbm_gem::SQLiteWrapper::StepDone())
@@ -103,29 +102,14 @@ namespace
         }
         if (rc != rhbm_gem::SQLiteWrapper::StepRow())
         {
-            throw std::runtime_error("Failed to query schema version: " + database.ErrorMessage());
+            throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
         return database.GetColumn<int>(0);
     }
 
-    void UpsertObjectMetadata(
-        rhbm_gem::SQLiteWrapper & database,
-        const std::vector<std::string> & key_list,
-        const std::string & object_type)
+    int QueryUserVersion(rhbm_gem::SQLiteWrapper & database)
     {
-        if (key_list.empty())
-        {
-            return;
-        }
-        database.Prepare(std::string(kUpsertObjectMetadataSql));
-        rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
-        for (const auto & key_tag : key_list)
-        {
-            database.Bind<std::string>(1, key_tag);
-            database.Bind<std::string>(2, object_type);
-            database.StepOnce();
-            database.Reset();
-        }
+        return QuerySingleInt(database, std::string(kPragmaUserVersionSql));
     }
 
     bool HasTable(rhbm_gem::SQLiteWrapper & database, const std::string & table_name)
@@ -145,20 +129,17 @@ namespace
         return true;
     }
 
+    void DropTableIfExists(rhbm_gem::SQLiteWrapper & database, const std::string & table_name)
+    {
+        if (HasTable(database, table_name))
+        {
+            database.Execute("DROP TABLE " + table_name + ";");
+        }
+    }
+
     bool IsDatabaseEmpty(rhbm_gem::SQLiteWrapper & database)
     {
-        database.Prepare(std::string(kDatabaseEmptySql));
-        rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
-        const auto rc{ database.StepNext() };
-        if (rc != rhbm_gem::SQLiteWrapper::StepRow())
-        {
-            if (rc == rhbm_gem::SQLiteWrapper::StepDone())
-            {
-                return true;
-            }
-            throw std::runtime_error("Failed to inspect database tables: " + database.ErrorMessage());
-        }
-        return database.GetColumn<int>(0) == 0;
+        return QuerySingleInt(database, std::string(kDatabaseEmptySql)) == 0;
     }
 
     bool HasLegacyModelSchema(rhbm_gem::SQLiteWrapper & database)
@@ -169,9 +150,9 @@ namespace
     bool IsManagedTableName(std::string_view table_name)
     {
         return std::find(
-                   kNormalizedV2RequiredTables.begin(),
-                   kNormalizedV2RequiredTables.end(),
-                   table_name) != kNormalizedV2RequiredTables.end();
+                   kKnownManagedTableNames.begin(),
+                   kKnownManagedTableNames.end(),
+                   table_name) != kKnownManagedTableNames.end();
     }
 
     UnversionedSchemaState InspectUnversionedSchemaState(rhbm_gem::SQLiteWrapper & database)
@@ -185,7 +166,7 @@ namespace
             return UnversionedSchemaState::LegacyV1;
         }
 
-        for (const auto & table_name : QuerySingleStringColumn(database, kListTablesSql))
+        for (const auto & table_name : QuerySingleStringColumn(database, std::string(kListTablesSql)))
         {
             if (!IsManagedTableName(table_name))
             {
@@ -195,17 +176,179 @@ namespace
         return UnversionedSchemaState::ManagedButUnversioned;
     }
 
-    void ValidateNormalizedV2Schema(rhbm_gem::SQLiteWrapper & database)
+    std::string BuildObjectCatalogTableName(const std::string & suffix = {})
     {
-        for (const auto required_table : kNormalizedV2RequiredTables)
+        return std::string(kFinalCatalogTableName) + suffix;
+    }
+
+    void CreateObjectCatalogTable(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & table_name = std::string(kFinalCatalogTableName))
+    {
+        database.Execute(
+            "CREATE TABLE IF NOT EXISTS " + table_name +
+            " (key_tag TEXT PRIMARY KEY, object_type TEXT NOT NULL, "
+            "CHECK (object_type IN ('model', 'map')));");
+    }
+
+    void UpsertObjectCatalogRows(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::vector<std::string> & key_list,
+        const std::string & object_type,
+        const std::string & table_name = std::string(kFinalCatalogTableName))
+    {
+        if (key_list.empty())
         {
-            if (!HasTable(database, std::string(required_table)))
+            return;
+        }
+        database.Prepare(
+            "INSERT INTO " + table_name + "(key_tag, object_type) VALUES (?, ?) "
+            "ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;");
+        rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+        for (const auto & key_tag : key_list)
+        {
+            database.Bind<std::string>(1, key_tag);
+            database.Bind<std::string>(2, object_type);
+            database.StepOnce();
+            database.Reset();
+        }
+    }
+
+    std::vector<std::string> QueryCatalogKeys(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & object_type,
+        const std::string & table_name = std::string(kFinalCatalogTableName))
+    {
+        if (!HasTable(database, table_name))
+        {
+            return {};
+        }
+        database.Prepare(
+            "SELECT key_tag FROM " + table_name + " WHERE object_type = ? ORDER BY key_tag;");
+        rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+        database.Bind<std::string>(1, object_type);
+        std::vector<std::string> key_list;
+        while (true)
+        {
+            const auto rc{ database.StepNext() };
+            if (rc == rhbm_gem::SQLiteWrapper::StepDone())
             {
-                throw std::runtime_error(
-                    "Normalized v2 schema is missing required table: " +
-                    std::string(required_table));
+                break;
+            }
+            if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+            {
+                throw std::runtime_error("Step failed: " + database.ErrorMessage());
+            }
+            key_list.push_back(database.GetColumn<std::string>(0));
+        }
+        return key_list;
+    }
+
+    void ValidateFinalV2Schema(rhbm_gem::SQLiteWrapper & database)
+    {
+        if (!HasTable(database, std::string(kFinalCatalogTableName)))
+        {
+            throw std::runtime_error("Normalized v2 schema is missing required table: object_catalog");
+        }
+        if (HasTable(database, std::string(kManagedObjectMetadataTableName)))
+        {
+            throw std::runtime_error(
+                "Normalized v2 schema must not retain legacy object_metadata.");
+        }
+
+        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        {
+            descriptor.validate_schema_v2(database);
+            const auto payload_keys{ descriptor.list_keys(database) };
+            const auto catalog_keys{
+                QueryCatalogKeys(database, std::string(descriptor.object_type))
+            };
+            const std::unordered_set<std::string> payload_key_set{
+                payload_keys.begin(), payload_keys.end()
+            };
+            const std::unordered_set<std::string> catalog_key_set{
+                catalog_keys.begin(), catalog_keys.end()
+            };
+
+            for (const auto & key_tag : payload_keys)
+            {
+                if (catalog_key_set.find(key_tag) == catalog_key_set.end())
+                {
+                    throw std::runtime_error(
+                        "Normalized v2 catalog is missing " +
+                        std::string(descriptor.object_type) +
+                        " key: " + key_tag);
+                }
+            }
+
+            for (const auto & key_tag : catalog_keys)
+            {
+                if (payload_key_set.find(key_tag) == payload_key_set.end())
+                {
+                    throw std::runtime_error(
+                        "Normalized v2 catalog contains ghost " +
+                        std::string(descriptor.object_type) +
+                        " key without payload: " + key_tag);
+                }
             }
         }
+    }
+
+    bool IsCatalogBasedV2Schema(rhbm_gem::SQLiteWrapper & database)
+    {
+        if (!HasTable(database, std::string(kFinalCatalogTableName)))
+        {
+            return false;
+        }
+        if (HasTable(database, std::string(kManagedObjectMetadataTableName)))
+        {
+            return false;
+        }
+
+        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        {
+            descriptor.validate_schema_v2(database);
+        }
+        return true;
+    }
+
+    bool IsMetadataBasedLegacyV2Schema(rhbm_gem::SQLiteWrapper & database)
+    {
+        if (!HasTable(database, std::string(kManagedObjectMetadataTableName)))
+        {
+            return false;
+        }
+        if (HasTable(database, std::string(kFinalCatalogTableName)))
+        {
+            return false;
+        }
+        for (const auto & table_name : QuerySingleStringColumn(database, std::string(kListTablesSql)))
+        {
+            if (!IsManagedTableName(table_name))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    void SetSchemaVersion(
+        rhbm_gem::SQLiteWrapper & database,
+        rhbm_gem::DatabaseSchemaVersion version)
+    {
+        database.Execute(
+            "PRAGMA user_version = " +
+            std::to_string(static_cast<int>(version)) +
+            ";");
+    }
+
+    int CountRows(rhbm_gem::SQLiteWrapper & database, const std::string & table_name)
+    {
+        if (!HasTable(database, table_name))
+        {
+            return 0;
+        }
+        return QuerySingleInt(database, "SELECT COUNT(*) FROM " + table_name + ";");
     }
 
     std::string SanitizeLegacyModelKey(const std::string & key_tag)
@@ -233,16 +376,21 @@ namespace
             return {};
         }
 
-        const auto model_list_keys{ QuerySingleStringColumn(database, kLegacyModelKeyListSql) };
-        if (!HasTable(database, "object_metadata"))
+        const auto model_list_keys{
+            QuerySingleStringColumn(database, std::string(kLegacyModelKeyListSql))
+        };
+        if (!HasTable(database, std::string(kManagedObjectMetadataTableName)))
         {
             return model_list_keys;
         }
 
-        const auto metadata_keys{ QuerySingleStringColumn(database, kModelMetadataKeyListSql) };
+        const auto metadata_keys{
+            QuerySingleStringColumn(database, std::string(kLegacyModelMetadataKeyListSql))
+        };
         std::unordered_set<std::string> metadata_key_set{ metadata_keys.begin(), metadata_keys.end() };
         std::unordered_set<std::string> model_list_key_set{
-            model_list_keys.begin(), model_list_keys.end() };
+            model_list_keys.begin(), model_list_keys.end()
+        };
 
         for (const auto & key_tag : model_list_keys)
         {
@@ -305,108 +453,293 @@ namespace
         return owned_table_names;
     }
 
-    void EnsureNormalizedV2Tables(rhbm_gem::SQLiteWrapper & database)
+    void CreateFinalV2Tables(rhbm_gem::SQLiteWrapper & database)
     {
-        database.Execute(std::string(kCreateObjectMetadataSql));
-        rhbm_gem::ModelObjectDAOv2::EnsureSchema(database);
-        rhbm_gem::MapObjectDAO::EnsureSchema(database);
+        CreateObjectCatalogTable(database);
+        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        {
+            descriptor.ensure_schema_v2(database);
+        }
     }
 
-    void RepairManagedMetadata(rhbm_gem::SQLiteWrapper & database)
+    void SeedCatalogFromLegacyMetadata(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & catalog_table_name)
     {
-        EnsureNormalizedV2Tables(database);
-
-        std::vector<std::string> map_keys;
-        if (HasTable(database, "map_list"))
-        {
-            map_keys = QuerySingleStringColumn(database, kMapKeyListSql);
-            UpsertObjectMetadata(database, map_keys, "map");
-        }
-
-        std::vector<std::string> model_keys;
-        if (HasTable(database, "model_object"))
-        {
-            model_keys = QuerySingleStringColumn(database, kModelV2KeyListSql);
-            UpsertObjectMetadata(database, model_keys, "model");
-        }
-
-        if (!HasTable(database, "object_metadata"))
+        if (!HasTable(database, std::string(kManagedObjectMetadataTableName)))
         {
             return;
         }
 
-        const std::unordered_set<std::string> map_key_set{ map_keys.begin(), map_keys.end() };
-        const std::unordered_set<std::string> model_key_set{ model_keys.begin(), model_keys.end() };
-        const auto map_metadata_keys{ QuerySingleStringColumn(database, kMapMetadataKeyListSql) };
-        const auto model_metadata_keys{ QuerySingleStringColumn(database, kModelMetadataKeyListSql) };
-        database.Prepare(std::string(kDeleteObjectMetadataSql));
-        rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+        const auto model_metadata_keys{
+            QuerySingleStringColumn(database, std::string(kLegacyModelMetadataKeyListSql))
+        };
+        const auto map_metadata_keys{
+            QuerySingleStringColumn(database, std::string(kLegacyMapMetadataKeyListSql))
+        };
+        const auto model_payload_keys{
+            rhbm_gem::persistence::LookupManagedStoreDescriptor("model").list_keys(database)
+        };
+        const auto map_payload_keys{
+            rhbm_gem::persistence::LookupManagedStoreDescriptor("map").list_keys(database)
+        };
+        const std::unordered_set<std::string> model_payload_key_set{
+            model_payload_keys.begin(), model_payload_keys.end()
+        };
+        const std::unordered_set<std::string> map_payload_key_set{
+            map_payload_keys.begin(), map_payload_keys.end()
+        };
 
-        for (const auto & key_tag : map_metadata_keys)
-        {
-            if (map_key_set.find(key_tag) != map_key_set.end())
-            {
-                continue;
-            }
-            database.Bind<std::string>(1, key_tag);
-            database.Bind<std::string>(2, "map");
-            database.StepOnce();
-            database.Reset();
-        }
-
+        std::vector<std::string> surviving_model_keys;
         for (const auto & key_tag : model_metadata_keys)
         {
-            if (model_key_set.find(key_tag) != model_key_set.end())
+            if (model_payload_key_set.find(key_tag) == model_payload_key_set.end())
             {
+                Logger::Log(
+                    LogLevel::Warning,
+                    "Ignoring ghost model metadata row during normalized v2 upgrade: " + key_tag);
                 continue;
             }
-            database.Bind<std::string>(1, key_tag);
-            database.Bind<std::string>(2, "model");
-            database.StepOnce();
-            database.Reset();
+            surviving_model_keys.push_back(key_tag);
+        }
+
+        std::vector<std::string> surviving_map_keys;
+        for (const auto & key_tag : map_metadata_keys)
+        {
+            if (map_payload_key_set.find(key_tag) == map_payload_key_set.end())
+            {
+                Logger::Log(
+                    LogLevel::Warning,
+                    "Ignoring ghost map metadata row during normalized v2 upgrade: " + key_tag);
+                continue;
+            }
+            surviving_map_keys.push_back(key_tag);
+        }
+
+        UpsertObjectCatalogRows(database, surviving_model_keys, "model", catalog_table_name);
+        UpsertObjectCatalogRows(database, surviving_map_keys, "map", catalog_table_name);
+    }
+
+    void SupplementCatalogFromPayload(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & catalog_table_name)
+    {
+        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        {
+            UpsertObjectCatalogRows(
+                database,
+                descriptor.list_keys(database),
+                std::string(descriptor.object_type),
+                catalog_table_name);
         }
     }
 
-    void SetSchemaVersion(
+    std::vector<std::string> QueryRootKeysForObjectType(
         rhbm_gem::SQLiteWrapper & database,
-        rhbm_gem::DatabaseSchemaVersion version)
+        std::string_view object_type,
+        const std::string & suffix)
     {
-        database.Execute(
-            "PRAGMA user_version = " +
-            std::to_string(static_cast<int>(version)) +
-            ";");
+        if (object_type == "model")
+        {
+            return HasTable(database, "model_object" + suffix)
+                ? QuerySingleStringColumn(
+                    database,
+                    "SELECT key_tag FROM model_object" + suffix + " ORDER BY key_tag;")
+                : std::vector<std::string>{};
+        }
+        if (object_type == "map")
+        {
+            return HasTable(database, "map_list" + suffix)
+                ? QuerySingleStringColumn(
+                    database,
+                    "SELECT key_tag FROM map_list" + suffix + " ORDER BY key_tag;")
+                : std::vector<std::string>{};
+        }
+        throw std::runtime_error("Unsupported managed object type: " + std::string(object_type));
     }
 
-    void MigrateLegacyV1ToNormalizedV2(rhbm_gem::SQLiteWrapper & database)
+    void ValidateShadowCatalogCoverage(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & suffix)
+    {
+        const auto shadow_catalog_table_name{ BuildObjectCatalogTableName(suffix) };
+        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        {
+            const auto catalog_keys{
+                QueryCatalogKeys(database, std::string(descriptor.object_type), shadow_catalog_table_name)
+            };
+            const auto payload_keys{
+                QueryRootKeysForObjectType(database, descriptor.object_type, suffix)
+            };
+            const std::unordered_set<std::string> catalog_key_set{
+                catalog_keys.begin(), catalog_keys.end()
+            };
+            const std::unordered_set<std::string> payload_key_set{
+                payload_keys.begin(), payload_keys.end()
+            };
+
+            for (const auto & key_tag : catalog_keys)
+            {
+                if (payload_key_set.find(key_tag) == payload_key_set.end())
+                {
+                    throw std::runtime_error(
+                        "Shadow object catalog contains ghost " +
+                        std::string(descriptor.object_type) +
+                        " key without payload: " + key_tag);
+                }
+            }
+
+            for (const auto & key_tag : payload_keys)
+            {
+                if (catalog_key_set.find(key_tag) == catalog_key_set.end())
+                {
+                    throw std::runtime_error(
+                        "Shadow object catalog is missing " +
+                        std::string(descriptor.object_type) +
+                        " key: " + key_tag);
+                }
+            }
+        }
+    }
+
+    void ValidateShadowPayloadRowCounts(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & suffix)
+    {
+        for (const auto table_name : rhbm_gem::model_io::kModelCanonicalTableNames)
+        {
+            if (!HasTable(database, std::string(table_name)))
+            {
+                continue;
+            }
+            const auto expected_count{ CountRows(database, std::string(table_name)) };
+            const auto actual_count{ CountRows(database, std::string(table_name) + suffix) };
+            if (expected_count != actual_count)
+            {
+                throw std::runtime_error(
+                    "Shadow table row count mismatch for " +
+                    std::string(table_name) +
+                    ": expected " + std::to_string(expected_count) +
+                    ", actual " + std::to_string(actual_count));
+            }
+        }
+
+        for (const auto table_name : rhbm_gem::persistence::kMapCanonicalTableNames)
+        {
+            if (!HasTable(database, std::string(table_name)))
+            {
+                continue;
+            }
+            const auto expected_count{ CountRows(database, std::string(table_name)) };
+            const auto actual_count{ CountRows(database, std::string(table_name) + suffix) };
+            if (expected_count != actual_count)
+            {
+                throw std::runtime_error(
+                    "Shadow table row count mismatch for " +
+                    std::string(table_name) +
+                    ": expected " + std::to_string(expected_count) +
+                    ", actual " + std::to_string(actual_count));
+            }
+        }
+    }
+
+    void RebuildManagedSchemaToFinalV2(
+        rhbm_gem::SQLiteWrapper & database,
+        bool seed_from_legacy_metadata)
     {
         Logger::Log(
             LogLevel::Info,
-            "Migrating database schema from legacy v1 to normalized v2.");
+            "Rebuilding managed database schema into final normalized v2 layout.");
+
+        rhbm_gem::SQLiteWrapper::TransactionGuard transaction(database);
+        const std::string suffix{ kObjectCatalogShadowSuffix };
+        const auto shadow_catalog_table_name{ BuildObjectCatalogTableName(suffix) };
+
+        CreateObjectCatalogTable(database, shadow_catalog_table_name);
+        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        {
+            descriptor.create_shadow_tables_v2(database, suffix);
+        }
+
+        if (seed_from_legacy_metadata)
+        {
+            SeedCatalogFromLegacyMetadata(database, shadow_catalog_table_name);
+        }
+        SupplementCatalogFromPayload(database, shadow_catalog_table_name);
+
+        int rebuilt_table_count{ 0 };
+        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        {
+            descriptor.copy_into_shadow_tables_v2(database, suffix);
+            ++rebuilt_table_count;
+        }
+
+        ValidateShadowCatalogCoverage(database, suffix);
+        ValidateShadowPayloadRowCounts(database, suffix);
+
+        DropTableIfExists(database, std::string(kManagedObjectMetadataTableName));
+        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        {
+            descriptor.drop_old_and_rename_shadow_tables_v2(database, suffix);
+        }
+        DropTableIfExists(database, std::string(kFinalCatalogTableName));
+        database.Execute(
+            "ALTER TABLE " + shadow_catalog_table_name +
+            " RENAME TO " + std::string(kFinalCatalogTableName) + ";");
+
+        SetSchemaVersion(database, rhbm_gem::DatabaseSchemaVersion::NormalizedV2);
+        ValidateFinalV2Schema(database);
+        Logger::Log(
+            LogLevel::Info,
+            "Managed schema rebuild completed. Rebuilt store count = " +
+                std::to_string(rebuilt_table_count) + ".");
+    }
+
+    void MigrateLegacyV1ToFinalV2(rhbm_gem::SQLiteWrapper & database)
+    {
+        Logger::Log(
+            LogLevel::Info,
+            "Migrating database schema from legacy v1 to final normalized v2.");
 
         rhbm_gem::SQLiteWrapper::TransactionGuard transaction(database);
         const auto legacy_model_keys{ GetLegacyModelKeyList(database) };
-        EnsureNormalizedV2Tables(database);
+
+        CreateFinalV2Tables(database);
 
         rhbm_gem::LegacyModelObjectReader legacy_reader{ &database };
         rhbm_gem::ModelObjectDAOv2 v2_dao{ &database };
         for (const auto & key_tag : legacy_model_keys)
         {
             auto model_object{ legacy_reader.Load(key_tag) };
+            UpsertObjectCatalogRows(database, { key_tag }, "model");
             v2_dao.Save(model_object.get(), key_tag);
-            UpsertObjectMetadata(database, { key_tag }, "model");
         }
 
+        const auto legacy_map_keys{
+            rhbm_gem::persistence::LookupManagedStoreDescriptor("map").list_keys(database)
+        };
+        UpsertObjectCatalogRows(database, legacy_map_keys, "map");
+
+        int dropped_legacy_table_count{ 0 };
         for (const auto & table_name : BuildLegacyOwnedTableNames(legacy_model_keys))
         {
             if (HasTable(database, table_name))
             {
-                database.Execute("DROP TABLE IF EXISTS " + table_name + ";");
+                database.Execute("DROP TABLE " + table_name + ";");
+                ++dropped_legacy_table_count;
             }
         }
 
-        RepairManagedMetadata(database);
+        DropTableIfExists(database, std::string(kManagedObjectMetadataTableName));
         SetSchemaVersion(database, rhbm_gem::DatabaseSchemaVersion::NormalizedV2);
-        ValidateNormalizedV2Schema(database);
+        ValidateFinalV2Schema(database);
+        Logger::Log(
+            LogLevel::Info,
+            "Legacy v1 migration completed. Migrated model count = " +
+                std::to_string(legacy_model_keys.size()) +
+                ", migrated map count = " + std::to_string(legacy_map_keys.size()) +
+                ", dropped legacy table count = " +
+                std::to_string(dropped_legacy_table_count) + ".");
     }
 }
 
@@ -426,13 +759,24 @@ DatabaseSchemaVersion DatabaseSchemaManager::EnsureSchema()
     const auto raw_version{ QueryUserVersion(*m_database) };
     if (raw_version == static_cast<int>(DatabaseSchemaVersion::LegacyV1))
     {
-        MigrateLegacyV1ToNormalizedV2(*m_database);
+        MigrateLegacyV1ToFinalV2(*m_database);
         return DatabaseSchemaVersion::NormalizedV2;
     }
     if (raw_version == static_cast<int>(DatabaseSchemaVersion::NormalizedV2))
     {
-        ValidateNormalizedV2Schema(*m_database);
-        return DatabaseSchemaVersion::NormalizedV2;
+        if (IsCatalogBasedV2Schema(*m_database))
+        {
+            ValidateFinalV2Schema(*m_database);
+            return DatabaseSchemaVersion::NormalizedV2;
+        }
+        if (IsMetadataBasedLegacyV2Schema(*m_database) ||
+            HasTable(*m_database, std::string(kManagedObjectMetadataTableName)))
+        {
+            RebuildManagedSchemaToFinalV2(*m_database, true);
+            return DatabaseSchemaVersion::NormalizedV2;
+        }
+        throw std::runtime_error(
+            "Database reports schema version 2 but does not match a supported normalized v2 shape.");
     }
     if (raw_version != 0)
     {
@@ -443,18 +787,17 @@ DatabaseSchemaVersion DatabaseSchemaManager::EnsureSchema()
     switch (InspectUnversionedSchemaState(*m_database))
     {
     case UnversionedSchemaState::Empty:
-        EnsureNormalizedV2Tables(*m_database);
+        CreateFinalV2Tables(*m_database);
         SetSchemaVersion(*m_database, DatabaseSchemaVersion::NormalizedV2);
-        ValidateNormalizedV2Schema(*m_database);
+        ValidateFinalV2Schema(*m_database);
         return DatabaseSchemaVersion::NormalizedV2;
     case UnversionedSchemaState::LegacyV1:
-        MigrateLegacyV1ToNormalizedV2(*m_database);
+        MigrateLegacyV1ToFinalV2(*m_database);
         return DatabaseSchemaVersion::NormalizedV2;
     case UnversionedSchemaState::ManagedButUnversioned:
-        EnsureNormalizedV2Tables(*m_database);
-        RepairManagedMetadata(*m_database);
-        SetSchemaVersion(*m_database, DatabaseSchemaVersion::NormalizedV2);
-        ValidateNormalizedV2Schema(*m_database);
+        RebuildManagedSchemaToFinalV2(
+            *m_database,
+            HasTable(*m_database, std::string(kManagedObjectMetadataTableName)));
         return DatabaseSchemaVersion::NormalizedV2;
     case UnversionedSchemaState::MixedUnknown:
         throw std::runtime_error(

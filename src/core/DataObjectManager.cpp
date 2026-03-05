@@ -1,6 +1,6 @@
 #include "DataObjectManager.hpp"
 #include "FileProcessFactoryBase.hpp"
-#include "FileProcessFactoryRegistry.hpp"
+#include "FileProcessFactoryResolver.hpp"
 #include "FilePathHelper.hpp"
 #include "DataObjectBase.hpp"
 #include "DataObjectVisitorBase.hpp"
@@ -12,8 +12,19 @@
 namespace rhbm_gem {
 
 DataObjectManager::DataObjectManager() :
-    m_db_manager{ nullptr }
+    DataObjectManager(CreateDefaultFileProcessFactoryResolver())
 {
+}
+
+DataObjectManager::DataObjectManager(
+    std::shared_ptr<const FileProcessFactoryResolver> file_factory_resolver) :
+    m_db_manager{ nullptr },
+    m_file_factory_resolver{ std::move(file_factory_resolver) }
+{
+    if (!m_file_factory_resolver)
+    {
+        throw std::runtime_error("DataObjectManager requires a valid file factory resolver.");
+    }
 }
 
 DataObjectManager::~DataObjectManager()
@@ -48,8 +59,7 @@ void DataObjectManager::ProcessFile(
 {
     try
     {
-        auto extension{ FilePathHelper::GetExtension(filename) };
-        auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(extension) };
+        auto factory{ CreateFileFactory(filename) };
         auto data_object{ factory->CreateDataObject(filename) };
         data_object->SetKeyTag(key_tag);
         data_object->Display();
@@ -76,8 +86,7 @@ void DataObjectManager::ProduceFile(
     try
     {
         auto data_object{ GetDataObject(key_tag) };
-        auto extension{ FilePathHelper::GetExtension(filename) };
-        auto factory{ FileProcessFactoryRegistry::Instance().CreateFactory(extension) };
+        auto factory{ CreateFileFactory(filename) };
         factory->OutputDataObject(filename, data_object.get());
     }
     catch (const std::exception & ex)
@@ -104,6 +113,12 @@ bool DataObjectManager::AddDataObject(
                     "the data object has been replaced.");
     }
     return result.second;
+}
+
+std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFileFactory(
+    const std::filesystem::path & filename) const
+{
+    return m_file_factory_resolver->CreateFactory(FilePathHelper::GetExtension(filename));
 }
 
 bool DataObjectManager::HasDataObject(const std::string & key_tag) const

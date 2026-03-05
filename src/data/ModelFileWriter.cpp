@@ -42,8 +42,7 @@ void ModelFileWriter::Write()
     {
         throw std::runtime_error("Cannot open the file: " + m_file_path);
     }
-    m_file_object->SaveHeader(m_model_object, outfile);
-    m_file_object->SaveDataArray(m_model_object, outfile, m_model_par);
+    m_file_object->Write(*m_model_object, outfile, m_model_par);
 }
 
 } // namespace rhbm_gem

@@ -13,6 +13,7 @@ set(DATA_SOURCES
     FileFormatBackendFactory.cpp
     FileFormatRegistry.cpp
     FileProcessFactoryRegistry.cpp
+    FileProcessFactoryResolver.cpp
     GroupPotentialEntry.cpp
     LocalPotentialEntry.cpp
     legacy/LegacyModelObjectReader.cpp
@@ -29,6 +30,7 @@ set(DATA_SOURCES
     ModelObjectFactory.cpp
     model_io/ModelAnalysisPersistence.cpp
     model_io/ModelStructurePersistence.cpp
+    persistence/ManagedStoreRegistry.cpp
     MrcFormat.cpp
     PdbFormat.cpp
     PotentialEntryIterator.cpp

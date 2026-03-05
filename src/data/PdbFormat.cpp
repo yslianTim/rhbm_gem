@@ -22,38 +22,22 @@ PdbFormat::~PdbFormat()
 
 }
 
-void PdbFormat::LoadHeader(const std::string & filename)
+void PdbFormat::Read(std::istream & stream, const std::string & source_name)
 {
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
+    m_data_block = std::make_unique<AtomicModelDataBlock>();
+    if (!stream)
     {
-        Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
-        throw std::runtime_error("LoadHeader failed!");
+        Logger::Log(LogLevel::Error, "Cannot read the file stream: " + source_name);
+        throw std::runtime_error("PdbFormat::Read() failed: invalid input stream.");
     }
+    LoadAtomSiteData(stream);
 }
 
-void PdbFormat::PrintHeader() const
+void PdbFormat::LoadAtomSiteData(std::istream & stream)
 {
-
-}
-
-void PdbFormat::LoadDataArray(const std::string & filename)
-{
-    LoadAtomSiteData(filename);
-}
-
-void PdbFormat::LoadAtomSiteData(const std::string & filename)
-{
-    std::ifstream infile{ filename, std::ios::binary };
-    if (!infile)
-    {
-        Logger::Log(LogLevel::Error, "Cannot open the file: " + filename);
-        throw std::runtime_error("LoadAtomSiteData failed!");
-    }
-
     std::string line;
     auto model_number{ 1 };
-    while (std::getline(infile, line))
+    while (std::getline(stream, line))
     {
         StringHelper::StripCarriageReturn(line);
         char * buffer{ line.data() };
@@ -117,13 +101,7 @@ AtomicModelDataBlock * PdbFormat::GetDataBlockPtr()
     return m_data_block.get();
 }
 
-void PdbFormat::SaveHeader(const ModelObject * model_object, std::ostream & stream)
-{
-    (void)model_object;
-    (void)stream;
-}
-
-void PdbFormat::SaveDataArray(const ModelObject * model_object, std::ostream & stream, int par)
+void PdbFormat::Write(const ModelObject & model_object, std::ostream & stream, int par)
 {
     (void)model_object;
     (void)stream;

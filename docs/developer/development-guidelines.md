@@ -78,13 +78,17 @@ See [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-i
 - `[Required]` `Execute()` should keep a clear phase boundary: validate and construct prerequisites first, then run the main workflow.
 - `[Required]` File parsing, database access, and DAO details belong in the data layer, not inside command orchestration logic.
 - `[Required]` Supported file-format matrices must be defined through `FileFormatRegistry`; do not scatter extension truth across unrelated registries or readers and writers.
+- `[Required]` Built-in top-level file factory selection must remain derivable from `FileFormatRegistry` through a resolver. Do not make global mutable registries the default source of built-in format behavior.
 - `[Required]` `FileProcessFactoryRegistry` is an override seam, not the default source of built-in format support. Default factory selection must remain derivable from `FileFormatRegistry`.
 - `[Required]` File readers, writers, and factories in the data layer should use throw-on-failure contracts. Do not rely on `nullptr`, `IsSuccessfullyRead()`, or similar success flags for normal error propagation.
+- `[Required]` Model-format backends should use the stream-based `ModelFileFormatBase::Read()` and `Write()` contract. Do not reintroduce filename-based split parsing such as separate header/data opens on the same file path.
 - `[Required]` Support for a new file format must update `FileFormatRegistry`, the corresponding backend implementation, regression tests, and the developer documentation support matrix in the same change.
 - `[Required]` Database schema evolution must use SQLite `PRAGMA user_version` and be coordinated through `DatabaseSchemaManager`.
 - `[Required]` `DatabaseManager` should make schema bootstrap, validation, migration, and repair a one-shot initialization concern for each database handle. Do not re-run schema repair logic in normal save or load hot paths.
 - `[Required]` `DatabaseManager` owns transaction boundaries for normal save and load flows. DAO implementations must not open their own transactions.
 - `[Required]` DAO `Save()` and `Load()` implementations must assume the schema is already prepared. Do not hide schema creation or repair inside hot-path DAO methods.
+- `[Required]` The normalized runtime persistence root is `object_catalog`. Normal save/load dispatch must go through `object_catalog`, not legacy helper tables such as `object_metadata`.
+- `[Required]` Managed store schema knowledge should live behind the descriptor registry under `src/data/persistence/`, not as ad hoc model/map-specific branching spread across unrelated schema-manager call sites.
 - `[Required]` Legacy model migration scope must be derived from authoritative legacy payload tables such as `model_list`, not from `object_metadata` alone. Databases with mixed unknown unmanaged tables must fail fast instead of being silently upgraded.
 - `[Required]` Legacy compatibility readers that exist only for migration must stay under `src/` as internal implementation details, not under the supported public `include/` surface.
 - `[Required]` Keep `ModelObjectDAOv2.hpp` as a minimal façade. SQL helpers and persistence-detail declarations belong under `src/data/model_io/`, not in the public header.

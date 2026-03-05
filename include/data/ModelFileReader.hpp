@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 namespace rhbm_gem {
 
@@ -24,9 +23,6 @@ public:
     AtomicModelDataBlock * GetDataBlockPtr();
 
 private:
-    void ReadHeader();
-    void ReadDataArray();
-
 };
 
 } // namespace rhbm_gem

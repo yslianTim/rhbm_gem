@@ -28,19 +28,19 @@ void DatabaseManager::SaveDataObject(
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
-    auto dao{ CreateDataObjectDAO(data_object) };
-    dao->Save(data_object, key_tag);
-
     std::string type_name{
         DataObjectDAOFactoryRegistry::Instance().GetTypeName(std::type_index(typeid(*data_object)))
     };
     m_database->Prepare(
-        "INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?) "
+        "INSERT INTO object_catalog(key_tag, object_type) VALUES (?, ?) "
         "ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;");
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
     m_database->Bind<std::string>(2, type_name);
     m_database->StepOnce();
+
+    auto dao{ CreateDataObjectDAO(data_object) };
+    dao->Save(data_object, key_tag);
 }
 
 std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
@@ -49,7 +49,7 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
     m_database->Prepare(
-        "SELECT object_type FROM object_metadata WHERE key_tag = ? LIMIT 1;");
+        "SELECT object_type FROM object_catalog WHERE key_tag = ? LIMIT 1;");
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
     auto rc{ m_database->StepNext() };

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <unordered_map>
-#include <string>
-#include <functional>
 #include <memory>
+#include <string>
+
+#include "FileProcessFactoryResolver.hpp"
 
 namespace rhbm_gem {
 
@@ -11,9 +11,7 @@ class FileProcessFactoryBase;
 
 class FileProcessFactoryRegistry
 {
-    std::unordered_map<
-        std::string,
-        std::function<std::unique_ptr<FileProcessFactoryBase>()>> m_factory_map;
+    OverrideableFileProcessFactoryResolver m_resolver;
 
 public:
     static FileProcessFactoryRegistry & Instance();

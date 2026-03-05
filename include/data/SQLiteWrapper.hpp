@@ -130,6 +130,7 @@ public:
             m_database_ptr = nullptr;
             throw std::runtime_error("Cannot open database: " + ErrorMessage());
         }
+        Execute("PRAGMA foreign_keys = ON;");
     }
 
     ~SQLiteWrapper()

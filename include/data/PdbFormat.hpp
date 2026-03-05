@@ -90,15 +90,12 @@ class PdbFormat : public ModelFileFormatBase
 public:
     PdbFormat();
     ~PdbFormat();
-    void LoadHeader(const std::string & filename) override;
-    void PrintHeader() const override;
-    void LoadDataArray(const std::string & filename) override;
-    void SaveHeader(const ModelObject * model_object, std::ostream & stream) override;
-    void SaveDataArray(const ModelObject * model_object, std::ostream & stream, int par) override;
+    void Read(std::istream & stream, const std::string & source_name) override;
+    void Write(const ModelObject & model_object, std::ostream & stream, int par) override;
     AtomicModelDataBlock * GetDataBlockPtr() override;
 
 private:
-    void LoadAtomSiteData(const std::string & filename);
+    void LoadAtomSiteData(std::istream & stream);
     void ScanAtomEntry(char * line, bool is_special, int model_number);
     PDB_HEADER MapToHeaderType(const std::string & name) const;
 

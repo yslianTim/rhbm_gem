@@ -7,6 +7,8 @@
 #include "AtomicModelDataBlock.hpp"
 #include "Logger.hpp"
 
+#include <fstream>
+
 namespace rhbm_gem {
 
 ModelFileReader::ModelFileReader(const std::string & filename) :
@@ -30,20 +32,13 @@ ModelFileReader::~ModelFileReader()
 void ModelFileReader::Read()
 {
     m_has_loaded_data = false;
-    ReadHeader();
-    ReadDataArray();
+    std::ifstream file{ m_file_path, std::ios::binary };
+    if (!file)
+    {
+        throw std::runtime_error("Cannot open the file: " + m_file_path);
+    }
+    m_file_object->Read(file, m_file_path);
     m_has_loaded_data = true;
-}
-
-void ModelFileReader::ReadHeader()
-{
-    m_file_object->LoadHeader(m_file_path);
-    m_file_object->PrintHeader();
-}
-
-void ModelFileReader::ReadDataArray()
-{
-    m_file_object->LoadDataArray(m_file_path);
 }
 
 AtomicModelDataBlock * ModelFileReader::GetDataBlockPtr()

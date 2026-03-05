@@ -41,22 +41,19 @@ class CifFormat : public ModelFileFormatBase
     bool m_find_chemical_component_entry{ false };
     bool m_find_component_atom_entry{ false };
     bool m_find_component_bond_entry{ false };
-    std::string m_cached_filename;
-    bool m_has_parsed_document{ false };
     std::unordered_map<std::string, std::vector<ParsedLoopCategory>> m_loop_category_map;
     std::unordered_map<std::string, std::vector<std::string>> m_data_item_map;
 
 public:
     CifFormat();
     ~CifFormat();
-    void LoadHeader(const std::string & filename) override;
-    void PrintHeader() const override;
-    void LoadDataArray(const std::string & filename) override;
-    void SaveHeader(const ModelObject * model_object, std::ostream & stream) override;
-    void SaveDataArray(const ModelObject * model_object, std::ostream & stream, int par) override;
+    void Read(std::istream & stream, const std::string & source_name) override;
+    void Write(const ModelObject & model_object, std::ostream & stream, int par) override;
     AtomicModelDataBlock * GetDataBlockPtr() override;
 
 private:
+    void ResetReadState();
+    void LogHeaderSummary() const;
     void LoadChemicalComponentBlock();
     void LoadChemicalComponentAtomBlock();
     void LoadChemicalComponentBondBlock();
@@ -75,11 +72,9 @@ private:
         const std::function<void(const ColumnIndexMap &,
                                  const std::vector<std::string> &)> & row_handler
     );
-    void EnsureParsedDocument(const std::string & filename);
-    void ParseMmCifDocument(const std::string & filename);
-    void ResetParsedDocument();
+    void ParseMmCifDocument(std::istream & stream, const std::string & source_name);
     std::optional<std::string> GetFirstDataItemValue(std::string_view key) const;
-    void WriteAtomSiteBlock(const ModelObject * model_object, std::ostream & stream, int model_par);
+    void WriteAtomSiteBlock(const ModelObject & model_object, std::ostream & stream, int model_par);
     void WriteAtomSiteBlockEntry(const AtomObject * atom,
         const std::array<float, 3> & position,
         const std::string & alt_id,

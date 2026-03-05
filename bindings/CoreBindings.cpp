@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -30,7 +31,7 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
 }
 
 template <typename CommandType>
-py::class_<CommandType> BindBuiltInCommand(
+py::class_<CommandType, std::shared_ptr<CommandType>> BindBuiltInCommand(
     py::module_ & module)
 {
     const auto & descriptor{ rhbm_gem::FindCommandDescriptor(CommandType::kCommandId) };
@@ -41,13 +42,13 @@ py::class_<CommandType> BindBuiltInCommand(
             + std::string(descriptor.name));
     }
 
-    return py::class_<CommandType>(
+    return py::class_<CommandType, std::shared_ptr<CommandType>>(
         module,
         std::string(descriptor.python_binding_name).c_str());
 }
 
-template <typename CommandType>
-void BindCommandDiagnostics(py::class_<CommandType> & py_command)
+template <typename CommandType, typename HolderType>
+void BindCommandDiagnostics(py::class_<CommandType, HolderType> & py_command)
 {
     py_command
         .def("PrepareForExecution",
@@ -62,11 +63,10 @@ void BindCommandDiagnostics(py::class_<CommandType> & py_command)
             })
         .def(
             "GetValidationIssues",
-            [](const CommandType & command) -> const std::vector<rhbm_gem::ValidationIssue> &
+            [](const CommandType & command)
             {
                 return command.GetValidationIssues();
-            },
-            py::return_value_policy::reference_internal);
+            });
 }
 
 } // namespace

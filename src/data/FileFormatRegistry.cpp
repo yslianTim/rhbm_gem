@@ -2,6 +2,7 @@
 
 #include "StringHelper.hpp"
 
+#include <unordered_map>
 #include <stdexcept>
 
 namespace
@@ -14,6 +15,16 @@ namespace
         { ".mrc", rhbm_gem::DataObjectKind::Map, true, true, std::nullopt, rhbm_gem::MapFormatBackend::Mrc },
         { ".map", rhbm_gem::DataObjectKind::Map, true, true, std::nullopt, rhbm_gem::MapFormatBackend::Ccp4 },
         { ".ccp4", rhbm_gem::DataObjectKind::Map, true, true, std::nullopt, rhbm_gem::MapFormatBackend::Ccp4 }
+    };
+
+    const std::unordered_map<std::string, std::size_t> k_descriptor_index_map{
+        { ".pdb", 0 },
+        { ".cif", 1 },
+        { ".mmcif", 2 },
+        { ".mcif", 3 },
+        { ".mrc", 4 },
+        { ".map", 5 },
+        { ".ccp4", 6 }
     };
 }
 
@@ -29,12 +40,10 @@ const FileFormatDescriptor & FileFormatRegistry::Lookup(const std::string & exte
 {
     auto normalized_extension{ extension };
     StringHelper::ToLowerCase(normalized_extension);
-    for (const auto & descriptor : k_descriptors)
+    const auto iter{ k_descriptor_index_map.find(normalized_extension) };
+    if (iter != k_descriptor_index_map.end())
     {
-        if (descriptor.extension == normalized_extension)
-        {
-            return descriptor;
-        }
+        return k_descriptors.at(iter->second);
     }
     throw std::runtime_error("Unsupported file format: " + extension);
 }
