@@ -1,6 +1,5 @@
 #pragma once
 
-#include <CLI/CLI.hpp>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -8,6 +7,11 @@
 
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
+
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
@@ -23,10 +27,7 @@ struct HRLModelTestCommandOptions : public CommandOptions
 class HRLModelTestCommand
     : public CommandWithOptions<
           HRLModelTestCommandOptions,
-          CommandId::ModelTest,
-          CommonOption::Threading
-              | CommonOption::Verbose
-              | CommonOption::OutputFolder>
+          CommandId::ModelTest>
 {
 public:
     using Options = HRLModelTestCommandOptions;

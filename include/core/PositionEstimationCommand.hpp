@@ -6,10 +6,13 @@
 #include <string>
 #include <vector>
 
-#include <CLI/CLI.hpp>
-
 #include "CommandBase.hpp"
 #include "MapObject.hpp"
+
+namespace CLI
+{
+    class App;
+}
 
 template <typename T> struct KDNode;
 
@@ -28,10 +31,7 @@ struct PositionEstimationCommandOptions : public CommandOptions
 class PositionEstimationCommand
     : public CommandWithOptions<
           PositionEstimationCommandOptions,
-          CommandId::PositionEstimation,
-          CommonOption::Threading
-              | CommonOption::Verbose
-              | CommonOption::OutputFolder>
+          CommandId::PositionEstimation>
 {
 public:
     using Options = PositionEstimationCommandOptions;

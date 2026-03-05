@@ -7,10 +7,13 @@
 #include <unordered_map>
 #include <vector>
 
-#include <CLI/CLI.hpp>
-
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
+
+namespace CLI
+{
+    class App;
+}
 
 template <typename T> struct KDNode;
 
@@ -34,10 +37,7 @@ struct MapSimulationCommandOptions : public CommandOptions
 class MapSimulationCommand
     : public CommandWithOptions<
           MapSimulationCommandOptions,
-          CommandId::MapSimulation,
-          CommonOption::Threading
-              | CommonOption::Verbose
-              | CommonOption::OutputFolder>
+          CommandId::MapSimulation>
 {
 public:
     using Options = MapSimulationCommandOptions;
@@ -50,7 +50,7 @@ private:
 
 public:
     MapSimulationCommand();
-    ~MapSimulationCommand();
+    ~MapSimulationCommand() override = default;
     void SetPotentialModelChoice(PotentialModel value);
     void SetPartialChargeChoice(PartialCharge value);
     void SetCutoffDistance(double value);

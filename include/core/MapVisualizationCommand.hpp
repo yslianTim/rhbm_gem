@@ -3,9 +3,13 @@
 #include <memory>
 #include <string>
 #include <filesystem>
-#include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
+
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
@@ -25,10 +29,7 @@ struct MapVisualizationCommandOptions : public CommandOptions
 class MapVisualizationCommand
     : public CommandWithOptions<
           MapVisualizationCommandOptions,
-          CommandId::MapVisualization,
-          CommonOption::Threading
-              | CommonOption::Verbose
-              | CommonOption::OutputFolder>
+          CommandId::MapVisualization>
 {
 public:
     using Options = MapVisualizationCommandOptions;
@@ -40,7 +41,7 @@ private:
 
 public:
     MapVisualizationCommand();
-    ~MapVisualizationCommand();
+    ~MapVisualizationCommand() override = default;
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetAtomSerialID(int value);

@@ -77,12 +77,6 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
 {
 }
 
-PotentialAnalysisCommand::~PotentialAnalysisCommand()
-{
-    m_map_object.reset();
-    m_model_object.reset();
-}
-
 void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     command_cli::AddPathOption(

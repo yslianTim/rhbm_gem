@@ -17,6 +17,7 @@ set(TEST_SOURCES
     DataObjectManager_test.cpp
     DataObjectIOSchema_test.cpp
     DataObjectDispatchIterationArchitecture_test.cpp
+    DocsSync_test.cpp
     EigenMatrixUtility_test.cpp
     ElectricPotential_test.cpp
     EnumOptionTraits_test.cpp
@@ -81,23 +82,6 @@ gtest_discover_tests(${TEST_EXEC_NAME}
     DISCOVERY_MODE PRE_TEST
 )
 
-add_executable(command_catalog_binding_names_helper
-    CommandCatalogBindingNamesHelper.cpp
-)
-target_link_libraries(command_catalog_binding_names_helper PRIVATE
-    core
-    CompilerFlags
-)
-target_include_directories(command_catalog_binding_names_helper PRIVATE
-    "${PROJECT_SOURCE_DIR}/src/core"
-)
-add_dependencies(${TEST_EXEC_NAME} command_catalog_binding_names_helper)
-set_target_properties(command_catalog_binding_names_helper PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-    ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-)
-
 add_test(
     NAME logging_style_guard
     COMMAND ${CMAKE_COMMAND}
@@ -119,7 +103,6 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
             "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
             ${Python_EXECUTABLE}
             ${PROJECT_SOURCE_DIR}/tests/python/bindings_smoke.py
-            "$<TARGET_FILE:command_catalog_binding_names_helper>"
     )
     add_test(
         NAME bindings_invalid_enum_validation_test

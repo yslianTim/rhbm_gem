@@ -3,9 +3,13 @@
 #include <memory>
 #include <string>
 #include <filesystem>
-#include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
+
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
@@ -36,10 +40,7 @@ class PotentialAnalysisCommand
     : public CommandWithOptions<
           PotentialAnalysisCommandOptions,
           CommandId::PotentialAnalysis,
-          CommonOption::Threading
-              | CommonOption::Verbose
-              | CommonOption::Database
-              | CommonOption::OutputFolder>
+          kDefaultCommandCommonOptions | CommonOption::Database>
 {
 public:
     using Options = PotentialAnalysisCommandOptions;
@@ -51,7 +52,7 @@ private:
 
 public:
     PotentialAnalysisCommand();
-    ~PotentialAnalysisCommand();
+    ~PotentialAnalysisCommand() override = default;
     void SetTrainingAlphaFlag(bool value);
     void SetAsymmetryFlag(bool value);
     void SetSimulationFlag(bool value);

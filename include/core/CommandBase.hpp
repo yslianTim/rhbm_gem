@@ -22,6 +22,12 @@ namespace CLI
 
 namespace rhbm_gem {
 
+constexpr CommonOptionMask kDefaultCommandCommonOptions{
+    CommonOption::Threading
+    | CommonOption::Verbose
+    | CommonOption::OutputFolder
+};
+
 enum class ValidationPhase : std::uint8_t
 {
     Parse = 0,
@@ -215,7 +221,6 @@ private:
 
     virtual const CommandOptions & GetOptions() const = 0;
     virtual CommandOptions & GetOptions() = 0;
-    virtual CommandId GetCommandId() const = 0;
     virtual CommonOptionMask GetCommonOptionsMask() const = 0;
 
     bool m_is_prepared_for_execution{ false };
@@ -271,7 +276,10 @@ private:
         bool auto_corrected);
 };
 
-template <typename OptionsT, CommandId IdValue, CommonOptionMask CommonOptionsValue>
+template <
+    typename OptionsT,
+    CommandId IdValue,
+    CommonOptionMask CommonOptionsValue = kDefaultCommandCommonOptions>
 class CommandWithOptions : public CommandBase
 {
 protected:
@@ -285,7 +293,6 @@ public:
 private:
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
-    CommandId GetCommandId() const override { return kCommandId; }
     CommonOptionMask GetCommonOptionsMask() const override { return kCommonOptions; }
 };
 

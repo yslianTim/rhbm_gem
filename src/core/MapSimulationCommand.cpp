@@ -59,10 +59,6 @@ MapSimulationCommand::MapSimulationCommand() :
 {
 }
 
-MapSimulationCommand::~MapSimulationCommand()
-{
-}
-
 void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     command_cli::AddPathOption(

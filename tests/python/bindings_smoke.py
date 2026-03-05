@@ -1,19 +1,8 @@
-import subprocess
-import sys
-
 import rhbm_gem_module as m
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        raise SystemExit("expected helper executable path")
-
-    helper_path = sys.argv[1]
-    binding_names = [
-        line.strip()
-        for line in subprocess.check_output([helper_path], text=True).splitlines()
-        if line.strip()
-    ]
+    binding_names = list(m._built_in_command_names)
 
     assert len(binding_names) == 7
     assert hasattr(m, "LogLevel")

@@ -5,10 +5,14 @@
 #include <vector>
 #include <unordered_map>
 #include <filesystem>
-#include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
+
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
@@ -27,10 +31,7 @@ class ResultDumpCommand
     : public CommandWithOptions<
           ResultDumpCommandOptions,
           CommandId::ResultDump,
-          CommonOption::Threading
-              | CommonOption::Verbose
-              | CommonOption::Database
-              | CommonOption::OutputFolder>
+          kDefaultCommandCommonOptions | CommonOption::Database>
 {
 public:
     using Options = ResultDumpCommandOptions;
@@ -43,7 +44,7 @@ private:
 
 public:
     ResultDumpCommand();
-    ~ResultDumpCommand();
+    ~ResultDumpCommand() override = default;
     void SetPrinterChoice(PrinterType value);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetModelKeyTagList(const std::string & value);

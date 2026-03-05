@@ -19,11 +19,7 @@ template <typename CommandType>
 CommandDescriptor MakeBuiltInDescriptor(
     std::string_view name,
     std::string_view description,
-    std::string_view python_binding_name,
-    CommandFactory factory = []() -> std::unique_ptr<CommandBase>
-    {
-        return std::make_unique<CommandType>();
-    })
+    std::string_view python_binding_name)
 {
     if (python_binding_name.empty())
     {
@@ -37,7 +33,10 @@ CommandDescriptor MakeBuiltInDescriptor(
         description,
         CommandType::kCommonOptions,
         python_binding_name,
-        factory
+        []() -> std::unique_ptr<CommandBase>
+        {
+            return std::make_unique<CommandType>();
+        }
     };
 }
 
@@ -46,34 +45,10 @@ CommandDescriptor MakeBuiltInDescriptor(
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
 {
     static const std::vector<CommandDescriptor> catalog{
-        MakeBuiltInDescriptor<PotentialAnalysisCommand>(
-            "potential_analysis",
-            "Run potential analysis",
-            "PotentialAnalysisCommand"),
-        MakeBuiltInDescriptor<PotentialDisplayCommand>(
-            "potential_display",
-            "Run potential display",
-            "PotentialDisplayCommand"),
-        MakeBuiltInDescriptor<ResultDumpCommand>(
-            "result_dump",
-            "Run result dump",
-            "ResultDumpCommand"),
-        MakeBuiltInDescriptor<MapSimulationCommand>(
-            "map_simulation",
-            "Run map simulation command",
-            "MapSimulationCommand"),
-        MakeBuiltInDescriptor<MapVisualizationCommand>(
-            "map_visualization",
-            "Run map visualization",
-            "MapVisualizationCommand"),
-        MakeBuiltInDescriptor<PositionEstimationCommand>(
-            "position_estimation",
-            "Run atom position estimation",
-            "PositionEstimationCommand"),
-        MakeBuiltInDescriptor<HRLModelTestCommand>(
-            "model_test",
-            "Run HRL model simulation test",
-            "HRLModelTestCommand")
+    #define RHBM_GEM_BUILTIN_COMMAND(COMMAND_TYPE, CLI_NAME, DESCRIPTION, PYTHON_BINDING_NAME) \
+        MakeBuiltInDescriptor<COMMAND_TYPE>(CLI_NAME, DESCRIPTION, PYTHON_BINDING_NAME),
+    #include "BuiltInCommandList.def"
+    #undef RHBM_GEM_BUILTIN_COMMAND
     };
 
     return catalog;

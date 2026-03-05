@@ -44,10 +44,6 @@ ResultDumpCommand::ResultDumpCommand() :
 {
 }
 
-ResultDumpCommand::~ResultDumpCommand()
-{
-}
-
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     command_cli::AddEnumOption<PrinterType>(

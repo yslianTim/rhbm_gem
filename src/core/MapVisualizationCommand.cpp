@@ -50,12 +50,6 @@ MapVisualizationCommand::MapVisualizationCommand() :
 {
 }
 
-MapVisualizationCommand::~MapVisualizationCommand()
-{
-    m_map_object.reset();
-    m_model_object.reset();
-}
-
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
     command_cli::AddPathOption(

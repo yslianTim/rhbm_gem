@@ -5,12 +5,15 @@
 #include <memory>
 #include <unordered_map>
 #include <filesystem>
-#include <CLI/CLI.hpp>
 
 #include "CommandBase.hpp"
 #include "OptionEnumClass.hpp"
 
 class AtomSelector;
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
@@ -34,10 +37,7 @@ class PotentialDisplayCommand
     : public CommandWithOptions<
           PotentialDisplayCommandOptions,
           CommandId::PotentialDisplay,
-          CommonOption::Threading
-              | CommonOption::Verbose
-              | CommonOption::Database
-              | CommonOption::OutputFolder>
+          kDefaultCommandCommonOptions | CommonOption::Database>
 {
 public:
     using Options = PotentialDisplayCommandOptions;
@@ -50,7 +50,7 @@ private:
 
 public:
     PotentialDisplayCommand();
-    ~PotentialDisplayCommand();
+    ~PotentialDisplayCommand() override;
     void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);

@@ -104,9 +104,7 @@ PotentialDisplayCommand::PotentialDisplayCommand() :
 {
 }
 
-PotentialDisplayCommand::~PotentialDisplayCommand()
-{
-}
+PotentialDisplayCommand::~PotentialDisplayCommand() = default;
 
 void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {
