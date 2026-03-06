@@ -2,7 +2,7 @@
 
 This guide describes the command system that exists in the codebase today. Treat it as a developer manual for reading, extending, and debugging commands, not as a refactor log.
 
-Use this document together with [`../development-guidelines.md`](../development-guidelines.md) and [`../adding-a-command.md`](../adding-a-command.md). Editable diagrams for this area live under [`./diagrams/`](./diagrams/).
+Use this document together with [`../development-guidelines.md`](../development-guidelines.md) and [`../adding-a-command.md`](../adding-a-command.md).
 
 ## 1. What the command layer owns
 
