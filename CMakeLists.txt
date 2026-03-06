@@ -359,7 +359,7 @@ if(BUILD_TESTING)
             BYPRODUCTS
                 "${COVERAGE_OUTPUT_DIR}/coverage_summary.txt"
                 "${COVERAGE_OUTPUT_DIR}/coverage_detail.txt"
-            DEPENDS unit_tests
+            DEPENDS tests_all
             USES_TERMINAL
             COMMENT "Running tests and generating gcov text coverage reports"
         )

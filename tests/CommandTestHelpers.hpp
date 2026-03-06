@@ -14,6 +14,11 @@
 
 namespace command_test {
 
+inline std::filesystem::path ProjectRootPath()
+{
+    return std::filesystem::path(__FILE__).parent_path().parent_path();
+}
+
 inline std::filesystem::path TestDataPath(const std::string & file_name)
 {
     return std::filesystem::path(__FILE__).parent_path() / "data" / file_name;

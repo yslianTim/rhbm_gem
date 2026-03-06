@@ -9,6 +9,7 @@
 #include <string>
 
 #include "BuiltInCommandCatalogInternal.hpp"
+#include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -125,9 +126,7 @@ std::string BuildExpectedPythonSurfaceBlock()
 
 TEST(DocsSyncTest, CommandArchitectureGeneratedSectionsMatchBuiltInCatalog)
 {
-    const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
-    };
+    const auto project_root{ command_test::ProjectRootPath() };
     const auto document_path{
         project_root / "docs" / "developer" / "architecture" / "command-architecture.md"
     };

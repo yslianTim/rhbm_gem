@@ -53,6 +53,37 @@ Notes:
 2. To include `tests/`, configure with `-DCOVERAGE_INCLUDE_TESTS=ON`.
 3. Coverage artifacts are generated under the build directory.
 
+## Test Execution and Labels
+
+Build all C++ test targets:
+
+```bash
+cmake --build build --target tests_all -j
+```
+
+Run all tests:
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+Run tests by domain label:
+
+```bash
+ctest --test-dir build -L domain:data --output-on-failure
+```
+
+Run tests by intent label:
+
+```bash
+ctest --test-dir build -L intent:migration --output-on-failure
+```
+
+Supported labels:
+
+- domain: `core`, `data`, `utils`, `integration`
+- intent: `contract`, `command`, `validation`, `io`, `schema`, `migration`, `algorithm`, `bindings`, `style`
+
 ## Feature Mode Checks (`AUTO` / `OFF` / `ON`)
 
 1. Force OpenMP OFF:
@@ -125,7 +156,7 @@ Beginner / common:
 | --- | --- | --- |
 | `CMAKE_BUILD_TYPE` | generator-dependent | Build type for single-config generators such as `Release` or `Debug`. |
 | `CMAKE_INSTALL_PREFIX` | platform-dependent | Base install path for `cmake --install`. |
-| `BUILD_TESTING` | `ON` | Build unit tests (`unit_tests` target). |
+| `BUILD_TESTING` | `ON` | Build test targets (aggregate target: `tests_all`). |
 | `ENABLE_COVERAGE` | `OFF` | Enable `gcov` coverage instrumentation and the `coverage` target. |
 | `COVERAGE_INCLUDE_TESTS` | `OFF` | Include `tests/` files in the coverage summary when coverage is enabled. |
 | `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3, CLI11, pybind11, and SQLite3. |

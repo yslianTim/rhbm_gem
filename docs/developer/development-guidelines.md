@@ -20,6 +20,7 @@ The goal is stable, maintainable, and diagnosable software that can evolve safel
 - `[Required]` Keep public C++ interfaces in `include/` and implementations in `src/`.
 - `[Required]` Keep responsibilities separated: command orchestration in `core`, file/persistence logic in `data`, reusable helpers in `utils`.
 - `[Required]` Keep tests in `tests/` and test fixtures in `tests/data/`.
+- `[Required]` Keep test sources aligned to domain folders (`tests/core`, `tests/data`, `tests/utils`, `tests/integration`) and intent-specific subfolders where applicable.
 - `[Required]` Project-owned public types in `core` and `data` must use namespace `rhbm_gem`.
 - `[Required]` Do not use `using namespace` in headers.
 - `[Recommended]` Keep header/source pairing clear and predictable for new modules.
@@ -89,7 +90,9 @@ Change-integration principles:
 - `[Required]` Cover both happy paths and failure paths that are part of supported behavior.
 - `[Required]` Keep tests deterministic and independent of machine-local state.
 - `[Required]` Add new `*_test.cpp` files to `tests/CMakeLists.txt`.
+- `[Required]` Every test target in `tests/CMakeLists.txt` must carry both `domain:*` and `intent:*` CTest labels.
 - `[Required]` Schema/persistence changes require regression coverage for bootstrap or migration behavior, rollback behavior on failure, and round-trip correctness.
+- `[Recommended]` Prefer searchable suite names that encode intent (for example `DataObjectSchemaMigrationTest`) over generic suite names.
 - `[Recommended]` Use minimal fixtures and temporary directories/files for generated outputs.
 
 ## 9. Public API, CLI, and Python Surface Governance

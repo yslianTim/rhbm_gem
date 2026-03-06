@@ -376,11 +376,11 @@ Also update:
 
 The most relevant existing test references are:
 
-- `tests/CommandExecutionContract_test.cpp`
-- `tests/CommandBase_test.cpp`
-- `tests/CommandCommonOptions_test.cpp`
-- `tests/CommandDescriptorShape_test.cpp`
-- command-specific tests such as `tests/MapSimulationCommand_test.cpp`
+- `tests/core/contract/CommandExecutionContract_test.cpp`
+- `tests/core/command/CommandBase_test.cpp`
+- `tests/core/contract/CommandCommonOptions_test.cpp`
+- `tests/core/contract/CommandDescriptorShape_test.cpp`
+- command-specific tests such as `tests/core/command/MapSimulationCommand_test.cpp`
 
 ## 12. Final checklist
 

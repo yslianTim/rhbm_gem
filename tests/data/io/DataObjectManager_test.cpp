@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include "DataObjectManager.hpp"
+#include "CommandTestHelpers.hpp"
 #include "AtomObject.hpp"
 #include "ModelObject.hpp"
 
@@ -13,7 +14,7 @@ using ModelObject = rg::ModelObject;
 TEST(DataObjectManagerTest, LoadCifFile)
 {
     DataObjectManager manager;
-    auto cif_path{ std::filesystem::path(__FILE__).parent_path() / "data/test_model.cif" };
+    auto cif_path{ command_test::TestDataPath("test_model.cif") };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
     EXPECT_EQ(model->GetNumberOfAtom(), 1);
@@ -23,7 +24,7 @@ TEST(DataObjectManagerTest, LoadCifFileWithKeyValueEntityMetadata)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_keyvalue_entity.cif"
+        command_test::TestDataPath("test_model_keyvalue_entity.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -38,7 +39,7 @@ TEST(DataObjectManagerTest, LoadCifFileWithKeyValueEntityMetadata)
 TEST(DataObjectManagerTest, FilterAtomFromSymmetrySkipsWhenChainMapMissing)
 {
     DataObjectManager manager;
-    auto cif_path{ std::filesystem::path(__FILE__).parent_path() / "data/test_model.cif" };
+    auto cif_path{ command_test::TestDataPath("test_model.cif") };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
     ASSERT_EQ(model->GetNumberOfAtom(), 1);
@@ -54,7 +55,7 @@ TEST(DataObjectManagerTest, LoadCifFileMissingModelNumberDefaultsToOne)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_missing_model_num.cif"
+        command_test::TestDataPath("test_model_missing_model_num.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -66,7 +67,7 @@ TEST(DataObjectManagerTest, LoadCifFileAuthOnlyAtomSiteColumns)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_auth_only.cif"
+        command_test::TestDataPath("test_model_auth_only.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -80,7 +81,7 @@ TEST(DataObjectManagerTest, LoadCifFileMissingNumericUsesDefaults)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_missing_numeric.cif"
+        command_test::TestDataPath("test_model_missing_numeric.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -93,7 +94,7 @@ TEST(DataObjectManagerTest, LoadCifFileModelTwoFallback)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_model2_only.cif"
+        command_test::TestDataPath("test_model_model2_only.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -105,7 +106,7 @@ TEST(DataObjectManagerTest, LoadCifFileWithDoubleQuotedAtomId)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_atom_id_double_quote.cif"
+        command_test::TestDataPath("test_model_atom_id_double_quote.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -116,7 +117,7 @@ TEST(DataObjectManagerTest, LoadCifFileWithDoubleQuotedAtomId)
 TEST(DataObjectManagerTest, LoadMmcifExtension)
 {
     DataObjectManager manager;
-    auto cif_path{ std::filesystem::path(__FILE__).parent_path() / "data/test_model.mmcif" };
+    auto cif_path{ command_test::TestDataPath("test_model.mmcif") };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
     EXPECT_EQ(model->GetNumberOfAtom(), 1);
@@ -126,7 +127,7 @@ TEST(DataObjectManagerTest, LoadCifFileDatabaseOrderKeepsEmdb)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_database_order.cif"
+        command_test::TestDataPath("test_model_database_order.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -137,7 +138,7 @@ TEST(DataObjectManagerTest, LoadCifFileAltBOnlyDoesNotThrow)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_alt_b_only.cif"
+        command_test::TestDataPath("test_model_alt_b_only.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -149,7 +150,7 @@ TEST(DataObjectManagerTest, LoadCifFileInvalidSecondaryRangeDoesNotDropAtoms)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_invalid_secondary_range.cif"
+        command_test::TestDataPath("test_model_invalid_secondary_range.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -160,7 +161,7 @@ TEST(DataObjectManagerTest, LoadCifFileLoopMultilineAndQuotedToken)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_loop_multiline.cif"
+        command_test::TestDataPath("test_model_loop_multiline.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -172,7 +173,7 @@ TEST(DataObjectManagerTest, LoadCifFileAuthSeqAlnumStructConnBuildsBond)
 {
     DataObjectManager manager;
     auto cif_path{
-        std::filesystem::path(__FILE__).parent_path() / "data/test_model_auth_seq_alnum_struct_conn.cif"
+        command_test::TestDataPath("test_model_auth_seq_alnum_struct_conn.cif")
     };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };

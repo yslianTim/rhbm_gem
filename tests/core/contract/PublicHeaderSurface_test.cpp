@@ -5,10 +5,12 @@
 #include <iterator>
 #include <string>
 
+#include "CommandTestHelpers.hpp"
+
 TEST(PublicHeaderSurfaceTest, ExperimentalBondWorkflowHeaderIsNotPublic)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto leaked_header{
         project_root / "include" / "core" / "PotentialAnalysisBondWorkflow.hpp"
@@ -20,7 +22,7 @@ TEST(PublicHeaderSurfaceTest, ExperimentalBondWorkflowHeaderIsNotPublic)
 TEST(PublicHeaderSurfaceTest, BuiltInCommandCatalogHeaderIsNotPublic)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto leaked_header{
         project_root / "include" / "core" / "BuiltInCommandCatalog.hpp"
@@ -32,7 +34,7 @@ TEST(PublicHeaderSurfaceTest, BuiltInCommandCatalogHeaderIsNotPublic)
 TEST(PublicHeaderSurfaceTest, CommandIdHeaderIsNotPublic)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto leaked_header{
         project_root / "include" / "core" / "CommandId.hpp"
@@ -44,7 +46,7 @@ TEST(PublicHeaderSurfaceTest, CommandIdHeaderIsNotPublic)
 TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceWrapper)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto header_path{
         project_root / "include" / "core" / "CommandMetadata.hpp"
@@ -66,7 +68,7 @@ TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceW
 TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHooks)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto header_path{
         project_root / "include" / "core" / "CommandBase.hpp"
@@ -99,7 +101,7 @@ TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHo
 TEST(PublicHeaderSurfaceTest, LegacyModelObjectDaoHeaderIsNotPublic)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto leaked_header{
         project_root / "include" / "data" / "LegacyModelObjectDAO.hpp"
@@ -111,7 +113,7 @@ TEST(PublicHeaderSurfaceTest, LegacyModelObjectDaoHeaderIsNotPublic)
 TEST(PublicHeaderSurfaceTest, FileReaderBaseHeaderIsNotPublic)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto leaked_header{
         project_root / "include" / "data" / "FileReaderBase.hpp"
@@ -123,7 +125,7 @@ TEST(PublicHeaderSurfaceTest, FileReaderBaseHeaderIsNotPublic)
 TEST(PublicHeaderSurfaceTest, FileWriterBaseHeaderIsNotPublic)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto leaked_header{
         project_root / "include" / "data" / "FileWriterBase.hpp"
@@ -135,7 +137,7 @@ TEST(PublicHeaderSurfaceTest, FileWriterBaseHeaderIsNotPublic)
 TEST(PublicHeaderSurfaceTest, FileProcessFactoryRegistryHeaderIsNotPublic)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto leaked_header{
         project_root / "include" / "data" / "FileProcessFactoryRegistry.hpp"
@@ -147,7 +149,7 @@ TEST(PublicHeaderSurfaceTest, FileProcessFactoryRegistryHeaderIsNotPublic)
 TEST(PublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugAccessors)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto header_path{
         project_root / "include" / "core" / "DataObjectManager.hpp"
@@ -167,7 +169,7 @@ TEST(PublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugA
 TEST(PublicHeaderSurfaceTest, DatabaseManagerHeaderDoesNotExposeRawDatabaseAccessor)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto header_path{
         project_root / "include" / "data" / "DatabaseManager.hpp"
@@ -186,7 +188,7 @@ TEST(PublicHeaderSurfaceTest, DatabaseManagerHeaderDoesNotExposeRawDatabaseAcces
 TEST(PublicHeaderSurfaceTest, ModelObjectDaoV2HeaderNoLongerLeaksPersistenceHelpers)
 {
     const auto project_root{
-        std::filesystem::path(__FILE__).parent_path().parent_path()
+        command_test::ProjectRootPath()
     };
     const auto header_path{
         project_root / "include" / "data" / "ModelObjectDAOv2.hpp"

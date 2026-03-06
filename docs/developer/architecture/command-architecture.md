@@ -381,12 +381,12 @@ Use the checklist below when adding a new built-in command or making a large com
 
 The most useful tests to revisit after a command-system change are:
 
-- `tests/CommandDescriptorShape_test.cpp`
-- `tests/CommandCommonOptions_test.cpp`
-- `tests/CommandExecutionContract_test.cpp`
-- `tests/CommandBase_test.cpp`
-- `tests/DocsSync_test.cpp`
-- command-specific tests under `tests/*Command*_test.cpp`
+- `tests/core/contract/CommandDescriptorShape_test.cpp`
+- `tests/core/contract/CommandCommonOptions_test.cpp`
+- `tests/core/contract/CommandExecutionContract_test.cpp`
+- `tests/core/command/CommandBase_test.cpp`
+- `tests/core/contract/DocsSync_test.cpp`
+- command-specific tests under `tests/core/command/*Command*_test.cpp`
 
 ## 12. What to avoid
 

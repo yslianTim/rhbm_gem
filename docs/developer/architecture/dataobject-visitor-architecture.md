@@ -177,4 +177,4 @@ Typed dispatch and ops:
 
 Regression tests:
 
-- `tests/DataObjectDispatchIterationArchitecture_test.cpp`
+- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
