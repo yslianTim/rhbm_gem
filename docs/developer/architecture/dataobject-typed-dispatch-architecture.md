@@ -13,7 +13,7 @@ Related guides:
 - [`../development-guidelines.md`](../development-guidelines.md)
 - [`./command-architecture.md`](./command-architecture.md)
 - [`./dataobject-io-architecture.md`](./dataobject-io-architecture.md)
-- [`../extending-dataobject-typed-dispatch.md`](../extending-dataobject-typed-dispatch.md)
+- [`../adding-dataobject-operations-and-iteration.md`](../adding-dataobject-operations-and-iteration.md)
 
 ## 1. Scope
 
@@ -155,9 +155,9 @@ These enforce expected types with `dynamic_cast` and throw mode-specific errors 
 
 ## 6. Extension Workflow
 
-For implementation steps and file-level checklists, use:
+For existing `ModelObject`/`MapObject` operation and iteration extension, use:
 
-- [`../extending-dataobject-typed-dispatch.md`](../extending-dataobject-typed-dispatch.md)
+- [`../adding-dataobject-operations-and-iteration.md`](../adding-dataobject-operations-and-iteration.md)
 
 ## 7. Key Files
 

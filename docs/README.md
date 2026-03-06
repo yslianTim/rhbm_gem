@@ -20,5 +20,5 @@ Use this directory as the entry point for the project documentation. The content
 - [`developer/development-guidelines.md`](developer/development-guidelines.md)
 - [`developer/architecture/command-architecture.md`](developer/architecture/command-architecture.md)
 - [`developer/architecture/dataobject-typed-dispatch-architecture.md`](developer/architecture/dataobject-typed-dispatch-architecture.md)
-- [`developer/extending-dataobject-typed-dispatch.md`](developer/extending-dataobject-typed-dispatch.md)
+- [`developer/adding-dataobject-operations-and-iteration.md`](developer/adding-dataobject-operations-and-iteration.md)
 - [`developer/adding-a-command.md`](developer/adding-a-command.md)

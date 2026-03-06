@@ -61,7 +61,7 @@ See:
 - [`./adding-a-command.md`](./adding-a-command.md)
 - [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-io-architecture.md)
 - [`./architecture/dataobject-typed-dispatch-architecture.md`](./architecture/dataobject-typed-dispatch-architecture.md)
-- [`./extending-dataobject-typed-dispatch.md`](./extending-dataobject-typed-dispatch.md)
+- [`./adding-dataobject-operations-and-iteration.md`](./adding-dataobject-operations-and-iteration.md)
 
 Command-layer principles:
 
