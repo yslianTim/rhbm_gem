@@ -25,6 +25,7 @@ function(add_rhbm_gtest_target target_name)
         core
         utils
         data
+        gui_adapter
         CompilerFlags
         ${GTEST_MAIN_TARGET}
     )
@@ -62,6 +63,7 @@ set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandOptionHelper_test.cpp
     core/command/CommandScalarValidationHelper_test.cpp
     core/command/CommandValidationIssue_test.cpp
+    core/command/GuiCommandExecutor_test.cpp
     core/command/HRLModelTestCommand_test.cpp
     core/command/MapSimulationCommand_test.cpp
     core/command/MapVisualizationCommand_test.cpp
@@ -160,6 +162,13 @@ add_rhbm_gtest_target(rhbm_tests_utils_hrl
         utils/hrl/HRLDataTransform_test.cpp
         utils/hrl/HRLGroupEstimator_test.cpp
         utils/hrl/HRLModelAlgorithms_test.cpp
+)
+
+add_rhbm_gtest_target(rhbm_tests_integration_command
+    DOMAIN integration
+    INTENTS command
+    SOURCES
+        integration/GuiCommandExecutorPipeline_test.cpp
 )
 
 add_test(

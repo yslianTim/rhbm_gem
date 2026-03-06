@@ -162,6 +162,7 @@ Beginner / common:
 | `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3, CLI11, pybind11, and SQLite3. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
 | `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `bindings/`. |
+| `RHBM_GEM_BUILD_GUI` | `OFF` | Build the Qt6 GUI executable (`RHBM-GEM-GUI`). Requires Qt6 Core/Widgets. |
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_BOOST_MODE` | `AUTO` | Boost mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_BOOST_COMPONENTS` | empty | Semicolon-separated Boost components required when Boost is enabled. |
@@ -197,6 +198,10 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 
 # Pure C++ build (skip Python bindings)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
+
+# Build the Qt6 GUI executable (optional)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BUILD_GUI=ON
+cmake --build build --target RHBM_GEM_gui -j
 
 # Force ROOT/OpenMP/Boost requirements
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GEM_OPENMP_MODE=ON -DRHBM_GEM_BOOST_MODE=ON

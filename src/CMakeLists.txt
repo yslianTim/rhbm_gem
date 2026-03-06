@@ -1,6 +1,7 @@
 add_subdirectory(core)
 add_subdirectory(utils)
 add_subdirectory(data)
+add_subdirectory(gui)
 
 set(MAIN_EXEC_TARGET ${PROJECT_NAME})
 add_executable(${MAIN_EXEC_TARGET} main.cpp)
