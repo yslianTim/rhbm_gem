@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
-
+#include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
 #include "MapVisualizationCommand.hpp"
 
@@ -13,20 +12,13 @@ TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesValidationErrorAtPrepa
     command.SetAtomSerialID(0);
 
     EXPECT_FALSE(command.PrepareForExecution());
-
-    const auto & issues{ command.GetValidationIssues() };
-    const auto issue_iter{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssue & issue)
-            {
-                return issue.option_name == "--atom-id";
-            })
-    };
-    ASSERT_NE(issue_iter, issues.end());
-    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
-    EXPECT_EQ(issue_iter->level, LogLevel::Error);
+    ASSERT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--atom-id",
+            rg::ValidationPhase::Parse,
+            LogLevel::Error),
+        nullptr);
 }
 
 TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesValidationErrorAtPrepare)
@@ -35,20 +27,13 @@ TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesValidationErrorAtP
     command.SetWindowSize(0.0);
 
     EXPECT_FALSE(command.PrepareForExecution());
-
-    const auto & issues{ command.GetValidationIssues() };
-    const auto issue_iter{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssue & issue)
-            {
-                return issue.option_name == "--window-size";
-            })
-    };
-    ASSERT_NE(issue_iter, issues.end());
-    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
-    EXPECT_EQ(issue_iter->level, LogLevel::Error);
+    ASSERT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--window-size",
+            rg::ValidationPhase::Parse,
+            LogLevel::Error),
+        nullptr);
 }
 
 TEST(MapVisualizationCommandTest, SamplingSizeNormalizationReportsAutoCorrectedWarning)
@@ -56,20 +41,15 @@ TEST(MapVisualizationCommandTest, SamplingSizeNormalizationReportsAutoCorrectedW
     rg::MapVisualizationCommand command;
     command.SetSamplingSize(0);
 
-    const auto & issues{ command.GetValidationIssues() };
-    const auto issue_iter{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssue & issue)
-            {
-                return issue.option_name == "--sampling";
-            })
+    const auto * issue{
+        command_test::FindValidationIssue(
+            command,
+            "--sampling",
+            rg::ValidationPhase::Parse,
+            LogLevel::Warning)
     };
-    ASSERT_NE(issue_iter, issues.end());
-    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
-    EXPECT_EQ(issue_iter->level, LogLevel::Warning);
-    EXPECT_TRUE(issue_iter->auto_corrected);
+    ASSERT_NE(issue, nullptr);
+    EXPECT_TRUE(issue->auto_corrected);
 }
 
 TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)

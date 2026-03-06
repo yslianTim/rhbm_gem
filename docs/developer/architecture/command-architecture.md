@@ -384,7 +384,7 @@ The most useful tests to revisit after a command-system change are:
 - `tests/CommandDescriptorShape_test.cpp`
 - `tests/CommandCommonOptions_test.cpp`
 - `tests/CommandExecutionContract_test.cpp`
-- `tests/PreparedStateInvalidation_test.cpp`
+- `tests/CommandBase_test.cpp`
 - `tests/DocsSync_test.cpp`
 - command-specific tests under `tests/*Command*_test.cpp`
 

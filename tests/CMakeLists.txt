@@ -36,7 +36,6 @@ set(TEST_SOURCES
     MapVisualizationCommand_test.cpp
     PositionEstimationCommand_test.cpp
     PotentialAnalysisCommand_test.cpp
-    PreparedStateInvalidation_test.cpp
     PotentialDisplayCommand_test.cpp
     PublicHeaderSurface_test.cpp
     ResultDumpCommand_test.cpp

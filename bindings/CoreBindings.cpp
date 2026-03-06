@@ -4,7 +4,6 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 #include "BuiltInCommandBindingInternal.hpp"
 #include "HRLModelTestCommand.hpp"
@@ -63,16 +62,6 @@ void BindCommandDiagnostics(py::class_<CommandType, HolderType> & py_command)
             });
 }
 
-std::vector<std::string> CollectBuiltInPythonBindingNames()
-{
-    return {
-    #define RHBM_GEM_BUILTIN_COMMAND(COMMAND_TYPE, CLI_NAME, DESCRIPTION, PYTHON_BINDING_NAME) \
-        std::string(PYTHON_BINDING_NAME),
-    #include "BuiltInCommandList.def"
-    #undef RHBM_GEM_BUILTIN_COMMAND
-    };
-}
-
 } // namespace
 
 PYBIND11_MODULE(rhbm_gem_module, m)
@@ -95,7 +84,6 @@ PYBIND11_MODULE(rhbm_gem_module, m)
         .def_readonly("level", &rhbm_gem::ValidationIssue::level)
         .def_readonly("message", &rhbm_gem::ValidationIssue::message)
         .def_readonly("auto_corrected", &rhbm_gem::ValidationIssue::auto_corrected);
-    m.attr("_built_in_command_names") = CollectBuiltInPythonBindingNames();
 
     auto painter_type{ py::enum_<rhbm_gem::PainterType>(m, "PainterType") };
     BindEnumEntries(painter_type);

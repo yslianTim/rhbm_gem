@@ -377,7 +377,7 @@ Also update:
 The most relevant existing test references are:
 
 - `tests/CommandExecutionContract_test.cpp`
-- `tests/PreparedStateInvalidation_test.cpp`
+- `tests/CommandBase_test.cpp`
 - `tests/CommandCommonOptions_test.cpp`
 - `tests/CommandDescriptorShape_test.cpp`
 - command-specific tests such as `tests/MapSimulationCommand_test.cpp`

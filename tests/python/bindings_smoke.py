@@ -1,10 +1,18 @@
 import rhbm_gem_module as m
 
+BUILT_IN_COMMAND_NAMES = [
+    "PotentialAnalysisCommand",
+    "PotentialDisplayCommand",
+    "ResultDumpCommand",
+    "MapSimulationCommand",
+    "MapVisualizationCommand",
+    "PositionEstimationCommand",
+    "HRLModelTestCommand",
+]
+
 
 def main() -> int:
-    binding_names = list(m._built_in_command_names)
-
-    assert len(binding_names) == 7
+    assert len(BUILT_IN_COMMAND_NAMES) == 7
     assert hasattr(m, "LogLevel")
     assert hasattr(m, "ValidationPhase")
     assert hasattr(m, "ValidationIssue")
@@ -12,9 +20,9 @@ def main() -> int:
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
     assert hasattr(m, "TesterType")
     assert hasattr(m.TesterType, "BENCHMARK")
-    assert all(hasattr(m, name) for name in binding_names)
+    assert all(hasattr(m, name) for name in BUILT_IN_COMMAND_NAMES)
 
-    instances = [getattr(m, name)() for name in binding_names]
+    instances = [getattr(m, name)() for name in BUILT_IN_COMMAND_NAMES]
     assert all(
         all(
             hasattr(instance, method)

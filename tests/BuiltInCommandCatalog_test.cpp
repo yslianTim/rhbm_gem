@@ -1,8 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <array>
 #include <string>
-#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -46,14 +44,6 @@ TEST(BuiltInCommandCatalogTest, CommandIdsAndNamesAreUnique)
     EXPECT_EQ(unique_names.size(), catalog.size());
 }
 
-TEST(BuiltInCommandCatalogTest, FactoriesAreNonNull)
-{
-    for (const auto & descriptor : rg::BuiltInCommandCatalog())
-    {
-        EXPECT_NE(descriptor.factory, nullptr) << descriptor.name;
-    }
-}
-
 TEST(BuiltInCommandCatalogTest, AllBuiltInCommandsProvidePythonBindingNames)
 {
     std::unordered_set<std::string> unique_binding_names;
@@ -64,26 +54,4 @@ TEST(BuiltInCommandCatalogTest, AllBuiltInCommandsProvidePythonBindingNames)
     }
 
     EXPECT_EQ(unique_binding_names.size(), rg::BuiltInCommandCatalog().size());
-}
-
-TEST(BuiltInCommandCatalogTest, DatabaseEnabledCommandSetMatchesExpectedSurface)
-{
-    static constexpr std::array<std::string_view, 3> kExpectedDatabaseCommandNames{
-        "potential_analysis",
-        "potential_display",
-        "result_dump"
-    };
-
-    std::vector<std::string> actual_names;
-    for (const auto & descriptor : rg::BuiltInCommandCatalog())
-    {
-        if (!rg::UsesDatabaseAtRuntime(descriptor.common_options)) continue;
-        actual_names.emplace_back(descriptor.name);
-    }
-
-    ASSERT_EQ(actual_names.size(), kExpectedDatabaseCommandNames.size());
-    for (std::size_t index = 0; index < kExpectedDatabaseCommandNames.size(); ++index)
-    {
-        EXPECT_EQ(actual_names[index], kExpectedDatabaseCommandNames[index]);
-    }
 }

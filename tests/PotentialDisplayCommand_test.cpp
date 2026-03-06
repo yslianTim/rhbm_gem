@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
-
+#include "CommandValidationAssertions.hpp"
 #include "PotentialDisplayCommand.hpp"
 
 namespace rg = rhbm_gem;
@@ -14,19 +13,13 @@ TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidatio
 
     EXPECT_NO_THROW(command.SetRefModelKeyTagListMap("invalid"));
     EXPECT_FALSE(command.PrepareForExecution());
-
-    const auto & issues{ command.GetValidationIssues() };
-    const auto issue_iter{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssue & issue)
-            {
-                return issue.option_name == "--ref-model-keylist";
-            })
-    };
-    ASSERT_NE(issue_iter, issues.end());
-    EXPECT_EQ(issue_iter->level, LogLevel::Error);
+    ASSERT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--ref-model-keylist",
+            std::nullopt,
+            LogLevel::Error),
+        nullptr);
 }
 
 TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError)
@@ -36,20 +29,13 @@ TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError)
     command.SetModelKeyTagList("model_key");
 
     EXPECT_FALSE(command.PrepareForExecution());
-
-    const auto & issues{ command.GetValidationIssues() };
-    const auto issue_iter{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssue & issue)
-            {
-                return issue.option_name == "--painter";
-            })
-    };
-    ASSERT_NE(issue_iter, issues.end());
-    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
-    EXPECT_EQ(issue_iter->level, LogLevel::Error);
+    ASSERT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--painter",
+            rg::ValidationPhase::Parse,
+            LogLevel::Error),
+        nullptr);
 }
 
 TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareValidation)
@@ -60,16 +46,11 @@ TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareVa
     command.SetRefModelKeyTagListMap("[with_charge]ref_a,ref_b;[no_charge]ref_c");
 
     EXPECT_TRUE(command.PrepareForExecution());
-
-    const auto & issues{ command.GetValidationIssues() };
-    const auto issue_iter{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssue & issue)
-            {
-                return issue.option_name == "--ref-model-keylist" && issue.level == LogLevel::Error;
-            })
-    };
-    EXPECT_EQ(issue_iter, issues.end());
+    EXPECT_EQ(
+        command_test::FindValidationIssue(
+            command,
+            "--ref-model-keylist",
+            std::nullopt,
+            LogLevel::Error),
+        nullptr);
 }

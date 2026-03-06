@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <filesystem>
 
+#include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
 #include "ResultDumpCommand.hpp"
 
@@ -24,20 +24,13 @@ TEST(ResultDumpCommandTest, InvalidPrinterChoiceBecomesValidationError)
     command.SetModelKeyTagList("model");
 
     EXPECT_FALSE(command.PrepareForExecution());
-
-    const auto & issues{ command.GetValidationIssues() };
-    const auto issue_iter{
-        std::find_if(
-            issues.begin(),
-            issues.end(),
-            [](const rg::ValidationIssue & issue)
-            {
-                return issue.option_name == "--printer";
-            })
-    };
-    ASSERT_NE(issue_iter, issues.end());
-    EXPECT_EQ(issue_iter->phase, rg::ValidationPhase::Parse);
-    EXPECT_EQ(issue_iter->level, LogLevel::Error);
+    ASSERT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--printer",
+            rg::ValidationPhase::Parse,
+            LogLevel::Error),
+        nullptr);
 }
 
 TEST(ResultDumpCommandTest, ExecuteTwiceDoesNotReuseStaleLoadedModels)

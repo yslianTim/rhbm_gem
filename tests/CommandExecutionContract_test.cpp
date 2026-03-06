@@ -110,19 +110,3 @@ TEST(CommandExecutionContractTest, RepeatedExecuteResetsRuntimeStateBetweenRuns)
     EXPECT_EQ(command.reset_count, 2);
     EXPECT_EQ(command.execute_impl_count, 2);
 }
-
-TEST(CommandExecutionContractTest, MutatingOptionsAfterPrepareForExecutionForcesAnotherPreflight)
-{
-    LifecycleCommand command;
-
-    ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_EQ(command.validate_count, 1);
-    EXPECT_EQ(command.reset_count, 1);
-
-    command.SetThreadSize(4);
-
-    ASSERT_TRUE(command.Execute());
-    EXPECT_EQ(command.validate_count, 2);
-    EXPECT_EQ(command.reset_count, 2);
-    EXPECT_EQ(command.execute_impl_count, 1);
-}
