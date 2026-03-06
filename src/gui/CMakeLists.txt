@@ -24,32 +24,37 @@ install(
 )
 
 if(RHBM_GEM_BUILD_GUI)
-    find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+    find_package(Qt6 QUIET COMPONENTS Core Widgets)
+    if(Qt6_FOUND)
+        message(STATUS "Qt6 found, enabling GUI executable build")
 
-    set(GUI_SOURCES
-        main.cpp
-        MainWindow.cpp
-    )
+        set(GUI_SOURCES
+            main.cpp
+            MainWindow.cpp
+        )
 
-    set(GUI_EXEC_TARGET ${PROJECT_NAME}_gui)
-    add_executable(${GUI_EXEC_TARGET} ${GUI_SOURCES})
-    set_target_properties(${GUI_EXEC_TARGET} PROPERTIES
-        OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-GUI"
-        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-    )
+        set(GUI_EXEC_TARGET ${PROJECT_NAME}_gui)
+        add_executable(${GUI_EXEC_TARGET} ${GUI_SOURCES})
+        set_target_properties(${GUI_EXEC_TARGET} PROPERTIES
+            OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-GUI"
+            RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+        )
 
-    target_link_libraries(${GUI_EXEC_TARGET} PRIVATE
-        gui_adapter
-        Qt6::Core
-        Qt6::Widgets
-        CompilerFlags
-    )
-    target_include_directories(${GUI_EXEC_TARGET} PRIVATE
-        "${PROJECT_SOURCE_DIR}/src/gui"
-    )
+        target_link_libraries(${GUI_EXEC_TARGET} PRIVATE
+            gui_adapter
+            Qt6::Core
+            Qt6::Widgets
+            CompilerFlags
+        )
+        target_include_directories(${GUI_EXEC_TARGET} PRIVATE
+            "${PROJECT_SOURCE_DIR}/src/gui"
+        )
 
-    install(
-        TARGETS ${GUI_EXEC_TARGET}
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    )
+        install(
+            TARGETS ${GUI_EXEC_TARGET}
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        )
+    else()
+        message(STATUS "Qt6 not found, skipping GUI executable build")
+    endif()
 endif()
