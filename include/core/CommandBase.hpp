@@ -23,15 +23,17 @@ namespace CLI
 namespace rhbm_gem {
 
 constexpr CommonOptionMask kDefaultCommandCommonOptions{
-    CommonOption::Threading
-    | CommonOption::Verbose
-    | CommonOption::OutputFolder
+    CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)
+};
+constexpr CommonOptionMask kDatabaseCommandCommonOptions{
+    CommonOptionMaskForProfile(CommonOptionProfile::DatabaseWorkflow)
 };
 
 enum class ValidationPhase : std::uint8_t
 {
     Parse = 0,
     Prepare = 1,
+    // Reserved for API compatibility. Runtime validation currently reports as Execute() failures.
     Runtime = 2
 };
 
@@ -289,11 +291,23 @@ public:
     using Options = OptionsT;
     static constexpr CommandId kCommandId{ IdValue };
     static constexpr CommonOptionMask kCommonOptions{ CommonOptionsValue };
+    static constexpr CommonOptionProfile kCommonOptionProfile{
+        InferCommonOptionProfile(kCommonOptions)
+    };
 
 private:
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
     CommonOptionMask GetCommonOptionsMask() const override { return kCommonOptions; }
 };
+
+template <
+    typename OptionsT,
+    CommandId IdValue,
+    CommonOptionProfile ProfileValue = CommonOptionProfile::FileWorkflow>
+using CommandWithProfileOptions = CommandWithOptions<
+    OptionsT,
+    IdValue,
+    CommonOptionMaskForProfile(ProfileValue)>;
 
 } // namespace rhbm_gem

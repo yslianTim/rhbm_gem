@@ -278,7 +278,7 @@ Current integration contract:
   `AsModelObject`, `AsMapObject`, `ExpectModelObject`, `ExpectMapObject`, and `GetCatalogTypeName`.
 - Core command workflows prefer command-local typed operation APIs
   (for example `NormalizeMapObject(...)`, `PrepareModelObject(...)`,
-  `RunAtomSampling(...)`, `SampleMapValues(...)`).
+  `PotentialAnalysisCommand::RunAtomMapValueSampling(...)`, `SampleMapValues(...)`).
 - Use `DataObjectManager::ForEachDataObject(...)` when traversal ownership belongs to manager-level
   key selection/order policies; use direct typed APIs (`GetTypedDataObject`, `Expect*`, model lists)
   for command-local workflows.

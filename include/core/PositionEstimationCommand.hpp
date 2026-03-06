@@ -29,7 +29,7 @@ struct PositionEstimationCommandOptions : public CommandOptions
 };
 
 class PositionEstimationCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           PositionEstimationCommandOptions,
           CommandId::PositionEstimation>
 {

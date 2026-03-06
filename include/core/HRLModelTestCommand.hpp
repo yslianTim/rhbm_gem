@@ -25,7 +25,7 @@ struct HRLModelTestCommandOptions : public CommandOptions
 };
 
 class HRLModelTestCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           HRLModelTestCommandOptions,
           CommandId::ModelTest>
 {

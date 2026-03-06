@@ -37,10 +37,10 @@ struct PotentialAnalysisCommandOptions : public CommandOptions
 };
 
 class PotentialAnalysisCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           PotentialAnalysisCommandOptions,
           CommandId::PotentialAnalysis,
-          kDefaultCommandCommonOptions | CommonOption::Database>
+          CommonOptionProfile::DatabaseWorkflow>
 {
 public:
     using Options = PotentialAnalysisCommandOptions;

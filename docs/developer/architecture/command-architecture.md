@@ -107,7 +107,7 @@ All built-in commands must provide a Python binding name in the built-in catalog
 Most commands should follow the same shape:
 
 1. define an `Options` struct that extends `CommandOptions`
-2. derive from `CommandWithOptions<OptionsT, CommandId::..., ...>`
+2. derive from `CommandWithProfileOptions<OptionsT, CommandId::..., ...>`
 3. implement command-specific setters
 4. register CLI options in `RegisterCLIOptionsExtend(...)`
 5. keep cross-field checks in `ValidateOptions()`
@@ -125,10 +125,10 @@ The template wrapper in [`include/core/CommandBase.hpp`](../../../include/core/C
 
 ```cpp
 class ExampleCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           ExampleCommandOptions,
           CommandId::Example,
-          CommonOption::Threading | CommonOption::OutputFolder>
+          CommonOptionProfile::FileWorkflow>
 {
     // setters
     // RegisterCLIOptionsExtend(...)
@@ -140,7 +140,8 @@ class ExampleCommand
 
 ### Shared option registration
 
-Shared CLI options are registered by `CommandBase` based on the concrete command's `kCommonOptions` mask:
+Shared CLI options are registered by `CommandBase` based on the concrete command's
+`kCommonOptionProfile` (internally translated to the existing `kCommonOptions` mask):
 
 - `CommonOption::Threading`
 - `CommonOption::Verbose`
@@ -211,7 +212,7 @@ Validation issues are tagged by phase:
 | --- | --- | --- |
 | `Parse` | setter callbacks | single-field checks, enum validation, required-path checks, safe fallbacks |
 | `Prepare` | `ValidateOptions()` and filesystem preflight | cross-field rules, mode-dependent rules, directory creation failures |
-| `Runtime` | `ExecuteImpl()` or deeper runtime helpers | failures discovered only during execution |
+| `Runtime` | reserved for API compatibility | runtime failures currently surface as `Execute()` failures and logs |
 
 Two practical rules keep command code readable:
 
@@ -220,7 +221,7 @@ Two practical rules keep command code readable:
 
 ### Prepared-state invalidation
 
-Any setter path should call `MutateOptions(...)` directly or indirectly. That invalidates prepared state and clears `Prepare` / `Runtime` issues so the next execution revalidates from a fresh snapshot.
+Any setter path should call `MutateOptions(...)` directly or indirectly. That invalidates prepared state and clears `Prepare` issues so the next execution revalidates from a fresh snapshot.
 
 This is why command setters should use the base helpers rather than writing directly into `m_options`.
 
@@ -278,7 +279,9 @@ which exposes non-template model/map loading helpers for command call sites.
 Current command-local typed workflow APIs include:
 
 - map/model preprocessing via `DataObjectWorkflowOps` (`NormalizeMapObject`, `PrepareModelObject`, ...)
-- potential analysis flows via `PotentialAnalysisWorkflowOps`
+- potential analysis flows via command-local workflow helpers in
+  `src/core/PotentialAnalysisCommandWorkflow.cpp` and
+  `src/core/PotentialAnalysisBondWorkflow.cpp` (experimental)
 - map sampling via stateless `SampleMapValues(...)`
 
 The command should decide:
@@ -365,7 +368,7 @@ Use the checklist below when adding a new built-in command or making a large com
 1. add or update the public command header under `include/core/`
 2. add or update the implementation under `src/core/`
 3. define an options type derived from `CommandOptions`
-4. derive from `CommandWithOptions<...>`
+4. derive from `CommandWithProfileOptions<...>`
 5. declare the correct `CommonOptionMask`
 6. register only command-local CLI options in `RegisterCLIOptionsExtend(...)`
 7. keep setters on top of `MutateOptions(...)` and the validation helpers

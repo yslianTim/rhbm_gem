@@ -1,9 +1,10 @@
 #include "PotentialAnalysisBondWorkflow.hpp"
 #include "PotentialAnalysisExecutionOptions.hpp"
-#include "PotentialAnalysisWorkflowOps.hpp"
 
+#include "BondClassifier.hpp"
 #include "BondObject.hpp"
 #include "ChemicalDataHelper.hpp"
+#include "CylinderSampler.hpp"
 #include "GausLinearTransformHelper.hpp"
 #include "GroupPotentialEntry.hpp"
 #include "HRLDataTransform.hpp"
@@ -12,10 +13,13 @@
 #include "LocalPotentialEntry.hpp"
 #include "Logger.hpp"
 #include "MapObject.hpp"
+#include "MapSampling.hpp"
 #include "ModelObject.hpp"
 #include "ScopeTimer.hpp"
 
+#include <array>
 #include <atomic>
+#include <memory>
 #include <tuple>
 #include <vector>
 
@@ -26,6 +30,104 @@
 namespace rhbm_gem::detail {
 
 namespace {
+
+void RunBondSampling(
+    ModelObject & model_object,
+    const MapObject & map_object,
+    const PotentialAnalysisCommandOptions & options)
+{
+    ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
+    auto sampler{ std::make_unique<CylinderSampler>() };
+    sampler->SetSamplingSize(static_cast<unsigned int>(options.sampling_size));
+    sampler->SetDistanceRangeMinimum(options.sampling_range_min);
+    sampler->SetDistanceRangeMaximum(options.sampling_range_max);
+    sampler->SetHeight(options.sampling_height);
+    sampler->Print();
+
+    const auto & bond_list{ model_object.GetSelectedBondList() };
+    const auto bond_size{ bond_list.size() };
+    size_t bond_count{ 0 };
+
+#ifdef USE_OPENMP
+    #pragma omp parallel num_threads(options.thread_size)
+    {
+        #pragma omp for
+        for (size_t i = 0; i < bond_size; i++)
+        {
+            auto bond{ bond_list[i] };
+            auto entry{ bond->GetLocalPotentialEntry() };
+            auto bond_vector{ bond->GetBondVector() };
+            auto bond_position{ bond->GetPosition() };
+            constexpr float adjusted_rate{ 0.0f };
+            std::array<float, 3> adjusted_position{
+                bond_position[0] + 0.5f * bond_vector[0] * adjusted_rate,
+                bond_position[1] + 0.5f * bond_vector[1] * adjusted_rate,
+                bond_position[2] + 0.5f * bond_vector[2] * adjusted_rate
+            };
+            entry->AddDistanceAndMapValueList(
+                SampleMapValues(
+                    map_object,
+                    *sampler,
+                    adjusted_position,
+                    bond_vector));
+            entry->AddBasisAndResponseEntryList(
+                GausLinearTransformHelper::MapValueTransform(
+                    entry->GetDistanceAndMapValueList(),
+                    options.fit_range_min,
+                    options.fit_range_max));
+            entry->SetAlphaR(options.alpha_r);
+            #pragma omp critical
+            {
+                bond_count++;
+                Logger::ProgressPercent(bond_count, bond_size);
+            }
+        }
+    }
+#else
+    for (size_t i = 0; i < bond_size; i++)
+    {
+        auto bond{ bond_list[i] };
+        auto entry{ bond->GetLocalPotentialEntry() };
+        entry->AddDistanceAndMapValueList(
+            SampleMapValues(
+                map_object,
+                *sampler,
+                bond->GetPosition(),
+                bond->GetBondVector()));
+        entry->AddBasisAndResponseEntryList(
+            GausLinearTransformHelper::MapValueTransform(
+                entry->GetDistanceAndMapValueList(),
+                options.fit_range_min,
+                options.fit_range_max));
+        entry->SetAlphaR(options.alpha_r);
+        bond_count++;
+        Logger::ProgressPercent(bond_count, bond_size);
+    }
+#endif
+}
+
+void RunBondGrouping(ModelObject & model_object)
+{
+    ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondGroupClassification");
+    Logger::Log(LogLevel::Info, "Bond Classification Summary:");
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
+    {
+        const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
+        auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
+        for (auto bond : model_object.GetSelectedBondList())
+        {
+            auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
+            group_potential_entry->AddBondObjectPtr(group_key, bond);
+            group_potential_entry->InsertGroupKey(group_key);
+        }
+        const auto group_size{ group_potential_entry->GetGroupKeySet().size() };
+        model_object.AddBondGroupPotentialEntry(class_key, group_potential_entry);
+        Logger::Log(
+            LogLevel::Info,
+            " - Class type: " + class_key + " include "
+                + std::to_string(group_size) + " groups.");
+    }
+}
 
 void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & context)
 {

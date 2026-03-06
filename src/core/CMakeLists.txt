@@ -9,15 +9,17 @@ set(CORE_SOURCES
     DemoPainter.cpp
     GausPainter.cpp
     HRLModelTestCommand.cpp
+    HRLModelTestCommandWorkflows.cpp
     MapSampling.cpp
     MapSimulationCommand.cpp
     MapVisualizationCommand.cpp
     ModelPainter.cpp
     PositionEstimationCommand.cpp
     PotentialAnalysisCommand.cpp
-    PotentialAnalysisWorkflowOps.cpp
+    PotentialAnalysisCommandWorkflow.cpp
     PotentialDisplayCommand.cpp
     ResultDumpCommand.cpp
+    ResultDumpCommandWorkflow.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)

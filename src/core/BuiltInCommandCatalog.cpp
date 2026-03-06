@@ -8,7 +8,6 @@
 #include "PotentialDisplayCommand.hpp"
 #include "ResultDumpCommand.hpp"
 
-#include <algorithm>
 #include <stdexcept>
 
 namespace rhbm_gem {
@@ -52,25 +51,6 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
     };
 
     return catalog;
-}
-
-const CommandDescriptor & FindCommandDescriptor(CommandId command_id)
-{
-    const auto & catalog{ BuiltInCommandCatalog() };
-    const auto iter{
-        std::find_if(
-            catalog.begin(),
-            catalog.end(),
-            [command_id](const CommandDescriptor & descriptor)
-            {
-                return descriptor.id == command_id;
-            })
-    };
-    if (iter == catalog.end())
-    {
-        throw std::runtime_error("Unknown CommandId in built-in command catalog.");
-    }
-    return *iter;
 }
 
 } // namespace rhbm_gem

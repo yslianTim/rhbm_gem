@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include "HRLModelTestCommand.hpp"
 #include "MapSimulationCommand.hpp"
 #include "MapVisualizationCommand.hpp"
@@ -18,7 +20,18 @@ namespace {
 template <typename CommandType>
 void ExpectDescriptorMatchesConcreteType(rg::CommandId command_id)
 {
-    const auto & descriptor{ rg::FindCommandDescriptor(command_id) };
+    const auto & catalog{ rg::BuiltInCommandCatalog() };
+    const auto descriptor_iter{
+        std::find_if(
+            catalog.begin(),
+            catalog.end(),
+            [command_id](const rg::CommandDescriptor & descriptor)
+            {
+                return descriptor.id == command_id;
+            })
+    };
+    ASSERT_NE(descriptor_iter, catalog.end()) << static_cast<int>(command_id);
+    const auto & descriptor{ *descriptor_iter };
     ASSERT_NE(descriptor.factory, nullptr) << descriptor.name;
     EXPECT_EQ(descriptor.id, CommandType::kCommandId) << descriptor.name;
     EXPECT_EQ(descriptor.common_options, CommandType::kCommonOptions) << descriptor.name;

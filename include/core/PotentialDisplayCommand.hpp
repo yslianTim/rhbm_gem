@@ -34,10 +34,10 @@ struct PotentialDisplayCommandOptions : public CommandOptions
 };
 
 class PotentialDisplayCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           PotentialDisplayCommandOptions,
           CommandId::PotentialDisplay,
-          kDefaultCommandCommonOptions | CommonOption::Database>
+          CommonOptionProfile::DatabaseWorkflow>
 {
 public:
     using Options = PotentialDisplayCommandOptions;

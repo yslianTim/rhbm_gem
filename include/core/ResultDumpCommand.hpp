@@ -28,10 +28,10 @@ struct ResultDumpCommandOptions : public CommandOptions
 };
 
 class ResultDumpCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           ResultDumpCommandOptions,
           CommandId::ResultDump,
-          kDefaultCommandCommonOptions | CommonOption::Database>
+          CommonOptionProfile::DatabaseWorkflow>
 {
 public:
     using Options = ResultDumpCommandOptions;

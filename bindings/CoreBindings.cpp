@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "BuiltInCommandCatalogInternal.hpp"
+#include "BuiltInCommandBindingInternal.hpp"
 #include "HRLModelTestCommand.hpp"
 #include "MapSimulationCommand.hpp"
 #include "MapVisualizationCommand.hpp"
@@ -35,17 +35,10 @@ template <typename CommandType>
 py::class_<CommandType, std::shared_ptr<CommandType>> BindBuiltInCommand(
     py::module_ & module)
 {
-    const auto & descriptor{ rhbm_gem::FindCommandDescriptor(CommandType::kCommandId) };
-    if (descriptor.python_binding_name.empty())
-    {
-        throw std::runtime_error(
-            "Built-in command descriptor is missing a Python binding name: "
-            + std::string(descriptor.name));
-    }
-
+    constexpr auto binding_name{ rhbm_gem::BuiltInCommandBindingName<CommandType>::value };
     return py::class_<CommandType, std::shared_ptr<CommandType>>(
         module,
-        std::string(descriptor.python_binding_name).c_str());
+        std::string(binding_name).c_str());
 }
 
 template <typename CommandType, typename HolderType>
@@ -72,12 +65,12 @@ void BindCommandDiagnostics(py::class_<CommandType, HolderType> & py_command)
 
 std::vector<std::string> CollectBuiltInPythonBindingNames()
 {
-    std::vector<std::string> names;
-    for (const auto & descriptor : rhbm_gem::BuiltInCommandCatalog())
-    {
-        names.emplace_back(descriptor.python_binding_name);
-    }
-    return names;
+    return {
+    #define RHBM_GEM_BUILTIN_COMMAND(COMMAND_TYPE, CLI_NAME, DESCRIPTION, PYTHON_BINDING_NAME) \
+        std::string(PYTHON_BINDING_NAME),
+    #include "BuiltInCommandList.def"
+    #undef RHBM_GEM_BUILTIN_COMMAND
+    };
 }
 
 } // namespace

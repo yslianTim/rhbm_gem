@@ -3,6 +3,7 @@ set(TEST_SOURCES
     ArrayStats_test.cpp
     AtomSelector_test.cpp
     BuiltInCommandCatalog_test.cpp
+    BuiltInCommandBindingName_test.cpp
     ChemicalDataHelper_test.cpp
     ChimeraXHelper_test.cpp
     CommandBase_test.cpp

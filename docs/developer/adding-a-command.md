@@ -39,7 +39,7 @@ You should not add public registration headers under `include/core/`. Built-in c
 The normal pattern is:
 
 1. define an options struct derived from `CommandOptions`
-2. derive the command from `CommandWithOptions<...>`
+2. derive the command from `CommandWithProfileOptions<...>`
 3. implement setters on top of `CommandBase` helper methods
 4. register command-local CLI options in `RegisterCLIOptionsExtend(...)`
 5. put cross-field validation in `ValidateOptions()`
@@ -75,12 +75,10 @@ struct ExampleCommandOptions : public CommandOptions
 };
 
 class ExampleCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           ExampleCommandOptions,
           CommandId::Example,
-          CommonOption::Threading
-              | CommonOption::Verbose
-              | CommonOption::OutputFolder>
+          CommonOptionProfile::FileWorkflow>
 {
 public:
     using Options = ExampleCommandOptions;
@@ -315,7 +313,8 @@ For database-backed commands:
 1. call `RequireDatabaseManager()`
 2. load or save objects through `m_data_manager`
 
-Use `BuildOutputPath(...)` for command outputs when the command declares `CommonOption::OutputFolder`.
+Use `BuildOutputPath(...)` for command outputs when the command uses the
+`CommonOptionProfile::FileWorkflow` or `CommonOptionProfile::DatabaseWorkflow` profile.
 
 ## 9. Register the command in the built-in catalog
 
@@ -334,7 +333,8 @@ Rules:
 
 - the descriptor name is the CLI subcommand name
 - `python_binding_name` is required for every built-in command
-- the concrete command type remains the source of `CommandId` and `kCommonOptions`
+- the concrete command type remains the source of `CommandId`, `kCommonOptionProfile`,
+  and `kCommonOptions`
 
 Do not add a public `BuiltInCommandCatalog.hpp` header.
 
@@ -387,7 +387,7 @@ The most relevant existing test references are:
 Before you consider the command done, verify all of the following:
 
 1. the command header is under `include/core/` and the implementation is under `src/core/`
-2. the command derives from `CommandWithOptions<...>`
+2. the command derives from `CommandWithProfileOptions<...>`
 3. setter mutations go through `MutateOptions(...)` or a helper built on top of it
 4. shared option policy is declared on the concrete command type
 5. the command is registered in `BuiltInCommandCatalog.cpp`

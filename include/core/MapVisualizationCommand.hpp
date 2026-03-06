@@ -27,7 +27,7 @@ struct MapVisualizationCommandOptions : public CommandOptions
 };
 
 class MapVisualizationCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           MapVisualizationCommandOptions,
           CommandId::MapVisualization>
 {

@@ -128,7 +128,6 @@ void CommandBase::InvalidatePreparedState()
 {
     m_is_prepared_for_execution = false;
     ClearValidationIssues(ValidationPhase::Prepare);
-    ClearValidationIssues(ValidationPhase::Runtime);
 }
 
 void CommandBase::SetThreadSize(int value)

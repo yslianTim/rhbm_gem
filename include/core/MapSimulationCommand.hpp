@@ -35,7 +35,7 @@ struct MapSimulationCommandOptions : public CommandOptions
 };
 
 class MapSimulationCommand
-    : public CommandWithOptions<
+    : public CommandWithProfileOptions<
           MapSimulationCommandOptions,
           CommandId::MapSimulation>
 {

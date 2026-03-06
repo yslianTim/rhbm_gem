@@ -22,7 +22,6 @@ struct CommandDescriptor
 };
 
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog();
-const CommandDescriptor & FindCommandDescriptor(CommandId command_id);
 
 constexpr bool UsesDatabaseAtRuntime(CommonOptionMask common_options)
 {

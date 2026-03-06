@@ -111,13 +111,10 @@ Workflow logic remains typed and visitor-free.
 - `PrepareSimulationAtoms`
 - `BuildModelAtomBondContext`
 
-`src/core/PotentialAnalysisWorkflowOps.*` exports:
+Potential-analysis-specific workflow helpers are command-local:
 
-- `RunAtomSampling`
-- `RunAtomGrouping`
-- `RunLocalAtomFitting`
-- `RunBondSampling`
-- `RunBondGrouping`
+- atom workflow helpers live in `src/core/PotentialAnalysisCommandWorkflow.cpp`
+- experimental bond workflow helpers live in `src/core/PotentialAnalysisBondWorkflow.cpp`
 
 `include/core/MapSampling.hpp` provides stateless map sampling through `SampleMapValues(...)`.
 
@@ -174,8 +171,6 @@ Typed dispatch and ops:
 - `src/data/DataObjectDispatch.cpp`
 - `src/core/DataObjectWorkflowOps.hpp`
 - `src/core/DataObjectWorkflowOps.cpp`
-- `src/core/PotentialAnalysisWorkflowOps.hpp`
-- `src/core/PotentialAnalysisWorkflowOps.cpp`
 - `include/core/MapSampling.hpp`
 - `src/core/MapSampling.cpp`
 - `src/core/PainterIngestionInternal.hpp`
