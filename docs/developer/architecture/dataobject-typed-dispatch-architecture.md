@@ -13,6 +13,7 @@ Related guides:
 - [`../development-guidelines.md`](../development-guidelines.md)
 - [`./command-architecture.md`](./command-architecture.md)
 - [`./dataobject-io-architecture.md`](./dataobject-io-architecture.md)
+- [`../extending-dataobject-typed-dispatch.md`](../extending-dataobject-typed-dispatch.md)
 
 ## 1. Scope
 
@@ -152,19 +153,11 @@ Painter ingestion uses `PainterIngestionInternal.hpp` template helpers:
 
 These enforce expected types with `dynamic_cast` and throw mode-specific errors for null or mismatched input.
 
-## 6. Extension Checklist
+## 6. Extension Workflow
 
-1. Add the new subtype derived from `DataObjectBase`.
-2. Decide whether it is a top-level catalog object or an internal domain object.
-3. If top-level, extend:
-   - `GetCatalogTypeName(...)`
-   - file-format and factory support
-   - DAO registration and persistence schema contracts
-4. Add or extend typed dispatch/workflow helpers where cross-module runtime checks are required.
-5. Add regression tests for:
-   - dispatch success/failure behavior
-   - iteration ordering and snapshot semantics
-   - persistence/file dispatch behavior (if top-level)
+For implementation steps and file-level checklists, use:
+
+- [`../extending-dataobject-typed-dispatch.md`](../extending-dataobject-typed-dispatch.md)
 
 ## 7. Key Files
 
