@@ -15,7 +15,7 @@ Related guides:
 
 - [`../development-guidelines.md`](../development-guidelines.md)
 - [`./command-architecture.md`](./command-architecture.md)
-- [`./dataobject-visitor-architecture.md`](./dataobject-visitor-architecture.md)
+- [`./dataobject-typed-dispatch-architecture.md`](./dataobject-typed-dispatch-architecture.md)
 
 ## 1. Scope
 

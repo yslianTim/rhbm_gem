@@ -19,5 +19,5 @@ Use this directory as the entry point for the project documentation. The content
 - Start with [`developer/README.md`](developer/README.md) and [`developer/build-and-configuration.md`](developer/build-and-configuration.md).
 - [`developer/development-guidelines.md`](developer/development-guidelines.md)
 - [`developer/architecture/command-architecture.md`](developer/architecture/command-architecture.md)
-- [`developer/architecture/dataobject-visitor-architecture.md`](developer/architecture/dataobject-visitor-architecture.md)
+- [`developer/architecture/dataobject-typed-dispatch-architecture.md`](developer/architecture/dataobject-typed-dispatch-architecture.md)
 - [`developer/adding-a-command.md`](developer/adding-a-command.md)
