@@ -189,17 +189,15 @@ Notes:
 2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_BOOST_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
 3. When system packages are unavailable, FetchContent fallbacks require network access unless archives are already cached.
 
-## CMake Presets (Recommended)
+## Standard Build Directory Workflow
 
-The repository provides `CMakePresets.json` with preset outputs under `.build/`:
+Use explicit source/build directory commands instead of CMake presets:
 
 ```bash
-cmake --preset dev
-cmake --build --preset dev -j
-ctest --preset dev
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+ctest --test-dir build
 ```
-
-Available configure presets: `dev`, `release`, `coverage`.
 
 ## Validation Examples
 
