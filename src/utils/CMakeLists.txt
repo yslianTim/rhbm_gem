@@ -60,6 +60,44 @@ function(rhbm_utils_object_include_directories)
     endforeach()
 endfunction()
 
+function(rhbm_utils_prepare_openmp_for_appleclang)
+    if(NOT APPLE OR NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+        return()
+    endif()
+
+    if(DEFINED OpenMP_ROOT AND EXISTS "${OpenMP_ROOT}/include/omp.h")
+        set(_rhbm_openmp_root "${OpenMP_ROOT}")
+    else()
+        set(_rhbm_openmp_candidates)
+        if(DEFINED ENV{HOMEBREW_PREFIX})
+            list(APPEND _rhbm_openmp_candidates "$ENV{HOMEBREW_PREFIX}/opt/libomp")
+        endif()
+        list(APPEND _rhbm_openmp_candidates
+            "/opt/homebrew/opt/libomp"
+            "/usr/local/opt/libomp"
+        )
+
+        foreach(_candidate_root IN LISTS _rhbm_openmp_candidates)
+            if(EXISTS "${_candidate_root}/include/omp.h"
+               AND (EXISTS "${_candidate_root}/lib/libomp.dylib"
+                    OR EXISTS "${_candidate_root}/lib/libomp.a"))
+                set(_rhbm_openmp_root "${_candidate_root}")
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    if(_rhbm_openmp_root)
+        message(STATUS "AppleClang detected, probing OpenMP in: ${_rhbm_openmp_root}")
+        set(OpenMP_ROOT "${_rhbm_openmp_root}" CACHE PATH
+            "Root directory for OpenMP installation"
+            FORCE
+        )
+        list(PREPEND CMAKE_PREFIX_PATH "${_rhbm_openmp_root}")
+        list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
+    endif()
+endfunction()
+
 add_library(utils_domain OBJECT ${UTILS_DOMAIN_SOURCES})
 rhbm_configure_utils_object_target(utils_domain)
 
@@ -91,8 +129,10 @@ set(RHBM_GEM_ENABLE_OPENMP FALSE)
 if(RHBM_GEM_OPENMP_MODE STREQUAL "OFF")
     message(STATUS "OpenMP features disabled by RHBM_GEM_OPENMP_MODE=OFF")
 elseif(RHBM_GEM_OPENMP_MODE STREQUAL "AUTO")
+    rhbm_utils_prepare_openmp_for_appleclang()
     find_package(OpenMP QUIET COMPONENTS CXX)
 elseif(RHBM_GEM_OPENMP_MODE STREQUAL "ON")
+    rhbm_utils_prepare_openmp_for_appleclang()
     find_package(OpenMP REQUIRED COMPONENTS CXX)
 else()
     message(FATAL_ERROR "Unsupported RHBM_GEM_OPENMP_MODE='${RHBM_GEM_OPENMP_MODE}'")

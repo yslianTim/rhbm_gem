@@ -104,6 +104,11 @@ cmake --build build-openmp-on -j
 ./build-openmp-on/RHBM-GEM --help
 ```
 
+Notes:
+
+- On macOS with AppleClang, the project now auto-probes Homebrew `libomp` in `/opt/homebrew/opt/libomp` and `/usr/local/opt/libomp` when `OpenMP_ROOT` is not set.
+- If VSCode CMake Tools still reports missing OpenMP after installing `libomp`, clear the old configure cache and configure again (for example: `CMake: Delete Cache and Reconfigure`).
+
 3. Force OpenMP ON on Linux:
 
 ```bash
