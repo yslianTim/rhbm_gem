@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "CommandValidationAssertions.hpp"
-#include <rhbm_gem/core/PotentialDisplayCommand.hpp>
+#include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
 
 namespace rg = rhbm_gem;
 

@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include <rhbm_gem/utils/ComponentHelper.hpp>
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/ComponentHelper.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 class ComponentHelperTest : public ::testing::Test
 {

@@ -1,7 +1,7 @@
-#include <rhbm_gem/data/LocalPotentialEntry.hpp>
-#include <rhbm_gem/utils/GausLinearTransformHelper.hpp>
-#include <rhbm_gem/utils/Constants.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cmath>
 

@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/core/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 class AtomSelector;
 

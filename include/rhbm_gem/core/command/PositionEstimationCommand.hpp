@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/core/CommandBase.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
+#include <rhbm_gem/core/command/CommandBase.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 
 namespace CLI
 {

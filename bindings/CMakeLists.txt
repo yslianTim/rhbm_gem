@@ -40,8 +40,6 @@ target_link_libraries(${BINDINGS_MODULE_TARGET} PRIVATE core data utils Compiler
 target_include_directories(${BINDINGS_MODULE_TARGET} PRIVATE
     "${PROJECT_SOURCE_DIR}/src/core"
     "${PROJECT_SOURCE_DIR}/src/core/internal"
-    "${PROJECT_SOURCE_DIR}/src/data"
-    "${PROJECT_SOURCE_DIR}/src/data/internal"
 )
 
 set_target_properties(${BINDINGS_MODULE_TARGET} PROPERTIES

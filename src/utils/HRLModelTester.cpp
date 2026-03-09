@@ -1,10 +1,10 @@
-#include <rhbm_gem/utils/HRLModelTester.hpp>
-#include <rhbm_gem/utils/HRLAlphaTrainer.hpp>
-#include <rhbm_gem/utils/HRLDataTransform.hpp>
-#include <rhbm_gem/utils/HRLModelAlgorithms.hpp>
-#include <rhbm_gem/utils/GausLinearTransformHelper.hpp>
-#include <rhbm_gem/utils/Constants.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
+#include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cmath>
 #include <limits>

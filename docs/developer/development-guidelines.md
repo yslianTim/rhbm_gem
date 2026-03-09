@@ -23,7 +23,6 @@ The goal is stable, maintainable, and diagnosable software that can evolve safel
 - `[Required]` Keep test sources aligned to domain folders (`tests/core`, `tests/data`, `tests/utils`, `tests/integration`) and intent-specific subfolders where applicable.
 - `[Required]` For `src/core`, place command orchestration in `src/core/command/`, workflow implementation in `src/core/workflow/`, painter implementation in `src/core/painter/`, and private helpers in `src/core/internal/`.
 - `[Required]` Keep reusable automation scripts under `scripts/`; do not add scripts at repository root.
-- `[Required]` Keep large local datasets/databases under `data/local/` (ignored) and keep shared fixtures under `tests/data/` (tracked).
 - `[Required]` Project-owned public types in `core` and `data` must use namespace `rhbm_gem`.
 - `[Required]` Do not use `using namespace` in headers.
 - `[Recommended]` Keep header/source pairing clear and predictable for new modules.

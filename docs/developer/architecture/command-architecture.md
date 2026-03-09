@@ -104,7 +104,7 @@ Base options from `CommandOptions`:
 - `database_path`
 - `folder_path`
 
-Template aliases in `include/rhbm_gem/core/CommandBase.hpp`:
+Template aliases in `include/rhbm_gem/core/command/CommandBase.hpp`:
 
 - `CommandWithOptions<...>` for explicit mask
 - `CommandWithProfileOptions<...>` for profile-driven mask
@@ -202,7 +202,7 @@ Data/output helpers on command boundary:
 - `RequireDatabaseManager()`
 - `BuildOutputPath(...)`
 
-CLI registration helpers in `include/rhbm_gem/core/CommandOptionBinding.hpp`:
+CLI registration helpers in `include/rhbm_gem/core/command/CommandOptionBinding.hpp`:
 
 - `command_cli::AddScalarOption(...)`
 - `command_cli::AddStringOption(...)`
@@ -228,7 +228,7 @@ Workflow helpers used by current commands:
 - map sampling via `SampleMapValues(...)`
 - command-local workflows (for example `PotentialAnalysisCommandWorkflow.cpp`, `ResultDumpCommandWorkflow.cpp`)
 
-`DataObjectDispatch` (`include/rhbm_gem/data/DataObjectDispatch.hpp`) is optional when a command iterates generic `DataObjectBase` and needs explicit runtime type dispatch.
+`DataObjectDispatch` (`include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`) is optional when a command iterates generic `DataObjectBase` and needs explicit runtime type dispatch.
 
 ## 9. Python binding contract
 
@@ -267,7 +267,7 @@ Current binding model:
 
 When adding or significantly modifying a built-in command, update the same change set:
 
-1. command header under `include/rhbm_gem/core/`
+1. command header under `include/rhbm_gem/core/command/`
 2. command implementation under `src/core/`
 3. built-in list entry in `src/core/internal/BuiltInCommandList.def`
 4. metadata/registration behavior (if needed) in `BuiltInCommandCatalog*`
@@ -290,19 +290,19 @@ When adding or significantly modifying a built-in command, update the same chang
 Core command architecture:
 
 - `src/main.cpp`
-- `include/rhbm_gem/core/Application.hpp`
+- `include/rhbm_gem/core/command/Application.hpp`
 - `src/core/command/Application.cpp`
-- `include/rhbm_gem/core/CommandBase.hpp`
+- `include/rhbm_gem/core/command/CommandBase.hpp`
 - `src/core/command/CommandBase.cpp`
-- `include/rhbm_gem/core/CommandMetadata.hpp`
+- `include/rhbm_gem/core/command/CommandMetadata.hpp`
 - `src/core/internal/BuiltInCommandList.def`
 - `src/core/internal/BuiltInCommandCatalogInternal.hpp`
 - `src/core/command/BuiltInCommandCatalog.cpp`
 - `src/core/internal/BuiltInCommandBindingInternal.hpp`
-- `include/rhbm_gem/core/CommandOptionBinding.hpp`
+- `include/rhbm_gem/core/command/CommandOptionBinding.hpp`
 - `src/core/internal/CommandDataLoaderInternal.hpp`
-- `include/rhbm_gem/core/DataObjectManager.hpp`
-- `src/core/command/DataObjectManager.cpp`
+- `include/rhbm_gem/core/command/DataObjectManager.hpp`
+- `src/data/io/DataObjectManager.cpp`
 - `bindings/CoreBindings.cpp`
 
 Representative concrete commands:

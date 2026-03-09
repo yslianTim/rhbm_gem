@@ -1,13 +1,13 @@
-#include "internal/ModelObjectDAOv2.hpp"
+#include "internal/io/sqlite/ModelObjectDaoSqlite.hpp"
 
-#include <rhbm_gem/data/DataObjectBase.hpp>
-#include <rhbm_gem/data/DataObjectDispatch.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
-#include "internal/SQLiteWrapper.hpp"
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include "internal/io/sqlite/SQLiteWrapper.hpp"
 
-#include "model_io/ModelAnalysisPersistence.hpp"
-#include "model_io/ModelSchemaSql.hpp"
-#include "model_io/ModelStructurePersistence.hpp"
+#include "io/sqlite/ModelAnalysisPersistence.hpp"
+#include "io/sqlite/ModelSchemaSql.hpp"
+#include "io/sqlite/ModelStructurePersistence.hpp"
 
 #include <stdexcept>
 #include <string>
@@ -32,16 +32,16 @@ void DeleteRowsForKey(
 
 namespace rhbm_gem {
 
-ModelObjectDAOv2::ModelObjectDAOv2(SQLiteWrapper * db_manager) :
+ModelObjectDaoSqlite::ModelObjectDaoSqlite(SQLiteWrapper * db_manager) :
     m_database{ db_manager }
 {
 }
 
-ModelObjectDAOv2::~ModelObjectDAOv2()
+ModelObjectDaoSqlite::~ModelObjectDaoSqlite()
 {
 }
 
-void ModelObjectDAOv2::EnsureSchema(SQLiteWrapper & database)
+void ModelObjectDaoSqlite::EnsureSchema(SQLiteWrapper & database)
 {
     for (const auto create_sql : model_io::kCreateModelTableSqlList)
     {
@@ -49,9 +49,9 @@ void ModelObjectDAOv2::EnsureSchema(SQLiteWrapper & database)
     }
 }
 
-void ModelObjectDAOv2::Save(const DataObjectBase & obj, const std::string & key_tag)
+void ModelObjectDaoSqlite::Save(const DataObjectBase & obj, const std::string & key_tag)
 {
-    const auto & model_obj{ ExpectModelObject(obj, "ModelObjectDAOv2::Save()") };
+    const auto & model_obj{ ExpectModelObject(obj, "ModelObjectDaoSqlite::Save()") };
 
     for (const auto table_name : model_io::kModelTablesScopedByKey)
     {
@@ -62,7 +62,7 @@ void ModelObjectDAOv2::Save(const DataObjectBase & obj, const std::string & key_
     model_io::SaveAnalysis(*m_database, model_obj, key_tag);
 }
 
-std::unique_ptr<DataObjectBase> ModelObjectDAOv2::Load(const std::string & key_tag)
+std::unique_ptr<DataObjectBase> ModelObjectDaoSqlite::Load(const std::string & key_tag)
 {
     auto model_object{ std::make_unique<ModelObject>() };
     model_io::LoadStructure(*m_database, *model_object, key_tag);

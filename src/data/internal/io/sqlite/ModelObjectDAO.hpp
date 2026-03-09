@@ -1,13 +1,13 @@
 #pragma once
 
-#include "ModelObjectDAOv2.hpp"
+#include "ModelObjectDaoSqlite.hpp"
 
 namespace rhbm_gem {
 
-class ModelObjectDAO : public ModelObjectDAOv2
+class ModelObjectDAO : public ModelObjectDaoSqlite
 {
 public:
-    using ModelObjectDAOv2::ModelObjectDAOv2;
+    using ModelObjectDaoSqlite::ModelObjectDaoSqlite;
 };
 
 } // namespace rhbm_gem

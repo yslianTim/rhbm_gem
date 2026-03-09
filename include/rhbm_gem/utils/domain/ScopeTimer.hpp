@@ -1,6 +1,6 @@
 #pragma once
 
-#include <rhbm_gem/utils/Timer.hpp>
+#include <rhbm_gem/utils/domain/Timer.hpp>
 
 class ScopeTimer
 {

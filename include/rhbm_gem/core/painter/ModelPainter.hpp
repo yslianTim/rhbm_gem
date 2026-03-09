@@ -5,8 +5,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/core/PainterBase.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/core/painter/PainterBase.hpp>
 
 #ifdef HAVE_ROOT
 class TPad;

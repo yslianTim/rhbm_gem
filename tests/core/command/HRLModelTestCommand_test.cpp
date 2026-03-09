@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "CommandValidationAssertions.hpp"
-#include <rhbm_gem/core/HRLModelTestCommand.hpp>
+#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
 
 namespace rg = rhbm_gem;
 

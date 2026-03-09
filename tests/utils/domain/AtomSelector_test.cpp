@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 #include <string>
 
-#include <rhbm_gem/utils/AtomSelector.hpp>
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/AtomSelector.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 class AtomSelectorTest : public ::testing::Test
 {

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/data/DataObjectBase.hpp>
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
 
 template <typename T> struct KDNode;
 

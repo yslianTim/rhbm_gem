@@ -1,6 +1,6 @@
-#include <rhbm_gem/core/CommandMetadata.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
-#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include <rhbm_gem/core/command/CommandMetadata.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <string>
 

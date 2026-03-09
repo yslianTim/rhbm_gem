@@ -10,7 +10,7 @@
 #include <limits>
 #include <algorithm>
 
-#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 namespace ChimeraXHelper
 {

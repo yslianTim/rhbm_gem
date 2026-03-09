@@ -1,8 +1,8 @@
-#include <rhbm_gem/core/HRLModelTestCommand.hpp>
-#include <rhbm_gem/utils/HRLModelTester.hpp>
-#include <rhbm_gem/utils/ArrayStats.hpp>
-#include <rhbm_gem/utils/ScopeTimer.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
+#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <memory>
 #include <random>
@@ -10,7 +10,7 @@
 #include <vector>
 
 #ifdef HAVE_ROOT
-#include <rhbm_gem/utils/ROOTHelper.hpp>
+#include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <TAxis.h>
 #include <TCanvas.h>
 #include <TColor.h>

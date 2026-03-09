@@ -88,7 +88,7 @@ Behavior:
 
 ## 4. Typed Dispatch Contract
 
-`DataObjectDispatch` (`include/rhbm_gem/data/DataObjectDispatch.hpp`) provides runtime dispatch helpers.
+`DataObjectDispatch` (`include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`) provides runtime dispatch helpers.
 
 ### 4.1 Probe helpers (non-throwing)
 
@@ -123,7 +123,7 @@ Contract:
 
 - `ModelObjectFactory::OutputDataObject(...)` -> `ExpectModelObject(...)`
 - `MapObjectFactory::OutputDataObject(...)` -> `ExpectMapObject(...)`
-- `ModelObjectDAOv2::Save(...)` -> `ExpectModelObject(...)`
+- `ModelObjectDaoSqlite::Save(...)` -> `ExpectModelObject(...)`
 - `MapObjectDAO::Save(...)` -> `ExpectMapObject(...)`
 
 ### 5.2 Command workflow helpers
@@ -139,7 +139,7 @@ Typed workflow operations live in `DataObjectWorkflowOps`:
 
 Map sampling is provided as a stateless helper:
 
-- `SampleMapValues(...)` (`include/rhbm_gem/core/MapSampling.hpp`)
+- `SampleMapValues(...)` (`include/rhbm_gem/core/command/MapSampling.hpp`)
 
 Potential-analysis-specific typed workflows remain command-local (`PotentialAnalysisCommandWorkflow.*`,
 `PotentialAnalysisBondWorkflow.*`).
@@ -163,25 +163,25 @@ For existing `ModelObject`/`MapObject` operation and iteration extension, use:
 
 Core interfaces:
 
-- `include/rhbm_gem/data/DataObjectBase.hpp`
-- `include/rhbm_gem/data/ModelObject.hpp`
-- `include/rhbm_gem/data/MapObject.hpp`
+- `include/rhbm_gem/data/object/DataObjectBase.hpp`
+- `include/rhbm_gem/data/object/ModelObject.hpp`
+- `include/rhbm_gem/data/object/MapObject.hpp`
 
 Manager iteration:
 
-- `include/rhbm_gem/core/DataObjectManager.hpp`
-- `src/core/command/DataObjectManager.cpp`
+- `include/rhbm_gem/core/command/DataObjectManager.hpp`
+- `src/data/io/DataObjectManager.cpp`
 
 Typed dispatch:
 
-- `include/rhbm_gem/data/DataObjectDispatch.hpp`
-- `src/data/DataObjectDispatch.cpp`
+- `include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`
+- `src/data/dispatch/DataObjectDispatch.cpp`
 
 Typed workflow helpers:
 
 - `src/core/workflow/DataObjectWorkflowOps.hpp`
 - `src/core/workflow/DataObjectWorkflowOps.cpp`
-- `include/rhbm_gem/core/MapSampling.hpp`
+- `include/rhbm_gem/core/command/MapSampling.hpp`
 - `src/core/command/MapSampling.cpp`
 - `src/core/internal/PainterIngestionInternal.hpp`
 

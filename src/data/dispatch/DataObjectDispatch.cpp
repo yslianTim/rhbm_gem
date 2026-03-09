@@ -1,14 +1,14 @@
-#include <rhbm_gem/data/DataObjectDispatch.hpp>
+#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
 
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
-#include <rhbm_gem/data/AtomObject.hpp>
-#include <rhbm_gem/data/BondObject.hpp>
-#include <rhbm_gem/data/DataObjectBase.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rhbm_gem {
 namespace {

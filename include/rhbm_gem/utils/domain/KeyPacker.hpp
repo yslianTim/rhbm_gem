@@ -4,10 +4,10 @@
 #include <tuple>
 #include <string>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/ComponentKeySystem.hpp>
-#include <rhbm_gem/utils/AtomKeySystem.hpp>
-#include <rhbm_gem/utils/BondKeySystem.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
+#include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
+#include <rhbm_gem/utils/domain/BondKeySystem.hpp>
 
 static_assert(std::is_same_v<std::underlying_type_t<Structure>,  uint8_t>);
 static_assert(std::is_same_v<GroupKey, uint64_t>);

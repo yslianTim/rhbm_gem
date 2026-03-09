@@ -17,6 +17,39 @@ if(CORE_ROOT_HPP)
         "Move these headers into src/core/internal/, src/core/workflow/, or remove them.")
 endif()
 
+file(GLOB PUBLIC_CORE_FLAT_HPP
+    RELATIVE "${PROJECT_SOURCE_DIR}"
+    "${PROJECT_SOURCE_DIR}/include/rhbm_gem/core/*.hpp")
+if(PUBLIC_CORE_FLAT_HPP)
+    list(JOIN PUBLIC_CORE_FLAT_HPP "\n  - " PUBLIC_CORE_FLAT_HPP_TEXT)
+    message(FATAL_ERROR
+        "Structure guard failed.\n"
+        "  - include/rhbm_gem/core must use subfolders (command/ or painter/).\n"
+        "  - ${PUBLIC_CORE_FLAT_HPP_TEXT}")
+endif()
+
+file(GLOB PUBLIC_DATA_FLAT_HPP
+    RELATIVE "${PROJECT_SOURCE_DIR}"
+    "${PROJECT_SOURCE_DIR}/include/rhbm_gem/data/*.hpp")
+if(PUBLIC_DATA_FLAT_HPP)
+    list(JOIN PUBLIC_DATA_FLAT_HPP "\n  - " PUBLIC_DATA_FLAT_HPP_TEXT)
+    message(FATAL_ERROR
+        "Structure guard failed.\n"
+        "  - include/rhbm_gem/data must use subfolders (object/, io/, dispatch/).\n"
+        "  - ${PUBLIC_DATA_FLAT_HPP_TEXT}")
+endif()
+
+file(GLOB PUBLIC_UTILS_FLAT_HPP
+    RELATIVE "${PROJECT_SOURCE_DIR}"
+    "${PROJECT_SOURCE_DIR}/include/rhbm_gem/utils/*.hpp")
+if(PUBLIC_UTILS_FLAT_HPP)
+    list(JOIN PUBLIC_UTILS_FLAT_HPP "\n  - " PUBLIC_UTILS_FLAT_HPP_TEXT)
+    message(FATAL_ERROR
+        "Structure guard failed.\n"
+        "  - include/rhbm_gem/utils must use subfolders (domain/, math/, hrl/).\n"
+        "  - ${PUBLIC_UTILS_FLAT_HPP_TEXT}")
+endif()
+
 file(GLOB CORE_ROOT_COMMAND_CPP RELATIVE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/core/*Command.cpp")
 if(CORE_ROOT_COMMAND_CPP)
     list(JOIN CORE_ROOT_COMMAND_CPP "\n  - " CORE_ROOT_COMMAND_CPP_TEXT)

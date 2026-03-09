@@ -6,7 +6,7 @@
 
 #include <CLI/CLI.hpp>
 
-#include <rhbm_gem/core/CommandBase.hpp>
+#include <rhbm_gem/core/command/CommandBase.hpp>
 
 namespace rg = rhbm_gem;
 

@@ -27,6 +27,7 @@ A few dependencies are optional:
 - If system packages are missing, CMake fetches pinned fallback sources for `Eigen3`/`CLI11`/`pybind11` and uses a bundled fallback for `SQLite3`.
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
 - `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
+- Runtime database default path is `${HOME}/.rhbmgem/data/database.sqlite`. Set `RHBM_GEM_DATA_DIR` to change the default root.
 
 For the full dependency policy and override flags such as `USE_SYSTEM_LIBS`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
 

@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-#include <rhbm_gem/core/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rhbm_gem {
 

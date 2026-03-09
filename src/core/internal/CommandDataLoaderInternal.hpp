@@ -6,9 +6,9 @@
 #include <string>
 #include <string_view>
 
-#include <rhbm_gem/core/DataObjectManager.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rhbm_gem::command_data_loader {
 

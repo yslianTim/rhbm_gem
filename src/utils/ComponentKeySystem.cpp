@@ -1,7 +1,7 @@
-#include <rhbm_gem/utils/ComponentKeySystem.hpp>
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <limits>
 

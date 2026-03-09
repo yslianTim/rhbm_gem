@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/core/CommandBase.hpp>
-#include <rhbm_gem/core/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandBase.hpp>
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rhbm_gem::gui {
 
@@ -13,7 +13,7 @@ struct CommonExecutionRequest
 {
     int thread_size{ 1 };
     int verbose_level{ 3 };
-    std::filesystem::path database_path{ "database.sqlite" };
+    std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path folder_path{ "" };
 };
 

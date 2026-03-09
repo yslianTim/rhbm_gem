@@ -1,7 +1,7 @@
 #include <iostream>
 #include <CLI/CLI.hpp>
 
-#include <rhbm_gem/core/Application.hpp>
+#include <rhbm_gem/core/command/Application.hpp>
 
 int main(int argc, char * argv[])
 {

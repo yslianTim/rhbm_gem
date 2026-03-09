@@ -16,26 +16,18 @@
 #include <unordered_set>
 #include <vector>
 
-#include <rhbm_gem/data/AtomObject.hpp>
-#include <rhbm_gem/data/BondObject.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
 #include "CommandTestHelpers.hpp"
-#include <rhbm_gem/data/DataObjectBase.hpp>
-#include "internal/DataObjectDAOBase.hpp"
-#include "internal/DataObjectDAOFactoryRegistry.hpp"
-#include <rhbm_gem/core/DataObjectManager.hpp>
-#include "internal/DatabaseManager.hpp"
-#include "internal/FileFormatRegistry.hpp"
-#include "internal/FileProcessFactoryBase.hpp"
-#include "internal/FileProcessFactoryResolver.hpp"
-#include <rhbm_gem/data/LocalPotentialEntry.hpp>
-#include <rhbm_gem/data/MapFileReader.hpp>
-#include <rhbm_gem/data/MapFileWriter.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
-#include "internal/MapObjectDAO.hpp"
-#include <rhbm_gem/data/ModelFileReader.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
-#include "internal/ModelObjectDAO.hpp"
-#include "internal/SQLiteWrapper.hpp"
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/io/MapFileReader.hpp>
+#include <rhbm_gem/data/io/MapFileWriter.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/io/ModelFileReader.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include "support/DataInternalTestSeam.hpp"
 
 namespace rg = rhbm_gem;
 

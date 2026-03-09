@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <array>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 class ElectricPotential
 {

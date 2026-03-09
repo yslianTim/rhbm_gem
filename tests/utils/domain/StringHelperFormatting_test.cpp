@@ -2,7 +2,7 @@
 
 #include <limits>
 
-#include <rhbm_gem/utils/StringHelper.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 TEST(StringHelperFormattingTest, ToStringWithPrecisionUsesDefaultPrecision)
 {

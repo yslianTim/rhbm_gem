@@ -1,11 +1,11 @@
-#include "internal/DatabaseManager.hpp"
-#include "internal/DatabaseSchemaManager.hpp"
-#include "internal/SQLiteWrapper.hpp"
-#include "internal/DataObjectDAOBase.hpp"
-#include "internal/DataObjectDAOFactoryRegistry.hpp"
-#include <rhbm_gem/data/DataObjectBase.hpp>
-#include <rhbm_gem/data/DataObjectDispatch.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include "internal/io/sqlite/DatabaseManager.hpp"
+#include "internal/migration/DatabaseSchemaManager.hpp"
+#include "internal/io/sqlite/SQLiteWrapper.hpp"
+#include "internal/io/sqlite/DataObjectDAOBase.hpp"
+#include "internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp"
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 

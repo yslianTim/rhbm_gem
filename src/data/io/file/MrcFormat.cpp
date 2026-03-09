@@ -1,7 +1,7 @@
-#include "internal/MrcFormat.hpp"
-#include <rhbm_gem/utils/Logger.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
-#include "map_io/MapAxisOrderHelper.hpp"
+#include "internal/io/file/MrcFormat.hpp"
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include "internal/io/file/MapAxisOrderHelper.hpp"
 
 #include <sstream>
 #include <fstream>

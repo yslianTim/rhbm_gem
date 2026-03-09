@@ -124,14 +124,15 @@ TEST(DataObjectIOContractTest, DataObjectManagerDoesNotRequireDefaultFactoryRegi
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
 }
 
-TEST(DataObjectIOContractTest, InjectedOverrideTakesPrecedenceOverDescriptorFallback)
+TEST(DataObjectIOContractTest, OverrideResolverTakesPrecedenceOverDescriptorFallback)
 {
     auto resolver{ std::make_shared<rg::OverrideableFileProcessFactoryResolver>() };
     resolver->RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
 
-    rg::DataObjectManager manager{ resolver };
-    ASSERT_NO_THROW(manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "override"));
-    EXPECT_NE(dynamic_cast<FailingDataObject *>(manager.GetDataObject("override").get()), nullptr);
+    auto override_factory{ resolver->CreateFactory(".cif") };
+    auto override_object{
+        override_factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
+    EXPECT_NE(dynamic_cast<FailingDataObject *>(override_object.get()), nullptr);
 }
 
 TEST(DataObjectIOContractTest, ResolverInjectionSupportsOverrideWithoutGlobalRegistry)
@@ -431,4 +432,3 @@ TEST(DataObjectIOContractTest, ReaderGettersThrowIfReadDidNotSucceed)
     EXPECT_THROW(map_reader.GetOriginArray(), std::runtime_error);
     EXPECT_THROW((void)map_reader.GetMapValueArray(), std::runtime_error);
 }
-

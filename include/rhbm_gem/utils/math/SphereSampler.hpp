@@ -4,7 +4,7 @@
 #include <vector>
 #include <tuple>
 
-#include <rhbm_gem/utils/SamplerBase.hpp>
+#include <rhbm_gem/utils/math/SamplerBase.hpp>
 
 class SphereSampler : public SamplerBase
 {

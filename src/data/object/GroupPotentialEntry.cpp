@@ -1,9 +1,9 @@
-#include <rhbm_gem/data/GroupPotentialEntry.hpp>
-#include <rhbm_gem/utils/GausLinearTransformHelper.hpp>
-#include <rhbm_gem/data/AtomObject.hpp>
-#include <rhbm_gem/data/BondObject.hpp>
-#include <rhbm_gem/utils/Constants.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
+#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cmath>
 

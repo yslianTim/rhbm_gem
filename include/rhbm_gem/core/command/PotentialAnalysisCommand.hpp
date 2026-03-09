@@ -4,7 +4,7 @@
 #include <string>
 #include <filesystem>
 
-#include <rhbm_gem/core/CommandBase.hpp>
+#include <rhbm_gem/core/command/CommandBase.hpp>
 
 namespace CLI
 {

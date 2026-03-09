@@ -41,8 +41,8 @@ For operation extension on existing objects, update these areas together:
 
 For iteration method extension, additionally update:
 
-- `include/rhbm_gem/core/DataObjectManager.hpp`
-- `src/core/command/DataObjectManager.cpp`
+- `include/rhbm_gem/core/command/DataObjectManager.hpp`
+- `src/data/io/DataObjectManager.cpp`
 - `tests/data/io/DataObjectManager_test.cpp`
 
 ## 3. Add a reusable operation in `DataObjectWorkflowOps`

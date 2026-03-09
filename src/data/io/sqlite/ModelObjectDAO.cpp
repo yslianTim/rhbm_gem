@@ -1,6 +1,6 @@
-#include "internal/ModelObjectDAO.hpp"
-#include "internal/DataObjectDAOFactoryRegistry.hpp"
-#include <rhbm_gem/data/ModelObject.hpp>
+#include "internal/io/sqlite/ModelObjectDAO.hpp"
+#include "internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp"
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace
 {

@@ -1,6 +1,6 @@
-#include <rhbm_gem/core/ResultDumpCommand.hpp>
-#include <rhbm_gem/core/CommandOptionBinding.hpp>
-#include <rhbm_gem/utils/StringHelper.hpp>
+#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };

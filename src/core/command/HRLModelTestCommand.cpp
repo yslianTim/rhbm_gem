@@ -1,6 +1,6 @@
-#include <rhbm_gem/core/HRLModelTestCommand.hpp>
-#include <rhbm_gem/core/CommandOptionBinding.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
+#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 

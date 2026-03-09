@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/core/PainterBase.hpp>
+#include <rhbm_gem/core/painter/PainterBase.hpp>
 
 #ifdef HAVE_ROOT
 class TPad;

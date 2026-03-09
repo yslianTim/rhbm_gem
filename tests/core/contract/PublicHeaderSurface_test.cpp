@@ -49,7 +49,7 @@ TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceW
         command_test::ProjectRootPath()
     };
     const auto header_path{
-        project_root / "include" / "rhbm_gem" / "core" / "CommandMetadata.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "command" / "CommandMetadata.hpp"
     };
 
     std::ifstream header_stream(header_path);
@@ -71,7 +71,7 @@ TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHo
         command_test::ProjectRootPath()
     };
     const auto header_path{
-        project_root / "include" / "rhbm_gem" / "core" / "CommandBase.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "command" / "CommandBase.hpp"
     };
 
     std::ifstream header_stream(header_path);
@@ -152,7 +152,7 @@ TEST(PublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugA
         command_test::ProjectRootPath()
     };
     const auto header_path{
-        project_root / "include" / "rhbm_gem" / "core" / "DataObjectManager.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "command" / "DataObjectManager.hpp"
     };
 
     std::ifstream header_stream(header_path);
@@ -178,13 +178,13 @@ TEST(PublicHeaderSurfaceTest, DatabaseManagerHeaderIsNotPublic)
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
 }
 
-TEST(PublicHeaderSurfaceTest, ModelObjectDaoV2HeaderIsNotPublic)
+TEST(PublicHeaderSurfaceTest, ModelObjectDaoSqliteHeaderIsNotPublic)
 {
     const auto project_root{
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "ModelObjectDAOv2.hpp"
+        project_root / "include" / "rhbm_gem" / "data" / "ModelObjectDaoSqlite.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();

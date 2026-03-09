@@ -6,8 +6,8 @@
 #include <unordered_map>
 #include <filesystem>
 
-#include <rhbm_gem/core/CommandBase.hpp>
-#include <rhbm_gem/core/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandBase.hpp>
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 class AtomSelector;
 namespace CLI

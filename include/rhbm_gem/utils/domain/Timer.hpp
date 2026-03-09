@@ -6,7 +6,7 @@
 #include <memory>
 #include <type_traits>
 
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 template<typename DurationUnit = std::chrono::microseconds>
 class Timer final

@@ -1,9 +1,9 @@
-#include "internal/FileProcessFactoryBase.hpp"
-#include <rhbm_gem/data/MapFileReader.hpp>
-#include <rhbm_gem/data/MapFileWriter.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
-#include <rhbm_gem/data/DataObjectDispatch.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include "internal/io/file/FileProcessFactoryBase.hpp"
+#include <rhbm_gem/data/io/MapFileReader.hpp>
+#include <rhbm_gem/data/io/MapFileWriter.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
 

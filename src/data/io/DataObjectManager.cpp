@@ -1,15 +1,22 @@
-#include <rhbm_gem/core/DataObjectManager.hpp>
-#include "internal/FileProcessFactoryBase.hpp"
-#include "internal/FileProcessFactoryResolver.hpp"
-#include <rhbm_gem/utils/FilePathHelper.hpp>
-#include <rhbm_gem/data/DataObjectBase.hpp>
-#include "internal/DatabaseManager.hpp"
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include "internal/io/file/FileProcessFactoryBase.hpp"
+#include "internal/io/file/FileProcessFactoryResolver.hpp"
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include "internal/io/sqlite/DatabaseManager.hpp"
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
 #include <utility>
 
 namespace rhbm_gem {
+
+struct DataObjectManager::Impl
+{
+    std::unique_ptr<DatabaseManager> m_db_manager;
+    std::shared_ptr<const FileProcessFactoryResolver> m_file_factory_resolver;
+};
+
 namespace {
 
 template <typename SharedPtrType>
@@ -72,27 +79,27 @@ std::vector<SharedPtrType> BuildDataObjectSnapshot(
     return data_object_list;
 }
 
+std::unique_ptr<FileProcessFactoryBase> CreateFileFactory(
+    const FileProcessFactoryResolver & resolver,
+    const std::filesystem::path & filename)
+{
+    return resolver.CreateFactory(FilePathHelper::GetExtension(filename));
+}
+
 } // namespace
 
 DataObjectManager::DataObjectManager() :
-    DataObjectManager(CreateDefaultFileProcessFactoryResolver())
+    m_impl{ std::make_unique<Impl>() }
 {
-}
-
-DataObjectManager::DataObjectManager(
-    std::shared_ptr<const FileProcessFactoryResolver> file_factory_resolver) :
-    m_db_manager{ nullptr },
-    m_file_factory_resolver{ std::move(file_factory_resolver) }
-{
-    if (!m_file_factory_resolver)
+    m_impl->m_db_manager = nullptr;
+    m_impl->m_file_factory_resolver = CreateDefaultFileProcessFactoryResolver();
+    if (!m_impl->m_file_factory_resolver)
     {
         throw std::runtime_error("DataObjectManager requires a valid file factory resolver.");
     }
 }
 
-DataObjectManager::~DataObjectManager()
-{
-}
+DataObjectManager::~DataObjectManager() = default;
 
 void DataObjectManager::ClearDataObjects()
 {
@@ -103,14 +110,14 @@ void DataObjectManager::ClearDataObjects()
 void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
-    if (m_db_manager && m_db_manager->GetDatabasePath() == dbname)
+    if (m_impl->m_db_manager && m_impl->m_db_manager->GetDatabasePath() == dbname)
     {
         Logger::Log(LogLevel::Warning,
                     "Database already existed in the path: " + dbname.string()
                     + ", skip re-allocation of DatabaseManager.");
         return;
     }
-    m_db_manager = std::make_unique<DatabaseManager>(dbname);
+    m_impl->m_db_manager = std::make_unique<DatabaseManager>(dbname);
 }
 
 void DataObjectManager::ProcessFile(
@@ -118,7 +125,7 @@ void DataObjectManager::ProcessFile(
 {
     try
     {
-        auto factory{ CreateFileFactory(filename) };
+        auto factory{ CreateFileFactory(*m_impl->m_file_factory_resolver, filename) };
         auto data_object{ factory->CreateDataObject(filename) };
         data_object->SetKeyTag(key_tag);
         data_object->Display();
@@ -145,7 +152,7 @@ void DataObjectManager::ProduceFile(
     try
     {
         auto data_object{ GetDataObject(key_tag) };
-        auto factory{ CreateFileFactory(filename) };
+        auto factory{ CreateFileFactory(*m_impl->m_file_factory_resolver, filename) };
         factory->OutputDataObject(filename, *data_object);
     }
     catch (const std::exception & ex)
@@ -155,8 +162,7 @@ void DataObjectManager::ProduceFile(
     }
 }
 
-bool DataObjectManager::AddDataObject(
-    const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object)
+bool DataObjectManager::AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object)
 {
     if (!data_object)
     {
@@ -174,12 +180,6 @@ bool DataObjectManager::AddDataObject(
     return result.second;
 }
 
-std::unique_ptr<FileProcessFactoryBase> DataObjectManager::CreateFileFactory(
-    const std::filesystem::path & filename) const
-{
-    return m_file_factory_resolver->CreateFactory(FilePathHelper::GetExtension(filename));
-}
-
 bool DataObjectManager::HasDataObject(const std::string & key_tag) const
 {
     std::lock_guard<std::mutex> lock(m_map_mutex);
@@ -191,11 +191,11 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
     std::unique_ptr<DataObjectBase> data_object;
     {
         std::lock_guard<std::mutex> lock(m_db_mutex);
-        if (m_db_manager == nullptr)
+        if (m_impl->m_db_manager == nullptr)
         {
             throw std::runtime_error("Database manager is not initialized.");
         }
-        data_object = m_db_manager->LoadDataObject(key_tag);
+        data_object = m_impl->m_db_manager->LoadDataObject(key_tag);
     }
     try
     {
@@ -218,7 +218,7 @@ void DataObjectManager::SaveDataObject(
     const std::string & key_tag, const std::string & renamed_key_tag) const
 {
     std::lock_guard<std::mutex> db_lock(m_db_mutex);
-    if (m_db_manager == nullptr)
+    if (m_impl->m_db_manager == nullptr)
     {
         throw std::runtime_error("Database manager is not initialized.");
     }
@@ -243,16 +243,16 @@ void DataObjectManager::SaveDataObject(
         Logger::Log(LogLevel::Info,
                     "The data object with key tag: [" + key_tag + "] will be renamed to: [" +
                     renamed_key_tag + "] and saved into database: " +
-                    m_db_manager->GetDatabasePath().string());
+                    m_impl->m_db_manager->GetDatabasePath().string());
     }
     else
     {
         Logger::Log(LogLevel::Info,
                     "The data object with key tag: [" + key_tag + "] will be saved into database: " +
-                    m_db_manager->GetDatabasePath().string());
+                    m_impl->m_db_manager->GetDatabasePath().string());
     }
 
-    m_db_manager->SaveDataObject(data_object.get(), saved_key_tag);
+    m_impl->m_db_manager->SaveDataObject(data_object.get(), saved_key_tag);
 }
 
 void DataObjectManager::ForEachDataObject(

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <rhbm_gem/utils/StringHelper.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 TEST(StringHelperTokenizationTest, SplitStringLineAsTokensHandlesQuotedStrings)
 {

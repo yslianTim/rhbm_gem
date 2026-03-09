@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <rhbm_gem/utils/KDTreeAlgorithm.hpp>
+#include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 
 struct TestNode
 {

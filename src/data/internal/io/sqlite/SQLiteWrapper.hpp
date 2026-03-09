@@ -12,7 +12,7 @@
 
 #include "SQLiteBinder.hpp"
 #include "SQLiteColumnReader.hpp"
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 

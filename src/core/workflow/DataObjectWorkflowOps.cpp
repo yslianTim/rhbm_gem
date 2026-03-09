@@ -4,14 +4,14 @@
 #include <memory>
 #include <string>
 
-#include <rhbm_gem/data/AtomObject.hpp>
-#include <rhbm_gem/utils/AtomSelector.hpp>
-#include <rhbm_gem/data/BondObject.hpp>
-#include <rhbm_gem/utils/ComponentHelper.hpp>
-#include <rhbm_gem/data/LocalPotentialEntry.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/utils/domain/AtomSelector.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/utils/domain/ComponentHelper.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rhbm_gem {
 namespace {

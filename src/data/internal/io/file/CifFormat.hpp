@@ -11,7 +11,7 @@
 #include <map>
 #include <optional>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include "ModelFileFormatBase.hpp"
 
 namespace rhbm_gem {

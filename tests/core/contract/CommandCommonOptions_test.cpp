@@ -1,13 +1,13 @@
 #include <gtest/gtest.h>
 
 #include "internal/BuiltInCommandCatalogInternal.hpp"
-#include <rhbm_gem/core/HRLModelTestCommand.hpp>
-#include <rhbm_gem/core/MapSimulationCommand.hpp>
-#include <rhbm_gem/core/MapVisualizationCommand.hpp>
-#include <rhbm_gem/core/PositionEstimationCommand.hpp>
-#include <rhbm_gem/core/PotentialAnalysisCommand.hpp>
-#include <rhbm_gem/core/PotentialDisplayCommand.hpp>
-#include <rhbm_gem/core/ResultDumpCommand.hpp>
+#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
+#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
+#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
+#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
+#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
+#include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
+#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
 
 namespace rg = rhbm_gem;
 

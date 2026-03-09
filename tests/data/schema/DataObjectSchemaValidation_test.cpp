@@ -8,7 +8,7 @@ TEST(DataObjectSchemaValidationTest, ShadowSchemaBuildDoesNotUseIdentifierRewrit
 {
     const auto source_path{
         command_test::ProjectRootPath()
-        / "src" / "data" / "persistence" / "ManagedStoreRegistry.cpp"
+        / "src" / "data" / "io" / "sqlite" / "ManagedStoreRegistry.cpp"
     };
 
     std::ifstream source_stream{ source_path };
@@ -237,4 +237,3 @@ TEST(DataObjectSchemaValidationTest, MapDaoSaveDoesNotCreateSchemaImplicitly)
     EXPECT_THROW(dao.Save(map_object, "map"), std::runtime_error);
     EXPECT_FALSE(HasTable(database_path, "map_list"));
 }
-

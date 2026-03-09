@@ -8,8 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/data/GroupPotentialEntry.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 
 #ifdef HAVE_ROOT
 class TH1D;

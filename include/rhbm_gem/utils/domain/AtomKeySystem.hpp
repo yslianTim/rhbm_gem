@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <mutex>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 using AtomKey = uint16_t;
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <rhbm_gem/utils/HRLModelTypes.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
 
 class HRLGroupEstimator final
 {

@@ -4,9 +4,9 @@
 #include <array>
 #include <vector>
 
-#include <rhbm_gem/data/MapFileReader.hpp>
-#include <rhbm_gem/data/MapFileWriter.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
+#include <rhbm_gem/data/io/MapFileReader.hpp>
+#include <rhbm_gem/data/io/MapFileWriter.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 
 namespace rg = rhbm_gem;
 using MapFileReader = rg::MapFileReader;

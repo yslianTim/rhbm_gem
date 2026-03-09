@@ -1,9 +1,9 @@
-#include <rhbm_gem/data/MapFileWriter.hpp>
-#include "internal/FileFormatBackendFactory.hpp"
-#include <rhbm_gem/utils/FilePathHelper.hpp>
-#include "internal/FileFormatRegistry.hpp"
-#include "internal/MapFileFormatBase.hpp"
-#include <rhbm_gem/data/MapObject.hpp>
+#include <rhbm_gem/data/io/MapFileWriter.hpp>
+#include "internal/io/file/FileFormatBackendFactory.hpp"
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
+#include "internal/io/file/FileFormatRegistry.hpp"
+#include "internal/io/file/MapFileFormatBase.hpp"
+#include <rhbm_gem/data/object/MapObject.hpp>
 
 #include <fstream>
 #include <stdexcept>

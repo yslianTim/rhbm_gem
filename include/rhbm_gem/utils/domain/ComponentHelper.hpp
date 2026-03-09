@@ -5,7 +5,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 class ComponentHelper
 {

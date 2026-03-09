@@ -11,18 +11,15 @@
 
 namespace rhbm_gem {
 
-class DatabaseManager;
-class FileProcessFactoryBase;
-class FileProcessFactoryResolver;
 class DataObjectBase;
 
 class DataObjectManager
 {
-    std::unique_ptr<DatabaseManager> m_db_manager;
-    std::shared_ptr<const FileProcessFactoryResolver> m_file_factory_resolver;
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
     std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> m_data_object_map;
     mutable std::mutex m_map_mutex; // protects m_data_object_map
-    mutable std::mutex m_db_mutex;  // protects m_db_manager
+    mutable std::mutex m_db_mutex;  // protects m_impl database state
 
 public:
     struct IterateOptions
@@ -31,8 +28,9 @@ public:
     };
 
     DataObjectManager();
-    explicit DataObjectManager(std::shared_ptr<const FileProcessFactoryResolver> file_factory_resolver);
     ~DataObjectManager();
+    DataObjectManager(const DataObjectManager &) = delete;
+    DataObjectManager & operator=(const DataObjectManager &) = delete;
     void ClearDataObjects();
     void SetDatabaseManager(const std::filesystem::path & dbname);
     void ProcessFile(const std::filesystem::path & filename, const std::string & key_tag);
@@ -75,8 +73,6 @@ public:
 
 private:
     bool AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object);
-    std::unique_ptr<FileProcessFactoryBase> CreateFileFactory(
-        const std::filesystem::path & filename) const;
 };
 
 } // namespace rhbm_gem

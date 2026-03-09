@@ -1,4 +1,4 @@
-#include <rhbm_gem/utils/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 
 #include <limits>
 #include <stdexcept>

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "CommandTestHelpers.hpp"
-#include <rhbm_gem/core/PositionEstimationCommand.hpp>
+#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
 
 namespace rg = rhbm_gem;
 

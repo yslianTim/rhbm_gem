@@ -6,9 +6,9 @@
 #include <string>
 #include <unordered_map>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/ComponentKeySystem.hpp>
-#include <rhbm_gem/utils/AtomKeySystem.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
+#include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 
 namespace rhbm_gem {
 

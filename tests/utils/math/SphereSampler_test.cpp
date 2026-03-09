@@ -3,7 +3,7 @@
 #include <string>
 #include <stdexcept>
 
-#include <rhbm_gem/utils/SphereSampler.hpp>
+#include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 TEST(SphereSamplerTest, DefaultConfiguration)
 {

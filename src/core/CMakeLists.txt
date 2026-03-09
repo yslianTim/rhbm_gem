@@ -5,7 +5,6 @@ set(CORE_SOURCES
     command/CommandBase.cpp
     painter/ComparisonPainter.cpp
     workflow/DataObjectWorkflowOps.cpp
-    command/DataObjectManager.cpp
     painter/DemoPainter.cpp
     painter/GausPainter.cpp
     command/HRLModelTestCommand.cpp
@@ -36,8 +35,6 @@ target_include_directories(core PUBLIC
 target_include_directories(core PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/internal"
-    "${PROJECT_SOURCE_DIR}/src/data"
-    "${PROJECT_SOURCE_DIR}/src/data/internal"
 )
 target_link_libraries(core PUBLIC
     utils

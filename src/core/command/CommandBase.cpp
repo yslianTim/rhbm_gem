@@ -1,6 +1,6 @@
-#include <rhbm_gem/core/CommandBase.hpp>
-#include <rhbm_gem/core/CommandOptionBinding.hpp>
-#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include <rhbm_gem/core/command/CommandBase.hpp>
+#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <CLI/CLI.hpp>
 #include <algorithm>

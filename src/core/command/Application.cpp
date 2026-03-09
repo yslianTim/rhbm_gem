@@ -1,8 +1,8 @@
-#include <rhbm_gem/core/Application.hpp>
+#include <rhbm_gem/core/command/Application.hpp>
 #include "internal/BuiltInCommandCatalogInternal.hpp"
-#include <rhbm_gem/core/CommandBase.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
-#include <rhbm_gem/utils/ScopeTimer.hpp>
+#include <rhbm_gem/core/command/CommandBase.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 #include <memory>
 #include <CLI/CLI.hpp>

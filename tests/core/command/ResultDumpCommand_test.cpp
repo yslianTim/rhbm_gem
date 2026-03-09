@@ -4,7 +4,7 @@
 
 #include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
-#include <rhbm_gem/core/ResultDumpCommand.hpp>
+#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
 
 namespace rg = rhbm_gem;
 

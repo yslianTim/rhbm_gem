@@ -9,13 +9,13 @@ namespace rhbm_gem {
 
 class SQLiteWrapper;
 
-class ModelObjectDAOv2 : public DataObjectDAOBase
+class ModelObjectDaoSqlite : public DataObjectDAOBase
 {
     SQLiteWrapper * m_database;
 
 public:
-    explicit ModelObjectDAOv2(SQLiteWrapper * db_manager);
-    ~ModelObjectDAOv2();
+    explicit ModelObjectDaoSqlite(SQLiteWrapper * db_manager);
+    ~ModelObjectDaoSqlite();
 
     static void EnsureSchema(SQLiteWrapper & database);
 

@@ -1,7 +1,7 @@
-#include <rhbm_gem/utils/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 
-#include <rhbm_gem/utils/HRLDataTransform.hpp>
-#include <rhbm_gem/utils/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 
 #include <algorithm>
 #include <random>

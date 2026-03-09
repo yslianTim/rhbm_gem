@@ -1,9 +1,9 @@
-#include <rhbm_gem/data/ModelFileWriter.hpp>
-#include "internal/FileFormatBackendFactory.hpp"
-#include <rhbm_gem/utils/FilePathHelper.hpp>
-#include "internal/FileFormatRegistry.hpp"
-#include "internal/ModelFileFormatBase.hpp"
-#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/data/io/ModelFileWriter.hpp>
+#include "internal/io/file/FileFormatBackendFactory.hpp"
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
+#include "internal/io/file/FileFormatRegistry.hpp"
+#include "internal/io/file/ModelFileFormatBase.hpp"
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 #include <stdexcept>
 #include <fstream>

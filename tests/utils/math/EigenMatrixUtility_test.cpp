@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <rhbm_gem/utils/EigenMatrixUtility.hpp>
+#include <rhbm_gem/utils/math/EigenMatrixUtility.hpp>
 
 TEST(EigenMatrixUtilityTest, GetMedianOddNumberOfElements)
 {

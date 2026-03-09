@@ -3,7 +3,7 @@
 #include <initializer_list>
 #include <stdexcept>
 
-#include <rhbm_gem/utils/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/hrl/HRLAlphaTrainer.hpp>
 
 namespace
 {

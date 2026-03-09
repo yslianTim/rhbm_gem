@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 struct LoggerOutputTestCase
 {

@@ -1,8 +1,8 @@
-#include <rhbm_gem/utils/AtomKeySystem.hpp>
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/StringHelper.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
 

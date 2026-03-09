@@ -1,10 +1,10 @@
-#include <rhbm_gem/data/AtomicModelDataBlock.hpp>
-#include <rhbm_gem/data/AtomObject.hpp>
-#include <rhbm_gem/data/BondObject.hpp>
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
-#include <rhbm_gem/data/ChemicalComponentEntry.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/object/AtomicModelDataBlock.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
 

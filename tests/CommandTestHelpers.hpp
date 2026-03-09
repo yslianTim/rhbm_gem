@@ -6,11 +6,11 @@
 #include <stdexcept>
 #include <string>
 
-#include <rhbm_gem/data/AtomObject.hpp>
-#include <rhbm_gem/core/DataObjectManager.hpp>
-#include <rhbm_gem/data/LocalPotentialEntry.hpp>
-#include <rhbm_gem/core/MapSimulationCommand.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace command_test {
 

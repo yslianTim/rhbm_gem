@@ -1,14 +1,14 @@
-#include <rhbm_gem/core/AtomPainter.hpp>
-#include <rhbm_gem/data/AtomObject.hpp>
-#include <rhbm_gem/data/DataObjectBase.hpp>
-#include <rhbm_gem/data/PotentialEntryIterator.hpp>
-#include <rhbm_gem/utils/FilePathHelper.hpp>
-#include <rhbm_gem/utils/ArrayStats.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/core/painter/AtomPainter.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
+#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include "internal/PainterIngestionInternal.hpp"
 
 #ifdef HAVE_ROOT
-#include <rhbm_gem/utils/ROOTHelper.hpp>
+#include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <TStyle.h>
 #include <TCanvas.h>
 #include <TPad.h>

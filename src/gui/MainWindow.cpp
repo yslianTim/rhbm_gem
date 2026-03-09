@@ -19,7 +19,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include <rhbm_gem/core/OptionEnumTraits.hpp>
+#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
 #include <chrono>
 
@@ -333,7 +333,8 @@ void MainWindow::AddCommonControls(
     {
         layout->addRow("Database (--database)", BuildPathSelector(
             controls.database_path, controls.database_browse));
-        controls.database_path->setText("database.sqlite");
+        controls.database_path->setText(
+            QString::fromStdString(rhbm_gem::GetDefaultDatabasePath().string()));
     }
 
     layout->addRow("Output Folder (--folder)", BuildPathSelector(

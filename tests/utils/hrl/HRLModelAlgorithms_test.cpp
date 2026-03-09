@@ -4,7 +4,7 @@
 #include <limits>
 #include <stdexcept>
 
-#include <rhbm_gem/utils/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
 
 namespace
 {

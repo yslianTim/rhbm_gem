@@ -7,7 +7,7 @@
 #include <mutex>
 #include <utility>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 using BondKey = uint16_t;
 

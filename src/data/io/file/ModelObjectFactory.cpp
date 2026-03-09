@@ -1,12 +1,12 @@
-#include "internal/FileProcessFactoryBase.hpp"
-#include <rhbm_gem/data/ModelFileReader.hpp>
-#include <rhbm_gem/data/ModelFileWriter.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
-#include <rhbm_gem/data/AtomObject.hpp>
-#include <rhbm_gem/data/BondObject.hpp>
-#include <rhbm_gem/data/AtomicModelDataBlock.hpp>
-#include <rhbm_gem/data/DataObjectDispatch.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include "internal/io/file/FileProcessFactoryBase.hpp"
+#include <rhbm_gem/data/io/ModelFileReader.hpp>
+#include <rhbm_gem/data/io/ModelFileWriter.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/data/object/AtomicModelDataBlock.hpp>
+#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
 #include <unordered_set>

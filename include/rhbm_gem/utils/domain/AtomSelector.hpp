@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_set>
 
-#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 class AtomSelector
 {

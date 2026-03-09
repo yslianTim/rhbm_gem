@@ -1,6 +1,6 @@
 #pragma once
 
-#include <rhbm_gem/core/PotentialAnalysisCommand.hpp>
+#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 
 namespace rhbm_gem {
 

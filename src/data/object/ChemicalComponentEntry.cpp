@@ -1,5 +1,5 @@
-#include <rhbm_gem/data/ChemicalComponentEntry.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 

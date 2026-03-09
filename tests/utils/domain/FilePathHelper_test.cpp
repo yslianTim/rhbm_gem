@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 TEST(FilePathHelperTest, PathWithExtensionReturnsExtension)
 {

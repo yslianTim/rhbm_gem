@@ -1,21 +1,21 @@
 #include "workflow/PotentialAnalysisBondWorkflow.hpp"
 #include "internal/PotentialAnalysisExecutionOptions.hpp"
 
-#include <rhbm_gem/data/BondClassifier.hpp>
-#include <rhbm_gem/data/BondObject.hpp>
-#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/CylinderSampler.hpp>
-#include <rhbm_gem/utils/GausLinearTransformHelper.hpp>
-#include <rhbm_gem/data/GroupPotentialEntry.hpp>
-#include <rhbm_gem/utils/HRLDataTransform.hpp>
-#include <rhbm_gem/utils/HRLGroupEstimator.hpp>
-#include <rhbm_gem/utils/HRLModelAlgorithms.hpp>
-#include <rhbm_gem/data/LocalPotentialEntry.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
-#include <rhbm_gem/core/MapSampling.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
-#include <rhbm_gem/utils/ScopeTimer.hpp>
+#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/math/CylinderSampler.hpp>
+#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
+#include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
+#include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/core/command/MapSampling.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 #include <array>
 #include <atomic>

@@ -9,7 +9,7 @@
 
 #include <CLI/CLI.hpp>
 
-#include <rhbm_gem/core/OptionEnumTraits.hpp>
+#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
 namespace rhbm_gem::command_cli {
 

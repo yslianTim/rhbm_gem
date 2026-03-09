@@ -5,7 +5,7 @@
 #include <cmath>
 #include <stdexcept>
 
-#include <rhbm_gem/utils/ArrayStats.hpp>
+#include <rhbm_gem/utils/math/ArrayStats.hpp>
 
 TEST(ArrayStatsTest, ComputeMin)
 {

@@ -1,8 +1,8 @@
-#include <rhbm_gem/data/MapObject.hpp>
-#include <rhbm_gem/utils/KDTreeAlgorithm.hpp>
-#include <rhbm_gem/utils/ScopeTimer.hpp>
-#include <rhbm_gem/utils/ArrayStats.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cstring>
 #include <string>

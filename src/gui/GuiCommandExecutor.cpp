@@ -1,8 +1,8 @@
 #include <rhbm_gem/gui/GuiCommandExecutor.hpp>
 
-#include <rhbm_gem/core/MapSimulationCommand.hpp>
-#include <rhbm_gem/core/PotentialAnalysisCommand.hpp>
-#include <rhbm_gem/core/ResultDumpCommand.hpp>
+#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
+#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
+#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
 
 namespace rhbm_gem::gui {
 

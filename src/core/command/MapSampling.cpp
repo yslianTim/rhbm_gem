@@ -1,9 +1,9 @@
-#include <rhbm_gem/core/MapSampling.hpp>
+#include <rhbm_gem/core/command/MapSampling.hpp>
 
 #include <algorithm>
 
-#include <rhbm_gem/data/MapObject.hpp>
-#include <rhbm_gem/utils/SamplerBase.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/utils/math/SamplerBase.hpp>
 
 namespace rhbm_gem {
 namespace {

@@ -4,8 +4,8 @@
 #include <string>
 #include <CLI/CLI.hpp>
 
-#include <rhbm_gem/core/CommandOptionBinding.hpp>
-#include <rhbm_gem/core/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rg = rhbm_gem;
 

@@ -7,7 +7,7 @@
 #include <typeindex>
 #include <mutex>
 
-#include "DatabaseSchemaManager.hpp"
+#include "internal/migration/DatabaseSchemaManager.hpp"
 
 namespace rhbm_gem {
 

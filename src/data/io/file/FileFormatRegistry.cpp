@@ -1,6 +1,6 @@
-#include "internal/FileFormatRegistry.hpp"
+#include "internal/io/file/FileFormatRegistry.hpp"
 
-#include <rhbm_gem/utils/StringHelper.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 #include <unordered_map>
 #include <stdexcept>

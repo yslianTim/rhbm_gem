@@ -1,9 +1,9 @@
-#include "ManagedStoreRegistry.hpp"
+#include "internal/io/sqlite/ManagedStoreRegistry.hpp"
 
-#include "internal/MapObjectDAO.hpp"
-#include "internal/ModelObjectDAOv2.hpp"
-#include "internal/SQLiteWrapper.hpp"
-#include "../model_io/ModelSchemaSql.hpp"
+#include "internal/io/sqlite/MapObjectDAO.hpp"
+#include "internal/io/sqlite/ModelObjectDaoSqlite.hpp"
+#include "internal/io/sqlite/SQLiteWrapper.hpp"
+#include "../io/sqlite/ModelSchemaSql.hpp"
 #include "MapStoreSql.hpp"
 
 #include <algorithm>
@@ -226,7 +226,7 @@ namespace
 
     void EnsureModelSchema(rhbm_gem::SQLiteWrapper & database)
     {
-        rhbm_gem::ModelObjectDAOv2::EnsureSchema(database);
+        rhbm_gem::ModelObjectDaoSqlite::EnsureSchema(database);
     }
 
     void ValidateModelSchema(rhbm_gem::SQLiteWrapper & database)

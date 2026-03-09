@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <Eigen/Dense>
 
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace EigenMatrixUtility
 {

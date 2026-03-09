@@ -1,14 +1,14 @@
-#include "internal/DatabaseSchemaManager.hpp"
+#include "internal/migration/DatabaseSchemaManager.hpp"
 
-#include <rhbm_gem/utils/Logger.hpp>
-#include <rhbm_gem/data/ModelObject.hpp>
-#include "internal/ModelObjectDAOv2.hpp"
-#include "internal/SQLiteWrapper.hpp"
-#include "persistence/ManagedStoreRegistry.hpp"
-#include "persistence/MapStoreSql.hpp"
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include "internal/io/sqlite/ModelObjectDaoSqlite.hpp"
+#include "internal/io/sqlite/SQLiteWrapper.hpp"
+#include "internal/io/sqlite/ManagedStoreRegistry.hpp"
+#include "io/sqlite/MapStoreSql.hpp"
 
-#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
-#include "legacy/LegacyModelObjectReader.hpp"
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include "internal/migration/LegacyModelObjectReader.hpp"
 
 #include <algorithm>
 #include <array>
@@ -548,7 +548,7 @@ namespace
         CreateFinalV2Tables(database);
 
         rhbm_gem::LegacyModelObjectReader legacy_reader{ &database };
-        rhbm_gem::ModelObjectDAOv2 v2_dao{ &database };
+        rhbm_gem::ModelObjectDaoSqlite v2_dao{ &database };
         for (const auto & key_tag : legacy_model_keys)
         {
             auto model_object{ legacy_reader.Load(key_tag) };

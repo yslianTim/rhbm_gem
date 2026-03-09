@@ -1,7 +1,7 @@
-#include <rhbm_gem/utils/GridSampler.hpp>
-#include <rhbm_gem/utils/Constants.hpp>
-#include <rhbm_gem/utils/StringHelper.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/math/GridSampler.hpp>
+#include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
 #include <cmath>

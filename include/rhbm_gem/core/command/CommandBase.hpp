@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -10,10 +11,10 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/CommandMetadata.hpp>
-#include <rhbm_gem/core/DataObjectManager.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
-#include <rhbm_gem/core/OptionEnumTraits.hpp>
+#include <rhbm_gem/core/command/CommandMetadata.hpp>
+#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
 namespace CLI
 {
@@ -28,6 +29,28 @@ constexpr CommonOptionMask kDefaultCommandCommonOptions{
 constexpr CommonOptionMask kDatabaseCommandCommonOptions{
     CommonOptionMaskForProfile(CommonOptionProfile::DatabaseWorkflow)
 };
+
+inline std::filesystem::path GetDefaultDataRootPath()
+{
+    if (const char * configured_root{ std::getenv("RHBM_GEM_DATA_DIR") };
+        configured_root != nullptr && configured_root[0] != '\0')
+    {
+        return std::filesystem::path(configured_root);
+    }
+
+    if (const char * home{ std::getenv("HOME") };
+        home != nullptr && home[0] != '\0')
+    {
+        return std::filesystem::path(home) / ".rhbmgem" / "data";
+    }
+
+    return std::filesystem::path(".rhbmgem") / "data";
+}
+
+inline std::filesystem::path GetDefaultDatabasePath()
+{
+    return GetDefaultDataRootPath() / "database.sqlite";
+}
 
 enum class ValidationPhase : std::uint8_t
 {
@@ -50,7 +73,7 @@ struct CommandOptions
 {
     int thread_size{ 1 };
     int verbose_level{ 3 };
-    std::filesystem::path database_path{"database.sqlite"};
+    std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path folder_path{""};
 };
 

@@ -5,7 +5,7 @@
 #include <string_view>
 #include <utility>
 
-#include <rhbm_gem/data/DataObjectBase.hpp>
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
 
 namespace rhbm_gem::painter_internal {
 

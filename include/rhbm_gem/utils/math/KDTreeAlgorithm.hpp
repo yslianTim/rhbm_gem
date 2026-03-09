@@ -12,7 +12,7 @@
 #include <omp.h>
 #endif
 
-#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 template <typename NodeType>
 struct KDNode

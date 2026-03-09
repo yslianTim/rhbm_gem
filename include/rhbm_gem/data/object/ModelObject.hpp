@@ -9,10 +9,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/utils/AtomKeySystem.hpp>
-#include <rhbm_gem/utils/BondKeySystem.hpp>
-#include <rhbm_gem/utils/ComponentKeySystem.hpp>
-#include <rhbm_gem/data/DataObjectBase.hpp>
+#include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
+#include <rhbm_gem/utils/domain/BondKeySystem.hpp>
+#include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
+#include <rhbm_gem/data/object/DataObjectBase.hpp>
 
 template <typename T> struct KDNode;
 

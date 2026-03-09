@@ -2,7 +2,7 @@
 
 #include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
-#include <rhbm_gem/core/MapSimulationCommand.hpp>
+#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
 
 namespace rg = rhbm_gem;
 

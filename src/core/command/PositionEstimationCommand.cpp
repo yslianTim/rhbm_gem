@@ -1,15 +1,15 @@
-#include <rhbm_gem/core/PositionEstimationCommand.hpp>
+#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
 #include "internal/CommandDataLoaderInternal.hpp"
-#include <rhbm_gem/core/CommandOptionBinding.hpp>
-#include <rhbm_gem/data/MapObject.hpp>
-#include <rhbm_gem/core/DataObjectManager.hpp>
+#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/core/command/DataObjectManager.hpp>
 #include "workflow/DataObjectWorkflowOps.hpp"
-#include <rhbm_gem/utils/KDTreeAlgorithm.hpp>
-#include <rhbm_gem/utils/ScopeTimer.hpp>
-#include <rhbm_gem/utils/ArrayStats.hpp>
-#include <rhbm_gem/utils/Logger.hpp>
-#include <rhbm_gem/utils/ChimeraXHelper.hpp>
-#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/math/ArrayStats.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/domain/ChimeraXHelper.hpp>
+#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <random>
 #include <memory>

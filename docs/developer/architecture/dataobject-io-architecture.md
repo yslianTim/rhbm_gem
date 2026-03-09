@@ -226,7 +226,7 @@ Normalized v2 ownership model:
 
 Migration behavior (when triggered) keeps only the final v2 layout:
 
-- migrate legacy model payload through `LegacyModelObjectReader` into `ModelObjectDAOv2`
+- migrate legacy model payload through `LegacyModelObjectReader` into `ModelObjectDaoSqlite`
 - migrate legacy map payload into final `map_list`
 - rebuild `object_catalog`
 - drop owned legacy tables and remove legacy `object_metadata` if present
@@ -247,7 +247,7 @@ Migration behavior (when triggered) keeps only the final v2 layout:
 
 DAO registration is static (translation-unit registration):
 
-- `ModelObjectDAO` registered as `"model"` (implementation inherits `ModelObjectDAOv2`)
+- `ModelObjectDAO` registered as `"model"` (implementation inherits `ModelObjectDaoSqlite`)
 - `MapObjectDAO` registered as `"map"`
 
 Registration API:
@@ -322,48 +322,48 @@ Current contracts:
 
 Core orchestration:
 
-- `include/rhbm_gem/core/DataObjectManager.hpp`
-- `src/core/command/DataObjectManager.cpp`
-- `include/rhbm_gem/utils/FilePathHelper.hpp`
+- `include/rhbm_gem/core/command/DataObjectManager.hpp`
+- `src/data/io/DataObjectManager.cpp`
+- `include/rhbm_gem/utils/domain/FilePathHelper.hpp`
 - `src/utils/FilePathHelper.cpp`
 
 File dispatch and factories:
 
-- `src/data/internal/FileFormatRegistry.hpp`
-- `src/data/FileFormatRegistry.cpp`
-- `src/data/internal/FileProcessFactoryResolver.hpp`
-- `src/data/FileProcessFactoryResolver.cpp`
-- `src/data/internal/FileProcessFactoryBase.hpp`
-- `src/data/internal/FileFormatBackendFactory.hpp`
-- `src/data/FileFormatBackendFactory.cpp`
-- `src/data/ModelObjectFactory.cpp`
-- `src/data/MapObjectFactory.cpp`
+- `src/data/internal/io/file/FileFormatRegistry.hpp`
+- `src/data/io/file/FileFormatRegistry.cpp`
+- `src/data/internal/io/file/FileProcessFactoryResolver.hpp`
+- `src/data/io/file/FileProcessFactoryResolver.cpp`
+- `src/data/internal/io/file/FileProcessFactoryBase.hpp`
+- `src/data/internal/io/file/FileFormatBackendFactory.hpp`
+- `src/data/io/file/FileFormatBackendFactory.cpp`
+- `src/data/io/file/ModelObjectFactory.cpp`
+- `src/data/io/file/MapObjectFactory.cpp`
 
 Model/map file I/O:
 
-- `include/rhbm_gem/data/ModelFileReader.hpp`, `src/data/ModelFileReader.cpp`
-- `include/rhbm_gem/data/ModelFileWriter.hpp`, `src/data/ModelFileWriter.cpp`
-- `include/rhbm_gem/data/MapFileReader.hpp`, `src/data/MapFileReader.cpp`
-- `include/rhbm_gem/data/MapFileWriter.hpp`, `src/data/MapFileWriter.cpp`
-- `src/data/internal/PdbFormat.hpp`, `src/data/PdbFormat.cpp`
-- `src/data/internal/CifFormat.hpp`, `src/data/CifFormat.cpp`
-- `src/data/internal/MrcFormat.hpp`, `src/data/MrcFormat.cpp`
-- `src/data/internal/CCP4Format.hpp`, `src/data/CCP4Format.cpp`
+- `include/rhbm_gem/data/io/ModelFileReader.hpp`, `src/data/io/file/ModelFileReader.cpp`
+- `include/rhbm_gem/data/io/ModelFileWriter.hpp`, `src/data/io/file/ModelFileWriter.cpp`
+- `include/rhbm_gem/data/io/MapFileReader.hpp`, `src/data/io/file/MapFileReader.cpp`
+- `include/rhbm_gem/data/io/MapFileWriter.hpp`, `src/data/io/file/MapFileWriter.cpp`
+- `src/data/internal/io/file/PdbFormat.hpp`, `src/data/io/file/PdbFormat.cpp`
+- `src/data/internal/io/file/CifFormat.hpp`, `src/data/io/file/CifFormat.cpp`
+- `src/data/internal/io/file/MrcFormat.hpp`, `src/data/io/file/MrcFormat.cpp`
+- `src/data/internal/io/file/CCP4Format.hpp`, `src/data/io/file/CCP4Format.cpp`
 
 Database/schema/DAO:
 
-- `src/data/internal/DatabaseManager.hpp`, `src/data/DatabaseManager.cpp`
-- `src/data/internal/DatabaseSchemaManager.hpp`, `src/data/DatabaseSchemaManager.cpp`
-- `src/data/internal/DataObjectDAOFactoryRegistry.hpp`, `src/data/DataObjectDAOFactoryRegistry.cpp`
-- `src/data/persistence/ManagedStoreRegistry.hpp`, `src/data/persistence/ManagedStoreRegistry.cpp`
-- `src/data/internal/ModelObjectDAO.hpp`, `src/data/ModelObjectDAO.cpp`
-- `src/data/internal/ModelObjectDAOv2.hpp`, `src/data/ModelObjectDAOv2.cpp`
-- `src/data/internal/MapObjectDAO.hpp`, `src/data/MapObjectDAO.cpp`
-- `src/data/model_io/ModelSchemaSql.hpp`
-- `src/data/model_io/ModelStructurePersistence.hpp`, `src/data/model_io/ModelStructurePersistence.cpp`
-- `src/data/model_io/ModelAnalysisPersistence.hpp`, `src/data/model_io/ModelAnalysisPersistence.cpp`
-- `src/data/legacy/LegacyModelObjectReader.hpp`, `src/data/legacy/LegacyModelObjectReader.cpp`
-- `src/data/internal/SQLiteWrapper.hpp`
+- `src/data/internal/io/sqlite/DatabaseManager.hpp`, `src/data/io/sqlite/DatabaseManager.cpp`
+- `src/data/internal/migration/DatabaseSchemaManager.hpp`, `src/data/schema/DatabaseSchemaManager.cpp`
+- `src/data/internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp`, `src/data/io/sqlite/DataObjectDAOFactoryRegistry.cpp`
+- `src/data/internal/io/sqlite/ManagedStoreRegistry.hpp`, `src/data/io/sqlite/ManagedStoreRegistry.cpp`
+- `src/data/internal/io/sqlite/ModelObjectDAO.hpp`, `src/data/io/sqlite/ModelObjectDAO.cpp`
+- `src/data/internal/io/sqlite/ModelObjectDaoSqlite.hpp`, `src/data/io/sqlite/ModelObjectDaoSqlite.cpp`
+- `src/data/internal/io/sqlite/MapObjectDAO.hpp`, `src/data/io/sqlite/MapObjectDAO.cpp`
+- `src/data/io/sqlite/ModelSchemaSql.hpp`
+- `src/data/io/sqlite/ModelStructurePersistence.hpp`, `src/data/io/sqlite/ModelStructurePersistence.cpp`
+- `src/data/io/sqlite/ModelAnalysisPersistence.hpp`, `src/data/io/sqlite/ModelAnalysisPersistence.cpp`
+- `src/data/internal/migration/LegacyModelObjectReader.hpp`, `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp`
+- `src/data/internal/io/sqlite/SQLiteWrapper.hpp`
 
 ## 9. Common Pitfalls
 
