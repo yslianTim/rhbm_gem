@@ -12,6 +12,9 @@ set(RHBM_GEM_GTEST_URL_HASH "SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979
 set(RHBM_GEM_PYBIND11_URL "https://github.com/pybind/pybind11/archive/refs/tags/v3.0.2.tar.gz")
 set(RHBM_GEM_PYBIND11_URL_HASH "SHA256=2f20a0af0b921815e0e169ea7fec63909869323581b89d7de1553468553f6a2d")
 
+set(RHBM_GEM_SQLITE3_URL "https://www.sqlite.org/2025/sqlite-amalgamation-3490100.zip")
+set(RHBM_GEM_SQLITE3_URL_HASH "SHA256=6cebd1d8403fc58c30e93939b246f3e6e58d0765a5cd50546f16c00fd805d2c3")
+
 function(rhbm_gem_fetch_eigen3 out_source_dir)
     FetchContent_Declare(rhbm_gem_eigen3
         URL "${RHBM_GEM_EIGEN3_URL}"
@@ -60,4 +63,26 @@ function(rhbm_gem_fetch_pybind11)
     )
     message(STATUS "Fetching pybind11 (v3.0.2) via FetchContent")
     FetchContent_MakeAvailable(rhbm_gem_pybind11)
+endfunction()
+
+function(rhbm_gem_fetch_sqlite3 out_source_dir)
+    FetchContent_Declare(rhbm_gem_sqlite3
+        URL "${RHBM_GEM_SQLITE3_URL}"
+        URL_HASH "${RHBM_GEM_SQLITE3_URL_HASH}"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    message(STATUS "Fetching SQLite3 amalgamation (3.49.1) via FetchContent")
+    FetchContent_GetProperties(rhbm_gem_sqlite3)
+    if(NOT rhbm_gem_sqlite3_POPULATED)
+        if(POLICY CMP0169)
+            cmake_policy(PUSH)
+            cmake_policy(SET CMP0169 OLD)
+        endif()
+        FetchContent_Populate(rhbm_gem_sqlite3)
+        if(POLICY CMP0169)
+            cmake_policy(POP)
+        endif()
+    endif()
+    FetchContent_GetProperties(rhbm_gem_sqlite3)
+    set(${out_source_dir} "${rhbm_gem_sqlite3_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()

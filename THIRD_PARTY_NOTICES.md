@@ -5,8 +5,7 @@ This project is licensed under Apache License 2.0. This file summarizes third-pa
 ## Scope and Dependency Selection
 
 - The build option `USE_SYSTEM_LIBS=ON` prefers system packages for Eigen3, CLI11, pybind11, SQLite3, and (when tests are enabled) GoogleTest.
-- If a system package is unavailable, Eigen3, CLI11, pybind11, and GoogleTest are fetched via CMake FetchContent from pinned release sources with SHA256 checksums.
-- SQLite3 keeps a bundled fallback under `third_party/`.
+- If a system package is unavailable, Eigen3, CLI11, pybind11, SQLite3, and GoogleTest are fetched via CMake FetchContent from pinned release sources with SHA256 checksums.
 - Test dependencies (for example GoogleTest) are only used when `BUILD_TESTING=ON`.
 
 ## Components
@@ -16,7 +15,7 @@ This project is licensed under Apache License 2.0. This file summarizes third-pa
 | CLI11 | Command-line parsing | BSD-3-Clause | System package preferred; pinned FetchContent fallback | `https://github.com/CLIUtils/CLI11/blob/v2.5.0/LICENSE` |
 | Eigen | Linear algebra templates | MPL-2.0 (primary), with additional notices in upstream package | System package preferred; pinned FetchContent fallback | `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.README`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.MPL2`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.BSD`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.LGPL`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.GPL`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.APACHE`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.MINPACK` |
 | pybind11 | Python bindings | BSD-3-Clause | System package preferred; pinned FetchContent fallback | `https://github.com/pybind/pybind11/blob/v3.0.2/LICENSE` |
-| SQLite (amalgamation) | Embedded database backend fallback | Public Domain (upstream declaration) | Bundled fallback in `third_party/sqlite` | Declaration in `third_party/sqlite/sqlite3.h` and `third_party/sqlite/sqlite3ext.h` |
+| SQLite (amalgamation) | Embedded database backend fallback | Public Domain (upstream declaration) | System package preferred; pinned FetchContent fallback (`sqlite-amalgamation-3490100`) | `https://www.sqlite.org/copyright.html` |
 | GoogleTest | Unit tests only | BSD-3-Clause | System package preferred; pinned FetchContent fallback | `https://github.com/google/googletest/blob/v1.17.0/LICENSE` |
 
 ## Optional System Dependencies (Not Bundled)

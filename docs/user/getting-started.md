@@ -24,7 +24,7 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 A few dependencies are optional:
 
 - `Eigen3`, `SQLite3`, `CLI11`, and `pybind11` are preferred from system packages.
-- If system packages are missing, CMake fetches pinned fallback sources for `Eigen3`/`CLI11`/`pybind11` and uses a bundled fallback for `SQLite3`.
+- If system packages are missing, CMake fetches pinned fallback sources for `Eigen3`/`CLI11`/`pybind11`/`SQLite3`.
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
 - `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
 - Runtime database default path is `${HOME}/.rhbmgem/data/database.sqlite`. Set `RHBM_GEM_DATA_DIR` to change the default root.
@@ -51,7 +51,7 @@ xcode-select --install
 brew install cmake python libomp
 ```
 
-4. Optional (Recommended): install system packages to avoid fallback downloads and bundled fallbacks:
+4. Optional (Recommended): install system packages to avoid fallback downloads:
 
 ```bash
 brew install eigen sqlite3 pybind11 cli11
@@ -85,7 +85,7 @@ sudo apt update
 sudo apt install -y build-essential cmake pkg-config python3
 ```
 
-2. Optional: if you plan to use Python bindings, or you want distro packages instead of fallback fetching/bundled sources, also install:
+2. Optional: if you plan to use Python bindings, or you want distro packages instead of fallback fetching, also install:
 
 ```bash
 sudo apt install -y python3-dev libsqlite3-dev libeigen3-dev pybind11-dev
@@ -128,7 +128,7 @@ Notes:
    - Python 3 if you plan to use Python bindings or examples
    - Git if you plan to install optional packages with `vcpkg`
 
-2. For a basic build, you can skip dependency package managers: CMake will use fallback sources (`FetchContent` for Eigen3/CLI11/pybind11 and bundled `third_party/` for SQLite3) as needed.
+2. For a basic build, you can skip dependency package managers: CMake will use fallback sources (`FetchContent` for Eigen3/CLI11/pybind11/SQLite3) as needed.
 
 3. Optional: if you prefer `vcpkg` packages, or you need Boost-backed features, prepare them now:
 
@@ -395,7 +395,7 @@ The pipeline example should create:
 ## Troubleshooting
 
 1. Missing `Eigen3`, `SQLite3`, `pybind11`, or `CLI11`
-   You can skip installing them. CMake will use fallback sources (`FetchContent` for Eigen3/CLI11/pybind11 and bundled `third_party/` for SQLite3).
+   You can skip installing them. CMake will use fallback sources (`FetchContent` for Eigen3/CLI11/pybind11/SQLite3).
 2. Missing Boost
    Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
 3. `ModuleNotFoundError: No module named 'rhbm_gem_module'`

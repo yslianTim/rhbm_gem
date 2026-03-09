@@ -40,21 +40,50 @@ set(DATA_SOURCES
 
 # Locate SQLite package
 if(USE_SYSTEM_LIBS)
-    find_package(SQLite3)
+    find_package(SQLite3 QUIET)
     if(SQLite3_FOUND)
         message(STATUS "Using system SQLite3")
         set(USE_SYSTEM_SQLITE3 TRUE)
     else()
-        message(STATUS "System SQLite3 not found, will use third_party version")
+        message(STATUS "System SQLite3 not found, will fetch via FetchContent")
         set(USE_SYSTEM_SQLITE3 FALSE)
     endif()
 else()
-    message(STATUS "Forced to use SQLite3 package in third_party libraries")
+    message(STATUS "Forced to use FetchContent for SQLite3")
     set(USE_SYSTEM_SQLITE3 FALSE)
 endif()
 
 if(NOT USE_SYSTEM_SQLITE3)
-    add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/sqlite ${PROJECT_BINARY_DIR}/third_party/sqlite)
+    rhbm_gem_fetch_sqlite3(RHBM_GEM_SQLITE3_SOURCE_DIR)
+
+    if(NOT EXISTS "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.c"
+        OR NOT EXISTS "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.h")
+        message(FATAL_ERROR
+            "Fetched SQLite3 source at '${RHBM_GEM_SQLITE3_SOURCE_DIR}' "
+            "does not contain sqlite3.c/sqlite3.h.")
+    endif()
+
+    if(NOT TARGET sqlite3)
+        add_library(sqlite3 STATIC "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.c")
+        target_include_directories(sqlite3 PUBLIC
+            "$<BUILD_INTERFACE:${RHBM_GEM_SQLITE3_SOURCE_DIR}>"
+            "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+        )
+        set_target_properties(sqlite3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+        install(
+            TARGETS sqlite3
+            EXPORT RHBM_GEMTargets
+            ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        )
+        install(
+            FILES "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.h"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+        )
+    endif()
+
     if(NOT TARGET RHBM_GEM::sqlite3)
         add_library(RHBM_GEM::sqlite3 ALIAS sqlite3)
     endif()
