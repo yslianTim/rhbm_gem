@@ -13,9 +13,6 @@ set(PROJECT_DISPLAY_NAME "RHBM-GEM")
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-# Avoid writing entries into the user package registry from bundled deps.
-set(CMAKE_EXPORT_NO_PACKAGE_REGISTRY ON)
-
 # Keep installed binaries relocatable with project-local shared libraries.
 if(APPLE)
     set(CMAKE_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
