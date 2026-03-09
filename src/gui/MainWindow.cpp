@@ -202,6 +202,11 @@ QWidget * MainWindow::BuildPotentialAnalysisPage()
 
     m_potential_analysis.saved_key_tag = new QLineEdit("model", page);
     layout->addRow("Saved Key (--save-key)", m_potential_analysis.saved_key_tag);
+    layout->addRow(
+        "Training Report Dir (--training-report-dir)",
+        BuildPathSelector(
+            m_potential_analysis.training_report_dir,
+            m_potential_analysis.training_report_dir_browse));
 
     m_potential_analysis.simulation_flag = new QCheckBox(page);
     layout->addRow("Simulation Mode (--simulation)", m_potential_analysis.simulation_flag);
@@ -391,6 +396,16 @@ void MainWindow::ConnectUi()
         [this]()
         {
             BrowseForInputFile(m_potential_analysis.map_path, "Select map file");
+        });
+    connect(
+        m_potential_analysis.training_report_dir_browse,
+        &QPushButton::clicked,
+        this,
+        [this]()
+        {
+            BrowseForDirectory(
+                m_potential_analysis.training_report_dir,
+                "Select alpha training report directory");
         });
     connect(
         m_potential_analysis.common.database_browse,
@@ -602,6 +617,7 @@ rhbm_gem::gui::PotentialAnalysisRequest MainWindow::BuildPotentialAnalysisReques
     request.model_file_path = ReadPath(m_potential_analysis.model_path);
     request.map_file_path = ReadPath(m_potential_analysis.map_path);
     request.saved_key_tag = ReadString(m_potential_analysis.saved_key_tag);
+    request.training_report_dir = ReadPath(m_potential_analysis.training_report_dir);
     request.simulation_flag = m_potential_analysis.simulation_flag->isChecked();
     request.simulated_map_resolution = m_potential_analysis.simulated_map_resolution->value();
     request.training_alpha_flag = m_potential_analysis.training_alpha_flag->isChecked();

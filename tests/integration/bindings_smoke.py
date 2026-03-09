@@ -46,6 +46,9 @@ def main() -> int:
     assert hasattr(position_estimation, "SetThresholdRatio")
     assert hasattr(position_estimation, "SetDedupTolerance")
 
+    potential_analysis = m.PotentialAnalysisCommand()
+    assert hasattr(potential_analysis, "SetTrainingReportDir")
+
     model_test = m.HRLModelTestCommand()
     assert hasattr(model_test, "SetTesterChoice")
     assert hasattr(model_test, "SetFitRangeMinimum")

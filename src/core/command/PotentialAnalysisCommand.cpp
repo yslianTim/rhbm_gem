@@ -8,6 +8,7 @@ constexpr std::string_view kModelFlags{ "-a,--model" };
 constexpr std::string_view kModelOption{ "--model" };
 constexpr std::string_view kMapFlags{ "-m,--map" };
 constexpr std::string_view kMapOption{ "--map" };
+constexpr std::string_view kTrainingReportDirOption{ "--training-report-dir" };
 constexpr std::string_view kSimulationOption{ "--simulation" };
 constexpr std::string_view kSimResolutionFlags{ "-r,--sim-resolution" };
 constexpr std::string_view kSimResolutionOption{ "--sim-resolution" };
@@ -50,6 +51,12 @@ void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
         "Map file path",
         std::nullopt,
         true);
+    command_cli::AddPathOption(
+        cmd, kTrainingReportDirOption,
+        [&](const std::filesystem::path & value) { SetTrainingReportDir(value); },
+        "Optional output directory for alpha training reports",
+        std::nullopt,
+        false);
     command_cli::AddScalarOption<bool>(
         cmd, kSimulationOption,
         [&](bool value) { SetSimulationFlag(value); },
@@ -296,6 +303,15 @@ void PotentialAnalysisCommand::SetModelFilePath(const std::filesystem::path & pa
 void PotentialAnalysisCommand::SetMapFilePath(const std::filesystem::path & path)
 {
     SetRequiredExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
+}
+
+void PotentialAnalysisCommand::SetTrainingReportDir(const std::filesystem::path & path)
+{
+    MutateOptions([&]()
+    {
+        ResetParseIssues(kTrainingReportDirOption);
+        m_options.training_report_dir = path;
+    });
 }
 
 } // namespace rhbm_gem

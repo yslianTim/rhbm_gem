@@ -56,6 +56,16 @@ set_tests_properties(structure_guard PROPERTIES
 )
 
 add_test(
+    NAME absolute_path_guard
+    COMMAND ${CMAKE_COMMAND}
+        -DPROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}
+        -P ${PROJECT_SOURCE_DIR}/cmake/AbsolutePathGuard.cmake
+)
+set_tests_properties(absolute_path_guard PROPERTIES
+    LABELS "domain:integration;intent:style"
+)
+
+add_test(
     NAME install_consumer_smoke
     COMMAND ${CMAKE_COMMAND}
         -DPROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}

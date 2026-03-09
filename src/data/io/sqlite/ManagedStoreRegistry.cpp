@@ -226,7 +226,7 @@ namespace
 
     void EnsureModelSchema(rhbm_gem::SQLiteWrapper & database)
     {
-        rhbm_gem::ModelObjectDaoSqlite::EnsureSchema(database);
+        rhbm_gem::ModelObjectDAOSqlite::EnsureSchema(database);
     }
 
     void ValidateModelSchema(rhbm_gem::SQLiteWrapper & database)

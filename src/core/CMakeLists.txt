@@ -18,6 +18,7 @@ set(CORE_SOURCES
     workflow/PotentialAnalysisCommandWorkflow.cpp
     command/PotentialDisplayCommand.cpp
     command/ResultDumpCommand.cpp
+    workflow/PotentialAnalysisTrainingSupport.cpp
     workflow/ResultDumpCommandWorkflow.cpp
 )
 

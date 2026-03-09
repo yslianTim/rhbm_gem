@@ -32,7 +32,7 @@ For a new built-in command, update these areas in one change:
 - `include/rhbm_gem/core/command/CommandMetadata.hpp` (add new `CommandId`)
 - `src/core/internal/BuiltInCommandList.def` (register built-in metadata)
 - `src/core/command/BuiltInCommandCatalog.cpp` (add command header include)
-- `bindings/CoreBindings.cpp` (add include + Python bindings)
+- `bindings/*Bindings.cpp` (add Python bindings in a command-specific binding file)
 - `tests/core/command/<YourCommand>_test.cpp`
 - `tests/cmake/core_tests.cmake` (wire tests)
 - related contract tests under `tests/core/contract/`
@@ -270,13 +270,14 @@ Important:
 
 ## 5. Add Python bindings
 
-`bindings/CoreBindings.cpp` is explicit/manual.
+Python bindings are explicit/manual and split by command under `bindings/`.
 
 Required actions:
 
-1. bind class with `BindBuiltInCommand<rhbm_gem::ExampleCommand>(m)`
-2. expose supported setters and `Execute`
-3. call `BindCommandDiagnostics(example_command)`
+1. create/update the command-specific binding source (for example `bindings/ExampleCommandBindings.cpp`)
+2. bind class with `BindBuiltInCommand<rhbm_gem::ExampleCommand>(m)`
+3. expose supported setters and `Execute`
+4. call `BindCommandDiagnostics(example_command)`
 
 Binding skeleton:
 
@@ -292,6 +293,8 @@ example_command
     .def("SetThreshold", &rhbm_gem::ExampleCommand::SetThreshold);
 BindCommandDiagnostics(example_command);
 ```
+
+Also register the new binding function call in `bindings/CoreBindings.cpp` (module entrypoint).
 
 Do not expose internal hooks such as `RegisterCLIOptionsExtend(...)` or `ValidateOptions()`.
 

@@ -4,10 +4,10 @@
 
 namespace rhbm_gem {
 
-class ModelObjectDAO : public ModelObjectDaoSqlite
+class ModelObjectDAO : public ModelObjectDAOSqlite
 {
 public:
-    using ModelObjectDaoSqlite::ModelObjectDaoSqlite;
+    using ModelObjectDAOSqlite::ModelObjectDAOSqlite;
 };
 
 } // namespace rhbm_gem

@@ -226,7 +226,7 @@ Normalized v2 ownership model:
 
 Migration behavior (when triggered) keeps only the final v2 layout:
 
-- migrate legacy model payload through `LegacyModelObjectReader` into `ModelObjectDaoSqlite`
+- migrate legacy model payload through `LegacyModelObjectReader` into `ModelObjectDAOSqlite`
 - migrate legacy map payload into final `map_list`
 - rebuild `object_catalog`
 - drop owned legacy tables and remove legacy `object_metadata` if present
@@ -247,7 +247,7 @@ Migration behavior (when triggered) keeps only the final v2 layout:
 
 DAO registration is static (translation-unit registration):
 
-- `ModelObjectDAO` registered as `"model"` (implementation inherits `ModelObjectDaoSqlite`)
+- `ModelObjectDAO` registered as `"model"` (implementation inherits `ModelObjectDAOSqlite`)
 - `MapObjectDAO` registered as `"map"`
 
 Registration API:
@@ -357,7 +357,7 @@ Database/schema/DAO:
 - `src/data/internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp`, `src/data/io/sqlite/DataObjectDAOFactoryRegistry.cpp`
 - `src/data/internal/io/sqlite/ManagedStoreRegistry.hpp`, `src/data/io/sqlite/ManagedStoreRegistry.cpp`
 - `src/data/internal/io/sqlite/ModelObjectDAO.hpp`, `src/data/io/sqlite/ModelObjectDAO.cpp`
-- `src/data/internal/io/sqlite/ModelObjectDaoSqlite.hpp`, `src/data/io/sqlite/ModelObjectDaoSqlite.cpp`
+- `src/data/internal/io/sqlite/ModelObjectDaoSqlite.hpp`, `src/data/io/sqlite/ModelObjectDaoSqlite.cpp` (class `ModelObjectDAOSqlite`, alias `ModelObjectDaoSqlite`)
 - `src/data/internal/io/sqlite/MapObjectDAO.hpp`, `src/data/io/sqlite/MapObjectDAO.cpp`
 - `src/data/io/sqlite/ModelSchemaSql.hpp`
 - `src/data/io/sqlite/ModelStructurePersistence.hpp`, `src/data/io/sqlite/ModelStructurePersistence.cpp`

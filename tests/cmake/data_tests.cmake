@@ -16,9 +16,11 @@ add_rhbm_gtest_target(rhbm_tests_data_schema
         data/schema/DataObjectSchemaValidation_test.cpp
 )
 
-add_rhbm_gtest_target(rhbm_tests_data_migration
-    DOMAIN data
-    INTENTS migration schema
-    SOURCES
-        data/schema/DataObjectSchemaMigration_test.cpp
-)
+if(RHBM_GEM_LEGACY_V1_SUPPORT)
+    add_rhbm_gtest_target(rhbm_tests_data_migration
+        DOMAIN data
+        INTENTS migration schema
+        SOURCES
+            data/schema/DataObjectSchemaMigration_test.cpp
+    )
+endif()

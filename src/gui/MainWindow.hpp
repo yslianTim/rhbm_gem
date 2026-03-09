@@ -58,6 +58,8 @@ private:
         QLineEdit * map_path{ nullptr };
         QPushButton * map_browse{ nullptr };
         QLineEdit * saved_key_tag{ nullptr };
+        QLineEdit * training_report_dir{ nullptr };
+        QPushButton * training_report_dir_browse{ nullptr };
         QCheckBox * simulation_flag{ nullptr };
         QDoubleSpinBox * simulated_map_resolution{ nullptr };
         QCheckBox * training_alpha_flag{ nullptr };

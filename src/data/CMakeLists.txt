@@ -1,6 +1,19 @@
-set(DATA_SOURCES
+set(DATA_OBJECT_SOURCES
     dispatch/DataObjectDispatch.cpp
-    io/DataObjectManager.cpp
+    object/AtomClassifier.cpp
+    object/AtomObject.cpp
+    object/AtomicModelDataBlock.cpp
+    object/BondClassifier.cpp
+    object/BondObject.cpp
+    object/ChemicalComponentEntry.cpp
+    object/GroupPotentialEntry.cpp
+    object/LocalPotentialEntry.cpp
+    object/MapObject.cpp
+    object/ModelObject.cpp
+    object/PotentialEntryIterator.cpp
+)
+
+set(DATA_IO_FILE_SOURCES
     io/file/CCP4Format.cpp
     io/file/CifFormat.cpp
     io/file/FileFormatBackendFactory.cpp
@@ -15,6 +28,9 @@ set(DATA_SOURCES
     io/file/ModelObjectFactory.cpp
     io/file/MrcFormat.cpp
     io/file/PdbFormat.cpp
+)
+
+set(DATA_IO_SQLITE_SOURCES
     io/sqlite/DataObjectDAOFactoryRegistry.cpp
     io/sqlite/DatabaseManager.cpp
     io/sqlite/ManagedStoreRegistry.cpp
@@ -23,19 +39,20 @@ set(DATA_SOURCES
     io/sqlite/ModelObjectDAO.cpp
     io/sqlite/ModelObjectDaoSqlite.cpp
     io/sqlite/ModelStructurePersistence.cpp
-    migration/legacy_v1/LegacyModelObjectReader.cpp
-    object/AtomClassifier.cpp
-    object/AtomObject.cpp
-    object/AtomicModelDataBlock.cpp
-    object/BondClassifier.cpp
-    object/BondObject.cpp
-    object/ChemicalComponentEntry.cpp
-    object/GroupPotentialEntry.cpp
-    object/LocalPotentialEntry.cpp
-    object/MapObject.cpp
-    object/ModelObject.cpp
-    object/PotentialEntryIterator.cpp
+)
+
+set(DATA_SCHEMA_MIGRATION_SOURCES
     schema/DatabaseSchemaManager.cpp
+)
+
+if(RHBM_GEM_LEGACY_V1_SUPPORT)
+    list(APPEND DATA_SCHEMA_MIGRATION_SOURCES
+        migration/legacy_v1/LegacyModelObjectReader.cpp
+    )
+endif()
+
+set(DATA_FRONTDOOR_SOURCES
+    io/DataObjectManager.cpp
 )
 
 # Locate SQLite package
@@ -89,7 +106,42 @@ if(NOT USE_SYSTEM_SQLITE3)
     endif()
 endif()
 
-add_library(data ${DATA_SOURCES})
+function(rhbm_configure_data_object_target target_name)
+    target_include_directories(${target_name} PRIVATE
+        "${PROJECT_SOURCE_DIR}/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/internal"
+    )
+    target_link_libraries(${target_name} PRIVATE
+        utils
+        $<$<BOOL:${USE_SYSTEM_SQLITE3}>:SQLite::SQLite3>
+        $<$<NOT:$<BOOL:${USE_SYSTEM_SQLITE3}>>:RHBM_GEM::sqlite3>
+        $<BUILD_INTERFACE:CompilerFlags>
+    )
+    if(RHBM_GEM_LEGACY_V1_SUPPORT)
+        target_compile_definitions(${target_name} PRIVATE RHBM_GEM_LEGACY_V1_SUPPORT)
+    endif()
+endfunction()
+
+add_library(data_object OBJECT ${DATA_OBJECT_SOURCES})
+rhbm_configure_data_object_target(data_object)
+
+add_library(data_io_file OBJECT ${DATA_IO_FILE_SOURCES})
+rhbm_configure_data_object_target(data_io_file)
+
+add_library(data_io_sqlite OBJECT ${DATA_IO_SQLITE_SOURCES})
+rhbm_configure_data_object_target(data_io_sqlite)
+
+add_library(data_schema_migration OBJECT ${DATA_SCHEMA_MIGRATION_SOURCES})
+rhbm_configure_data_object_target(data_schema_migration)
+
+add_library(data
+    ${DATA_FRONTDOOR_SOURCES}
+    $<TARGET_OBJECTS:data_object>
+    $<TARGET_OBJECTS:data_io_file>
+    $<TARGET_OBJECTS:data_io_sqlite>
+    $<TARGET_OBJECTS:data_schema_migration>
+)
 target_include_directories(data PUBLIC
     "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
@@ -103,7 +155,16 @@ target_link_libraries(data PUBLIC
     $<$<BOOL:${USE_SYSTEM_SQLITE3}>:SQLite::SQLite3>
     $<$<NOT:$<BOOL:${USE_SYSTEM_SQLITE3}>>:RHBM_GEM::sqlite3>
 )
-target_link_libraries(data PRIVATE $<BUILD_INTERFACE:CompilerFlags>)
+target_link_libraries(data PRIVATE
+    data_object
+    data_io_file
+    data_io_sqlite
+    data_schema_migration
+    $<BUILD_INTERFACE:CompilerFlags>
+)
+if(RHBM_GEM_LEGACY_V1_SUPPORT)
+    target_compile_definitions(data PRIVATE RHBM_GEM_LEGACY_V1_SUPPORT)
+endif()
 
 set_target_properties(data PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"

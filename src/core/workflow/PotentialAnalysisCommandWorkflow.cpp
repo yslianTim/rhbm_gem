@@ -1,6 +1,7 @@
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 #include "internal/PotentialAnalysisExecutionOptions.hpp"
 #include "internal/CommandDataLoaderInternal.hpp"
+#include "internal/PotentialAnalysisTrainingSupport.hpp"
 #include <rhbm_gem/core/command/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -19,7 +20,6 @@
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 
@@ -283,9 +283,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     if (m_map_object == nullptr) return;
 
     const size_t subset_size_alpha_r{ 5 };
-    std::vector<double> alpha_r_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
-    auto ordered_alpha_r_list{ alpha_r_list };
-    std::sort(ordered_alpha_r_list.begin(), ordered_alpha_r_list.end());
+    const auto ordered_alpha_r_list{ detail::BuildOrderedAlphaRTrainingList() };
     
     // Alpha_R Training
     auto & atom_list{ m_model_object->GetSelectedAtomList() };
@@ -315,9 +313,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     // Alpha_G Training
     RunLocalAtomFitting(alpha_r);
     const size_t subset_size_alpha_g{ 10 };
-    std::vector<double> alpha_g_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
-    auto ordered_alpha_g_list{ alpha_g_list };
-    std::sort(ordered_alpha_g_list.begin(), ordered_alpha_g_list.end());
+    const auto ordered_alpha_g_list{ detail::BuildOrderedAlphaGTrainingList() };
     
     auto component_group_potential_entry{
         m_model_object->GetAtomGroupPotentialEntry(ChemicalDataHelper::GetComponentAtomClassKey())
@@ -350,7 +346,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
         }
     }
 
-    StudyAtomLocalFittingViaAlphaR(selected_atom_list, ordered_alpha_g_list);
+    StudyAtomLocalFittingViaAlphaR(selected_atom_list, ordered_alpha_r_list);
     StudyAtomGroupFittingViaAlphaG(atom_list_set, ordered_alpha_g_list);
 }
 
@@ -466,6 +462,14 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     if (m_model_object == nullptr) return;
 
     auto atom_size{ atom_list.size() };
+    if (atom_size == 0)
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Skip Alpha_R bias study because no eligible atoms were selected.");
+        return;
+    }
+
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
     std::atomic<size_t> atom_count{ 0 };
     Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
@@ -513,10 +517,21 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     }
     gaus_bias_matrix /= static_cast<double>(atom_size);
 
-    LocalPainter::PaintTemplate1(
-        gaus_bias_matrix, alpha_list, "#alpha_{r}", "Deviation with OLS",
-        "/Users/yslian/Downloads/alpha_r_bias.pdf"
-    );
+    const bool report_emitted{
+        detail::EmitTrainingReportIfRequested(
+            gaus_bias_matrix,
+            alpha_list,
+            "#alpha_{r}",
+            "Deviation with OLS",
+            m_options,
+            "alpha_r_bias.pdf")
+    };
+    if (!report_emitted)
+    {
+        Logger::Log(
+            LogLevel::Debug,
+            "Alpha_R bias report was skipped (set --training-report-dir to emit PDF output).");
+    }
 
     std::ostringstream alpha_r_bias_stream;
     alpha_r_bias_stream << "Alpha_R bias matrix:\n" << gaus_bias_matrix;
@@ -532,6 +547,14 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
 
     auto alpha_size{ static_cast<int>(alpha_list.size()) };
     auto group_size{ atom_list_set.size() };
+    if (group_size == 0)
+    {
+        Logger::Log(
+            LogLevel::Warning,
+            "Skip Alpha_G bias study because no eligible groups were selected.");
+        return;
+    }
+
     std::atomic<size_t> group_count{ 0 };
     Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
 
@@ -581,10 +604,21 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
     }
     gaus_bias_matrix /= static_cast<double>(group_size);
 
-    LocalPainter::PaintTemplate1(
-        gaus_bias_matrix, alpha_list, "#alpha_{g}", "Deviation with Mean",
-        "/Users/yslian/Downloads/alpha_g_bias.pdf"
-    );
+    const bool report_emitted{
+        detail::EmitTrainingReportIfRequested(
+            gaus_bias_matrix,
+            alpha_list,
+            "#alpha_{g}",
+            "Deviation with Mean",
+            m_options,
+            "alpha_g_bias.pdf")
+    };
+    if (!report_emitted)
+    {
+        Logger::Log(
+            LogLevel::Debug,
+            "Alpha_G bias report was skipped (set --training-report-dir to emit PDF output).");
+    }
     std::ostringstream alpha_g_bias_stream;
     alpha_g_bias_stream << "Alpha_G bias matrix:\n" << gaus_bias_matrix;
     Logger::Log(LogLevel::Debug, alpha_g_bias_stream.str());

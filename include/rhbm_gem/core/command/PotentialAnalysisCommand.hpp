@@ -33,6 +33,7 @@ struct PotentialAnalysisCommandOptions : public CommandOptions
     double resolution_simulation{ 0.0 };
     std::filesystem::path model_file_path;
     std::filesystem::path map_file_path;
+    std::filesystem::path training_report_dir{};
     std::string saved_key_tag{"model"};
 };
 
@@ -63,6 +64,7 @@ public:
     void SetAlphaG(double value);
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);
+    void SetTrainingReportDir(const std::filesystem::path & path);
     void SetSavedKeyTag(const std::string & tag);
     void SetSamplingSize(int value);
     void SetSamplingRangeMinimum(double value);

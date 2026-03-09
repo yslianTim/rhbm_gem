@@ -8,7 +8,9 @@
 #include "io/sqlite/MapStoreSql.hpp"
 
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
 #include "internal/migration/LegacyModelObjectReader.hpp"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -49,11 +51,14 @@ namespace
     constexpr std::string_view kDatabaseEmptySql =
         "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
     constexpr std::string_view kPragmaUserVersionSql = "PRAGMA user_version;";
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
     constexpr std::string_view kLegacyModelKeyListSql = "SELECT key_tag FROM model_list;";
+#endif
 
     constexpr std::string_view kFinalCatalogTableName = "object_catalog";
     constexpr std::string_view kManagedObjectMetadataTableName = "object_metadata";
 
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
     std::vector<std::string> QuerySingleStringColumn(
         rhbm_gem::SQLiteWrapper & database,
         const std::string & sql)
@@ -76,6 +81,7 @@ namespace
         }
         return values;
     }
+#endif
 
     int QuerySingleInt(
         rhbm_gem::SQLiteWrapper & database,
@@ -117,6 +123,7 @@ namespace
         return true;
     }
 
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
     void DropTableIfExists(rhbm_gem::SQLiteWrapper & database, const std::string & table_name)
     {
         if (HasTable(database, table_name))
@@ -124,6 +131,7 @@ namespace
             database.Execute("DROP TABLE " + table_name + ";");
         }
     }
+#endif
 
     bool IsDatabaseEmpty(rhbm_gem::SQLiteWrapper & database)
     {
@@ -158,6 +166,7 @@ namespace
             "CHECK (object_type IN ('model', 'map')));");
     }
 
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
     void UpsertObjectCatalogRows(
         rhbm_gem::SQLiteWrapper & database,
         const std::vector<std::string> & key_list,
@@ -180,6 +189,7 @@ namespace
             database.Reset();
         }
     }
+#endif
 
     std::vector<std::string> QueryCatalogKeys(
         rhbm_gem::SQLiteWrapper & database,
@@ -353,6 +363,7 @@ namespace
             ";");
     }
 
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
     std::string SanitizeLegacyModelKey(const std::string & key_tag)
     {
         std::string sanitized_key_tag;
@@ -415,6 +426,7 @@ namespace
         std::sort(owned_table_names.begin(), owned_table_names.end());
         return owned_table_names;
     }
+#endif // RHBM_GEM_LEGACY_V1_SUPPORT
 
     void CreateFinalV2Tables(rhbm_gem::SQLiteWrapper & database)
     {
@@ -425,6 +437,7 @@ namespace
         }
     }
 
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
     std::vector<LegacyMapRow> LoadLegacyMapRows(rhbm_gem::SQLiteWrapper & database)
     {
         if (!HasTable(database, std::string(rhbm_gem::persistence::kMapTableName)))
@@ -548,7 +561,7 @@ namespace
         CreateFinalV2Tables(database);
 
         rhbm_gem::LegacyModelObjectReader legacy_reader{ &database };
-        rhbm_gem::ModelObjectDaoSqlite v2_dao{ &database };
+        rhbm_gem::ModelObjectDAOSqlite v2_dao{ &database };
         for (const auto & key_tag : legacy_model_keys)
         {
             auto model_object{ legacy_reader.Load(key_tag) };
@@ -582,6 +595,7 @@ namespace
                 ", dropped legacy table count = " +
                 std::to_string(dropped_legacy_table_count) + ".");
     }
+#endif // RHBM_GEM_LEGACY_V1_SUPPORT
 } // namespace
 
 namespace rhbm_gem {
@@ -600,8 +614,14 @@ DatabaseSchemaVersion DatabaseSchemaManager::EnsureSchema()
     const auto raw_version{ QueryUserVersion(*m_database) };
     if (raw_version == static_cast<int>(DatabaseSchemaVersion::LegacyV1))
     {
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
         MigrateLegacyV1ToFinalV2(*m_database);
         return DatabaseSchemaVersion::NormalizedV2;
+#else
+        throw std::runtime_error(
+            "Detected legacy v1 database schema, but support is disabled. "
+            "Rebuild with -DRHBM_GEM_LEGACY_V1_SUPPORT=ON to enable migration.");
+#endif
     }
     if (raw_version == static_cast<int>(DatabaseSchemaVersion::NormalizedV2))
     {
@@ -622,8 +642,14 @@ DatabaseSchemaVersion DatabaseSchemaManager::EnsureSchema()
         ValidateFinalV2Schema(*m_database);
         return DatabaseSchemaVersion::NormalizedV2;
     case UnversionedSchemaState::LegacyV1:
+#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
         MigrateLegacyV1ToFinalV2(*m_database);
         return DatabaseSchemaVersion::NormalizedV2;
+#else
+        throw std::runtime_error(
+            "Detected unversioned legacy v1 schema, but support is disabled. "
+            "Rebuild with -DRHBM_GEM_LEGACY_V1_SUPPORT=ON to enable migration.");
+#endif
     case UnversionedSchemaState::NonEmptyNonLegacy:
         throw std::runtime_error(
             "Unversioned non-empty database is unsupported unless it is a legacy v1 schema.");

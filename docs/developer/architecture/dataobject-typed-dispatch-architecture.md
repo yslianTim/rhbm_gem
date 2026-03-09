@@ -123,7 +123,7 @@ Contract:
 
 - `ModelObjectFactory::OutputDataObject(...)` -> `ExpectModelObject(...)`
 - `MapObjectFactory::OutputDataObject(...)` -> `ExpectMapObject(...)`
-- `ModelObjectDaoSqlite::Save(...)` -> `ExpectModelObject(...)`
+- `ModelObjectDAOSqlite::Save(...)` -> `ExpectModelObject(...)`
 - `MapObjectDAO::Save(...)` -> `ExpectMapObject(...)`
 
 ### 5.2 Command workflow helpers

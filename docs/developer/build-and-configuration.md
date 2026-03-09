@@ -170,6 +170,7 @@ Beginner / common:
 | `RHBM_GEM_BOOST_COMPONENTS` | empty | Semicolon-separated Boost components required when Boost is enabled. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS` | `OFF` | Enable the experimental bond-analysis workflow hook inside `PotentialAnalysisCommand`. |
+| `RHBM_GEM_LEGACY_V1_SUPPORT` | `ON` | Enable migration support for legacy v1 SQLite schema. |
 | `RHBM_GEM_PYTHON_INSTALL_LAYOUT` | `SITE_PREFIX` | Python module install layout: `SITE_PREFIX` or `LIBDIR`. |
 | `RHBM_GEM_PYTHON_INSTALL_DIR` | empty | Explicit install directory for the Python extension module. |
 
@@ -187,6 +188,18 @@ Notes:
 1. For Eigen3, CLI11, pybind11, and SQLite3, `-DUSE_SYSTEM_LIBS=OFF` is usually simpler than setting multiple `CMAKE_DISABLE_FIND_PACKAGE_*` flags.
 2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_BOOST_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
 3. When system packages are unavailable, FetchContent fallbacks require network access unless archives are already cached.
+
+## CMake Presets (Recommended)
+
+The repository provides `CMakePresets.json` with preset outputs under `.build/`:
+
+```bash
+cmake --preset dev
+cmake --build --preset dev -j
+ctest --preset dev
+```
+
+Available configure presets: `dev`, `release`, `coverage`.
 
 ## Validation Examples
 
@@ -214,6 +227,9 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ENABLE_EXPERIMENTAL_BO
 
 # Force Boost with specific components
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_GEM_BOOST_COMPONENTS="filesystem;system"
+
+# Disable legacy v1 schema migration support
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_LEGACY_V1_SUPPORT=OFF
 
 # Install Python module into <prefix>/lib/pythonX.Y/site-packages (default)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON

@@ -41,6 +41,7 @@ Style guard coverage includes:
 
 - repository hygiene guard (`cmake/RepositoryHygieneGuard.cmake`)
 - fixture tracking guard (`cmake/TestFixtureTrackingGuard.cmake`)
+- absolute path guard (`cmake/AbsolutePathGuard.cmake`)
 
 ## Common Commands
 

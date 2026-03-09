@@ -76,6 +76,7 @@ ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
         configured.SetSimulationFlag(request.simulation_flag);
         configured.SetSimulatedMapResolution(request.simulated_map_resolution);
         configured.SetSavedKeyTag(request.saved_key_tag);
+        configured.SetTrainingReportDir(request.training_report_dir);
         configured.SetTrainingAlphaFlag(request.training_alpha_flag);
         configured.SetAsymmetryFlag(request.asymmetry_flag);
         configured.SetSamplingSize(request.sampling_size);
