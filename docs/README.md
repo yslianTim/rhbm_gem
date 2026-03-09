@@ -1,6 +1,7 @@
 # Documentation
 
-Use this directory as the entry point for the project documentation. The content is split by audience so you can go straight to the guide that matches your task.
+Use this directory as the entry point for the project documentation.
+The content is split by audience so you can go straight to the guide that matches your task.
 
 ## User Documentation
 
