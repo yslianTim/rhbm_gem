@@ -41,8 +41,10 @@ void SaveChainMap(
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelChainMapSql) };
-    for (const auto & [entity_id, chain_id_list] : model_obj.GetChainIDListMap())
+    for (const auto & chain_entry : model_obj.GetChainIDListMap())
     {
+        const auto & entity_id{ chain_entry.first };
+        const auto & chain_id_list{ chain_entry.second };
         for (size_t ordinal = 0; ordinal < chain_id_list.size(); ordinal++)
         {
             batch.Execute([&](SQLiteWrapper & statement_db)
@@ -62,8 +64,10 @@ void SaveChemicalComponentEntryList(
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelComponentSql) };
-    for (const auto & [component_key, component_entry] : model_obj.GetChemicalComponentEntryMap())
+    for (const auto & component_map_entry : model_obj.GetChemicalComponentEntryMap())
     {
+        const auto & component_key{ component_map_entry.first };
+        const auto & component_entry{ component_map_entry.second };
         batch.Execute([&](SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
@@ -84,10 +88,14 @@ void SaveComponentAtomEntryList(
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelComponentAtomSql) };
-    for (const auto & [component_key, component_entry] : model_obj.GetChemicalComponentEntryMap())
+    for (const auto & component_map_entry : model_obj.GetChemicalComponentEntryMap())
     {
-        for (const auto & [atom_key, atom_entry] : component_entry->GetComponentAtomEntryMap())
+        const auto & component_key{ component_map_entry.first };
+        const auto & component_entry{ component_map_entry.second };
+        for (const auto & atom_map_entry : component_entry->GetComponentAtomEntryMap())
         {
+            const auto & atom_key{ atom_map_entry.first };
+            const auto & atom_entry{ atom_map_entry.second };
             batch.Execute([&](SQLiteWrapper & statement_db)
             {
                 statement_db.Bind<std::string>(1, key_tag);
@@ -108,10 +116,14 @@ void SaveComponentBondEntryList(
     const std::string & key_tag)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelComponentBondSql) };
-    for (const auto & [component_key, component_entry] : model_obj.GetChemicalComponentEntryMap())
+    for (const auto & component_map_entry : model_obj.GetChemicalComponentEntryMap())
     {
-        for (const auto & [bond_key, bond_entry] : component_entry->GetComponentBondEntryMap())
+        const auto & component_key{ component_map_entry.first };
+        const auto & component_entry{ component_map_entry.second };
+        for (const auto & bond_map_entry : component_entry->GetComponentBondEntryMap())
         {
+            const auto & bond_key{ bond_map_entry.first };
+            const auto & bond_entry{ bond_map_entry.second };
             batch.Execute([&](SQLiteWrapper & statement_db)
             {
                 statement_db.Bind<std::string>(1, key_tag);
