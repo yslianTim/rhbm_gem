@@ -1,4 +1,5 @@
 include("${CMAKE_CURRENT_LIST_DIR}/RHBMGemThirdPartyGuard.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/RHBMGemFetchDeps.cmake")
 
 # Locate Eigen package
 if(USE_SYSTEM_LIBS)
@@ -7,34 +8,16 @@ if(USE_SYSTEM_LIBS)
         message(STATUS "Using system Eigen3")
         set(HAVE_EIGEN3 TRUE)
     else()
-        message(STATUS "System Eigen3 not found, will use third_party version")
+        message(STATUS "System Eigen3 not found, will fetch via FetchContent")
         set(HAVE_EIGEN3 FALSE)
     endif()
 else()
-    message(STATUS "Forced to use third_party libraries")
+    message(STATUS "Forced to use FetchContent for Eigen3")
     set(HAVE_EIGEN3 FALSE)
 endif()
 
 if(NOT HAVE_EIGEN3)
-    rhbm_gem_require_bundled_dependency("Eigen3" "third_party/eigen/CMakeLists.txt")
-    # Disable Eigen's own tests to avoid policy warnings
-    set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests" FORCE)
-    # Temporarily store the original BUILD_TESTING value and turn it off to
-    # avoid Eigen's test configuration interfering with ours.
-    if(DEFINED BUILD_TESTING)
-        set(_ORIG_BUILD_TESTING "${BUILD_TESTING}")
-    else()
-        unset(_ORIG_BUILD_TESTING)
-    endif()
-    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-    add_subdirectory(third_party/eigen)
-    # Restore BUILD_TESTING to its original state. If it was originally
-    # undefined, remove it from the cache so later option() calls can define it.
-    if(DEFINED _ORIG_BUILD_TESTING)
-        set(BUILD_TESTING "${_ORIG_BUILD_TESTING}" CACHE BOOL "" FORCE)
-    else()
-        unset(BUILD_TESTING CACHE)
-    endif()
+    rhbm_gem_fetch_eigen3(RHBM_GEM_EIGEN3_SOURCE_DIR)
 endif()
 
 add_library(rhbm_eigen INTERFACE)
@@ -42,16 +25,16 @@ if(HAVE_EIGEN3)
     target_link_libraries(rhbm_eigen INTERFACE Eigen3::Eigen)
 else()
     target_include_directories(rhbm_eigen SYSTEM INTERFACE
-        "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/eigen>"
+        "$<BUILD_INTERFACE:${RHBM_GEM_EIGEN3_SOURCE_DIR}>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
     )
     install(
-        DIRECTORY "${PROJECT_SOURCE_DIR}/third_party/eigen/Eigen"
+        DIRECTORY "${RHBM_GEM_EIGEN3_SOURCE_DIR}/Eigen"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     )
-    if(EXISTS "${PROJECT_SOURCE_DIR}/third_party/eigen/unsupported")
+    if(EXISTS "${RHBM_GEM_EIGEN3_SOURCE_DIR}/unsupported")
         install(
-            DIRECTORY "${PROJECT_SOURCE_DIR}/third_party/eigen/unsupported"
+            DIRECTORY "${RHBM_GEM_EIGEN3_SOURCE_DIR}/unsupported"
             DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
         )
     endif()
@@ -110,15 +93,15 @@ if(BUILD_PYTHON_BINDINGS)
             message(STATUS "Using system Pybind11")
             set(HAVE_PYBIND11 TRUE)
         else()
-            message(STATUS "System Pybind11 not found, will use third_party version")
+            message(STATUS "System Pybind11 not found, will fetch via FetchContent")
             set(HAVE_PYBIND11 FALSE)
         endif()
     else()
+        message(STATUS "Forced to use FetchContent for Pybind11")
         set(HAVE_PYBIND11 FALSE)
     endif()
 
     if(NOT HAVE_PYBIND11)
-        rhbm_gem_require_bundled_dependency("pybind11" "third_party/pybind11/CMakeLists.txt")
-        add_subdirectory(third_party/pybind11)
+        rhbm_gem_fetch_pybind11()
     endif()
 endif()

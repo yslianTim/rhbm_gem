@@ -2,20 +2,6 @@
 
 RHBM-GEM is a robust hierarchical Bayesian framework for Gaussian modeling and parameter estimation of atom-associated cryo-EM map distributions.
 
-## Repository Setup
-
-Initialize bundled third-party dependencies after cloning:
-
-```bash
-git submodule update --init --recursive
-```
-
-Or use the helper script:
-
-```bash
-./scripts/bootstrap_submodules.sh
-```
-
 ## Documentation
 
 For the full documentation map, start at [`docs/README.md`](docs/README.md).

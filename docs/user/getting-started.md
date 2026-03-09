@@ -23,7 +23,8 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 
 A few dependencies are optional:
 
-- `Eigen3`, `SQLite3`, `CLI11`, and `pybind11` are preferred from system packages, but CMake falls back to the bundled copies in `third_party/` when they are missing.
+- `Eigen3`, `SQLite3`, `CLI11`, and `pybind11` are preferred from system packages.
+- If system packages are missing, CMake fetches pinned archives for `Eigen3`/`pybind11` and uses bundled fallbacks for `CLI11`/`SQLite3`.
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
 - `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
 
@@ -49,7 +50,7 @@ xcode-select --install
 brew install cmake python libomp
 ```
 
-4. Optional (Recommended): install system packages instead of using the bundled copies from `third_party/`:
+4. Optional (Recommended): install system packages to avoid fallback downloads and bundled fallbacks:
 
 ```bash
 brew install eigen sqlite3 pybind11 cli11
@@ -83,7 +84,7 @@ sudo apt update
 sudo apt install -y build-essential cmake pkg-config python3
 ```
 
-2. Optional: if you plan to use Python bindings, or you want distro packages instead of bundled copies, also install:
+2. Optional: if you plan to use Python bindings, or you want distro packages instead of fallback fetching/bundled sources, also install:
 
 ```bash
 sudo apt install -y python3-dev libsqlite3-dev libeigen3-dev pybind11-dev
@@ -126,7 +127,7 @@ Notes:
    - Python 3 if you plan to use Python bindings or examples
    - Git if you plan to install optional packages with `vcpkg`
 
-2. For a basic build, use the bundled copies of `Eigen3`, `SQLite3`, `CLI11`, and `pybind11`.
+2. For a basic build, you can skip dependency package managers: CMake will use fallback sources (`FetchContent` for Eigen3/pybind11 and bundled `third_party/` for CLI11/SQLite3) as needed.
 
 3. Optional: if you prefer `vcpkg` packages, or you need Boost-backed features, prepare them now:
 
@@ -152,7 +153,7 @@ root.exe -b -q
 
 Notes:
 
-- The installation workflow later in this guide uses bundled third-party libraries by default, so you do not need `vcpkg` for a basic build.
+- The installation workflow later in this guide does not require `vcpkg` for a basic build because fallback dependency sources are available.
 - If you use `vcpkg`, reuse the same toolchain arguments when you configure the project later.
 - If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
 - The project defaults are still documented in [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy). This guide chooses the simplest Windows path instead of listing every supported configuration.
@@ -393,7 +394,7 @@ The pipeline example should create:
 ## Troubleshooting
 
 1. Missing `Eigen3`, `SQLite3`, `pybind11`, or `CLI11`
-   You can skip installing them; CMake will use the bundled versions in `third_party/`.
+   You can skip installing them. CMake will use fallback sources (`FetchContent` for Eigen3/pybind11 and bundled `third_party/` for CLI11/SQLite3).
 2. Missing Boost
    Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
 3. `ModuleNotFoundError: No module named 'rhbm_gem_module'`

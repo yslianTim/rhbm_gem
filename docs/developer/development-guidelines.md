@@ -33,7 +33,6 @@ The goal is stable, maintainable, and diagnosable software that can evolve safel
 - `[Required]` Keep code portable within CMake + C++17 baseline.
 - `[Required]` Compile cleanly under project warning settings; do not hide real issues with broad suppressions.
 - `[Required]` Keep optional dependencies behind explicit feature gates and provide clean behavior when disabled.
-- `[Required]` Keep bundled dependencies reproducible through pinned git submodules and document bootstrap steps.
 - `[Required]` Public headers must be self-contained.
 - `[Recommended]` Reuse existing build patterns (`CompilerFlags`, dependency discovery conventions) instead of creating one-off policies.
 

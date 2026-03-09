@@ -6,7 +6,7 @@ This guide is for maintainers preparing source or binary releases.
 
 - Project license: Apache License 2.0 (see `../../LICENSE`).
 - Third-party licenses and attribution summary: see `../../THIRD_PARTY_NOTICES.md`.
-- This repository can use either system packages or bundled third-party dependencies under `third_party/` depending on CMake configuration.
+- This repository can use system packages, FetchContent fallbacks (Eigen3/pybind11/GoogleTest), or bundled `third_party/` fallbacks (CLI11/SQLite3), depending on CMake configuration.
 
 ## Distribution Policy (Default Release Profile)
 
@@ -19,7 +19,7 @@ This guide is for maintainers preparing source or binary releases.
 
 1. Include `LICENSE`.
 2. Include `THIRD_PARTY_NOTICES.md`.
-3. Ensure bundled third-party license file paths referenced in `THIRD_PARTY_NOTICES.md` remain valid.
+3. Ensure version pins and notices in `THIRD_PARTY_NOTICES.md` match the configured dependency sources.
 4. Validate build variants used for release:
    - `USE_SYSTEM_LIBS=OFF`
    - `USE_SYSTEM_LIBS=ON`

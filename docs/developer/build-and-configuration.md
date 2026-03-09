@@ -8,29 +8,17 @@ Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOption
 
 ## Dependency Strategy
 
-This project uses CMake + C++17. By default it prefers system-installed Eigen3, CLI11, pybind11, and SQLite3. If any are missing, CMake falls back to bundled sources under `third_party/` (provided via git submodules). Boost support is controlled independently with `RHBM_GEM_BOOST_MODE` (`AUTO` by default).
-
-Initialize submodules before configuring:
-
-```bash
-git submodule update --init --recursive
-```
-
-Or:
-
-```bash
-./scripts/bootstrap_submodules.sh
-```
+This project uses CMake + C++17. By default it prefers system-installed Eigen3, CLI11, pybind11, and SQLite3. If these are missing, CMake uses a mixed fallback strategy: Eigen3 and pybind11 are fetched via pinned FetchContent archives, while CLI11 and SQLite3 use bundled sources under `third_party/`. GoogleTest follows the same system-first strategy when `BUILD_TESTING=ON` and falls back to pinned FetchContent.
 
 The user guide's Windows workflow intentionally uses `-DUSE_SYSTEM_LIBS=OFF` and `-DRHBM_GEM_ROOT_MODE=OFF` for the simplest first-time setup. That is a documentation choice for end users, not a change to the project defaults described here.
 
-To force bundled dependencies where supported:
+To force non-system dependency sources where supported:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 ```
 
-Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
+Boost has no bundled or FetchContent fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
 
 ## Coverage (`gcov`)
 
@@ -198,7 +186,7 @@ Notes:
 
 1. For Eigen3, CLI11, pybind11, and SQLite3, `-DUSE_SYSTEM_LIBS=OFF` is usually simpler than setting multiple `CMAKE_DISABLE_FIND_PACKAGE_*` flags.
 2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_BOOST_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
-3. If bundled dependency sources are missing, configure will fail with an explicit submodule initialization message.
+3. When system packages are unavailable, FetchContent fallbacks require network access unless archives are already cached.
 
 ## Validation Examples
 
@@ -208,7 +196,7 @@ These examples are for validating configuration behavior and CMake options. For 
 # Release build, no tests
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 
-# Force bundled third-party dependencies
+# Force non-system dependency sources
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
 
 # Pure C++ build (skip Python bindings)
