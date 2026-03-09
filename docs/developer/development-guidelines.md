@@ -21,6 +21,9 @@ The goal is stable, maintainable, and diagnosable software that can evolve safel
 - `[Required]` Keep responsibilities separated: command orchestration in `core`, file/persistence logic in `data`, reusable helpers in `utils`.
 - `[Required]` Keep tests in `tests/` and test fixtures in `tests/data/`.
 - `[Required]` Keep test sources aligned to domain folders (`tests/core`, `tests/data`, `tests/utils`, `tests/integration`) and intent-specific subfolders where applicable.
+- `[Recommended]` For `src/core`, place new workflow implementation in `src/core/workflow/`, painter implementation in `src/core/painter/`, and private helpers in `src/core/internal/`.
+- `[Required]` Keep reusable automation scripts under `scripts/`; do not add scripts at repository root.
+- `[Required]` Keep large local datasets/databases under `data/local/` (ignored) and keep shared fixtures under `tests/data/` (tracked).
 - `[Required]` Project-owned public types in `core` and `data` must use namespace `rhbm_gem`.
 - `[Required]` Do not use `using namespace` in headers.
 - `[Recommended]` Keep header/source pairing clear and predictable for new modules.
@@ -30,6 +33,7 @@ The goal is stable, maintainable, and diagnosable software that can evolve safel
 - `[Required]` Keep code portable within CMake + C++17 baseline.
 - `[Required]` Compile cleanly under project warning settings; do not hide real issues with broad suppressions.
 - `[Required]` Keep optional dependencies behind explicit feature gates and provide clean behavior when disabled.
+- `[Required]` Keep bundled dependencies reproducible through pinned git submodules and document bootstrap steps.
 - `[Required]` Public headers must be self-contained.
 - `[Recommended]` Reuse existing build patterns (`CompilerFlags`, dependency discovery conventions) instead of creating one-off policies.
 
@@ -92,6 +96,7 @@ Change-integration principles:
 - `[Required]` Keep tests deterministic and independent of machine-local state.
 - `[Required]` Add new `*_test.cpp` files to `tests/CMakeLists.txt`.
 - `[Required]` Every test target in `tests/CMakeLists.txt` must carry both `domain:*` and `intent:*` CTest labels.
+- `[Required]` Every file referenced by `TestDataPath(...)` must exist under `tests/data/` and be tracked by git.
 - `[Required]` Schema/persistence changes require regression coverage for bootstrap or migration behavior, rollback behavior on failure, and round-trip correctness.
 - `[Recommended]` Prefer searchable suite names that encode intent (for example `DataObjectSchemaMigrationTest`) over generic suite names.
 - `[Recommended]` Use minimal fixtures and temporary directories/files for generated outputs.

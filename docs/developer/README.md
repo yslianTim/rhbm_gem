@@ -2,6 +2,12 @@
 
 Start here if you are changing the codebase, validating build configurations, or working with project internals.
 
+Before building from a fresh clone, initialize submodules:
+
+```bash
+git submodule update --init --recursive
+```
+
 ## Recommended Reading Order
 
 1. Read [`build-and-configuration.md`](build-and-configuration.md) for CMake parameters, dependency selection, coverage, and feature-mode validation commands.

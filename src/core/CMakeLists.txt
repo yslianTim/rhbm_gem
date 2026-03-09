@@ -1,30 +1,30 @@
 set(CORE_SOURCES
     Application.cpp
-    AtomPainter.cpp
+    painter/AtomPainter.cpp
     BuiltInCommandCatalog.cpp
     CommandBase.cpp
-    ComparisonPainter.cpp
-    DataObjectWorkflowOps.cpp
+    painter/ComparisonPainter.cpp
+    workflow/DataObjectWorkflowOps.cpp
     DataObjectManager.cpp
-    DemoPainter.cpp
-    GausPainter.cpp
+    painter/DemoPainter.cpp
+    painter/GausPainter.cpp
     HRLModelTestCommand.cpp
-    HRLModelTestCommandWorkflows.cpp
+    workflow/HRLModelTestCommandWorkflows.cpp
     MapSampling.cpp
     MapSimulationCommand.cpp
     MapVisualizationCommand.cpp
-    ModelPainter.cpp
+    painter/ModelPainter.cpp
     PositionEstimationCommand.cpp
     PotentialAnalysisCommand.cpp
-    PotentialAnalysisCommandWorkflow.cpp
+    workflow/PotentialAnalysisCommandWorkflow.cpp
     PotentialDisplayCommand.cpp
     ResultDumpCommand.cpp
-    ResultDumpCommandWorkflow.cpp
+    workflow/ResultDumpCommandWorkflow.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
     list(APPEND CORE_SOURCES
-        PotentialAnalysisBondWorkflow.cpp
+        workflow/PotentialAnalysisBondWorkflow.cpp
     )
 endif()
 
@@ -32,6 +32,9 @@ add_library(core ${CORE_SOURCES})
 target_include_directories(core PUBLIC
     "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/core>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core>"
+)
+target_include_directories(core PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_link_libraries(core PUBLIC
     utils

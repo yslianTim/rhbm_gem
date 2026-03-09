@@ -37,6 +37,11 @@ Required CTest labels:
 - `intent:bindings`
 - `intent:style`
 
+Style guard coverage includes:
+
+- repository hygiene guard (`cmake/RepositoryHygieneGuard.cmake`)
+- fixture tracking guard (`cmake/TestFixtureTrackingGuard.cmake`)
+
 ## Common Commands
 
 Build all test targets:

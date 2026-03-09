@@ -27,7 +27,7 @@ target_include_directories(utils PUBLIC
     "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/utils>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/utils>"
 )
-target_link_libraries(utils PUBLIC Eigen3::Eigen)
+target_link_libraries(utils PUBLIC rhbm_eigen)
 target_link_libraries(utils PRIVATE $<BUILD_INTERFACE:CompilerFlags>)
 
 set(MIN_OPENMP_VERSION "4.5")
