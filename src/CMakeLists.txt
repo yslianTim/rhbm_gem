@@ -16,7 +16,7 @@ target_link_libraries(${MAIN_EXEC_TARGET} PUBLIC
     data
 )
 target_link_libraries(${MAIN_EXEC_TARGET} PRIVATE
-    CLI11::CLI11
+    rhbm_cli11
     CompilerFlags
 )
 

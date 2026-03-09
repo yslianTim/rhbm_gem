@@ -24,7 +24,7 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 A few dependencies are optional:
 
 - `Eigen3`, `SQLite3`, `CLI11`, and `pybind11` are preferred from system packages.
-- If system packages are missing, CMake fetches pinned archives for `Eigen3`/`pybind11` and uses bundled fallbacks for `CLI11`/`SQLite3`.
+- If system packages are missing, CMake fetches pinned fallback sources for `Eigen3`/`CLI11`/`pybind11` and uses a bundled fallback for `SQLite3`.
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
 - `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
 
@@ -116,7 +116,7 @@ root-config --prefix
 
 Notes:
 
-- If your distro does not package `CLI11`, CMake will use the bundled copy automatically.
+- If your distro does not package `CLI11`, CMake will fetch a pinned fallback copy automatically.
 - If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
 
 ### Windows (PowerShell + Visual Studio 2022)
@@ -127,7 +127,7 @@ Notes:
    - Python 3 if you plan to use Python bindings or examples
    - Git if you plan to install optional packages with `vcpkg`
 
-2. For a basic build, you can skip dependency package managers: CMake will use fallback sources (`FetchContent` for Eigen3/pybind11 and bundled `third_party/` for CLI11/SQLite3) as needed.
+2. For a basic build, you can skip dependency package managers: CMake will use fallback sources (`FetchContent` for Eigen3/CLI11/pybind11 and bundled `third_party/` for SQLite3) as needed.
 
 3. Optional: if you prefer `vcpkg` packages, or you need Boost-backed features, prepare them now:
 
@@ -394,7 +394,7 @@ The pipeline example should create:
 ## Troubleshooting
 
 1. Missing `Eigen3`, `SQLite3`, `pybind11`, or `CLI11`
-   You can skip installing them. CMake will use fallback sources (`FetchContent` for Eigen3/pybind11 and bundled `third_party/` for CLI11/SQLite3).
+   You can skip installing them. CMake will use fallback sources (`FetchContent` for Eigen3/CLI11/pybind11 and bundled `third_party/` for SQLite3).
 2. Missing Boost
    Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
 3. `ModuleNotFoundError: No module named 'rhbm_gem_module'`

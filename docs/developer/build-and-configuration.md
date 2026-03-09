@@ -8,7 +8,7 @@ Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOption
 
 ## Dependency Strategy
 
-This project uses CMake + C++17. By default it prefers system-installed Eigen3, CLI11, pybind11, and SQLite3. If these are missing, CMake uses a mixed fallback strategy: Eigen3 and pybind11 are fetched via pinned FetchContent archives, while CLI11 and SQLite3 use bundled sources under `third_party/`. GoogleTest follows the same system-first strategy when `BUILD_TESTING=ON` and falls back to pinned FetchContent.
+This project uses CMake + C++17. By default it prefers system-installed Eigen3, CLI11, pybind11, and SQLite3. If these are missing, CMake fetches pinned fallback sources for Eigen3, CLI11, and pybind11 via FetchContent, while SQLite3 uses bundled sources under `third_party/`. GoogleTest follows the same system-first strategy when `BUILD_TESTING=ON` and falls back to pinned FetchContent.
 
 The user guide's Windows workflow intentionally uses `-DUSE_SYSTEM_LIBS=OFF` and `-DRHBM_GEM_ROOT_MODE=OFF` for the simplest first-time setup. That is a documentation choice for end users, not a change to the project defaults described here.
 

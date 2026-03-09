@@ -3,6 +3,9 @@ include(FetchContent)
 set(RHBM_GEM_EIGEN3_URL "https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz")
 set(RHBM_GEM_EIGEN3_URL_HASH "SHA256=e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec")
 
+set(RHBM_GEM_CLI11_URL "https://github.com/CLIUtils/CLI11/archive/refs/tags/v2.5.0.tar.gz")
+set(RHBM_GEM_CLI11_URL_HASH "SHA256=17e02b4cddc2fa348e5dbdbb582c59a3486fa2b2433e70a0c3bacb871334fd55")
+
 set(RHBM_GEM_GTEST_URL "https://github.com/google/googletest/archive/refs/tags/v1.17.0.tar.gz")
 set(RHBM_GEM_GTEST_URL_HASH "SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c")
 
@@ -19,6 +22,18 @@ function(rhbm_gem_fetch_eigen3 out_source_dir)
     FetchContent_MakeAvailable(rhbm_gem_eigen3)
     FetchContent_GetProperties(rhbm_gem_eigen3)
     set(${out_source_dir} "${rhbm_gem_eigen3_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
+
+function(rhbm_gem_fetch_cli11 out_source_dir)
+    FetchContent_Declare(rhbm_gem_cli11
+        URL "${RHBM_GEM_CLI11_URL}"
+        URL_HASH "${RHBM_GEM_CLI11_URL_HASH}"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    message(STATUS "Fetching CLI11 (v2.5.0) via FetchContent")
+    FetchContent_MakeAvailable(rhbm_gem_cli11)
+    FetchContent_GetProperties(rhbm_gem_cli11)
+    set(${out_source_dir} "${rhbm_gem_cli11_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
 function(rhbm_gem_fetch_googletest)

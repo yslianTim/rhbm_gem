@@ -1,4 +1,3 @@
-include("${CMAKE_CURRENT_LIST_DIR}/RHBMGemThirdPartyGuard.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/RHBMGemFetchDeps.cmake")
 
 # Locate Eigen package
@@ -49,18 +48,18 @@ if(USE_SYSTEM_LIBS)
         set(HAVE_CLI11 TRUE)
         set(RHBM_GEM_USE_SYSTEM_CLI11 TRUE)
     else()
-        message(STATUS "System CLI11 not found, will use third_party version")
+        message(STATUS "System CLI11 not found, will fetch via FetchContent")
         set(HAVE_CLI11 FALSE)
         set(RHBM_GEM_USE_SYSTEM_CLI11 FALSE)
     endif()
 else()
+    message(STATUS "Forced to use FetchContent for CLI11")
     set(HAVE_CLI11 FALSE)
     set(RHBM_GEM_USE_SYSTEM_CLI11 FALSE)
 endif()
 
 if(NOT HAVE_CLI11)
-    rhbm_gem_require_bundled_dependency("CLI11" "third_party/CLI11/CMakeLists.txt")
-    add_subdirectory(third_party/CLI11)
+    rhbm_gem_fetch_cli11(RHBM_GEM_CLI11_SOURCE_DIR)
 endif()
 
 add_library(rhbm_cli11 INTERFACE)
@@ -68,11 +67,11 @@ if(HAVE_CLI11)
     target_link_libraries(rhbm_cli11 INTERFACE CLI11::CLI11)
 else()
     target_include_directories(rhbm_cli11 INTERFACE
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11/include>"
+        "$<BUILD_INTERFACE:${RHBM_GEM_CLI11_SOURCE_DIR}/include>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
     )
     install(
-        DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CLI11/include/CLI"
+        DIRECTORY "${RHBM_GEM_CLI11_SOURCE_DIR}/include/CLI"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     )
 endif()

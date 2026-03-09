@@ -6,7 +6,7 @@ This guide is for maintainers preparing source or binary releases.
 
 - Project license: Apache License 2.0 (see `../../LICENSE`).
 - Third-party licenses and attribution summary: see `../../THIRD_PARTY_NOTICES.md`.
-- This repository can use system packages, FetchContent fallbacks (Eigen3/pybind11/GoogleTest), or bundled `third_party/` fallbacks (CLI11/SQLite3), depending on CMake configuration.
+- This repository can use system packages, FetchContent fallbacks (Eigen3/CLI11/pybind11/GoogleTest), or a bundled `third_party/` fallback (SQLite3), depending on CMake configuration.
 
 ## Distribution Policy (Default Release Profile)
 
