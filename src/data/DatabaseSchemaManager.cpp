@@ -1,13 +1,13 @@
-#include "DatabaseSchemaManager.hpp"
+#include "internal/DatabaseSchemaManager.hpp"
 
-#include "Logger.hpp"
-#include "ModelObject.hpp"
-#include "ModelObjectDAOv2.hpp"
-#include "SQLiteWrapper.hpp"
+#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
+#include "internal/ModelObjectDAOv2.hpp"
+#include "internal/SQLiteWrapper.hpp"
 #include "persistence/ManagedStoreRegistry.hpp"
 #include "persistence/MapStoreSql.hpp"
 
-#include "ChemicalDataHelper.hpp"
+#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
 #include "legacy/LegacyModelObjectReader.hpp"
 
 #include <algorithm>

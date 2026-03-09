@@ -2,8 +2,8 @@
 #include <stdexcept>
 #include <cmath>
 
-#include "GausLinearTransformHelper.hpp"
-#include "Constants.hpp"
+#include <rhbm_gem/utils/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/Constants.hpp>
 /*
 TEST(GausLinearTransformHelperTest, BuildLinearModelDataVectorNormalCase)
 {

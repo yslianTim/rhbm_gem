@@ -71,6 +71,6 @@ ctest --test-dir build -L intent:migration --output-on-failure
 ## Adding New Tests
 
 - Place new tests in the matching domain directory.
-- Add the source to the correct grouped target in `tests/CMakeLists.txt`.
+- Add the source to the correct grouped target in `tests/cmake/*.cmake`.
 - Ensure the target has the correct `domain:*` and `intent:*` labels.
 - Prefer searchable suite names (for example `DataObjectSchemaMigrationTest`) over generic names.

@@ -1,6 +1,6 @@
-#include "HRLModelAlgorithms.hpp"
+#include <rhbm_gem/utils/HRLModelAlgorithms.hpp>
 
-#include "EigenMatrixUtility.hpp"
+#include <rhbm_gem/utils/EigenMatrixUtility.hpp>
 
 #include <cmath>
 #include <limits>

@@ -4,7 +4,7 @@
 
 #include "CommandTestHelpers.hpp"
 #include "CommandValidationAssertions.hpp"
-#include "GuiCommandExecutor.hpp"
+#include <rhbm_gem/gui/GuiCommandExecutor.hpp>
 
 namespace rg = rhbm_gem;
 

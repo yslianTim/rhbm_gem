@@ -1,6 +1,6 @@
-#include "GausLinearTransformHelper.hpp"
-#include "Constants.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/utils/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/Constants.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #include <stdexcept>
 

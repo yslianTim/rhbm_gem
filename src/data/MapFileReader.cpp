@@ -1,9 +1,10 @@
-#include "MapFileReader.hpp"
-#include "FileFormatBackendFactory.hpp"
-#include "FilePathHelper.hpp"
-#include "FileFormatRegistry.hpp"
-#include "MapFileFormatBase.hpp"
+#include <rhbm_gem/data/MapFileReader.hpp>
+#include "internal/FileFormatBackendFactory.hpp"
+#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include "internal/FileFormatRegistry.hpp"
+#include "internal/MapFileFormatBase.hpp"
 
+#include <fstream>
 #include <stdexcept>
 namespace rhbm_gem {
 
@@ -20,6 +21,8 @@ MapFileReader::MapFileReader(const std::string & filename) :
     }
     m_file_format_helper = CreateMapFileFormatBackend(*descriptor.map_backend);
 }
+
+MapFileReader::~MapFileReader() = default;
 
 void MapFileReader::Read()
 {

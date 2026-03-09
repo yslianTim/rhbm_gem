@@ -34,14 +34,14 @@ Those responsibilities stay in `DataObjectManager`, data/file modules, and domai
 
 Built-in command definitions are centralized in:
 
-- `src/core/BuiltInCommandList.def`
+- `src/core/internal/BuiltInCommandList.def`
 
 This list is consumed by:
 
-- `src/core/BuiltInCommandCatalog.cpp` to build `BuiltInCommandCatalog()` for CLI registration and metadata checks
-- `src/core/BuiltInCommandBindingInternal.hpp` to map `CommandType -> python binding name`
+- `src/core/command/BuiltInCommandCatalog.cpp` to build `BuiltInCommandCatalog()` for CLI registration and metadata checks
+- `src/core/internal/BuiltInCommandBindingInternal.hpp` to map `CommandType -> python binding name`
 
-`CommandDescriptor` fields (defined in `src/core/BuiltInCommandCatalogInternal.hpp`):
+`CommandDescriptor` fields (defined in `src/core/internal/BuiltInCommandCatalogInternal.hpp`):
 
 - `id` (`CommandId`)
 - `name` (CLI subcommand name)
@@ -74,7 +74,7 @@ Rules enforced by implementation:
 Startup path:
 
 1. `src/main.cpp` creates `CLI::App`.
-2. `Application` (`src/core/Application.cpp`) requires exactly one subcommand.
+2. `Application` (`src/core/command/Application.cpp`) requires exactly one subcommand.
 3. `Application::RegisterAllCommands()` iterates `BuiltInCommandCatalog()`.
 4. For each descriptor:
    - create concrete command via `descriptor.factory()`
@@ -104,7 +104,7 @@ Base options from `CommandOptions`:
 - `database_path`
 - `folder_path`
 
-Template aliases in `include/core/CommandBase.hpp`:
+Template aliases in `include/rhbm_gem/core/CommandBase.hpp`:
 
 - `CommandWithOptions<...>` for explicit mask
 - `CommandWithProfileOptions<...>` for profile-driven mask
@@ -202,7 +202,7 @@ Data/output helpers on command boundary:
 - `RequireDatabaseManager()`
 - `BuildOutputPath(...)`
 
-CLI registration helpers in `include/core/CommandOptionBinding.hpp`:
+CLI registration helpers in `include/rhbm_gem/core/CommandOptionBinding.hpp`:
 
 - `command_cli::AddScalarOption(...)`
 - `command_cli::AddStringOption(...)`
@@ -220,7 +220,7 @@ Primary command-side APIs:
 - `m_data_manager.SaveDataObject(...)`
 - `m_data_manager.GetTypedDataObject(...)`
 - `m_data_manager.ForEachDataObject(...)`
-- `command_data_loader::*` helpers in `src/core/CommandDataLoaderInternal.hpp`
+- `command_data_loader::*` helpers in `src/core/internal/CommandDataLoaderInternal.hpp`
 
 Workflow helpers used by current commands:
 
@@ -228,7 +228,7 @@ Workflow helpers used by current commands:
 - map sampling via `SampleMapValues(...)`
 - command-local workflows (for example `PotentialAnalysisCommandWorkflow.cpp`, `ResultDumpCommandWorkflow.cpp`)
 
-`DataObjectDispatch` (`include/data/DataObjectDispatch.hpp`) is optional when a command iterates generic `DataObjectBase` and needs explicit runtime type dispatch.
+`DataObjectDispatch` (`include/rhbm_gem/data/DataObjectDispatch.hpp`) is optional when a command iterates generic `DataObjectBase` and needs explicit runtime type dispatch.
 
 ## 9. Python binding contract
 
@@ -267,9 +267,9 @@ Current binding model:
 
 When adding or significantly modifying a built-in command, update the same change set:
 
-1. command header under `include/core/`
+1. command header under `include/rhbm_gem/core/`
 2. command implementation under `src/core/`
-3. built-in list entry in `src/core/BuiltInCommandList.def`
+3. built-in list entry in `src/core/internal/BuiltInCommandList.def`
 4. metadata/registration behavior (if needed) in `BuiltInCommandCatalog*`
 5. Python binding exposure in `bindings/CoreBindings.cpp`
 6. tests (contract + command-specific)
@@ -290,27 +290,27 @@ When adding or significantly modifying a built-in command, update the same chang
 Core command architecture:
 
 - `src/main.cpp`
-- `include/core/Application.hpp`
-- `src/core/Application.cpp`
-- `include/core/CommandBase.hpp`
-- `src/core/CommandBase.cpp`
-- `include/core/CommandMetadata.hpp`
-- `src/core/BuiltInCommandList.def`
-- `src/core/BuiltInCommandCatalogInternal.hpp`
-- `src/core/BuiltInCommandCatalog.cpp`
-- `src/core/BuiltInCommandBindingInternal.hpp`
-- `include/core/CommandOptionBinding.hpp`
-- `src/core/CommandDataLoaderInternal.hpp`
-- `include/core/DataObjectManager.hpp`
-- `src/core/DataObjectManager.cpp`
+- `include/rhbm_gem/core/Application.hpp`
+- `src/core/command/Application.cpp`
+- `include/rhbm_gem/core/CommandBase.hpp`
+- `src/core/command/CommandBase.cpp`
+- `include/rhbm_gem/core/CommandMetadata.hpp`
+- `src/core/internal/BuiltInCommandList.def`
+- `src/core/internal/BuiltInCommandCatalogInternal.hpp`
+- `src/core/command/BuiltInCommandCatalog.cpp`
+- `src/core/internal/BuiltInCommandBindingInternal.hpp`
+- `include/rhbm_gem/core/CommandOptionBinding.hpp`
+- `src/core/internal/CommandDataLoaderInternal.hpp`
+- `include/rhbm_gem/core/DataObjectManager.hpp`
+- `src/core/command/DataObjectManager.cpp`
 - `bindings/CoreBindings.cpp`
 
 Representative concrete commands:
 
-- `src/core/PotentialAnalysisCommand.cpp`
-- `src/core/PotentialDisplayCommand.cpp`
-- `src/core/ResultDumpCommand.cpp`
-- `src/core/MapSimulationCommand.cpp`
-- `src/core/MapVisualizationCommand.cpp`
-- `src/core/PositionEstimationCommand.cpp`
-- `src/core/HRLModelTestCommand.cpp`
+- `src/core/command/PotentialAnalysisCommand.cpp`
+- `src/core/command/PotentialDisplayCommand.cpp`
+- `src/core/command/ResultDumpCommand.cpp`
+- `src/core/command/MapSimulationCommand.cpp`
+- `src/core/command/MapVisualizationCommand.cpp`
+- `src/core/command/PositionEstimationCommand.cpp`
+- `src/core/command/HRLModelTestCommand.cpp`

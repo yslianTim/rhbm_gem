@@ -1,6 +1,6 @@
-#include "CCP4Format.hpp"
-#include "Logger.hpp"
-#include "MapObject.hpp"
+#include "internal/CCP4Format.hpp"
+#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/MapObject.hpp>
 #include "map_io/MapAxisOrderHelper.hpp"
 
 #include <fstream>

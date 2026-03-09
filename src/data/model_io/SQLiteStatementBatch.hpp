@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-#include "SQLiteWrapper.hpp"
+#include "internal/SQLiteWrapper.hpp"
 
 namespace rhbm_gem::model_io {
 

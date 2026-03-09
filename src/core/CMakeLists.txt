@@ -1,24 +1,24 @@
 set(CORE_SOURCES
-    Application.cpp
+    command/Application.cpp
     painter/AtomPainter.cpp
-    BuiltInCommandCatalog.cpp
-    CommandBase.cpp
+    command/BuiltInCommandCatalog.cpp
+    command/CommandBase.cpp
     painter/ComparisonPainter.cpp
     workflow/DataObjectWorkflowOps.cpp
-    DataObjectManager.cpp
+    command/DataObjectManager.cpp
     painter/DemoPainter.cpp
     painter/GausPainter.cpp
-    HRLModelTestCommand.cpp
+    command/HRLModelTestCommand.cpp
     workflow/HRLModelTestCommandWorkflows.cpp
-    MapSampling.cpp
-    MapSimulationCommand.cpp
-    MapVisualizationCommand.cpp
+    command/MapSampling.cpp
+    command/MapSimulationCommand.cpp
+    command/MapVisualizationCommand.cpp
     painter/ModelPainter.cpp
-    PositionEstimationCommand.cpp
-    PotentialAnalysisCommand.cpp
+    command/PositionEstimationCommand.cpp
+    command/PotentialAnalysisCommand.cpp
     workflow/PotentialAnalysisCommandWorkflow.cpp
-    PotentialDisplayCommand.cpp
-    ResultDumpCommand.cpp
+    command/PotentialDisplayCommand.cpp
+    command/ResultDumpCommand.cpp
     workflow/ResultDumpCommandWorkflow.cpp
 )
 
@@ -30,11 +30,14 @@ endif()
 
 add_library(core ${CORE_SOURCES})
 target_include_directories(core PUBLIC
-    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/core>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core>"
+    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 target_include_directories(core PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/internal"
+    "${PROJECT_SOURCE_DIR}/src/data"
+    "${PROJECT_SOURCE_DIR}/src/data/internal"
 )
 target_link_libraries(core PUBLIC
     utils

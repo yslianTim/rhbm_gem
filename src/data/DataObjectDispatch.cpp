@@ -1,14 +1,14 @@
-#include "DataObjectDispatch.hpp"
+#include <rhbm_gem/data/DataObjectDispatch.hpp>
 
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
-#include "AtomObject.hpp"
-#include "BondObject.hpp"
-#include "DataObjectBase.hpp"
-#include "MapObject.hpp"
-#include "ModelObject.hpp"
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/data/BondObject.hpp>
+#include <rhbm_gem/data/DataObjectBase.hpp>
+#include <rhbm_gem/data/MapObject.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
 
 namespace rhbm_gem {
 namespace {

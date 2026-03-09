@@ -24,8 +24,8 @@ set(UTILS_SOURCES
 # Build utils module
 add_library(utils ${UTILS_SOURCES})
 target_include_directories(utils PUBLIC
-    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/utils>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/utils>"
+    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 target_link_libraries(utils PUBLIC rhbm_eigen)
 target_link_libraries(utils PRIVATE $<BUILD_INTERFACE:CompilerFlags>)

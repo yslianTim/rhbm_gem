@@ -1,8 +1,8 @@
-#include "FileProcessFactoryResolver.hpp"
+#include "internal/FileProcessFactoryResolver.hpp"
 
-#include "FileFormatRegistry.hpp"
-#include "FileProcessFactoryBase.hpp"
-#include "StringHelper.hpp"
+#include "internal/FileFormatRegistry.hpp"
+#include "internal/FileProcessFactoryBase.hpp"
+#include <rhbm_gem/utils/StringHelper.hpp>
 
 #include <stdexcept>
 

@@ -1,17 +1,17 @@
-#include "DataObjectWorkflowOps.hpp"
+#include "workflow/DataObjectWorkflowOps.hpp"
 
 #include <algorithm>
 #include <memory>
 #include <string>
 
-#include "AtomObject.hpp"
-#include "AtomSelector.hpp"
-#include "BondObject.hpp"
-#include "ComponentHelper.hpp"
-#include "LocalPotentialEntry.hpp"
-#include "Logger.hpp"
-#include "MapObject.hpp"
-#include "ModelObject.hpp"
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/utils/AtomSelector.hpp>
+#include <rhbm_gem/data/BondObject.hpp>
+#include <rhbm_gem/utils/ComponentHelper.hpp>
+#include <rhbm_gem/data/LocalPotentialEntry.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/MapObject.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
 
 namespace rhbm_gem {
 namespace {

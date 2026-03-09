@@ -21,7 +21,7 @@ The goal is stable, maintainable, and diagnosable software that can evolve safel
 - `[Required]` Keep responsibilities separated: command orchestration in `core`, file/persistence logic in `data`, reusable helpers in `utils`.
 - `[Required]` Keep tests in `tests/` and test fixtures in `tests/data/`.
 - `[Required]` Keep test sources aligned to domain folders (`tests/core`, `tests/data`, `tests/utils`, `tests/integration`) and intent-specific subfolders where applicable.
-- `[Recommended]` For `src/core`, place new workflow implementation in `src/core/workflow/`, painter implementation in `src/core/painter/`, and private helpers in `src/core/internal/`.
+- `[Required]` For `src/core`, place command orchestration in `src/core/command/`, workflow implementation in `src/core/workflow/`, painter implementation in `src/core/painter/`, and private helpers in `src/core/internal/`.
 - `[Required]` Keep reusable automation scripts under `scripts/`; do not add scripts at repository root.
 - `[Required]` Keep large local datasets/databases under `data/local/` (ignored) and keep shared fixtures under `tests/data/` (tracked).
 - `[Required]` Project-owned public types in `core` and `data` must use namespace `rhbm_gem`.
@@ -93,8 +93,8 @@ Change-integration principles:
 - `[Required]` New features, behavior changes, and bug fixes require tests (except documentation-only changes).
 - `[Required]` Cover both happy paths and failure paths that are part of supported behavior.
 - `[Required]` Keep tests deterministic and independent of machine-local state.
-- `[Required]` Add new `*_test.cpp` files to `tests/CMakeLists.txt`.
-- `[Required]` Every test target in `tests/CMakeLists.txt` must carry both `domain:*` and `intent:*` CTest labels.
+- `[Required]` Add new `*_test.cpp` files to the matching grouped file under `tests/cmake/`.
+- `[Required]` Every test target declared through `add_rhbm_gtest_target(...)` must carry both `domain:*` and `intent:*` CTest labels.
 - `[Required]` Every file referenced by `TestDataPath(...)` must exist under `tests/data/` and be tracked by git.
 - `[Required]` Schema/persistence changes require regression coverage for bootstrap or migration behavior, rollback behavior on failure, and round-trip correctness.
 - `[Recommended]` Prefer searchable suite names that encode intent (for example `DataObjectSchemaMigrationTest`) over generic suite names.

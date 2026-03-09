@@ -12,24 +12,24 @@
 #include <tuple>
 #include <vector>
 
-#include "AtomObject.hpp"
-#include "AtomPainter.hpp"
-#include "AtomSelector.hpp"
-#include "BondObject.hpp"
-#include "ComparisonPainter.hpp"
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/core/AtomPainter.hpp>
+#include <rhbm_gem/utils/AtomSelector.hpp>
+#include <rhbm_gem/data/BondObject.hpp>
+#include <rhbm_gem/core/ComparisonPainter.hpp>
 #include "CommandTestHelpers.hpp"
-#include "DataObjectDispatch.hpp"
-#include "DataObjectManager.hpp"
-#include "DataObjectWorkflowOps.hpp"
-#include "DemoPainter.hpp"
-#include "FileProcessFactoryBase.hpp"
-#include "GausPainter.hpp"
-#include "LocalPotentialEntry.hpp"
-#include "MapObject.hpp"
-#include "MapSampling.hpp"
-#include "ModelObject.hpp"
-#include "ModelPainter.hpp"
-#include "SamplerBase.hpp"
+#include <rhbm_gem/data/DataObjectDispatch.hpp>
+#include <rhbm_gem/core/DataObjectManager.hpp>
+#include "workflow/DataObjectWorkflowOps.hpp"
+#include <rhbm_gem/core/DemoPainter.hpp>
+#include "internal/FileProcessFactoryBase.hpp"
+#include <rhbm_gem/core/GausPainter.hpp>
+#include <rhbm_gem/data/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/MapObject.hpp>
+#include <rhbm_gem/core/MapSampling.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/core/ModelPainter.hpp>
+#include <rhbm_gem/utils/SamplerBase.hpp>
 
 namespace rg = rhbm_gem;
 

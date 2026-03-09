@@ -2,9 +2,9 @@
 #include <algorithm>
 #include <utility>
 
-#include "ChemicalDataHelper.hpp"
-#include "GlobalEnumClass.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 class ChemicalDataHelperTest : public ::testing::Test
 {

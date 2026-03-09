@@ -2,9 +2,9 @@
 
 #include <algorithm>
 
-#include "Logger.hpp"
-#include "ScopeTimer.hpp"
-#include "Timer.hpp"
+#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/ScopeTimer.hpp>
+#include <rhbm_gem/utils/Timer.hpp>
 
 TEST(LoggerProgressTimerTest, ProgressBarUpdatesAndFinishes)
 {

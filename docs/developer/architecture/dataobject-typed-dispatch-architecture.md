@@ -88,7 +88,7 @@ Behavior:
 
 ## 4. Typed Dispatch Contract
 
-`DataObjectDispatch` (`include/data/DataObjectDispatch.hpp`) provides runtime dispatch helpers.
+`DataObjectDispatch` (`include/rhbm_gem/data/DataObjectDispatch.hpp`) provides runtime dispatch helpers.
 
 ### 4.1 Probe helpers (non-throwing)
 
@@ -139,7 +139,7 @@ Typed workflow operations live in `DataObjectWorkflowOps`:
 
 Map sampling is provided as a stateless helper:
 
-- `SampleMapValues(...)` (`include/core/MapSampling.hpp`)
+- `SampleMapValues(...)` (`include/rhbm_gem/core/MapSampling.hpp`)
 
 Potential-analysis-specific typed workflows remain command-local (`PotentialAnalysisCommandWorkflow.*`,
 `PotentialAnalysisBondWorkflow.*`).
@@ -163,27 +163,27 @@ For existing `ModelObject`/`MapObject` operation and iteration extension, use:
 
 Core interfaces:
 
-- `include/data/DataObjectBase.hpp`
-- `include/data/ModelObject.hpp`
-- `include/data/MapObject.hpp`
+- `include/rhbm_gem/data/DataObjectBase.hpp`
+- `include/rhbm_gem/data/ModelObject.hpp`
+- `include/rhbm_gem/data/MapObject.hpp`
 
 Manager iteration:
 
-- `include/core/DataObjectManager.hpp`
-- `src/core/DataObjectManager.cpp`
+- `include/rhbm_gem/core/DataObjectManager.hpp`
+- `src/core/command/DataObjectManager.cpp`
 
 Typed dispatch:
 
-- `include/data/DataObjectDispatch.hpp`
+- `include/rhbm_gem/data/DataObjectDispatch.hpp`
 - `src/data/DataObjectDispatch.cpp`
 
 Typed workflow helpers:
 
-- `src/core/DataObjectWorkflowOps.hpp`
-- `src/core/DataObjectWorkflowOps.cpp`
-- `include/core/MapSampling.hpp`
-- `src/core/MapSampling.cpp`
-- `src/core/PainterIngestionInternal.hpp`
+- `src/core/workflow/DataObjectWorkflowOps.hpp`
+- `src/core/workflow/DataObjectWorkflowOps.cpp`
+- `include/rhbm_gem/core/MapSampling.hpp`
+- `src/core/command/MapSampling.cpp`
+- `src/core/internal/PainterIngestionInternal.hpp`
 
 Regression tests:
 

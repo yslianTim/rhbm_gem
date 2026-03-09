@@ -1,6 +1,6 @@
-#include "AtomSelector.hpp"
-#include "ChemicalDataHelper.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/utils/AtomSelector.hpp>
+#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #include <sstream>
 

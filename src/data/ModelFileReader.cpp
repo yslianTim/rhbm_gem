@@ -1,11 +1,11 @@
-#include "ModelFileReader.hpp"
-#include "FileFormatBackendFactory.hpp"
-#include "FilePathHelper.hpp"
-#include "FileFormatRegistry.hpp"
-#include "ModelFileFormatBase.hpp"
-#include "AtomObject.hpp"
-#include "AtomicModelDataBlock.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/data/ModelFileReader.hpp>
+#include "internal/FileFormatBackendFactory.hpp"
+#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include "internal/FileFormatRegistry.hpp"
+#include "internal/ModelFileFormatBase.hpp"
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/data/AtomicModelDataBlock.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #include <fstream>
 

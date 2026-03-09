@@ -1,9 +1,9 @@
-#include "MapFileWriter.hpp"
-#include "FileFormatBackendFactory.hpp"
-#include "FilePathHelper.hpp"
-#include "FileFormatRegistry.hpp"
-#include "MapFileFormatBase.hpp"
-#include "MapObject.hpp"
+#include <rhbm_gem/data/MapFileWriter.hpp>
+#include "internal/FileFormatBackendFactory.hpp"
+#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include "internal/FileFormatRegistry.hpp"
+#include "internal/MapFileFormatBase.hpp"
+#include <rhbm_gem/data/MapObject.hpp>
 
 #include <fstream>
 #include <stdexcept>
@@ -24,6 +24,8 @@ MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map
     }
     m_file_format_helper = CreateMapFileFormatBackend(*descriptor.map_backend);
 }
+
+MapFileWriter::~MapFileWriter() = default;
 
 void MapFileWriter::Write()
 {

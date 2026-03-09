@@ -15,7 +15,12 @@ if(NOT DEFINED RHBM_GEM_USE_SYSTEM_CLI11)
 endif()
 
 # Install public headers and legal notices.
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/rhbm_gem/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem"
+    FILES_MATCHING
+    PATTERN "*.hpp"
+)
 install(
     FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
@@ -60,4 +65,3 @@ install(
         "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
     DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
 )
-

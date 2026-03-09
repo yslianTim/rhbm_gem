@@ -33,6 +33,9 @@ function(add_rhbm_gtest_target target_name)
     target_include_directories(${target_name} PRIVATE
         "${PROJECT_BINARY_DIR}"
         "${PROJECT_SOURCE_DIR}/src/core"
+        "${PROJECT_SOURCE_DIR}/src/core/internal"
+        "${PROJECT_SOURCE_DIR}/src/data"
+        "${PROJECT_SOURCE_DIR}/src/data/internal"
         "${PROJECT_SOURCE_DIR}/tests"
     )
 

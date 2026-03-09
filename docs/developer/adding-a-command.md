@@ -26,15 +26,15 @@ Prefer extending an existing command when:
 
 For a new built-in command, update these areas in one change:
 
-- `include/core/<YourCommand>.hpp`
-- `src/core/<YourCommand>.cpp` (and optional `*Workflow.cpp` files)
+- `include/rhbm_gem/core/<YourCommand>.hpp`
+- `src/core/command/<YourCommand>.cpp` (and optional `src/core/workflow/*Workflow.cpp` files)
 - `src/core/CMakeLists.txt` (add source file)
-- `include/core/CommandMetadata.hpp` (add new `CommandId`)
-- `src/core/BuiltInCommandList.def` (register built-in metadata)
-- `src/core/BuiltInCommandCatalog.cpp` (add command header include)
+- `include/rhbm_gem/core/CommandMetadata.hpp` (add new `CommandId`)
+- `src/core/internal/BuiltInCommandList.def` (register built-in metadata)
+- `src/core/command/BuiltInCommandCatalog.cpp` (add command header include)
 - `bindings/CoreBindings.cpp` (add include + Python bindings)
 - `tests/core/command/<YourCommand>_test.cpp`
-- `tests/CMakeLists.txt` (wire tests)
+- `tests/cmake/core_tests.cmake` (wire tests)
 - related contract tests under `tests/core/contract/`
 - developer docs affected by command surface changes
 
@@ -59,7 +59,7 @@ Header skeleton:
 #include <memory>
 #include <string>
 
-#include "CommandBase.hpp"
+#include <rhbm_gem/core/CommandBase.hpp>
 
 namespace CLI
 {
@@ -109,13 +109,13 @@ private:
 Source skeleton:
 
 ```cpp
-#include "ExampleCommand.hpp"
+#include <rhbm_gem/core/ExampleCommand.hpp>
 
-#include "CommandDataLoaderInternal.hpp"
-#include "CommandOptionBinding.hpp"
-#include "Logger.hpp"
-#include "ModelObject.hpp"
-#include "ScopeTimer.hpp"
+#include "internal/CommandDataLoaderInternal.hpp"
+#include <rhbm_gem/core/CommandOptionBinding.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/utils/ScopeTimer.hpp>
 
 namespace {
 constexpr std::string_view kInputFlags{ "-i,--input" };
@@ -247,7 +247,7 @@ Implementation rules:
 
 ## 4. Register the built-in command
 
-The built-in command manifest is `src/core/BuiltInCommandList.def`.
+The built-in command manifest is `src/core/internal/BuiltInCommandList.def`.
 Add one entry:
 
 ```cpp
@@ -260,8 +260,8 @@ RHBM_GEM_BUILTIN_COMMAND(
 
 Also add required include(s):
 
-- include `"ExampleCommand.hpp"` in `src/core/BuiltInCommandCatalog.cpp`
-- include `"ExampleCommand.hpp"` in `bindings/CoreBindings.cpp`
+- include `<rhbm_gem/core/ExampleCommand.hpp>` in `src/core/command/BuiltInCommandCatalog.cpp`
+- include `<rhbm_gem/core/ExampleCommand.hpp>` in `bindings/CoreBindings.cpp`
 
 Important:
 
@@ -298,6 +298,7 @@ Do not expose internal hooks such as `RegisterCLIOptionsExtend(...)` or `Validat
 ## 6. Build wiring
 
 Add command source files to `src/core/CMakeLists.txt` in `CORE_SOURCES`.
+Use the `command/<YourCommand>.cpp` path entry.
 
 If you add extra workflow files, include them in the same list.
 
@@ -306,7 +307,7 @@ If you add extra workflow files, include them in the same list.
 Add command tests and update build wiring:
 
 - create `tests/core/command/<YourCommand>_test.cpp`
-- append it to `CORE_COMMAND_TEST_SOURCES` in `tests/CMakeLists.txt`
+- append it to `CORE_COMMAND_TEST_SOURCES` in `tests/cmake/core_tests.cmake`
 
 Update contract tests that assert explicit built-in lists or per-command mappings:
 
@@ -328,9 +329,9 @@ When command surface changes, update:
 
 Before merging:
 
-1. `CommandId` was added in `include/core/CommandMetadata.hpp`
+1. `CommandId` was added in `include/rhbm_gem/core/CommandMetadata.hpp`
 2. command class compiles and is added to `src/core/CMakeLists.txt`
-3. built-in macro entry exists in `src/core/BuiltInCommandList.def`
+3. built-in macro entry exists in `src/core/internal/BuiltInCommandList.def`
 4. command headers are included where required (`BuiltInCommandCatalog.cpp`, `CoreBindings.cpp`)
 5. Python class and binding methods are added in `bindings/CoreBindings.cpp`
 6. command tests and contract tests are updated

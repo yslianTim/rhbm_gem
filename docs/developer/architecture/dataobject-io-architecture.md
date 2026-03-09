@@ -322,48 +322,48 @@ Current contracts:
 
 Core orchestration:
 
-- `include/core/DataObjectManager.hpp`
-- `src/core/DataObjectManager.cpp`
-- `include/utils/FilePathHelper.hpp`
+- `include/rhbm_gem/core/DataObjectManager.hpp`
+- `src/core/command/DataObjectManager.cpp`
+- `include/rhbm_gem/utils/FilePathHelper.hpp`
 - `src/utils/FilePathHelper.cpp`
 
 File dispatch and factories:
 
-- `include/data/FileFormatRegistry.hpp`
+- `src/data/internal/FileFormatRegistry.hpp`
 - `src/data/FileFormatRegistry.cpp`
-- `include/data/FileProcessFactoryResolver.hpp`
+- `src/data/internal/FileProcessFactoryResolver.hpp`
 - `src/data/FileProcessFactoryResolver.cpp`
-- `include/data/FileProcessFactoryBase.hpp`
-- `include/data/FileFormatBackendFactory.hpp`
+- `src/data/internal/FileProcessFactoryBase.hpp`
+- `src/data/internal/FileFormatBackendFactory.hpp`
 - `src/data/FileFormatBackendFactory.cpp`
 - `src/data/ModelObjectFactory.cpp`
 - `src/data/MapObjectFactory.cpp`
 
 Model/map file I/O:
 
-- `include/data/ModelFileReader.hpp`, `src/data/ModelFileReader.cpp`
-- `include/data/ModelFileWriter.hpp`, `src/data/ModelFileWriter.cpp`
-- `include/data/MapFileReader.hpp`, `src/data/MapFileReader.cpp`
-- `include/data/MapFileWriter.hpp`, `src/data/MapFileWriter.cpp`
-- `include/data/PdbFormat.hpp`, `src/data/PdbFormat.cpp`
-- `include/data/CifFormat.hpp`, `src/data/CifFormat.cpp`
-- `include/data/MrcFormat.hpp`, `src/data/MrcFormat.cpp`
-- `include/data/CCP4Format.hpp`, `src/data/CCP4Format.cpp`
+- `include/rhbm_gem/data/ModelFileReader.hpp`, `src/data/ModelFileReader.cpp`
+- `include/rhbm_gem/data/ModelFileWriter.hpp`, `src/data/ModelFileWriter.cpp`
+- `include/rhbm_gem/data/MapFileReader.hpp`, `src/data/MapFileReader.cpp`
+- `include/rhbm_gem/data/MapFileWriter.hpp`, `src/data/MapFileWriter.cpp`
+- `src/data/internal/PdbFormat.hpp`, `src/data/PdbFormat.cpp`
+- `src/data/internal/CifFormat.hpp`, `src/data/CifFormat.cpp`
+- `src/data/internal/MrcFormat.hpp`, `src/data/MrcFormat.cpp`
+- `src/data/internal/CCP4Format.hpp`, `src/data/CCP4Format.cpp`
 
 Database/schema/DAO:
 
-- `include/data/DatabaseManager.hpp`, `src/data/DatabaseManager.cpp`
-- `include/data/DatabaseSchemaManager.hpp`, `src/data/DatabaseSchemaManager.cpp`
-- `include/data/DataObjectDAOFactoryRegistry.hpp`, `src/data/DataObjectDAOFactoryRegistry.cpp`
+- `src/data/internal/DatabaseManager.hpp`, `src/data/DatabaseManager.cpp`
+- `src/data/internal/DatabaseSchemaManager.hpp`, `src/data/DatabaseSchemaManager.cpp`
+- `src/data/internal/DataObjectDAOFactoryRegistry.hpp`, `src/data/DataObjectDAOFactoryRegistry.cpp`
 - `src/data/persistence/ManagedStoreRegistry.hpp`, `src/data/persistence/ManagedStoreRegistry.cpp`
-- `include/data/ModelObjectDAO.hpp`, `src/data/ModelObjectDAO.cpp`
-- `include/data/ModelObjectDAOv2.hpp`, `src/data/ModelObjectDAOv2.cpp`
-- `include/data/MapObjectDAO.hpp`, `src/data/MapObjectDAO.cpp`
+- `src/data/internal/ModelObjectDAO.hpp`, `src/data/ModelObjectDAO.cpp`
+- `src/data/internal/ModelObjectDAOv2.hpp`, `src/data/ModelObjectDAOv2.cpp`
+- `src/data/internal/MapObjectDAO.hpp`, `src/data/MapObjectDAO.cpp`
 - `src/data/model_io/ModelSchemaSql.hpp`
 - `src/data/model_io/ModelStructurePersistence.hpp`, `src/data/model_io/ModelStructurePersistence.cpp`
 - `src/data/model_io/ModelAnalysisPersistence.hpp`, `src/data/model_io/ModelAnalysisPersistence.cpp`
 - `src/data/legacy/LegacyModelObjectReader.hpp`, `src/data/legacy/LegacyModelObjectReader.cpp`
-- `include/data/SQLiteWrapper.hpp`
+- `src/data/internal/SQLiteWrapper.hpp`
 
 ## 9. Common Pitfalls
 

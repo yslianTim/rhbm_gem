@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "HRLDataTransform.hpp"
+#include <rhbm_gem/utils/HRLDataTransform.hpp>
 
 namespace
 {

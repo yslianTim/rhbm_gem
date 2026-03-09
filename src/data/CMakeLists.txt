@@ -61,8 +61,12 @@ endif()
 
 add_library(data ${DATA_SOURCES})
 target_include_directories(data PUBLIC
-    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/data>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/data>"
+    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+target_include_directories(data PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/internal"
 )
 target_link_libraries(data PUBLIC
     utils

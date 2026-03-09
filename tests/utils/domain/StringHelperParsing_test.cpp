@@ -4,7 +4,7 @@
 #include <limits>
 #include <stdexcept>
 
-#include "StringHelper.hpp"
+#include <rhbm_gem/utils/StringHelper.hpp>
 
 TEST(StringHelperParsingTest, ExtractCharWithinBounds)
 {

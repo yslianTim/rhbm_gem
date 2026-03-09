@@ -1,6 +1,6 @@
-#include "DataObjectDAOFactoryRegistry.hpp"
-#include "DataObjectDAOBase.hpp"
-#include "Logger.hpp"
+#include "internal/DataObjectDAOFactoryRegistry.hpp"
+#include "internal/DataObjectDAOBase.hpp"
+#include <rhbm_gem/utils/Logger.hpp>
 #include <stdexcept>
 
 namespace rhbm_gem {

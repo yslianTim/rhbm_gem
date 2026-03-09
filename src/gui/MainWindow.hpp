@@ -5,7 +5,7 @@
 
 #include <future>
 
-#include "GuiCommandExecutor.hpp"
+#include <rhbm_gem/gui/GuiCommandExecutor.hpp>
 
 class QCheckBox;
 class QComboBox;

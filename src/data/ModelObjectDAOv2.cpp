@@ -1,9 +1,9 @@
-#include "ModelObjectDAOv2.hpp"
+#include "internal/ModelObjectDAOv2.hpp"
 
-#include "DataObjectBase.hpp"
-#include "DataObjectDispatch.hpp"
-#include "ModelObject.hpp"
-#include "SQLiteWrapper.hpp"
+#include <rhbm_gem/data/DataObjectBase.hpp>
+#include <rhbm_gem/data/DataObjectDispatch.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
+#include "internal/SQLiteWrapper.hpp"
 
 #include "model_io/ModelAnalysisPersistence.hpp"
 #include "model_io/ModelSchemaSql.hpp"

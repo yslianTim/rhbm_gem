@@ -45,6 +45,27 @@ set_tests_properties(fixture_tracking_guard PROPERTIES
     LABELS "domain:integration;intent:style"
 )
 
+add_test(
+    NAME structure_guard
+    COMMAND ${CMAKE_COMMAND}
+        -DPROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}
+        -P ${PROJECT_SOURCE_DIR}/cmake/StructureGuard.cmake
+)
+set_tests_properties(structure_guard PROPERTIES
+    LABELS "domain:integration;intent:style"
+)
+
+add_test(
+    NAME install_consumer_smoke
+    COMMAND ${CMAKE_COMMAND}
+        -DPROJECT_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}
+        -DPROJECT_BINARY_DIR:PATH=${PROJECT_BINARY_DIR}
+        -P ${PROJECT_SOURCE_DIR}/cmake/InstallConsumerSmoke.cmake
+)
+set_tests_properties(install_consumer_smoke PROPERTIES
+    LABELS "domain:integration;intent:contract"
+)
+
 if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABLE)
     add_dependencies(tests_all rhbm_gem_module)
 

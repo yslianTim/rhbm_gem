@@ -4,8 +4,8 @@ set(GUI_ADAPTER_SOURCES
 
 add_library(gui_adapter ${GUI_ADAPTER_SOURCES})
 target_include_directories(gui_adapter PUBLIC
-    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/gui>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/gui>"
+    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 target_link_libraries(gui_adapter PUBLIC core)
 target_link_libraries(gui_adapter PRIVATE $<BUILD_INTERFACE:CompilerFlags>)

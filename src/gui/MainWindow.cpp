@@ -19,7 +19,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include "OptionEnumTraits.hpp"
+#include <rhbm_gem/core/OptionEnumTraits.hpp>
 
 #include <chrono>
 

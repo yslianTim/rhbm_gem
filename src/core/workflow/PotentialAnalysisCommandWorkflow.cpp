@@ -1,27 +1,27 @@
-#include "PotentialAnalysisCommand.hpp"
-#include "PotentialAnalysisExecutionOptions.hpp"
-#include "CommandDataLoaderInternal.hpp"
-#include "DataObjectManager.hpp"
-#include "AtomObject.hpp"
-#include "BondObject.hpp"
-#include "MapObject.hpp"
-#include "ModelObject.hpp"
-#include "DataObjectWorkflowOps.hpp"
-#include "HRLAlphaTrainer.hpp"
-#include "HRLDataTransform.hpp"
-#include "HRLGroupEstimator.hpp"
-#include "HRLModelAlgorithms.hpp"
-#include "ScopeTimer.hpp"
-#include "FilePathHelper.hpp"
-#include "LocalPotentialEntry.hpp"
-#include "GroupPotentialEntry.hpp"
-#include "ChemicalDataHelper.hpp"
-#include "AtomClassifier.hpp"
-#include "GausLinearTransformHelper.hpp"
-#include "Logger.hpp"
-#include "LocalPainter.hpp"
-#include "MapSampling.hpp"
-#include "SphereSampler.hpp"
+#include <rhbm_gem/core/PotentialAnalysisCommand.hpp>
+#include "internal/PotentialAnalysisExecutionOptions.hpp"
+#include "internal/CommandDataLoaderInternal.hpp"
+#include <rhbm_gem/core/DataObjectManager.hpp>
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/data/BondObject.hpp>
+#include <rhbm_gem/data/MapObject.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
+#include "workflow/DataObjectWorkflowOps.hpp"
+#include <rhbm_gem/utils/HRLAlphaTrainer.hpp>
+#include <rhbm_gem/utils/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/HRLGroupEstimator.hpp>
+#include <rhbm_gem/utils/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/utils/ScopeTimer.hpp>
+#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include <rhbm_gem/data/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/GroupPotentialEntry.hpp>
+#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
+#include <rhbm_gem/data/AtomClassifier.hpp>
+#include <rhbm_gem/utils/GausLinearTransformHelper.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
+#include <rhbm_gem/utils/LocalPainter.hpp>
+#include <rhbm_gem/core/MapSampling.hpp>
+#include <rhbm_gem/utils/SphereSampler.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -37,7 +37,7 @@
 #include <vector>
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
-#include "PotentialAnalysisBondWorkflow.hpp"
+#include "workflow/PotentialAnalysisBondWorkflow.hpp"
 #endif
 
 #ifdef USE_OPENMP

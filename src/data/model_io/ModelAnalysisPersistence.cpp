@@ -3,15 +3,15 @@
 #include "ModelSchemaSql.hpp"
 #include "SQLiteStatementBatch.hpp"
 
-#include "AtomClassifier.hpp"
-#include "AtomObject.hpp"
-#include "BondClassifier.hpp"
-#include "BondObject.hpp"
-#include "ChemicalDataHelper.hpp"
-#include "GroupPotentialEntry.hpp"
-#include "LocalPotentialEntry.hpp"
-#include "ModelObject.hpp"
-#include "SQLiteWrapper.hpp"
+#include <rhbm_gem/data/AtomClassifier.hpp>
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/data/BondClassifier.hpp>
+#include <rhbm_gem/data/BondObject.hpp>
+#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
+#include <rhbm_gem/data/GroupPotentialEntry.hpp>
+#include <rhbm_gem/data/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
+#include "internal/SQLiteWrapper.hpp"
 
 #include <map>
 #include <stdexcept>

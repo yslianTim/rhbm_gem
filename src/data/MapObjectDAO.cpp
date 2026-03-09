@@ -1,10 +1,10 @@
-#include "MapObjectDAO.hpp"
-#include "SQLiteWrapper.hpp"
-#include "MapObject.hpp"
-#include "DataObjectBase.hpp"
-#include "DataObjectDAOFactoryRegistry.hpp"
-#include "DataObjectDispatch.hpp"
-#include "Logger.hpp"
+#include "internal/MapObjectDAO.hpp"
+#include "internal/SQLiteWrapper.hpp"
+#include <rhbm_gem/data/MapObject.hpp>
+#include <rhbm_gem/data/DataObjectBase.hpp>
+#include "internal/DataObjectDAOFactoryRegistry.hpp"
+#include <rhbm_gem/data/DataObjectDispatch.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 #include "persistence/MapStoreSql.hpp"
 
 #include <stdexcept>

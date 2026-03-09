@@ -1,8 +1,8 @@
 #include "ManagedStoreRegistry.hpp"
 
-#include "MapObjectDAO.hpp"
-#include "ModelObjectDAOv2.hpp"
-#include "SQLiteWrapper.hpp"
+#include "internal/MapObjectDAO.hpp"
+#include "internal/ModelObjectDAOv2.hpp"
+#include "internal/SQLiteWrapper.hpp"
 #include "../model_io/ModelSchemaSql.hpp"
 #include "MapStoreSql.hpp"
 

@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 
-#include "BuiltInCommandCatalogInternal.hpp"
+#include "internal/BuiltInCommandCatalogInternal.hpp"
 #include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;

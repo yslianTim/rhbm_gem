@@ -3,12 +3,12 @@
 #include "ModelSchemaSql.hpp"
 #include "SQLiteStatementBatch.hpp"
 
-#include "AtomObject.hpp"
-#include "BondObject.hpp"
-#include "ChemicalComponentEntry.hpp"
-#include "LocalPotentialEntry.hpp"
-#include "ModelObject.hpp"
-#include "SQLiteWrapper.hpp"
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/data/BondObject.hpp>
+#include <rhbm_gem/data/ChemicalComponentEntry.hpp>
+#include <rhbm_gem/data/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
+#include "internal/SQLiteWrapper.hpp"
 
 #include <stdexcept>
 #include <string>

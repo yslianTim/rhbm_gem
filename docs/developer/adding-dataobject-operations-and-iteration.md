@@ -32,8 +32,8 @@ Avoid putting command-specific branching into `DataObjectWorkflowOps`.
 
 For operation extension on existing objects, update these areas together:
 
-- `src/core/DataObjectWorkflowOps.hpp`
-- `src/core/DataObjectWorkflowOps.cpp`
+- `src/core/workflow/DataObjectWorkflowOps.hpp`
+- `src/core/workflow/DataObjectWorkflowOps.cpp`
 - command workflow call sites that consume the new operation
 - `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
 - relevant command tests under `tests/core/command/`
@@ -41,13 +41,13 @@ For operation extension on existing objects, update these areas together:
 
 For iteration method extension, additionally update:
 
-- `include/core/DataObjectManager.hpp`
-- `src/core/DataObjectManager.cpp`
+- `include/rhbm_gem/core/DataObjectManager.hpp`
+- `src/core/command/DataObjectManager.cpp`
 - `tests/data/io/DataObjectManager_test.cpp`
 
 ## 3. Add a reusable operation in `DataObjectWorkflowOps`
 
-Header pattern (`src/core/DataObjectWorkflowOps.hpp`):
+Header pattern (`src/core/workflow/DataObjectWorkflowOps.hpp`):
 
 ```cpp
 struct ModelPruneOptions
@@ -61,7 +61,7 @@ void PruneModelAtoms(
     ModelPruneOptions options = {});
 ```
 
-Implementation rules (`src/core/DataObjectWorkflowOps.cpp`):
+Implementation rules (`src/core/workflow/DataObjectWorkflowOps.cpp`):
 
 - keep behavior deterministic for the same model state and options
 - keep function contracts typed (`ModelObject &`, `MapObject &`) instead of generic base pointers

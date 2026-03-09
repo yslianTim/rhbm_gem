@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "BuiltInCommandCatalogInternal.hpp"
+#include "internal/BuiltInCommandCatalogInternal.hpp"
 
 namespace rg = rhbm_gem;
 

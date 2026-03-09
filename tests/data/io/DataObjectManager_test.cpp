@@ -2,10 +2,10 @@
 #include <filesystem>
 #include <unordered_map>
 
-#include "DataObjectManager.hpp"
+#include <rhbm_gem/core/DataObjectManager.hpp>
 #include "CommandTestHelpers.hpp"
-#include "AtomObject.hpp"
-#include "ModelObject.hpp"
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
 
 namespace rg = rhbm_gem;
 using DataObjectManager = rg::DataObjectManager;

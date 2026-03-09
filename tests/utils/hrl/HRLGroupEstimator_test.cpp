@@ -3,8 +3,8 @@
 #include <initializer_list>
 #include <stdexcept>
 
-#include "HRLDataTransform.hpp"
-#include "HRLGroupEstimator.hpp"
+#include <rhbm_gem/utils/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/HRLGroupEstimator.hpp>
 
 namespace
 {

@@ -1,6 +1,6 @@
-#include "ModelObjectDAO.hpp"
-#include "DataObjectDAOFactoryRegistry.hpp"
-#include "ModelObject.hpp"
+#include "internal/ModelObjectDAO.hpp"
+#include "internal/DataObjectDAOFactoryRegistry.hpp"
+#include <rhbm_gem/data/ModelObject.hpp>
 
 namespace
 {

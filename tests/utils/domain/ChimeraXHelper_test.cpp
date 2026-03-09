@@ -5,7 +5,7 @@
 #include <vector>
 #include <array>
 
-#include "ChimeraXHelper.hpp"
+#include <rhbm_gem/utils/ChimeraXHelper.hpp>
 
 TEST(ChimeraXHelperTest, WritePointsCmm)
 {

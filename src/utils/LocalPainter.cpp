@@ -1,9 +1,9 @@
-#include "LocalPainter.hpp"
-#include "ArrayStats.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/utils/LocalPainter.hpp>
+#include <rhbm_gem/utils/ArrayStats.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #ifdef HAVE_ROOT
-#include "ROOTHelper.hpp"
+#include <rhbm_gem/utils/ROOTHelper.hpp>
 #include <TStyle.h>
 #include <TCanvas.h>
 #include <TPad.h>

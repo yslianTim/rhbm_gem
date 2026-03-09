@@ -1,4 +1,4 @@
-#include "ROOTHelper.hpp"
+#include <rhbm_gem/utils/ROOTHelper.hpp>
 
 #ifdef HAVE_ROOT
 

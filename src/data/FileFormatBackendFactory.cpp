@@ -1,11 +1,11 @@
-#include "FileFormatBackendFactory.hpp"
+#include "internal/FileFormatBackendFactory.hpp"
 
-#include "CCP4Format.hpp"
-#include "CifFormat.hpp"
-#include "MapFileFormatBase.hpp"
-#include "ModelFileFormatBase.hpp"
-#include "MrcFormat.hpp"
-#include "PdbFormat.hpp"
+#include "internal/CCP4Format.hpp"
+#include "internal/CifFormat.hpp"
+#include "internal/MapFileFormatBase.hpp"
+#include "internal/ModelFileFormatBase.hpp"
+#include "internal/MrcFormat.hpp"
+#include "internal/PdbFormat.hpp"
 
 #include <stdexcept>
 

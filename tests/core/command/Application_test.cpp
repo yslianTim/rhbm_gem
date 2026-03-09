@@ -4,8 +4,8 @@
 
 #include <CLI/CLI.hpp>
 
-#include "Application.hpp"
-#include "BuiltInCommandCatalogInternal.hpp"
+#include <rhbm_gem/core/Application.hpp>
+#include "internal/BuiltInCommandCatalogInternal.hpp"
 
 namespace rg = rhbm_gem;
 

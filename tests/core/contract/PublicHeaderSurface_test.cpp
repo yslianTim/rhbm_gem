@@ -13,7 +13,7 @@ TEST(PublicHeaderSurfaceTest, ExperimentalBondWorkflowHeaderIsNotPublic)
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "core" / "PotentialAnalysisBondWorkflow.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "PotentialAnalysisBondWorkflow.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
@@ -25,7 +25,7 @@ TEST(PublicHeaderSurfaceTest, BuiltInCommandCatalogHeaderIsNotPublic)
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "core" / "BuiltInCommandCatalog.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "BuiltInCommandCatalog.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
@@ -37,7 +37,7 @@ TEST(PublicHeaderSurfaceTest, CommandIdHeaderIsNotPublic)
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "core" / "CommandId.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "CommandId.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
@@ -49,7 +49,7 @@ TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceW
         command_test::ProjectRootPath()
     };
     const auto header_path{
-        project_root / "include" / "core" / "CommandMetadata.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "CommandMetadata.hpp"
     };
 
     std::ifstream header_stream(header_path);
@@ -71,7 +71,7 @@ TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHo
         command_test::ProjectRootPath()
     };
     const auto header_path{
-        project_root / "include" / "core" / "CommandBase.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "CommandBase.hpp"
     };
 
     std::ifstream header_stream(header_path);
@@ -104,7 +104,7 @@ TEST(PublicHeaderSurfaceTest, LegacyModelObjectDaoHeaderIsNotPublic)
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "data" / "LegacyModelObjectDAO.hpp"
+        project_root / "include" / "rhbm_gem" / "data" / "LegacyModelObjectDAO.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
@@ -116,7 +116,7 @@ TEST(PublicHeaderSurfaceTest, FileReaderBaseHeaderIsNotPublic)
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "data" / "FileReaderBase.hpp"
+        project_root / "include" / "rhbm_gem" / "data" / "FileReaderBase.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
@@ -128,7 +128,7 @@ TEST(PublicHeaderSurfaceTest, FileWriterBaseHeaderIsNotPublic)
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "data" / "FileWriterBase.hpp"
+        project_root / "include" / "rhbm_gem" / "data" / "FileWriterBase.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
@@ -140,7 +140,7 @@ TEST(PublicHeaderSurfaceTest, FileProcessFactoryRegistryHeaderIsNotPublic)
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "data" / "FileProcessFactoryRegistry.hpp"
+        project_root / "include" / "rhbm_gem" / "data" / "FileProcessFactoryRegistry.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
@@ -152,7 +152,7 @@ TEST(PublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugA
         command_test::ProjectRootPath()
     };
     const auto header_path{
-        project_root / "include" / "core" / "DataObjectManager.hpp"
+        project_root / "include" / "rhbm_gem" / "core" / "DataObjectManager.hpp"
     };
 
     std::ifstream header_stream(header_path);
@@ -166,43 +166,26 @@ TEST(PublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugA
     EXPECT_EQ(header_content.find("GetDataObjectMap"), std::string::npos);
 }
 
-TEST(PublicHeaderSurfaceTest, DatabaseManagerHeaderDoesNotExposeRawDatabaseAccessor)
+TEST(PublicHeaderSurfaceTest, DatabaseManagerHeaderIsNotPublic)
 {
     const auto project_root{
         command_test::ProjectRootPath()
     };
-    const auto header_path{
-        project_root / "include" / "data" / "DatabaseManager.hpp"
+    const auto leaked_header{
+        project_root / "include" / "rhbm_gem" / "data" / "DatabaseManager.hpp"
     };
 
-    std::ifstream header_stream(header_path);
-    ASSERT_TRUE(header_stream.is_open());
-    const std::string header_content{
-        std::istreambuf_iterator<char>(header_stream),
-        std::istreambuf_iterator<char>()
-    };
-
-    EXPECT_EQ(header_content.find("GetDatabase()"), std::string::npos);
+    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
 }
 
-TEST(PublicHeaderSurfaceTest, ModelObjectDaoV2HeaderNoLongerLeaksPersistenceHelpers)
+TEST(PublicHeaderSurfaceTest, ModelObjectDaoV2HeaderIsNotPublic)
 {
     const auto project_root{
         command_test::ProjectRootPath()
     };
-    const auto header_path{
-        project_root / "include" / "data" / "ModelObjectDAOv2.hpp"
+    const auto leaked_header{
+        project_root / "include" / "rhbm_gem" / "data" / "ModelObjectDAOv2.hpp"
     };
 
-    std::ifstream header_stream(header_path);
-    ASSERT_TRUE(header_stream.is_open());
-    const std::string header_content{
-        std::istreambuf_iterator<char>(header_stream),
-        std::istreambuf_iterator<char>()
-    };
-
-    EXPECT_EQ(header_content.find("DeleteRowsForKey"), std::string::npos);
-    EXPECT_EQ(header_content.find("SaveModelObjectRow"), std::string::npos);
-    EXPECT_EQ(header_content.find("LoadAtomLocalPotentialEntryMap"), std::string::npos);
-    EXPECT_EQ(header_content.find("GroupPotentialEntry"), std::string::npos);
+    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
 }

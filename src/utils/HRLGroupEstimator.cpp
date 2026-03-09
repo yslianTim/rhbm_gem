@@ -1,8 +1,8 @@
-#include "HRLGroupEstimator.hpp"
+#include <rhbm_gem/utils/HRLGroupEstimator.hpp>
 
-#include "HRLDataTransform.hpp"
-#include "HRLModelAlgorithms.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/utils/HRLDataTransform.hpp>
+#include <rhbm_gem/utils/HRLModelAlgorithms.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #include <stdexcept>
 #include <utility>

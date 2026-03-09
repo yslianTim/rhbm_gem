@@ -4,7 +4,7 @@
 #include <thread>
 #include <vector>
 
-#include "Logger.hpp"
+#include <rhbm_gem/utils/Logger.hpp>
 
 class LoggerLogLevelTest : public ::testing::TestWithParam<LogLevel>
 {

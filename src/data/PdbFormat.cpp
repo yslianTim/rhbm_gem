@@ -1,12 +1,12 @@
 #define _CRT_SECURE_NO_WARNINGS // To disable deprecation warnings for sscanf
-#include "PdbFormat.hpp"
-#include "AtomObject.hpp"
-#include "ChemicalDataHelper.hpp"
-#include "LocalPotentialEntry.hpp"
-#include "ModelObject.hpp"
-#include "StringHelper.hpp"
-#include "AtomicModelDataBlock.hpp"
-#include "Logger.hpp"
+#include "internal/PdbFormat.hpp"
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
+#include <rhbm_gem/data/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/utils/StringHelper.hpp>
+#include <rhbm_gem/data/AtomicModelDataBlock.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #include <fstream>
 #include <algorithm>

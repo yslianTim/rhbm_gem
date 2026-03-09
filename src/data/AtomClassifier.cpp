@@ -1,9 +1,9 @@
-#include "AtomClassifier.hpp"
-#include "ChemicalDataHelper.hpp"
-#include "GlobalEnumClass.hpp"
-#include "KeyPacker.hpp"
-#include "AtomObject.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/data/AtomClassifier.hpp>
+#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/KeyPacker.hpp>
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #include <stdexcept>
 

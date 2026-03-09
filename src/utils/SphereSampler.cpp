@@ -1,7 +1,7 @@
-#include "SphereSampler.hpp"
-#include "Constants.hpp"
-#include "StringHelper.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/utils/SphereSampler.hpp>
+#include <rhbm_gem/utils/Constants.hpp>
+#include <rhbm_gem/utils/StringHelper.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #include <random>
 #include <stdexcept>

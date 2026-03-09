@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-#include "CommandBase.hpp"
+#include <rhbm_gem/core/CommandBase.hpp>
 
 namespace command_test {
 

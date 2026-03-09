@@ -1,12 +1,12 @@
-#include "ModelObject.hpp"
-#include "AtomObject.hpp"
-#include "BondObject.hpp"
-#include "GroupPotentialEntry.hpp"
-#include "ChemicalComponentEntry.hpp"
-#include "KDTreeAlgorithm.hpp"
-#include "ArrayStats.hpp"
-#include "StringHelper.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/data/ModelObject.hpp>
+#include <rhbm_gem/data/AtomObject.hpp>
+#include <rhbm_gem/data/BondObject.hpp>
+#include <rhbm_gem/data/GroupPotentialEntry.hpp>
+#include <rhbm_gem/data/ChemicalComponentEntry.hpp>
+#include <rhbm_gem/utils/KDTreeAlgorithm.hpp>
+#include <rhbm_gem/utils/ArrayStats.hpp>
+#include <rhbm_gem/utils/StringHelper.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 namespace rhbm_gem {
 

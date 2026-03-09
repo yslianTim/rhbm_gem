@@ -2,16 +2,16 @@
 
 #include <algorithm>
 
-#include "HRLModelTestCommand.hpp"
-#include "MapSimulationCommand.hpp"
-#include "MapVisualizationCommand.hpp"
-#include "PositionEstimationCommand.hpp"
-#include "PotentialAnalysisCommand.hpp"
-#include "PotentialDisplayCommand.hpp"
-#include "ResultDumpCommand.hpp"
+#include <rhbm_gem/core/HRLModelTestCommand.hpp>
+#include <rhbm_gem/core/MapSimulationCommand.hpp>
+#include <rhbm_gem/core/MapVisualizationCommand.hpp>
+#include <rhbm_gem/core/PositionEstimationCommand.hpp>
+#include <rhbm_gem/core/PotentialAnalysisCommand.hpp>
+#include <rhbm_gem/core/PotentialDisplayCommand.hpp>
+#include <rhbm_gem/core/ResultDumpCommand.hpp>
 
-#include "BuiltInCommandCatalogInternal.hpp"
-#include "CommandBase.hpp"
+#include "internal/BuiltInCommandCatalogInternal.hpp"
+#include <rhbm_gem/core/CommandBase.hpp>
 
 namespace rg = rhbm_gem;
 

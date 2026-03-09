@@ -4,10 +4,10 @@
 #include <tuple>
 #include <stdexcept>
 
-#include "ElectricPotential.hpp"
-#include "ChemicalDataHelper.hpp"
-#include "GlobalEnumClass.hpp"
-#include "Constants.hpp"
+#include <rhbm_gem/utils/ElectricPotential.hpp>
+#include <rhbm_gem/utils/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/Constants.hpp>
 
 namespace
 {

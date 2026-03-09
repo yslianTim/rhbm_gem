@@ -1,6 +1,6 @@
-#include "FilePathHelper.hpp"
-#include "StringHelper.hpp"
-#include "Logger.hpp"
+#include <rhbm_gem/utils/FilePathHelper.hpp>
+#include <rhbm_gem/utils/StringHelper.hpp>
+#include <rhbm_gem/utils/Logger.hpp>
 
 #include <algorithm>
 #include <cctype>

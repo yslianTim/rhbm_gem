@@ -2,7 +2,7 @@
 
 #include <set>
 
-#include "OptionEnumTraits.hpp"
+#include <rhbm_gem/core/OptionEnumTraits.hpp>
 
 namespace rg = rhbm_gem;
 
