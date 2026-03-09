@@ -5,17 +5,23 @@ set(CORE_SOURCES
     command/CommandBase.cpp
     painter/ComparisonPainter.cpp
     workflow/DataObjectWorkflowOps.cpp
-    painter/DemoPainter.cpp
-    painter/GausPainter.cpp
+    painter/DemoPainterRendering.cpp
+    painter/DemoPainterWorkflow.cpp
+    painter/GausPainterRendering.cpp
+    painter/GausPainterFitting.cpp
     command/HRLModelTestCommand.cpp
     workflow/HRLModelTestCommandWorkflows.cpp
     command/MapSampling.cpp
     command/MapSimulationCommand.cpp
     command/MapVisualizationCommand.cpp
-    painter/ModelPainter.cpp
+    painter/ModelPainterRender.cpp
+    painter/ModelPainterAnnotation.cpp
+    painter/ModelPainterStyle.cpp
     command/PositionEstimationCommand.cpp
     command/PotentialAnalysisCommand.cpp
-    workflow/PotentialAnalysisCommandWorkflow.cpp
+    workflow/PotentialAnalysisAnalysisWorkflow.cpp
+    workflow/PotentialAnalysisTrainingWorkflow.cpp
+    workflow/PotentialAnalysisReportWorkflow.cpp
     command/PotentialDisplayCommand.cpp
     command/ResultDumpCommand.cpp
     workflow/PotentialAnalysisTrainingSupport.cpp

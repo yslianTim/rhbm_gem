@@ -325,7 +325,7 @@ Core orchestration:
 - `include/rhbm_gem/core/command/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
 - `include/rhbm_gem/utils/domain/FilePathHelper.hpp`
-- `src/utils/FilePathHelper.cpp`
+- `src/utils/domain/FilePathHelper.cpp`
 
 File dispatch and factories:
 
@@ -357,7 +357,7 @@ Database/schema/DAO:
 - `src/data/internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp`, `src/data/io/sqlite/DataObjectDAOFactoryRegistry.cpp`
 - `src/data/internal/io/sqlite/ManagedStoreRegistry.hpp`, `src/data/io/sqlite/ManagedStoreRegistry.cpp`
 - `src/data/internal/io/sqlite/ModelObjectDAO.hpp`, `src/data/io/sqlite/ModelObjectDAO.cpp`
-- `src/data/internal/io/sqlite/ModelObjectDaoSqlite.hpp`, `src/data/io/sqlite/ModelObjectDaoSqlite.cpp` (class `ModelObjectDAOSqlite`, alias `ModelObjectDaoSqlite`)
+- `src/data/internal/io/sqlite/ModelObjectDAOSqlite.hpp`, `src/data/io/sqlite/ModelObjectDAOSqlite.cpp` (class `ModelObjectDAOSqlite`)
 - `src/data/internal/io/sqlite/MapObjectDAO.hpp`, `src/data/io/sqlite/MapObjectDAO.cpp`
 - `src/data/io/sqlite/ModelSchemaSql.hpp`
 - `src/data/io/sqlite/ModelStructurePersistence.hpp`, `src/data/io/sqlite/ModelStructurePersistence.cpp`

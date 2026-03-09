@@ -5,7 +5,7 @@ set(_logging_guard_sources
 
 set(_stream_pattern "\\bstd::cout\\b|\\bstd::cerr\\b|\\bprintf\\(|\\bfprintf\\(|\\bputs\\(|\\bstd::clog\\b")
 set(_chatty_debug_pattern "Logger::Log\\(LogLevel::Debug,.*called")
-set(_allowed_stream_file "${PROJECT_SOURCE_DIR}/src/utils/Logger.cpp")
+set(_allowed_stream_file "${PROJECT_SOURCE_DIR}/src/utils/domain/Logger.cpp")
 
 foreach(_root IN LISTS _logging_guard_sources)
     file(GLOB_RECURSE _logging_guard_files

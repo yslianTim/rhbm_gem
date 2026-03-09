@@ -226,7 +226,7 @@ Workflow helpers used by current commands:
 
 - map/model preprocessing via `DataObjectWorkflowOps` (for example `NormalizeMapObject`, `PrepareModelObject`)
 - map sampling via `SampleMapValues(...)`
-- command-local workflows (for example `PotentialAnalysisCommandWorkflow.cpp`, `ResultDumpCommandWorkflow.cpp`)
+- command-local workflows (for example `PotentialAnalysisTrainingWorkflow.cpp`, `PotentialAnalysisAnalysisWorkflow.cpp`, `PotentialAnalysisReportWorkflow.cpp`, `ResultDumpCommandWorkflow.cpp`)
 
 `DataObjectDispatch` (`include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`) is optional when a command iterates generic `DataObjectBase` and needs explicit runtime type dispatch.
 

@@ -1,7 +1,7 @@
 #include "internal/io/sqlite/ManagedStoreRegistry.hpp"
 
 #include "internal/io/sqlite/MapObjectDAO.hpp"
-#include "internal/io/sqlite/ModelObjectDaoSqlite.hpp"
+#include "internal/io/sqlite/ModelObjectDAOSqlite.hpp"
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
 #include "../io/sqlite/ModelSchemaSql.hpp"
 #include "MapStoreSql.hpp"

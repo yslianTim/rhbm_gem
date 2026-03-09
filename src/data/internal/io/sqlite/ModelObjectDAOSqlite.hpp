@@ -23,6 +23,4 @@ public:
     std::unique_ptr<DataObjectBase> Load(const std::string & key_tag) override;
 };
 
-using ModelObjectDaoSqlite = ModelObjectDAOSqlite;
-
 } // namespace rhbm_gem

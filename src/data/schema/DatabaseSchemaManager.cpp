@@ -2,7 +2,7 @@
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "internal/io/sqlite/ModelObjectDaoSqlite.hpp"
+#include "internal/io/sqlite/ModelObjectDAOSqlite.hpp"
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
 #include "internal/io/sqlite/ManagedStoreRegistry.hpp"
 #include "io/sqlite/MapStoreSql.hpp"

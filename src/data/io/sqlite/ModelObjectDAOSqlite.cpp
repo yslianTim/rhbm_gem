@@ -1,4 +1,4 @@
-#include "internal/io/sqlite/ModelObjectDaoSqlite.hpp"
+#include "internal/io/sqlite/ModelObjectDAOSqlite.hpp"
 
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>

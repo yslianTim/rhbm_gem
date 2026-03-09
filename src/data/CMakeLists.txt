@@ -37,7 +37,7 @@ set(DATA_IO_SQLITE_SOURCES
     io/sqlite/MapObjectDAO.cpp
     io/sqlite/ModelAnalysisPersistence.cpp
     io/sqlite/ModelObjectDAO.cpp
-    io/sqlite/ModelObjectDaoSqlite.cpp
+    io/sqlite/ModelObjectDAOSqlite.cpp
     io/sqlite/ModelStructurePersistence.cpp
 )
 

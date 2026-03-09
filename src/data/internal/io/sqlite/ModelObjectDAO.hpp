@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ModelObjectDaoSqlite.hpp"
+#include "ModelObjectDAOSqlite.hpp"
 
 namespace rhbm_gem {
 

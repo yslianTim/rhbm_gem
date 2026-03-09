@@ -178,13 +178,13 @@ TEST(PublicHeaderSurfaceTest, DatabaseManagerHeaderIsNotPublic)
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
 }
 
-TEST(PublicHeaderSurfaceTest, ModelObjectDaoSqliteHeaderIsNotPublic)
+TEST(PublicHeaderSurfaceTest, ModelObjectDAOSqliteHeaderIsNotPublic)
 {
     const auto project_root{
         command_test::ProjectRootPath()
     };
     const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "ModelObjectDaoSqlite.hpp"
+        project_root / "include" / "rhbm_gem" / "data" / "ModelObjectDAOSqlite.hpp"
     };
 
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
