@@ -22,10 +22,26 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
             ${Python_EXECUTABLE}
             ${PROJECT_SOURCE_DIR}/tests/integration/bindings_invalid_enum_validation.py
     )
+    add_test(
+        NAME examples_quickstart_smoke_test
+        COMMAND ${CMAKE_COMMAND} -E env
+            "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
+            ${Python_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/tests/integration/examples_quickstart_smoke.py
+    )
+    add_test(
+        NAME examples_end_to_end_smoke_test
+        COMMAND ${CMAKE_COMMAND} -E env
+            "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
+            ${Python_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/tests/integration/examples_end_to_end_smoke.py
+    )
 
     set_tests_properties(
         bindings_smoke_test
         bindings_invalid_enum_validation_test
+        examples_quickstart_smoke_test
+        examples_end_to_end_smoke_test
         PROPERTIES LABELS "domain:integration;intent:bindings"
     )
 endif()
