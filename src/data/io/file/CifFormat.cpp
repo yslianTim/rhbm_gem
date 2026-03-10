@@ -1,4 +1,5 @@
 #include "internal/io/file/CifFormat.hpp"
+#include "internal/io/file/MmCifLoopParser.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -17,7 +18,6 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
-#include <cctype>
 #include <ostream>
 #include <algorithm>
 #include <optional>
@@ -34,84 +34,6 @@ namespace
 bool IsMmCifMissingValue(const std::string & value)
 {
     return value.empty() || value == "." || value == "?";
-}
-
-std::vector<std::string> SplitMmCifTokens(const std::string & line)
-{
-    std::vector<std::string> token_list;
-    std::string current_token;
-    enum class State
-    {
-        IN_SPACE,
-        IN_UNQUOTED,
-        IN_SINGLE_QUOTE,
-        IN_DOUBLE_QUOTE
-    };
-    State state{ State::IN_SPACE };
-
-    auto flush_token{
-        [&]()
-        {
-            if (current_token.empty()) return;
-            token_list.emplace_back(std::move(current_token));
-            current_token.clear();
-        }
-    };
-
-    for (size_t pos = 0; pos < line.size(); ++pos)
-    {
-        const char current_char{ line[pos] };
-        switch (state)
-        {
-        case State::IN_SPACE:
-            if (std::isspace(static_cast<unsigned char>(current_char)))
-            {
-                continue;
-            }
-            if (current_char == '\'')
-            {
-                state = State::IN_SINGLE_QUOTE;
-                continue;
-            }
-            if (current_char == '"')
-            {
-                state = State::IN_DOUBLE_QUOTE;
-                continue;
-            }
-            current_token.push_back(current_char);
-            state = State::IN_UNQUOTED;
-            continue;
-        case State::IN_UNQUOTED:
-            if (std::isspace(static_cast<unsigned char>(current_char)))
-            {
-                flush_token();
-                state = State::IN_SPACE;
-                continue;
-            }
-            current_token.push_back(current_char);
-            continue;
-        case State::IN_SINGLE_QUOTE:
-            if (current_char == '\'')
-            {
-                flush_token();
-                state = State::IN_SPACE;
-                continue;
-            }
-            current_token.push_back(current_char);
-            continue;
-        case State::IN_DOUBLE_QUOTE:
-            if (current_char == '"')
-            {
-                flush_token();
-                state = State::IN_SPACE;
-                continue;
-            }
-            current_token.push_back(current_char);
-            continue;
-        }
-    }
-    flush_token();
-    return token_list;
 }
 
 std::string BuildMmCifTokenPreview(const std::vector<std::string> & token_list, size_t max_items = 8)
@@ -205,28 +127,6 @@ std::optional<int> TryParseInt(const std::string & value)
     {
         return std::nullopt;
     }
-}
-
-std::string_view TrimLeft(std::string_view value)
-{
-    size_t pos{ 0 };
-    while (pos < value.size() && std::isspace(static_cast<unsigned char>(value[pos])))
-    {
-        ++pos;
-    }
-    return value.substr(pos);
-}
-
-bool StartsWithToken(std::string_view line, std::string_view token)
-{
-    return line.rfind(token, 0) == 0;
-}
-
-std::string BuildLoopCategoryPrefix(const std::string & column_name)
-{
-    auto dot_pos{ column_name.find('.') };
-    if (dot_pos == std::string::npos) return column_name;
-    return column_name.substr(0, dot_pos + 1);
 }
 
 struct AtomAltLocKey
@@ -332,187 +232,27 @@ void CifFormat::ParseMmCifDocument(std::istream & stream, const std::string & so
     }
 
     ResetReadState();
-    size_t line_idx{ 0 };
-    while (line_idx < line_list.size())
+    auto parsed_document{ ParseMmCifDocumentLines(line_list, source_name) };
+
+    m_data_item_map = std::move(parsed_document.data_item_map);
+
+    m_loop_category_map.clear();
+    for (auto & [category_key, parsed_category_list] : parsed_document.loop_category_map)
     {
-        const auto & raw_line{ line_list[line_idx] };
-        const auto trimmed_line{ TrimLeft(raw_line) };
-        if (trimmed_line.empty() || trimmed_line.front() == '#')
+        auto & category_list{ m_loop_category_map[category_key] };
+        category_list.reserve(parsed_category_list.size());
+        for (auto & parsed_category : parsed_category_list)
         {
-            ++line_idx;
-            continue;
+            ParsedLoopCategory category;
+            category.column_name_list = std::move(parsed_category.column_name_list);
+            category.row_list.reserve(parsed_category.row_list.size());
+            for (auto & parsed_row : parsed_category.row_list)
+            {
+                category.row_list.emplace_back(
+                    ParsedLoopRow{ std::move(parsed_row.token_list), parsed_row.line_number });
+            }
+            category_list.emplace_back(std::move(category));
         }
-
-        if (trimmed_line == "loop_")
-        {
-            ++line_idx;
-            std::vector<std::string> column_name_list;
-            while (line_idx < line_list.size())
-            {
-                const auto & header_raw_line{ line_list[line_idx] };
-                const auto header_trimmed_line{ TrimLeft(header_raw_line) };
-                if (header_trimmed_line.empty())
-                {
-                    ++line_idx;
-                    continue;
-                }
-                if (header_trimmed_line.front() != '_') break;
-                auto header_token_list{ SplitMmCifTokens(std::string{header_trimmed_line}) };
-                if (!header_token_list.empty())
-                {
-                    column_name_list.emplace_back(header_token_list.front());
-                }
-                ++line_idx;
-            }
-            if (column_name_list.empty()) continue;
-
-            ParsedLoopCategory loop_category;
-            loop_category.column_name_list = column_name_list;
-            const auto expected_column_size{ loop_category.column_name_list.size() };
-            std::vector<std::string> row_token_list;
-            size_t row_start_line_number{ line_idx + 1 };
-
-            while (line_idx < line_list.size())
-            {
-                const auto & row_raw_line{ line_list[line_idx] };
-                const auto row_trimmed_line{ TrimLeft(row_raw_line) };
-                if (row_trimmed_line.empty())
-                {
-                    ++line_idx;
-                    continue;
-                }
-                if (row_trimmed_line.front() == '#')
-                {
-                    ++line_idx;
-                    break;
-                }
-                if (row_token_list.empty() &&
-                    (row_trimmed_line == "loop_" ||
-                     StartsWithToken(row_trimmed_line, "data_") ||
-                     row_trimmed_line.front() == '_'))
-                {
-                    break;
-                }
-                if (row_token_list.empty()) row_start_line_number = line_idx + 1;
-
-                if (!row_raw_line.empty() && row_raw_line.front() == ';')
-                {
-                    std::string multiline_value{ row_raw_line.substr(1) };
-                    ++line_idx;
-                    auto terminated{ false };
-                    while (line_idx < line_list.size())
-                    {
-                        const auto & multiline_raw_line{ line_list[line_idx] };
-                        if (!multiline_raw_line.empty() && multiline_raw_line.front() == ';')
-                        {
-                            terminated = true;
-                            break;
-                        }
-                        if (!multiline_value.empty()) multiline_value += "\n";
-                        multiline_value += multiline_raw_line;
-                        ++line_idx;
-                    }
-                    if (!terminated)
-                    {
-                        Logger::Log(LogLevel::Warning,
-                            "ParseMmCifDocument() unterminated multiline token in loop category "
-                            + BuildLoopCategoryPrefix(loop_category.column_name_list.front())
-                            + " near file line " + std::to_string(row_start_line_number) + ".");
-                        break;
-                    }
-                    row_token_list.emplace_back(std::move(multiline_value));
-                    ++line_idx; // consume the closing ';'
-                }
-                else
-                {
-                    auto token_list{ SplitMmCifTokens(std::string{row_trimmed_line}) };
-                    row_token_list.insert(row_token_list.end(), token_list.begin(), token_list.end());
-                    ++line_idx;
-                }
-
-                while (row_token_list.size() >= expected_column_size)
-                {
-                    std::vector<std::string> row_value_list(
-                        row_token_list.begin(),
-                        row_token_list.begin() + static_cast<std::ptrdiff_t>(expected_column_size));
-                    loop_category.row_list.emplace_back(
-                        ParsedLoopRow{ std::move(row_value_list), row_start_line_number });
-                    row_token_list.erase(
-                        row_token_list.begin(),
-                        row_token_list.begin() + static_cast<std::ptrdiff_t>(expected_column_size));
-                    row_start_line_number = line_idx + 1;
-                }
-            }
-
-            if (!row_token_list.empty())
-            {
-                Logger::Log(LogLevel::Warning,
-                    "ParseMmCifDocument() loop category "
-                    + BuildLoopCategoryPrefix(loop_category.column_name_list.front())
-                    + " ends with incomplete row (token count = "
-                    + std::to_string(row_token_list.size())
-                    + ", expected = " + std::to_string(expected_column_size) + ").");
-            }
-
-            auto category_prefix{ BuildLoopCategoryPrefix(loop_category.column_name_list.front()) };
-            m_loop_category_map[category_prefix].emplace_back(std::move(loop_category));
-            continue;
-        }
-
-        if (trimmed_line.front() == '_')
-        {
-            auto token_list{ SplitMmCifTokens(std::string{trimmed_line}) };
-            if (token_list.empty())
-            {
-                ++line_idx;
-                continue;
-            }
-
-            std::string key{ token_list.front() };
-            std::string value;
-            if (token_list.size() >= 2)
-            {
-                value = token_list[1];
-                m_data_item_map[key].emplace_back(std::move(value));
-                ++line_idx;
-                continue;
-            }
-
-            ++line_idx;
-            while (line_idx < line_list.size())
-            {
-                const auto & value_raw_line{ line_list[line_idx] };
-                const auto value_trimmed_line{ TrimLeft(value_raw_line) };
-                if (value_trimmed_line.empty())
-                {
-                    ++line_idx;
-                    continue;
-                }
-                if (value_trimmed_line.front() == '#') break;
-                if (!value_raw_line.empty() && value_raw_line.front() == ';')
-                {
-                    value = value_raw_line.substr(1);
-                    ++line_idx;
-                    while (line_idx < line_list.size())
-                    {
-                        const auto & multiline_raw_line{ line_list[line_idx] };
-                        if (!multiline_raw_line.empty() && multiline_raw_line.front() == ';') break;
-                        if (!value.empty()) value += "\n";
-                        value += multiline_raw_line;
-                        ++line_idx;
-                    }
-                    break;
-                }
-                auto value_token_list{ SplitMmCifTokens(std::string{value_trimmed_line}) };
-                value = value_token_list.empty() ? std::string{} : value_token_list.front();
-                break;
-            }
-            m_data_item_map[key].emplace_back(std::move(value));
-            ++line_idx;
-            continue;
-        }
-
-        ++line_idx;
     }
 
 }

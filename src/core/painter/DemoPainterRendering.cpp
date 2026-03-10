@@ -2,7 +2,8 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
@@ -342,7 +343,8 @@ void DemoPainter::PaintAtomMapValueExample(
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomMapValueExample");
 
     if (model_object == nullptr) return;
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -363,15 +365,16 @@ void DemoPainter::PaintAtomMapValueExample(
     if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) return;
     for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
     {
-        auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
-        auto graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
+        auto atom_iter{ std::make_unique<PotentialEntryQuery>(atom) };
+        auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
+        auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
         ROOTHelper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
         map_value_graph_list.emplace_back(std::move(graph));
         auto map_value_range{ atom_iter->GetMapValueRange(0.0) };
         y_array.emplace_back(std::get<0>(map_value_range));
         y_array.emplace_back(std::get<1>(map_value_range));
     }
-    gaus_function = entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key);
+    gaus_function = plot_builder->CreateAtomGroupGausFunctionPrior(group_key, class_key);
     amplitude_prior = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0);
     width_prior = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1);
 
@@ -478,13 +481,14 @@ void DemoPainter::PaintGroupGausMainChainSummary(
         std::vector<double> amplitude_array, width_array;
         info_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
         resolution_text[j] = ROOTHelper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false);
-        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+        auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+        auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         for (size_t k = 0; k < main_chain_element_count; k++)
         {
             auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
-            amplitude_graph[j][k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 0);
-            width_graph[j][k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 1);
-            correlation_graph[j][k] = entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
+            amplitude_graph[j][k] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 0);
+            width_graph[j][k] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 1);
+            correlation_graph[j][k] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
             for (int p = 0; p < amplitude_graph[j][k]->GetN(); p++)
             {
                 amplitude_array.push_back(amplitude_graph[j][k]->GetPointY(p));
@@ -592,7 +596,8 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupGausMainChainSingle");
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -627,9 +632,9 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
         auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
-        amplitude_graph[k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 0);
-        width_graph[k] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 1);
-        correlation_graph[k] = entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
+        amplitude_graph[k] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 0);
+        width_graph[k] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list, residue_class, 1);
+        correlation_graph[k] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, residue_class, 1, 0);
         for (int p = 0; p < amplitude_graph[k]->GetN(); p++)
         {
             amplitude_array.push_back(amplitude_graph[k]->GetPointY(p));
@@ -780,7 +785,8 @@ void DemoPainter::PaintGroupGausToFSC(
         auto count{ 0 };
         for (auto model : model_list)
         {
-            auto entry_iter{ std::make_unique<PotentialEntryIterator>(model) };
+            auto entry_iter{ std::make_unique<PotentialEntryQuery>(model) };
+            auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model) };
             auto width_value{ entry_iter->GetAtomGausEstimatePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
             auto width_error{ entry_iter->GetAtomGausVariancePrior(group_key, ChemicalDataHelper::GetSimpleAtomClassKey(), 1) };
             graph[i]->SetPoint(count, model->GetResolution(), width_value);
@@ -885,7 +891,8 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
     if (model_object == nullptr) return;
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -904,7 +911,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     auto normalized_z_position{ 0.5 };
     auto z_ratio_window{ 0.1 };
     auto graph_position{
-        entry_iter->CreateAtomXYPositionTomographyGraph(normalized_z_position, z_ratio_window, true)
+        plot_builder->CreateAtomXYPositionTomographyGraph(normalized_z_position, z_ratio_window, true)
     };
     auto z_position{ model_object->GetModelPosition(2, normalized_z_position) };
     auto z_window{ model_object->GetModelLength(2) * z_ratio_window };
@@ -936,7 +943,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         {
             auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
             if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
-            auto gaus_graph{ entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, class_key, 1) };
+            auto gaus_graph{ plot_builder->CreateCOMDistanceToGausEstimateGraph(group_key, class_key, 1) };
             for (int p = 0; p < gaus_graph->GetN(); p++)
             {
                 x_array[i].emplace_back(gaus_graph->GetPointX(p));

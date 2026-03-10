@@ -1,7 +1,8 @@
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -108,12 +109,13 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     auto pad_main{ ROOTHelper::CreatePad("pad","", 0.00, 0.00, 1.00, 1.00) };
     pad_main->Draw();
 
-    auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom_object) };
+    auto atom_iter{ std::make_unique<PotentialEntryQuery>(atom_object) };
+    auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
     auto map_value_range{ atom_iter->GetMapValueRange(0.3) };
     auto distance_range{ atom_iter->GetDistanceRange(0.0) };
 
-    auto map_value_graph{ atom_iter->CreateDistanceToMapValueGraph() };
-    auto map_value_ref_graph{ atom_iter->CreateDistanceToMapValueGraph() };
+    auto map_value_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
+    auto map_value_ref_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
 
     auto map_value_hist{ ROOTHelper::CreateHist2D("hist","", 15, std::get<0>(distance_range), std::get<1>(distance_range), 1000, std::get<0>(map_value_range), std::get<1>(map_value_range)) };
     for (int p = 0; p < map_value_graph->GetN(); p++)
@@ -198,15 +200,16 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     
     for (auto atom_object : m_atom_object_list)
     {
-        auto entry_iter{ std::make_unique<PotentialEntryIterator>(atom_object) };
-        auto data_graph{ entry_iter->CreateDistanceToMapValueGraph() };
-        auto data_hist{ entry_iter->CreateDistanceToMapValueHistogram(15) };
-        auto gaus_function_mdpde{ entry_iter->CreateAtomLocalGausFunctionMDPDE() };
-        auto gaus_function_ols{ entry_iter->CreateAtomLocalGausFunctionOLS() };
-        auto linear_model_mdpde{ entry_iter->CreateAtomLocalLinearModelFunctionMDPDE() };
-        auto linear_model_ols{ entry_iter->CreateAtomLocalLinearModelFunctionOLS() };
-        auto x_hist{ entry_iter->CreateLinearModelDataHistogram(0) };
-        auto y_hist{ entry_iter->CreateLinearModelDataHistogram(1) };
+        auto entry_iter{ std::make_unique<PotentialEntryQuery>(atom_object) };
+        auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
+        auto data_graph{ plot_builder->CreateDistanceToMapValueGraph() };
+        auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(15) };
+        auto gaus_function_mdpde{ plot_builder->CreateAtomLocalGausFunctionMDPDE() };
+        auto gaus_function_ols{ plot_builder->CreateAtomLocalGausFunctionOLS() };
+        auto linear_model_mdpde{ plot_builder->CreateAtomLocalLinearModelFunctionMDPDE() };
+        auto linear_model_ols{ plot_builder->CreateAtomLocalLinearModelFunctionOLS() };
+        auto x_hist{ plot_builder->CreateLinearModelDataHistogram(0) };
+        auto y_hist{ plot_builder->CreateLinearModelDataHistogram(1) };
 
         canvas->cd();
         for (int i = 0; i < pad_size; i++)
@@ -334,7 +337,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         frame_scatter->GetYaxis()->CenterTitle();
         frame_scatter->SetStats(0);
         frame_scatter->Draw();
-        auto scatter_graph{ entry_iter->CreateLinearModelDistanceToMapValueGraph() };
+        auto scatter_graph{ plot_builder->CreateLinearModelDistanceToMapValueGraph() };
         ROOTHelper::SetMarkerAttribute(scatter_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
         scatter_graph->Draw("P");
 

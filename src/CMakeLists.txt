@@ -47,6 +47,7 @@ set(RHBM_GEM_LIBRARY_SOURCES
     core/painter/DemoPainterWorkflow.cpp
     core/painter/GausPainterRendering.cpp
     core/painter/GausPainterFitting.cpp
+    core/painter/PotentialPlotBuilder.cpp
     core/command/HRLModelTestCommand.cpp
     core/workflow/HRLModelTestCommandWorkflows.cpp
     core/command/MapSampling.cpp
@@ -76,7 +77,7 @@ set(RHBM_GEM_LIBRARY_SOURCES
     data/object/LocalPotentialEntry.cpp
     data/object/MapObject.cpp
     data/object/ModelObject.cpp
-    data/object/PotentialEntryIterator.cpp
+    data/object/PotentialEntryQuery.cpp
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp
     data/io/file/FileFormatBackendFactory.cpp
@@ -86,6 +87,8 @@ set(RHBM_GEM_LIBRARY_SOURCES
     data/io/file/MapFileReader.cpp
     data/io/file/MapFileWriter.cpp
     data/io/file/MapObjectFactory.cpp
+    data/io/file/MmCifLoopParser.cpp
+    data/io/file/MmCifTokenizer.cpp
     data/io/file/ModelFileReader.cpp
     data/io/file/ModelFileWriter.cpp
     data/io/file/ModelObjectFactory.cpp

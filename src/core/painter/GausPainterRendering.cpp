@@ -3,7 +3,8 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -124,7 +125,8 @@ void GausPainter::PaintAtomLocalGausSummary(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintAtomLocalGausSummary");
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     auto show_outlier{ false };
@@ -158,8 +160,8 @@ void GausPainter::PaintAtomLocalGausSummary(
             if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
             if (entry_iter->GetAtomObjectMap(group_key, class_key).size() < 1) continue;
 
-            auto amplitude_hist{ entry_iter->CreateAtomGausEstimateHistogram(group_key, class_key, 0) };
-            auto width_hist{ entry_iter->CreateAtomGausEstimateHistogram(group_key, class_key, 1) };
+            auto amplitude_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, class_key, 0) };
+            auto width_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, class_key, 1) };
 
             canvas->cd();
             for (int i = 0; i < pad_size; i++)
@@ -226,8 +228,8 @@ void GausPainter::PaintAtomLocalGausSummary(
             frame_scatter->GetYaxis()->CenterTitle();
             frame_scatter->SetStats(0);
             frame_scatter->Draw();
-            auto scatter_graph{ entry_iter->CreateAtomGausEstimateScatterGraph(group_key, class_key, 0, 1) };
-            auto outlier_scatter_graph{ entry_iter->CreateAtomGausEstimateScatterGraph(group_key, class_key, 0, 1, true) };
+            auto scatter_graph{ plot_builder->CreateAtomGausEstimateScatterGraph(group_key, class_key, 0, 1) };
+            auto outlier_scatter_graph{ plot_builder->CreateAtomGausEstimateScatterGraph(group_key, class_key, 0, 1, true) };
             ROOTHelper::SetMarkerAttribute(scatter_graph.get(), 24, 1.5, kAzure-7, 1.0f);
             ROOTHelper::SetMarkerAttribute(outlier_scatter_graph.get(), 5, 1.5, kRed+1, 1.0f);
             scatter_graph->Draw("P");
@@ -275,8 +277,9 @@ void GausPainter::PaintAtomLocalGausSummary(
             y_array.reserve(member_size * 2);
             for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
             {
-                auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
-                auto graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
+                auto atom_iter{ std::make_unique<PotentialEntryQuery>(atom) };
+                auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
                 auto is_outlier{ atom_iter->IsOutlierAtom(class_key) };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
@@ -315,8 +318,8 @@ void GausPainter::PaintAtomLocalGausSummary(
                 graph->Draw("L X0");
             }
 
-            auto gaus_mean{ entry_iter->CreateAtomGroupGausFunctionMean(group_key, class_key) };
-            auto gaus_prior{ entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key) };
+            auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key, class_key) };
+            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key, class_key) };
             ROOTHelper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
             ROOTHelper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
             gaus_prior->Draw("SAME");
@@ -375,7 +378,8 @@ void GausPainter::PaintAtomGroupGausSummary(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausSummary");
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     
     #ifdef HAVE_ROOT
@@ -478,11 +482,11 @@ void GausPainter::PaintAtomGroupGausSummary(
         for (auto & [element, group_key_list] : group_key_list_map)
         {
             auto amplitude_graph{
-                entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                plot_builder->CreateAtomGausEstimateToAtomIdGraph(
                     group_key_list, atom_id_list, class_key, 0)
             };
             auto width_graph{
-                entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                plot_builder->CreateAtomGausEstimateToAtomIdGraph(
                     group_key_list, atom_id_list, class_key, 1)
             };
             std::vector<GroupKey> group_key_list_vector;
@@ -492,7 +496,7 @@ void GausPainter::PaintAtomGroupGausSummary(
                 group_key_list_vector.emplace_back(group_key);
             }
             auto correlation_graph{
-                entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list_vector, class_key, 0, 1)
+                plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list_vector, class_key, 0, 1)
             };
             for (int p = 0; p < amplitude_graph->GetN(); p++)
             {
@@ -516,11 +520,11 @@ void GausPainter::PaintAtomGroupGausSummary(
             if (has_helix_component == true)
             {
                 auto helix_amplitude_graph{
-                    entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                    plot_builder->CreateAtomGausEstimateToAtomIdGraph(
                         helix_group_key_list_map[element], atom_id_list, struct_class_key, 0)
                 };
                 auto helix_width_graph{
-                    entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                    plot_builder->CreateAtomGausEstimateToAtomIdGraph(
                         helix_group_key_list_map[element], atom_id_list, struct_class_key, 1)
                 };
                 
@@ -537,11 +541,11 @@ void GausPainter::PaintAtomGroupGausSummary(
             if (has_sheet_component == true)
             {
                 auto sheet_amplitude_graph{
-                    entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                    plot_builder->CreateAtomGausEstimateToAtomIdGraph(
                         sheet_group_key_list_map[element], atom_id_list, struct_class_key, 0)
                 };
                 auto sheet_width_graph{
-                    entry_iter->CreateAtomGausEstimateToAtomIdGraph(
+                    plot_builder->CreateAtomGausEstimateToAtomIdGraph(
                         sheet_group_key_list_map[element], atom_id_list, struct_class_key, 1)
                 };
                 
@@ -752,7 +756,8 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
     Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent");
 
     bool show_outlier{ false };
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
@@ -800,8 +805,8 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
             auto component_id{ chemical_component_map.at(component_key)->GetComponentId() };
             component_id_map.emplace(residue, component_id);
 
-            auto gaus_mean{ entry_iter->CreateAtomGroupGausFunctionMean(group_key, class_key) };
-            auto gaus_prior{ entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key) };
+            auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key, class_key) };
+            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key, class_key) };
             gaus_mean_map.emplace(residue, std::move(gaus_mean));
             gaus_prior_map.emplace(residue, std::move(gaus_prior));
 
@@ -812,8 +817,9 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
             y_array.reserve(member_size * 2);
             for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
             {
-                auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
-                auto graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
+                auto atom_iter{ std::make_unique<PotentialEntryQuery>(atom) };
+                auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
                 auto is_outlier{ atom_iter->IsOutlierAtom(class_key) };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
@@ -979,7 +985,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent");
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
 
     //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
@@ -1059,15 +1066,15 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     for (auto & [spot, group_key_list] : group_key_list_map)
     {
         auto amplitude_graph{
-            entry_iter->CreateAtomGausEstimateToResidueGraph(
+            plot_builder->CreateAtomGausEstimateToResidueGraph(
                 group_key_list, class_key, 0)
         };
         auto width_graph{
-            entry_iter->CreateAtomGausEstimateToResidueGraph(
+            plot_builder->CreateAtomGausEstimateToResidueGraph(
                 group_key_list, class_key, 1)
         };
         auto correlation_graph{
-            entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, class_key, 1, 0)
+            plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, class_key, 1, 0)
         };
         for (int p = 0; p < amplitude_graph->GetN(); p++)
         {
@@ -1135,7 +1142,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     }
 
     auto count_hist{
-        entry_iter->CreateComponentCountHistogram(group_key_list_map.at(Spot::CA), class_key)
+        plot_builder->CreateComponentCountHistogram(group_key_list_map.at(Spot::CA), class_key)
     };
 
     canvas->cd();

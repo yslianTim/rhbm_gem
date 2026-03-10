@@ -3,7 +3,8 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
@@ -134,7 +135,8 @@ void ModelPainter::PaintAtomGroupGausMainChain(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGroupGausMainChain");
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     
     #ifdef HAVE_ROOT
 
@@ -195,9 +197,9 @@ void ModelPainter::PaintAtomGroupGausMainChain(
         auto class_key{ (j == 0) ? ChemicalDataHelper::GetComponentAtomClassKey() : ChemicalDataHelper::GetStructureAtomClassKey() };
         for (size_t i = 0; i < primary_element_size; i++)
         {
-            amplitude_graph[i] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list[i][j], class_key, 0);
-            width_graph[i] = entry_iter->CreateAtomGausEstimateToResidueGraph(group_key_list[i][j], class_key, 1);
-            correlation_graph[i] = entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list[i][j], class_key, 0, 1);
+            amplitude_graph[i] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list[i][j], class_key, 0);
+            width_graph[i] = plot_builder->CreateAtomGausEstimateToResidueGraph(group_key_list[i][j], class_key, 1);
+            correlation_graph[i] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list[i][j], class_key, 0, 1);
             for (int p = 0; p < amplitude_graph[i]->GetN(); p++)
             {
                 amplitude_array.push_back(amplitude_graph[i]->GetPointY(p));
@@ -240,7 +242,7 @@ void ModelPainter::PaintAtomGroupGausMainChain(
             width_hist[i]->SetBarWidth(0.5f);
         }
 
-        auto count_hist{ entry_iter->CreateAtomResidueCountHistogram(class_key, structure_list[j]) };
+        auto count_hist{ plot_builder->CreateAtomResidueCountHistogram(class_key, structure_list[j]) };
         auto max_count{ static_cast<int>(count_hist->GetMaximum()) };
 
         canvas->cd();
@@ -341,7 +343,8 @@ void ModelPainter::PaintBondGroupGausMainChain(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondGroupGausMainChain");
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     
     #ifdef HAVE_ROOT
 
@@ -388,9 +391,9 @@ void ModelPainter::PaintBondGroupGausMainChain(
     auto class_key{ ChemicalDataHelper::GetComponentBondClassKey() };
     for (size_t i = 0; i < primary_element_size; i++)
     {
-        amplitude_graph[i] = entry_iter->CreateBondGausEstimateToResidueGraph(group_key_list[i], class_key, 0);
-        width_graph[i] = entry_iter->CreateBondGausEstimateToResidueGraph(group_key_list[i], class_key, 1);
-        correlation_graph[i] = entry_iter->CreateBondGausEstimateScatterGraph(group_key_list[i], class_key, 0, 1);
+        amplitude_graph[i] = plot_builder->CreateBondGausEstimateToResidueGraph(group_key_list[i], class_key, 0);
+        width_graph[i] = plot_builder->CreateBondGausEstimateToResidueGraph(group_key_list[i], class_key, 1);
+        correlation_graph[i] = plot_builder->CreateBondGausEstimateScatterGraph(group_key_list[i], class_key, 0, 1);
         for (int p = 0; p < amplitude_graph[i]->GetN(); p++)
         {
             amplitude_array.push_back(amplitude_graph[i]->GetPointY(p));
@@ -432,7 +435,7 @@ void ModelPainter::PaintBondGroupGausMainChain(
         width_hist[i]->SetBarWidth(0.5f);
     }
 
-    auto count_hist{ entry_iter->CreateBondResidueCountHistogram(class_key) };
+    auto count_hist{ plot_builder->CreateBondResidueCountHistogram(class_key) };
     auto max_count{ static_cast<int>(count_hist->GetMaximum()) };
 
     canvas->cd();
@@ -539,7 +542,8 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
         return;
     }
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     
     #ifdef HAVE_ROOT
 
@@ -588,9 +592,9 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     for (size_t i = 0; i < component_size; i++)
     {
-        amplitude_graph[i] = entry_iter->CreateAtomGausEstimateToSpotGraph(group_key_list[i], class_key, 0);
-        width_graph[i] = entry_iter->CreateAtomGausEstimateToSpotGraph(group_key_list[i], class_key, 1);
-        correlation_graph[i] = entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list[i], class_key, 0, 1);
+        amplitude_graph[i] = plot_builder->CreateAtomGausEstimateToSpotGraph(group_key_list[i], class_key, 0);
+        width_graph[i] = plot_builder->CreateAtomGausEstimateToSpotGraph(group_key_list[i], class_key, 1);
+        correlation_graph[i] = plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list[i], class_key, 0, 1);
         for (int p = 0; p < amplitude_graph[i]->GetN(); p++)
         {
             amplitude_array.push_back(amplitude_graph[i]->GetPointY(p));
@@ -632,7 +636,7 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
         width_hist[i]->SetBarWidth(0.5f);
     }
 
-    //auto count_hist{ entry_iter->CreateAtomResidueCountHistogram(class_key, Structure::FREE) };
+    //auto count_hist{ plot_builder->CreateAtomResidueCountHistogram(class_key, Structure::FREE) };
     //auto max_count{ static_cast<int>(count_hist->GetMaximum()) };
 
     canvas->cd();
@@ -769,7 +773,8 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomMapValueMainChain");
     const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     const int col_size{ 4 };
     const int row_size{ 1 };
@@ -798,15 +803,16 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
         if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
         for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
         {
-            auto atom_iter{ std::make_unique<PotentialEntryIterator>(atom) };
-            auto graph{ atom_iter->CreateBinnedDistanceToMapValueGraph() };
+            auto atom_iter{ std::make_unique<PotentialEntryQuery>(atom) };
+            auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
+            auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             auto map_value_range{ atom_iter->GetMapValueRange(0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
-        gaus_function[k] = entry_iter->CreateAtomGroupGausFunctionPrior(group_key, class_key);
+        gaus_function[k] = plot_builder->CreateAtomGroupGausFunctionPrior(group_key, class_key);
         amplitude_prior[k] = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0);
         width_prior[k] = entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1);
     }
@@ -935,7 +941,8 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondMapValueMainChain");
     const auto & class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     const int col_size{ 4 };
     const int row_size{ 1 };
@@ -966,15 +973,16 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
 
         for (auto bond : entry_iter->GetBondObjectList(group_key, class_key))
         {
-            auto bond_iter{ std::make_unique<PotentialEntryIterator>(bond) };
-            auto graph{ bond_iter->CreateBinnedDistanceToMapValueGraph() };
+            auto bond_iter{ std::make_unique<PotentialEntryQuery>(bond) };
+            auto bond_plot_builder{ std::make_unique<PotentialPlotBuilder>(bond) };
+            auto graph{ bond_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             auto map_value_range{ bond_iter->GetMapValueRange(0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
-        gaus_function[k] = entry_iter->CreateBondGroupGausFunctionPrior(group_key, class_key);
+        gaus_function[k] = plot_builder->CreateBondGroupGausFunctionPrior(group_key, class_key);
         amplitude_prior[k] = entry_iter->GetBondGausEstimatePrior(group_key, class_key, 0);
         width_prior[k] = entry_iter->GetBondGausEstimatePrior(group_key, class_key, 1);
         member_entries[k] = static_cast<int>(entry_iter->GetBondObjectList(group_key, class_key).size());

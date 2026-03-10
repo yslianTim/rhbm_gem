@@ -2,7 +2,8 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -797,7 +798,8 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
     auto count{ 0 };
     for (auto model_object : model_list)
     {
-        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+        auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+        auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
         if (entry_iter->IsAvailableAtomGroupKey(ref_group_key, class_key) == false) continue;
         auto x_value{ model_object->GetResolution() };
@@ -837,7 +839,8 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     for (auto model_object : model_list)
     {
         model_count++;
-        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+        auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+        auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
         if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
         if (entry_iter->IsAvailableAtomGroupKey(ref_group_key, class_key) == false) continue;
         auto x_value{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1) };
@@ -875,8 +878,10 @@ void ComparisonPainter::BuildMapValueScatterGraph(
     GroupKey group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
     int bin_size, double x_min, double x_max)
 {
-    auto entry1_iter{ std::make_unique<PotentialEntryIterator>(model1) };
-    auto entry2_iter{ std::make_unique<PotentialEntryIterator>(model2) };
+    auto entry1_iter{ std::make_unique<PotentialEntryQuery>(model1) };
+    auto plot_builder1{ std::make_unique<PotentialPlotBuilder>(model1) };
+    auto entry2_iter{ std::make_unique<PotentialEntryQuery>(model2) };
+    auto plot_builder2{ std::make_unique<PotentialPlotBuilder>(model2) };
     if (entry1_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
     if (entry2_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
     auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
@@ -886,8 +891,10 @@ void ComparisonPainter::BuildMapValueScatterGraph(
     {
         if (model2_atom_map.find(atom_id) == model2_atom_map.end()) continue;
         auto atom_object2{ model2_atom_map.at(atom_id) };
-        auto atom1_iter{ std::make_unique<PotentialEntryIterator>(atom_object1) };
-        auto atom2_iter{ std::make_unique<PotentialEntryIterator>(atom_object2) };
+        auto atom1_iter{ std::make_unique<PotentialEntryQuery>(atom_object1) };
+        auto atom_plot_builder1{ std::make_unique<PotentialPlotBuilder>(atom_object1) };
+        auto atom2_iter{ std::make_unique<PotentialEntryQuery>(atom_object2) };
+        auto atom_plot_builder2{ std::make_unique<PotentialPlotBuilder>(atom_object2) };
         auto data1_array{ atom1_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
         auto data2_array{ atom2_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)

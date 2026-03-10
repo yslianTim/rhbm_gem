@@ -3,7 +3,8 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
@@ -46,7 +47,8 @@ void ModelPainter::PaintGroupWidthScatterPlot(
     Logger::Log(LogLevel::Info, " ModelPainter::PaintGroupWidthScatterPlot");
     auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -78,8 +80,8 @@ void ModelPainter::PaintGroupWidthScatterPlot(
                 auto gaus_graph
                 {
                     (par_id == 0) ?
-                    entry_iter->CreateCOMDistanceToGausEstimateGraph(group_key, residue_class, 1) :
-                    entry_iter->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 1)
+                    plot_builder->CreateCOMDistanceToGausEstimateGraph(group_key, residue_class, 1) :
+                    plot_builder->CreateInRangeAtomsToGausEstimateGraph(group_key, residue_class, 5.0, 1)
                 };
                 for (int p = 0; p < gaus_graph->GetN(); p++)
                 {
@@ -179,7 +181,8 @@ void ModelPainter::PaintAtomXYPosition(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomXYPosition");
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -192,7 +195,7 @@ void ModelPainter::PaintAtomXYPosition(
 
     auto normalized_z_position{ 0.5 };
     auto z_ratio_window{ 0.1 };
-    auto graph{ entry_iter->CreateAtomXYPositionTomographyGraph(
+    auto graph{ plot_builder->CreateAtomXYPositionTomographyGraph(
         normalized_z_position, z_ratio_window, true)
     };
     auto z_position{ model_object->GetModelPosition(2, normalized_z_position) };
@@ -269,7 +272,8 @@ void ModelPainter::PaintAtomGausScatterPlot(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGausScatterPlot");
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     auto amplitude_min{ entry_iter->GetAtomGausEstimateMinimum(0, Element::OXYGEN) };
 
     #ifdef HAVE_ROOT
@@ -291,8 +295,8 @@ void ModelPainter::PaintAtomGausScatterPlot(
         auto graph
         {
             (do_normalize == true) ?
-            entry_iter->CreateNormalizedAtomGausEstimateScatterGraph(element_type, amplitude_min) :
-            entry_iter->CreateAtomGausEstimateScatterGraph(element_type)
+            plot_builder->CreateNormalizedAtomGausEstimateScatterGraph(element_type, amplitude_min) :
+            plot_builder->CreateAtomGausEstimateScatterGraph(element_type)
         };
         auto atomic_number{ ChemicalDataHelper::GetAtomicNumber(element_type) };
         auto marker_size{ (atomic_number <= 8) ? 1.2f : 2.0f };
@@ -374,7 +378,8 @@ void ModelPainter::PaintBondGausScatterPlot(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondGausScatterPlot");
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     auto amplitude_min{ entry_iter->GetBondGausEstimateMinimum(0) };
 
     #ifdef HAVE_ROOT
@@ -396,8 +401,8 @@ void ModelPainter::PaintBondGausScatterPlot(
         auto graph
         {
             (do_normalize == true) ?
-            entry_iter->CreateNormalizedBondGausEstimateScatterGraph(element_type, amplitude_min) :
-            entry_iter->CreateBondGausEstimateScatterGraph(element_type)
+            plot_builder->CreateNormalizedBondGausEstimateScatterGraph(element_type, amplitude_min) :
+            plot_builder->CreateBondGausEstimateScatterGraph(element_type)
         };
         auto marker_size{ 2.0f };
         auto marker_color{ (ChemicalDataHelper::IsStandardElement(element_type)) ?
@@ -475,7 +480,8 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGausMainChain");
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -500,9 +506,9 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_map[row_size][main_chain_element_count];
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph_map[2][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
-        gaus_graph_map[1][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
-        gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
+        gaus_graph_map[2][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
+        gaus_graph_map[1][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
+        gaus_graph_map[0][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])
@@ -625,7 +631,8 @@ void ModelPainter::PaintBondGausMainChain(ModelObject * model_object, const std:
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondGausMainChain");
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -650,9 +657,9 @@ void ModelPainter::PaintBondGausMainChain(ModelObject * model_object, const std:
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_map[row_size][main_chain_element_count];
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph_map[2][k] = entry_iter->CreateBondGausEstimateToSequenceIDGraphMap(k, 0);
-        gaus_graph_map[1][k] = entry_iter->CreateBondGausEstimateToSequenceIDGraphMap(k, 1);
-        gaus_graph_map[0][k] = entry_iter->CreateBondGausEstimateToSequenceIDGraphMap(k, 2);
+        gaus_graph_map[2][k] = plot_builder->CreateBondGausEstimateToSequenceIDGraphMap(k, 0);
+        gaus_graph_map[1][k] = plot_builder->CreateBondGausEstimateToSequenceIDGraphMap(k, 1);
+        gaus_graph_map[0][k] = plot_builder->CreateBondGausEstimateToSequenceIDGraphMap(k, 2);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])
@@ -776,7 +783,8 @@ void ModelPainter::PaintAtomRankMainChain(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomRankMainChain");
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -802,15 +810,15 @@ void ModelPainter::PaintAtomRankMainChain(
     std::vector<std::unique_ptr<TH1D>> rank_hist_list[row_size][3];
     std::unique_ptr<TH1D> rank_reference[row_size];
     std::vector<Residue> veto_residues_list{  };
-    rank_hist_list[2][0] = entry_iter->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::UNK, 2, veto_residues_list);
-    rank_hist_list[1][0] = entry_iter->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::UNK, 1, veto_residues_list);
-    rank_hist_list[0][0] = entry_iter->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::UNK, 0, veto_residues_list);
-    rank_hist_list[2][1] = entry_iter->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::GLY);
-    rank_hist_list[1][1] = entry_iter->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::GLY);
-    rank_hist_list[0][1] = entry_iter->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::GLY);
-    rank_hist_list[2][2] = entry_iter->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::PRO);
-    rank_hist_list[1][2] = entry_iter->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::PRO);
-    rank_hist_list[0][2] = entry_iter->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::PRO);
+    rank_hist_list[2][0] = plot_builder->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::UNK, 2, veto_residues_list);
+    rank_hist_list[1][0] = plot_builder->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::UNK, 1, veto_residues_list);
+    rank_hist_list[0][0] = plot_builder->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::UNK, 0, veto_residues_list);
+    rank_hist_list[2][1] = plot_builder->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::GLY);
+    rank_hist_list[1][1] = plot_builder->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::GLY);
+    rank_hist_list[0][1] = plot_builder->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::GLY);
+    rank_hist_list[2][2] = plot_builder->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::PRO);
+    rank_hist_list[1][2] = plot_builder->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::PRO);
+    rank_hist_list[0][2] = plot_builder->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::PRO);
     
     for (int j = 0; j < row_size; j++)
     {

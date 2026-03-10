@@ -8,7 +8,7 @@
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
-#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
@@ -339,7 +339,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
     for (const auto & model_object : m_model_object_list)
     {
         auto key_tag{ model_object->GetKeyTag() };
-        auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object.get()) };
+        auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object.get()) };
 
         const std::string file_name{ "group_gaus_list_" + model_object->GetPdbID() };
         std::filesystem::path output_path{ BuildOutputPath(file_name, ".csv") };

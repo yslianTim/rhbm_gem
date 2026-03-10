@@ -3,7 +3,8 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryIterator.hpp>
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -43,7 +44,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple");
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
 
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
@@ -116,11 +118,11 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     for (auto & [spot, group_key_list] : group_key_list_map)
     {
         auto amplitude_graph{
-            entry_iter->CreateAtomGausEstimateToResidueGraph(
+            plot_builder->CreateAtomGausEstimateToResidueGraph(
                 group_key_list, class_key, 0)
         };
         auto width_graph{
-            entry_iter->CreateAtomGausEstimateToResidueGraph(
+            plot_builder->CreateAtomGausEstimateToResidueGraph(
                 group_key_list, class_key, 1)
         };
         for (int p = 0; p < amplitude_graph->GetN(); p++)
@@ -142,7 +144,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     auto width_range{ ArrayStats<double>::ComputeScalingRangeTuple(width_array, scaling) };
 
     auto count_hist{
-        entry_iter->CreateComponentCountHistogram(group_key_list_map.at(Spot::CA), class_key)
+        plot_builder->CreateComponentCountHistogram(group_key_list_map.at(Spot::CA), class_key)
     };
 
     canvas->cd();
@@ -229,7 +231,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure");
 
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
 
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
@@ -313,15 +316,15 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         for (auto & [structure, group_key_list] : group_key_list_map)
         {
             auto amplitude_graph{
-                entry_iter->CreateAtomGausEstimateToResidueGraph(
+                plot_builder->CreateAtomGausEstimateToResidueGraph(
                     group_key_list, class_key, 0)
             };
             auto width_graph{
-                entry_iter->CreateAtomGausEstimateToResidueGraph(
+                plot_builder->CreateAtomGausEstimateToResidueGraph(
                     group_key_list, class_key, 1)
             };
             auto correlation_graph{
-                entry_iter->CreateAtomGausEstimateScatterGraph(group_key_list, class_key, 0, 1)
+                plot_builder->CreateAtomGausEstimateScatterGraph(group_key_list, class_key, 0, 1)
             };
             for (int p = 0; p < amplitude_graph->GetN(); p++)
             {
@@ -388,7 +391,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
             width_hist_map[structure] = std::move(width_hist);
         }
 
-        auto count_hist{ entry_iter->CreateAtomResidueCountHistogram2D(class_key) };
+        auto count_hist{ plot_builder->CreateAtomResidueCountHistogram2D(class_key) };
 
         canvas->cd();
         for (int j = 0; j < pad_size; j++)
@@ -542,7 +545,8 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain");
-    auto entry_iter{ std::make_unique<PotentialEntryIterator>(model_object) };
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
 
@@ -566,10 +570,10 @@ void GausPainter::PaintAtomLocalGausToSequenceAminoAcidMainChain(
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_map[row_size][main_chain_element_count];
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        gaus_graph_map[1][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
-        gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
-        //gaus_graph_map[0][k] = entry_iter->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
-        //gaus_graph_map[0][k] = entry_iter->CreateAtomMapValueToSequenceIDGraphMap(k);
+        gaus_graph_map[1][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
+        gaus_graph_map[0][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
+        //gaus_graph_map[0][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
+        //gaus_graph_map[0][k] = plot_builder->CreateAtomMapValueToSequenceIDGraphMap(k);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])

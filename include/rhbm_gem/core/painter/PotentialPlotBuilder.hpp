@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <map>
 #include <memory>
 #include <string>
@@ -8,14 +7,13 @@
 #include <unordered_map>
 #include <vector>
 
+#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 
 #ifdef HAVE_ROOT
 class TH1D;
 class TH2D;
 class TGraphErrors;
-class TGraph2DErrors;
 class TF1;
 #endif
 
@@ -23,57 +21,24 @@ namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
-class ModelObject;
 class LocalPotentialEntry;
+class ModelObject;
 
-class PotentialEntryIterator
+class PotentialPlotBuilder
 {
-    AtomObject * m_atom_object;
-    BondObject * m_bond_object;
+    PotentialEntryQuery m_query;
     ModelObject * m_model_object;
     LocalPotentialEntry * m_atom_local_entry;
     LocalPotentialEntry * m_bond_local_entry;
 
 public:
-    PotentialEntryIterator(ModelObject * model_object);
-    PotentialEntryIterator(AtomObject * atom_object);
-    PotentialEntryIterator(BondObject * bond_object);
-    ~PotentialEntryIterator();
-    double GetAtomGausEstimateMinimum(int par_id, Element element) const;
-    double GetBondGausEstimateMinimum(int par_id) const;
-    bool IsOutlierAtom(const std::string & class_key) const;
-    bool IsOutlierBond(const std::string & class_key) const;
-    bool IsAvailableAtomGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
-    bool IsAvailableBondGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
-    double GetAtomGausEstimateMean(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const;
-    const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const;
-    std::vector<AtomObject *> GetOutlierAtomObjectList(GroupKey group_key, const std::string & class_key) const;
-    std::unordered_map<int, AtomObject *> GetAtomObjectMap(GroupKey group_key, const std::string & class_key) const;
+    explicit PotentialPlotBuilder(ModelObject * model_object);
+    explicit PotentialPlotBuilder(AtomObject * atom_object);
+    explicit PotentialPlotBuilder(BondObject * bond_object);
+    ~PotentialPlotBuilder();
 
-    std::vector<std::tuple<float, float>> GetLinearModelDistanceAndMapValueList() const;
-    const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList() const;
-    std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(int bin_size=15, double x_min=0.0, double x_max=1.5) const;
-    std::tuple<float, float> GetDistanceRange(double margin_rate=0.0) const;
-    std::tuple<float, float> GetMapValueRange(double margin_rate=0.0) const;
-    std::tuple<float, float> GetBinnedMapValueRange(int bin_size=15, double x_min=0.0, double x_max=1.5, double margin_rate=0.0) const;
-    double GetAmplitudeEstimateMDPDE() const;
-    double GetAmplitudeEstimatePosterior(const std::string & key) const;
-    double GetAmplitudeVariancePosterior(const std::string & key) const;
-    double GetWidthEstimateMDPDE() const;
-    double GetWidthEstimatePosterior(const std::string & key) const;
-    double GetWidthVariancePosterior(const std::string & key) const;
-    double GetAlphaR() const;
-    double GetAtomAlphaR(GroupKey group_key, const std::string & class_key) const;
-    double GetBondAlphaR(GroupKey group_key, const std::string & class_key) const;
-    double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const;
-    double GetBondAlphaG(GroupKey group_key, const std::string & class_key) const;
-    Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
-    Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
+    PotentialEntryQuery & GetQuery();
+    const PotentialEntryQuery & GetQuery() const;
 
 #ifdef HAVE_ROOT
     std::unique_ptr<::TH1D> CreateComponentCountHistogram(std::vector<GroupKey> & group_key_list, const std::string & class_key) const;
@@ -118,15 +83,25 @@ public:
 #endif
 
 private:
+    bool IsModelObjectAvailable() const;
+    bool IsAtomLocalEntryAvailable() const;
     size_t GetAtomResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;
     size_t GetBondResidueCount(const std::string & class_key, Residue residue) const;
-    bool IsAtomObjectAvailable() const;
-    bool IsBondObjectAvailable() const;
-    bool IsAtomLocalEntryAvailable() const;
-    bool IsBondLocalEntryAvailable() const;
-    bool IsModelObjectAvailable() const;
-    bool CheckAtomGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
-    bool CheckBondGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
+    bool IsAvailableAtomGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
+    bool IsAvailableBondGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
+    double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
+    const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const;
+    const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const;
+    std::vector<std::tuple<float, float>> GetLinearModelDistanceAndMapValueList() const;
+    const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList() const;
+    std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(int bin_size=15, double x_min=0.0, double x_max=1.5) const;
+    std::tuple<float, float> GetDistanceRange(double margin_rate=0.0) const;
+    std::tuple<float, float> GetMapValueRange(double margin_rate=0.0) const;
+    Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
+    Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
 };
 
 } // namespace rhbm_gem
