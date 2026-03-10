@@ -287,7 +287,9 @@ if(DEFINED OpenMP_ROOT)
     set(RHBM_GEM_OPENMP_ROOT "${OpenMP_ROOT}" CACHE INTERNAL "OpenMP root used by RHBM_GEM build" FORCE)
 endif()
 
-set(MAIN_EXEC_TARGET ${PROJECT_NAME})
+# Avoid target-directory collisions on case-insensitive filesystems
+# (e.g. `rhbm_gem` library vs `RHBM_GEM` executable).
+set(MAIN_EXEC_TARGET rhbm_gem_cli)
 add_executable(${MAIN_EXEC_TARGET} main.cpp)
 set_target_properties(${MAIN_EXEC_TARGET} PROPERTIES
     OUTPUT_NAME "${PROJECT_DISPLAY_NAME}"
