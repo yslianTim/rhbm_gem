@@ -16,7 +16,7 @@ This project uses a two-axis test organization model:
 | `tests/utils/math/` | `utils` | Numeric/statistical/geometry helper algorithms |
 | `tests/utils/domain/` | `utils` | Domain helpers (string/logging/file-path/chemistry-related helpers) |
 | `tests/utils/hrl/` | `utils` | HRL-specific algorithm and transform tests |
-| `tests/integration/` | `integration` | Python binding smoke/validation scripts and style-guard tests |
+| `tests/integration/` | `integration` | Python binding smoke/validation scripts and end-to-end command pipeline checks |
 | `tests/data/` | fixture | Shared fixture files used by C++ and Python tests |
 
 ## Label Vocabulary
@@ -35,13 +35,6 @@ Required CTest labels:
 - `intent:migration`
 - `intent:algorithm`
 - `intent:bindings`
-- `intent:style`
-
-Style guard coverage includes:
-
-- repository hygiene guard (`cmake/RepositoryHygieneGuard.cmake`)
-- fixture tracking guard (`cmake/TestFixtureTrackingGuard.cmake`)
-- absolute path guard (`cmake/AbsolutePathGuard.cmake`)
 
 ## Common Commands
 
@@ -67,6 +60,12 @@ Run by intent:
 
 ```bash
 ctest --test-dir build -L intent:migration --output-on-failure
+```
+
+Run repository guards and install consumer smoke (lint lane):
+
+```bash
+cmake --build build --target lint_repo
 ```
 
 ## Adding New Tests

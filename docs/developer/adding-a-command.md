@@ -28,7 +28,7 @@ For a new built-in command, update these areas in one change:
 
 - `include/rhbm_gem/core/command/<YourCommand>.hpp`
 - `src/core/command/<YourCommand>.cpp` (and optional `src/core/workflow/*Workflow.cpp` files)
-- `src/core/CMakeLists.txt` (add source file)
+- `src/CMakeLists.txt` (add source file to `RHBM_GEM_LIBRARY_SOURCES`)
 - `include/rhbm_gem/core/command/CommandMetadata.hpp` (add new `CommandId`)
 - `src/core/internal/BuiltInCommandList.def` (register built-in metadata)
 - `src/core/command/BuiltInCommandCatalog.cpp` (add command header include)
@@ -308,7 +308,7 @@ Do not expose internal hooks such as `RegisterCLIOptionsExtend(...)` or `Validat
 
 ## 6. Build wiring
 
-Add command source files to `src/core/CMakeLists.txt` in `CORE_SOURCES`.
+Add command source files to `src/CMakeLists.txt` in `RHBM_GEM_LIBRARY_SOURCES`.
 Use the `command/<YourCommand>.cpp` path entry.
 
 If you add extra workflow files, include them in the same list.
@@ -341,7 +341,7 @@ When command surface changes, update:
 Before merging:
 
 1. `CommandId` was added in `include/rhbm_gem/core/command/CommandMetadata.hpp`
-2. command class compiles and is added to `src/core/CMakeLists.txt`
+2. command class compiles and is added to `src/CMakeLists.txt`
 3. built-in macro entry exists in `src/core/internal/BuiltInCommandList.def`
 4. command headers are included where required (`BuiltInCommandCatalog.cpp`, `CoreBindings.cpp`)
 5. Python class and binding methods are added in `bindings/CoreBindings.cpp`

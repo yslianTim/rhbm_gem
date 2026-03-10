@@ -23,13 +23,14 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 
 A few dependencies are optional:
 
-- `Eigen3`, `SQLite3`, `CLI11`, and `pybind11` are preferred from system packages.
-- If system packages are missing, CMake fetches pinned fallback sources for `Eigen3`/`CLI11`/`pybind11`/`SQLite3`.
+- Core dependencies (`Eigen3`, `SQLite3`, `CLI11`, and `pybind11`) are selected by `RHBM_GEM_DEP_PROVIDER`.
+- Use `RHBM_GEM_DEP_PROVIDER=SYSTEM` to require system packages.
+- Use `RHBM_GEM_DEP_PROVIDER=FETCH` to use pinned `FetchContent` sources.
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
 - `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
 - Runtime database default path is `${HOME}/.rhbmgem/data/database.sqlite`. Set `RHBM_GEM_DATA_DIR` to change the default root.
 
-For the full dependency policy and override flags such as `USE_SYSTEM_LIBS`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
+For the full dependency policy and override flags such as `RHBM_GEM_DEP_PROVIDER`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
 
 ### macOS (Homebrew)
 
@@ -51,7 +52,7 @@ xcode-select --install
 brew install cmake python libomp
 ```
 
-4. Optional (Recommended): install system packages to avoid fallback downloads:
+4. Optional (Recommended when using `RHBM_GEM_DEP_PROVIDER=SYSTEM`): install system packages:
 
 ```bash
 brew install eigen sqlite3 pybind11 cli11
@@ -85,7 +86,7 @@ sudo apt update
 sudo apt install -y build-essential cmake pkg-config python3
 ```
 
-2. Optional: if you plan to use Python bindings, or you want distro packages instead of fallback fetching, also install:
+2. Optional: if you plan to use Python bindings, or you want distro packages with `RHBM_GEM_DEP_PROVIDER=SYSTEM`, also install:
 
 ```bash
 sudo apt install -y python3-dev libsqlite3-dev libeigen3-dev pybind11-dev
@@ -117,7 +118,7 @@ root-config --prefix
 
 Notes:
 
-- If your distro does not package `CLI11`, CMake will fetch a pinned fallback copy automatically.
+- If your distro does not package `CLI11`, use `-DRHBM_GEM_DEP_PROVIDER=FETCH`.
 - If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
 
 ### Windows (PowerShell + Visual Studio 2022)
@@ -128,7 +129,7 @@ Notes:
    - Python 3 if you plan to use Python bindings or examples
    - Git if you plan to install optional packages with `vcpkg`
 
-2. For a basic build, you can skip dependency package managers: CMake will use fallback sources (`FetchContent` for Eigen3/CLI11/pybind11/SQLite3) as needed.
+2. For a basic build without system packages, configure with `-DRHBM_GEM_DEP_PROVIDER=FETCH`.
 
 3. Optional: if you prefer `vcpkg` packages, or you need Boost-backed features, prepare them now:
 
@@ -154,7 +155,7 @@ root.exe -b -q
 
 Notes:
 
-- The installation workflow later in this guide does not require `vcpkg` for a basic build because fallback dependency sources are available.
+- The installation workflow later in this guide does not require `vcpkg` for a basic build if you set `-DRHBM_GEM_DEP_PROVIDER=FETCH`.
 - If you use `vcpkg`, reuse the same toolchain arguments when you configure the project later.
 - If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
 - The project defaults are still documented in [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy). This guide chooses the simplest Windows path instead of listing every supported configuration.
@@ -235,7 +236,7 @@ $InstallPrefix = "$env:USERPROFILE\AppData\Local\RHBM-GEM"
 cmake -S . -B build `
   -G "Visual Studio 17 2022" `
   -A x64 `
-  -DUSE_SYSTEM_LIBS=OFF `
+  -DRHBM_GEM_DEP_PROVIDER=FETCH `
   -DRHBM_GEM_ROOT_MODE=OFF `
   -DCMAKE_INSTALL_PREFIX="$InstallPrefix"
 cmake --build build --config Release
@@ -258,7 +259,7 @@ Notes:
 
 - If you prepared Windows builds with `vcpkg` in **Environment Setup**, add the same toolchain arguments to the configure command in this workflow.
 - If you installed ROOT, remove `-DRHBM_GEM_ROOT_MODE=OFF` or replace it with `-DRHBM_GEM_ROOT_MODE=AUTO`.
-- This workflow intentionally uses `-DUSE_SYSTEM_LIBS=OFF` and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
+- This workflow intentionally uses `-DRHBM_GEM_DEP_PROVIDER=FETCH` and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
 
 ## Python Bindings
 
@@ -309,7 +310,7 @@ $InstallPrefix = "$env:USERPROFILE\AppData\Local\RHBM-GEM"
 cmake -S . -B build-py `
   -G "Visual Studio 17 2022" `
   -A x64 `
-  -DUSE_SYSTEM_LIBS=OFF `
+  -DRHBM_GEM_DEP_PROVIDER=FETCH `
   -DRHBM_GEM_ROOT_MODE=OFF `
   -DBUILD_PYTHON_BINDINGS=ON `
   -DCMAKE_INSTALL_PREFIX="$InstallPrefix"

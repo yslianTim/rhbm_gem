@@ -8,17 +8,24 @@ Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOption
 
 ## Dependency Strategy
 
-This project uses CMake + C++17. By default it prefers system-installed Eigen3, CLI11, pybind11, and SQLite3. If these are missing, CMake fetches pinned fallback sources for Eigen3, CLI11, pybind11, and SQLite3 via FetchContent. GoogleTest follows the same system-first strategy when `BUILD_TESTING=ON` and falls back to pinned FetchContent.
+This project uses CMake + C++17 with a single dependency-provider switch:
 
-The user guide's Windows workflow intentionally uses `-DUSE_SYSTEM_LIBS=OFF` and `-DRHBM_GEM_ROOT_MODE=OFF` for the simplest first-time setup. That is a documentation choice for end users, not a change to the project defaults described here.
+- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: require system packages for Eigen3, CLI11, SQLite3, pybind11 (if bindings enabled), and GTest (if tests enabled).
+- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3, CLI11, SQLite3, pybind11, and GTest.
 
-To force non-system dependency sources where supported:
+`Boost` has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
+
+To force fetched dependency sources:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=FETCH
 ```
 
-Boost has no bundled or FetchContent fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
+To force system packages:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=SYSTEM
+```
 
 ## Coverage (`gcov`)
 
@@ -84,7 +91,15 @@ ctest --test-dir build -L intent:migration --output-on-failure
 Supported labels:
 
 - domain: `core`, `data`, `utils`, `integration`
-- intent: `contract`, `command`, `validation`, `io`, `schema`, `migration`, `algorithm`, `bindings`, `style`
+- intent: `contract`, `command`, `validation`, `io`, `schema`, `migration`, `algorithm`, `bindings`
+
+## Repository Lint Checks
+
+Repository guard checks (style/structure/hygiene/fixture tracking/absolute-path/install consumer smoke) are executed through `lint_repo`:
+
+```bash
+cmake --build build --target lint_repo
+```
 
 ## Feature Mode Checks (`AUTO` / `OFF` / `ON`)
 
@@ -106,7 +121,7 @@ cmake --build build-openmp-on -j
 
 Notes:
 
-- On macOS with AppleClang, the project now auto-probes Homebrew `libomp` in `/opt/homebrew/opt/libomp` and `/usr/local/opt/libomp` when `OpenMP_ROOT` is not set.
+- On macOS with AppleClang, the project auto-probes Homebrew `libomp` in `/opt/homebrew/opt/libomp` and `/usr/local/opt/libomp` when `OpenMP_ROOT` is not set.
 - If VSCode CMake Tools still reports missing OpenMP after installing `libomp`, clear the old configure cache and configure again (for example: `CMake: Delete Cache and Reconfigure`).
 
 3. Force OpenMP ON on Linux:
@@ -166,7 +181,7 @@ Beginner / common:
 | `BUILD_TESTING` | `ON` | Build test targets (aggregate target: `tests_all`). |
 | `ENABLE_COVERAGE` | `OFF` | Enable `gcov` coverage instrumentation and the `coverage` target. |
 | `COVERAGE_INCLUDE_TESTS` | `OFF` | Include `tests/` files in the coverage summary when coverage is enabled. |
-| `USE_SYSTEM_LIBS` | `ON` | Prefer system packages for Eigen3, CLI11, pybind11, and SQLite3. |
+| `RHBM_GEM_DEP_PROVIDER` | `SYSTEM` | Dependency provider mode: `SYSTEM` or `FETCH`. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
 | `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `bindings/`. |
 | `RHBM_GEM_BUILD_GUI` | `ON` | Build the Qt6 GUI executable (`RHBM-GEM-GUI`) when Qt6 Core/Widgets are available. |
@@ -190,9 +205,9 @@ Advanced / environment control:
 
 Notes:
 
-1. For Eigen3, CLI11, pybind11, and SQLite3, `-DUSE_SYSTEM_LIBS=OFF` is usually simpler than setting multiple `CMAKE_DISABLE_FIND_PACKAGE_*` flags.
+1. `RHBM_GEM_DEP_PROVIDER=FETCH` is recommended when system dependencies are unavailable.
 2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_BOOST_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
-3. When system packages are unavailable, FetchContent fallbacks require network access unless archives are already cached.
+3. `FETCH` mode requires network access unless archives are already cached.
 
 ## Standard Build Directory Workflow
 
@@ -212,8 +227,11 @@ These examples are for validating configuration behavior and CMake options. For 
 # Release build, no tests
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 
-# Force non-system dependency sources
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_LIBS=OFF
+# Force fetched dependencies
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=FETCH
+
+# Force system dependencies
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=SYSTEM
 
 # Pure C++ build (skip Python bindings)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
@@ -250,8 +268,17 @@ After installation, downstream CMake projects can consume this project with:
 
 ```cmake
 find_package(RHBM_GEM CONFIG REQUIRED)
-target_link_libraries(your_target PRIVATE RHBM_GEM::core)
+target_link_libraries(your_target PRIVATE RHBM_GEM::rhbm_gem)
 ```
+
+## Migration Notes
+
+If you are upgrading from the previous CMake interface:
+
+- `USE_SYSTEM_LIBS=ON` -> `RHBM_GEM_DEP_PROVIDER=SYSTEM`
+- `USE_SYSTEM_LIBS=OFF` -> `RHBM_GEM_DEP_PROVIDER=FETCH`
+- `RHBM_GEM::core` (and split library targets) -> `RHBM_GEM::rhbm_gem`
+- repository/style guard tests in `ctest` -> `cmake --build <build> --target lint_repo`
 
 To inspect the full cache after configure:
 

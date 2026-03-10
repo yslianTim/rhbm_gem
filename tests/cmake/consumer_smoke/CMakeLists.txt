@@ -8,4 +8,4 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(RHBM_GEM CONFIG REQUIRED)
 
 add_executable(rhbm_gem_consumer_smoke main.cpp)
-target_link_libraries(rhbm_gem_consumer_smoke PRIVATE RHBM_GEM::core)
+target_link_libraries(rhbm_gem_consumer_smoke PRIVATE RHBM_GEM::rhbm_gem)

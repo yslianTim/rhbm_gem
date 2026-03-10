@@ -22,10 +22,7 @@ function(add_rhbm_gtest_target target_name)
     add_executable(${target_name} ${ARG_SOURCES})
 
     target_link_libraries(${target_name} PRIVATE
-        core
-        utils
-        data
-        gui_adapter
+        rhbm_gem
         CompilerFlags
         ${GTEST_MAIN_TARGET}
     )
@@ -37,12 +34,6 @@ function(add_rhbm_gtest_target target_name)
         "${PROJECT_SOURCE_DIR}/src/data"
         "${PROJECT_SOURCE_DIR}/src/data/internal"
         "${PROJECT_SOURCE_DIR}/tests"
-    )
-
-    set_target_properties(${target_name} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-        ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-        LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
     )
 
     set(test_labels "domain:${ARG_DOMAIN}")
