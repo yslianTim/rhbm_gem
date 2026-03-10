@@ -43,6 +43,7 @@ For iteration method extension, additionally update:
 
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
+- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
 - `tests/data/io/DataObjectManager_test.cpp`
 
 ## 3. Add a reusable operation in `DataObjectWorkflowOps`
@@ -73,9 +74,13 @@ Implementation rules (`src/core/workflow/DataObjectWorkflowOps.cpp`):
 Current `ForEachDataObject` contract includes:
 
 - mutable and const callback overloads
-- optional key filtering by `key_tag_list`
-- optional ordering via `IterateOptions::deterministic_order`
+- optional key filtering by `key_tag_list` (missing keys are skipped with warning logs)
+- `IterateOptions::deterministic_order` applies when `key_tag_list` is empty
+  (`true` sorts keys lexicographically; `false` uses current container order)
+- when `key_tag_list` is not empty, callback order follows `key_tag_list` order
 - snapshot-based traversal (callbacks run after snapshot capture)
+- empty callback throws (`ForEachDataObject(): callback is empty.`
+  / `ForEachDataObject() const: callback is empty.`)
 
 When extending iteration behavior:
 
@@ -141,7 +146,7 @@ Add or extend tests for:
 Common files:
 
 - `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
-- `tests/data/io/DataObjectManager_test.cpp`
+- `tests/data/io/DataObjectManager_test.cpp` (when manager-level load/save or key handling is affected)
 - command-specific suites under `tests/core/command/`
 
 ## 8. Documentation checklist
