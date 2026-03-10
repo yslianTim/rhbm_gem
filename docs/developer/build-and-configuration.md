@@ -11,9 +11,7 @@ Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOption
 This project uses CMake + C++17 with a single dependency-provider switch:
 
 - `RHBM_GEM_DEP_PROVIDER=SYSTEM`: require system packages for Eigen3, CLI11, SQLite3, pybind11 (if bindings enabled), and GTest (if tests enabled).
-- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3, CLI11, SQLite3, pybind11, and GTest.
-
-`Boost` has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
+- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3, CLI11, SQLite3, Boost, pybind11, and GTest.
 
 To force fetched dependency sources:
 
@@ -147,25 +145,7 @@ cmake --build build-root-off -j
 cmake -S . -B build-root-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON
 ```
 
-6. Force Boost OFF:
-
-```bash
-cmake -S . -B build-boost-off -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=OFF
-```
-
-7. Force Boost ON:
-
-```bash
-cmake -S . -B build-boost-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON
-```
-
-8. Force Boost ON with required components:
-
-```bash
-cmake -S . -B build-boost-components -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_GEM_BOOST_COMPONENTS="filesystem;system"
-```
-
-9. If OpenMP is missing on Linux, install the package set that matches your compiler toolchain (Ubuntu/Debian + Clang example):
+6. If OpenMP is missing on Linux, install the package set that matches your compiler toolchain (Ubuntu/Debian + Clang example):
 
 ```bash
 sudo apt install -y libomp-dev
@@ -189,8 +169,6 @@ Beginner / common:
 | `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `bindings/`. |
 | `RHBM_GEM_BUILD_GUI` | `ON` | Build the Qt6 GUI executable (`RHBM-GEM-GUI`) when Qt6 Core/Widgets are available. |
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
-| `RHBM_GEM_BOOST_MODE` | `AUTO` | Boost mode control: `AUTO`, `ON`, or `OFF`. |
-| `RHBM_GEM_BOOST_COMPONENTS` | empty | Semicolon-separated Boost components required when Boost is enabled. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS` | `OFF` | Enable the experimental bond-analysis workflow hook inside `PotentialAnalysisCommand`. |
 | `RHBM_GEM_LEGACY_V1_SUPPORT` | `ON` | Enable migration support for legacy v1 SQLite schema. |
@@ -203,13 +181,13 @@ Advanced / environment control:
 | --- | --- | --- |
 | `CMAKE_PREFIX_PATH` | `/opt/homebrew;/opt/homebrew/opt/libomp` | Extra package search prefixes for `find_package(...)`. |
 | `OpenMP_ROOT` | `/opt/homebrew/opt/libomp` | Help CMake find OpenMP on macOS/Homebrew. |
-| `Boost_ROOT` | `/opt/homebrew/opt/boost` | Help CMake find Boost when automatic detection fails. |
+| `Boost_ROOT` | `/opt/homebrew/opt/boost` | Help CMake find system Boost when automatic detection fails. |
 | `Python_EXECUTABLE` | `/opt/homebrew/bin/python3` | Select the interpreter used to build bindings and derive the install layout. |
 
 Notes:
 
 1. `RHBM_GEM_DEP_PROVIDER=FETCH` is recommended when system dependencies are unavailable.
-2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_BOOST_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
+2. The project-specific mode flags (`RHBM_GEM_OPENMP_MODE`, `RHBM_GEM_ROOT_MODE`) are preferred over `CMAKE_DISABLE_FIND_PACKAGE_*`.
 3. `FETCH` mode requires network access unless archives are already cached.
 
 ## Standard Build Directory Workflow
@@ -243,14 +221,11 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BUILD_GUI=ON
 cmake --build build --target RHBM_GEM_gui -j
 
-# Force ROOT/OpenMP/Boost requirements
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GEM_OPENMP_MODE=ON -DRHBM_GEM_BOOST_MODE=ON
+# Force ROOT/OpenMP requirements
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GEM_OPENMP_MODE=ON
 
 # Enable the experimental PotentialAnalysis bond workflow
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS=ON
-
-# Force Boost with specific components
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_GEM_BOOST_COMPONENTS="filesystem;system"
 
 # Disable legacy v1 schema migration support
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_LEGACY_V1_SUPPORT=OFF

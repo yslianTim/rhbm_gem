@@ -37,9 +37,7 @@
 #include <limits>
 #include <sstream>
 
-#ifdef HAVE_BOOST
 #include <boost/math/distributions/students_t.hpp>
-#endif
 
 namespace rhbm_gem {
 

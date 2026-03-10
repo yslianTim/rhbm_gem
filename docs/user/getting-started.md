@@ -19,7 +19,6 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 | A standard C++ build | A compiler toolchain, CMake, and the platform prerequisites for your OS |
 | Python interface or Python examples | Python 3; on Linux also install `python3-dev` |
 | Plots or figure output | ROOT on the platform where you will build |
-| Boost-backed features | Boost, or leave `RHBM_GEM_BOOST_MODE=AUTO` / set `RHBM_GEM_BOOST_MODE=OFF` |
 
 A few dependencies are optional:
 
@@ -29,7 +28,6 @@ A few dependencies are optional:
 - Use `RHBM_GEM_DEP_PROVIDER=SYSTEM` to require system packages.
 - Use `RHBM_GEM_DEP_PROVIDER=FETCH` to use pinned `FetchContent` sources (network access required during configure).
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
-- `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
 - Runtime database default path is `${HOME}/.rhbmgem/data/database.sqlite`. Set `RHBM_GEM_DATA_DIR` to change the default root.
 
 For the full dependency policy and override flags such as `RHBM_GEM_DEP_PROVIDER`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
@@ -83,7 +81,6 @@ root-config --prefix
 Notes:
 
 - Install `root` only if you need plotting or figure output.
-- Install `boost` only if you need Boost-backed features.
 
 ### Linux (Ubuntu/Debian example)
 
@@ -427,15 +424,13 @@ The pipeline example should create:
 
 1. Missing `Eigen3`, `SQLite3`, `pybind11`, or `CLI11`
    Fallback sources are used only with `-DRHBM_GEM_DEP_PROVIDER=FETCH`. In `SYSTEM` mode, install the required packages first.
-2. Missing Boost
-   Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
-3. Missing `GTest` during configure
+2. Missing `GTest` during configure
    If you do not need tests, set `-DBUILD_TESTING=OFF` (the installation workflows in this guide already do this).
-4. `ModuleNotFoundError: No module named 'rhbm_gem_module'`
+3. `ModuleNotFoundError: No module named 'rhbm_gem_module'`
    Verify `BUILD_PYTHON_BINDINGS=ON`, run `cmake --install`, and make sure `PYTHONPATH` points to the actual install `site-packages` path.
-5. Install prefix mismatch
+4. Install prefix mismatch
    If you install under a different prefix, recompute the `site-packages` path from that prefix instead of reusing the examples for `~/.local` or `%USERPROFILE%\AppData\Local\RHBM-GEM`.
-6. `Could not find sample model ...`
+5. `Could not find sample model ...`
    Pass `--model /path/to/your_model.cif` explicitly.
 
 ## Verbosity Levels

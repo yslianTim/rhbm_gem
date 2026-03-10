@@ -37,9 +37,7 @@
 #include <limits>
 #include <sstream>
 
-#ifdef HAVE_BOOST
 #include <boost/math/distributions/students_t.hpp>
-#endif
 
 namespace rhbm_gem {
 void DemoPainter::PaintGroupWidthScatterPlot(
@@ -744,7 +742,6 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
         //};
 
         auto p_value{ std::numeric_limits<double>::quiet_NaN() };
-        #ifdef HAVE_BOOST
         if (std::isfinite(t_value) && dof > 0.0)
         {
             boost::math::students_t_distribution<double> dist(dof);
@@ -752,7 +749,6 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
                 boost::math::complement(dist, std::fabs(t_value))
             );
         }
-        #endif
 
         std::ostringstream width_summary;
         width_summary << "Width estimate summary for model " << model_object->GetPdbID()

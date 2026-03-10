@@ -15,6 +15,9 @@ set(RHBM_GEM_PYBIND11_URL_HASH "SHA256=2f20a0af0b921815e0e169ea7fec6390986932358
 set(RHBM_GEM_SQLITE3_URL "https://www.sqlite.org/2025/sqlite-amalgamation-3490100.zip")
 set(RHBM_GEM_SQLITE3_URL_HASH "SHA256=6cebd1d8403fc58c30e93939b246f3e6e58d0765a5cd50546f16c00fd805d2c3")
 
+set(RHBM_GEM_BOOST_URL "https://archives.boost.io/release/1.90.0/source/boost_1_90_0.tar.bz2")
+set(RHBM_GEM_BOOST_URL_HASH "SHA256=49551aff3b22cbc5c5a9ed3dbc92f0e23ea50a0f7325b0d198b705e8ee3fc305")
+
 function(rhbm_gem_populate_content dep_name dep_url dep_hash out_source_dir)
     FetchContent_Declare(${dep_name}
         URL "${dep_url}"
@@ -31,11 +34,20 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
     find_package(Eigen3 REQUIRED)
     find_package(CLI11 REQUIRED)
     find_package(SQLite3 REQUIRED)
+    if(POLICY CMP0167)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0167 OLD)
+        find_package(Boost REQUIRED)
+        cmake_policy(POP)
+    else()
+        find_package(Boost REQUIRED)
+    endif()
 
     set(RHBM_GEM_USE_SYSTEM_DEPS TRUE CACHE INTERNAL "RHBM_GEM uses system dependencies" FORCE)
     set(RHBM_GEM_EIGEN_INCLUDE_DIR "" CACHE INTERNAL "Fetched Eigen include root" FORCE)
     set(RHBM_GEM_CLI11_INCLUDE_DIR "" CACHE INTERNAL "Fetched CLI11 include root" FORCE)
     set(RHBM_GEM_SQLITE3_SOURCE_DIR "" CACHE INTERNAL "Fetched SQLite3 source root" FORCE)
+    set(RHBM_GEM_BOOST_INCLUDE_DIR "" CACHE INTERNAL "Fetched Boost include root" FORCE)
 else()
     message(STATUS "Dependency provider: FETCH")
 
@@ -45,19 +57,20 @@ else()
         "${RHBM_GEM_EIGEN3_URL_HASH}"
         RHBM_GEM_EIGEN3_SOURCE_DIR
     )
+
     rhbm_gem_populate_content(
         rhbm_gem_cli11
         "${RHBM_GEM_CLI11_URL}"
         "${RHBM_GEM_CLI11_URL_HASH}"
         RHBM_GEM_CLI11_SOURCE_DIR
     )
+
     rhbm_gem_populate_content(
         rhbm_gem_sqlite3
         "${RHBM_GEM_SQLITE3_URL}"
         "${RHBM_GEM_SQLITE3_URL_HASH}"
         RHBM_GEM_SQLITE3_SOURCE_DIR
     )
-
     if(NOT EXISTS "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.c"
         OR NOT EXISTS "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.h")
         message(FATAL_ERROR
@@ -65,10 +78,23 @@ else()
             "does not contain sqlite3.c/sqlite3.h.")
     endif()
 
+    rhbm_gem_populate_content(
+        rhbm_gem_boost
+        "${RHBM_GEM_BOOST_URL}"
+        "${RHBM_GEM_BOOST_URL_HASH}"
+        RHBM_GEM_BOOST_SOURCE_DIR
+    )
+    if(NOT EXISTS "${RHBM_GEM_BOOST_SOURCE_DIR}/boost")
+        message(FATAL_ERROR
+            "Fetched Boost source at '${RHBM_GEM_BOOST_SOURCE_DIR}' "
+            "does not contain the expected boost/ headers.")
+    endif()
+
     set(RHBM_GEM_USE_SYSTEM_DEPS FALSE CACHE INTERNAL "RHBM_GEM uses system dependencies" FORCE)
     set(RHBM_GEM_EIGEN_INCLUDE_DIR "${RHBM_GEM_EIGEN3_SOURCE_DIR}" CACHE INTERNAL "Fetched Eigen include root" FORCE)
     set(RHBM_GEM_CLI11_INCLUDE_DIR "${RHBM_GEM_CLI11_SOURCE_DIR}/include" CACHE INTERNAL "Fetched CLI11 include root" FORCE)
     set(RHBM_GEM_SQLITE3_SOURCE_DIR "${RHBM_GEM_SQLITE3_SOURCE_DIR}" CACHE INTERNAL "Fetched SQLite3 source root" FORCE)
+    set(RHBM_GEM_BOOST_INCLUDE_DIR "${RHBM_GEM_BOOST_SOURCE_DIR}" CACHE INTERNAL "Fetched Boost include root" FORCE)
 
     install(
         DIRECTORY "${RHBM_GEM_EIGEN_INCLUDE_DIR}/Eigen"
@@ -88,6 +114,11 @@ else()
 
     install(
         FILES "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.h"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+
+    install(
+        DIRECTORY "${RHBM_GEM_BOOST_INCLUDE_DIR}/boost"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     )
 endif()
