@@ -32,7 +32,10 @@ For a new built-in command, update these areas in one change:
 - `include/rhbm_gem/core/command/CommandMetadata.hpp` (add new `CommandId`)
 - `src/core/internal/BuiltInCommandList.def` (register built-in metadata)
 - `src/core/command/BuiltInCommandCatalog.cpp` (add command header include)
-- `bindings/*Bindings.cpp` (add Python bindings in a command-specific binding file)
+- `bindings/<YourFeature>Bindings.cpp` (add command-specific Python bindings)
+- `bindings/BindingHelpers.hpp` (declare binding entrypoint)
+- `bindings/CoreBindings.cpp` (call the binding entrypoint in module init)
+- `bindings/CMakeLists.txt` (add binding source to `BINDINGS_SOURCES`)
 - `tests/core/command/<YourCommand>_test.cpp`
 - `tests/cmake/core_tests.cmake` (wire tests)
 - related contract tests under `tests/core/contract/`
@@ -86,7 +89,7 @@ class ExampleCommand
 public:
     using Options = ExampleCommandOptions;
 
-    ExampleCommand();
+    explicit ExampleCommand(const DataIoServices & data_io_services);
     ~ExampleCommand() override = default;
 
     void SetInputPath(const std::filesystem::path & path);
@@ -128,7 +131,11 @@ constexpr std::string_view kInputKey{ "input" };
 
 namespace rhbm_gem {
 
-ExampleCommand::ExampleCommand() :
+ExampleCommand::ExampleCommand(const DataIoServices & data_io_services) :
+    CommandWithProfileOptions<
+        ExampleCommandOptions,
+        CommandId::Example,
+        CommonOptionProfile::FileWorkflow>{ data_io_services },
     m_model_object{ nullptr }
 {
 }
@@ -261,7 +268,7 @@ RHBM_GEM_BUILTIN_COMMAND(
 Also add required include(s):
 
 - include `<rhbm_gem/core/command/ExampleCommand.hpp>` in `src/core/command/BuiltInCommandCatalog.cpp`
-- include `<rhbm_gem/core/command/ExampleCommand.hpp>` in `bindings/CoreBindings.cpp`
+- include `<rhbm_gem/core/command/ExampleCommand.hpp>` in your command-specific binding source (for example `bindings/ExampleBindings.cpp`)
 
 Important:
 
@@ -274,11 +281,14 @@ Python bindings are explicit/manual and split by command under `bindings/`.
 
 Required actions:
 
-1. create/update the command-specific binding source (for example `bindings/ExampleCommandBindings.cpp`)
+1. create/update the command-specific binding source (for example `bindings/ExampleBindings.cpp`)
 2. bind class with `BindBuiltInCommand<rhbm_gem::ExampleCommand>(m)`
 3. expose constructor that requires `DataIoServices` context
 4. expose supported setters and `Execute`
 5. call `BindCommandDiagnostics(example_command)`
+6. declare `BindExample(...)` in `bindings/BindingHelpers.hpp`
+7. call `BindExample(module)` in `bindings/CoreBindings.cpp`
+8. add the new binding source file in `bindings/CMakeLists.txt`
 
 Binding skeleton:
 
@@ -311,6 +321,8 @@ Do not expose internal hooks such as `RegisterCLIOptionsExtend(...)` or `Validat
 Add command source files to `src/CMakeLists.txt` in `RHBM_GEM_LIBRARY_SOURCES`.
 Use the `command/<YourCommand>.cpp` path entry.
 
+Add command binding sources to `bindings/CMakeLists.txt` in `BINDINGS_SOURCES`.
+
 If you add extra workflow files, include them in the same list.
 
 ## 7. Testing updates
@@ -327,7 +339,11 @@ Update contract tests that assert explicit built-in lists or per-command mapping
 - `tests/core/contract/CommandDescriptorShape_test.cpp`
 - `tests/core/contract/CommandCommonOptions_test.cpp`
 
-If command docs include generated built-in lists/matrices, update those sections and run docs sync tests.
+When built-in membership or command metadata changes, update generated blocks in:
+
+- `docs/developer/architecture/command-architecture.md`
+
+Then run docs sync tests (`tests/core/contract/DocsSync_test.cpp`).
 
 ## 8. Documentation updates
 
@@ -343,8 +359,8 @@ Before merging:
 1. `CommandId` was added in `include/rhbm_gem/core/command/CommandMetadata.hpp`
 2. command class compiles and is added to `src/CMakeLists.txt`
 3. built-in macro entry exists in `src/core/internal/BuiltInCommandList.def`
-4. command headers are included where required (`BuiltInCommandCatalog.cpp`, `CoreBindings.cpp`)
-5. Python class and binding methods are added in `bindings/CoreBindings.cpp`
+4. command headers are included where required (`BuiltInCommandCatalog.cpp`, command-specific `bindings/*Bindings.cpp`)
+5. Python binding wiring is complete (`bindings/<YourFeature>Bindings.cpp`, `bindings/BindingHelpers.hpp`, `bindings/CoreBindings.cpp`, `bindings/CMakeLists.txt`)
 6. command tests and contract tests are updated
 7. docs are updated to reflect final command surface
 
