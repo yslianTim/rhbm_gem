@@ -1,28 +1,4 @@
-# Install public headers and legal notices.
-install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/rhbm_gem/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem"
-    FILES_MATCHING
-    PATTERN "*.hpp"
-)
-install(
-    FILES
-        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-        "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
-    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
-)
-install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/examples/python/"
-    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python"
-    FILES_MATCHING
-    PATTERN "*.py"
-)
-install(
-    FILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/test_model.cif"
-    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python/data"
-)
-
-if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
+function(rhbm_gem_install_fetched_headers)
     install(
         DIRECTORY "${RHBM_GEM_EIGEN_INCLUDE_DIR}/Eigen"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
@@ -48,6 +24,34 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
         DIRECTORY "${RHBM_GEM_BOOST_INCLUDE_DIR}/boost"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     )
+endfunction()
+
+# Install public headers and legal notices.
+install(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/rhbm_gem/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem"
+    FILES_MATCHING
+    PATTERN "*.hpp"
+)
+install(
+    FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
+)
+install(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/examples/python/"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python"
+    FILES_MATCHING
+    PATTERN "*.py"
+)
+install(
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/test_model.cif"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python/data"
+)
+
+if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
+    rhbm_gem_install_fetched_headers()
 endif()
 
 set(RHBM_GEM_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")

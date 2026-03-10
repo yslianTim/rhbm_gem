@@ -17,6 +17,10 @@ set(RHBM_GEM_BOOST_URL "https://archives.boost.io/release/1.90.0/source/boost_1_
 set(RHBM_GEM_BOOST_URL_HASH "SHA256=49551aff3b22cbc5c5a9ed3dbc92f0e23ea50a0f7325b0d198b705e8ee3fc305")
 set(RHBM_GEM_BOOST_FALLBACK_VERSION "1.90.0")
 
+if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
+    include(FetchContent)
+endif()
+
 function(rhbm_gem_populate_content dep_name dep_url dep_hash out_source_dir)
     FetchContent_Declare(${dep_name}
         URL "${dep_url}"
@@ -41,14 +45,8 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
     else()
         find_package(Boost REQUIRED)
     endif()
-
-    set(RHBM_GEM_EIGEN_INCLUDE_DIR "")
-    set(RHBM_GEM_CLI11_INCLUDE_DIR "")
-    set(RHBM_GEM_SQLITE3_SOURCE_DIR "")
-    set(RHBM_GEM_BOOST_INCLUDE_DIR "")
 else()
     message(STATUS "Dependency provider: FETCH")
-    include(FetchContent)
 
     rhbm_gem_populate_content(
         rhbm_gem_eigen3
@@ -101,7 +99,6 @@ if(BUILD_PYTHON_BINDINGS)
     if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(pybind11 CONFIG REQUIRED)
     else()
-        include(FetchContent)
         set(PYBIND11_TEST OFF CACHE BOOL "Disable pybind11 tests" FORCE)
         FetchContent_Declare(rhbm_gem_pybind11
             URL "${RHBM_GEM_PYBIND11_URL}"
@@ -121,7 +118,6 @@ if(BUILD_TESTING)
     if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(GTest REQUIRED)
     else()
-        include(FetchContent)
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         FetchContent_Declare(rhbm_gem_googletest
             URL "${RHBM_GEM_GTEST_URL}"

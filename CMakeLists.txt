@@ -1,7 +1,4 @@
 cmake_minimum_required(VERSION 3.18)
-message(STATUS "----------------------------")
-message(STATUS "---   RHBM-GEM Project   ---")
-message(STATUS "----------------------------")
 project(RHBM_GEM
     VERSION 1.0
     DESCRIPTION RHBM-GEM

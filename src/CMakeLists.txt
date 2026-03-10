@@ -3,13 +3,14 @@ function(rhbm_utils_prepare_openmp_for_appleclang)
         return()
     endif()
 
-    set(_rhbm_openmp_root "")
     if(DEFINED OpenMP_ROOT)
         if(EXISTS "${OpenMP_ROOT}/include/omp.h")
-            set(_rhbm_openmp_root "${OpenMP_ROOT}")
+            return()
         endif()
+        return()
     endif()
 
+    set(_rhbm_openmp_root "")
     if(NOT _rhbm_openmp_root)
         set(_rhbm_openmp_candidates)
         if(DEFINED ENV{HOMEBREW_PREFIX})
@@ -32,10 +33,7 @@ function(rhbm_utils_prepare_openmp_for_appleclang)
 
     if(_rhbm_openmp_root)
         message(STATUS "AppleClang detected, probing OpenMP in: ${_rhbm_openmp_root}")
-        set(OpenMP_ROOT "${_rhbm_openmp_root}" CACHE PATH
-            "Root directory for OpenMP installation"
-            FORCE
-        )
+        set(OpenMP_ROOT "${_rhbm_openmp_root}" PARENT_SCOPE)
     endif()
 endfunction()
 

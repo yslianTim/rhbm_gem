@@ -1,3 +1,17 @@
+function(rhbm_gem_normalize_cache_enum cache_var description)
+    set(_rhbm_gem_valid_values ${ARGN})
+    set_property(CACHE ${cache_var} PROPERTY STRINGS ${_rhbm_gem_valid_values})
+
+    string(TOUPPER "${${cache_var}}" _rhbm_gem_normalized_value)
+    if(NOT _rhbm_gem_normalized_value IN_LIST _rhbm_gem_valid_values)
+        string(REPLACE ";" ", " _rhbm_gem_valid_values_text "${_rhbm_gem_valid_values}")
+        message(FATAL_ERROR
+            "Invalid ${cache_var}='${${cache_var}}'. Valid values: ${_rhbm_gem_valid_values_text}.")
+    endif()
+
+    set(${cache_var} "${_rhbm_gem_normalized_value}" CACHE STRING "${description}" FORCE)
+endfunction()
+
 # Core build options
 option(BUILD_TESTING "Build unit tests" ON)
 option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
@@ -13,56 +27,33 @@ option(RHBM_GEM_LEGACY_V1_SUPPORT
 
 set(RHBM_GEM_DEP_PROVIDER "SYSTEM" CACHE STRING
     "Dependency provider mode: SYSTEM or FETCH")
-set_property(CACHE RHBM_GEM_DEP_PROVIDER PROPERTY STRINGS SYSTEM FETCH)
-
 set(RHBM_GEM_OPENMP_MODE "AUTO" CACHE STRING "OpenMP feature mode: AUTO, ON, or OFF")
-set_property(CACHE RHBM_GEM_OPENMP_MODE PROPERTY STRINGS AUTO ON OFF)
 set(RHBM_GEM_ROOT_MODE "AUTO" CACHE STRING "ROOT feature mode: AUTO, ON, or OFF")
-set_property(CACHE RHBM_GEM_ROOT_MODE PROPERTY STRINGS AUTO ON OFF)
 set(RHBM_GEM_PYTHON_INSTALL_LAYOUT "SITE_PREFIX" CACHE STRING
     "Python extension install layout: SITE_PREFIX or LIBDIR")
-set_property(CACHE RHBM_GEM_PYTHON_INSTALL_LAYOUT PROPERTY STRINGS SITE_PREFIX LIBDIR)
 set(RHBM_GEM_PYTHON_INSTALL_DIR "" CACHE PATH
     "Override installation directory for Python extension module (relative or absolute path)")
 
-set(_RHBM_GEM_VALID_DEP_PROVIDERS SYSTEM FETCH)
-string(TOUPPER "${RHBM_GEM_DEP_PROVIDER}" RHBM_GEM_DEP_PROVIDER)
-if(NOT RHBM_GEM_DEP_PROVIDER IN_LIST _RHBM_GEM_VALID_DEP_PROVIDERS)
-    message(FATAL_ERROR
-        "Invalid RHBM_GEM_DEP_PROVIDER='${RHBM_GEM_DEP_PROVIDER}'. Valid values: SYSTEM, FETCH.")
-endif()
-set(RHBM_GEM_DEP_PROVIDER "${RHBM_GEM_DEP_PROVIDER}" CACHE STRING
-    "Dependency provider mode: SYSTEM or FETCH" FORCE)
-unset(_RHBM_GEM_VALID_DEP_PROVIDERS)
-
-set(_RHBM_GEM_VALID_FEATURE_MODES AUTO ON OFF)
-string(TOUPPER "${RHBM_GEM_OPENMP_MODE}" RHBM_GEM_OPENMP_MODE)
-if(NOT RHBM_GEM_OPENMP_MODE IN_LIST _RHBM_GEM_VALID_FEATURE_MODES)
-    message(FATAL_ERROR
-        "Invalid RHBM_GEM_OPENMP_MODE='${RHBM_GEM_OPENMP_MODE}'. Valid values: AUTO, ON, OFF.")
-endif()
-set(RHBM_GEM_OPENMP_MODE "${RHBM_GEM_OPENMP_MODE}" CACHE STRING
-    "OpenMP feature mode: AUTO, ON, or OFF" FORCE)
-
-string(TOUPPER "${RHBM_GEM_ROOT_MODE}" RHBM_GEM_ROOT_MODE)
-if(NOT RHBM_GEM_ROOT_MODE IN_LIST _RHBM_GEM_VALID_FEATURE_MODES)
-    message(FATAL_ERROR
-        "Invalid RHBM_GEM_ROOT_MODE='${RHBM_GEM_ROOT_MODE}'. Valid values: AUTO, ON, OFF.")
-endif()
-set(RHBM_GEM_ROOT_MODE "${RHBM_GEM_ROOT_MODE}" CACHE STRING
-    "ROOT feature mode: AUTO, ON, or OFF" FORCE)
-unset(_RHBM_GEM_VALID_FEATURE_MODES)
-
-set(_RHBM_GEM_VALID_PY_LAYOUTS SITE_PREFIX LIBDIR)
-string(TOUPPER "${RHBM_GEM_PYTHON_INSTALL_LAYOUT}" RHBM_GEM_PYTHON_INSTALL_LAYOUT)
-if(NOT RHBM_GEM_PYTHON_INSTALL_LAYOUT IN_LIST _RHBM_GEM_VALID_PY_LAYOUTS)
-    message(FATAL_ERROR
-        "Invalid RHBM_GEM_PYTHON_INSTALL_LAYOUT='${RHBM_GEM_PYTHON_INSTALL_LAYOUT}'. "
-        "Valid values: SITE_PREFIX, LIBDIR.")
-endif()
-set(RHBM_GEM_PYTHON_INSTALL_LAYOUT "${RHBM_GEM_PYTHON_INSTALL_LAYOUT}" CACHE STRING
-    "Python extension install layout: SITE_PREFIX or LIBDIR" FORCE)
-unset(_RHBM_GEM_VALID_PY_LAYOUTS)
+rhbm_gem_normalize_cache_enum(
+    RHBM_GEM_DEP_PROVIDER
+    "Dependency provider mode: SYSTEM or FETCH"
+    SYSTEM FETCH
+)
+rhbm_gem_normalize_cache_enum(
+    RHBM_GEM_OPENMP_MODE
+    "OpenMP feature mode: AUTO, ON, or OFF"
+    AUTO ON OFF
+)
+rhbm_gem_normalize_cache_enum(
+    RHBM_GEM_ROOT_MODE
+    "ROOT feature mode: AUTO, ON, or OFF"
+    AUTO ON OFF
+)
+rhbm_gem_normalize_cache_enum(
+    RHBM_GEM_PYTHON_INSTALL_LAYOUT
+    "Python extension install layout: SITE_PREFIX or LIBDIR"
+    SITE_PREFIX LIBDIR
+)
 
 if(ENABLE_COVERAGE AND NOT BUILD_TESTING)
     message(FATAL_ERROR "ENABLE_COVERAGE requires BUILD_TESTING=ON")
