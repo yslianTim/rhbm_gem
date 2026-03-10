@@ -52,7 +52,7 @@ private:
     std::shared_ptr<ModelObject> m_model_object;
 
 public:
-    PotentialAnalysisCommand();
+    explicit PotentialAnalysisCommand(const DataIoServices & data_io_services);
     ~PotentialAnalysisCommand() override = default;
     void SetTrainingAlphaFlag(bool value);
     void SetAsymmetryFlag(bool value);

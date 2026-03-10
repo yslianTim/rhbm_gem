@@ -22,7 +22,8 @@ def main() -> int:
     assert hasattr(m.TesterType, "BENCHMARK")
     assert all(hasattr(m, name) for name in BUILT_IN_COMMAND_NAMES)
 
-    instances = [getattr(m, name)() for name in BUILT_IN_COMMAND_NAMES]
+    services = m.DataIoServices()
+    instances = [getattr(m, name)(services) for name in BUILT_IN_COMMAND_NAMES]
     assert all(
         all(
             hasattr(instance, method)
@@ -31,14 +32,14 @@ def main() -> int:
         for instance in instances
     )
 
-    map_visualization = m.MapVisualizationCommand()
+    map_visualization = m.MapVisualizationCommand(services)
     assert hasattr(map_visualization, "SetModelFilePath")
     assert hasattr(map_visualization, "SetMapFilePath")
     assert hasattr(map_visualization, "SetAtomSerialID")
     assert hasattr(map_visualization, "SetSamplingSize")
     assert hasattr(map_visualization, "SetWindowSize")
 
-    position_estimation = m.PositionEstimationCommand()
+    position_estimation = m.PositionEstimationCommand(services)
     assert hasattr(position_estimation, "SetMapFilePath")
     assert hasattr(position_estimation, "SetIterationCount")
     assert hasattr(position_estimation, "SetKNNSize")
@@ -46,10 +47,10 @@ def main() -> int:
     assert hasattr(position_estimation, "SetThresholdRatio")
     assert hasattr(position_estimation, "SetDedupTolerance")
 
-    potential_analysis = m.PotentialAnalysisCommand()
+    potential_analysis = m.PotentialAnalysisCommand(services)
     assert hasattr(potential_analysis, "SetTrainingReportDir")
 
-    model_test = m.HRLModelTestCommand()
+    model_test = m.HRLModelTestCommand(services)
     assert hasattr(model_test, "SetTesterChoice")
     assert hasattr(model_test, "SetFitRangeMinimum")
     assert hasattr(model_test, "SetFitRangeMaximum")

@@ -9,6 +9,7 @@ namespace rhbm_gem {
 
 class MapObject;
 class MapFileFormatBase;
+class FileFormatRegistry;
 
 class MapFileWriter
 {
@@ -18,6 +19,10 @@ class MapFileWriter
 
 public:
     explicit MapFileWriter(const std::string & filename, const MapObject * map_object);
+    MapFileWriter(
+        const std::string & filename,
+        const MapObject * map_object,
+        const FileFormatRegistry & file_format_registry);
     ~MapFileWriter();
     void Write();
 

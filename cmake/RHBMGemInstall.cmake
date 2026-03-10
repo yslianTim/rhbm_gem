@@ -13,6 +13,13 @@ endif()
 if(NOT DEFINED RHBM_GEM_USE_SYSTEM_CLI11)
     set(RHBM_GEM_USE_SYSTEM_CLI11 FALSE)
 endif()
+if(NOT DEFINED RHBM_GEM_OPENMP_ROOT)
+    if(DEFINED OpenMP_ROOT)
+        set(RHBM_GEM_OPENMP_ROOT "${OpenMP_ROOT}")
+    else()
+        set(RHBM_GEM_OPENMP_ROOT "")
+    endif()
+endif()
 
 # Install public headers and legal notices.
 install(

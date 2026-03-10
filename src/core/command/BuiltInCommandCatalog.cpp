@@ -7,6 +7,7 @@
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 #include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include <rhbm_gem/data/io/DataIoServices.hpp>
 
 #include <stdexcept>
 
@@ -32,9 +33,9 @@ CommandDescriptor MakeBuiltInDescriptor(
         description,
         CommandType::kCommonOptions,
         python_binding_name,
-        []() -> std::unique_ptr<CommandBase>
+        [](const DataIoServices & data_io_services) -> std::unique_ptr<CommandBase>
         {
-            return std::make_unique<CommandType>();
+            return std::make_unique<CommandType>(data_io_services);
         }
     };
 }

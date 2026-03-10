@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <unordered_map>
 
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include "CommandTestHelpers.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -13,7 +13,7 @@ using ModelObject = rg::ModelObject;
 
 TEST(DataObjectManagerTest, LoadCifFile)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{ command_test::TestDataPath("test_model.cif") };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -22,7 +22,7 @@ TEST(DataObjectManagerTest, LoadCifFile)
 
 TEST(DataObjectManagerTest, LoadCifFileWithKeyValueEntityMetadata)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_keyvalue_entity.cif")
     };
@@ -38,7 +38,7 @@ TEST(DataObjectManagerTest, LoadCifFileWithKeyValueEntityMetadata)
 
 TEST(DataObjectManagerTest, FilterAtomFromSymmetrySkipsWhenChainMapMissing)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{ command_test::TestDataPath("test_model.cif") };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -53,7 +53,7 @@ TEST(DataObjectManagerTest, FilterAtomFromSymmetrySkipsWhenChainMapMissing)
 
 TEST(DataObjectManagerTest, LoadCifFileMissingModelNumberDefaultsToOne)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_missing_model_num.cif")
     };
@@ -65,7 +65,7 @@ TEST(DataObjectManagerTest, LoadCifFileMissingModelNumberDefaultsToOne)
 
 TEST(DataObjectManagerTest, LoadCifFileAuthOnlyAtomSiteColumns)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_auth_only.cif")
     };
@@ -79,7 +79,7 @@ TEST(DataObjectManagerTest, LoadCifFileAuthOnlyAtomSiteColumns)
 
 TEST(DataObjectManagerTest, LoadCifFileMissingNumericUsesDefaults)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_missing_numeric.cif")
     };
@@ -92,7 +92,7 @@ TEST(DataObjectManagerTest, LoadCifFileMissingNumericUsesDefaults)
 
 TEST(DataObjectManagerTest, LoadCifFileModelTwoFallback)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_model2_only.cif")
     };
@@ -104,7 +104,7 @@ TEST(DataObjectManagerTest, LoadCifFileModelTwoFallback)
 
 TEST(DataObjectManagerTest, LoadCifFileWithDoubleQuotedAtomId)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_atom_id_double_quote.cif")
     };
@@ -116,7 +116,7 @@ TEST(DataObjectManagerTest, LoadCifFileWithDoubleQuotedAtomId)
 
 TEST(DataObjectManagerTest, LoadMmcifExtension)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{ command_test::TestDataPath("test_model.mmcif") };
     ASSERT_NO_THROW(manager.ProcessFile(cif_path, "model"));
     auto model{ manager.GetTypedDataObject<ModelObject>("model") };
@@ -125,7 +125,7 @@ TEST(DataObjectManagerTest, LoadMmcifExtension)
 
 TEST(DataObjectManagerTest, LoadCifFileDatabaseOrderKeepsEmdb)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_database_order.cif")
     };
@@ -136,7 +136,7 @@ TEST(DataObjectManagerTest, LoadCifFileDatabaseOrderKeepsEmdb)
 
 TEST(DataObjectManagerTest, LoadCifFileAltBOnlyDoesNotThrow)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_alt_b_only.cif")
     };
@@ -148,7 +148,7 @@ TEST(DataObjectManagerTest, LoadCifFileAltBOnlyDoesNotThrow)
 
 TEST(DataObjectManagerTest, LoadCifFileInvalidSecondaryRangeDoesNotDropAtoms)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_invalid_secondary_range.cif")
     };
@@ -159,7 +159,7 @@ TEST(DataObjectManagerTest, LoadCifFileInvalidSecondaryRangeDoesNotDropAtoms)
 
 TEST(DataObjectManagerTest, LoadCifFileLoopMultilineAndQuotedToken)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_loop_multiline.cif")
     };
@@ -171,7 +171,7 @@ TEST(DataObjectManagerTest, LoadCifFileLoopMultilineAndQuotedToken)
 
 TEST(DataObjectManagerTest, LoadCifFileAuthSeqAlnumStructConnBuildsBond)
 {
-    DataObjectManager manager;
+    DataObjectManager manager{ command_test::BuildDataIoServices() };
     auto cif_path{
         command_test::TestDataPath("test_model_auth_seq_alnum_struct_conn.cif")
     };

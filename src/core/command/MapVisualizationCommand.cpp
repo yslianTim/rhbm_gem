@@ -1,7 +1,7 @@
 #include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
 #include "internal/CommandDataLoaderInternal.hpp"
 #include <rhbm_gem/core/command/CommandOptionBinding.hpp>
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -44,7 +44,9 @@ constexpr std::string_view kWindowSizeOption{ "--window-size" };
 
 namespace rhbm_gem {
 
-MapVisualizationCommand::MapVisualizationCommand() :
+MapVisualizationCommand::MapVisualizationCommand(const DataIoServices & data_io_services) :
+    CommandWithProfileOptions<MapVisualizationCommandOptions, CommandId::MapVisualization>{
+        data_io_services },
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {

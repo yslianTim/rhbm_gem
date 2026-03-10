@@ -2,7 +2,6 @@
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include "internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp"
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include "io/sqlite/MapStoreSql.hpp"
@@ -10,8 +9,6 @@
 #include <stdexcept>
 #include <vector>
 #include <cstring>
-
-namespace { rhbm_gem::DataObjectDAORegistrar<rhbm_gem::MapObject, rhbm_gem::MapObjectDAO> registrar_map_dao("map"); }
 
 namespace rhbm_gem {
 

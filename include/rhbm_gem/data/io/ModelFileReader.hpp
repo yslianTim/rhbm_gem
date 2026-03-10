@@ -6,6 +6,7 @@
 namespace rhbm_gem {
 
 class ModelFileFormatBase;
+class FileFormatRegistry;
 class AtomObject;
 class AtomicModelDataBlock;
 
@@ -16,7 +17,8 @@ class ModelFileReader
     bool m_has_loaded_data;
 
 public:
-    ModelFileReader(const std::string & filename);
+    explicit ModelFileReader(const std::string & filename);
+    ModelFileReader(const std::string & filename, const FileFormatRegistry & file_format_registry);
     ~ModelFileReader();
     void Read();
 

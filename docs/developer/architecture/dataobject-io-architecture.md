@@ -322,7 +322,7 @@ Current contracts:
 
 Core orchestration:
 
-- `include/rhbm_gem/core/command/DataObjectManager.hpp`
+- `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
 - `include/rhbm_gem/utils/domain/FilePathHelper.hpp`
 - `src/utils/domain/FilePathHelper.cpp`

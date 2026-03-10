@@ -3,6 +3,7 @@
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include <rhbm_gem/data/io/DataIoServices.hpp>
 
 namespace rhbm_gem::gui {
 
@@ -50,7 +51,8 @@ ExecutionResult ExecuteCommand(CommandType & command, ConfigureFn && configure)
 ExecutionResult GuiCommandExecutor::ExecuteMapSimulation(
     const MapSimulationRequest & request)
 {
-    MapSimulationCommand command;
+    const auto data_io_services{ DataIoServices::BuildDefault() };
+    MapSimulationCommand command{ data_io_services };
     return ExecuteCommand(command, [&](MapSimulationCommand & configured)
     {
         ApplyCommonOptions(configured, request.common, false);
@@ -67,7 +69,8 @@ ExecutionResult GuiCommandExecutor::ExecuteMapSimulation(
 ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
     const PotentialAnalysisRequest & request)
 {
-    PotentialAnalysisCommand command;
+    const auto data_io_services{ DataIoServices::BuildDefault() };
+    PotentialAnalysisCommand command{ data_io_services };
     return ExecuteCommand(command, [&](PotentialAnalysisCommand & configured)
     {
         ApplyCommonOptions(configured, request.common, true);
@@ -93,7 +96,8 @@ ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
 ExecutionResult GuiCommandExecutor::ExecuteResultDump(
     const ResultDumpRequest & request)
 {
-    ResultDumpCommand command;
+    const auto data_io_services{ DataIoServices::BuildDefault() };
+    ResultDumpCommand command{ data_io_services };
     return ExecuteCommand(command, [&](ResultDumpCommand & configured)
     {
         ApplyCommonOptions(configured, request.common, true);

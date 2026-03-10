@@ -1,4 +1,5 @@
 #include "internal/io/file/FileProcessFactoryBase.hpp"
+#include "internal/io/file/FileFormatRegistry.hpp"
 #include <rhbm_gem/data/io/ModelFileReader.hpp>
 #include <rhbm_gem/data/io/ModelFileWriter.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -13,9 +14,14 @@
 
 namespace rhbm_gem {
 
+ModelObjectFactory::ModelObjectFactory(const FileFormatRegistry & file_format_registry) :
+    m_file_format_registry{ file_format_registry }
+{
+}
+
 std::unique_ptr<DataObjectBase> ModelObjectFactory::CreateDataObject(const std::string & filename)
 {
-    auto file_reader{ std::make_unique<ModelFileReader>(filename) };
+    auto file_reader{ std::make_unique<ModelFileReader>(filename, m_file_format_registry) };
     file_reader->Read();
     auto data_block{ file_reader->GetDataBlockPtr() };
     auto model_number_list{ data_block->GetModelNumberList() };
@@ -76,7 +82,8 @@ void ModelObjectFactory::OutputDataObject(
 {
     const auto & model_object{
         ExpectModelObject(data_object, "ModelObjectFactory::OutputDataObject()") };
-    auto file_writer{ std::make_unique<ModelFileWriter>(filename, &model_object) };
+    auto file_writer{
+        std::make_unique<ModelFileWriter>(filename, &model_object, m_file_format_registry) };
     file_writer->Write();
 }
 

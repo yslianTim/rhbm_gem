@@ -31,12 +31,12 @@ set(DATA_IO_FILE_SOURCES
 )
 
 set(DATA_IO_SQLITE_SOURCES
+    io/sqlite/BuiltInDataObjectDaos.cpp
     io/sqlite/DataObjectDAOFactoryRegistry.cpp
     io/sqlite/DatabaseManager.cpp
     io/sqlite/ManagedStoreRegistry.cpp
     io/sqlite/MapObjectDAO.cpp
     io/sqlite/ModelAnalysisPersistence.cpp
-    io/sqlite/ModelObjectDAO.cpp
     io/sqlite/ModelObjectDAOSqlite.cpp
     io/sqlite/ModelStructurePersistence.cpp
 )
@@ -52,6 +52,7 @@ if(RHBM_GEM_LEGACY_V1_SUPPORT)
 endif()
 
 set(DATA_FRONTDOOR_SOURCES
+    io/DataIoServices.cpp
     io/DataObjectManager.cpp
 )
 

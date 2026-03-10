@@ -1,8 +1,10 @@
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include "internal/io/file/FileProcessFactoryBase.hpp"
+#include "internal/io/file/FileFormatRegistry.hpp"
 #include "internal/io/file/FileProcessFactoryResolver.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include "internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp"
 #include "internal/io/sqlite/DatabaseManager.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -14,7 +16,9 @@ namespace rhbm_gem {
 struct DataObjectManager::Impl
 {
     std::unique_ptr<DatabaseManager> m_db_manager;
+    std::shared_ptr<const FileFormatRegistry> m_file_format_registry;
     std::shared_ptr<const FileProcessFactoryResolver> m_file_factory_resolver;
+    std::shared_ptr<const DataObjectDAOFactoryRegistry> m_dao_factory_registry;
 };
 
 namespace {
@@ -88,14 +92,24 @@ std::unique_ptr<FileProcessFactoryBase> CreateFileFactory(
 
 } // namespace
 
-DataObjectManager::DataObjectManager() :
+DataObjectManager::DataObjectManager(const DataIoServices & data_io_services) :
     m_impl{ std::make_unique<Impl>() }
 {
     m_impl->m_db_manager = nullptr;
-    m_impl->m_file_factory_resolver = CreateDefaultFileProcessFactoryResolver();
+    m_impl->m_file_format_registry = data_io_services.FileFormatRegistryPtr();
+    m_impl->m_file_factory_resolver = data_io_services.FileProcessFactoryResolverPtr();
+    m_impl->m_dao_factory_registry = data_io_services.DaoFactoryRegistryPtr();
+    if (!m_impl->m_file_format_registry)
+    {
+        throw std::runtime_error("DataObjectManager requires a valid file format registry.");
+    }
     if (!m_impl->m_file_factory_resolver)
     {
         throw std::runtime_error("DataObjectManager requires a valid file factory resolver.");
+    }
+    if (!m_impl->m_dao_factory_registry)
+    {
+        throw std::runtime_error("DataObjectManager requires a valid DAO factory registry.");
     }
 }
 
@@ -117,7 +131,9 @@ void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
                     + ", skip re-allocation of DatabaseManager.");
         return;
     }
-    m_impl->m_db_manager = std::make_unique<DatabaseManager>(dbname);
+    m_impl->m_db_manager = std::make_unique<DatabaseManager>(
+        dbname,
+        m_impl->m_dao_factory_registry);
 }
 
 void DataObjectManager::ProcessFile(

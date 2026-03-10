@@ -11,7 +11,7 @@ TEST(DataObjectIOContractTest, CatalogLookupLoadsCorrectDaoType)
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     const auto map_path{ temp_dir.path() / "map_only.map" };
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     manager.SaveDataObject("model");
@@ -30,7 +30,7 @@ TEST(DataObjectIOContractTest, ChainMetadataPersistsAcrossDatabaseRoundTrip)
     const auto database_path{ temp_dir.path() / "chain_roundtrip.sqlite" };
     const auto model_path{ command_test::TestDataPath("test_model_keyvalue_entity.cif") };
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     auto original_model{ manager.GetTypedDataObject<rg::ModelObject>("model") };
@@ -57,7 +57,7 @@ TEST(DataObjectIOContractTest, SymmetryFilteringMatchesAfterDatabaseReload)
     original_model->Update();
     const auto original_selected_count{ original_model->GetNumberOfSelectedAtom() };
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     for (const auto & atom : manager.GetTypedDataObject<rg::ModelObject>("model")->GetAtomList())
@@ -78,7 +78,7 @@ TEST(DataObjectIOContractTest, SymmetryFilteringMatchesAfterDatabaseReload)
 
 TEST(DataObjectIOContractTest, FileImportTransfersBondKeySystem)
 {
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     const auto model_path{
         command_test::TestDataPath("test_model_auth_seq_alnum_struct_conn.cif") };
 
@@ -96,7 +96,7 @@ TEST(DataObjectIOContractTest, UppercaseExtensionsDispatchCorrectly)
     const auto uppercase_model_path{ temp_dir.path() / "TEST_MODEL.MMCIF" };
     std::filesystem::copy_file(source_model_path, uppercase_model_path);
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.ProcessFile(uppercase_model_path, "model"));
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
 
@@ -111,7 +111,8 @@ TEST(DataObjectIOContractTest, UppercaseExtensionsDispatchCorrectly)
 
 TEST(DataObjectIOContractTest, BuiltInFormatsStillWorkWithoutAnyRegistrationStep)
 {
-    rg::DefaultFileProcessFactoryResolver resolver;
+    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
+    rg::DefaultFileProcessFactoryResolver resolver{ *file_format_registry };
     auto factory{ resolver.CreateFactory(".cif") };
     auto data_object{ factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
     EXPECT_NE(dynamic_cast<rg::ModelObject *>(data_object.get()), nullptr);
@@ -119,14 +120,18 @@ TEST(DataObjectIOContractTest, BuiltInFormatsStillWorkWithoutAnyRegistrationStep
 
 TEST(DataObjectIOContractTest, DataObjectManagerDoesNotRequireDefaultFactoryRegistration)
 {
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model"));
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
 }
 
 TEST(DataObjectIOContractTest, OverrideResolverTakesPrecedenceOverDescriptorFallback)
 {
-    auto resolver{ std::make_shared<rg::OverrideableFileProcessFactoryResolver>() };
+    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
+    auto fallback_resolver{
+        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
+    auto resolver{
+        std::make_shared<rg::OverrideableFileProcessFactoryResolver>(fallback_resolver) };
     resolver->RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
 
     auto override_factory{ resolver->CreateFactory(".cif") };
@@ -137,7 +142,10 @@ TEST(DataObjectIOContractTest, OverrideResolverTakesPrecedenceOverDescriptorFall
 
 TEST(DataObjectIOContractTest, ResolverInjectionSupportsOverrideWithoutGlobalRegistry)
 {
-    rg::OverrideableFileProcessFactoryResolver resolver;
+    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
+    auto fallback_resolver{
+        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
+    rg::OverrideableFileProcessFactoryResolver resolver{ fallback_resolver };
     resolver.RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
 
     auto override_factory{ resolver.CreateFactory(".cif") };
@@ -155,7 +163,10 @@ TEST(DataObjectIOContractTest, ResolverInjectionSupportsOverrideWithoutGlobalReg
 
 TEST(DataObjectIOContractTest, CustomFactoryOverrideTakesPrecedenceOverDescriptorFallback)
 {
-    rg::OverrideableFileProcessFactoryResolver resolver;
+    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
+    auto fallback_resolver{
+        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
+    rg::OverrideableFileProcessFactoryResolver resolver{ fallback_resolver };
     ScopedFactoryOverride override{
         resolver,
         ".cif",
@@ -170,7 +181,10 @@ TEST(DataObjectIOContractTest, CustomFactoryOverrideTakesPrecedenceOverDescripto
 
 TEST(DataObjectIOContractTest, CustomFactoryOverrideDoesNotLeakAcrossTests)
 {
-    rg::OverrideableFileProcessFactoryResolver resolver;
+    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
+    auto fallback_resolver{
+        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
+    rg::OverrideableFileProcessFactoryResolver resolver{ fallback_resolver };
     {
         ScopedFactoryOverride override{
             resolver,
@@ -191,7 +205,8 @@ TEST(DataObjectIOContractTest, CustomFactoryOverrideDoesNotLeakAcrossTests)
 TEST(DataObjectIOContractTest, FileFormatDescriptorsAreUniqueAndConsistent)
 {
     std::unordered_set<std::string> extension_set;
-    for (const auto & descriptor : rg::FileFormatRegistry::Instance().GetAllDescriptors())
+    const auto registry{ rg::BuildDefaultFileFormatRegistry() };
+    for (const auto & descriptor : registry.GetAllDescriptors())
     {
         EXPECT_TRUE(extension_set.insert(descriptor.extension).second);
         if (descriptor.kind == rg::DataObjectKind::Model)
@@ -215,7 +230,7 @@ TEST(DataObjectIOContractTest, FileFormatDescriptorsAreUniqueAndConsistent)
 
 TEST(DataObjectIOContractTest, FileFormatRegistryIndexMatchesDescriptorSource)
 {
-    const auto & registry{ rg::FileFormatRegistry::Instance() };
+    const auto registry{ rg::BuildDefaultFileFormatRegistry() };
     for (const auto & descriptor : registry.GetAllDescriptors())
     {
         const auto & looked_up_lower{ registry.Lookup(descriptor.extension) };
@@ -238,7 +253,10 @@ TEST(DataObjectIOContractTest, FileFormatRegistryIndexMatchesDescriptorSource)
 
 TEST(DataObjectIOContractTest, ResolverConcurrentOverrideAndLookupIsSafe)
 {
-    rg::OverrideableFileProcessFactoryResolver resolver;
+    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
+    auto fallback_resolver{
+        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
+    rg::OverrideableFileProcessFactoryResolver resolver{ fallback_resolver };
     constexpr int kIterationCount{ 800 };
     std::atomic<bool> writer_done{ false };
     std::atomic<int> failure_count{ 0 };
@@ -291,7 +309,7 @@ TEST(DataObjectIOContractTest, PdbWriteProducesNonEmptyOutput)
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     const auto output_path{ temp_dir.path() / "output.pdb" };
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.ProcessFile(model_path, "model");
     ASSERT_NO_THROW(manager.ProduceFile(output_path, "model"));
 
@@ -311,7 +329,7 @@ TEST(DataObjectIOContractTest, PdbWriteRoundTripBasicFields)
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     const auto output_path{ temp_dir.path() / "roundtrip.pdb" };
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.ProcessFile(model_path, "source");
     auto source_model{ manager.GetTypedDataObject<rg::ModelObject>("source") };
     ASSERT_NO_THROW(manager.ProduceFile(output_path, "source"));
@@ -336,7 +354,7 @@ TEST(DataObjectIOContractTest, ModelWriteSupportMatrixStillAcceptsPdbAndCifOnly)
     const auto cif_output_path{ temp_dir.path() / "supported_output.cif" };
     const auto output_path{ temp_dir.path() / "unsupported_output.mmcif" };
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.ProcessFile(model_path, "model");
     EXPECT_NO_THROW(manager.ProduceFile(pdb_output_path, "model"));
     EXPECT_NO_THROW(manager.ProduceFile(cif_output_path, "model"));
@@ -352,7 +370,7 @@ TEST(DataObjectIOContractTest, ProcessFileThrowsOnMalformedModelInput)
         output << "data_bad\nloop_\n_atom_site.id\n";
     }
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     try
     {
         manager.ProcessFile(malformed_path, "broken");
@@ -375,7 +393,7 @@ TEST(DataObjectIOContractTest, ProcessFileThrowsOnMalformedMapInput)
         output << "bad";
     }
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     try
     {
         manager.ProcessFile(malformed_path, "broken_map");
@@ -395,7 +413,7 @@ TEST(DataObjectIOContractTest, ProduceFileThrowsWhenWriterCannotOpenTarget)
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     const auto output_path{ temp_dir.path() / "missing_dir" / "output.cif" };
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.ProcessFile(model_path, "model");
 
     try

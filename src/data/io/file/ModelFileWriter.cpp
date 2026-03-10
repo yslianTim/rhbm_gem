@@ -11,11 +11,26 @@
 namespace rhbm_gem {
 
 ModelFileWriter::ModelFileWriter(
-    const std::string & filename, const ModelObject * model_object, int model_par) :
+    const std::string & filename,
+    const ModelObject * model_object,
+    int model_par) :
+    ModelFileWriter(
+        filename,
+        model_object,
+        BuildDefaultFileFormatRegistry(),
+        model_par)
+{
+}
+
+ModelFileWriter::ModelFileWriter(
+    const std::string & filename,
+    const ModelObject * model_object,
+    const FileFormatRegistry & file_format_registry,
+    int model_par) :
     m_file_path{ filename }, m_model_object{ model_object }, m_model_par{ model_par }
 {
     const auto & descriptor{
-        FileFormatRegistry::Instance().LookupForWrite(FilePathHelper::GetExtension(filename)) };
+        file_format_registry.LookupForWrite(FilePathHelper::GetExtension(filename)) };
     if (descriptor.kind != DataObjectKind::Model || !descriptor.model_backend.has_value())
     {
         throw std::runtime_error("Unsupported model file format");

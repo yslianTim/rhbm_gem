@@ -9,6 +9,30 @@ if("@RHBM_GEM_USE_SYSTEM_CLI11@" STREQUAL "TRUE")
 endif()
 
 if("@RHBM_GEM_WITH_OPENMP@" STREQUAL "TRUE")
+    if(APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+        set(_RHBM_GEM_OPENMP_CANDIDATES)
+        if("@RHBM_GEM_OPENMP_ROOT@" AND EXISTS "@RHBM_GEM_OPENMP_ROOT@/include/omp.h")
+            list(APPEND _RHBM_GEM_OPENMP_CANDIDATES "@RHBM_GEM_OPENMP_ROOT@")
+        endif()
+        if(DEFINED ENV{HOMEBREW_PREFIX})
+            list(APPEND _RHBM_GEM_OPENMP_CANDIDATES "$ENV{HOMEBREW_PREFIX}/opt/libomp")
+        endif()
+        list(APPEND _RHBM_GEM_OPENMP_CANDIDATES
+            "/opt/homebrew/opt/libomp"
+            "/usr/local/opt/libomp"
+        )
+        foreach(_RHBM_GEM_OPENMP_CANDIDATE IN LISTS _RHBM_GEM_OPENMP_CANDIDATES)
+            if(EXISTS "${_RHBM_GEM_OPENMP_CANDIDATE}/include/omp.h")
+                set(OpenMP_ROOT "${_RHBM_GEM_OPENMP_CANDIDATE}" CACHE PATH
+                    "Root directory for OpenMP installation")
+                list(PREPEND CMAKE_PREFIX_PATH "${_RHBM_GEM_OPENMP_CANDIDATE}")
+                list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
+                break()
+            endif()
+        endforeach()
+        unset(_RHBM_GEM_OPENMP_CANDIDATE)
+        unset(_RHBM_GEM_OPENMP_CANDIDATES)
+    endif()
     find_dependency(OpenMP REQUIRED COMPONENTS CXX)
 endif()
 

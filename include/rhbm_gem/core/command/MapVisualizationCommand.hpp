@@ -40,7 +40,7 @@ private:
     std::shared_ptr<ModelObject> m_model_object;
 
 public:
-    MapVisualizationCommand();
+    explicit MapVisualizationCommand(const DataIoServices & data_io_services);
     ~MapVisualizationCommand() override = default;
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);

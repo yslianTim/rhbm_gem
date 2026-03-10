@@ -1,7 +1,7 @@
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
 #include "internal/CommandDataLoaderInternal.hpp"
 #include <rhbm_gem/core/command/CommandOptionBinding.hpp>
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -46,7 +46,9 @@ std::string SerializeBlurringWidths(const std::vector<double> & widths)
 
 namespace rhbm_gem {
 
-MapSimulationCommand::MapSimulationCommand() :
+MapSimulationCommand::MapSimulationCommand(const DataIoServices & data_io_services) :
+    CommandWithProfileOptions<MapSimulationCommandOptions, CommandId::MapSimulation>{
+        data_io_services },
     m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),

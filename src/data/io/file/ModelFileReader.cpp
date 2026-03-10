@@ -12,12 +12,19 @@
 namespace rhbm_gem {
 
 ModelFileReader::ModelFileReader(const std::string & filename) :
+    ModelFileReader(filename, BuildDefaultFileFormatRegistry())
+{
+}
+
+ModelFileReader::ModelFileReader(
+    const std::string & filename,
+    const FileFormatRegistry & file_format_registry) :
     m_file_path{ filename },
     m_file_object{ nullptr },
     m_has_loaded_data{ false }
 {
     const auto & descriptor{
-        FileFormatRegistry::Instance().LookupForRead(FilePathHelper::GetExtension(filename)) };
+        file_format_registry.LookupForRead(FilePathHelper::GetExtension(filename)) };
     if (descriptor.kind != DataObjectKind::Model || !descriptor.model_backend.has_value())
     {
         throw std::runtime_error("Unsupported model file format");

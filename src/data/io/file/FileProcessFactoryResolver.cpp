@@ -17,20 +17,37 @@ namespace
 
 namespace rhbm_gem {
 
+DefaultFileProcessFactoryResolver::DefaultFileProcessFactoryResolver(
+    const FileFormatRegistry & file_format_registry) :
+    m_file_format_registry{ file_format_registry }
+{
+}
+
 std::unique_ptr<FileProcessFactoryBase> DefaultFileProcessFactoryResolver::CreateFactory(
     const std::string & extension) const
 {
     const auto normalized_extension{ NormalizeExtension(extension) };
-    const auto & descriptor{ FileFormatRegistry::Instance().Lookup(normalized_extension) };
+    const auto & descriptor{ m_file_format_registry.Lookup(normalized_extension) };
     switch (descriptor.kind)
     {
     case DataObjectKind::Model:
-        return std::make_unique<ModelObjectFactory>();
+        return std::make_unique<ModelObjectFactory>(m_file_format_registry);
     case DataObjectKind::Map:
-        return std::make_unique<MapObjectFactory>();
+        return std::make_unique<MapObjectFactory>(m_file_format_registry);
     }
 
     throw std::runtime_error("Unsupported file format: " + extension);
+}
+
+OverrideableFileProcessFactoryResolver::OverrideableFileProcessFactoryResolver(
+    std::shared_ptr<const FileProcessFactoryResolver> fallback_resolver) :
+    m_fallback_resolver{ std::move(fallback_resolver) }
+{
+    if (!m_fallback_resolver)
+    {
+        throw std::runtime_error(
+            "OverrideableFileProcessFactoryResolver requires a fallback resolver.");
+    }
 }
 
 void OverrideableFileProcessFactoryResolver::RegisterFactory(
@@ -65,16 +82,7 @@ std::unique_ptr<FileProcessFactoryBase> OverrideableFileProcessFactoryResolver::
         return creator();
     }
 
-    DefaultFileProcessFactoryResolver default_resolver;
-    return default_resolver.CreateFactory(normalized_extension);
-}
-
-std::shared_ptr<const FileProcessFactoryResolver> CreateDefaultFileProcessFactoryResolver()
-{
-    static const auto resolver{
-        std::make_shared<DefaultFileProcessFactoryResolver>()
-    };
-    return resolver;
+    return m_fallback_resolver->CreateFactory(normalized_extension);
 }
 
 } // namespace rhbm_gem

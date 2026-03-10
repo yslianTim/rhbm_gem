@@ -9,19 +9,21 @@ def has_parse_issue(command, option_name: str) -> bool:
 
 
 def main() -> int:
-    dump = m.ResultDumpCommand()
+    services = m.DataIoServices()
+
+    dump = m.ResultDumpCommand(services)
     dump.SetPrinterChoice(999)
     dump.SetModelKeyTagList("model")
     assert not dump.PrepareForExecution()
     assert has_parse_issue(dump, "--printer")
 
-    display = m.PotentialDisplayCommand()
+    display = m.PotentialDisplayCommand(services)
     display.SetPainterChoice(999)
     display.SetModelKeyTagList("model")
     assert not display.PrepareForExecution()
     assert has_parse_issue(display, "--painter")
 
-    model_test = m.HRLModelTestCommand()
+    model_test = m.HRLModelTestCommand(services)
     model_test.SetTesterChoice(999)
     assert not model_test.PrepareForExecution()
     assert has_parse_issue(model_test, "--tester")

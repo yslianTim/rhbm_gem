@@ -31,7 +31,11 @@ constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 
 namespace rhbm_gem {
 
-PotentialAnalysisCommand::PotentialAnalysisCommand() :
+PotentialAnalysisCommand::PotentialAnalysisCommand(const DataIoServices & data_io_services) :
+    CommandWithProfileOptions<
+        PotentialAnalysisCommandOptions,
+        CommandId::PotentialAnalysis,
+        CommonOptionProfile::DatabaseWorkflow>{ data_io_services },
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {

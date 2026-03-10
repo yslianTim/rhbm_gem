@@ -14,7 +14,11 @@ constexpr std::string_view kMapOption{ "--map" };
 
 namespace rhbm_gem {
 
-ResultDumpCommand::ResultDumpCommand() :
+ResultDumpCommand::ResultDumpCommand(const DataIoServices & data_io_services) :
+    CommandWithProfileOptions<
+        ResultDumpCommandOptions,
+        CommandId::ResultDump,
+        CommonOptionProfile::DatabaseWorkflow>{ data_io_services },
     m_map_key_tag{ kMapKey }, m_map_object{ nullptr }
 {
 }

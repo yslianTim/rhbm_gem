@@ -9,11 +9,18 @@
 
 namespace rhbm_gem {
 
-DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
+DatabaseManager::DatabaseManager(
+    const std::filesystem::path & database_path,
+    std::shared_ptr<const DataObjectDAOFactoryRegistry> dao_factory_registry) :
     m_database_path{ database_path },
     m_database{ nullptr },
+    m_dao_factory_registry{ std::move(dao_factory_registry) },
     m_schema_version{ DatabaseSchemaVersion::NormalizedV2 }
 {
+    if (!m_dao_factory_registry)
+    {
+        throw std::runtime_error("DatabaseManager requires a DAO factory registry.");
+    }
     if (m_database_path.empty()) m_database_path = "database.sqlite";
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
     DatabaseSchemaManager schema_manager{ m_database.get() };
@@ -73,14 +80,14 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
 std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
     const std::string & object_type)
 {
-    auto type{ DataObjectDAOFactoryRegistry::Instance().GetTypeIndex(object_type) };
+    auto type{ m_dao_factory_registry->GetTypeIndex(object_type) };
     std::lock_guard<std::mutex> lock(m_mutex);
     auto iter{ m_dao_cache.find(type) };
     if (iter != m_dao_cache.end())
     {
         return iter->second;
     }
-    auto dao_unique{ DataObjectDAOFactoryRegistry::Instance().CreateDAO(type, m_database.get()) };
+    auto dao_unique{ m_dao_factory_registry->CreateDAO(type, m_database.get()) };
     std::shared_ptr<DataObjectDAOBase> dao{ std::move(dao_unique) };
     m_dao_cache.emplace(type, dao);
     return dao;

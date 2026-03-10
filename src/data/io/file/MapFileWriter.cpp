@@ -10,6 +10,14 @@
 namespace rhbm_gem {
 
 MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map_object) :
+    MapFileWriter(filename, map_object, BuildDefaultFileFormatRegistry())
+{
+}
+
+MapFileWriter::MapFileWriter(
+    const std::string & filename,
+    const MapObject * map_object,
+    const FileFormatRegistry & file_format_registry) :
     m_file_path{ filename }, m_map_object{ map_object }
 {
     if (m_map_object == nullptr)
@@ -17,7 +25,7 @@ MapFileWriter::MapFileWriter(const std::string & filename, const MapObject * map
         throw std::invalid_argument("MapFileWriter: map_object is null");
     }
     const auto & descriptor{
-        FileFormatRegistry::Instance().LookupForWrite(FilePathHelper::GetExtension(filename)) };
+        file_format_registry.LookupForWrite(FilePathHelper::GetExtension(filename)) };
     if (descriptor.kind != DataObjectKind::Map || !descriptor.map_backend.has_value())
     {
         throw std::runtime_error("Unsupported map file format");

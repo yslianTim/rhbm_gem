@@ -5,12 +5,6 @@
 
 namespace rhbm_gem {
 
-DataObjectDAOFactoryRegistry & DataObjectDAOFactoryRegistry::Instance()
-{
-    static DataObjectDAOFactoryRegistry instance;
-    return instance;
-}
-
 bool DataObjectDAOFactoryRegistry::RegisterFactory(
     std::type_index type, const std::string & name,
     std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)> factory)

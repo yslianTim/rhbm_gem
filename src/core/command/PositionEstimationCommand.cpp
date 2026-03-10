@@ -2,7 +2,7 @@
 #include "internal/CommandDataLoaderInternal.hpp"
 #include <rhbm_gem/core/command/CommandOptionBinding.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -49,7 +49,9 @@ struct QuantizedPointHash
 
 namespace rhbm_gem {
 
-PositionEstimationCommand::PositionEstimationCommand() :
+PositionEstimationCommand::PositionEstimationCommand(const DataIoServices & data_io_services) :
+    CommandWithProfileOptions<PositionEstimationCommandOptions, CommandId::PositionEstimation>{
+        data_io_services },
     m_selected_voxel_list{}, m_query_point_list{}, m_position_list{},
     m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {

@@ -20,7 +20,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "CommandTestHelpers.hpp"
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/io/MapFileReader.hpp>
 #include <rhbm_gem/data/io/MapFileWriter.hpp>
@@ -32,6 +32,31 @@
 namespace rg = rhbm_gem;
 
 namespace data_object_io_schema_test {
+
+inline std::shared_ptr<const rg::FileFormatRegistry> BuildDefaultFileFormatRegistry()
+{
+    return std::make_shared<rg::FileFormatRegistry>(rg::BuildDefaultFileFormatRegistry());
+}
+
+inline std::shared_ptr<const rg::FileProcessFactoryResolver> BuildDefaultFileResolver(
+    const std::shared_ptr<const rg::FileFormatRegistry> & file_format_registry)
+{
+    return std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry);
+}
+
+inline std::shared_ptr<const rg::DataObjectDAOFactoryRegistry> BuildDefaultDaoFactoryRegistry()
+{
+    auto registry{ std::make_shared<rg::DataObjectDAOFactoryRegistry>() };
+    rg::RegisterBuiltInDataObjectDaos(*registry);
+    return registry;
+}
+
+inline std::shared_ptr<rg::DataObjectDAOFactoryRegistry> BuildMutableDaoFactoryRegistry()
+{
+    auto registry{ std::make_shared<rg::DataObjectDAOFactoryRegistry>() };
+    rg::RegisterBuiltInDataObjectDaos(*registry);
+    return registry;
+}
 
 constexpr const char * kUpsertObjectMetadataSql =
     "INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?) "
@@ -294,7 +319,7 @@ inline std::shared_ptr<rg::ModelObject> LoadFixtureModel(
     const std::filesystem::path & model_path,
     const std::string & key_tag = "model")
 {
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.ProcessFile(model_path, key_tag);
     return manager.GetTypedDataObject<rg::ModelObject>(key_tag);
 }

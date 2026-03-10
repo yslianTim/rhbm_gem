@@ -8,7 +8,7 @@ void BindMapVisualization(py::module_ & module)
 {
     auto map_visualization{ BindBuiltInCommand<MapVisualizationCommand>(module) };
     map_visualization
-        .def(py::init<>())
+        .def(py::init<const DataIoServices &>())
         .def("Execute", &MapVisualizationCommand::Execute)
         .def("SetFolderPath", &MapVisualizationCommand::SetFolderPath)
         .def("SetModelFilePath", &MapVisualizationCommand::SetModelFilePath)

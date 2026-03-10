@@ -2,74 +2,62 @@
 
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-#include <unordered_map>
 #include <stdexcept>
-
-namespace
-{
-    const std::vector<rhbm_gem::FileFormatDescriptor> k_descriptors{
-        { ".pdb", rhbm_gem::DataObjectKind::Model, true, true, rhbm_gem::ModelFormatBackend::Pdb, std::nullopt },
-        { ".cif", rhbm_gem::DataObjectKind::Model, true, true, rhbm_gem::ModelFormatBackend::Cif, std::nullopt },
-        { ".mmcif", rhbm_gem::DataObjectKind::Model, true, false, rhbm_gem::ModelFormatBackend::Cif, std::nullopt },
-        { ".mcif", rhbm_gem::DataObjectKind::Model, true, false, rhbm_gem::ModelFormatBackend::Cif, std::nullopt },
-        { ".mrc", rhbm_gem::DataObjectKind::Map, true, true, std::nullopt, rhbm_gem::MapFormatBackend::Mrc },
-        { ".map", rhbm_gem::DataObjectKind::Map, true, true, std::nullopt, rhbm_gem::MapFormatBackend::Ccp4 },
-        { ".ccp4", rhbm_gem::DataObjectKind::Map, true, true, std::nullopt, rhbm_gem::MapFormatBackend::Ccp4 }
-    };
-
-    const std::unordered_map<std::string, std::size_t> & GetDescriptorIndexMap()
-    {
-        static const auto k_descriptor_index_map{
-            []()
-            {
-                std::unordered_map<std::string, std::size_t> index_map;
-                index_map.reserve(k_descriptors.size());
-                for (size_t i = 0; i < k_descriptors.size(); i++)
-                {
-                    const auto & descriptor{ k_descriptors.at(i) };
-                    const auto [iter, inserted]{ index_map.emplace(descriptor.extension, i) };
-                    if (!inserted)
-                    {
-                        throw std::runtime_error(
-                            "Duplicate file format descriptor extension: " + descriptor.extension);
-                    }
-                    if (descriptor.kind == rhbm_gem::DataObjectKind::Model &&
-                        !descriptor.model_backend.has_value())
-                    {
-                        throw std::runtime_error(
-                            "Model descriptor must define model backend: " + descriptor.extension);
-                    }
-                    if (descriptor.kind == rhbm_gem::DataObjectKind::Map &&
-                        !descriptor.map_backend.has_value())
-                    {
-                        throw std::runtime_error(
-                            "Map descriptor must define map backend: " + descriptor.extension);
-                    }
-                }
-                return index_map;
-            }()
-        };
-        return k_descriptor_index_map;
-    }
-}
 
 namespace rhbm_gem {
 
-const FileFormatRegistry & FileFormatRegistry::Instance()
+namespace {
+
+std::vector<FileFormatDescriptor> BuildDefaultDescriptors()
 {
-    static FileFormatRegistry instance;
-    return instance;
+    return {
+        { ".pdb", DataObjectKind::Model, true, true, ModelFormatBackend::Pdb, std::nullopt },
+        { ".cif", DataObjectKind::Model, true, true, ModelFormatBackend::Cif, std::nullopt },
+        { ".mmcif", DataObjectKind::Model, true, false, ModelFormatBackend::Cif, std::nullopt },
+        { ".mcif", DataObjectKind::Model, true, false, ModelFormatBackend::Cif, std::nullopt },
+        { ".mrc", DataObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Mrc },
+        { ".map", DataObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Ccp4 },
+        { ".ccp4", DataObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Ccp4 }
+    };
+}
+
+} // namespace
+
+FileFormatRegistry::FileFormatRegistry(std::vector<FileFormatDescriptor> descriptors) :
+    m_descriptors{ std::move(descriptors) },
+    m_descriptor_index_map{}
+{
+    m_descriptor_index_map.reserve(m_descriptors.size());
+    for (std::size_t i = 0; i < m_descriptors.size(); ++i)
+    {
+        const auto & descriptor{ m_descriptors.at(i) };
+        const auto [iter, inserted]{ m_descriptor_index_map.emplace(descriptor.extension, i) };
+        if (!inserted)
+        {
+            throw std::runtime_error(
+                "Duplicate file format descriptor extension: " + descriptor.extension);
+        }
+        if (descriptor.kind == DataObjectKind::Model && !descriptor.model_backend.has_value())
+        {
+            throw std::runtime_error(
+                "Model descriptor must define model backend: " + descriptor.extension);
+        }
+        if (descriptor.kind == DataObjectKind::Map && !descriptor.map_backend.has_value())
+        {
+            throw std::runtime_error(
+                "Map descriptor must define map backend: " + descriptor.extension);
+        }
+    }
 }
 
 const FileFormatDescriptor & FileFormatRegistry::Lookup(const std::string & extension) const
 {
     auto normalized_extension{ extension };
     StringHelper::ToLowerCase(normalized_extension);
-    const auto & descriptor_index_map{ GetDescriptorIndexMap() };
-    const auto iter{ descriptor_index_map.find(normalized_extension) };
-    if (iter != descriptor_index_map.end())
+    const auto iter{ m_descriptor_index_map.find(normalized_extension) };
+    if (iter != m_descriptor_index_map.end())
     {
-        return k_descriptors.at(iter->second);
+        return m_descriptors.at(iter->second);
     }
     throw std::runtime_error("Unsupported file format: " + extension);
 }
@@ -96,7 +84,12 @@ const FileFormatDescriptor & FileFormatRegistry::LookupForWrite(const std::strin
 
 const std::vector<FileFormatDescriptor> & FileFormatRegistry::GetAllDescriptors() const
 {
-    return k_descriptors;
+    return m_descriptors;
+}
+
+FileFormatRegistry BuildDefaultFileFormatRegistry()
+{
+    return FileFormatRegistry{ BuildDefaultDescriptors() };
 }
 
 } // namespace rhbm_gem

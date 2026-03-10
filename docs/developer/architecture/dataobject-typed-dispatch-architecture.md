@@ -169,7 +169,7 @@ Core interfaces:
 
 Manager iteration:
 
-- `include/rhbm_gem/core/command/DataObjectManager.hpp`
+- `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
 
 Typed dispatch:

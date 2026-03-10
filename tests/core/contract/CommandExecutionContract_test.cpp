@@ -5,6 +5,7 @@
 #include <CLI/CLI.hpp>
 
 #include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -26,6 +27,16 @@ class LifecycleCommand final
 {
 public:
     using Options = LifecycleCommandOptions;
+
+    explicit LifecycleCommand(const rg::DataIoServices & data_io_services) :
+        rg::CommandWithOptions<
+            LifecycleCommandOptions,
+            rg::CommandId::ModelTest,
+            rg::CommonOption::Threading
+                | rg::CommonOption::Verbose
+                | rg::CommonOption::OutputFolder>{ data_io_services }
+    {
+    }
 
     int validate_count{ 0 };
     int reset_count{ 0 };
@@ -76,7 +87,8 @@ private:
 
 TEST(CommandExecutionContractTest, ExecuteRunsPrepareBeforeExecuteImpl)
 {
-    LifecycleCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    LifecycleCommand command{ data_io_services };
     command.SetFailPrepare(true);
 
     EXPECT_FALSE(command.Execute());
@@ -87,7 +99,8 @@ TEST(CommandExecutionContractTest, ExecuteRunsPrepareBeforeExecuteImpl)
 
 TEST(CommandExecutionContractTest, ExplicitPrepareSkipsDuplicatePreflightInsideExecute)
 {
-    LifecycleCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    LifecycleCommand command{ data_io_services };
 
     ASSERT_TRUE(command.PrepareForExecution());
     EXPECT_EQ(command.validate_count, 1);
@@ -101,7 +114,8 @@ TEST(CommandExecutionContractTest, ExplicitPrepareSkipsDuplicatePreflightInsideE
 
 TEST(CommandExecutionContractTest, RepeatedExecuteResetsRuntimeStateBetweenRuns)
 {
-    LifecycleCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    LifecycleCommand command{ data_io_services };
 
     ASSERT_TRUE(command.Execute());
     ASSERT_TRUE(command.Execute());

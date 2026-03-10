@@ -7,12 +7,18 @@
 #include <string>
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataIoServices.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace command_test {
+
+inline rhbm_gem::DataIoServices BuildDataIoServices()
+{
+    return rhbm_gem::DataIoServices::BuildDefault();
+}
 
 inline std::filesystem::path ProjectRootPath()
 {
@@ -67,7 +73,7 @@ inline void SeedSavedModel(
     const std::string & saved_key,
     const std::string & pdb_id)
 {
-    rhbm_gem::DataObjectManager manager;
+    rhbm_gem::DataObjectManager manager{ BuildDataIoServices() };
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     auto model{ manager.GetTypedDataObject<rhbm_gem::ModelObject>("model") };
@@ -85,7 +91,8 @@ inline std::filesystem::path GenerateMapFile(
     const std::string & map_name = "sim_map",
     const std::string & blurring_widths = "1.0")
 {
-    rhbm_gem::MapSimulationCommand command;
+    const auto data_io_services{ BuildDataIoServices() };
+    rhbm_gem::MapSimulationCommand command{ data_io_services };
     command.SetFolderPath(output_dir);
     command.SetMapFileName(map_name);
     command.SetModelFilePath(model_path);

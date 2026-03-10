@@ -32,6 +32,16 @@ class CommandOptionHelperCommand final
 public:
     using Options = CommandOptionHelperCommandOptions;
 
+    explicit CommandOptionHelperCommand(const rg::DataIoServices & data_io_services) :
+        rg::CommandWithOptions<
+            CommandOptionHelperCommandOptions,
+            rg::CommandId::ModelTest,
+            rg::CommonOption::Threading
+                | rg::CommonOption::Verbose
+                | rg::CommonOption::OutputFolder>{ data_io_services }
+    {
+    }
+
     int validate_count{ 0 };
     int reset_count{ 0 };
     int execute_count{ 0 };
@@ -88,7 +98,8 @@ private:
 
 TEST(CommandOptionHelperTest, MutateOptionsInvalidatesPreparedState)
 {
-    CommandOptionHelperCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    CommandOptionHelperCommand command{ data_io_services };
 
     ASSERT_TRUE(command.PrepareForExecution());
     EXPECT_EQ(command.validate_count, 1);
@@ -112,7 +123,8 @@ TEST(CommandOptionHelperTest, PathHelpersValidateRequiredAndOptionalInputs)
     }
     const auto missing_file{ temp_dir.path() / "missing.txt" };
 
-    CommandOptionHelperCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    CommandOptionHelperCommand command{ data_io_services };
     command.SetRequiredPath(existing_file);
     EXPECT_TRUE(command.GetValidationIssues().empty());
 
@@ -159,7 +171,8 @@ TEST(CommandOptionHelperTest, PathHelpersValidateRequiredAndOptionalInputs)
 
 TEST(CommandOptionHelperTest, NormalizedScalarHelperReportsAutoCorrectedWarning)
 {
-    CommandOptionHelperCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    CommandOptionHelperCommand command{ data_io_services };
 
     command.SetPositiveCount(0);
 

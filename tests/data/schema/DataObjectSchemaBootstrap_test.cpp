@@ -4,17 +4,13 @@
 
 using namespace data_object_io_schema_test;
 
-namespace {
-rg::DataObjectDAORegistrar<FailingDataObject, FailingDataObjectDAO>
-    g_registrar_failing_dao("failing");
-} // namespace
-
 TEST(DataObjectSchemaBootstrapTest, EmptyDatabaseBootstrapsNormalizedSchema)
 {
     const command_test::ScopedTempDir temp_dir{ "schema_bootstrap" };
     const auto database_path{ temp_dir.path() / "bootstrap.sqlite" };
 
-    rg::DatabaseManager database_manager{ database_path };
+    const auto dao_registry{ BuildDefaultDaoFactoryRegistry() };
+    rg::DatabaseManager database_manager{ database_path, dao_registry };
 
     EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
     EXPECT_TRUE(HasTable(database_path, "object_catalog"));
@@ -29,7 +25,10 @@ TEST(DataObjectSchemaBootstrapTest, SaveRollbackLeavesNoPayloadOrMetadata)
     const command_test::ScopedTempDir temp_dir{ "schema_atomic_save" };
     const auto database_path{ temp_dir.path() / "atomic.sqlite" };
 
-    rg::DatabaseManager database_manager{ database_path };
+    auto dao_registry{ BuildMutableDaoFactoryRegistry() };
+    rg::DataObjectDAORegistrar<FailingDataObject, FailingDataObjectDAO>
+        failing_dao_registrar{ *dao_registry, "failing" };
+    rg::DatabaseManager database_manager{ database_path, dao_registry };
     FailingDataObject data_object;
     data_object.SetKeyTag("failing");
 
@@ -44,7 +43,8 @@ TEST(DataObjectSchemaBootstrapTest, UnknownSchemaVersionThrows)
     const auto database_path{ temp_dir.path() / "unknown.sqlite" };
 
     SetUserVersion(database_path, 99);
-    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+    const auto dao_registry{ BuildDefaultDaoFactoryRegistry() };
+    EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
 }
 
 TEST(DataObjectSchemaBootstrapTest, Version2WithObjectMetadataFailsFast)
@@ -54,7 +54,8 @@ TEST(DataObjectSchemaBootstrapTest, Version2WithObjectMetadataFailsFast)
     const auto map_object{ MakeTinyMapObject() };
 
     {
-        rg::DatabaseManager database_manager{ database_path };
+        const auto dao_registry{ BuildDefaultDaoFactoryRegistry() };
+        rg::DatabaseManager database_manager{ database_path, dao_registry };
         database_manager.SaveDataObject(&map_object, "map_only");
     }
 
@@ -66,7 +67,10 @@ TEST(DataObjectSchemaBootstrapTest, Version2WithObjectMetadataFailsFast)
         "INSERT INTO object_metadata(key_tag, object_type) VALUES ('map_only', 'map');");
     SetUserVersion(database_path, 2);
 
-    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+    {
+        const auto dao_registry{ BuildDefaultDaoFactoryRegistry() };
+        EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
+    }
 }
 
 TEST(DataObjectSchemaBootstrapTest, Version2MetadataBasedShapeFailsFast)
@@ -76,7 +80,10 @@ TEST(DataObjectSchemaBootstrapTest, Version2MetadataBasedShapeFailsFast)
 
     CreateVersion2MetadataBasedMapShapeDatabase(database_path);
 
-    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+    {
+        const auto dao_registry{ BuildDefaultDaoFactoryRegistry() };
+        EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
+    }
 }
 
 TEST(DataObjectSchemaBootstrapTest, ManagedButUnversionedDatabaseFailsFast)
@@ -86,7 +93,7 @@ TEST(DataObjectSchemaBootstrapTest, ManagedButUnversionedDatabaseFailsFast)
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
 
     {
-        rg::DataObjectManager manager;
+        rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
         manager.SetDatabaseManager(database_path);
         manager.ProcessFile(model_path, "model");
         manager.SaveDataObject("model");
@@ -94,7 +101,10 @@ TEST(DataObjectSchemaBootstrapTest, ManagedButUnversionedDatabaseFailsFast)
 
     SetUserVersion(database_path, 0);
 
-    EXPECT_THROW((void)rg::DatabaseManager{ database_path }, std::runtime_error);
+    {
+        const auto dao_registry{ BuildDefaultDaoFactoryRegistry() };
+        EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
+    }
 }
 
 TEST(DataObjectSchemaBootstrapTest, FinalV2CatalogDatabaseRemainsLoadable)
@@ -105,7 +115,7 @@ TEST(DataObjectSchemaBootstrapTest, FinalV2CatalogDatabaseRemainsLoadable)
     const auto map_path{ temp_dir.path() / "map_only.map" };
 
     {
-        rg::DataObjectManager manager;
+        rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
         manager.SetDatabaseManager(database_path);
         manager.ProcessFile(model_path, "model");
         manager.SaveDataObject("model");
@@ -114,11 +124,10 @@ TEST(DataObjectSchemaBootstrapTest, FinalV2CatalogDatabaseRemainsLoadable)
 
     SetUserVersion(database_path, 2);
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
     ASSERT_NO_THROW(manager.LoadDataObject("model"));
     ASSERT_NO_THROW(manager.LoadDataObject("map"));
     EXPECT_NE(manager.GetTypedDataObject<rg::ModelObject>("model"), nullptr);
     EXPECT_NE(manager.GetTypedDataObject<rg::MapObject>("map"), nullptr);
 }
-

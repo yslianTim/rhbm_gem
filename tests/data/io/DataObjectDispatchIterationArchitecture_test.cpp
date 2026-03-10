@@ -19,7 +19,7 @@
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
 #include "CommandTestHelpers.hpp"
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include "support/DataInternalTestSeam.hpp"
@@ -142,7 +142,7 @@ rg::MapObject MakeMapObject()
 
 TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectDeterministicOrderByDefault)
 {
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
@@ -165,7 +165,7 @@ TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectDeterm
 
 TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectPreservesInputKeyOrder)
 {
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
@@ -186,7 +186,7 @@ TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectPreser
 
 TEST(DataObjectDispatchIterationArchitectureTest, ConstManagerForEachDataObjectWorks)
 {
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
@@ -207,7 +207,7 @@ TEST(DataObjectDispatchIterationArchitectureTest, ConstManagerForEachDataObjectW
 
 TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectUsesSnapshotSoClearCanRunConcurrently)
 {
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model");
 
     BlockingModelCallback callback;
@@ -236,7 +236,7 @@ TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectUsesSn
 
 TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectRejectsEmptyCallback)
 {
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     std::function<void(rg::DataObjectBase &)> mutable_callback;
     EXPECT_THROW(manager.ForEachDataObject(mutable_callback), std::runtime_error);
 
@@ -466,8 +466,9 @@ TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchCatalogTypeN
 
 TEST(DataObjectDispatchIterationArchitectureTest, FileProcessFactoryOutputRejectsWrongObjectTypeThroughDispatch)
 {
-    rg::ModelObjectFactory model_factory;
-    rg::MapObjectFactory map_factory;
+    const auto file_format_registry{ rg::BuildDefaultFileFormatRegistry() };
+    rg::ModelObjectFactory model_factory{ file_format_registry };
+    rg::MapObjectFactory map_factory{ file_format_registry };
     rg::AtomObject atom;
 
     EXPECT_THROW(

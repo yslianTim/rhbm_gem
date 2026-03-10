@@ -13,7 +13,7 @@ TEST(PositionEstimationCommandTest, ExecuteDoesNotRequireDatabaseConfiguration)
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::PositionEstimationCommand command;
+    rg::PositionEstimationCommand command{ command_test::BuildDataIoServices() };
     command.SetFolderPath(output_dir);
     command.SetMapFilePath(map_path);
 

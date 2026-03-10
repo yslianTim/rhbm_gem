@@ -28,6 +28,10 @@ class TestCommand final
 {
 public:
     using Options = TestCommandOptions;
+    explicit TestCommand(const rg::DataIoServices & data_io_services) :
+        CommandWithOptions{ data_io_services }
+    {
+    }
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
     int validate_count{ 0 };
@@ -70,7 +74,8 @@ TEST(CommandBaseTest, SettersDoNotCreateDirectoriesUntilPrepareForExecution)
     const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
     const auto folder_path{ temp_dir.path() / "out" };
 
-    TestCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    TestCommand command{ data_io_services };
     command.SetDatabasePath(database_path);
     command.SetFolderPath(folder_path);
 
@@ -84,7 +89,8 @@ TEST(CommandBaseTest, SettersDoNotCreateDirectoriesUntilPrepareForExecution)
 
 TEST(CommandBaseTest, PrepareForExecutionReportsValidationIssues)
 {
-    TestCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    TestCommand command{ data_io_services };
     command.SetForceInvalid(true);
 
     testing::internal::CaptureStderr();
@@ -97,7 +103,8 @@ TEST(CommandBaseTest, PrepareForExecutionReportsValidationIssues)
 
 TEST(CommandBaseTest, BaseSettersInvalidatePreparedState)
 {
-    TestCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    TestCommand command{ data_io_services };
 
     ASSERT_TRUE(command.PrepareForExecution());
     EXPECT_EQ(command.validate_count, 1);
@@ -126,7 +133,8 @@ TEST(CommandBaseTest, ValidationFailureSkipsFilesystemPreflight)
     const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
     const auto folder_path{ temp_dir.path() / "out" };
 
-    TestCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    TestCommand command{ data_io_services };
     command.SetDatabasePath(database_path);
     command.SetFolderPath(folder_path);
     command.SetForceInvalid(true);

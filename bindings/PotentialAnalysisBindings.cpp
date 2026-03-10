@@ -8,7 +8,7 @@ void BindPotentialAnalysis(py::module_ & module)
 {
     auto potential_analysis{ BindBuiltInCommand<PotentialAnalysisCommand>(module) };
     potential_analysis
-        .def(py::init<>())
+        .def(py::init<const DataIoServices &>())
         .def("Execute", &PotentialAnalysisCommand::Execute)
         .def("SetAsymmetryFlag", &PotentialAnalysisCommand::SetAsymmetryFlag)
         .def("SetFitRangeMinimum", &PotentialAnalysisCommand::SetFitRangeMinimum)

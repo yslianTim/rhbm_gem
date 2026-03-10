@@ -7,6 +7,7 @@
 namespace rhbm_gem {
 
 class MapFileFormatBase;
+class FileFormatRegistry;
 
 class MapFileReader
 {
@@ -16,6 +17,7 @@ class MapFileReader
 
 public:
     explicit MapFileReader(const std::string & filename);
+    MapFileReader(const std::string & filename, const FileFormatRegistry & file_format_registry);
     ~MapFileReader();
     void Read();
 

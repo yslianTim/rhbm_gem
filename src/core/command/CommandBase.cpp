@@ -41,6 +41,11 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
 
 } // namespace
 
+CommandBase::CommandBase(const DataIoServices & data_io_services) :
+    m_data_manager{ data_io_services }
+{
+}
+
 bool CommandBase::Execute()
 {
     const bool was_prepared{ m_is_prepared_for_execution };

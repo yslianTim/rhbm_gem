@@ -44,7 +44,7 @@ private:
     std::shared_ptr<MapObject> m_map_object;
 
 public:
-    PositionEstimationCommand();
+    explicit PositionEstimationCommand(const DataIoServices & data_io_services);
     ~PositionEstimationCommand() override;
     void SetMapFilePath(const std::filesystem::path & path);
     void SetIterationCount(int value);

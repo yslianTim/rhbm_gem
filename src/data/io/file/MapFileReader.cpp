@@ -9,12 +9,19 @@
 namespace rhbm_gem {
 
 MapFileReader::MapFileReader(const std::string & filename) :
+    MapFileReader(filename, BuildDefaultFileFormatRegistry())
+{
+}
+
+MapFileReader::MapFileReader(
+    const std::string & filename,
+    const FileFormatRegistry & file_format_registry) :
     m_file_path{ filename },
     m_file_format_helper{ nullptr },
     m_has_loaded_data{ false }
 {
     const auto & descriptor{
-        FileFormatRegistry::Instance().LookupForRead(FilePathHelper::GetExtension(filename)) };
+        file_format_registry.LookupForRead(FilePathHelper::GetExtension(filename)) };
     if (descriptor.kind != DataObjectKind::Map || !descriptor.map_backend.has_value())
     {
         throw std::runtime_error("Unsupported map file format");

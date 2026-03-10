@@ -13,9 +13,10 @@ TEST(DataObjectSchemaMigrationTest, LegacyFixtureMigratesToNormalizedSchema)
     ASSERT_EQ(GetUserVersion(database_path), 0);
     ASSERT_TRUE(HasTable(database_path, "model_list"));
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    rg::DatabaseManager verifier{ database_path };
+    const auto dao_registry{ BuildDefaultDaoFactoryRegistry() };
+    rg::DatabaseManager verifier{ database_path, dao_registry };
     EXPECT_EQ(verifier.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
 
     ASSERT_NO_THROW(manager.LoadDataObject("legacy_model"));
@@ -38,7 +39,7 @@ TEST(DataObjectSchemaMigrationTest, FailedLegacyMigrationRollsBackToLegacyState)
         database_path,
         "UPDATE model_list SET atom_size = 999 WHERE key_tag = 'key_b';");
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     EXPECT_THROW(manager.SetDatabaseManager(database_path), std::runtime_error);
     EXPECT_TRUE(HasTable(database_path, "model_list"));
     EXPECT_FALSE(HasTable(database_path, "model_object"));
@@ -57,7 +58,7 @@ TEST(DataObjectSchemaMigrationTest, LegacyMigrationUsesModelListWhenMetadataInco
         database_path,
         "DELETE FROM object_metadata WHERE key_tag = 'key_b' AND object_type = 'model';");
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
     ASSERT_NO_THROW(manager.LoadDataObject("key_a"));
     ASSERT_NO_THROW(manager.LoadDataObject("key_b"));
@@ -80,7 +81,7 @@ TEST(DataObjectSchemaMigrationTest, LegacyMigrationIgnoresMetadataOnlyGhostKeys)
         UpsertObjectMetadata(database, "ghost_model", "model");
     }
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
     ASSERT_NO_THROW(manager.LoadDataObject("real_model"));
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("real_model")->GetPdbID(), "REAL");
@@ -98,7 +99,7 @@ TEST(DataObjectSchemaMigrationTest, LegacyMigrationDropsOnlyOwnedTables)
     CopyLegacyFixtureDatabase(database_path);
     ExecuteSql(database_path, "CREATE TABLE custom_atom_list_in_notes (value INTEGER);");
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
     EXPECT_TRUE(HasTable(database_path, "custom_atom_list_in_notes"));
     EXPECT_FALSE(HasTable(database_path, "atom_list_in_legacy_model"));
@@ -123,7 +124,7 @@ TEST(DataObjectSchemaMigrationTest, LegacyV1MapListWithoutFkIsMigratedToFinalV2W
             "key_tag",
             "CASCADE"));
 
-    rg::DataObjectManager manager;
+    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
     EXPECT_EQ(GetUserVersion(database_path), 2);
     EXPECT_TRUE(
@@ -138,4 +139,3 @@ TEST(DataObjectSchemaMigrationTest, LegacyV1MapListWithoutFkIsMigratedToFinalV2W
     EXPECT_EQ(manager.GetTypedDataObject<rg::MapObject>("legacy_map")->GetGridSize(), map_object.GetGridSize());
     EXPECT_EQ(GetUserVersion(database_path), 2);
 }
-

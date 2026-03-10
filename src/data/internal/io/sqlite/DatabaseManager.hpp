@@ -14,18 +14,22 @@ namespace rhbm_gem {
 class SQLiteWrapper;
 class DataObjectBase;
 class DataObjectDAOBase;
+class DataObjectDAOFactoryRegistry;
 
 class DatabaseManager
 {
     std::filesystem::path m_database_path;
     std::unique_ptr<SQLiteWrapper> m_database;
+    std::shared_ptr<const DataObjectDAOFactoryRegistry> m_dao_factory_registry;
     std::unordered_map<std::type_index, std::shared_ptr<DataObjectDAOBase>> m_dao_cache;
     DatabaseSchemaVersion m_schema_version;
     mutable std::mutex m_mutex;     // Protects m_dao_cache
     mutable std::mutex m_db_mutex;  // Protects database operations
 
 public:
-    explicit DatabaseManager(const std::filesystem::path & database_path);
+    DatabaseManager(
+        const std::filesystem::path & database_path,
+        std::shared_ptr<const DataObjectDAOFactoryRegistry> dao_factory_registry);
     ~DatabaseManager();
     void SaveDataObject(const DataObjectBase * data_object, const std::string & key_tag);
     std::unique_ptr<DataObjectBase> LoadDataObject(const std::string & key_tag);

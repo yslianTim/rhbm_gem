@@ -6,6 +6,7 @@
 namespace rhbm_gem {
 
 class DataObjectBase;
+class FileFormatRegistry;
 
 class FileProcessFactoryBase
 {
@@ -19,8 +20,10 @@ public:
 
 class ModelObjectFactory : public FileProcessFactoryBase
 {
+    const FileFormatRegistry & m_file_format_registry;
+
 public:
-    ModelObjectFactory() = default;
+    explicit ModelObjectFactory(const FileFormatRegistry & file_format_registry);
     ~ModelObjectFactory() = default;
     std::unique_ptr<DataObjectBase> CreateDataObject(const std::string & filename) override;
     void OutputDataObject(
@@ -30,8 +33,10 @@ public:
 
 class MapObjectFactory : public FileProcessFactoryBase
 {
+    const FileFormatRegistry & m_file_format_registry;
+
 public:
-    MapObjectFactory() = default;
+    explicit MapObjectFactory(const FileFormatRegistry & file_format_registry);
     ~MapObjectFactory() = default;
     std::unique_ptr<DataObjectBase> CreateDataObject(const std::string & filename) override;
     void OutputDataObject(

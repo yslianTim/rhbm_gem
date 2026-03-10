@@ -13,7 +13,7 @@ namespace rg = rhbm_gem;
 
 TEST(PotentialAnalysisCommandTest, NegativeAlphaValuesBecomeValidationErrors)
 {
-    rg::PotentialAnalysisCommand command;
+    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
     command.SetAlphaR(-0.1);
     command.SetAlphaG(0.0);
 
@@ -28,7 +28,7 @@ TEST(PotentialAnalysisCommandTest, NegativeAlphaValuesBecomeValidationErrors)
 
 TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare)
 {
-    rg::PotentialAnalysisCommand command;
+    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
     command.SetSimulationFlag(true);
     command.SetSimulatedMapResolution(0.0);
 
@@ -44,7 +44,7 @@ TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare
 
 TEST(PotentialAnalysisCommandTest, NonPositiveSamplingHeightBecomesValidationError)
 {
-    rg::PotentialAnalysisCommand command;
+    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
     command.SetSamplingHeight(0.0);
 
     EXPECT_FALSE(command.PrepareForExecution());
@@ -59,7 +59,7 @@ TEST(PotentialAnalysisCommandTest, NonPositiveSamplingHeightBecomesValidationErr
 
 TEST(PotentialAnalysisCommandTest, EmptySavedKeyBecomesValidationError)
 {
-    rg::PotentialAnalysisCommand command;
+    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
     command.SetSavedKeyTag("");
 
     EXPECT_FALSE(command.PrepareForExecution());
@@ -74,7 +74,7 @@ TEST(PotentialAnalysisCommandTest, EmptySavedKeyBecomesValidationError)
 
 TEST(PotentialAnalysisCommandTest, TrainingReportDirSetterAcceptsEmptyAndRelativePath)
 {
-    rg::PotentialAnalysisCommand command;
+    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
     command.SetTrainingReportDir(std::filesystem::path{});
     EXPECT_EQ(
         command_test::FindValidationIssue(
@@ -116,9 +116,9 @@ TEST(PotentialAnalysisCommandTest, TrainingReportEmissionIsSkippedWhenDirectoryI
 TEST(PotentialAnalysisCommandTest, TrainingReportEmissionAndAlphaRGridBehaviorAreDeterministic)
 {
     const auto alpha_r_list{ rg::detail::BuildOrderedAlphaRTrainingList() };
-    ASSERT_EQ(alpha_r_list.size(), 6u);
+    ASSERT_EQ(alpha_r_list.size(), 11u);
     EXPECT_DOUBLE_EQ(alpha_r_list.front(), 0.0);
-    EXPECT_DOUBLE_EQ(alpha_r_list.back(), 0.5);
+    EXPECT_DOUBLE_EQ(alpha_r_list.back(), 1.0);
 
     command_test::ScopedTempDir temp_dir{ "potential_analysis_training_report" };
     const auto report_dir{ temp_dir.path() / "reports" };

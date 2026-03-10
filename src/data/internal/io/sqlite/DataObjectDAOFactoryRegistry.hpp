@@ -23,7 +23,6 @@ class DataObjectDAOFactoryRegistry
     std::unordered_map<std::string, std::type_index> m_name_map;
 
 public:
-    static DataObjectDAOFactoryRegistry & Instance();
     bool RegisterFactory(std::type_index type, const std::string & name,
                          std::function<std::unique_ptr<DataObjectDAOBase>(SQLiteWrapper*)> factory);
     std::unique_ptr<DataObjectDAOBase> CreateDAO(std::type_index type, SQLiteWrapper * db) const;
@@ -37,12 +36,14 @@ template <typename DataObjectType, typename DAOType>
 class DataObjectDAORegistrar
 {
 public:
-    explicit DataObjectDAORegistrar(const std::string & name)
+    DataObjectDAORegistrar(DataObjectDAOFactoryRegistry & registry, const std::string & name)
     {
-        DataObjectDAOFactoryRegistry::Instance().RegisterFactory(
+        registry.RegisterFactory(
             typeid(DataObjectType), name,
             [](SQLiteWrapper* db){ return std::make_unique<DAOType>(db); });
     }
 };
+
+void RegisterBuiltInDataObjectDaos(DataObjectDAOFactoryRegistry & registry);
 
 } // namespace rhbm_gem

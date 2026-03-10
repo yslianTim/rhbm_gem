@@ -8,7 +8,7 @@ void BindHRLModelTest(py::module_ & module)
 {
     auto model_test{ BindBuiltInCommand<HRLModelTestCommand>(module) };
     model_test
-        .def(py::init<>())
+        .def(py::init<const DataIoServices &>())
         .def("Execute", &HRLModelTestCommand::Execute)
         .def("SetThreadSize", &HRLModelTestCommand::SetThreadSize)
         .def("SetTesterChoice", &HRLModelTestCommand::SetTesterChoice)

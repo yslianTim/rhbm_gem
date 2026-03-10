@@ -8,7 +8,7 @@ void BindPositionEstimation(py::module_ & module)
 {
     auto position_estimation{ BindBuiltInCommand<PositionEstimationCommand>(module) };
     position_estimation
-        .def(py::init<>())
+        .def(py::init<const DataIoServices &>())
         .def("Execute", &PositionEstimationCommand::Execute)
         .def("SetFolderPath", &PositionEstimationCommand::SetFolderPath)
         .def("SetThreadSize", &PositionEstimationCommand::SetThreadSize)

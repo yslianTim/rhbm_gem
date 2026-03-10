@@ -7,6 +7,7 @@
 #include <CLI/CLI.hpp>
 
 #include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -30,6 +31,16 @@ class CommandScalarValidationHelperCommand final
 {
 public:
     using Options = CommandScalarValidationHelperCommandOptions;
+
+    explicit CommandScalarValidationHelperCommand(const rg::DataIoServices & data_io_services) :
+        rg::CommandWithOptions<
+            CommandScalarValidationHelperCommandOptions,
+            rg::CommandId::ModelTest,
+            rg::CommonOption::Threading
+                | rg::CommonOption::Verbose
+                | rg::CommonOption::OutputFolder>{ data_io_services }
+    {
+    }
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
 
@@ -112,7 +123,8 @@ const rg::ValidationIssue * FindIssue(
 
 TEST(CommandScalarValidationHelperTest, CommandLocalValidationPatternRejectsInvalidInputWithParseError)
 {
-    CommandScalarValidationHelperCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    CommandScalarValidationHelperCommand command{ data_io_services };
 
     command.SetCommandLocalValidatedValue(2.0);
 
@@ -126,7 +138,8 @@ TEST(CommandScalarValidationHelperTest, CommandLocalValidationPatternRejectsInva
 
 TEST(CommandScalarValidationHelperTest, CommandLocalValidationPatternAcceptsValidInputAndClearsPriorIssue)
 {
-    CommandScalarValidationHelperCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    CommandScalarValidationHelperCommand command{ data_io_services };
 
     command.SetCommandLocalValidatedValue(2.0);
     ASSERT_NE(FindIssue(command, "--validated"), nullptr);
@@ -148,7 +161,8 @@ TEST(CommandScalarValidationHelperTest, FinitePositiveScalarOptionRejectsZeroNeg
 
     for (double value : invalid_values)
     {
-        CommandScalarValidationHelperCommand command;
+        const auto data_io_services{ command_test::BuildDataIoServices() };
+        CommandScalarValidationHelperCommand command{ data_io_services };
         command.SetFinitePositiveValue(value);
 
         EXPECT_DOUBLE_EQ(command.FinitePositiveValue(), 2.0);
@@ -170,7 +184,8 @@ TEST(CommandScalarValidationHelperTest, FiniteNonNegativeScalarOptionRejectsNega
 
     for (double value : invalid_values)
     {
-        CommandScalarValidationHelperCommand command;
+        const auto data_io_services{ command_test::BuildDataIoServices() };
+        CommandScalarValidationHelperCommand command{ data_io_services };
         command.SetFiniteNonNegativeValue(value);
 
         EXPECT_DOUBLE_EQ(command.FiniteNonNegativeValue(), 0.0);
@@ -184,7 +199,8 @@ TEST(CommandScalarValidationHelperTest, FiniteNonNegativeScalarOptionRejectsNega
 
 TEST(CommandScalarValidationHelperTest, PositiveScalarOptionRejectsNonPositiveIntegers)
 {
-    CommandScalarValidationHelperCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    CommandScalarValidationHelperCommand command{ data_io_services };
 
     command.SetPositiveCountValue(0);
 

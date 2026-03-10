@@ -41,7 +41,7 @@ For operation extension on existing objects, update these areas together:
 
 For iteration method extension, additionally update:
 
-- `include/rhbm_gem/core/command/DataObjectManager.hpp`
+- `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
 - `tests/data/io/DataObjectManager_test.cpp`
 

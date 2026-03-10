@@ -10,7 +10,7 @@ TEST(MapSimulationCommandTest, ExecuteFiltersInvalidBlurringWidths)
 {
     command_test::ScopedTempDir temp_dir{"map_simulation_valid"};
 
-    rg::MapSimulationCommand command;
+    rg::MapSimulationCommand command{ command_test::BuildDataIoServices() };
     command.SetFolderPath(temp_dir.path());
     command.SetMapFileName("sim_map");
     command.SetModelFilePath(command_test::TestDataPath("test_model.cif"));
@@ -24,7 +24,7 @@ TEST(MapSimulationCommandTest, ExecuteFailsWhenAllBlurringWidthsAreInvalid)
 {
     command_test::ScopedTempDir temp_dir{"map_simulation_invalid"};
 
-    rg::MapSimulationCommand command;
+    rg::MapSimulationCommand command{ command_test::BuildDataIoServices() };
     command.SetFolderPath(temp_dir.path());
     command.SetMapFileName("sim_map");
     command.SetModelFilePath(command_test::TestDataPath("test_model.cif"));
@@ -36,7 +36,7 @@ TEST(MapSimulationCommandTest, ExecuteFailsWhenAllBlurringWidthsAreInvalid)
 
 TEST(MapSimulationCommandTest, InvalidPotentialModelBecomesValidationError)
 {
-    rg::MapSimulationCommand command;
+    rg::MapSimulationCommand command{ command_test::BuildDataIoServices() };
     command.SetModelFilePath(command_test::TestDataPath("test_model.cif"));
     command.SetBlurringWidthList("1.0");
     command.SetPotentialModelChoice(static_cast<rg::PotentialModel>(999));
@@ -53,7 +53,7 @@ TEST(MapSimulationCommandTest, InvalidPotentialModelBecomesValidationError)
 
 TEST(MapSimulationCommandTest, InvalidPartialChargeChoiceBecomesValidationError)
 {
-    rg::MapSimulationCommand command;
+    rg::MapSimulationCommand command{ command_test::BuildDataIoServices() };
     command.SetModelFilePath(command_test::TestDataPath("test_model.cif"));
     command.SetBlurringWidthList("1.0");
     command.SetPartialChargeChoice(static_cast<rg::PartialCharge>(999));

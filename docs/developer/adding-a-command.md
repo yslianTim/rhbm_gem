@@ -276,8 +276,9 @@ Required actions:
 
 1. create/update the command-specific binding source (for example `bindings/ExampleCommandBindings.cpp`)
 2. bind class with `BindBuiltInCommand<rhbm_gem::ExampleCommand>(m)`
-3. expose supported setters and `Execute`
-4. call `BindCommandDiagnostics(example_command)`
+3. expose constructor that requires `DataIoServices` context
+4. expose supported setters and `Execute`
+5. call `BindCommandDiagnostics(example_command)`
 
 Binding skeleton:
 
@@ -286,12 +287,19 @@ auto example_command{
     BindBuiltInCommand<rhbm_gem::ExampleCommand>(m)
 };
 example_command
-    .def(py::init<>())
+    .def(py::init<const rhbm_gem::DataIoServices &>())
     .def("Execute", &rhbm_gem::ExampleCommand::Execute)
     .def("SetInputPath", &rhbm_gem::ExampleCommand::SetInputPath)
     .def("SetOutputStem", &rhbm_gem::ExampleCommand::SetOutputStem)
     .def("SetThreshold", &rhbm_gem::ExampleCommand::SetThreshold);
 BindCommandDiagnostics(example_command);
+```
+
+Python callers must create one context and pass it into command constructors:
+
+```python
+services = m.DataIoServices()
+command = m.ExampleCommand(services)
 ```
 
 Also register the new binding function call in `bindings/CoreBindings.cpp` (module entrypoint).

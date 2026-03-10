@@ -6,6 +6,7 @@
 #include <CLI/CLI.hpp>
 
 #include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -26,6 +27,16 @@ class ValidationIssueCommand final
 {
 public:
     using Options = ValidationIssueCommandOptions;
+
+    explicit ValidationIssueCommand(const rg::DataIoServices & data_io_services) :
+        rg::CommandWithOptions<
+            ValidationIssueCommandOptions,
+            rg::CommandId::ModelTest,
+            rg::CommonOption::Threading
+                | rg::CommonOption::Verbose
+                | rg::CommonOption::OutputFolder>{ data_io_services }
+    {
+    }
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
 
@@ -64,7 +75,8 @@ private:
 
 TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
 {
-    ValidationIssueCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    ValidationIssueCommand command{ data_io_services };
     command.SetProblematicValue(0);
     command.SetPrepareError(true);
 
@@ -103,7 +115,8 @@ TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
 
 TEST(CommandValidationIssueTest, BaseNormalizationWarningsAreProgrammaticallyVisible)
 {
-    ValidationIssueCommand command;
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    ValidationIssueCommand command{ data_io_services };
     command.SetThreadSize(0);
     command.SetVerboseLevel(99);
 

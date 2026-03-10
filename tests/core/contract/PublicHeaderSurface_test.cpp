@@ -152,7 +152,7 @@ TEST(PublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugA
         command_test::ProjectRootPath()
     };
     const auto header_path{
-        project_root / "include" / "rhbm_gem" / "core" / "command" / "DataObjectManager.hpp"
+        project_root / "include" / "rhbm_gem" / "data" / "io" / "DataObjectManager.hpp"
     };
 
     std::ifstream header_stream(header_path);

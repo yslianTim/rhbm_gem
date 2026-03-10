@@ -2,7 +2,7 @@
 #include "internal/PotentialAnalysisExecutionOptions.hpp"
 #include "internal/CommandDataLoaderInternal.hpp"
 #include "internal/PotentialAnalysisTrainingSupport.hpp"
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

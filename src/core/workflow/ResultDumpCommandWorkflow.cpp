@@ -1,6 +1,6 @@
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
 #include "internal/CommandDataLoaderInternal.hpp"
-#include <rhbm_gem/core/command/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

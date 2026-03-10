@@ -6,6 +6,7 @@
 namespace rhbm_gem {
 
 class ModelFileFormatBase;
+class FileFormatRegistry;
 class ModelObject;
 
 class ModelFileWriter
@@ -17,6 +18,11 @@ class ModelFileWriter
 
 public:
     ModelFileWriter(const std::string & filename, const ModelObject * model_object, int model_par = 0);
+    ModelFileWriter(
+        const std::string & filename,
+        const ModelObject * model_object,
+        const FileFormatRegistry & file_format_registry,
+        int model_par = 0);
     ~ModelFileWriter();
     void Write();
 

@@ -49,7 +49,7 @@ private:
     std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;
 
 public:
-    PotentialDisplayCommand();
+    explicit PotentialDisplayCommand(const DataIoServices & data_io_services);
     ~PotentialDisplayCommand() override;
     void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);

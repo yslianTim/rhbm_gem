@@ -8,7 +8,7 @@ void BindMapSimulation(py::module_ & module)
 {
     auto map_simulation{ BindBuiltInCommand<MapSimulationCommand>(module) };
     map_simulation
-        .def(py::init<>())
+        .def(py::init<const DataIoServices &>())
         .def("Execute", &MapSimulationCommand::Execute)
         .def("SetFolderPath", &MapSimulationCommand::SetFolderPath)
         .def("SetModelFilePath", &MapSimulationCommand::SetModelFilePath)

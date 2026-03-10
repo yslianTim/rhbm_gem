@@ -73,11 +73,11 @@ Rules enforced by implementation:
 
 Startup path:
 
-1. `src/main.cpp` creates `CLI::App`.
-2. `Application` (`src/core/command/Application.cpp`) requires exactly one subcommand.
+1. `src/main.cpp` creates `CLI::App` and one `DataIoServices` instance.
+2. `Application` (`src/core/command/Application.cpp`) receives `DataIoServices` and requires exactly one subcommand.
 3. `Application::RegisterAllCommands()` iterates `BuiltInCommandCatalog()`.
 4. For each descriptor:
-   - create concrete command via `descriptor.factory()`
+   - create concrete command via `descriptor.factory(data_io_services)`
    - register subcommand (`name`, `description`)
    - call `CommandBase::RegisterCLIOptions()`
    - register callback that calls `Execute()`
@@ -301,7 +301,7 @@ Core command architecture:
 - `src/core/internal/BuiltInCommandBindingInternal.hpp`
 - `include/rhbm_gem/core/command/CommandOptionBinding.hpp`
 - `src/core/internal/CommandDataLoaderInternal.hpp`
-- `include/rhbm_gem/core/command/DataObjectManager.hpp`
+- `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
 - `bindings/CoreBindings.cpp`
 
