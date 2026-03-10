@@ -10,11 +10,12 @@ Related guides:
 
 ## 1. Scope and ownership
 
-The command layer is the orchestration boundary between input surfaces (CLI/Python) and domain/data logic.
+The command layer is the orchestration boundary between input surfaces
+(CLI/Python/GUI execution requests) and domain/data logic.
 
 Command responsibilities:
 
-- accept CLI11 or Python setter input
+- accept CLI11 callbacks, Python setter calls, and GUI request-adapter setter calls
 - store normalized options
 - validate options in parse/prepare phases
 - prepare runtime prerequisites (log level, output folders, database parent folder)
@@ -85,6 +86,12 @@ Startup path:
 
 There is no second built-in CLI registration path in the project.
 
+GUI integration path:
+
+- `GuiCommandExecutor` (`src/gui/GuiCommandExecutor.cpp`) does not register subcommands
+- it creates concrete command instances directly, applies request DTOs through setters, then runs `PrepareForExecution()`/`Execute()`
+- this path reuses the same command lifecycle and validation APIs as CLI/Python
+
 ## 4. Concrete command contract
 
 Standard command structure:
@@ -141,7 +148,7 @@ Concrete commands should only register command-local options in `RegisterCLIOpti
 
 ## 6. Execution lifecycle and validation model
 
-`Execute()` is the single execution entry for CLI callbacks and Python bindings.
+`Execute()` is the single execution entry for CLI callbacks, Python bindings, and GUI adapters.
 
 Behavior:
 
@@ -232,12 +239,13 @@ Workflow helpers used by current commands:
 
 ## 9. Python binding contract
 
-Built-in Python command classes are manually bound in `bindings/CoreBindings.cpp`.
+Built-in Python command classes are bound through per-command binding units under `bindings/`,
+with module assembly in `bindings/CoreBindings.cpp`.
 
 Current binding model:
 
 - built-in membership/name mapping comes from `BuiltInCommandList.def` + `BuiltInCommandBindingInternal.hpp`
-- method exposure is explicit in `CoreBindings.cpp` (not auto-generated)
+- method exposure is explicit in `bindings/*Bindings.cpp` (not auto-generated)
 - Python execution path calls the same `Execute()` / `PrepareForExecution()` contract as C++
 
 ### Python built-in surface
@@ -268,10 +276,10 @@ Current binding model:
 When adding or significantly modifying a built-in command, update the same change set:
 
 1. command header under `include/rhbm_gem/core/command/`
-2. command implementation under `src/core/`
+2. command implementation under `src/core/command/` (and `src/core/workflow/` when introducing/extracting workflows)
 3. built-in list entry in `src/core/internal/BuiltInCommandList.def`
 4. metadata/registration behavior (if needed) in `BuiltInCommandCatalog*`
-5. Python binding exposure in `bindings/CoreBindings.cpp`
+5. Python binding exposure in `bindings/*Bindings.cpp` (and wire module init in `bindings/CoreBindings.cpp` if adding a new binding unit)
 6. tests (contract + command-specific)
 7. this architecture document and related developer docs
 
@@ -303,6 +311,10 @@ Core command architecture:
 - `src/core/internal/CommandDataLoaderInternal.hpp`
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
+- `include/rhbm_gem/gui/GuiCommandExecutor.hpp`
+- `src/gui/GuiCommandExecutor.cpp`
+- `bindings/BindingHelpers.hpp`
+- `bindings/CommonBindings.cpp`
 - `bindings/CoreBindings.cpp`
 
 Representative concrete commands:
