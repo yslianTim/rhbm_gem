@@ -64,7 +64,7 @@ flowchart LR
         L --> N["object_catalog + DataObjectDAOFactoryRegistry"]
         N --> O["ModelObjectDAO (v2 impl)"]
         N --> P2["MapObjectDAO"]
-        M --> Q["LegacyModelObjectReader (migration path)"]
+        M --> Q["LegacyModelObjectReader (optional migration path)"]
         O --> R["SQLiteWrapper"]
         P2 --> R
         Q --> R
@@ -144,8 +144,9 @@ Ownership rule:
 - Missing key in `ProduceFile(...)` logs a warning and returns.
 - Missing key in `SaveDataObject(...)` logs a warning and returns.
 - Parse/write/load failures throw exceptions.
-- `ProcessFile(...)`, `ProduceFile(...)`, and `LoadDataObject(...)` wrap failures with
-  file path and/or key context.
+- `ProcessFile(...)` and `ProduceFile(...)` wrap failures with file path and key context.
+- `LoadDataObject(...)` propagates failures from `DatabaseManager`/DAO layers
+  (messages are produced by the persistence path and may include key context).
 
 ## 5. SQLite Persistence Contract
 
@@ -212,9 +213,10 @@ CREATE TABLE IF NOT EXISTS object_catalog (
 Schema version source: `PRAGMA user_version`
 
 - `2`: validate normalized v2 schema only
-- `1`: migrate to normalized v2
+- `1`: migrate to normalized v2 when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`; otherwise reject
 - `0` + empty database: create normalized v2
-- `0` + recognized legacy v1 layout: migrate to normalized v2
+- `0` + recognized legacy v1 layout: migrate to normalized v2 when
+  `RHBM_GEM_LEGACY_V1_SUPPORT=ON`; otherwise reject
 - `0` + non-empty non-legacy layout: reject
 - any other version: reject
 
@@ -224,7 +226,7 @@ Normalized v2 ownership model:
 - `model_object.key_tag` and `map_list.key_tag` reference `object_catalog(key_tag)` with `ON DELETE CASCADE`
 - model child tables reference `model_object(key_tag)` with `ON DELETE CASCADE`
 
-Migration behavior (when triggered) keeps only the final v2 layout:
+Migration behavior (when triggered and legacy support is enabled) keeps only the final v2 layout:
 
 - migrate legacy model payload through `LegacyModelObjectReader` into `ModelObjectDAOSqlite`
 - migrate legacy map payload into final `map_list`
@@ -245,15 +247,16 @@ Migration behavior (when triggered) keeps only the final v2 layout:
 
 ### 5.6 DAO registration and stable names
 
-DAO registration is static (translation-unit registration):
+Built-in DAO registration is centralized in `RegisterBuiltInDataObjectDaos(...)`,
+which is invoked by `DataIoServices::BuildDefault()`:
 
-- `ModelObjectDAO` registered as `"model"` (implementation inherits `ModelObjectDAOSqlite`)
-- `MapObjectDAO` registered as `"map"`
+- `ModelObject` -> `ModelObjectDAO` registered as `"model"`
+- `MapObject` -> `MapObjectDAO` registered as `"map"`
 
-Registration API:
+For extension/testing use cases, `DataObjectDAORegistrar` is available:
 
 ```cpp
-DataObjectDAORegistrar<DataObjectType, DAOType>("stable_name")
+DataObjectDAORegistrar<DataObjectType, DAOType>(registry, "stable_name")
 ```
 
 `stable_name` is persisted in `object_catalog.object_type`.
@@ -355,14 +358,15 @@ Database/schema/DAO:
 - `src/data/internal/io/sqlite/DatabaseManager.hpp`, `src/data/io/sqlite/DatabaseManager.cpp`
 - `src/data/internal/migration/DatabaseSchemaManager.hpp`, `src/data/schema/DatabaseSchemaManager.cpp`
 - `src/data/internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp`, `src/data/io/sqlite/DataObjectDAOFactoryRegistry.cpp`
+- `src/data/io/sqlite/BuiltInDataObjectDaos.cpp`
 - `src/data/internal/io/sqlite/ManagedStoreRegistry.hpp`, `src/data/io/sqlite/ManagedStoreRegistry.cpp`
-- `src/data/internal/io/sqlite/ModelObjectDAO.hpp`, `src/data/io/sqlite/ModelObjectDAO.cpp`
+- `src/data/internal/io/sqlite/ModelObjectDAO.hpp` (thin alias over `ModelObjectDAOSqlite`)
 - `src/data/internal/io/sqlite/ModelObjectDAOSqlite.hpp`, `src/data/io/sqlite/ModelObjectDAOSqlite.cpp` (class `ModelObjectDAOSqlite`)
 - `src/data/internal/io/sqlite/MapObjectDAO.hpp`, `src/data/io/sqlite/MapObjectDAO.cpp`
 - `src/data/io/sqlite/ModelSchemaSql.hpp`
 - `src/data/io/sqlite/ModelStructurePersistence.hpp`, `src/data/io/sqlite/ModelStructurePersistence.cpp`
 - `src/data/io/sqlite/ModelAnalysisPersistence.hpp`, `src/data/io/sqlite/ModelAnalysisPersistence.cpp`
-- `src/data/internal/migration/LegacyModelObjectReader.hpp`, `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp`
+- `src/data/internal/migration/LegacyModelObjectReader.hpp`, `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp` (when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`)
 - `src/data/internal/io/sqlite/SQLiteWrapper.hpp`
 
 ## 9. Common Pitfalls

@@ -80,7 +80,9 @@ Behavior:
   - `deterministic_order=true` sorts keys lexicographically before callback execution.
   - `deterministic_order=false` iterates current container order.
 - Non-empty `key_tag_list`: caller order is preserved; missing keys are skipped with warning logs.
-- Empty callback is invalid and throws (`ForEachDataObject(): callback is empty.`).
+- Empty callback is invalid:
+  - mutable overload throws `ForEachDataObject(): callback is empty.`
+  - const overload throws `ForEachDataObject() const: callback is empty.`
 - Traversal is snapshot-based:
   - manager map access is locked only while building the snapshot vector
   - callbacks run outside the map lock
@@ -141,8 +143,9 @@ Map sampling is provided as a stateless helper:
 
 - `SampleMapValues(...)` (`include/rhbm_gem/core/command/MapSampling.hpp`)
 
-Potential-analysis-specific typed workflows remain command-local (`PotentialAnalysisCommandWorkflow.*`,
-`PotentialAnalysisBondWorkflow.*`).
+Potential-analysis-specific typed workflows remain command-local
+(`PotentialAnalysisTrainingWorkflow.*`, `PotentialAnalysisAnalysisWorkflow.*`,
+`PotentialAnalysisReportWorkflow.*`, `PotentialAnalysisBondWorkflow.*`).
 
 ### 5.3 Painter ingestion checks
 
