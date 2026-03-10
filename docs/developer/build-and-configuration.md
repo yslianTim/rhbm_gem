@@ -61,6 +61,7 @@ Notes:
 1. Default summary includes only `src/` files.
 2. To include `tests/`, configure with `-DCOVERAGE_INCLUDE_TESTS=ON`.
 3. Coverage artifacts are generated under the build directory.
+4. `ENABLE_COVERAGE=ON` requires `BUILD_TESTING=ON`.
 
 ## Test Execution and Labels
 
@@ -164,11 +165,13 @@ cmake -S . -B build-boost-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON
 cmake -S . -B build-boost-components -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_GEM_BOOST_COMPONENTS="filesystem;system"
 ```
 
-9. If OpenMP is missing on Linux:
+9. If OpenMP is missing on Linux, install the package set that matches your compiler toolchain (Ubuntu/Debian + Clang example):
 
 ```bash
 sudo apt install -y libomp-dev
 ```
+
+For GCC-based builds, ensure `g++`/`build-essential` is installed so `libgomp` is available.
 
 ## CMake Parameters
 
@@ -236,7 +239,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=SYSTEM
 # Pure C++ build (skip Python bindings)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
 
-# Build the Qt6 GUI executable (optional)
+# Build the Qt6 GUI executable (optional; target exists only when Qt6 Core/Widgets is found)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BUILD_GUI=ON
 cmake --build build --target RHBM_GEM_gui -j
 
@@ -252,11 +255,11 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BOOST_MODE=ON -DRHBM_G
 # Disable legacy v1 schema migration support
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_LEGACY_V1_SUPPORT=OFF
 
-# Install Python module into <prefix>/lib/pythonX.Y/site-packages (default)
+# Install Python module into <prefix>/<CMAKE_INSTALL_LIBDIR>/pythonX.Y/site-packages (default layout)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON
 cmake --install build --prefix "$HOME/.local"
 PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PYTHONPATH="$HOME/.local/lib/python${PYVER}/site-packages" python3 -c "import rhbm_gem_module"
+PYTHONPATH="$HOME/.local/lib/python${PYVER}/site-packages:$HOME/.local/lib64/python${PYVER}/site-packages" python3 -c "import rhbm_gem_module"
 
 # Keep the old libdir install style for the Python module
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR
