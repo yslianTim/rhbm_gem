@@ -1,5 +1,3 @@
-include(FetchContent)
-
 set(RHBM_GEM_EIGEN3_URL "https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz")
 set(RHBM_GEM_EIGEN3_URL_HASH "SHA256=e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec")
 
@@ -44,12 +42,13 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(Boost REQUIRED)
     endif()
 
-    set(RHBM_GEM_EIGEN_INCLUDE_DIR "" CACHE INTERNAL "Fetched Eigen include root" FORCE)
-    set(RHBM_GEM_CLI11_INCLUDE_DIR "" CACHE INTERNAL "Fetched CLI11 include root" FORCE)
-    set(RHBM_GEM_SQLITE3_SOURCE_DIR "" CACHE INTERNAL "Fetched SQLite3 source root" FORCE)
-    set(RHBM_GEM_BOOST_INCLUDE_DIR "" CACHE INTERNAL "Fetched Boost include root" FORCE)
+    set(RHBM_GEM_EIGEN_INCLUDE_DIR "")
+    set(RHBM_GEM_CLI11_INCLUDE_DIR "")
+    set(RHBM_GEM_SQLITE3_SOURCE_DIR "")
+    set(RHBM_GEM_BOOST_INCLUDE_DIR "")
 else()
     message(STATUS "Dependency provider: FETCH")
+    include(FetchContent)
 
     rhbm_gem_populate_content(
         rhbm_gem_eigen3
@@ -90,36 +89,9 @@ else()
             "does not contain the expected boost/ headers.")
     endif()
 
-    set(RHBM_GEM_EIGEN_INCLUDE_DIR "${RHBM_GEM_EIGEN3_SOURCE_DIR}" CACHE INTERNAL "Fetched Eigen include root" FORCE)
-    set(RHBM_GEM_CLI11_INCLUDE_DIR "${RHBM_GEM_CLI11_SOURCE_DIR}/include" CACHE INTERNAL "Fetched CLI11 include root" FORCE)
-    set(RHBM_GEM_SQLITE3_SOURCE_DIR "${RHBM_GEM_SQLITE3_SOURCE_DIR}" CACHE INTERNAL "Fetched SQLite3 source root" FORCE)
-    set(RHBM_GEM_BOOST_INCLUDE_DIR "${RHBM_GEM_BOOST_SOURCE_DIR}" CACHE INTERNAL "Fetched Boost include root" FORCE)
-
-    install(
-        DIRECTORY "${RHBM_GEM_EIGEN_INCLUDE_DIR}/Eigen"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-    )
-    if(EXISTS "${RHBM_GEM_EIGEN_INCLUDE_DIR}/unsupported")
-        install(
-            DIRECTORY "${RHBM_GEM_EIGEN_INCLUDE_DIR}/unsupported"
-            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-        )
-    endif()
-
-    install(
-        DIRECTORY "${RHBM_GEM_CLI11_INCLUDE_DIR}/CLI"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-    )
-
-    install(
-        FILES "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.h"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-    )
-
-    install(
-        DIRECTORY "${RHBM_GEM_BOOST_INCLUDE_DIR}/boost"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-    )
+    set(RHBM_GEM_EIGEN_INCLUDE_DIR "${RHBM_GEM_EIGEN3_SOURCE_DIR}")
+    set(RHBM_GEM_CLI11_INCLUDE_DIR "${RHBM_GEM_CLI11_SOURCE_DIR}/include")
+    set(RHBM_GEM_BOOST_INCLUDE_DIR "${RHBM_GEM_BOOST_SOURCE_DIR}")
 endif()
 
 if(BUILD_PYTHON_BINDINGS)
@@ -129,6 +101,7 @@ if(BUILD_PYTHON_BINDINGS)
     if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(pybind11 CONFIG REQUIRED)
     else()
+        include(FetchContent)
         set(PYBIND11_TEST OFF CACHE BOOL "Disable pybind11 tests" FORCE)
         FetchContent_Declare(rhbm_gem_pybind11
             URL "${RHBM_GEM_PYBIND11_URL}"
@@ -148,6 +121,7 @@ if(BUILD_TESTING)
     if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(GTest REQUIRED)
     else()
+        include(FetchContent)
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         FetchContent_Declare(rhbm_gem_googletest
             URL "${RHBM_GEM_GTEST_URL}"

@@ -1,20 +1,3 @@
-if(NOT DEFINED RHBM_GEM_WITH_OPENMP)
-    set(RHBM_GEM_WITH_OPENMP FALSE)
-endif()
-if(NOT DEFINED RHBM_GEM_WITH_ROOT)
-    set(RHBM_GEM_WITH_ROOT FALSE)
-endif()
-if(NOT DEFINED RHBM_GEM_DEP_PROVIDER)
-    set(RHBM_GEM_DEP_PROVIDER "SYSTEM")
-endif()
-if(NOT DEFINED RHBM_GEM_OPENMP_ROOT)
-    if(DEFINED OpenMP_ROOT)
-        set(RHBM_GEM_OPENMP_ROOT "${OpenMP_ROOT}")
-    else()
-        set(RHBM_GEM_OPENMP_ROOT "")
-    endif()
-endif()
-
 # Install public headers and legal notices.
 install(
     DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/rhbm_gem/"
@@ -38,6 +21,34 @@ install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/test_model.cif"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python/data"
 )
+
+if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
+    install(
+        DIRECTORY "${RHBM_GEM_EIGEN_INCLUDE_DIR}/Eigen"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+    if(EXISTS "${RHBM_GEM_EIGEN_INCLUDE_DIR}/unsupported")
+        install(
+            DIRECTORY "${RHBM_GEM_EIGEN_INCLUDE_DIR}/unsupported"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+        )
+    endif()
+
+    install(
+        DIRECTORY "${RHBM_GEM_CLI11_INCLUDE_DIR}/CLI"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+
+    install(
+        FILES "${RHBM_GEM_SQLITE3_SOURCE_DIR}/sqlite3.h"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+
+    install(
+        DIRECTORY "${RHBM_GEM_BOOST_INCLUDE_DIR}/boost"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+endif()
 
 set(RHBM_GEM_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
 

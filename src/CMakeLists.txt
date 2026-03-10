@@ -36,8 +36,6 @@ function(rhbm_utils_prepare_openmp_for_appleclang)
             "Root directory for OpenMP installation"
             FORCE
         )
-        list(PREPEND CMAKE_PREFIX_PATH "${_rhbm_openmp_root}")
-        list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
     endif()
 endfunction()
 
@@ -154,6 +152,7 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "FETCH")
 endif()
 
 add_library(rhbm_gem ${RHBM_GEM_LIBRARY_SOURCES})
+target_compile_features(rhbm_gem PUBLIC cxx_std_17)
 
 target_include_directories(rhbm_gem PUBLIC
     "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
@@ -188,6 +187,14 @@ endif()
 target_link_libraries(rhbm_gem PRIVATE
     CompilerFlags
 )
+if(WIN32 AND BUILD_SHARED_LIBS)
+    set_target_properties(rhbm_gem PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+if(DEFINED RHBM_GEM_LIBRARY_INSTALL_RPATH)
+    set_target_properties(rhbm_gem PROPERTIES
+        INSTALL_RPATH "${RHBM_GEM_LIBRARY_INSTALL_RPATH}"
+    )
+endif()
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
     target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
@@ -198,6 +205,7 @@ endif()
 
 set(MIN_OPENMP_VERSION "4.5")
 set(RHBM_GEM_ENABLE_OPENMP FALSE)
+set(RHBM_GEM_OPENMP_ROOT "")
 if(RHBM_GEM_OPENMP_MODE STREQUAL "OFF")
     message(STATUS "OpenMP features disabled by RHBM_GEM_OPENMP_MODE=OFF")
 elseif(RHBM_GEM_OPENMP_MODE STREQUAL "AUTO")
@@ -225,6 +233,9 @@ if(OpenMP_CXX_FOUND)
         target_compile_definitions(rhbm_gem PUBLIC USE_OPENMP)
         target_link_libraries(rhbm_gem PUBLIC OpenMP::OpenMP_CXX)
         set(RHBM_GEM_ENABLE_OPENMP TRUE)
+        if(DEFINED OpenMP_ROOT)
+            set(RHBM_GEM_OPENMP_ROOT "${OpenMP_ROOT}")
+        endif()
     endif()
 else()
     if(RHBM_GEM_OPENMP_MODE STREQUAL "AUTO")
@@ -282,11 +293,9 @@ install(
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
 )
 
-set(RHBM_GEM_WITH_OPENMP "${RHBM_GEM_ENABLE_OPENMP}" CACHE INTERNAL "RHBM_GEM was built with OpenMP support" FORCE)
-set(RHBM_GEM_WITH_ROOT "${RHBM_GEM_ENABLE_ROOT}" CACHE INTERNAL "RHBM_GEM was built with ROOT support" FORCE)
-if(DEFINED OpenMP_ROOT)
-    set(RHBM_GEM_OPENMP_ROOT "${OpenMP_ROOT}" CACHE INTERNAL "OpenMP root used by RHBM_GEM build" FORCE)
-endif()
+set(RHBM_GEM_WITH_OPENMP "${RHBM_GEM_ENABLE_OPENMP}" PARENT_SCOPE)
+set(RHBM_GEM_WITH_ROOT "${RHBM_GEM_ENABLE_ROOT}" PARENT_SCOPE)
+set(RHBM_GEM_OPENMP_ROOT "${RHBM_GEM_OPENMP_ROOT}" PARENT_SCOPE)
 
 # Avoid target-directory collisions on case-insensitive filesystems
 # (e.g. `rhbm_gem` library vs `RHBM_GEM` executable).
@@ -300,6 +309,11 @@ target_link_libraries(${MAIN_EXEC_TARGET} PRIVATE
     CompilerFlags
 )
 target_include_directories(${MAIN_EXEC_TARGET} PRIVATE "${PROJECT_BINARY_DIR}")
+if(DEFINED RHBM_GEM_EXECUTABLE_INSTALL_RPATH)
+    set_target_properties(${MAIN_EXEC_TARGET} PROPERTIES
+        INSTALL_RPATH "${RHBM_GEM_EXECUTABLE_INSTALL_RPATH}"
+    )
+endif()
 
 install(
     TARGETS ${MAIN_EXEC_TARGET}
@@ -328,6 +342,11 @@ if(RHBM_GEM_BUILD_GUI)
         target_include_directories(${GUI_EXEC_TARGET} PRIVATE
             "${PROJECT_SOURCE_DIR}/src/gui"
         )
+        if(DEFINED RHBM_GEM_EXECUTABLE_INSTALL_RPATH)
+            set_target_properties(${GUI_EXEC_TARGET} PROPERTIES
+                INSTALL_RPATH "${RHBM_GEM_EXECUTABLE_INSTALL_RPATH}"
+            )
+        endif()
 
         install(
             TARGETS ${GUI_EXEC_TARGET}

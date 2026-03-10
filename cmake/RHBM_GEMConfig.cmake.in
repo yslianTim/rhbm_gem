@@ -26,8 +26,6 @@ if("@RHBM_GEM_WITH_OPENMP@" STREQUAL "TRUE")
             if(EXISTS "${_RHBM_GEM_OPENMP_CANDIDATE}/include/omp.h")
                 set(OpenMP_ROOT "${_RHBM_GEM_OPENMP_CANDIDATE}" CACHE PATH
                     "Root directory for OpenMP installation")
-                list(PREPEND CMAKE_PREFIX_PATH "${_RHBM_GEM_OPENMP_CANDIDATE}")
-                list(REMOVE_DUPLICATES CMAKE_PREFIX_PATH)
                 break()
             endif()
         endforeach()

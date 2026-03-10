@@ -1,7 +1,3 @@
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
 # Core build options
 option(BUILD_TESTING "Build unit tests" ON)
 option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
@@ -73,7 +69,6 @@ if(ENABLE_COVERAGE AND NOT BUILD_TESTING)
 endif()
 
 add_library(CompilerFlags INTERFACE)
-target_compile_features(CompilerFlags INTERFACE cxx_std_17)
 set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
 set(msvc_cxx "$<COMPILE_LANG_AND_ID:CXX,MSVC>")
 
@@ -104,8 +99,4 @@ if(ENABLE_COVERAGE)
     target_link_options(CompilerFlags INTERFACE
         --coverage
     )
-endif()
-
-if(WIN32 AND BUILD_SHARED_LIBS)
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
