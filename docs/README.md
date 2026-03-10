@@ -1,6 +1,7 @@
 # Documentation
 
-Use this directory as the entry point for the project documentation. The content is split by audience so you can go straight to the guide that matches your task.
+Use this directory as the entry point for the project documentation.
+The content is split by audience so you can go straight to the guide that matches your task.
 
 ## User Documentation
 
@@ -19,4 +20,6 @@ Use this directory as the entry point for the project documentation. The content
 - Start with [`developer/README.md`](developer/README.md) and [`developer/build-and-configuration.md`](developer/build-and-configuration.md).
 - [`developer/development-guidelines.md`](developer/development-guidelines.md)
 - [`developer/architecture/command-architecture.md`](developer/architecture/command-architecture.md)
+- [`developer/architecture/dataobject-typed-dispatch-architecture.md`](developer/architecture/dataobject-typed-dispatch-architecture.md)
+- [`developer/adding-dataobject-operations-and-iteration.md`](developer/adding-dataobject-operations-and-iteration.md)
 - [`developer/adding-a-command.md`](developer/adding-a-command.md)

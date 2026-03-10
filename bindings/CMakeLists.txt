@@ -1,5 +1,13 @@
 set(BINDINGS_SOURCES
+    CommonBindings.cpp
+    HRLModelTestBindings.cpp
     CoreBindings.cpp
+    MapSimulationBindings.cpp
+    MapVisualizationBindings.cpp
+    PositionEstimationBindings.cpp
+    PotentialAnalysisBindings.cpp
+    PotentialDisplayBindings.cpp
+    ResultDumpBindings.cpp
 )
 
 set(BINDINGS_MODULE_TARGET rhbm_gem_module)
@@ -36,14 +44,12 @@ if(NOT IS_ABSOLUTE "${RHBM_GEM_PYTHON_MODULE_INSTALL_DIR}")
     endif()
 endif()
 
-target_link_libraries(${BINDINGS_MODULE_TARGET} PRIVATE core data utils CompilerFlags)
-target_include_directories(${BINDINGS_MODULE_TARGET} PRIVATE "${PROJECT_SOURCE_DIR}/src/core")
-
-set_target_properties(${BINDINGS_MODULE_TARGET} PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+target_link_libraries(${BINDINGS_MODULE_TARGET} PRIVATE rhbm_gem CompilerFlags)
+target_include_directories(${BINDINGS_MODULE_TARGET} PRIVATE
+    "${PROJECT_SOURCE_DIR}/src/core"
+    "${PROJECT_SOURCE_DIR}/src/core/internal"
 )
+
 if(_RHBM_GEM_DEFAULT_PYTHON_INSTALL_RPATH)
     set_target_properties(${BINDINGS_MODULE_TARGET} PROPERTIES
         INSTALL_RPATH "${_RHBM_GEM_DEFAULT_PYTHON_INSTALL_RPATH}"

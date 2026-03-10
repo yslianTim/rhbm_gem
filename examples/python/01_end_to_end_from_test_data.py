@@ -80,9 +80,10 @@ def main() -> int:
     dump_dir.mkdir(parents=True, exist_ok=True)
 
     database_path = args.database.resolve() if args.database else (workdir / "demo.sqlite")
+    services = rgm.DataIoServices()
 
     print("[1/3] Map simulation")
-    simulator = rgm.MapSimulationCommand()
+    simulator = rgm.MapSimulationCommand(services)
     simulator.SetModelFilePath(str(model_path))
     simulator.SetFolderPath(str(maps_dir))
     simulator.SetBlurringWidthList(args.blurring_width)
@@ -96,7 +97,7 @@ def main() -> int:
     print(f"  map:   {map_path}")
 
     print("[2/3] Potential analysis")
-    analyzer = rgm.PotentialAnalysisCommand()
+    analyzer = rgm.PotentialAnalysisCommand(services)
     analyzer.SetDatabasePath(str(database_path))
     analyzer.SetModelFilePath(str(model_path))
     analyzer.SetMapFilePath(str(map_path))
@@ -106,7 +107,7 @@ def main() -> int:
     print(f"  database: {database_path}")
 
     print("[3/3] Result dump")
-    dumper = rgm.ResultDumpCommand()
+    dumper = rgm.ResultDumpCommand(services)
     dumper.SetDatabasePath(str(database_path))
     dumper.SetFolderPath(str(dump_dir))
     dumper.SetModelKeyTagList(args.saved_key_tag)

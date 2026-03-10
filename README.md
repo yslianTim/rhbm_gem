@@ -18,7 +18,6 @@ For the full documentation map, start at [`docs/README.md`](docs/README.md).
 - Change the repository and follow project conventions.
 - Extend commands, data I/O, or other internal components.
 - Validate build configurations and prepare releases.
-- Experimental command paths such as bond analysis stay behind explicit CMake flags.
 - Start with [`docs/developer/README.md`](docs/developer/README.md) and [`docs/developer/build-and-configuration.md`](docs/developer/build-and-configuration.md).
 
 ## License and Third-Party Notices

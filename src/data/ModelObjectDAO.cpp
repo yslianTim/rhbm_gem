@@ -1,9 +1,0 @@
-#include "ModelObjectDAO.hpp"
-#include "DataObjectDAOFactoryRegistry.hpp"
-#include "ModelObject.hpp"
-
-namespace
-{
-    rhbm_gem::DataObjectDAORegistrar<rhbm_gem::ModelObject, rhbm_gem::ModelObjectDAO>
-        registrar_model_dao("model");
-}

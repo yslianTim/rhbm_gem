@@ -23,11 +23,16 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 
 A few dependencies are optional:
 
-- `Eigen3`, `SQLite3`, `CLI11`, and `pybind11` are preferred from system packages, but CMake falls back to the bundled copies in `third_party/` when they are missing.
+- Core C++ dependencies (`Eigen3`, `SQLite3`, and `CLI11`) are selected by `RHBM_GEM_DEP_PROVIDER`.
+- `pybind11` and Python development headers are required only when `BUILD_PYTHON_BINDINGS=ON`.
+- `GTest` is required only when `BUILD_TESTING=ON`.
+- Use `RHBM_GEM_DEP_PROVIDER=SYSTEM` to require system packages.
+- Use `RHBM_GEM_DEP_PROVIDER=FETCH` to use pinned `FetchContent` sources (network access required during configure).
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
 - `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
+- Runtime database default path is `${HOME}/.rhbmgem/data/database.sqlite`. Set `RHBM_GEM_DATA_DIR` to change the default root.
 
-For the full dependency policy and override flags such as `USE_SYSTEM_LIBS`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
+For the full dependency policy and override flags such as `RHBM_GEM_DEP_PROVIDER`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
 
 ### macOS (Homebrew)
 
@@ -49,10 +54,16 @@ xcode-select --install
 brew install cmake python libomp
 ```
 
-4. Optional (Recommended): install system packages instead of using the bundled copies from `third_party/`:
+4. Optional (Recommended when using `RHBM_GEM_DEP_PROVIDER=SYSTEM`): install system packages:
 
 ```bash
 brew install eigen sqlite3 pybind11 cli11
+```
+
+If you plan to keep `BUILD_TESTING=ON`, install GTest too:
+
+```bash
+brew install googletest
 ```
 
 5. Optional (Recommended): install these only if you need the related features:
@@ -83,10 +94,16 @@ sudo apt update
 sudo apt install -y build-essential cmake pkg-config python3
 ```
 
-2. Optional: if you plan to use Python bindings, or you want distro packages instead of bundled copies, also install:
+2. Optional: if you plan to use Python bindings, or you want distro packages with `RHBM_GEM_DEP_PROVIDER=SYSTEM`, also install:
 
 ```bash
 sudo apt install -y python3-dev libsqlite3-dev libeigen3-dev pybind11-dev
+```
+
+If you plan to keep `BUILD_TESTING=ON`, install GTest too:
+
+```bash
+sudo apt install -y libgtest-dev
 ```
 
 3. Optional: install these only if you need the related features:
@@ -115,7 +132,7 @@ root-config --prefix
 
 Notes:
 
-- If your distro does not package `CLI11`, CMake will use the bundled copy automatically.
+- If your distro does not package `CLI11`, use `-DRHBM_GEM_DEP_PROVIDER=FETCH`.
 - If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
 
 ### Windows (PowerShell + Visual Studio 2022)
@@ -126,7 +143,7 @@ Notes:
    - Python 3 if you plan to use Python bindings or examples
    - Git if you plan to install optional packages with `vcpkg`
 
-2. For a basic build, use the bundled copies of `Eigen3`, `SQLite3`, `CLI11`, and `pybind11`.
+2. For a basic build without system packages, configure with `-DRHBM_GEM_DEP_PROVIDER=FETCH`.
 
 3. Optional: if you prefer `vcpkg` packages, or you need Boost-backed features, prepare them now:
 
@@ -152,7 +169,7 @@ root.exe -b -q
 
 Notes:
 
-- The installation workflow later in this guide uses bundled third-party libraries by default, so you do not need `vcpkg` for a basic build.
+- The installation workflow later in this guide does not require `vcpkg` for a basic build if you set `-DRHBM_GEM_DEP_PROVIDER=FETCH`.
 - If you use `vcpkg`, reuse the same toolchain arguments when you configure the project later.
 - If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
 - The project defaults are still documented in [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy). This guide chooses the simplest Windows path instead of listing every supported configuration.
@@ -160,6 +177,8 @@ Notes:
 ## Installation
 
 Finish **Environment Setup** first, then choose one installation workflow and follow only that workflow.
+
+The commands below intentionally use `RHBM_GEM_DEP_PROVIDER=FETCH`, `BUILD_TESTING=OFF`, and `BUILD_PYTHON_BINDINGS=OFF` for a predictable first install. This avoids requiring system `Eigen3`/`SQLite3`/`CLI11`/`GTest` packages during onboarding.
 
 ### macOS and Linux: user-local install
 
@@ -170,6 +189,9 @@ For most people on macOS and Linux, `~/.local` is the easiest choice. It avoids 
 ```bash
 cmake -S . -B build-local \
   -DCMAKE_BUILD_TYPE=Release \
+  -DRHBM_GEM_DEP_PROVIDER=FETCH \
+  -DBUILD_TESTING=OFF \
+  -DBUILD_PYTHON_BINDINGS=OFF \
   -DCMAKE_INSTALL_PREFIX="$HOME/.local"
 cmake --build build-local -j
 ```
@@ -199,7 +221,11 @@ Use this workflow on a shared machine, or when you want CMake's default install 
 1. Configure and build:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DRHBM_GEM_DEP_PROVIDER=FETCH \
+  -DBUILD_TESTING=OFF \
+  -DBUILD_PYTHON_BINDINGS=OFF
 cmake --build build -j
 ```
 
@@ -233,8 +259,10 @@ $InstallPrefix = "$env:USERPROFILE\AppData\Local\RHBM-GEM"
 cmake -S . -B build `
   -G "Visual Studio 17 2022" `
   -A x64 `
-  -DUSE_SYSTEM_LIBS=OFF `
+  -DRHBM_GEM_DEP_PROVIDER=FETCH `
   -DRHBM_GEM_ROOT_MODE=OFF `
+  -DBUILD_TESTING=OFF `
+  -DBUILD_PYTHON_BINDINGS=OFF `
   -DCMAKE_INSTALL_PREFIX="$InstallPrefix"
 cmake --build build --config Release
 ```
@@ -242,7 +270,7 @@ cmake --build build --config Release
 3. Verify the executable from the build tree:
 
 ```powershell
-.\build\Release\RHBM-GEM.exe --help
+.\build\RHBM-GEM.exe --help
 ```
 
 4. Install and verify the installed executable:
@@ -256,7 +284,7 @@ Notes:
 
 - If you prepared Windows builds with `vcpkg` in **Environment Setup**, add the same toolchain arguments to the configure command in this workflow.
 - If you installed ROOT, remove `-DRHBM_GEM_ROOT_MODE=OFF` or replace it with `-DRHBM_GEM_ROOT_MODE=AUTO`.
-- This workflow intentionally uses `-DUSE_SYSTEM_LIBS=OFF` and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
+- This workflow intentionally uses `-DRHBM_GEM_DEP_PROVIDER=FETCH`, `-DBUILD_TESTING=OFF`, `-DBUILD_PYTHON_BINDINGS=OFF`, and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
 
 ## Python Bindings
 
@@ -275,6 +303,8 @@ INSTALL_PREFIX="$HOME/.local"
 
 cmake -S . -B build-py \
   -DCMAKE_BUILD_TYPE=Release \
+  -DRHBM_GEM_DEP_PROVIDER=FETCH \
+  -DBUILD_TESTING=OFF \
   -DBUILD_PYTHON_BINDINGS=ON \
   -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}"
 cmake --build build-py -j
@@ -285,13 +315,15 @@ cmake --install build-py
 
 ```bash
 PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PY_SITE="${INSTALL_PREFIX}/lib/python${PYVER}/site-packages"
+PY_SITE_LIB="${INSTALL_PREFIX}/lib/python${PYVER}/site-packages"
+PY_SITE_LIB64="${INSTALL_PREFIX}/lib64/python${PYVER}/site-packages"
+PY_SITE_PATHS="${PY_SITE_LIB}:${PY_SITE_LIB64}"
 
-PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
+PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 -c "import rhbm_gem_module as rgm; print(rgm.__file__)"
 ```
 
-Note: If you installed the project to a different prefix, update `INSTALL_PREFIX` before computing `PY_SITE`.
+Note: If you installed the project to a different prefix, update `INSTALL_PREFIX` before computing `PY_SITE_PATHS`.
 
 For custom Python layouts such as `RHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR` or an explicit `RHBM_GEM_PYTHON_INSTALL_DIR`, see [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters) and [`../developer/build-and-configuration.md#validation-examples`](../developer/build-and-configuration.md#validation-examples).
 
@@ -307,8 +339,9 @@ $InstallPrefix = "$env:USERPROFILE\AppData\Local\RHBM-GEM"
 cmake -S . -B build-py `
   -G "Visual Studio 17 2022" `
   -A x64 `
-  -DUSE_SYSTEM_LIBS=OFF `
+  -DRHBM_GEM_DEP_PROVIDER=FETCH `
   -DRHBM_GEM_ROOT_MODE=OFF `
+  -DBUILD_TESTING=OFF `
   -DBUILD_PYTHON_BINDINGS=ON `
   -DCMAKE_INSTALL_PREFIX="$InstallPrefix"
 cmake --build build-py --config Release
@@ -337,26 +370,26 @@ Once the import check succeeds, continue with the example workflow for your plat
 
 ### macOS and Linux
 
-These commands assume `INSTALL_PREFIX` and `PY_SITE` are still set from **Python Bindings**.
+These commands assume `INSTALL_PREFIX` and `PY_SITE_PATHS` are still set from **Python Bindings**.
 
 1. Run the quickstart example from the source tree:
 
 ```bash
-PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
+PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 examples/python/00_quickstart.py
 ```
 
 2. Run the end-to-end pipeline example from the source tree:
 
 ```bash
-PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
+PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
 ```
 
 3. Run the installed copy of the pipeline example:
 
 ```bash
-PYTHONPATH="${PY_SITE}${PYTHONPATH:+:${PYTHONPATH}}" \
+PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 "${INSTALL_PREFIX}/share/RHBM_GEM/examples/python/01_end_to_end_from_test_data.py" \
   --workdir /tmp/rhbm_py_demo_installed
 ```
@@ -393,14 +426,16 @@ The pipeline example should create:
 ## Troubleshooting
 
 1. Missing `Eigen3`, `SQLite3`, `pybind11`, or `CLI11`
-   You can skip installing them; CMake will use the bundled versions in `third_party/`.
+   Fallback sources are used only with `-DRHBM_GEM_DEP_PROVIDER=FETCH`. In `SYSTEM` mode, install the required packages first.
 2. Missing Boost
    Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
-3. `ModuleNotFoundError: No module named 'rhbm_gem_module'`
+3. Missing `GTest` during configure
+   If you do not need tests, set `-DBUILD_TESTING=OFF` (the installation workflows in this guide already do this).
+4. `ModuleNotFoundError: No module named 'rhbm_gem_module'`
    Verify `BUILD_PYTHON_BINDINGS=ON`, run `cmake --install`, and make sure `PYTHONPATH` points to the actual install `site-packages` path.
-4. Install prefix mismatch
+5. Install prefix mismatch
    If you install under a different prefix, recompute the `site-packages` path from that prefix instead of reusing the examples for `~/.local` or `%USERPROFILE%\AppData\Local\RHBM-GEM`.
-5. `Could not find sample model ...`
+6. `Could not find sample model ...`
    Pass `--model /path/to/your_model.cif` explicitly.
 
 ## Verbosity Levels

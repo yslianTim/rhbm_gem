@@ -1,0 +1,71 @@
+if(NOT DEFINED RHBM_GEM_WITH_OPENMP)
+    set(RHBM_GEM_WITH_OPENMP FALSE)
+endif()
+if(NOT DEFINED RHBM_GEM_WITH_BOOST)
+    set(RHBM_GEM_WITH_BOOST FALSE)
+endif()
+if(NOT DEFINED RHBM_GEM_WITH_ROOT)
+    set(RHBM_GEM_WITH_ROOT FALSE)
+endif()
+if(NOT DEFINED RHBM_GEM_DEP_PROVIDER)
+    set(RHBM_GEM_DEP_PROVIDER "SYSTEM")
+endif()
+if(NOT DEFINED RHBM_GEM_OPENMP_ROOT)
+    if(DEFINED OpenMP_ROOT)
+        set(RHBM_GEM_OPENMP_ROOT "${OpenMP_ROOT}")
+    else()
+        set(RHBM_GEM_OPENMP_ROOT "")
+    endif()
+endif()
+
+# Install public headers and legal notices.
+install(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/rhbm_gem/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem"
+    FILES_MATCHING
+    PATTERN "*.hpp"
+)
+install(
+    FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
+)
+install(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/examples/python/"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python"
+    FILES_MATCHING
+    PATTERN "*.py"
+)
+install(
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/test_model.cif"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python/data"
+)
+
+set(RHBM_GEM_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
+
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RHBM_GEMConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfig.cmake"
+    INSTALL_DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
+    VERSION "${PROJECT_VERSION}"
+    COMPATIBILITY SameMajorVersion
+)
+
+install(
+    EXPORT RHBM_GEMTargets
+    FILE RHBM_GEMTargets.cmake
+    NAMESPACE RHBM_GEM::
+    DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
+)
+
+install(
+    FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
+    DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
+)
