@@ -239,16 +239,12 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         message(FATAL_ERROR
             "System Boost package was configured but no Boost include target/directory was exported.")
     endif()
-    set(RHBM_GEM_WITH_FETCHED_BOOST FALSE CACHE INTERNAL
-        "RHBM_GEM was built with fetched Boost fallback headers" FORCE)
 else()
-    message(STATUS "Using fetched Boost fallback (v${RHBM_GEM_BOOST_VERSION})")
+    message(STATUS "Using fetched Boost fallback (v${RHBM_GEM_BOOST_FALLBACK_VERSION})")
     target_include_directories(rhbm_gem SYSTEM PUBLIC
         "$<BUILD_INTERFACE:${RHBM_GEM_BOOST_INCLUDE_DIR}>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
     )
-    set(RHBM_GEM_WITH_FETCHED_BOOST TRUE CACHE INTERNAL
-        "RHBM_GEM was built with fetched Boost fallback headers" FORCE)
 endif()
 
 set(RHBM_GEM_ENABLE_ROOT FALSE)

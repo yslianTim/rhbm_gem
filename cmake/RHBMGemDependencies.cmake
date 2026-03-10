@@ -17,6 +17,7 @@ set(RHBM_GEM_SQLITE3_URL_HASH "SHA256=6cebd1d8403fc58c30e93939b246f3e6e58d0765a5
 
 set(RHBM_GEM_BOOST_URL "https://archives.boost.io/release/1.90.0/source/boost_1_90_0.tar.bz2")
 set(RHBM_GEM_BOOST_URL_HASH "SHA256=49551aff3b22cbc5c5a9ed3dbc92f0e23ea50a0f7325b0d198b705e8ee3fc305")
+set(RHBM_GEM_BOOST_FALLBACK_VERSION "1.90.0")
 
 function(rhbm_gem_populate_content dep_name dep_url dep_hash out_source_dir)
     FetchContent_Declare(${dep_name}
@@ -43,7 +44,6 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(Boost REQUIRED)
     endif()
 
-    set(RHBM_GEM_USE_SYSTEM_DEPS TRUE CACHE INTERNAL "RHBM_GEM uses system dependencies" FORCE)
     set(RHBM_GEM_EIGEN_INCLUDE_DIR "" CACHE INTERNAL "Fetched Eigen include root" FORCE)
     set(RHBM_GEM_CLI11_INCLUDE_DIR "" CACHE INTERNAL "Fetched CLI11 include root" FORCE)
     set(RHBM_GEM_SQLITE3_SOURCE_DIR "" CACHE INTERNAL "Fetched SQLite3 source root" FORCE)
@@ -90,7 +90,6 @@ else()
             "does not contain the expected boost/ headers.")
     endif()
 
-    set(RHBM_GEM_USE_SYSTEM_DEPS FALSE CACHE INTERNAL "RHBM_GEM uses system dependencies" FORCE)
     set(RHBM_GEM_EIGEN_INCLUDE_DIR "${RHBM_GEM_EIGEN3_SOURCE_DIR}" CACHE INTERNAL "Fetched Eigen include root" FORCE)
     set(RHBM_GEM_CLI11_INCLUDE_DIR "${RHBM_GEM_CLI11_SOURCE_DIR}/include" CACHE INTERNAL "Fetched CLI11 include root" FORCE)
     set(RHBM_GEM_SQLITE3_SOURCE_DIR "${RHBM_GEM_SQLITE3_SOURCE_DIR}" CACHE INTERNAL "Fetched SQLite3 source root" FORCE)
@@ -125,11 +124,7 @@ endif()
 
 if(BUILD_PYTHON_BINDINGS)
     set(PYBIND11_FINDPYTHON ON)
-    if(CMAKE_VERSION VERSION_LESS "3.18")
-        find_package(Python REQUIRED COMPONENTS Interpreter Development)
-    else()
-        find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
-    endif()
+    find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 
     if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(pybind11 CONFIG REQUIRED)
