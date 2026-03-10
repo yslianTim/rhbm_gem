@@ -3,9 +3,14 @@ function(rhbm_utils_prepare_openmp_for_appleclang)
         return()
     endif()
 
-    if(DEFINED OpenMP_ROOT AND EXISTS "${OpenMP_ROOT}/include/omp.h")
-        set(_rhbm_openmp_root "${OpenMP_ROOT}")
-    else()
+    set(_rhbm_openmp_root "")
+    if(DEFINED OpenMP_ROOT)
+        if(EXISTS "${OpenMP_ROOT}/include/omp.h")
+            set(_rhbm_openmp_root "${OpenMP_ROOT}")
+        endif()
+    endif()
+
+    if(NOT _rhbm_openmp_root)
         set(_rhbm_openmp_candidates)
         if(DEFINED ENV{HOMEBREW_PREFIX})
             list(APPEND _rhbm_openmp_candidates "$ENV{HOMEBREW_PREFIX}/opt/libomp")
@@ -181,7 +186,7 @@ else()
 endif()
 
 target_link_libraries(rhbm_gem PRIVATE
-    $<BUILD_INTERFACE:CompilerFlags>
+    CompilerFlags
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
@@ -294,7 +299,7 @@ target_link_libraries(${MAIN_EXEC_TARGET} PRIVATE
     rhbm_gem
     CompilerFlags
 )
-target_include_directories(${MAIN_EXEC_TARGET} PUBLIC "${PROJECT_BINARY_DIR}")
+target_include_directories(${MAIN_EXEC_TARGET} PRIVATE "${PROJECT_BINARY_DIR}")
 
 install(
     TARGETS ${MAIN_EXEC_TARGET}

@@ -1,11 +1,6 @@
-if(NOT DEFINED PROJECT_SOURCE_DIR)
-    message(FATAL_ERROR "PROJECT_SOURCE_DIR is required")
-endif()
-
-find_program(GIT_EXECUTABLE NAMES git)
-if(NOT GIT_EXECUTABLE)
-    message(FATAL_ERROR "git executable was not found")
-endif()
+include("${CMAKE_CURRENT_LIST_DIR}/GuardCommon.cmake")
+rhbm_guard_require_project_source_dir()
+rhbm_guard_find_git(GIT_EXECUTABLE)
 
 file(GLOB CORE_ROOT_HPP RELATIVE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/core/*.hpp")
 if(CORE_ROOT_HPP)
@@ -60,20 +55,7 @@ if(CORE_ROOT_COMMAND_CPP)
         "Move these sources under src/core/command/.")
 endif()
 
-execute_process(
-    COMMAND "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" ls-files
-    OUTPUT_VARIABLE TRACKED_FILES_RAW
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    RESULT_VARIABLE GIT_LS_RESULT
-)
-if(NOT GIT_LS_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to query tracked files via git ls-files")
-endif()
-
-set(TRACKED_FILE_LIST)
-if(NOT TRACKED_FILES_RAW STREQUAL "")
-    string(REPLACE "\n" ";" TRACKED_FILE_LIST "${TRACKED_FILES_RAW}")
-endif()
+rhbm_guard_get_tracked_files("${GIT_EXECUTABLE}" TRACKED_FILE_LIST)
 
 file(GLOB_RECURSE PUBLIC_HEADERS RELATIVE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/include/rhbm_gem/*.hpp")
 set(PUBLIC_INCLUDE_VIOLATIONS)

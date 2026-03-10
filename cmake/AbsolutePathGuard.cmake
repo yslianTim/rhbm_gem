@@ -1,26 +1,7 @@
-if(NOT DEFINED PROJECT_SOURCE_DIR)
-    message(FATAL_ERROR "PROJECT_SOURCE_DIR is required")
-endif()
-
-find_program(GIT_EXECUTABLE NAMES git)
-if(NOT GIT_EXECUTABLE)
-    message(FATAL_ERROR "git executable was not found")
-endif()
-
-execute_process(
-    COMMAND "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" ls-files
-    OUTPUT_VARIABLE TRACKED_FILES_RAW
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    RESULT_VARIABLE GIT_LS_RESULT
-)
-if(NOT GIT_LS_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to query tracked files via git ls-files")
-endif()
-
-set(TRACKED_FILE_LIST)
-if(NOT TRACKED_FILES_RAW STREQUAL "")
-    string(REPLACE "\n" ";" TRACKED_FILE_LIST "${TRACKED_FILES_RAW}")
-endif()
+include("${CMAKE_CURRENT_LIST_DIR}/GuardCommon.cmake")
+rhbm_guard_require_project_source_dir()
+rhbm_guard_find_git(GIT_EXECUTABLE)
+rhbm_guard_get_tracked_files("${GIT_EXECUTABLE}" TRACKED_FILE_LIST)
 
 set(ABSOLUTE_PATH_VIOLATIONS)
 foreach(TRACKED_FILE IN LISTS TRACKED_FILE_LIST)
