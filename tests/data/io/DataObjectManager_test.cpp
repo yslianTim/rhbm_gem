@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <memory>
+#include <string>
 #include <unordered_map>
 
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -9,13 +11,93 @@ namespace rg = rhbm_gem;
 using DataObjectManager = rg::DataObjectManager;
 using ModelObject = rg::ModelObject;
 
-TEST(DataObjectManagerTest, LoadCifFile) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
-    auto cif_path{command_test::TestDataPath("test_model.cif")};
-    manager.ProcessFile(cif_path, "model");
-    auto model{manager.GetTypedDataObject<ModelObject>("model")};
-    EXPECT_EQ(model->GetNumberOfAtom(), 1);
+namespace {
+
+std::shared_ptr<ModelObject> LoadModelFixture(
+    DataObjectManager& manager,
+    const std::string& fixture_name) {
+    manager.ProcessFile(command_test::TestDataPath(fixture_name), "model");
+    return manager.GetTypedDataObject<ModelObject>("model");
 }
+
+struct FixtureAtomCountCase {
+    const char* name;
+    const char* fixture_name;
+    size_t expected_atom_count;
+};
+
+class DataObjectManagerAtomCountFixtureTest
+    : public ::testing::TestWithParam<FixtureAtomCountCase> {};
+
+TEST_P(DataObjectManagerAtomCountFixtureTest, LoadsFixtureWithExpectedAtomCount) {
+    DataObjectManager manager{command_test::BuildDataIoServices()};
+    auto model{LoadModelFixture(manager, GetParam().fixture_name)};
+    EXPECT_EQ(model->GetNumberOfAtom(), GetParam().expected_atom_count);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AtomCountFixtures,
+    DataObjectManagerAtomCountFixtureTest,
+    ::testing::Values(
+        FixtureAtomCountCase{ "CifExtension", "test_model.cif", 1 },
+        FixtureAtomCountCase{ "MmcifExtension", "test_model.mmcif", 1 }),
+    [](const ::testing::TestParamInfo<FixtureAtomCountCase>& info) {
+        return info.param.name;
+    });
+
+struct FixtureSerialIdCase {
+    const char* name;
+    const char* fixture_name;
+    size_t expected_serial_id;
+};
+
+class DataObjectManagerSerialIdFixtureTest
+    : public ::testing::TestWithParam<FixtureSerialIdCase> {};
+
+TEST_P(DataObjectManagerSerialIdFixtureTest, UsesExpectedSerialIdFallback) {
+    DataObjectManager manager{command_test::BuildDataIoServices()};
+    auto model{LoadModelFixture(manager, GetParam().fixture_name)};
+    ASSERT_EQ(model->GetNumberOfAtom(), 1);
+    EXPECT_EQ(model->GetAtomList().front()->GetSerialID(), GetParam().expected_serial_id);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    SerialIdFixtures,
+    DataObjectManagerSerialIdFixtureTest,
+    ::testing::Values(
+        FixtureSerialIdCase{ "MissingModelNumberDefaultsToOne", "test_model_missing_model_num.cif", 1 },
+        FixtureSerialIdCase{ "ModelTwoFallback", "test_model_model2_only.cif", 1 }),
+    [](const ::testing::TestParamInfo<FixtureSerialIdCase>& info) {
+        return info.param.name;
+    });
+
+struct FixtureAtomIdCase {
+    const char* name;
+    const char* fixture_name;
+    const char* expected_atom_id;
+};
+
+class DataObjectManagerAtomIdFixtureTest
+    : public ::testing::TestWithParam<FixtureAtomIdCase> {};
+
+TEST_P(DataObjectManagerAtomIdFixtureTest, KeepsExpectedAtomIdentifier) {
+    DataObjectManager manager{command_test::BuildDataIoServices()};
+    auto model{LoadModelFixture(manager, GetParam().fixture_name)};
+    ASSERT_EQ(model->GetNumberOfAtom(), 1);
+    EXPECT_EQ(model->GetAtomList().front()->GetAtomID(), GetParam().expected_atom_id);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AtomIdFixtures,
+    DataObjectManagerAtomIdFixtureTest,
+    ::testing::Values(
+        FixtureAtomIdCase{ "DoubleQuotedAtomId", "test_model_atom_id_double_quote.cif", "CA A" },
+        FixtureAtomIdCase{ "LoopMultilineQuotedToken", "test_model_loop_multiline.cif", "CA A" }),
+    [](const ::testing::TestParamInfo<FixtureAtomIdCase>& info) {
+        return info.param.name;
+    });
+
+} // namespace
 
 TEST(DataObjectManagerTest, LoadCifFileWithKeyValueEntityMetadata) {
     DataObjectManager manager{command_test::BuildDataIoServices()};
@@ -47,16 +129,6 @@ TEST(DataObjectManagerTest, FilterAtomFromSymmetrySkipsWhenChainMapMissing) {
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), 1);
 }
 
-TEST(DataObjectManagerTest, LoadCifFileMissingModelNumberDefaultsToOne) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
-    auto cif_path{
-        command_test::TestDataPath("test_model_missing_model_num.cif")};
-    manager.ProcessFile(cif_path, "model");
-    auto model{manager.GetTypedDataObject<ModelObject>("model")};
-    ASSERT_EQ(model->GetNumberOfAtom(), 1);
-    EXPECT_EQ(model->GetAtomList().front()->GetSerialID(), 1);
-}
-
 TEST(DataObjectManagerTest, LoadCifFileAuthOnlyAtomSiteColumns) {
     DataObjectManager manager{command_test::BuildDataIoServices()};
     auto cif_path{
@@ -78,34 +150,6 @@ TEST(DataObjectManagerTest, LoadCifFileMissingNumericUsesDefaults) {
     ASSERT_EQ(model->GetNumberOfAtom(), 1);
     EXPECT_FLOAT_EQ(model->GetAtomList().front()->GetOccupancy(), 1.0f);
     EXPECT_FLOAT_EQ(model->GetAtomList().front()->GetTemperature(), 0.0f);
-}
-
-TEST(DataObjectManagerTest, LoadCifFileModelTwoFallback) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
-    auto cif_path{
-        command_test::TestDataPath("test_model_model2_only.cif")};
-    manager.ProcessFile(cif_path, "model");
-    auto model{manager.GetTypedDataObject<ModelObject>("model")};
-    ASSERT_EQ(model->GetNumberOfAtom(), 1);
-    EXPECT_EQ(model->GetAtomList().front()->GetSerialID(), 1);
-}
-
-TEST(DataObjectManagerTest, LoadCifFileWithDoubleQuotedAtomId) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
-    auto cif_path{
-        command_test::TestDataPath("test_model_atom_id_double_quote.cif")};
-    manager.ProcessFile(cif_path, "model");
-    auto model{manager.GetTypedDataObject<ModelObject>("model")};
-    ASSERT_EQ(model->GetNumberOfAtom(), 1);
-    EXPECT_EQ(model->GetAtomList().front()->GetAtomID(), "CA A");
-}
-
-TEST(DataObjectManagerTest, LoadMmcifExtension) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
-    auto cif_path{command_test::TestDataPath("test_model.mmcif")};
-    manager.ProcessFile(cif_path, "model");
-    auto model{manager.GetTypedDataObject<ModelObject>("model")};
-    EXPECT_EQ(model->GetNumberOfAtom(), 1);
 }
 
 TEST(DataObjectManagerTest, LoadCifFileDatabaseOrderKeepsEmdb) {
@@ -134,16 +178,6 @@ TEST(DataObjectManagerTest, LoadCifFileInvalidSecondaryRangeDoesNotDropAtoms) {
     manager.ProcessFile(cif_path, "model");
     auto model{manager.GetTypedDataObject<ModelObject>("model")};
     ASSERT_EQ(model->GetNumberOfAtom(), 1);
-}
-
-TEST(DataObjectManagerTest, LoadCifFileLoopMultilineAndQuotedToken) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
-    auto cif_path{
-        command_test::TestDataPath("test_model_loop_multiline.cif")};
-    manager.ProcessFile(cif_path, "model");
-    auto model{manager.GetTypedDataObject<ModelObject>("model")};
-    ASSERT_EQ(model->GetNumberOfAtom(), 1);
-    EXPECT_EQ(model->GetAtomList().front()->GetAtomID(), "CA A");
 }
 
 TEST(DataObjectManagerTest, LoadCifFileAuthSeqAlnumStructConnBuildsBond) {
