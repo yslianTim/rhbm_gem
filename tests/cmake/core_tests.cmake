@@ -33,6 +33,7 @@ add_rhbm_gtest_target(rhbm_tests_core_contract
     SOURCES
         core/contract/BuiltInCommandBindingName_test.cpp
         core/contract/BuiltInCommandCatalog_test.cpp
+        core/contract/CommandScaffoldScript_test.cpp
         core/contract/CommandCommonOptions_test.cpp
         core/contract/CommandDescriptorShape_test.cpp
         core/contract/CommandExecutionContract_test.cpp

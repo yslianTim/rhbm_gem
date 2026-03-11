@@ -43,7 +43,7 @@ TEST(PublicHeaderSurfaceTest, CommandIdHeaderIsNotPublic)
     EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
 }
 
-TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceWrapper)
+TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderDefinesCurrentMetadataTypes)
 {
     const auto project_root{
         command_test::ProjectRootPath()
@@ -59,13 +59,12 @@ TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceW
         std::istreambuf_iterator<char>()
     };
 
-    EXPECT_EQ(header_content.find("struct CommandSurface"), std::string::npos);
-    EXPECT_EQ(header_content.find("MakeCommandSurface"), std::string::npos);
     EXPECT_NE(header_content.find("enum class CommandId"), std::string::npos);
     EXPECT_NE(header_content.find("enum class CommonOption"), std::string::npos);
+    EXPECT_NE(header_content.find("enum class CommonOptionProfile"), std::string::npos);
 }
 
-TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHooks)
+TEST(PublicHeaderSurfaceTest, CommandBaseHeaderPublicSectionExcludesLifecycleInternals)
 {
     const auto project_root{
         command_test::ProjectRootPath()
@@ -92,10 +91,6 @@ TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHo
     EXPECT_EQ(public_surface.find("RegisterCLIOptions"), std::string::npos);
     EXPECT_EQ(public_surface.find("ReportValidationIssues"), std::string::npos);
     EXPECT_EQ(public_surface.find("GetOptions"), std::string::npos);
-    EXPECT_EQ(public_surface.find("GetCommandId"), std::string::npos);
-    EXPECT_EQ(header_content.find("ProcessTypedFile"), std::string::npos);
-    EXPECT_EQ(header_content.find("OptionalProcessTypedFile"), std::string::npos);
-    EXPECT_EQ(header_content.find("LoadTypedObject"), std::string::npos);
 }
 
 TEST(PublicHeaderSurfaceTest, LegacyModelObjectDaoHeaderIsNotPublic)

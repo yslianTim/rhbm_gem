@@ -8,13 +8,20 @@
 
 namespace rg = rhbm_gem;
 
-TEST(ResultDumpCommandTest, MapPrinterRequiresMapFile)
+TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
 {
     rg::ResultDumpCommand command{ command_test::BuildDataIoServices() };
     command.SetPrinterChoice(rg::PrinterType::MAP_VALUE);
     command.SetModelKeyTagList("model");
 
     EXPECT_FALSE(command.PrepareForExecution());
+    EXPECT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--map",
+            rg::ValidationPhase::Prepare,
+            LogLevel::Error),
+        nullptr);
 }
 
 TEST(ResultDumpCommandTest, InvalidPrinterChoiceBecomesValidationError)

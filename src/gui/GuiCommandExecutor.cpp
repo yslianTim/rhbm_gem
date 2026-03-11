@@ -12,13 +12,12 @@ namespace {
 template <typename CommandType>
 void ApplyCommonOptions(
     CommandType & command,
-    const CommonExecutionRequest & common,
-    bool uses_database)
+    const CommonExecutionRequest & common)
 {
     command.SetThreadSize(common.thread_size);
     command.SetVerboseLevel(common.verbose_level);
     command.SetFolderPath(common.folder_path);
-    if (uses_database)
+    if constexpr (HasCommonOption(CommandType::kCommonOptions, CommonOption::Database))
     {
         command.SetDatabasePath(common.database_path);
     }
@@ -55,7 +54,7 @@ ExecutionResult GuiCommandExecutor::ExecuteMapSimulation(
     MapSimulationCommand command{ data_io_services };
     return ExecuteCommand(command, [&](MapSimulationCommand & configured)
     {
-        ApplyCommonOptions(configured, request.common, false);
+        ApplyCommonOptions(configured, request.common);
         configured.SetModelFilePath(request.model_file_path);
         configured.SetMapFileName(request.map_file_name);
         configured.SetPotentialModelChoice(request.potential_model_choice);
@@ -73,7 +72,7 @@ ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
     PotentialAnalysisCommand command{ data_io_services };
     return ExecuteCommand(command, [&](PotentialAnalysisCommand & configured)
     {
-        ApplyCommonOptions(configured, request.common, true);
+        ApplyCommonOptions(configured, request.common);
         configured.SetModelFilePath(request.model_file_path);
         configured.SetMapFilePath(request.map_file_path);
         configured.SetSimulationFlag(request.simulation_flag);
@@ -100,7 +99,7 @@ ExecutionResult GuiCommandExecutor::ExecuteResultDump(
     ResultDumpCommand command{ data_io_services };
     return ExecuteCommand(command, [&](ResultDumpCommand & configured)
     {
-        ApplyCommonOptions(configured, request.common, true);
+        ApplyCommonOptions(configured, request.common);
         configured.SetPrinterChoice(request.printer_choice);
         configured.SetModelKeyTagList(request.model_key_tag_list);
         configured.SetMapFilePath(request.map_file_path);

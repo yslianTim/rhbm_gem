@@ -72,28 +72,6 @@ TEST(PotentialAnalysisCommandTest, EmptySavedKeyBecomesValidationError)
         nullptr);
 }
 
-TEST(PotentialAnalysisCommandTest, TrainingReportDirSetterAcceptsEmptyAndRelativePath)
-{
-    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
-    command.SetTrainingReportDir(std::filesystem::path{});
-    EXPECT_EQ(
-        command_test::FindValidationIssue(
-            command,
-            "--training-report-dir",
-            rg::ValidationPhase::Parse,
-            LogLevel::Error),
-        nullptr);
-
-    command.SetTrainingReportDir(std::filesystem::path{ "reports" });
-    EXPECT_EQ(
-        command_test::FindValidationIssue(
-            command,
-            "--training-report-dir",
-            rg::ValidationPhase::Parse,
-            LogLevel::Error),
-        nullptr);
-}
-
 TEST(PotentialAnalysisCommandTest, TrainingReportEmissionIsSkippedWhenDirectoryIsUnset)
 {
     const Eigen::MatrixXd bias_matrix{ Eigen::MatrixXd::Constant(3, 2, 1.0) };

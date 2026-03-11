@@ -53,10 +53,7 @@ inline std::filesystem::path GetDefaultDatabasePath()
 enum class ValidationPhase : std::uint8_t
 {
     Parse = 0,
-    Prepare = 1,
-    // Deprecated internal placeholder retained for API compatibility.
-    // Runtime failures currently surface via Execute() return value + logs.
-    Runtime = 2
+    Prepare = 1
 };
 
 struct ValidationIssue

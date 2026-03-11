@@ -695,8 +695,6 @@ QString MainWindow::ValidationPhaseLabel(rhbm_gem::ValidationPhase phase)
         return "parse";
     case rhbm_gem::ValidationPhase::Prepare:
         return "prepare";
-    case rhbm_gem::ValidationPhase::Runtime:
-        return "runtime";
     default:
         return "unknown";
     }

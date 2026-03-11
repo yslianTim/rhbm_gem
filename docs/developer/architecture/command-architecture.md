@@ -177,7 +177,8 @@ Validation phases:
 | --- | --- | --- |
 | `Parse` | setter callbacks | single-field checks, enum/path validation, normalization |
 | `Prepare` | `ValidateOptions()` + preflight | cross-field checks, mode-dependent checks, directory creation failures |
-| `Runtime` | deprecated internal placeholder retained for API compatibility | runtime failures currently surface through `Execute()` failure + logs |
+
+Runtime execution failures surface through `Execute()` return value and logger output.
 
 Prepared-state invalidation rule:
 

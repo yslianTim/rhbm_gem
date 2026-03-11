@@ -24,20 +24,23 @@ Prefer extending an existing command when:
 
 ## 2. Required change set
 
-For a new built-in command, update these areas in one change:
+For a new built-in command, the minimum manual change set is:
 
 - `include/rhbm_gem/core/command/<YourCommand>.hpp`
 - `src/core/command/<YourCommand>.cpp` (and optional `src/core/workflow/*Workflow.cpp` files)
-- `src/CMakeLists.txt` (add source file to `RHBM_GEM_LIBRARY_SOURCES`)
 - `include/rhbm_gem/core/command/CommandMetadata.hpp` (add new `CommandId`)
 - `src/core/internal/BuiltInCommandList.def` (register built-in metadata)
-- `src/core/command/BuiltInCommandCatalog.cpp` (add command header include)
 - `bindings/<YourFeature>Bindings.cpp` (add command-specific Python bindings)
-- `bindings/CMakeLists.txt` (add binding source to `BINDINGS_SOURCES`)
 - `tests/core/command/<YourCommand>_test.cpp`
-- `tests/cmake/core_tests.cmake` (wire tests)
 - related contract tests under `tests/core/contract/`
 - developer docs affected by command surface changes
+
+When using scaffold auto-wiring (`--wire`), these registration surfaces are updated automatically:
+
+- `src/core/command/BuiltInCommandCatalog.cpp` include list
+- `src/rhbm_gem_sources.cmake`
+- `bindings/CMakeLists.txt`
+- `tests/cmake/core_tests.cmake`
 
 Scaffold helper:
 
@@ -46,7 +49,7 @@ python3 scripts/command_scaffold.py --name Example --profile FileWorkflow
 ```
 
 The scaffold creates command/binding/test/doc skeleton files only.
-You still need to wire registration and manifests listed above.
+Use `--wire` to apply registration/manifests automatically.
 
 Scaffold + auto-wire helper:
 

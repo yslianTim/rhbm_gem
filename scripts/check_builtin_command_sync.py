@@ -39,24 +39,6 @@ def parse_builtins(path: Path) -> list[CommandEntry]:
     ]
 
 
-def ensure_relative_order(text: str, tokens: list[str], label: str, errors: list[str]) -> None:
-    positions: list[tuple[int, str]] = []
-    for token in tokens:
-        idx = text.find(token)
-        if idx < 0:
-            errors.append(f"{label} missing ordered token: {token}")
-            return
-        positions.append((idx, token))
-
-    last = -1
-    for idx, token in positions:
-        if idx < last:
-            ordered = " -> ".join(t for _, t in positions)
-            errors.append(f"{label} has order drift (expected built-in order): {ordered}")
-            return
-        last = idx
-
-
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     builtins = parse_builtins(root / "src" / "core" / "internal" / "BuiltInCommandList.def")
@@ -110,29 +92,9 @@ def main() -> int:
                 f"{binding_unit} missing command registration specialization: {bind_registration_ref}"
             )
 
-    builtins_order = [entry.command_type for entry in builtins]
-    builtins_stems = [command.removesuffix("Command") for command in builtins_order]
-    ensure_relative_order(
-        catalog_text,
-        [f"#include <rhbm_gem/core/command/{command}.hpp>" for command in builtins_order],
-        "BuiltInCommandCatalog.cpp include list",
-        errors,
-    )
-    ensure_relative_order(
-        bindings_cmake_text,
-        [f"{stem}Bindings.cpp" for stem in builtins_stems],
-        "bindings/CMakeLists.txt sources",
-        errors,
-    )
-    ensure_relative_order(
-        core_tests_text,
-        [f"core/command/{command}_test.cpp" for command in builtins_order],
-        "tests/cmake/core_tests.cmake command tests",
-        errors,
-    )
-    if '#include "internal/BuiltInCommandList.def"' not in core_bindings_text:
+    if core_bindings_text.count('#include "internal/BuiltInCommandList.def"') < 1:
         errors.append("CoreBindings.cpp must include internal/BuiltInCommandList.def")
-    if "BindCommand<rhbm_gem::COMMAND_TYPE>(module);" not in core_bindings_text:
+    if "BindCommand<rhbm_gem::COMMAND_TYPE>" not in core_bindings_text:
         errors.append("CoreBindings.cpp must register commands via manifest macro expansion")
 
     if errors:

@@ -151,3 +151,21 @@ TEST(CommandValidationIssueTest, BaseNormalizationWarningsAreProgrammaticallyVis
     EXPECT_EQ(verbose_issue->level, LogLevel::Warning);
     EXPECT_TRUE(verbose_issue->auto_corrected);
 }
+
+TEST(CommandValidationIssueTest, ValidationIssuesUseOnlyParseAndPreparePhases)
+{
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    ValidationIssueCommand command{ data_io_services };
+    command.SetProblematicValue(0);
+    command.SetPrepareError(true);
+
+    EXPECT_FALSE(command.PrepareForExecution());
+    ASSERT_FALSE(command.GetValidationIssues().empty());
+
+    for (const auto & issue : command.GetValidationIssues())
+    {
+        EXPECT_TRUE(
+            issue.phase == rg::ValidationPhase::Parse
+            || issue.phase == rg::ValidationPhase::Prepare);
+    }
+}

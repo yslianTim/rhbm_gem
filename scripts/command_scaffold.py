@@ -86,14 +86,23 @@ def _append_before_closing_paren_in_set(
     raise RuntimeError(f"Cannot find closing ')' for set({set_name} ...)")
 
 
-def _insert_after_anchor_once(text: str, anchor: str, insertion: str) -> tuple[str, bool]:
-    if insertion.strip() in text:
+def _insert_command_include(text: str, command_type: str) -> tuple[str, bool]:
+    include_line = f"#include <rhbm_gem/core/command/{command_type}.hpp>"
+    if include_line in text:
         return text, False
-    idx = text.find(anchor)
-    if idx < 0:
-        raise RuntimeError(f"Anchor not found: {anchor}")
-    insert_at = idx + len(anchor)
-    return text[:insert_at] + insertion + text[insert_at:], True
+
+    lines = text.splitlines(keepends=True)
+    include_indexes = [
+        idx
+        for idx, line in enumerate(lines)
+        if line.startswith("#include <rhbm_gem/core/command/")
+    ]
+    if not include_indexes:
+        raise RuntimeError("Cannot find command include block in BuiltInCommandCatalog.cpp")
+
+    insert_at = include_indexes[-1] + 1
+    lines.insert(insert_at, include_line + "\n")
+    return "".join(lines), True
 
 
 def _append_builtins_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
@@ -281,14 +290,10 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
     )
     _update_file(
         wire.catalog_cpp,
-        lambda text: _insert_after_anchor_once(
-            text,
-            "#include <rhbm_gem/core/command/ResultDumpCommand.hpp>\n",
-            f"#include <rhbm_gem/core/command/{spec.command_type}.hpp>\n",
-        ),
+        lambda text: _insert_command_include(text, spec.command_type),
         dry_run,
         strict,
-        "Ensure ResultDumpCommand include exists or update scaffold anchor in scripts/command_scaffold.py.",
+        "Ensure BuiltInCommandCatalog.cpp contains the command include block.",
     )
     _update_file(
         wire.source_manifest,

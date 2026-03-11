@@ -20,8 +20,7 @@ void BindCommonTypes(py::module_ & module)
 
     py::enum_<ValidationPhase>(module, "ValidationPhase")
         .value("Parse", ValidationPhase::Parse)
-        .value("Prepare", ValidationPhase::Prepare)
-        .value("Runtime", ValidationPhase::Runtime);
+        .value("Prepare", ValidationPhase::Prepare);
 
     py::class_<ValidationIssue>(module, "ValidationIssue")
         .def_readonly("option_name", &ValidationIssue::option_name)

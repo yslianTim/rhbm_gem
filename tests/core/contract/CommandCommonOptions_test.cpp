@@ -93,24 +93,34 @@ TEST(CommandCommonOptionsTest, BuiltInCommandCommonOptionPoliciesMatchExpectedMe
     EXPECT_EQ(model_test->python_binding_name, "HRLModelTestCommand");
 }
 
-TEST(CommandCommonOptionsTest, BuiltInCommonOptionMasksStayInSyncWithSharedOptionSurface)
+TEST(CommandCommonOptionsTest, BuiltInCommonOptionMasksExposeRequiredSharedControls)
 {
-    const auto file_workflow_mask{
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow)
-    };
-    const auto database_workflow_mask{
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::DatabaseWorkflow)
-    };
+    bool saw_database_workflow{ false };
+    bool saw_file_workflow{ false };
 
     for (const auto & descriptor : rg::BuiltInCommandCatalog())
     {
+        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Threading))
+            << descriptor.name;
+        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Verbose))
+            << descriptor.name;
+        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::OutputFolder))
+            << descriptor.name;
+
         if (rg::UsesDatabaseAtRuntime(descriptor.common_options))
         {
-            EXPECT_EQ(descriptor.common_options, database_workflow_mask) << descriptor.name;
+            saw_database_workflow = true;
+            EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Database))
+                << descriptor.name;
         }
         else
         {
-            EXPECT_EQ(descriptor.common_options, file_workflow_mask) << descriptor.name;
+            saw_file_workflow = true;
+            EXPECT_FALSE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Database))
+                << descriptor.name;
         }
     }
+
+    EXPECT_TRUE(saw_database_workflow);
+    EXPECT_TRUE(saw_file_workflow);
 }

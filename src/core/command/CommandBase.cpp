@@ -12,10 +12,9 @@ namespace rhbm_gem {
 
 namespace {
 
-constexpr std::array<std::string_view, 3> kValidationPhaseLabels{
+constexpr std::array<std::string_view, 2> kValidationPhaseLabels{
     "parse",
-    "prepare",
-    "runtime"
+    "prepare"
 };
 constexpr std::string_view kJobsOption{ "--jobs" };
 constexpr std::string_view kVerboseOption{ "--verbose" };
