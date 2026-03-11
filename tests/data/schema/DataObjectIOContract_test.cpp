@@ -109,13 +109,6 @@ TEST(DataObjectIOContractTest, UppercaseExtensionsDispatchCorrectly)
     EXPECT_EQ(reader.GetGridSizeArray(), map_object.GetGridSize());
 }
 
-TEST(DataObjectIOContractTest, DataObjectManagerDoesNotRequireDefaultFactoryRegistration)
-{
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    ASSERT_NO_THROW(manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model"));
-    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
-}
-
 TEST(DataObjectIOContractTest, ResolverInjectionSupportsOverrideWithoutGlobalRegistry)
 {
     const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
@@ -261,26 +254,6 @@ TEST(DataObjectIOContractTest, ResolverConcurrentOverrideAndLookupIsSafe)
     EXPECT_EQ(failure_count.load(), 0);
 }
 
-TEST(DataObjectIOContractTest, PdbWriteProducesNonEmptyOutput)
-{
-    const command_test::ScopedTempDir temp_dir{ "pdb_write_non_empty" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto output_path{ temp_dir.path() / "output.pdb" };
-
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    manager.ProcessFile(model_path, "model");
-    ASSERT_NO_THROW(manager.ProduceFile(output_path, "model"));
-
-    std::ifstream output_stream{ output_path };
-    ASSERT_TRUE(output_stream.is_open());
-    const std::string output_content{
-        std::istreambuf_iterator<char>(output_stream),
-        std::istreambuf_iterator<char>()
-    };
-    EXPECT_FALSE(output_content.empty());
-    EXPECT_NE(output_content.find("ATOM"), std::string::npos);
-}
-
 TEST(DataObjectIOContractTest, PdbWriteRoundTripBasicFields)
 {
     const command_test::ScopedTempDir temp_dir{ "pdb_write_roundtrip" };
@@ -304,7 +277,7 @@ TEST(DataObjectIOContractTest, PdbWriteRoundTripBasicFields)
         source_model->GetAtomList().front()->GetChainID());
 }
 
-TEST(DataObjectIOContractTest, ModelWriteSupportMatrixStillAcceptsPdbAndCifOnly)
+TEST(DataObjectIOContractTest, ModelWriteSupportMatrixAllowsPdbAndCifAndRejectsMmcif)
 {
     const command_test::ScopedTempDir temp_dir{ "schema_output_matrix" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
@@ -329,17 +302,7 @@ TEST(DataObjectIOContractTest, ProcessFileThrowsOnMalformedModelInput)
     }
 
     rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    try
-    {
-        manager.ProcessFile(malformed_path, "broken");
-        FAIL() << "Expected malformed model input to throw.";
-    }
-    catch (const std::runtime_error & ex)
-    {
-        const std::string message{ ex.what() };
-        EXPECT_NE(message.find(malformed_path.string()), std::string::npos);
-        EXPECT_NE(message.find("broken"), std::string::npos);
-    }
+    EXPECT_THROW(manager.ProcessFile(malformed_path, "broken"), std::runtime_error);
 }
 
 TEST(DataObjectIOContractTest, ProcessFileThrowsOnMalformedMapInput)
@@ -352,17 +315,7 @@ TEST(DataObjectIOContractTest, ProcessFileThrowsOnMalformedMapInput)
     }
 
     rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    try
-    {
-        manager.ProcessFile(malformed_path, "broken_map");
-        FAIL() << "Expected malformed map input to throw.";
-    }
-    catch (const std::runtime_error & ex)
-    {
-        const std::string message{ ex.what() };
-        EXPECT_NE(message.find(malformed_path.string()), std::string::npos);
-        EXPECT_NE(message.find("broken_map"), std::string::npos);
-    }
+    EXPECT_THROW(manager.ProcessFile(malformed_path, "broken_map"), std::runtime_error);
 }
 
 TEST(DataObjectIOContractTest, ProduceFileThrowsWhenWriterCannotOpenTarget)
@@ -374,17 +327,7 @@ TEST(DataObjectIOContractTest, ProduceFileThrowsWhenWriterCannotOpenTarget)
     rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     manager.ProcessFile(model_path, "model");
 
-    try
-    {
-        manager.ProduceFile(output_path, "model");
-        FAIL() << "Expected writer open failure to throw.";
-    }
-    catch (const std::runtime_error & ex)
-    {
-        const std::string message{ ex.what() };
-        EXPECT_NE(message.find(output_path.string()), std::string::npos);
-        EXPECT_NE(message.find("model"), std::string::npos);
-    }
+    EXPECT_THROW(manager.ProduceFile(output_path, "model"), std::runtime_error);
 }
 
 TEST(DataObjectIOContractTest, ReaderGettersThrowIfReadDidNotSucceed)

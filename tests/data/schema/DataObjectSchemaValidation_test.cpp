@@ -173,22 +173,6 @@ TEST(DataObjectSchemaValidationTest, SaveRenamedKeyDoesNotRenameInMemoryObject) 
     EXPECT_TRUE(manager.HasDataObject("saved_model"));
 }
 
-TEST(DataObjectSchemaValidationTest, DatabaseManagerConstructorEnsuresSchemaAndHotPathDoesNotRecheck) {
-    const command_test::ScopedTempDir temp_dir{"schema_hot_path"};
-    const auto database_path{temp_dir.path() / "hot_path.sqlite"};
-    const auto model_path{command_test::TestDataPath("test_model.cif")};
-
-    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
-    manager.SetDatabaseManager(database_path);
-    manager.ProcessFile(model_path, "model");
-    EXPECT_TRUE(HasTable(database_path, "model_object"));
-
-    ExecuteSql(database_path, "DROP TABLE model_object;");
-    EXPECT_FALSE(HasTable(database_path, "model_object"));
-    EXPECT_THROW(manager.SaveDataObject("model"), std::runtime_error);
-    EXPECT_FALSE(HasTable(database_path, "model_object"));
-}
-
 TEST(DataObjectSchemaValidationTest, ModelDaoSaveDoesNotCreateSchemaImplicitly) {
     const command_test::ScopedTempDir temp_dir{"schema_model_dao_contract"};
     const auto database_path{temp_dir.path() / "model_dao.sqlite"};

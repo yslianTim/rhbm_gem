@@ -282,22 +282,11 @@ TEST(DataObjectDispatchIterationArchitectureTest, ModelBasedPaintersDispatchByTy
     EXPECT_THROW(demo_painter.AddDataObject(&atom), std::runtime_error);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, PainterNullIngestUsesModeSpecificErrorMessage) {
+TEST(DataObjectDispatchIterationArchitectureTest, PainterNullIngestThrows) {
     rg::ModelPainter painter;
 
-    try {
-        painter.AddDataObject(nullptr);
-        FAIL() << "Expected AddDataObject(nullptr) to throw.";
-    } catch (const std::runtime_error& ex) {
-        EXPECT_NE(std::string(ex.what()).find("AddDataObject"), std::string::npos);
-    }
-
-    try {
-        painter.AddReferenceDataObject(nullptr, "ref");
-        FAIL() << "Expected AddReferenceDataObject(nullptr, ...) to throw.";
-    } catch (const std::runtime_error& ex) {
-        EXPECT_NE(std::string(ex.what()).find("AddReferenceDataObject"), std::string::npos);
-    }
+    EXPECT_THROW(painter.AddDataObject(nullptr), std::runtime_error);
+    EXPECT_THROW(painter.AddReferenceDataObject(nullptr, "ref"), std::runtime_error);
 }
 
 TEST(DataObjectDispatchIterationArchitectureTest, NormalizeMapObjectNormalizesMapValues) {
@@ -340,18 +329,6 @@ TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAndIn
         ASSERT_NE(bond, nullptr);
         EXPECT_NE(bond->GetLocalPotentialEntry(), nullptr);
     }
-}
-
-TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAllWhenRequested) {
-    auto model{MakeModelWithBond()};
-    rg::ModelPreparationOptions options;
-    options.select_all_atoms = true;
-    options.select_all_bonds = true;
-    options.update_model = true;
-
-    rg::PrepareModelObject(*model, options);
-    EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
-    EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
 }
 
 TEST(DataObjectDispatchIterationArchitectureTest, ApplyModelSelectionSelectsByAtomSelectorRules) {

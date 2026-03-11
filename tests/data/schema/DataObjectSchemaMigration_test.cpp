@@ -105,7 +105,7 @@ TEST(DataObjectSchemaMigrationTest, LegacyMigrationDropsOnlyOwnedTables)
     EXPECT_FALSE(HasTable(database_path, "atom_list_in_legacy_model"));
 }
 
-TEST(DataObjectSchemaMigrationTest, LegacyV1MapListWithoutFkIsMigratedToFinalV2WithoutGenericRebuild)
+TEST(DataObjectSchemaMigrationTest, LegacyV1MapListWithoutFkMigratesToFinalV2)
 {
     const command_test::ScopedTempDir temp_dir{ "schema_legacy_map_fk_rebuild" };
     const auto database_path{ temp_dir.path() / "legacy_map_fk.sqlite" };

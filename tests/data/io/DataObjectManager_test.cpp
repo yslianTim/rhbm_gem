@@ -1,10 +1,8 @@
 #include <gtest/gtest.h>
-#include <filesystem>
 #include <unordered_map>
 
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include "CommandTestHelpers.hpp"
-#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rg = rhbm_gem;
