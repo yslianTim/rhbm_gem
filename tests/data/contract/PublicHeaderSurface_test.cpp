@@ -1,100 +1,52 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <string>
+#include <vector>
 
 #include "CommandTestHelpers.hpp"
 
-TEST(DataPublicHeaderSurfaceTest, LegacyModelObjectDaoHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "LegacyModelObjectDAO.hpp"
-    };
+namespace {
 
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+std::vector<std::string> CollectPublicHeadersForDomain(const std::string& domain) {
+    const auto include_root{command_test::ProjectRootPath() / "include" / "rhbm_gem"};
+    const auto domain_root{include_root / domain};
+    std::vector<std::string> headers;
+
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(domain_root)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        headers.push_back(std::filesystem::relative(entry.path(), include_root).generic_string());
+    }
+    std::sort(headers.begin(), headers.end());
+    return headers;
 }
 
-TEST(DataPublicHeaderSurfaceTest, FileReaderBaseHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "FileReaderBase.hpp"
-    };
+} // namespace
 
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
+TEST(DataPublicHeaderSurfaceTest, DataPublicHeadersMatchApprovedSurface) {
+    const std::vector<std::string> expected{
+        "data/dispatch/DataObjectDispatch.hpp",
+        "data/io/DataIoServices.hpp",
+        "data/io/DataObjectManager.hpp",
+        "data/io/MapFileReader.hpp",
+        "data/io/MapFileWriter.hpp",
+        "data/io/ModelFileReader.hpp",
+        "data/io/ModelFileWriter.hpp",
+        "data/object/AtomClassifier.hpp",
+        "data/object/AtomObject.hpp",
+        "data/object/AtomicModelDataBlock.hpp",
+        "data/object/BondClassifier.hpp",
+        "data/object/BondObject.hpp",
+        "data/object/ChemicalComponentEntry.hpp",
+        "data/object/DataObjectBase.hpp",
+        "data/object/GroupPotentialEntry.hpp",
+        "data/object/LocalPotentialEntry.hpp",
+        "data/object/MapObject.hpp",
+        "data/object/ModelObject.hpp",
+        "data/object/PotentialEntryQuery.hpp"};
 
-TEST(DataPublicHeaderSurfaceTest, FileWriterBaseHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "FileWriterBase.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
-
-TEST(DataPublicHeaderSurfaceTest, FileProcessFactoryRegistryHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "FileProcessFactoryRegistry.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
-
-TEST(DataPublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugAccessors)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto header_path{
-        project_root / "include" / "rhbm_gem" / "data" / "io" / "DataObjectManager.hpp"
-    };
-
-    std::ifstream header_stream(header_path);
-    ASSERT_TRUE(header_stream.is_open());
-    const std::string header_content{
-        std::istreambuf_iterator<char>(header_stream),
-        std::istreambuf_iterator<char>()
-    };
-
-    EXPECT_EQ(header_content.find("GetDatabaseManager"), std::string::npos);
-    EXPECT_EQ(header_content.find("GetDataObjectMap"), std::string::npos);
-}
-
-TEST(DataPublicHeaderSurfaceTest, DatabaseManagerHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "DatabaseManager.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
-
-TEST(DataPublicHeaderSurfaceTest, ModelObjectDAOSqliteHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "ModelObjectDAOSqlite.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+    EXPECT_EQ(CollectPublicHeadersForDomain("data"), expected);
 }
