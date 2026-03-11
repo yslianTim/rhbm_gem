@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 
@@ -14,7 +15,6 @@ class CommandEntry:
     command_type: str
     cli_name: str
     description: str
-    python_binding_name: str
 
 
 def parse_builtins(path: Path) -> list[CommandEntry]:
@@ -23,8 +23,7 @@ def parse_builtins(path: Path) -> list[CommandEntry]:
         r"RHBM_GEM_BUILTIN_COMMAND\(\s*"
         r"(?P<command>[A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
         r"\"(?P<cli>[^\"]+)\"\s*,\s*"
-        r"\"(?P<desc>[^\"]*)\"\s*,\s*"
-        r"\"(?P<py>[^\"]+)\"\s*"
+        r"\"(?P<desc>[^\"]*)\"\s*"
         r"\)",
         re.MULTILINE,
     )
@@ -33,7 +32,6 @@ def parse_builtins(path: Path) -> list[CommandEntry]:
             command_type=m.group("command"),
             cli_name=m.group("cli"),
             description=m.group("desc"),
-            python_binding_name=m.group("py"),
         )
         for m in pattern.finditer(text)
     ]
@@ -46,13 +44,22 @@ def main() -> int:
         print("No built-in commands parsed from BuiltInCommandList.def")
         return 1
 
-    catalog_text = (root / "src" / "core" / "command" / "BuiltInCommandCatalog.cpp").read_text(encoding="utf-8")
-    sources_text = (root / "src" / "rhbm_gem_sources.cmake").read_text(encoding="utf-8")
-    core_tests_text = (root / "tests" / "cmake" / "core_tests.cmake").read_text(encoding="utf-8")
-    bindings_cmake_text = (root / "bindings" / "CMakeLists.txt").read_text(encoding="utf-8")
     core_bindings_text = (root / "bindings" / "CoreBindings.cpp").read_text(encoding="utf-8")
 
     errors: list[str] = []
+    generator = root / "scripts" / "generate_builtin_command_artifacts.py"
+    generated = subprocess.run(
+        [sys.executable, str(generator), "--check"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if generated.returncode != 0:
+        message = generated.stdout.strip()
+        if generated.stderr.strip():
+            message += ("\n" if message else "") + generated.stderr.strip()
+        errors.append(f"generated artifacts drift detected:\n{message}")
+
     for entry in builtins:
         command = entry.command_type
         stem = command.removesuffix("Command")
@@ -66,21 +73,6 @@ def main() -> int:
         for p in expected_paths:
             if not p.exists():
                 errors.append(f"missing file for {command}: {p.relative_to(root)}")
-
-        header_include = f"#include <rhbm_gem/core/command/{command}.hpp>"
-        if header_include not in catalog_text:
-            errors.append(f"BuiltInCommandCatalog.cpp missing include for {command}")
-
-        source_ref = f"core/command/{command}.cpp"
-        if source_ref not in sources_text:
-            errors.append(f"rhbm_gem_sources.cmake missing source entry: {source_ref}")
-
-        test_ref = f"core/command/{command}_test.cpp"
-        if test_ref not in core_tests_text:
-            errors.append(f"core_tests.cmake missing test entry: {test_ref}")
-
-        if binding_unit not in bindings_cmake_text:
-            errors.append(f"bindings/CMakeLists.txt missing source entry: {binding_unit}")
 
         binding_text = (root / "bindings" / binding_unit).read_text(encoding="utf-8")
         bind_template_ref = f"BindBuiltInCommand<{command}>"

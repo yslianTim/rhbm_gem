@@ -11,14 +11,13 @@ void BindCommand<PositionEstimationCommand>(py::module_ & module)
     position_estimation
         .def(py::init<const DataIoServices &>())
         .def("Execute", &PositionEstimationCommand::Execute)
-        .def("SetFolderPath", &PositionEstimationCommand::SetFolderPath)
-        .def("SetThreadSize", &PositionEstimationCommand::SetThreadSize)
         .def("SetMapFilePath", &PositionEstimationCommand::SetMapFilePath)
         .def("SetIterationCount", &PositionEstimationCommand::SetIterationCount)
         .def("SetKNNSize", &PositionEstimationCommand::SetKNNSize)
         .def("SetAlpha", &PositionEstimationCommand::SetAlpha)
         .def("SetThresholdRatio", &PositionEstimationCommand::SetThresholdRatio)
         .def("SetDedupTolerance", &PositionEstimationCommand::SetDedupTolerance);
+    BindCommonCommandSetters(position_estimation);
     BindCommandDiagnostics(position_estimation);
 }
 

@@ -41,6 +41,7 @@ This list is consumed by:
 
 - `src/core/command/BuiltInCommandCatalog.cpp` to build `BuiltInCommandCatalog()` for CLI registration and metadata checks
 - `bindings/CoreBindings.cpp` to register built-in Python command binders via manifest expansion
+- `scripts/generate_builtin_command_artifacts.py` to refresh generated catalog/CMake/docs artifacts
 
 `CommandDescriptor` fields (defined in `src/core/internal/BuiltInCommandCatalogInternal.hpp`):
 
@@ -54,7 +55,7 @@ This list is consumed by:
 Rules enforced by implementation:
 
 - `id` and `common_options` are derived from concrete command type (`kCommandId`, `kCommonOptions`)
-- built-in descriptors must provide a non-empty `python_binding_name`
+- `python_binding_name` is derived from command type (`COMMAND_TYPE`)
 - built-in order in the catalog defines CLI subcommand help order
 - there is no plugin/self-registration path for commands
 

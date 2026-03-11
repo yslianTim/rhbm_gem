@@ -44,32 +44,6 @@ private:
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     bool ExecuteImpl() override;
-    void RunSimulationTestOnBenchMark();
-    void RunSimulationTestOnDataOutlier();
-    void RunSimulationTestOnMemberOutlier();
-    void RunSimulationTestOnModelAlphaData();
-    void RunSimulationTestOnModelAlphaMember();
-    void PrintDataOutlierResult(
-        const std::string & name,
-        const std::vector<double> & outlier_list,
-        const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
-        const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
-        const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
-        const std::vector<Eigen::MatrixXd> & sigma_matrix_ols_list,
-        const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-        const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list
-    );
-    void PrintMemberOutlierResult(
-        const std::string & name,
-        const std::vector<double> & outlier_list,
-        const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
-        const std::vector<Eigen::MatrixXd> & mean_matrix_mdpde_list,
-        const std::vector<Eigen::MatrixXd> & mean_matrix_train_list,
-        const std::vector<Eigen::MatrixXd> & sigma_matrix_median_list,
-        const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
-        const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list
-    );
-
 };
 
 } // namespace rhbm_gem

@@ -1,5 +1,6 @@
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
 #include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "workflow/ResultDumpWorkflowInternal.hpp"
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 namespace {
@@ -46,9 +47,20 @@ void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool ResultDumpCommand::ExecuteImpl()
 {
-    if (BuildDataObjectList() == false) return false;
-    RunResultDump();
-    return true;
+    detail::ResultDumpWorkflowContext context{
+        m_data_manager,
+        m_options,
+        m_map_key_tag,
+        m_selected_atom_list_map,
+        m_model_object_list,
+        m_map_object,
+        [this]() { RequireDatabaseManager(); },
+        [this](std::string_view stem, std::string_view extension)
+        {
+            return BuildOutputPath(stem, extension);
+        },
+    };
+    return detail::ExecuteResultDumpWorkflow(context);
 }
 
 void ResultDumpCommand::ValidateOptions()

@@ -1,6 +1,9 @@
 #include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
 #include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "workflow/HRLModelTestWorkflowInternal.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
+
+#include <string_view>
 
 namespace rhbm_gem {
 
@@ -50,30 +53,13 @@ void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 
 bool HRLModelTestCommand::ExecuteImpl()
 {
-    switch (m_options.tester_choice)
-    {
-        case TesterType::BENCHMARK:
-            RunSimulationTestOnBenchMark();
-            break;
-        case TesterType::DATA_OUTLIER:
-            RunSimulationTestOnDataOutlier();
-            break;
-        case TesterType::MEMBER_OUTLIER:
-            RunSimulationTestOnMemberOutlier();
-            break;
-        case TesterType::MODEL_ALPHA_DATA:
-            RunSimulationTestOnModelAlphaData();
-            break;
-        case TesterType::MODEL_ALPHA_MEMBER:
-            RunSimulationTestOnModelAlphaMember();
-            break;
-        default:
-            Logger::Log(LogLevel::Error,
-                        "Invalid tester choice reached execution path: ["
-                        + std::to_string(static_cast<int>(m_options.tester_choice)) + "]");
-            return false;
-    }
-    return true;
+    return detail::RunHRLModelTestWorkflow(detail::HRLModelTestWorkflowContext{
+        m_options,
+        [this](std::string_view stem)
+        {
+            return BuildOutputPath(stem, "");
+        },
+    });
 }
 
 void HRLModelTestCommand::ValidateOptions()

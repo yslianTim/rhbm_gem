@@ -1,13 +1,9 @@
+include(${CMAKE_CURRENT_LIST_DIR}/BuiltInBindingUnits.generated.cmake)
+
 set(BINDINGS_SOURCES
     CommonBindings.cpp
     CoreBindings.cpp
-    PotentialAnalysisBindings.cpp
-    PotentialDisplayBindings.cpp
-    ResultDumpBindings.cpp
-    MapSimulationBindings.cpp
-    MapVisualizationBindings.cpp
-    PositionEstimationBindings.cpp
-    HRLModelTestBindings.cpp
+    ${RHBM_GEM_BUILTIN_BINDING_SOURCES}
 )
 
 set(BINDINGS_MODULE_TARGET rhbm_gem_module)

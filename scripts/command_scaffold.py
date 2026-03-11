@@ -12,6 +12,7 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import subprocess
 import sys
 from typing import Callable
 
@@ -21,17 +22,7 @@ class ScaffoldSpec:
     command_type: str
     cli_name: str
     description: str
-    python_binding_name: str
     profile: str
-
-
-@dataclass(frozen=True)
-class WireTargets:
-    builtins_def: Path
-    catalog_cpp: Path
-    source_manifest: Path
-    bindings_cmake: Path
-    core_tests_cmake: Path
 
 
 def _to_title_case(text: str) -> str:
@@ -67,44 +58,6 @@ def _write_text(path: Path, content: str, dry_run: bool) -> None:
     print(f"[wire] {path}")
 
 
-def _append_before_closing_paren_in_set(
-    text: str,
-    set_name: str,
-    entry: str,
-) -> tuple[str, bool]:
-    if entry in text:
-        return text, False
-    lines = text.splitlines(keepends=True)
-    in_target_set = False
-    for i, line in enumerate(lines):
-        if not in_target_set and re.match(rf"^\s*set\(\s*{re.escape(set_name)}\b", line):
-            in_target_set = True
-            continue
-        if in_target_set and re.match(r"^\s*\)\s*$", line):
-            lines.insert(i, f"    {entry}\n")
-            return "".join(lines), True
-    raise RuntimeError(f"Cannot find closing ')' for set({set_name} ...)")
-
-
-def _insert_command_include(text: str, command_type: str) -> tuple[str, bool]:
-    include_line = f"#include <rhbm_gem/core/command/{command_type}.hpp>"
-    if include_line in text:
-        return text, False
-
-    lines = text.splitlines(keepends=True)
-    include_indexes = [
-        idx
-        for idx, line in enumerate(lines)
-        if line.startswith("#include <rhbm_gem/core/command/")
-    ]
-    if not include_indexes:
-        raise RuntimeError("Cannot find command include block in BuiltInCommandCatalog.cpp")
-
-    insert_at = include_indexes[-1] + 1
-    lines.insert(insert_at, include_line + "\n")
-    return "".join(lines), True
-
-
 def _append_builtins_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
     if f"{spec.command_type}," in text:
         return text, False
@@ -113,16 +66,9 @@ def _append_builtins_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
         "RHBM_GEM_BUILTIN_COMMAND(\n"
         f"    {spec.command_type},\n"
         f'    "{spec.cli_name}",\n'
-        f'    "{spec.description}",\n'
-        f'    "{spec.python_binding_name}")\n'
+        f'    "{spec.description}")\n'
     )
     return text.rstrip() + block, True
-
-
-def _ensure_line(text: str, line: str) -> tuple[str, bool]:
-    if line in text:
-        return text, False
-    return text + ("\n" if not text.endswith("\n") else "") + line + "\n", True
 
 
 def _update_file(
@@ -265,69 +211,38 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 ## Registration Checklist
 
 1. Add `{spec.command_type}` into `src/core/internal/BuiltInCommandList.def`.
-2. Include `{spec.command_type}.hpp` in `src/core/command/BuiltInCommandCatalog.cpp`.
-3. Add source files to `src/rhbm_gem_sources.cmake`, `bindings/CMakeLists.txt`, and `tests/cmake/core_tests.cmake`.
+2. Run `python3 scripts/generate_builtin_command_artifacts.py`.
+3. Keep generated artifacts clean (`python3 scripts/check_builtin_command_sync.py`).
 """
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
-    stem = spec.command_type.removesuffix("Command")
-    binding_unit = f"{stem}Bindings.cpp"
-    wire = WireTargets(
-        builtins_def=root / "src" / "core" / "internal" / "BuiltInCommandList.def",
-        catalog_cpp=root / "src" / "core" / "command" / "BuiltInCommandCatalog.cpp",
-        source_manifest=root / "src" / "rhbm_gem_sources.cmake",
-        bindings_cmake=root / "bindings" / "CMakeLists.txt",
-        core_tests_cmake=root / "tests" / "cmake" / "core_tests.cmake",
-    )
-
+    builtins_def = root / "src" / "core" / "internal" / "BuiltInCommandList.def"
     _update_file(
-        wire.builtins_def,
+        builtins_def,
         lambda text: _append_builtins_entry(text, spec),
         dry_run,
         strict,
         "Append a new RHBM_GEM_BUILTIN_COMMAND(...) block to BuiltInCommandList.def.",
     )
-    _update_file(
-        wire.catalog_cpp,
-        lambda text: _insert_command_include(text, spec.command_type),
-        dry_run,
-        strict,
-        "Ensure BuiltInCommandCatalog.cpp contains the command include block.",
+    if dry_run:
+        print("[wire] scripts/generate_builtin_command_artifacts.py")
+        return
+
+    generator = root / "scripts" / "generate_builtin_command_artifacts.py"
+    result = subprocess.run(
+        [sys.executable, str(generator)],
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    _update_file(
-        wire.source_manifest,
-        lambda text: _append_before_closing_paren_in_set(
-            text,
-            "RHBM_GEM_LIBRARY_SOURCES",
-            f"core/command/{spec.command_type}.cpp",
-        ),
-        dry_run,
-        strict,
-        "Ensure set(RHBM_GEM_LIBRARY_SOURCES ...) exists and remains a standard multiline set block.",
-    )
-    _update_file(
-        wire.bindings_cmake,
-        lambda text: _append_before_closing_paren_in_set(
-            text,
-            "BINDINGS_SOURCES",
-            binding_unit,
-        ),
-        dry_run,
-        strict,
-        "Ensure set(BINDINGS_SOURCES ...) exists and remains a standard multiline set block.",
-    )
-    _update_file(
-        wire.core_tests_cmake,
-        lambda text: _append_before_closing_paren_in_set(
-            text,
-            "CORE_COMMAND_TEST_SOURCES",
-            f"core/command/{spec.command_type}_test.cpp",
-        ),
-        dry_run,
-        strict,
-        "Ensure set(CORE_COMMAND_TEST_SOURCES ...) exists and remains a standard multiline set block.",
-    )
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.returncode != 0:
+        if result.stderr.strip():
+            print(result.stderr.strip(), file=sys.stderr)
+        if strict:
+            raise RuntimeError("Generator failed while wiring built-in command artifacts.")
 
 
 def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
@@ -335,12 +250,10 @@ def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
     command_type = base if base.endswith("Command") else f"{base}Command"
     cli_name = _to_cli_name(args.cli_name or base)
     description = args.description or f"Run {cli_name}"
-    python_binding_name = args.python_binding_name or command_type
     return ScaffoldSpec(
         command_type=command_type,
         cli_name=cli_name,
         description=description,
-        python_binding_name=python_binding_name,
         profile=args.profile,
     )
 
@@ -350,7 +263,6 @@ def main() -> int:
     parser.add_argument("--name", required=True, help="Base command name, e.g. Example or ExampleCommand.")
     parser.add_argument("--cli-name", help="CLI subcommand token. Defaults to name converted to snake_case.")
     parser.add_argument("--description", help="Built-in description text.")
-    parser.add_argument("--python-binding-name", help="Python class name for BuiltInCommandList.def.")
     parser.add_argument(
         "--profile",
         default="FileWorkflow",
@@ -362,16 +274,14 @@ def main() -> int:
         "--wire",
         action="store_true",
         help=(
-            "Also update command registration/manifests "
-            "(BuiltInCommandList.def, CMake lists, bindings, and core test list)."
+            "Also update BuiltInCommandList.def and regenerate derived built-in artifacts."
         ),
     )
     parser.add_argument(
         "--strict",
         action="store_true",
         help=(
-            "Only valid with --wire. Fail-fast when a wiring anchor drifts, "
-            "and print a concrete repair hint."
+            "Only valid with --wire. Fail-fast when manifest generation fails."
         ),
     )
     args = parser.parse_args()
@@ -399,9 +309,9 @@ def main() -> int:
 
     print("\nScaffold complete.")
     if args.wire:
-        print("Registration/manifests were wired automatically.")
+        print("Registration/manifests were wired automatically (manifest + generated artifacts).")
     else:
-        print("Next: wire BuiltInCommandList.def and CMake manifests, then implement binding specialization.")
+        print("Next: wire BuiltInCommandList.def and run artifact generator.")
     return 0
 
 

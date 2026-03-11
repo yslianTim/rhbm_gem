@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
+#include <thread>
 
 #include "CommandTestHelpers.hpp"
 #include "CommandValidationAssertions.hpp"
+#include "GuiCommandExecutorTestHooks.hpp"
 #include <rhbm_gem/gui/GuiCommandExecutor.hpp>
 
 namespace rg = rhbm_gem;
@@ -103,4 +105,55 @@ TEST(GuiCommandExecutorTest, ResultDumpMapPathIsOnlyRequiredForMapPrinter)
             rg::ValidationPhase::Prepare,
             LogLevel::Error),
         nullptr);
+}
+
+TEST(GuiCommandExecutorTest, StaticAndInstanceExecutionPathsAreEquivalentForValidation)
+{
+    rg::gui::MapSimulationRequest request;
+
+    const auto static_result{ rg::gui::GuiCommandExecutor::ExecuteMapSimulation(request) };
+
+    rg::gui::GuiCommandExecutor instance_executor{ command_test::BuildDataIoServices() };
+    const auto instance_result{ instance_executor.RunMapSimulation(request) };
+
+    EXPECT_EQ(static_result.prepared, instance_result.prepared);
+    EXPECT_EQ(static_result.executed, instance_result.executed);
+    EXPECT_NE(
+        command_test::FindValidationIssue(
+            instance_result.validation_issues,
+            "--model",
+            rg::ValidationPhase::Parse,
+            LogLevel::Error),
+        nullptr);
+}
+
+TEST(GuiCommandExecutorTest, StaticExecutorPoolReusesPerThreadExecutor)
+{
+    const auto service_count_before{
+        rg::gui::internal::DefaultServiceBuildCountForTesting()
+    };
+    const auto executor_count_before{
+        rg::gui::internal::DefaultExecutorBuildCountForTesting()
+    };
+
+    std::thread worker([]()
+    {
+        rg::gui::MapSimulationRequest request;
+        const auto first{ rg::gui::GuiCommandExecutor::ExecuteMapSimulation(request) };
+        const auto second{ rg::gui::GuiCommandExecutor::ExecuteMapSimulation(request) };
+        EXPECT_FALSE(first.prepared);
+        EXPECT_FALSE(second.prepared);
+    });
+    worker.join();
+
+    const auto service_count_after{
+        rg::gui::internal::DefaultServiceBuildCountForTesting()
+    };
+    const auto executor_count_after{
+        rg::gui::internal::DefaultExecutorBuildCountForTesting()
+    };
+
+    EXPECT_GE(service_count_after, service_count_before);
+    EXPECT_LE(service_count_after, service_count_before + 1U);
+    EXPECT_EQ(executor_count_after, executor_count_before + 1U);
 }

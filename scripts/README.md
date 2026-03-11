@@ -9,11 +9,13 @@
 
 ## Built-in Command Automation
 
+- `scripts/generate_builtin_command_artifacts.py`: generate all built-in command derived artifacts from `BuiltInCommandList.def`
+  (catalog include/entry fragments, built-in CMake source lists, docs generated blocks).
 - `scripts/command_scaffold.py`: generate a new command/binding/test/doc scaffold.
-  - add `--wire` to also update built-in registration + manifest files.
-  - add `--wire --strict` to fail-fast on anchor drift with repair hints.
+  - add `--wire` to also update `BuiltInCommandList.def` and regenerate derived artifacts.
+  - add `--wire --strict` to fail-fast if manifest generation fails.
 - `scripts/check_builtin_command_sync.py`: validate `BuiltInCommandList.def` sync with
-  headers/sources/bindings/tests/CMake manifests and order consistency.
+  generated artifacts plus required headers/sources/bindings/tests surface files.
 - `scripts/run_clang_format_check.sh`: check formatting for painter/parser directories (check-only).
 - `scripts/run_clang_tidy_check.sh`: run clang-tidy for painter/parser source files (check-only),
   and optionally compare warning counts with `scripts/clang_tidy_baseline.json`.

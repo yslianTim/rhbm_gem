@@ -7,6 +7,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
+#include <rhbm_gem/core/command/CommandMetadata.hpp>
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
 #include "internal/BuiltInCommandCatalogInternal.hpp"
@@ -32,6 +33,27 @@ py::class_<CommandType, std::shared_ptr<CommandType>> BindBuiltInCommand(py::mod
     return py::class_<CommandType, std::shared_ptr<CommandType>>(
         module,
         std::string(binding_name).c_str());
+}
+
+template <typename CommandType, typename HolderType>
+void BindCommonCommandSetters(py::class_<CommandType, HolderType> & py_command)
+{
+    if constexpr (HasCommonOption(CommandType::kCommonOptions, CommonOption::Threading))
+    {
+        py_command.def("SetThreadSize", &CommandType::SetThreadSize);
+    }
+    if constexpr (HasCommonOption(CommandType::kCommonOptions, CommonOption::Verbose))
+    {
+        py_command.def("SetVerboseLevel", &CommandType::SetVerboseLevel);
+    }
+    if constexpr (HasCommonOption(CommandType::kCommonOptions, CommonOption::Database))
+    {
+        py_command.def("SetDatabasePath", &CommandType::SetDatabasePath);
+    }
+    if constexpr (HasCommonOption(CommandType::kCommonOptions, CommonOption::OutputFolder))
+    {
+        py_command.def("SetFolderPath", &CommandType::SetFolderPath);
+    }
 }
 
 template <typename CommandType, typename HolderType>

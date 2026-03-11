@@ -1,35 +1,28 @@
 RHBM_GEM_BUILTIN_COMMAND(
     PotentialAnalysisCommand,
     "potential_analysis",
-    "Run potential analysis",
-    "PotentialAnalysisCommand")
+    "Run potential analysis")
 RHBM_GEM_BUILTIN_COMMAND(
     PotentialDisplayCommand,
     "potential_display",
-    "Run potential display",
-    "PotentialDisplayCommand")
+    "Run potential display")
 RHBM_GEM_BUILTIN_COMMAND(
     ResultDumpCommand,
     "result_dump",
-    "Run result dump",
-    "ResultDumpCommand")
+    "Run result dump")
 RHBM_GEM_BUILTIN_COMMAND(
     MapSimulationCommand,
     "map_simulation",
-    "Run map simulation command",
-    "MapSimulationCommand")
+    "Run map simulation command")
 RHBM_GEM_BUILTIN_COMMAND(
     MapVisualizationCommand,
     "map_visualization",
-    "Run map visualization",
-    "MapVisualizationCommand")
+    "Run map visualization")
 RHBM_GEM_BUILTIN_COMMAND(
     PositionEstimationCommand,
     "position_estimation",
-    "Run atom position estimation",
-    "PositionEstimationCommand")
+    "Run atom position estimation")
 RHBM_GEM_BUILTIN_COMMAND(
     HRLModelTestCommand,
     "model_test",
-    "Run HRL model simulation test",
-    "HRLModelTestCommand")
+    "Run HRL model simulation test")

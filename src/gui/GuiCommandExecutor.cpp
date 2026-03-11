@@ -4,10 +4,37 @@
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
 #include <rhbm_gem/data/io/DataIoServices.hpp>
+#include "internal/GuiCommandExecutorTestHooks.hpp"
+
+#include <atomic>
+#include <utility>
 
 namespace rhbm_gem::gui {
 
 namespace {
+
+std::atomic<std::size_t> g_default_service_build_count{ 0U };
+std::atomic<std::size_t> g_default_executor_build_count{ 0U };
+
+const DataIoServices & SharedDataIoServices()
+{
+    static const DataIoServices data_io_services = []()
+    {
+        g_default_service_build_count.fetch_add(1U, std::memory_order_relaxed);
+        return DataIoServices::BuildDefault();
+    }();
+    return data_io_services;
+}
+
+const GuiCommandExecutor & SharedThreadExecutor()
+{
+    thread_local const GuiCommandExecutor executor = []()
+    {
+        g_default_executor_build_count.fetch_add(1U, std::memory_order_relaxed);
+        return GuiCommandExecutor{ SharedDataIoServices() };
+    }();
+    return executor;
+}
 
 template <typename CommandType>
 void ApplyCommonOptions(
@@ -24,8 +51,11 @@ void ApplyCommonOptions(
 }
 
 template <typename CommandType, typename ConfigureFn>
-ExecutionResult ExecuteCommand(CommandType & command, ConfigureFn && configure)
+ExecutionResult ExecuteCommand(
+    const DataIoServices & data_io_services,
+    ConfigureFn && configure)
 {
+    CommandType command{ data_io_services };
     configure(command);
 
     ExecutionResult result;
@@ -47,12 +77,20 @@ ExecutionResult ExecuteCommand(CommandType & command, ConfigureFn && configure)
 
 } // namespace
 
-ExecutionResult GuiCommandExecutor::ExecuteMapSimulation(
-    const MapSimulationRequest & request)
+GuiCommandExecutor::GuiCommandExecutor() :
+    m_data_io_services{ DataIoServices::BuildDefault() }
 {
-    const auto data_io_services{ DataIoServices::BuildDefault() };
-    MapSimulationCommand command{ data_io_services };
-    return ExecuteCommand(command, [&](MapSimulationCommand & configured)
+}
+
+GuiCommandExecutor::GuiCommandExecutor(DataIoServices data_io_services) :
+    m_data_io_services{ std::move(data_io_services) }
+{
+}
+
+ExecutionResult GuiCommandExecutor::RunMapSimulation(
+    const MapSimulationRequest & request) const
+{
+    return ExecuteCommand<MapSimulationCommand>(m_data_io_services, [&](MapSimulationCommand & configured)
     {
         ApplyCommonOptions(configured, request.common);
         configured.SetModelFilePath(request.model_file_path);
@@ -65,12 +103,10 @@ ExecutionResult GuiCommandExecutor::ExecuteMapSimulation(
     });
 }
 
-ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
-    const PotentialAnalysisRequest & request)
+ExecutionResult GuiCommandExecutor::RunPotentialAnalysis(
+    const PotentialAnalysisRequest & request) const
 {
-    const auto data_io_services{ DataIoServices::BuildDefault() };
-    PotentialAnalysisCommand command{ data_io_services };
-    return ExecuteCommand(command, [&](PotentialAnalysisCommand & configured)
+    return ExecuteCommand<PotentialAnalysisCommand>(m_data_io_services, [&](PotentialAnalysisCommand & configured)
     {
         ApplyCommonOptions(configured, request.common);
         configured.SetModelFilePath(request.model_file_path);
@@ -92,12 +128,10 @@ ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
     });
 }
 
-ExecutionResult GuiCommandExecutor::ExecuteResultDump(
-    const ResultDumpRequest & request)
+ExecutionResult GuiCommandExecutor::RunResultDump(
+    const ResultDumpRequest & request) const
 {
-    const auto data_io_services{ DataIoServices::BuildDefault() };
-    ResultDumpCommand command{ data_io_services };
-    return ExecuteCommand(command, [&](ResultDumpCommand & configured)
+    return ExecuteCommand<ResultDumpCommand>(m_data_io_services, [&](ResultDumpCommand & configured)
     {
         ApplyCommonOptions(configured, request.common);
         configured.SetPrinterChoice(request.printer_choice);
@@ -105,5 +139,37 @@ ExecutionResult GuiCommandExecutor::ExecuteResultDump(
         configured.SetMapFilePath(request.map_file_path);
     });
 }
+
+ExecutionResult GuiCommandExecutor::ExecuteMapSimulation(
+    const MapSimulationRequest & request)
+{
+    return SharedThreadExecutor().RunMapSimulation(request);
+}
+
+ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
+    const PotentialAnalysisRequest & request)
+{
+    return SharedThreadExecutor().RunPotentialAnalysis(request);
+}
+
+ExecutionResult GuiCommandExecutor::ExecuteResultDump(
+    const ResultDumpRequest & request)
+{
+    return SharedThreadExecutor().RunResultDump(request);
+}
+
+namespace internal {
+
+std::size_t DefaultServiceBuildCountForTesting()
+{
+    return g_default_service_build_count.load(std::memory_order_relaxed);
+}
+
+std::size_t DefaultExecutorBuildCountForTesting()
+{
+    return g_default_executor_build_count.load(std::memory_order_relaxed);
+}
+
+} // namespace internal
 
 } // namespace rhbm_gem::gui

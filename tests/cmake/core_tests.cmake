@@ -1,3 +1,5 @@
+include(${CMAKE_CURRENT_LIST_DIR}/BuiltInCoreCommandTests.generated.cmake)
+
 set(CORE_COMMAND_TEST_SOURCES
     core/command/Application_test.cpp
     core/command/CommandBase_test.cpp
@@ -6,13 +8,7 @@ set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandScalarValidationHelper_test.cpp
     core/command/CommandValidationIssue_test.cpp
     core/command/GuiCommandExecutor_test.cpp
-    core/command/PotentialAnalysisCommand_test.cpp
-    core/command/PotentialDisplayCommand_test.cpp
-    core/command/ResultDumpCommand_test.cpp
-    core/command/MapSimulationCommand_test.cpp
-    core/command/MapVisualizationCommand_test.cpp
-    core/command/PositionEstimationCommand_test.cpp
-    core/command/HRLModelTestCommand_test.cpp
+    ${RHBM_GEM_BUILTIN_CORE_COMMAND_TEST_SOURCES}
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)

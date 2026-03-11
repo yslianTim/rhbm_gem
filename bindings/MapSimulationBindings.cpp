@@ -11,14 +11,13 @@ void BindCommand<MapSimulationCommand>(py::module_ & module)
     map_simulation
         .def(py::init<const DataIoServices &>())
         .def("Execute", &MapSimulationCommand::Execute)
-        .def("SetFolderPath", &MapSimulationCommand::SetFolderPath)
         .def("SetModelFilePath", &MapSimulationCommand::SetModelFilePath)
-        .def("SetThreadSize", &MapSimulationCommand::SetThreadSize)
         .def("SetPotentialModelChoice", &MapSimulationCommand::SetPotentialModelChoice)
         .def("SetPartialChargeChoice", &MapSimulationCommand::SetPartialChargeChoice)
         .def("SetCutoffDistance", &MapSimulationCommand::SetCutoffDistance)
         .def("SetGridSpacing", &MapSimulationCommand::SetGridSpacing)
         .def("SetBlurringWidthList", &MapSimulationCommand::SetBlurringWidthList);
+    BindCommonCommandSetters(map_simulation);
     BindCommandDiagnostics(map_simulation);
 }
 

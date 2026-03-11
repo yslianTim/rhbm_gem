@@ -13,9 +13,8 @@ void BindCommand<ResultDumpCommand>(py::module_ & module)
         .def("Execute", &ResultDumpCommand::Execute)
         .def("SetPrinterChoice", &ResultDumpCommand::SetPrinterChoice)
         .def("SetModelKeyTagList", &ResultDumpCommand::SetModelKeyTagList)
-        .def("SetDatabasePath", &ResultDumpCommand::SetDatabasePath)
-        .def("SetMapFilePath", &ResultDumpCommand::SetMapFilePath)
-        .def("SetFolderPath", &ResultDumpCommand::SetFolderPath);
+        .def("SetMapFilePath", &ResultDumpCommand::SetMapFilePath);
+    BindCommonCommandSetters(result_dump);
     BindCommandDiagnostics(result_dump);
 }
 

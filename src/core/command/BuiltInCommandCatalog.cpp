@@ -1,12 +1,6 @@
 #include "internal/BuiltInCommandCatalogInternal.hpp"
+#include "internal/BuiltInCommandCatalogIncludes.generated.inc"
 
-#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
-#include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
-#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
-#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
-#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
-#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
-#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
 #include <rhbm_gem/data/io/DataIoServices.hpp>
 
 #include <stdexcept>
@@ -17,9 +11,9 @@ namespace {
 
 template <typename CommandType>
 CommandDescriptor MakeBuiltInDescriptor(
+    std::string_view python_binding_name,
     std::string_view name,
-    std::string_view description,
-    std::string_view python_binding_name)
+    std::string_view description)
 {
     if (python_binding_name.empty())
     {
@@ -45,10 +39,7 @@ CommandDescriptor MakeBuiltInDescriptor(
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
 {
     static const std::vector<CommandDescriptor> catalog{
-    #define RHBM_GEM_BUILTIN_COMMAND(COMMAND_TYPE, CLI_NAME, DESCRIPTION, PYTHON_BINDING_NAME) \
-        MakeBuiltInDescriptor<COMMAND_TYPE>(CLI_NAME, DESCRIPTION, PYTHON_BINDING_NAME),
-    #include "internal/BuiltInCommandList.def"
-    #undef RHBM_GEM_BUILTIN_COMMAND
+    #include "internal/BuiltInCommandCatalogEntries.generated.inc"
     };
 
     return catalog;

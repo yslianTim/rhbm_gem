@@ -54,14 +54,6 @@ private:
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
-    bool BuildDataObjectList();
-    void RunResultDump();
-    void RunAtomOutlierDumping();
-    void RunAtomPositionDumping();
-    void RunMapValueDumping();
-    void RunGausEstimatesDumping();
-    void RunGroupGausEstimatesDumping();
-
 };
 
 } // namespace rhbm_gem

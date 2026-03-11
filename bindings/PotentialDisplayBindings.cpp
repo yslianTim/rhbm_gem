@@ -14,14 +14,13 @@ void BindCommand<PotentialDisplayCommand>(py::module_ & module)
         .def("SetPainterChoice", &PotentialDisplayCommand::SetPainterChoice)
         .def("SetModelKeyTagList", &PotentialDisplayCommand::SetModelKeyTagList)
         .def("SetRefModelKeyTagListMap", &PotentialDisplayCommand::SetRefModelKeyTagListMap)
-        .def("SetDatabasePath", &PotentialDisplayCommand::SetDatabasePath)
-        .def("SetFolderPath", &PotentialDisplayCommand::SetFolderPath)
         .def("SetPickChainID", &PotentialDisplayCommand::SetPickChainID)
         .def("SetPickResidueType", &PotentialDisplayCommand::SetPickResidueType)
         .def("SetPickElementType", &PotentialDisplayCommand::SetPickElementType)
         .def("SetVetoChainID", &PotentialDisplayCommand::SetVetoChainID)
         .def("SetVetoResidueType", &PotentialDisplayCommand::SetVetoResidueType)
         .def("SetVetoElementType", &PotentialDisplayCommand::SetVetoElementType);
+    BindCommonCommandSetters(potential_display);
     BindCommandDiagnostics(potential_display);
 }
 

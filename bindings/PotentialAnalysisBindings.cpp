@@ -16,17 +16,16 @@ void BindCommand<PotentialAnalysisCommand>(py::module_ & module)
         .def("SetFitRangeMaximum", &PotentialAnalysisCommand::SetFitRangeMaximum)
         .def("SetAlphaR", &PotentialAnalysisCommand::SetAlphaR)
         .def("SetAlphaG", &PotentialAnalysisCommand::SetAlphaG)
-        .def("SetDatabasePath", &PotentialAnalysisCommand::SetDatabasePath)
         .def("SetModelFilePath", &PotentialAnalysisCommand::SetModelFilePath)
         .def("SetMapFilePath", &PotentialAnalysisCommand::SetMapFilePath)
         .def("SetSavedKeyTag", &PotentialAnalysisCommand::SetSavedKeyTag)
         .def("SetTrainingReportDir", &PotentialAnalysisCommand::SetTrainingReportDir)
-        .def("SetThreadSize", &PotentialAnalysisCommand::SetThreadSize)
         .def("SetSamplingSize", &PotentialAnalysisCommand::SetSamplingSize)
         .def("SetSamplingRangeMinimum", &PotentialAnalysisCommand::SetSamplingRangeMinimum)
         .def("SetSamplingRangeMaximum", &PotentialAnalysisCommand::SetSamplingRangeMaximum)
         .def("SetSimulationFlag", &PotentialAnalysisCommand::SetSimulationFlag)
         .def("SetSimulatedMapResolution", &PotentialAnalysisCommand::SetSimulatedMapResolution);
+    BindCommonCommandSetters(potential_analysis);
     BindCommandDiagnostics(potential_analysis);
 }
 

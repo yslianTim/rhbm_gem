@@ -1,3 +1,5 @@
+include(${CMAKE_CURRENT_LIST_DIR}/BuiltInCommandSources.generated.cmake)
+
 set(RHBM_GEM_LIBRARY_SOURCES
     core/command/Application.cpp
     core/painter/AtomPainter.cpp
@@ -15,22 +17,16 @@ set(RHBM_GEM_LIBRARY_SOURCES
     core/painter/PotentialPlotBuilder.cpp
     core/painter/PotentialPlotBuilderSequenceGraphs.cpp
     core/painter/PotentialPlotBuilderPlotFunctions.cpp
-    core/command/HRLModelTestCommand.cpp
+    ${RHBM_GEM_BUILTIN_COMMAND_SOURCES}
     core/workflow/HRLModelTestCommandWorkflows.cpp
     core/command/MapSampling.cpp
-    core/command/MapSimulationCommand.cpp
-    core/command/MapVisualizationCommand.cpp
     core/painter/ModelPainterMapValueRender.cpp
     core/painter/ModelPainterRender.cpp
     core/painter/ModelPainterAnnotation.cpp
     core/painter/ModelPainterStyle.cpp
-    core/command/PositionEstimationCommand.cpp
-    core/command/PotentialAnalysisCommand.cpp
     core/workflow/PotentialAnalysisAnalysisWorkflow.cpp
     core/workflow/PotentialAnalysisTrainingWorkflow.cpp
     core/workflow/PotentialAnalysisReportWorkflow.cpp
-    core/command/PotentialDisplayCommand.cpp
-    core/command/ResultDumpCommand.cpp
     core/workflow/PotentialAnalysisTrainingSupport.cpp
     core/workflow/ResultDumpCommandWorkflow.cpp
 

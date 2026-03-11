@@ -11,12 +11,12 @@ void BindCommand<MapVisualizationCommand>(py::module_ & module)
     map_visualization
         .def(py::init<const DataIoServices &>())
         .def("Execute", &MapVisualizationCommand::Execute)
-        .def("SetFolderPath", &MapVisualizationCommand::SetFolderPath)
         .def("SetModelFilePath", &MapVisualizationCommand::SetModelFilePath)
         .def("SetMapFilePath", &MapVisualizationCommand::SetMapFilePath)
         .def("SetAtomSerialID", &MapVisualizationCommand::SetAtomSerialID)
         .def("SetSamplingSize", &MapVisualizationCommand::SetSamplingSize)
         .def("SetWindowSize", &MapVisualizationCommand::SetWindowSize);
+    BindCommonCommandSetters(map_visualization);
     BindCommandDiagnostics(map_visualization);
 }
 

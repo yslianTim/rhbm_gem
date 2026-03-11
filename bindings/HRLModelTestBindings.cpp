@@ -11,12 +11,12 @@ void BindCommand<HRLModelTestCommand>(py::module_ & module)
     model_test
         .def(py::init<const DataIoServices &>())
         .def("Execute", &HRLModelTestCommand::Execute)
-        .def("SetThreadSize", &HRLModelTestCommand::SetThreadSize)
         .def("SetTesterChoice", &HRLModelTestCommand::SetTesterChoice)
         .def("SetFitRangeMinimum", &HRLModelTestCommand::SetFitRangeMinimum)
         .def("SetFitRangeMaximum", &HRLModelTestCommand::SetFitRangeMaximum)
         .def("SetAlphaR", &HRLModelTestCommand::SetAlphaR)
         .def("SetAlphaG", &HRLModelTestCommand::SetAlphaG);
+    BindCommonCommandSetters(model_test);
     BindCommandDiagnostics(model_test);
 }
 
