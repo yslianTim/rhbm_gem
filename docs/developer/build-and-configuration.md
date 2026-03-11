@@ -106,22 +106,22 @@ cmake --build build --target lint_repo
 
 ## Static Quality Checks (Targeted)
 
-Format check for hotspot files:
+Format check for painter/parser directories:
 
 ```bash
 bash scripts/run_clang_format_check.sh
 ```
 
-Clang-tidy check for parser/painter hotspots:
+Clang-tidy check for painter/parser directories:
 
 ```bash
-clang-tidy -p build \
-  src/core/painter/PotentialPlotBuilder.cpp \
-  src/core/painter/PotentialPlotBuilderSequenceGraphs.cpp \
-  src/core/painter/PotentialPlotBuilderPlotFunctions.cpp \
-  src/data/io/file/CifFormat.cpp \
-  src/data/io/file/ICifCategoryParser.cpp
+bash scripts/run_clang_tidy_check.sh build
 ```
+
+CI layout:
+
+1. Pull request / push: fast gate (`lint_repo` + command sync + `core/data/integration` tests + format/tidy checks)
+2. Nightly schedule: full test run with feature-mode matrix (`OPENMP` / `ROOT` / `LEGACY`)
 
 ## Feature Mode Checks (`AUTO` / `OFF` / `ON`)
 

@@ -49,15 +49,20 @@ def main() -> int:
     catalog_text = (root / "src" / "core" / "command" / "BuiltInCommandCatalog.cpp").read_text(encoding="utf-8")
     sources_text = (root / "src" / "rhbm_gem_sources.cmake").read_text(encoding="utf-8")
     core_tests_text = (root / "tests" / "cmake" / "core_tests.cmake").read_text(encoding="utf-8")
+    bindings_cmake_text = (root / "bindings" / "CMakeLists.txt").read_text(encoding="utf-8")
+    binding_helpers_text = (root / "bindings" / "BindingHelpers.hpp").read_text(encoding="utf-8")
+    core_bindings_text = (root / "bindings" / "CoreBindings.cpp").read_text(encoding="utf-8")
 
     errors: list[str] = []
     for entry in builtins:
         command = entry.command_type
         stem = command.removesuffix("Command")
+        bind_fn = f"Bind{stem}"
+        binding_unit = f"{stem}Bindings.cpp"
         expected_paths = [
             root / "include" / "rhbm_gem" / "core" / "command" / f"{command}.hpp",
             root / "src" / "core" / "command" / f"{command}.cpp",
-            root / "bindings" / f"{stem}Bindings.cpp",
+            root / "bindings" / binding_unit,
             root / "tests" / "core" / "command" / f"{command}_test.cpp",
         ]
         for p in expected_paths:
@@ -75,6 +80,22 @@ def main() -> int:
         test_ref = f"core/command/{command}_test.cpp"
         if test_ref not in core_tests_text:
             errors.append(f"core_tests.cmake missing test entry: {test_ref}")
+
+        if binding_unit not in bindings_cmake_text:
+            errors.append(f"bindings/CMakeLists.txt missing source entry: {binding_unit}")
+
+        helper_decl = f"void {bind_fn}(py::module_ & module);"
+        if helper_decl not in binding_helpers_text:
+            errors.append(f"BindingHelpers.hpp missing declaration: {helper_decl}")
+
+        bind_call = f"rhbm_gem::bindings::{bind_fn}(module);"
+        if bind_call not in core_bindings_text:
+            errors.append(f"CoreBindings.cpp missing module registration call: {bind_call}")
+
+        binding_text = (root / "bindings" / binding_unit).read_text(encoding="utf-8")
+        bind_template_ref = f"BindBuiltInCommand<{command}>"
+        if bind_template_ref not in binding_text:
+            errors.append(f"{binding_unit} missing built-in bind template reference: {bind_template_ref}")
 
     if errors:
         print("Built-in command sync check failed:")

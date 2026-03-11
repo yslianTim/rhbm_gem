@@ -50,6 +50,22 @@ python3 scripts/command_scaffold.py --name Example --profile FileWorkflow
 The scaffold creates command/binding/test/doc skeleton files only.
 You still need to wire registration and manifests listed above.
 
+Scaffold + auto-wire helper:
+
+```bash
+python3 scripts/command_scaffold.py --name Example --profile FileWorkflow --wire
+```
+
+`--wire` will also update:
+
+- `src/core/internal/BuiltInCommandList.def`
+- `src/core/command/BuiltInCommandCatalog.cpp` include list
+- `src/rhbm_gem_sources.cmake`
+- `bindings/CMakeLists.txt`
+- `bindings/BindingHelpers.hpp`
+- `bindings/CoreBindings.cpp`
+- `tests/cmake/core_tests.cmake`
+
 ## 3. Implement the command type
 
 Standard command shape:

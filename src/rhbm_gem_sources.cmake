@@ -45,6 +45,9 @@ set(RHBM_GEM_LIBRARY_SOURCES
     data/object/PotentialEntryQuery.cpp
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp
+    data/io/file/CifFormatBondConstruction.cpp
+    data/io/file/CifFormatOrchestration.cpp
+    data/io/file/CifFormatWriteBlock.cpp
     data/io/file/ICifCategoryParser.cpp
     data/io/file/FileFormatBackendFactory.cpp
     data/io/file/FileFormatRegistry.cpp

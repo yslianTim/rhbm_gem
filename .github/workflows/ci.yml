@@ -7,9 +7,12 @@ on:
       - main
       - master
       - "codex/**"
+  schedule:
+    - cron: "0 2 * * *"
 
 jobs:
-  build-and-quality:
+  pr-fast:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
     steps:
@@ -34,24 +37,67 @@ jobs:
       - name: Build
         run: cmake --build build --target tests_all lint_repo -j2
 
-      - name: Repo guards
-        run: cmake --build build --target lint_repo
-
       - name: Built-in command sync
         run: python3 scripts/check_builtin_command_sync.py
 
       - name: Run tests (core/data/integration)
         run: ctest --test-dir build --output-on-failure -L "domain:(core|data|integration)"
 
-      - name: clang-format check (targeted hotspots)
+      - name: clang-format check (painter + parser dirs)
         run: bash scripts/run_clang_format_check.sh
 
-      - name: clang-tidy check (targeted hotspots)
+      - name: clang-tidy check (painter + parser dirs)
+        run: bash scripts/run_clang_tidy_check.sh build
+
+  nightly-full:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: base
+            openmp: OFF
+            root: OFF
+            legacy: ON
+          - name: openmp-on
+            openmp: ON
+            root: OFF
+            legacy: ON
+          - name: legacy-off
+            openmp: OFF
+            root: OFF
+            legacy: OFF
+          - name: root-auto
+            openmp: OFF
+            root: AUTO
+            legacy: ON
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
         run: |
-          clang-tidy \
-            -p build \
-            src/core/painter/PotentialPlotBuilder.cpp \
-            src/core/painter/PotentialPlotBuilderSequenceGraphs.cpp \
-            src/core/painter/PotentialPlotBuilderPlotFunctions.cpp \
-            src/data/io/file/CifFormat.cpp \
-            src/data/io/file/ICifCategoryParser.cpp
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Configure (${{ matrix.name }})
+        run: |
+          cmake -S . -B build-${{ matrix.name }} \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DRHBM_GEM_DEP_PROVIDER=FETCH \
+            -DBUILD_PYTHON_BINDINGS=OFF \
+            -DRHBM_GEM_OPENMP_MODE=${{ matrix.openmp }} \
+            -DRHBM_GEM_ROOT_MODE=${{ matrix.root }} \
+            -DRHBM_GEM_LEGACY_V1_SUPPORT=${{ matrix.legacy }}
+
+      - name: Build (${{ matrix.name }})
+        run: cmake --build build-${{ matrix.name }} --target tests_all lint_repo -j2
+
+      - name: Built-in command sync (${{ matrix.name }})
+        run: python3 scripts/check_builtin_command_sync.py
+
+      - name: Run full tests (${{ matrix.name }})
+        run: ctest --test-dir build-${{ matrix.name }} --output-on-failure -j2

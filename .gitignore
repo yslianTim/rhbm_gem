@@ -1,7 +1,7 @@
 # Build outputs and compiler artifacts
 build/
 build*/
-.build/
+local/
 Debug/
 Release/
 coverage/

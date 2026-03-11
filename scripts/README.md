@@ -10,5 +10,8 @@
 ## Built-in Command Automation
 
 - `scripts/command_scaffold.py`: generate a new command/binding/test/doc scaffold.
+  - add `--wire` to also update built-in registration + manifest files.
 - `scripts/check_builtin_command_sync.py`: validate `BuiltInCommandList.def` sync with
-  headers/sources/bindings/tests/CMake manifests.
+  headers/sources/bindings/tests/CMake manifests and binding registration wiring.
+- `scripts/run_clang_format_check.sh`: check formatting for painter/parser directories (check-only).
+- `scripts/run_clang_tidy_check.sh`: run clang-tidy for painter/parser source files (check-only).
