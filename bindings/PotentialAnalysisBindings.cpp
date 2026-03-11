@@ -4,7 +4,8 @@
 
 namespace rhbm_gem::bindings {
 
-void BindPotentialAnalysis(py::module_ & module)
+template <>
+void BindCommand<PotentialAnalysisCommand>(py::module_ & module)
 {
     auto potential_analysis{ BindBuiltInCommand<PotentialAnalysisCommand>(module) };
     potential_analysis

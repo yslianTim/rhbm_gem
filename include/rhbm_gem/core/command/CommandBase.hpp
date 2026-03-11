@@ -27,9 +27,6 @@ namespace rhbm_gem {
 constexpr CommonOptionMask kDefaultCommandCommonOptions{
     CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)
 };
-constexpr CommonOptionMask kDatabaseCommandCommonOptions{
-    CommonOptionMaskForProfile(CommonOptionProfile::DatabaseWorkflow)
-};
 
 inline std::filesystem::path GetDefaultDataRootPath()
 {
@@ -57,7 +54,8 @@ enum class ValidationPhase : std::uint8_t
 {
     Parse = 0,
     Prepare = 1,
-    // Reserved for API compatibility. Runtime validation currently reports as Execute() failures.
+    // Deprecated internal placeholder retained for API compatibility.
+    // Runtime failures currently surface via Execute() return value + logs.
     Runtime = 2
 };
 
@@ -315,9 +313,6 @@ public:
     using Options = OptionsT;
     static constexpr CommandId kCommandId{ IdValue };
     static constexpr CommonOptionMask kCommonOptions{ CommonOptionsValue };
-    static constexpr CommonOptionProfile kCommonOptionProfile{
-        InferCommonOptionProfile(kCommonOptions)
-    };
 
     explicit CommandWithOptions(const DataIoServices & data_io_services) :
         CommandBase{ data_io_services }

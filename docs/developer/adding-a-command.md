@@ -33,8 +33,6 @@ For a new built-in command, update these areas in one change:
 - `src/core/internal/BuiltInCommandList.def` (register built-in metadata)
 - `src/core/command/BuiltInCommandCatalog.cpp` (add command header include)
 - `bindings/<YourFeature>Bindings.cpp` (add command-specific Python bindings)
-- `bindings/BindingHelpers.hpp` (declare binding entrypoint)
-- `bindings/CoreBindings.cpp` (call the binding entrypoint in module init)
 - `bindings/CMakeLists.txt` (add binding source to `BINDINGS_SOURCES`)
 - `tests/core/command/<YourCommand>_test.cpp`
 - `tests/cmake/core_tests.cmake` (wire tests)
@@ -62,8 +60,6 @@ python3 scripts/command_scaffold.py --name Example --profile FileWorkflow --wire
 - `src/core/command/BuiltInCommandCatalog.cpp` include list
 - `src/rhbm_gem_sources.cmake`
 - `bindings/CMakeLists.txt`
-- `bindings/BindingHelpers.hpp`
-- `bindings/CoreBindings.cpp`
 - `tests/cmake/core_tests.cmake`
 
 Strict wiring mode (recommended in CI/local guard runs):
@@ -327,23 +323,24 @@ Required actions:
 3. expose constructor that requires `DataIoServices` context
 4. expose supported setters and `Execute`
 5. call `BindCommandDiagnostics(example_command)`
-6. declare `BindExample(...)` in `bindings/BindingHelpers.hpp`
-7. call `BindExample(module)` in `bindings/CoreBindings.cpp`
-8. add the new binding source file in `bindings/CMakeLists.txt`
+6. implement command registration specialization `template <> void BindCommand<rhbm_gem::ExampleCommand>(py::module_ & module)`
+7. add the new binding source file in `bindings/CMakeLists.txt`
 
 Binding skeleton:
 
 ```cpp
-auto example_command{
-    BindBuiltInCommand<rhbm_gem::ExampleCommand>(m)
-};
-example_command
-    .def(py::init<const rhbm_gem::DataIoServices &>())
-    .def("Execute", &rhbm_gem::ExampleCommand::Execute)
-    .def("SetInputPath", &rhbm_gem::ExampleCommand::SetInputPath)
-    .def("SetOutputStem", &rhbm_gem::ExampleCommand::SetOutputStem)
-    .def("SetThreshold", &rhbm_gem::ExampleCommand::SetThreshold);
-BindCommandDiagnostics(example_command);
+template <>
+void BindCommand<rhbm_gem::ExampleCommand>(py::module_ & module)
+{
+    auto example_command{ BindBuiltInCommand<rhbm_gem::ExampleCommand>(module) };
+    example_command
+        .def(py::init<const rhbm_gem::DataIoServices &>())
+        .def("Execute", &rhbm_gem::ExampleCommand::Execute)
+        .def("SetInputPath", &rhbm_gem::ExampleCommand::SetInputPath)
+        .def("SetOutputStem", &rhbm_gem::ExampleCommand::SetOutputStem)
+        .def("SetThreshold", &rhbm_gem::ExampleCommand::SetThreshold);
+    BindCommandDiagnostics(example_command);
+}
 ```
 
 Python callers must create one context and pass it into command constructors:
@@ -353,7 +350,8 @@ services = m.DataIoServices()
 command = m.ExampleCommand(services)
 ```
 
-Also register the new binding function call in `bindings/CoreBindings.cpp` (module entrypoint).
+`bindings/CoreBindings.cpp` registers all built-ins from `BuiltInCommandList.def`; no manual
+module entrypoint edits are required for new command bindings.
 
 Do not expose internal hooks such as `RegisterCLIOptionsExtend(...)` or `ValidateOptions()`.
 
@@ -401,7 +399,7 @@ Before merging:
 2. command class compiles and is added to `src/CMakeLists.txt`
 3. built-in macro entry exists in `src/core/internal/BuiltInCommandList.def`
 4. command headers are included where required (`BuiltInCommandCatalog.cpp`, command-specific `bindings/*Bindings.cpp`)
-5. Python binding wiring is complete (`bindings/<YourFeature>Bindings.cpp`, `bindings/BindingHelpers.hpp`, `bindings/CoreBindings.cpp`, `bindings/CMakeLists.txt`)
+5. Python binding wiring is complete (`bindings/<YourFeature>Bindings.cpp`, `bindings/CMakeLists.txt`)
 6. command tests and contract tests are updated
 7. docs are updated to reflect final command surface
 

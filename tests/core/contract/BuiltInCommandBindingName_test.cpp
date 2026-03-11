@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <string_view>
 
-#include "internal/BuiltInCommandBindingInternal.hpp"
 #include "internal/BuiltInCommandCatalogInternal.hpp"
 #include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
@@ -33,12 +32,12 @@ void ExpectBindingNameMatchesCatalog()
     ASSERT_NE(descriptor_iter, catalog.end());
     EXPECT_EQ(
         std::string_view{ descriptor_iter->python_binding_name },
-        rg::BuiltInCommandBindingName<CommandType>::value);
+        rg::BuiltInPythonBindingName(CommandType::kCommandId));
 }
 
 } // namespace
 
-TEST(BuiltInCommandBindingNameTest, BindingNamesMatchBuiltInCatalogMetadata)
+TEST(BuiltInCommandBindingNameTest, BindingNamesAreResolvedFromBuiltInCatalog)
 {
     ExpectBindingNameMatchesCatalog<rg::PotentialAnalysisCommand>();
     ExpectBindingNameMatchesCatalog<rg::PotentialDisplayCommand>();

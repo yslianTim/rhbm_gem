@@ -4,7 +4,8 @@
 
 namespace rhbm_gem::bindings {
 
-void BindMapSimulation(py::module_ & module)
+template <>
+void BindCommand<MapSimulationCommand>(py::module_ & module)
 {
     auto map_simulation{ BindBuiltInCommand<MapSimulationCommand>(module) };
     map_simulation

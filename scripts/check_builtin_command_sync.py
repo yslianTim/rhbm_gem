@@ -17,11 +17,6 @@ class CommandEntry:
     python_binding_name: str
 
 
-def command_doc_stem(command_type: str) -> str:
-    stem = command_type.removesuffix("Command")
-    return re.sub(r"(?<!^)([A-Z])", r"-\1", stem).lower()
-
-
 def parse_builtins(path: Path) -> list[CommandEntry]:
     text = path.read_text(encoding="utf-8")
     pattern = re.compile(
@@ -73,21 +68,18 @@ def main() -> int:
     sources_text = (root / "src" / "rhbm_gem_sources.cmake").read_text(encoding="utf-8")
     core_tests_text = (root / "tests" / "cmake" / "core_tests.cmake").read_text(encoding="utf-8")
     bindings_cmake_text = (root / "bindings" / "CMakeLists.txt").read_text(encoding="utf-8")
-    binding_helpers_text = (root / "bindings" / "BindingHelpers.hpp").read_text(encoding="utf-8")
     core_bindings_text = (root / "bindings" / "CoreBindings.cpp").read_text(encoding="utf-8")
 
     errors: list[str] = []
     for entry in builtins:
         command = entry.command_type
         stem = command.removesuffix("Command")
-        bind_fn = f"Bind{stem}"
         binding_unit = f"{stem}Bindings.cpp"
         expected_paths = [
             root / "include" / "rhbm_gem" / "core" / "command" / f"{command}.hpp",
             root / "src" / "core" / "command" / f"{command}.cpp",
             root / "bindings" / binding_unit,
             root / "tests" / "core" / "command" / f"{command}_test.cpp",
-            root / "docs" / "developer" / "commands" / f"{command_doc_stem(command)}.md",
         ]
         for p in expected_paths:
             if not p.exists():
@@ -108,26 +100,15 @@ def main() -> int:
         if binding_unit not in bindings_cmake_text:
             errors.append(f"bindings/CMakeLists.txt missing source entry: {binding_unit}")
 
-        helper_decl = f"void {bind_fn}(py::module_ & module);"
-        if helper_decl not in binding_helpers_text:
-            errors.append(f"BindingHelpers.hpp missing declaration: {helper_decl}")
-
-        bind_call = f"rhbm_gem::bindings::{bind_fn}(module);"
-        if bind_call not in core_bindings_text:
-            errors.append(f"CoreBindings.cpp missing module registration call: {bind_call}")
-
         binding_text = (root / "bindings" / binding_unit).read_text(encoding="utf-8")
         bind_template_ref = f"BindBuiltInCommand<{command}>"
         if bind_template_ref not in binding_text:
             errors.append(f"{binding_unit} missing built-in bind template reference: {bind_template_ref}")
-
-        doc_path = root / "docs" / "developer" / "commands" / f"{command_doc_stem(command)}.md"
-        if doc_path.exists():
-            doc_text = doc_path.read_text(encoding="utf-8")
-            if f"# {command}" not in doc_text:
-                errors.append(f"{doc_path.relative_to(root)} missing title header '# {command}'")
-            if "## Registration Checklist" not in doc_text:
-                errors.append(f"{doc_path.relative_to(root)} missing 'Registration Checklist' section")
+        bind_registration_ref = f"BindCommand<{command}>"
+        if bind_registration_ref not in binding_text:
+            errors.append(
+                f"{binding_unit} missing command registration specialization: {bind_registration_ref}"
+            )
 
     builtins_order = [entry.command_type for entry in builtins]
     builtins_stems = [command.removesuffix("Command") for command in builtins_order]
@@ -135,18 +116,6 @@ def main() -> int:
         catalog_text,
         [f"#include <rhbm_gem/core/command/{command}.hpp>" for command in builtins_order],
         "BuiltInCommandCatalog.cpp include list",
-        errors,
-    )
-    ensure_relative_order(
-        binding_helpers_text,
-        [f"void Bind{stem}(py::module_ & module);" for stem in builtins_stems],
-        "BindingHelpers.hpp declarations",
-        errors,
-    )
-    ensure_relative_order(
-        core_bindings_text,
-        [f"rhbm_gem::bindings::Bind{stem}(module);" for stem in builtins_stems],
-        "CoreBindings.cpp bind calls",
         errors,
     )
     ensure_relative_order(
@@ -161,6 +130,10 @@ def main() -> int:
         "tests/cmake/core_tests.cmake command tests",
         errors,
     )
+    if '#include "internal/BuiltInCommandList.def"' not in core_bindings_text:
+        errors.append("CoreBindings.cpp must include internal/BuiltInCommandList.def")
+    if "BindCommand<rhbm_gem::COMMAND_TYPE>(module);" not in core_bindings_text:
+        errors.append("CoreBindings.cpp must register commands via manifest macro expansion")
 
     if errors:
         print("Built-in command sync check failed:")

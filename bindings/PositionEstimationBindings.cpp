@@ -4,7 +4,8 @@
 
 namespace rhbm_gem::bindings {
 
-void BindPositionEstimation(py::module_ & module)
+template <>
+void BindCommand<PositionEstimationCommand>(py::module_ & module)
 {
     auto position_estimation{ BindBuiltInCommand<PositionEstimationCommand>(module) };
     position_estimation

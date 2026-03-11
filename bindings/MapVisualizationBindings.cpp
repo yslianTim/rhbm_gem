@@ -4,7 +4,8 @@
 
 namespace rhbm_gem::bindings {
 
-void BindMapVisualization(py::module_ & module)
+template <>
+void BindCommand<MapVisualizationCommand>(py::module_ & module)
 {
     auto map_visualization{ BindBuiltInCommand<MapVisualizationCommand>(module) };
     map_visualization

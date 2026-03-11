@@ -31,8 +31,6 @@ class WireTargets:
     catalog_cpp: Path
     source_manifest: Path
     bindings_cmake: Path
-    binding_helpers_hpp: Path
-    core_bindings_cpp: Path
     core_tests_cmake: Path
 
 
@@ -215,14 +213,14 @@ bool {spec.command_type}::ExecuteImpl()
 
 
 def _binding_template(spec: ScaffoldSpec) -> str:
-    bind_fn = f'Bind{spec.command_type.removesuffix("Command")}'
     return f"""#include "BindingHelpers.hpp"
 
 #include <rhbm_gem/core/command/{spec.command_type}.hpp>
 
 namespace rhbm_gem::bindings {{
 
-void {bind_fn}(py::module_ & module)
+template <>
+void BindCommand<{spec.command_type}>(py::module_ & module)
 {{
     auto command{{ BindBuiltInCommand<{spec.command_type}>(module) }};
     command
@@ -259,23 +257,18 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 1. Add `{spec.command_type}` into `src/core/internal/BuiltInCommandList.def`.
 2. Include `{spec.command_type}.hpp` in `src/core/command/BuiltInCommandCatalog.cpp`.
-3. Add source files to `src/rhbm_gem_sources.cmake` and `bindings/CMakeLists.txt`.
-4. Wire binding function in `bindings/BindingHelpers.hpp` and `bindings/CoreBindings.cpp`.
-5. Add tests to `tests/cmake/core_tests.cmake`.
+3. Add source files to `src/rhbm_gem_sources.cmake`, `bindings/CMakeLists.txt`, and `tests/cmake/core_tests.cmake`.
 """
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
     stem = spec.command_type.removesuffix("Command")
-    bind_fn = f"Bind{stem}"
     binding_unit = f"{stem}Bindings.cpp"
     wire = WireTargets(
         builtins_def=root / "src" / "core" / "internal" / "BuiltInCommandList.def",
         catalog_cpp=root / "src" / "core" / "command" / "BuiltInCommandCatalog.cpp",
         source_manifest=root / "src" / "rhbm_gem_sources.cmake",
         bindings_cmake=root / "bindings" / "CMakeLists.txt",
-        binding_helpers_hpp=root / "bindings" / "BindingHelpers.hpp",
-        core_bindings_cpp=root / "bindings" / "CoreBindings.cpp",
         core_tests_cmake=root / "tests" / "cmake" / "core_tests.cmake",
     )
 
@@ -318,28 +311,6 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         dry_run,
         strict,
         "Ensure set(BINDINGS_SOURCES ...) exists and remains a standard multiline set block.",
-    )
-    _update_file(
-        wire.binding_helpers_hpp,
-        lambda text: _insert_after_anchor_once(
-            text,
-            "void BindHRLModelTest(py::module_ & module);\n",
-            f"void {bind_fn}(py::module_ & module);\n",
-        ),
-        dry_run,
-        strict,
-        "Ensure BindHRLModelTest declaration exists or update scaffold anchor to current declaration order.",
-    )
-    _update_file(
-        wire.core_bindings_cpp,
-        lambda text: _insert_after_anchor_once(
-            text,
-            "    rhbm_gem::bindings::BindHRLModelTest(module);\n",
-            f"    rhbm_gem::bindings::{bind_fn}(module);\n",
-        ),
-        dry_run,
-        strict,
-        "Ensure BindHRLModelTest(module) call exists or update scaffold anchor to current call order.",
     )
     _update_file(
         wire.core_tests_cmake,
@@ -425,7 +396,7 @@ def main() -> int:
     if args.wire:
         print("Registration/manifests were wired automatically.")
     else:
-        print("Next: wire BuiltInCommandList.def, CMake manifests, binding registration, and tests/cmake.")
+        print("Next: wire BuiltInCommandList.def and CMake manifests, then implement binding specialization.")
     return 0
 
 

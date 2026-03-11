@@ -13,7 +13,7 @@
   - add `--wire` to also update built-in registration + manifest files.
   - add `--wire --strict` to fail-fast on anchor drift with repair hints.
 - `scripts/check_builtin_command_sync.py`: validate `BuiltInCommandList.def` sync with
-  headers/sources/bindings/tests/CMake manifests, docs placeholders, and order consistency.
+  headers/sources/bindings/tests/CMake manifests and order consistency.
 - `scripts/run_clang_format_check.sh`: check formatting for painter/parser directories (check-only).
 - `scripts/run_clang_tidy_check.sh`: run clang-tidy for painter/parser source files (check-only),
   and optionally compare warning counts with `scripts/clang_tidy_baseline.json`.

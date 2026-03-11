@@ -4,7 +4,8 @@
 
 namespace rhbm_gem::bindings {
 
-void BindPotentialDisplay(py::module_ & module)
+template <>
+void BindCommand<PotentialDisplayCommand>(py::module_ & module)
 {
     auto potential_display{ BindBuiltInCommand<PotentialDisplayCommand>(module) };
     potential_display

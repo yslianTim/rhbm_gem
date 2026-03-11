@@ -93,40 +93,24 @@ TEST(CommandCommonOptionsTest, BuiltInCommandCommonOptionPoliciesMatchExpectedMe
     EXPECT_EQ(model_test->python_binding_name, "HRLModelTestCommand");
 }
 
-TEST(CommandCommonOptionsTest, BuiltInProfilesStayInSyncWithSharedOptionSurface)
+TEST(CommandCommonOptionsTest, BuiltInCommonOptionMasksStayInSyncWithSharedOptionSurface)
 {
+    const auto file_workflow_mask{
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow)
+    };
+    const auto database_workflow_mask{
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::DatabaseWorkflow)
+    };
+
     for (const auto & descriptor : rg::BuiltInCommandCatalog())
     {
-        const auto profile{ rg::InferCommonOptionProfile(descriptor.common_options) };
         if (rg::UsesDatabaseAtRuntime(descriptor.common_options))
         {
-            EXPECT_EQ(profile, rg::CommonOptionProfile::DatabaseWorkflow) << descriptor.name;
+            EXPECT_EQ(descriptor.common_options, database_workflow_mask) << descriptor.name;
         }
         else
         {
-            EXPECT_EQ(profile, rg::CommonOptionProfile::FileWorkflow) << descriptor.name;
+            EXPECT_EQ(descriptor.common_options, file_workflow_mask) << descriptor.name;
         }
     }
-
-    EXPECT_EQ(
-        rg::PotentialAnalysisCommand::kCommonOptionProfile,
-        rg::CommonOptionProfile::DatabaseWorkflow);
-    EXPECT_EQ(
-        rg::PotentialDisplayCommand::kCommonOptionProfile,
-        rg::CommonOptionProfile::DatabaseWorkflow);
-    EXPECT_EQ(
-        rg::ResultDumpCommand::kCommonOptionProfile,
-        rg::CommonOptionProfile::DatabaseWorkflow);
-    EXPECT_EQ(
-        rg::MapSimulationCommand::kCommonOptionProfile,
-        rg::CommonOptionProfile::FileWorkflow);
-    EXPECT_EQ(
-        rg::MapVisualizationCommand::kCommonOptionProfile,
-        rg::CommonOptionProfile::FileWorkflow);
-    EXPECT_EQ(
-        rg::PositionEstimationCommand::kCommonOptionProfile,
-        rg::CommonOptionProfile::FileWorkflow);
-    EXPECT_EQ(
-        rg::HRLModelTestCommand::kCommonOptionProfile,
-        rg::CommonOptionProfile::FileWorkflow);
 }

@@ -4,7 +4,8 @@
 
 namespace rhbm_gem::bindings {
 
-void BindHRLModelTest(py::module_ & module)
+template <>
+void BindCommand<HRLModelTestCommand>(py::module_ & module)
 {
     auto model_test{ BindBuiltInCommand<HRLModelTestCommand>(module) };
     model_test

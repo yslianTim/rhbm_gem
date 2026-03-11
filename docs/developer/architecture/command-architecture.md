@@ -40,7 +40,7 @@ Built-in command definitions are centralized in:
 This list is consumed by:
 
 - `src/core/command/BuiltInCommandCatalog.cpp` to build `BuiltInCommandCatalog()` for CLI registration and metadata checks
-- `src/core/internal/BuiltInCommandBindingInternal.hpp` to map `CommandType -> python binding name`
+- `bindings/CoreBindings.cpp` to register built-in Python command binders via manifest expansion
 
 `CommandDescriptor` fields (defined in `src/core/internal/BuiltInCommandCatalogInternal.hpp`):
 
@@ -177,7 +177,7 @@ Validation phases:
 | --- | --- | --- |
 | `Parse` | setter callbacks | single-field checks, enum/path validation, normalization |
 | `Prepare` | `ValidateOptions()` + preflight | cross-field checks, mode-dependent checks, directory creation failures |
-| `Runtime` | reserved API phase | runtime failures currently surface through `Execute()` failure + logs |
+| `Runtime` | deprecated internal placeholder retained for API compatibility | runtime failures currently surface through `Execute()` failure + logs |
 
 Prepared-state invalidation rule:
 
@@ -244,7 +244,8 @@ with module assembly in `bindings/CoreBindings.cpp`.
 
 Current binding model:
 
-- built-in membership/name mapping comes from `BuiltInCommandList.def` + `BuiltInCommandBindingInternal.hpp`
+- built-in membership/name mapping comes from `BuiltInCommandList.def` + `BuiltInCommandCatalog()`
+- module registration is manifest-driven in `bindings/CoreBindings.cpp`
 - method exposure is explicit in `bindings/*Bindings.cpp` (not auto-generated)
 - Python execution path calls the same `Execute()` / `PrepareForExecution()` contract as C++
 
@@ -279,7 +280,7 @@ When adding or significantly modifying a built-in command, update the same chang
 2. command implementation under `src/core/command/` (and `src/core/workflow/` when introducing/extracting workflows)
 3. built-in list entry in `src/core/internal/BuiltInCommandList.def`
 4. metadata/registration behavior (if needed) in `BuiltInCommandCatalog*`
-5. Python binding exposure in `bindings/*Bindings.cpp` (and wire module init in `bindings/CoreBindings.cpp` if adding a new binding unit)
+5. Python binding exposure in `bindings/*Bindings.cpp` (module init wiring is manifest-driven from `BuiltInCommandList.def`)
 6. tests (contract + command-specific)
 7. this architecture document and related developer docs
 
@@ -306,7 +307,6 @@ Core command architecture:
 - `src/core/internal/BuiltInCommandList.def`
 - `src/core/internal/BuiltInCommandCatalogInternal.hpp`
 - `src/core/command/BuiltInCommandCatalog.cpp`
-- `src/core/internal/BuiltInCommandBindingInternal.hpp`
 - `include/rhbm_gem/core/command/CommandOptionBinding.hpp`
 - `src/core/internal/CommandDataLoaderInternal.hpp`
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`

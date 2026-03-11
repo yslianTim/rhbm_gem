@@ -54,4 +54,18 @@ const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
     return catalog;
 }
 
+std::string_view BuiltInPythonBindingName(CommandId id)
+{
+    for (const auto & descriptor : BuiltInCommandCatalog())
+    {
+        if (descriptor.id == id)
+        {
+            return descriptor.python_binding_name;
+        }
+    }
+
+    throw std::runtime_error(
+        "BuiltInPythonBindingName lookup failed: command id not found.");
+}
+
 } // namespace rhbm_gem

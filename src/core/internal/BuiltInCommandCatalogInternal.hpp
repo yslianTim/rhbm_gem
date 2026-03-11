@@ -23,6 +23,7 @@ struct CommandDescriptor
 };
 
 const std::vector<CommandDescriptor> & BuiltInCommandCatalog();
+std::string_view BuiltInPythonBindingName(CommandId id);
 
 constexpr bool UsesDatabaseAtRuntime(CommonOptionMask common_options)
 {

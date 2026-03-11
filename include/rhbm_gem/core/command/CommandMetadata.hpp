@@ -72,11 +72,4 @@ constexpr CommonOptionMask CommonOptionMaskForProfile(CommonOptionProfile profil
     }
 }
 
-constexpr CommonOptionProfile InferCommonOptionProfile(CommonOptionMask mask)
-{
-    return HasCommonOption(mask, CommonOption::Database)
-        ? CommonOptionProfile::DatabaseWorkflow
-        : CommonOptionProfile::FileWorkflow;
-}
-
 } // namespace rhbm_gem

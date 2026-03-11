@@ -4,7 +4,8 @@
 
 namespace rhbm_gem::bindings {
 
-void BindResultDump(py::module_ & module)
+template <>
+void BindCommand<ResultDumpCommand>(py::module_ & module)
 {
     auto result_dump{ BindBuiltInCommand<ResultDumpCommand>(module) };
     result_dump

@@ -9,7 +9,7 @@
 
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
-#include "internal/BuiltInCommandBindingInternal.hpp"
+#include "internal/BuiltInCommandCatalogInternal.hpp"
 
 namespace py = pybind11;
 
@@ -28,7 +28,7 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
 template <typename CommandType>
 py::class_<CommandType, std::shared_ptr<CommandType>> BindBuiltInCommand(py::module_ & module)
 {
-    constexpr auto binding_name{ BuiltInCommandBindingName<CommandType>::value };
+    const auto binding_name{ BuiltInPythonBindingName(CommandType::kCommandId) };
     return py::class_<CommandType, std::shared_ptr<CommandType>>(
         module,
         std::string(binding_name).c_str());
@@ -56,13 +56,9 @@ void BindCommandDiagnostics(py::class_<CommandType, HolderType> & py_command)
             });
 }
 
+template <typename CommandType>
+void BindCommand(py::module_ & module);
+
 void BindCommonTypes(py::module_ & module);
-void BindPotentialAnalysis(py::module_ & module);
-void BindPotentialDisplay(py::module_ & module);
-void BindResultDump(py::module_ & module);
-void BindMapSimulation(py::module_ & module);
-void BindMapVisualization(py::module_ & module);
-void BindPositionEstimation(py::module_ & module);
-void BindHRLModelTest(py::module_ & module);
 
 } // namespace rhbm_gem::bindings
