@@ -3,6 +3,7 @@
 
 By default this script only creates command/binding/test/doc skeleton files.
 When ``--wire`` is set, it also updates registration/manifests in-place.
+Use ``--wire --strict`` to fail-fast on anchor drift with repair hints.
 """
 
 from __future__ import annotations
@@ -121,9 +122,19 @@ def _update_file(
     path: Path,
     transform: Callable[[str], tuple[str, bool]],
     dry_run: bool,
+    strict: bool = False,
+    suggestion: str = "",
 ) -> bool:
     original = _read_text(path)
-    updated, changed = transform(original)
+    try:
+        updated, changed = transform(original)
+    except RuntimeError as exc:
+        hint = f" Suggested fix: {suggestion}" if suggestion else ""
+        message = f"{path}: {exc}.{hint}"
+        if strict:
+            raise RuntimeError(message) from exc
+        print(f"[warn] {message}")
+        return False
     if changed:
         _write_text(path, updated, dry_run)
     else:
@@ -254,7 +265,7 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 """
 
 
-def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool) -> None:
+def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
     stem = spec.command_type.removesuffix("Command")
     bind_fn = f"Bind{stem}"
     binding_unit = f"{stem}Bindings.cpp"
@@ -272,6 +283,8 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool) -> N
         wire.builtins_def,
         lambda text: _append_builtins_entry(text, spec),
         dry_run,
+        strict,
+        "Append a new RHBM_GEM_BUILTIN_COMMAND(...) block to BuiltInCommandList.def.",
     )
     _update_file(
         wire.catalog_cpp,
@@ -281,6 +294,8 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool) -> N
             f"#include <rhbm_gem/core/command/{spec.command_type}.hpp>\n",
         ),
         dry_run,
+        strict,
+        "Ensure ResultDumpCommand include exists or update scaffold anchor in scripts/command_scaffold.py.",
     )
     _update_file(
         wire.source_manifest,
@@ -290,6 +305,8 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool) -> N
             f"core/command/{spec.command_type}.cpp",
         ),
         dry_run,
+        strict,
+        "Ensure set(RHBM_GEM_LIBRARY_SOURCES ...) exists and remains a standard multiline set block.",
     )
     _update_file(
         wire.bindings_cmake,
@@ -299,6 +316,8 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool) -> N
             binding_unit,
         ),
         dry_run,
+        strict,
+        "Ensure set(BINDINGS_SOURCES ...) exists and remains a standard multiline set block.",
     )
     _update_file(
         wire.binding_helpers_hpp,
@@ -308,6 +327,8 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool) -> N
             f"void {bind_fn}(py::module_ & module);\n",
         ),
         dry_run,
+        strict,
+        "Ensure BindHRLModelTest declaration exists or update scaffold anchor to current declaration order.",
     )
     _update_file(
         wire.core_bindings_cpp,
@@ -317,6 +338,8 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool) -> N
             f"    rhbm_gem::bindings::{bind_fn}(module);\n",
         ),
         dry_run,
+        strict,
+        "Ensure BindHRLModelTest(module) call exists or update scaffold anchor to current call order.",
     )
     _update_file(
         wire.core_tests_cmake,
@@ -326,6 +349,8 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool) -> N
             f"core/command/{spec.command_type}_test.cpp",
         ),
         dry_run,
+        strict,
+        "Ensure set(CORE_COMMAND_TEST_SOURCES ...) exists and remains a standard multiline set block.",
     )
 
 
@@ -365,7 +390,17 @@ def main() -> int:
             "(BuiltInCommandList.def, CMake lists, bindings, and core test list)."
         ),
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "Only valid with --wire. Fail-fast when a wiring anchor drifts, "
+            "and print a concrete repair hint."
+        ),
+    )
     args = parser.parse_args()
+    if args.strict and not args.wire:
+        parser.error("--strict requires --wire.")
 
     root = Path(__file__).resolve().parents[1]
     spec = build_spec(args)
@@ -384,7 +419,7 @@ def main() -> int:
         _write_new(path, content, args.dry_run)
 
     if args.wire:
-        _wire_registration_files(root, spec, args.dry_run)
+        _wire_registration_files(root, spec, args.dry_run, args.strict)
 
     print("\nScaffold complete.")
     if args.wire:

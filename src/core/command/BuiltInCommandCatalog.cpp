@@ -1,12 +1,12 @@
 #include "internal/BuiltInCommandCatalogInternal.hpp"
 
-#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
-#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
-#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
-#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 #include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
+#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
+#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
+#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
 #include <rhbm_gem/data/io/DataIoServices.hpp>
 
 #include <stdexcept>

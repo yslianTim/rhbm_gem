@@ -66,6 +66,14 @@ python3 scripts/command_scaffold.py --name Example --profile FileWorkflow --wire
 - `bindings/CoreBindings.cpp`
 - `tests/cmake/core_tests.cmake`
 
+Strict wiring mode (recommended in CI/local guard runs):
+
+```bash
+python3 scripts/command_scaffold.py --name Example --profile FileWorkflow --wire --strict
+```
+
+`--wire --strict` will fail-fast when anchor/set structure drift is detected and print repair hints.
+
 ## 3. Implement the command type
 
 Standard command shape:

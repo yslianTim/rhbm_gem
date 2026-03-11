@@ -6,8 +6,10 @@ set(RHBM_GEM_LIBRARY_SOURCES
     core/command/CommandBase.cpp
     core/painter/ComparisonPainter.cpp
     core/workflow/DataObjectWorkflowOps.cpp
+    core/painter/DemoPainterAdvancedRender.cpp
     core/painter/DemoPainterRendering.cpp
     core/painter/DemoPainterWorkflow.cpp
+    core/painter/GausPainterComponentRender.cpp
     core/painter/GausPainterRendering.cpp
     core/painter/GausPainterFitting.cpp
     core/painter/PotentialPlotBuilder.cpp
@@ -18,6 +20,7 @@ set(RHBM_GEM_LIBRARY_SOURCES
     core/command/MapSampling.cpp
     core/command/MapSimulationCommand.cpp
     core/command/MapVisualizationCommand.cpp
+    core/painter/ModelPainterMapValueRender.cpp
     core/painter/ModelPainterRender.cpp
     core/painter/ModelPainterAnnotation.cpp
     core/painter/ModelPainterStyle.cpp
@@ -46,6 +49,7 @@ set(RHBM_GEM_LIBRARY_SOURCES
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp
     data/io/file/CifFormatBondConstruction.cpp
+    data/io/file/CifFormatCategoryLoaders.cpp
     data/io/file/CifFormatOrchestration.cpp
     data/io/file/CifFormatWriteBlock.cpp
     data/io/file/ICifCategoryParser.cpp

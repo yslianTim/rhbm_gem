@@ -6,13 +6,13 @@ set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandScalarValidationHelper_test.cpp
     core/command/CommandValidationIssue_test.cpp
     core/command/GuiCommandExecutor_test.cpp
-    core/command/HRLModelTestCommand_test.cpp
-    core/command/MapSimulationCommand_test.cpp
-    core/command/MapVisualizationCommand_test.cpp
-    core/command/PositionEstimationCommand_test.cpp
     core/command/PotentialAnalysisCommand_test.cpp
     core/command/PotentialDisplayCommand_test.cpp
     core/command/ResultDumpCommand_test.cpp
+    core/command/MapSimulationCommand_test.cpp
+    core/command/MapVisualizationCommand_test.cpp
+    core/command/PositionEstimationCommand_test.cpp
+    core/command/HRLModelTestCommand_test.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)

@@ -1,13 +1,13 @@
 set(BINDINGS_SOURCES
     CommonBindings.cpp
-    HRLModelTestBindings.cpp
     CoreBindings.cpp
-    MapSimulationBindings.cpp
-    MapVisualizationBindings.cpp
-    PositionEstimationBindings.cpp
     PotentialAnalysisBindings.cpp
     PotentialDisplayBindings.cpp
     ResultDumpBindings.cpp
+    MapSimulationBindings.cpp
+    MapVisualizationBindings.cpp
+    PositionEstimationBindings.cpp
+    HRLModelTestBindings.cpp
 )
 
 set(BINDINGS_MODULE_TARGET rhbm_gem_module)

@@ -47,7 +47,10 @@ jobs:
         run: bash scripts/run_clang_format_check.sh
 
       - name: clang-tidy check (painter + parser dirs)
-        run: bash scripts/run_clang_tidy_check.sh build
+        run: >
+          bash scripts/run_clang_tidy_check.sh
+          build
+          --baseline scripts/clang_tidy_baseline.json
 
   nightly-full:
     if: github.event_name == 'schedule'
@@ -79,7 +82,7 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build
+          sudo apt-get install -y ninja-build clang-tidy
 
       - name: Configure (${{ matrix.name }})
         run: |
@@ -94,10 +97,23 @@ jobs:
             -DRHBM_GEM_LEGACY_V1_SUPPORT=${{ matrix.legacy }}
 
       - name: Build (${{ matrix.name }})
+        id: build_step
         run: cmake --build build-${{ matrix.name }} --target tests_all lint_repo -j2
 
       - name: Built-in command sync (${{ matrix.name }})
         run: python3 scripts/check_builtin_command_sync.py
 
+      - name: clang-tidy baseline check (${{ matrix.name }})
+        run: >
+          bash scripts/run_clang_tidy_check.sh
+          build-${{ matrix.name }}
+          --baseline scripts/clang_tidy_baseline.json
+
       - name: Run full tests (${{ matrix.name }})
-        run: ctest --test-dir build-${{ matrix.name }} --output-on-failure -j2
+        run: bash scripts/run_ctest_with_classification.sh build-${{ matrix.name }} -j2
+
+      - name: Failure classification (build)
+        if: failure() && steps.build_step.outcome == 'failure'
+        run: |
+          echo "Failure category: build"
+          exit 1

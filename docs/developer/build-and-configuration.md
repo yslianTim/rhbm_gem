@@ -118,10 +118,22 @@ Clang-tidy check for painter/parser directories:
 bash scripts/run_clang_tidy_check.sh build
 ```
 
+Clang-tidy baseline guard (no-regression policy):
+
+```bash
+bash scripts/run_clang_tidy_check.sh build --baseline scripts/clang_tidy_baseline.json
+```
+
+CTest with failure classification output:
+
+```bash
+bash scripts/run_ctest_with_classification.sh build -j8
+```
+
 CI layout:
 
 1. Pull request / push: fast gate (`lint_repo` + command sync + `core/data/integration` tests + format/tidy checks)
-2. Nightly schedule: full test run with feature-mode matrix (`OPENMP` / `ROOT` / `LEGACY`)
+2. Nightly schedule: full test run with feature-mode matrix (`OPENMP` / `ROOT` / `LEGACY`) + failure classification (`build` / `contract` / `runtime`)
 
 ## Feature Mode Checks (`AUTO` / `OFF` / `ON`)
 
