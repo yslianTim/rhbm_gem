@@ -6,7 +6,7 @@
 
 namespace rg = rhbm_gem;
 
-TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesValidationErrorAtPrepare)
+TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesParseValidationError)
 {
     rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
     command.SetAtomSerialID(0);
@@ -21,7 +21,7 @@ TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesValidationErrorAtPrepa
         nullptr);
 }
 
-TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesValidationErrorAtPrepare)
+TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesParseValidationError)
 {
     rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
     command.SetWindowSize(0.0);

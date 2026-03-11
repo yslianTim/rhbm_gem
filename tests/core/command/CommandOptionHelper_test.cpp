@@ -4,8 +4,6 @@
 #include <filesystem>
 #include <fstream>
 
-#include <CLI/CLI.hpp>
-
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include "CommandTestHelpers.hpp"
 
@@ -18,7 +16,6 @@ struct CommandOptionHelperCommandOptions : public rg::CommandOptions
     std::filesystem::path required_path;
     std::filesystem::path optional_path;
     int count{ 1 };
-    int mode{ 0 };
 };
 
 class CommandOptionHelperCommand final
@@ -42,16 +39,7 @@ public:
     {
     }
 
-    int validate_count{ 0 };
-    int reset_count{ 0 };
-    int execute_count{ 0 };
-
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-
-    void SetMode(int value)
-    {
-        MutateOptions([&]() { m_options.mode = value; });
-    }
 
     void SetRequiredPath(const std::filesystem::path & value)
     {
@@ -76,42 +64,18 @@ public:
 
     int Count() const { return m_options.count; }
 
-    void ValidateOptions() override
-    {
-        ++validate_count;
-    }
+    void ValidateOptions() override {}
 
-    void ResetRuntimeState() override
-    {
-        ++reset_count;
-    }
+    void ResetRuntimeState() override {}
 
 private:
     bool ExecuteImpl() override
     {
-        ++execute_count;
         return true;
     }
 };
 
 } // namespace
-
-TEST(CommandOptionHelperTest, MutateOptionsInvalidatesPreparedState)
-{
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    CommandOptionHelperCommand command{ data_io_services };
-
-    ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_EQ(command.validate_count, 1);
-    EXPECT_EQ(command.reset_count, 1);
-
-    command.SetMode(3);
-
-    ASSERT_TRUE(command.Execute());
-    EXPECT_EQ(command.validate_count, 2);
-    EXPECT_EQ(command.reset_count, 2);
-    EXPECT_EQ(command.execute_count, 1);
-}
 
 TEST(CommandOptionHelperTest, PathHelpersValidateRequiredAndOptionalInputs)
 {

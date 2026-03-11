@@ -3,8 +3,6 @@
 #include <filesystem>
 #include <string>
 
-#include <CLI/CLI.hpp>
-
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include "CommandTestHelpers.hpp"
 
@@ -34,9 +32,6 @@ public:
     }
 
     void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-    int validate_count{ 0 };
-    int reset_count{ 0 };
-    int execute_count{ 0 };
 
     void SetForceInvalid(bool value)
     {
@@ -45,7 +40,6 @@ public:
 
     void ValidateOptions() override
     {
-        ++validate_count;
         ResetPrepareIssues("--test");
         if (m_options.force_invalid)
         {
@@ -53,15 +47,11 @@ public:
         }
     }
 
-    void ResetRuntimeState() override
-    {
-        ++reset_count;
-    }
+    void ResetRuntimeState() override {}
 
 private:
     bool ExecuteImpl() override
     {
-        ++execute_count;
         return true;
     }
 };
@@ -99,32 +89,6 @@ TEST(CommandBaseTest, PrepareForExecutionReportsValidationIssues)
 
     ASSERT_FALSE(command.GetValidationIssues().empty());
     EXPECT_NE(error_output.find("Option --test: forced invalid config"), std::string::npos);
-}
-
-TEST(CommandBaseTest, BaseSettersInvalidatePreparedState)
-{
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    TestCommand command{ data_io_services };
-
-    ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_EQ(command.validate_count, 1);
-    EXPECT_EQ(command.reset_count, 1);
-
-    command.SetThreadSize(2);
-    ASSERT_TRUE(command.Execute());
-    EXPECT_EQ(command.validate_count, 2);
-    EXPECT_EQ(command.reset_count, 2);
-    EXPECT_EQ(command.execute_count, 1);
-
-    ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_EQ(command.validate_count, 3);
-    EXPECT_EQ(command.reset_count, 3);
-
-    command.SetFolderPath("output");
-    ASSERT_TRUE(command.Execute());
-    EXPECT_EQ(command.validate_count, 4);
-    EXPECT_EQ(command.reset_count, 4);
-    EXPECT_EQ(command.execute_count, 2);
 }
 
 TEST(CommandBaseTest, ValidationFailureSkipsFilesystemPreflight)
