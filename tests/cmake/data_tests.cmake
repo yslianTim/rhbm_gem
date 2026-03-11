@@ -2,6 +2,7 @@ add_rhbm_gtest_target(rhbm_tests_data_io
     DOMAIN data
     INTENTS io contract
     SOURCES
+        data/contract/PublicHeaderSurface_test.cpp
         data/io/DataObjectDispatchIterationArchitecture_test.cpp
         data/io/DataObjectManager_test.cpp
         data/io/MapFileIO_test.cpp

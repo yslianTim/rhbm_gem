@@ -1,57 +1,166 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
 #include "internal/BuiltInCommandCatalogInternal.hpp"
+#include <rhbm_gem/core/command/CommandBase.hpp>
+#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
+#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
+#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
+#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
+#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
+#include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
+#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+
+#include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
-TEST(BuiltInCommandCatalogTest, BuiltInOrderIsStable)
+namespace {
+
+struct ExpectedBuiltInCommandMetadata
+{
+    rg::CommandId id;
+    std::string_view name;
+    std::string_view python_binding_name;
+    rg::CommonOptionMask common_options;
+    bool uses_database;
+};
+
+constexpr std::array<ExpectedBuiltInCommandMetadata, 7> kExpectedBuiltInMetadata{{
+    {
+        rg::CommandId::PotentialAnalysis,
+        "potential_analysis",
+        "PotentialAnalysisCommand",
+        rg::PotentialAnalysisCommand::kCommonOptions,
+        true
+    },
+    {
+        rg::CommandId::PotentialDisplay,
+        "potential_display",
+        "PotentialDisplayCommand",
+        rg::PotentialDisplayCommand::kCommonOptions,
+        true
+    },
+    {
+        rg::CommandId::ResultDump,
+        "result_dump",
+        "ResultDumpCommand",
+        rg::ResultDumpCommand::kCommonOptions,
+        true
+    },
+    {
+        rg::CommandId::MapSimulation,
+        "map_simulation",
+        "MapSimulationCommand",
+        rg::MapSimulationCommand::kCommonOptions,
+        false
+    },
+    {
+        rg::CommandId::MapVisualization,
+        "map_visualization",
+        "MapVisualizationCommand",
+        rg::MapVisualizationCommand::kCommonOptions,
+        false
+    },
+    {
+        rg::CommandId::PositionEstimation,
+        "position_estimation",
+        "PositionEstimationCommand",
+        rg::PositionEstimationCommand::kCommonOptions,
+        false
+    },
+    {
+        rg::CommandId::ModelTest,
+        "model_test",
+        "HRLModelTestCommand",
+        rg::HRLModelTestCommand::kCommonOptions,
+        false
+    }
+}};
+
+const rg::CommandDescriptor * FindDescriptor(rg::CommandId command_id)
 {
     const auto & catalog{ rg::BuiltInCommandCatalog() };
-    const std::vector<std::string> expected_names{
-        "potential_analysis",
-        "potential_display",
-        "result_dump",
-        "map_simulation",
-        "map_visualization",
-        "position_estimation",
-        "model_test"
+    const auto iter{
+        std::find_if(
+            catalog.begin(),
+            catalog.end(),
+            [command_id](const rg::CommandDescriptor & descriptor)
+            {
+                return descriptor.id == command_id;
+            })
     };
-
-    ASSERT_EQ(catalog.size(), expected_names.size());
-    for (std::size_t index = 0; index < expected_names.size(); ++index)
-    {
-        EXPECT_EQ(catalog[index].name, expected_names[index]);
-    }
+    return iter == catalog.end() ? nullptr : &(*iter);
 }
 
-TEST(BuiltInCommandCatalogTest, CommandIdsAndNamesAreUnique)
+template <typename CommandType>
+void ExpectFactoryConstructs(rg::CommandId command_id)
+{
+    const auto * descriptor{ FindDescriptor(command_id) };
+    ASSERT_NE(descriptor, nullptr) << static_cast<int>(command_id);
+    ASSERT_NE(descriptor->factory, nullptr) << descriptor->name;
+    EXPECT_EQ(descriptor->id, CommandType::kCommandId) << descriptor->name;
+    EXPECT_EQ(descriptor->common_options, CommandType::kCommonOptions) << descriptor->name;
+
+    const auto data_io_services{ command_test::BuildDataIoServices() };
+    auto command{ descriptor->factory(data_io_services) };
+    ASSERT_NE(command, nullptr) << descriptor->name;
+    EXPECT_NE(dynamic_cast<CommandType *>(command.get()), nullptr) << descriptor->name;
+}
+
+} // namespace
+
+TEST(BuiltInCommandCatalogTest, BuiltInCatalogMatchesExpectedMetadataAndOrder)
 {
     const auto & catalog{ rg::BuiltInCommandCatalog() };
+    ASSERT_EQ(catalog.size(), kExpectedBuiltInMetadata.size());
+
     std::unordered_set<int> unique_ids;
     std::unordered_set<std::string> unique_names;
-
-    for (const auto & descriptor : catalog)
+    std::unordered_set<std::string> unique_binding_names;
+    for (std::size_t index = 0; index < kExpectedBuiltInMetadata.size(); ++index)
     {
+        const auto & descriptor{ catalog[index] };
+        const auto & expected{ kExpectedBuiltInMetadata[index] };
+
+        EXPECT_EQ(descriptor.id, expected.id);
+        EXPECT_EQ(std::string_view{ descriptor.name }, expected.name);
+        EXPECT_EQ(std::string_view{ descriptor.python_binding_name }, expected.python_binding_name);
+        EXPECT_EQ(descriptor.common_options, expected.common_options);
+        EXPECT_EQ(rg::UsesDatabaseAtRuntime(descriptor.common_options), expected.uses_database);
+        EXPECT_EQ(
+            rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Database),
+            expected.uses_database);
+        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Threading));
+        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Verbose));
+        EXPECT_TRUE(rg::UsesOutputFolder(descriptor.common_options));
+        EXPECT_EQ(
+            rg::BuiltInPythonBindingName(descriptor.id),
+            std::string_view{ descriptor.python_binding_name });
+
         unique_ids.insert(static_cast<int>(descriptor.id));
         unique_names.emplace(descriptor.name);
+        unique_binding_names.emplace(descriptor.python_binding_name);
     }
 
     EXPECT_EQ(unique_ids.size(), catalog.size());
     EXPECT_EQ(unique_names.size(), catalog.size());
+    EXPECT_EQ(unique_binding_names.size(), catalog.size());
 }
 
-TEST(BuiltInCommandCatalogTest, AllBuiltInCommandsProvidePythonBindingNames)
+TEST(BuiltInCommandCatalogTest, BuiltInFactoriesConstructCommandsWithMatchingMetadata)
 {
-    std::unordered_set<std::string> unique_binding_names;
-    for (const auto & descriptor : rg::BuiltInCommandCatalog())
-    {
-        EXPECT_FALSE(descriptor.python_binding_name.empty()) << descriptor.name;
-        unique_binding_names.emplace(descriptor.python_binding_name);
-    }
-
-    EXPECT_EQ(unique_binding_names.size(), rg::BuiltInCommandCatalog().size());
+    ExpectFactoryConstructs<rg::PotentialAnalysisCommand>(rg::CommandId::PotentialAnalysis);
+    ExpectFactoryConstructs<rg::PotentialDisplayCommand>(rg::CommandId::PotentialDisplay);
+    ExpectFactoryConstructs<rg::ResultDumpCommand>(rg::CommandId::ResultDump);
+    ExpectFactoryConstructs<rg::MapSimulationCommand>(rg::CommandId::MapSimulation);
+    ExpectFactoryConstructs<rg::MapVisualizationCommand>(rg::CommandId::MapVisualization);
+    ExpectFactoryConstructs<rg::PositionEstimationCommand>(rg::CommandId::PositionEstimation);
+    ExpectFactoryConstructs<rg::HRLModelTestCommand>(rg::CommandId::ModelTest);
 }
