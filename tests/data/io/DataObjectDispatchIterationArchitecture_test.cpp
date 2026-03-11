@@ -223,26 +223,25 @@ TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectReject
     EXPECT_THROW(const_manager.ForEachDataObject(const_callback), std::runtime_error);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesProducesSamplingOutput) {
-    auto map{MakeMapObject()};
-    SinglePointSampler sampler;
-    const auto sampling_data{
-        rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
-
-    ASSERT_EQ(sampling_data.size(), 1);
-    EXPECT_FLOAT_EQ(std::get<0>(sampling_data.front()), 0.0f);
-}
-
-TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesIsStatelessAcrossCalls) {
+TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesReturnsExpectedPointValueAndIsDeterministic) {
     auto map{MakeMapObject()};
     SinglePointSampler sampler;
     const auto first{
         rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
     const auto second{
         rg::SampleMapValues(map, sampler, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f})};
+    const auto first_again{
+        rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
 
-    EXPECT_EQ(first.size(), 1);
-    EXPECT_EQ(second.size(), 1);
+    ASSERT_EQ(first.size(), 1);
+    ASSERT_EQ(second.size(), 1);
+    ASSERT_EQ(first_again.size(), 1);
+
+    EXPECT_FLOAT_EQ(std::get<0>(first.front()), 0.0f);
+    EXPECT_FLOAT_EQ(std::get<0>(second.front()), 0.0f);
+    EXPECT_FLOAT_EQ(std::get<1>(first.front()), map.GetMapValue(0, 0, 0));
+    EXPECT_FLOAT_EQ(std::get<1>(second.front()), map.GetMapValue(1, 1, 1));
+    EXPECT_FLOAT_EQ(std::get<1>(first_again.front()), std::get<1>(first.front()));
 }
 
 TEST(DataObjectDispatchIterationArchitectureTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType) {

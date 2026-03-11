@@ -38,12 +38,6 @@ inline std::shared_ptr<const rg::FileFormatRegistry> BuildDefaultFileFormatRegis
     return std::make_shared<rg::FileFormatRegistry>(rg::BuildDefaultFileFormatRegistry());
 }
 
-inline std::shared_ptr<const rg::FileProcessFactoryResolver> BuildDefaultFileResolver(
-    const std::shared_ptr<const rg::FileFormatRegistry> & file_format_registry)
-{
-    return std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry);
-}
-
 inline std::shared_ptr<const rg::DataObjectDAOFactoryRegistry> BuildDefaultDaoFactoryRegistry()
 {
     auto registry{ std::make_shared<rg::DataObjectDAOFactoryRegistry>() };

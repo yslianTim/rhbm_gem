@@ -109,35 +109,11 @@ TEST(DataObjectIOContractTest, UppercaseExtensionsDispatchCorrectly)
     EXPECT_EQ(reader.GetGridSizeArray(), map_object.GetGridSize());
 }
 
-TEST(DataObjectIOContractTest, BuiltInFormatsStillWorkWithoutAnyRegistrationStep)
-{
-    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
-    rg::DefaultFileProcessFactoryResolver resolver{ *file_format_registry };
-    auto factory{ resolver.CreateFactory(".cif") };
-    auto data_object{ factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
-    EXPECT_NE(dynamic_cast<rg::ModelObject *>(data_object.get()), nullptr);
-}
-
 TEST(DataObjectIOContractTest, DataObjectManagerDoesNotRequireDefaultFactoryRegistration)
 {
     rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
     ASSERT_NO_THROW(manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model"));
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
-}
-
-TEST(DataObjectIOContractTest, OverrideResolverTakesPrecedenceOverDescriptorFallback)
-{
-    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
-    auto fallback_resolver{
-        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
-    auto resolver{
-        std::make_shared<rg::OverrideableFileProcessFactoryResolver>(fallback_resolver) };
-    resolver->RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
-
-    auto override_factory{ resolver->CreateFactory(".cif") };
-    auto override_object{
-        override_factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
-    EXPECT_NE(dynamic_cast<FailingDataObject *>(override_object.get()), nullptr);
 }
 
 TEST(DataObjectIOContractTest, ResolverInjectionSupportsOverrideWithoutGlobalRegistry)
@@ -159,24 +135,6 @@ TEST(DataObjectIOContractTest, ResolverInjectionSupportsOverrideWithoutGlobalReg
     auto default_object{
         default_factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
     EXPECT_NE(dynamic_cast<rg::ModelObject *>(default_object.get()), nullptr);
-}
-
-TEST(DataObjectIOContractTest, CustomFactoryOverrideTakesPrecedenceOverDescriptorFallback)
-{
-    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
-    auto fallback_resolver{
-        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
-    rg::OverrideableFileProcessFactoryResolver resolver{ fallback_resolver };
-    ScopedFactoryOverride override{
-        resolver,
-        ".cif",
-        []() { return std::make_unique<OverrideFileFactory>(); }
-    };
-
-    auto factory{ resolver.CreateFactory(".cif") };
-    auto data_object{
-        factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
-    EXPECT_NE(dynamic_cast<FailingDataObject *>(data_object.get()), nullptr);
 }
 
 TEST(DataObjectIOContractTest, CustomFactoryOverrideDoesNotLeakAcrossTests)

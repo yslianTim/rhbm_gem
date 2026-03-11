@@ -14,7 +14,6 @@ namespace {
 struct LifecycleCommandOptions : public rg::CommandOptions
 {
     bool fail_prepare{ false };
-    bool fail_execute{ false };
 };
 
 class LifecycleCommand final
@@ -49,10 +48,6 @@ public:
     {
         MutateOptions([&]() { m_options.fail_prepare = value; });
     }
-    void SetFailExecute(bool value)
-    {
-        MutateOptions([&]() { m_options.fail_execute = value; });
-    }
 
     void ValidateOptions() override
     {
@@ -79,7 +74,7 @@ private:
             return false;
         }
         runtime_state.push_back(1);
-        return !m_options.fail_execute;
+        return true;
     }
 };
 

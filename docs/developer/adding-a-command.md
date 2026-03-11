@@ -377,9 +377,8 @@ Add command tests and update build wiring:
 Update contract tests that assert explicit built-in lists or per-command mappings:
 
 - `tests/core/contract/BuiltInCommandCatalog_test.cpp`
-- `tests/core/contract/BuiltInCommandBindingName_test.cpp`
-- `tests/core/contract/CommandDescriptorShape_test.cpp`
-- `tests/core/contract/CommandCommonOptions_test.cpp`
+- `tests/core/contract/DocsSync_test.cpp`
+- `tests/core/contract/PublicHeaderSurface_test.cpp`
 
 When built-in membership or command metadata changes, update generated blocks in:
 

@@ -1,31 +1,10 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
-#include <filesystem>
 #include <string>
 #include <vector>
 
-#include "CommandTestHelpers.hpp"
+#include "support/PublicHeaderSurfaceTestSupport.hpp"
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
-
-namespace {
-
-std::vector<std::string> CollectPublicHeadersForDomain(const std::string& domain) {
-    const auto include_root{command_test::ProjectRootPath() / "include" / "rhbm_gem"};
-    const auto domain_root{include_root / domain};
-    std::vector<std::string> headers;
-
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(domain_root)) {
-        if (!entry.is_regular_file()) {
-            continue;
-        }
-        headers.push_back(std::filesystem::relative(entry.path(), include_root).generic_string());
-    }
-    std::sort(headers.begin(), headers.end());
-    return headers;
-}
-
-} // namespace
 
 TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
@@ -51,7 +30,7 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
         "core/painter/PainterBase.hpp",
         "core/painter/PotentialPlotBuilder.hpp"};
 
-    EXPECT_EQ(CollectPublicHeadersForDomain("core"), expected);
+    EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("core"), expected);
 }
 
 TEST(PublicHeaderSurfaceTest, CommandMetadataProfilesRemainStable) {
