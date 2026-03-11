@@ -1,4 +1,5 @@
 #include "internal/io/file/CifFormat.hpp"
+#include "internal/io/file/ICifCategoryParser.hpp"
 #include "internal/io/file/MmCifLoopParser.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -34,20 +35,6 @@ namespace
 bool IsMmCifMissingValue(const std::string & value)
 {
     return value.empty() || value == "." || value == "?";
-}
-
-std::string BuildMmCifTokenPreview(const std::vector<std::string> & token_list, size_t max_items = 8)
-{
-    std::ostringstream oss;
-    oss << "[";
-    for (size_t i = 0; i < token_list.size() && i < max_items; ++i)
-    {
-        if (i > 0) oss << ", ";
-        oss << token_list[i];
-    }
-    if (token_list.size() > max_items) oss << ", ...";
-    oss << "]";
-    return oss.str();
 }
 
 template <typename IndexMap>
@@ -189,7 +176,8 @@ CanonicalAtomPair BuildCanonicalAtomPair(const AtomObject * atom_1, const AtomOb
 } // namespace
 
 CifFormat::CifFormat() :
-    m_data_block{ std::make_unique<AtomicModelDataBlock>() }
+    m_data_block{ std::make_unique<AtomicModelDataBlock>() },
+    m_category_parser{ std::make_unique<MmCifCategoryParser>() }
 {
 }
 
@@ -235,26 +223,7 @@ void CifFormat::ParseMmCifDocument(std::istream & stream, const std::string & so
     auto parsed_document{ ParseMmCifDocumentLines(line_list, source_name) };
 
     m_data_item_map = std::move(parsed_document.data_item_map);
-
-    m_loop_category_map.clear();
-    for (auto & [category_key, parsed_category_list] : parsed_document.loop_category_map)
-    {
-        auto & category_list{ m_loop_category_map[category_key] };
-        category_list.reserve(parsed_category_list.size());
-        for (auto & parsed_category : parsed_category_list)
-        {
-            ParsedLoopCategory category;
-            category.column_name_list = std::move(parsed_category.column_name_list);
-            category.row_list.reserve(parsed_category.row_list.size());
-            for (auto & parsed_row : parsed_category.row_list)
-            {
-                category.row_list.emplace_back(
-                    ParsedLoopRow{ std::move(parsed_row.token_list), parsed_row.line_number });
-            }
-            category_list.emplace_back(std::move(category));
-        }
-    }
-
+    m_loop_category_map = std::move(parsed_document.loop_category_map);
 }
 
 void CifFormat::Read(std::istream & stream, const std::string & source_name)
@@ -1237,56 +1206,13 @@ void CifFormat::WriteAtomSiteBlockEntry(
 
 void CifFormat::ParseLoopBlock(
     std::string_view data_block_prefix,
-    const std::function<void(const ColumnIndexMap &,
-                             const std::vector<std::string> &)> & table_handler)
+    const CifLoopRowHandler & table_handler)
 {
-    auto category_iter{ m_loop_category_map.find(std::string{data_block_prefix}) };
-    if (category_iter == m_loop_category_map.end()) return;
-
-    for (const auto & category : category_iter->second)
+    if (m_category_parser == nullptr)
     {
-        ColumnIndexMap column_index_map;
-        for (size_t i = 0; i < category.column_name_list.size(); ++i)
-        {
-            std::string short_name{ category.column_name_list[i] };
-            if (short_name.rfind(data_block_prefix, 0) == 0)
-            {
-                short_name = short_name.substr(data_block_prefix.size());
-            }
-            column_index_map[short_name] = i;
-        }
-
-        size_t loop_row_number{ 0 };
-        for (const auto & row : category.row_list)
-        {
-            ++loop_row_number;
-            if (row.token_list.size() != column_index_map.size())
-            {
-                Logger::Log(LogLevel::Warning,
-                    "ParseLoopBlock(" + std::string(data_block_prefix)
-                    + ") row " + std::to_string(loop_row_number)
-                    + " has token count " + std::to_string(row.token_list.size())
-                    + " but expects " + std::to_string(column_index_map.size())
-                    + " at file line " + std::to_string(row.line_number)
-                    + ". tokens = " + BuildMmCifTokenPreview(row.token_list));
-                continue;
-            }
-            try
-            {
-                table_handler(column_index_map, row.token_list);
-            }
-            catch (const std::exception & ex)
-            {
-                Logger::Log(LogLevel::Warning,
-                    "ParseLoopBlock(" + std::string(data_block_prefix)
-                    + ") row " + std::to_string(loop_row_number)
-                    + " failed at file line " + std::to_string(row.line_number)
-                    + ": " + std::string(ex.what())
-                    + ". tokens = " + BuildMmCifTokenPreview(row.token_list));
-                continue;
-            }
-        }
+        throw std::runtime_error("CifFormat category parser is not initialized.");
     }
+    m_category_parser->ParseLoopBlock(data_block_prefix, m_loop_category_map, table_handler);
 }
 
 void CifFormat::BuildDefaultChemicalComponentEntry(const std::string & comp_id)

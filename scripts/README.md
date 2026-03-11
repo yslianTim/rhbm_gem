@@ -6,3 +6,9 @@
 - Do not hardcode absolute user paths in scripts.
 - Use `scripts/run_local_template.sh` as the baseline template.
 - Do not place scripts at repository root.
+
+## Built-in Command Automation
+
+- `scripts/command_scaffold.py`: generate a new command/binding/test/doc scaffold.
+- `scripts/check_builtin_command_sync.py`: validate `BuiltInCommandList.def` sync with
+  headers/sources/bindings/tests/CMake manifests.

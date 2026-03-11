@@ -12,6 +12,7 @@
 #include <optional>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include "ICifCategoryParser.hpp"
 #include "ModelFileFormatBase.hpp"
 
 namespace rhbm_gem {
@@ -19,29 +20,19 @@ namespace rhbm_gem {
 class AtomicModelDataBlock;
 class ModelObject;
 class AtomObject;
+class ICifCategoryParser;
 
 class CifFormat : public ModelFileFormatBase
 {
-    struct ParsedLoopRow
-    {
-        std::vector<std::string> token_list;
-        size_t line_number;
-    };
-
-    struct ParsedLoopCategory
-    {
-        std::vector<std::string> column_name_list;
-        std::vector<ParsedLoopRow> row_list;
-    };
-
-    using ColumnIndexMap = std::map<std::string, size_t, std::less<>>;
+    using ColumnIndexMap = CifColumnIndexMap;
 
     static constexpr float m_bond_searching_radius{ 2.0f };
     std::unique_ptr<AtomicModelDataBlock> m_data_block;
+    std::unique_ptr<ICifCategoryParser> m_category_parser;
     bool m_find_chemical_component_entry{ false };
     bool m_find_component_atom_entry{ false };
     bool m_find_component_bond_entry{ false };
-    std::unordered_map<std::string, std::vector<ParsedLoopCategory>> m_loop_category_map;
+    std::unordered_map<std::string, std::vector<MmCifParsedLoopCategory>> m_loop_category_map;
     std::unordered_map<std::string, std::vector<std::string>> m_data_item_map;
 
 public:
@@ -69,8 +60,7 @@ private:
     void ConstructBondList();
     void ParseLoopBlock(
         std::string_view data_block_prefix,
-        const std::function<void(const ColumnIndexMap &,
-                                 const std::vector<std::string> &)> & row_handler
+        const CifLoopRowHandler & row_handler
     );
     void ParseMmCifDocument(std::istream & stream, const std::string & source_name);
     std::optional<std::string> GetFirstDataItemValue(std::string_view key) const;

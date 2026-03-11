@@ -5,6 +5,7 @@ This guide is for contributors and maintainers who need the full build surface: 
 If you only want to install and run the project, use [`../user/getting-started.md`](../user/getting-started.md). For the end-user workflow, start with [`../user/getting-started.md#environment-setup`](../user/getting-started.md#environment-setup), then continue to [`../user/getting-started.md#installation`](../user/getting-started.md#installation), [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings), and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
 
 Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOptions`, `RHBMGemDependencies`, `RHBMGemInstall`, `RHBMGemTesting`) to keep maintenance localized.
+All runtime targets from a build tree (CLI, GUI, and C++ test executables) are emitted under `<build-dir>/bin/`.
 
 ## Dependency Strategy
 
@@ -100,6 +101,28 @@ Repository guard checks (style/structure/hygiene/fixture tracking/absolute-path/
 cmake --build build --target lint_repo
 ```
 
+`lint_repo` also includes a built-in command manifest sync guard
+(`scripts/check_builtin_command_sync.py`).
+
+## Static Quality Checks (Targeted)
+
+Format check for hotspot files:
+
+```bash
+bash scripts/run_clang_format_check.sh
+```
+
+Clang-tidy check for parser/painter hotspots:
+
+```bash
+clang-tidy -p build \
+  src/core/painter/PotentialPlotBuilder.cpp \
+  src/core/painter/PotentialPlotBuilderSequenceGraphs.cpp \
+  src/core/painter/PotentialPlotBuilderPlotFunctions.cpp \
+  src/data/io/file/CifFormat.cpp \
+  src/data/io/file/ICifCategoryParser.cpp
+```
+
 ## Feature Mode Checks (`AUTO` / `OFF` / `ON`)
 
 1. Force OpenMP OFF:
@@ -107,7 +130,7 @@ cmake --build build --target lint_repo
 ```bash
 cmake -S . -B build-openmp-off -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_OPENMP_MODE=OFF
 cmake --build build-openmp-off -j
-./build-openmp-off/RHBM-GEM --help
+./build-openmp-off/bin/RHBM-GEM --help
 ```
 
 2. Force OpenMP ON on macOS with Homebrew `libomp`:
@@ -115,7 +138,7 @@ cmake --build build-openmp-off -j
 ```bash
 cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_OPENMP_MODE=ON -DOpenMP_ROOT=/opt/homebrew/opt/libomp -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/libomp
 cmake --build build-openmp-on -j
-./build-openmp-on/RHBM-GEM --help
+./build-openmp-on/bin/RHBM-GEM --help
 ```
 
 Notes:
@@ -128,7 +151,7 @@ Notes:
 ```bash
 cmake -S . -B build-openmp-on -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_OPENMP_MODE=ON
 cmake --build build-openmp-on -j
-./build-openmp-on/RHBM-GEM --help
+./build-openmp-on/bin/RHBM-GEM --help
 ```
 
 4. Force ROOT OFF even if ROOT is installed:
@@ -136,7 +159,7 @@ cmake --build build-openmp-on -j
 ```bash
 cmake -S . -B build-root-off -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=OFF
 cmake --build build-root-off -j
-./build-root-off/RHBM-GEM --help
+./build-root-off/bin/RHBM-GEM --help
 ```
 
 5. Force ROOT ON:

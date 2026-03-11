@@ -41,6 +41,15 @@ For a new built-in command, update these areas in one change:
 - related contract tests under `tests/core/contract/`
 - developer docs affected by command surface changes
 
+Scaffold helper:
+
+```bash
+python3 scripts/command_scaffold.py --name Example --profile FileWorkflow
+```
+
+The scaffold creates command/binding/test/doc skeleton files only.
+You still need to wire registration and manifests listed above.
+
 ## 3. Implement the command type
 
 Standard command shape:
@@ -251,6 +260,14 @@ Implementation rules:
 - use `MutateOptions(...)` or convenience setters from `CommandBase`
 - do not write to `m_options` outside mutation helpers
 - do not create directories in setters
+
+Before pushing, run:
+
+```bash
+python3 scripts/check_builtin_command_sync.py
+```
+
+This is also enforced by the repository guard (`lint_repo`).
 
 ## 4. Register the built-in command
 

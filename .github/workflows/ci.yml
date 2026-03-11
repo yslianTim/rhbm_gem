@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - "codex/**"
+
+jobs:
+  build-and-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-format clang-tidy
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DRHBM_GEM_DEP_PROVIDER=FETCH \
+            -DBUILD_PYTHON_BINDINGS=OFF \
+            -DRHBM_GEM_ROOT_MODE=OFF \
+            -DRHBM_GEM_OPENMP_MODE=OFF
+
+      - name: Build
+        run: cmake --build build --target tests_all lint_repo -j2
+
+      - name: Repo guards
+        run: cmake --build build --target lint_repo
+
+      - name: Built-in command sync
+        run: python3 scripts/check_builtin_command_sync.py
+
+      - name: Run tests (core/data/integration)
+        run: ctest --test-dir build --output-on-failure -L "domain:(core|data|integration)"
+
+      - name: clang-format check (targeted hotspots)
+        run: bash scripts/run_clang_format_check.sh
+
+      - name: clang-tidy check (targeted hotspots)
+        run: |
+          clang-tidy \
+            -p build \
+            src/core/painter/PotentialPlotBuilder.cpp \
+            src/core/painter/PotentialPlotBuilderSequenceGraphs.cpp \
+            src/core/painter/PotentialPlotBuilderPlotFunctions.cpp \
+            src/data/io/file/CifFormat.cpp \
+            src/data/io/file/ICifCategoryParser.cpp

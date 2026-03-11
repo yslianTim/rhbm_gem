@@ -1,6 +1,7 @@
 set(RHBM_GEM_LIBRARY_SOURCES
     core/command/Application.cpp
     core/painter/AtomPainter.cpp
+    core/painter/RootPlotRenderBackend.cpp
     core/command/BuiltInCommandCatalog.cpp
     core/command/CommandBase.cpp
     core/painter/ComparisonPainter.cpp
@@ -10,6 +11,8 @@ set(RHBM_GEM_LIBRARY_SOURCES
     core/painter/GausPainterRendering.cpp
     core/painter/GausPainterFitting.cpp
     core/painter/PotentialPlotBuilder.cpp
+    core/painter/PotentialPlotBuilderSequenceGraphs.cpp
+    core/painter/PotentialPlotBuilderPlotFunctions.cpp
     core/command/HRLModelTestCommand.cpp
     core/workflow/HRLModelTestCommandWorkflows.cpp
     core/command/MapSampling.cpp
@@ -42,6 +45,7 @@ set(RHBM_GEM_LIBRARY_SOURCES
     data/object/PotentialEntryQuery.cpp
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp
+    data/io/file/ICifCategoryParser.cpp
     data/io/file/FileFormatBackendFactory.cpp
     data/io/file/FileFormatRegistry.cpp
     data/io/file/FileProcessFactoryResolver.cpp

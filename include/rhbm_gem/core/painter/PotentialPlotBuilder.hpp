@@ -21,12 +21,16 @@ namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
+class IPlotDataBuilder;
+class IPlotRenderBackend;
 class LocalPotentialEntry;
 class ModelObject;
 
 class PotentialPlotBuilder
 {
     PotentialEntryQuery m_query;
+    std::unique_ptr<IPlotDataBuilder> m_plot_data_builder;
+    std::unique_ptr<IPlotRenderBackend> m_plot_render_backend;
     ModelObject * m_model_object;
     LocalPotentialEntry * m_atom_local_entry;
     LocalPotentialEntry * m_bond_local_entry;

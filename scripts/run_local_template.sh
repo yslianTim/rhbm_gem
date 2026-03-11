@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${RHBM_GEM_EXECUTABLE:=./build/RHBM-GEM}"
+: "${RHBM_GEM_EXECUTABLE:=./build/bin/RHBM-GEM}"
 : "${RHBM_GEM_DATA_DIR:=${HOME}/.rhbmgem/data}"
 : "${RHBM_GEM_DATABASE_PATH:=${RHBM_GEM_DATA_DIR}/database.sqlite}"
 : "${RHBM_GEM_MODEL_PATH:?set RHBM_GEM_MODEL_PATH to a model file (.cif/.pdb)}"

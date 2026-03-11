@@ -176,6 +176,7 @@ Notes:
 Finish **Environment Setup** first, then choose one installation workflow and follow only that workflow.
 
 The commands below intentionally use `RHBM_GEM_DEP_PROVIDER=FETCH`, `BUILD_TESTING=OFF`, and `BUILD_PYTHON_BINDINGS=OFF` for a predictable first install. This avoids requiring system `Eigen3`/`SQLite3`/`CLI11`/`GTest` packages during onboarding.
+Runtime executables from any build directory are placed under `<build-dir>/bin/`.
 
 ### macOS and Linux: user-local install
 
@@ -196,7 +197,7 @@ cmake --build build-local -j
 2. Verify the executable from the build tree:
 
 ```bash
-./build-local/RHBM-GEM --help
+./build-local/bin/RHBM-GEM --help
 ```
 
 3. Install to your user-local prefix:
@@ -229,7 +230,7 @@ cmake --build build -j
 2. Verify the executable from the build tree:
 
 ```bash
-./build/RHBM-GEM --help
+./build/bin/RHBM-GEM --help
 ```
 
 3. Install to the default prefix:

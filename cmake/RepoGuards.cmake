@@ -9,6 +9,7 @@ set(_RHBM_GEM_GUARD_SCRIPTS
     LoggingStyleGuard.cmake
     ParameterlessVoidStyleGuard.cmake
     RepositoryHygieneGuard.cmake
+    CommandManifestGuard.cmake
     TestFixtureTrackingGuard.cmake
     StructureGuard.cmake
     AbsolutePathGuard.cmake

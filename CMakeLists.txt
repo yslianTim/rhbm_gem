@@ -26,6 +26,14 @@ include(RHBMGemOptions)
 include(RHBMGemTargetHelpers)
 include(RHBMGemDependencies)
 
+# Keep all runtime targets (CLI, GUI, tests) in a single predictable folder.
+set(RHBM_GEM_RUNTIME_OUTPUT_DIR "${PROJECT_BINARY_DIR}/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${RHBM_GEM_RUNTIME_OUTPUT_DIR}")
+foreach(config IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${config}" config_upper)
+    set("CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config_upper}" "${RHBM_GEM_RUNTIME_OUTPUT_DIR}")
+endforeach()
+
 add_subdirectory(src)
 if(BUILD_PYTHON_BINDINGS)
     add_subdirectory(bindings)
