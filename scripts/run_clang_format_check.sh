@@ -13,7 +13,10 @@ TARGET_DIRS=(
     "src/data/internal/io/file"
 )
 
-mapfile -t FILES < <(
+FILES=()
+while IFS= read -r file; do
+    FILES+=("${file}")
+done < <(
     find "${TARGET_DIRS[@]}" -type f \( -name '*.cpp' -o -name '*.hpp' \) | sort
 )
 
