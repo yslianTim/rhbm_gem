@@ -130,6 +130,8 @@ void GausPainter::PaintAtomLocalGausSummary(
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     auto show_outlier{ false };
+    (void)chemical_component_map;
+    (void)show_outlier;
 
     #ifdef HAVE_ROOT
 
@@ -381,7 +383,7 @@ void GausPainter::PaintAtomGroupGausSummary(
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
-    
+    (void)chemical_component_map;
     #ifdef HAVE_ROOT
 
     gStyle->SetLineScalePS(2.0);
@@ -755,13 +757,17 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent");
 
-    bool show_outlier{ false };
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
+    bool show_outlier{ false };
+    (void)chemical_component_map;
+    (void)class_key;
+    (void)standard_residue_list;
+    (void)show_outlier;
 
     #ifdef HAVE_ROOT
 
@@ -988,9 +994,9 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
-
     //const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+    (void)chemical_component_map;
 
     #ifdef HAVE_ROOT
 

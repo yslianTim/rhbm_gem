@@ -13,7 +13,6 @@ function(rhbm_gem_normalize_cache_enum cache_var description)
 endfunction()
 
 # Core build options
-option(BUILD_TESTING "Build unit tests" ON)
 option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
 option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
 option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)

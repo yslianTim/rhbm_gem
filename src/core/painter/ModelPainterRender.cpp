@@ -772,14 +772,14 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomMapValueMainChain");
+    (void)model_object;
+
+    #ifdef HAVE_ROOT
     const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-
     const int col_size{ 4 };
     const int row_size{ 1 };
-
-    #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
 
@@ -940,14 +940,14 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondMapValueMainChain");
+    (void)model_object;
+
+    #ifdef HAVE_ROOT
     const auto & class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-
     const int col_size{ 4 };
     const int row_size{ 1 };
-
-    #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
 

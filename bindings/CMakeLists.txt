@@ -50,11 +50,7 @@ target_include_directories(${BINDINGS_MODULE_TARGET} PRIVATE
     "${PROJECT_SOURCE_DIR}/src/core/internal"
 )
 
-if(_RHBM_GEM_DEFAULT_PYTHON_INSTALL_RPATH)
-    set_target_properties(${BINDINGS_MODULE_TARGET} PROPERTIES
-        INSTALL_RPATH "${_RHBM_GEM_DEFAULT_PYTHON_INSTALL_RPATH}"
-    )
-endif()
+rhbm_gem_set_install_rpath(${BINDINGS_MODULE_TARGET} "${_RHBM_GEM_DEFAULT_PYTHON_INSTALL_RPATH}")
 
 install(
     TARGETS ${BINDINGS_MODULE_TARGET}

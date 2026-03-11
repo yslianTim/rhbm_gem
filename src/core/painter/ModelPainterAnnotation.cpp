@@ -46,6 +46,8 @@ void ModelPainter::PaintGroupWidthScatterPlot(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintGroupWidthScatterPlot");
     auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    (void)par_id;
+    (void)draw_box_plot;
 
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
@@ -272,11 +274,13 @@ void ModelPainter::PaintAtomGausScatterPlot(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGausScatterPlot");
+    (void)model_object;
+    (void)do_normalize;
+
+    #ifdef HAVE_ROOT
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     auto amplitude_min{ entry_iter->GetAtomGausEstimateMinimum(0, Element::OXYGEN) };
-
-    #ifdef HAVE_ROOT
 
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
@@ -378,11 +382,13 @@ void ModelPainter::PaintBondGausScatterPlot(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondGausScatterPlot");
+    (void)model_object;
+    (void)do_normalize;
+
+    #ifdef HAVE_ROOT
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     auto amplitude_min{ entry_iter->GetBondGausEstimateMinimum(0) };
-
-    #ifdef HAVE_ROOT
 
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);

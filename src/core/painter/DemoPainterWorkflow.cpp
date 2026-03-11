@@ -47,6 +47,8 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintGroupWidthScatterPlot");
     auto residue_class{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    (void)par_id;
+    (void)draw_box_plot;
 
     for (auto & model : model_list) if (model == nullptr) return;
 
@@ -255,6 +257,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomGausMainChainDemo");
+    (void)par_id;
     
     if (model_object1 == nullptr || model_object2 == nullptr) return;
     auto entry_iter1{ std::make_unique<PotentialEntryQuery>(model_object1) };
@@ -360,6 +363,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomGausMainChainDemoSingle");
+    (void)par_id;
     
     if (model_object == nullptr) return;
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
@@ -577,6 +581,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     const int col_size{ 3 };
     const int row_size{ 2 };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    (void)row_size;
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
     std::map<Spot, std::vector<GroupKey>> group_key_list_map[col_size];
     for (size_t i = 0; i < model_list.size(); i++)

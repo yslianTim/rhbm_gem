@@ -47,8 +47,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
-
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
+    (void)chemical_component_map;
 
     #ifdef HAVE_ROOT
 
@@ -234,9 +234,9 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
-
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const std::vector<Structure> structure_list{ Structure::FREE, Structure::HELX_P, Structure::SHEET };
+    (void)chemical_component_map;
     
     #ifdef HAVE_ROOT
 

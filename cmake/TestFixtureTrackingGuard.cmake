@@ -1,21 +1,16 @@
-if(NOT DEFINED PROJECT_SOURCE_DIR)
-    message(FATAL_ERROR "PROJECT_SOURCE_DIR is required")
-endif()
+include("${CMAKE_CURRENT_LIST_DIR}/GuardCommon.cmake")
+rhbm_guard_require_project_source_dir()
+rhbm_guard_find_git(GIT_EXECUTABLE)
 
-find_program(GIT_EXECUTABLE NAMES git)
-if(NOT GIT_EXECUTABLE)
-    message(FATAL_ERROR "git executable was not found")
-endif()
-
-file(GLOB_RECURSE TEST_SOURCE_FILES
-    "${PROJECT_SOURCE_DIR}/tests/*.cpp"
-    "${PROJECT_SOURCE_DIR}/tests/*.hpp"
-    "${PROJECT_SOURCE_DIR}/tests/*.py"
+rhbm_guard_collect_relative_files(TEST_SOURCE_FILES
+    BASE_DIR "${PROJECT_SOURCE_DIR}"
+    ROOTS "${PROJECT_SOURCE_DIR}/tests"
+    GLOBS "*.cpp" "*.hpp" "*.py"
 )
 
 set(REFERENCED_FIXTURES)
 foreach(TEST_SOURCE_FILE IN LISTS TEST_SOURCE_FILES)
-    file(READ "${TEST_SOURCE_FILE}" TEST_SOURCE_CONTENT)
+    file(READ "${PROJECT_SOURCE_DIR}/${TEST_SOURCE_FILE}" TEST_SOURCE_CONTENT)
     string(REGEX MATCHALL "TestDataPath\\(\"[^\"]+\"\\)" FIXTURE_CALLS "${TEST_SOURCE_CONTENT}")
     foreach(FIXTURE_CALL IN LISTS FIXTURE_CALLS)
         string(REGEX REPLACE "^TestDataPath\\(\"([^\"]+)\"\\)$" "\\1" FIXTURE_REL_PATH "${FIXTURE_CALL}")

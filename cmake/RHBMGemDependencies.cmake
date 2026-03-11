@@ -32,6 +32,70 @@ function(rhbm_gem_populate_content dep_name dep_url dep_hash out_source_dir)
     set(${out_source_dir} "${${dep_name}_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
+function(rhbm_gem_prepare_openmp_for_appleclang)
+    if(NOT APPLE OR NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+        return()
+    endif()
+
+    if(DEFINED OpenMP_ROOT)
+        if(EXISTS "${OpenMP_ROOT}/include/omp.h")
+            return()
+        endif()
+        return()
+    endif()
+
+    set(_rhbm_openmp_root "")
+    set(_rhbm_openmp_candidates)
+    if(DEFINED ENV{HOMEBREW_PREFIX})
+        list(APPEND _rhbm_openmp_candidates "$ENV{HOMEBREW_PREFIX}/opt/libomp")
+    endif()
+    list(APPEND _rhbm_openmp_candidates
+        "/opt/homebrew/opt/libomp"
+        "/usr/local/opt/libomp"
+    )
+
+    foreach(_candidate_root IN LISTS _rhbm_openmp_candidates)
+        if(EXISTS "${_candidate_root}/include/omp.h"
+           AND (EXISTS "${_candidate_root}/lib/libomp.dylib"
+                OR EXISTS "${_candidate_root}/lib/libomp.a"))
+            set(_rhbm_openmp_root "${_candidate_root}")
+            break()
+        endif()
+    endforeach()
+
+    if(_rhbm_openmp_root)
+        message(STATUS "AppleClang detected, probing OpenMP in: ${_rhbm_openmp_root}")
+        set(OpenMP_ROOT "${_rhbm_openmp_root}" PARENT_SCOPE)
+    endif()
+endfunction()
+
+function(rhbm_gem_link_boost_dependency target_name)
+    if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
+        message(STATUS "Using system Boost package")
+        if(TARGET Boost::headers)
+            target_link_libraries(${target_name} INTERFACE Boost::headers)
+        elseif(TARGET Boost::boost)
+            target_link_libraries(${target_name} INTERFACE Boost::boost)
+        elseif(Boost_INCLUDE_DIRS)
+            target_include_directories(${target_name} SYSTEM INTERFACE ${Boost_INCLUDE_DIRS})
+        else()
+            message(FATAL_ERROR
+                "System Boost package was configured but no Boost include target/directory was exported.")
+        endif()
+    else()
+        message(STATUS "Using fetched Boost fallback (v${RHBM_GEM_BOOST_FALLBACK_VERSION})")
+        target_include_directories(${target_name} SYSTEM INTERFACE
+            "$<BUILD_INTERFACE:${RHBM_GEM_BOOST_INCLUDE_DIR}>"
+            "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+        )
+    endif()
+endfunction()
+
+add_library(rhbm_gem_dependencies INTERFACE)
+set(RHBM_GEM_WITH_OPENMP FALSE)
+set(RHBM_GEM_WITH_ROOT FALSE)
+set(RHBM_GEM_OPENMP_ROOT "")
+
 if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
     message(STATUS "Dependency provider: SYSTEM")
     find_package(Eigen3 REQUIRED)
@@ -45,6 +109,12 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
     else()
         find_package(Boost REQUIRED)
     endif()
+
+    target_link_libraries(rhbm_gem_dependencies INTERFACE
+        Eigen3::Eigen
+        CLI11::CLI11
+        SQLite::SQLite3
+    )
 else()
     message(STATUS "Dependency provider: FETCH")
 
@@ -90,6 +160,82 @@ else()
     set(RHBM_GEM_EIGEN_INCLUDE_DIR "${RHBM_GEM_EIGEN3_SOURCE_DIR}")
     set(RHBM_GEM_CLI11_INCLUDE_DIR "${RHBM_GEM_CLI11_SOURCE_DIR}/include")
     set(RHBM_GEM_BOOST_INCLUDE_DIR "${RHBM_GEM_BOOST_SOURCE_DIR}")
+
+    target_include_directories(rhbm_gem_dependencies SYSTEM INTERFACE
+        "$<BUILD_INTERFACE:${RHBM_GEM_EIGEN_INCLUDE_DIR}>"
+        "$<BUILD_INTERFACE:${RHBM_GEM_CLI11_INCLUDE_DIR}>"
+        "$<BUILD_INTERFACE:${RHBM_GEM_SQLITE3_SOURCE_DIR}>"
+        "$<BUILD_INTERFACE:${RHBM_GEM_BOOST_INCLUDE_DIR}>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+    )
+endif()
+
+rhbm_gem_link_boost_dependency(rhbm_gem_dependencies)
+
+set(_rhbm_gem_min_openmp_version "4.5")
+if(RHBM_GEM_OPENMP_MODE STREQUAL "OFF")
+    message(STATUS "OpenMP features disabled by RHBM_GEM_OPENMP_MODE=OFF")
+elseif(RHBM_GEM_OPENMP_MODE STREQUAL "AUTO")
+    rhbm_gem_prepare_openmp_for_appleclang()
+    find_package(OpenMP QUIET COMPONENTS CXX)
+elseif(RHBM_GEM_OPENMP_MODE STREQUAL "ON")
+    rhbm_gem_prepare_openmp_for_appleclang()
+    find_package(OpenMP REQUIRED COMPONENTS CXX)
+else()
+    message(FATAL_ERROR "Unsupported RHBM_GEM_OPENMP_MODE='${RHBM_GEM_OPENMP_MODE}'")
+endif()
+
+if(OpenMP_CXX_FOUND)
+    if(DEFINED OpenMP_CXX_VERSION AND OpenMP_CXX_VERSION VERSION_LESS _rhbm_gem_min_openmp_version)
+        if(RHBM_GEM_OPENMP_MODE STREQUAL "ON")
+            message(FATAL_ERROR
+                "OpenMP version ${OpenMP_CXX_VERSION} is below required ${_rhbm_gem_min_openmp_version} "
+                "while RHBM_GEM_OPENMP_MODE=ON.")
+        endif()
+        message(WARNING
+            "Found OpenMP version ${OpenMP_CXX_VERSION} but need at least ${_rhbm_gem_min_openmp_version}. "
+            "Disabling OpenMP features.")
+    else()
+        message(STATUS "OpenMP found (version ${OpenMP_CXX_VERSION}). Enabling OpenMP features.")
+        target_compile_definitions(rhbm_gem_dependencies INTERFACE USE_OPENMP)
+        target_link_libraries(rhbm_gem_dependencies INTERFACE OpenMP::OpenMP_CXX)
+        set(RHBM_GEM_WITH_OPENMP TRUE)
+        if(DEFINED OpenMP_ROOT)
+            set(RHBM_GEM_OPENMP_ROOT "${OpenMP_ROOT}")
+        endif()
+    endif()
+elseif(RHBM_GEM_OPENMP_MODE STREQUAL "AUTO")
+    message(STATUS "OpenMP support not found, using serial version")
+endif()
+
+if(RHBM_GEM_ROOT_MODE STREQUAL "OFF")
+    message(STATUS "ROOT features disabled by RHBM_GEM_ROOT_MODE=OFF")
+elseif(RHBM_GEM_ROOT_MODE STREQUAL "AUTO")
+    find_package(ROOT 6.28 QUIET COMPONENTS Core Hist Gpad RIO)
+elseif(RHBM_GEM_ROOT_MODE STREQUAL "ON")
+    find_package(ROOT 6.28 REQUIRED COMPONENTS Core Hist Gpad RIO)
+else()
+    message(FATAL_ERROR "Unsupported RHBM_GEM_ROOT_MODE='${RHBM_GEM_ROOT_MODE}'")
+endif()
+
+if(ROOT_FOUND)
+    message(STATUS "ROOT library found, enabling ROOT features")
+    target_compile_definitions(rhbm_gem_dependencies INTERFACE HAVE_ROOT)
+    target_link_libraries(rhbm_gem_dependencies INTERFACE ROOT::Core ROOT::Hist ROOT::Gpad ROOT::RIO)
+    set(RHBM_GEM_WITH_ROOT TRUE)
+elseif(RHBM_GEM_ROOT_MODE STREQUAL "AUTO")
+    message(STATUS "ROOT library not found, disabling ROOT features")
+endif()
+
+if(RHBM_GEM_BUILD_GUI)
+    find_package(Qt6 QUIET COMPONENTS Core Widgets)
+    if(Qt6_FOUND)
+        message(STATUS "Qt6 found, enabling GUI executable build")
+        add_library(rhbm_gem_gui_dependencies INTERFACE)
+        target_link_libraries(rhbm_gem_gui_dependencies INTERFACE Qt6::Core Qt6::Widgets)
+    else()
+        message(STATUS "Qt6 not found, skipping GUI executable build")
+    endif()
 endif()
 
 if(BUILD_PYTHON_BINDINGS)

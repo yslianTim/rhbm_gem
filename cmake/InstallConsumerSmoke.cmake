@@ -1,9 +1,6 @@
-if(NOT DEFINED PROJECT_SOURCE_DIR)
-    message(FATAL_ERROR "PROJECT_SOURCE_DIR is required")
-endif()
-if(NOT DEFINED PROJECT_BINARY_DIR)
-    message(FATAL_ERROR "PROJECT_BINARY_DIR is required")
-endif()
+include("${PROJECT_SOURCE_DIR}/cmake/GuardCommon.cmake")
+rhbm_guard_require_project_source_dir()
+rhbm_guard_require_project_binary_dir()
 
 set(SMOKE_ROOT "${PROJECT_BINARY_DIR}/consumer_smoke")
 set(INSTALL_PREFIX "${SMOKE_ROOT}/install")

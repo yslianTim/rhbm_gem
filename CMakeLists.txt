@@ -21,7 +21,9 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+include(CTest)
 include(RHBMGemOptions)
+include(RHBMGemTargetHelpers)
 include(RHBMGemDependencies)
 
 add_subdirectory(src)
@@ -31,3 +33,4 @@ endif()
 
 include(RHBMGemInstall)
 include(RHBMGemTesting)
+include(RHBMGemQuality)

@@ -121,9 +121,8 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
     auto sim_amber95_model_object_list{ m_ref_model_object_list_map.at("amber95")};
 
-    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
-
     #ifdef HAVE_ROOT
+    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
     const int extra_pad_size{ 5 };
@@ -454,9 +453,8 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
     auto sim_amber95_model_object_list{ m_ref_model_object_list_map.at("amber95")};
 
-    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
-
     #ifdef HAVE_ROOT
+    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
     const int col_size{ 5 };
@@ -642,6 +640,8 @@ void ComparisonPainter::PainMapValueComparison(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ComparisonPainter::PainMapValueComparison");
+    (void)model_object;
+    (void)ref_model_object_list;
 
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);

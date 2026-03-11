@@ -418,6 +418,13 @@ void HRLModelTestCommand::PrintDataOutlierResult(
 {
     auto file_path{ BuildOutputPath(name, "") };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintDataOutlierResult");
+    (void)outlier_list;
+    (void)mean_matrix_ols_list;
+    (void)mean_matrix_mdpde_list;
+    (void)mean_matrix_train_list;
+    (void)sigma_matrix_ols_list;
+    (void)sigma_matrix_mdpde_list;
+    (void)sigma_matrix_train_list;
 
     std::vector<std::string> title_y_list{
         "Amplitude #font[2]{A}", "Width #tau"
@@ -646,6 +653,13 @@ void HRLModelTestCommand::PrintMemberOutlierResult(
 {
     auto file_path{ BuildOutputPath(name, "") };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintMemberOutlierResult");
+    (void)outlier_list;
+    (void)mean_matrix_ols_list;
+    (void)mean_matrix_mdpde_list;
+    (void)mean_matrix_train_list;
+    (void)sigma_matrix_ols_list;
+    (void)sigma_matrix_mdpde_list;
+    (void)sigma_matrix_train_list;
 
     std::vector<std::string> title_y_list{
         "Amplitude #font[2]{A}", "Width #tau"

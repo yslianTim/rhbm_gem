@@ -199,6 +199,8 @@ void DemoPainter::PainMapValueComparisonSingle(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PainMapValueComparisonSingle");
+    (void)model_object;
+    (void)ref_model_object;
 
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
@@ -887,6 +889,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomWidthScatterPlotSingle");
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
+    (void)draw_box_plot;
 
     if (model_object == nullptr) return;
     auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
