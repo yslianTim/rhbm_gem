@@ -35,13 +35,12 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-class BlockingModelCallback
-{
-public:
-    void operator()(rg::DataObjectBase & data_object)
-    {
-        auto * model{ rg::AsModelObject(data_object) };
-        if (model == nullptr) return;
+class BlockingModelCallback {
+  public:
+    void operator()(rg::DataObjectBase& data_object) {
+        auto* model{rg::AsModelObject(data_object)};
+        if (model == nullptr)
+            return;
 
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -54,14 +53,12 @@ public:
         m_cv_release.wait(lock, [this] { return m_released; });
     }
 
-    bool WaitStarted(std::chrono::milliseconds timeout)
-    {
+    bool WaitStarted(std::chrono::milliseconds timeout) {
         std::unique_lock<std::mutex> lock(m_mutex);
         return m_cv_started.wait_for(lock, timeout, [this] { return m_started; });
     }
 
-    void Release()
-    {
+    void Release() {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_released = true;
@@ -69,57 +66,53 @@ public:
         m_cv_release.notify_all();
     }
 
-    std::string Key() const
-    {
+    std::string Key() const {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_key;
     }
 
-private:
+  private:
     mutable std::mutex m_mutex;
     std::condition_variable m_cv_started;
     std::condition_variable m_cv_release;
-    bool m_started{ false };
-    bool m_released{ false };
+    bool m_started{false};
+    bool m_released{false};
     std::string m_key;
 };
 
-class SinglePointSampler : public ::SamplerBase
-{
-public:
+class SinglePointSampler : public ::SamplerBase {
+  public:
     void Print() const override {}
 
     std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
-        const std::array<float, 3> & position,
-        const std::array<float, 3> & axis_vector) const override
-    {
+        const std::array<float, 3>& position,
+        const std::array<float, 3>& axis_vector) const override {
         (void)axis_vector;
-        return { std::make_tuple(0.0f, position) };
+        return {std::make_tuple(0.0f, position)};
     }
 
     unsigned int GetSamplingSize() const override { return m_sampling_size; }
     void SetSamplingSize(unsigned int value) override { m_sampling_size = value; }
 
-private:
-    unsigned int m_sampling_size{ 1 };
+  private:
+    unsigned int m_sampling_size{1};
 };
 
-std::unique_ptr<rg::ModelObject> MakeModelWithBond()
-{
+std::unique_ptr<rg::ModelObject> MakeModelWithBond() {
     std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
     atom_list.reserve(2);
 
-    auto atom_1{ std::make_unique<rg::AtomObject>() };
+    auto atom_1{std::make_unique<rg::AtomObject>()};
     atom_1->SetSerialID(1);
     atom_1->SetPosition(0.0f, 0.0f, 0.0f);
 
-    auto atom_2{ std::make_unique<rg::AtomObject>() };
+    auto atom_2{std::make_unique<rg::AtomObject>()};
     atom_2->SetSerialID(2);
     atom_2->SetPosition(1.0f, 0.0f, 0.0f);
 
     atom_list.emplace_back(std::move(atom_1));
     atom_list.emplace_back(std::move(atom_2));
-    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    auto model{std::make_unique<rg::ModelObject>(std::move(atom_list))};
 
     std::vector<std::unique_ptr<rg::BondObject>> bond_list;
     bond_list.emplace_back(std::make_unique<rg::BondObject>(
@@ -128,99 +121,85 @@ std::unique_ptr<rg::ModelObject> MakeModelWithBond()
     return model;
 }
 
-rg::MapObject MakeMapObject()
-{
-    std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
-    for (size_t i = 0; i < 8; i++) values[i] = static_cast<float>(i + 1);
-    return rg::MapObject{ grid_size, grid_spacing, origin, std::move(values) };
+rg::MapObject MakeMapObject() {
+    std::array<int, 3> grid_size{2, 2, 2};
+    std::array<float, 3> grid_spacing{1.0f, 1.0f, 1.0f};
+    std::array<float, 3> origin{0.0f, 0.0f, 0.0f};
+    auto values{std::make_unique<float[]>(8)};
+    for (size_t i = 0; i < 8; i++)
+        values[i] = static_cast<float>(i + 1);
+    return rg::MapObject{grid_size, grid_spacing, origin, std::move(values)};
 }
 
 } // namespace
 
-TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectDeterministicOrderByDefault)
-{
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectDeterministicOrderByDefault) {
+    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
 
     rg::DataObjectManager::IterateOptions options;
     std::vector<std::string> keys;
     manager.ForEachDataObject(
-        [&keys](const rg::DataObjectBase & data_object)
-        {
-            if (const auto * model{ rg::AsModelObject(data_object) })
-            {
+        [&keys](const rg::DataObjectBase& data_object) {
+            if (const auto* model{rg::AsModelObject(data_object)}) {
                 keys.push_back(model->GetKeyTag());
             }
         },
         {},
         options);
 
-    EXPECT_EQ(keys, (std::vector<std::string>{ "a_model", "b_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{"a_model", "b_model"}));
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectPreservesInputKeyOrder)
-{
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectPreservesInputKeyOrder) {
+    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
 
     std::vector<std::string> keys;
     manager.ForEachDataObject(
-        [&keys](const rg::DataObjectBase & data_object)
-        {
-            if (const auto * model{ rg::AsModelObject(data_object) })
-            {
+        [&keys](const rg::DataObjectBase& data_object) {
+            if (const auto* model{rg::AsModelObject(data_object)}) {
                 keys.push_back(model->GetKeyTag());
             }
         },
-        { "b_model", "a_model" });
+        {"b_model", "a_model"});
 
-    EXPECT_EQ(keys, (std::vector<std::string>{ "b_model", "a_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{"b_model", "a_model"}));
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, ConstManagerForEachDataObjectWorks)
-{
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+TEST(DataObjectDispatchIterationArchitectureTest, ConstManagerForEachDataObjectWorks) {
+    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
 
-    const rg::DataObjectManager & const_manager{ manager };
+    const rg::DataObjectManager& const_manager{manager};
     std::vector<std::string> keys;
     const_manager.ForEachDataObject(
-        [&keys](const rg::DataObjectBase & data_object)
-        {
-            if (const auto * model{ rg::AsModelObject(data_object) })
-            {
+        [&keys](const rg::DataObjectBase& data_object) {
+            if (const auto* model{rg::AsModelObject(data_object)}) {
                 keys.push_back(model->GetKeyTag());
             }
         });
 
-    EXPECT_EQ(keys, (std::vector<std::string>{ "a_model", "b_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{"a_model", "b_model"}));
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectUsesSnapshotSoClearCanRunConcurrently)
-{
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectUsesSnapshotSoClearCanRunConcurrently) {
+    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
     manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model");
 
     BlockingModelCallback callback;
     std::exception_ptr worker_error;
     std::thread worker(
-        [&]
-        {
-            try
-            {
-                manager.ForEachDataObject(std::ref(callback), { "model" });
-            }
-            catch (...)
-            {
+        [&] {
+            try {
+                manager.ForEachDataObject(std::ref(callback), {"model"});
+            } catch (...) {
                 worker_error = std::current_exception();
             }
         });
@@ -234,114 +213,98 @@ TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectUsesSn
     EXPECT_EQ(callback.Key(), "model");
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectRejectsEmptyCallback)
-{
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    std::function<void(rg::DataObjectBase &)> mutable_callback;
+TEST(DataObjectDispatchIterationArchitectureTest, ManagerForEachDataObjectRejectsEmptyCallback) {
+    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
+    std::function<void(rg::DataObjectBase&)> mutable_callback;
     EXPECT_THROW(manager.ForEachDataObject(mutable_callback), std::runtime_error);
 
-    const rg::DataObjectManager & const_manager{ manager };
-    std::function<void(const rg::DataObjectBase &)> const_callback;
+    const rg::DataObjectManager& const_manager{manager};
+    std::function<void(const rg::DataObjectBase&)> const_callback;
     EXPECT_THROW(const_manager.ForEachDataObject(const_callback), std::runtime_error);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesProducesSamplingOutput)
-{
-    auto map{ MakeMapObject() };
+TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesProducesSamplingOutput) {
+    auto map{MakeMapObject()};
     SinglePointSampler sampler;
     const auto sampling_data{
-        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f })
-    };
+        rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
 
     ASSERT_EQ(sampling_data.size(), 1);
     EXPECT_FLOAT_EQ(std::get<0>(sampling_data.front()), 0.0f);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesIsStatelessAcrossCalls)
-{
-    auto map{ MakeMapObject() };
+TEST(DataObjectDispatchIterationArchitectureTest, SampleMapValuesIsStatelessAcrossCalls) {
+    auto map{MakeMapObject()};
     SinglePointSampler sampler;
     const auto first{
-        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f })
-    };
+        rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
     const auto second{
-        rg::SampleMapValues(map, sampler, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f })
-    };
+        rg::SampleMapValues(map, sampler, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f})};
 
     EXPECT_EQ(first.size(), 1);
     EXPECT_EQ(second.size(), 1);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType)
-{
+TEST(DataObjectDispatchIterationArchitectureTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType) {
     rg::AtomPainter painter;
     rg::AtomObject atom;
     atom.SetSelectedFlag(true);
     atom.AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
-    EXPECT_NO_THROW(painter.AddDataObject(&atom));
-    EXPECT_NO_THROW(painter.AddReferenceDataObject(&atom, "ref"));
+    painter.AddDataObject(&atom);
+    painter.AddReferenceDataObject(&atom, "ref");
 
-    auto model{ MakeModelWithBond() };
+    auto model{MakeModelWithBond()};
     EXPECT_THROW(painter.AddDataObject(model.get()), std::runtime_error);
     EXPECT_THROW(painter.AddReferenceDataObject(model.get(), "ref"), std::runtime_error);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, ModelBasedPaintersDispatchByTypedIngestionAndRejectUnsupportedType)
-{
-    auto model{ MakeModelWithBond() };
+TEST(DataObjectDispatchIterationArchitectureTest, ModelBasedPaintersDispatchByTypedIngestionAndRejectUnsupportedType) {
+    auto model{MakeModelWithBond()};
     rg::AtomObject atom;
 
     rg::ModelPainter model_painter;
-    EXPECT_NO_THROW(model_painter.AddDataObject(model.get()));
-    EXPECT_NO_THROW(model_painter.AddReferenceDataObject(model.get(), "ref"));
+    model_painter.AddDataObject(model.get());
+    model_painter.AddReferenceDataObject(model.get(), "ref");
     EXPECT_THROW(model_painter.AddDataObject(&atom), std::runtime_error);
 
     rg::GausPainter gaus_painter;
-    EXPECT_NO_THROW(gaus_painter.AddDataObject(model.get()));
-    EXPECT_NO_THROW(gaus_painter.AddReferenceDataObject(model.get(), "ref"));
+    gaus_painter.AddDataObject(model.get());
+    gaus_painter.AddReferenceDataObject(model.get(), "ref");
     EXPECT_THROW(gaus_painter.AddDataObject(&atom), std::runtime_error);
 
     rg::ComparisonPainter comparison_painter;
-    EXPECT_NO_THROW(comparison_painter.AddDataObject(model.get()));
-    EXPECT_NO_THROW(comparison_painter.AddReferenceDataObject(model.get(), "ref"));
+    comparison_painter.AddDataObject(model.get());
+    comparison_painter.AddReferenceDataObject(model.get(), "ref");
     EXPECT_THROW(comparison_painter.AddDataObject(&atom), std::runtime_error);
 
     rg::DemoPainter demo_painter;
-    EXPECT_NO_THROW(demo_painter.AddDataObject(model.get()));
-    EXPECT_NO_THROW(demo_painter.AddReferenceDataObject(model.get(), "ref"));
+    demo_painter.AddDataObject(model.get());
+    demo_painter.AddReferenceDataObject(model.get(), "ref");
     EXPECT_THROW(demo_painter.AddDataObject(&atom), std::runtime_error);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, PainterNullIngestUsesModeSpecificErrorMessage)
-{
+TEST(DataObjectDispatchIterationArchitectureTest, PainterNullIngestUsesModeSpecificErrorMessage) {
     rg::ModelPainter painter;
 
-    try
-    {
+    try {
         painter.AddDataObject(nullptr);
         FAIL() << "Expected AddDataObject(nullptr) to throw.";
-    }
-    catch (const std::runtime_error & ex)
-    {
+    } catch (const std::runtime_error& ex) {
         EXPECT_NE(std::string(ex.what()).find("AddDataObject"), std::string::npos);
     }
 
-    try
-    {
+    try {
         painter.AddReferenceDataObject(nullptr, "ref");
         FAIL() << "Expected AddReferenceDataObject(nullptr, ...) to throw.";
-    }
-    catch (const std::runtime_error & ex)
-    {
+    } catch (const std::runtime_error& ex) {
         EXPECT_NE(std::string(ex.what()).find("AddReferenceDataObject"), std::string::npos);
     }
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, NormalizeMapObjectNormalizesMapValues)
-{
-    auto map{ MakeMapObject() };
-    const auto original_value{ map.GetMapValue(0) };
-    const auto original_sd{ map.GetMapValueSD() };
+TEST(DataObjectDispatchIterationArchitectureTest, NormalizeMapObjectNormalizesMapValues) {
+    auto map{MakeMapObject()};
+    const auto original_value{map.GetMapValue(0)};
+    const auto original_sd{map.GetMapValueSD()};
     ASSERT_GT(original_sd, 0.0f);
 
     rg::NormalizeMapObject(map);
@@ -349,11 +312,12 @@ TEST(DataObjectDispatchIterationArchitectureTest, NormalizeMapObjectNormalizesMa
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAndInitializesLocalEntries)
-{
-    auto model{ MakeModelWithBond() };
-    for (auto & atom : model->GetAtomList()) atom->SetSelectedFlag(false);
-    for (auto & bond : model->GetBondList()) bond->SetSelectedFlag(false);
+TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAndInitializesLocalEntries) {
+    auto model{MakeModelWithBond()};
+    for (auto& atom : model->GetAtomList())
+        atom->SetSelectedFlag(false);
+    for (auto& bond : model->GetBondList())
+        bond->SetSelectedFlag(false);
     model->Update();
     ASSERT_EQ(model->GetNumberOfSelectedAtom(), 0);
     ASSERT_EQ(model->GetNumberOfSelectedBond(), 0);
@@ -369,35 +333,31 @@ TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAndIn
 
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
     EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
-    for (const auto * atom : model->GetSelectedAtomList())
-    {
+    for (const auto* atom : model->GetSelectedAtomList()) {
         ASSERT_NE(atom, nullptr);
         EXPECT_NE(atom->GetLocalPotentialEntry(), nullptr);
     }
-    for (const auto * bond : model->GetSelectedBondList())
-    {
+    for (const auto* bond : model->GetSelectedBondList()) {
         ASSERT_NE(bond, nullptr);
         EXPECT_NE(bond->GetLocalPotentialEntry(), nullptr);
     }
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAllWhenRequested)
-{
-    auto model{ MakeModelWithBond() };
+TEST(DataObjectDispatchIterationArchitectureTest, PrepareModelObjectSelectsAllWhenRequested) {
+    auto model{MakeModelWithBond()};
     rg::ModelPreparationOptions options;
     options.select_all_atoms = true;
     options.select_all_bonds = true;
     options.update_model = true;
 
-    EXPECT_NO_THROW(rg::PrepareModelObject(*model, options));
+    rg::PrepareModelObject(*model, options);
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
     EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, ApplyModelSelectionSelectsByAtomSelectorRules)
-{
-    auto model{ MakeModelWithBond() };
-    auto & atom_list{ model->GetAtomList() };
+TEST(DataObjectDispatchIterationArchitectureTest, ApplyModelSelectionSelectsByAtomSelectorRules) {
+    auto model{MakeModelWithBond()};
+    auto& atom_list{model->GetAtomList()};
     ASSERT_EQ(atom_list.size(), 2);
     atom_list.at(0)->SetChainID("A");
     atom_list.at(1)->SetChainID("B");
@@ -412,10 +372,9 @@ TEST(DataObjectDispatchIterationArchitectureTest, ApplyModelSelectionSelectsByAt
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchAsHelpersResolveModelAndMap)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
+TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchAsHelpersResolveModelAndMap) {
+    auto model{MakeModelWithBond()};
+    auto map{MakeMapObject()};
     rg::AtomObject atom;
 
     EXPECT_EQ(rg::AsModelObject(*model), model.get());
@@ -425,25 +384,23 @@ TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchAsHelpersRes
     EXPECT_EQ(rg::AsModelObject(atom), nullptr);
     EXPECT_EQ(rg::AsMapObject(atom), nullptr);
 
-    const rg::DataObjectBase & const_model_ref{ *model };
-    const rg::DataObjectBase & const_map_ref{ map };
+    const rg::DataObjectBase& const_model_ref{*model};
+    const rg::DataObjectBase& const_map_ref{map};
     EXPECT_EQ(rg::AsModelObject(const_model_ref), model.get());
     EXPECT_EQ(rg::AsMapObject(const_map_ref), &map);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchExpectHelpersResolveModelAndMap)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
+TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchExpectHelpersResolveModelAndMap) {
+    auto model{MakeModelWithBond()};
+    auto map{MakeMapObject()};
 
-    const auto & model_ref{ rg::ExpectModelObject(*model, "dispatch-test-model") };
-    const auto & map_ref{ rg::ExpectMapObject(map, "dispatch-test-map") };
+    const auto& model_ref{rg::ExpectModelObject(*model, "dispatch-test-model")};
+    const auto& map_ref{rg::ExpectMapObject(map, "dispatch-test-map")};
     EXPECT_EQ(&model_ref, model.get());
     EXPECT_EQ(&map_ref, &map);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchThrowsOnUnsupportedTargetType)
-{
+TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchThrowsOnUnsupportedTargetType) {
     rg::AtomObject atom;
     EXPECT_THROW(
         (void)rg::ExpectModelObject(atom, "dispatch-test-model"),
@@ -453,10 +410,9 @@ TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchThrowsOnUnsu
         std::runtime_error);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchCatalogTypeNameUsesStableTopLevelNames)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
+TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchCatalogTypeNameUsesStableTopLevelNames) {
+    auto model{MakeModelWithBond()};
+    auto map{MakeMapObject()};
     rg::AtomObject atom;
 
     EXPECT_EQ(rg::GetCatalogTypeName(*model), "model");
@@ -464,11 +420,10 @@ TEST(DataObjectDispatchIterationArchitectureTest, DataObjectDispatchCatalogTypeN
     EXPECT_THROW((void)rg::GetCatalogTypeName(atom), std::runtime_error);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, FileProcessFactoryOutputRejectsWrongObjectTypeThroughDispatch)
-{
-    const auto file_format_registry{ rg::BuildDefaultFileFormatRegistry() };
-    rg::ModelObjectFactory model_factory{ file_format_registry };
-    rg::MapObjectFactory map_factory{ file_format_registry };
+TEST(DataObjectDispatchIterationArchitectureTest, FileProcessFactoryOutputRejectsWrongObjectTypeThroughDispatch) {
+    const auto file_format_registry{rg::BuildDefaultFileFormatRegistry()};
+    rg::ModelObjectFactory model_factory{file_format_registry};
+    rg::MapObjectFactory map_factory{file_format_registry};
     rg::AtomObject atom;
 
     EXPECT_THROW(
@@ -479,10 +434,9 @@ TEST(DataObjectDispatchIterationArchitectureTest, FileProcessFactoryOutputReject
         std::runtime_error);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, CollectModelAtomsSupportsSelectionAndEntryFilters)
-{
-    auto model{ MakeModelWithBond() };
-    auto & atoms{ model->GetAtomList() };
+TEST(DataObjectDispatchIterationArchitectureTest, CollectModelAtomsSupportsSelectionAndEntryFilters) {
+    auto model{MakeModelWithBond()};
+    auto& atoms{model->GetAtomList()};
     ASSERT_EQ(atoms.size(), 2);
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(false);
@@ -492,43 +446,41 @@ TEST(DataObjectDispatchIterationArchitectureTest, CollectModelAtomsSupportsSelec
     rg::ModelAtomCollectorOptions selected_only_options;
     selected_only_options.selected_only = true;
     selected_only_options.require_local_potential_entry = false;
-    const auto selected_only_atoms{ rg::CollectModelAtoms(*model, selected_only_options) };
+    const auto selected_only_atoms{rg::CollectModelAtoms(*model, selected_only_options)};
     ASSERT_EQ(selected_only_atoms.size(), 1);
     EXPECT_EQ(selected_only_atoms.front(), atoms[0].get());
 
     rg::ModelAtomCollectorOptions require_entry_options;
     require_entry_options.selected_only = false;
     require_entry_options.require_local_potential_entry = true;
-    const auto require_entry_atoms{ rg::CollectModelAtoms(*model, require_entry_options) };
+    const auto require_entry_atoms{rg::CollectModelAtoms(*model, require_entry_options)};
     ASSERT_EQ(require_entry_atoms.size(), 1);
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, PrepareSimulationAtomsCollectsAtomChargeAndRange)
-{
-    auto model{ MakeModelWithBond() };
+TEST(DataObjectDispatchIterationArchitectureTest, PrepareSimulationAtomsCollectsAtomChargeAndRange) {
+    auto model{MakeModelWithBond()};
     rg::SimulationAtomPreparationOptions options;
     options.partial_charge_choice = rg::PartialCharge::NEUTRAL;
     options.include_unknown_atoms = true;
 
-    const auto result{ rg::PrepareSimulationAtoms(*model, options) };
+    const auto result{rg::PrepareSimulationAtoms(*model, options)};
     ASSERT_TRUE(result.has_atom);
     EXPECT_EQ(result.atom_list.size(), 2);
     ASSERT_EQ(result.atom_charge_map.size(), 2);
     EXPECT_DOUBLE_EQ(result.atom_charge_map.at(1), 0.0);
     EXPECT_DOUBLE_EQ(result.atom_charge_map.at(2), 0.0);
 
-    const auto range_min{ result.range_minimum };
-    const auto range_max{ result.range_maximum };
+    const auto range_min{result.range_minimum};
+    const auto range_max{result.range_maximum};
     EXPECT_FLOAT_EQ(range_min[0], 0.0f);
     EXPECT_FLOAT_EQ(range_max[0], 1.0f);
 }
 
-TEST(DataObjectDispatchIterationArchitectureTest, BuildModelAtomBondContextBuildsSelectedContextMaps)
-{
-    auto model{ MakeModelWithBond() };
-    auto & atoms{ model->GetAtomList() };
-    auto & bonds{ model->GetBondList() };
+TEST(DataObjectDispatchIterationArchitectureTest, BuildModelAtomBondContextBuildsSelectedContextMaps) {
+    auto model{MakeModelWithBond()};
+    auto& atoms{model->GetAtomList()};
+    auto& bonds{model->GetBondList()};
     ASSERT_EQ(atoms.size(), 2);
     ASSERT_EQ(bonds.size(), 1);
     atoms[0]->SetSelectedFlag(true);
@@ -536,7 +488,7 @@ TEST(DataObjectDispatchIterationArchitectureTest, BuildModelAtomBondContextBuild
     bonds[0]->SetSelectedFlag(true);
     model->Update();
 
-    const auto context{ rg::BuildModelAtomBondContext(*model) };
+    const auto context{rg::BuildModelAtomBondContext(*model)};
     ASSERT_EQ(context.atom_map.size(), 2);
     ASSERT_EQ(context.bond_map.size(), 2);
     EXPECT_EQ(context.atom_map.at(1), atoms[0].get());

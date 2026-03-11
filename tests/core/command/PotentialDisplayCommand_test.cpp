@@ -6,13 +6,12 @@
 
 namespace rg = rhbm_gem;
 
-TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidationError)
-{
-    rg::PotentialDisplayCommand command{ command_test::BuildDataIoServices() };
+TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidationError) {
+    rg::PotentialDisplayCommand command{command_test::BuildDataIoServices()};
     command.SetPainterChoice(rg::PainterType::MODEL);
     command.SetModelKeyTagList("model_key");
 
-    EXPECT_NO_THROW(command.SetRefModelKeyTagListMap("invalid"));
+    command.SetRefModelKeyTagListMap("invalid");
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
         command_test::FindValidationIssue(
@@ -23,9 +22,8 @@ TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidatio
         nullptr);
 }
 
-TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError)
-{
-    rg::PotentialDisplayCommand command{ command_test::BuildDataIoServices() };
+TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError) {
+    rg::PotentialDisplayCommand command{command_test::BuildDataIoServices()};
     command.SetPainterChoice(static_cast<rg::PainterType>(999));
     command.SetModelKeyTagList("model_key");
 
@@ -39,9 +37,8 @@ TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError)
         nullptr);
 }
 
-TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareValidation)
-{
-    rg::PotentialDisplayCommand command{ command_test::BuildDataIoServices() };
+TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareValidation) {
+    rg::PotentialDisplayCommand command{command_test::BuildDataIoServices()};
     command.SetPainterChoice(rg::PainterType::MODEL);
     command.SetModelKeyTagList("model_key");
     command.SetRefModelKeyTagListMap("[with_charge]ref_a,ref_b;[no_charge]ref_c");

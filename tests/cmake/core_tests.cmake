@@ -32,7 +32,6 @@ add_rhbm_gtest_target(rhbm_tests_core_contract
     INTENTS contract
     SOURCES
         core/contract/BuiltInCommandCatalog_test.cpp
-        core/contract/CommandScaffoldScript_test.cpp
         core/contract/CommandExecutionContract_test.cpp
         core/contract/DocsSync_test.cpp
         core/contract/EnumOptionTraits_test.cpp

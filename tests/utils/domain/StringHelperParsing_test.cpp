@@ -336,15 +336,20 @@ TEST(StringHelperParsingTest, ParseListOptionParsesNegativeDoubles)
 TEST(StringHelperParsingTest, ParseListOptionHandlesVeryLargeDoubles)
 {
     const std::string input{ "1e308,2e308" };
+    bool parsed_successfully{ false };
+    bool threw_out_of_range{ false };
     try
     {
         const auto values{ StringHelper::ParseListOption<double>(input) };
         ASSERT_EQ(2u, values.size());
         EXPECT_DOUBLE_EQ(1e308, values[0]);
         EXPECT_TRUE(std::isinf(values[1]));
+        parsed_successfully = true;
     }
     catch (const std::out_of_range &)
     {
-        SUCCEED();
+        threw_out_of_range = true;
     }
+
+    EXPECT_TRUE(parsed_successfully || threw_out_of_range);
 }
