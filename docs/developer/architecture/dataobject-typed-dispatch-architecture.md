@@ -1,12 +1,6 @@
 # DataObject Typed Dispatch and Iteration Architecture
 
-This manual defines the current runtime contracts for `DataObject` iteration and typed dispatch.
-
-Use this guide to:
-
-- iterate manager-owned `DataObjectBase` instances safely
-- dispatch `DataObjectBase` to concrete top-level types (`ModelObject`, `MapObject`)
-- implement typed workflows at command, persistence, and painter boundaries
+This document defines runtime contracts for typed dispatch and manager-level iteration.
 
 Related guides:
 
@@ -17,45 +11,43 @@ Related guides:
 
 ## 1. Scope
 
-Top-level `DataObject` roots in this architecture are:
+Top-level dispatch targets in this architecture:
 
 - `ModelObject`
 - `MapObject`
 
-`AtomObject` and `BondObject` are valid `DataObjectBase` subtypes in runtime dispatch,
-but they are treated as internal model-domain objects rather than top-level catalog roots.
+`AtomObject` and `BondObject` are valid `DataObjectBase` subtypes but are not top-level catalog roots.
 
-## 2. Core Contracts
+## 2. Dispatch API
 
-### 2.1 `DataObjectBase`
+`DataObjectDispatch` (`include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`) provides:
 
-All concrete `DataObject` types implement:
+Probe helpers (non-throwing):
 
-```cpp
-virtual std::unique_ptr<DataObjectBase> Clone() const = 0;
-virtual void Display() const = 0;
-virtual void Update() = 0;
-virtual void SetKeyTag(const std::string & label) = 0;
-virtual std::string GetKeyTag() const = 0;
-```
+- `AsModelObject(...)`
+- `AsMapObject(...)`
 
-### 2.2 `ModelObject`
+Expect helpers (throwing):
 
-Model-domain workflows are expressed through typed APIs such as:
+- `ExpectModelObject(...)`
+- `ExpectMapObject(...)`
 
-- `GetAtomList()`
-- `GetBondList()`
-- `GetSelectedAtomList()`
-- `GetSelectedBondList()`
+Catalog type helper:
 
-### 2.3 `DataObjectManager` key-based typed access
+- `GetCatalogTypeName(const DataObjectBase &)`
 
-`DataObjectManager::GetTypedDataObject<T>(key_tag)` provides key-based typed retrieval via
-`std::dynamic_pointer_cast`, and throws on mismatch (`"Invalid data type for <key>"`).
+Dispatch contract:
 
-## 3. Manager Iteration Contract
+- Probe helpers return typed pointer or `nullptr`.
+- Expect helpers return typed reference or throw runtime error with caller context + resolved runtime type.
+- `GetCatalogTypeName(...)` returns stable root names:
+  - `model` for `ModelObject`
+  - `map` for `MapObject`
+- `GetCatalogTypeName(...)` throws for non-top-level types (`AtomObject`, `BondObject`, unresolved types).
 
-`DataObjectManager` exposes mutable and const callback traversal with optional ordering options:
+## 3. DataObjectManager Iteration Contract
+
+`DataObjectManager` supports mutable and const traversal:
 
 ```cpp
 struct IterateOptions
@@ -77,60 +69,23 @@ void ForEachDataObject(
 Behavior:
 
 - Empty `key_tag_list`:
-  - `deterministic_order=true` sorts keys lexicographically before callback execution.
-  - `deterministic_order=false` iterates current container order.
-- Non-empty `key_tag_list`: caller order is preserved; missing keys are skipped with warning logs.
-- Empty callback is invalid:
-  - mutable overload throws `ForEachDataObject(): callback is empty.`
-  - const overload throws `ForEachDataObject() const: callback is empty.`
-- Traversal is snapshot-based:
-  - manager map access is locked only while building the snapshot vector
-  - callbacks run outside the map lock
-  - map mutations (for example `ClearDataObjects()`) do not invalidate the active traversal
+  - `deterministic_order=true`: lexicographic key order.
+  - `deterministic_order=false`: container iteration order.
+- Non-empty `key_tag_list`: callback order follows input list order.
+- Missing keys are skipped and logged as warnings.
+- Empty callback throws runtime error.
+- Iteration is snapshot-based; callbacks run after snapshot capture, so map mutation does not invalidate active traversal.
 
-## 4. Typed Dispatch Contract
+## 4. Integration Contracts
 
-`DataObjectDispatch` (`include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`) provides runtime dispatch helpers.
+File/persistence type safety:
 
-### 4.1 Probe helpers (non-throwing)
+- `WriteDataObject(...)` model branch uses `ExpectModelObject(...)`.
+- `WriteDataObject(...)` map branch uses `ExpectMapObject(...)`.
+- `ModelObjectDAOSqlite::Save(...)` uses `ExpectModelObject(...)`.
+- `MapObjectDAO::Save(...)` uses `ExpectMapObject(...)`.
 
-- `AsModelObject(...)`
-- `AsMapObject(...)`
-
-These return typed pointers or `nullptr`.
-
-### 4.2 Expect helpers (throwing)
-
-- `ExpectModelObject(...)`
-- `ExpectMapObject(...)`
-
-These return typed references and throw `std::runtime_error` on mismatch. Error messages include
-caller-provided context and resolved runtime type (for example `expected ModelObject but got AtomObject`).
-
-### 4.3 Catalog naming helper
-
-- `GetCatalogTypeName(const DataObjectBase &)`
-
-Contract:
-
-- returns `"model"` for `ModelObject`
-- returns `"map"` for `MapObject`
-- throws for `AtomObject`/`BondObject` and unresolved types
-
-## 5. Integration Boundaries
-
-### 5.1 File and persistence type checks
-
-`Expect*` helpers are used as strict runtime contracts in I/O and persistence paths:
-
-- `WriteDataObject(...)` (model branch) -> `ExpectModelObject(...)`
-- `WriteDataObject(...)` (map branch) -> `ExpectMapObject(...)`
-- `ModelObjectDAOSqlite::Save(...)` -> `ExpectModelObject(...)`
-- `MapObjectDAO::Save(...)` -> `ExpectMapObject(...)`
-
-### 5.2 Command workflow helpers
-
-Typed workflow operations live in `DataObjectWorkflowOps`:
+Typed workflow operations (`DataObjectWorkflowOps`):
 
 - `NormalizeMapObject`
 - `PrepareModelObject`
@@ -139,30 +94,22 @@ Typed workflow operations live in `DataObjectWorkflowOps`:
 - `PrepareSimulationAtoms`
 - `BuildModelAtomBondContext`
 
-Map sampling is provided as a stateless helper:
+Map sampling helper:
 
 - `SampleMapValues(...)` (`include/rhbm_gem/core/command/MapSampling.hpp`)
 
-Potential-analysis-specific typed workflows remain command-local
-(`PotentialAnalysisTrainingWorkflow.*`, `PotentialAnalysisAnalysisWorkflow.*`,
-`PotentialAnalysisReportWorkflow.*`, `PotentialAnalysisBondWorkflow.*`).
+Painter ingestion contract:
 
-### 5.3 Painter ingestion checks
+- `AddDataObject(...)` / `AddReferenceDataObject(...)` template helpers in `PainterIngestionInternal.hpp`
+- Reject null or mismatched type with runtime error.
 
-Painter ingestion uses `PainterIngestionInternal.hpp` template helpers:
+## 5. Extension Guidance
 
-- `AddDataObject(...)`
-- `AddReferenceDataObject(...)`
+For extending behavior on existing `ModelObject` / `MapObject` workflows and iteration:
 
-These enforce expected types with `dynamic_cast` and throw mode-specific errors for null or mismatched input.
+- use [`../adding-dataobject-operations-and-iteration.md`](../adding-dataobject-operations-and-iteration.md)
 
-## 6. Extension Workflow
-
-For existing `ModelObject`/`MapObject` operation and iteration extension, use:
-
-- [`../adding-dataobject-operations-and-iteration.md`](../adding-dataobject-operations-and-iteration.md)
-
-## 7. Key Files
+## 6. Key Files
 
 Core interfaces:
 

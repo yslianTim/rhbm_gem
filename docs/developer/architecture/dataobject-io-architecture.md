@@ -1,6 +1,6 @@
 # DataObject I/O Architecture
 
-This document describes the current (v2) Data I/O architecture after complexity reduction.
+This document defines the current runtime and development contract for DataObject file I/O and SQLite persistence.
 
 Related guides:
 
@@ -11,12 +11,12 @@ Related guides:
 
 ## 1. Scope
 
-Top-level persisted/file-routable objects are fixed to:
+Top-level I/O roots are fixed:
 
 - `ModelObject`
 - `MapObject`
 
-`AtomObject` / `BondObject` are `ModelObject` internals and are not standalone I/O roots.
+`AtomObject` and `BondObject` are model-domain objects, not top-level file/database roots.
 
 ## 2. Supported Surface
 
@@ -25,10 +25,10 @@ Top-level persisted/file-routable objects are fixed to:
 | `ModelObject` | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` | yes |
 | `MapObject` | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` | yes |
 
-Notes:
+Rules:
 
 - Extension matching is case-insensitive.
-- `.mmcif` / `.mcif` are read aliases to CIF backend.
+- `.mmcif` and `.mcif` are read-only aliases to CIF backend.
 
 ## 3. Runtime Topology
 
@@ -49,11 +49,11 @@ flowchart LR
     subgraph P["SQLite persistence"]
       B --> H["DatabaseManager"]
       H --> I["object_catalog upsert / lookup"]
-      I --> J["fixed route: model -> ModelObjectDAOSqlite"]
-      I --> K["fixed route: map -> MapObjectDAO"]
+      I --> J["model -> ModelObjectDAOSqlite"]
+      I --> K["map -> MapObjectDAO"]
       H --> L["DatabaseSchemaManager"]
-      L --> M["v2 validate/bootstrap"]
-      L --> N["legacy_v1 migration (optional)"]
+      L --> M["v2 bootstrap/validation"]
+      L --> N["legacy v1 migration (optional)"]
     end
 ```
 
@@ -63,84 +63,81 @@ Public API (`include/rhbm_gem/data/io/FileIO.hpp`):
 
 - `ReadDataObject(path)`
 - `WriteDataObject(path, obj)`
-- `ReadModel(path)` / `WriteModel(path, model, model_parameter)`
+- `ReadModel(path)` / `WriteModel(path, model, model_parameter=0)`
 - `ReadMap(path)` / `WriteMap(path, map)`
 
-Design rules:
+Contract:
 
-- One descriptor lookup per operation; descriptor is forwarded through the full path.
-- Kind dispatch is explicit (`model` / `map`), not factory-registered at runtime.
-- Default `FileFormatRegistry` is process-level singleton.
-- Entry points return success or throw context-rich exceptions (path + operation).
+- Descriptor lookup is performed once per operation.
+- Routing is explicit by descriptor kind (`model` or `map`).
+- Backend construction uses fixed factories (`CreateModelFileFormatBackend`, `CreateMapFileFormatBackend`).
+- Type mismatch on generic write is enforced through `ExpectModelObject` / `ExpectMapObject`.
+- All entry points return success or throw `std::runtime_error` with path + operation context.
 
 `DataObjectManager` integration:
 
-- `ProcessFile(...)` calls `ReadDataObject(...)`, sets key tag, stores in memory.
-- `ProduceFile(...)` calls `WriteDataObject(...)` for in-memory object by key.
+- `ProcessFile(...)`: read, set key tag, display object, store in map.
+- `ProduceFile(...)`: write in-memory object by key.
+- Missing key in `ProduceFile(...)` logs warning and returns without throwing.
 
 ## 5. SQLite Persistence Contract
 
-Entry points (`DataObjectManager`):
+Manager entry points:
 
 - `SaveDataObject(key_tag, renamed_key_tag="")`
 - `LoadDataObject(key_tag)`
 
 `DatabaseManager` responsibilities:
 
-- open SQLite and ensure schema via `DatabaseSchemaManager`
-- keep transaction boundary for each save/load
-- upsert / query `object_catalog(key_tag, object_type)`
-- fixed routing only:
-  - `object_type == "model"` -> `ModelObjectDAOSqlite`
-  - `object_type == "map"` -> `MapObjectDAO`
+- open SQLite connection
+- call `DatabaseSchemaManager::EnsureSchema()`
+- own transaction boundary for each save/load
+- upsert or query `object_catalog(key_tag, object_type)`
+- route by stable type name only:
+  - `model` -> `ModelObjectDAOSqlite`
+  - `map` -> `MapObjectDAO`
 
-Removed by design:
+Behavior details:
 
-- runtime DAO factory registry
-- `CreateDAO(name)` / `GetTypeName(type_index)` style generic dispatch
-- arbitrary top-level runtime persistence extension path
+- `SaveDataObject(...)` throws when input pointer is null.
+- Unknown catalog type throws fail-fast runtime error.
+- `LoadDataObject(...)` throws if key does not exist.
+- `SaveDataObject(key, renamed)` changes persisted key only; in-memory key map is unchanged.
 
-## 6. Schema and Migration
+## 6. Schema Contract
 
 Schema version source: `PRAGMA user_version`.
 
-Supported behavior:
+Supported states:
 
-- `user_version = 2`: validate normalized v2 schema.
-- `user_version = 1`: migrate legacy v1 -> v2 only if `RHBM_GEM_LEGACY_V1_SUPPORT=ON`.
-- `user_version = 0`:
+- `2`: validate normalized v2 schema.
+- `1`: migrate legacy v1 to v2 only when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`.
+- `0`:
   - empty DB -> bootstrap v2
-  - unversioned legacy-v1 layout -> migrate if legacy support is enabled
-  - non-empty non-legacy layout -> fail fast
-- any other version -> fail fast
+  - legacy-v1 layout -> migrate to v2 when legacy support is enabled
+  - non-empty non-legacy -> fail fast
+- other versions -> fail fast
 
 v2 invariants:
 
-- `object_catalog` is the polymorphic root (`object_type in ('model','map')`).
-- `model_object.key_tag` and `map_list.key_tag` reference `object_catalog(key_tag)` with cascade.
-- all model payload tables reference `model_object(key_tag)` with cascade.
-- schema validation checks table presence, PK/FK shapes, and catalog/payload key consistency.
+- `object_catalog(key_tag, object_type)` is the root table.
+- `object_type` is constrained to `model` or `map`.
+- `model_object.key_tag` and `map_list.key_tag` reference `object_catalog(key_tag)` with `ON DELETE CASCADE`.
+- model payload tables reference `model_object(key_tag)` with `ON DELETE CASCADE`.
+- validation checks table presence, PK/FK shape, and catalog/payload key consistency.
 
-Legacy handling:
+## 7. Extension Boundaries
 
-- legacy migration path remains supported (when compiled with `RHBM_GEM_LEGACY_V1_SUPPORT=ON`).
-- legacy model reader lives in `src/data/migration/legacy_v1/`.
-- migration remains transaction-protected and validated before commit.
+Allowed extension:
 
-## 7. Extension Policy
+- Add model/map file backend via `FileFormatRegistry` + backend factory.
+- Evolve model/map schema and corresponding fixed DAO implementation.
 
-This architecture intentionally optimizes readability and traceability over runtime pluggability.
+Out of scope:
 
-Allowed extension points:
-
-- add model/map file backend in `FileFormatRegistry` + backend factory
-- evolve model/map schema and corresponding fixed DAO implementations
-
-Not supported:
-
-- runtime registration of new top-level `DataObject` types
-- runtime registration of arbitrary DAO factories
-- runtime override resolver/factory chains for file kind dispatch
+- Runtime registration of arbitrary top-level `DataObject` types.
+- Runtime registration of DAO factories.
+- Runtime file resolver/factory override chains.
 
 ## 8. Key Files
 
@@ -170,13 +167,5 @@ SQLite/schema:
 - `src/data/io/sqlite/MapObjectDAO.cpp`
 - `src/data/internal/io/sqlite/SQLiteWrapper.hpp`
 - optional legacy migration helper:
-  `src/data/internal/migration/LegacyModelObjectReader.hpp`,
-  `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp`
-
-## 9. Common Pitfalls
-
-- `ProcessFile(...)` / `LoadDataObject(...)` replace in-memory object on key collision.
-- `SaveDataObject(original, renamed)` only renames persisted key; memory key is unchanged.
-- `ClearDataObjects()` clears memory only, not database rows.
-- schema bootstrap/validation is performed during `DatabaseManager` construction.
-- unsupported schema versions fail fast by design.
+  - `src/data/internal/migration/LegacyModelObjectReader.hpp`
+  - `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp`
