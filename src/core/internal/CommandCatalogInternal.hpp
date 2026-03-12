@@ -24,14 +24,4 @@ struct CommandDescriptor
 const std::vector<CommandDescriptor> & CommandCatalog();
 std::string_view CommandPythonBindingName(CommandId id);
 
-constexpr bool UsesDatabaseAtRuntime(CommonOptionMask common_options)
-{
-    return HasCommonOption(common_options, CommonOption::Database);
-}
-
-constexpr bool UsesOutputFolder(CommonOptionMask common_options)
-{
-    return HasCommonOption(common_options, CommonOption::OutputFolder);
-}
-
 } // namespace rhbm_gem

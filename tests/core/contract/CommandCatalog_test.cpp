@@ -129,13 +129,12 @@ TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
         EXPECT_EQ(std::string_view{ descriptor.name }, expected.name);
         EXPECT_EQ(std::string_view{ descriptor.python_binding_name }, expected.python_binding_name);
         EXPECT_EQ(descriptor.common_options, expected.common_options);
-        EXPECT_EQ(rg::UsesDatabaseAtRuntime(descriptor.common_options), expected.uses_database);
         EXPECT_EQ(
             rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Database),
             expected.uses_database);
         EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Threading));
         EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Verbose));
-        EXPECT_TRUE(rg::UsesOutputFolder(descriptor.common_options));
+        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::OutputFolder));
         EXPECT_EQ(
             rg::CommandPythonBindingName(descriptor.id),
             std::string_view{ descriptor.python_binding_name });

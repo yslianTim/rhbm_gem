@@ -44,11 +44,11 @@ TEST(ApplicationTest, SharedOptionsMatchCommandMetadata)
         };
         EXPECT_EQ(
             help_text.find("--database") != std::string::npos,
-            rg::UsesDatabaseAtRuntime(descriptor.common_options))
+            rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Database))
             << descriptor.name;
         EXPECT_EQ(
             help_text.find("--folder") != std::string::npos,
-            rg::UsesOutputFolder(descriptor.common_options))
+            rg::HasCommonOption(descriptor.common_options, rg::CommonOption::OutputFolder))
             << descriptor.name;
     }
 }

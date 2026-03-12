@@ -92,9 +92,13 @@ std::string BuildExpectedSurfaceMatrixBlock()
     for (const auto & descriptor : rg::CommandCatalog())
     {
         output << "| `" << descriptor.name << "` | "
-               << (rg::UsesDatabaseAtRuntime(descriptor.common_options) ? "yes" : "no")
+               << (rg::HasCommonOption(
+                    descriptor.common_options,
+                    rg::CommonOption::Database) ? "yes" : "no")
                << " | "
-               << (rg::UsesOutputFolder(descriptor.common_options) ? "yes" : "no")
+               << (rg::HasCommonOption(
+                    descriptor.common_options,
+                    rg::CommonOption::OutputFolder) ? "yes" : "no")
                << " |\n";
     }
     return output.str();
