@@ -3,38 +3,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-import re
-import subprocess
-import sys
+
+import generate_command_artifacts
+from command_manifest import command_surface_paths, collect_drift_paths, parse_commands
 
 
-@dataclass(frozen=True)
-class CommandEntry:
-    command_type: str
-    cli_name: str
-    description: str
-
-
-def parse_commands(path: Path) -> list[CommandEntry]:
-    text = path.read_text(encoding="utf-8")
-    pattern = re.compile(
-        r"RHBM_GEM_COMMAND\(\s*"
-        r"(?P<command>[A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
-        r"\"(?P<cli>[^\"]+)\"\s*,\s*"
-        r"\"(?P<desc>[^\"]*)\"\s*"
-        r"\)",
-        re.MULTILINE,
-    )
-    return [
-        CommandEntry(
-            command_type=m.group("command"),
-            cli_name=m.group("cli"),
-            description=m.group("desc"),
-        )
-        for m in pattern.finditer(text)
-    ]
+ALLOWED_PROFILES = {"FileWorkflow", "DatabaseWorkflow"}
 
 
 def main() -> int:
@@ -47,34 +22,30 @@ def main() -> int:
     core_bindings_text = (root / "bindings" / "CoreBindings.cpp").read_text(encoding="utf-8")
 
     errors: list[str] = []
-    generator = root / "scripts" / "generate_command_artifacts.py"
-    generated = subprocess.run(
-        [sys.executable, str(generator), "--check"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if generated.returncode != 0:
-        message = generated.stdout.strip()
-        if generated.stderr.strip():
-            message += ("\n" if message else "") + generated.stderr.strip()
-        errors.append(f"generated artifacts drift detected:\n{message}")
+    generated_outputs = generate_command_artifacts.compute_expected_outputs(root, commands)
+    generated_drift = collect_drift_paths(generated_outputs)
+    if generated_drift:
+        drift_lines = "\n".join(
+            f" - {path.relative_to(root)}" for path in generated_drift
+        )
+        errors.append(
+            "generated artifacts drift detected:\n"
+            f"{drift_lines}\n"
+            "Run: python3 scripts/generate_command_artifacts.py"
+        )
 
     for entry in commands:
         command = entry.command_type
-        stem = command.removesuffix("Command")
-        binding_unit = f"{stem}Bindings.cpp"
-        expected_paths = [
-            root / "include" / "rhbm_gem" / "core" / "command" / f"{command}.hpp",
-            root / "src" / "core" / "command" / f"{command}.cpp",
-            root / "bindings" / binding_unit,
-            root / "tests" / "core" / "command" / f"{command}_test.cpp",
-        ]
+        binding_unit = f"{command.removesuffix('Command')}Bindings.cpp"
+        expected_paths = command_surface_paths(root, command)
         for p in expected_paths:
             if not p.exists():
                 errors.append(f"missing file for {command}: {p.relative_to(root)}")
 
-        binding_text = (root / "bindings" / binding_unit).read_text(encoding="utf-8")
+        binding_path = root / "bindings" / binding_unit
+        if not binding_path.exists():
+            continue
+        binding_text = binding_path.read_text(encoding="utf-8")
         bind_template_ref = f"BindCommandClass<{command}>"
         if bind_template_ref not in binding_text:
             errors.append(f"{binding_unit} missing command bind template reference: {bind_template_ref}")
@@ -82,6 +53,22 @@ def main() -> int:
         if bind_registration_ref not in binding_text:
             errors.append(
                 f"{binding_unit} missing command registration specialization: {bind_registration_ref}"
+            )
+
+    command_ids = [entry.command_id for entry in commands]
+    if len(command_ids) != len(set(command_ids)):
+        errors.append("CommandList.def has duplicated command ids.")
+    cli_names = [entry.cli_name for entry in commands]
+    if len(cli_names) != len(set(cli_names)):
+        errors.append("CommandList.def has duplicated CLI names.")
+    python_names = [entry.python_binding_name for entry in commands]
+    if len(python_names) != len(set(python_names)):
+        errors.append("CommandList.def has duplicated Python binding names.")
+    for entry in commands:
+        if entry.profile not in ALLOWED_PROFILES:
+            errors.append(
+                f"{entry.command_type} has unsupported profile '{entry.profile}'. "
+                "Expected FileWorkflow or DatabaseWorkflow."
             )
 
     if core_bindings_text.count('#include "internal/CommandList.def"') < 1:
@@ -100,4 +87,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

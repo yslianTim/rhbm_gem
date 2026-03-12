@@ -23,7 +23,6 @@ Manual updates for a new command:
 
 - `include/rhbm_gem/core/command/<YourCommand>.hpp`
 - `src/core/command/<YourCommand>.cpp`
-- `include/rhbm_gem/core/command/CommandMetadata.hpp` (add `CommandId`)
 - `src/core/internal/CommandList.def` (register command)
 - `bindings/<YourCommandStem>Bindings.cpp`
 - `tests/core/command/<YourCommand>_test.cpp`
@@ -37,8 +36,10 @@ Optional/manual depending on design:
 
 Generated artifacts from `CommandList.def`:
 
+- `include/rhbm_gem/core/command/internal/CommandIdEntries.generated.inc`
 - `src/core/internal/CommandCatalogIncludes.generated.inc`
 - `src/core/internal/CommandCatalogEntries.generated.inc`
+- `bindings/internal/CommandBindingNames.generated.inc`
 - `src/CommandSources.generated.cmake`
 - `bindings/CommandBindingUnits.generated.cmake`
 - `tests/cmake/CoreCommandTests.generated.cmake`
@@ -96,9 +97,12 @@ Add manifest entry in `src/core/internal/CommandList.def`:
 
 ```cpp
 RHBM_GEM_COMMAND(
+    Example,
     ExampleCommand,
     "example_command",
-    "Run example command")
+    "Run example command",
+    FileWorkflow,
+    "ExampleCommand")
 ```
 
 Then run:
@@ -143,12 +147,11 @@ Contract tests that usually need manual updates for a new command:
 
 Before merge:
 
-1. `CommandId` added in `include/rhbm_gem/core/command/CommandMetadata.hpp`.
-2. command added to `src/core/internal/CommandList.def`.
-3. generated artifacts refreshed (`python3 scripts/generate_command_artifacts.py`).
-4. command bindings complete (`bindings/<YourCommandStem>Bindings.cpp`).
-5. command tests and required contract tests updated.
-6. docs are synced with final command surface.
+1. command added to `src/core/internal/CommandList.def` with complete metadata (`COMMAND_ID`, `COMMAND_TYPE`, `CLI_NAME`, `DESCRIPTION`, `PROFILE`, `PYTHON_BINDING_NAME`).
+2. generated artifacts refreshed (`python3 scripts/generate_command_artifacts.py`).
+3. command bindings complete (`bindings/<YourCommandStem>Bindings.cpp`).
+4. command tests and required contract tests updated.
+5. docs are synced with final command surface.
 
 Recommended checks:
 

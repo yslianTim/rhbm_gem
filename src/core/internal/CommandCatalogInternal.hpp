@@ -17,11 +17,9 @@ struct CommandDescriptor
     std::string_view name;
     std::string_view description;
     CommonOptionMask common_options;
-    std::string_view python_binding_name;
     CommandFactory factory;
 };
 
 const std::vector<CommandDescriptor> & CommandCatalog();
-std::string_view CommandPythonBindingName(CommandId id);
 
 } // namespace rhbm_gem

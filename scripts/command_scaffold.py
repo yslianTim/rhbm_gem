@@ -19,10 +19,12 @@ from typing import Callable
 
 @dataclass(frozen=True)
 class ScaffoldSpec:
+    command_id: str
     command_type: str
     cli_name: str
     description: str
     profile: str
+    python_binding_name: str
 
 
 def _to_title_case(text: str) -> str:
@@ -64,9 +66,12 @@ def _append_command_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
     block = (
         "\n"
         "RHBM_GEM_COMMAND(\n"
+        f"    {spec.command_id},\n"
         f"    {spec.command_type},\n"
         f'    "{spec.cli_name}",\n'
-        f'    "{spec.description}")\n'
+        f'    "{spec.description}",\n'
+        f"    {spec.profile},\n"
+        f'    "{spec.python_binding_name}")\n'
     )
     return text.rstrip() + block, True
 
@@ -114,7 +119,7 @@ struct {spec.command_type}Options : public CommandOptions
 class {spec.command_type}
     : public CommandWithProfileOptions<
           {spec.command_type}Options,
-          CommandId::{spec.command_type.removesuffix("Command")},
+          CommandId::{spec.command_id},
           CommonOptionProfile::{spec.profile}>
 {{
 public:
@@ -140,7 +145,7 @@ namespace rhbm_gem {{
 {spec.command_type}::{spec.command_type}() :
     CommandWithProfileOptions<
         {spec.command_type}Options,
-        CommandId::{spec.command_type.removesuffix("Command")},
+        CommandId::{spec.command_id},
         CommonOptionProfile::{spec.profile}>{{}}
 {{
 }}
@@ -248,21 +253,36 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
 def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
     base = _to_title_case(args.name)
     command_type = base if base.endswith("Command") else f"{base}Command"
+    command_id = args.command_id or command_type.removesuffix("Command")
     cli_name = _to_cli_name(args.cli_name or base)
     description = args.description or f"Run {cli_name}"
+    python_binding_name = args.python_binding_name or command_type
     return ScaffoldSpec(
+        command_id=command_id,
         command_type=command_type,
         cli_name=cli_name,
         description=description,
         profile=args.profile,
+        python_binding_name=python_binding_name,
     )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate command scaffold files.")
     parser.add_argument("--name", required=True, help="Base command name, e.g. Example or ExampleCommand.")
+    parser.add_argument(
+        "--command-id",
+        help=(
+            "CommandId enum token to emit in CommandList.def. "
+            "Defaults to command name without 'Command' suffix."
+        ),
+    )
     parser.add_argument("--cli-name", help="CLI subcommand token. Defaults to name converted to snake_case.")
     parser.add_argument("--description", help="Command description text.")
+    parser.add_argument(
+        "--python-binding-name",
+        help="Python-exposed class name. Defaults to the command class name.",
+    )
     parser.add_argument(
         "--profile",
         default="FileWorkflow",

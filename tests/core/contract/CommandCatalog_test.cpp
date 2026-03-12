@@ -25,7 +25,6 @@ struct ExpectedCommandMetadata
 {
     rg::CommandId id;
     std::string_view name;
-    std::string_view python_binding_name;
     rg::CommonOptionMask common_options;
     bool uses_database;
 };
@@ -34,49 +33,42 @@ constexpr std::array<ExpectedCommandMetadata, 7> kExpectedCommandMetadata{{
     {
         rg::CommandId::PotentialAnalysis,
         "potential_analysis",
-        "PotentialAnalysisCommand",
         rg::PotentialAnalysisCommand::kCommonOptions,
         true
     },
     {
         rg::CommandId::PotentialDisplay,
         "potential_display",
-        "PotentialDisplayCommand",
         rg::PotentialDisplayCommand::kCommonOptions,
         true
     },
     {
         rg::CommandId::ResultDump,
         "result_dump",
-        "ResultDumpCommand",
         rg::ResultDumpCommand::kCommonOptions,
         true
     },
     {
         rg::CommandId::MapSimulation,
         "map_simulation",
-        "MapSimulationCommand",
         rg::MapSimulationCommand::kCommonOptions,
         false
     },
     {
         rg::CommandId::MapVisualization,
         "map_visualization",
-        "MapVisualizationCommand",
         rg::MapVisualizationCommand::kCommonOptions,
         false
     },
     {
         rg::CommandId::PositionEstimation,
         "position_estimation",
-        "PositionEstimationCommand",
         rg::PositionEstimationCommand::kCommonOptions,
         false
     },
     {
         rg::CommandId::ModelTest,
         "model_test",
-        "HRLModelTestCommand",
         rg::HRLModelTestCommand::kCommonOptions,
         false
     }
@@ -119,7 +111,6 @@ TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
 
     std::unordered_set<int> unique_ids;
     std::unordered_set<std::string> unique_names;
-    std::unordered_set<std::string> unique_binding_names;
     for (std::size_t index = 0; index < kExpectedCommandMetadata.size(); ++index)
     {
         const auto & descriptor{ catalog[index] };
@@ -127,7 +118,6 @@ TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
 
         EXPECT_EQ(descriptor.id, expected.id);
         EXPECT_EQ(std::string_view{ descriptor.name }, expected.name);
-        EXPECT_EQ(std::string_view{ descriptor.python_binding_name }, expected.python_binding_name);
         EXPECT_EQ(descriptor.common_options, expected.common_options);
         EXPECT_EQ(
             rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Database),
@@ -135,18 +125,13 @@ TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
         EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Threading));
         EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Verbose));
         EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::OutputFolder));
-        EXPECT_EQ(
-            rg::CommandPythonBindingName(descriptor.id),
-            std::string_view{ descriptor.python_binding_name });
 
         unique_ids.insert(static_cast<int>(descriptor.id));
         unique_names.emplace(descriptor.name);
-        unique_binding_names.emplace(descriptor.python_binding_name);
     }
 
     EXPECT_EQ(unique_ids.size(), catalog.size());
     EXPECT_EQ(unique_names.size(), catalog.size());
-    EXPECT_EQ(unique_binding_names.size(), catalog.size());
 }
 
 TEST(CommandCatalogTest, FactoriesConstructCommandsWithMatchingMetadata)

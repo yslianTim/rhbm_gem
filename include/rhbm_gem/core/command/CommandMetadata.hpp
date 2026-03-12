@@ -6,13 +6,7 @@ namespace rhbm_gem {
 
 enum class CommandId
 {
-    PotentialAnalysis = 0,
-    PotentialDisplay,
-    ResultDump,
-    MapSimulation,
-    MapVisualization,
-    PositionEstimation,
-    ModelTest
+#include <rhbm_gem/core/command/internal/CommandIdEntries.generated.inc>
 };
 
 enum class CommonOption : std::uint8_t

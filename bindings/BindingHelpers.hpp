@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -10,11 +11,21 @@
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
-#include "internal/CommandCatalogInternal.hpp"
-
 namespace py = pybind11;
 
+namespace rhbm_gem {
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE, PYTHON_BINDING_NAME) \
+    class COMMAND_TYPE;
+#include "internal/CommandList.def"
+#undef RHBM_GEM_COMMAND
+} // namespace rhbm_gem
+
 namespace rhbm_gem::bindings {
+
+template <typename CommandType>
+struct CommandBindingName;
+
+#include "internal/CommandBindingNames.generated.inc"
 
 template <typename EnumType>
 void BindEnumEntries(py::enum_<EnumType> & py_enum)
@@ -29,10 +40,10 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
 template <typename CommandType>
 py::class_<CommandType, std::shared_ptr<CommandType>> BindCommandClass(py::module_ & module)
 {
-    const auto binding_name{ CommandPythonBindingName(CommandType::kCommandId) };
+    const auto binding_name{ std::string(CommandBindingName<CommandType>::value) };
     return py::class_<CommandType, std::shared_ptr<CommandType>>(
         module,
-        std::string(binding_name).c_str());
+        binding_name.c_str());
 }
 
 template <typename CommandType, typename HolderType>

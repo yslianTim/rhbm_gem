@@ -31,11 +31,16 @@ namespace rhbm_gem::detail {
 namespace {
 
 std::filesystem::path BuildOutputPath(
-    ResultDumpWorkflowContext & context,
+    const ResultDumpWorkflowContext & context,
     std::string_view stem,
     std::string_view extension)
 {
-    return context.build_output_path(stem, extension);
+    std::string normalized_extension{ extension };
+    if (!normalized_extension.empty() && normalized_extension.front() != '.')
+    {
+        normalized_extension.insert(normalized_extension.begin(), '.');
+    }
+    return context.options.folder_path / (std::string(stem) + normalized_extension);
 }
 
 bool BuildDataObjectList(ResultDumpWorkflowContext & context)
@@ -43,7 +48,7 @@ bool BuildDataObjectList(ResultDumpWorkflowContext & context)
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     try
     {
-        context.require_database_manager();
+        context.data_manager.SetDatabaseManager(context.options.database_path);
         context.map_object = command_data_loader::OptionalProcessMapFile(
             context.data_manager,
             context.options.map_file_path,

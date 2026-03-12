@@ -33,6 +33,10 @@ Top-level command membership is defined in:
 
 - `src/core/internal/CommandList.def`
 
+Each entry follows:
+
+- `RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE, PYTHON_BINDING_NAME)`
+
 The manifest drives:
 
 - `CommandCatalog()` construction (`src/core/command/CommandCatalog.cpp`)
@@ -46,7 +50,6 @@ The manifest drives:
 - `name`
 - `description`
 - `common_options`
-- `python_binding_name`
 - `factory`
 
 ### Command manifest
@@ -177,10 +180,9 @@ Convenience setters:
 
 Execution boundary helpers:
 
-- `RequireDatabaseManager()`
 - `BuildOutputPath(...)`
 
-CLI binding helpers (`CommandOptionBinding.hpp`):
+CLI binding helpers (`src/core/internal/CommandOptionBindingInternal.hpp`):
 
 - `command_cli::AddScalarOption(...)`
 - `command_cli::AddStringOption(...)`
@@ -204,7 +206,7 @@ Per-command binding units are explicit (`bindings/*Bindings.cpp`), module wiring
 
 Binding rules:
 
-- command class name comes from `CommandPythonBindingName(...)`
+- command class name comes from manifest-generated binding traits (`bindings/internal/CommandBindingNames.generated.inc`)
 - expose command-local setters + `Execute`
 - include shared bindings via `BindCommonCommandSetters(...)` and `BindCommandDiagnostics(...)`
 - execution contract is the same `PrepareForExecution()` / `Execute()` path as C++
@@ -237,7 +239,7 @@ Binding rules:
 When adding or changing a command:
 
 1. Update command implementation (`include/.../command/*.hpp`, `src/core/command/*.cpp`).
-2. Update membership in `src/core/internal/CommandList.def`.
+2. Update membership and metadata in `src/core/internal/CommandList.def`.
 3. Refresh generated artifacts (`python3 scripts/generate_command_artifacts.py`).
 4. Update command bindings (`bindings/*Bindings.cpp`).
 5. Update command and contract tests.
@@ -251,15 +253,17 @@ When adding or changing a command:
 - `include/rhbm_gem/core/command/CommandBase.hpp`
 - `src/core/command/CommandBase.cpp`
 - `include/rhbm_gem/core/command/CommandMetadata.hpp`
+- `include/rhbm_gem/core/command/internal/CommandIdEntries.generated.inc`
 - `src/core/internal/CommandList.def`
 - `src/core/internal/CommandCatalogInternal.hpp`
 - `src/core/command/CommandCatalog.cpp`
-- `include/rhbm_gem/core/command/CommandOptionBinding.hpp`
+- `src/core/internal/CommandOptionBindingInternal.hpp`
 - `src/core/internal/CommandDataLoaderInternal.hpp`
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `include/rhbm_gem/gui/GuiCommandExecutor.hpp`
 - `src/gui/GuiCommandExecutor.cpp`
 - `bindings/BindingHelpers.hpp`
+- `bindings/internal/CommandBindingNames.generated.inc`
 - `bindings/CommonBindings.cpp`
 - `bindings/CoreBindings.cpp`
 

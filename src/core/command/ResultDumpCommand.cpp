@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "internal/CommandOptionBindingInternal.hpp"
 #include "workflow/ResultDumpWorkflowInternal.hpp"
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
@@ -54,11 +54,6 @@ bool ResultDumpCommand::ExecuteImpl()
         m_selected_atom_list_map,
         m_model_object_list,
         m_map_object,
-        [this]() { RequireDatabaseManager(); },
-        [this](std::string_view stem, std::string_view extension)
-        {
-            return BuildOutputPath(stem, extension);
-        },
     };
     return detail::ExecuteResultDumpWorkflow(context);
 }

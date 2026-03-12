@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/command/CommandBase.hpp>
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "internal/CommandOptionBindingInternal.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <CLI/CLI.hpp>
@@ -339,11 +339,6 @@ void CommandBase::AddValidationIssue(
         message,
         auto_corrected
     });
-}
-
-void CommandBase::RequireDatabaseManager()
-{
-    m_data_manager.SetDatabaseManager(GetOptions().database_path);
 }
 
 std::filesystem::path CommandBase::BuildOutputPath(

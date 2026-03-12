@@ -1,6 +1,6 @@
 #include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
 #include "internal/CommandDataLoaderInternal.hpp"
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "internal/CommandOptionBindingInternal.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -259,7 +259,7 @@ bool PotentialDisplayCommand::BuildDataObject()
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        RequireDatabaseManager();
+        m_data_manager.SetDatabaseManager(m_options.database_path);
         auto model_size{ m_options.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");

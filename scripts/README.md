@@ -10,7 +10,8 @@
 ## Command Automation
 
 - `scripts/generate_command_artifacts.py`: generate all command derived artifacts from `CommandList.def`
-  (catalog include/entry fragments, command CMake source lists, docs generated blocks).
+  (generated `CommandId` entries, catalog include/entry fragments, binding-name traits,
+  command CMake source lists, docs generated blocks).
 - `scripts/command_scaffold.py`: generate a new command/binding/test/doc scaffold.
   - add `--wire` to also update `CommandList.def` and regenerate derived artifacts.
   - add `--wire --strict` to fail-fast if manifest generation fails.

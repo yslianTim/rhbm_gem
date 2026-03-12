@@ -7,6 +7,8 @@
 #include <iterator>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "internal/CommandCatalogInternal.hpp"
 #include "CommandTestHelpers.hpp"
@@ -106,11 +108,17 @@ std::string BuildExpectedSurfaceMatrixBlock()
 
 std::string BuildExpectedPythonSurfaceBlock()
 {
+    std::vector<std::string_view> python_binding_names;
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE, PYTHON_BINDING_NAME) \
+    python_binding_names.emplace_back(PYTHON_BINDING_NAME);
+#include "internal/CommandList.def"
+#undef RHBM_GEM_COMMAND
+
     std::ostringstream output;
     output << "### Python command classes\n";
-    for (const auto & descriptor : rg::CommandCatalog())
+    for (const auto & binding_name : python_binding_names)
     {
-        output << "- `" << descriptor.python_binding_name << "`\n";
+        output << "- `" << binding_name << "`\n";
     }
 
     output << "\n### Shared diagnostics types\n";

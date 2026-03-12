@@ -4,9 +4,11 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
+#include <filesystem>
 #include <memory>
 #include <random>
 #include <sstream>
+#include <string_view>
 #include <vector>
 
 #ifdef HAVE_ROOT
@@ -28,6 +30,17 @@
 #endif
 
 namespace rhbm_gem::detail {
+
+namespace {
+
+std::filesystem::path BuildOutputPath(
+    const HRLModelTestWorkflowContext & context,
+    std::string_view stem)
+{
+    return context.options.folder_path / std::string(stem);
+}
+
+} // namespace
 
 void PrintDataOutlierResult(
     const HRLModelTestWorkflowContext & context,
@@ -443,7 +456,7 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ context.build_output_path(name) };
+    auto file_path{ BuildOutputPath(context, name) };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintDataOutlierResult");
     (void)outlier_list;
     (void)mean_matrix_ols_list;
@@ -679,7 +692,7 @@ void PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ context.build_output_path(name) };
+    auto file_path{ BuildOutputPath(context, name) };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintMemberOutlierResult");
     (void)outlier_list;
     (void)mean_matrix_median_list;

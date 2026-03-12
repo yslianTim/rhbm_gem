@@ -3,26 +3,10 @@
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
-#include "internal/GuiCommandExecutorTestHooks.hpp"
-
-#include <atomic>
-#include <utility>
 
 namespace rhbm_gem::gui {
 
 namespace {
-
-std::atomic<std::size_t> g_default_executor_build_count{ 0U };
-
-const GuiCommandExecutor & SharedThreadExecutor()
-{
-    thread_local const GuiCommandExecutor executor = []()
-    {
-        g_default_executor_build_count.fetch_add(1U, std::memory_order_relaxed);
-        return GuiCommandExecutor{};
-    }();
-    return executor;
-}
 
 template <typename CommandType>
 void ApplyCommonOptions(
@@ -66,8 +50,8 @@ ExecutionResult ExecuteCommand(
 
 GuiCommandExecutor::GuiCommandExecutor() = default;
 
-ExecutionResult GuiCommandExecutor::RunMapSimulation(
-    const MapSimulationRequest & request) const
+ExecutionResult GuiCommandExecutor::ExecuteMapSimulation(
+    const MapSimulationRequest & request)
 {
     return ExecuteCommand<MapSimulationCommand>([&](MapSimulationCommand & configured)
     {
@@ -82,8 +66,8 @@ ExecutionResult GuiCommandExecutor::RunMapSimulation(
     });
 }
 
-ExecutionResult GuiCommandExecutor::RunPotentialAnalysis(
-    const PotentialAnalysisRequest & request) const
+ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
+    const PotentialAnalysisRequest & request)
 {
     return ExecuteCommand<PotentialAnalysisCommand>([&](PotentialAnalysisCommand & configured)
     {
@@ -107,8 +91,8 @@ ExecutionResult GuiCommandExecutor::RunPotentialAnalysis(
     });
 }
 
-ExecutionResult GuiCommandExecutor::RunResultDump(
-    const ResultDumpRequest & request) const
+ExecutionResult GuiCommandExecutor::ExecuteResultDump(
+    const ResultDumpRequest & request)
 {
     return ExecuteCommand<ResultDumpCommand>([&](ResultDumpCommand & configured)
     {
@@ -118,37 +102,5 @@ ExecutionResult GuiCommandExecutor::RunResultDump(
         configured.SetMapFilePath(request.map_file_path);
     });
 }
-
-ExecutionResult GuiCommandExecutor::ExecuteMapSimulation(
-    const MapSimulationRequest & request)
-{
-    return SharedThreadExecutor().RunMapSimulation(request);
-}
-
-ExecutionResult GuiCommandExecutor::ExecutePotentialAnalysis(
-    const PotentialAnalysisRequest & request)
-{
-    return SharedThreadExecutor().RunPotentialAnalysis(request);
-}
-
-ExecutionResult GuiCommandExecutor::ExecuteResultDump(
-    const ResultDumpRequest & request)
-{
-    return SharedThreadExecutor().RunResultDump(request);
-}
-
-namespace internal {
-
-std::size_t DefaultServiceBuildCountForTesting()
-{
-    return 0U;
-}
-
-std::size_t DefaultExecutorBuildCountForTesting()
-{
-    return g_default_executor_build_count.load(std::memory_order_relaxed);
-}
-
-} // namespace internal
 
 } // namespace rhbm_gem::gui

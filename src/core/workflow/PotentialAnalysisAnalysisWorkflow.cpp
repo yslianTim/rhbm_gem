@@ -50,7 +50,7 @@ bool PotentialAnalysisCommand::BuildDataObject()
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
-        RequireDatabaseManager();
+        m_data_manager.SetDatabaseManager(m_options.database_path);
         m_model_object = command_data_loader::ProcessModelFile(
             m_data_manager, m_options.model_file_path, m_model_key_tag, "model file");
         m_map_object = command_data_loader::ProcessMapFile(

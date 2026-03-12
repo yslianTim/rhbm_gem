@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "internal/CommandOptionBindingInternal.hpp"
 
 namespace {
 constexpr std::string_view kModelKey{ "model" };

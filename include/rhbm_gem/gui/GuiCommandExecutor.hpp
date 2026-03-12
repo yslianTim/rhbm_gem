@@ -66,10 +66,6 @@ class GuiCommandExecutor
 public:
     GuiCommandExecutor();
 
-    ExecutionResult RunMapSimulation(const MapSimulationRequest & request) const;
-    ExecutionResult RunPotentialAnalysis(const PotentialAnalysisRequest & request) const;
-    ExecutionResult RunResultDump(const ResultDumpRequest & request) const;
-
     static ExecutionResult ExecuteMapSimulation(const MapSimulationRequest & request);
     static ExecutionResult ExecutePotentialAnalysis(const PotentialAnalysisRequest & request);
     static ExecutionResult ExecuteResultDump(const ResultDumpRequest & request);

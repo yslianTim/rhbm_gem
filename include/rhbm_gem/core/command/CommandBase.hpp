@@ -231,7 +231,6 @@ protected:
                 ValidationPhase::Parse);
         });
     }
-    void RequireDatabaseManager();
     std::filesystem::path BuildOutputPath(
         std::string_view stem,
         std::string_view extension) const;

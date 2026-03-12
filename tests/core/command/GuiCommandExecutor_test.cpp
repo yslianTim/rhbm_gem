@@ -1,11 +1,10 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
-#include <thread>
+#include <type_traits>
 
 #include "CommandTestHelpers.hpp"
 #include "CommandValidationAssertions.hpp"
-#include "GuiCommandExecutorTestHooks.hpp"
 #include <rhbm_gem/gui/GuiCommandExecutor.hpp>
 
 namespace rg = rhbm_gem;
@@ -107,53 +106,59 @@ TEST(GuiCommandExecutorTest, ResultDumpMapPathIsOnlyRequiredForMapPrinter)
         nullptr);
 }
 
-TEST(GuiCommandExecutorTest, StaticAndInstanceExecutionPathsAreEquivalentForValidation)
+namespace {
+
+template <typename Type, typename = void>
+struct HasRunMapSimulation : std::false_type
 {
-    rg::gui::MapSimulationRequest request;
+};
 
-    const auto static_result{ rg::gui::GuiCommandExecutor::ExecuteMapSimulation(request) };
+template <typename Type>
+struct HasRunMapSimulation<Type, std::void_t<decltype(&Type::RunMapSimulation)>>
+    : std::true_type
+{
+};
 
-    rg::gui::GuiCommandExecutor instance_executor{};
-    const auto instance_result{ instance_executor.RunMapSimulation(request) };
+template <typename Type, typename = void>
+struct HasRunPotentialAnalysis : std::false_type
+{
+};
 
-    EXPECT_EQ(static_result.prepared, instance_result.prepared);
-    EXPECT_EQ(static_result.executed, instance_result.executed);
+template <typename Type>
+struct HasRunPotentialAnalysis<Type, std::void_t<decltype(&Type::RunPotentialAnalysis)>>
+    : std::true_type
+{
+};
+
+template <typename Type, typename = void>
+struct HasRunResultDump : std::false_type
+{
+};
+
+template <typename Type>
+struct HasRunResultDump<Type, std::void_t<decltype(&Type::RunResultDump)>>
+    : std::true_type
+{
+};
+
+} // namespace
+
+TEST(GuiCommandExecutorTest, ExposesExecuteOnlySurfaceForCommandEntryPoints)
+{
+    EXPECT_FALSE(HasRunMapSimulation<rg::gui::GuiCommandExecutor>::value);
+    EXPECT_FALSE(HasRunPotentialAnalysis<rg::gui::GuiCommandExecutor>::value);
+    EXPECT_FALSE(HasRunResultDump<rg::gui::GuiCommandExecutor>::value);
+
+    const auto result{
+        rg::gui::GuiCommandExecutor::ExecuteMapSimulation(rg::gui::MapSimulationRequest{})
+    };
+    EXPECT_FALSE(result.prepared);
+    EXPECT_FALSE(result.executed);
     EXPECT_NE(
         command_test::FindValidationIssue(
-            instance_result.validation_issues,
+            result.validation_issues,
             "--model",
             rg::ValidationPhase::Parse,
             LogLevel::Error),
         nullptr);
-}
-
-TEST(GuiCommandExecutorTest, StaticExecutorPoolReusesPerThreadExecutor)
-{
-    const auto service_count_before{
-        rg::gui::internal::DefaultServiceBuildCountForTesting()
-    };
-    const auto executor_count_before{
-        rg::gui::internal::DefaultExecutorBuildCountForTesting()
-    };
-
-    std::thread worker([]()
-    {
-        rg::gui::MapSimulationRequest request;
-        const auto first{ rg::gui::GuiCommandExecutor::ExecuteMapSimulation(request) };
-        const auto second{ rg::gui::GuiCommandExecutor::ExecuteMapSimulation(request) };
-        EXPECT_FALSE(first.prepared);
-        EXPECT_FALSE(second.prepared);
-    });
-    worker.join();
-
-    const auto service_count_after{
-        rg::gui::internal::DefaultServiceBuildCountForTesting()
-    };
-    const auto executor_count_after{
-        rg::gui::internal::DefaultExecutorBuildCountForTesting()
-    };
-
-    EXPECT_GE(service_count_after, service_count_before);
-    EXPECT_LE(service_count_after, service_count_before + 1U);
-    EXPECT_EQ(executor_count_after, executor_count_before + 1U);
 }

@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "internal/CommandOptionBindingInternal.hpp"
 #include "workflow/HRLModelTestWorkflowInternal.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -55,10 +55,6 @@ bool HRLModelTestCommand::ExecuteImpl()
 {
     return detail::RunHRLModelTestWorkflow(detail::HRLModelTestWorkflowContext{
         m_options,
-        [this](std::string_view stem)
-        {
-            return BuildOutputPath(stem, "");
-        },
     });
 }
 
