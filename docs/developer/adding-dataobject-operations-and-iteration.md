@@ -4,7 +4,6 @@ This guide explains how to extend behavior on existing `DataObject` types (`Mode
 
 Related references:
 
-- [`architecture/dataobject-typed-dispatch-architecture.md`](architecture/dataobject-typed-dispatch-architecture.md)
 - [`architecture/dataobject-io-architecture.md`](architecture/dataobject-io-architecture.md)
 - [`adding-a-command.md`](adding-a-command.md)
 
@@ -125,7 +124,6 @@ Common suites:
 
 When contracts change, update:
 
-- `docs/developer/architecture/dataobject-typed-dispatch-architecture.md`
 - `docs/developer/architecture/dataobject-io-architecture.md`
 - this guide
 - command docs if command behavior or options changed

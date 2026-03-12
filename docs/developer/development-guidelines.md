@@ -62,7 +62,6 @@ See:
 - [`./architecture/command-architecture.md`](./architecture/command-architecture.md)
 - [`./adding-a-command.md`](./adding-a-command.md)
 - [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-io-architecture.md)
-- [`./architecture/dataobject-typed-dispatch-architecture.md`](./architecture/dataobject-typed-dispatch-architecture.md)
 - [`./adding-dataobject-operations-and-iteration.md`](./adding-dataobject-operations-and-iteration.md)
 
 Command-layer principles:
@@ -75,7 +74,7 @@ Command-layer principles:
 DataObject I/O principles:
 
 - `[Required]` Keep file-format support definitions centralized in a single registry-style source of truth.
-- `[Required]` Use injectable resolvers/factories for overrides and testing; avoid hidden global mutable behavior.
+- `[Required]` Use explicit fixed routing with centralized registry-driven descriptor lookup.
 - `[Required]` Reader/writer and DAO paths should fail fast with clear exceptions when contracts are violated.
 - `[Required]` Keep schema versioning, validation, and migration centralized in schema-management components.
 - `[Required]` Keep normal save/load hot paths separate from bootstrap/repair logic.

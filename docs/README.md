@@ -20,6 +20,6 @@ The content is split by audience so you can go straight to the guide that matche
 - Start with [`developer/README.md`](developer/README.md) and [`developer/build-and-configuration.md`](developer/build-and-configuration.md).
 - [`developer/development-guidelines.md`](developer/development-guidelines.md)
 - [`developer/architecture/command-architecture.md`](developer/architecture/command-architecture.md)
-- [`developer/architecture/dataobject-typed-dispatch-architecture.md`](developer/architecture/dataobject-typed-dispatch-architecture.md)
+- [`developer/architecture/dataobject-io-architecture.md`](developer/architecture/dataobject-io-architecture.md)
 - [`developer/adding-dataobject-operations-and-iteration.md`](developer/adding-dataobject-operations-and-iteration.md)
 - [`developer/adding-a-command.md`](developer/adding-a-command.md)
