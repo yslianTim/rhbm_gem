@@ -1,63 +1,53 @@
 # Command Architecture
 
-This document describes the command system in this repository.
+Current command runtime and extension contracts.
 
 Related guides:
 
-- [`../development-guidelines.md`](../development-guidelines.md)
 - [`../adding-a-command.md`](../adding-a-command.md)
+- [`../development-guidelines.md`](../development-guidelines.md)
 
-## 1. Scope and ownership
+## 1. Runtime topology
 
-The command layer is the orchestration boundary between input surfaces
-(CLI/Python/GUI execution requests) and domain/data logic.
+```mermaid
+flowchart LR
+    A["CLI (main.cpp + CLI11)"] --> B["Application::RegisterAllCommands()"]
+    B --> C["CommandCatalog() from CommandList.def"]
+    C --> D["Concrete CommandBase instances"]
 
-Command responsibilities:
+    E["Python bindings (pybind11)"] --> D
+    F["GUI requests (GuiCommandExecutor)"] --> D
 
-- accept CLI11 callbacks, Python setter calls, and GUI request-adapter setter calls
-- store normalized options
-- validate options in parse/prepare phases
-- prepare runtime prerequisites (log level, output folders, database parent folder)
-- orchestrate workflow execution in `ExecuteImpl()`
-- report user-facing issues through `Logger` and `ValidationIssue`
+    D --> G["PrepareForExecution()"]
+    G --> G1["ResetRuntimeState + ClearDataObjects"]
+    G --> G2["ValidateOptions()"]
+    G --> G3["Filesystem preflight<br/>database parent/output folder"]
 
-Non-responsibilities:
+    D --> H["Execute() / ExecuteImpl()"]
+    H --> I["DataObjectManager + workflows + I/O"]
+```
 
-- file-format parsing internals
-- database persistence internals
-- numerical kernel internals
-- painter/printer implementation internals
+## 2. Source of truth
 
-Those responsibilities stay in `DataObjectManager`, data/file modules, and domain helpers.
-
-## 2. Command source of truth
-
-Command definitions are centralized in:
+Top-level command membership is defined in:
 
 - `src/core/internal/CommandList.def`
 
-This list is consumed by:
+The manifest drives:
 
-- `src/core/command/CommandCatalog.cpp` to build `CommandCatalog()` for CLI registration and metadata checks
-- `bindings/CoreBindings.cpp` to register Python command binders via manifest expansion
-- `scripts/generate_command_artifacts.py` to refresh generated catalog/CMake/docs artifacts
-- generated CMake source lists for command sources/bindings/tests
+- `CommandCatalog()` construction (`src/core/command/CommandCatalog.cpp`)
+- CLI subcommand registration order (`src/core/command/Application.cpp`)
+- Python module command registration (`bindings/CoreBindings.cpp`)
+- generated catalog/CMake/docs artifacts (`scripts/generate_command_artifacts.py`)
 
-`CommandDescriptor` fields (defined in `src/core/internal/CommandCatalogInternal.hpp`):
+`CommandDescriptor` fields (`src/core/internal/CommandCatalogInternal.hpp`):
 
-- `id` (`CommandId`)
-- `name` (CLI subcommand name)
+- `id`
+- `name`
 - `description`
-- `common_options` (`CommonOptionMask`)
+- `common_options`
 - `python_binding_name`
 - `factory`
-
-Rules enforced by implementation:
-
-- `id` and `common_options` are derived from concrete command type (`kCommandId`, `kCommonOptions`)
-- `python_binding_name` is derived from command type (`COMMAND_TYPE`)
-- command order in the catalog defines CLI subcommand help order
-- there is no plugin/self-registration path for commands
 
 ### Command manifest
 
@@ -71,67 +61,58 @@ Rules enforced by implementation:
 7. `model_test`
 <!-- END GENERATED: command-manifest -->
 
-## 3. CLI startup and registration flow
+## 3. Registration paths
 
-Startup path:
+CLI path:
 
 1. `src/main.cpp` creates `CLI::App`.
-2. `Application` (`src/core/command/Application.cpp`) is constructed with `CLI::App` and requires exactly one subcommand.
-3. `Application::RegisterAllCommands()` iterates `CommandCatalog()`.
-4. For each descriptor:
-   - create concrete command via `descriptor.factory()`
-   - register subcommand (`name`, `description`)
-   - call `CommandBase::RegisterCLIOptions()`
-   - register callback that calls `Execute()`
-5. Callback throws `CLI::RuntimeError(1)` when `Execute()` returns `false`.
+2. `Application` requires exactly one subcommand.
+3. `RegisterAllCommands()` iterates `CommandCatalog()`.
+4. For each descriptor, it creates a command instance, registers CLI options, and binds callback to `Execute()`.
+5. Callback throws `CLI::RuntimeError(1)` when execution fails.
 
-There is no second command CLI registration path in the project.
+Python path:
 
-GUI integration path:
+- `bindings/CoreBindings.cpp` expands `CommandList.def` and calls `BindCommand<...>()` per command.
 
-- `GuiCommandExecutor` (`src/gui/GuiCommandExecutor.cpp`) does not register subcommands
-- it creates concrete command instances directly, applies request DTOs through setters, then runs `PrepareForExecution()`/`Execute()`
-- this path reuses the same command lifecycle and validation APIs as CLI/Python
+GUI path:
+
+- `GuiCommandExecutor` creates concrete command objects directly, applies request DTOs via setters, then calls `PrepareForExecution()` and `Execute()`.
 
 ## 4. Concrete command contract
 
-Standard command structure:
+Command shape:
 
-1. define `Options` struct derived from `CommandOptions`
-2. derive from `CommandWithProfileOptions<OptionsT, CommandId::..., Profile>`
-3. implement command-specific setters
-4. register command-local CLI options in `RegisterCLIOptionsExtend(...)`
-5. keep cross-field checks in `ValidateOptions()`
-6. clear transient runtime state in `ResetRuntimeState()`
-7. keep `ExecuteImpl()` orchestration-focused
+1. Define `Options` derived from `CommandOptions`.
+2. Derive command class from `CommandWithProfileOptions<...>` or `CommandWithOptions<...>`.
+3. Implement command-local setters.
+4. Register command-local CLI options in `RegisterCLIOptionsExtend(...)`.
+5. Keep cross-field checks in `ValidateOptions()`.
+6. Reset transient runtime fields in `ResetRuntimeState()`.
+7. Keep `ExecuteImpl()` focused on orchestration.
 
-Base options from `CommandOptions`:
+Base `CommandOptions` fields:
 
 - `thread_size`
 - `verbose_level`
 - `database_path`
 - `folder_path`
 
-Template aliases in `include/rhbm_gem/core/command/CommandBase.hpp`:
-
-- `CommandWithOptions<...>` for explicit mask
-- `CommandWithProfileOptions<...>` for profile-driven mask
-
-`CommonOptionProfile` mapping (in `CommandMetadata.hpp`):
+`CommonOptionProfile` (`CommandMetadata.hpp`) maps to:
 
 - `FileWorkflow` -> `Threading | Verbose | OutputFolder`
 - `DatabaseWorkflow` -> `Threading | Verbose | Database | OutputFolder`
 
-## 5. Shared option surface
+## 5. Shared options
 
-Shared options are registered in `CommandBase::RegisterCLIOptionsBasic(...)` from `GetCommonOptionsMask()`:
+`CommandBase::RegisterCLIOptionsBasic(...)` exposes shared flags by `common_options` mask:
 
-- `-j,--jobs` (`CommonOption::Threading`)
-- `-v,--verbose` (`CommonOption::Verbose`)
-- `-d,--database` (`CommonOption::Database`)
-- `-o,--folder` (`CommonOption::OutputFolder`)
+- `-j,--jobs`
+- `-v,--verbose`
+- `-d,--database`
+- `-o,--folder`
 
-Concrete commands should only register command-local options in `RegisterCLIOptionsExtend(...)`.
+Concrete commands should only add command-specific flags in `RegisterCLIOptionsExtend(...)`.
 
 ### Shared policy matrix
 
@@ -147,48 +128,36 @@ Concrete commands should only register command-local options in `RegisterCLIOpti
 | `model_test` | no | yes |
 <!-- END GENERATED: command-surface-matrix -->
 
-## 6. Execution lifecycle and validation model
+## 6. Lifecycle and validation
 
-`Execute()` is the single execution entry for CLI callbacks, Python bindings, and GUI adapters.
+`Execute()` is the single execution entry point across CLI/Python/GUI.
 
 Behavior:
 
-- if command is not prepared, `Execute()` calls `PrepareForExecution()`
-- if already prepared, `Execute()` runs `ExecuteImpl()` directly
-- after every execution attempt, prepared state is cleared
+- If not prepared, `Execute()` calls `PrepareForExecution()`.
+- If already prepared, `Execute()` runs `ExecuteImpl()` directly.
+- Prepared state is cleared after each execution attempt.
 
-`PrepareForExecution()` steps:
+`PrepareForExecution()` sequence:
 
 1. `BeginPreparationPass()`
-   - apply log level
-   - call `ResetRuntimeState()`
-   - clear `m_data_manager` cache (`ClearDataObjects()`)
-   - invalidate prepared state
 2. `RunValidationPass()`
-   - call `ValidateOptions()`
-   - abort when any error-level issue exists
 3. `RunFilesystemPreflight()`
-   - create parent folder for `database_path` when database option is enabled
-   - create output folder for `folder_path` when output-folder option is enabled
-   - emit issues and finalize prepared state
 
 Validation phases:
 
 | Phase | Typical source | Typical purpose |
 | --- | --- | --- |
-| `Parse` | setter callbacks | single-field checks, enum/path validation, normalization |
-| `Prepare` | `ValidateOptions()` + preflight | cross-field checks, mode-dependent checks, directory creation failures |
-
-Runtime execution failures surface through `Execute()` return value and logger output.
+| `Parse` | setters | single-field validation/normalization |
+| `Prepare` | `ValidateOptions()` + preflight | cross-field checks and runtime preflight failures |
 
 Prepared-state invalidation rule:
 
-- all setter mutations must go through `MutateOptions(...)` or helpers built on top of it
-- this clears prepared state and stale `Prepare` issues
+- All option mutations must go through `MutateOptions(...)` or wrappers built on it.
 
-## 7. Setter and option-binding APIs
+## 7. Command helper APIs
 
-Core setter/validation APIs in `CommandBase`:
+Core APIs (`CommandBase`):
 
 - `MutateOptions(...)`
 - `AddValidationError(...)`
@@ -196,7 +165,7 @@ Core setter/validation APIs in `CommandBase`:
 - `ResetParseIssues(...)`
 - `ResetPrepareIssues(...)`
 
-Convenience setter helpers:
+Convenience setters:
 
 - `SetRequiredExistingPathOption(...)`
 - `SetOptionalExistingPathOption(...)`
@@ -206,51 +175,39 @@ Convenience setter helpers:
 - `SetPositiveScalarOption(...)`
 - `SetValidatedEnumOption(...)`
 
-Data/output helpers on command boundary:
+Execution boundary helpers:
 
 - `RequireDatabaseManager()`
 - `BuildOutputPath(...)`
 
-CLI registration helpers in `include/rhbm_gem/core/command/CommandOptionBinding.hpp`:
+CLI binding helpers (`CommandOptionBinding.hpp`):
 
 - `command_cli::AddScalarOption(...)`
 - `command_cli::AddStringOption(...)`
 - `command_cli::AddPathOption(...)`
 - `command_cli::AddEnumOption(...)`
 
-## 8. Data access boundary for commands
+## 8. Data boundary
 
-Use command-facing boundaries; do not bypass into persistence internals.
+Commands should use command-facing APIs and helpers:
 
-Primary command-side APIs:
+- `DataObjectManager` (`ProcessFile`, `LoadDataObject`, `SaveDataObject`, `ForEachDataObject`, typed getters)
+- `command_data_loader::*` (`src/core/internal/CommandDataLoaderInternal.hpp`)
+- typed workflow helpers in `src/core/workflow/DataObjectWorkflowOps.*`
+- `SampleMapValues(...)` for map sampling
 
-- `m_data_manager.ProcessFile(...)`
-- `m_data_manager.LoadDataObject(...)`
-- `m_data_manager.SaveDataObject(...)`
-- `m_data_manager.GetTypedDataObject(...)`
-- `m_data_manager.ForEachDataObject(...)`
-- `command_data_loader::*` helpers in `src/core/internal/CommandDataLoaderInternal.hpp`
-
-Workflow helpers used by commands:
-
-- map/model preprocessing via `DataObjectWorkflowOps` (for example `NormalizeMapObject`, `PrepareModelObject`)
-- map sampling via `SampleMapValues(...)`
-- command-local workflows (for example `PotentialAnalysisTrainingWorkflow.cpp`, `PotentialAnalysisAnalysisWorkflow.cpp`, `PotentialAnalysisReportWorkflow.cpp`, `ResultDumpCommandWorkflow.cpp`)
-
-`DataObjectDispatch` (`include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`) is optional when a command iterates generic `DataObjectBase` and needs explicit runtime type dispatch.
+Use `DataObjectDispatch` only when dispatching generic `DataObjectBase` at runtime.
 
 ## 9. Python binding contract
 
-Python command classes are bound through per-command binding units under `bindings/`,
-with module assembly in `bindings/CoreBindings.cpp`.
+Per-command binding units are explicit (`bindings/*Bindings.cpp`), module wiring is manifest-driven (`bindings/CoreBindings.cpp`).
 
-Binding model:
+Binding rules:
 
-- command membership/name mapping comes from `CommandList.def` + `CommandCatalog()`
-- module registration is manifest-driven in `bindings/CoreBindings.cpp`
-- method exposure is explicit in `bindings/*Bindings.cpp` (not auto-generated)
-- command binding units bind shared command APIs via `BindCommonCommandSetters(...)` and `BindCommandDiagnostics(...)`
-- Python execution path calls the same `Execute()` / `PrepareForExecution()` contract as C++
+- command class name comes from `CommandPythonBindingName(...)`
+- expose command-local setters + `Execute`
+- include shared bindings via `BindCommonCommandSetters(...)` and `BindCommandDiagnostics(...)`
+- execution contract is the same `PrepareForExecution()` / `Execute()` path as C++
 
 ### Python command surface
 
@@ -275,31 +232,18 @@ Binding model:
 - `GetValidationIssues()`
 <!-- END GENERATED: command-python-surface -->
 
-## 10. Command change checklist
+## 10. Update checklist
 
-When adding or significantly modifying a command, update the same change set:
+When adding or changing a command:
 
-1. command header under `include/rhbm_gem/core/command/`
-2. command implementation under `src/core/command/` (and `src/core/workflow/` when introducing/extracting workflows)
-3. command list entry in `src/core/internal/CommandList.def`
-4. metadata/registration behavior (if needed) in `CommandCatalog*`
-5. Python binding exposure in `bindings/*Bindings.cpp` (module init wiring is manifest-driven from `CommandList.def`)
-6. tests (contract + command-specific)
-7. this architecture document and related developer docs
+1. Update command implementation (`include/.../command/*.hpp`, `src/core/command/*.cpp`).
+2. Update membership in `src/core/internal/CommandList.def`.
+3. Refresh generated artifacts (`python3 scripts/generate_command_artifacts.py`).
+4. Update command bindings (`bindings/*Bindings.cpp`).
+5. Update command and contract tests.
+6. Keep this document and `docs/developer/adding-a-command.md` in sync.
 
-## 11. Anti-patterns to avoid
-
-- bypassing command registration flow and hard-coding command wiring elsewhere
-- reintroducing static self-registration/plugin-style registration
-- writing directly to `m_options` outside `MutateOptions(...)`
-- pushing obvious single-field validation into `ExecuteImpl()`
-- creating directories in setters
-- bypassing `DataObjectManager` to access persistence internals
-- adding a new top-level command when an enum mode extension is sufficient
-
-## 12. Key reference files
-
-Core command architecture:
+## 11. Key files
 
 - `src/main.cpp`
 - `include/rhbm_gem/core/command/Application.hpp`
@@ -313,7 +257,6 @@ Core command architecture:
 - `include/rhbm_gem/core/command/CommandOptionBinding.hpp`
 - `src/core/internal/CommandDataLoaderInternal.hpp`
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
-- `src/data/io/DataObjectManager.cpp`
 - `include/rhbm_gem/gui/GuiCommandExecutor.hpp`
 - `src/gui/GuiCommandExecutor.cpp`
 - `bindings/BindingHelpers.hpp`
