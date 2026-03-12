@@ -44,9 +44,8 @@ constexpr std::string_view kWindowSizeOption{ "--window-size" };
 
 namespace rhbm_gem {
 
-MapVisualizationCommand::MapVisualizationCommand(const DataIoServices & data_io_services) :
-    CommandWithProfileOptions<MapVisualizationCommandOptions, CommandId::MapVisualization>{
-        data_io_services },
+MapVisualizationCommand::MapVisualizationCommand() :
+    CommandWithProfileOptions<MapVisualizationCommandOptions, CommandId::MapVisualization>{},
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {

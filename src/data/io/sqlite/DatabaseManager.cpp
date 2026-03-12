@@ -1,28 +1,24 @@
 #include "internal/io/sqlite/DatabaseManager.hpp"
 #include "internal/migration/DatabaseSchemaManager.hpp"
+#include "internal/io/sqlite/MapObjectDAO.hpp"
+#include "internal/io/sqlite/ModelObjectDAOSqlite.hpp"
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
-#include "internal/io/sqlite/DataObjectDAOBase.hpp"
-#include "internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp"
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 
-DatabaseManager::DatabaseManager(
-    const std::filesystem::path & database_path,
-    std::shared_ptr<const DataObjectDAOFactoryRegistry> dao_factory_registry) :
+DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
     m_database_path{ database_path },
     m_database{ nullptr },
-    m_dao_factory_registry{ std::move(dao_factory_registry) },
+    m_model_store{ nullptr },
+    m_map_store{ nullptr },
     m_schema_version{ DatabaseSchemaVersion::NormalizedV2 }
 {
-    if (!m_dao_factory_registry)
-    {
-        throw std::runtime_error("DatabaseManager requires a DAO factory registry.");
-    }
     if (m_database_path.empty()) m_database_path = "database.sqlite";
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
+    m_model_store = std::make_shared<ModelObjectDAOSqlite>(m_database.get());
+    m_map_store = std::make_shared<MapObjectDAO>(m_database.get());
     DatabaseSchemaManager schema_manager{ m_database.get() };
     m_schema_version = schema_manager.EnsureSchema();
 }
@@ -49,8 +45,17 @@ void DatabaseManager::SaveDataObject(
     m_database->Bind<std::string>(2, type_name);
     m_database->StepOnce();
 
-    auto dao{ CreateDataObjectDAO(type_name) };
-    dao->Save(*data_object, key_tag);
+    if (type_name == "model")
+    {
+        m_model_store->Save(*data_object, key_tag);
+        return;
+    }
+    if (type_name == "map")
+    {
+        m_map_store->Save(*data_object, key_tag);
+        return;
+    }
+    throw std::runtime_error("Unsupported data object type: " + type_name);
 }
 
 std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
@@ -73,24 +78,15 @@ std::unique_ptr<DataObjectBase> DatabaseManager::LoadDataObject(
     }
 
     auto type_name{ m_database->GetColumn<std::string>(0) };
-    auto dao{ CreateDataObjectDAO(type_name) };
-    return dao->Load(key_tag);
-}
-
-std::shared_ptr<DataObjectDAOBase> DatabaseManager::CreateDataObjectDAO(
-    const std::string & object_type)
-{
-    auto type{ m_dao_factory_registry->GetTypeIndex(object_type) };
-    std::lock_guard<std::mutex> lock(m_mutex);
-    auto iter{ m_dao_cache.find(type) };
-    if (iter != m_dao_cache.end())
+    if (type_name == "model")
     {
-        return iter->second;
+        return m_model_store->Load(key_tag);
     }
-    auto dao_unique{ m_dao_factory_registry->CreateDAO(type, m_database.get()) };
-    std::shared_ptr<DataObjectDAOBase> dao{ std::move(dao_unique) };
-    m_dao_cache.emplace(type, dao);
-    return dao;
+    if (type_name == "map")
+    {
+        return m_map_store->Load(key_tag);
+    }
+    throw std::runtime_error("Unsupported data object type: " + type_name);
 }
 
 } // namespace rhbm_gem

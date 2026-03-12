@@ -28,13 +28,13 @@ class ValidationIssueCommand final
 public:
     using Options = ValidationIssueCommandOptions;
 
-    explicit ValidationIssueCommand(const rg::DataIoServices & data_io_services) :
+    explicit ValidationIssueCommand() :
         rg::CommandWithOptions<
             ValidationIssueCommandOptions,
             rg::CommandId::ModelTest,
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder>{ data_io_services }
+                | rg::CommonOption::OutputFolder>{}
     {
     }
 
@@ -75,8 +75,7 @@ private:
 
 TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    ValidationIssueCommand command{ data_io_services };
+    ValidationIssueCommand command{};
     command.SetProblematicValue(0);
     command.SetPrepareError(true);
 
@@ -115,8 +114,7 @@ TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
 
 TEST(CommandValidationIssueTest, BaseNormalizationWarningsAreProgrammaticallyVisible)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    ValidationIssueCommand command{ data_io_services };
+    ValidationIssueCommand command{};
     command.SetThreadSize(0);
     command.SetVerboseLevel(99);
 

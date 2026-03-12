@@ -9,8 +9,6 @@
 #include <mutex>
 #include <functional>
 
-#include <rhbm_gem/data/io/DataIoServices.hpp>
-
 namespace rhbm_gem {
 
 class DataObjectBase;
@@ -29,7 +27,7 @@ public:
         bool deterministic_order{ true };
     };
 
-    explicit DataObjectManager(const DataIoServices & data_io_services);
+    DataObjectManager();
     ~DataObjectManager();
     DataObjectManager(const DataObjectManager &) = delete;
     DataObjectManager & operator=(const DataObjectManager &) = delete;

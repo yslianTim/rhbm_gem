@@ -118,7 +118,7 @@ class {spec.command_type}
           CommonOptionProfile::{spec.profile}>
 {{
 public:
-    explicit {spec.command_type}(const DataIoServices & data_io_services);
+    explicit {spec.command_type}();
     ~{spec.command_type}() override = default;
 
 private:
@@ -137,11 +137,11 @@ def _source_template(spec: ScaffoldSpec) -> str:
 
 namespace rhbm_gem {{
 
-{spec.command_type}::{spec.command_type}(const DataIoServices & data_io_services) :
+{spec.command_type}::{spec.command_type}() :
     CommandWithProfileOptions<
         {spec.command_type}Options,
         CommandId::{spec.command_type.removesuffix("Command")},
-        CommonOptionProfile::{spec.profile}>{{ data_io_services }}
+        CommonOptionProfile::{spec.profile}>{{}}
 {{
 }}
 
@@ -179,7 +179,7 @@ void BindCommand<{spec.command_type}>(py::module_ & module)
 {{
     auto command{{ BindCommandClass<{spec.command_type}>(module) }};
     command
-        .def(py::init<const DataIoServices &>())
+        .def(py::init<>())
         .def("Execute", &{spec.command_type}::Execute);
     BindCommandDiagnostics(command);
 }}

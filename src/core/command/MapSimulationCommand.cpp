@@ -2,10 +2,10 @@
 #include "internal/CommandDataLoaderInternal.hpp"
 #include <rhbm_gem/core/command/CommandOptionBinding.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/data/io/MapFileWriter.hpp>
 #include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
@@ -46,9 +46,8 @@ std::string SerializeBlurringWidths(const std::vector<double> & widths)
 
 namespace rhbm_gem {
 
-MapSimulationCommand::MapSimulationCommand(const DataIoServices & data_io_services) :
-    CommandWithProfileOptions<MapSimulationCommandOptions, CommandId::MapSimulation>{
-        data_io_services },
+MapSimulationCommand::MapSimulationCommand() :
+    CommandWithProfileOptions<MapSimulationCommandOptions, CommandId::MapSimulation>{},
     m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),
@@ -246,8 +245,7 @@ void MapSimulationCommand::RunMapSimulation()
         const auto output_file_name{
             BuildOutputPath(m_options.map_file_name + "_" + map_key_tag, ".map")
         };
-        MapFileWriter writer{ output_file_name.string(), map_object.get() };
-        writer.Write();
+        WriteMap(output_file_name, *map_object);
     }
 }
 

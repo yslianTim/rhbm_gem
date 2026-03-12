@@ -1,8 +1,6 @@
 #include "internal/CommandCatalogInternal.hpp"
 #include "internal/CommandCatalogIncludes.generated.inc"
 
-#include <rhbm_gem/data/io/DataIoServices.hpp>
-
 #include <stdexcept>
 
 namespace rhbm_gem {
@@ -27,9 +25,9 @@ CommandDescriptor MakeCommandDescriptor(
         description,
         CommandType::kCommonOptions,
         python_binding_name,
-        [](const DataIoServices & data_io_services) -> std::unique_ptr<CommandBase>
+        []() -> std::unique_ptr<CommandBase>
         {
-            return std::make_unique<CommandType>(data_io_services);
+            return std::make_unique<CommandType>();
         }
     };
 }

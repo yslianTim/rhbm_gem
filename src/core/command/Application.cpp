@@ -1,7 +1,6 @@
 #include <rhbm_gem/core/command/Application.hpp>
 #include "internal/CommandCatalogInternal.hpp"
 #include <rhbm_gem/core/command/CommandBase.hpp>
-#include <rhbm_gem/data/io/DataIoServices.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
@@ -10,9 +9,8 @@
 
 namespace rhbm_gem {
 
-Application::Application(CLI::App & app, const DataIoServices & data_io_services) :
-    m_cli_app{ app },
-    m_data_io_services{ data_io_services }
+Application::Application(CLI::App & app) :
+    m_cli_app{ app }
 {
     m_cli_app.require_subcommand(1);
     RegisterAllCommands();
@@ -22,7 +20,7 @@ void Application::RegisterAllCommands()
 {
     for (const auto & descriptor : CommandCatalog())
     {
-        auto command_object{ descriptor.factory(m_data_io_services) };
+        auto command_object{ descriptor.factory() };
         CLI::App * command{
             m_cli_app.add_subcommand(
                 std::string(descriptor.name),

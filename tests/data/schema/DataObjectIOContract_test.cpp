@@ -4,33 +4,13 @@
 
 using namespace data_object_io_schema_test;
 
-TEST(DataObjectIOContractTest, CatalogLookupLoadsCorrectDaoType)
-{
-    const command_test::ScopedTempDir temp_dir{ "schema_catalog_lookup" };
-    const auto database_path{ temp_dir.path() / "catalog_lookup.sqlite" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto map_path{ temp_dir.path() / "map_only.map" };
-
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
-    manager.SetDatabaseManager(database_path);
-    manager.ProcessFile(model_path, "model");
-    manager.SaveDataObject("model");
-    SaveTinyMapThroughManager(manager, map_path, "map");
-    manager.ClearDataObjects();
-
-    ASSERT_NO_THROW(manager.LoadDataObject("model"));
-    ASSERT_NO_THROW(manager.LoadDataObject("map"));
-    EXPECT_NE(dynamic_cast<rg::ModelObject *>(manager.GetDataObject("model").get()), nullptr);
-    EXPECT_NE(dynamic_cast<rg::MapObject *>(manager.GetDataObject("map").get()), nullptr);
-}
-
 TEST(DataObjectIOContractTest, ChainMetadataPersistsAcrossDatabaseRoundTrip)
 {
     const command_test::ScopedTempDir temp_dir{ "schema_chain_roundtrip" };
     const auto database_path{ temp_dir.path() / "chain_roundtrip.sqlite" };
     const auto model_path{ command_test::TestDataPath("test_model_keyvalue_entity.cif") };
 
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     auto original_model{ manager.GetTypedDataObject<rg::ModelObject>("model") };
@@ -57,7 +37,7 @@ TEST(DataObjectIOContractTest, SymmetryFilteringMatchesAfterDatabaseReload)
     original_model->Update();
     const auto original_selected_count{ original_model->GetNumberOfSelectedAtom() };
 
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     for (const auto & atom : manager.GetTypedDataObject<rg::ModelObject>("model")->GetAtomList())
@@ -78,7 +58,7 @@ TEST(DataObjectIOContractTest, SymmetryFilteringMatchesAfterDatabaseReload)
 
 TEST(DataObjectIOContractTest, FileImportTransfersBondKeySystem)
 {
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     const auto model_path{
         command_test::TestDataPath("test_model_auth_seq_alnum_struct_conn.cif") };
 
@@ -96,61 +76,16 @@ TEST(DataObjectIOContractTest, UppercaseExtensionsDispatchCorrectly)
     const auto uppercase_model_path{ temp_dir.path() / "TEST_MODEL.MMCIF" };
     std::filesystem::copy_file(source_model_path, uppercase_model_path);
 
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     ASSERT_NO_THROW(manager.ProcessFile(uppercase_model_path, "model"));
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
 
     const auto map_object{ MakeTinyMapObject() };
     const auto uppercase_map_path{ temp_dir.path() / "TEST_MAP.MAP" };
-    rg::MapFileWriter writer{ uppercase_map_path.string(), &map_object };
-    ASSERT_NO_THROW(writer.Write());
-    rg::MapFileReader reader{ uppercase_map_path.string() };
-    ASSERT_NO_THROW(reader.Read());
-    EXPECT_EQ(reader.GetGridSizeArray(), map_object.GetGridSize());
-}
-
-TEST(DataObjectIOContractTest, ResolverInjectionSupportsOverrideWithoutGlobalRegistry)
-{
-    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
-    auto fallback_resolver{
-        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
-    rg::OverrideableFileProcessFactoryResolver resolver{ fallback_resolver };
-    resolver.RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
-
-    auto override_factory{ resolver.CreateFactory(".cif") };
-    auto override_object{
-        override_factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
-    EXPECT_NE(dynamic_cast<FailingDataObject *>(override_object.get()), nullptr);
-
-    resolver.UnregisterFactory(".cif");
-
-    auto default_factory{ resolver.CreateFactory(".cif") };
-    auto default_object{
-        default_factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
-    EXPECT_NE(dynamic_cast<rg::ModelObject *>(default_object.get()), nullptr);
-}
-
-TEST(DataObjectIOContractTest, CustomFactoryOverrideDoesNotLeakAcrossTests)
-{
-    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
-    auto fallback_resolver{
-        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
-    rg::OverrideableFileProcessFactoryResolver resolver{ fallback_resolver };
-    {
-        ScopedFactoryOverride override{
-            resolver,
-            ".cif",
-            []() { return std::make_unique<OverrideFileFactory>(); }
-        };
-        auto factory{ resolver.CreateFactory(".cif") };
-        auto data_object{
-            factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
-        EXPECT_NE(dynamic_cast<FailingDataObject *>(data_object.get()), nullptr);
-    }
-
-    auto factory{ resolver.CreateFactory(".cif") };
-    auto data_object{ factory->CreateDataObject(command_test::TestDataPath("test_model.cif").string()) };
-    EXPECT_NE(dynamic_cast<rg::ModelObject *>(data_object.get()), nullptr);
+    ASSERT_NO_THROW(rg::WriteMap(uppercase_map_path, map_object));
+    auto loaded_map{ rg::ReadMap(uppercase_map_path) };
+    ASSERT_NE(loaded_map, nullptr);
+    EXPECT_EQ(loaded_map->GetGridSize(), map_object.GetGridSize());
 }
 
 TEST(DataObjectIOContractTest, FileFormatDescriptorsAreUniqueAndConsistent)
@@ -179,88 +114,13 @@ TEST(DataObjectIOContractTest, FileFormatDescriptorsAreUniqueAndConsistent)
     }
 }
 
-TEST(DataObjectIOContractTest, FileFormatRegistryIndexMatchesDescriptorSource)
-{
-    const auto registry{ rg::BuildDefaultFileFormatRegistry() };
-    for (const auto & descriptor : registry.GetAllDescriptors())
-    {
-        const auto & looked_up_lower{ registry.Lookup(descriptor.extension) };
-        EXPECT_EQ(looked_up_lower.extension, descriptor.extension);
-        EXPECT_EQ(looked_up_lower.kind, descriptor.kind);
-        EXPECT_EQ(looked_up_lower.supports_read, descriptor.supports_read);
-        EXPECT_EQ(looked_up_lower.supports_write, descriptor.supports_write);
-        EXPECT_EQ(looked_up_lower.model_backend, descriptor.model_backend);
-        EXPECT_EQ(looked_up_lower.map_backend, descriptor.map_backend);
-
-        auto upper_extension{ descriptor.extension };
-        for (auto & ch : upper_extension)
-        {
-            ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        }
-        const auto & looked_up_upper{ registry.Lookup(upper_extension) };
-        EXPECT_EQ(looked_up_upper.extension, descriptor.extension);
-    }
-}
-
-TEST(DataObjectIOContractTest, ResolverConcurrentOverrideAndLookupIsSafe)
-{
-    const auto file_format_registry{ BuildDefaultFileFormatRegistry() };
-    auto fallback_resolver{
-        std::make_shared<rg::DefaultFileProcessFactoryResolver>(*file_format_registry) };
-    rg::OverrideableFileProcessFactoryResolver resolver{ fallback_resolver };
-    constexpr int kIterationCount{ 800 };
-    std::atomic<bool> writer_done{ false };
-    std::atomic<int> failure_count{ 0 };
-
-    std::thread writer{
-        [&]()
-        {
-            for (int i = 0; i < kIterationCount; i++)
-            {
-                resolver.RegisterFactory(".cif", []() { return std::make_unique<OverrideFileFactory>(); });
-                resolver.UnregisterFactory(".cif");
-            }
-            writer_done = true;
-        }
-    };
-
-    auto reader_task{
-        [&]()
-        {
-            while (!writer_done.load())
-            {
-                try
-                {
-                    auto factory{ resolver.CreateFactory(".cif") };
-                    if (!factory)
-                    {
-                        ++failure_count;
-                    }
-                }
-                catch (const std::exception &)
-                {
-                    ++failure_count;
-                }
-            }
-        }
-    };
-
-    std::thread reader_a{ reader_task };
-    std::thread reader_b{ reader_task };
-
-    writer.join();
-    reader_a.join();
-    reader_b.join();
-    EXPECT_EQ(failure_count.load(), 0);
-}
-
 TEST(DataObjectIOContractTest, PdbWriteRoundTripBasicFields)
 {
     const command_test::ScopedTempDir temp_dir{ "pdb_write_roundtrip" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     const auto output_path{ temp_dir.path() / "roundtrip.pdb" };
 
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     manager.ProcessFile(model_path, "source");
     auto source_model{ manager.GetTypedDataObject<rg::ModelObject>("source") };
     ASSERT_NO_THROW(manager.ProduceFile(output_path, "source"));
@@ -285,7 +145,7 @@ TEST(DataObjectIOContractTest, ModelWriteSupportMatrixAllowsPdbAndCifAndRejectsM
     const auto cif_output_path{ temp_dir.path() / "supported_output.cif" };
     const auto output_path{ temp_dir.path() / "unsupported_output.mmcif" };
 
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     manager.ProcessFile(model_path, "model");
     EXPECT_NO_THROW(manager.ProduceFile(pdb_output_path, "model"));
     EXPECT_NO_THROW(manager.ProduceFile(cif_output_path, "model"));
@@ -301,7 +161,7 @@ TEST(DataObjectIOContractTest, ProcessFileThrowsOnMalformedModelInput)
         output << "data_bad\nloop_\n_atom_site.id\n";
     }
 
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     EXPECT_THROW(manager.ProcessFile(malformed_path, "broken"), std::runtime_error);
 }
 
@@ -314,7 +174,7 @@ TEST(DataObjectIOContractTest, ProcessFileThrowsOnMalformedMapInput)
         output << "bad";
     }
 
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     EXPECT_THROW(manager.ProcessFile(malformed_path, "broken_map"), std::runtime_error);
 }
 
@@ -324,15 +184,15 @@ TEST(DataObjectIOContractTest, ProduceFileThrowsWhenWriterCannotOpenTarget)
     const auto model_path{ command_test::TestDataPath("test_model.cif") };
     const auto output_path{ temp_dir.path() / "missing_dir" / "output.cif" };
 
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     manager.ProcessFile(model_path, "model");
 
     EXPECT_THROW(manager.ProduceFile(output_path, "model"), std::runtime_error);
 }
 
-TEST(DataObjectIOContractTest, ReaderGettersThrowIfReadDidNotSucceed)
+TEST(DataObjectIOContractTest, FunctionFileIoThrowsWhenReadFails)
 {
-    const command_test::ScopedTempDir temp_dir{ "reader_failure_contract" };
+    const command_test::ScopedTempDir temp_dir{ "file_io_failure_contract" };
     const auto missing_model_path{ temp_dir.path() / "missing_model.cif" };
     const auto malformed_map_path{ temp_dir.path() / "bad_map.map" };
     {
@@ -340,14 +200,6 @@ TEST(DataObjectIOContractTest, ReaderGettersThrowIfReadDidNotSucceed)
         map_output << "bad";
     }
 
-    rg::ModelFileReader model_reader{ missing_model_path.string() };
-    EXPECT_THROW(model_reader.Read(), std::runtime_error);
-    EXPECT_THROW(model_reader.GetDataBlockPtr(), std::runtime_error);
-
-    rg::MapFileReader map_reader{ malformed_map_path.string() };
-    EXPECT_THROW(map_reader.Read(), std::runtime_error);
-    EXPECT_THROW(map_reader.GetGridSizeArray(), std::runtime_error);
-    EXPECT_THROW(map_reader.GetGridSpacingArray(), std::runtime_error);
-    EXPECT_THROW(map_reader.GetOriginArray(), std::runtime_error);
-    EXPECT_THROW((void)map_reader.GetMapValueArray(), std::runtime_error);
+    EXPECT_THROW((void)rg::ReadModel(missing_model_path), std::runtime_error);
+    EXPECT_THROW((void)rg::ReadMap(malformed_map_path), std::runtime_error);
 }

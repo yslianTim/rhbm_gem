@@ -17,8 +17,6 @@
 #include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
 
-#include "CommandTestHelpers.hpp"
-
 namespace rg = rhbm_gem;
 
 namespace {
@@ -107,9 +105,7 @@ void ExpectFactoryConstructs(rg::CommandId command_id)
     ASSERT_NE(descriptor->factory, nullptr) << descriptor->name;
     EXPECT_EQ(descriptor->id, CommandType::kCommandId) << descriptor->name;
     EXPECT_EQ(descriptor->common_options, CommandType::kCommonOptions) << descriptor->name;
-
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    auto command{ descriptor->factory(data_io_services) };
+    auto command{ descriptor->factory() };
     ASSERT_NE(command, nullptr) << descriptor->name;
     EXPECT_NE(dynamic_cast<CommandType *>(command.get()), nullptr) << descriptor->name;
 }

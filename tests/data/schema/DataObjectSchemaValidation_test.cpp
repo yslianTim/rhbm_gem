@@ -4,28 +4,28 @@
 
 using namespace data_object_io_schema_test;
 
-TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThrows) {
-    const command_test::ScopedTempDir temp_dir{"schema_missing_v2_table"};
-    const auto database_path{temp_dir.path() / "missing_v2.sqlite"};
-    const auto dao_registry{BuildDefaultDaoFactoryRegistry()};
+TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThrows)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_missing_v2_table" };
+    const auto database_path{ temp_dir.path() / "missing_v2.sqlite" };
 
     {
-        rg::DatabaseManager database_manager{database_path, dao_registry};
+        rg::DatabaseManager database_manager{ database_path };
         EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
     }
     ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
     SetUserVersion(database_path, 2);
 
-    EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
+    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeignKeys) {
-    const command_test::ScopedTempDir temp_dir{"schema_missing_fk"};
-    const auto database_path{temp_dir.path() / "missing_fk.sqlite"};
-    const auto dao_registry{BuildDefaultDaoFactoryRegistry()};
+TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeignKeys)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_missing_fk" };
+    const auto database_path{ temp_dir.path() / "missing_fk.sqlite" };
 
     {
-        rg::DatabaseManager database_manager{database_path, dao_registry};
+        rg::DatabaseManager database_manager{ database_path };
         EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
     }
 
@@ -49,16 +49,16 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeig
             "object_catalog",
             "key_tag",
             "CASCADE"));
-    EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
+    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequiredCatalogColumns) {
-    const command_test::ScopedTempDir temp_dir{"schema_bad_catalog_columns"};
-    const auto database_path{temp_dir.path() / "bad_catalog_columns.sqlite"};
-    const auto dao_registry{BuildDefaultDaoFactoryRegistry()};
+TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequiredCatalogColumns)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_bad_catalog_columns" };
+    const auto database_path{ temp_dir.path() / "bad_catalog_columns.sqlite" };
 
     {
-        rg::DatabaseManager database_manager{database_path, dao_registry};
+        rg::DatabaseManager database_manager{ database_path };
         EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
     }
 
@@ -68,16 +68,16 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequir
         "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY);");
     SetUserVersion(database_path, 2);
 
-    EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
+    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObjectTypeValue) {
-    const command_test::ScopedTempDir temp_dir{"schema_bad_catalog_type"};
-    const auto database_path{temp_dir.path() / "bad_catalog_type.sqlite"};
-    const auto dao_registry{BuildDefaultDaoFactoryRegistry()};
+TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObjectTypeValue)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_bad_catalog_type" };
+    const auto database_path{ temp_dir.path() / "bad_catalog_type.sqlite" };
 
     {
-        rg::DatabaseManager database_manager{database_path, dao_registry};
+        rg::DatabaseManager database_manager{ database_path };
         EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
     }
 
@@ -90,15 +90,16 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObject
         "INSERT INTO object_catalog(key_tag, object_type) VALUES ('unknown_root', 'unknown');");
     SetUserVersion(database_path, 2);
 
-    EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
+    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, DistinctUnsanitizedKeysDoNotCollideInV2Schema) {
-    const command_test::ScopedTempDir temp_dir{"schema_key_collision"};
-    const auto database_path{temp_dir.path() / "collision.sqlite"};
-    const auto model_path{command_test::TestDataPath("test_model.cif")};
+TEST(DataObjectSchemaValidationTest, DistinctUnsanitizedKeysDoNotCollideInV2Schema)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_key_collision" };
+    const auto database_path{ temp_dir.path() / "collision.sqlite" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
 
-    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
+    rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "mem_a");
     manager.ProcessFile(model_path, "mem_b");
@@ -116,20 +117,20 @@ TEST(DataObjectSchemaValidationTest, DistinctUnsanitizedKeysDoNotCollideInV2Sche
     EXPECT_EQ(CountRows(database_path, "model_object"), 2);
 }
 
-TEST(DataObjectSchemaValidationTest, MixedUnknownSchemaFailsFast) {
-    const command_test::ScopedTempDir temp_dir{"schema_mixed_unknown"};
-    const auto database_path{temp_dir.path() / "mixed_unknown.sqlite"};
-    const auto dao_registry{BuildDefaultDaoFactoryRegistry()};
+TEST(DataObjectSchemaValidationTest, MixedUnknownSchemaFailsFast)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_mixed_unknown" };
+    const auto database_path{ temp_dir.path() / "mixed_unknown.sqlite" };
 
     ExecuteSql(database_path, "CREATE TABLE foreign_table (id INTEGER PRIMARY KEY);");
-    EXPECT_THROW((void)rg::DatabaseManager(database_path, dao_registry), std::runtime_error);
+    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows) {
-    const command_test::ScopedTempDir temp_dir{"schema_fk_orphan"};
-    const auto database_path{temp_dir.path() / "orphan.sqlite"};
-    const auto dao_registry{BuildDefaultDaoFactoryRegistry()};
-    rg::DatabaseManager database_manager{database_path, dao_registry};
+TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_fk_orphan" };
+    const auto database_path{ temp_dir.path() / "orphan.sqlite" };
+    rg::DatabaseManager database_manager{ database_path };
 
     EXPECT_THROW(
         ExecuteSql(
@@ -139,12 +140,13 @@ TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows) {
         std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows) {
-    const command_test::ScopedTempDir temp_dir{"schema_catalog_cascade"};
-    const auto database_path{temp_dir.path() / "cascade.sqlite"};
-    const auto model_path{command_test::TestDataPath("test_model.cif")};
+TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_catalog_cascade" };
+    const auto database_path{ temp_dir.path() / "cascade.sqlite" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
 
-    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
+    rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     manager.SaveDataObject("model");
@@ -156,12 +158,13 @@ TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows) {
     EXPECT_EQ(CountRows(database_path, "model_atom"), 0);
 }
 
-TEST(DataObjectSchemaValidationTest, SaveRenamedKeyDoesNotRenameInMemoryObject) {
-    const command_test::ScopedTempDir temp_dir{"schema_rename_semantics"};
-    const auto database_path{temp_dir.path() / "rename.sqlite"};
-    const auto model_path{command_test::TestDataPath("test_model.cif")};
+TEST(DataObjectSchemaValidationTest, SaveRenamedKeyDoesNotRenameInMemoryObject)
+{
+    const command_test::ScopedTempDir temp_dir{ "schema_rename_semantics" };
+    const auto database_path{ temp_dir.path() / "rename.sqlite" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
 
-    rg::DataObjectManager manager{command_test::BuildDataIoServices()};
+    rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
     manager.ProcessFile(model_path, "model");
     manager.SaveDataObject("model", "saved_model");
@@ -171,28 +174,4 @@ TEST(DataObjectSchemaValidationTest, SaveRenamedKeyDoesNotRenameInMemoryObject) 
 
     ASSERT_NO_THROW(manager.LoadDataObject("saved_model"));
     EXPECT_TRUE(manager.HasDataObject("saved_model"));
-}
-
-TEST(DataObjectSchemaValidationTest, ModelDaoSaveDoesNotCreateSchemaImplicitly) {
-    const command_test::ScopedTempDir temp_dir{"schema_model_dao_contract"};
-    const auto database_path{temp_dir.path() / "model_dao.sqlite"};
-    const auto model{LoadFixtureModel(command_test::TestDataPath("test_model.cif"))};
-
-    rg::SQLiteWrapper database{database_path};
-    rg::ModelObjectDAO dao{&database};
-
-    EXPECT_THROW(dao.Save(*model, "model"), std::runtime_error);
-    EXPECT_FALSE(HasTable(database_path, "model_object"));
-}
-
-TEST(DataObjectSchemaValidationTest, MapDaoSaveDoesNotCreateSchemaImplicitly) {
-    const command_test::ScopedTempDir temp_dir{"schema_map_dao_contract"};
-    const auto database_path{temp_dir.path() / "map_dao.sqlite"};
-    const auto map_object{MakeTinyMapObject()};
-
-    rg::SQLiteWrapper database{database_path};
-    rg::MapObjectDAO dao{&database};
-
-    EXPECT_THROW(dao.Save(map_object, "map"), std::runtime_error);
-    EXPECT_FALSE(HasTable(database_path, "map_list"));
 }

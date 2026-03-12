@@ -130,7 +130,7 @@ class ExampleCommand
 public:
     using Options = ExampleCommandOptions;
 
-    explicit ExampleCommand(const DataIoServices & data_io_services);
+    explicit ExampleCommand();
     ~ExampleCommand() override = default;
 
     void SetInputPath(const std::filesystem::path & path);
@@ -172,11 +172,11 @@ constexpr std::string_view kInputKey{ "input" };
 
 namespace rhbm_gem {
 
-ExampleCommand::ExampleCommand(const DataIoServices & data_io_services) :
+ExampleCommand::ExampleCommand() :
     CommandWithProfileOptions<
         ExampleCommandOptions,
         CommandId::Example,
-        CommonOptionProfile::FileWorkflow>{ data_io_services },
+        CommonOptionProfile::FileWorkflow>{},
     m_model_object{ nullptr }
 {
 }
@@ -326,7 +326,7 @@ Required actions:
 
 1. create/update the command-specific binding source (for example `bindings/ExampleBindings.cpp`)
 2. bind class with `BindCommandClass<rhbm_gem::ExampleCommand>(m)`
-3. expose constructor that requires `DataIoServices` context
+3. expose default constructor
 4. expose supported setters and `Execute`
 5. call `BindCommonCommandSetters(example_command)` so common options stay synchronized
 6. call `BindCommandDiagnostics(example_command)`
@@ -340,7 +340,7 @@ void BindCommand<rhbm_gem::ExampleCommand>(py::module_ & module)
 {
     auto example_command{ BindCommandClass<rhbm_gem::ExampleCommand>(module) };
     example_command
-        .def(py::init<const rhbm_gem::DataIoServices &>())
+        .def(py::init<>())
         .def("Execute", &rhbm_gem::ExampleCommand::Execute)
         .def("SetInputPath", &rhbm_gem::ExampleCommand::SetInputPath)
         .def("SetOutputStem", &rhbm_gem::ExampleCommand::SetOutputStem)
@@ -350,11 +350,10 @@ void BindCommand<rhbm_gem::ExampleCommand>(py::module_ & module)
 }
 ```
 
-Python callers must create one context and pass it into command constructors:
+Python callers construct commands directly:
 
 ```python
-services = m.DataIoServices()
-command = m.ExampleCommand(services)
+command = m.ExampleCommand()
 ```
 
 `bindings/CoreBindings.cpp` registers all commands from `CommandList.def`; no manual

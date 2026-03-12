@@ -32,7 +32,7 @@ class HRLModelTestCommand
 public:
     using Options = HRLModelTestCommandOptions;
 
-    explicit HRLModelTestCommand(const DataIoServices & data_io_services);
+    explicit HRLModelTestCommand();
     ~HRLModelTestCommand() = default;
     void SetTesterChoice(TesterType value);
     void SetFitRangeMinimum(double value);

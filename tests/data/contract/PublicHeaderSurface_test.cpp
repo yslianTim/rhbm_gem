@@ -8,12 +8,8 @@
 TEST(DataPublicHeaderSurfaceTest, DataPublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
         "data/dispatch/DataObjectDispatch.hpp",
-        "data/io/DataIoServices.hpp",
         "data/io/DataObjectManager.hpp",
-        "data/io/MapFileReader.hpp",
-        "data/io/MapFileWriter.hpp",
-        "data/io/ModelFileReader.hpp",
-        "data/io/ModelFileWriter.hpp",
+        "data/io/FileIO.hpp",
         "data/object/AtomClassifier.hpp",
         "data/object/AtomObject.hpp",
         "data/object/AtomicModelDataBlock.hpp",

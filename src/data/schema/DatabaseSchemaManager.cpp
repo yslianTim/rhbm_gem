@@ -2,10 +2,11 @@
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include "internal/io/sqlite/MapObjectDAO.hpp"
 #include "internal/io/sqlite/ModelObjectDAOSqlite.hpp"
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
-#include "internal/io/sqlite/ManagedStoreRegistry.hpp"
 #include "io/sqlite/MapStoreSql.hpp"
+#include "io/sqlite/ModelSchemaSql.hpp"
 
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #ifdef RHBM_GEM_LEGACY_V1_SUPPORT
@@ -37,6 +38,14 @@ namespace
         int primary_key_index;
     };
 
+    struct ForeignKeyInfo
+    {
+        std::string referenced_table;
+        std::string from_column;
+        std::string to_column;
+        std::string on_delete;
+    };
+
     struct LegacyMapRow
     {
         std::string key_tag;
@@ -57,6 +66,16 @@ namespace
 
     constexpr std::string_view kFinalCatalogTableName = "object_catalog";
     constexpr std::string_view kManagedObjectMetadataTableName = "object_metadata";
+
+    std::string ToUpperCopy(std::string value)
+    {
+        std::transform(
+            value.begin(),
+            value.end(),
+            value.begin(),
+            [](const unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
+        return value;
+    }
 
 #ifdef RHBM_GEM_LEGACY_V1_SUPPORT
     std::vector<std::string> QuerySingleStringColumn(
@@ -249,6 +268,217 @@ namespace
         return column_info_list;
     }
 
+    std::vector<ForeignKeyInfo> QueryForeignKeyList(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & table_name)
+    {
+        std::vector<ForeignKeyInfo> foreign_key_info_list;
+        database.Prepare("PRAGMA foreign_key_list(" + table_name + ");");
+        rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+        while (true)
+        {
+            const auto rc{ database.StepNext() };
+            if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+            {
+                break;
+            }
+            if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+            {
+                throw std::runtime_error("Step failed: " + database.ErrorMessage());
+            }
+            foreign_key_info_list.push_back(
+                ForeignKeyInfo{
+                    database.GetColumn<std::string>(2),
+                    database.GetColumn<std::string>(3),
+                    database.GetColumn<std::string>(4),
+                    database.GetColumn<std::string>(6)
+                });
+        }
+        return foreign_key_info_list;
+    }
+
+    std::vector<std::string> QueryKeyList(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & sql)
+    {
+        std::vector<std::string> key_list;
+        database.Prepare(sql);
+        rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+        while (true)
+        {
+            const auto rc{ database.StepNext() };
+            if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+            {
+                break;
+            }
+            if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+            {
+                throw std::runtime_error("Step failed: " + database.ErrorMessage());
+            }
+            key_list.push_back(database.GetColumn<std::string>(0));
+        }
+        return key_list;
+    }
+
+    void ValidatePrimaryKeyShape(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & table_name,
+        const std::vector<std::string_view> & expected_primary_key_columns)
+    {
+        if (!HasTable(database, table_name))
+        {
+            throw std::runtime_error("Cannot validate missing table: " + table_name);
+        }
+
+        std::vector<std::pair<int, std::string>> actual_primary_key_columns;
+        for (const auto & column_info : QueryTableInfo(database, table_name))
+        {
+            if (column_info.primary_key_index > 0)
+            {
+                actual_primary_key_columns.emplace_back(
+                    column_info.primary_key_index,
+                    column_info.name);
+            }
+        }
+        std::sort(
+            actual_primary_key_columns.begin(),
+            actual_primary_key_columns.end(),
+            [](const auto & left, const auto & right)
+            {
+                return left.first < right.first;
+            });
+
+        if (actual_primary_key_columns.size() != expected_primary_key_columns.size())
+        {
+            throw std::runtime_error(
+                "Normalized v2 schema primary key shape mismatch for table: " + table_name);
+        }
+
+        for (size_t i = 0; i < expected_primary_key_columns.size(); i++)
+        {
+            if (actual_primary_key_columns[i].second != expected_primary_key_columns[i])
+            {
+                throw std::runtime_error(
+                    "Normalized v2 schema primary key shape mismatch for table: " + table_name);
+            }
+        }
+    }
+
+    void ValidateForeignKey(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::string & table_name,
+        std::string_view from_column,
+        std::string_view referenced_table,
+        std::string_view referenced_column,
+        std::string_view on_delete)
+    {
+        const auto expected_on_delete{ ToUpperCopy(std::string(on_delete)) };
+        for (const auto & foreign_key_info : QueryForeignKeyList(database, table_name))
+        {
+            if (foreign_key_info.from_column != from_column) continue;
+            if (foreign_key_info.referenced_table != referenced_table) continue;
+            if (foreign_key_info.to_column != referenced_column) continue;
+            if (ToUpperCopy(foreign_key_info.on_delete) != expected_on_delete) continue;
+            return;
+        }
+        throw std::runtime_error(
+            "Normalized v2 schema is missing required foreign key on table: " + table_name);
+    }
+
+    template <std::size_t N>
+    void ValidateRequiredTables(
+        rhbm_gem::SQLiteWrapper & database,
+        const std::array<std::string_view, N> & table_names,
+        const std::string & object_type)
+    {
+        for (const auto table_name : table_names)
+        {
+            if (!HasTable(database, std::string(table_name)))
+            {
+                throw std::runtime_error(
+                    "Normalized v2 schema is missing required " + object_type +
+                    " table: " + std::string(table_name));
+            }
+        }
+    }
+
+    void EnsureModelSchema(rhbm_gem::SQLiteWrapper & database)
+    {
+        rhbm_gem::ModelObjectDAOSqlite::EnsureSchema(database);
+    }
+
+    void ValidateModelSchema(rhbm_gem::SQLiteWrapper & database)
+    {
+        ValidateRequiredTables(database, rhbm_gem::model_io::kModelCanonicalTableNames, "model");
+
+        ValidatePrimaryKeyShape(database, "model_object", {"key_tag"});
+        ValidatePrimaryKeyShape(database, "model_chain_map", {"key_tag", "entity_id", "chain_ordinal"});
+        ValidatePrimaryKeyShape(database, "model_component", {"key_tag", "component_key"});
+        ValidatePrimaryKeyShape(database, "model_component_atom", {"key_tag", "component_key", "atom_key"});
+        ValidatePrimaryKeyShape(database, "model_component_bond", {"key_tag", "component_key", "bond_key"});
+        ValidatePrimaryKeyShape(database, "model_atom", {"key_tag", "serial_id"});
+        ValidatePrimaryKeyShape(database, "model_bond", {"key_tag", "atom_serial_id_1", "atom_serial_id_2"});
+        ValidatePrimaryKeyShape(database, "model_atom_local_potential", {"key_tag", "serial_id"});
+        ValidatePrimaryKeyShape(
+            database,
+            "model_bond_local_potential",
+            {"key_tag", "atom_serial_id_1", "atom_serial_id_2"});
+        ValidatePrimaryKeyShape(database, "model_atom_posterior", {"key_tag", "class_key", "serial_id"});
+        ValidatePrimaryKeyShape(
+            database,
+            "model_bond_posterior",
+            {"key_tag", "class_key", "atom_serial_id_1", "atom_serial_id_2"});
+        ValidatePrimaryKeyShape(database, "model_atom_group_potential", {"key_tag", "class_key", "group_key"});
+        ValidatePrimaryKeyShape(database, "model_bond_group_potential", {"key_tag", "class_key", "group_key"});
+
+        ValidateForeignKey(database, "model_object", "key_tag", "object_catalog", "key_tag", "CASCADE");
+
+        for (const auto table_name : rhbm_gem::model_io::kModelCanonicalTableNames)
+        {
+            if (table_name == std::string_view("model_object"))
+            {
+                continue;
+            }
+            ValidateForeignKey(
+                database,
+                std::string(table_name),
+                "key_tag",
+                "model_object",
+                "key_tag",
+                "CASCADE");
+        }
+    }
+
+    std::vector<std::string> ListModelKeys(rhbm_gem::SQLiteWrapper & database)
+    {
+        if (!HasTable(database, "model_object"))
+        {
+            return {};
+        }
+        return QueryKeyList(database, "SELECT key_tag FROM model_object ORDER BY key_tag;");
+    }
+
+    void EnsureMapSchema(rhbm_gem::SQLiteWrapper & database)
+    {
+        rhbm_gem::MapObjectDAO::EnsureSchema(database);
+    }
+
+    void ValidateMapSchema(rhbm_gem::SQLiteWrapper & database)
+    {
+        ValidateRequiredTables(database, rhbm_gem::persistence::kMapCanonicalTableNames, "map");
+        ValidatePrimaryKeyShape(database, "map_list", {"key_tag"});
+        ValidateForeignKey(database, "map_list", "key_tag", "object_catalog", "key_tag", "CASCADE");
+    }
+
+    std::vector<std::string> ListMapKeys(rhbm_gem::SQLiteWrapper & database)
+    {
+        if (!HasTable(database, "map_list"))
+        {
+            return {};
+        }
+        return QueryKeyList(database, "SELECT key_tag FROM map_list ORDER BY key_tag;");
+    }
+
     void ValidateObjectCatalogShape(rhbm_gem::SQLiteWrapper & database)
     {
         const auto columns{ QueryTableInfo(database, std::string(kFinalCatalogTableName)) };
@@ -315,13 +545,10 @@ namespace
 
         ValidateObjectCatalogShape(database);
 
-        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
+        const auto validate_catalog_consistency =
+            [&database](std::string_view object_type, const std::vector<std::string> & payload_keys)
         {
-            descriptor.validate_schema_v2(database);
-            const auto payload_keys{ descriptor.list_keys(database) };
-            const auto catalog_keys{
-                QueryCatalogKeys(database, std::string(descriptor.object_type))
-            };
+            const auto catalog_keys{ QueryCatalogKeys(database, std::string(object_type)) };
             const std::unordered_set<std::string> payload_key_set{
                 payload_keys.begin(), payload_keys.end()
             };
@@ -335,7 +562,7 @@ namespace
                 {
                     throw std::runtime_error(
                         "Normalized v2 catalog is missing " +
-                        std::string(descriptor.object_type) +
+                        std::string(object_type) +
                         " key: " + key_tag);
                 }
             }
@@ -346,11 +573,16 @@ namespace
                 {
                     throw std::runtime_error(
                         "Normalized v2 catalog contains ghost " +
-                        std::string(descriptor.object_type) +
+                        std::string(object_type) +
                         " key without payload: " + key_tag);
                 }
             }
-        }
+        };
+
+        ValidateModelSchema(database);
+        ValidateMapSchema(database);
+        validate_catalog_consistency("model", ListModelKeys(database));
+        validate_catalog_consistency("map", ListMapKeys(database));
     }
 
     void SetSchemaVersion(
@@ -431,10 +663,8 @@ namespace
     void CreateFinalV2Tables(rhbm_gem::SQLiteWrapper & database)
     {
         CreateObjectCatalogTable(database);
-        for (const auto & descriptor : rhbm_gem::persistence::GetAllManagedStoreDescriptors())
-        {
-            descriptor.ensure_schema_v2(database);
-        }
+        EnsureModelSchema(database);
+        EnsureMapSchema(database);
     }
 
 #ifdef RHBM_GEM_LEGACY_V1_SUPPORT

@@ -5,7 +5,6 @@
 #include <CLI/CLI.hpp>
 
 #include <rhbm_gem/core/command/Application.hpp>
-#include <rhbm_gem/data/io/DataIoServices.hpp>
 #include "internal/CommandCatalogInternal.hpp"
 
 namespace rg = rhbm_gem;
@@ -13,8 +12,7 @@ namespace rg = rhbm_gem;
 TEST(ApplicationTest, HelpOrderMatchesCommandCatalog)
 {
     CLI::App app{"RHBM-GEM"};
-    const auto data_io_services{ rg::DataIoServices::BuildDefault() };
-    rg::Application controller(app, data_io_services);
+    rg::Application controller(app);
 
     const auto subcommands{
         app.get_subcommands([](CLI::App * subcommand)
@@ -34,8 +32,7 @@ TEST(ApplicationTest, HelpOrderMatchesCommandCatalog)
 TEST(ApplicationTest, SharedOptionsMatchCommandMetadata)
 {
     CLI::App app{"RHBM-GEM"};
-    const auto data_io_services{ rg::DataIoServices::BuildDefault() };
-    rg::Application controller(app, data_io_services);
+    rg::Application controller(app);
 
     for (const auto & descriptor : rg::CommandCatalog())
     {
@@ -59,8 +56,7 @@ TEST(ApplicationTest, SharedOptionsMatchCommandMetadata)
 TEST(ApplicationTest, CommandFailurePropagatesAsRuntimeError)
 {
     CLI::App app{"RHBM-GEM"};
-    const auto data_io_services{ rg::DataIoServices::BuildDefault() };
-    rg::Application controller(app, data_io_services);
+    rg::Application controller(app);
 
     EXPECT_THROW(
         app.parse("map_simulation --model missing.cif --blurring-width 1.0", false),

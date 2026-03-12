@@ -113,7 +113,7 @@ TEST(GuiCommandExecutorTest, StaticAndInstanceExecutionPathsAreEquivalentForVali
 
     const auto static_result{ rg::gui::GuiCommandExecutor::ExecuteMapSimulation(request) };
 
-    rg::gui::GuiCommandExecutor instance_executor{ command_test::BuildDataIoServices() };
+    rg::gui::GuiCommandExecutor instance_executor{};
     const auto instance_result{ instance_executor.RunMapSimulation(request) };
 
     EXPECT_EQ(static_result.prepared, instance_result.prepared);

@@ -49,9 +49,8 @@ struct QuantizedPointHash
 
 namespace rhbm_gem {
 
-PositionEstimationCommand::PositionEstimationCommand(const DataIoServices & data_io_services) :
-    CommandWithProfileOptions<PositionEstimationCommandOptions, CommandId::PositionEstimation>{
-        data_io_services },
+PositionEstimationCommand::PositionEstimationCommand() :
+    CommandWithProfileOptions<PositionEstimationCommandOptions, CommandId::PositionEstimation>{},
     m_selected_voxel_list{}, m_query_point_list{}, m_position_list{},
     m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {

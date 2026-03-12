@@ -10,7 +10,7 @@ namespace rg = rhbm_gem;
 
 TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
 {
-    rg::ResultDumpCommand command{ command_test::BuildDataIoServices() };
+    rg::ResultDumpCommand command{};
     command.SetPrinterChoice(rg::PrinterType::MAP_VALUE);
     command.SetModelKeyTagList("model");
 
@@ -26,7 +26,7 @@ TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
 
 TEST(ResultDumpCommandTest, InvalidPrinterChoiceBecomesValidationError)
 {
-    rg::ResultDumpCommand command{ command_test::BuildDataIoServices() };
+    rg::ResultDumpCommand command{};
     command.SetPrinterChoice(static_cast<rg::PrinterType>(999));
     command.SetModelKeyTagList("model");
 
@@ -51,7 +51,7 @@ TEST(ResultDumpCommandTest, ExecuteTwiceDoesNotReuseStaleLoadedModels)
     command_test::SeedSavedModel(database_path, model_path, "key_a", "MODEL_A");
     command_test::SeedSavedModel(database_path, model_path, "key_b", "MODEL_B");
 
-    rg::ResultDumpCommand command{ command_test::BuildDataIoServices() };
+    rg::ResultDumpCommand command{};
     command.SetDatabasePath(database_path);
     command.SetPrinterChoice(rg::PrinterType::ATOM_POSITION);
 

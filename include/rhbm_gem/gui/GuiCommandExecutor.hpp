@@ -6,7 +6,6 @@
 
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
-#include <rhbm_gem/data/io/DataIoServices.hpp>
 
 namespace rhbm_gem::gui {
 
@@ -66,7 +65,6 @@ class GuiCommandExecutor
 {
 public:
     GuiCommandExecutor();
-    explicit GuiCommandExecutor(DataIoServices data_io_services);
 
     ExecutionResult RunMapSimulation(const MapSimulationRequest & request) const;
     ExecutionResult RunPotentialAnalysis(const PotentialAnalysisRequest & request) const;
@@ -75,9 +73,6 @@ public:
     static ExecutionResult ExecuteMapSimulation(const MapSimulationRequest & request);
     static ExecutionResult ExecutePotentialAnalysis(const PotentialAnalysisRequest & request);
     static ExecutionResult ExecuteResultDump(const ResultDumpRequest & request);
-
-private:
-    DataIoServices m_data_io_services;
 };
 
 } // namespace rhbm_gem::gui

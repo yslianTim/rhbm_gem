@@ -9,7 +9,7 @@ void BindCommand<ResultDumpCommand>(py::module_ & module)
 {
     auto result_dump{ BindCommandClass<ResultDumpCommand>(module) };
     result_dump
-        .def(py::init<const DataIoServices &>())
+        .def(py::init<>())
         .def("Execute", &ResultDumpCommand::Execute)
         .def("SetPrinterChoice", &ResultDumpCommand::SetPrinterChoice)
         .def("SetModelKeyTagList", &ResultDumpCommand::SetModelKeyTagList)

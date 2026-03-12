@@ -30,7 +30,7 @@ class DataObjectManagerAtomCountFixtureTest
     : public ::testing::TestWithParam<FixtureAtomCountCase> {};
 
 TEST_P(DataObjectManagerAtomCountFixtureTest, LoadsFixtureWithExpectedAtomCount) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto model{LoadModelFixture(manager, GetParam().fixture_name)};
     EXPECT_EQ(model->GetNumberOfAtom(), GetParam().expected_atom_count);
 }
@@ -55,7 +55,7 @@ class DataObjectManagerSerialIdFixtureTest
     : public ::testing::TestWithParam<FixtureSerialIdCase> {};
 
 TEST_P(DataObjectManagerSerialIdFixtureTest, UsesExpectedSerialIdFallback) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto model{LoadModelFixture(manager, GetParam().fixture_name)};
     ASSERT_EQ(model->GetNumberOfAtom(), 1);
     EXPECT_EQ(model->GetAtomList().front()->GetSerialID(), GetParam().expected_serial_id);
@@ -81,7 +81,7 @@ class DataObjectManagerAtomIdFixtureTest
     : public ::testing::TestWithParam<FixtureAtomIdCase> {};
 
 TEST_P(DataObjectManagerAtomIdFixtureTest, KeepsExpectedAtomIdentifier) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto model{LoadModelFixture(manager, GetParam().fixture_name)};
     ASSERT_EQ(model->GetNumberOfAtom(), 1);
     EXPECT_EQ(model->GetAtomList().front()->GetAtomID(), GetParam().expected_atom_id);
@@ -100,7 +100,7 @@ INSTANTIATE_TEST_SUITE_P(
 } // namespace
 
 TEST(DataObjectManagerTest, LoadCifFileWithKeyValueEntityMetadata) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto cif_path{
         command_test::TestDataPath("test_model_keyvalue_entity.cif")};
     manager.ProcessFile(cif_path, "model");
@@ -115,7 +115,7 @@ TEST(DataObjectManagerTest, LoadCifFileWithKeyValueEntityMetadata) {
 }
 
 TEST(DataObjectManagerTest, FilterAtomFromSymmetrySkipsWhenChainMapMissing) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto cif_path{command_test::TestDataPath("test_model.cif")};
     manager.ProcessFile(cif_path, "model");
     auto model{manager.GetTypedDataObject<ModelObject>("model")};
@@ -130,7 +130,7 @@ TEST(DataObjectManagerTest, FilterAtomFromSymmetrySkipsWhenChainMapMissing) {
 }
 
 TEST(DataObjectManagerTest, LoadCifFileAuthOnlyAtomSiteColumns) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto cif_path{
         command_test::TestDataPath("test_model_auth_only.cif")};
     manager.ProcessFile(cif_path, "model");
@@ -142,7 +142,7 @@ TEST(DataObjectManagerTest, LoadCifFileAuthOnlyAtomSiteColumns) {
 }
 
 TEST(DataObjectManagerTest, LoadCifFileMissingNumericUsesDefaults) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto cif_path{
         command_test::TestDataPath("test_model_missing_numeric.cif")};
     manager.ProcessFile(cif_path, "model");
@@ -153,7 +153,7 @@ TEST(DataObjectManagerTest, LoadCifFileMissingNumericUsesDefaults) {
 }
 
 TEST(DataObjectManagerTest, LoadCifFileDatabaseOrderKeepsEmdb) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto cif_path{
         command_test::TestDataPath("test_model_database_order.cif")};
     manager.ProcessFile(cif_path, "model");
@@ -162,7 +162,7 @@ TEST(DataObjectManagerTest, LoadCifFileDatabaseOrderKeepsEmdb) {
 }
 
 TEST(DataObjectManagerTest, LoadCifFileAltBOnlyKeepsAltIndicator) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto cif_path{
         command_test::TestDataPath("test_model_alt_b_only.cif")};
     manager.ProcessFile(cif_path, "model");
@@ -172,7 +172,7 @@ TEST(DataObjectManagerTest, LoadCifFileAltBOnlyKeepsAltIndicator) {
 }
 
 TEST(DataObjectManagerTest, LoadCifFileInvalidSecondaryRangeDoesNotDropAtoms) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto cif_path{
         command_test::TestDataPath("test_model_invalid_secondary_range.cif")};
     manager.ProcessFile(cif_path, "model");
@@ -181,7 +181,7 @@ TEST(DataObjectManagerTest, LoadCifFileInvalidSecondaryRangeDoesNotDropAtoms) {
 }
 
 TEST(DataObjectManagerTest, LoadCifFileAuthSeqAlnumStructConnBuildsBond) {
-    DataObjectManager manager{command_test::BuildDataIoServices()};
+    DataObjectManager manager{};
     auto cif_path{
         command_test::TestDataPath("test_model_auth_seq_alnum_struct_conn.cif")};
     manager.ProcessFile(cif_path, "model");

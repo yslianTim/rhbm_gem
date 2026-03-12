@@ -48,15 +48,14 @@ def main() -> int:
         print_enum_members(enum_name)
     print("")
 
-    services = rgm.DataIoServices()
     commands = [
-        rgm.HRLModelTestCommand(services),
-        rgm.MapSimulationCommand(services),
-        rgm.MapVisualizationCommand(services),
-        rgm.PotentialAnalysisCommand(services),
-        rgm.PositionEstimationCommand(services),
-        rgm.ResultDumpCommand(services),
-        rgm.PotentialDisplayCommand(services),
+        rgm.HRLModelTestCommand(),
+        rgm.MapSimulationCommand(),
+        rgm.MapVisualizationCommand(),
+        rgm.PotentialAnalysisCommand(),
+        rgm.PositionEstimationCommand(),
+        rgm.ResultDumpCommand(),
+        rgm.PotentialDisplayCommand(),
     ]
 
     print("Available command setters:")

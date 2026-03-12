@@ -9,8 +9,7 @@
 namespace rhbm_gem {
 
 class CommandBase;
-class DataIoServices;
-using CommandFactory = std::unique_ptr<CommandBase>(*)(const DataIoServices &);
+using CommandFactory = std::unique_ptr<CommandBase>(*)();
 
 struct CommandDescriptor
 {

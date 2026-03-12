@@ -3,7 +3,7 @@
 #include "internal/CommandDataLoaderInternal.hpp"
 #include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
-#include <rhbm_gem/data/io/ModelFileWriter.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
@@ -274,20 +274,17 @@ void RunGausEstimatesDumping(ResultDumpWorkflowContext & context)
 
         const std::string amplitude_file_name{ model_object->GetPdbID() + "_gaus_amplitude" };
         const auto output_amplitude_cif_file{ BuildOutputPath(context, amplitude_file_name, ".cif") };
-        ModelFileWriter amplitude_writer{ output_amplitude_cif_file.string(), model_object.get(), 0 };
-        amplitude_writer.Write();
+        WriteModel(output_amplitude_cif_file, *model_object, 0);
         Logger::Log(LogLevel::Info, "Output file: " + output_amplitude_cif_file.string());
 
         const std::string width_file_name{ model_object->GetPdbID() + "_gaus_width" };
         const auto output_width_cif_file{ BuildOutputPath(context, width_file_name, ".cif") };
-        ModelFileWriter width_writer{ output_width_cif_file.string(), model_object.get(), 1 };
-        width_writer.Write();
+        WriteModel(output_width_cif_file, *model_object, 1);
         Logger::Log(LogLevel::Info, "Output file: " + output_width_cif_file.string());
 
         const std::string intensity_file_name{ model_object->GetPdbID() + "_gaus_intensity" };
         const auto output_intensity_cif_file{ BuildOutputPath(context, intensity_file_name, ".cif") };
-        ModelFileWriter intensity_writer{ output_intensity_cif_file.string(), model_object.get(), 2 };
-        intensity_writer.Write();
+        WriteModel(output_intensity_cif_file, *model_object, 2);
         Logger::Log(LogLevel::Info, "Output file: " + output_intensity_cif_file.string());
     }
 }

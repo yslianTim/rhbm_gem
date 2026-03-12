@@ -43,7 +43,7 @@ private:
     std::shared_ptr<MapObject> m_map_object;
 
 public:
-    explicit ResultDumpCommand(const DataIoServices & data_io_services);
+    explicit ResultDumpCommand();
     ~ResultDumpCommand() override = default;
     void SetPrinterChoice(PrinterType value);
     void SetMapFilePath(const std::filesystem::path & path);

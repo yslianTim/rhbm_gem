@@ -3,7 +3,6 @@
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
-#include <rhbm_gem/data/io/DataIoServices.hpp>
 #include "internal/GuiCommandExecutorTestHooks.hpp"
 
 #include <atomic>
@@ -13,25 +12,14 @@ namespace rhbm_gem::gui {
 
 namespace {
 
-std::atomic<std::size_t> g_default_service_build_count{ 0U };
 std::atomic<std::size_t> g_default_executor_build_count{ 0U };
-
-const DataIoServices & SharedDataIoServices()
-{
-    static const DataIoServices data_io_services = []()
-    {
-        g_default_service_build_count.fetch_add(1U, std::memory_order_relaxed);
-        return DataIoServices::BuildDefault();
-    }();
-    return data_io_services;
-}
 
 const GuiCommandExecutor & SharedThreadExecutor()
 {
     thread_local const GuiCommandExecutor executor = []()
     {
         g_default_executor_build_count.fetch_add(1U, std::memory_order_relaxed);
-        return GuiCommandExecutor{ SharedDataIoServices() };
+        return GuiCommandExecutor{};
     }();
     return executor;
 }
@@ -52,10 +40,9 @@ void ApplyCommonOptions(
 
 template <typename CommandType, typename ConfigureFn>
 ExecutionResult ExecuteCommand(
-    const DataIoServices & data_io_services,
     ConfigureFn && configure)
 {
-    CommandType command{ data_io_services };
+    CommandType command{};
     configure(command);
 
     ExecutionResult result;
@@ -77,20 +64,12 @@ ExecutionResult ExecuteCommand(
 
 } // namespace
 
-GuiCommandExecutor::GuiCommandExecutor() :
-    m_data_io_services{ DataIoServices::BuildDefault() }
-{
-}
-
-GuiCommandExecutor::GuiCommandExecutor(DataIoServices data_io_services) :
-    m_data_io_services{ std::move(data_io_services) }
-{
-}
+GuiCommandExecutor::GuiCommandExecutor() = default;
 
 ExecutionResult GuiCommandExecutor::RunMapSimulation(
     const MapSimulationRequest & request) const
 {
-    return ExecuteCommand<MapSimulationCommand>(m_data_io_services, [&](MapSimulationCommand & configured)
+    return ExecuteCommand<MapSimulationCommand>([&](MapSimulationCommand & configured)
     {
         ApplyCommonOptions(configured, request.common);
         configured.SetModelFilePath(request.model_file_path);
@@ -106,7 +85,7 @@ ExecutionResult GuiCommandExecutor::RunMapSimulation(
 ExecutionResult GuiCommandExecutor::RunPotentialAnalysis(
     const PotentialAnalysisRequest & request) const
 {
-    return ExecuteCommand<PotentialAnalysisCommand>(m_data_io_services, [&](PotentialAnalysisCommand & configured)
+    return ExecuteCommand<PotentialAnalysisCommand>([&](PotentialAnalysisCommand & configured)
     {
         ApplyCommonOptions(configured, request.common);
         configured.SetModelFilePath(request.model_file_path);
@@ -131,7 +110,7 @@ ExecutionResult GuiCommandExecutor::RunPotentialAnalysis(
 ExecutionResult GuiCommandExecutor::RunResultDump(
     const ResultDumpRequest & request) const
 {
-    return ExecuteCommand<ResultDumpCommand>(m_data_io_services, [&](ResultDumpCommand & configured)
+    return ExecuteCommand<ResultDumpCommand>([&](ResultDumpCommand & configured)
     {
         ApplyCommonOptions(configured, request.common);
         configured.SetPrinterChoice(request.printer_choice);
@@ -162,7 +141,7 @@ namespace internal {
 
 std::size_t DefaultServiceBuildCountForTesting()
 {
-    return g_default_service_build_count.load(std::memory_order_relaxed);
+    return 0U;
 }
 
 std::size_t DefaultExecutorBuildCountForTesting()

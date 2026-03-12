@@ -9,7 +9,7 @@ void BindCommand<HRLModelTestCommand>(py::module_ & module)
 {
     auto model_test{ BindCommandClass<HRLModelTestCommand>(module) };
     model_test
-        .def(py::init<const DataIoServices &>())
+        .def(py::init<>())
         .def("Execute", &HRLModelTestCommand::Execute)
         .def("SetTesterChoice", &HRLModelTestCommand::SetTesterChoice)
         .def("SetFitRangeMinimum", &HRLModelTestCommand::SetFitRangeMinimum)

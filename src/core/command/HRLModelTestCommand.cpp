@@ -17,8 +17,8 @@ constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 } // namespace
 
-HRLModelTestCommand::HRLModelTestCommand(const DataIoServices & data_io_services) :
-    CommandWithProfileOptions<HRLModelTestCommandOptions, CommandId::ModelTest>{ data_io_services }
+HRLModelTestCommand::HRLModelTestCommand() :
+    CommandWithProfileOptions<HRLModelTestCommandOptions, CommandId::ModelTest>{}
 {
 }
 

@@ -40,8 +40,8 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
 
 } // namespace
 
-CommandBase::CommandBase(const DataIoServices & data_io_services) :
-    m_data_manager{ data_io_services }
+CommandBase::CommandBase() :
+    m_data_manager{}
 {
 }
 

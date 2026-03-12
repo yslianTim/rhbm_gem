@@ -9,7 +9,7 @@ void BindCommand<PositionEstimationCommand>(py::module_ & module)
 {
     auto position_estimation{ BindCommandClass<PositionEstimationCommand>(module) };
     position_estimation
-        .def(py::init<const DataIoServices &>())
+        .def(py::init<>())
         .def("Execute", &PositionEstimationCommand::Execute)
         .def("SetMapFilePath", &PositionEstimationCommand::SetMapFilePath)
         .def("SetIterationCount", &PositionEstimationCommand::SetIterationCount)

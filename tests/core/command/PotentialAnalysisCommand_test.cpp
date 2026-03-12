@@ -13,7 +13,7 @@ namespace rg = rhbm_gem;
 
 TEST(PotentialAnalysisCommandTest, NegativeAlphaValuesBecomeValidationErrors)
 {
-    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
+    rg::PotentialAnalysisCommand command{};
     command.SetAlphaR(-0.1);
     command.SetAlphaG(0.0);
 
@@ -28,7 +28,7 @@ TEST(PotentialAnalysisCommandTest, NegativeAlphaValuesBecomeValidationErrors)
 
 TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare)
 {
-    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
+    rg::PotentialAnalysisCommand command{};
     command.SetSimulationFlag(true);
     command.SetSimulatedMapResolution(0.0);
 
@@ -44,7 +44,7 @@ TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare
 
 TEST(PotentialAnalysisCommandTest, NonPositiveSamplingHeightBecomesValidationError)
 {
-    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
+    rg::PotentialAnalysisCommand command{};
     command.SetSamplingHeight(0.0);
 
     EXPECT_FALSE(command.PrepareForExecution());
@@ -59,7 +59,7 @@ TEST(PotentialAnalysisCommandTest, NonPositiveSamplingHeightBecomesValidationErr
 
 TEST(PotentialAnalysisCommandTest, EmptySavedKeyBecomesValidationError)
 {
-    rg::PotentialAnalysisCommand command{ command_test::BuildDataIoServices() };
+    rg::PotentialAnalysisCommand command{};
     command.SetSavedKeyTag("");
 
     EXPECT_FALSE(command.PrepareForExecution());

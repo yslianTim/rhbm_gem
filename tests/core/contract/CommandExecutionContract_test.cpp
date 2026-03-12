@@ -27,13 +27,13 @@ class LifecycleCommand final
 public:
     using Options = LifecycleCommandOptions;
 
-    explicit LifecycleCommand(const rg::DataIoServices & data_io_services) :
+    explicit LifecycleCommand() :
         rg::CommandWithOptions<
             LifecycleCommandOptions,
             rg::CommandId::ModelTest,
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder>{ data_io_services }
+                | rg::CommonOption::OutputFolder>{}
     {
     }
 
@@ -82,8 +82,7 @@ private:
 
 TEST(CommandExecutionContractTest, ExecuteRunsPrepareBeforeExecuteImpl)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    LifecycleCommand command{ data_io_services };
+    LifecycleCommand command{};
     command.SetFailPrepare(true);
 
     EXPECT_FALSE(command.Execute());
@@ -94,8 +93,7 @@ TEST(CommandExecutionContractTest, ExecuteRunsPrepareBeforeExecuteImpl)
 
 TEST(CommandExecutionContractTest, ExplicitPrepareSkipsDuplicatePreflightInsideExecute)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    LifecycleCommand command{ data_io_services };
+    LifecycleCommand command{};
 
     ASSERT_TRUE(command.PrepareForExecution());
     EXPECT_EQ(command.validate_count, 1);
@@ -109,8 +107,7 @@ TEST(CommandExecutionContractTest, ExplicitPrepareSkipsDuplicatePreflightInsideE
 
 TEST(CommandExecutionContractTest, RepeatedExecuteResetsRuntimeStateBetweenRuns)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    LifecycleCommand command{ data_io_services };
+    LifecycleCommand command{};
 
     ASSERT_TRUE(command.Execute());
     ASSERT_TRUE(command.Execute());

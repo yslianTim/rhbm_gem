@@ -15,9 +15,8 @@ EXPECTED_COMMON_SETTERS = {
 
 
 def main() -> int:
-    services = m.DataIoServices()
     for class_name, expected_setters in EXPECTED_COMMON_SETTERS.items():
-        command = getattr(m, class_name)(services)
+        command = getattr(m, class_name)()
         missing = [setter for setter in expected_setters if not hasattr(command, setter)]
         assert not missing, f"{class_name} missing common setters: {missing}"
     return 0

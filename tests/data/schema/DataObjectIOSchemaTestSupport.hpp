@@ -2,18 +2,13 @@
 
 
 #include <array>
-#include <atomic>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <functional>
-#include <iterator>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <thread>
-#include <unordered_set>
 #include <vector>
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -21,36 +16,15 @@
 #include "CommandTestHelpers.hpp"
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/data/io/MapFileReader.hpp>
-#include <rhbm_gem/data/io/MapFileWriter.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/data/io/ModelFileReader.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "support/DataInternalTestSeam.hpp"
 
 namespace rg = rhbm_gem;
 
 namespace data_object_io_schema_test {
-
-inline std::shared_ptr<const rg::FileFormatRegistry> BuildDefaultFileFormatRegistry()
-{
-    return std::make_shared<rg::FileFormatRegistry>(rg::BuildDefaultFileFormatRegistry());
-}
-
-inline std::shared_ptr<const rg::DataObjectDAOFactoryRegistry> BuildDefaultDaoFactoryRegistry()
-{
-    auto registry{ std::make_shared<rg::DataObjectDAOFactoryRegistry>() };
-    rg::RegisterDataObjectDaos(*registry);
-    return registry;
-}
-
-inline std::shared_ptr<rg::DataObjectDAOFactoryRegistry> BuildMutableDaoFactoryRegistry()
-{
-    auto registry{ std::make_shared<rg::DataObjectDAOFactoryRegistry>() };
-    rg::RegisterDataObjectDaos(*registry);
-    return registry;
-}
 
 constexpr const char * kUpsertObjectMetadataSql =
     "INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?) "
@@ -313,7 +287,7 @@ inline std::shared_ptr<rg::ModelObject> LoadFixtureModel(
     const std::filesystem::path & model_path,
     const std::string & key_tag = "model")
 {
-    rg::DataObjectManager manager{ command_test::BuildDataIoServices() };
+    rg::DataObjectManager manager{};
     manager.ProcessFile(model_path, key_tag);
     return manager.GetTypedDataObject<rg::ModelObject>(key_tag);
 }
@@ -335,8 +309,7 @@ inline void SaveTinyMapThroughManager(
     float scale = 1.0f)
 {
     auto map_object{ MakeTinyMapObject(scale) };
-    rg::MapFileWriter writer{ map_path.string(), &map_object };
-    writer.Write();
+    rg::WriteMap(map_path, map_object);
     manager.ProcessFile(map_path, key_tag);
     manager.SaveDataObject(key_tag);
 }
@@ -355,69 +328,6 @@ public:
     void Update() override {}
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
-};
-
-class FailingDataObjectDAO final : public rg::DataObjectDAOBase
-{
-    rg::SQLiteWrapper * m_database;
-
-public:
-    explicit FailingDataObjectDAO(rg::SQLiteWrapper * database) : m_database{ database } {}
-
-    void Save(const rg::DataObjectBase & /*obj*/, const std::string & key_tag) override
-    {
-        m_database->Execute("CREATE TABLE IF NOT EXISTS failing_payload (key_tag TEXT PRIMARY KEY);");
-        m_database->Prepare("INSERT INTO failing_payload(key_tag) VALUES (?);");
-        rg::SQLiteWrapper::StatementGuard guard(*m_database);
-        m_database->Bind<std::string>(1, key_tag);
-        m_database->StepOnce();
-        throw std::runtime_error("Injected DAO failure");
-    }
-
-    std::unique_ptr<rg::DataObjectBase> Load(const std::string & /*key_tag*/) override
-    {
-        throw std::runtime_error("Load not implemented for failing DAO");
-    }
-};
-
-
-class OverrideFileFactory final : public rg::FileProcessFactoryBase
-{
-public:
-    std::unique_ptr<rg::DataObjectBase> CreateDataObject(const std::string & /*filename*/) override
-    {
-        return std::make_unique<FailingDataObject>();
-    }
-
-    void OutputDataObject(
-        const std::string & /*filename*/, const rg::DataObjectBase & /*data_object*/) override
-    {
-    }
-};
-
-class ScopedFactoryOverride
-{
-    rg::OverrideableFileProcessFactoryResolver * m_resolver;
-    std::string m_extension;
-
-public:
-    ScopedFactoryOverride(
-        rg::OverrideableFileProcessFactoryResolver & resolver,
-        const std::string & extension,
-        std::function<std::unique_ptr<rg::FileProcessFactoryBase>()> creator) :
-        m_resolver{ &resolver },
-        m_extension{ extension }
-    {
-        m_resolver->RegisterFactory(m_extension, std::move(creator));
-    }
-
-    ~ScopedFactoryOverride()
-    {
-        if (m_resolver != nullptr)
-        {
-            m_resolver->UnregisterFactory(m_extension);
-        }
-    }
 };
 
 } // namespace

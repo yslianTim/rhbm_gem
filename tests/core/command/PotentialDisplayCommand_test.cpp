@@ -7,7 +7,7 @@
 namespace rg = rhbm_gem;
 
 TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidationError) {
-    rg::PotentialDisplayCommand command{command_test::BuildDataIoServices()};
+    rg::PotentialDisplayCommand command{};
     command.SetPainterChoice(rg::PainterType::MODEL);
     command.SetModelKeyTagList("model_key");
 
@@ -23,7 +23,7 @@ TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidatio
 }
 
 TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError) {
-    rg::PotentialDisplayCommand command{command_test::BuildDataIoServices()};
+    rg::PotentialDisplayCommand command{};
     command.SetPainterChoice(static_cast<rg::PainterType>(999));
     command.SetModelKeyTagList("model_key");
 
@@ -38,7 +38,7 @@ TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError) {
 }
 
 TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareValidation) {
-    rg::PotentialDisplayCommand command{command_test::BuildDataIoServices()};
+    rg::PotentialDisplayCommand command{};
     command.SetPainterChoice(rg::PainterType::MODEL);
     command.SetModelKeyTagList("model_key");
     command.SetRefModelKeyTagListMap("[with_charge]ref_a,ref_b;[no_charge]ref_c");

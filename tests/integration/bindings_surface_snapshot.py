@@ -97,9 +97,8 @@ EXPECTED_METHODS = {
 
 
 def main() -> int:
-    services = m.DataIoServices()
     for class_name, expected in EXPECTED_METHODS.items():
-        command = getattr(m, class_name)(services)
+        command = getattr(m, class_name)()
         missing = [method for method in expected if not hasattr(command, method)]
         assert not missing, f"{class_name} missing expected methods: {missing}"
     return 0

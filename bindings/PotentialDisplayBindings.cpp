@@ -9,7 +9,7 @@ void BindCommand<PotentialDisplayCommand>(py::module_ & module)
 {
     auto potential_display{ BindCommandClass<PotentialDisplayCommand>(module) };
     potential_display
-        .def(py::init<const DataIoServices &>())
+        .def(py::init<>())
         .def("Execute", &PotentialDisplayCommand::Execute)
         .def("SetPainterChoice", &PotentialDisplayCommand::SetPainterChoice)
         .def("SetModelKeyTagList", &PotentialDisplayCommand::SetModelKeyTagList)

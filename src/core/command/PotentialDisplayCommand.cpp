@@ -99,11 +99,11 @@ void IngestModelSetsToPainter(
 
 namespace rhbm_gem {
 
-PotentialDisplayCommand::PotentialDisplayCommand(const DataIoServices & data_io_services) :
+PotentialDisplayCommand::PotentialDisplayCommand() :
     CommandWithProfileOptions<
         PotentialDisplayCommandOptions,
         CommandId::PotentialDisplay,
-        CommonOptionProfile::DatabaseWorkflow>{ data_io_services },
+        CommonOptionProfile::DatabaseWorkflow>{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 }

@@ -9,7 +9,7 @@ void BindCommand<MapSimulationCommand>(py::module_ & module)
 {
     auto map_simulation{ BindCommandClass<MapSimulationCommand>(module) };
     map_simulation
-        .def(py::init<const DataIoServices &>())
+        .def(py::init<>())
         .def("Execute", &MapSimulationCommand::Execute)
         .def("SetModelFilePath", &MapSimulationCommand::SetModelFilePath)
         .def("SetPotentialModelChoice", &MapSimulationCommand::SetPotentialModelChoice)

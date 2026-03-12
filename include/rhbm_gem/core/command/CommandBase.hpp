@@ -12,7 +12,6 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
-#include <rhbm_gem/data/io/DataIoServices.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
@@ -90,7 +89,7 @@ protected:
     DataObjectManager m_data_manager;
     std::vector<ValidationIssue> m_validation_issues;
 
-    explicit CommandBase(const DataIoServices & data_io_services);
+    CommandBase();
 
     // Concrete command lifecycle hooks.
     virtual void RegisterCLIOptionsExtend(::CLI::App * command) = 0;
@@ -311,8 +310,8 @@ public:
     static constexpr CommandId kCommandId{ IdValue };
     static constexpr CommonOptionMask kCommonOptions{ CommonOptionsValue };
 
-    explicit CommandWithOptions(const DataIoServices & data_io_services) :
-        CommandBase{ data_io_services }
+    CommandWithOptions() :
+        CommandBase{}
     {
     }
 

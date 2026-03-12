@@ -26,8 +26,8 @@ class TestCommand final
 {
 public:
     using Options = TestCommandOptions;
-    explicit TestCommand(const rg::DataIoServices & data_io_services) :
-        CommandWithOptions{ data_io_services }
+    explicit TestCommand() :
+        CommandWithOptions{}
     {
     }
 
@@ -63,9 +63,7 @@ TEST(CommandBaseTest, SettersDoNotCreateDirectoriesUntilPrepareForExecution)
     command_test::ScopedTempDir temp_dir{"command_base_setters"};
     const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
     const auto folder_path{ temp_dir.path() / "out" };
-
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    TestCommand command{ data_io_services };
+    TestCommand command{};
     command.SetDatabasePath(database_path);
     command.SetFolderPath(folder_path);
 
@@ -79,8 +77,7 @@ TEST(CommandBaseTest, SettersDoNotCreateDirectoriesUntilPrepareForExecution)
 
 TEST(CommandBaseTest, PrepareForExecutionReportsValidationIssues)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    TestCommand command{ data_io_services };
+    TestCommand command{};
     command.SetForceInvalid(true);
 
     testing::internal::CaptureStderr();
@@ -96,9 +93,7 @@ TEST(CommandBaseTest, ValidationFailureSkipsFilesystemPreflight)
     command_test::ScopedTempDir temp_dir{"command_base_prepare_validation_failure"};
     const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
     const auto folder_path{ temp_dir.path() / "out" };
-
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    TestCommand command{ data_io_services };
+    TestCommand command{};
     command.SetDatabasePath(database_path);
     command.SetFolderPath(folder_path);
     command.SetForceInvalid(true);

@@ -2,15 +2,11 @@
 
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
-#include <rhbm_gem/data/io/DataIoServices.hpp>
 
 namespace rhbm_gem::bindings {
 
 void BindCommonTypes(py::module_ & module)
 {
-    py::class_<DataIoServices>(module, "DataIoServices")
-        .def(py::init(&DataIoServices::BuildDefault));
-
     py::enum_<LogLevel>(module, "LogLevel")
         .value("Error", LogLevel::Error)
         .value("Warning", LogLevel::Warning)

@@ -8,7 +8,7 @@ namespace rg = rhbm_gem;
 
 TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesParseValidationError)
 {
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
+    rg::MapVisualizationCommand command{};
     command.SetAtomSerialID(0);
 
     EXPECT_FALSE(command.PrepareForExecution());
@@ -23,7 +23,7 @@ TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesParseValidationError)
 
 TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesParseValidationError)
 {
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
+    rg::MapVisualizationCommand command{};
     command.SetWindowSize(0.0);
 
     EXPECT_FALSE(command.PrepareForExecution());
@@ -38,7 +38,7 @@ TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesParseValidationErr
 
 TEST(MapVisualizationCommandTest, SamplingSizeNormalizationReportsAutoCorrectedWarning)
 {
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
+    rg::MapVisualizationCommand command{};
     command.SetSamplingSize(0);
 
     const auto * issue{
@@ -62,7 +62,7 @@ TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
+    rg::MapVisualizationCommand command{};
     command.SetFolderPath(output_dir);
     command.SetModelFilePath(model_path);
     command.SetMapFilePath(map_path);
@@ -83,7 +83,7 @@ TEST(MapVisualizationCommandTest, ExecuteWritesPdfToConfiguredFolder)
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
+    rg::MapVisualizationCommand command{};
     command.SetFolderPath(output_dir);
     command.SetModelFilePath(model_path);
     command.SetMapFilePath(map_path);

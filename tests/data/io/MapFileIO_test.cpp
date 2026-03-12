@@ -4,13 +4,10 @@
 #include <array>
 #include <vector>
 
-#include <rhbm_gem/data/io/MapFileReader.hpp>
-#include <rhbm_gem/data/io/MapFileWriter.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 
 namespace rg = rhbm_gem;
-using MapFileReader = rg::MapFileReader;
-using MapFileWriter = rg::MapFileWriter;
 using MapObject = rg::MapObject;
 
 TEST(MapFileIOTest, ReadWriteMapAndCCP4)
@@ -30,18 +27,15 @@ TEST(MapFileIOTest, ReadWriteMapAndCCP4)
     for (const auto & ext : extensions)
     {
         std::filesystem::path path{ std::filesystem::temp_directory_path() / ("test_map_io" + ext) };
-        {
-            MapFileWriter writer{ path.string(), &map };
-            writer.Write();
-        }
-        MapFileReader reader{ path.string() };
-        reader.Read();
+        rg::WriteMap(path, map);
+        auto reader{ rg::ReadMap(path) };
+        ASSERT_NE(reader, nullptr);
 
-        EXPECT_EQ(grid_size, reader.GetGridSizeArray());
-        EXPECT_EQ(grid_spacing, reader.GetGridSpacingArray());
-        EXPECT_EQ(origin, reader.GetOriginArray());
+        EXPECT_EQ(grid_size, reader->GetGridSize());
+        EXPECT_EQ(grid_spacing, reader->GetGridSpacing());
+        EXPECT_EQ(origin, reader->GetOrigin());
 
-        auto read_values{ reader.GetMapValueArray() };
+        const auto * read_values{ reader->GetMapValueArray() };
         ASSERT_NE(read_values, nullptr);
         for (size_t i = 0; i < voxel_size; i++)
         {

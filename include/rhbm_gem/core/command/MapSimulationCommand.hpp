@@ -49,7 +49,7 @@ private:
     std::array<float, 3> m_atom_range_minimum, m_atom_range_maximum;
 
 public:
-    explicit MapSimulationCommand(const DataIoServices & data_io_services);
+    explicit MapSimulationCommand();
     ~MapSimulationCommand() override = default;
     void SetPotentialModelChoice(PotentialModel value);
     void SetPartialChargeChoice(PartialCharge value);

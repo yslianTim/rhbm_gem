@@ -123,8 +123,8 @@ Contract:
 
 `Expect*` helpers are used as strict runtime contracts in I/O and persistence paths:
 
-- `ModelObjectFactory::OutputDataObject(...)` -> `ExpectModelObject(...)`
-- `MapObjectFactory::OutputDataObject(...)` -> `ExpectMapObject(...)`
+- `WriteDataObject(...)` (model branch) -> `ExpectModelObject(...)`
+- `WriteDataObject(...)` (map branch) -> `ExpectMapObject(...)`
 - `ModelObjectDAOSqlite::Save(...)` -> `ExpectModelObject(...)`
 - `MapObjectDAO::Save(...)` -> `ExpectMapObject(...)`
 
