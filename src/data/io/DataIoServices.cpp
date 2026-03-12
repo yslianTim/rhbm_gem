@@ -29,7 +29,7 @@ DataIoServices DataIoServices::BuildDefault()
     auto default_resolver{
         std::make_shared<DefaultFileProcessFactoryResolver>(*file_format_registry) };
     auto dao_factory_registry{ std::make_shared<DataObjectDAOFactoryRegistry>() };
-    RegisterBuiltInDataObjectDaos(*dao_factory_registry);
+    RegisterDataObjectDaos(*dao_factory_registry);
 
     impl->file_format_registry = std::move(file_format_registry);
     impl->file_process_factory_resolver = std::move(default_resolver);

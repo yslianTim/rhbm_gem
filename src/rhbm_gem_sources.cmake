@@ -63,7 +63,7 @@ set(RHBM_GEM_LIBRARY_SOURCES
     data/io/file/ModelObjectFactory.cpp
     data/io/file/MrcFormat.cpp
     data/io/file/PdbFormat.cpp
-    data/io/sqlite/BuiltInDataObjectDaos.cpp
+    data/io/sqlite/DataObjectDAOs.cpp
     data/io/sqlite/DataObjectDAOFactoryRegistry.cpp
     data/io/sqlite/DatabaseManager.cpp
     data/io/sqlite/ManagedStoreRegistry.cpp

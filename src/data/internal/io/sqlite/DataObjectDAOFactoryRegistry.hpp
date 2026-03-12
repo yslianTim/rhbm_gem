@@ -44,6 +44,6 @@ public:
     }
 };
 
-void RegisterBuiltInDataObjectDaos(DataObjectDAOFactoryRegistry & registry);
+void RegisterDataObjectDaos(DataObjectDAOFactoryRegistry & registry);
 
 } // namespace rhbm_gem

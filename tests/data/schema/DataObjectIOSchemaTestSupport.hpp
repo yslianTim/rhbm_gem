@@ -41,14 +41,14 @@ inline std::shared_ptr<const rg::FileFormatRegistry> BuildDefaultFileFormatRegis
 inline std::shared_ptr<const rg::DataObjectDAOFactoryRegistry> BuildDefaultDaoFactoryRegistry()
 {
     auto registry{ std::make_shared<rg::DataObjectDAOFactoryRegistry>() };
-    rg::RegisterBuiltInDataObjectDaos(*registry);
+    rg::RegisterDataObjectDaos(*registry);
     return registry;
 }
 
 inline std::shared_ptr<rg::DataObjectDAOFactoryRegistry> BuildMutableDaoFactoryRegistry()
 {
     auto registry{ std::make_shared<rg::DataObjectDAOFactoryRegistry>() };
-    rg::RegisterBuiltInDataObjectDaos(*registry);
+    rg::RegisterDataObjectDaos(*registry);
     return registry;
 }
 

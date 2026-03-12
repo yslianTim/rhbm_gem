@@ -7,7 +7,7 @@
 
 namespace rhbm_gem {
 
-void RegisterBuiltInDataObjectDaos(DataObjectDAOFactoryRegistry & registry)
+void RegisterDataObjectDaos(DataObjectDAOFactoryRegistry & registry)
 {
     registry.RegisterFactory(
         typeid(ModelObject),

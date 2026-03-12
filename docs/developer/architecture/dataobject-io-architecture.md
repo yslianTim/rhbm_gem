@@ -247,7 +247,7 @@ Migration behavior (when triggered and legacy support is enabled) keeps only the
 
 ### 5.6 DAO registration and stable names
 
-Built-in DAO registration is centralized in `RegisterBuiltInDataObjectDaos(...)`,
+DAO registration is centralized in `RegisterDataObjectDaos(...)`,
 which is invoked by `DataIoServices::BuildDefault()`:
 
 - `ModelObject` -> `ModelObjectDAO` registered as `"model"`
@@ -358,7 +358,7 @@ Database/schema/DAO:
 - `src/data/internal/io/sqlite/DatabaseManager.hpp`, `src/data/io/sqlite/DatabaseManager.cpp`
 - `src/data/internal/migration/DatabaseSchemaManager.hpp`, `src/data/schema/DatabaseSchemaManager.cpp`
 - `src/data/internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp`, `src/data/io/sqlite/DataObjectDAOFactoryRegistry.cpp`
-- `src/data/io/sqlite/BuiltInDataObjectDaos.cpp`
+- `src/data/io/sqlite/DataObjectDAOs.cpp`
 - `src/data/internal/io/sqlite/ManagedStoreRegistry.hpp`, `src/data/io/sqlite/ManagedStoreRegistry.cpp`
 - `src/data/internal/io/sqlite/ModelObjectDAO.hpp` (thin alias over `ModelObjectDAOSqlite`)
 - `src/data/internal/io/sqlite/ModelObjectDAOSqlite.hpp`, `src/data/io/sqlite/ModelObjectDAOSqlite.cpp` (class `ModelObjectDAOSqlite`)
