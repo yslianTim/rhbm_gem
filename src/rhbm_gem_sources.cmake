@@ -1,10 +1,10 @@
-include(${CMAKE_CURRENT_LIST_DIR}/BuiltInCommandSources.generated.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/CommandSources.generated.cmake)
 
 set(RHBM_GEM_LIBRARY_SOURCES
     core/command/Application.cpp
     core/painter/AtomPainter.cpp
     core/painter/RootPlotRenderBackend.cpp
-    core/command/BuiltInCommandCatalog.cpp
+    core/command/CommandCatalog.cpp
     core/command/CommandBase.cpp
     core/painter/ComparisonPainter.cpp
     core/workflow/DataObjectWorkflowOps.cpp
@@ -17,7 +17,7 @@ set(RHBM_GEM_LIBRARY_SOURCES
     core/painter/PotentialPlotBuilder.cpp
     core/painter/PotentialPlotBuilderSequenceGraphs.cpp
     core/painter/PotentialPlotBuilderPlotFunctions.cpp
-    ${RHBM_GEM_BUILTIN_COMMAND_SOURCES}
+    ${RHBM_GEM_COMMAND_SOURCES}
     core/workflow/HRLModelTestCommandWorkflows.cpp
     core/command/MapSampling.cpp
     core/painter/ModelPainterMapValueRender.cpp

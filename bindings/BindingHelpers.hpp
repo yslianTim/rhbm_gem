@@ -10,7 +10,7 @@
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
-#include "internal/BuiltInCommandCatalogInternal.hpp"
+#include "internal/CommandCatalogInternal.hpp"
 
 namespace py = pybind11;
 
@@ -27,9 +27,9 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
 }
 
 template <typename CommandType>
-py::class_<CommandType, std::shared_ptr<CommandType>> BindBuiltInCommand(py::module_ & module)
+py::class_<CommandType, std::shared_ptr<CommandType>> BindCommandClass(py::module_ & module)
 {
-    const auto binding_name{ BuiltInPythonBindingName(CommandType::kCommandId) };
+    const auto binding_name{ CommandPythonBindingName(CommandType::kCommandId) };
     return py::class_<CommandType, std::shared_ptr<CommandType>>(
         module,
         std::string(binding_name).c_str());

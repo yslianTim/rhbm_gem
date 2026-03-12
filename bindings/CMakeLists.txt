@@ -1,9 +1,9 @@
-include(${CMAKE_CURRENT_LIST_DIR}/BuiltInBindingUnits.generated.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/CommandBindingUnits.generated.cmake)
 
 set(BINDINGS_SOURCES
     CommonBindings.cpp
     CoreBindings.cpp
-    ${RHBM_GEM_BUILTIN_BINDING_SOURCES}
+    ${RHBM_GEM_COMMAND_BINDING_SOURCES}
 )
 
 set(BINDINGS_MODULE_TARGET rhbm_gem_module)

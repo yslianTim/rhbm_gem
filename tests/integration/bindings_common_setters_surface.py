@@ -1,7 +1,7 @@
 import rhbm_gem_module as m
 
 
-# Derived from command profiles: all built-ins expose threading/verbose/output-folder,
+# Derived from command profiles: all commands expose threading/verbose/output-folder,
 # and database commands additionally expose database-path setter.
 EXPECTED_COMMON_SETTERS = {
     "PotentialAnalysisCommand": {"SetThreadSize", "SetVerboseLevel", "SetFolderPath", "SetDatabasePath"},

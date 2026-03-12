@@ -30,20 +30,20 @@ Non-responsibilities:
 
 Those responsibilities stay in `DataObjectManager`, data/file modules, and domain helpers.
 
-## 2. Built-in command source of truth
+## 2. Command source of truth
 
-Built-in command definitions are centralized in:
+Command definitions are centralized in:
 
-- `src/core/internal/BuiltInCommandList.def`
+- `src/core/internal/CommandList.def`
 
 This list is consumed by:
 
-- `src/core/command/BuiltInCommandCatalog.cpp` to build `BuiltInCommandCatalog()` for CLI registration and metadata checks
-- `bindings/CoreBindings.cpp` to register built-in Python command binders via manifest expansion
-- `scripts/generate_builtin_command_artifacts.py` to refresh generated catalog/CMake/docs artifacts
-- generated CMake source lists for built-in command sources/bindings/tests
+- `src/core/command/CommandCatalog.cpp` to build `CommandCatalog()` for CLI registration and metadata checks
+- `bindings/CoreBindings.cpp` to register Python command binders via manifest expansion
+- `scripts/generate_command_artifacts.py` to refresh generated catalog/CMake/docs artifacts
+- generated CMake source lists for command sources/bindings/tests
 
-`CommandDescriptor` fields (defined in `src/core/internal/BuiltInCommandCatalogInternal.hpp`):
+`CommandDescriptor` fields (defined in `src/core/internal/CommandCatalogInternal.hpp`):
 
 - `id` (`CommandId`)
 - `name` (CLI subcommand name)
@@ -56,12 +56,12 @@ Rules enforced by implementation:
 
 - `id` and `common_options` are derived from concrete command type (`kCommandId`, `kCommonOptions`)
 - `python_binding_name` is derived from command type (`COMMAND_TYPE`)
-- built-in order in the catalog defines CLI subcommand help order
+- command order in the catalog defines CLI subcommand help order
 - there is no plugin/self-registration path for commands
 
-### Built-in command manifest
+### Command manifest
 
-<!-- BEGIN GENERATED: built-in-command-manifest -->
+<!-- BEGIN GENERATED: command-manifest -->
 1. `potential_analysis`
 2. `potential_display`
 3. `result_dump`
@@ -69,7 +69,7 @@ Rules enforced by implementation:
 5. `map_visualization`
 6. `position_estimation`
 7. `model_test`
-<!-- END GENERATED: built-in-command-manifest -->
+<!-- END GENERATED: command-manifest -->
 
 ## 3. CLI startup and registration flow
 
@@ -77,7 +77,7 @@ Startup path:
 
 1. `src/main.cpp` creates `CLI::App` and one `DataIoServices` instance.
 2. `Application` (`src/core/command/Application.cpp`) receives `DataIoServices` and requires exactly one subcommand.
-3. `Application::RegisterAllCommands()` iterates `BuiltInCommandCatalog()`.
+3. `Application::RegisterAllCommands()` iterates `CommandCatalog()`.
 4. For each descriptor:
    - create concrete command via `descriptor.factory(data_io_services)`
    - register subcommand (`name`, `description`)
@@ -85,7 +85,7 @@ Startup path:
    - register callback that calls `Execute()`
 5. Callback throws `CLI::RuntimeError(1)` when `Execute()` returns `false`.
 
-There is no second built-in CLI registration path in the project.
+There is no second command CLI registration path in the project.
 
 GUI integration path:
 
@@ -231,7 +231,7 @@ Primary command-side APIs:
 - `m_data_manager.ForEachDataObject(...)`
 - `command_data_loader::*` helpers in `src/core/internal/CommandDataLoaderInternal.hpp`
 
-Workflow helpers used by built-in commands:
+Workflow helpers used by commands:
 
 - map/model preprocessing via `DataObjectWorkflowOps` (for example `NormalizeMapObject`, `PrepareModelObject`)
 - map sampling via `SampleMapValues(...)`
@@ -241,21 +241,21 @@ Workflow helpers used by built-in commands:
 
 ## 9. Python binding contract
 
-Built-in Python command classes are bound through per-command binding units under `bindings/`,
+Python command classes are bound through per-command binding units under `bindings/`,
 with module assembly in `bindings/CoreBindings.cpp`.
 
 Binding model:
 
-- built-in membership/name mapping comes from `BuiltInCommandList.def` + `BuiltInCommandCatalog()`
+- command membership/name mapping comes from `CommandList.def` + `CommandCatalog()`
 - module registration is manifest-driven in `bindings/CoreBindings.cpp`
 - method exposure is explicit in `bindings/*Bindings.cpp` (not auto-generated)
-- built-in binding units bind shared command APIs via `BindCommonCommandSetters(...)` and `BindCommandDiagnostics(...)`
+- command binding units bind shared command APIs via `BindCommonCommandSetters(...)` and `BindCommandDiagnostics(...)`
 - Python execution path calls the same `Execute()` / `PrepareForExecution()` contract as C++
 
-### Python built-in surface
+### Python command surface
 
-<!-- BEGIN GENERATED: built-in-python-command-surface -->
-### Built-in Python command classes
+<!-- BEGIN GENERATED: command-python-surface -->
+### Python command classes
 - `PotentialAnalysisCommand`
 - `PotentialDisplayCommand`
 - `ResultDumpCommand`
@@ -269,27 +269,27 @@ Binding model:
 - `ValidationPhase`
 - `ValidationIssue`
 
-### Shared diagnostics methods on built-in Python commands
+### Shared diagnostics methods on Python commands
 - `PrepareForExecution()`
 - `HasValidationErrors()`
 - `GetValidationIssues()`
-<!-- END GENERATED: built-in-python-command-surface -->
+<!-- END GENERATED: command-python-surface -->
 
-## 10. Built-in command change checklist
+## 10. Command change checklist
 
-When adding or significantly modifying a built-in command, update the same change set:
+When adding or significantly modifying a command, update the same change set:
 
 1. command header under `include/rhbm_gem/core/command/`
 2. command implementation under `src/core/command/` (and `src/core/workflow/` when introducing/extracting workflows)
-3. built-in list entry in `src/core/internal/BuiltInCommandList.def`
-4. metadata/registration behavior (if needed) in `BuiltInCommandCatalog*`
-5. Python binding exposure in `bindings/*Bindings.cpp` (module init wiring is manifest-driven from `BuiltInCommandList.def`)
+3. command list entry in `src/core/internal/CommandList.def`
+4. metadata/registration behavior (if needed) in `CommandCatalog*`
+5. Python binding exposure in `bindings/*Bindings.cpp` (module init wiring is manifest-driven from `CommandList.def`)
 6. tests (contract + command-specific)
 7. this architecture document and related developer docs
 
 ## 11. Anti-patterns to avoid
 
-- bypassing built-in registration flow and hard-coding command wiring elsewhere
+- bypassing command registration flow and hard-coding command wiring elsewhere
 - reintroducing static self-registration/plugin-style registration
 - writing directly to `m_options` outside `MutateOptions(...)`
 - pushing obvious single-field validation into `ExecuteImpl()`
@@ -307,9 +307,9 @@ Core command architecture:
 - `include/rhbm_gem/core/command/CommandBase.hpp`
 - `src/core/command/CommandBase.cpp`
 - `include/rhbm_gem/core/command/CommandMetadata.hpp`
-- `src/core/internal/BuiltInCommandList.def`
-- `src/core/internal/BuiltInCommandCatalogInternal.hpp`
-- `src/core/command/BuiltInCommandCatalog.cpp`
+- `src/core/internal/CommandList.def`
+- `src/core/internal/CommandCatalogInternal.hpp`
+- `src/core/command/CommandCatalog.cpp`
 - `include/rhbm_gem/core/command/CommandOptionBinding.hpp`
 - `src/core/internal/CommandDataLoaderInternal.hpp`
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`

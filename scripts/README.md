@@ -7,14 +7,14 @@
 - Use `scripts/run_local_template.sh` as the baseline template.
 - Do not place scripts at repository root.
 
-## Built-in Command Automation
+## Command Automation
 
-- `scripts/generate_builtin_command_artifacts.py`: generate all built-in command derived artifacts from `BuiltInCommandList.def`
-  (catalog include/entry fragments, built-in CMake source lists, docs generated blocks).
+- `scripts/generate_command_artifacts.py`: generate all command derived artifacts from `CommandList.def`
+  (catalog include/entry fragments, command CMake source lists, docs generated blocks).
 - `scripts/command_scaffold.py`: generate a new command/binding/test/doc scaffold.
-  - add `--wire` to also update `BuiltInCommandList.def` and regenerate derived artifacts.
+  - add `--wire` to also update `CommandList.def` and regenerate derived artifacts.
   - add `--wire --strict` to fail-fast if manifest generation fails.
-- `scripts/check_builtin_command_sync.py`: validate `BuiltInCommandList.def` sync with
+- `scripts/check_command_sync.py`: validate `CommandList.def` sync with
   generated artifacts plus required headers/sources/bindings/tests surface files.
 - `scripts/run_clang_format_check.sh`: check formatting for painter/parser directories (check-only).
 - `scripts/run_clang_tidy_check.sh`: run clang-tidy for painter/parser source files (check-only),

@@ -7,7 +7,7 @@ namespace rhbm_gem::bindings {
 template <>
 void BindCommand<MapSimulationCommand>(py::module_ & module)
 {
-    auto map_simulation{ BindBuiltInCommand<MapSimulationCommand>(module) };
+    auto map_simulation{ BindCommandClass<MapSimulationCommand>(module) };
     map_simulation
         .def(py::init<const DataIoServices &>())
         .def("Execute", &MapSimulationCommand::Execute)

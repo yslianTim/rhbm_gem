@@ -7,7 +7,7 @@ namespace rhbm_gem::bindings {
 template <>
 void BindCommand<PositionEstimationCommand>(py::module_ & module)
 {
-    auto position_estimation{ BindBuiltInCommand<PositionEstimationCommand>(module) };
+    auto position_estimation{ BindCommandClass<PositionEstimationCommand>(module) };
     position_estimation
         .def(py::init<const DataIoServices &>())
         .def("Execute", &PositionEstimationCommand::Execute)

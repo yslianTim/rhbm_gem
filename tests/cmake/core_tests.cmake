@@ -1,4 +1,4 @@
-include(${CMAKE_CURRENT_LIST_DIR}/BuiltInCoreCommandTests.generated.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/CoreCommandTests.generated.cmake)
 
 set(CORE_COMMAND_TEST_SOURCES
     core/command/Application_test.cpp
@@ -8,7 +8,7 @@ set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandScalarValidationHelper_test.cpp
     core/command/CommandValidationIssue_test.cpp
     core/command/GuiCommandExecutor_test.cpp
-    ${RHBM_GEM_BUILTIN_CORE_COMMAND_TEST_SOURCES}
+    ${RHBM_GEM_GENERATED_CORE_COMMAND_TEST_SOURCES}
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
@@ -27,7 +27,7 @@ add_rhbm_gtest_target(rhbm_tests_core_contract
     DOMAIN core
     INTENTS contract
     SOURCES
-        core/contract/BuiltInCommandCatalog_test.cpp
+        core/contract/CommandCatalog_test.cpp
         core/contract/CommandExecutionContract_test.cpp
         core/contract/DocsSync_test.cpp
         core/contract/EnumOptionTraits_test.cpp

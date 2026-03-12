@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 
-#include "internal/BuiltInCommandCatalogInternal.hpp"
+#include "internal/CommandCatalogInternal.hpp"
 #include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
@@ -76,7 +76,7 @@ std::string NormalizeBlock(std::string text)
 std::string BuildExpectedManifestBlock()
 {
     std::ostringstream output;
-    const auto & catalog{ rg::BuiltInCommandCatalog() };
+    const auto & catalog{ rg::CommandCatalog() };
     for (std::size_t index = 0; index < catalog.size(); ++index)
     {
         output << (index + 1) << ". `" << catalog[index].name << "`\n";
@@ -89,7 +89,7 @@ std::string BuildExpectedSurfaceMatrixBlock()
     std::ostringstream output;
     output << "| Command | Uses database at runtime | Uses output folder |\n";
     output << "| --- | --- | --- |\n";
-    for (const auto & descriptor : rg::BuiltInCommandCatalog())
+    for (const auto & descriptor : rg::CommandCatalog())
     {
         output << "| `" << descriptor.name << "` | "
                << (rg::UsesDatabaseAtRuntime(descriptor.common_options) ? "yes" : "no")
@@ -103,8 +103,8 @@ std::string BuildExpectedSurfaceMatrixBlock()
 std::string BuildExpectedPythonSurfaceBlock()
 {
     std::ostringstream output;
-    output << "### Built-in Python command classes\n";
-    for (const auto & descriptor : rg::BuiltInCommandCatalog())
+    output << "### Python command classes\n";
+    for (const auto & descriptor : rg::CommandCatalog())
     {
         output << "- `" << descriptor.python_binding_name << "`\n";
     }
@@ -114,7 +114,7 @@ std::string BuildExpectedPythonSurfaceBlock()
     output << "- `ValidationPhase`\n";
     output << "- `ValidationIssue`\n";
 
-    output << "\n### Shared diagnostics methods on built-in Python commands\n";
+    output << "\n### Shared diagnostics methods on Python commands\n";
     output << "- `PrepareForExecution()`\n";
     output << "- `HasValidationErrors()`\n";
     output << "- `GetValidationIssues()`\n";
@@ -124,7 +124,7 @@ std::string BuildExpectedPythonSurfaceBlock()
 
 } // namespace
 
-TEST(DocsSyncTest, CommandArchitectureGeneratedSectionsMatchBuiltInCatalog)
+TEST(DocsSyncTest, CommandArchitectureGeneratedSectionsMatchCatalog)
 {
     const auto project_root{ command_test::ProjectRootPath() };
     const auto document_path{
@@ -136,8 +136,8 @@ TEST(DocsSyncTest, CommandArchitectureGeneratedSectionsMatchBuiltInCatalog)
     const auto actual_manifest{
         ExtractGeneratedBlock(
             document,
-            "<!-- BEGIN GENERATED: built-in-command-manifest -->",
-            "<!-- END GENERATED: built-in-command-manifest -->")
+            "<!-- BEGIN GENERATED: command-manifest -->",
+            "<!-- END GENERATED: command-manifest -->")
     };
     const auto actual_matrix{
         ExtractGeneratedBlock(
@@ -148,8 +148,8 @@ TEST(DocsSyncTest, CommandArchitectureGeneratedSectionsMatchBuiltInCatalog)
     const auto actual_python_surface{
         ExtractGeneratedBlock(
             document,
-            "<!-- BEGIN GENERATED: built-in-python-command-surface -->",
-            "<!-- END GENERATED: built-in-python-command-surface -->")
+            "<!-- BEGIN GENERATED: command-python-surface -->",
+            "<!-- END GENERATED: command-python-surface -->")
     };
 
     ASSERT_FALSE(actual_manifest.empty());

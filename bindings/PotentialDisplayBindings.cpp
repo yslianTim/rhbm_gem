@@ -7,7 +7,7 @@ namespace rhbm_gem::bindings {
 template <>
 void BindCommand<PotentialDisplayCommand>(py::module_ & module)
 {
-    auto potential_display{ BindBuiltInCommand<PotentialDisplayCommand>(module) };
+    auto potential_display{ BindCommandClass<PotentialDisplayCommand>(module) };
     potential_display
         .def(py::init<const DataIoServices &>())
         .def("Execute", &PotentialDisplayCommand::Execute)

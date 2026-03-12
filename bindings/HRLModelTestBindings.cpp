@@ -7,7 +7,7 @@ namespace rhbm_gem::bindings {
 template <>
 void BindCommand<HRLModelTestCommand>(py::module_ & module)
 {
-    auto model_test{ BindBuiltInCommand<HRLModelTestCommand>(module) };
+    auto model_test{ BindCommandClass<HRLModelTestCommand>(module) };
     model_test
         .def(py::init<const DataIoServices &>())
         .def("Execute", &HRLModelTestCommand::Execute)

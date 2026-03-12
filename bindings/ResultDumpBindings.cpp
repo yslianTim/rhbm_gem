@@ -7,7 +7,7 @@ namespace rhbm_gem::bindings {
 template <>
 void BindCommand<ResultDumpCommand>(py::module_ & module)
 {
-    auto result_dump{ BindBuiltInCommand<ResultDumpCommand>(module) };
+    auto result_dump{ BindCommandClass<ResultDumpCommand>(module) };
     result_dump
         .def(py::init<const DataIoServices &>())
         .def("Execute", &ResultDumpCommand::Execute)

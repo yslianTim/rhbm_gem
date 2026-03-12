@@ -7,7 +7,7 @@ namespace rhbm_gem::bindings {
 template <>
 void BindCommand<PotentialAnalysisCommand>(py::module_ & module)
 {
-    auto potential_analysis{ BindBuiltInCommand<PotentialAnalysisCommand>(module) };
+    auto potential_analysis{ BindCommandClass<PotentialAnalysisCommand>(module) };
     potential_analysis
         .def(py::init<const DataIoServices &>())
         .def("Execute", &PotentialAnalysisCommand::Execute)

@@ -84,7 +84,7 @@ DataObject I/O principles:
 
 Change-integration principles:
 
-- `[Required]` New built-in commands must update CLI registration, Python bindings, tests, and developer docs together unless intentionally internal-only.
+- `[Required]` New commands must update CLI registration, Python bindings, tests, and developer docs together unless intentionally internal-only.
 - `[Recommended]` Keep manager classes as boundary objects that connect commands, file I/O, and persistence.
 
 ## 8. Testing and Regression Policy

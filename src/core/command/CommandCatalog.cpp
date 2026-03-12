@@ -1,5 +1,5 @@
-#include "internal/BuiltInCommandCatalogInternal.hpp"
-#include "internal/BuiltInCommandCatalogIncludes.generated.inc"
+#include "internal/CommandCatalogInternal.hpp"
+#include "internal/CommandCatalogIncludes.generated.inc"
 
 #include <rhbm_gem/data/io/DataIoServices.hpp>
 
@@ -10,7 +10,7 @@ namespace rhbm_gem {
 namespace {
 
 template <typename CommandType>
-CommandDescriptor MakeBuiltInDescriptor(
+CommandDescriptor MakeCommandDescriptor(
     std::string_view python_binding_name,
     std::string_view name,
     std::string_view description)
@@ -18,7 +18,7 @@ CommandDescriptor MakeBuiltInDescriptor(
     if (python_binding_name.empty())
     {
         throw std::runtime_error(
-            "Built-in command descriptors must provide a Python binding name.");
+            "Command descriptors must provide a Python binding name.");
     }
 
     return CommandDescriptor{
@@ -36,18 +36,18 @@ CommandDescriptor MakeBuiltInDescriptor(
 
 } // namespace
 
-const std::vector<CommandDescriptor> & BuiltInCommandCatalog()
+const std::vector<CommandDescriptor> & CommandCatalog()
 {
     static const std::vector<CommandDescriptor> catalog{
-    #include "internal/BuiltInCommandCatalogEntries.generated.inc"
+    #include "internal/CommandCatalogEntries.generated.inc"
     };
 
     return catalog;
 }
 
-std::string_view BuiltInPythonBindingName(CommandId id)
+std::string_view CommandPythonBindingName(CommandId id)
 {
-    for (const auto & descriptor : BuiltInCommandCatalog())
+    for (const auto & descriptor : CommandCatalog())
     {
         if (descriptor.id == id)
         {
@@ -56,7 +56,7 @@ std::string_view BuiltInPythonBindingName(CommandId id)
     }
 
     throw std::runtime_error(
-        "BuiltInPythonBindingName lookup failed: command id not found.");
+        "CommandPythonBindingName lookup failed: command id not found.");
 }
 
 } // namespace rhbm_gem

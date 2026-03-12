@@ -7,7 +7,7 @@ namespace rhbm_gem::bindings {
 template <>
 void BindCommand<MapVisualizationCommand>(py::module_ & module)
 {
-    auto map_visualization{ BindBuiltInCommand<MapVisualizationCommand>(module) };
+    auto map_visualization{ BindCommandClass<MapVisualizationCommand>(module) };
     map_visualization
         .def(py::init<const DataIoServices &>())
         .def("Execute", &MapVisualizationCommand::Execute)

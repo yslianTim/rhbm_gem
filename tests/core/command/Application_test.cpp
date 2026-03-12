@@ -6,11 +6,11 @@
 
 #include <rhbm_gem/core/command/Application.hpp>
 #include <rhbm_gem/data/io/DataIoServices.hpp>
-#include "internal/BuiltInCommandCatalogInternal.hpp"
+#include "internal/CommandCatalogInternal.hpp"
 
 namespace rg = rhbm_gem;
 
-TEST(ApplicationTest, HelpOrderMatchesBuiltInCommandCatalog)
+TEST(ApplicationTest, HelpOrderMatchesCommandCatalog)
 {
     CLI::App app{"RHBM-GEM"};
     const auto data_io_services{ rg::DataIoServices::BuildDefault() };
@@ -23,7 +23,7 @@ TEST(ApplicationTest, HelpOrderMatchesBuiltInCommandCatalog)
         })
     };
 
-    const auto & catalog{ rg::BuiltInCommandCatalog() };
+    const auto & catalog{ rg::CommandCatalog() };
     ASSERT_EQ(subcommands.size(), catalog.size());
     for (std::size_t index = 0; index < catalog.size(); ++index)
     {
@@ -31,13 +31,13 @@ TEST(ApplicationTest, HelpOrderMatchesBuiltInCommandCatalog)
     }
 }
 
-TEST(ApplicationTest, SharedOptionsMatchBuiltInCommandMetadata)
+TEST(ApplicationTest, SharedOptionsMatchCommandMetadata)
 {
     CLI::App app{"RHBM-GEM"};
     const auto data_io_services{ rg::DataIoServices::BuildDefault() };
     rg::Application controller(app, data_io_services);
 
-    for (const auto & descriptor : rg::BuiltInCommandCatalog())
+    for (const auto & descriptor : rg::CommandCatalog())
     {
         auto * subcommand{ app.get_subcommand(std::string(descriptor.name)) };
         ASSERT_NE(subcommand, nullptr) << descriptor.name;

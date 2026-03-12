@@ -1,6 +1,6 @@
-# Adding a Built-in Command
+# Adding a Command
 
-This guide describes how to add a built-in command in this repository.
+This guide describes how to add a command in this repository.
 
 Related references:
 
@@ -23,31 +23,31 @@ Prefer extending an existing command when:
 
 ## 2. Required change set
 
-For a new built-in command, the minimum manual change set is:
+For a new command, the minimum manual change set is:
 
 - `include/rhbm_gem/core/command/<YourCommand>.hpp`
 - `src/core/command/<YourCommand>.cpp` (and optional `src/core/workflow/*Workflow.cpp` files)
 - `include/rhbm_gem/core/command/CommandMetadata.hpp` (add new `CommandId`)
-- `src/core/internal/BuiltInCommandList.def` (register built-in metadata)
+- `src/core/internal/CommandList.def` (register command metadata)
 - `bindings/<YourFeature>Bindings.cpp` (add command-specific Python bindings)
 - `tests/core/command/<YourCommand>_test.cpp`
 - related contract tests under `tests/core/contract/`
 - developer docs affected by command surface changes
 
-Generated registration surfaces are derived from `BuiltInCommandList.def`.
-After changing built-ins, run:
+Generated registration surfaces are derived from `CommandList.def`.
+After changing commands, run:
 
 ```bash
-python3 scripts/generate_builtin_command_artifacts.py
+python3 scripts/generate_command_artifacts.py
 ```
 
 This refreshes:
 
-- `src/core/internal/BuiltInCommandCatalogIncludes.generated.inc`
-- `src/core/internal/BuiltInCommandCatalogEntries.generated.inc`
-- `src/BuiltInCommandSources.generated.cmake`
-- `bindings/BuiltInBindingUnits.generated.cmake`
-- `tests/cmake/BuiltInCoreCommandTests.generated.cmake`
+- `src/core/internal/CommandCatalogIncludes.generated.inc`
+- `src/core/internal/CommandCatalogEntries.generated.inc`
+- `src/CommandSources.generated.cmake`
+- `bindings/CommandBindingUnits.generated.cmake`
+- `tests/cmake/CoreCommandTests.generated.cmake`
 - generated sections in `docs/developer/architecture/command-architecture.md`
 
 Scaffold helper:
@@ -71,8 +71,8 @@ python3 scripts/command_scaffold.py --name Example --profile FileWorkflow --wire
 
 `--wire` will also update:
 
-- `src/core/internal/BuiltInCommandList.def`
-- generated built-in command artifacts (catalog includes/entries, CMake source lists, docs blocks)
+- `src/core/internal/CommandList.def`
+- generated command artifacts (catalog includes/entries, CMake source lists, docs blocks)
 
 Strict wiring mode (recommended in CI/local guard runs):
 
@@ -296,18 +296,18 @@ Implementation rules:
 Before pushing, run:
 
 ```bash
-python3 scripts/check_builtin_command_sync.py
+python3 scripts/check_command_sync.py
 ```
 
 This is also enforced by the repository guard (`lint_repo`).
 
-## 4. Register the built-in command
+## 4. Register the command
 
-The built-in command manifest is `src/core/internal/BuiltInCommandList.def`.
+The command manifest is `src/core/internal/CommandList.def`.
 Add one entry:
 
 ```cpp
-RHBM_GEM_BUILTIN_COMMAND(
+RHBM_GEM_COMMAND(
     ExampleCommand,
     "example_command",
     "Run example command")
@@ -315,7 +315,7 @@ RHBM_GEM_BUILTIN_COMMAND(
 
 Important:
 
-- built-in order in `BuiltInCommandList.def` affects CLI help order
+- command order in `CommandList.def` affects CLI help order
 - Python class name is derived from `COMMAND_TYPE` (for example `ExampleCommand`)
 
 ## 5. Add Python bindings
@@ -325,7 +325,7 @@ Python bindings are explicit/manual and split by command under `bindings/`.
 Required actions:
 
 1. create/update the command-specific binding source (for example `bindings/ExampleBindings.cpp`)
-2. bind class with `BindBuiltInCommand<rhbm_gem::ExampleCommand>(m)`
+2. bind class with `BindCommandClass<rhbm_gem::ExampleCommand>(m)`
 3. expose constructor that requires `DataIoServices` context
 4. expose supported setters and `Execute`
 5. call `BindCommonCommandSetters(example_command)` so common options stay synchronized
@@ -338,7 +338,7 @@ Binding skeleton:
 template <>
 void BindCommand<rhbm_gem::ExampleCommand>(py::module_ & module)
 {
-    auto example_command{ BindBuiltInCommand<rhbm_gem::ExampleCommand>(module) };
+    auto example_command{ BindCommandClass<rhbm_gem::ExampleCommand>(module) };
     example_command
         .def(py::init<const rhbm_gem::DataIoServices &>())
         .def("Execute", &rhbm_gem::ExampleCommand::Execute)
@@ -357,7 +357,7 @@ services = m.DataIoServices()
 command = m.ExampleCommand(services)
 ```
 
-`bindings/CoreBindings.cpp` registers all built-ins from `BuiltInCommandList.def`; no manual
+`bindings/CoreBindings.cpp` registers all commands from `CommandList.def`; no manual
 module entrypoint edits are required for new command bindings.
 
 Do not expose internal hooks such as `RegisterCLIOptionsExtend(...)` or `ValidateOptions()`.
@@ -365,22 +365,22 @@ Do not expose internal hooks such as `RegisterCLIOptionsExtend(...)` or `Validat
 ## 6. Build wiring
 
 Add extra workflow files to `src/rhbm_gem_sources.cmake` when needed.
-Built-in command source/binding/test lists are generated from `BuiltInCommandList.def`.
+Command source/binding/test lists are generated from `CommandList.def`.
 
 ## 7. Testing updates
 
 Add command tests and update build wiring:
 
 - create `tests/core/command/<YourCommand>_test.cpp`
-- run `python3 scripts/generate_builtin_command_artifacts.py`
+- run `python3 scripts/generate_command_artifacts.py`
 
-Update contract tests that assert explicit built-in lists or per-command mappings:
+Update contract tests that assert explicit command lists or per-command mappings:
 
-- `tests/core/contract/BuiltInCommandCatalog_test.cpp`
+- `tests/core/contract/CommandCatalog_test.cpp`
 - `tests/core/contract/DocsSync_test.cpp`
 - `tests/core/contract/PublicHeaderSurface_test.cpp`
 
-When built-in membership or command metadata changes, update generated blocks in:
+When command membership or command metadata changes, update generated blocks in:
 
 - `docs/developer/architecture/command-architecture.md`
 
@@ -399,12 +399,12 @@ Before merging:
 
 1. `CommandId` was added in `include/rhbm_gem/core/command/CommandMetadata.hpp`
 2. command class compiles and any workflow source files are wired in `src/rhbm_gem_sources.cmake`
-3. built-in macro entry exists in `src/core/internal/BuiltInCommandList.def`
-4. generated artifacts were refreshed (`python3 scripts/generate_builtin_command_artifacts.py`)
+3. command macro entry exists in `src/core/internal/CommandList.def`
+4. generated artifacts were refreshed (`python3 scripts/generate_command_artifacts.py`)
 5. Python binding wiring is complete (`bindings/<YourFeature>Bindings.cpp`)
 6. command tests and contract tests are updated
 7. docs are updated to reflect final command surface
 
 Recommended verification:
 
-1. `ctest --output-on-failure -R "Command|BuiltIn|DocsSync"`
+1. `ctest --output-on-failure -R "Command|DocsSync"`

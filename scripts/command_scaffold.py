@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a built-in command scaffold.
+"""Generate a command scaffold.
 
 By default this script only creates command/binding/test/doc skeleton files.
 When ``--wire`` is set, it also updates registration/manifests in-place.
@@ -58,12 +58,12 @@ def _write_text(path: Path, content: str, dry_run: bool) -> None:
     print(f"[wire] {path}")
 
 
-def _append_builtins_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
+def _append_command_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
     if f"{spec.command_type}," in text:
         return text, False
     block = (
         "\n"
-        "RHBM_GEM_BUILTIN_COMMAND(\n"
+        "RHBM_GEM_COMMAND(\n"
         f"    {spec.command_type},\n"
         f'    "{spec.cli_name}",\n'
         f'    "{spec.description}")\n'
@@ -177,7 +177,7 @@ namespace rhbm_gem::bindings {{
 template <>
 void BindCommand<{spec.command_type}>(py::module_ & module)
 {{
-    auto command{{ BindBuiltInCommand<{spec.command_type}>(module) }};
+    auto command{{ BindCommandClass<{spec.command_type}>(module) }};
     command
         .def(py::init<const DataIoServices &>())
         .def("Execute", &{spec.command_type}::Execute);
@@ -210,26 +210,26 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 ## Registration Checklist
 
-1. Add `{spec.command_type}` into `src/core/internal/BuiltInCommandList.def`.
-2. Run `python3 scripts/generate_builtin_command_artifacts.py`.
-3. Keep generated artifacts clean (`python3 scripts/check_builtin_command_sync.py`).
+1. Add `{spec.command_type}` into `src/core/internal/CommandList.def`.
+2. Run `python3 scripts/generate_command_artifacts.py`.
+3. Keep generated artifacts clean (`python3 scripts/check_command_sync.py`).
 """
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
-    builtins_def = root / "src" / "core" / "internal" / "BuiltInCommandList.def"
+    command_def = root / "src" / "core" / "internal" / "CommandList.def"
     _update_file(
-        builtins_def,
-        lambda text: _append_builtins_entry(text, spec),
+        command_def,
+        lambda text: _append_command_entry(text, spec),
         dry_run,
         strict,
-        "Append a new RHBM_GEM_BUILTIN_COMMAND(...) block to BuiltInCommandList.def.",
+        "Append a new RHBM_GEM_COMMAND(...) block to CommandList.def.",
     )
     if dry_run:
-        print("[wire] scripts/generate_builtin_command_artifacts.py")
+        print("[wire] scripts/generate_command_artifacts.py")
         return
 
-    generator = root / "scripts" / "generate_builtin_command_artifacts.py"
+    generator = root / "scripts" / "generate_command_artifacts.py"
     result = subprocess.run(
         [sys.executable, str(generator)],
         check=False,
@@ -242,7 +242,7 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         if result.stderr.strip():
             print(result.stderr.strip(), file=sys.stderr)
         if strict:
-            raise RuntimeError("Generator failed while wiring built-in command artifacts.")
+            raise RuntimeError("Generator failed while wiring command artifacts.")
 
 
 def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
@@ -259,10 +259,10 @@ def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate built-in command scaffold files.")
+    parser = argparse.ArgumentParser(description="Generate command scaffold files.")
     parser.add_argument("--name", required=True, help="Base command name, e.g. Example or ExampleCommand.")
     parser.add_argument("--cli-name", help="CLI subcommand token. Defaults to name converted to snake_case.")
-    parser.add_argument("--description", help="Built-in description text.")
+    parser.add_argument("--description", help="Command description text.")
     parser.add_argument(
         "--profile",
         default="FileWorkflow",
@@ -274,7 +274,7 @@ def main() -> int:
         "--wire",
         action="store_true",
         help=(
-            "Also update BuiltInCommandList.def and regenerate derived built-in artifacts."
+            "Also update CommandList.def and regenerate derived command artifacts."
         ),
     )
     parser.add_argument(
@@ -311,7 +311,7 @@ def main() -> int:
     if args.wire:
         print("Registration/manifests were wired automatically (manifest + generated artifacts).")
     else:
-        print("Next: wire BuiltInCommandList.def and run artifact generator.")
+        print("Next: wire CommandList.def and run artifact generator.")
     return 0
 
 

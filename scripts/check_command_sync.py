@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate built-in command manifest synchronization."""
+"""Validate command manifest synchronization."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ class CommandEntry:
     description: str
 
 
-def parse_builtins(path: Path) -> list[CommandEntry]:
+def parse_commands(path: Path) -> list[CommandEntry]:
     text = path.read_text(encoding="utf-8")
     pattern = re.compile(
-        r"RHBM_GEM_BUILTIN_COMMAND\(\s*"
+        r"RHBM_GEM_COMMAND\(\s*"
         r"(?P<command>[A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
         r"\"(?P<cli>[^\"]+)\"\s*,\s*"
         r"\"(?P<desc>[^\"]*)\"\s*"
@@ -39,15 +39,15 @@ def parse_builtins(path: Path) -> list[CommandEntry]:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    builtins = parse_builtins(root / "src" / "core" / "internal" / "BuiltInCommandList.def")
-    if not builtins:
-        print("No built-in commands parsed from BuiltInCommandList.def")
+    commands = parse_commands(root / "src" / "core" / "internal" / "CommandList.def")
+    if not commands:
+        print("No commands parsed from CommandList.def")
         return 1
 
     core_bindings_text = (root / "bindings" / "CoreBindings.cpp").read_text(encoding="utf-8")
 
     errors: list[str] = []
-    generator = root / "scripts" / "generate_builtin_command_artifacts.py"
+    generator = root / "scripts" / "generate_command_artifacts.py"
     generated = subprocess.run(
         [sys.executable, str(generator), "--check"],
         check=False,
@@ -60,7 +60,7 @@ def main() -> int:
             message += ("\n" if message else "") + generated.stderr.strip()
         errors.append(f"generated artifacts drift detected:\n{message}")
 
-    for entry in builtins:
+    for entry in commands:
         command = entry.command_type
         stem = command.removesuffix("Command")
         binding_unit = f"{stem}Bindings.cpp"
@@ -75,27 +75,27 @@ def main() -> int:
                 errors.append(f"missing file for {command}: {p.relative_to(root)}")
 
         binding_text = (root / "bindings" / binding_unit).read_text(encoding="utf-8")
-        bind_template_ref = f"BindBuiltInCommand<{command}>"
+        bind_template_ref = f"BindCommandClass<{command}>"
         if bind_template_ref not in binding_text:
-            errors.append(f"{binding_unit} missing built-in bind template reference: {bind_template_ref}")
+            errors.append(f"{binding_unit} missing command bind template reference: {bind_template_ref}")
         bind_registration_ref = f"BindCommand<{command}>"
         if bind_registration_ref not in binding_text:
             errors.append(
                 f"{binding_unit} missing command registration specialization: {bind_registration_ref}"
             )
 
-    if core_bindings_text.count('#include "internal/BuiltInCommandList.def"') < 1:
-        errors.append("CoreBindings.cpp must include internal/BuiltInCommandList.def")
+    if core_bindings_text.count('#include "internal/CommandList.def"') < 1:
+        errors.append("CoreBindings.cpp must include internal/CommandList.def")
     if "BindCommand<rhbm_gem::COMMAND_TYPE>" not in core_bindings_text:
         errors.append("CoreBindings.cpp must register commands via manifest macro expansion")
 
     if errors:
-        print("Built-in command sync check failed:")
+        print("Command sync check failed:")
         for err in errors:
             print(f" - {err}")
         return 1
 
-    print(f"Built-in command sync check passed ({len(builtins)} commands).")
+    print(f"Command sync check passed ({len(commands)} commands).")
     return 0
 
 

@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/command/Application.hpp>
-#include "internal/BuiltInCommandCatalogInternal.hpp"
+#include "internal/CommandCatalogInternal.hpp"
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include <rhbm_gem/data/io/DataIoServices.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -20,7 +20,7 @@ Application::Application(CLI::App & app, const DataIoServices & data_io_services
 
 void Application::RegisterAllCommands()
 {
-    for (const auto & descriptor : BuiltInCommandCatalog())
+    for (const auto & descriptor : CommandCatalog())
     {
         auto command_object{ descriptor.factory(m_data_io_services) };
         CLI::App * command{

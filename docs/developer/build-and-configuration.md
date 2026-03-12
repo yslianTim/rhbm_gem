@@ -101,8 +101,8 @@ Repository guard checks (style/structure/hygiene/fixture tracking/absolute-path/
 cmake --build build --target lint_repo
 ```
 
-`lint_repo` also includes a built-in command manifest sync guard
-(`scripts/check_builtin_command_sync.py`).
+`lint_repo` also includes a command manifest sync guard
+(`scripts/check_command_sync.py`).
 
 ## Static Quality Checks (Targeted)
 

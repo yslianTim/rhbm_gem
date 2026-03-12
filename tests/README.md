@@ -9,7 +9,7 @@ This project uses a two-axis test organization model:
 
 | Directory | Domain | Typical focus |
 | --- | --- | --- |
-| `tests/core/command/` | `core` | Built-in command workflows, option handling, command-level validation |
+| `tests/core/command/` | `core` | Command workflows, option handling, command-level validation |
 | `tests/core/contract/` | `core` | Command catalog/metadata/surface contracts and docs sync checks |
 | `tests/data/io/` | `data` | DataObjectManager and file I/O integration contracts |
 | `tests/data/schema/` | `data` | Schema bootstrap, migration, schema validation, persistence contracts |

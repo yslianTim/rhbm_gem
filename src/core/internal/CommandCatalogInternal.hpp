@@ -22,8 +22,8 @@ struct CommandDescriptor
     CommandFactory factory;
 };
 
-const std::vector<CommandDescriptor> & BuiltInCommandCatalog();
-std::string_view BuiltInPythonBindingName(CommandId id);
+const std::vector<CommandDescriptor> & CommandCatalog();
+std::string_view CommandPythonBindingName(CommandId id);
 
 constexpr bool UsesDatabaseAtRuntime(CommonOptionMask common_options)
 {

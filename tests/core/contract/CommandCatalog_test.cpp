@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "internal/BuiltInCommandCatalogInternal.hpp"
+#include "internal/CommandCatalogInternal.hpp"
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
@@ -23,7 +23,7 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-struct ExpectedBuiltInCommandMetadata
+struct ExpectedCommandMetadata
 {
     rg::CommandId id;
     std::string_view name;
@@ -32,7 +32,7 @@ struct ExpectedBuiltInCommandMetadata
     bool uses_database;
 };
 
-constexpr std::array<ExpectedBuiltInCommandMetadata, 7> kExpectedBuiltInMetadata{{
+constexpr std::array<ExpectedCommandMetadata, 7> kExpectedCommandMetadata{{
     {
         rg::CommandId::PotentialAnalysis,
         "potential_analysis",
@@ -86,7 +86,7 @@ constexpr std::array<ExpectedBuiltInCommandMetadata, 7> kExpectedBuiltInMetadata
 
 const rg::CommandDescriptor * FindDescriptor(rg::CommandId command_id)
 {
-    const auto & catalog{ rg::BuiltInCommandCatalog() };
+    const auto & catalog{ rg::CommandCatalog() };
     const auto iter{
         std::find_if(
             catalog.begin(),
@@ -116,18 +116,18 @@ void ExpectFactoryConstructs(rg::CommandId command_id)
 
 } // namespace
 
-TEST(BuiltInCommandCatalogTest, BuiltInCatalogMatchesExpectedMetadataAndOrder)
+TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
 {
-    const auto & catalog{ rg::BuiltInCommandCatalog() };
-    ASSERT_EQ(catalog.size(), kExpectedBuiltInMetadata.size());
+    const auto & catalog{ rg::CommandCatalog() };
+    ASSERT_EQ(catalog.size(), kExpectedCommandMetadata.size());
 
     std::unordered_set<int> unique_ids;
     std::unordered_set<std::string> unique_names;
     std::unordered_set<std::string> unique_binding_names;
-    for (std::size_t index = 0; index < kExpectedBuiltInMetadata.size(); ++index)
+    for (std::size_t index = 0; index < kExpectedCommandMetadata.size(); ++index)
     {
         const auto & descriptor{ catalog[index] };
-        const auto & expected{ kExpectedBuiltInMetadata[index] };
+        const auto & expected{ kExpectedCommandMetadata[index] };
 
         EXPECT_EQ(descriptor.id, expected.id);
         EXPECT_EQ(std::string_view{ descriptor.name }, expected.name);
@@ -141,7 +141,7 @@ TEST(BuiltInCommandCatalogTest, BuiltInCatalogMatchesExpectedMetadataAndOrder)
         EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Verbose));
         EXPECT_TRUE(rg::UsesOutputFolder(descriptor.common_options));
         EXPECT_EQ(
-            rg::BuiltInPythonBindingName(descriptor.id),
+            rg::CommandPythonBindingName(descriptor.id),
             std::string_view{ descriptor.python_binding_name });
 
         unique_ids.insert(static_cast<int>(descriptor.id));
@@ -154,7 +154,7 @@ TEST(BuiltInCommandCatalogTest, BuiltInCatalogMatchesExpectedMetadataAndOrder)
     EXPECT_EQ(unique_binding_names.size(), catalog.size());
 }
 
-TEST(BuiltInCommandCatalogTest, BuiltInFactoriesConstructCommandsWithMatchingMetadata)
+TEST(CommandCatalogTest, FactoriesConstructCommandsWithMatchingMetadata)
 {
     ExpectFactoryConstructs<rg::PotentialAnalysisCommand>(rg::CommandId::PotentialAnalysis);
     ExpectFactoryConstructs<rg::PotentialDisplayCommand>(rg::CommandId::PotentialDisplay);
