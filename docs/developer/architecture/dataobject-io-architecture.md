@@ -9,8 +9,6 @@ Use this document to:
 - extend supported file formats
 - add a new persistent top-level `DataObject`
 
-This document describes current behavior only.
-
 Related guides:
 
 - [`../development-guidelines.md`](../development-guidelines.md)
@@ -62,12 +60,10 @@ flowchart LR
         L --> M["DatabaseSchemaManager"]
         M --> M2["ManagedStoreRegistry"]
         L --> N["object_catalog + DataObjectDAOFactoryRegistry"]
-        N --> O["ModelObjectDAO (v2 impl)"]
+        N --> O["ModelObjectDAO"]
         N --> P2["MapObjectDAO"]
-        M --> Q["LegacyModelObjectReader (optional migration path)"]
         O --> R["SQLiteWrapper"]
         P2 --> R
-        Q --> R
     end
 ```
 
@@ -212,12 +208,12 @@ CREATE TABLE IF NOT EXISTS object_catalog (
 
 Schema version source: `PRAGMA user_version`
 
-- `2`: validate normalized v2 schema only
-- `1`: migrate to normalized v2 when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`; otherwise reject
-- `0` + empty database: create normalized v2
-- `0` + recognized legacy v1 layout: migrate to normalized v2 when
-  `RHBM_GEM_LEGACY_V1_SUPPORT=ON`; otherwise reject
-- `0` + non-empty non-legacy layout: reject
+- `2`: validate normalized v2 schema
+- `1`: treat as legacy v1 and migrate only when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`; otherwise reject
+- `0`:
+  - empty DB -> create normalized v2
+  - unversioned legacy-v1 layout -> migrate to normalized v2 only when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`
+  - non-empty non-legacy layout -> reject
 - any other version: reject
 
 Normalized v2 ownership model:
@@ -226,13 +222,10 @@ Normalized v2 ownership model:
 - `model_object.key_tag` and `map_list.key_tag` reference `object_catalog(key_tag)` with `ON DELETE CASCADE`
 - model child tables reference `model_object(key_tag)` with `ON DELETE CASCADE`
 
-Migration behavior (when triggered and legacy support is enabled) keeps only the final v2 layout:
+Migration contract (when legacy support is enabled and migration is triggered):
 
-- migrate legacy model payload through `LegacyModelObjectReader` into `ModelObjectDAOSqlite`
-- migrate legacy map payload into final `map_list`
-- rebuild `object_catalog`
-- drop owned legacy tables and remove legacy `object_metadata` if present
-- set `user_version = 2` and validate final schema
+- migration runs in `DatabaseSchemaManager::EnsureSchema()` during `DatabaseManager` construction
+- migrated DB is normalized v2 only (`user_version = 2`) and is validated before use
 
 ### 5.5 Managed store registry
 
@@ -366,7 +359,8 @@ Database/schema/DAO:
 - `src/data/io/sqlite/ModelSchemaSql.hpp`
 - `src/data/io/sqlite/ModelStructurePersistence.hpp`, `src/data/io/sqlite/ModelStructurePersistence.cpp`
 - `src/data/io/sqlite/ModelAnalysisPersistence.hpp`, `src/data/io/sqlite/ModelAnalysisPersistence.cpp`
-- `src/data/internal/migration/LegacyModelObjectReader.hpp`, `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp` (when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`)
+- optional migration helper (`RHBM_GEM_LEGACY_V1_SUPPORT=ON`):
+  `src/data/internal/migration/LegacyModelObjectReader.hpp`, `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp`
 - `src/data/internal/io/sqlite/SQLiteWrapper.hpp`
 
 ## 9. Common Pitfalls
