@@ -1,7 +1,6 @@
 # Adding a Built-in Command
 
-This guide describes the current workflow for adding a built-in command in this repository.
-It is implementation-oriented and aligned with the codebase as it exists today.
+This guide describes how to add a built-in command in this repository.
 
 Related references:
 
@@ -59,6 +58,10 @@ python3 scripts/command_scaffold.py --name Example --profile FileWorkflow
 
 The scaffold creates command/binding/test/doc skeleton files only.
 Use `--wire` to apply registration/manifests automatically.
+
+Note:
+
+- scaffolded binding files do not add command-specific setters or `BindCommonCommandSetters(...)`; add them manually
 
 Scaffold + auto-wire helper:
 
@@ -325,8 +328,8 @@ Required actions:
 2. bind class with `BindBuiltInCommand<rhbm_gem::ExampleCommand>(m)`
 3. expose constructor that requires `DataIoServices` context
 4. expose supported setters and `Execute`
-5. call `BindCommandDiagnostics(example_command)`
-6. call `BindCommonCommandSetters(example_command)` so common options stay synchronized
+5. call `BindCommonCommandSetters(example_command)` so common options stay synchronized
+6. call `BindCommandDiagnostics(example_command)`
 7. implement command registration specialization `template <> void BindCommand<rhbm_gem::ExampleCommand>(py::module_ & module)`
 
 Binding skeleton:

@@ -1,7 +1,6 @@
 # Command Architecture
 
-This document describes the current command system in this repository.
-Use it as the command-layer developer manual, not as change history.
+This document describes the command system in this repository.
 
 Related guides:
 
@@ -42,6 +41,7 @@ This list is consumed by:
 - `src/core/command/BuiltInCommandCatalog.cpp` to build `BuiltInCommandCatalog()` for CLI registration and metadata checks
 - `bindings/CoreBindings.cpp` to register built-in Python command binders via manifest expansion
 - `scripts/generate_builtin_command_artifacts.py` to refresh generated catalog/CMake/docs artifacts
+- generated CMake source lists for built-in command sources/bindings/tests
 
 `CommandDescriptor` fields (defined in `src/core/internal/BuiltInCommandCatalogInternal.hpp`):
 
@@ -231,7 +231,7 @@ Primary command-side APIs:
 - `m_data_manager.ForEachDataObject(...)`
 - `command_data_loader::*` helpers in `src/core/internal/CommandDataLoaderInternal.hpp`
 
-Workflow helpers used by current commands:
+Workflow helpers used by built-in commands:
 
 - map/model preprocessing via `DataObjectWorkflowOps` (for example `NormalizeMapObject`, `PrepareModelObject`)
 - map sampling via `SampleMapValues(...)`
@@ -244,11 +244,12 @@ Workflow helpers used by current commands:
 Built-in Python command classes are bound through per-command binding units under `bindings/`,
 with module assembly in `bindings/CoreBindings.cpp`.
 
-Current binding model:
+Binding model:
 
 - built-in membership/name mapping comes from `BuiltInCommandList.def` + `BuiltInCommandCatalog()`
 - module registration is manifest-driven in `bindings/CoreBindings.cpp`
 - method exposure is explicit in `bindings/*Bindings.cpp` (not auto-generated)
+- built-in binding units bind shared command APIs via `BindCommonCommandSetters(...)` and `BindCommandDiagnostics(...)`
 - Python execution path calls the same `Execute()` / `PrepareForExecution()` contract as C++
 
 ### Python built-in surface
