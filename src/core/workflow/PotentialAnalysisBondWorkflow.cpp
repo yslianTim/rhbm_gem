@@ -1,4 +1,4 @@
-#include "workflow/PotentialAnalysisBondWorkflow.hpp"
+#include "internal/workflow/PotentialAnalysisBondWorkflow.hpp"
 #include "internal/PotentialAnalysisExecutionOptions.hpp"
 
 #include <rhbm_gem/data/object/BondClassifier.hpp>

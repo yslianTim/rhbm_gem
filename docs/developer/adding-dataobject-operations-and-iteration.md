@@ -14,7 +14,7 @@ Use the narrowest boundary that matches the change:
 - `DataObjectWorkflowOps` (`src/core/workflow/DataObjectWorkflowOps.*`)
   - reusable cross-command typed logic on `ModelObject`/`MapObject`
 - command-local workflow (`src/core/workflow/*CommandWorkflow*.cpp`)
-  - behavior only needed by one command
+  - behavior only needed by one command; keep private command-workflow headers under `src/core/internal/workflow/`
 - `DataObjectManager::ForEachDataObject(...)`
   - iteration policy or callback contract changes
 

@@ -37,7 +37,7 @@
 #include <vector>
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
-#include "workflow/PotentialAnalysisBondWorkflow.hpp"
+#include "internal/workflow/PotentialAnalysisBondWorkflow.hpp"
 #endif
 
 #ifdef USE_OPENMP
