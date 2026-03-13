@@ -1,6 +1,7 @@
 # Build outputs and compiler artifacts
 build/
 build*/
+Testing/
 local/
 Debug/
 Release/
