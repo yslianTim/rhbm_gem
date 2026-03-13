@@ -5,7 +5,7 @@
 #include <CLI/CLI.hpp>
 
 #include <rhbm_gem/core/command/Application.hpp>
-#include "internal/CommandCatalogInternal.hpp"
+#include "internal/CommandCatalog.hpp"
 
 namespace rg = rhbm_gem;
 

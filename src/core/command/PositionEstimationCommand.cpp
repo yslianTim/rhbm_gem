@@ -1,6 +1,6 @@
 #include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
-#include "internal/CommandDataLoaderInternal.hpp"
-#include "internal/CommandOptionBindingInternal.hpp"
+#include "internal/CommandDataLoader.hpp"
+#include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include "workflow/DataObjectWorkflowOps.hpp"

@@ -44,7 +44,7 @@ The manifest drives:
 - Python module command registration (`bindings/CoreBindings.cpp`)
 - generated catalog/CMake/docs artifacts (`scripts/developer/generate_command_artifacts.py`)
 
-`CommandDescriptor` fields (`src/core/internal/CommandCatalogInternal.hpp`):
+`CommandDescriptor` fields (`src/core/internal/CommandCatalog.hpp`):
 
 - `id`
 - `name`
@@ -182,7 +182,7 @@ Execution boundary helpers:
 
 - `BuildOutputPath(...)`
 
-CLI binding helpers (`src/core/internal/CommandOptionBindingInternal.hpp`):
+CLI binding helpers (`src/core/internal/CommandOptionBinding.hpp`):
 
 - `command_cli::AddScalarOption(...)`
 - `command_cli::AddStringOption(...)`
@@ -194,7 +194,7 @@ CLI binding helpers (`src/core/internal/CommandOptionBindingInternal.hpp`):
 Commands should use command-facing APIs and helpers:
 
 - `DataObjectManager` (`ProcessFile`, `LoadDataObject`, `SaveDataObject`, `ForEachDataObject`, typed getters)
-- `command_data_loader::*` (`src/core/internal/CommandDataLoaderInternal.hpp`)
+- `command_data_loader::*` (`src/core/internal/CommandDataLoader.hpp`)
 - typed workflow helpers in `src/core/workflow/DataObjectWorkflowOps.*`
 - `SampleMapValues(...)` for map sampling
 
@@ -255,10 +255,10 @@ When adding or changing a command:
 - `include/rhbm_gem/core/command/CommandMetadata.hpp`
 - `include/rhbm_gem/core/command/internal/CommandIdEntries.generated.inc`
 - `src/core/internal/CommandList.def`
-- `src/core/internal/CommandCatalogInternal.hpp`
+- `src/core/internal/CommandCatalog.hpp`
 - `src/core/command/CommandCatalog.cpp`
-- `src/core/internal/CommandOptionBindingInternal.hpp`
-- `src/core/internal/CommandDataLoaderInternal.hpp`
+- `src/core/internal/CommandOptionBinding.hpp`
+- `src/core/internal/CommandDataLoader.hpp`
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `include/rhbm_gem/gui/GuiCommandExecutor.hpp`
 - `src/gui/GuiCommandExecutor.cpp`

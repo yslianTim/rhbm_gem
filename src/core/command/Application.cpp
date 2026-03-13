@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/command/Application.hpp>
-#include "internal/CommandCatalogInternal.hpp"
+#include "internal/CommandCatalog.hpp"
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>

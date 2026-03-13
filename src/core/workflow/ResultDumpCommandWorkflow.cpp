@@ -1,6 +1,6 @@
-#include "workflow/ResultDumpWorkflowInternal.hpp"
+#include "internal/workflow/ResultDumpWorkflow.hpp"
 
-#include "internal/CommandDataLoaderInternal.hpp"
+#include "internal/CommandDataLoader.hpp"
 #include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>

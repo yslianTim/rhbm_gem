@@ -1,6 +1,6 @@
 #include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
-#include "internal/CommandOptionBindingInternal.hpp"
-#include "workflow/HRLModelTestWorkflowInternal.hpp"
+#include "internal/CommandOptionBinding.hpp"
+#include "internal/workflow/HRLModelTestWorkflow.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <string_view>

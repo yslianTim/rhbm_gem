@@ -10,7 +10,7 @@
 #include <string_view>
 #include <vector>
 
-#include "internal/CommandCatalogInternal.hpp"
+#include "internal/CommandCatalog.hpp"
 #include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;

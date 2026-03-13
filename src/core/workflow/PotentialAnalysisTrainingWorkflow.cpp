@@ -1,6 +1,6 @@
-#include "workflow/PotentialAnalysisWorkflowInternal.hpp"
+#include "internal/workflow/PotentialAnalysisWorkflow.hpp"
 #include "internal/PotentialAnalysisExecutionOptions.hpp"
-#include "internal/CommandDataLoaderInternal.hpp"
+#include "internal/CommandDataLoader.hpp"
 #include "internal/PotentialAnalysisTrainingSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

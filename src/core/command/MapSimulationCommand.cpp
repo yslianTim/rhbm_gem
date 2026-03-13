@@ -1,6 +1,6 @@
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
-#include "internal/CommandDataLoaderInternal.hpp"
-#include "internal/CommandOptionBindingInternal.hpp"
+#include "internal/CommandDataLoader.hpp"
+#include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "internal/CommandCatalogInternal.hpp"
+#include "internal/CommandCatalog.hpp"
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>

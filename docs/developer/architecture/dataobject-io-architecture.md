@@ -195,7 +195,7 @@ Map sampling helper:
 
 Painter ingestion type checks:
 
-- `AddDataObject(...)` / `AddReferenceDataObject(...)` in `src/core/internal/PainterIngestionInternal.hpp`
+- `AddDataObject(...)` / `AddReferenceDataObject(...)` in `src/core/internal/PainterIngestion.hpp`
 - null or mismatched typed input throws runtime error
 
 ## 10. Extension Boundaries
@@ -236,7 +236,7 @@ Dispatch + typed ops:
 - `src/core/workflow/DataObjectWorkflowOps.cpp`
 - `include/rhbm_gem/core/command/MapSampling.hpp`
 - `src/core/command/MapSampling.cpp`
-- `src/core/internal/PainterIngestionInternal.hpp`
+- `src/core/internal/PainterIngestion.hpp`
 
 SQLite/schema:
 

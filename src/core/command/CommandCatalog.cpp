@@ -1,4 +1,4 @@
-#include "internal/CommandCatalogInternal.hpp"
+#include "internal/CommandCatalog.hpp"
 #include "internal/CommandCatalogIncludes.generated.inc"
 
 namespace rhbm_gem {

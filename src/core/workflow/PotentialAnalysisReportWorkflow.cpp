@@ -1,6 +1,6 @@
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 #include "internal/PotentialAnalysisExecutionOptions.hpp"
-#include "internal/CommandDataLoaderInternal.hpp"
+#include "internal/CommandDataLoader.hpp"
 #include "internal/PotentialAnalysisTrainingSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

@@ -1,6 +1,6 @@
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
-#include "internal/CommandOptionBindingInternal.hpp"
-#include "workflow/ResultDumpWorkflowInternal.hpp"
+#include "internal/CommandOptionBinding.hpp"
+#include "internal/workflow/ResultDumpWorkflow.hpp"
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 namespace {

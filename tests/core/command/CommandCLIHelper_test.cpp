@@ -4,7 +4,7 @@
 #include <string>
 #include <CLI/CLI.hpp>
 
-#include "internal/CommandOptionBindingInternal.hpp"
+#include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rg = rhbm_gem;

@@ -1,4 +1,4 @@
-#include "workflow/HRLModelTestWorkflowInternal.hpp"
+#include "internal/workflow/HRLModelTestWorkflow.hpp"
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>

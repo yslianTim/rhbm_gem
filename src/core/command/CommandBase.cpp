@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/command/CommandBase.hpp>
-#include "internal/CommandOptionBindingInternal.hpp"
+#include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <CLI/CLI.hpp>
