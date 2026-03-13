@@ -28,12 +28,6 @@ struct ExpectedCommandMetadata
     bool uses_database;
 };
 
-struct ManifestCommandEntry
-{
-    std::string command_id;
-    std::string command_stem;
-};
-
 std::vector<ExpectedCommandMetadata> BuildExpectedCommandMetadata()
 {
     std::vector<ExpectedCommandMetadata> expected;
@@ -86,61 +80,6 @@ std::vector<std::string> ParseCommandIdTokensFromManifest()
         command_ids.push_back((*iter)[1].str());
     }
     return command_ids;
-}
-
-std::vector<ManifestCommandEntry> ParseManifestEntries()
-{
-    const auto manifest_path{
-        command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
-            / "CommandList.def"
-    };
-    std::ifstream manifest_stream{ manifest_path };
-    if (!manifest_stream.is_open())
-    {
-        return {};
-    }
-
-    const std::string manifest{
-        std::istreambuf_iterator<char>{ manifest_stream },
-        std::istreambuf_iterator<char>{}
-    };
-    const std::regex command_pattern{
-        R"(RHBM_GEM_COMMAND\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)"
-    };
-
-    std::vector<ManifestCommandEntry> entries;
-    for (std::sregex_iterator iter{ manifest.begin(), manifest.end(), command_pattern };
-        iter != std::sregex_iterator{};
-        ++iter)
-    {
-        entries.push_back(ManifestCommandEntry{ (*iter)[1].str(), (*iter)[2].str() });
-    }
-    return entries;
-}
-
-std::vector<std::string> ParseRunFunctionTokens(
-    const std::filesystem::path & path,
-    const std::regex & pattern)
-{
-    std::ifstream input{ path };
-    if (!input.is_open())
-    {
-        return {};
-    }
-
-    const std::string content{
-        std::istreambuf_iterator<char>{ input },
-        std::istreambuf_iterator<char>{}
-    };
-
-    std::vector<std::string> tokens;
-    for (std::sregex_iterator iter{ content.begin(), content.end(), pattern };
-        iter != std::sregex_iterator{};
-        ++iter)
-    {
-        tokens.push_back((*iter)[1].str());
-    }
-    return tokens;
 }
 
 std::string ReadFileContent(const std::filesystem::path & path)
