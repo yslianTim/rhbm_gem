@@ -558,7 +558,7 @@ namespace rhbm_gem {
 const std::vector<CommandDescriptor> & CommandCatalog()
 {
     static const std::vector<CommandDescriptor> catalog{
-#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
         CommandDescriptor{                                                                      \
             CommandId::COMMAND_ID,                                                              \
             CLI_NAME,                                                                           \
@@ -578,12 +578,12 @@ void RegisterCommandSubcommands(CLI::App & app)
     {
         switch (descriptor.id)
         {
-#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
         case CommandId::COMMAND_ID:                                                             \
-            RegisterCommand<COMMAND_STEM##Request, &Run##COMMAND_STEM>(                         \
+            RegisterCommand<COMMAND_ID##Request, &Run##COMMAND_ID>(                             \
                 app,                                                                            \
                 descriptor,                                                                     \
-                Bind##COMMAND_STEM##RequestOptions);                                            \
+                Bind##COMMAND_ID##RequestOptions);                                              \
             break;
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND

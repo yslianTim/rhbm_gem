@@ -36,10 +36,10 @@ ExecutionReport RunCommand(CommonOptionProfile profile, const RequestType & requ
 
 } // namespace
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
-    ExecutionReport Run##COMMAND_STEM(const COMMAND_STEM##Request & request)                    \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
+    ExecutionReport Run##COMMAND_ID(const COMMAND_ID##Request & request)                        \
     {                                                                                            \
-        return RunCommand<COMMAND_STEM##Command>(CommonOptionProfile::PROFILE, request);        \
+        return RunCommand<COMMAND_ID##Command>(CommonOptionProfile::PROFILE, request);          \
     }
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND

@@ -64,7 +64,6 @@ def _append_command_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
         "\n"
         "RHBM_GEM_COMMAND(\n"
         f"    {spec.command_id},\n"
-        f"    {spec.command_type.removesuffix('Command')},\n"
         f'    "{spec.cli_name}",\n'
         f'    "{spec.description}",\n'
         f"    {spec.profile})\n"
@@ -204,7 +203,7 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
 def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
     base = _to_title_case(args.name)
     command_type = base if base.endswith("Command") else f"{base}Command"
-    command_id = args.command_id or command_type.removesuffix("Command")
+    command_id = command_type.removesuffix("Command")
     cli_name = _to_cli_name(args.cli_name or base)
     description = args.description or f"Run {cli_name}"
     return ScaffoldSpec(
@@ -219,13 +218,6 @@ def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate command scaffold files.")
     parser.add_argument("--name", required=True, help="Base command name, e.g. Example or ExampleCommand.")
-    parser.add_argument(
-        "--command-id",
-        help=(
-            "CommandId enum token to emit in CommandList.def. "
-            "Defaults to command name without 'Command' suffix."
-        ),
-    )
     parser.add_argument("--cli-name", help="CLI subcommand token. Defaults to name converted to snake_case.")
     parser.add_argument("--description", help="Command description text.")
     parser.add_argument(

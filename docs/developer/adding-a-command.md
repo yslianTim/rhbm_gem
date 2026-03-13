@@ -54,7 +54,6 @@ Add an entry to `include/rhbm_gem/core/command/CommandList.def`:
 ```cpp
 RHBM_GEM_COMMAND(
     Example,
-    Example,
     "example",
     "Run example command",
     FileWorkflow)
@@ -63,10 +62,9 @@ RHBM_GEM_COMMAND(
 Parameters:
 
 1. `COMMAND_ID`: `CommandId` enum token.
-2. `COMMAND_STEM`: shared stem for `ExampleCommand`, `ExampleRequest`, and `RunExample(...)`.
-3. `CLI_NAME`: subcommand token.
-4. `DESCRIPTION`: CLI description.
-5. `PROFILE`: `FileWorkflow` or `DatabaseWorkflow`.
+2. `CLI_NAME`: subcommand token.
+3. `DESCRIPTION`: CLI description.
+4. `PROFILE`: `FileWorkflow` or `DatabaseWorkflow`.
 
 ## 4. Scaffold (optional)
 

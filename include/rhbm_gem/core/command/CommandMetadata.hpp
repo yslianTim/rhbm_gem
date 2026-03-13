@@ -6,7 +6,7 @@ namespace rhbm_gem {
 
 enum class CommandId
 {
-#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
     COMMAND_ID,
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND

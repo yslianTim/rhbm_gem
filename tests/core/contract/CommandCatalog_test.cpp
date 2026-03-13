@@ -31,7 +31,7 @@ struct ExpectedCommandMetadata
 std::vector<ExpectedCommandMetadata> BuildExpectedCommandMetadata()
 {
     std::vector<ExpectedCommandMetadata> expected;
-#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
     expected.push_back(ExpectedCommandMetadata{                                                 \
         rg::CommandId::COMMAND_ID,                                                              \
         CLI_NAME,                                                                               \
@@ -45,7 +45,7 @@ std::vector<ExpectedCommandMetadata> BuildExpectedCommandMetadata()
 std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTokens()
 {
     std::vector<std::pair<std::string_view, rg::CommandId>> expected;
-#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
     expected.emplace_back(#COMMAND_ID, rg::CommandId::COMMAND_ID);
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND
@@ -176,17 +176,32 @@ TEST(CommandCatalogTest, RunSurfaceAndPythonBindingsMatchManifestOrder)
     ASSERT_FALSE(command_api.empty());
     ASSERT_FALSE(bindings.empty());
     EXPECT_NE(
-        command_api.find("ExecutionReport Run##COMMAND_STEM"),
+        command_api.find("ExecutionReport Run##COMMAND_ID"),
         std::string::npos);
     EXPECT_NE(
         command_api.find("#include <rhbm_gem/core/command/CommandList.def>"),
         std::string::npos);
     EXPECT_NE(
-        bindings.find("module.def(\"Run\" #COMMAND_STEM"),
+        bindings.find("module.def(\"Run\" #COMMAND_ID"),
         std::string::npos);
     EXPECT_NE(
         bindings.find("#include <rhbm_gem/core/command/CommandList.def>"),
         std::string::npos);
+}
+
+TEST(CommandCatalogTest, ModelTestCliNameMapsToHRLModelTestCommandId)
+{
+    const auto & catalog{ rg::CommandCatalog() };
+    const auto iter = std::find_if(
+        catalog.begin(),
+        catalog.end(),
+        [](const rg::CommandDescriptor & descriptor)
+        {
+            return std::string_view{ descriptor.name } == "model_test";
+        });
+
+    ASSERT_NE(iter, catalog.end());
+    EXPECT_EQ(iter->id, rg::CommandId::HRLModelTest);
 }
 
 TEST(CommandCatalogTest, CommandTestsDoNotIncludeCommandPrivateWorkflowHeaders)

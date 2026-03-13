@@ -108,8 +108,8 @@ void BindCommandApi(py::module_ & module)
         .def_readonly("executed", &ExecutionReport::executed)
         .def_readonly("validation_issues", &ExecutionReport::validation_issues);
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
-    module.def("Run" #COMMAND_STEM, &Run##COMMAND_STEM);
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
+    module.def("Run" #COMMAND_ID, &Run##COMMAND_ID);
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND
 }

@@ -7,7 +7,7 @@ import re
 def _manifest_entries() -> list[str]:
     manifest_path = Path(__file__).resolve().parents[2] / "include" / "rhbm_gem" / "core" / "command" / "CommandList.def"
     pattern = re.compile(
-        r"RHBM_GEM_COMMAND\(\s*[A-Za-z_][A-Za-z0-9_]*\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*,"
+        r"RHBM_GEM_COMMAND\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,"
     )
     return [match.group(1) for match in pattern.finditer(manifest_path.read_text(encoding="utf-8"))]
 

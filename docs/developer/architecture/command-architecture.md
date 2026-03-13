@@ -15,7 +15,7 @@ Top-level command membership is defined in:
 
 Each entry uses:
 
-- `RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)`
+- `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)`
 
 This manifest is expanded directly with X-macros by:
 
