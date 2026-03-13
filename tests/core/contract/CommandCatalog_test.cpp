@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <regex>
@@ -25,6 +26,12 @@ struct ExpectedCommandMetadata
     std::string_view name;
     rg::CommonOptionProfile profile;
     bool uses_database;
+};
+
+struct ManifestCommandEntry
+{
+    std::string command_id;
+    std::string command_type;
 };
 
 std::vector<ExpectedCommandMetadata> BuildExpectedCommandMetadata()
@@ -78,6 +85,83 @@ std::vector<std::string> ParseCommandIdTokensFromManifest()
         command_ids.push_back((*iter)[1].str());
     }
     return command_ids;
+}
+
+std::vector<ManifestCommandEntry> ParseManifestEntries()
+{
+    const auto manifest_path{
+        command_test::ProjectRootPath() / "src" / "core" / "internal" / "CommandList.def"
+    };
+    std::ifstream manifest_stream{ manifest_path };
+    if (!manifest_stream.is_open())
+    {
+        return {};
+    }
+
+    const std::string manifest{
+        std::istreambuf_iterator<char>{ manifest_stream },
+        std::istreambuf_iterator<char>{}
+    };
+    const std::regex command_pattern{
+        R"(RHBM_GEM_COMMAND\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)"
+    };
+
+    std::vector<ManifestCommandEntry> entries;
+    for (std::sregex_iterator iter{ manifest.begin(), manifest.end(), command_pattern };
+        iter != std::sregex_iterator{};
+        ++iter)
+    {
+        entries.push_back(ManifestCommandEntry{ (*iter)[1].str(), (*iter)[2].str() });
+    }
+    return entries;
+}
+
+std::string ApiStemFromCommandType(std::string_view command_type)
+{
+    constexpr std::string_view suffix{ "Command" };
+    if (command_type.size() >= suffix.size()
+        && command_type.substr(command_type.size() - suffix.size()) == suffix)
+    {
+        return std::string(command_type.substr(0, command_type.size() - suffix.size()));
+    }
+    return std::string(command_type);
+}
+
+std::vector<std::string> ParseRunFunctionTokens(
+    const std::filesystem::path & path,
+    const std::regex & pattern)
+{
+    std::ifstream input{ path };
+    if (!input.is_open())
+    {
+        return {};
+    }
+
+    const std::string content{
+        std::istreambuf_iterator<char>{ input },
+        std::istreambuf_iterator<char>{}
+    };
+
+    std::vector<std::string> tokens;
+    for (std::sregex_iterator iter{ content.begin(), content.end(), pattern };
+        iter != std::sregex_iterator{};
+        ++iter)
+    {
+        tokens.push_back((*iter)[1].str());
+    }
+    return tokens;
+}
+
+std::string ReadFileContent(const std::filesystem::path & path)
+{
+    std::ifstream input{ path };
+    if (!input.is_open())
+    {
+        return {};
+    }
+    return std::string(
+        std::istreambuf_iterator<char>{ input },
+        std::istreambuf_iterator<char>{});
 }
 
 const rg::CommandDescriptor * FindDescriptor(rg::CommandId command_id)
@@ -161,5 +245,60 @@ TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
         const auto & expected{ expected_command_ids[index] };
         EXPECT_EQ(manifest_ids[index], expected.first);
         EXPECT_EQ(static_cast<int>(expected.second), static_cast<int>(index));
+    }
+}
+
+TEST(CommandCatalogTest, RunSurfaceAndPythonBindingsMatchManifestOrder)
+{
+    const auto manifest_entries{ ParseManifestEntries() };
+    ASSERT_FALSE(manifest_entries.empty());
+
+    std::vector<std::string> expected_stems;
+    expected_stems.reserve(manifest_entries.size());
+    for (const auto & entry : manifest_entries)
+    {
+        expected_stems.push_back(ApiStemFromCommandType(entry.command_type));
+    }
+
+    const auto project_root{ command_test::ProjectRootPath() };
+    const auto header_runs{
+        ParseRunFunctionTokens(
+            project_root / "include" / "rhbm_gem" / "core" / "command" / "CommandApi.hpp",
+            std::regex{ R"(ExecutionReport Run([A-Za-z_][A-Za-z0-9_]*)\()" })
+    };
+    const auto pybind_runs{
+        ParseRunFunctionTokens(
+            project_root / "bindings" / "CommandApiBindings.cpp",
+            std::regex{ R"pybind(module\.def\("Run([A-Za-z_][A-Za-z0-9_]*)",)pybind" })
+    };
+
+    EXPECT_EQ(header_runs, expected_stems);
+    EXPECT_EQ(pybind_runs, expected_stems);
+}
+
+TEST(CommandCatalogTest, CommandTestsDoNotIncludeCommandPrivateWorkflowHeaders)
+{
+    const auto command_test_dir{
+        command_test::ProjectRootPath() / "tests" / "core" / "command"
+    };
+    const std::array<std::string_view, 2> forbidden_includes{
+        "internal/workflow/",
+        "internal/PotentialAnalysisTrainingSupport.hpp",
+    };
+
+    for (const auto & entry : std::filesystem::directory_iterator{ command_test_dir })
+    {
+        if (!entry.is_regular_file() || entry.path().extension() != ".cpp")
+        {
+            continue;
+        }
+
+        const auto content{ ReadFileContent(entry.path()) };
+        ASSERT_FALSE(content.empty()) << entry.path().string();
+        for (const auto forbidden : forbidden_includes)
+        {
+            EXPECT_EQ(content.find(forbidden), std::string::npos)
+                << entry.path().filename().string();
+        }
     }
 }

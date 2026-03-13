@@ -110,6 +110,7 @@ struct ExecutionReport
     std::vector<ValidationIssue> validation_issues{};
 };
 
+// BEGIN GENERATED: command-run-declarations
 ExecutionReport RunPotentialAnalysis(const PotentialAnalysisRequest & request);
 ExecutionReport RunPotentialDisplay(const PotentialDisplayRequest & request);
 ExecutionReport RunResultDump(const ResultDumpRequest & request);
@@ -117,5 +118,6 @@ ExecutionReport RunMapSimulation(const MapSimulationRequest & request);
 ExecutionReport RunMapVisualization(const MapVisualizationRequest & request);
 ExecutionReport RunPositionEstimation(const PositionEstimationRequest & request);
 ExecutionReport RunHRLModelTest(const HRLModelTestRequest & request);
+// END GENERATED: command-run-declarations
 
 } // namespace rhbm_gem

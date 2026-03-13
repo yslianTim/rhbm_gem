@@ -1,7 +1,5 @@
 #include "internal/workflow/PotentialAnalysisWorkflow.hpp"
-#include "internal/PotentialAnalysisExecutionOptions.hpp"
 #include "internal/CommandDataLoader.hpp"
-#include "internal/PotentialAnalysisTrainingSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -36,13 +34,30 @@
 #include <utility>
 #include <vector>
 
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
-#include "internal/workflow/PotentialAnalysisBondWorkflow.hpp"
-#endif
-
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
+
+namespace rhbm_gem::detail {
+
+std::vector<double> BuildOrderedAlphaRTrainingList();
+std::vector<double> BuildOrderedAlphaGTrainingList();
+
+} // namespace rhbm_gem::detail
+
+namespace {
+
+HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
+    const rhbm_gem::PotentialAnalysisCommandOptions & options,
+    bool quiet_mode)
+{
+    HRLExecutionOptions execution_options;
+    execution_options.quiet_mode = quiet_mode;
+    execution_options.thread_size = options.thread_size;
+    return execution_options;
+}
+
+} // namespace
 
 namespace rhbm_gem {
 namespace detail {
@@ -298,7 +313,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                detail::MakePotentialAnalysisExecutionOptions(m_options, true)
+                MakePotentialAnalysisExecutionOptions(m_options, true)
             )
         };
         
@@ -354,7 +369,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                detail::MakePotentialAnalysisExecutionOptions(m_options, true)
+                MakePotentialAnalysisExecutionOptions(m_options, true)
             )
         };
         

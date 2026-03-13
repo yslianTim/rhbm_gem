@@ -20,12 +20,19 @@ BEGIN_COMMAND_IDS = "// BEGIN GENERATED: command-id-entries"
 END_COMMAND_IDS = "// END GENERATED: command-id-entries"
 BEGIN_COMMAND_CATALOG = "// BEGIN GENERATED: command-catalog-entries"
 END_COMMAND_CATALOG = "// END GENERATED: command-catalog-entries"
+BEGIN_RUN_DECLS = "// BEGIN GENERATED: command-run-declarations"
+END_RUN_DECLS = "// END GENERATED: command-run-declarations"
+BEGIN_RUN_DEFS = "// BEGIN GENERATED: command-run-definitions"
+END_RUN_DEFS = "// END GENERATED: command-run-definitions"
+BEGIN_PYBIND_RUN_DEFS = "// BEGIN GENERATED: command-pybind-run-bindings"
+END_PYBIND_RUN_DEFS = "// END GENERATED: command-pybind-run-bindings"
 
 
 def build_catalog_block(entries: list[CommandEntry]) -> str:
     lines: list[str] = []
     for entry in entries:
-        binder = f"Bind{entry.command_id}Runtime"
+        stem = entry.command_type.removesuffix("Command")
+        binder = f"Bind{stem}Runtime"
         lines.append(
             "    CommandDescriptor{"
             f"CommandId::{entry.command_id}, "
@@ -115,6 +122,40 @@ def build_python_surface_block(entries: list[CommandEntry]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def build_run_declaration_block(entries: list[CommandEntry]) -> str:
+    lines: list[str] = []
+    for entry in entries:
+        stem = entry.command_type.removesuffix("Command")
+        lines.append(f"ExecutionReport Run{stem}(const {stem}Request & request);")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_run_definition_block(entries: list[CommandEntry]) -> str:
+    lines: list[str] = []
+    for entry in entries:
+        stem = entry.command_type.removesuffix("Command")
+        lines.extend(
+            [
+                f"ExecutionReport Run{stem}(const {stem}Request & request)",
+                "{",
+                f"    return RunCommand<{entry.command_type}>(request);",
+                "}",
+                "",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def build_pybind_run_binding_block(entries: list[CommandEntry]) -> str:
+    lines: list[str] = []
+    for entry in entries:
+        stem = entry.command_type.removesuffix("Command")
+        lines.append(f'    module.def("Run{stem}", &Run{stem});')
+    lines.append("")
+    return "\n".join(lines)
+
+
 def replace_generated_block(
     text: str,
     begin_marker: str,
@@ -168,6 +209,39 @@ def build_updated_command_catalog(root: Path, entries: list[CommandEntry]) -> st
     )
 
 
+def build_updated_command_api_header(root: Path, entries: list[CommandEntry]) -> str:
+    header_path = root / "include" / "rhbm_gem" / "core" / "command" / "CommandApi.hpp"
+    header = header_path.read_text(encoding="utf-8")
+    return replace_generated_block(
+        header,
+        BEGIN_RUN_DECLS,
+        END_RUN_DECLS,
+        build_run_declaration_block(entries),
+    )
+
+
+def build_updated_command_api_cpp(root: Path, entries: list[CommandEntry]) -> str:
+    source_path = root / "src" / "core" / "command" / "CommandApi.cpp"
+    source = source_path.read_text(encoding="utf-8")
+    return replace_generated_block(
+        source,
+        BEGIN_RUN_DEFS,
+        END_RUN_DEFS,
+        build_run_definition_block(entries),
+    )
+
+
+def build_updated_command_api_bindings(root: Path, entries: list[CommandEntry]) -> str:
+    bindings_path = root / "bindings" / "CommandApiBindings.cpp"
+    bindings = bindings_path.read_text(encoding="utf-8")
+    return replace_generated_block(
+        bindings,
+        BEGIN_PYBIND_RUN_DEFS,
+        END_PYBIND_RUN_DEFS,
+        build_pybind_run_binding_block(entries),
+    )
+
+
 def compute_expected_outputs(
     root: Path,
     entries: list[CommandEntry]) -> list[tuple[Path, str]]:
@@ -177,8 +251,20 @@ def compute_expected_outputs(
             build_updated_command_metadata(root, entries),
         ),
         (
+            root / "include" / "rhbm_gem" / "core" / "command" / "CommandApi.hpp",
+            build_updated_command_api_header(root, entries),
+        ),
+        (
+            root / "src" / "core" / "command" / "CommandApi.cpp",
+            build_updated_command_api_cpp(root, entries),
+        ),
+        (
             root / "src" / "core" / "command" / "CommandCatalog.cpp",
             build_updated_command_catalog(root, entries),
+        ),
+        (
+            root / "bindings" / "CommandApiBindings.cpp",
+            build_updated_command_api_bindings(root, entries),
         ),
         (
             root / "src" / "CommandSources.generated.cmake",

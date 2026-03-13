@@ -1,6 +1,5 @@
-#include "internal/workflow/ResultDumpWorkflow.hpp"
-
 #include "internal/CommandDataLoader.hpp"
+#include "command/ResultDumpCommand.hpp"
 #include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
@@ -29,6 +28,16 @@
 
 namespace rhbm_gem::detail {
 namespace {
+
+struct ResultDumpWorkflowContext
+{
+    DataObjectManager & data_manager;
+    const ResultDumpCommandOptions & options;
+    std::string & map_key_tag;
+    std::unordered_map<std::string, std::vector<AtomObject *>> & selected_atom_list_map;
+    std::vector<std::shared_ptr<ModelObject>> & model_object_list;
+    std::shared_ptr<MapObject> & map_object;
+};
 
 std::filesystem::path BuildOutputPath(
     const ResultDumpWorkflowContext & context,
@@ -397,6 +406,25 @@ bool ExecuteResultDumpWorkflow(ResultDumpWorkflowContext & context)
     }
     RunResultDump(context);
     return true;
+}
+
+bool ExecuteResultDumpWorkflow(
+    DataObjectManager & data_manager,
+    const ResultDumpCommandOptions & options,
+    std::string & map_key_tag,
+    std::unordered_map<std::string, std::vector<AtomObject *>> & selected_atom_list_map,
+    std::vector<std::shared_ptr<ModelObject>> & model_object_list,
+    std::shared_ptr<MapObject> & map_object)
+{
+    ResultDumpWorkflowContext context{
+        data_manager,
+        options,
+        map_key_tag,
+        selected_atom_list_map,
+        model_object_list,
+        map_object,
+    };
+    return ExecuteResultDumpWorkflow(context);
 }
 
 } // namespace rhbm_gem::detail

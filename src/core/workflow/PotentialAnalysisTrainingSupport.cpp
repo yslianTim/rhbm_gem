@@ -1,10 +1,15 @@
-#include "internal/PotentialAnalysisTrainingSupport.hpp"
+#include "command/PotentialAnalysisCommand.hpp"
 
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
+#include <Eigen/Dense>
+
 #include <algorithm>
+#include <filesystem>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace rhbm_gem::detail {
 

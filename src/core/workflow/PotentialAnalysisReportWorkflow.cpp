@@ -1,7 +1,5 @@
 #include "command/PotentialAnalysisCommand.hpp"
-#include "internal/PotentialAnalysisExecutionOptions.hpp"
 #include "internal/CommandDataLoader.hpp"
-#include "internal/PotentialAnalysisTrainingSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -36,13 +34,35 @@
 #include <utility>
 #include <vector>
 
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
-#include "internal/workflow/PotentialAnalysisBondWorkflow.hpp"
-#endif
-
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
+
+namespace rhbm_gem::detail {
+
+bool EmitTrainingReportIfRequested(
+    const Eigen::MatrixXd & gaus_bias_matrix,
+    const std::vector<double> & alpha_list,
+    std::string_view x_label,
+    std::string_view y_label,
+    const PotentialAnalysisCommandOptions & options,
+    std::string_view report_file_name);
+
+} // namespace rhbm_gem::detail
+
+namespace {
+
+HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
+    const rhbm_gem::PotentialAnalysisCommandOptions & options,
+    bool quiet_mode)
+{
+    HRLExecutionOptions execution_options;
+    execution_options.quiet_mode = quiet_mode;
+    execution_options.thread_size = options.thread_size;
+    return execution_options;
+}
+
+} // namespace
 
 namespace rhbm_gem {
 void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
@@ -74,7 +94,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
         const auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         const auto algorithm_options{
-            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
+            MakePotentialAnalysisExecutionOptions(m_options, true)
         };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
@@ -165,7 +185,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
         }
         const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(data_entry_list, true) };
         const auto algorithm_options{
-            detail::MakePotentialAnalysisExecutionOptions(m_options, true)
+            MakePotentialAnalysisExecutionOptions(m_options, true)
         };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };

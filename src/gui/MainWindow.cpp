@@ -1,5 +1,7 @@
 #include "MainWindow.hpp"
 
+#include "internal/CommandCatalog.hpp"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
@@ -21,9 +23,43 @@
 
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
+#include <algorithm>
 #include <chrono>
+#include <stdexcept>
 
 namespace {
+
+const rhbm_gem::CommandDescriptor & RequireCommandDescriptor(rhbm_gem::CommandId command_id)
+{
+    const auto & catalog{ rhbm_gem::CommandCatalog() };
+    const auto iter{
+        std::find_if(
+            catalog.begin(),
+            catalog.end(),
+            [command_id](const rhbm_gem::CommandDescriptor & descriptor)
+            {
+                return descriptor.id == command_id;
+            })
+    };
+    if (iter == catalog.end())
+    {
+        throw std::runtime_error("GUI command descriptor is missing from CommandCatalog().");
+    }
+    return *iter;
+}
+
+QString CommandName(rhbm_gem::CommandId command_id)
+{
+    const auto & descriptor{ RequireCommandDescriptor(command_id) };
+    return QString::fromUtf8(descriptor.name.data(), static_cast<int>(descriptor.name.size()));
+}
+
+bool CommandUsesDatabase(rhbm_gem::CommandId command_id)
+{
+    return rhbm_gem::HasCommonOption(
+        rhbm_gem::CommonOptionsForCommand(RequireCommandDescriptor(command_id)),
+        rhbm_gem::CommonOption::Database);
+}
 
 QWidget * BuildPathSelector(QLineEdit *& line_edit, QPushButton *& browse_button)
 {
@@ -99,17 +135,17 @@ void MainWindow::InitializeGuiCommands()
 
     m_gui_commands = {
         GuiCommandRegistration{
-            "map_simulation",
+            rhbm_gem::CommandId::MapSimulation,
             [this]() { return BuildMapSimulationPage(); },
             [this]() { return rhbm_gem::RunMapSimulation(BuildMapSimulationRequest()); }
         },
         GuiCommandRegistration{
-            "potential_analysis",
+            rhbm_gem::CommandId::PotentialAnalysis,
             [this]() { return BuildPotentialAnalysisPage(); },
             [this]() { return rhbm_gem::RunPotentialAnalysis(BuildPotentialAnalysisRequest()); }
         },
         GuiCommandRegistration{
-            "result_dump",
+            rhbm_gem::CommandId::ResultDump,
             [this]() { return BuildResultDumpPage(); },
             [this]() { return rhbm_gem::RunResultDump(BuildResultDumpRequest()); }
         },
@@ -135,7 +171,7 @@ void MainWindow::BuildUi()
     m_command_stack = new QStackedWidget(top_splitter);
     for (const auto & command : m_gui_commands)
     {
-        m_command_list->addItem(command.name);
+        m_command_list->addItem(CommandName(command.id));
         m_command_stack->addWidget(command.build_page());
     }
 
@@ -172,7 +208,10 @@ QWidget * MainWindow::BuildMapSimulationPage()
     layout->setFormAlignment(Qt::AlignTop);
     layout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
-    AddCommonControls(layout, m_map_simulation.common, false);
+    AddCommonControls(
+        layout,
+        m_map_simulation.common,
+        CommandUsesDatabase(rhbm_gem::CommandId::MapSimulation));
 
     layout->addRow("Model File (--model)", BuildPathSelector(
         m_map_simulation.model_path, m_map_simulation.model_browse));
@@ -220,7 +259,10 @@ QWidget * MainWindow::BuildPotentialAnalysisPage()
     layout->setFormAlignment(Qt::AlignTop);
     layout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
-    AddCommonControls(layout, m_potential_analysis.common, true);
+    AddCommonControls(
+        layout,
+        m_potential_analysis.common,
+        CommandUsesDatabase(rhbm_gem::CommandId::PotentialAnalysis));
 
     layout->addRow("Model File (--model)", BuildPathSelector(
         m_potential_analysis.model_path, m_potential_analysis.model_browse));
@@ -311,7 +353,10 @@ QWidget * MainWindow::BuildResultDumpPage()
     layout->setFormAlignment(Qt::AlignTop);
     layout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
-    AddCommonControls(layout, m_result_dump.common, true);
+    AddCommonControls(
+        layout,
+        m_result_dump.common,
+        CommandUsesDatabase(rhbm_gem::CommandId::ResultDump));
 
     m_result_dump.printer_choice = new QComboBox(page);
     PopulateEnumCombo<rhbm_gem::PrinterType>(m_result_dump.printer_choice);
@@ -536,7 +581,7 @@ void MainWindow::StartExecution()
         return;
     }
     const auto & command{ m_gui_commands[static_cast<std::size_t>(command_index)] };
-    m_active_command_name = command.name;
+    m_active_command_name = CommandName(command.id);
     m_execution_future = std::async(std::launch::async, [runner = command.run]()
     {
         return runner();

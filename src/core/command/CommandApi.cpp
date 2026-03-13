@@ -36,6 +36,7 @@ ExecutionReport RunCommand(const RequestType & request)
 
 } // namespace
 
+// BEGIN GENERATED: command-run-definitions
 ExecutionReport RunPotentialAnalysis(const PotentialAnalysisRequest & request)
 {
     return RunCommand<PotentialAnalysisCommand>(request);
@@ -70,5 +71,6 @@ ExecutionReport RunHRLModelTest(const HRLModelTestRequest & request)
 {
     return RunCommand<HRLModelTestCommand>(request);
 }
+// END GENERATED: command-run-definitions
 
 } // namespace rhbm_gem

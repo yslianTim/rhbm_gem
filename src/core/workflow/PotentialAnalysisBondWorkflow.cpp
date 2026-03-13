@@ -1,6 +1,4 @@
-#include "internal/workflow/PotentialAnalysisBondWorkflow.hpp"
-#include "internal/PotentialAnalysisExecutionOptions.hpp"
-
+#include "command/PotentialAnalysisCommand.hpp"
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -30,6 +28,23 @@
 namespace rhbm_gem::detail {
 
 namespace {
+
+struct PotentialAnalysisBondWorkflowContext
+{
+    ModelObject & model_object;
+    MapObject & map_object;
+    const PotentialAnalysisCommandOptions & options;
+};
+
+HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
+    const PotentialAnalysisCommandOptions & options,
+    bool quiet_mode)
+{
+    HRLExecutionOptions execution_options;
+    execution_options.quiet_mode = quiet_mode;
+    execution_options.thread_size = options.thread_size;
+    return execution_options;
+}
 
 void RunBondSampling(
     ModelObject & model_object,
@@ -320,6 +335,21 @@ void RunPotentialAnalysisBondWorkflow(const PotentialAnalysisBondWorkflowContext
     RunBondGroupClassification(context);
     RunLocalBondFitting(context, context.options.alpha_r);
     RunBondPotentialFitting(context);
+}
+
+} // namespace
+
+void RunPotentialAnalysisBondWorkflow(
+    ModelObject & model_object,
+    MapObject & map_object,
+    const PotentialAnalysisCommandOptions & options)
+{
+    PotentialAnalysisBondWorkflowContext context{
+        model_object,
+        map_object,
+        options,
+    };
+    RunPotentialAnalysisBondWorkflow(context);
 }
 
 } // namespace rhbm_gem::detail

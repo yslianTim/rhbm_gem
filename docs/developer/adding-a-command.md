@@ -29,8 +29,7 @@ Public command API:
 
 CLI runtime binding:
 
-- `src/core/internal/CommandRuntimeRegistry.hpp`
-- `src/core/command/CommandRuntimeRegistry.cpp`
+- `src/core/command/CommandCatalog.cpp`
 
 Manifest and generated artifacts:
 
@@ -57,7 +56,10 @@ Optional:
 Do not hand-edit these generated sections/files without rerunning the generator:
 
 - generated `command-id-entries` block in `include/rhbm_gem/core/command/CommandMetadata.hpp`
+- generated `command-run-declarations` block in `include/rhbm_gem/core/command/CommandApi.hpp`
+- generated `command-run-definitions` block in `src/core/command/CommandApi.cpp`
 - generated `command-catalog-entries` block in `src/core/command/CommandCatalog.cpp`
+- generated `command-pybind-run-bindings` block in `bindings/CommandApiBindings.cpp`
 - `src/CommandSources.generated.cmake`
 - `tests/cmake/CoreCommandTests.generated.cmake`
 - generated blocks in `docs/developer/architecture/command-architecture.md`
@@ -89,7 +91,8 @@ python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkf
 ```
 
 The scaffold does not finish the command for you. You still need to implement the command logic,
-update `CommandApi`, add runtime binders, and expose Python bindings.
+update the request structs, add command-specific CLI option binding in `CommandCatalog.cpp`,
+and expose request fields in Python bindings.
 
 ## 5. Implement the command class
 
@@ -119,9 +122,9 @@ Useful base helpers from `CommandBase`:
 
 ## 6. Add the public request and run entrypoint
 
-Add the new request struct and run function declaration in
-`include/rhbm_gem/core/command/CommandApi.hpp`, then implement the run function in
-`src/core/command/CommandApi.cpp`.
+Add the new request struct to `include/rhbm_gem/core/command/CommandApi.hpp`.
+The `Run*` declaration/definition blocks are generated from `CommandList.def`, so rerun the
+artifact generator instead of hand-editing the run-function list.
 
 Each `Run*` entrypoint follows the same pattern:
 
@@ -152,12 +155,10 @@ python3 scripts/developer/generate_command_artifacts.py
 
 ## 8. Bind CLI options
 
-Add a runtime binder declaration to `src/core/internal/CommandRuntimeRegistry.hpp`.
-
-In `src/core/command/CommandRuntimeRegistry.cpp`:
+In `src/core/command/CommandCatalog.cpp`:
 
 1. Add `Bind<YourCommand>RequestOptions(...)` for command-specific CLI flags.
-2. Add `Bind<YourCommand>Runtime(...)` that calls `BindRuntime<RequestType>(...)`.
+2. Add `Bind<YourCommandStem>Runtime(...)` that calls `BindRuntime<RequestType>(...)`.
 3. Pass the correct `CommonOptionProfile` so shared flags are wired automatically.
 
 Shared flags come from the profile:
@@ -175,7 +176,7 @@ Use `command_cli::AddScalarOption(...)`, `AddStringOption(...)`, `AddPathOption(
 Update `bindings/CommandApiBindings.cpp`:
 
 1. Bind the new `*Request` type.
-2. Expose the new `Run*` function.
+2. Rerun the artifact generator so the generated `Run*` export block stays in sync.
 
 Shared enums and diagnostics live in `bindings/CommonBindings.cpp`, so that file only needs
 changes if the command introduces new shared enum types.
@@ -196,8 +197,8 @@ Add or update:
 Before merge:
 
 1. The command is implemented in `src/core/command/`.
-2. `CommandApi.hpp` and `CommandApi.cpp` expose the new request and `Run*` function.
-3. CLI binding is added in `CommandRuntimeRegistry.hpp/.cpp`.
+2. `CommandApi.hpp` contains the new request and the generated `Run*` blocks were refreshed.
+3. CLI binding is added in `CommandCatalog.cpp`.
 4. `src/core/internal/CommandList.def` contains the new manifest entry.
 5. Generated artifacts have been refreshed.
 6. Python bindings are updated if the binding surface changed.

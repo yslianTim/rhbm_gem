@@ -1,7 +1,5 @@
 #include "command/PotentialAnalysisCommand.hpp"
-#include "internal/PotentialAnalysisExecutionOptions.hpp"
 #include "internal/CommandDataLoader.hpp"
-#include "internal/PotentialAnalysisTrainingSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -37,12 +35,31 @@
 #include <vector>
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
-#include "internal/workflow/PotentialAnalysisBondWorkflow.hpp"
+namespace rhbm_gem::detail {
+void RunPotentialAnalysisBondWorkflow(
+    ModelObject & model_object,
+    MapObject & map_object,
+    const PotentialAnalysisCommandOptions & options);
+} // namespace rhbm_gem::detail
 #endif
 
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
+
+namespace {
+
+HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
+    const rhbm_gem::PotentialAnalysisCommandOptions & options,
+    bool quiet_mode)
+{
+    HRLExecutionOptions execution_options;
+    execution_options.quiet_mode = quiet_mode;
+    execution_options.thread_size = options.thread_size;
+    return execution_options;
+}
+
+} // namespace
 
 namespace rhbm_gem {
 bool PotentialAnalysisCommand::BuildDataObject()
@@ -173,7 +190,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
                 data_covariance_list
             );
             HRLGroupEstimator estimator(
-                detail::MakePotentialAnalysisExecutionOptions(m_options, true));
+                MakePotentialAnalysisExecutionOptions(m_options, true));
             const auto result = estimator.Estimate(input, alpha_g);
 
             auto gaus_group_mean{
@@ -242,11 +259,7 @@ void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled()
 {
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
     if (m_model_object == nullptr || m_map_object == nullptr) return;
-    detail::RunPotentialAnalysisBondWorkflow(detail::PotentialAnalysisBondWorkflowContext{
-        *m_model_object,
-        *m_map_object,
-        m_options
-    });
+    detail::RunPotentialAnalysisBondWorkflow(*m_model_object, *m_map_object, m_options);
 #endif
 }
 

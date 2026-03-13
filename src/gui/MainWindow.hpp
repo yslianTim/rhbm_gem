@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandMetadata.hpp>
 
 class QCheckBox;
 class QComboBox;
@@ -87,7 +88,7 @@ private:
 
     struct GuiCommandRegistration
     {
-        QString name{};
+        rhbm_gem::CommandId id{ rhbm_gem::CommandId::PotentialAnalysis };
         std::function<QWidget *()> build_page{};
         std::function<rhbm_gem::ExecutionReport()> run{};
     };

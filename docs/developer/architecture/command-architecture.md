@@ -20,18 +20,19 @@ Each entry uses:
 The manifest drives:
 
 - generated `CommandId` entries in `include/rhbm_gem/core/command/CommandMetadata.hpp`
+- generated `Run*` declarations in `include/rhbm_gem/core/command/CommandApi.hpp`
+- generated `Run*` definitions in `src/core/command/CommandApi.cpp`
 - generated command catalog entries in `src/core/command/CommandCatalog.cpp`
+- generated pybind `Run*` exports in `bindings/CommandApiBindings.cpp`
 - generated source/test CMake lists
 - generated sections in this document
 - CLI registration order through `CommandCatalog()`
 
 The manifest does not generate these manual surfaces:
 
-- request structs and `Run*` entrypoints in `include/rhbm_gem/core/command/CommandApi.hpp`
-- `Run*` implementations in `src/core/command/CommandApi.cpp`
-- runtime binder declarations in `src/core/internal/CommandRuntimeRegistry.hpp`
-- CLI option binding logic in `src/core/command/CommandRuntimeRegistry.cpp`
-- pybind exposure in `bindings/CommandApiBindings.cpp`
+- request structs in `include/rhbm_gem/core/command/CommandApi.hpp`
+- command-specific CLI option binding logic in `src/core/command/CommandCatalog.cpp`
+- pybind request-field exposure in `bindings/CommandApiBindings.cpp`
 - GUI exposure in `src/gui/MainWindow.cpp`
 
 ### Command manifest
@@ -85,8 +86,8 @@ Current entrypoints:
 - `profile`
 - `bind_runtime`
 
-`bind_runtime` points to functions declared in `src/core/internal/CommandRuntimeRegistry.hpp`
-and implemented in `src/core/command/CommandRuntimeRegistry.cpp`.
+`bind_runtime` is now a private implementation detail inside `src/core/command/CommandCatalog.cpp`;
+there is no separate runtime-registry header anymore.
 
 Each runtime binder:
 
@@ -203,8 +204,9 @@ Python bindings are split across:
 `bindings/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
 functions.
 
-The GUI is not manifest-driven today. `src/gui/MainWindow.cpp` maintains its own command list and
-builds request objects manually for the subset it exposes.
+The GUI is not manifest-driven today. `src/gui/MainWindow.cpp` still builds request objects
+manually for its subset, but it now reads command names and shared option policy from
+`CommandCatalog()` instead of maintaining a second hard-coded metadata list.
 
 ### Python command surface
 
@@ -242,8 +244,7 @@ When a command changes, review these files together:
 - `src/core/internal/CommandList.def`
 - `include/rhbm_gem/core/command/CommandApi.hpp`
 - `src/core/command/CommandApi.cpp`
-- `src/core/internal/CommandRuntimeRegistry.hpp`
-- `src/core/command/CommandRuntimeRegistry.cpp`
+- `src/core/command/CommandCatalog.cpp`
 - `bindings/CommandApiBindings.cpp`
 - `src/core/command/<Command>.hpp`
 - `src/core/command/<Command>.cpp`

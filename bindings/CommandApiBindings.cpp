@@ -108,6 +108,7 @@ void BindCommandApi(py::module_ & module)
         .def_readonly("executed", &ExecutionReport::executed)
         .def_readonly("validation_issues", &ExecutionReport::validation_issues);
 
+// BEGIN GENERATED: command-pybind-run-bindings
     module.def("RunPotentialAnalysis", &RunPotentialAnalysis);
     module.def("RunPotentialDisplay", &RunPotentialDisplay);
     module.def("RunResultDump", &RunResultDump);
@@ -115,6 +116,7 @@ void BindCommandApi(py::module_ & module)
     module.def("RunMapVisualization", &RunMapVisualization);
     module.def("RunPositionEstimation", &RunPositionEstimation);
     module.def("RunHRLModelTest", &RunHRLModelTest);
+// END GENERATED: command-pybind-run-bindings
 }
 
 } // namespace rhbm_gem::bindings
