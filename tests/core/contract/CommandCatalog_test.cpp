@@ -2,11 +2,16 @@
 
 #include <algorithm>
 #include <array>
+#include <fstream>
+#include <iterator>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
+#include "CommandTestHelpers.hpp"
 #include "internal/CommandCatalog.hpp"
 #include <CLI/CLI.hpp>
 
@@ -66,6 +71,45 @@ constexpr std::array<ExpectedCommandMetadata, 7> kExpectedCommandMetadata{{
         false
     }
 }};
+
+constexpr std::array<std::pair<std::string_view, rg::CommandId>, 7> kExpectedCommandIdTokens{{
+    {"PotentialAnalysis", rg::CommandId::PotentialAnalysis},
+    {"PotentialDisplay", rg::CommandId::PotentialDisplay},
+    {"ResultDump", rg::CommandId::ResultDump},
+    {"MapSimulation", rg::CommandId::MapSimulation},
+    {"MapVisualization", rg::CommandId::MapVisualization},
+    {"PositionEstimation", rg::CommandId::PositionEstimation},
+    {"ModelTest", rg::CommandId::ModelTest},
+}};
+
+std::vector<std::string> ParseCommandIdTokensFromManifest()
+{
+    const auto manifest_path{
+        command_test::ProjectRootPath() / "src" / "core" / "internal" / "CommandList.def"
+    };
+    std::ifstream manifest_stream{ manifest_path };
+    if (!manifest_stream.is_open())
+    {
+        return {};
+    }
+
+    const std::string manifest{
+        std::istreambuf_iterator<char>{ manifest_stream },
+        std::istreambuf_iterator<char>{}
+    };
+    const std::regex command_pattern{
+        R"(RHBM_GEM_COMMAND\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)"
+    };
+
+    std::vector<std::string> command_ids;
+    for (std::sregex_iterator iter{ manifest.begin(), manifest.end(), command_pattern };
+        iter != std::sregex_iterator{};
+        ++iter)
+    {
+        command_ids.push_back((*iter)[1].str());
+    }
+    return command_ids;
+}
 
 const rg::CommandDescriptor * FindDescriptor(rg::CommandId command_id)
 {
@@ -134,4 +178,18 @@ TEST(CommandCatalogTest, RuntimeBindersArePresentForAllCommands)
     ExpectRuntimeBinderConstructs(rg::CommandId::MapVisualization);
     ExpectRuntimeBinderConstructs(rg::CommandId::PositionEstimation);
     ExpectRuntimeBinderConstructs(rg::CommandId::ModelTest);
+}
+
+TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
+{
+    const auto manifest_ids{ ParseCommandIdTokensFromManifest() };
+    ASSERT_FALSE(manifest_ids.empty());
+    ASSERT_EQ(manifest_ids.size(), kExpectedCommandIdTokens.size());
+
+    for (std::size_t index = 0; index < kExpectedCommandIdTokens.size(); ++index)
+    {
+        const auto & expected{ kExpectedCommandIdTokens[index] };
+        EXPECT_EQ(manifest_ids[index], expected.first);
+        EXPECT_EQ(static_cast<int>(expected.second), static_cast<int>(index));
+    }
 }

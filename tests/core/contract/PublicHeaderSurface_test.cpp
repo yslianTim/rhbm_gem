@@ -15,7 +15,6 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
         "core/command/MapSampling.hpp",
         "core/command/OptionEnumClass.hpp",
         "core/command/OptionEnumTraits.hpp",
-        "core/command/internal/CommandIdEntries.generated.inc",
         "core/painter/AtomPainter.hpp",
         "core/painter/ComparisonPainter.hpp",
         "core/painter/DemoPainter.hpp",
