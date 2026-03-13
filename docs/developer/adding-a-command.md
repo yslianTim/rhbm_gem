@@ -35,9 +35,8 @@ Optional/manual depending on design:
 
 Generated artifacts from `CommandList.def`:
 
-- `include/rhbm_gem/core/command/internal/CommandIdEntries.generated.inc`
-- `src/core/internal/CommandCatalogIncludes.generated.inc`
-- `src/core/internal/CommandCatalogEntries.generated.inc`
+- generated `command-id-entries` block in `include/rhbm_gem/core/command/CommandMetadata.hpp`
+- generated `command-catalog-entries` block in `src/core/command/CommandCatalog.cpp`
 - `src/CommandSources.generated.cmake`
 - `tests/cmake/CoreCommandTests.generated.cmake`
 - generated sections in `docs/developer/architecture/command-architecture.md`

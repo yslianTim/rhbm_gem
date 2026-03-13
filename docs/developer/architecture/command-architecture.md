@@ -260,7 +260,7 @@ When adding or changing a command:
 - `include/rhbm_gem/core/command/CommandBase.hpp`
 - `src/core/command/CommandBase.cpp`
 - `include/rhbm_gem/core/command/CommandMetadata.hpp`
-- `include/rhbm_gem/core/command/internal/CommandIdEntries.generated.inc`
+- generated `command-id-entries` block in `include/rhbm_gem/core/command/CommandMetadata.hpp`
 - `src/core/internal/CommandList.def`
 - `src/core/internal/CommandCatalog.hpp`
 - `src/core/command/CommandCatalog.cpp`
