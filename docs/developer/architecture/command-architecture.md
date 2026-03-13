@@ -1,59 +1,38 @@
 # Command Architecture
 
-Current command runtime and extension contracts.
+Current command registration and execution flow.
 
 Related guides:
 
 - [`../adding-a-command.md`](../adding-a-command.md)
 - [`../development-guidelines.md`](../development-guidelines.md)
 
-## 1. Runtime topology
-
-```mermaid
-flowchart LR
-    A["CLI (main.cpp + CLI11)"] --> B["Application::RegisterAllCommands()"]
-    B --> C["CommandCatalog() from CommandList.def"]
-    C --> D["Concrete CommandBase instances"]
-
-    E["Python bindings (pybind11)"] --> J["CommandApi::Run*"]
-    F["GUI requests (Qt MainWindow)"] --> J
-    J --> D
-
-    D --> G["PrepareForExecution()"]
-    G --> G1["ResetRuntimeState + ClearDataObjects"]
-    G --> G2["ValidateOptions()"]
-    G --> G3["Filesystem preflight<br/>database parent/output folder"]
-
-    D --> H["Execute() / ExecuteImpl()"]
-    H --> I["DataObjectManager + workflows + I/O"]
-```
-
-## 2. Source of truth
+## 1. Source of truth
 
 Top-level command membership is defined in:
 
 - `src/core/internal/CommandList.def`
 
-Each entry follows:
+Each entry uses:
 
 - `RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE)`
 
 The manifest drives:
 
-- `CommandCatalog()` construction (`src/core/command/CommandCatalog.cpp`)
-- CLI subcommand registration order (`src/core/command/Application.cpp`)
-- generated catalog/CMake/docs artifacts (`scripts/developer/generate_command_artifacts.py`)
+- generated `CommandId` entries in `include/rhbm_gem/core/command/CommandMetadata.hpp`
+- generated command catalog entries in `src/core/command/CommandCatalog.cpp`
+- generated source/test CMake lists
+- generated sections in this document
+- CLI registration order through `CommandCatalog()`
 
-The manifest does not generate request field bindings in `bindings/CommandApiBindings.cpp`;
-those remain hand-authored.
+The manifest does not generate these manual surfaces:
 
-`CommandDescriptor` fields (`src/core/internal/CommandCatalog.hpp`):
-
-- `id`
-- `name`
-- `description`
-- `profile`
-- `bind_runtime`
+- request structs and `Run*` entrypoints in `include/rhbm_gem/core/command/CommandApi.hpp`
+- `Run*` implementations in `src/core/command/CommandApi.cpp`
+- runtime binder declarations in `src/core/internal/CommandRuntimeRegistry.hpp`
+- CLI option binding logic in `src/core/command/CommandRuntimeRegistry.cpp`
+- pybind exposure in `bindings/CommandApiBindings.cpp`
+- GUI exposure in `src/gui/MainWindow.cpp`
 
 ### Command manifest
 
@@ -67,59 +46,71 @@ those remain hand-authored.
 7. `model_test`
 <!-- END GENERATED: command-manifest -->
 
-## 3. Registration paths
+## 2. Execution surfaces
 
-CLI path:
+All entrypoints converge on the public `Run*` functions in `CommandApi`.
 
-1. `src/main.cpp` creates `CLI::App`.
-2. `Application` requires exactly one subcommand.
-3. `RegisterAllCommands()` iterates `CommandCatalog()`.
-4. For each descriptor, it creates a CLI subcommand, lets the runtime binder attach request options, and binds callback to `Execute()`.
-5. Callback throws `CLI::RuntimeError(1)` when execution fails.
+```mermaid
+flowchart LR
+    A["CLI (src/main.cpp)"] --> B["Application"]
+    B --> C["CommandCatalog()"]
+    C --> D["bind_runtime(...)"]
+    D --> E["Run* in CommandApi"]
 
-Python path:
+    F["Python (pybind11)"] --> E
+    G["GUI (subset in MainWindow)"] --> E
 
-- `bindings/CoreBindings.cpp` registers shared types + request structs + `Run*` entrypoints.
+    E --> H["Construct concrete command"]
+    H --> I["ApplyRequest(...)"]
+    I --> J["PrepareForExecution()"]
+    J --> K["Execute()"]
+    K --> L["ExecuteImpl()"]
+```
 
-GUI path:
+Current entrypoints:
 
-- `MainWindow` builds `CommandApi` requests and calls `Run*` entrypoints.
+- CLI: `src/main.cpp` creates `CLI::App`, `Application` requires exactly one subcommand, and
+  `RegisterAllCommands()` adds subcommands from `CommandCatalog()`.
+- Python: `bindings/CoreBindings.cpp` loads shared bindings and command bindings.
+- GUI: `src/gui/MainWindow.cpp` currently exposes only `map_simulation`,
+  `potential_analysis`, and `result_dump`.
 
-## 4. Concrete command contract
+## 3. Command catalog and runtime binders
 
-Command shape:
+`CommandCatalog()` returns `CommandDescriptor` entries with:
 
-1. Define `Options` derived from `CommandOptions`.
-2. Derive command class from `CommandWithProfileOptions<...>` or `CommandWithOptions<...>`.
-3. Implement `ApplyRequest(const XxxRequest&)` as the external configuration entrypoint.
-4. Keep only non-trivial command-local helpers for normalization/parsing/validation.
-5. `ApplyRequest(...)` may inline simple field copies; CLI option wiring lives in the runtime binder layer.
-6. Keep cross-field checks in `ValidateOptions()`.
-7. Reset transient runtime fields in `ResetRuntimeState()`.
-8. Keep `ExecuteImpl()` focused on orchestration.
+- `id`
+- `name`
+- `description`
+- `profile`
+- `bind_runtime`
 
-Base `CommandOptions` fields:
+`bind_runtime` points to functions declared in `src/core/internal/CommandRuntimeRegistry.hpp`
+and implemented in `src/core/command/CommandRuntimeRegistry.cpp`.
+
+Each runtime binder:
+
+1. Creates a request object.
+2. Applies shared CLI options from the command profile.
+3. Binds command-specific CLI options.
+4. Returns a runner that calls the matching `Run*` function.
+
+## 4. Public request surface
+
+Public command requests live in `include/rhbm_gem/core/command/CommandApi.hpp`.
+
+Shared request fields:
 
 - `thread_size`
 - `verbose_level`
 - `database_path`
 - `folder_path`
 
-`CommonOptionProfile` (`CommandMetadata.hpp`) maps to:
+`CommonOptionProfile` in `include/rhbm_gem/core/command/CommandMetadata.hpp` controls which
+shared options are active:
 
 - `FileWorkflow` -> `Threading | Verbose | OutputFolder`
 - `DatabaseWorkflow` -> `Threading | Verbose | Database | OutputFolder`
-
-## 5. Shared options
-
-Shared CLI flags are derived from `CommandDescriptor::profile`:
-
-- `-j,--jobs`
-- `-v,--verbose`
-- `-d,--database`
-- `-o,--folder`
-
-Concrete commands should only add command-specific flags in their request binder helpers.
 
 ### Shared policy matrix
 
@@ -135,45 +126,27 @@ Concrete commands should only add command-specific flags in their request binder
 | `model_test` | no | yes |
 <!-- END GENERATED: command-surface-matrix -->
 
-## 6. Lifecycle and validation
+## 5. Concrete command contract
 
-`Execute()` is the single execution entry point across CLI/Python/GUI.
+Concrete command classes are internal types under `src/core/command/`.
 
-Behavior:
+The current pattern is:
 
-- If not prepared, `Execute()` calls `PrepareForExecution()`.
-- If already prepared, `Execute()` runs `ExecuteImpl()` directly.
-- Prepared state is cleared after each execution attempt.
+1. Define `Options` derived from `CommandOptions`.
+2. Derive from `CommandWithProfileOptions<...>` or `CommandWithOptions<...>`.
+3. Implement `ApplyRequest(const XxxRequest&)`.
+4. Call `ApplyCommonRequest(request.common)` from `ApplyRequest(...)`.
+5. Keep cross-field validation in `ValidateOptions()`.
+6. Reset transient execution state in `ResetRuntimeState()`.
+7. Keep `ExecuteImpl()` focused on workflow orchestration.
 
-`PrepareForExecution()` sequence:
-
-1. `BeginPreparationPass()`
-2. `RunValidationPass()`
-3. `RunFilesystemPreflight()`
-
-Validation phases:
-
-| Phase | Typical source | Typical purpose |
-| --- | --- | --- |
-| `Parse` | `ApplyRequest(...)` and internal option setters | single-field validation/normalization |
-| `Prepare` | `ValidateOptions()` + preflight | cross-field checks and runtime preflight failures |
-
-Prepared-state invalidation rule:
-
-- All option mutations must go through `MutateOptions(...)` or wrappers built on it.
-
-## 7. Command helper APIs
-
-Core APIs (`CommandBase`):
+Common extension helpers from `CommandBase` include:
 
 - `MutateOptions(...)`
 - `AddValidationError(...)`
 - `AddNormalizationWarning(...)`
 - `ResetParseIssues(...)`
 - `ResetPrepareIssues(...)`
-
-Convenience setters:
-
 - `SetRequiredExistingPathOption(...)`
 - `SetOptionalExistingPathOption(...)`
 - `SetNormalizedScalarOption(...)`
@@ -181,36 +154,57 @@ Convenience setters:
 - `SetFiniteNonNegativeScalarOption(...)`
 - `SetPositiveScalarOption(...)`
 - `SetValidatedEnumOption(...)`
-
-Execution boundary helpers:
-
 - `BuildOutputPath(...)`
 
-CLI binding helpers (`src/core/internal/CommandOptionBinding.hpp`):
+## 6. Lifecycle and validation
 
-- `command_cli::AddScalarOption(...)`
-- `command_cli::AddStringOption(...)`
-- `command_cli::AddPathOption(...)`
-- `command_cli::AddEnumOption(...)`
+`Run*` functions in `src/core/command/CommandApi.cpp` follow this sequence:
 
-## 8. Data boundary
+1. Construct the concrete command.
+2. Call `ApplyRequest(...)`.
+3. Call `PrepareForExecution()`.
+4. Return early with validation issues if preparation fails.
+5. Call `Execute()`.
+6. Return an `ExecutionReport`.
 
-Commands should use command-facing APIs and helpers:
+`PrepareForExecution()` runs:
 
-- `DataObjectManager` (`ProcessFile`, `LoadDataObject`, `SaveDataObject`, `ForEachDataObject`, typed getters)
-- `command_data_loader::*` (`src/core/internal/CommandDataLoader.hpp`)
-- typed workflow helpers in `src/core/workflow/DataObjectWorkflowOps.*`
-- `SampleMapValues(...)` for map sampling
+1. `BeginPreparationPass()`
+2. `RunValidationPass()`
+3. `RunFilesystemPreflight()`
 
-Use `DataObjectDispatch` only when dispatching generic `DataObjectBase` at runtime.
+Current preflight behavior:
 
-## 9. Python binding contract
+- resets transient runtime state
+- clears loaded `DataObjectManager` state
+- runs `ValidateOptions()`
+- creates the database parent directory when needed for `DatabaseWorkflow`
+- creates the output folder when needed
 
-Python bindings expose:
+Validation phases:
 
-- request structs (`*Request`)
-- shared diagnostics/result structs (`ValidationIssue`, `ExecutionReport`)
-- `Run*` functions mapped to `CommandApi`
+- `Parse`: request application and scalar/enum/path setters
+- `Prepare`: `ValidateOptions()` and filesystem preflight
+
+Prepared-state rule:
+
+- option mutations must go through `MutateOptions(...)` or helpers built on top of it, because
+  mutation invalidates prepared state and clears prepare-phase issues
+
+## 7. Python and GUI integration
+
+Python bindings are split across:
+
+- `bindings/CoreBindings.cpp`
+- `bindings/CommonBindings.cpp`
+- `bindings/CommandApiBindings.cpp`
+
+`bindings/CommonBindings.cpp` exposes shared enums and diagnostics.
+`bindings/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
+functions.
+
+The GUI is not manifest-driven today. `src/gui/MainWindow.cpp` maintains its own command list and
+builds request objects manually for the subset it exposes.
 
 ### Python command surface
 
@@ -241,44 +235,17 @@ Python bindings expose:
 - `ExecutionReport`
 <!-- END GENERATED: command-python-surface -->
 
-## 10. Update checklist
+## 8. Files that usually move together
 
-When adding or changing a command:
+When a command changes, review these files together:
 
-1. Update command implementation (`include/.../command/*.hpp`, `src/core/command/*.cpp`).
-2. Update membership and metadata in `src/core/internal/CommandList.def`.
-3. Refresh generated artifacts (`python3 scripts/developer/generate_command_artifacts.py`).
-4. Update request/run bindings (`bindings/CommandApiBindings.cpp`) when command surface changes.
-5. Update command and contract tests.
-6. Keep this document and `docs/developer/adding-a-command.md` in sync.
-
-## 11. Key files
-
-- `src/main.cpp`
-- `include/rhbm_gem/core/command/Application.hpp`
-- `src/core/command/Application.cpp`
+- `src/core/internal/CommandList.def`
 - `include/rhbm_gem/core/command/CommandApi.hpp`
 - `src/core/command/CommandApi.cpp`
-- `include/rhbm_gem/core/command/CommandBase.hpp`
-- `src/core/command/CommandBase.cpp`
-- `include/rhbm_gem/core/command/CommandMetadata.hpp`
-- generated `command-id-entries` block in `include/rhbm_gem/core/command/CommandMetadata.hpp`
-- `src/core/internal/CommandList.def`
-- `src/core/internal/CommandCatalog.hpp`
-- `src/core/command/CommandCatalog.cpp`
-- `src/core/internal/CommandOptionBinding.hpp`
-- `src/core/internal/CommandDataLoader.hpp`
-- `include/rhbm_gem/data/io/DataObjectManager.hpp`
-- `bindings/CommonBindings.cpp`
+- `src/core/internal/CommandRuntimeRegistry.hpp`
+- `src/core/command/CommandRuntimeRegistry.cpp`
 - `bindings/CommandApiBindings.cpp`
-- `bindings/CoreBindings.cpp`
-
-Representative concrete commands:
-
-- `src/core/command/PotentialAnalysisCommand.cpp`
-- `src/core/command/PotentialDisplayCommand.cpp`
-- `src/core/command/ResultDumpCommand.cpp`
-- `src/core/command/MapSimulationCommand.cpp`
-- `src/core/command/MapVisualizationCommand.cpp`
-- `src/core/command/PositionEstimationCommand.cpp`
-- `src/core/command/HRLModelTestCommand.cpp`
+- `src/core/command/<Command>.hpp`
+- `src/core/command/<Command>.cpp`
+- `tests/core/command/`
+- this document and `docs/developer/adding-a-command.md`
