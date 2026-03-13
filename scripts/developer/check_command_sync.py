@@ -13,7 +13,7 @@ ALLOWED_PROFILES = {"FileWorkflow", "DatabaseWorkflow"}
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     commands = parse_commands(root / "src" / "core" / "internal" / "CommandList.def")
     if not commands:
         print("No commands parsed from CommandList.def")
@@ -31,7 +31,7 @@ def main() -> int:
         errors.append(
             "generated artifacts drift detected:\n"
             f"{drift_lines}\n"
-            "Run: python3 scripts/generate_command_artifacts.py"
+            "Run: python3 scripts/developer/generate_command_artifacts.py"
         )
 
     for entry in commands:

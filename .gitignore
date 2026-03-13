@@ -54,7 +54,7 @@ data/local/
 output/
 
 # Local one-off scripts
-scripts/local/
+scripts/user/local/
 
 # Local database files stored at repository root (legacy)
 /*.sqlite

@@ -102,32 +102,32 @@ cmake --build build --target lint_repo
 ```
 
 `lint_repo` also includes a command manifest sync guard
-(`scripts/check_command_sync.py`).
+(`scripts/developer/check_command_sync.py`).
 
 ## Static Quality Checks (Targeted)
 
 Format check for painter/parser directories:
 
 ```bash
-bash scripts/run_clang_format_check.sh
+bash scripts/developer/run_clang_format_check.sh
 ```
 
 Clang-tidy check for painter/parser directories:
 
 ```bash
-bash scripts/run_clang_tidy_check.sh build
+bash scripts/developer/run_clang_tidy_check.sh build
 ```
 
 Clang-tidy baseline guard (no-regression policy):
 
 ```bash
-bash scripts/run_clang_tidy_check.sh build --baseline scripts/clang_tidy_baseline.json
+bash scripts/developer/run_clang_tidy_check.sh build --baseline scripts/developer/clang_tidy_baseline.json
 ```
 
 CTest with failure classification output:
 
 ```bash
-bash scripts/run_ctest_with_classification.sh build -j8
+bash scripts/developer/run_ctest_with_classification.sh build -j8
 ```
 
 CI layout:

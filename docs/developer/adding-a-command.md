@@ -48,7 +48,7 @@ Generated artifacts from `CommandList.def`:
 Generate/update:
 
 ```bash
-python3 scripts/generate_command_artifacts.py
+python3 scripts/developer/generate_command_artifacts.py
 ```
 
 ## 3. Scaffold (optional)
@@ -56,19 +56,19 @@ python3 scripts/generate_command_artifacts.py
 Create skeleton files:
 
 ```bash
-python3 scripts/command_scaffold.py --name Example --profile FileWorkflow
+python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkflow
 ```
 
 Create skeletons + wire manifest + regenerate artifacts:
 
 ```bash
-python3 scripts/command_scaffold.py --name Example --profile FileWorkflow --wire
+python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkflow --wire
 ```
 
 Strict mode (`--wire` required):
 
 ```bash
-python3 scripts/command_scaffold.py --name Example --profile FileWorkflow --wire --strict
+python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkflow --wire --strict
 ```
 
 Note: scaffolded binding files do not include command-specific setters or `BindCommonCommandSetters(...)`; add them manually.
@@ -108,7 +108,7 @@ RHBM_GEM_COMMAND(
 Then run:
 
 ```bash
-python3 scripts/generate_command_artifacts.py
+python3 scripts/developer/generate_command_artifacts.py
 ```
 
 ## 6. Add Python bindings
@@ -148,12 +148,12 @@ Contract tests that usually need manual updates for a new command:
 Before merge:
 
 1. command added to `src/core/internal/CommandList.def` with complete metadata (`COMMAND_ID`, `COMMAND_TYPE`, `CLI_NAME`, `DESCRIPTION`, `PROFILE`, `PYTHON_BINDING_NAME`).
-2. generated artifacts refreshed (`python3 scripts/generate_command_artifacts.py`).
+2. generated artifacts refreshed (`python3 scripts/developer/generate_command_artifacts.py`).
 3. command bindings complete (`bindings/<YourCommandStem>Bindings.cpp`).
 4. command tests and required contract tests updated.
 5. docs are synced with final command surface.
 
 Recommended checks:
 
-1. `python3 scripts/check_command_sync.py`
+1. `python3 scripts/developer/check_command_sync.py`
 2. `ctest --output-on-failure -R "Command|DocsSync"`

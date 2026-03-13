@@ -42,7 +42,7 @@ The manifest drives:
 - `CommandCatalog()` construction (`src/core/command/CommandCatalog.cpp`)
 - CLI subcommand registration order (`src/core/command/Application.cpp`)
 - Python module command registration (`bindings/CoreBindings.cpp`)
-- generated catalog/CMake/docs artifacts (`scripts/generate_command_artifacts.py`)
+- generated catalog/CMake/docs artifacts (`scripts/developer/generate_command_artifacts.py`)
 
 `CommandDescriptor` fields (`src/core/internal/CommandCatalogInternal.hpp`):
 
@@ -240,7 +240,7 @@ When adding or changing a command:
 
 1. Update command implementation (`include/.../command/*.hpp`, `src/core/command/*.cpp`).
 2. Update membership and metadata in `src/core/internal/CommandList.def`.
-3. Refresh generated artifacts (`python3 scripts/generate_command_artifacts.py`).
+3. Refresh generated artifacts (`python3 scripts/developer/generate_command_artifacts.py`).
 4. Update command bindings (`bindings/*Bindings.cpp`).
 5. Update command and contract tests.
 6. Keep this document and `docs/developer/adding-a-command.md` in sync.

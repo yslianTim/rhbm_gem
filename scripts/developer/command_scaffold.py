@@ -216,8 +216,8 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 ## Registration Checklist
 
 1. Add `{spec.command_type}` into `src/core/internal/CommandList.def`.
-2. Run `python3 scripts/generate_command_artifacts.py`.
-3. Keep generated artifacts clean (`python3 scripts/check_command_sync.py`).
+2. Run `python3 scripts/developer/generate_command_artifacts.py`.
+3. Keep generated artifacts clean (`python3 scripts/developer/check_command_sync.py`).
 """
 
 
@@ -231,10 +231,10 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         "Append a new RHBM_GEM_COMMAND(...) block to CommandList.def.",
     )
     if dry_run:
-        print("[wire] scripts/generate_command_artifacts.py")
+        print("[wire] scripts/developer/generate_command_artifacts.py")
         return
 
-    generator = root / "scripts" / "generate_command_artifacts.py"
+    generator = root / "scripts" / "developer" / "generate_command_artifacts.py"
     result = subprocess.run(
         [sys.executable, str(generator)],
         check=False,
@@ -308,7 +308,7 @@ def main() -> int:
     if args.strict and not args.wire:
         parser.error("--strict requires --wire.")
 
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     spec = build_spec(args)
 
     bind_unit = f'{spec.command_type.removesuffix("Command")}Bindings.cpp'

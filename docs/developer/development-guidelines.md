@@ -109,12 +109,12 @@ Change-integration principles:
 
 - `[Required]` Update `README.md` when changes affect build options, dependencies, install/export behavior, public commands, bindings, or examples.
 - `[Required]` Update this guideline document when project-wide engineering rules change.
-- `[Required]` Keep command manifests and generated command artifacts synchronized (use `scripts/check_command_sync.py` or `lint_repo`).
+- `[Required]` Keep command manifests and generated command artifacts synchronized (use `scripts/developer/check_command_sync.py` or `lint_repo`).
 - `[Recommended]` Prefer concise, principle-driven guidance over temporary implementation details.
 
 ## 11. Quality Checks and CI Alignment
 
 - `[Required]` Keep repository guard checks passing through `lint_repo` (structure, hygiene, logging style, fixture tracking, command-manifest sync, and absolute-path checks).
-- `[Recommended]` Run targeted formatter checks with `scripts/run_clang_format_check.sh` when touching covered painter/parser paths.
-- `[Recommended]` Run targeted static analysis with `scripts/run_clang_tidy_check.sh` (baseline mode when appropriate) when touching covered painter/parser paths.
-- `[Recommended]` For broad or risky changes, run `scripts/run_ctest_with_classification.sh` in addition to normal `ctest`.
+- `[Recommended]` Run targeted formatter checks with `scripts/developer/run_clang_format_check.sh` when touching covered painter/parser paths.
+- `[Recommended]` Run targeted static analysis with `scripts/developer/run_clang_tidy_check.sh` (baseline mode when appropriate) when touching covered painter/parser paths.
+- `[Recommended]` For broad or risky changes, run `scripts/developer/run_ctest_with_classification.sh` in addition to normal `ctest`.
