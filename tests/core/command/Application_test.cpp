@@ -38,17 +38,18 @@ TEST(ApplicationTest, SharedOptionsMatchCommandMetadata)
     {
         auto * subcommand{ app.get_subcommand(std::string(descriptor.name)) };
         ASSERT_NE(subcommand, nullptr) << descriptor.name;
+        const auto common_options{ rg::CommonOptionsForCommand(descriptor) };
 
         const std::string help_text{
             subcommand->help(subcommand->get_name(), CLI::AppFormatMode::Sub)
         };
         EXPECT_EQ(
             help_text.find("--database") != std::string::npos,
-            rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Database))
+            rg::HasCommonOption(common_options, rg::CommonOption::Database))
             << descriptor.name;
         EXPECT_EQ(
             help_text.find("--folder") != std::string::npos,
-            rg::HasCommonOption(descriptor.common_options, rg::CommonOption::OutputFolder))
+            rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder))
             << descriptor.name;
     }
 }

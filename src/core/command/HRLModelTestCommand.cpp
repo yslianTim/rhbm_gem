@@ -23,9 +23,7 @@ HRLModelTestCommand::HRLModelTestCommand() :
 
 void HRLModelTestCommand::ApplyRequest(const HRLModelTestRequest & request)
 {
-    SetThreadSize(request.common.thread_size);
-    SetVerboseLevel(request.common.verbose_level);
-    SetFolderPath(request.common.folder_path);
+    ApplyCommonRequest(request.common);
     SetTesterChoice(request.tester_choice);
     SetFitRangeMinimum(request.fit_range_min);
     SetFitRangeMaximum(request.fit_range_max);

@@ -53,9 +53,6 @@ public:
     void ApplyRequest(const PotentialAnalysisRequest & request);
 
 private:
-    void SetTrainingAlphaFlag(bool value);
-    void SetAsymmetryFlag(bool value);
-    void SetSimulationFlag(bool value);
     void SetSimulatedMapResolution(double value);
     void SetFitRangeMinimum(double value);
     void SetFitRangeMaximum(double value);
@@ -63,7 +60,6 @@ private:
     void SetAlphaG(double value);
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);
-    void SetTrainingReportDir(const std::filesystem::path & path);
     void SetSavedKeyTag(const std::string & tag);
     void SetSamplingSize(int value);
     void SetSamplingRangeMinimum(double value);

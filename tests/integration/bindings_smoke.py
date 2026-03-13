@@ -1,30 +1,14 @@
 import rhbm_gem_module as m
 
-REQUEST_NAMES = [
-    "CommonCommandRequest",
-    "PotentialAnalysisRequest",
-    "PotentialDisplayRequest",
-    "ResultDumpRequest",
-    "MapSimulationRequest",
-    "MapVisualizationRequest",
-    "PositionEstimationRequest",
-    "HRLModelTestRequest",
-]
+from command_manifest_expectations import expected_request_names, expected_run_functions
 
-RUN_FUNCTIONS = [
-    "RunPotentialAnalysis",
-    "RunPotentialDisplay",
-    "RunResultDump",
-    "RunMapSimulation",
-    "RunMapVisualization",
-    "RunPositionEstimation",
-    "RunHRLModelTest",
-]
+REQUEST_NAMES = expected_request_names()
+RUN_FUNCTIONS = expected_run_functions()
 
 
 def main() -> int:
-    assert len(REQUEST_NAMES) == 8
-    assert len(RUN_FUNCTIONS) == 7
+    assert len(REQUEST_NAMES) >= 2
+    assert len(RUN_FUNCTIONS) >= 1
     assert hasattr(m, "LogLevel")
     assert hasattr(m, "ValidationPhase")
     assert hasattr(m, "ValidationIssue")

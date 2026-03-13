@@ -23,64 +23,33 @@ struct ExpectedCommandMetadata
 {
     rg::CommandId id;
     std::string_view name;
-    rg::CommonOptionMask common_options;
+    rg::CommonOptionProfile profile;
     bool uses_database;
 };
 
-constexpr std::array<ExpectedCommandMetadata, 7> kExpectedCommandMetadata{{
-    {
-        rg::CommandId::PotentialAnalysis,
-        "potential_analysis",
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::DatabaseWorkflow),
-        true
-    },
-    {
-        rg::CommandId::PotentialDisplay,
-        "potential_display",
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::DatabaseWorkflow),
-        true
-    },
-    {
-        rg::CommandId::ResultDump,
-        "result_dump",
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::DatabaseWorkflow),
-        true
-    },
-    {
-        rg::CommandId::MapSimulation,
-        "map_simulation",
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow),
-        false
-    },
-    {
-        rg::CommandId::MapVisualization,
-        "map_visualization",
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow),
-        false
-    },
-    {
-        rg::CommandId::PositionEstimation,
-        "position_estimation",
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow),
-        false
-    },
-    {
-        rg::CommandId::ModelTest,
-        "model_test",
-        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow),
-        false
-    }
-}};
+std::vector<ExpectedCommandMetadata> BuildExpectedCommandMetadata()
+{
+    std::vector<ExpectedCommandMetadata> expected;
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE)             \
+    expected.push_back(ExpectedCommandMetadata{                                                 \
+        rg::CommandId::COMMAND_ID,                                                              \
+        CLI_NAME,                                                                               \
+        rg::CommonOptionProfile::PROFILE,                                                       \
+        rg::CommonOptionProfile::PROFILE == rg::CommonOptionProfile::DatabaseWorkflow});
+#include "internal/CommandList.def"
+#undef RHBM_GEM_COMMAND
+    return expected;
+}
 
-constexpr std::array<std::pair<std::string_view, rg::CommandId>, 7> kExpectedCommandIdTokens{{
-    {"PotentialAnalysis", rg::CommandId::PotentialAnalysis},
-    {"PotentialDisplay", rg::CommandId::PotentialDisplay},
-    {"ResultDump", rg::CommandId::ResultDump},
-    {"MapSimulation", rg::CommandId::MapSimulation},
-    {"MapVisualization", rg::CommandId::MapVisualization},
-    {"PositionEstimation", rg::CommandId::PositionEstimation},
-    {"ModelTest", rg::CommandId::ModelTest},
-}};
+std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTokens()
+{
+    std::vector<std::pair<std::string_view, rg::CommandId>> expected;
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE)             \
+    expected.emplace_back(#COMMAND_ID, rg::CommandId::COMMAND_ID);
+#include "internal/CommandList.def"
+#undef RHBM_GEM_COMMAND
+    return expected;
+}
 
 std::vector<std::string> ParseCommandIdTokensFromManifest()
 {
@@ -141,25 +110,27 @@ void ExpectRuntimeBinderConstructs(rg::CommandId command_id)
 
 TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
 {
+    const auto expected_metadata{ BuildExpectedCommandMetadata() };
     const auto & catalog{ rg::CommandCatalog() };
-    ASSERT_EQ(catalog.size(), kExpectedCommandMetadata.size());
+    ASSERT_EQ(catalog.size(), expected_metadata.size());
 
     std::unordered_set<int> unique_ids;
     std::unordered_set<std::string> unique_names;
-    for (std::size_t index = 0; index < kExpectedCommandMetadata.size(); ++index)
+    for (std::size_t index = 0; index < expected_metadata.size(); ++index)
     {
         const auto & descriptor{ catalog[index] };
-        const auto & expected{ kExpectedCommandMetadata[index] };
+        const auto & expected{ expected_metadata[index] };
+        const auto common_options{ rg::CommonOptionsForCommand(descriptor) };
 
         EXPECT_EQ(descriptor.id, expected.id);
         EXPECT_EQ(std::string_view{ descriptor.name }, expected.name);
-        EXPECT_EQ(descriptor.common_options, expected.common_options);
+        EXPECT_EQ(descriptor.profile, expected.profile);
         EXPECT_EQ(
-            rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Database),
+            rg::HasCommonOption(common_options, rg::CommonOption::Database),
             expected.uses_database);
-        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Threading));
-        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::Verbose));
-        EXPECT_TRUE(rg::HasCommonOption(descriptor.common_options, rg::CommonOption::OutputFolder));
+        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Threading));
+        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Verbose));
+        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder));
 
         unique_ids.insert(static_cast<int>(descriptor.id));
         unique_names.emplace(descriptor.name);
@@ -171,24 +142,23 @@ TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
 
 TEST(CommandCatalogTest, RuntimeBindersArePresentForAllCommands)
 {
-    ExpectRuntimeBinderConstructs(rg::CommandId::PotentialAnalysis);
-    ExpectRuntimeBinderConstructs(rg::CommandId::PotentialDisplay);
-    ExpectRuntimeBinderConstructs(rg::CommandId::ResultDump);
-    ExpectRuntimeBinderConstructs(rg::CommandId::MapSimulation);
-    ExpectRuntimeBinderConstructs(rg::CommandId::MapVisualization);
-    ExpectRuntimeBinderConstructs(rg::CommandId::PositionEstimation);
-    ExpectRuntimeBinderConstructs(rg::CommandId::ModelTest);
+    for (const auto & [token, command_id] : BuildExpectedCommandIdTokens())
+    {
+        (void)token;
+        ExpectRuntimeBinderConstructs(command_id);
+    }
 }
 
 TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
 {
+    const auto expected_command_ids{ BuildExpectedCommandIdTokens() };
     const auto manifest_ids{ ParseCommandIdTokensFromManifest() };
     ASSERT_FALSE(manifest_ids.empty());
-    ASSERT_EQ(manifest_ids.size(), kExpectedCommandIdTokens.size());
+    ASSERT_EQ(manifest_ids.size(), expected_command_ids.size());
 
-    for (std::size_t index = 0; index < kExpectedCommandIdTokens.size(); ++index)
+    for (std::size_t index = 0; index < expected_command_ids.size(); ++index)
     {
-        const auto & expected{ kExpectedCommandIdTokens[index] };
+        const auto & expected{ expected_command_ids[index] };
         EXPECT_EQ(manifest_ids[index], expected.first);
         EXPECT_EQ(static_cast<int>(expected.second), static_cast<int>(index));
     }

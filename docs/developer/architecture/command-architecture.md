@@ -42,16 +42,18 @@ The manifest drives:
 
 - `CommandCatalog()` construction (`src/core/command/CommandCatalog.cpp`)
 - CLI subcommand registration order (`src/core/command/Application.cpp`)
-- Python request/run surface (`bindings/CommandApiBindings.cpp`)
 - generated catalog/CMake/docs artifacts (`scripts/developer/generate_command_artifacts.py`)
+
+The manifest does not generate request field bindings in `bindings/CommandApiBindings.cpp`;
+those remain hand-authored.
 
 `CommandDescriptor` fields (`src/core/internal/CommandCatalog.hpp`):
 
 - `id`
 - `name`
 - `description`
-- `common_options`
-- `factory`
+- `profile`
+- `bind_runtime`
 
 ### Command manifest
 
@@ -72,7 +74,7 @@ CLI path:
 1. `src/main.cpp` creates `CLI::App`.
 2. `Application` requires exactly one subcommand.
 3. `RegisterAllCommands()` iterates `CommandCatalog()`.
-4. For each descriptor, it creates a command instance, registers CLI options, and binds callback to `Execute()`.
+4. For each descriptor, it creates a CLI subcommand, lets the runtime binder attach request options, and binds callback to `Execute()`.
 5. Callback throws `CLI::RuntimeError(1)` when execution fails.
 
 Python path:
@@ -90,8 +92,8 @@ Command shape:
 1. Define `Options` derived from `CommandOptions`.
 2. Derive command class from `CommandWithProfileOptions<...>` or `CommandWithOptions<...>`.
 3. Implement `ApplyRequest(const XxxRequest&)` as the external configuration entrypoint.
-4. Keep command-local `Set*` helpers internal/private for CLI parsing and normalization.
-5. Register command-local CLI options in `RegisterCLIOptionsExtend(...)`.
+4. Keep only non-trivial command-local helpers for normalization/parsing/validation.
+5. `ApplyRequest(...)` may inline simple field copies; CLI option wiring lives in the runtime binder layer.
 6. Keep cross-field checks in `ValidateOptions()`.
 7. Reset transient runtime fields in `ResetRuntimeState()`.
 8. Keep `ExecuteImpl()` focused on orchestration.
@@ -110,14 +112,14 @@ Base `CommandOptions` fields:
 
 ## 5. Shared options
 
-`CommandBase::RegisterCLIOptionsBasic(...)` exposes shared flags by `common_options` mask:
+Shared CLI flags are derived from `CommandDescriptor::profile`:
 
 - `-j,--jobs`
 - `-v,--verbose`
 - `-d,--database`
 - `-o,--folder`
 
-Concrete commands should only add command-specific flags in `RegisterCLIOptionsExtend(...)`.
+Concrete commands should only add command-specific flags in their request binder helpers.
 
 ### Shared policy matrix
 

@@ -103,12 +103,9 @@ def _header_template(spec: ScaffoldSpec) -> str:
 
 #include "CommandBase.hpp"
 
-namespace CLI
-{{
-    class App;
-}}
-
 namespace rhbm_gem {{
+
+struct {spec.command_type.removesuffix("Command")}Request;
 
 struct {spec.command_type}Options : public CommandOptions
 {{
@@ -123,9 +120,9 @@ class {spec.command_type}
 public:
     explicit {spec.command_type}();
     ~{spec.command_type}() override = default;
+    void ApplyRequest(const {spec.command_type.removesuffix("Command")}Request & request);
 
 private:
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
@@ -138,6 +135,8 @@ private:
 def _source_template(spec: ScaffoldSpec) -> str:
     return f"""#include "{spec.command_type}.hpp"
 
+#include <rhbm_gem/core/command/CommandApi.hpp>
+
 namespace rhbm_gem {{
 
 {spec.command_type}::{spec.command_type}() :
@@ -148,9 +147,9 @@ namespace rhbm_gem {{
 {{
 }}
 
-void {spec.command_type}::RegisterCLIOptionsExtend(CLI::App * cmd)
+void {spec.command_type}::ApplyRequest(const {spec.command_type.removesuffix("Command")}Request & request)
 {{
-    (void)cmd;
+    ApplyCommonRequest(request.common);
 }}
 
 void {spec.command_type}::ValidateOptions()

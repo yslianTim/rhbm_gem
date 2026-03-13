@@ -1,26 +1,9 @@
 import rhbm_gem_module as m
 
+from command_manifest_expectations import expected_request_names, expected_run_functions
 
-EXPECTED_REQUEST_TYPES = {
-    "CommonCommandRequest",
-    "PotentialAnalysisRequest",
-    "PotentialDisplayRequest",
-    "ResultDumpRequest",
-    "MapSimulationRequest",
-    "MapVisualizationRequest",
-    "PositionEstimationRequest",
-    "HRLModelTestRequest",
-}
-
-EXPECTED_RUN_FUNCTIONS = {
-    "RunPotentialAnalysis",
-    "RunPotentialDisplay",
-    "RunResultDump",
-    "RunMapSimulation",
-    "RunMapVisualization",
-    "RunPositionEstimation",
-    "RunHRLModelTest",
-}
+EXPECTED_REQUEST_TYPES = set(expected_request_names())
+EXPECTED_RUN_FUNCTIONS = set(expected_run_functions())
 
 
 def main() -> int:

@@ -90,8 +90,36 @@ MainWindow::MainWindow(QWidget * parent) :
     ConnectUi();
 }
 
+void MainWindow::InitializeGuiCommands()
+{
+    if (!m_gui_commands.empty())
+    {
+        return;
+    }
+
+    m_gui_commands = {
+        GuiCommandRegistration{
+            "map_simulation",
+            [this]() { return BuildMapSimulationPage(); },
+            [this]() { return rhbm_gem::RunMapSimulation(BuildMapSimulationRequest()); }
+        },
+        GuiCommandRegistration{
+            "potential_analysis",
+            [this]() { return BuildPotentialAnalysisPage(); },
+            [this]() { return rhbm_gem::RunPotentialAnalysis(BuildPotentialAnalysisRequest()); }
+        },
+        GuiCommandRegistration{
+            "result_dump",
+            [this]() { return BuildResultDumpPage(); },
+            [this]() { return rhbm_gem::RunResultDump(BuildResultDumpRequest()); }
+        },
+    };
+}
+
 void MainWindow::BuildUi()
 {
+    InitializeGuiCommands();
+
     setWindowTitle("RHBM-GEM GUI");
     resize(1180, 820);
 
@@ -102,15 +130,14 @@ void MainWindow::BuildUi()
 
     auto * top_splitter{ new QSplitter(Qt::Horizontal, central) };
     m_command_list = new QListWidget(top_splitter);
-    m_command_list->addItem("map_simulation");
-    m_command_list->addItem("potential_analysis");
-    m_command_list->addItem("result_dump");
     m_command_list->setMinimumWidth(220);
 
     m_command_stack = new QStackedWidget(top_splitter);
-    m_command_stack->addWidget(BuildMapSimulationPage());
-    m_command_stack->addWidget(BuildPotentialAnalysisPage());
-    m_command_stack->addWidget(BuildResultDumpPage());
+    for (const auto & command : m_gui_commands)
+    {
+        m_command_list->addItem(command.name);
+        m_command_stack->addWidget(command.build_page());
+    }
 
     top_splitter->addWidget(m_command_list);
     top_splitter->addWidget(m_command_stack);
@@ -503,40 +530,17 @@ void MainWindow::StartExecution()
 {
     if (m_execution_running) return;
 
-    const auto command_page{ static_cast<CommandPage>(m_command_stack->currentIndex()) };
-    switch (command_page)
+    const int command_index{ m_command_stack->currentIndex() };
+    if (command_index < 0 || static_cast<std::size_t>(command_index) >= m_gui_commands.size())
     {
-    case CommandPage::MapSimulation:
+        return;
+    }
+    const auto & command{ m_gui_commands[static_cast<std::size_t>(command_index)] };
+    m_active_command_name = command.name;
+    m_execution_future = std::async(std::launch::async, [runner = command.run]()
     {
-        const auto request{ BuildMapSimulationRequest() };
-        m_active_command_name = "map_simulation";
-        m_execution_future = std::async(std::launch::async, [request]()
-        {
-            return rhbm_gem::RunMapSimulation(request);
-        });
-        break;
-    }
-    case CommandPage::PotentialAnalysis:
-    {
-        const auto request{ BuildPotentialAnalysisRequest() };
-        m_active_command_name = "potential_analysis";
-        m_execution_future = std::async(std::launch::async, [request]()
-        {
-            return rhbm_gem::RunPotentialAnalysis(request);
-        });
-        break;
-    }
-    case CommandPage::ResultDump:
-    {
-        const auto request{ BuildResultDumpRequest() };
-        m_active_command_name = "result_dump";
-        m_execution_future = std::async(std::launch::async, [request]()
-        {
-            return rhbm_gem::RunResultDump(request);
-        });
-        break;
-    }
-    }
+        return runner();
+    });
 
     m_execution_running = true;
     m_execution_poll_timer->start();

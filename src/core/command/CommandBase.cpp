@@ -1,4 +1,5 @@
 #include "CommandBase.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <algorithm>
@@ -127,6 +128,22 @@ void CommandBase::SetFolderPath(const std::filesystem::path & path)
     {
         options.folder_path = std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
     });
+}
+
+void CommandBase::ApplyCommonRequest(const CommonCommandRequest & request)
+{
+    SetThreadSize(request.thread_size);
+    SetVerboseLevel(request.verbose_level);
+
+    const auto common_options{ GetCommonOptionsMask() };
+    if (HasCommonOption(common_options, CommonOption::Database))
+    {
+        SetDatabasePath(request.database_path);
+    }
+    if (HasCommonOption(common_options, CommonOption::OutputFolder))
+    {
+        SetFolderPath(request.folder_path);
+    }
 }
 
 void CommandBase::ReportValidationIssues() const

@@ -54,7 +54,6 @@ private:
     void SetPartialChargeChoice(PartialCharge value);
     void SetCutoffDistance(double value);
     void SetModelFilePath(const std::filesystem::path & value);
-    void SetMapFileName(const std::string & value);
     void SetGridSpacing(double value);
     void SetBlurringWidthList(const std::string & value);
     void ValidateOptions() override;

@@ -1,18 +1,8 @@
 #pragma once
 
-#include <functional>
-
-#include <rhbm_gem/core/command/CommandApi.hpp>
-
-namespace CLI
-{
-    class App;
-}
+#include "CommandCatalog.hpp"
 
 namespace rhbm_gem {
-
-using CommandRunner = std::function<ExecutionReport()>;
-using CommandRuntimeBinder = CommandRunner (*)(CLI::App *);
 
 CommandRunner BindPotentialAnalysisRuntime(CLI::App * command);
 CommandRunner BindPotentialDisplayRuntime(CLI::App * command);

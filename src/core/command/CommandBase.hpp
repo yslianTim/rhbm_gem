@@ -21,6 +21,8 @@ constexpr CommonOptionMask kDefaultCommandCommonOptions{
     CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)
 };
 
+struct CommonCommandRequest;
+
 struct CommandOptions
 {
     int thread_size{ 1 };
@@ -51,6 +53,7 @@ protected:
     void SetVerboseLevel(int value);
     void SetDatabasePath(const std::filesystem::path & path);
     void SetFolderPath(const std::filesystem::path & path);
+    void ApplyCommonRequest(const CommonCommandRequest & request);
 
     // Core command extension API used by concrete command setters and validators.
     template <typename Mutator>

@@ -3,7 +3,9 @@
 #include <QMainWindow>
 #include <QString>
 
+#include <functional>
 #include <future>
+#include <vector>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
@@ -83,11 +85,11 @@ private:
         QPushButton * map_browse{ nullptr };
     };
 
-    enum class CommandPage
+    struct GuiCommandRegistration
     {
-        MapSimulation = 0,
-        PotentialAnalysis = 1,
-        ResultDump = 2
+        QString name{};
+        std::function<QWidget *()> build_page{};
+        std::function<rhbm_gem::ExecutionReport()> run{};
     };
 
     QListWidget * m_command_list{ nullptr };
@@ -103,8 +105,10 @@ private:
     MapSimulationControls m_map_simulation{};
     PotentialAnalysisControls m_potential_analysis{};
     ResultDumpControls m_result_dump{};
+    std::vector<GuiCommandRegistration> m_gui_commands{};
 
     void BuildUi();
+    void InitializeGuiCommands();
     QWidget * BuildMapSimulationPage();
     QWidget * BuildPotentialAnalysisPage();
     QWidget * BuildResultDumpPage();

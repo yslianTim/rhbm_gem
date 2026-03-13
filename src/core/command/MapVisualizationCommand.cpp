@@ -49,9 +49,7 @@ MapVisualizationCommand::MapVisualizationCommand() :
 
 void MapVisualizationCommand::ApplyRequest(const MapVisualizationRequest & request)
 {
-    SetThreadSize(request.common.thread_size);
-    SetVerboseLevel(request.common.verbose_level);
-    SetFolderPath(request.common.folder_path);
+    ApplyCommonRequest(request.common);
     SetModelFilePath(request.model_file_path);
     SetMapFilePath(request.map_file_path);
     SetAtomSerialID(request.atom_serial_id);

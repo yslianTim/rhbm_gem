@@ -54,12 +54,6 @@ private:
     void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
-    void SetPickChainID(const std::string & value);
-    void SetVetoChainID(const std::string & value);
-    void SetPickResidueType(const std::string & value);
-    void SetVetoResidueType(const std::string & value);
-    void SetPickElementType(const std::string & value);
-    void SetVetoElementType(const std::string & value);
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();

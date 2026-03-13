@@ -23,10 +23,7 @@ ResultDumpCommand::ResultDumpCommand() :
 
 void ResultDumpCommand::ApplyRequest(const ResultDumpRequest & request)
 {
-    SetThreadSize(request.common.thread_size);
-    SetVerboseLevel(request.common.verbose_level);
-    SetFolderPath(request.common.folder_path);
-    SetDatabasePath(request.common.database_path);
+    ApplyCommonRequest(request.common);
     SetPrinterChoice(request.printer_choice);
     SetModelKeyTagList(request.model_key_tag_list);
     SetMapFilePath(request.map_file_path);

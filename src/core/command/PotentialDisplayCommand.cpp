@@ -103,19 +103,19 @@ PotentialDisplayCommand::~PotentialDisplayCommand() = default;
 
 void PotentialDisplayCommand::ApplyRequest(const PotentialDisplayRequest & request)
 {
-    SetThreadSize(request.common.thread_size);
-    SetVerboseLevel(request.common.verbose_level);
-    SetFolderPath(request.common.folder_path);
-    SetDatabasePath(request.common.database_path);
+    ApplyCommonRequest(request.common);
     SetPainterChoice(request.painter_choice);
     SetModelKeyTagList(request.model_key_tag_list);
     SetRefModelKeyTagListMap(request.ref_model_key_tag_list);
-    SetPickChainID(request.pick_chain_id);
-    SetVetoChainID(request.veto_chain_id);
-    SetPickResidueType(request.pick_residue);
-    SetVetoResidueType(request.veto_residue);
-    SetPickElementType(request.pick_element);
-    SetVetoElementType(request.veto_element);
+    MutateOptions([&]()
+    {
+        m_options.pick_chain_id = request.pick_chain_id;
+        m_options.veto_chain_id = request.veto_chain_id;
+        m_options.pick_residue = request.pick_residue;
+        m_options.veto_residue = request.veto_residue;
+        m_options.pick_element = request.pick_element;
+        m_options.veto_element = request.veto_element;
+    });
 }
 
 bool PotentialDisplayCommand::ExecuteImpl()
@@ -179,36 +179,6 @@ void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value
             "Parsed " + std::to_string(m_ref_model_key_tag_list_map.size())
             + " reference model groups.");
     });
-}
-
-void PotentialDisplayCommand::SetPickChainID(const std::string & value)
-{
-    MutateOptions([&]() { m_options.pick_chain_id = value; });
-}
-
-void PotentialDisplayCommand::SetVetoChainID(const std::string & value)
-{
-    MutateOptions([&]() { m_options.veto_chain_id = value; });
-}
-
-void PotentialDisplayCommand::SetPickResidueType(const std::string & value)
-{
-    MutateOptions([&]() { m_options.pick_residue = value; });
-}
-
-void PotentialDisplayCommand::SetVetoResidueType(const std::string & value)
-{
-    MutateOptions([&]() { m_options.veto_residue = value; });
-}
-
-void PotentialDisplayCommand::SetPickElementType(const std::string & value)
-{
-    MutateOptions([&]() { m_options.pick_element = value; });
-}
-
-void PotentialDisplayCommand::SetVetoElementType(const std::string & value)
-{
-    MutateOptions([&]() { m_options.veto_element = value; });
 }
 
 bool PotentialDisplayCommand::BuildDataObject()

@@ -47,11 +47,9 @@ MapSimulationCommand::MapSimulationCommand() :
 
 void MapSimulationCommand::ApplyRequest(const MapSimulationRequest & request)
 {
-    SetThreadSize(request.common.thread_size);
-    SetVerboseLevel(request.common.verbose_level);
-    SetFolderPath(request.common.folder_path);
+    ApplyCommonRequest(request.common);
     SetModelFilePath(request.model_file_path);
-    SetMapFileName(request.map_file_name);
+    MutateOptions([&]() { m_options.map_file_name = request.map_file_name; });
     SetPotentialModelChoice(request.potential_model_choice);
     SetPartialChargeChoice(request.partial_charge_choice);
     SetCutoffDistance(request.cutoff_distance);
@@ -127,11 +125,6 @@ void MapSimulationCommand::SetCutoffDistance(double value)
 void MapSimulationCommand::SetModelFilePath(const std::filesystem::path & value)
 {
     SetRequiredExistingPathOption(m_options.model_file_path, value, kModelOption, "Model file");
-}
-
-void MapSimulationCommand::SetMapFileName(const std::string & value)
-{
-    MutateOptions([&]() { m_options.map_file_name = value; });
 }
 
 void MapSimulationCommand::SetGridSpacing(double value)

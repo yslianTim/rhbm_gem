@@ -93,13 +93,14 @@ std::string BuildExpectedSurfaceMatrixBlock()
     output << "| --- | --- | --- |\n";
     for (const auto & descriptor : rg::CommandCatalog())
     {
+        const auto common_options{ rg::CommonOptionsForCommand(descriptor) };
         output << "| `" << descriptor.name << "` | "
                << (rg::HasCommonOption(
-                    descriptor.common_options,
+                    common_options,
                     rg::CommonOption::Database) ? "yes" : "no")
                << " | "
                << (rg::HasCommonOption(
-                    descriptor.common_options,
+                    common_options,
                     rg::CommonOption::OutputFolder) ? "yes" : "no")
                << " |\n";
     }
@@ -192,4 +193,7 @@ TEST(DocsSyncTest, CommandArchitectureGeneratedSectionsMatchCatalog)
     EXPECT_EQ(
         NormalizeBlock(actual_python_surface),
         NormalizeBlock(BuildExpectedPythonSurfaceBlock()));
+
+    EXPECT_EQ(document.find("RegisterCLIOptionsExtend"), std::string::npos);
+    EXPECT_EQ(document.find("RegisterCLIOptionsBasic"), std::string::npos);
 }

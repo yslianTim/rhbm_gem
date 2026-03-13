@@ -74,8 +74,8 @@ Standard structure:
 1. `Options` derives from `CommandOptions`.
 2. Command derives from `CommandWithProfileOptions<...>` (or `CommandWithOptions<...>`).
 3. `ApplyRequest(const XxxRequest&)` is the external configuration entrypoint.
-4. Internal `Set*` helpers use `MutateOptions(...)` or `CommandBase` helper setters.
-5. CLI-only option wiring goes in `RegisterCLIOptionsExtend(...)`.
+4. Keep only non-trivial internal helpers; simple field copies can stay inside `ApplyRequest(...)`.
+5. CLI option wiring goes in `src/core/command/CommandRuntimeRegistry.cpp`.
 6. Cross-field checks go in `ValidateOptions()`.
 7. Runtime cache/state cleanup goes in `ResetRuntimeState()`.
 8. `ExecuteImpl()` coordinates workflow; avoid embedding parse-time validation.

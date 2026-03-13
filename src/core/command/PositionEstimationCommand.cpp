@@ -59,9 +59,7 @@ PositionEstimationCommand::~PositionEstimationCommand() = default;
 
 void PositionEstimationCommand::ApplyRequest(const PositionEstimationRequest & request)
 {
-    SetThreadSize(request.common.thread_size);
-    SetVerboseLevel(request.common.verbose_level);
-    SetFolderPath(request.common.folder_path);
+    ApplyCommonRequest(request.common);
     SetMapFilePath(request.map_file_path);
     SetIterationCount(request.iteration_count);
     SetKNNSize(request.knn_size);

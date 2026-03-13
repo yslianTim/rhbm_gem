@@ -22,9 +22,14 @@ struct CommandDescriptor
     CommandId id;
     std::string_view name;
     std::string_view description;
-    CommonOptionMask common_options;
+    CommonOptionProfile profile;
     CommandRuntimeBinder bind_runtime;
 };
+
+constexpr CommonOptionMask CommonOptionsForCommand(const CommandDescriptor & descriptor)
+{
+    return CommonOptionMaskForProfile(descriptor.profile);
+}
 
 const std::vector<CommandDescriptor> & CommandCatalog();
 

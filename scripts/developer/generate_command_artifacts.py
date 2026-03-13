@@ -23,11 +23,6 @@ END_COMMAND_CATALOG = "// END GENERATED: command-catalog-entries"
 
 
 def build_catalog_block(entries: list[CommandEntry]) -> str:
-    profile_to_mask = {
-        "FileWorkflow": "CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)",
-        "DatabaseWorkflow": "CommonOptionMaskForProfile(CommonOptionProfile::DatabaseWorkflow)",
-    }
-
     lines: list[str] = []
     for entry in entries:
         binder = f"Bind{entry.command_id}Runtime"
@@ -36,7 +31,7 @@ def build_catalog_block(entries: list[CommandEntry]) -> str:
             f"CommandId::{entry.command_id}, "
             f"\"{entry.cli_name}\", "
             f"\"{entry.description}\", "
-            f"{profile_to_mask[entry.profile]}, "
+            f"CommonOptionProfile::{entry.profile}, "
             f"&{binder}" + "},"
         )
     lines.append("")
