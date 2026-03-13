@@ -68,16 +68,37 @@ template <typename RequestType, typename BindOptionsFn, typename RunFn>
 rhbm_gem::CommandRunner BindRuntime(
     CLI::App * command,
     CommonOptionProfile profile,
-    BindOptionsFn && bind_options,
-    RunFn && run_command)
+    BindOptionsFn bind_options,
+    RunFn run_command)
 {
     auto request{ std::make_shared<RequestType>() };
     BindCommonOptions(command, request->common, profile);
-    std::invoke(std::forward<BindOptionsFn>(bind_options), command, *request);
+    std::invoke(bind_options, command, *request);
 
-    return [request, run = std::forward<RunFn>(run_command)]()
+    return [request, run = run_command]()
     {
         return std::invoke(run, *request);
+    };
+}
+
+template <typename RequestType, typename BindOptionsFn, typename RunFn>
+rhbm_gem::CommandDescriptor MakeCommandDescriptor(
+    rhbm_gem::CommandId id,
+    std::string_view name,
+    std::string_view description,
+    CommonOptionProfile profile,
+    BindOptionsFn bind_options,
+    RunFn run_command)
+{
+    return rhbm_gem::CommandDescriptor{
+        id,
+        name,
+        description,
+        profile,
+        [profile, bind_options, run_command](CLI::App * command)
+        {
+            return BindRuntime<RequestType>(command, profile, bind_options, run_command);
+        },
     };
 }
 
@@ -465,69 +486,6 @@ void BindHRLModelTestRequestOptions(
         request.alpha_g);
 }
 
-rhbm_gem::CommandRunner BindPotentialAnalysisRuntime(CLI::App * command)
-{
-    return BindRuntime<rhbm_gem::PotentialAnalysisRequest>(
-        command,
-        CommonOptionProfile::DatabaseWorkflow,
-        BindPotentialAnalysisRequestOptions,
-        &rhbm_gem::RunPotentialAnalysis);
-}
-
-rhbm_gem::CommandRunner BindPotentialDisplayRuntime(CLI::App * command)
-{
-    return BindRuntime<rhbm_gem::PotentialDisplayRequest>(
-        command,
-        CommonOptionProfile::DatabaseWorkflow,
-        BindPotentialDisplayRequestOptions,
-        &rhbm_gem::RunPotentialDisplay);
-}
-
-rhbm_gem::CommandRunner BindResultDumpRuntime(CLI::App * command)
-{
-    return BindRuntime<rhbm_gem::ResultDumpRequest>(
-        command,
-        CommonOptionProfile::DatabaseWorkflow,
-        BindResultDumpRequestOptions,
-        &rhbm_gem::RunResultDump);
-}
-
-rhbm_gem::CommandRunner BindMapSimulationRuntime(CLI::App * command)
-{
-    return BindRuntime<rhbm_gem::MapSimulationRequest>(
-        command,
-        CommonOptionProfile::FileWorkflow,
-        BindMapSimulationRequestOptions,
-        &rhbm_gem::RunMapSimulation);
-}
-
-rhbm_gem::CommandRunner BindMapVisualizationRuntime(CLI::App * command)
-{
-    return BindRuntime<rhbm_gem::MapVisualizationRequest>(
-        command,
-        CommonOptionProfile::FileWorkflow,
-        BindMapVisualizationRequestOptions,
-        &rhbm_gem::RunMapVisualization);
-}
-
-rhbm_gem::CommandRunner BindPositionEstimationRuntime(CLI::App * command)
-{
-    return BindRuntime<rhbm_gem::PositionEstimationRequest>(
-        command,
-        CommonOptionProfile::FileWorkflow,
-        BindPositionEstimationRequestOptions,
-        &rhbm_gem::RunPositionEstimation);
-}
-
-rhbm_gem::CommandRunner BindHRLModelTestRuntime(CLI::App * command)
-{
-    return BindRuntime<rhbm_gem::HRLModelTestRequest>(
-        command,
-        CommonOptionProfile::FileWorkflow,
-        BindHRLModelTestRequestOptions,
-        &rhbm_gem::RunHRLModelTest);
-}
-
 } // namespace
 
 namespace rhbm_gem {
@@ -536,13 +494,13 @@ const std::vector<CommandDescriptor> & CommandCatalog()
 {
     static const std::vector<CommandDescriptor> catalog{
     // BEGIN GENERATED: command-catalog-entries
-    CommandDescriptor{CommandId::PotentialAnalysis, "potential_analysis", "Run potential analysis", CommonOptionProfile::DatabaseWorkflow, &BindPotentialAnalysisRuntime},
-    CommandDescriptor{CommandId::PotentialDisplay, "potential_display", "Run potential display", CommonOptionProfile::DatabaseWorkflow, &BindPotentialDisplayRuntime},
-    CommandDescriptor{CommandId::ResultDump, "result_dump", "Run result dump", CommonOptionProfile::DatabaseWorkflow, &BindResultDumpRuntime},
-    CommandDescriptor{CommandId::MapSimulation, "map_simulation", "Run map simulation command", CommonOptionProfile::FileWorkflow, &BindMapSimulationRuntime},
-    CommandDescriptor{CommandId::MapVisualization, "map_visualization", "Run map visualization", CommonOptionProfile::FileWorkflow, &BindMapVisualizationRuntime},
-    CommandDescriptor{CommandId::PositionEstimation, "position_estimation", "Run atom position estimation", CommonOptionProfile::FileWorkflow, &BindPositionEstimationRuntime},
-    CommandDescriptor{CommandId::ModelTest, "model_test", "Run HRL model simulation test", CommonOptionProfile::FileWorkflow, &BindHRLModelTestRuntime},
+    MakeCommandDescriptor<rhbm_gem::PotentialAnalysisRequest>(CommandId::PotentialAnalysis, "potential_analysis", "Run potential analysis", CommonOptionProfile::DatabaseWorkflow, BindPotentialAnalysisRequestOptions, &rhbm_gem::RunPotentialAnalysis),
+    MakeCommandDescriptor<rhbm_gem::PotentialDisplayRequest>(CommandId::PotentialDisplay, "potential_display", "Run potential display", CommonOptionProfile::DatabaseWorkflow, BindPotentialDisplayRequestOptions, &rhbm_gem::RunPotentialDisplay),
+    MakeCommandDescriptor<rhbm_gem::ResultDumpRequest>(CommandId::ResultDump, "result_dump", "Run result dump", CommonOptionProfile::DatabaseWorkflow, BindResultDumpRequestOptions, &rhbm_gem::RunResultDump),
+    MakeCommandDescriptor<rhbm_gem::MapSimulationRequest>(CommandId::MapSimulation, "map_simulation", "Run map simulation command", CommonOptionProfile::FileWorkflow, BindMapSimulationRequestOptions, &rhbm_gem::RunMapSimulation),
+    MakeCommandDescriptor<rhbm_gem::MapVisualizationRequest>(CommandId::MapVisualization, "map_visualization", "Run map visualization", CommonOptionProfile::FileWorkflow, BindMapVisualizationRequestOptions, &rhbm_gem::RunMapVisualization),
+    MakeCommandDescriptor<rhbm_gem::PositionEstimationRequest>(CommandId::PositionEstimation, "position_estimation", "Run atom position estimation", CommonOptionProfile::FileWorkflow, BindPositionEstimationRequestOptions, &rhbm_gem::RunPositionEstimation),
+    MakeCommandDescriptor<rhbm_gem::HRLModelTestRequest>(CommandId::ModelTest, "model_test", "Run HRL model simulation test", CommonOptionProfile::FileWorkflow, BindHRLModelTestRequestOptions, &rhbm_gem::RunHRLModelTest),
 // END GENERATED: command-catalog-entries
     };
 

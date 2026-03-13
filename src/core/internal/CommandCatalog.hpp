@@ -15,7 +15,7 @@ namespace CLI
 namespace rhbm_gem {
 
 using CommandRunner = std::function<ExecutionReport()>;
-using CommandRuntimeBinder = CommandRunner (*)(CLI::App *);
+using CommandRuntimeBinder = std::function<CommandRunner(CLI::App *)>;
 
 struct CommandDescriptor
 {

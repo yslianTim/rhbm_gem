@@ -158,7 +158,7 @@ python3 scripts/developer/generate_command_artifacts.py
 In `src/core/command/CommandCatalog.cpp`:
 
 1. Add `Bind<YourCommand>RequestOptions(...)` for command-specific CLI flags.
-2. Add `Bind<YourCommandStem>Runtime(...)` that calls `BindRuntime<RequestType>(...)`.
+2. Register the command through the shared `MakeCommandDescriptor<RequestType>(...)` helper.
 3. Pass the correct `CommonOptionProfile` so shared flags are wired automatically.
 
 Shared flags come from the profile:
@@ -170,6 +170,11 @@ Shared flags come from the profile:
 
 Use `command_cli::AddScalarOption(...)`, `AddStringOption(...)`, `AddPathOption(...)`, and
 `AddEnumOption(...)` for command-specific flags.
+
+If the command needs extra workflow helpers:
+
+- keep command-only helpers in the command `.cpp` or its workflow implementation unit under
+  `src/core/workflow/`
 
 ## 9. Add Python bindings
 

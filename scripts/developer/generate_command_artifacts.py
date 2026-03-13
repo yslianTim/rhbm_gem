@@ -32,14 +32,14 @@ def build_catalog_block(entries: list[CommandEntry]) -> str:
     lines: list[str] = []
     for entry in entries:
         stem = entry.command_type.removesuffix("Command")
-        binder = f"Bind{stem}Runtime"
         lines.append(
-            "    CommandDescriptor{"
+            f"    MakeCommandDescriptor<rhbm_gem::{stem}Request>("
             f"CommandId::{entry.command_id}, "
             f"\"{entry.cli_name}\", "
             f"\"{entry.description}\", "
             f"CommonOptionProfile::{entry.profile}, "
-            f"&{binder}" + "},"
+            f"Bind{stem}RequestOptions, "
+            f"&rhbm_gem::Run{stem}),"
         )
     lines.append("")
     return "\n".join(lines)

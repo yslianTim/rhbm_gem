@@ -1,4 +1,4 @@
-#include "internal/workflow/HRLModelTestWorkflow.hpp"
+#include "command/HRLModelTestCommand.hpp"
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -34,16 +34,16 @@ namespace rhbm_gem::detail {
 namespace {
 
 std::filesystem::path BuildOutputPath(
-    const HRLModelTestWorkflowContext & context,
+    const HRLModelTestCommandOptions & options,
     std::string_view stem)
 {
-    return context.options.folder_path / std::string(stem);
+    return options.folder_path / std::string(stem);
 }
 
 } // namespace
 
 void PrintDataOutlierResult(
-    const HRLModelTestWorkflowContext & context,
+    const HRLModelTestCommandOptions & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
@@ -54,7 +54,7 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list);
 
 void PrintMemberOutlierResult(
-    const HRLModelTestWorkflowContext & context,
+    const HRLModelTestCommandOptions & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
@@ -64,7 +64,7 @@ void PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list);
 
-void RunSimulationTestOnBenchMark(const HRLModelTestWorkflowContext & context)
+void RunSimulationTestOnBenchMark(const HRLModelTestCommandOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
 
@@ -86,12 +86,12 @@ void RunSimulationTestOnBenchMark(const HRLModelTestWorkflowContext & context)
     auto error_sigma{ 1.0 };
     auto outlier_ratio{ 0.0 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(context.options.fit_range_min, context.options.fit_range_max);
+    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
     tester->RunBetaMDPDETest(
         alpha_r_list,
         residual_mean_ols_list, residual_mean_mdpde_list,
         residual_sigma_ols_list, residual_sigma_mdpde_list,
-        model_par_prior, sampling_entry_size, error_sigma, outlier_ratio, context.options.thread_size
+        model_par_prior, sampling_entry_size, error_sigma, outlier_ratio, options.thread_size
     );
 
     std::ostringstream ols_stream;
@@ -115,7 +115,7 @@ void RunSimulationTestOnBenchMark(const HRLModelTestWorkflowContext & context)
     Logger::Log(LogLevel::Info, mdpde_stream.str());
 }
 
-void RunSimulationTestOnDataOutlier(const HRLModelTestWorkflowContext & context)
+void RunSimulationTestOnDataOutlier(const HRLModelTestCommandOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnDataOutlier");
 
@@ -129,7 +129,7 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestWorkflowContext & context)
     auto replica_size{ 100 };
     auto sampling_entry_size{ 1000 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(context.options.fit_range_min, context.options.fit_range_max);
+    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
 
     std::vector<double> alpha_r_list{ 0.1 };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
@@ -167,7 +167,7 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestWorkflowContext & context)
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
                 model_par_prior, sampling_entry_size, error_sigma,
-                outlier_list[static_cast<size_t>(i)], context.options.thread_size
+                outlier_list[static_cast<size_t>(i)], options.thread_size
             );
 
             mean_matrix_ols.col(i) = residual_mean_ols_list.front();
@@ -186,7 +186,7 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestWorkflowContext & context)
     }
 
     PrintDataOutlierResult(
-        context,
+        options,
         "bias_outlier_in_data.pdf",
         outlier_list,
         mean_matrix_ols_list, mean_matrix_mdpde_list, mean_matrix_train_list,
@@ -194,7 +194,7 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestWorkflowContext & context)
     );
 }
 
-void RunSimulationTestOnMemberOutlier(const HRLModelTestWorkflowContext & context)
+void RunSimulationTestOnMemberOutlier(const HRLModelTestCommandOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnMemberOutlier");
 
@@ -212,7 +212,7 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestWorkflowContext & contex
     auto replica_size{ 100 };
     auto member_size{ 100 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(context.options.fit_range_min, context.options.fit_range_max);
+    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
 
     std::vector<double> alpha_g_list{ 0.2 };
     std::vector<Eigen::VectorXd> outlier_prior_list{
@@ -261,7 +261,7 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestWorkflowContext & contex
                 residual_sigma_median_list, residual_sigma_mdpde_list,
                 member_size, model_par_prior, model_par_sigma,
                 outlier_prior, model_par_sigma,
-                outlier_list[static_cast<size_t>(i)], context.options.thread_size
+                outlier_list[static_cast<size_t>(i)], options.thread_size
             );
 
             mean_matrix_median.col(i) = residual_mean_median_list.front();
@@ -280,7 +280,7 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestWorkflowContext & contex
     }
 
     PrintMemberOutlierResult(
-        context,
+        options,
         "bias_outlier_in_member.pdf",
         outlier_list,
         mean_matrix_median_list, mean_matrix_mdpde_list, mean_matrix_train_list,
@@ -288,7 +288,7 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestWorkflowContext & contex
     );
 }
 
-void RunSimulationTestOnModelAlphaData(const HRLModelTestWorkflowContext & context)
+void RunSimulationTestOnModelAlphaData(const HRLModelTestCommandOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
 
@@ -302,7 +302,7 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestWorkflowContext & conte
     auto replica_size{ 100 };
     auto sampling_entry_size{ 1000 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(context.options.fit_range_min, context.options.fit_range_max);
+    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
 
     std::vector<double> alpha_r_list{ 0.1, 0.4 };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
@@ -336,7 +336,7 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestWorkflowContext & conte
                 residual_mean_ols_list, residual_mean_mdpde_list,
                 residual_sigma_ols_list, residual_sigma_mdpde_list,
                 model_par_prior, sampling_entry_size, error_sigma,
-                outlier_list[static_cast<size_t>(i)], context.options.thread_size
+                outlier_list[static_cast<size_t>(i)], options.thread_size
             );
 
             mean_matrix_alpha1.col(i) = residual_mean_mdpde_list.front();
@@ -351,7 +351,7 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestWorkflowContext & conte
     }
 
     PrintDataOutlierResult(
-        context,
+        options,
         "bias_outlier_with_alpha_in_data.pdf",
         outlier_list,
         mean_matrix_alpha1_list, mean_matrix_alpha2_list, mean_matrix_alpha2_list,
@@ -359,7 +359,7 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestWorkflowContext & conte
     );
 }
 
-void RunSimulationTestOnModelAlphaMember(const HRLModelTestWorkflowContext & context)
+void RunSimulationTestOnModelAlphaMember(const HRLModelTestCommandOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
 
@@ -377,7 +377,7 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestWorkflowContext & con
     auto replica_size{ 100 };
     auto member_size{ 100 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(context.options.fit_range_min, context.options.fit_range_max);
+    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
 
     std::vector<double> alpha_g_list{ 0.2, 0.5 };
     std::vector<Eigen::VectorXd> outlier_prior_list{
@@ -422,7 +422,7 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestWorkflowContext & con
                 residual_sigma_median_list, residual_sigma_mdpde_list,
                 member_size, model_par_prior, model_par_sigma,
                 outlier_prior, model_par_sigma,
-                outlier_list[static_cast<size_t>(i)], context.options.thread_size
+                outlier_list[static_cast<size_t>(i)], options.thread_size
             );
 
             mean_matrix_alpha1.col(i) = residual_mean_mdpde_list.front();
@@ -437,7 +437,7 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestWorkflowContext & con
     }
 
     PrintMemberOutlierResult(
-        context,
+        options,
         "bias_outlier_with_alpha_in_member.pdf",
         outlier_list,
         mean_matrix_alpha1_list, mean_matrix_alpha2_list, mean_matrix_alpha2_list,
@@ -446,7 +446,7 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestWorkflowContext & con
 }
 
 void PrintDataOutlierResult(
-    const HRLModelTestWorkflowContext & context,
+    const HRLModelTestCommandOptions & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
@@ -456,7 +456,7 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ BuildOutputPath(context, name) };
+    auto file_path{ BuildOutputPath(options, name) };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintDataOutlierResult");
     (void)outlier_list;
     (void)mean_matrix_ols_list;
@@ -528,8 +528,8 @@ void PrintDataOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (context.options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? -2.0 : -0.7;
-        x_max[i] = (context.options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? 47.0 : 22.0;
+        x_min[i] = (options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? -2.0 : -0.7;
+        x_max[i] = (options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? 47.0 : 22.0;
     }
     for (size_t j = 0; j < row_size; j++)
     {
@@ -629,7 +629,7 @@ void PrintDataOutlierResult(
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    if (context.options.tester_choice == TesterType::MODEL_ALPHA_DATA)
+    if (options.tester_choice == TesterType::MODEL_ALPHA_DATA)
     {
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "MDPDE (#alpha_{r} = 0.1)", "plf");
@@ -682,7 +682,7 @@ void PrintDataOutlierResult(
 }
 
 void PrintMemberOutlierResult(
-    const HRLModelTestWorkflowContext & context,
+    const HRLModelTestCommandOptions & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
@@ -692,7 +692,7 @@ void PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list)
 {
-    auto file_path{ BuildOutputPath(context, name) };
+    auto file_path{ BuildOutputPath(options, name) };
     Logger::Log(LogLevel::Info, " HRLModelTestCommand::PrintMemberOutlierResult");
     (void)outlier_list;
     (void)mean_matrix_median_list;
@@ -763,8 +763,8 @@ void PrintMemberOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (context.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : -0.7;
-        x_max[i] = (context.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? 47.0 : 22.0;
+        x_min[i] = (options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : -0.7;
+        x_max[i] = (options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? 47.0 : 22.0;
     }
     auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(global_y_array, 0.3) };
     for (size_t j = 0; j < row_size; j++)
@@ -866,7 +866,7 @@ void PrintMemberOutlierResult(
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    if (context.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER)
+    if (options.tester_choice == TesterType::MODEL_ALPHA_MEMBER)
     {
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "MDPDE (#alpha_{g} = 0.2)", "plf");
@@ -918,33 +918,42 @@ void PrintMemberOutlierResult(
     #endif
 }
 
-bool RunHRLModelTestWorkflow(const HRLModelTestWorkflowContext & context)
+bool RunHRLModelTestWorkflow(const HRLModelTestCommandOptions & options)
 {
-    switch (context.options.tester_choice)
+    switch (options.tester_choice)
     {
     case TesterType::BENCHMARK:
-        RunSimulationTestOnBenchMark(context);
+        RunSimulationTestOnBenchMark(options);
         return true;
     case TesterType::DATA_OUTLIER:
-        RunSimulationTestOnDataOutlier(context);
+        RunSimulationTestOnDataOutlier(options);
         return true;
     case TesterType::MEMBER_OUTLIER:
-        RunSimulationTestOnMemberOutlier(context);
+        RunSimulationTestOnMemberOutlier(options);
         return true;
     case TesterType::MODEL_ALPHA_DATA:
-        RunSimulationTestOnModelAlphaData(context);
+        RunSimulationTestOnModelAlphaData(options);
         return true;
     case TesterType::MODEL_ALPHA_MEMBER:
-        RunSimulationTestOnModelAlphaMember(context);
+        RunSimulationTestOnModelAlphaMember(options);
         return true;
     default:
         Logger::Log(
             LogLevel::Error,
             "Invalid tester choice reached execution path: ["
-                + std::to_string(static_cast<int>(context.options.tester_choice)) + "]");
+                + std::to_string(static_cast<int>(options.tester_choice)) + "]");
         return false;
     }
 }
 
 
 } // namespace rhbm_gem::detail
+
+namespace rhbm_gem {
+
+bool HRLModelTestCommand::ExecuteImpl()
+{
+    return detail::RunHRLModelTestWorkflow(m_options);
+}
+
+} // namespace rhbm_gem

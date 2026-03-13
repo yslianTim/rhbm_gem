@@ -89,6 +89,10 @@ Current entrypoints:
 `bind_runtime` is now a private implementation detail inside `src/core/command/CommandCatalog.cpp`;
 there is no separate runtime-registry header anymore.
 
+Catalog entries are built through a shared descriptor factory in `CommandCatalog.cpp` rather than
+per-command `Bind*Runtime(...)` wrappers. The manifest still drives the generated catalog block,
+but command-specific CLI binding stays in `Bind<Command>RequestOptions(...)`.
+
 Each runtime binder:
 
 1. Creates a request object.

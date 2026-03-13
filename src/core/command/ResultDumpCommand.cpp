@@ -2,18 +2,6 @@
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-namespace rhbm_gem::detail {
-
-bool ExecuteResultDumpWorkflow(
-    DataObjectManager & data_manager,
-    const ResultDumpCommandOptions & options,
-    std::string & map_key_tag,
-    std::unordered_map<std::string, std::vector<AtomObject *>> & selected_atom_list_map,
-    std::vector<std::shared_ptr<ModelObject>> & model_object_list,
-    std::shared_ptr<MapObject> & map_object);
-
-} // namespace rhbm_gem::detail
-
 namespace {
 constexpr std::string_view kMapKey{ "map" };
 constexpr std::string_view kPrinterOption{ "--printer" };
@@ -38,17 +26,6 @@ void ResultDumpCommand::ApplyRequest(const ResultDumpRequest & request)
     SetPrinterChoice(request.printer_choice);
     SetModelKeyTagList(request.model_key_tag_list);
     SetMapFilePath(request.map_file_path);
-}
-
-bool ResultDumpCommand::ExecuteImpl()
-{
-    return detail::ExecuteResultDumpWorkflow(
-        m_data_manager,
-        m_options,
-        m_map_key_tag,
-        m_selected_atom_list_map,
-        m_model_object_list,
-        m_map_object);
 }
 
 void ResultDumpCommand::ValidateOptions()

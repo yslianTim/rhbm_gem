@@ -1,4 +1,4 @@
-#include "internal/workflow/PotentialAnalysisWorkflow.hpp"
+#include "command/PotentialAnalysisCommand.hpp"
 #include "internal/CommandDataLoader.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

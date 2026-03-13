@@ -1,6 +1,5 @@
 #include "HRLModelTestCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/workflow/HRLModelTestWorkflow.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <string_view>
@@ -29,13 +28,6 @@ void HRLModelTestCommand::ApplyRequest(const HRLModelTestRequest & request)
     SetFitRangeMaximum(request.fit_range_max);
     SetAlphaR(request.alpha_r);
     SetAlphaG(request.alpha_g);
-}
-
-bool HRLModelTestCommand::ExecuteImpl()
-{
-    return detail::RunHRLModelTestWorkflow(detail::HRLModelTestWorkflowContext{
-        m_options,
-    });
 }
 
 void HRLModelTestCommand::ValidateOptions()

@@ -183,7 +183,7 @@ void ExpectRuntimeBinderConstructs(rg::CommandId command_id)
 {
     const auto * descriptor{ FindDescriptor(command_id) };
     ASSERT_NE(descriptor, nullptr) << static_cast<int>(command_id);
-    ASSERT_NE(descriptor->bind_runtime, nullptr) << descriptor->name;
+    ASSERT_TRUE(static_cast<bool>(descriptor->bind_runtime)) << descriptor->name;
 
     CLI::App subcommand{ std::string(descriptor->name) };
     auto runner{ descriptor->bind_runtime(&subcommand) };
@@ -300,5 +300,19 @@ TEST(CommandCatalogTest, CommandTestsDoNotIncludeCommandPrivateWorkflowHeaders)
             EXPECT_EQ(content.find(forbidden), std::string::npos)
                 << entry.path().filename().string();
         }
+    }
+}
+
+TEST(CommandCatalogTest, SingleCommandPrivateWorkflowHeadersDoNotReappear)
+{
+    const auto project_root{ command_test::ProjectRootPath() };
+    const std::array<std::filesystem::path, 2> removed_headers{
+        project_root / "src" / "core" / "internal" / "workflow" / "HRLModelTestWorkflow.hpp",
+        project_root / "src" / "core" / "internal" / "workflow" / "PotentialAnalysisWorkflow.hpp",
+    };
+
+    for (const auto & path : removed_headers)
+    {
+        EXPECT_FALSE(std::filesystem::exists(path)) << path.string();
     }
 }
