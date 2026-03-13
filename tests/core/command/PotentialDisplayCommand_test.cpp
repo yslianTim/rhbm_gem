@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include "CommandValidationAssertions.hpp"
-#include "CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "command/PotentialDisplayCommand.hpp"
 
@@ -21,23 +20,6 @@ TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidatio
             command,
             "--ref-model-keylist",
             std::nullopt,
-            LogLevel::Error),
-        nullptr);
-}
-
-TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError) {
-    rg::PotentialDisplayCommand command{};
-    rg::PotentialDisplayRequest request{};
-    request.painter_choice = static_cast<rg::PainterType>(999);
-    request.model_key_tag_list = "model_key";
-    command.ApplyRequest(request);
-
-    EXPECT_FALSE(command.PrepareForExecution());
-    ASSERT_NE(
-        command_test::FindValidationIssue(
-            command,
-            "--painter",
-            rg::ValidationPhase::Parse,
             LogLevel::Error),
         nullptr);
 }

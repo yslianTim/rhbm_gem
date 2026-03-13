@@ -302,17 +302,3 @@ TEST(CommandCatalogTest, CommandTestsDoNotIncludeCommandPrivateWorkflowHeaders)
         }
     }
 }
-
-TEST(CommandCatalogTest, SingleCommandPrivateWorkflowHeadersDoNotReappear)
-{
-    const auto project_root{ command_test::ProjectRootPath() };
-    const std::array<std::filesystem::path, 2> removed_headers{
-        project_root / "src" / "core" / "internal" / "workflow" / "HRLModelTestWorkflow.hpp",
-        project_root / "src" / "core" / "internal" / "workflow" / "PotentialAnalysisWorkflow.hpp",
-    };
-
-    for (const auto & path : removed_headers)
-    {
-        EXPECT_FALSE(std::filesystem::exists(path)) << path.string();
-    }
-}

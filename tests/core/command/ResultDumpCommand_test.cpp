@@ -27,24 +27,6 @@ TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
         nullptr);
 }
 
-TEST(ResultDumpCommandTest, InvalidPrinterChoiceBecomesValidationError)
-{
-    rg::ResultDumpCommand command{};
-    rg::ResultDumpRequest request{};
-    request.printer_choice = static_cast<rg::PrinterType>(999);
-    request.model_key_tag_list = "model";
-    command.ApplyRequest(request);
-
-    EXPECT_FALSE(command.PrepareForExecution());
-    ASSERT_NE(
-        command_test::FindValidationIssue(
-            command,
-            "--printer",
-            rg::ValidationPhase::Parse,
-            LogLevel::Error),
-        nullptr);
-}
-
 TEST(ResultDumpCommandTest, ExecuteTwiceDoesNotReuseStaleLoadedModels)
 {
     command_test::ScopedTempDir temp_dir{"result_dump"};

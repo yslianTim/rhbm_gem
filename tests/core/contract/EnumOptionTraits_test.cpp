@@ -67,3 +67,10 @@ TEST(EnumOptionTraitsTest, PartialChargeTraitsStayInSync)
         BuildValueSetFromCLI<rg::PartialCharge>(),
         BuildValueSetFromBindings<rg::PartialCharge>());
 }
+
+TEST(EnumOptionTraitsTest, TesterTypeTraitsStayInSync)
+{
+    const auto cli_map{ rg::BuildEnumCLIMap<rg::TesterType>() };
+    EXPECT_EQ(cli_map.at("benchmark"), rg::TesterType::BENCHMARK);
+    EXPECT_EQ(BuildValueSetFromCLI<rg::TesterType>(), BuildValueSetFromBindings<rg::TesterType>());
+}

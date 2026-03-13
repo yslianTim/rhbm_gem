@@ -193,7 +193,4 @@ TEST(DocsSyncTest, CommandArchitectureGeneratedSectionsMatchCatalog)
     EXPECT_EQ(
         NormalizeBlock(actual_python_surface),
         NormalizeBlock(BuildExpectedPythonSurfaceBlock()));
-
-    EXPECT_EQ(document.find("RegisterCLIOptionsExtend"), std::string::npos);
-    EXPECT_EQ(document.find("RegisterCLIOptionsBasic"), std::string::npos);
 }

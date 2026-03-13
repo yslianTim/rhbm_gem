@@ -6,6 +6,7 @@
 
 #include "command/CommandBase.hpp"
 #include "CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -16,6 +17,7 @@ struct CommandOptionHelperCommandOptions : public rg::CommandOptions
     std::filesystem::path required_path;
     std::filesystem::path optional_path;
     int count{ 1 };
+    rg::PrinterType printer{ rg::PrinterType::GAUS_ESTIMATES };
 };
 
 class CommandOptionHelperCommand final
@@ -61,6 +63,18 @@ public:
     }
 
     int Count() const { return m_options.count; }
+
+    void SetPrinter(rg::PrinterType value)
+    {
+        SetValidatedEnumOption(
+            m_options.printer,
+            value,
+            "--printer",
+            rg::PrinterType::GAUS_ESTIMATES,
+            "Printer choice");
+    }
+
+    rg::PrinterType Printer() const { return m_options.printer; }
 
     void ValidateOptions() override {}
 
@@ -141,4 +155,18 @@ TEST(CommandOptionHelperTest, NormalizedScalarHelperReportsAutoCorrectedWarning)
     EXPECT_EQ(command.GetValidationIssues().front().phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(command.GetValidationIssues().front().level, LogLevel::Warning);
     EXPECT_TRUE(command.GetValidationIssues().front().auto_corrected);
+}
+
+TEST(CommandOptionHelperTest, ValidatedEnumHelperFallsBackAndReportsParseError)
+{
+    CommandOptionHelperCommand command{};
+
+    command.SetPrinter(static_cast<rg::PrinterType>(999));
+
+    EXPECT_EQ(command.Printer(), rg::PrinterType::GAUS_ESTIMATES);
+    ASSERT_EQ(command.GetValidationIssues().size(), 1u);
+    EXPECT_EQ(command.GetValidationIssues().front().option_name, "--printer");
+    EXPECT_EQ(command.GetValidationIssues().front().phase, rg::ValidationPhase::Parse);
+    EXPECT_EQ(command.GetValidationIssues().front().level, LogLevel::Error);
+    EXPECT_FALSE(command.GetValidationIssues().front().auto_corrected);
 }

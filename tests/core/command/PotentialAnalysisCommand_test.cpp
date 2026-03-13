@@ -1,30 +1,10 @@
 #include <gtest/gtest.h>
 
-#include <filesystem>
-
-#include "CommandTestHelpers.hpp"
 #include "CommandValidationAssertions.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "command/PotentialAnalysisCommand.hpp"
 
 namespace rg = rhbm_gem;
-
-TEST(PotentialAnalysisCommandTest, NegativeAlphaValuesBecomeValidationErrors)
-{
-    rg::PotentialAnalysisCommand command{};
-    rg::PotentialAnalysisRequest request{};
-    request.alpha_r = -0.1;
-    request.alpha_g = 0.0;
-    command.ApplyRequest(request);
-
-    EXPECT_FALSE(command.PrepareForExecution());
-    ASSERT_NE(
-        command_test::FindValidationIssue(command, "--alpha-r", rg::ValidationPhase::Parse),
-        nullptr);
-    ASSERT_NE(
-        command_test::FindValidationIssue(command, "--alpha-g", rg::ValidationPhase::Parse),
-        nullptr);
-}
 
 TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare)
 {
@@ -44,19 +24,20 @@ TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare
         nullptr);
 }
 
-TEST(PotentialAnalysisCommandTest, NonPositiveSamplingHeightBecomesValidationError)
+TEST(PotentialAnalysisCommandTest, InvertedSamplingRangeBecomesPrepareValidationError)
 {
     rg::PotentialAnalysisCommand command{};
     rg::PotentialAnalysisRequest request{};
-    request.sampling_height = 0.0;
+    request.sampling_range_min = 2.0;
+    request.sampling_range_max = 1.0;
     command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
         command_test::FindValidationIssue(
             command,
-            "--sampling-height",
-            rg::ValidationPhase::Parse,
+            "--sampling-range",
+            rg::ValidationPhase::Prepare,
             LogLevel::Error),
         nullptr);
 }

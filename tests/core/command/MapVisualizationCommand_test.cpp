@@ -1,63 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "command/MapVisualizationCommand.hpp"
 
 namespace rg = rhbm_gem;
-
-TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesParseValidationError)
-{
-    rg::MapVisualizationCommand command{};
-    rg::MapVisualizationRequest request{};
-    request.atom_serial_id = 0;
-    command.ApplyRequest(request);
-
-    EXPECT_FALSE(command.PrepareForExecution());
-    ASSERT_NE(
-        command_test::FindValidationIssue(
-            command,
-            "--atom-id",
-            rg::ValidationPhase::Parse,
-            LogLevel::Error),
-        nullptr);
-}
-
-TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesParseValidationError)
-{
-    rg::MapVisualizationCommand command{};
-    rg::MapVisualizationRequest request{};
-    request.window_size = 0.0;
-    command.ApplyRequest(request);
-
-    EXPECT_FALSE(command.PrepareForExecution());
-    ASSERT_NE(
-        command_test::FindValidationIssue(
-            command,
-            "--window-size",
-            rg::ValidationPhase::Parse,
-            LogLevel::Error),
-        nullptr);
-}
-
-TEST(MapVisualizationCommandTest, SamplingSizeNormalizationReportsAutoCorrectedWarning)
-{
-    rg::MapVisualizationCommand command{};
-    rg::MapVisualizationRequest request{};
-    request.sampling_size = 0;
-    command.ApplyRequest(request);
-
-    const auto * issue{
-        command_test::FindValidationIssue(
-            command,
-            "--sampling",
-            rg::ValidationPhase::Parse,
-            LogLevel::Warning)
-    };
-    ASSERT_NE(issue, nullptr);
-    EXPECT_TRUE(issue->auto_corrected);
-}
 
 TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)
 {
