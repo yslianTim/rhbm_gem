@@ -6,11 +6,6 @@
 
 #include "CommandBase.hpp"
 
-namespace CLI
-{
-    class App;
-}
-
 namespace rhbm_gem {
 
 class ModelObject;

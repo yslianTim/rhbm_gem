@@ -23,12 +23,6 @@ namespace {
 constexpr std::string_view kPainterOption{ "--painter" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
 constexpr std::string_view kRefModelKeyListOption{ "--ref-model-keylist" };
-constexpr std::string_view kPickChainOption{ "--pick-chain" };
-constexpr std::string_view kPickResidueOption{ "--pick-residue" };
-constexpr std::string_view kPickElementOption{ "--pick-element" };
-constexpr std::string_view kVetoChainOption{ "--veto-chain" };
-constexpr std::string_view kVetoResidueOption{ "--veto-residue" };
-constexpr std::string_view kVetoElementOption{ "--veto-element" };
 
 bool ParseReferenceModelKeyTagListMap(
     const std::string & value,

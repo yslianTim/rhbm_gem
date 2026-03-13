@@ -9,11 +9,6 @@
 #include "CommandBase.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 
-namespace CLI
-{
-    class App;
-}
-
 template <typename T> struct KDNode;
 
 namespace rhbm_gem {
