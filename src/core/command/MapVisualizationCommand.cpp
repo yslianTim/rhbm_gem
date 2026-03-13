@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandDataLoader.hpp"
 #include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -49,6 +50,18 @@ MapVisualizationCommand::MapVisualizationCommand() :
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
+}
+
+void MapVisualizationCommand::ApplyRequest(const MapVisualizationRequest & request)
+{
+    SetThreadSize(request.common.thread_size);
+    SetVerboseLevel(request.common.verbose_level);
+    SetFolderPath(request.common.folder_path);
+    SetModelFilePath(request.model_file_path);
+    SetMapFilePath(request.map_file_path);
+    SetAtomSerialID(request.atom_serial_id);
+    SetSamplingSize(request.sampling_size);
+    SetWindowSize(request.window_size);
 }
 
 void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)

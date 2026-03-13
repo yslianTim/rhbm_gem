@@ -13,7 +13,7 @@ struct PotentialAnalysisBondWorkflowContext
 {
     ModelObject & model_object;
     MapObject & map_object;
-    const PotentialAnalysisCommand::Options & options;
+    const PotentialAnalysisCommandOptions & options;
 };
 
 void RunPotentialAnalysisBondWorkflow(

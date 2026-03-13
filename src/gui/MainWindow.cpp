@@ -512,7 +512,7 @@ void MainWindow::StartExecution()
         m_active_command_name = "map_simulation";
         m_execution_future = std::async(std::launch::async, [request]()
         {
-            return rhbm_gem::gui::GuiCommandExecutor::ExecuteMapSimulation(request);
+            return rhbm_gem::RunMapSimulation(request);
         });
         break;
     }
@@ -522,7 +522,7 @@ void MainWindow::StartExecution()
         m_active_command_name = "potential_analysis";
         m_execution_future = std::async(std::launch::async, [request]()
         {
-            return rhbm_gem::gui::GuiCommandExecutor::ExecutePotentialAnalysis(request);
+            return rhbm_gem::RunPotentialAnalysis(request);
         });
         break;
     }
@@ -532,7 +532,7 @@ void MainWindow::StartExecution()
         m_active_command_name = "result_dump";
         m_execution_future = std::async(std::launch::async, [request]()
         {
-            return rhbm_gem::gui::GuiCommandExecutor::ExecuteResultDump(request);
+            return rhbm_gem::RunResultDump(request);
         });
         break;
     }
@@ -564,7 +564,7 @@ void MainWindow::PollExecutionState()
     OnExecutionFinished(m_execution_future.get());
 }
 
-void MainWindow::OnExecutionFinished(const rhbm_gem::gui::ExecutionResult & result)
+void MainWindow::OnExecutionFinished(const rhbm_gem::ExecutionReport & result)
 {
     const QString summary{ FormatExecutionSummary(result) };
     const QString timestamp{ QDateTime::currentDateTime().toString(Qt::ISODate) };
@@ -588,9 +588,9 @@ void MainWindow::OnExecutionFinished(const rhbm_gem::gui::ExecutionResult & resu
     m_run_button->setEnabled(true);
 }
 
-rhbm_gem::gui::MapSimulationRequest MainWindow::BuildMapSimulationRequest() const
+rhbm_gem::MapSimulationRequest MainWindow::BuildMapSimulationRequest() const
 {
-    rhbm_gem::gui::MapSimulationRequest request;
+    rhbm_gem::MapSimulationRequest request;
     request.common.thread_size = m_map_simulation.common.jobs->value();
     request.common.verbose_level = m_map_simulation.common.verbose->value();
     request.common.folder_path = ReadPath(m_map_simulation.common.folder_path);
@@ -606,9 +606,9 @@ rhbm_gem::gui::MapSimulationRequest MainWindow::BuildMapSimulationRequest() cons
     return request;
 }
 
-rhbm_gem::gui::PotentialAnalysisRequest MainWindow::BuildPotentialAnalysisRequest() const
+rhbm_gem::PotentialAnalysisRequest MainWindow::BuildPotentialAnalysisRequest() const
 {
-    rhbm_gem::gui::PotentialAnalysisRequest request;
+    rhbm_gem::PotentialAnalysisRequest request;
     request.common.thread_size = m_potential_analysis.common.jobs->value();
     request.common.verbose_level = m_potential_analysis.common.verbose->value();
     request.common.database_path = ReadPath(m_potential_analysis.common.database_path);
@@ -633,9 +633,9 @@ rhbm_gem::gui::PotentialAnalysisRequest MainWindow::BuildPotentialAnalysisReques
     return request;
 }
 
-rhbm_gem::gui::ResultDumpRequest MainWindow::BuildResultDumpRequest() const
+rhbm_gem::ResultDumpRequest MainWindow::BuildResultDumpRequest() const
 {
-    rhbm_gem::gui::ResultDumpRequest request;
+    rhbm_gem::ResultDumpRequest request;
     request.common.thread_size = m_result_dump.common.jobs->value();
     request.common.verbose_level = m_result_dump.common.verbose->value();
     request.common.database_path = ReadPath(m_result_dump.common.database_path);
@@ -647,7 +647,7 @@ rhbm_gem::gui::ResultDumpRequest MainWindow::BuildResultDumpRequest() const
     return request;
 }
 
-QString MainWindow::FormatExecutionSummary(const rhbm_gem::gui::ExecutionResult & result)
+QString MainWindow::FormatExecutionSummary(const rhbm_gem::ExecutionReport & result)
 {
     QString summary;
     summary += QString("Prepared: %1\n").arg(result.prepared ? "true" : "false");

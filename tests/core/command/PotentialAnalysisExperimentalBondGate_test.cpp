@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 
 namespace rg = rhbm_gem;
@@ -18,11 +19,13 @@ TEST(PotentialAnalysisExperimentalBondGateTest, ExecuteRemainsReachableWhenFeatu
     };
 
     rg::PotentialAnalysisCommand command{};
-    command.SetDatabasePath(database_path);
-    command.SetModelFilePath(model_path);
-    command.SetMapFilePath(map_path);
-    command.SetSavedKeyTag("bond_gate_model");
-    command.SetSamplingSize(25);
+    rg::PotentialAnalysisRequest request{};
+    request.common.database_path = database_path;
+    request.model_file_path = model_path;
+    request.map_file_path = map_path;
+    request.saved_key_tag = "bond_gate_model";
+    request.sampling_size = 25;
+    command.ApplyRequest(request);
 
     ASSERT_TRUE(command.PrepareForExecution());
     EXPECT_TRUE(command.Execute());

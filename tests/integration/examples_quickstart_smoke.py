@@ -19,7 +19,7 @@ def main() -> int:
     output = f"{result.stdout}\n{result.stderr}"
     assert result.returncode == 0, output
     assert "Imported module: rhbm_gem_module" in result.stdout, output
-    assert "Available command setters:" in result.stdout, output
+    assert "Available run functions:" in result.stdout, output
     return 0
 
 

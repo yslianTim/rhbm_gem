@@ -1,106 +1,39 @@
 import rhbm_gem_module as m
 
 
-# Snapshot guards against accidental API removals.
-EXPECTED_METHODS = {
-    "PotentialAnalysisCommand": {
-        "Execute",
-        "PrepareForExecution",
-        "HasValidationErrors",
-        "GetValidationIssues",
-        "SetAsymmetryFlag",
-        "SetFitRangeMinimum",
-        "SetFitRangeMaximum",
-        "SetAlphaR",
-        "SetAlphaG",
-        "SetModelFilePath",
-        "SetMapFilePath",
-        "SetSavedKeyTag",
-        "SetTrainingReportDir",
-        "SetSamplingSize",
-        "SetSamplingRangeMinimum",
-        "SetSamplingRangeMaximum",
-        "SetSimulationFlag",
-        "SetSimulatedMapResolution",
-    },
-    "PotentialDisplayCommand": {
-        "Execute",
-        "PrepareForExecution",
-        "HasValidationErrors",
-        "GetValidationIssues",
-        "SetPainterChoice",
-        "SetModelKeyTagList",
-        "SetRefModelKeyTagListMap",
-        "SetPickChainID",
-        "SetPickResidueType",
-        "SetPickElementType",
-        "SetVetoChainID",
-        "SetVetoResidueType",
-        "SetVetoElementType",
-    },
-    "ResultDumpCommand": {
-        "Execute",
-        "PrepareForExecution",
-        "HasValidationErrors",
-        "GetValidationIssues",
-        "SetPrinterChoice",
-        "SetModelKeyTagList",
-        "SetMapFilePath",
-    },
-    "MapSimulationCommand": {
-        "Execute",
-        "PrepareForExecution",
-        "HasValidationErrors",
-        "GetValidationIssues",
-        "SetModelFilePath",
-        "SetPotentialModelChoice",
-        "SetPartialChargeChoice",
-        "SetCutoffDistance",
-        "SetGridSpacing",
-        "SetBlurringWidthList",
-    },
-    "MapVisualizationCommand": {
-        "Execute",
-        "PrepareForExecution",
-        "HasValidationErrors",
-        "GetValidationIssues",
-        "SetModelFilePath",
-        "SetMapFilePath",
-        "SetAtomSerialID",
-        "SetSamplingSize",
-        "SetWindowSize",
-    },
-    "PositionEstimationCommand": {
-        "Execute",
-        "PrepareForExecution",
-        "HasValidationErrors",
-        "GetValidationIssues",
-        "SetMapFilePath",
-        "SetIterationCount",
-        "SetKNNSize",
-        "SetAlpha",
-        "SetThresholdRatio",
-        "SetDedupTolerance",
-    },
-    "HRLModelTestCommand": {
-        "Execute",
-        "PrepareForExecution",
-        "HasValidationErrors",
-        "GetValidationIssues",
-        "SetTesterChoice",
-        "SetFitRangeMinimum",
-        "SetFitRangeMaximum",
-        "SetAlphaR",
-        "SetAlphaG",
-    },
+EXPECTED_REQUEST_TYPES = {
+    "CommonCommandRequest",
+    "PotentialAnalysisRequest",
+    "PotentialDisplayRequest",
+    "ResultDumpRequest",
+    "MapSimulationRequest",
+    "MapVisualizationRequest",
+    "PositionEstimationRequest",
+    "HRLModelTestRequest",
+}
+
+EXPECTED_RUN_FUNCTIONS = {
+    "RunPotentialAnalysis",
+    "RunPotentialDisplay",
+    "RunResultDump",
+    "RunMapSimulation",
+    "RunMapVisualization",
+    "RunPositionEstimation",
+    "RunHRLModelTest",
 }
 
 
 def main() -> int:
-    for class_name, expected in EXPECTED_METHODS.items():
-        command = getattr(m, class_name)()
-        missing = [method for method in expected if not hasattr(command, method)]
-        assert not missing, f"{class_name} missing expected methods: {missing}"
+    for name in EXPECTED_REQUEST_TYPES:
+        assert hasattr(m, name), f"Missing request type: {name}"
+
+    for name in EXPECTED_RUN_FUNCTIONS:
+        assert hasattr(m, name), f"Missing run function: {name}"
+
+    assert hasattr(m, "ExecutionReport")
+    report = m.ExecutionReport()
+    for field in ("prepared", "executed", "validation_issues"):
+        assert hasattr(report, field), f"ExecutionReport missing field: {field}"
     return 0
 
 

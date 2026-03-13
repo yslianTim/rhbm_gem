@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandDataLoader.hpp"
 #include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -57,6 +58,19 @@ PositionEstimationCommand::PositionEstimationCommand() :
 }
 
 PositionEstimationCommand::~PositionEstimationCommand() = default;
+
+void PositionEstimationCommand::ApplyRequest(const PositionEstimationRequest & request)
+{
+    SetThreadSize(request.common.thread_size);
+    SetVerboseLevel(request.common.verbose_level);
+    SetFolderPath(request.common.folder_path);
+    SetMapFilePath(request.map_file_path);
+    SetIterationCount(request.iteration_count);
+    SetKNNSize(request.knn_size);
+    SetAlpha(request.alpha);
+    SetThresholdRatio(request.threshold_ratio);
+    SetDedupTolerance(request.dedup_tolerance);
+}
 
 void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {

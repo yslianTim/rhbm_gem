@@ -2,6 +2,7 @@
 
 #include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
 
 namespace rg = rhbm_gem;
@@ -9,7 +10,9 @@ namespace rg = rhbm_gem;
 TEST(HRLModelTestCommandTest, InvalidTesterChoiceBecomesValidationError)
 {
     rg::HRLModelTestCommand command{};
-    command.SetTesterChoice(static_cast<rg::TesterType>(999));
+    rg::HRLModelTestRequest request{};
+    request.tester_choice = static_cast<rg::TesterType>(999);
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -24,8 +27,10 @@ TEST(HRLModelTestCommandTest, InvalidTesterChoiceBecomesValidationError)
 TEST(HRLModelTestCommandTest, NegativeAlphaValuesBecomeValidationErrors)
 {
     rg::HRLModelTestCommand command{};
-    command.SetAlphaR(-0.1);
-    command.SetAlphaG(0.0);
+    rg::HRLModelTestRequest request{};
+    request.alpha_r = -0.1;
+    request.alpha_g = 0.0;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -39,8 +44,10 @@ TEST(HRLModelTestCommandTest, NegativeAlphaValuesBecomeValidationErrors)
 TEST(HRLModelTestCommandTest, FitRangeOrderingBecomesPrepareValidationError)
 {
     rg::HRLModelTestCommand command{};
-    command.SetFitRangeMinimum(2.0);
-    command.SetFitRangeMaximum(1.0);
+    rg::HRLModelTestRequest request{};
+    request.fit_range_min = 2.0;
+    request.fit_range_max = 1.0;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(

@@ -2,6 +2,7 @@
 
 #include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
 
 namespace rg = rhbm_gem;
@@ -9,7 +10,9 @@ namespace rg = rhbm_gem;
 TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesParseValidationError)
 {
     rg::MapVisualizationCommand command{};
-    command.SetAtomSerialID(0);
+    rg::MapVisualizationRequest request{};
+    request.atom_serial_id = 0;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -24,7 +27,9 @@ TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesParseValidationError)
 TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesParseValidationError)
 {
     rg::MapVisualizationCommand command{};
-    command.SetWindowSize(0.0);
+    rg::MapVisualizationRequest request{};
+    request.window_size = 0.0;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -39,7 +44,9 @@ TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesParseValidationErr
 TEST(MapVisualizationCommandTest, SamplingSizeNormalizationReportsAutoCorrectedWarning)
 {
     rg::MapVisualizationCommand command{};
-    command.SetSamplingSize(0);
+    rg::MapVisualizationRequest request{};
+    request.sampling_size = 0;
+    command.ApplyRequest(request);
 
     const auto * issue{
         command_test::FindValidationIssue(
@@ -63,10 +70,12 @@ TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
     rg::MapVisualizationCommand command{};
-    command.SetFolderPath(output_dir);
-    command.SetModelFilePath(model_path);
-    command.SetMapFilePath(map_path);
-    command.SetAtomSerialID(999);
+    rg::MapVisualizationRequest request{};
+    request.common.folder_path = output_dir;
+    request.model_file_path = model_path;
+    request.map_file_path = map_path;
+    request.atom_serial_id = 999;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.Execute());
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".pdf"), 0);
@@ -84,10 +93,12 @@ TEST(MapVisualizationCommandTest, ExecuteWritesPdfToConfiguredFolder)
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
     rg::MapVisualizationCommand command{};
-    command.SetFolderPath(output_dir);
-    command.SetModelFilePath(model_path);
-    command.SetMapFilePath(map_path);
-    command.SetAtomSerialID(1);
+    rg::MapVisualizationRequest request{};
+    request.common.folder_path = output_dir;
+    request.model_file_path = model_path;
+    request.map_file_path = map_path;
+    request.atom_serial_id = 1;
+    command.ApplyRequest(request);
 
     ASSERT_TRUE(command.Execute());
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".pdf"), 1);

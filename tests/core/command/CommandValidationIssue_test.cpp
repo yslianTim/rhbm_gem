@@ -58,6 +58,12 @@ public:
         MutateOptions([&]() { m_options.add_prepare_error = value; });
     }
 
+    void SetCommonOptionsForTest(int thread_size, int verbose_level)
+    {
+        SetThreadSize(thread_size);
+        SetVerboseLevel(verbose_level);
+    }
+
     void ValidateOptions() override
     {
         ResetPrepareIssues("--problem");
@@ -115,8 +121,7 @@ TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
 TEST(CommandValidationIssueTest, BaseNormalizationWarningsAreProgrammaticallyVisible)
 {
     ValidationIssueCommand command{};
-    command.SetThreadSize(0);
-    command.SetVerboseLevel(99);
+    command.SetCommonOptionsForTest(0, 99);
 
     const auto & issues{ command.GetValidationIssues() };
     ASSERT_EQ(issues.size(), 2u);

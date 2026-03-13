@@ -15,8 +15,9 @@ flowchart LR
     B --> C["CommandCatalog() from CommandList.def"]
     C --> D["Concrete CommandBase instances"]
 
-    E["Python bindings (pybind11)"] --> D
-    F["GUI requests (GuiCommandExecutor)"] --> D
+    E["Python bindings (pybind11)"] --> J["CommandApi::Run*"]
+    F["GUI requests (Qt MainWindow)"] --> J
+    J --> D
 
     D --> G["PrepareForExecution()"]
     G --> G1["ResetRuntimeState + ClearDataObjects"]
@@ -35,13 +36,13 @@ Top-level command membership is defined in:
 
 Each entry follows:
 
-- `RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE, PYTHON_BINDING_NAME)`
+- `RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE)`
 
 The manifest drives:
 
 - `CommandCatalog()` construction (`src/core/command/CommandCatalog.cpp`)
 - CLI subcommand registration order (`src/core/command/Application.cpp`)
-- Python module command registration (`bindings/CoreBindings.cpp`)
+- Python request/run surface (`bindings/CommandApiBindings.cpp`)
 - generated catalog/CMake/docs artifacts (`scripts/developer/generate_command_artifacts.py`)
 
 `CommandDescriptor` fields (`src/core/internal/CommandCatalog.hpp`):
@@ -76,11 +77,11 @@ CLI path:
 
 Python path:
 
-- `bindings/CoreBindings.cpp` expands `CommandList.def` and calls `BindCommand<...>()` per command.
+- `bindings/CoreBindings.cpp` registers shared types + request structs + `Run*` entrypoints.
 
 GUI path:
 
-- `GuiCommandExecutor` creates concrete command objects directly, applies request DTOs via setters, then calls `PrepareForExecution()` and `Execute()`.
+- `MainWindow` builds `CommandApi` requests and calls `Run*` entrypoints.
 
 ## 4. Concrete command contract
 
@@ -88,11 +89,12 @@ Command shape:
 
 1. Define `Options` derived from `CommandOptions`.
 2. Derive command class from `CommandWithProfileOptions<...>` or `CommandWithOptions<...>`.
-3. Implement command-local setters.
-4. Register command-local CLI options in `RegisterCLIOptionsExtend(...)`.
-5. Keep cross-field checks in `ValidateOptions()`.
-6. Reset transient runtime fields in `ResetRuntimeState()`.
-7. Keep `ExecuteImpl()` focused on orchestration.
+3. Implement `ApplyRequest(const XxxRequest&)` as the external configuration entrypoint.
+4. Keep command-local `Set*` helpers internal/private for CLI parsing and normalization.
+5. Register command-local CLI options in `RegisterCLIOptionsExtend(...)`.
+6. Keep cross-field checks in `ValidateOptions()`.
+7. Reset transient runtime fields in `ResetRuntimeState()`.
+8. Keep `ExecuteImpl()` focused on orchestration.
 
 Base `CommandOptions` fields:
 
@@ -151,7 +153,7 @@ Validation phases:
 
 | Phase | Typical source | Typical purpose |
 | --- | --- | --- |
-| `Parse` | setters | single-field validation/normalization |
+| `Parse` | `ApplyRequest(...)` and internal option setters | single-field validation/normalization |
 | `Prepare` | `ValidateOptions()` + preflight | cross-field checks and runtime preflight failures |
 
 Prepared-state invalidation rule:
@@ -202,36 +204,39 @@ Use `DataObjectDispatch` only when dispatching generic `DataObjectBase` at runti
 
 ## 9. Python binding contract
 
-Per-command binding units are explicit (`bindings/*Bindings.cpp`), module wiring is manifest-driven (`bindings/CoreBindings.cpp`).
+Python bindings expose:
 
-Binding rules:
-
-- command class name comes from manifest-generated binding traits (`bindings/internal/CommandBindingNames.generated.inc`)
-- expose command-local setters + `Execute`
-- include shared bindings via `BindCommonCommandSetters(...)` and `BindCommandDiagnostics(...)`
-- execution contract is the same `PrepareForExecution()` / `Execute()` path as C++
+- request structs (`*Request`)
+- shared diagnostics/result structs (`ValidationIssue`, `ExecutionReport`)
+- `Run*` functions mapped to `CommandApi`
 
 ### Python command surface
 
 <!-- BEGIN GENERATED: command-python-surface -->
-### Python command classes
-- `PotentialAnalysisCommand`
-- `PotentialDisplayCommand`
-- `ResultDumpCommand`
-- `MapSimulationCommand`
-- `MapVisualizationCommand`
-- `PositionEstimationCommand`
-- `HRLModelTestCommand`
+### Python request types
+- `CommonCommandRequest`
+- `PotentialAnalysisRequest`
+- `PotentialDisplayRequest`
+- `ResultDumpRequest`
+- `MapSimulationRequest`
+- `MapVisualizationRequest`
+- `PositionEstimationRequest`
+- `HRLModelTestRequest`
+
+### Python run functions
+- `RunPotentialAnalysis(...)`
+- `RunPotentialDisplay(...)`
+- `RunResultDump(...)`
+- `RunMapSimulation(...)`
+- `RunMapVisualization(...)`
+- `RunPositionEstimation(...)`
+- `RunHRLModelTest(...)`
 
 ### Shared diagnostics types
 - `LogLevel`
 - `ValidationPhase`
 - `ValidationIssue`
-
-### Shared diagnostics methods on Python commands
-- `PrepareForExecution()`
-- `HasValidationErrors()`
-- `GetValidationIssues()`
+- `ExecutionReport`
 <!-- END GENERATED: command-python-surface -->
 
 ## 10. Update checklist
@@ -241,7 +246,7 @@ When adding or changing a command:
 1. Update command implementation (`include/.../command/*.hpp`, `src/core/command/*.cpp`).
 2. Update membership and metadata in `src/core/internal/CommandList.def`.
 3. Refresh generated artifacts (`python3 scripts/developer/generate_command_artifacts.py`).
-4. Update command bindings (`bindings/*Bindings.cpp`).
+4. Update request/run bindings (`bindings/CommandApiBindings.cpp`) when command surface changes.
 5. Update command and contract tests.
 6. Keep this document and `docs/developer/adding-a-command.md` in sync.
 
@@ -250,6 +255,8 @@ When adding or changing a command:
 - `src/main.cpp`
 - `include/rhbm_gem/core/command/Application.hpp`
 - `src/core/command/Application.cpp`
+- `include/rhbm_gem/core/command/CommandApi.hpp`
+- `src/core/command/CommandApi.cpp`
 - `include/rhbm_gem/core/command/CommandBase.hpp`
 - `src/core/command/CommandBase.cpp`
 - `include/rhbm_gem/core/command/CommandMetadata.hpp`
@@ -260,11 +267,8 @@ When adding or changing a command:
 - `src/core/internal/CommandOptionBinding.hpp`
 - `src/core/internal/CommandDataLoader.hpp`
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
-- `include/rhbm_gem/gui/GuiCommandExecutor.hpp`
-- `src/gui/GuiCommandExecutor.cpp`
-- `bindings/BindingHelpers.hpp`
-- `bindings/internal/CommandBindingNames.generated.inc`
 - `bindings/CommonBindings.cpp`
+- `bindings/CommandApiBindings.cpp`
 - `bindings/CoreBindings.cpp`
 
 Representative concrete commands:

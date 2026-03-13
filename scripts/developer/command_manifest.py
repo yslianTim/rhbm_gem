@@ -15,7 +15,6 @@ class CommandEntry:
     cli_name: str
     description: str
     profile: str
-    python_binding_name: str
 
 
 COMMAND_PATTERN = re.compile(
@@ -24,8 +23,7 @@ COMMAND_PATTERN = re.compile(
     r"(?P<command>[A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
     r"\"(?P<cli>[^\"]+)\"\s*,\s*"
     r"\"(?P<desc>[^\"]*)\"\s*,\s*"
-    r"(?P<profile>[A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
-    r"\"(?P<python>[^\"]+)\"\s*"
+    r"(?P<profile>[A-Za-z_][A-Za-z0-9_]*)\s*"
     r"\)",
     re.MULTILINE,
 )
@@ -40,18 +38,15 @@ def parse_commands(path: Path) -> list[CommandEntry]:
             cli_name=match.group("cli"),
             description=match.group("desc"),
             profile=match.group("profile"),
-            python_binding_name=match.group("python"),
         )
         for match in COMMAND_PATTERN.finditer(text)
     ]
 
 
 def command_surface_paths(root: Path, command_type: str) -> list[Path]:
-    stem = command_type.removesuffix("Command")
     return [
         root / "include" / "rhbm_gem" / "core" / "command" / f"{command_type}.hpp",
         root / "src" / "core" / "command" / f"{command_type}.cpp",
-        root / "bindings" / f"{stem}Bindings.cpp",
         root / "tests" / "core" / "command" / f"{command_type}_test.cpp",
     ]
 

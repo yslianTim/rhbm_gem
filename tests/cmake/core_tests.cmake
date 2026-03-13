@@ -7,7 +7,7 @@ set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandOptionHelper_test.cpp
     core/command/CommandScalarValidationHelper_test.cpp
     core/command/CommandValidationIssue_test.cpp
-    core/command/GuiCommandExecutor_test.cpp
+    core/command/CommandApi_test.cpp
     ${RHBM_GEM_GENERATED_CORE_COMMAND_TEST_SOURCES}
 )
 

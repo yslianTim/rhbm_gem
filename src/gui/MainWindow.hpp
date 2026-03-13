@@ -5,7 +5,7 @@
 
 #include <future>
 
-#include <rhbm_gem/gui/GuiCommandExecutor.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 
 class QCheckBox;
 class QComboBox;
@@ -97,7 +97,7 @@ private:
     QPlainTextEdit * m_result_view{ nullptr };
     QTimer * m_execution_poll_timer{ nullptr };
     bool m_execution_running{ false };
-    std::future<rhbm_gem::gui::ExecutionResult> m_execution_future{};
+    std::future<rhbm_gem::ExecutionReport> m_execution_future{};
     QString m_active_command_name{};
 
     MapSimulationControls m_map_simulation{};
@@ -120,13 +120,13 @@ private:
 
     void StartExecution();
     void PollExecutionState();
-    void OnExecutionFinished(const rhbm_gem::gui::ExecutionResult & result);
+    void OnExecutionFinished(const rhbm_gem::ExecutionReport & result);
 
-    rhbm_gem::gui::MapSimulationRequest BuildMapSimulationRequest() const;
-    rhbm_gem::gui::PotentialAnalysisRequest BuildPotentialAnalysisRequest() const;
-    rhbm_gem::gui::ResultDumpRequest BuildResultDumpRequest() const;
+    rhbm_gem::MapSimulationRequest BuildMapSimulationRequest() const;
+    rhbm_gem::PotentialAnalysisRequest BuildPotentialAnalysisRequest() const;
+    rhbm_gem::ResultDumpRequest BuildResultDumpRequest() const;
 
-    static QString FormatExecutionSummary(const rhbm_gem::gui::ExecutionResult & result);
+    static QString FormatExecutionSummary(const rhbm_gem::ExecutionReport & result);
     static QString FormatValidationIssues(
         const std::vector<rhbm_gem::ValidationIssue> & issues);
     static QString ValidationPhaseLabel(rhbm_gem::ValidationPhase phase);

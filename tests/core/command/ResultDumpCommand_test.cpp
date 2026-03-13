@@ -4,6 +4,7 @@
 
 #include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
 
 namespace rg = rhbm_gem;
@@ -11,8 +12,10 @@ namespace rg = rhbm_gem;
 TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
 {
     rg::ResultDumpCommand command{};
-    command.SetPrinterChoice(rg::PrinterType::MAP_VALUE);
-    command.SetModelKeyTagList("model");
+    rg::ResultDumpRequest request{};
+    request.printer_choice = rg::PrinterType::MAP_VALUE;
+    request.model_key_tag_list = "model";
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     EXPECT_NE(
@@ -27,8 +30,10 @@ TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
 TEST(ResultDumpCommandTest, InvalidPrinterChoiceBecomesValidationError)
 {
     rg::ResultDumpCommand command{};
-    command.SetPrinterChoice(static_cast<rg::PrinterType>(999));
-    command.SetModelKeyTagList("model");
+    rg::ResultDumpRequest request{};
+    request.printer_choice = static_cast<rg::PrinterType>(999);
+    request.model_key_tag_list = "model";
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -52,17 +57,20 @@ TEST(ResultDumpCommandTest, ExecuteTwiceDoesNotReuseStaleLoadedModels)
     command_test::SeedSavedModel(database_path, model_path, "key_b", "MODEL_B");
 
     rg::ResultDumpCommand command{};
-    command.SetDatabasePath(database_path);
-    command.SetPrinterChoice(rg::PrinterType::ATOM_POSITION);
+    rg::ResultDumpRequest request{};
+    request.common.database_path = database_path;
+    request.printer_choice = rg::PrinterType::ATOM_POSITION;
 
-    command.SetFolderPath(output_dir_a);
-    command.SetModelKeyTagList("key_a");
+    request.common.folder_path = output_dir_a;
+    request.model_key_tag_list = "key_a";
+    command.ApplyRequest(request);
     ASSERT_TRUE(command.Execute());
     EXPECT_TRUE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_A.csv"));
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir_a, ".csv"), 1);
 
-    command.SetFolderPath(output_dir_b);
-    command.SetModelKeyTagList("key_b");
+    request.common.folder_path = output_dir_b;
+    request.model_key_tag_list = "key_b";
+    command.ApplyRequest(request);
     ASSERT_TRUE(command.Execute());
     EXPECT_TRUE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_B.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_A.csv"));
@@ -84,17 +92,20 @@ TEST(ResultDumpCommandTest, ExecuteUsesCurrentDatabasePathAndOutputFolderOptions
     command_test::SeedSavedModel(database_path_b, model_path, "shared_key", "MODEL_FROM_B");
 
     rg::ResultDumpCommand command{};
-    command.SetPrinterChoice(rg::PrinterType::ATOM_POSITION);
-    command.SetModelKeyTagList("shared_key");
+    rg::ResultDumpRequest request{};
+    request.printer_choice = rg::PrinterType::ATOM_POSITION;
+    request.model_key_tag_list = "shared_key";
 
-    command.SetDatabasePath(database_path_a);
-    command.SetFolderPath(output_dir_a);
+    request.common.database_path = database_path_a;
+    request.common.folder_path = output_dir_a;
+    command.ApplyRequest(request);
     ASSERT_TRUE(command.Execute());
     EXPECT_TRUE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_A.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_B.csv"));
 
-    command.SetDatabasePath(database_path_b);
-    command.SetFolderPath(output_dir_b);
+    request.common.database_path = database_path_b;
+    request.common.folder_path = output_dir_b;
+    command.ApplyRequest(request);
     ASSERT_TRUE(command.Execute());
     EXPECT_TRUE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_FROM_B.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_FROM_A.csv"));

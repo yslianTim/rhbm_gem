@@ -22,6 +22,7 @@ namespace rhbm_gem {
 class ModelObject;
 class MapObject;
 class AtomObject;
+struct MapSimulationRequest;
 
 struct MapSimulationCommandOptions : public CommandOptions
 {
@@ -51,6 +52,9 @@ private:
 public:
     explicit MapSimulationCommand();
     ~MapSimulationCommand() override = default;
+    void ApplyRequest(const MapSimulationRequest & request);
+
+private:
     void SetPotentialModelChoice(PotentialModel value);
     void SetPartialChargeChoice(PartialCharge value);
     void SetCutoffDistance(double value);
@@ -59,7 +63,6 @@ public:
     void SetGridSpacing(double value);
     void SetBlurringWidthList(const std::string & value);
 
-private:
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;

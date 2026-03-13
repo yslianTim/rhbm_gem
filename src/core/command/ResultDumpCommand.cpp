@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandOptionBinding.hpp"
 #include "internal/workflow/ResultDumpWorkflow.hpp"
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
@@ -22,6 +23,17 @@ ResultDumpCommand::ResultDumpCommand() :
         CommonOptionProfile::DatabaseWorkflow>{},
     m_map_key_tag{ kMapKey }, m_map_object{ nullptr }
 {
+}
+
+void ResultDumpCommand::ApplyRequest(const ResultDumpRequest & request)
+{
+    SetThreadSize(request.common.thread_size);
+    SetVerboseLevel(request.common.verbose_level);
+    SetFolderPath(request.common.folder_path);
+    SetDatabasePath(request.common.database_path);
+    SetPrinterChoice(request.printer_choice);
+    SetModelKeyTagList(request.model_key_tag_list);
+    SetMapFilePath(request.map_file_path);
 }
 
 void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)

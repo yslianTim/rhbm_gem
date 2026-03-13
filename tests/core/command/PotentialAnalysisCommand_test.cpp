@@ -7,6 +7,7 @@
 #include "CommandTestHelpers.hpp"
 #include "CommandValidationAssertions.hpp"
 #include "internal/PotentialAnalysisTrainingSupport.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
 
 namespace rg = rhbm_gem;
@@ -14,8 +15,10 @@ namespace rg = rhbm_gem;
 TEST(PotentialAnalysisCommandTest, NegativeAlphaValuesBecomeValidationErrors)
 {
     rg::PotentialAnalysisCommand command{};
-    command.SetAlphaR(-0.1);
-    command.SetAlphaG(0.0);
+    rg::PotentialAnalysisRequest request{};
+    request.alpha_r = -0.1;
+    request.alpha_g = 0.0;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -29,8 +32,10 @@ TEST(PotentialAnalysisCommandTest, NegativeAlphaValuesBecomeValidationErrors)
 TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare)
 {
     rg::PotentialAnalysisCommand command{};
-    command.SetSimulationFlag(true);
-    command.SetSimulatedMapResolution(0.0);
+    rg::PotentialAnalysisRequest request{};
+    request.simulation_flag = true;
+    request.simulated_map_resolution = 0.0;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -45,7 +50,9 @@ TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare
 TEST(PotentialAnalysisCommandTest, NonPositiveSamplingHeightBecomesValidationError)
 {
     rg::PotentialAnalysisCommand command{};
-    command.SetSamplingHeight(0.0);
+    rg::PotentialAnalysisRequest request{};
+    request.sampling_height = 0.0;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -60,7 +67,9 @@ TEST(PotentialAnalysisCommandTest, NonPositiveSamplingHeightBecomesValidationErr
 TEST(PotentialAnalysisCommandTest, EmptySavedKeyBecomesValidationError)
 {
     rg::PotentialAnalysisCommand command{};
-    command.SetSavedKeyTag("");
+    rg::PotentialAnalysisRequest request{};
+    request.saved_key_tag = "";
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(

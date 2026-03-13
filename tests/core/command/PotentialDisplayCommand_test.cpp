@@ -2,16 +2,19 @@
 
 #include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
 
 namespace rg = rhbm_gem;
 
 TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidationError) {
     rg::PotentialDisplayCommand command{};
-    command.SetPainterChoice(rg::PainterType::MODEL);
-    command.SetModelKeyTagList("model_key");
+    rg::PotentialDisplayRequest request{};
+    request.painter_choice = rg::PainterType::MODEL;
+    request.model_key_tag_list = "model_key";
+    request.ref_model_key_tag_list = "invalid";
+    command.ApplyRequest(request);
 
-    command.SetRefModelKeyTagListMap("invalid");
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
         command_test::FindValidationIssue(
@@ -24,8 +27,10 @@ TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidatio
 
 TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError) {
     rg::PotentialDisplayCommand command{};
-    command.SetPainterChoice(static_cast<rg::PainterType>(999));
-    command.SetModelKeyTagList("model_key");
+    rg::PotentialDisplayRequest request{};
+    request.painter_choice = static_cast<rg::PainterType>(999);
+    request.model_key_tag_list = "model_key";
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
@@ -39,9 +44,11 @@ TEST(PotentialDisplayCommandTest, InvalidPainterChoiceBecomesValidationError) {
 
 TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareValidation) {
     rg::PotentialDisplayCommand command{};
-    command.SetPainterChoice(rg::PainterType::MODEL);
-    command.SetModelKeyTagList("model_key");
-    command.SetRefModelKeyTagListMap("[with_charge]ref_a,ref_b;[no_charge]ref_c");
+    rg::PotentialDisplayRequest request{};
+    request.painter_choice = rg::PainterType::MODEL;
+    request.model_key_tag_list = "model_key";
+    request.ref_model_key_tag_list = "[with_charge]ref_a,ref_b;[no_charge]ref_c";
+    command.ApplyRequest(request);
 
     EXPECT_TRUE(command.PrepareForExecution());
     EXPECT_EQ(

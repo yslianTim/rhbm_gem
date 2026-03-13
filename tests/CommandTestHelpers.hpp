@@ -9,7 +9,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace command_test {
@@ -85,12 +85,14 @@ inline std::filesystem::path GenerateMapFile(
     const std::string & map_name = "sim_map",
     const std::string & blurring_widths = "1.0")
 {
-    rhbm_gem::MapSimulationCommand command{};
-    command.SetFolderPath(output_dir);
-    command.SetMapFileName(map_name);
-    command.SetModelFilePath(model_path);
-    command.SetBlurringWidthList(blurring_widths);
-    if (!command.Execute())
+    rhbm_gem::MapSimulationRequest request{};
+    request.common.folder_path = output_dir;
+    request.model_file_path = model_path;
+    request.map_file_name = map_name;
+    request.blurring_width_list = blurring_widths;
+
+    const auto report{ rhbm_gem::RunMapSimulation(request) };
+    if (!report.executed)
     {
         throw std::runtime_error("Failed to generate map fixture.");
     }

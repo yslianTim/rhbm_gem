@@ -190,15 +190,14 @@ void CommandBase::ReportValidationIssues() const
     }
 }
 
-bool CommandBase::HasValidationErrors(std::optional<ValidationPhase> phase) const
+bool CommandBase::HasValidationErrors() const
 {
     return std::any_of(
         m_validation_issues.begin(),
         m_validation_issues.end(),
-        [phase](const ValidationIssue & issue)
+        [](const ValidationIssue & issue)
         {
-            return issue.level == LogLevel::Error
-                && (!phase.has_value() || issue.phase == phase.value());
+            return issue.level == LogLevel::Error;
         });
 }
 

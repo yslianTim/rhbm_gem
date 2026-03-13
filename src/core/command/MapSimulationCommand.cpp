@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/command/MapSimulationCommand.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandDataLoader.hpp"
 #include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -58,6 +59,20 @@ MapSimulationCommand::MapSimulationCommand() :
         std::numeric_limits<float>::lowest(),
         std::numeric_limits<float>::lowest() }
 {
+}
+
+void MapSimulationCommand::ApplyRequest(const MapSimulationRequest & request)
+{
+    SetThreadSize(request.common.thread_size);
+    SetVerboseLevel(request.common.verbose_level);
+    SetFolderPath(request.common.folder_path);
+    SetModelFilePath(request.model_file_path);
+    SetMapFileName(request.map_file_name);
+    SetPotentialModelChoice(request.potential_model_choice);
+    SetPartialChargeChoice(request.partial_charge_choice);
+    SetCutoffDistance(request.cutoff_distance);
+    SetGridSpacing(request.grid_spacing);
+    SetBlurringWidthList(request.blurring_width_list);
 }
 
 void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)

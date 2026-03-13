@@ -19,6 +19,7 @@ namespace rhbm_gem {
 class AtomObject;
 class ModelObject;
 class MapObject;
+struct ResultDumpRequest;
 
 struct ResultDumpCommandOptions : public CommandOptions
 {
@@ -45,11 +46,13 @@ private:
 public:
     explicit ResultDumpCommand();
     ~ResultDumpCommand() override = default;
+    void ApplyRequest(const ResultDumpRequest & request);
+
+private:
     void SetPrinterChoice(PrinterType value);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetModelKeyTagList(const std::string & value);
 
-private:
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;

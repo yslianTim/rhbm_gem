@@ -16,6 +16,7 @@ namespace rhbm_gem {
 class ModelObject;
 class MapObject;
 class AtomObject;
+struct PotentialAnalysisRequest;
 
 struct PotentialAnalysisCommandOptions : public CommandOptions
 {
@@ -54,6 +55,9 @@ private:
 public:
     explicit PotentialAnalysisCommand();
     ~PotentialAnalysisCommand() override = default;
+    void ApplyRequest(const PotentialAnalysisRequest & request);
+
+private:
     void SetTrainingAlphaFlag(bool value);
     void SetAsymmetryFlag(bool value);
     void SetSimulationFlag(bool value);
@@ -71,7 +75,6 @@ public:
     void SetSamplingRangeMaximum(double value);
     void SetSamplingHeight(double value);
 
-private:
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;

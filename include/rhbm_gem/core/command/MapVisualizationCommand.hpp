@@ -16,6 +16,7 @@ namespace rhbm_gem {
 class ModelObject;
 class MapObject;
 class AtomObject;
+struct MapVisualizationRequest;
 
 struct MapVisualizationCommandOptions : public CommandOptions
 {
@@ -42,13 +43,15 @@ private:
 public:
     explicit MapVisualizationCommand();
     ~MapVisualizationCommand() override = default;
+    void ApplyRequest(const MapVisualizationRequest & request);
+
+private:
     void SetModelFilePath(const std::filesystem::path & path);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetAtomSerialID(int value);
     void SetSamplingSize(int value);
     void SetWindowSize(double value);
 
-private:
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

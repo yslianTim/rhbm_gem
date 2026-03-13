@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import inspect
-
 import rhbm_gem_module as rgm
 
 
@@ -21,16 +19,13 @@ def print_enum_members(enum_name: str) -> None:
         print(f"  - {name} = {value}")
 
 
-def print_available_setters(obj: object) -> None:
-    method_names = [
-        name for name, member in inspect.getmembers(obj, predicate=callable)
-        if name.startswith("Set")
-    ]
-    print(f"[class] {obj.__class__.__name__}")
-    if not method_names:
-        print("  - (no Set* methods exposed)")
-        return
-    for name in method_names:
+def print_request_fields(request_name: str) -> None:
+    request = getattr(rgm, request_name)()
+    fields = [name for name in dir(request) if not name.startswith("_")]
+    print(f"[request] {request_name}")
+    for name in fields:
+        if callable(getattr(request, name)):
+            continue
         print(f"  - {name}")
 
 
@@ -48,20 +43,28 @@ def main() -> int:
         print_enum_members(enum_name)
     print("")
 
-    commands = [
-        rgm.HRLModelTestCommand(),
-        rgm.MapSimulationCommand(),
-        rgm.MapVisualizationCommand(),
-        rgm.PotentialAnalysisCommand(),
-        rgm.PositionEstimationCommand(),
-        rgm.ResultDumpCommand(),
-        rgm.PotentialDisplayCommand(),
-    ]
-
-    print("Available command setters:")
-    for command in commands:
-        print_available_setters(command)
+    print("Available run functions:")
+    for name in (
+        "RunPotentialAnalysis",
+        "RunPotentialDisplay",
+        "RunResultDump",
+        "RunMapSimulation",
+        "RunMapVisualization",
+        "RunPositionEstimation",
+        "RunHRLModelTest",
+    ):
+        print(f"  - {name}")
     print("")
+
+    print("Available request fields:")
+    for request_name in (
+        "MapSimulationRequest",
+        "PotentialAnalysisRequest",
+        "ResultDumpRequest",
+    ):
+        print_request_fields(request_name)
+    print("")
+
     print("Next step:")
     print("  python3 examples/python/01_end_to_end_from_test_data.py")
     return 0

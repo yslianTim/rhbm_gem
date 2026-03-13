@@ -2,7 +2,7 @@ add_rhbm_gtest_target(rhbm_tests_integration_command
     DOMAIN integration
     INTENTS command
     SOURCES
-        integration/GuiCommandExecutorPipeline_test.cpp
+        integration/CommandApiPipeline_test.cpp
 )
 
 if(DEFINED Python_EXECUTABLE)

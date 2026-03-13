@@ -2,6 +2,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/CommandSources.generated.cmake)
 
 set(RHBM_GEM_LIBRARY_SOURCES
     core/command/Application.cpp
+    core/command/CommandApi.cpp
     core/painter/AtomPainter.cpp
     core/painter/RootPlotRenderBackend.cpp
     core/command/CommandCatalog.cpp
@@ -86,7 +87,6 @@ set(RHBM_GEM_LIBRARY_SOURCES
     utils/hrl/HRLModelAlgorithms.cpp
     utils/hrl/HRLModelTester.cpp
 
-    gui/GuiCommandExecutor.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)

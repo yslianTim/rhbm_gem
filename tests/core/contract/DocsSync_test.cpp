@@ -108,28 +108,43 @@ std::string BuildExpectedSurfaceMatrixBlock()
 
 std::string BuildExpectedPythonSurfaceBlock()
 {
-    std::vector<std::string_view> python_binding_names;
-#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE, PYTHON_BINDING_NAME) \
-    python_binding_names.emplace_back(PYTHON_BINDING_NAME);
+    std::vector<std::string_view> command_types;
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_TYPE, CLI_NAME, DESCRIPTION, PROFILE) \
+    command_types.emplace_back(#COMMAND_TYPE);
 #include "internal/CommandList.def"
 #undef RHBM_GEM_COMMAND
 
     std::ostringstream output;
-    output << "### Python command classes\n";
-    for (const auto & binding_name : python_binding_names)
+    output << "### Python request types\n";
+    output << "- `CommonCommandRequest`\n";
+    for (const auto & command_type : command_types)
     {
-        output << "- `" << binding_name << "`\n";
+        const std::string type_text{ command_type };
+        const std::string stem{
+            type_text.size() >= 7 && type_text.substr(type_text.size() - 7) == "Command"
+                ? type_text.substr(0, type_text.size() - 7)
+                : type_text
+        };
+        output << "- `" << stem << "Request`\n";
+    }
+
+    output << "\n### Python run functions\n";
+    for (const auto & command_type : command_types)
+    {
+        const std::string type_text{ command_type };
+        const std::string stem{
+            type_text.size() >= 7 && type_text.substr(type_text.size() - 7) == "Command"
+                ? type_text.substr(0, type_text.size() - 7)
+                : type_text
+        };
+        output << "- `Run" << stem << "(...)`\n";
     }
 
     output << "\n### Shared diagnostics types\n";
     output << "- `LogLevel`\n";
     output << "- `ValidationPhase`\n";
     output << "- `ValidationIssue`\n";
-
-    output << "\n### Shared diagnostics methods on Python commands\n";
-    output << "- `PrepareForExecution()`\n";
-    output << "- `HasValidationErrors()`\n";
-    output << "- `GetValidationIssues()`\n";
+    output << "- `ExecutionReport`\n";
 
     return output.str();
 }

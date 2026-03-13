@@ -78,11 +78,7 @@ public:
     virtual ~CommandBase() = default;
     bool Execute();
     bool PrepareForExecution();
-    void SetThreadSize(int value);
-    void SetVerboseLevel(int value);
-    void SetDatabasePath(const std::filesystem::path & path);
-    void SetFolderPath(const std::filesystem::path & path);
-    bool HasValidationErrors(std::optional<ValidationPhase> phase = std::nullopt) const;
+    bool HasValidationErrors() const;
     const std::vector<ValidationIssue> & GetValidationIssues() const { return m_validation_issues; }
 
 protected:
@@ -96,6 +92,10 @@ protected:
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
+    void SetThreadSize(int value);
+    void SetVerboseLevel(int value);
+    void SetDatabasePath(const std::filesystem::path & path);
+    void SetFolderPath(const std::filesystem::path & path);
 
     // Core command extension API used by concrete command setters and validators.
     template <typename Mutator>

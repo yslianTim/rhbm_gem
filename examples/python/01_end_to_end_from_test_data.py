@@ -63,9 +63,19 @@ def find_default_model(script_path: Path) -> Path:
     )
 
 
-def ensure_execute(success: bool, step_name: str) -> None:
-    if not success:
-        raise RuntimeError(f"{step_name} failed (Execute() returned false)")
+def ensure_execute(report, step_name: str) -> None:
+    if report.prepared and report.executed:
+        return
+
+    details = "\n".join(
+        f"[{issue.phase}/{issue.level}] {issue.option_name}: {issue.message}"
+        for issue in report.validation_issues
+    )
+    if not details:
+        details = "(no validation issue details)"
+    raise RuntimeError(
+        f"{step_name} failed (prepared={report.prepared}, executed={report.executed}).\n{details}"
+    )
 
 
 def main() -> int:
@@ -82,11 +92,11 @@ def main() -> int:
     database_path = args.database.resolve() if args.database else (workdir / "demo.sqlite")
 
     print("[1/3] Map simulation")
-    simulator = rgm.MapSimulationCommand()
-    simulator.SetModelFilePath(str(model_path))
-    simulator.SetFolderPath(str(maps_dir))
-    simulator.SetBlurringWidthList(args.blurring_width)
-    ensure_execute(simulator.Execute(), "MapSimulationCommand")
+    simulation_request = rgm.MapSimulationRequest()
+    simulation_request.model_file_path = str(model_path)
+    simulation_request.common.folder_path = str(maps_dir)
+    simulation_request.blurring_width_list = args.blurring_width
+    ensure_execute(rgm.RunMapSimulation(simulation_request), "RunMapSimulation")
 
     map_files = sorted(maps_dir.glob("sim_map_*.map"))
     if not map_files:
@@ -96,22 +106,22 @@ def main() -> int:
     print(f"  map:   {map_path}")
 
     print("[2/3] Potential analysis")
-    analyzer = rgm.PotentialAnalysisCommand()
-    analyzer.SetDatabasePath(str(database_path))
-    analyzer.SetModelFilePath(str(model_path))
-    analyzer.SetMapFilePath(str(map_path))
-    analyzer.SetSavedKeyTag(args.saved_key_tag)
-    analyzer.SetSamplingSize(args.sampling_size)
-    ensure_execute(analyzer.Execute(), "PotentialAnalysisCommand")
+    analysis_request = rgm.PotentialAnalysisRequest()
+    analysis_request.common.database_path = str(database_path)
+    analysis_request.model_file_path = str(model_path)
+    analysis_request.map_file_path = str(map_path)
+    analysis_request.saved_key_tag = args.saved_key_tag
+    analysis_request.sampling_size = args.sampling_size
+    ensure_execute(rgm.RunPotentialAnalysis(analysis_request), "RunPotentialAnalysis")
     print(f"  database: {database_path}")
 
     print("[3/3] Result dump")
-    dumper = rgm.ResultDumpCommand()
-    dumper.SetDatabasePath(str(database_path))
-    dumper.SetFolderPath(str(dump_dir))
-    dumper.SetModelKeyTagList(args.saved_key_tag)
-    dumper.SetPrinterChoice(rgm.PrinterType.GAUS_ESTIMATES)
-    ensure_execute(dumper.Execute(), "ResultDumpCommand")
+    dump_request = rgm.ResultDumpRequest()
+    dump_request.common.database_path = str(database_path)
+    dump_request.common.folder_path = str(dump_dir)
+    dump_request.model_key_tag_list = args.saved_key_tag
+    dump_request.printer_choice = rgm.PrinterType.GAUS_ESTIMATES
+    ensure_execute(rgm.RunResultDump(dump_request), "RunResultDump")
 
     dump_outputs = sorted(path.name for path in dump_dir.glob("*"))
     print("  dump outputs:")

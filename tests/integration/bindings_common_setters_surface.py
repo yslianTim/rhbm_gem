@@ -1,24 +1,29 @@
 import rhbm_gem_module as m
 
+REQUEST_TYPES = (
+    m.PotentialAnalysisRequest,
+    m.PotentialDisplayRequest,
+    m.ResultDumpRequest,
+    m.MapSimulationRequest,
+    m.MapVisualizationRequest,
+    m.PositionEstimationRequest,
+    m.HRLModelTestRequest,
+)
 
-# Derived from command profiles: all commands expose threading/verbose/output-folder,
-# and database commands additionally expose database-path setter.
-EXPECTED_COMMON_SETTERS = {
-    "PotentialAnalysisCommand": {"SetThreadSize", "SetVerboseLevel", "SetFolderPath", "SetDatabasePath"},
-    "PotentialDisplayCommand": {"SetThreadSize", "SetVerboseLevel", "SetFolderPath", "SetDatabasePath"},
-    "ResultDumpCommand": {"SetThreadSize", "SetVerboseLevel", "SetFolderPath", "SetDatabasePath"},
-    "MapSimulationCommand": {"SetThreadSize", "SetVerboseLevel", "SetFolderPath"},
-    "MapVisualizationCommand": {"SetThreadSize", "SetVerboseLevel", "SetFolderPath"},
-    "PositionEstimationCommand": {"SetThreadSize", "SetVerboseLevel", "SetFolderPath"},
-    "HRLModelTestCommand": {"SetThreadSize", "SetVerboseLevel", "SetFolderPath"},
+EXPECTED_COMMON_FIELDS = {
+    "thread_size",
+    "verbose_level",
+    "database_path",
+    "folder_path",
 }
 
 
 def main() -> int:
-    for class_name, expected_setters in EXPECTED_COMMON_SETTERS.items():
-        command = getattr(m, class_name)()
-        missing = [setter for setter in expected_setters if not hasattr(command, setter)]
-        assert not missing, f"{class_name} missing common setters: {missing}"
+    for request_type in REQUEST_TYPES:
+        request = request_type()
+        common = request.common
+        missing = [field for field in EXPECTED_COMMON_FIELDS if not hasattr(common, field)]
+        assert not missing, f"{request_type.__name__}.common missing fields: {missing}"
     return 0
 
 

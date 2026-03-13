@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandOptionBinding.hpp"
 #include "internal/workflow/HRLModelTestWorkflow.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -20,6 +21,18 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 HRLModelTestCommand::HRLModelTestCommand() :
     CommandWithProfileOptions<HRLModelTestCommandOptions, CommandId::ModelTest>{}
 {
+}
+
+void HRLModelTestCommand::ApplyRequest(const HRLModelTestRequest & request)
+{
+    SetThreadSize(request.common.thread_size);
+    SetVerboseLevel(request.common.verbose_level);
+    SetFolderPath(request.common.folder_path);
+    SetTesterChoice(request.tester_choice);
+    SetFitRangeMinimum(request.fit_range_min);
+    SetFitRangeMaximum(request.fit_range_max);
+    SetAlphaR(request.alpha_r);
+    SetAlphaG(request.alpha_g);
 }
 
 void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)

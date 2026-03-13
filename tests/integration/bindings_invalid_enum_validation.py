@@ -1,31 +1,25 @@
 import rhbm_gem_module as m
 
 
-def has_parse_issue(command, option_name: str) -> bool:
+def has_parse_issue(report, option_name: str) -> bool:
     return any(
         issue.option_name == option_name and issue.phase == m.ValidationPhase.Parse
-        for issue in command.GetValidationIssues()
+        for issue in report.validation_issues
     )
 
 
 def main() -> int:
+    dump = m.ResultDumpRequest()
+    dump.model_key_tag_list = ""
+    report = m.RunResultDump(dump)
+    assert not report.prepared
+    assert has_parse_issue(report, "--model-keylist")
 
-    dump = m.ResultDumpCommand()
-    dump.SetPrinterChoice(999)
-    dump.SetModelKeyTagList("model")
-    assert not dump.PrepareForExecution()
-    assert has_parse_issue(dump, "--printer")
-
-    display = m.PotentialDisplayCommand()
-    display.SetPainterChoice(999)
-    display.SetModelKeyTagList("model")
-    assert not display.PrepareForExecution()
-    assert has_parse_issue(display, "--painter")
-
-    model_test = m.HRLModelTestCommand()
-    model_test.SetTesterChoice(999)
-    assert not model_test.PrepareForExecution()
-    assert has_parse_issue(model_test, "--tester")
+    analysis = m.PotentialAnalysisRequest()
+    analysis.saved_key_tag = ""
+    report = m.RunPotentialAnalysis(analysis)
+    assert not report.prepared
+    assert has_parse_issue(report, "--save-key")
 
     return 0
 

@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandDataLoader.hpp"
 #include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -109,6 +110,23 @@ PotentialDisplayCommand::PotentialDisplayCommand() :
 }
 
 PotentialDisplayCommand::~PotentialDisplayCommand() = default;
+
+void PotentialDisplayCommand::ApplyRequest(const PotentialDisplayRequest & request)
+{
+    SetThreadSize(request.common.thread_size);
+    SetVerboseLevel(request.common.verbose_level);
+    SetFolderPath(request.common.folder_path);
+    SetDatabasePath(request.common.database_path);
+    SetPainterChoice(request.painter_choice);
+    SetModelKeyTagList(request.model_key_tag_list);
+    SetRefModelKeyTagListMap(request.ref_model_key_tag_list);
+    SetPickChainID(request.pick_chain_id);
+    SetVetoChainID(request.veto_chain_id);
+    SetPickResidueType(request.pick_residue);
+    SetVetoResidueType(request.veto_residue);
+    SetPickElementType(request.pick_element);
+    SetVetoElementType(request.veto_element);
+}
 
 void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
 {

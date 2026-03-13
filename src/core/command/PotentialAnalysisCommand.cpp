@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandOptionBinding.hpp"
 
 namespace {
@@ -39,6 +40,30 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
+}
+
+void PotentialAnalysisCommand::ApplyRequest(const PotentialAnalysisRequest & request)
+{
+    SetThreadSize(request.common.thread_size);
+    SetVerboseLevel(request.common.verbose_level);
+    SetFolderPath(request.common.folder_path);
+    SetDatabasePath(request.common.database_path);
+    SetModelFilePath(request.model_file_path);
+    SetMapFilePath(request.map_file_path);
+    SetSimulationFlag(request.simulation_flag);
+    SetSimulatedMapResolution(request.simulated_map_resolution);
+    SetSavedKeyTag(request.saved_key_tag);
+    SetTrainingReportDir(request.training_report_dir);
+    SetTrainingAlphaFlag(request.training_alpha_flag);
+    SetAsymmetryFlag(request.asymmetry_flag);
+    SetSamplingSize(request.sampling_size);
+    SetSamplingRangeMinimum(request.sampling_range_min);
+    SetSamplingRangeMaximum(request.sampling_range_max);
+    SetSamplingHeight(request.sampling_height);
+    SetFitRangeMinimum(request.fit_range_min);
+    SetFitRangeMaximum(request.fit_range_max);
+    SetAlphaR(request.alpha_r);
+    SetAlphaG(request.alpha_g);
 }
 
 void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)

@@ -24,7 +24,6 @@ class ScaffoldSpec:
     cli_name: str
     description: str
     profile: str
-    python_binding_name: str
 
 
 def _to_title_case(text: str) -> str:
@@ -70,8 +69,7 @@ def _append_command_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
         f"    {spec.command_type},\n"
         f'    "{spec.cli_name}",\n'
         f'    "{spec.description}",\n'
-        f"    {spec.profile},\n"
-        f'    "{spec.python_binding_name}")\n'
+        f"    {spec.profile})\n"
     )
     return text.rstrip() + block, True
 
@@ -172,27 +170,6 @@ bool {spec.command_type}::ExecuteImpl()
 """
 
 
-def _binding_template(spec: ScaffoldSpec) -> str:
-    return f"""#include "BindingHelpers.hpp"
-
-#include <rhbm_gem/core/command/{spec.command_type}.hpp>
-
-namespace rhbm_gem::bindings {{
-
-template <>
-void BindCommand<{spec.command_type}>(py::module_ & module)
-{{
-    auto command{{ BindCommandClass<{spec.command_type}>(module) }};
-    command
-        .def(py::init<>())
-        .def("Execute", &{spec.command_type}::Execute);
-    BindCommandDiagnostics(command);
-}}
-
-}} // namespace rhbm_gem::bindings
-"""
-
-
 def _test_template(spec: ScaffoldSpec) -> str:
     suite = f"{spec.command_type}Test"
     return f"""#include <gtest/gtest.h>
@@ -256,14 +233,12 @@ def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
     command_id = args.command_id or command_type.removesuffix("Command")
     cli_name = _to_cli_name(args.cli_name or base)
     description = args.description or f"Run {cli_name}"
-    python_binding_name = args.python_binding_name or command_type
     return ScaffoldSpec(
         command_id=command_id,
         command_type=command_type,
         cli_name=cli_name,
         description=description,
         profile=args.profile,
-        python_binding_name=python_binding_name,
     )
 
 
@@ -279,10 +254,6 @@ def main() -> int:
     )
     parser.add_argument("--cli-name", help="CLI subcommand token. Defaults to name converted to snake_case.")
     parser.add_argument("--description", help="Command description text.")
-    parser.add_argument(
-        "--python-binding-name",
-        help="Python-exposed class name. Defaults to the command class name.",
-    )
     parser.add_argument(
         "--profile",
         default="FileWorkflow",
@@ -311,12 +282,10 @@ def main() -> int:
     root = Path(__file__).resolve().parents[2]
     spec = build_spec(args)
 
-    bind_unit = f'{spec.command_type.removesuffix("Command")}Bindings.cpp'
     doc_stem = re.sub(r"(?<!^)([A-Z])", r"-\1", spec.command_type.removesuffix("Command")).lower()
     files = {
         root / "include" / "rhbm_gem" / "core" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
         root / "src" / "core" / "command" / f"{spec.command_type}.cpp": _source_template(spec),
-        root / "bindings" / bind_unit: _binding_template(spec),
         root / "tests" / "core" / "command" / f"{spec.command_type}_test.cpp": _test_template(spec),
         root / "docs" / "developer" / "commands" / f"{doc_stem}.md": _doc_template(spec),
     }

@@ -1,9 +1,7 @@
-include(${CMAKE_CURRENT_LIST_DIR}/CommandBindingUnits.generated.cmake)
-
 set(BINDINGS_SOURCES
     CommonBindings.cpp
     CoreBindings.cpp
-    ${RHBM_GEM_COMMAND_BINDING_SOURCES}
+    CommandApiBindings.cpp
 )
 
 set(BINDINGS_MODULE_TARGET rhbm_gem_module)

@@ -18,6 +18,8 @@ template <typename T> struct KDNode;
 
 namespace rhbm_gem {
 
+struct PositionEstimationRequest;
+
 struct PositionEstimationCommandOptions : public CommandOptions
 {
     int iteration_count{ 15 };
@@ -46,6 +48,9 @@ private:
 public:
     explicit PositionEstimationCommand();
     ~PositionEstimationCommand() override;
+    void ApplyRequest(const PositionEstimationRequest & request);
+
+private:
     void SetMapFilePath(const std::filesystem::path & path);
     void SetIterationCount(int value);
     void SetKNNSize(int value);
@@ -53,7 +58,6 @@ public:
     void SetThresholdRatio(double value);
     void SetDedupTolerance(double value);
 
-private:
     void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

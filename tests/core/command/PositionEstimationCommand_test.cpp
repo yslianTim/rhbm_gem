@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
 
 namespace rg = rhbm_gem;
@@ -14,8 +15,10 @@ TEST(PositionEstimationCommandTest, ExecuteDoesNotRequireDatabaseConfiguration)
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
     rg::PositionEstimationCommand command{};
-    command.SetFolderPath(output_dir);
-    command.SetMapFilePath(map_path);
+    rg::PositionEstimationRequest request{};
+    request.common.folder_path = output_dir;
+    request.map_file_path = map_path;
+    command.ApplyRequest(request);
 
     ASSERT_TRUE(command.Execute());
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".cmm"), 1);

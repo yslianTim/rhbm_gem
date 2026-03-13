@@ -19,6 +19,7 @@ namespace rhbm_gem {
 
 class DataObjectManager;
 class ModelObject;
+struct PotentialDisplayRequest;
 
 struct PotentialDisplayCommandOptions : public CommandOptions
 {
@@ -51,6 +52,9 @@ private:
 public:
     explicit PotentialDisplayCommand();
     ~PotentialDisplayCommand() override;
+    void ApplyRequest(const PotentialDisplayRequest & request);
+
+private:
     void SetPainterChoice(PainterType value);
     void SetModelKeyTagList(const std::string & value);
     void SetRefModelKeyTagListMap(const std::string & value);
@@ -61,7 +65,6 @@ public:
     void SetPickElementType(const std::string & value);
     void SetVetoElementType(const std::string & value);
 
-private:
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

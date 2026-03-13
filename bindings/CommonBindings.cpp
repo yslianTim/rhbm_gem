@@ -1,9 +1,27 @@
-#include "BindingHelpers.hpp"
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/stl/filesystem.h>
 
 #include <rhbm_gem/core/command/CommandBase.hpp>
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
+
+namespace py = pybind11;
 
 namespace rhbm_gem::bindings {
+namespace {
+
+template <typename EnumType>
+void BindEnumEntries(py::enum_<EnumType> & py_enum)
+{
+    for (const auto & entry : EnumOptionTraits<EnumType>::kBindingEntries)
+    {
+        const std::string name{ entry.token };
+        py_enum.value(name.c_str(), entry.value);
+    }
+}
+
+} // namespace
 
 void BindCommonTypes(py::module_ & module)
 {

@@ -6,7 +6,7 @@
 namespace rhbm_gem::detail {
 
 inline HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
-    const PotentialAnalysisCommand::Options & options,
+    const PotentialAnalysisCommandOptions & options,
     bool quiet_mode)
 {
     HRLExecutionOptions execution_options;

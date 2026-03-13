@@ -15,6 +15,8 @@ namespace CLI
 
 namespace rhbm_gem {
 
+struct HRLModelTestRequest;
+
 struct HRLModelTestCommandOptions : public CommandOptions
 {
     TesterType tester_choice{ TesterType::BENCHMARK };
@@ -34,13 +36,15 @@ public:
 
     explicit HRLModelTestCommand();
     ~HRLModelTestCommand() = default;
+    void ApplyRequest(const HRLModelTestRequest & request);
+
+private:
     void SetTesterChoice(TesterType value);
     void SetFitRangeMinimum(double value);
     void SetFitRangeMaximum(double value);
     void SetAlphaR(double value);
     void SetAlphaG(double value);
 
-private:
     void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     bool ExecuteImpl() override;
