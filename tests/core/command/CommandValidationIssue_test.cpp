@@ -3,9 +3,8 @@
 #include <algorithm>
 #include <vector>
 
-#include <CLI/CLI.hpp>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "command/CommandBase.hpp"
 #include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
@@ -37,8 +36,6 @@ public:
                 | rg::CommonOption::OutputFolder>{}
     {
     }
-
-    void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
 
     void SetProblematicValue(int value)
     {

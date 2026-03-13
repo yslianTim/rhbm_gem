@@ -1,7 +1,6 @@
-#include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
+#include "PotentialDisplayCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandDataLoader.hpp"
-#include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -21,11 +20,8 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 namespace {
-constexpr std::string_view kPainterFlags{ "-p,--painter" };
 constexpr std::string_view kPainterOption{ "--painter" };
-constexpr std::string_view kModelKeyListFlags{ "-k,--model-keylist" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
-constexpr std::string_view kRefModelKeyListFlags{ "-r,--ref-model-keylist" };
 constexpr std::string_view kRefModelKeyListOption{ "--ref-model-keylist" };
 constexpr std::string_view kPickChainOption{ "--pick-chain" };
 constexpr std::string_view kPickResidueOption{ "--pick-residue" };
@@ -126,57 +122,6 @@ void PotentialDisplayCommand::ApplyRequest(const PotentialDisplayRequest & reque
     SetVetoResidueType(request.veto_residue);
     SetPickElementType(request.pick_element);
     SetVetoElementType(request.veto_element);
-}
-
-void PotentialDisplayCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
-{
-    command_cli::AddEnumOption<PainterType>(
-        cmd, kPainterFlags,
-        [&](PainterType value) { SetPainterChoice(value); },
-        "Painter choice",
-        std::nullopt,
-        true);
-    command_cli::AddStringOption(
-        cmd, kModelKeyListFlags,
-        [&](const std::string & value) { SetModelKeyTagList(value); },
-        "List of model key tag to be display",
-        std::nullopt,
-        true);
-    command_cli::AddStringOption(
-        cmd, kRefModelKeyListFlags,
-        [&](const std::string & value) { SetRefModelKeyTagListMap(value); },
-        "List of reference model key tag to be display",
-        m_options.ref_model_key_tag_list);
-    command_cli::AddStringOption(
-        cmd, kPickChainOption,
-        [&](const std::string & value) { SetPickChainID(value); },
-        "Pick chain ID",
-        m_options.pick_chain_id);
-    command_cli::AddStringOption(
-        cmd, kPickResidueOption,
-        [&](const std::string & value) { SetPickResidueType(value); },
-        "Pick residue type",
-        m_options.pick_residue);
-    command_cli::AddStringOption(
-        cmd, kPickElementOption,
-        [&](const std::string & value) { SetPickElementType(value); },
-        "Pick element type",
-        m_options.pick_element);
-    command_cli::AddStringOption(
-        cmd, kVetoChainOption,
-        [&](const std::string & value) { SetVetoChainID(value); },
-        "Veto chain ID",
-        m_options.veto_chain_id);
-    command_cli::AddStringOption(
-        cmd, kVetoResidueOption,
-        [&](const std::string & value) { SetVetoResidueType(value); },
-        "Veto residue type",
-        m_options.veto_residue);
-    command_cli::AddStringOption(
-        cmd, kVetoElementOption,
-        [&](const std::string & value) { SetVetoElementType(value); },
-        "Veto element type",
-        m_options.veto_element);
 }
 
 bool PotentialDisplayCommand::ExecuteImpl()

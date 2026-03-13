@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <filesystem>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace CLI
@@ -52,8 +52,6 @@ private:
     void SetPrinterChoice(PrinterType value);
     void SetMapFilePath(const std::filesystem::path & path);
     void SetModelKeyTagList(const std::string & value);
-
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

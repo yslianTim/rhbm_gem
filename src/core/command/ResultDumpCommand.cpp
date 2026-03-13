@@ -1,16 +1,12 @@
-#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include "ResultDumpCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/CommandOptionBinding.hpp"
 #include "internal/workflow/ResultDumpWorkflow.hpp"
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kPrinterFlags{ "-p,--printer" };
 constexpr std::string_view kPrinterOption{ "--printer" };
-constexpr std::string_view kModelKeyListFlags{ "-k,--model-keylist" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
-constexpr std::string_view kMapFlags{ "-m,--map" };
 constexpr std::string_view kMapOption{ "--map" };
 }
 
@@ -34,27 +30,6 @@ void ResultDumpCommand::ApplyRequest(const ResultDumpRequest & request)
     SetPrinterChoice(request.printer_choice);
     SetModelKeyTagList(request.model_key_tag_list);
     SetMapFilePath(request.map_file_path);
-}
-
-void ResultDumpCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
-{
-    command_cli::AddEnumOption<PrinterType>(
-        cmd, kPrinterFlags,
-        [&](PrinterType value) { SetPrinterChoice(value); },
-        "Printer choice",
-        std::nullopt,
-        true);
-    command_cli::AddStringOption(
-        cmd, kModelKeyListFlags,
-        [&](const std::string & value) { SetModelKeyTagList(value); },
-        "List of model key tag to be display",
-        std::nullopt,
-        true);
-    command_cli::AddPathOption(
-        cmd, kMapFlags,
-        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
-        "Map file path",
-        m_options.map_file_path);
 }
 
 bool ResultDumpCommand::ExecuteImpl()

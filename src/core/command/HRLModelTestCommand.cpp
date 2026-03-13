@@ -1,6 +1,5 @@
-#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
+#include "HRLModelTestCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/CommandOptionBinding.hpp"
 #include "internal/workflow/HRLModelTestWorkflow.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -9,7 +8,6 @@
 namespace rhbm_gem {
 
 namespace {
-constexpr std::string_view kTesterFlags{ "-t,--tester" };
 constexpr std::string_view kTesterOption{ "--tester" };
 constexpr std::string_view kFitMinOption{ "--fit-min" };
 constexpr std::string_view kFitMaxOption{ "--fit-max" };
@@ -33,35 +31,6 @@ void HRLModelTestCommand::ApplyRequest(const HRLModelTestRequest & request)
     SetFitRangeMaximum(request.fit_range_max);
     SetAlphaR(request.alpha_r);
     SetAlphaG(request.alpha_g);
-}
-
-void HRLModelTestCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
-{
-    command_cli::AddEnumOption<TesterType>(
-        cmd, kTesterFlags,
-        [&](TesterType value) { SetTesterChoice(value); },
-        "Tester option",
-        TesterType::DATA_OUTLIER);
-    command_cli::AddScalarOption<double>(
-        cmd, kFitMinOption,
-        [&](double value) { SetFitRangeMinimum(value); },
-        "Minimum fitting range",
-        m_options.fit_range_min);
-    command_cli::AddScalarOption<double>(
-        cmd, kFitMaxOption,
-        [&](double value) { SetFitRangeMaximum(value); },
-        "Maximum fitting range",
-        m_options.fit_range_max);
-    command_cli::AddScalarOption<double>(
-        cmd, kAlphaROption,
-        [&](double value) { SetAlphaR(value); },
-        "Alpha value for R",
-        m_options.alpha_r);
-    command_cli::AddScalarOption<double>(
-        cmd, kAlphaGOption,
-        [&](double value) { SetAlphaG(value); },
-        "Alpha value for G",
-        m_options.alpha_g);
 }
 
 bool HRLModelTestCommand::ExecuteImpl()

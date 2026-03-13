@@ -1,7 +1,6 @@
-#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
+#include "PositionEstimationCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandDataLoader.hpp"
-#include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include "workflow/DataObjectWorkflowOps.hpp"
@@ -27,7 +26,6 @@
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kMapFlags{ "-m,--map" };
 constexpr std::string_view kMapOption{ "--map" };
 constexpr std::string_view kIterationOption{ "--iter" };
 constexpr std::string_view kKnnOption{ "--knn" };
@@ -70,41 +68,6 @@ void PositionEstimationCommand::ApplyRequest(const PositionEstimationRequest & r
     SetAlpha(request.alpha);
     SetThresholdRatio(request.threshold_ratio);
     SetDedupTolerance(request.dedup_tolerance);
-}
-
-void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
-{
-    command_cli::AddPathOption(
-        cmd, kMapFlags,
-        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
-        "Map file path",
-        std::nullopt,
-        true);
-    command_cli::AddScalarOption<int>(
-        cmd, kIterationOption,
-        [&](int value) { SetIterationCount(value); },
-        "Iteration count for estimation",
-        m_options.iteration_count);
-    command_cli::AddScalarOption<int>(
-        cmd, kKnnOption,
-        [&](int value) { SetKNNSize(value); },
-        "KNN size for estimation",
-        static_cast<int>(m_options.knn_size));
-    command_cli::AddScalarOption<double>(
-        cmd, kAlphaOption,
-        [&](double value) { SetAlpha(value); },
-        "Alpha value for robust regression",
-        static_cast<double>(m_options.alpha));
-    command_cli::AddScalarOption<double>(
-        cmd, kThresholdOption,
-        [&](double value) { SetThresholdRatio(value); },
-        "Ratio of threshold of map values",
-        static_cast<double>(m_options.threshold_ratio));
-    command_cli::AddScalarOption<double>(
-        cmd, kDedupToleranceOption,
-        [&](double value) { SetDedupTolerance(value); },
-        "Tolerance for deduplicating points",
-        static_cast<double>(m_options.dedup_tolerance));
 }
 
 bool PositionEstimationCommand::ExecuteImpl()

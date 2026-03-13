@@ -1,6 +1,6 @@
 #pragma once
 
-#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
+#include "command/HRLModelTestCommand.hpp"
 
 namespace rhbm_gem::detail {
 

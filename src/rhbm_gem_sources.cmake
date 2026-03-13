@@ -3,6 +3,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/CommandSources.generated.cmake)
 set(RHBM_GEM_LIBRARY_SOURCES
     core/command/Application.cpp
     core/command/CommandApi.cpp
+    core/command/CommandRuntimeRegistry.cpp
     core/painter/AtomPainter.cpp
     core/painter/RootPlotRenderBackend.cpp
     core/command/CommandCatalog.cpp

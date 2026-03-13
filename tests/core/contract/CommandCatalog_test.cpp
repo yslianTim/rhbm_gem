@@ -8,14 +8,7 @@
 #include <vector>
 
 #include "internal/CommandCatalog.hpp"
-#include <rhbm_gem/core/command/CommandBase.hpp>
-#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
-#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
-#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
-#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
-#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
-#include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
-#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include <CLI/CLI.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -33,43 +26,43 @@ constexpr std::array<ExpectedCommandMetadata, 7> kExpectedCommandMetadata{{
     {
         rg::CommandId::PotentialAnalysis,
         "potential_analysis",
-        rg::PotentialAnalysisCommand::kCommonOptions,
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::DatabaseWorkflow),
         true
     },
     {
         rg::CommandId::PotentialDisplay,
         "potential_display",
-        rg::PotentialDisplayCommand::kCommonOptions,
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::DatabaseWorkflow),
         true
     },
     {
         rg::CommandId::ResultDump,
         "result_dump",
-        rg::ResultDumpCommand::kCommonOptions,
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::DatabaseWorkflow),
         true
     },
     {
         rg::CommandId::MapSimulation,
         "map_simulation",
-        rg::MapSimulationCommand::kCommonOptions,
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow),
         false
     },
     {
         rg::CommandId::MapVisualization,
         "map_visualization",
-        rg::MapVisualizationCommand::kCommonOptions,
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow),
         false
     },
     {
         rg::CommandId::PositionEstimation,
         "position_estimation",
-        rg::PositionEstimationCommand::kCommonOptions,
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow),
         false
     },
     {
         rg::CommandId::ModelTest,
         "model_test",
-        rg::HRLModelTestCommand::kCommonOptions,
+        rg::CommonOptionMaskForProfile(rg::CommonOptionProfile::FileWorkflow),
         false
     }
 }};
@@ -89,17 +82,15 @@ const rg::CommandDescriptor * FindDescriptor(rg::CommandId command_id)
     return iter == catalog.end() ? nullptr : &(*iter);
 }
 
-template <typename CommandType>
-void ExpectFactoryConstructs(rg::CommandId command_id)
+void ExpectRuntimeBinderConstructs(rg::CommandId command_id)
 {
     const auto * descriptor{ FindDescriptor(command_id) };
     ASSERT_NE(descriptor, nullptr) << static_cast<int>(command_id);
-    ASSERT_NE(descriptor->factory, nullptr) << descriptor->name;
-    EXPECT_EQ(descriptor->id, CommandType::kCommandId) << descriptor->name;
-    EXPECT_EQ(descriptor->common_options, CommandType::kCommonOptions) << descriptor->name;
-    auto command{ descriptor->factory() };
-    ASSERT_NE(command, nullptr) << descriptor->name;
-    EXPECT_NE(dynamic_cast<CommandType *>(command.get()), nullptr) << descriptor->name;
+    ASSERT_NE(descriptor->bind_runtime, nullptr) << descriptor->name;
+
+    CLI::App subcommand{ std::string(descriptor->name) };
+    auto runner{ descriptor->bind_runtime(&subcommand) };
+    EXPECT_TRUE(static_cast<bool>(runner));
 }
 
 } // namespace
@@ -134,13 +125,13 @@ TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
     EXPECT_EQ(unique_names.size(), catalog.size());
 }
 
-TEST(CommandCatalogTest, FactoriesConstructCommandsWithMatchingMetadata)
+TEST(CommandCatalogTest, RuntimeBindersArePresentForAllCommands)
 {
-    ExpectFactoryConstructs<rg::PotentialAnalysisCommand>(rg::CommandId::PotentialAnalysis);
-    ExpectFactoryConstructs<rg::PotentialDisplayCommand>(rg::CommandId::PotentialDisplay);
-    ExpectFactoryConstructs<rg::ResultDumpCommand>(rg::CommandId::ResultDump);
-    ExpectFactoryConstructs<rg::MapSimulationCommand>(rg::CommandId::MapSimulation);
-    ExpectFactoryConstructs<rg::MapVisualizationCommand>(rg::CommandId::MapVisualization);
-    ExpectFactoryConstructs<rg::PositionEstimationCommand>(rg::CommandId::PositionEstimation);
-    ExpectFactoryConstructs<rg::HRLModelTestCommand>(rg::CommandId::ModelTest);
+    ExpectRuntimeBinderConstructs(rg::CommandId::PotentialAnalysis);
+    ExpectRuntimeBinderConstructs(rg::CommandId::PotentialDisplay);
+    ExpectRuntimeBinderConstructs(rg::CommandId::ResultDump);
+    ExpectRuntimeBinderConstructs(rg::CommandId::MapSimulation);
+    ExpectRuntimeBinderConstructs(rg::CommandId::MapVisualization);
+    ExpectRuntimeBinderConstructs(rg::CommandId::PositionEstimation);
+    ExpectRuntimeBinderConstructs(rg::CommandId::ModelTest);
 }

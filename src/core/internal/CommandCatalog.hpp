@@ -1,15 +1,21 @@
 #pragma once
 
-#include <memory>
+#include <functional>
 #include <string_view>
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
+
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
-class CommandBase;
-using CommandFactory = std::unique_ptr<CommandBase>(*)();
+using CommandRunner = std::function<ExecutionReport()>;
+using CommandRuntimeBinder = CommandRunner (*)(CLI::App *);
 
 struct CommandDescriptor
 {
@@ -17,7 +23,7 @@ struct CommandDescriptor
     std::string_view name;
     std::string_view description;
     CommonOptionMask common_options;
-    CommandFactory factory;
+    CommandRuntimeBinder bind_runtime;
 };
 
 const std::vector<CommandDescriptor> & CommandCatalog();

@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
+#include "command/PotentialAnalysisCommand.hpp"
 #include "internal/PotentialAnalysisExecutionOptions.hpp"
 #include "internal/CommandDataLoader.hpp"
 #include "internal/PotentialAnalysisTrainingSupport.hpp"

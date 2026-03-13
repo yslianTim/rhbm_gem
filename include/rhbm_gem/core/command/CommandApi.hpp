@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include <rhbm_gem/core/command/CommandContract.hpp>
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rhbm_gem {

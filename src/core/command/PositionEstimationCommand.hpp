@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandBase.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 
 namespace CLI
@@ -57,8 +57,6 @@ private:
     void SetAlpha(double value);
     void SetThresholdRatio(double value);
     void SetDedupTolerance(double value);
-
-    void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();

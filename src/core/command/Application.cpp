@@ -1,11 +1,10 @@
 #include <rhbm_gem/core/command/Application.hpp>
 #include "internal/CommandCatalog.hpp"
-#include <rhbm_gem/core/command/CommandBase.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
-#include <memory>
 #include <CLI/CLI.hpp>
+#include <utility>
 
 namespace rhbm_gem {
 
@@ -20,18 +19,17 @@ void Application::RegisterAllCommands()
 {
     for (const auto & descriptor : CommandCatalog())
     {
-        auto command_object{ descriptor.factory() };
         CLI::App * command{
             m_cli_app.add_subcommand(
                 std::string(descriptor.name),
                 std::string(descriptor.description))
         };
-        command_object->RegisterCLIOptions(command);
+        auto run_command{ descriptor.bind_runtime(command) };
 
-        auto shared_cmd{ std::shared_ptr<CommandBase>(std::move(command_object)) };
-        command->callback([cmd = std::move(shared_cmd)]() {
+        command->callback([run = std::move(run_command)]() {
             ScopeTimer timer("Command in Application");
-            if (!cmd->Execute())
+            const auto report{ run() };
+            if (!report.executed)
             {
                 throw CLI::RuntimeError(1);
             }

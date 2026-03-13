@@ -1,12 +1,12 @@
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
-#include <rhbm_gem/core/command/HRLModelTestCommand.hpp>
-#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
-#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
-#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
-#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
-#include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
-#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include "HRLModelTestCommand.hpp"
+#include "MapSimulationCommand.hpp"
+#include "MapVisualizationCommand.hpp"
+#include "PositionEstimationCommand.hpp"
+#include "PotentialAnalysisCommand.hpp"
+#include "PotentialDisplayCommand.hpp"
+#include "ResultDumpCommand.hpp"
 
 namespace rhbm_gem {
 namespace {

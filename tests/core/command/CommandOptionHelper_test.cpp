@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "command/CommandBase.hpp"
 #include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
@@ -38,8 +38,6 @@ public:
                 | rg::CommonOption::OutputFolder>{}
     {
     }
-
-    void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
 
     void SetRequiredPath(const std::filesystem::path & value)
     {

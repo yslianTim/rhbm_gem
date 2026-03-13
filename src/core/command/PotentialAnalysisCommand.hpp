@@ -4,7 +4,7 @@
 #include <string>
 #include <filesystem>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandBase.hpp"
 
 namespace CLI
 {
@@ -74,8 +74,6 @@ private:
     void SetSamplingRangeMinimum(double value);
     void SetSamplingRangeMaximum(double value);
     void SetSamplingHeight(double value);
-
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

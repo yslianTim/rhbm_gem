@@ -3,7 +3,7 @@
 #include "CommandValidationAssertions.hpp"
 #include "CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/PotentialDisplayCommand.hpp>
+#include "command/PotentialDisplayCommand.hpp"
 
 namespace rg = rhbm_gem;
 

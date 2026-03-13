@@ -1,23 +1,17 @@
-#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
+#include "PotentialAnalysisCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/CommandOptionBinding.hpp"
 
 namespace {
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kModelFlags{ "-a,--model" };
 constexpr std::string_view kModelOption{ "--model" };
-constexpr std::string_view kMapFlags{ "-m,--map" };
 constexpr std::string_view kMapOption{ "--map" };
 constexpr std::string_view kTrainingReportDirOption{ "--training-report-dir" };
 constexpr std::string_view kSimulationOption{ "--simulation" };
-constexpr std::string_view kSimResolutionFlags{ "-r,--sim-resolution" };
 constexpr std::string_view kSimResolutionOption{ "--sim-resolution" };
-constexpr std::string_view kSaveKeyFlags{ "-k,--save-key" };
 constexpr std::string_view kSaveKeyOption{ "--save-key" };
 constexpr std::string_view kTrainingAlphaOption{ "--training-alpha" };
 constexpr std::string_view kAsymmetryOption{ "--asymmetry" };
-constexpr std::string_view kSamplingFlags{ "-s,--sampling" };
 constexpr std::string_view kSamplingOption{ "--sampling" };
 constexpr std::string_view kSamplingMinOption{ "--sampling-min" };
 constexpr std::string_view kSamplingMaxOption{ "--sampling-max" };
@@ -64,93 +58,6 @@ void PotentialAnalysisCommand::ApplyRequest(const PotentialAnalysisRequest & req
     SetFitRangeMaximum(request.fit_range_max);
     SetAlphaR(request.alpha_r);
     SetAlphaG(request.alpha_g);
-}
-
-void PotentialAnalysisCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
-{
-    command_cli::AddPathOption(
-        cmd, kModelFlags,
-        [&](const std::filesystem::path & value) { SetModelFilePath(value); },
-        "Model file path",
-        std::nullopt,
-        true);
-    command_cli::AddPathOption(
-        cmd, kMapFlags,
-        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
-        "Map file path",
-        std::nullopt,
-        true);
-    command_cli::AddPathOption(
-        cmd, kTrainingReportDirOption,
-        [&](const std::filesystem::path & value) { SetTrainingReportDir(value); },
-        "Optional output directory for alpha training reports",
-        std::nullopt,
-        false);
-    command_cli::AddScalarOption<bool>(
-        cmd, kSimulationOption,
-        [&](bool value) { SetSimulationFlag(value); },
-        "Simulation flag",
-        m_options.is_simulation);
-    command_cli::AddScalarOption<double>(
-        cmd, kSimResolutionFlags,
-        [&](double value) { SetSimulatedMapResolution(value); },
-        "Set simulated map's resolution (blurring width)",
-        m_options.resolution_simulation);
-    command_cli::AddStringOption(
-        cmd, kSaveKeyFlags,
-        [&](const std::string & value) { SetSavedKeyTag(value); },
-        "New key tag for saving ModelObject results into database",
-        m_options.saved_key_tag);
-    command_cli::AddScalarOption<bool>(
-        cmd, kTrainingAlphaOption,
-        [&](bool value) { SetTrainingAlphaFlag(value); },
-        "Turn On/Off alpha training flag",
-        m_options.use_training_alpha);
-    command_cli::AddScalarOption<bool>(
-        cmd, kAsymmetryOption,
-        [&](bool value) { SetAsymmetryFlag(value); },
-        "Turn On/Off asymmetry flag",
-        m_options.is_asymmetry);
-    command_cli::AddScalarOption<int>(
-        cmd, kSamplingFlags,
-        [&](int value) { SetSamplingSize(value); },
-        "Number of sampling points per atom",
-        m_options.sampling_size);
-    command_cli::AddScalarOption<double>(
-        cmd, kSamplingMinOption,
-        [&](double value) { SetSamplingRangeMinimum(value); },
-        "Minimum sampling range",
-        m_options.sampling_range_min);
-    command_cli::AddScalarOption<double>(
-        cmd, kSamplingMaxOption,
-        [&](double value) { SetSamplingRangeMaximum(value); },
-        "Maximum sampling range",
-        m_options.sampling_range_max);
-    command_cli::AddScalarOption<double>(
-        cmd, kSamplingHeightOption,
-        [&](double value) { SetSamplingHeight(value); },
-        "Maximum sampling height",
-        m_options.sampling_height);
-    command_cli::AddScalarOption<double>(
-        cmd, kFitMinOption,
-        [&](double value) { SetFitRangeMinimum(value); },
-        "Minimum fitting range",
-        m_options.fit_range_min);
-    command_cli::AddScalarOption<double>(
-        cmd, kFitMaxOption,
-        [&](double value) { SetFitRangeMaximum(value); },
-        "Maximum fitting range",
-        m_options.fit_range_max);
-    command_cli::AddScalarOption<double>(
-        cmd, kAlphaROption,
-        [&](double value) { SetAlphaR(value); },
-        "Alpha value for R",
-        m_options.alpha_r);
-    command_cli::AddScalarOption<double>(
-        cmd, kAlphaGOption,
-        [&](double value) { SetAlphaG(value); },
-        "Alpha value for G",
-        m_options.alpha_g);
 }
 
 bool PotentialAnalysisCommand::ExecuteImpl()

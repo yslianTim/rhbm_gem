@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace CLI
@@ -62,8 +62,6 @@ private:
     void SetMapFileName(const std::string & value);
     void SetGridSpacing(double value);
     void SetBlurringWidthList(const std::string & value);
-
-    void RegisterCLIOptionsExtend(::CLI::App * cmd) override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

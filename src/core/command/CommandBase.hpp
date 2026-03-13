@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cstdint>
 #include <cmath>
-#include <cstdlib>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -12,56 +10,15 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
+#include <rhbm_gem/core/command/CommandContract.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
-
-namespace CLI
-{
-    class App;
-}
 
 namespace rhbm_gem {
 
 constexpr CommonOptionMask kDefaultCommandCommonOptions{
     CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)
-};
-
-inline std::filesystem::path GetDefaultDataRootPath()
-{
-    if (const char * configured_root{ std::getenv("RHBM_GEM_DATA_DIR") };
-        configured_root != nullptr && configured_root[0] != '\0')
-    {
-        return std::filesystem::path(configured_root);
-    }
-
-    if (const char * home{ std::getenv("HOME") };
-        home != nullptr && home[0] != '\0')
-    {
-        return std::filesystem::path(home) / ".rhbmgem" / "data";
-    }
-
-    return std::filesystem::path(".rhbmgem") / "data";
-}
-
-inline std::filesystem::path GetDefaultDatabasePath()
-{
-    return GetDefaultDataRootPath() / "database.sqlite";
-}
-
-enum class ValidationPhase : std::uint8_t
-{
-    Parse = 0,
-    Prepare = 1
-};
-
-struct ValidationIssue
-{
-    std::string option_name;
-    ValidationPhase phase;
-    LogLevel level;
-    std::string message;
-    bool auto_corrected{ false };
 };
 
 struct CommandOptions
@@ -87,8 +44,6 @@ protected:
 
     CommandBase();
 
-    // Concrete command lifecycle hooks.
-    virtual void RegisterCLIOptionsExtend(::CLI::App * command) = 0;
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
@@ -236,16 +191,12 @@ protected:
         std::string_view extension) const;
 
 private:
-    friend class Application;
-
     virtual const CommandOptions & GetOptions() const = 0;
     virtual CommandOptions & GetOptions() = 0;
     virtual CommonOptionMask GetCommonOptionsMask() const = 0;
 
     bool m_is_prepared_for_execution{ false };
     void InvalidatePreparedState();
-    void RegisterCLIOptions(::CLI::App * command);
-    void RegisterCLIOptionsBasic(::CLI::App * command);
     void BeginPreparationPass();
     bool RunValidationPass();
     bool RunFilesystemPreflight();

@@ -2,9 +2,8 @@
 
 #include <vector>
 
-#include <CLI/CLI.hpp>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "command/CommandBase.hpp"
 #include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
@@ -41,8 +40,6 @@ public:
     int reset_count{ 0 };
     int execute_impl_count{ 0 };
     std::vector<int> runtime_state{};
-
-    void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
 
     void SetFailPrepare(bool value)
     {

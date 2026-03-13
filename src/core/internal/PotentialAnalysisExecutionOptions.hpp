@@ -1,6 +1,6 @@
 #pragma once
 
-#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
+#include "command/PotentialAnalysisCommand.hpp"
 #include <rhbm_gem/utils/hrl/HRLModelTypes.hpp>
 
 namespace rhbm_gem::detail {

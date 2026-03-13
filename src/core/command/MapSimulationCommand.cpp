@@ -1,7 +1,6 @@
-#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
+#include "MapSimulationCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandDataLoader.hpp"
-#include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -22,27 +21,12 @@
 
 namespace {
 constexpr std::string_view kModelKey{ "model" };
-constexpr std::string_view kModelFlags{ "-a,--model" };
 constexpr std::string_view kModelOption{ "--model" };
-constexpr std::string_view kMapNameFlags{ "-n,--name" };
-constexpr std::string_view kCutoffFlags{ "-c,--cut-off" };
 constexpr std::string_view kPotentialModelOption{ "--potential-model" };
 constexpr std::string_view kChargeOption{ "--charge" };
 constexpr std::string_view kCutoffOption{ "--cut-off" };
-constexpr std::string_view kGridSpacingFlags{ "-g,--grid-spacing" };
 constexpr std::string_view kGridSpacingOption{ "--grid-spacing" };
 constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
-
-std::string SerializeBlurringWidths(const std::vector<double> & widths)
-{
-    std::string output;
-    for (size_t index = 0; index < widths.size(); ++index)
-    {
-        if (index != 0) output += ",";
-        output += StringHelper::ToStringWithPrecision<double>(widths[index], 2);
-    }
-    return output;
-}
 }
 
 namespace rhbm_gem {
@@ -73,46 +57,6 @@ void MapSimulationCommand::ApplyRequest(const MapSimulationRequest & request)
     SetCutoffDistance(request.cutoff_distance);
     SetGridSpacing(request.grid_spacing);
     SetBlurringWidthList(request.blurring_width_list);
-}
-
-void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
-{
-    command_cli::AddPathOption(
-        cmd, kModelFlags,
-        [&](const std::filesystem::path & value) { SetModelFilePath(value); },
-        "Model file path",
-        std::nullopt,
-        true);
-    command_cli::AddStringOption(
-        cmd, kMapNameFlags,
-        [&](const std::string & value) { SetMapFileName(value); },
-        "File name for output map files",
-        m_options.map_file_name);
-    command_cli::AddEnumOption<PotentialModel>(
-        cmd, kPotentialModelOption,
-        [&](PotentialModel value) { SetPotentialModelChoice(value); },
-        "Atomic potential model option",
-        PotentialModel::FIVE_GAUS_CHARGE);
-    command_cli::AddEnumOption<PartialCharge>(
-        cmd, kChargeOption,
-        [&](PartialCharge value) { SetPartialChargeChoice(value); },
-        "Partial charge table option",
-        PartialCharge::PARTIAL);
-    command_cli::AddScalarOption<double>(
-        cmd, kCutoffFlags,
-        [&](double value) { SetCutoffDistance(value); },
-        "Cutoff distance",
-        m_options.cutoff_distance);
-    command_cli::AddScalarOption<double>(
-        cmd, kGridSpacingFlags,
-        [&](double value) { SetGridSpacing(value); },
-        "Grid spacing",
-        m_options.grid_spacing);
-    command_cli::AddStringOption(
-        cmd, kBlurringWidthOption,
-        [&](const std::string & value) { SetBlurringWidthList(value); },
-        "Blurring width (list) setting",
-        SerializeBlurringWidths(m_options.blurring_width_list));
 }
 
 bool MapSimulationCommand::ExecuteImpl()

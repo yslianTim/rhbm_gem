@@ -5,7 +5,7 @@
 #include <vector>
 #include <Eigen/Dense>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace CLI
@@ -44,8 +44,6 @@ private:
     void SetFitRangeMaximum(double value);
     void SetAlphaR(double value);
     void SetAlphaG(double value);
-
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ValidateOptions() override;
     bool ExecuteImpl() override;
 };

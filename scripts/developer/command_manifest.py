@@ -45,7 +45,7 @@ def parse_commands(path: Path) -> list[CommandEntry]:
 
 def command_surface_paths(root: Path, command_type: str) -> list[Path]:
     return [
-        root / "include" / "rhbm_gem" / "core" / "command" / f"{command_type}.hpp",
+        root / "src" / "core" / "command" / f"{command_type}.hpp",
         root / "src" / "core" / "command" / f"{command_type}.cpp",
         root / "tests" / "core" / "command" / f"{command_type}_test.cpp",
     ]

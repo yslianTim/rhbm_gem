@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <string>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "command/CommandBase.hpp"
 #include "CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
@@ -30,8 +30,6 @@ public:
         CommandWithOptions{}
     {
     }
-
-    void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
 
     void SetForceInvalid(bool value)
     {

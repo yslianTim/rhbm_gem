@@ -1,8 +1,6 @@
-#include <rhbm_gem/core/command/CommandBase.hpp>
-#include "internal/CommandOptionBinding.hpp"
+#include "CommandBase.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
-#include <CLI/CLI.hpp>
 #include <algorithm>
 #include <array>
 #include <string>
@@ -66,55 +64,6 @@ bool CommandBase::Execute()
             "Command execution failed. Aborting command execution.");
     }
     return executed;
-}
-
-void CommandBase::RegisterCLIOptions(CLI::App * command)
-{
-    RegisterCLIOptionsBasic(command);
-    RegisterCLIOptionsExtend(command);
-}
-
-void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
-{
-    auto & options{ GetOptions() };
-    const auto common_options{ GetCommonOptionsMask() };
-
-    if (HasCommonOption(common_options, CommonOption::Threading))
-    {
-        command_cli::AddScalarOption<int>(
-            command,
-            "-j,--jobs",
-            [&](int value) { SetThreadSize(value); },
-            "Number of threads",
-            options.thread_size);
-    }
-    if (HasCommonOption(common_options, CommonOption::Verbose))
-    {
-        command_cli::AddScalarOption<int>(
-            command,
-            "-v,--verbose",
-            [&](int value) { SetVerboseLevel(value); },
-            "Verbose level",
-            options.verbose_level);
-    }
-    if (HasCommonOption(common_options, CommonOption::Database))
-    {
-        command_cli::AddPathOption(
-            command,
-            "-d,--database",
-            [&](const std::filesystem::path & value) { SetDatabasePath(value); },
-            "Database file path",
-            options.database_path);
-    }
-    if (HasCommonOption(common_options, CommonOption::OutputFolder))
-    {
-        command_cli::AddPathOption(
-            command,
-            "-o,--folder",
-            [&](const std::filesystem::path & value) { SetFolderPath(value); },
-            "folder path for output files",
-            options.folder_path);
-    }
 }
 
 bool CommandBase::PrepareForExecution()

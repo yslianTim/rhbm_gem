@@ -1,7 +1,6 @@
-#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
+#include "MapVisualizationCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandDataLoader.hpp"
-#include "internal/CommandOptionBinding.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -32,13 +31,9 @@
 namespace {
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kModelFlags{ "-a,--model" };
 constexpr std::string_view kModelOption{ "--model" };
-constexpr std::string_view kMapFlags{ "-m,--map" };
 constexpr std::string_view kMapOption{ "--map" };
-constexpr std::string_view kAtomIdFlags{ "-i,--atom-id" };
 constexpr std::string_view kAtomIdOption{ "--atom-id" };
-constexpr std::string_view kSamplingFlags{ "-s,--sampling" };
 constexpr std::string_view kSamplingOption{ "--sampling" };
 constexpr std::string_view kWindowSizeOption{ "--window-size" };
 }
@@ -62,37 +57,6 @@ void MapVisualizationCommand::ApplyRequest(const MapVisualizationRequest & reque
     SetAtomSerialID(request.atom_serial_id);
     SetSamplingSize(request.sampling_size);
     SetWindowSize(request.window_size);
-}
-
-void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
-{
-    command_cli::AddPathOption(
-        cmd, kModelFlags,
-        [&](const std::filesystem::path & value) { SetModelFilePath(value); },
-        "Model file path",
-        std::nullopt,
-        true);
-    command_cli::AddPathOption(
-        cmd, kMapFlags,
-        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
-        "Map file path",
-        std::nullopt,
-        true);
-    command_cli::AddScalarOption<int>(
-        cmd, kAtomIdFlags,
-        [&](int value) { SetAtomSerialID(value); },
-        "Atom serial ID for visualization",
-        m_options.atom_serial_id);
-    command_cli::AddScalarOption<int>(
-        cmd, kSamplingFlags,
-        [&](int value) { SetSamplingSize(value); },
-        "Number of sampling points per atom",
-        m_options.sampling_size);
-    command_cli::AddScalarOption<double>(
-        cmd, kWindowSizeOption,
-        [&](double value) { SetWindowSize(value); },
-        "Window size for sampling",
-        m_options.window_size);
 }
 
 bool MapVisualizationCommand::ExecuteImpl()

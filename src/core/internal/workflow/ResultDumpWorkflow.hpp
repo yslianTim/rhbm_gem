@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/core/command/ResultDumpCommand.hpp>
+#include "command/ResultDumpCommand.hpp"
 
 namespace rhbm_gem {
 

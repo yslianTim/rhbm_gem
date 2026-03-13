@@ -8,7 +8,7 @@
 #include "CommandValidationAssertions.hpp"
 #include "internal/PotentialAnalysisTrainingSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/PotentialAnalysisCommand.hpp>
+#include "command/PotentialAnalysisCommand.hpp"
 
 namespace rg = rhbm_gem;
 

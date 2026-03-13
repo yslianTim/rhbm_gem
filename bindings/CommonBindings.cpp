@@ -2,7 +2,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl/filesystem.h>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include <rhbm_gem/core/command/CommandContract.hpp>
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 

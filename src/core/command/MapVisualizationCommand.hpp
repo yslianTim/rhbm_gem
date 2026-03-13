@@ -4,7 +4,7 @@
 #include <string>
 #include <filesystem>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandBase.hpp"
 
 namespace CLI
 {
@@ -51,8 +51,6 @@ private:
     void SetAtomSerialID(int value);
     void SetSamplingSize(int value);
     void SetWindowSize(double value);
-
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();

@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <filesystem>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
+#include "CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 class AtomSelector;
@@ -64,8 +64,6 @@ private:
     void SetVetoResidueType(const std::string & value);
     void SetPickElementType(const std::string & value);
     void SetVetoElementType(const std::string & value);
-
-    void RegisterCLIOptionsExtend(CLI::App * cmd) override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();
