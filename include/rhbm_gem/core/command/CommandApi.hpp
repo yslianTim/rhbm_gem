@@ -7,6 +7,11 @@
 #include <rhbm_gem/core/command/CommandContract.hpp>
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
+namespace CLI
+{
+    class App;
+}
+
 namespace rhbm_gem {
 
 struct CommonCommandRequest
@@ -109,6 +114,8 @@ struct ExecutionReport
     bool executed{ false };
     std::vector<ValidationIssue> validation_issues{};
 };
+
+void ConfigureCommandCli(::CLI::App & app);
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
     ExecutionReport Run##COMMAND_ID(const COMMAND_ID##Request & request);

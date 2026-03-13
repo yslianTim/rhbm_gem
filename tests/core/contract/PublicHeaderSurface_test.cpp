@@ -8,7 +8,6 @@
 
 TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
-        "core/command/Application.hpp",
         "core/command/CommandApi.hpp",
         "core/command/CommandContract.hpp",
         "core/command/CommandList.def",

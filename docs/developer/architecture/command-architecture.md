@@ -43,7 +43,7 @@ All entrypoints converge on the public `Run*` functions in `CommandApi`.
 
 ```mermaid
 flowchart LR
-    A["CLI (src/main.cpp)"] --> B["Application"]
+    A["CLI (src/main.cpp)"] --> B["ConfigureCommandCli(...)"]
     B --> C["RegisterCommandSubcommands(...)"]
     C --> D["Run* in CommandApi"]
 

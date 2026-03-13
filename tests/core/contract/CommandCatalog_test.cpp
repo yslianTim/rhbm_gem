@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandCatalog.hpp"
 #include <CLI/CLI.hpp>
 
@@ -147,6 +148,25 @@ TEST(CommandCatalogTest, RegisterCommandSubcommandsBuildsOneSubcommandPerManifes
     }
 }
 
+TEST(CommandCatalogTest, ConfigureCommandCliBuildsOneSubcommandPerManifestEntry)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::ConfigureCommandCli(app);
+
+    const auto subcommands{
+        app.get_subcommands([](CLI::App * subcommand)
+        {
+            return subcommand != nullptr && !subcommand->get_name().empty();
+        })
+    };
+    const auto expected_metadata{ BuildExpectedCommandMetadata() };
+    ASSERT_EQ(subcommands.size(), expected_metadata.size());
+    for (std::size_t index = 0; index < expected_metadata.size(); ++index)
+    {
+        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].name);
+    }
+}
+
 TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
 {
     const auto expected_command_ids{ BuildExpectedCommandIdTokens() };
@@ -202,6 +222,41 @@ TEST(CommandCatalogTest, ModelTestCliNameMapsToHRLModelTestCommandId)
 
     ASSERT_NE(iter, catalog.end());
     EXPECT_EQ(iter->id, rg::CommandId::HRLModelTest);
+}
+
+TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::ConfigureCommandCli(app);
+
+    for (const auto & descriptor : rg::CommandCatalog())
+    {
+        auto * subcommand{ app.get_subcommand(std::string(descriptor.name)) };
+        ASSERT_NE(subcommand, nullptr) << descriptor.name;
+        const auto common_options{ rg::CommonOptionsForCommand(descriptor) };
+
+        const std::string help_text{
+            subcommand->help(subcommand->get_name(), CLI::AppFormatMode::Sub)
+        };
+        EXPECT_EQ(
+            help_text.find("--database") != std::string::npos,
+            rg::HasCommonOption(common_options, rg::CommonOption::Database))
+            << descriptor.name;
+        EXPECT_EQ(
+            help_text.find("--folder") != std::string::npos,
+            rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder))
+            << descriptor.name;
+    }
+}
+
+TEST(CommandCatalogTest, ConfigureCommandCliPropagatesCommandFailureAsRuntimeError)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::ConfigureCommandCli(app);
+
+    EXPECT_THROW(
+        app.parse("map_simulation --model missing.cif --blurring-width 1.0", false),
+        CLI::RuntimeError);
 }
 
 TEST(CommandCatalogTest, CommandTestsDoNotIncludeCommandPrivateWorkflowHeaders)

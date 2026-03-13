@@ -4,7 +4,6 @@ file(GLOB RHBM_GEM_COMMAND_SOURCES CONFIGURE_DEPENDS
 )
 
 set(RHBM_GEM_LIBRARY_SOURCES
-    core/command/Application.cpp
     core/command/CommandApi.cpp
     core/command/CommandDataSupport.cpp
     core/painter/AtomPainter.cpp

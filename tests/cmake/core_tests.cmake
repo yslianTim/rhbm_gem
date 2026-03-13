@@ -4,7 +4,6 @@ file(GLOB RHBM_GEM_CORE_COMMAND_TEST_SOURCES CONFIGURE_DEPENDS
 )
 
 set(CORE_COMMAND_TEST_SOURCES
-    core/command/Application_test.cpp
     core/command/CommandBase_test.cpp
     core/command/CommandOptionHelper_test.cpp
     core/command/CommandScalarValidationHelper_test.cpp

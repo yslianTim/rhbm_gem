@@ -183,7 +183,7 @@ void RegisterCommand(
     std::invoke(bind_options, command, *request);
     command->callback([request]()
     {
-        ScopeTimer timer("Command in Application");
+        ScopeTimer timer("Command CLI callback");
         const auto report{ RunCommandFn(*request) };
         if (!report.executed)
         {
@@ -570,6 +570,12 @@ const std::vector<CommandDescriptor> & CommandCatalog()
     };
 
     return catalog;
+}
+
+void ConfigureCommandCli(CLI::App & app)
+{
+    app.require_subcommand(1);
+    RegisterCommandSubcommands(app);
 }
 
 void RegisterCommandSubcommands(CLI::App & app)
