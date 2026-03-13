@@ -4,8 +4,8 @@ import sys
 
 def main() -> int:
     project_root = Path(__file__).resolve().parents[2]
-    scripts_dir = project_root / "scripts"
-    sys.path.insert(0, str(scripts_dir))
+    developer_scripts_dir = project_root / "scripts" / "developer"
+    sys.path.insert(0, str(developer_scripts_dir))
 
     import command_manifest
     import generate_command_artifacts
