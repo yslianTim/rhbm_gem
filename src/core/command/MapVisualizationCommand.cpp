@@ -1,12 +1,11 @@
 #include "MapVisualizationCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/CommandDataLoader.hpp"
+#include "CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
@@ -40,8 +39,9 @@ constexpr std::string_view kWindowSizeOption{ "--window-size" };
 
 namespace rhbm_gem {
 
-MapVisualizationCommand::MapVisualizationCommand() :
-    CommandWithProfileOptions<MapVisualizationCommandOptions, CommandId::MapVisualization>{},
+MapVisualizationCommand::MapVisualizationCommand(CommonOptionProfile profile) :
+    CommandWithOptions<MapVisualizationCommandOptions>{
+        CommonOptionMaskForProfile(profile) },
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {

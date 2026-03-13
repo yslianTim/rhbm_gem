@@ -27,14 +27,10 @@ Public command API:
 - `include/rhbm_gem/core/command/CommandApi.hpp`
 - `src/core/command/CommandApi.cpp`
 
-CLI runtime binding:
+Manifest and CLI registration:
 
+- `include/rhbm_gem/core/command/CommandList.def`
 - `src/core/command/CommandCatalog.cpp`
-
-Manifest and generated artifacts:
-
-- `src/core/internal/CommandList.def`
-- run `python3 scripts/developer/generate_command_artifacts.py`
 
 Python bindings:
 
@@ -43,32 +39,34 @@ Python bindings:
 Tests and docs:
 
 - `tests/core/command/<YourCommand>_test.cpp`
-- any integration or contract tests impacted by the new public surface
-- docs affected by the new command surface
+- any integration/contract tests impacted by the public surface
+- developer/user docs touched by the command surface
 
 Optional:
 
 - `src/gui/MainWindow.cpp` and `src/gui/MainWindow.hpp` if the GUI should expose the command
-- `docs/developer/commands/<your-command>.md` if you want a command-specific developer note
+- `docs/developer/commands/<your-command>.md` for command-specific notes
 
-## 3. Files generated from `CommandList.def`
+## 3. Manifest shape
 
-Do not hand-edit these generated sections/files without rerunning the generator:
+Add an entry to `include/rhbm_gem/core/command/CommandList.def`:
 
-- generated `command-id-entries` block in `include/rhbm_gem/core/command/CommandMetadata.hpp`
-- generated `command-run-declarations` block in `include/rhbm_gem/core/command/CommandApi.hpp`
-- generated `command-run-definitions` block in `src/core/command/CommandApi.cpp`
-- generated `command-catalog-entries` block in `src/core/command/CommandCatalog.cpp`
-- generated `command-pybind-run-bindings` block in `bindings/CommandApiBindings.cpp`
-- `src/CommandSources.generated.cmake`
-- `tests/cmake/CoreCommandTests.generated.cmake`
-- generated blocks in `docs/developer/architecture/command-architecture.md`
-
-Refresh them with:
-
-```bash
-python3 scripts/developer/generate_command_artifacts.py
+```cpp
+RHBM_GEM_COMMAND(
+    Example,
+    Example,
+    "example",
+    "Run example command",
+    FileWorkflow)
 ```
+
+Parameters:
+
+1. `COMMAND_ID`: `CommandId` enum token.
+2. `COMMAND_STEM`: shared stem for `ExampleCommand`, `ExampleRequest`, and `RunExample(...)`.
+3. `CLI_NAME`: subcommand token.
+4. `DESCRIPTION`: CLI description.
+5. `PROFILE`: `FileWorkflow` or `DatabaseWorkflow`.
 
 ## 4. Scaffold (optional)
 
@@ -78,21 +76,11 @@ Create skeleton files:
 python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkflow
 ```
 
-Create skeletons, append the manifest entry, and regenerate generated artifacts:
+Create skeleton files and append the manifest entry:
 
 ```bash
 python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkflow --wire
 ```
-
-Strict wiring mode:
-
-```bash
-python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkflow --wire --strict
-```
-
-The scaffold does not finish the command for you. You still need to implement the command logic,
-update the request structs, add command-specific CLI option binding in `CommandCatalog.cpp`,
-and expose request fields in Python bindings.
 
 ## 5. Implement the command class
 
@@ -101,13 +89,14 @@ Current command classes are internal implementation types under `src/core/comman
 Use this shape:
 
 1. Define `Options` deriving from `CommandOptions`.
-2. Derive the command from `CommandWithProfileOptions<...>` or `CommandWithOptions<...>`.
-3. Implement `ApplyRequest(const XxxRequest&)` as the external configuration entry point.
-4. Call `ApplyCommonRequest(request.common)` inside `ApplyRequest(...)`.
-5. Keep per-field normalization in setters or `ApplyRequest(...)`.
-6. Keep cross-field validation in `ValidateOptions()`.
-7. Reset transient runtime state in `ResetRuntimeState()`.
-8. Keep `ExecuteImpl()` focused on orchestration.
+2. Derive the command from `CommandWithOptions<...>`.
+3. Construct the command with a `CommonOptionProfile`.
+4. Implement `ApplyRequest(const XxxRequest &)`.
+5. Call `ApplyCommonRequest(request.common)` inside `ApplyRequest(...)`.
+6. Keep per-field normalization in setters or `ApplyRequest(...)`.
+7. Keep cross-field validation in `ValidateOptions()`.
+8. Reset transient execution state in `ResetRuntimeState()`.
+9. Keep `ExecuteImpl()` focused on orchestration.
 
 Useful base helpers from `CommandBase`:
 
@@ -122,44 +111,26 @@ Useful base helpers from `CommandBase`:
 
 ## 6. Add the public request and run entrypoint
 
-Add the new request struct to `include/rhbm_gem/core/command/CommandApi.hpp`.
-The `Run*` declaration/definition blocks are generated from `CommandList.def`, so rerun the
-artifact generator instead of hand-editing the run-function list.
+Add the request struct to `include/rhbm_gem/core/command/CommandApi.hpp`.
 
-Each `Run*` entrypoint follows the same pattern:
+`Run*` declarations/definitions are expanded from `CommandList.def`, so once the manifest entry
+exists you only need to ensure the request struct, command class, and includes are present.
 
-1. Construct the concrete command.
+Each `Run*` entrypoint follows this pattern:
+
+1. Construct the concrete command with the manifest profile.
 2. Call `ApplyRequest(...)`.
 3. Call `PrepareForExecution()`.
 4. Call `Execute()` if preparation succeeds.
 5. Return an `ExecutionReport`.
 
-## 7. Register the command
-
-Add a manifest entry in `src/core/internal/CommandList.def`:
-
-```cpp
-RHBM_GEM_COMMAND(
-    Example,
-    ExampleCommand,
-    "example",
-    "Run example command",
-    FileWorkflow)
-```
-
-Then regenerate artifacts:
-
-```bash
-python3 scripts/developer/generate_command_artifacts.py
-```
-
-## 8. Bind CLI options
+## 7. Bind CLI options
 
 In `src/core/command/CommandCatalog.cpp`:
 
-1. Add `Bind<YourCommand>RequestOptions(...)` for command-specific CLI flags.
-2. Register the command through the shared `MakeCommandDescriptor<RequestType>(...)` helper.
-3. Pass the correct `CommonOptionProfile` so shared flags are wired automatically.
+1. Add `Bind<YourCommand>RequestOptions(...)` for command-specific flags.
+2. `RegisterCommandSubcommands(...)` will pick it up through the manifest X-macro expansion.
+3. Shared flags are bound automatically from the manifest profile.
 
 Shared flags come from the profile:
 
@@ -168,25 +139,18 @@ Shared flags come from the profile:
 - `-d,--database` for `DatabaseWorkflow`
 - `-o,--folder`
 
-Use `command_cli::AddScalarOption(...)`, `AddStringOption(...)`, `AddPathOption(...)`, and
-`AddEnumOption(...)` for command-specific flags.
-
-If the command needs extra workflow helpers:
-
-- keep command-only helpers in the command `.cpp` or its workflow implementation unit under
-  `src/core/workflow/`
-
-## 9. Add Python bindings
+## 8. Add Python bindings
 
 Update `bindings/CommandApiBindings.cpp`:
 
 1. Bind the new `*Request` type.
-2. Rerun the artifact generator so the generated `Run*` export block stays in sync.
+2. The `Run*` export list is expanded from the manifest, so no separate binding list needs to be
+   maintained.
 
 Shared enums and diagnostics live in `bindings/CommonBindings.cpp`, so that file only needs
-changes if the command introduces new shared enum types.
+changes if the command introduces a new shared enum.
 
-## 10. Tests and documentation
+## 9. Tests and documentation
 
 Add or update:
 
@@ -194,24 +158,20 @@ Add or update:
 - integration tests if the public API or Python surface changes
 - developer/user docs if the command changes the documented surface
 
-`tests/core/contract/DocsSync_test.cpp` verifies the generated blocks in
-`docs/developer/architecture/command-architecture.md`, so keep the markers intact.
-
-## 11. Validation checklist
+## 10. Validation checklist
 
 Before merge:
 
 1. The command is implemented in `src/core/command/`.
-2. `CommandApi.hpp` contains the new request and the generated `Run*` blocks were refreshed.
-3. CLI binding is added in `CommandCatalog.cpp`.
-4. `src/core/internal/CommandList.def` contains the new manifest entry.
-5. Generated artifacts have been refreshed.
-6. Python bindings are updated if the binding surface changed.
-7. Tests and docs are aligned with the final command surface.
+2. `CommandApi.hpp` contains the new request.
+3. `CommandList.def` contains the new manifest entry.
+4. CLI binding is added in `CommandCatalog.cpp`.
+5. Python bindings are updated if the binding surface changed.
+6. Tests and docs are aligned with the final command surface.
 
 Recommended checks:
 
 ```bash
-python3 scripts/developer/check_command_sync.py
-ctest --output-on-failure -R "Command|DocsSync"
+cmake --build build --target tests_all -j
+ctest --output-on-failure -R "Command|Contract|bindings"
 ```

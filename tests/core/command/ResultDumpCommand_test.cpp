@@ -11,7 +11,7 @@ namespace rg = rhbm_gem;
 
 TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
 {
-    rg::ResultDumpCommand command{};
+    rg::ResultDumpCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::ResultDumpRequest request{};
     request.printer_choice = rg::PrinterType::MAP_VALUE;
     request.model_key_tag_list = "model";
@@ -38,7 +38,7 @@ TEST(ResultDumpCommandTest, ExecuteTwiceDoesNotReuseStaleLoadedModels)
     command_test::SeedSavedModel(database_path, model_path, "key_a", "MODEL_A");
     command_test::SeedSavedModel(database_path, model_path, "key_b", "MODEL_B");
 
-    rg::ResultDumpCommand command{};
+    rg::ResultDumpCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::ResultDumpRequest request{};
     request.common.database_path = database_path;
     request.printer_choice = rg::PrinterType::ATOM_POSITION;
@@ -73,7 +73,7 @@ TEST(ResultDumpCommandTest, ExecuteUsesCurrentDatabasePathAndOutputFolderOptions
     command_test::SeedSavedModel(database_path_a, model_path, "shared_key", "MODEL_FROM_A");
     command_test::SeedSavedModel(database_path_b, model_path, "shared_key", "MODEL_FROM_B");
 
-    rg::ResultDumpCommand command{};
+    rg::ResultDumpCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::ResultDumpRequest request{};
     request.printer_choice = rg::PrinterType::ATOM_POSITION;
     request.model_key_tag_list = "shared_key";

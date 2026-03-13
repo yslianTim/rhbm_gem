@@ -11,21 +11,21 @@ Related references:
 
 Use the narrowest boundary that matches the change:
 
-- `DataObjectWorkflowOps` (`src/core/workflow/DataObjectWorkflowOps.*`)
+- `CommandDataSupport` (`src/core/command/CommandDataSupport.*`)
   - reusable cross-command typed logic on `ModelObject`/`MapObject`
 - command-local workflow (`src/core/workflow/*CommandWorkflow*.cpp`)
   - behavior only needed by one command; keep private command-workflow headers under `src/core/internal/workflow/`
 - `DataObjectManager::ForEachDataObject(...)`
   - iteration policy or callback contract changes
 
-Do not move command-specific branching into shared `DataObjectWorkflowOps` unless multiple commands need the same contract.
+Do not move command-specific branching into shared `CommandDataSupport` unless multiple commands need the same contract.
 
 ## 2. Required File Updates
 
 If you add or change reusable typed operations:
 
-- `src/core/workflow/DataObjectWorkflowOps.hpp`
-- `src/core/workflow/DataObjectWorkflowOps.cpp`
+- `src/core/command/CommandDataSupport.hpp`
+- `src/core/command/CommandDataSupport.cpp`
 - command call sites using the operation
 - `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
 - related command tests under `tests/core/command/`
@@ -40,7 +40,7 @@ If you change manager iteration behavior, also update:
 
 ## 3. Operation Design Rules
 
-For `DataObjectWorkflowOps`:
+For `CommandDataSupport`:
 
 - Keep signatures typed (`ModelObject &`, `MapObject &`), not generic base pointers.
 - Keep behavior deterministic for the same object state + options.
@@ -100,7 +100,7 @@ Keep callback body short; move multi-step logic to typed helper functions.
 Typical flow in command code:
 
 1. load/build typed objects (`GetTypedDataObject<T>()` or command data-loader helpers)
-2. apply shared typed operations from `DataObjectWorkflowOps`
+2. apply shared typed operations from `CommandDataSupport`
 3. use manager iteration only when key selection/order belongs to manager layer
 4. keep `ExecuteImpl()` orchestration-focused
 

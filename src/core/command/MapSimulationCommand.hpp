@@ -31,9 +31,7 @@ struct MapSimulationCommandOptions : public CommandOptions
 };
 
 class MapSimulationCommand
-    : public CommandWithProfileOptions<
-          MapSimulationCommandOptions,
-          CommandId::MapSimulation>
+    : public CommandWithOptions<MapSimulationCommandOptions>
 {
 public:
     using Options = MapSimulationCommandOptions;
@@ -45,7 +43,7 @@ private:
     std::array<float, 3> m_atom_range_minimum, m_atom_range_maximum;
 
 public:
-    explicit MapSimulationCommand();
+    explicit MapSimulationCommand(CommonOptionProfile profile);
     ~MapSimulationCommand() override = default;
     void ApplyRequest(const MapSimulationRequest & request);
 

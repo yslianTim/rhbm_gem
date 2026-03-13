@@ -1,9 +1,13 @@
 #include "internal/CommandCatalog.hpp"
 
-#include "internal/CommandOptionBinding.hpp"
-
+#include <CLI/CLI.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
+#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
+#include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -20,6 +24,105 @@ using rhbm_gem::PotentialModel;
 using rhbm_gem::PrinterType;
 using rhbm_gem::TesterType;
 
+template <typename ValueType, typename Setter>
+CLI::Option * AddScalarOption(
+    CLI::App * command,
+    std::string_view flags,
+    Setter && setter,
+    std::string_view help,
+    std::optional<ValueType> default_value = std::nullopt,
+    bool required = false)
+{
+    auto * option{
+        command->add_option_function<ValueType>(
+            std::string(flags),
+            [callback = std::forward<Setter>(setter)](const ValueType & value) mutable
+            {
+                std::invoke(callback, value);
+            },
+            std::string(help))
+    };
+    if (required)
+    {
+        option->required();
+    }
+    if (default_value.has_value())
+    {
+        option->default_val(*default_value);
+    }
+    return option;
+}
+
+template <typename Setter>
+CLI::Option * AddStringOption(
+    CLI::App * command,
+    std::string_view flags,
+    Setter && setter,
+    std::string_view help,
+    std::optional<std::string> default_value = std::nullopt,
+    bool required = false)
+{
+    return AddScalarOption<std::string>(
+        command,
+        flags,
+        std::forward<Setter>(setter),
+        help,
+        std::move(default_value),
+        required);
+}
+
+template <typename Setter>
+CLI::Option * AddPathOption(
+    CLI::App * command,
+    std::string_view flags,
+    Setter && setter,
+    std::string_view help,
+    std::optional<std::filesystem::path> default_value = std::nullopt,
+    bool required = false)
+{
+    auto * option{
+        command->add_option_function<std::string>(
+            std::string(flags),
+            [callback = std::forward<Setter>(setter)](const std::string & value) mutable
+            {
+                std::invoke(callback, std::filesystem::path{ value });
+            },
+            std::string(help))
+    };
+    if (required)
+    {
+        option->required();
+    }
+    if (default_value.has_value())
+    {
+        option->default_val(default_value->string());
+    }
+    return option;
+}
+
+template <typename EnumType, typename Setter>
+CLI::Option * AddEnumOption(
+    CLI::App * command,
+    std::string_view flags,
+    Setter && setter,
+    std::string_view help,
+    std::optional<EnumType> default_value = std::nullopt,
+    bool required = false)
+{
+    auto * option{
+        AddScalarOption<EnumType>(
+            command,
+            flags,
+            std::forward<Setter>(setter),
+            help,
+            std::move(default_value),
+            required)
+    };
+    option->transform(CLI::CheckedTransformer(
+        rhbm_gem::BuildEnumCLIMap<EnumType>(), CLI::ignore_case));
+    return option;
+}
+
 void BindCommonOptions(
     CLI::App * command,
     CommonCommandRequest & common,
@@ -28,7 +131,7 @@ void BindCommonOptions(
     const auto common_options{ rhbm_gem::CommonOptionMaskForProfile(profile) };
     if (HasCommonOption(common_options, CommonOption::Threading))
     {
-        rhbm_gem::command_cli::AddScalarOption<int>(
+        AddScalarOption<int>(
             command,
             "-j,--jobs",
             [&](int value) { common.thread_size = value; },
@@ -37,7 +140,7 @@ void BindCommonOptions(
     }
     if (HasCommonOption(common_options, CommonOption::Verbose))
     {
-        rhbm_gem::command_cli::AddScalarOption<int>(
+        AddScalarOption<int>(
             command,
             "-v,--verbose",
             [&](int value) { common.verbose_level = value; },
@@ -46,7 +149,7 @@ void BindCommonOptions(
     }
     if (HasCommonOption(common_options, CommonOption::Database))
     {
-        rhbm_gem::command_cli::AddPathOption(
+        AddPathOption(
             command,
             "-d,--database",
             [&](const std::filesystem::path & value) { common.database_path = value; },
@@ -55,7 +158,7 @@ void BindCommonOptions(
     }
     if (HasCommonOption(common_options, CommonOption::OutputFolder))
     {
-        rhbm_gem::command_cli::AddPathOption(
+        AddPathOption(
             command,
             "-o,--folder",
             [&](const std::filesystem::path & value) { common.folder_path = value; },
@@ -64,52 +167,35 @@ void BindCommonOptions(
     }
 }
 
-template <typename RequestType, typename BindOptionsFn, typename RunFn>
-rhbm_gem::CommandRunner BindRuntime(
-    CLI::App * command,
-    CommonOptionProfile profile,
-    BindOptionsFn bind_options,
-    RunFn run_command)
+template <typename RequestType, auto RunCommandFn, typename BindOptionsFn>
+void RegisterCommand(
+    CLI::App & app,
+    const rhbm_gem::CommandDescriptor & descriptor,
+    BindOptionsFn bind_options)
 {
+    CLI::App * command{
+        app.add_subcommand(
+            std::string(descriptor.name),
+            std::string(descriptor.description))
+    };
     auto request{ std::make_shared<RequestType>() };
-    BindCommonOptions(command, request->common, profile);
+    BindCommonOptions(command, request->common, descriptor.profile);
     std::invoke(bind_options, command, *request);
-
-    return [request, run = run_command]()
+    command->callback([request]()
     {
-        return std::invoke(run, *request);
-    };
-}
-
-template <typename RequestType, typename BindOptionsFn, typename RunFn>
-rhbm_gem::CommandDescriptor MakeCommandDescriptor(
-    rhbm_gem::CommandId id,
-    std::string_view name,
-    std::string_view description,
-    CommonOptionProfile profile,
-    BindOptionsFn bind_options,
-    RunFn run_command)
-{
-    return rhbm_gem::CommandDescriptor{
-        id,
-        name,
-        description,
-        profile,
-        [profile, bind_options, run_command](CLI::App * command)
+        ScopeTimer timer("Command in Application");
+        const auto report{ RunCommandFn(*request) };
+        if (!report.executed)
         {
-            return BindRuntime<RequestType>(command, profile, bind_options, run_command);
-        },
-    };
+            throw CLI::RuntimeError(1);
+        }
+    });
 }
 
 void BindPotentialAnalysisRequestOptions(
     CLI::App * command,
     rhbm_gem::PotentialAnalysisRequest & request)
 {
-    using rhbm_gem::command_cli::AddPathOption;
-    using rhbm_gem::command_cli::AddScalarOption;
-    using rhbm_gem::command_cli::AddStringOption;
-
     AddPathOption(
         command,
         "-a,--model",
@@ -213,9 +299,6 @@ void BindPotentialDisplayRequestOptions(
     CLI::App * command,
     rhbm_gem::PotentialDisplayRequest & request)
 {
-    using rhbm_gem::command_cli::AddEnumOption;
-    using rhbm_gem::command_cli::AddStringOption;
-
     AddEnumOption<PainterType>(
         command,
         "-p,--painter",
@@ -278,10 +361,6 @@ void BindResultDumpRequestOptions(
     CLI::App * command,
     rhbm_gem::ResultDumpRequest & request)
 {
-    using rhbm_gem::command_cli::AddEnumOption;
-    using rhbm_gem::command_cli::AddPathOption;
-    using rhbm_gem::command_cli::AddStringOption;
-
     AddEnumOption<PrinterType>(
         command,
         "-p,--printer",
@@ -308,11 +387,6 @@ void BindMapSimulationRequestOptions(
     CLI::App * command,
     rhbm_gem::MapSimulationRequest & request)
 {
-    using rhbm_gem::command_cli::AddEnumOption;
-    using rhbm_gem::command_cli::AddPathOption;
-    using rhbm_gem::command_cli::AddScalarOption;
-    using rhbm_gem::command_cli::AddStringOption;
-
     request.blurring_width_list.clear();
 
     AddPathOption(
@@ -364,9 +438,6 @@ void BindMapVisualizationRequestOptions(
     CLI::App * command,
     rhbm_gem::MapVisualizationRequest & request)
 {
-    using rhbm_gem::command_cli::AddPathOption;
-    using rhbm_gem::command_cli::AddScalarOption;
-
     AddPathOption(
         command,
         "-a,--model",
@@ -405,9 +476,6 @@ void BindPositionEstimationRequestOptions(
     CLI::App * command,
     rhbm_gem::PositionEstimationRequest & request)
 {
-    using rhbm_gem::command_cli::AddPathOption;
-    using rhbm_gem::command_cli::AddScalarOption;
-
     AddPathOption(
         command,
         "-m,--map",
@@ -451,9 +519,6 @@ void BindHRLModelTestRequestOptions(
     CLI::App * command,
     rhbm_gem::HRLModelTestRequest & request)
 {
-    using rhbm_gem::command_cli::AddEnumOption;
-    using rhbm_gem::command_cli::AddScalarOption;
-
     AddEnumOption<TesterType>(
         command,
         "-t,--tester",
@@ -493,18 +558,39 @@ namespace rhbm_gem {
 const std::vector<CommandDescriptor> & CommandCatalog()
 {
     static const std::vector<CommandDescriptor> catalog{
-    // BEGIN GENERATED: command-catalog-entries
-    MakeCommandDescriptor<rhbm_gem::PotentialAnalysisRequest>(CommandId::PotentialAnalysis, "potential_analysis", "Run potential analysis", CommonOptionProfile::DatabaseWorkflow, BindPotentialAnalysisRequestOptions, &rhbm_gem::RunPotentialAnalysis),
-    MakeCommandDescriptor<rhbm_gem::PotentialDisplayRequest>(CommandId::PotentialDisplay, "potential_display", "Run potential display", CommonOptionProfile::DatabaseWorkflow, BindPotentialDisplayRequestOptions, &rhbm_gem::RunPotentialDisplay),
-    MakeCommandDescriptor<rhbm_gem::ResultDumpRequest>(CommandId::ResultDump, "result_dump", "Run result dump", CommonOptionProfile::DatabaseWorkflow, BindResultDumpRequestOptions, &rhbm_gem::RunResultDump),
-    MakeCommandDescriptor<rhbm_gem::MapSimulationRequest>(CommandId::MapSimulation, "map_simulation", "Run map simulation command", CommonOptionProfile::FileWorkflow, BindMapSimulationRequestOptions, &rhbm_gem::RunMapSimulation),
-    MakeCommandDescriptor<rhbm_gem::MapVisualizationRequest>(CommandId::MapVisualization, "map_visualization", "Run map visualization", CommonOptionProfile::FileWorkflow, BindMapVisualizationRequestOptions, &rhbm_gem::RunMapVisualization),
-    MakeCommandDescriptor<rhbm_gem::PositionEstimationRequest>(CommandId::PositionEstimation, "position_estimation", "Run atom position estimation", CommonOptionProfile::FileWorkflow, BindPositionEstimationRequestOptions, &rhbm_gem::RunPositionEstimation),
-    MakeCommandDescriptor<rhbm_gem::HRLModelTestRequest>(CommandId::ModelTest, "model_test", "Run HRL model simulation test", CommonOptionProfile::FileWorkflow, BindHRLModelTestRequestOptions, &rhbm_gem::RunHRLModelTest),
-// END GENERATED: command-catalog-entries
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+        CommandDescriptor{                                                                      \
+            CommandId::COMMAND_ID,                                                              \
+            CLI_NAME,                                                                           \
+            DESCRIPTION,                                                                        \
+            CommonOptionProfile::PROFILE                                                        \
+        },
+#include <rhbm_gem/core/command/CommandList.def>
+#undef RHBM_GEM_COMMAND
     };
 
     return catalog;
+}
+
+void RegisterCommandSubcommands(CLI::App & app)
+{
+    for (const auto & descriptor : CommandCatalog())
+    {
+        switch (descriptor.id)
+        {
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+        case CommandId::COMMAND_ID:                                                             \
+            RegisterCommand<COMMAND_STEM##Request, &Run##COMMAND_STEM>(                         \
+                app,                                                                            \
+                descriptor,                                                                     \
+                Bind##COMMAND_STEM##RequestOptions);                                            \
+            break;
+#include <rhbm_gem/core/command/CommandList.def>
+#undef RHBM_GEM_COMMAND
+        default:
+            break;
+        }
+    }
 }
 
 } // namespace rhbm_gem

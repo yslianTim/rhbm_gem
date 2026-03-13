@@ -1,4 +1,4 @@
-#include "workflow/DataObjectWorkflowOps.hpp"
+#include "command/CommandDataSupport.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -10,8 +10,6 @@
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rhbm_gem {
 namespace {

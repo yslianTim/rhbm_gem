@@ -1,9 +1,8 @@
 #include "PositionEstimationCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/CommandDataLoader.hpp"
+#include "CommandDataSupport.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
-#include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -48,8 +47,9 @@ struct QuantizedPointHash
 
 namespace rhbm_gem {
 
-PositionEstimationCommand::PositionEstimationCommand() :
-    CommandWithProfileOptions<PositionEstimationCommandOptions, CommandId::PositionEstimation>{},
+PositionEstimationCommand::PositionEstimationCommand(CommonOptionProfile profile) :
+    CommandWithOptions<PositionEstimationCommandOptions>{
+        CommonOptionMaskForProfile(profile) },
     m_selected_voxel_list{}, m_query_point_list{}, m_position_list{},
     m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {

@@ -12,9 +12,9 @@ namespace rhbm_gem {
 namespace {
 
 template <typename CommandType, typename RequestType>
-ExecutionReport RunCommand(const RequestType & request)
+ExecutionReport RunCommand(CommonOptionProfile profile, const RequestType & request)
 {
-    CommandType command{};
+    CommandType command{ profile };
     command.ApplyRequest(request);
 
     ExecutionReport report;
@@ -36,41 +36,12 @@ ExecutionReport RunCommand(const RequestType & request)
 
 } // namespace
 
-// BEGIN GENERATED: command-run-definitions
-ExecutionReport RunPotentialAnalysis(const PotentialAnalysisRequest & request)
-{
-    return RunCommand<PotentialAnalysisCommand>(request);
-}
-
-ExecutionReport RunPotentialDisplay(const PotentialDisplayRequest & request)
-{
-    return RunCommand<PotentialDisplayCommand>(request);
-}
-
-ExecutionReport RunResultDump(const ResultDumpRequest & request)
-{
-    return RunCommand<ResultDumpCommand>(request);
-}
-
-ExecutionReport RunMapSimulation(const MapSimulationRequest & request)
-{
-    return RunCommand<MapSimulationCommand>(request);
-}
-
-ExecutionReport RunMapVisualization(const MapVisualizationRequest & request)
-{
-    return RunCommand<MapVisualizationCommand>(request);
-}
-
-ExecutionReport RunPositionEstimation(const PositionEstimationRequest & request)
-{
-    return RunCommand<PositionEstimationCommand>(request);
-}
-
-ExecutionReport RunHRLModelTest(const HRLModelTestRequest & request)
-{
-    return RunCommand<HRLModelTestCommand>(request);
-}
-// END GENERATED: command-run-definitions
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+    ExecutionReport Run##COMMAND_STEM(const COMMAND_STEM##Request & request)                    \
+    {                                                                                            \
+        return RunCommand<COMMAND_STEM##Command>(CommonOptionProfile::PROFILE, request);        \
+    }
+#include <rhbm_gem/core/command/CommandList.def>
+#undef RHBM_GEM_COMMAND
 
 } // namespace rhbm_gem

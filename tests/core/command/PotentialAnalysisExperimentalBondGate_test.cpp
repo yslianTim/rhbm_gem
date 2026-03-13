@@ -18,7 +18,7 @@ TEST(PotentialAnalysisExperimentalBondGateTest, ExecuteRemainsReachableWhenFeatu
         command_test::GenerateMapFile(maps_dir, model_path, "bond_gate_map", "1.0")
     };
 
-    rg::PotentialAnalysisCommand command{};
+    rg::PotentialAnalysisCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::PotentialAnalysisRequest request{};
     request.common.database_path = database_path;
     request.model_file_path = model_path;

@@ -10,7 +10,7 @@ TEST(MapSimulationCommandTest, ExecuteFiltersInvalidBlurringWidths)
 {
     command_test::ScopedTempDir temp_dir{"map_simulation_valid"};
 
-    rg::MapSimulationCommand command{};
+    rg::MapSimulationCommand command{rg::CommonOptionProfile::FileWorkflow};
     rg::MapSimulationRequest request{};
     request.common.folder_path = temp_dir.path();
     request.map_file_name = "sim_map";
@@ -26,7 +26,7 @@ TEST(MapSimulationCommandTest, ExecuteFailsWhenAllBlurringWidthsAreInvalid)
 {
     command_test::ScopedTempDir temp_dir{"map_simulation_invalid"};
 
-    rg::MapSimulationCommand command{};
+    rg::MapSimulationCommand command{rg::CommonOptionProfile::FileWorkflow};
     rg::MapSimulationRequest request{};
     request.common.folder_path = temp_dir.path();
     request.map_file_name = "sim_map";

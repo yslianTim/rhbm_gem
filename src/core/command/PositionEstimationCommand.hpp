@@ -26,9 +26,7 @@ struct PositionEstimationCommandOptions : public CommandOptions
 };
 
 class PositionEstimationCommand
-    : public CommandWithProfileOptions<
-          PositionEstimationCommandOptions,
-          CommandId::PositionEstimation>
+    : public CommandWithOptions<PositionEstimationCommandOptions>
 {
 public:
     using Options = PositionEstimationCommandOptions;
@@ -41,7 +39,7 @@ private:
     std::shared_ptr<MapObject> m_map_object;
 
 public:
-    explicit PositionEstimationCommand();
+    explicit PositionEstimationCommand(CommonOptionProfile profile);
     ~PositionEstimationCommand() override;
     void ApplyRequest(const PositionEstimationRequest & request);
 

@@ -21,7 +21,7 @@
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
-#include "workflow/DataObjectWorkflowOps.hpp"
+#include "command/CommandDataSupport.hpp"
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include "support/DataInternalTestSeam.hpp"
 #include <rhbm_gem/core/painter/GausPainter.hpp>

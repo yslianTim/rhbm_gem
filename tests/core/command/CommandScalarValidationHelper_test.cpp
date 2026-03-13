@@ -21,23 +21,16 @@ struct CommandScalarValidationHelperCommandOptions : public rg::CommandOptions
 };
 
 class CommandScalarValidationHelperCommand final
-    : public rg::CommandWithOptions<
-          CommandScalarValidationHelperCommandOptions,
-          rg::CommandId::ModelTest,
-          rg::CommonOption::Threading
-              | rg::CommonOption::Verbose
-              | rg::CommonOption::OutputFolder>
+    : public rg::CommandWithOptions<CommandScalarValidationHelperCommandOptions>
 {
 public:
     using Options = CommandScalarValidationHelperCommandOptions;
 
     explicit CommandScalarValidationHelperCommand() :
-        rg::CommandWithOptions<
-            CommandScalarValidationHelperCommandOptions,
-            rg::CommandId::ModelTest,
+        rg::CommandWithOptions<CommandScalarValidationHelperCommandOptions>{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder>{}
+                | rg::CommonOption::OutputFolder}
     {
     }
 

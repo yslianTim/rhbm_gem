@@ -65,7 +65,7 @@ flowchart LR
       R["DataObjectDispatch"] --> R1["AsModelObject / AsMapObject"]
       R --> R2["ExpectModelObject / ExpectMapObject"]
       R --> R3["GetCatalogTypeName"]
-      S["DataObjectWorkflowOps"] --> S1["typed Model/Map helpers"]
+      S["CommandDataSupport"] --> S1["typed Model/Map helpers"]
     end
 ```
 
@@ -180,7 +180,7 @@ Behavior:
 
 ## 9. Typed Workflow and Painter Boundaries
 
-Shared typed workflow helpers (`src/core/workflow/DataObjectWorkflowOps.*`):
+Shared typed workflow helpers (`src/core/command/CommandDataSupport.*`):
 
 - `NormalizeMapObject`
 - `PrepareModelObject`
@@ -204,7 +204,7 @@ Allowed extension:
 
 - add model/map file backend via `FileFormatRegistry` + backend factory
 - evolve model/map schema and corresponding fixed DAO implementation
-- add reusable typed model/map operations in `DataObjectWorkflowOps`
+- add reusable typed model/map operations in `CommandDataSupport`
 
 Out of scope:
 
@@ -232,8 +232,8 @@ Dispatch + typed ops:
 
 - `include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`
 - `src/data/dispatch/DataObjectDispatch.cpp`
-- `src/core/workflow/DataObjectWorkflowOps.hpp`
-- `src/core/workflow/DataObjectWorkflowOps.cpp`
+- `src/core/command/CommandDataSupport.hpp`
+- `src/core/command/CommandDataSupport.cpp`
 - `include/rhbm_gem/core/command/MapSampling.hpp`
 - `src/core/command/MapSampling.cpp`
 - `src/core/internal/PainterIngestion.hpp`

@@ -22,14 +22,12 @@ struct HRLModelTestCommandOptions : public CommandOptions
 };
 
 class HRLModelTestCommand
-    : public CommandWithProfileOptions<
-          HRLModelTestCommandOptions,
-          CommandId::ModelTest>
+    : public CommandWithOptions<HRLModelTestCommandOptions>
 {
 public:
     using Options = HRLModelTestCommandOptions;
 
-    explicit HRLModelTestCommand();
+    explicit HRLModelTestCommand(CommonOptionProfile profile);
     ~HRLModelTestCommand() = default;
     void ApplyRequest(const HRLModelTestRequest & request);
 

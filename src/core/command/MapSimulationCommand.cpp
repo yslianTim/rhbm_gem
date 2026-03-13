@@ -1,12 +1,11 @@
 #include "MapSimulationCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/CommandDataLoader.hpp"
+#include "CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
@@ -31,8 +30,9 @@ constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
 
 namespace rhbm_gem {
 
-MapSimulationCommand::MapSimulationCommand() :
-    CommandWithProfileOptions<MapSimulationCommandOptions, CommandId::MapSimulation>{},
+MapSimulationCommand::MapSimulationCommand(CommonOptionProfile profile) :
+    CommandWithOptions<MapSimulationCommandOptions>{
+        CommonOptionMaskForProfile(profile) },
     m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),

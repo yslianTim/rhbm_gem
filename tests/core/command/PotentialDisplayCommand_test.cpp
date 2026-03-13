@@ -7,7 +7,7 @@
 namespace rg = rhbm_gem;
 
 TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidationError) {
-    rg::PotentialDisplayCommand command{};
+    rg::PotentialDisplayCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::PotentialDisplayRequest request{};
     request.painter_choice = rg::PainterType::MODEL;
     request.model_key_tag_list = "model_key";
@@ -25,7 +25,7 @@ TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidatio
 }
 
 TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareValidation) {
-    rg::PotentialDisplayCommand command{};
+    rg::PotentialDisplayCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::PotentialDisplayRequest request{};
     request.painter_choice = rg::PainterType::MODEL;
     request.model_key_tag_list = "model_key";

@@ -44,7 +44,7 @@ protected:
     DataObjectManager m_data_manager;
     std::vector<ValidationIssue> m_validation_issues;
 
-    CommandBase();
+    explicit CommandBase(CommonOptionMask common_options = kDefaultCommandCommonOptions);
 
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
@@ -196,8 +196,9 @@ protected:
 private:
     virtual const CommandOptions & GetOptions() const = 0;
     virtual CommandOptions & GetOptions() = 0;
-    virtual CommonOptionMask GetCommonOptionsMask() const = 0;
+    CommonOptionMask GetCommonOptionsMask() const { return m_common_options; }
 
+    CommonOptionMask m_common_options;
     bool m_is_prepared_for_execution{ false };
     void InvalidatePreparedState();
     void BeginPreparationPass();
@@ -249,10 +250,7 @@ private:
         bool auto_corrected);
 };
 
-template <
-    typename OptionsT,
-    CommandId IdValue,
-    CommonOptionMask CommonOptionsValue = kDefaultCommandCommonOptions>
+template <typename OptionsT>
 class CommandWithOptions : public CommandBase
 {
 protected:
@@ -260,27 +258,15 @@ protected:
 
 public:
     using Options = OptionsT;
-    static constexpr CommandId kCommandId{ IdValue };
-    static constexpr CommonOptionMask kCommonOptions{ CommonOptionsValue };
-
-    CommandWithOptions() :
-        CommandBase{}
+    explicit CommandWithOptions(
+        CommonOptionMask common_options = kDefaultCommandCommonOptions) :
+        CommandBase{ common_options }
     {
     }
 
 private:
     const CommandOptions & GetOptions() const override { return m_options; }
     CommandOptions & GetOptions() override { return m_options; }
-    CommonOptionMask GetCommonOptionsMask() const override { return kCommonOptions; }
 };
-
-template <
-    typename OptionsT,
-    CommandId IdValue,
-    CommonOptionProfile ProfileValue = CommonOptionProfile::FileWorkflow>
-using CommandWithProfileOptions = CommandWithOptions<
-    OptionsT,
-    IdValue,
-    CommonOptionMaskForProfile(ProfileValue)>;
 
 } // namespace rhbm_gem

@@ -16,18 +16,16 @@ struct TestCommandOptions : public rg::CommandOptions
 };
 
 class TestCommand final
-    : public rg::CommandWithOptions<
-          TestCommandOptions,
-          rg::CommandId::ModelTest,
-          rg::CommonOption::Threading
-              | rg::CommonOption::Verbose
-              | rg::CommonOption::Database
-              | rg::CommonOption::OutputFolder>
+    : public rg::CommandWithOptions<TestCommandOptions>
 {
 public:
     using Options = TestCommandOptions;
     explicit TestCommand() :
-        CommandWithOptions{}
+        CommandWithOptions{
+            rg::CommonOption::Threading
+            | rg::CommonOption::Verbose
+            | rg::CommonOption::Database
+            | rg::CommonOption::OutputFolder}
     {
     }
 
@@ -64,7 +62,7 @@ private:
 
 } // namespace
 
-TEST(CommandBaseTest, SettersDoNotCreateDirectoriesUntilPrepareForExecution)
+TEST(CommandBaseTest, PrepareCreatesOutputFolderButLeavesDatabaseParentToDatabaseLayer)
 {
     command_test::ScopedTempDir temp_dir{"command_base_setters"};
     const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
@@ -76,7 +74,7 @@ TEST(CommandBaseTest, SettersDoNotCreateDirectoriesUntilPrepareForExecution)
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 
     ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_TRUE(std::filesystem::exists(database_path.parent_path()));
+    EXPECT_FALSE(std::filesystem::exists(database_path.parent_path()));
     EXPECT_TRUE(std::filesystem::exists(folder_path));
 }
 

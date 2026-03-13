@@ -31,10 +31,7 @@ struct PotentialDisplayCommandOptions : public CommandOptions
 };
 
 class PotentialDisplayCommand
-    : public CommandWithProfileOptions<
-          PotentialDisplayCommandOptions,
-          CommandId::PotentialDisplay,
-          CommonOptionProfile::DatabaseWorkflow>
+    : public CommandWithOptions<PotentialDisplayCommandOptions>
 {
 public:
     using Options = PotentialDisplayCommandOptions;
@@ -46,7 +43,7 @@ private:
     std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;
 
 public:
-    explicit PotentialDisplayCommand();
+    explicit PotentialDisplayCommand(CommonOptionProfile profile);
     ~PotentialDisplayCommand() override;
     void ApplyRequest(const PotentialDisplayRequest & request);
 

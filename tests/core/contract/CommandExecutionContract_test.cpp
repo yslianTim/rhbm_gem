@@ -16,23 +16,16 @@ struct LifecycleCommandOptions : public rg::CommandOptions
 };
 
 class LifecycleCommand final
-    : public rg::CommandWithOptions<
-          LifecycleCommandOptions,
-          rg::CommandId::ModelTest,
-          rg::CommonOption::Threading
-              | rg::CommonOption::Verbose
-              | rg::CommonOption::OutputFolder>
+    : public rg::CommandWithOptions<LifecycleCommandOptions>
 {
 public:
     using Options = LifecycleCommandOptions;
 
     explicit LifecycleCommand() :
-        rg::CommandWithOptions<
-            LifecycleCommandOptions,
-            rg::CommandId::ModelTest,
+        rg::CommandWithOptions<LifecycleCommandOptions>{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder>{}
+                | rg::CommonOption::OutputFolder}
     {
     }
 

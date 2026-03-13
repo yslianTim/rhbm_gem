@@ -2,8 +2,7 @@
 """Generate a command scaffold.
 
 By default this script only creates command/binding/test/doc skeleton files.
-When ``--wire`` is set, it also updates registration/manifests in-place.
-Use ``--wire --strict`` to fail-fast on anchor drift with repair hints.
+When ``--wire`` is set, it also updates the manifest in-place.
 """
 
 from __future__ import annotations
@@ -12,7 +11,6 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 import re
-import subprocess
 import sys
 from typing import Callable
 
@@ -60,13 +58,13 @@ def _write_text(path: Path, content: str, dry_run: bool) -> None:
 
 
 def _append_command_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    if f"{spec.command_type}," in text:
+    if f"{spec.command_id}," in text:
         return text, False
     block = (
         "\n"
         "RHBM_GEM_COMMAND(\n"
         f"    {spec.command_id},\n"
-        f"    {spec.command_type},\n"
+        f"    {spec.command_type.removesuffix('Command')},\n"
         f'    "{spec.cli_name}",\n'
         f'    "{spec.description}",\n'
         f"    {spec.profile})\n"
@@ -112,13 +110,10 @@ struct {spec.command_type}Options : public CommandOptions
 }};
 
 class {spec.command_type}
-    : public CommandWithProfileOptions<
-          {spec.command_type}Options,
-          CommandId::{spec.command_id},
-          CommonOptionProfile::{spec.profile}>
+    : public CommandWithOptions<{spec.command_type}Options>
 {{
 public:
-    explicit {spec.command_type}();
+    explicit {spec.command_type}(CommonOptionProfile profile);
     ~{spec.command_type}() override = default;
     void ApplyRequest(const {spec.command_type.removesuffix("Command")}Request & request);
 
@@ -139,11 +134,9 @@ def _source_template(spec: ScaffoldSpec) -> str:
 
 namespace rhbm_gem {{
 
-{spec.command_type}::{spec.command_type}() :
-    CommandWithProfileOptions<
-        {spec.command_type}Options,
-        CommandId::{spec.command_id},
-        CommonOptionProfile::{spec.profile}>{{}}
+{spec.command_type}::{spec.command_type}(CommonOptionProfile profile) :
+    CommandWithOptions<{spec.command_type}Options>{{
+        CommonOptionMaskForProfile(profile)}}{{}}
 {{
 }}
 
@@ -191,14 +184,14 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 ## Registration Checklist
 
-1. Add `{spec.command_type}` into `src/core/internal/CommandList.def`.
-2. Run `python3 scripts/developer/generate_command_artifacts.py`.
-3. Keep generated artifacts clean (`python3 scripts/developer/check_command_sync.py`).
+1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandList.def`.
+2. Add the request struct in `include/rhbm_gem/core/command/CommandApi.hpp`.
+3. Add command-specific CLI binding in `src/core/command/CommandCatalog.cpp`.
 """
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
-    command_def = root / "src" / "core" / "internal" / "CommandList.def"
+    command_def = root / "include" / "rhbm_gem" / "core" / "command" / "CommandList.def"
     _update_file(
         command_def,
         lambda text: _append_command_entry(text, spec),
@@ -206,24 +199,6 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         strict,
         "Append a new RHBM_GEM_COMMAND(...) block to CommandList.def.",
     )
-    if dry_run:
-        print("[wire] scripts/developer/generate_command_artifacts.py")
-        return
-
-    generator = root / "scripts" / "developer" / "generate_command_artifacts.py"
-    result = subprocess.run(
-        [sys.executable, str(generator)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.stdout.strip():
-        print(result.stdout.strip())
-    if result.returncode != 0:
-        if result.stderr.strip():
-            print(result.stderr.strip(), file=sys.stderr)
-        if strict:
-            raise RuntimeError("Generator failed while wiring command artifacts.")
 
 
 def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
@@ -263,16 +238,12 @@ def main() -> int:
     parser.add_argument(
         "--wire",
         action="store_true",
-        help=(
-            "Also update CommandList.def and regenerate derived command artifacts."
-        ),
+        help=("Also update CommandList.def."),
     )
     parser.add_argument(
         "--strict",
         action="store_true",
-        help=(
-            "Only valid with --wire. Fail-fast when manifest generation fails."
-        ),
+        help=("Only valid with --wire. Fail-fast when manifest update fails."),
     )
     args = parser.parse_args()
     if args.strict and not args.wire:
@@ -297,9 +268,9 @@ def main() -> int:
 
     print("\nScaffold complete.")
     if args.wire:
-        print("Registration/manifests were wired automatically (manifest + generated artifacts).")
+        print("Registration/manifests were wired automatically.")
     else:
-        print("Next: wire CommandList.def and run artifact generator.")
+        print("Next: wire CommandList.def and add request/CLI binding code.")
     return 0
 
 

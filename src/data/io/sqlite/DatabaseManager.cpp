@@ -6,6 +6,8 @@
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
 
+#include <system_error>
+
 namespace rhbm_gem {
 
 DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
@@ -16,6 +18,20 @@ DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
     m_schema_version{ DatabaseSchemaVersion::NormalizedV2 }
 {
     if (m_database_path.empty()) m_database_path = "database.sqlite";
+
+    const auto parent_path{ m_database_path.parent_path() };
+    if (!parent_path.empty())
+    {
+        std::error_code error_code;
+        std::filesystem::create_directories(parent_path, error_code);
+        if (error_code)
+        {
+            throw std::runtime_error(
+                "Failed to create database parent directory '" + parent_path.string()
+                + "': " + error_code.message());
+        }
+    }
+
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
     m_model_store = std::make_shared<ModelObjectDAOSqlite>(m_database.get());
     m_map_store = std::make_shared<MapObjectDAO>(m_database.get());

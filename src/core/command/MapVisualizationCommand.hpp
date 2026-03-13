@@ -23,9 +23,7 @@ struct MapVisualizationCommandOptions : public CommandOptions
 };
 
 class MapVisualizationCommand
-    : public CommandWithProfileOptions<
-          MapVisualizationCommandOptions,
-          CommandId::MapVisualization>
+    : public CommandWithOptions<MapVisualizationCommandOptions>
 {
 public:
     using Options = MapVisualizationCommandOptions;
@@ -36,7 +34,7 @@ private:
     std::shared_ptr<ModelObject> m_model_object;
 
 public:
-    explicit MapVisualizationCommand();
+    explicit MapVisualizationCommand(CommonOptionProfile profile);
     ~MapVisualizationCommand() override = default;
     void ApplyRequest(const MapVisualizationRequest & request);
 

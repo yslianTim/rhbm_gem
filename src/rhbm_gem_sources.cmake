@@ -1,14 +1,17 @@
-include(${CMAKE_CURRENT_LIST_DIR}/CommandSources.generated.cmake)
+file(GLOB RHBM_GEM_COMMAND_SOURCES CONFIGURE_DEPENDS
+    RELATIVE "${CMAKE_CURRENT_LIST_DIR}"
+    "${CMAKE_CURRENT_LIST_DIR}/core/command/*Command.cpp"
+)
 
 set(RHBM_GEM_LIBRARY_SOURCES
     core/command/Application.cpp
     core/command/CommandApi.cpp
+    core/command/CommandDataSupport.cpp
     core/painter/AtomPainter.cpp
     core/painter/RootPlotRenderBackend.cpp
     core/command/CommandCatalog.cpp
     core/command/CommandBase.cpp
     core/painter/ComparisonPainter.cpp
-    core/workflow/DataObjectWorkflowOps.cpp
     core/painter/DemoPainterAdvancedRender.cpp
     core/painter/DemoPainterRendering.cpp
     core/painter/DemoPainterWorkflow.cpp
@@ -19,17 +22,11 @@ set(RHBM_GEM_LIBRARY_SOURCES
     core/painter/PotentialPlotBuilderSequenceGraphs.cpp
     core/painter/PotentialPlotBuilderPlotFunctions.cpp
     ${RHBM_GEM_COMMAND_SOURCES}
-    core/workflow/HRLModelTestCommandWorkflows.cpp
     core/command/MapSampling.cpp
     core/painter/ModelPainterMapValueRender.cpp
     core/painter/ModelPainterRender.cpp
     core/painter/ModelPainterAnnotation.cpp
     core/painter/ModelPainterStyle.cpp
-    core/workflow/PotentialAnalysisAnalysisWorkflow.cpp
-    core/workflow/PotentialAnalysisTrainingWorkflow.cpp
-    core/workflow/PotentialAnalysisReportWorkflow.cpp
-    core/workflow/PotentialAnalysisTrainingSupport.cpp
-    core/workflow/ResultDumpCommandWorkflow.cpp
 
     data/dispatch/DataObjectDispatch.cpp
     data/object/AtomClassifier.cpp

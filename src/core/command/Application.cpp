@@ -17,24 +17,7 @@ Application::Application(CLI::App & app) :
 
 void Application::RegisterAllCommands()
 {
-    for (const auto & descriptor : CommandCatalog())
-    {
-        CLI::App * command{
-            m_cli_app.add_subcommand(
-                std::string(descriptor.name),
-                std::string(descriptor.description))
-        };
-        auto run_command{ descriptor.bind_runtime(command) };
-
-        command->callback([run = std::move(run_command)]() {
-            ScopeTimer timer("Command in Application");
-            const auto report{ run() };
-            if (!report.executed)
-            {
-                throw CLI::RuntimeError(1);
-            }
-        });
-    }
+    RegisterCommandSubcommands(m_cli_app);
 }
 
 } // namespace rhbm_gem

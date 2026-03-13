@@ -101,8 +101,8 @@ Repository guard checks (style/structure/hygiene/fixture tracking/absolute-path/
 cmake --build build --target lint_repo
 ```
 
-`lint_repo` also includes a command manifest sync guard
-(`scripts/developer/check_command_sync.py`).
+`lint_repo` also exercises the command manifest indirectly through compile-time expansion and
+contract tests.
 
 ## Static Quality Checks (Targeted)
 
@@ -132,7 +132,7 @@ bash scripts/developer/run_ctest_with_classification.sh build -j8
 
 CI layout:
 
-1. Pull request / push: fast gate (`lint_repo` + command sync + `core/data/integration` tests + format/tidy checks)
+1. Pull request / push: fast gate (`lint_repo` + `core/data/integration` tests + format/tidy checks)
 2. Nightly schedule: full test run with feature-mode matrix (`OPENMP` / `ROOT` / `LEGACY`) + failure classification (`build` / `contract` / `runtime`)
 
 ## Feature Mode Checks (`AUTO` / `OFF` / `ON`)

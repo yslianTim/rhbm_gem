@@ -34,10 +34,7 @@ struct PotentialAnalysisCommandOptions : public CommandOptions
 };
 
 class PotentialAnalysisCommand
-    : public CommandWithProfileOptions<
-          PotentialAnalysisCommandOptions,
-          CommandId::PotentialAnalysis,
-          CommonOptionProfile::DatabaseWorkflow>
+    : public CommandWithOptions<PotentialAnalysisCommandOptions>
 {
 public:
     using Options = PotentialAnalysisCommandOptions;
@@ -48,7 +45,7 @@ private:
     std::shared_ptr<ModelObject> m_model_object;
 
 public:
-    explicit PotentialAnalysisCommand();
+    explicit PotentialAnalysisCommand(CommonOptionProfile profile);
     ~PotentialAnalysisCommand() override = default;
     void ApplyRequest(const PotentialAnalysisRequest & request);
 

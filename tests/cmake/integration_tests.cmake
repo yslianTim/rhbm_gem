@@ -5,18 +5,6 @@ add_rhbm_gtest_target(rhbm_tests_integration_command
         integration/CommandApiPipeline_test.cpp
 )
 
-if(DEFINED Python_EXECUTABLE)
-    add_test(
-        NAME command_manifest_single_source_test
-        COMMAND ${Python_EXECUTABLE}
-            ${PROJECT_SOURCE_DIR}/tests/integration/command_manifest_single_source.py
-    )
-    set_tests_properties(
-        command_manifest_single_source_test
-        PROPERTIES LABELS "domain:integration;intent:command"
-    )
-endif()
-
 if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABLE)
     add_dependencies(tests_all rhbm_gem_module)
 

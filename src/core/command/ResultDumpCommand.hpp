@@ -24,10 +24,7 @@ struct ResultDumpCommandOptions : public CommandOptions
 };
 
 class ResultDumpCommand
-    : public CommandWithProfileOptions<
-          ResultDumpCommandOptions,
-          CommandId::ResultDump,
-          CommonOptionProfile::DatabaseWorkflow>
+    : public CommandWithOptions<ResultDumpCommandOptions>
 {
 public:
     using Options = ResultDumpCommandOptions;
@@ -39,7 +36,7 @@ private:
     std::shared_ptr<MapObject> m_map_object;
 
 public:
-    explicit ResultDumpCommand();
+    explicit ResultDumpCommand(CommonOptionProfile profile);
     ~ResultDumpCommand() override = default;
     void ApplyRequest(const ResultDumpRequest & request);
 

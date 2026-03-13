@@ -17,23 +17,16 @@ struct ValidationIssueCommandOptions : public rg::CommandOptions
 };
 
 class ValidationIssueCommand final
-    : public rg::CommandWithOptions<
-          ValidationIssueCommandOptions,
-          rg::CommandId::ModelTest,
-          rg::CommonOption::Threading
-              | rg::CommonOption::Verbose
-              | rg::CommonOption::OutputFolder>
+    : public rg::CommandWithOptions<ValidationIssueCommandOptions>
 {
 public:
     using Options = ValidationIssueCommandOptions;
 
     explicit ValidationIssueCommand() :
-        rg::CommandWithOptions<
-            ValidationIssueCommandOptions,
-            rg::CommandId::ModelTest,
+        rg::CommandWithOptions<ValidationIssueCommandOptions>{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder>{}
+                | rg::CommonOption::OutputFolder}
     {
     }
 

@@ -8,7 +8,7 @@ namespace rg = rhbm_gem;
 
 TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare)
 {
-    rg::PotentialAnalysisCommand command{};
+    rg::PotentialAnalysisCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::PotentialAnalysisRequest request{};
     request.simulation_flag = true;
     request.simulated_map_resolution = 0.0;
@@ -26,7 +26,7 @@ TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare
 
 TEST(PotentialAnalysisCommandTest, InvertedSamplingRangeBecomesPrepareValidationError)
 {
-    rg::PotentialAnalysisCommand command{};
+    rg::PotentialAnalysisCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::PotentialAnalysisRequest request{};
     request.sampling_range_min = 2.0;
     request.sampling_range_max = 1.0;
@@ -44,7 +44,7 @@ TEST(PotentialAnalysisCommandTest, InvertedSamplingRangeBecomesPrepareValidation
 
 TEST(PotentialAnalysisCommandTest, EmptySavedKeyBecomesValidationError)
 {
-    rg::PotentialAnalysisCommand command{};
+    rg::PotentialAnalysisCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::PotentialAnalysisRequest request{};
     request.saved_key_tag = "";
     command.ApplyRequest(request);

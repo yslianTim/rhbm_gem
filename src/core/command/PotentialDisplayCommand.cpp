@@ -1,6 +1,6 @@
 #include "PotentialDisplayCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/CommandDataLoader.hpp"
+#include "CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -13,7 +13,6 @@
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
-#include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
@@ -90,11 +89,9 @@ void IngestModelSetsToPainter(
 
 namespace rhbm_gem {
 
-PotentialDisplayCommand::PotentialDisplayCommand() :
-    CommandWithProfileOptions<
-        PotentialDisplayCommandOptions,
-        CommandId::PotentialDisplay,
-        CommonOptionProfile::DatabaseWorkflow>{},
+PotentialDisplayCommand::PotentialDisplayCommand(CommonOptionProfile profile) :
+    CommandWithOptions<PotentialDisplayCommandOptions>{
+        CommonOptionMaskForProfile(profile) },
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 }

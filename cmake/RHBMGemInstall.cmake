@@ -32,6 +32,7 @@ install(
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem"
     FILES_MATCHING
     PATTERN "*.hpp"
+    PATTERN "*.def"
 )
 install(
     FILES

@@ -110,14 +110,9 @@ struct ExecutionReport
     std::vector<ValidationIssue> validation_issues{};
 };
 
-// BEGIN GENERATED: command-run-declarations
-ExecutionReport RunPotentialAnalysis(const PotentialAnalysisRequest & request);
-ExecutionReport RunPotentialDisplay(const PotentialDisplayRequest & request);
-ExecutionReport RunResultDump(const ResultDumpRequest & request);
-ExecutionReport RunMapSimulation(const MapSimulationRequest & request);
-ExecutionReport RunMapVisualization(const MapVisualizationRequest & request);
-ExecutionReport RunPositionEstimation(const PositionEstimationRequest & request);
-ExecutionReport RunHRLModelTest(const HRLModelTestRequest & request);
-// END GENERATED: command-run-declarations
+#define RHBM_GEM_COMMAND(COMMAND_ID, COMMAND_STEM, CLI_NAME, DESCRIPTION, PROFILE)             \
+    ExecutionReport Run##COMMAND_STEM(const COMMAND_STEM##Request & request);
+#include <rhbm_gem/core/command/CommandList.def>
+#undef RHBM_GEM_COMMAND
 
 } // namespace rhbm_gem

@@ -17,7 +17,6 @@ constexpr std::array<std::string_view, 2> kValidationPhaseLabels{
 };
 constexpr std::string_view kJobsOption{ "--jobs" };
 constexpr std::string_view kVerboseOption{ "--verbose" };
-constexpr std::string_view kDatabaseOption{ "--database" };
 constexpr std::string_view kFolderOption{ "--folder" };
 
 std::string BuildIssuePrefix(const ValidationIssue & issue)
@@ -39,8 +38,9 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
 
 } // namespace
 
-CommandBase::CommandBase() :
-    m_data_manager{}
+CommandBase::CommandBase(CommonOptionMask common_options) :
+    m_data_manager{},
+    m_common_options{ common_options }
 {
 }
 
@@ -342,24 +342,6 @@ bool CommandBase::RunValidationPass()
 bool CommandBase::RunFilesystemPreflight()
 {
     const auto common_options{ GetCommonOptionsMask() };
-
-    if (HasCommonOption(common_options, CommonOption::Database))
-    {
-        ClearValidationIssues(kDatabaseOption, ValidationPhase::Prepare);
-        const auto parent_path{ GetOptions().database_path.parent_path() };
-        if (!parent_path.empty() && !std::filesystem::exists(parent_path))
-        {
-            std::error_code error_code;
-            std::filesystem::create_directories(parent_path, error_code);
-            if (error_code)
-            {
-                AddValidationError(
-                    kDatabaseOption,
-                    "Failed to create parent directory '" + parent_path.string()
-                        + "': " + error_code.message());
-            }
-        }
-    }
 
     if (HasCommonOption(common_options, CommonOption::OutputFolder))
     {

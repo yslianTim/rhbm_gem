@@ -21,23 +21,16 @@ struct CommandOptionHelperCommandOptions : public rg::CommandOptions
 };
 
 class CommandOptionHelperCommand final
-    : public rg::CommandWithOptions<
-          CommandOptionHelperCommandOptions,
-          rg::CommandId::ModelTest,
-          rg::CommonOption::Threading
-              | rg::CommonOption::Verbose
-              | rg::CommonOption::OutputFolder>
+    : public rg::CommandWithOptions<CommandOptionHelperCommandOptions>
 {
 public:
     using Options = CommandOptionHelperCommandOptions;
 
     explicit CommandOptionHelperCommand() :
-        rg::CommandWithOptions<
-            CommandOptionHelperCommandOptions,
-            rg::CommandId::ModelTest,
+        rg::CommandWithOptions<CommandOptionHelperCommandOptions>{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder>{}
+                | rg::CommonOption::OutputFolder}
     {
     }
 
