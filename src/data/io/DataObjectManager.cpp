@@ -1,7 +1,7 @@
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include "internal/io/sqlite/DatabaseManager.hpp"
+#include "internal/sqlite/DatabaseManager.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>

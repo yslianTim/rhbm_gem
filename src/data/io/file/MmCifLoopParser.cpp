@@ -1,6 +1,6 @@
-#include "internal/io/file/MmCifLoopParser.hpp"
+#include "internal/file/MmCifLoopParser.hpp"
 
-#include "internal/io/file/MmCifTokenizer.hpp"
+#include "internal/file/MmCifTokenizer.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cstddef>

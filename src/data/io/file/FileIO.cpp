@@ -1,10 +1,10 @@
 #include <rhbm_gem/data/io/FileIO.hpp>
 
-#include "internal/io/file/CCP4Format.hpp"
-#include "internal/io/file/CifFormat.hpp"
-#include "internal/io/file/FileFormatCatalog.hpp"
-#include "internal/io/file/MrcFormat.hpp"
-#include "internal/io/file/PdbFormat.hpp"
+#include "internal/file/CCP4Format.hpp"
+#include "internal/file/CifFormat.hpp"
+#include "internal/file/FileFormatCatalog.hpp"
+#include "internal/file/MrcFormat.hpp"
+#include "internal/file/PdbFormat.hpp"
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

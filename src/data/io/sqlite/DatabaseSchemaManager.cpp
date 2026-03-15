@@ -1,14 +1,14 @@
-#include "internal/migration/DatabaseSchemaManager.hpp"
+#include "internal/sqlite/DatabaseSchemaManager.hpp"
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "internal/io/sqlite/MapObjectStorage.hpp"
-#include "internal/io/sqlite/ModelObjectStorage.hpp"
-#include "internal/io/sqlite/SQLiteWrapper.hpp"
+#include "internal/sqlite/MapObjectStorage.hpp"
+#include "internal/sqlite/ModelObjectStorage.hpp"
+#include "internal/sqlite/SQLiteWrapper.hpp"
 
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #ifdef RHBM_GEM_LEGACY_V1_SUPPORT
-#include "internal/migration/LegacyModelObjectReader.hpp"
+#include "internal/sqlite/LegacyModelObjectReader.hpp"
 #endif
 
 #include <algorithm>

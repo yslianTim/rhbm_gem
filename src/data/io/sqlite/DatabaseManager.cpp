@@ -1,8 +1,8 @@
-#include "internal/io/sqlite/DatabaseManager.hpp"
-#include "internal/migration/DatabaseSchemaManager.hpp"
-#include "internal/io/sqlite/MapObjectStorage.hpp"
-#include "internal/io/sqlite/ModelObjectStorage.hpp"
-#include "internal/io/sqlite/SQLiteWrapper.hpp"
+#include "internal/sqlite/DatabaseManager.hpp"
+#include "internal/sqlite/DatabaseSchemaManager.hpp"
+#include "internal/sqlite/MapObjectStorage.hpp"
+#include "internal/sqlite/ModelObjectStorage.hpp"
+#include "internal/sqlite/SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

@@ -58,7 +58,7 @@ target_sources(rhbm_gem PRIVATE
     data/io/sqlite/DatabaseManager.cpp
     data/io/sqlite/MapObjectStorage.cpp
     data/io/sqlite/ModelObjectStorage.cpp
-    data/schema/DatabaseSchemaManager.cpp
+    data/io/sqlite/DatabaseSchemaManager.cpp
     data/io/DataObjectManager.cpp
 
     # utils
@@ -92,7 +92,7 @@ endif()
 
 if(RHBM_GEM_LEGACY_V1_SUPPORT)
     target_sources(rhbm_gem PRIVATE
-        data/migration/legacy_v1/LegacyModelObjectReader.cpp
+        data/io/sqlite/legacy_v1/LegacyModelObjectReader.cpp
     )
 endif()
 

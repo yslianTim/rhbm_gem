@@ -1,5 +1,5 @@
-#include "internal/io/sqlite/MapObjectStorage.hpp"
-#include "internal/io/sqlite/SQLiteWrapper.hpp"
+#include "internal/sqlite/MapObjectStorage.hpp"
+#include "internal/sqlite/SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 

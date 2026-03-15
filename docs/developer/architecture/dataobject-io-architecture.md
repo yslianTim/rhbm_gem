@@ -222,7 +222,7 @@ Core orchestration:
 
 File registry/backends:
 
-- `src/data/internal/io/file/FileFormatCatalog.hpp`
+- `src/data/internal/file/FileFormatCatalog.hpp`
 - `src/data/io/file/FileFormatCatalog.cpp`
 
 Dispatch + typed ops:
@@ -237,15 +237,15 @@ Dispatch + typed ops:
 
 SQLite/schema:
 
-- `src/data/internal/io/sqlite/DatabaseManager.hpp`
+- `src/data/internal/sqlite/DatabaseManager.hpp`
 - `src/data/io/sqlite/DatabaseManager.cpp`
-- `src/data/internal/migration/DatabaseSchemaManager.hpp`
-- `src/data/schema/DatabaseSchemaManager.cpp`
-- `src/data/internal/io/sqlite/ModelObjectStorage.hpp`
+- `src/data/internal/sqlite/DatabaseSchemaManager.hpp`
+- `src/data/io/sqlite/DatabaseSchemaManager.cpp`
+- `src/data/internal/sqlite/ModelObjectStorage.hpp`
 - `src/data/io/sqlite/ModelObjectStorage.cpp`
-- `src/data/internal/io/sqlite/MapObjectStorage.hpp`
+- `src/data/internal/sqlite/MapObjectStorage.hpp`
 - `src/data/io/sqlite/MapObjectStorage.cpp`
-- `src/data/internal/io/sqlite/SQLiteWrapper.hpp`
+- `src/data/internal/sqlite/SQLiteWrapper.hpp`
 - optional legacy migration helper:
-  - `src/data/internal/migration/LegacyModelObjectReader.hpp`
-  - `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp`
+  - `src/data/internal/sqlite/LegacyModelObjectReader.hpp`
+  - `src/data/io/sqlite/legacy_v1/LegacyModelObjectReader.cpp`

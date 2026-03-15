@@ -1,4 +1,4 @@
-#include "internal/io/file/MmCifTokenizer.hpp"
+#include "internal/file/MmCifTokenizer.hpp"
 
 #include <cctype>
 

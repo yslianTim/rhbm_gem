@@ -1,4 +1,4 @@
-#include "internal/io/file/FileFormatCatalog.hpp"
+#include "internal/file/FileFormatCatalog.hpp"
 
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 

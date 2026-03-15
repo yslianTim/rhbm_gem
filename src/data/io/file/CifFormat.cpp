@@ -1,5 +1,5 @@
-#include "internal/io/file/CifFormat.hpp"
-#include "internal/io/file/MmCifLoopParser.hpp"
+#include "internal/file/CifFormat.hpp"
+#include "internal/file/MmCifLoopParser.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -7,7 +7,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
-#include "internal/object/AtomicModelDataBlock.hpp"
+#include "internal/file/AtomicModelDataBlock.hpp"
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>

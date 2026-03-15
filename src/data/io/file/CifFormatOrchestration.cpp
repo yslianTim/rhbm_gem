@@ -1,6 +1,6 @@
-#include "internal/io/file/CifFormat.hpp"
+#include "internal/file/CifFormat.hpp"
 
-#include "internal/object/AtomicModelDataBlock.hpp"
+#include "internal/file/AtomicModelDataBlock.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 

@@ -1,4 +1,4 @@
-#include "internal/object/AtomicModelDataBlock.hpp"
+#include "internal/file/AtomicModelDataBlock.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

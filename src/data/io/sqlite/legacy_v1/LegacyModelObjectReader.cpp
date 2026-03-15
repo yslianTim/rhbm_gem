@@ -1,4 +1,4 @@
-#include "internal/migration/LegacyModelObjectReader.hpp"
+#include "internal/sqlite/LegacyModelObjectReader.hpp"
 
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -9,7 +9,7 @@
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "internal/io/sqlite/SQLiteWrapper.hpp"
+#include "internal/sqlite/SQLiteWrapper.hpp"
 
 #include <cctype>
 #include <stdexcept>

@@ -1,4 +1,4 @@
-#include "internal/io/file/CifFormat.hpp"
+#include "internal/file/CifFormat.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>

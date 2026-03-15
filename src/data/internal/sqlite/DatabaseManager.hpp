@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <mutex>
 
-#include "internal/migration/DatabaseSchemaManager.hpp"
+#include "internal/sqlite/DatabaseSchemaManager.hpp"
 
 namespace rhbm_gem {
 
