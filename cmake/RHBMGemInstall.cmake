@@ -28,7 +28,7 @@ endfunction()
 
 # Install public headers and legal notices.
 install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/rhbm_gem/"
+    DIRECTORY "${PROJECT_SOURCE_DIR}/include/rhbm_gem/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem"
     FILES_MATCHING
     PATTERN "*.hpp"
@@ -36,18 +36,18 @@ install(
 )
 install(
     FILES
-        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-        "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+        "${PROJECT_SOURCE_DIR}/LICENSE"
+        "${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
 )
 install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/examples/python/"
+    DIRECTORY "${PROJECT_SOURCE_DIR}/examples/python/"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python"
     FILES_MATCHING
     PATTERN "*.py"
 )
 install(
-    FILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/test_model.cif"
+    FILES "${PROJECT_SOURCE_DIR}/tests/data/test_model.cif"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python/data"
 )
 
@@ -58,13 +58,13 @@ endif()
 set(RHBM_GEM_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
 
 configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RHBM_GEMConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfig.cmake"
+    "${PROJECT_SOURCE_DIR}/cmake/RHBM_GEMConfig.cmake.in"
+    "${PROJECT_BINARY_DIR}/RHBM_GEMConfig.cmake"
     INSTALL_DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
 )
 
 write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
+    "${PROJECT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
     VERSION "${PROJECT_VERSION}"
     COMPATIBILITY SameMajorVersion
 )
@@ -78,7 +78,7 @@ install(
 
 install(
     FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
+        "${PROJECT_BINARY_DIR}/RHBM_GEMConfig.cmake"
+        "${PROJECT_BINARY_DIR}/RHBM_GEMConfigVersion.cmake"
     DESTINATION "${RHBM_GEM_CMAKE_INSTALL_DIR}"
 )

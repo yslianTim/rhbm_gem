@@ -4,7 +4,7 @@ This guide is for contributors and maintainers who need the full build surface: 
 
 If you only want to install and run the project, use [`../user/getting-started.md`](../user/getting-started.md). For the end-user workflow, start with [`../user/getting-started.md#environment-setup`](../user/getting-started.md#environment-setup), then continue to [`../user/getting-started.md#installation`](../user/getting-started.md#installation), [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings), and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
 
-Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOptions`, `RHBMGemDependencies`, `RHBMGemInstall`, `RHBMGemTesting`) to keep maintenance localized.
+Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOptions`, `RHBMGemDependencies`, `RHBMGemInstall`, `RHBMGemDevTools`) to keep maintenance localized while keeping test and lint entrypoints co-located.
 All runtime targets from a build tree (CLI, GUI, and C++ test executables) are emitted under `<build-dir>/bin/`.
 
 ## Dependency Strategy

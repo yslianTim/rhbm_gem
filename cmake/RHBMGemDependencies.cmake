@@ -264,7 +264,9 @@ if(BUILD_TESTING)
     if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(GTest REQUIRED)
     else()
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        if(MSVC)
+            set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        endif()
         FetchContent_Declare(rhbm_gem_googletest
             URL "${RHBM_GEM_GTEST_URL}"
             URL_HASH "${RHBM_GEM_GTEST_URL_HASH}"
