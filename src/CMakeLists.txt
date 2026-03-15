@@ -11,7 +11,6 @@ target_sources(rhbm_gem PRIVATE
     core/command/CommandApi.cpp
     core/command/CommandDataSupport.cpp
     core/painter/AtomPainter.cpp
-    core/painter/RootPlotRenderBackend.cpp
     core/command/CommandCatalog.cpp
     core/command/CommandBase.cpp
     core/painter/ComparisonPainter.cpp
@@ -23,7 +22,6 @@ target_sources(rhbm_gem PRIVATE
     core/painter/GausPainterFitting.cpp
     core/painter/PotentialPlotBuilder.cpp
     core/painter/PotentialPlotBuilderSequenceGraphs.cpp
-    core/painter/PotentialPlotBuilderPlotFunctions.cpp
     ${RHBM_GEM_COMMAND_SOURCES}
     core/command/MapSampling.cpp
     core/painter/ModelPainterMapValueRender.cpp

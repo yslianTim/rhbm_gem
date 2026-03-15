@@ -3,7 +3,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -21,19 +20,11 @@ namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
-class IPlotDataBuilder;
-class IPlotRenderBackend;
-class LocalPotentialEntry;
 class ModelObject;
 
 class PotentialPlotBuilder
 {
     PotentialEntryQuery m_query;
-    std::unique_ptr<IPlotDataBuilder> m_plot_data_builder;
-    std::unique_ptr<IPlotRenderBackend> m_plot_render_backend;
-    ModelObject * m_model_object;
-    LocalPotentialEntry * m_atom_local_entry;
-    LocalPotentialEntry * m_bond_local_entry;
 
 public:
     explicit PotentialPlotBuilder(ModelObject * model_object);
@@ -93,19 +84,6 @@ private:
     size_t GetBondResidueCount(const std::string & class_key, Residue residue) const;
     bool IsAvailableAtomGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
     bool IsAvailableBondGroupKey(GroupKey group_key, const std::string & class_key, bool varbose=false) const;
-    double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const;
-    const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const;
-    const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const;
-    std::vector<std::tuple<float, float>> GetLinearModelDistanceAndMapValueList() const;
-    const std::vector<std::tuple<float, float>> & GetDistanceAndMapValueList() const;
-    std::vector<std::tuple<float, float>> GetBinnedDistanceAndMapValueList(int bin_size=15, double x_min=0.0, double x_max=1.5) const;
-    std::tuple<float, float> GetDistanceRange(double margin_rate=0.0) const;
-    std::tuple<float, float> GetMapValueRange(double margin_rate=0.0) const;
-    Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const;
-    Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const;
 };
 
 } // namespace rhbm_gem

@@ -1,7 +1,5 @@
 #include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 
-#include "internal/plot/IPlotRenderBackend.hpp"
-
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>
@@ -11,6 +9,7 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 
 #ifdef HAVE_ROOT
+#include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <TGraphErrors.h>
 #endif
 
@@ -25,9 +24,10 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEsti
     {
         return nullptr;
     }
-    auto graph{ m_plot_render_backend->CreateGraphErrors() };
+    auto model_object{ m_query.GetModelObject() };
+    auto graph{ ROOTHelper::CreateGraphErrors() };
     std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
-    for (auto & atom : m_model_object->GetSelectedAtomList())
+    for (auto & atom : model_object->GetSelectedAtomList())
     {
         if (atom->GetSpot() != Spot::O) continue;
         if (atom->GetSpecialAtomFlag() == false)
@@ -39,7 +39,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedAtomGausEsti
         }
     }
     auto count{ 0 };
-    for (auto & atom : m_model_object->GetSelectedAtomList())
+    for (auto & atom : model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != element) continue;
         auto sequence_id{ atom->GetSequenceID() };
@@ -69,9 +69,10 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedBondGausEsti
     {
         return nullptr;
     }
-    auto graph{ m_plot_render_backend->CreateGraphErrors() };
+    auto model_object{ m_query.GetModelObject() };
+    auto graph{ ROOTHelper::CreateGraphErrors() };
     std::unordered_map<int, double> amplitude_diff_to_carbonyl_oxygen_map;
-    for (auto & bond : m_model_object->GetSelectedBondList())
+    for (auto & bond : model_object->GetSelectedBondList())
     {
         if (bond->GetSpecialBondFlag() == false)
         {
@@ -82,7 +83,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateNormalizedBondGausEsti
         }
     }
     auto count{ 0 };
-    for (auto & bond : m_model_object->GetSelectedBondList())
+    for (auto & bond : model_object->GetSelectedBondList())
     {
         if (bond->GetAtomObject1()->GetElement() != element) continue;
         auto sequence_id{ bond->GetAtomObject1()->GetSequenceID() };
@@ -113,11 +114,12 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
     {
         return {};
     }
+    auto model_object{ m_query.GetModelObject() };
 
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
     std::unordered_map<std::string, int> count_map;
 
-    for (auto & atom : m_model_object->GetSelectedAtomList())
+    for (auto & atom : model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
@@ -128,7 +130,7 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = m_plot_render_backend->CreateGraphErrors();
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
@@ -146,11 +148,12 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
     {
         return {};
     }
+    auto model_object{ m_query.GetModelObject() };
 
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
     std::unordered_map<std::string, int> count_map;
 
-    for (auto & atom : m_model_object->GetSelectedAtomList())
+    for (auto & atom : model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
@@ -161,7 +164,7 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = m_plot_render_backend->CreateGraphErrors();
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
@@ -184,7 +187,7 @@ PotentialPlotBuilder::CreateBondGausEstimateToSequenceIDGraphMap(
     std::unordered_map<std::string, int> count_map;
     auto class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
     auto group_key{ BondClassifier::GetMainChainSimpleBondClassGroupKey(main_chain_element_id) };
-    for (auto & bond : GetBondObjectList(group_key, class_key))
+    for (auto & bond : m_query.GetBondObjectList(group_key, class_key))
     {
         if (residue != Residue::UNK && bond->GetAtomObject1()->GetResidue() != residue) continue;
         auto entry{ bond->GetLocalPotentialEntry() };
@@ -193,7 +196,7 @@ PotentialPlotBuilder::CreateBondGausEstimateToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = m_plot_render_backend->CreateGraphErrors();
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
@@ -217,11 +220,12 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
     {
         return {};
     }
+    auto model_object{ m_query.GetModelObject() };
 
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
     std::unordered_map<std::string, int> count_map;
 
-    for (auto & atom : m_model_object->GetSelectedAtomList())
+    for (auto & atom : model_object->GetSelectedAtomList())
     {
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
@@ -232,7 +236,7 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
         if (sequence_id < 0) continue;
         if (graph_map.find(chain_id) == graph_map.end())
         {
-            graph_map[chain_id] = m_plot_render_backend->CreateGraphErrors();
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };

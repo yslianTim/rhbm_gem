@@ -85,6 +85,7 @@ add_rhbm_gtest_target(rhbm_tests_core_contract
         core/contract/CommandCatalog_test.cpp
         core/contract/CommandExecutionContract_test.cpp
         core/contract/EnumOptionTraits_test.cpp
+        core/contract/PotentialPlotBuilder_test.cpp
         core/contract/PublicHeaderSurface_test.cpp
 )
 
