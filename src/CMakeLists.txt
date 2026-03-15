@@ -57,9 +57,7 @@ target_sources(rhbm_gem PRIVATE
     data/io/file/PdbFormat.cpp
     data/io/sqlite/DatabaseManager.cpp
     data/io/sqlite/MapObjectStorage.cpp
-    data/io/sqlite/ModelAnalysisPersistence.cpp
     data/io/sqlite/ModelObjectStorage.cpp
-    data/io/sqlite/ModelStructurePersistence.cpp
     data/schema/DatabaseSchemaManager.cpp
     data/io/DataObjectManager.cpp
 
