@@ -65,7 +65,10 @@ flowchart LR
 - `description`
 - `profile`
 
-`RegisterCommandSubcommands(CLI::App &)` is the only CLI registration entrypoint.
+`ConfigureCommandCli(CLI::App &)` is the public top-level CLI setup entrypoint.
+It enables `require_subcommand(1)` and then delegates to `RegisterCommandSubcommands(CLI::App &)`.
+
+`RegisterCommandSubcommands(CLI::App &)` is the lower-level registry wiring entrypoint.
 It creates the request object, binds common options from the profile, binds command-specific
 options, and wires the callback to the matching `Run*` function.
 
@@ -90,6 +93,10 @@ Shared request fields:
 - `verbose_level`
 - `database_path`
 - `folder_path`
+
+`CommandApi.hpp` includes `CommandContract.hpp`, so callers that only need the public `Run*`
+surface can include one header, while lower-level consumers can depend on `CommandContract.hpp`
+directly for shared diagnostics/default-path behavior.
 
 `CommonOptionProfile` in `CommandMetadata.hpp` controls shared CLI/common-option behavior:
 
@@ -138,13 +145,13 @@ Useful `CommandBase` helpers:
 5. Call `Execute()`.
 6. Return an `ExecutionReport`.
 
-`PrepareForExecution()` runs:
+`PrepareForExecution()` does three things in order:
 
-1. `BeginPreparationPass()`
-2. `RunValidationPass()`
-3. `RunFilesystemPreflight()`
+1. reset transient preparation state
+2. run validation and collect issues
+3. run filesystem preflight
 
-Preflight now stays command-local:
+The preflight phase now stays command-local:
 
 - resets transient runtime state
 - clears loaded `DataObjectManager` state
@@ -177,7 +184,7 @@ Python bindings are split across:
 - `bindings/CommonBindings.cpp`
 - `bindings/CommandApiBindings.cpp`
 
-`bindings/CommonBindings.cpp` exposes shared enums and diagnostics.
+`bindings/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
 `bindings/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
 functions via the manifest X-macro.
 

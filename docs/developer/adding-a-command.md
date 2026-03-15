@@ -24,6 +24,7 @@ Concrete command implementation:
 
 Public command API:
 
+- `include/rhbm_gem/core/command/CommandContract.hpp` only if shared diagnostics/defaults change
 - `include/rhbm_gem/core/command/CommandApi.hpp`
 - `src/core/command/CommandApi.cpp`
 
@@ -110,6 +111,10 @@ Useful base helpers from `CommandBase`:
 ## 6. Add the public request and run entrypoint
 
 Add the request struct to `include/rhbm_gem/core/command/CommandApi.hpp`.
+
+Shared diagnostics and `ExecutionReport` live in
+`include/rhbm_gem/core/command/CommandContract.hpp`, so adding a normal command usually does not
+require contract changes.
 
 `Run*` declarations/definitions are expanded from `CommandList.def`, so once the manifest entry
 exists you only need to ensure the request struct, command class, and includes are present.
