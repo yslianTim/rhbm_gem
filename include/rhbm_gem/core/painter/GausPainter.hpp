@@ -28,9 +28,6 @@ class GausPainter : public PainterBase
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
     std::unique_ptr<BondClassifier> m_bond_classifier;
-    enum class IngestMode { Data, Reference };
-    IngestMode m_ingest_mode{ IngestMode::Data };
-    std::string m_ingest_label;
 
 public:
     GausPainter();
@@ -44,7 +41,8 @@ public:
 #endif
 
 private:
-    void IngestModelObject(ModelObject & data_object);
+    void AppendModelObject(ModelObject & data_object);
+    void AppendReferenceModelObject(ModelObject & data_object, const std::string & label);
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);

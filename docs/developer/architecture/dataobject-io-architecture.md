@@ -193,9 +193,10 @@ Map sampling helper:
 
 - `SampleMapValues(...)` (`include/rhbm_gem/core/command/MapSampling.hpp`)
 
-Painter ingestion type checks:
+Painter typed object validation:
 
-- `AddDataObject(...)` / `AddReferenceDataObject(...)` in `src/core/internal/PainterIngestion.hpp`
+- `RequirePainterObject(...)` in `src/core/internal/PainterTypeCheck.hpp`
+- painter implementations route data/reference ingestion explicitly after validation
 - null or mismatched typed input throws runtime error
 
 ## 10. Extension Boundaries
@@ -236,7 +237,7 @@ Dispatch + typed ops:
 - `src/core/command/CommandDataSupport.cpp`
 - `include/rhbm_gem/core/command/MapSampling.hpp`
 - `src/core/command/MapSampling.cpp`
-- `src/core/internal/PainterIngestion.hpp`
+- `src/core/internal/PainterTypeCheck.hpp`
 
 SQLite/schema:
 

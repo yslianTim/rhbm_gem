@@ -12,7 +12,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "internal/PainterIngestion.hpp"
+#include "internal/PainterTypeCheck.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -53,37 +53,31 @@ void ComparisonPainter::SetFolder(const std::string & folder_path)
 
 void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject<ModelObject>(
-        data_object,
-        m_ingest_mode,
-        IngestMode::Data,
-        IngestMode::Reference,
-        m_ingest_label,
-        "ComparisonPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "ComparisonPainter", "AddDataObject") };
+    AppendModelObject(typed_data_object);
 }
 
 void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject<ModelObject>(
-        data_object,
-        label,
-        m_ingest_mode,
-        IngestMode::Reference,
-        m_ingest_label,
-        "ComparisonPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "ComparisonPainter", "AddReferenceDataObject") };
+    AppendReferenceModelObject(typed_data_object, label);
 }
 
-void ComparisonPainter::IngestModelObject(ModelObject & data_object)
+void ComparisonPainter::AppendModelObject(ModelObject & data_object)
 {
-    if (m_ingest_mode == IngestMode::Reference)
-    {
-        m_ref_model_object_list_map[m_ingest_label].emplace_back(&data_object);
-        return;
-    }
     m_model_object_list.emplace_back(&data_object);
     m_resolution_list.emplace_back(data_object.GetResolution());
+}
+
+void ComparisonPainter::AppendReferenceModelObject(
+    ModelObject & data_object,
+    const std::string & label)
+{
+    m_ref_model_object_list_map[label].emplace_back(&data_object);
 }
 
 void ComparisonPainter::Painting()

@@ -28,9 +28,6 @@ class ComparisonPainter : public PainterBase
     std::vector<double> m_resolution_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
-    enum class IngestMode { Data, Reference };
-    IngestMode m_ingest_mode{ IngestMode::Data };
-    std::string m_ingest_label;
 
 public:
     ComparisonPainter();
@@ -41,7 +38,8 @@ public:
     void Painting() override;
 
 private:
-    void IngestModelObject(ModelObject & data_object);
+    void AppendModelObject(ModelObject & data_object);
+    void AppendReferenceModelObject(ModelObject & data_object, const std::string & label);
     void PaintGroupGausEstimateComparison(const std::string & name);
     void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
     void PainMapValueComparison(const std::string & name, ModelObject * model_object, const std::vector<ModelObject *> & ref_model_object_list);

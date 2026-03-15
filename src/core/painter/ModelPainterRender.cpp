@@ -15,7 +15,7 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "internal/PainterIngestion.hpp"
+#include "internal/PainterTypeCheck.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -61,36 +61,30 @@ void ModelPainter::SetFolder(const std::string & folder_path)
 
 void ModelPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject<ModelObject>(
-        data_object,
-        m_ingest_mode,
-        IngestMode::Data,
-        IngestMode::Reference,
-        m_ingest_label,
-        "ModelPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "ModelPainter", "AddDataObject") };
+    AppendModelObject(typed_data_object);
 }
 
 void ModelPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject<ModelObject>(
-        data_object,
-        label,
-        m_ingest_mode,
-        IngestMode::Reference,
-        m_ingest_label,
-        "ModelPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "ModelPainter", "AddReferenceDataObject") };
+    AppendReferenceModelObject(typed_data_object, label);
 }
 
-void ModelPainter::IngestModelObject(ModelObject & data_object)
+void ModelPainter::AppendModelObject(ModelObject & data_object)
 {
-    if (m_ingest_mode == IngestMode::Reference)
-    {
-        m_ref_model_object_list_map[m_ingest_label].push_back(&data_object);
-        return;
-    }
     m_model_object_list.push_back(&data_object);
+}
+
+void ModelPainter::AppendReferenceModelObject(
+    ModelObject & data_object,
+    const std::string & label)
+{
+    m_ref_model_object_list_map[label].push_back(&data_object);
 }
 
 void ModelPainter::Painting()

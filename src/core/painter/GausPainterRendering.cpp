@@ -16,7 +16,7 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "internal/PainterIngestion.hpp"
+#include "internal/PainterTypeCheck.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -59,36 +59,30 @@ void GausPainter::SetFolder(const std::string & folder_path)
 
 void GausPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject<ModelObject>(
-        data_object,
-        m_ingest_mode,
-        IngestMode::Data,
-        IngestMode::Reference,
-        m_ingest_label,
-        "GausPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "GausPainter", "AddDataObject") };
+    AppendModelObject(typed_data_object);
 }
 
 void GausPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject<ModelObject>(
-        data_object,
-        label,
-        m_ingest_mode,
-        IngestMode::Reference,
-        m_ingest_label,
-        "GausPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "GausPainter", "AddReferenceDataObject") };
+    AppendReferenceModelObject(typed_data_object, label);
 }
 
-void GausPainter::IngestModelObject(ModelObject & data_object)
+void GausPainter::AppendModelObject(ModelObject & data_object)
 {
-    if (m_ingest_mode == IngestMode::Reference)
-    {
-        m_ref_model_object_list_map[m_ingest_label].push_back(&data_object);
-        return;
-    }
     m_model_object_list.push_back(&data_object);
+}
+
+void GausPainter::AppendReferenceModelObject(
+    ModelObject & data_object,
+    const std::string & label)
+{
+    m_ref_model_object_list_map[label].push_back(&data_object);
 }
 
 void GausPainter::Painting()

@@ -11,7 +11,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "internal/PainterIngestion.hpp"
+#include "internal/PainterTypeCheck.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -59,36 +59,30 @@ void DemoPainter::SetFolder(const std::string & folder_path)
 
 void DemoPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject<ModelObject>(
-        data_object,
-        m_ingest_mode,
-        IngestMode::Data,
-        IngestMode::Reference,
-        m_ingest_label,
-        "DemoPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "DemoPainter", "AddDataObject") };
+    AppendModelObject(typed_data_object);
 }
 
 void DemoPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject<ModelObject>(
-        data_object,
-        label,
-        m_ingest_mode,
-        IngestMode::Reference,
-        m_ingest_label,
-        "DemoPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "DemoPainter", "AddReferenceDataObject") };
+    AppendReferenceModelObject(typed_data_object, label);
 }
 
-void DemoPainter::IngestModelObject(ModelObject & data_object)
+void DemoPainter::AppendModelObject(ModelObject & data_object)
 {
-    if (m_ingest_mode == IngestMode::Reference)
-    {
-        m_ref_model_object_list_map[m_ingest_label].push_back(&data_object);
-        return;
-    }
     m_model_object_list.push_back(&data_object);
+}
+
+void DemoPainter::AppendReferenceModelObject(
+    ModelObject & data_object,
+    const std::string & label)
+{
+    m_ref_model_object_list_map[label].push_back(&data_object);
 }
 
 void DemoPainter::Painting()

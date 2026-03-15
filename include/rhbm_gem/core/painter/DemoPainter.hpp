@@ -27,9 +27,6 @@ class DemoPainter : public PainterBase
     std::vector<ModelObject *> m_model_object_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
-    enum class IngestMode { Data, Reference };
-    IngestMode m_ingest_mode{ IngestMode::Data };
-    std::string m_ingest_label;
 
 public:
     DemoPainter();
@@ -40,7 +37,8 @@ public:
     void Painting() override;
 
 private:
-    void IngestModelObject(ModelObject & data_object);
+    void AppendModelObject(ModelObject & data_object);
+    void AppendReferenceModelObject(ModelObject & data_object, const std::string & label);
     void PainMapValueComparisonSingle(const std::string & name, ModelObject * model_object, ModelObject * ref_model_object);
     void PaintAtomMapValueExample(ModelObject * model_object, const std::string & name);
     void PaintGroupGausMainChainSummary(const std::vector<ModelObject *> & model_list, const std::string & name);
