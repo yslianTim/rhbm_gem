@@ -1,96 +1,37 @@
 #include <rhbm_gem/data/io/FileIO.hpp>
 
-#include "internal/io/file/FileFormatBackendFactory.hpp"
-#include "internal/io/file/FileFormatRegistry.hpp"
-#include "internal/io/file/MapFileFormatBase.hpp"
-#include "internal/io/file/ModelFileFormatBase.hpp"
+#include "internal/io/file/CCP4Format.hpp"
+#include "internal/io/file/CifFormat.hpp"
+#include "internal/io/file/FileFormatCatalog.hpp"
+#include "internal/io/file/MrcFormat.hpp"
+#include "internal/io/file/PdbFormat.hpp"
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
-#include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/AtomicModelDataBlock.hpp>
-#include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <fstream>
 #include <stdexcept>
-#include <unordered_set>
-#include <utility>
 
 namespace rhbm_gem {
 
 namespace {
 
-const FileFormatRegistry & DefaultFileFormatRegistry()
+const FileFormatCatalog & DefaultFileFormatCatalog()
 {
-    static const FileFormatRegistry registry{ BuildDefaultFileFormatRegistry() };
-    return registry;
+    static const FileFormatCatalog catalog{ BuildDefaultFileFormatCatalog() };
+    return catalog;
 }
 
 const FileFormatDescriptor & ResolveDescriptorForRead(const std::filesystem::path & filename)
 {
-    return DefaultFileFormatRegistry().LookupForRead(FilePathHelper::GetExtension(filename));
+    return DefaultFileFormatCatalog().LookupForRead(FilePathHelper::GetExtension(filename));
 }
 
 const FileFormatDescriptor & ResolveDescriptorForWrite(const std::filesystem::path & filename)
 {
-    return DefaultFileFormatRegistry().LookupForWrite(FilePathHelper::GetExtension(filename));
-}
-
-std::unique_ptr<ModelObject> BuildModelObject(AtomicModelDataBlock & data_block)
-{
-    auto model_number_list{ data_block.GetModelNumberList() };
-    if (model_number_list.empty())
-    {
-        throw std::runtime_error("No atom model found in the input model file.");
-    }
-
-    int selected_model_number{ 1 };
-    if (data_block.HasModelNumber(selected_model_number) == false)
-    {
-        selected_model_number = model_number_list.front();
-        Logger::Log(LogLevel::Warning,
-            "Model 1 not found. Fallback to model "
-            + std::to_string(selected_model_number) + ".");
-    }
-
-    auto model_object{
-        std::make_unique<ModelObject>(data_block.MoveAtomObjectList(selected_model_number))
-    };
-
-    std::unordered_set<const AtomObject *> selected_atom_set;
-    selected_atom_set.reserve(model_object->GetAtomList().size());
-    for (const auto & atom : model_object->GetAtomList())
-    {
-        selected_atom_set.insert(atom.get());
-    }
-
-    auto bond_list{ data_block.MoveBondObjectList() };
-    std::vector<std::unique_ptr<BondObject>> filtered_bond_list;
-    filtered_bond_list.reserve(bond_list.size());
-    for (auto & bond : bond_list)
-    {
-        if (bond == nullptr) continue;
-        auto atom_1{ bond->GetAtomObject1() };
-        auto atom_2{ bond->GetAtomObject2() };
-        if (selected_atom_set.find(atom_1) == selected_atom_set.end()) continue;
-        if (selected_atom_set.find(atom_2) == selected_atom_set.end()) continue;
-        filtered_bond_list.emplace_back(std::move(bond));
-    }
-
-    model_object->SetPdbID(data_block.GetPdbID());
-    model_object->SetEmdID(data_block.GetEmdID());
-    model_object->SetResolution(data_block.GetResolution());
-    model_object->SetResolutionMethod(data_block.GetResolutionMethod());
-    model_object->SetChainIDListMap(data_block.GetChainIDListMap());
-    model_object->SetChemicalComponentEntryMap(data_block.GetChemicalComponentEntryMap());
-    model_object->SetComponentKeySystem(data_block.MoveComponentKeySystem());
-    model_object->SetAtomKeySystem(data_block.MoveAtomKeySystem());
-    model_object->SetBondKeySystem(data_block.MoveBondKeySystem());
-    model_object->SetBondList(std::move(filtered_bond_list));
-    return model_object;
+    return DefaultFileFormatCatalog().LookupForWrite(FilePathHelper::GetExtension(filename));
 }
 
 std::unique_ptr<ModelObject> ReadModelWithDescriptor(
@@ -102,19 +43,25 @@ std::unique_ptr<ModelObject> ReadModelWithDescriptor(
         throw std::runtime_error("Unsupported model file format.");
     }
 
-    auto file_backend{ CreateModelFileFormatBackend(*descriptor.model_backend) };
     std::ifstream file{ filename, std::ios::binary };
     if (!file)
     {
         throw std::runtime_error("Cannot open the file: " + filename.string());
     }
-    file_backend->Read(file, filename.string());
-    auto * data_block{ file_backend->GetDataBlockPtr() };
-    if (data_block == nullptr)
+    switch (*descriptor.model_backend)
     {
-        throw std::runtime_error("Model file backend returned null data block.");
+    case ModelFormatBackend::Pdb:
+    {
+        PdbFormat codec;
+        return codec.ReadModel(file, filename.string());
     }
-    return BuildModelObject(*data_block);
+    case ModelFormatBackend::Cif:
+    {
+        CifFormat codec;
+        return codec.ReadModel(file, filename.string());
+    }
+    }
+    throw std::runtime_error("Unsupported model file format backend.");
 }
 
 void WriteModelWithDescriptor(
@@ -128,13 +75,27 @@ void WriteModelWithDescriptor(
         throw std::runtime_error("Unsupported model file format.");
     }
 
-    auto file_backend{ CreateModelFileFormatBackend(*descriptor.model_backend) };
     std::ofstream outfile{ filename, std::ios::binary };
     if (!outfile)
     {
         throw std::runtime_error("Cannot open the file: " + filename.string());
     }
-    file_backend->Write(model_object, outfile, model_parameter);
+    switch (*descriptor.model_backend)
+    {
+    case ModelFormatBackend::Pdb:
+    {
+        PdbFormat codec;
+        codec.WriteModel(model_object, outfile, model_parameter);
+        return;
+    }
+    case ModelFormatBackend::Cif:
+    {
+        CifFormat codec;
+        codec.WriteModel(model_object, outfile, model_parameter);
+        return;
+    }
+    }
+    throw std::runtime_error("Unsupported model file format backend.");
 }
 
 std::unique_ptr<MapObject> ReadMapWithDescriptor(
@@ -146,18 +107,25 @@ std::unique_ptr<MapObject> ReadMapWithDescriptor(
         throw std::runtime_error("Unsupported map file format.");
     }
 
-    auto file_backend{ CreateMapFileFormatBackend(*descriptor.map_backend) };
     std::ifstream file{ filename, std::ios::binary };
     if (!file)
     {
         throw std::runtime_error("Cannot open the file: " + filename.string());
     }
-    file_backend->Read(file, filename.string());
-    return std::make_unique<MapObject>(
-        file_backend->GetGridSize(),
-        file_backend->GetGridSpacing(),
-        file_backend->GetOrigin(),
-        file_backend->GetDataArray());
+    switch (*descriptor.map_backend)
+    {
+    case MapFormatBackend::Mrc:
+    {
+        MrcFormat codec;
+        return codec.ReadMap(file, filename.string());
+    }
+    case MapFormatBackend::Ccp4:
+    {
+        CCP4Format codec;
+        return codec.ReadMap(file, filename.string());
+    }
+    }
+    throw std::runtime_error("Unsupported map file format backend.");
 }
 
 void WriteMapWithDescriptor(
@@ -170,13 +138,27 @@ void WriteMapWithDescriptor(
         throw std::runtime_error("Unsupported map file format.");
     }
 
-    auto file_backend{ CreateMapFileFormatBackend(*descriptor.map_backend) };
     std::ofstream outfile{ filename, std::ios::binary | std::ios::trunc };
     if (!outfile)
     {
         throw std::runtime_error("Cannot open the file: " + filename.string());
     }
-    file_backend->Write(map_object, outfile);
+    switch (*descriptor.map_backend)
+    {
+    case MapFormatBackend::Mrc:
+    {
+        MrcFormat codec;
+        codec.WriteMap(map_object, outfile);
+        return;
+    }
+    case MapFormatBackend::Ccp4:
+    {
+        CCP4Format codec;
+        codec.WriteMap(map_object, outfile);
+        return;
+    }
+    }
+    throw std::runtime_error("Unsupported map file format backend.");
 }
 
 } // namespace

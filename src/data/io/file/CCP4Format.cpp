@@ -16,7 +16,8 @@ CCP4Format::CCP4Format()
     InitHeader();
 }
 
-void CCP4Format::Read(std::istream & stream, const std::string & source_name)
+std::unique_ptr<MapObject> CCP4Format::ReadMap(
+    std::istream & stream, const std::string & source_name)
 {
     m_data_array.reset();
     InitHeader();
@@ -36,9 +37,10 @@ void CCP4Format::Read(std::istream & stream, const std::string & source_name)
         throw std::runtime_error("CCP4Format::Read() failed for '" + source_name
                                  + "': " + ex.what());
     }
+    return std::make_unique<MapObject>(GetGridSize(), GetGridSpacing(), GetOrigin(), TakeDataArray());
 }
 
-void CCP4Format::Write(const MapObject & map_object, std::ostream & stream)
+void CCP4Format::WriteMap(const MapObject & map_object, std::ostream & stream)
 {
     if (!stream)
     {
@@ -285,12 +287,12 @@ void CCP4Format::SaveDataArray(const float * data, size_t size, std::ostream & s
     }
 }
 
-std::unique_ptr<float[]> CCP4Format::GetDataArray()
+std::unique_ptr<float[]> CCP4Format::TakeDataArray()
 {
     return std::move(m_data_array);
 }
 
-std::array<int, 3> CCP4Format::GetGridSize()
+std::array<int, 3> CCP4Format::GetGridSize() const
 {
     // Return data array size in X, Y, Z order (CCP4Header::array_size)
     std::array<int, 3> grid_size{
@@ -301,7 +303,7 @@ std::array<int, 3> CCP4Format::GetGridSize()
     return grid_size;
 }
 
-std::array<float, 3> CCP4Format::GetGridSpacing()
+std::array<float, 3> CCP4Format::GetGridSpacing() const
 {
     if (m_header.grid_size[0] == 0 || m_header.grid_size[1] == 0 || m_header.grid_size[2] == 0)
     {
@@ -315,7 +317,7 @@ std::array<float, 3> CCP4Format::GetGridSpacing()
     return grid_spacing;
 }
 
-std::array<float, 3> CCP4Format::GetOrigin()
+std::array<float, 3> CCP4Format::GetOrigin() const
 {
     auto grid_spacing{ GetGridSpacing() };
     std::array<float, 3> origin{

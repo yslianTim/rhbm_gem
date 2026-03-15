@@ -5,7 +5,7 @@
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
-#include <rhbm_gem/data/object/AtomicModelDataBlock.hpp>
+#include "internal/object/AtomicModelDataBlock.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <fstream>
@@ -27,7 +27,8 @@ PdbFormat::~PdbFormat()
 
 }
 
-void PdbFormat::Read(std::istream & stream, const std::string & source_name)
+std::unique_ptr<ModelObject> PdbFormat::ReadModel(
+    std::istream & stream, const std::string & source_name)
 {
     m_data_block = std::make_unique<AtomicModelDataBlock>();
     if (!stream)
@@ -36,6 +37,7 @@ void PdbFormat::Read(std::istream & stream, const std::string & source_name)
         throw std::runtime_error("PdbFormat::Read() failed: invalid input stream.");
     }
     LoadAtomSiteData(stream);
+    return m_data_block->TakeModelObject();
 }
 
 void PdbFormat::LoadAtomSiteData(std::istream & stream)
@@ -101,12 +103,7 @@ void PdbFormat::ScanAtomEntry(char * line, bool is_special, int model_number)
     m_data_block->AddAtomObject(model_number, std::move(atom_object));
 }
 
-AtomicModelDataBlock * PdbFormat::GetDataBlockPtr()
-{
-    return m_data_block.get();
-}
-
-void PdbFormat::Write(const ModelObject & model_object, std::ostream & stream, int par)
+void PdbFormat::WriteModel(const ModelObject & model_object, std::ostream & stream, int par)
 {
     if (!stream)
     {

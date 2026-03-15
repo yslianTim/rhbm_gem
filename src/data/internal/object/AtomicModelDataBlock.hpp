@@ -19,6 +19,7 @@ namespace rhbm_gem {
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
+class ModelObject;
 struct ComponentAtomEntry;
 struct ComponentBondEntry;
 struct SheetRange
@@ -131,6 +132,7 @@ public:
     ComponentKeySystem * GetComponentKeySystemPtr() { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr() { return m_atom_key_system.get(); }
     BondKeySystem * GetBondKeySystemPtr() { return m_bond_key_system.get(); }
+    std::unique_ptr<ModelObject> TakeModelObject(int preferred_model_number = 1);
     std::vector<std::unique_ptr<AtomObject>> MoveAtomObjectList(int model_number=1);
     std::vector<std::unique_ptr<BondObject>> MoveBondObjectList();
     std::unique_ptr<ComponentKeySystem> MoveComponentKeySystem() { return std::move(m_component_key_system); }

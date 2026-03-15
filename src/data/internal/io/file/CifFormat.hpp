@@ -12,23 +12,25 @@
 #include <optional>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include "ICifCategoryParser.hpp"
-#include "ModelFileFormatBase.hpp"
+#include "MmCifParsedDocument.hpp"
 
 namespace rhbm_gem {
 
 class AtomicModelDataBlock;
 class ModelObject;
 class AtomObject;
-class ICifCategoryParser;
 
-class CifFormat : public ModelFileFormatBase
+using CifColumnIndexMap = std::map<std::string, size_t, std::less<>>;
+using CifLoopRowHandler = std::function<void(
+    const CifColumnIndexMap &,
+    const std::vector<std::string> &)>;
+
+class CifFormat
 {
     using ColumnIndexMap = CifColumnIndexMap;
 
     static constexpr float m_bond_searching_radius{ 2.0f };
     std::unique_ptr<AtomicModelDataBlock> m_data_block;
-    std::unique_ptr<ICifCategoryParser> m_category_parser;
     bool m_find_chemical_component_entry{ false };
     bool m_find_component_atom_entry{ false };
     bool m_find_component_bond_entry{ false };
@@ -38,9 +40,8 @@ class CifFormat : public ModelFileFormatBase
 public:
     CifFormat();
     ~CifFormat();
-    void Read(std::istream & stream, const std::string & source_name) override;
-    void Write(const ModelObject & model_object, std::ostream & stream, int par) override;
-    AtomicModelDataBlock * GetDataBlockPtr() override;
+    std::unique_ptr<ModelObject> ReadModel(std::istream & stream, const std::string & source_name);
+    void WriteModel(const ModelObject & model_object, std::ostream & stream, int par);
 
 private:
     void ResetReadState();

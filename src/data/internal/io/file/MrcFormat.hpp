@@ -5,11 +5,11 @@
 #include <istream>
 #include <ostream>
 
-#include "MapFileFormatBase.hpp"
-
 namespace rhbm_gem {
 
-class MrcFormat : public MapFileFormatBase
+class MapObject;
+
+class MrcFormat
 {
     enum HEAD
     {
@@ -78,16 +78,16 @@ class MrcFormat : public MapFileFormatBase
 public:
     MrcFormat();
     ~MrcFormat() = default;
-    void Read(std::istream & stream, const std::string & source_name) override;
-    void Write(const MapObject & map_object, std::ostream & stream) override;
-    std::unique_ptr<float[]> GetDataArray() override;
-    std::array<int, 3> GetGridSize() override;
-    std::array<float, 3> GetGridSpacing() override;
-    std::array<float, 3> GetOrigin() override;
+    std::unique_ptr<MapObject> ReadMap(std::istream & stream, const std::string & source_name);
+    void WriteMap(const MapObject & map_object, std::ostream & stream);
 
     const MrcHeader & GetHeader() const { return m_header; }
     
 private:
+    std::unique_ptr<float[]> TakeDataArray();
+    std::array<int, 3> GetGridSize() const;
+    std::array<float, 3> GetGridSpacing() const;
+    std::array<float, 3> GetOrigin() const;
     void InitHeader();
     void LoadHeader(std::istream & stream);
     void SaveHeader(std::ostream & stream);

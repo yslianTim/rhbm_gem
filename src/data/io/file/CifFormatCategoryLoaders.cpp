@@ -1,7 +1,7 @@
 #include "internal/io/file/CifFormat.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/AtomicModelDataBlock.hpp>
+#include "internal/object/AtomicModelDataBlock.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>

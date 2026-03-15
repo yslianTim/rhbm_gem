@@ -1,10 +1,7 @@
-#include "internal/io/sqlite/MapObjectDAO.hpp"
+#include "internal/io/sqlite/MapObjectStorage.hpp"
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "io/sqlite/MapStoreSql.hpp"
 
 #include <stdexcept>
 #include <vector>
@@ -12,24 +9,22 @@
 
 namespace rhbm_gem {
 
-MapObjectDAO::MapObjectDAO(SQLiteWrapper * database) : m_database{ database }
+MapObjectStorage::MapObjectStorage(SQLiteWrapper * database) : m_database{ database }
 {
 }
 
-MapObjectDAO::~MapObjectDAO()
+MapObjectStorage::~MapObjectStorage()
 {
 }
 
-void MapObjectDAO::EnsureSchema(SQLiteWrapper & database)
+void MapObjectStorage::CreateTables(SQLiteWrapper & database)
 {
-    database.Execute(std::string(persistence::kCreateMapTableSql));
+    database.Execute(std::string(map_storage::kCreateTableSql));
 }
 
-void MapObjectDAO::Save(const DataObjectBase & data_object, const std::string & key_tag)
+void MapObjectStorage::Save(const MapObject & map_object, const std::string & key_tag)
 {
-    const auto & map_object{ ExpectMapObject(data_object, "MapObjectDAO::Save()") };
-
-    m_database->Prepare(std::string(persistence::kInsertMapSql));
+    m_database->Prepare(std::string(map_storage::kInsertSql));
     SQLiteWrapper::StatementGuard guard(*m_database);
 
     auto grid_size{ map_object.GetGridSize() };
@@ -53,9 +48,9 @@ void MapObjectDAO::Save(const DataObjectBase & data_object, const std::string & 
     m_database->StepOnce();
 }
 
-std::unique_ptr<DataObjectBase> MapObjectDAO::Load(const std::string & key_tag)
+std::unique_ptr<MapObject> MapObjectStorage::Load(const std::string & key_tag)
 {
-    m_database->Prepare(std::string(persistence::kSelectMapSql));
+    m_database->Prepare(std::string(map_storage::kSelectSql));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
 

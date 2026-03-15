@@ -2,11 +2,9 @@
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "internal/io/sqlite/MapObjectDAO.hpp"
-#include "internal/io/sqlite/ModelObjectDAOSqlite.hpp"
+#include "internal/io/sqlite/MapObjectStorage.hpp"
+#include "internal/io/sqlite/ModelObjectStorage.hpp"
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
-#include "io/sqlite/MapStoreSql.hpp"
-#include "io/sqlite/ModelSchemaSql.hpp"
 
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #ifdef RHBM_GEM_LEGACY_V1_SUPPORT
@@ -404,12 +402,12 @@ namespace
 
     void EnsureModelSchema(rhbm_gem::SQLiteWrapper & database)
     {
-        rhbm_gem::ModelObjectDAOSqlite::EnsureSchema(database);
+        rhbm_gem::ModelObjectStorage::CreateTables(database);
     }
 
     void ValidateModelSchema(rhbm_gem::SQLiteWrapper & database)
     {
-        ValidateRequiredTables(database, rhbm_gem::model_io::kModelCanonicalTableNames, "model");
+        ValidateRequiredTables(database, rhbm_gem::model_storage::kCanonicalTableNames, "model");
 
         ValidatePrimaryKeyShape(database, "model_object", {"key_tag"});
         ValidatePrimaryKeyShape(database, "model_chain_map", {"key_tag", "entity_id", "chain_ordinal"});
@@ -433,7 +431,7 @@ namespace
 
         ValidateForeignKey(database, "model_object", "key_tag", "object_catalog", "key_tag", "CASCADE");
 
-        for (const auto table_name : rhbm_gem::model_io::kModelCanonicalTableNames)
+        for (const auto table_name : rhbm_gem::model_storage::kCanonicalTableNames)
         {
             if (table_name == std::string_view("model_object"))
             {
@@ -460,12 +458,12 @@ namespace
 
     void EnsureMapSchema(rhbm_gem::SQLiteWrapper & database)
     {
-        rhbm_gem::MapObjectDAO::EnsureSchema(database);
+        rhbm_gem::MapObjectStorage::CreateTables(database);
     }
 
     void ValidateMapSchema(rhbm_gem::SQLiteWrapper & database)
     {
-        ValidateRequiredTables(database, rhbm_gem::persistence::kMapCanonicalTableNames, "map");
+        ValidateRequiredTables(database, rhbm_gem::map_storage::kCanonicalTableNames, "map");
         ValidatePrimaryKeyShape(database, "map_list", {"key_tag"});
         ValidateForeignKey(database, "map_list", "key_tag", "object_catalog", "key_tag", "CASCADE");
     }
@@ -670,7 +668,7 @@ namespace
 #ifdef RHBM_GEM_LEGACY_V1_SUPPORT
     std::vector<LegacyMapRow> LoadLegacyMapRows(rhbm_gem::SQLiteWrapper & database)
     {
-        if (!HasTable(database, std::string(rhbm_gem::persistence::kMapTableName)))
+        if (!HasTable(database, std::string(rhbm_gem::map_storage::kTableName)))
         {
             return {};
         }
@@ -756,7 +754,7 @@ namespace
             return;
         }
 
-        database.Prepare(std::string(rhbm_gem::persistence::kInsertMapSql));
+        database.Prepare(std::string(rhbm_gem::map_storage::kInsertSql));
         rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
         for (const auto & row : legacy_map_rows)
         {
@@ -787,16 +785,16 @@ namespace
         const auto legacy_map_rows{ LoadLegacyMapRows(database) };
         ValidateNoLegacyRootKeyCollision(legacy_model_keys, legacy_map_rows);
 
-        DropTableIfExists(database, std::string(rhbm_gem::persistence::kMapTableName));
+        DropTableIfExists(database, std::string(rhbm_gem::map_storage::kTableName));
         CreateFinalV2Tables(database);
 
         rhbm_gem::LegacyModelObjectReader legacy_reader{ &database };
-        rhbm_gem::ModelObjectDAOSqlite v2_dao{ &database };
+        rhbm_gem::ModelObjectStorage v2_storage{ &database };
         for (const auto & key_tag : legacy_model_keys)
         {
             auto model_object{ legacy_reader.Load(key_tag) };
             UpsertObjectCatalogRows(database, { key_tag }, "model");
-            v2_dao.Save(*model_object, key_tag);
+            v2_storage.Save(*model_object, key_tag);
         }
 
         const auto legacy_map_keys{ BuildLegacyMapKeyList(legacy_map_rows) };

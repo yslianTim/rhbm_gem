@@ -1,12 +1,14 @@
-#include <rhbm_gem/data/object/AtomicModelDataBlock.hpp>
+#include "internal/object/AtomicModelDataBlock.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace rhbm_gem {
 
@@ -158,6 +160,61 @@ void AtomicModelDataBlock::SetStructureInfo(AtomObject * atom_object)
     }
 
     atom_object->SetStructure(Structure::FREE);
+}
+
+std::unique_ptr<ModelObject> AtomicModelDataBlock::TakeModelObject(int preferred_model_number)
+{
+    auto model_number_list{ GetModelNumberList() };
+    if (model_number_list.empty())
+    {
+        throw std::runtime_error("No atom model found in the input model file.");
+    }
+
+    int selected_model_number{ preferred_model_number };
+    if (HasModelNumber(selected_model_number) == false)
+    {
+        selected_model_number = model_number_list.front();
+        Logger::Log(
+            LogLevel::Warning,
+            "Model " + std::to_string(preferred_model_number) + " not found. Fallback to model "
+                + std::to_string(selected_model_number) + ".");
+    }
+
+    auto model_object{
+        std::make_unique<ModelObject>(MoveAtomObjectList(selected_model_number))
+    };
+
+    std::unordered_set<const AtomObject *> selected_atom_set;
+    selected_atom_set.reserve(model_object->GetAtomList().size());
+    for (const auto & atom : model_object->GetAtomList())
+    {
+        selected_atom_set.insert(atom.get());
+    }
+
+    auto bond_list{ MoveBondObjectList() };
+    std::vector<std::unique_ptr<BondObject>> filtered_bond_list;
+    filtered_bond_list.reserve(bond_list.size());
+    for (auto & bond : bond_list)
+    {
+        if (bond == nullptr) continue;
+        auto atom_1{ bond->GetAtomObject1() };
+        auto atom_2{ bond->GetAtomObject2() };
+        if (selected_atom_set.find(atom_1) == selected_atom_set.end()) continue;
+        if (selected_atom_set.find(atom_2) == selected_atom_set.end()) continue;
+        filtered_bond_list.emplace_back(std::move(bond));
+    }
+
+    model_object->SetPdbID(GetPdbID());
+    model_object->SetEmdID(GetEmdID());
+    model_object->SetResolution(GetResolution());
+    model_object->SetResolutionMethod(GetResolutionMethod());
+    model_object->SetChainIDListMap(GetChainIDListMap());
+    model_object->SetChemicalComponentEntryMap(GetChemicalComponentEntryMap());
+    model_object->SetComponentKeySystem(MoveComponentKeySystem());
+    model_object->SetAtomKeySystem(MoveAtomKeySystem());
+    model_object->SetBondKeySystem(MoveBondKeySystem());
+    model_object->SetBondList(std::move(filtered_bond_list));
+    return model_object;
 }
 
 std::vector<std::unique_ptr<AtomObject>> AtomicModelDataBlock::MoveAtomObjectList(int model_number)

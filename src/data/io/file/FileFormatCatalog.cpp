@@ -1,4 +1,4 @@
-#include "internal/io/file/FileFormatRegistry.hpp"
+#include "internal/io/file/FileFormatCatalog.hpp"
 
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
@@ -23,7 +23,7 @@ std::vector<FileFormatDescriptor> BuildDefaultDescriptors()
 
 } // namespace
 
-FileFormatRegistry::FileFormatRegistry(std::vector<FileFormatDescriptor> descriptors) :
+FileFormatCatalog::FileFormatCatalog(std::vector<FileFormatDescriptor> descriptors) :
     m_descriptors{ std::move(descriptors) },
     m_descriptor_index_map{}
 {
@@ -50,7 +50,7 @@ FileFormatRegistry::FileFormatRegistry(std::vector<FileFormatDescriptor> descrip
     }
 }
 
-const FileFormatDescriptor & FileFormatRegistry::Lookup(const std::string & extension) const
+const FileFormatDescriptor & FileFormatCatalog::Lookup(const std::string & extension) const
 {
     auto normalized_extension{ extension };
     StringHelper::ToLowerCase(normalized_extension);
@@ -62,7 +62,7 @@ const FileFormatDescriptor & FileFormatRegistry::Lookup(const std::string & exte
     throw std::runtime_error("Unsupported file format: " + extension);
 }
 
-const FileFormatDescriptor & FileFormatRegistry::LookupForRead(const std::string & extension) const
+const FileFormatDescriptor & FileFormatCatalog::LookupForRead(const std::string & extension) const
 {
     const auto & descriptor{ Lookup(extension) };
     if (!descriptor.supports_read)
@@ -72,7 +72,7 @@ const FileFormatDescriptor & FileFormatRegistry::LookupForRead(const std::string
     return descriptor;
 }
 
-const FileFormatDescriptor & FileFormatRegistry::LookupForWrite(const std::string & extension) const
+const FileFormatDescriptor & FileFormatCatalog::LookupForWrite(const std::string & extension) const
 {
     const auto & descriptor{ Lookup(extension) };
     if (!descriptor.supports_write)
@@ -82,14 +82,14 @@ const FileFormatDescriptor & FileFormatRegistry::LookupForWrite(const std::strin
     return descriptor;
 }
 
-const std::vector<FileFormatDescriptor> & FileFormatRegistry::GetAllDescriptors() const
+const std::vector<FileFormatDescriptor> & FileFormatCatalog::GetAllDescriptors() const
 {
     return m_descriptors;
 }
 
-FileFormatRegistry BuildDefaultFileFormatRegistry()
+FileFormatCatalog BuildDefaultFileFormatCatalog()
 {
-    return FileFormatRegistry{ BuildDefaultDescriptors() };
+    return FileFormatCatalog{ BuildDefaultDescriptors() };
 }
 
 } // namespace rhbm_gem

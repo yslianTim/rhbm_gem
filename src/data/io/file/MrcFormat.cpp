@@ -16,7 +16,8 @@ MrcFormat::MrcFormat()
     InitHeader();
 }
 
-void MrcFormat::Read(std::istream & stream, const std::string & source_name)
+std::unique_ptr<MapObject> MrcFormat::ReadMap(
+    std::istream & stream, const std::string & source_name)
 {
     m_data_array.reset();
     InitHeader();
@@ -36,9 +37,10 @@ void MrcFormat::Read(std::istream & stream, const std::string & source_name)
         throw std::runtime_error("MrcFormat::Read() failed for '" + source_name
                                  + "': " + ex.what());
     }
+    return std::make_unique<MapObject>(GetGridSize(), GetGridSpacing(), GetOrigin(), TakeDataArray());
 }
 
-void MrcFormat::Write(const MapObject & map_object, std::ostream & stream)
+void MrcFormat::WriteMap(const MapObject & map_object, std::ostream & stream)
 {
     if (!stream)
     {
@@ -270,12 +272,12 @@ void MrcFormat::SaveDataArray(const float * data, size_t size, std::ostream & st
     }
 }
 
-std::unique_ptr<float[]> MrcFormat::GetDataArray()
+std::unique_ptr<float[]> MrcFormat::TakeDataArray()
 {
     return std::move(m_data_array);
 }
 
-std::array<int, 3> MrcFormat::GetGridSize()
+std::array<int, 3> MrcFormat::GetGridSize() const
 {
     std::array<int, 3> grid_size{
         m_header.array_size[0],
@@ -285,7 +287,7 @@ std::array<int, 3> MrcFormat::GetGridSize()
     return grid_size;
 }
 
-std::array<float, 3> MrcFormat::GetGridSpacing()
+std::array<float, 3> MrcFormat::GetGridSpacing() const
 {
     if (m_header.grid_size[0] == 0 || m_header.grid_size[1] == 0 || m_header.grid_size[2] == 0)
     {
@@ -299,7 +301,7 @@ std::array<float, 3> MrcFormat::GetGridSpacing()
     return grid_spacing;
 }
 
-std::array<float, 3> MrcFormat::GetOrigin()
+std::array<float, 3> MrcFormat::GetOrigin() const
 {
     std::array<float, 3> origin{
         m_header.origin[0],

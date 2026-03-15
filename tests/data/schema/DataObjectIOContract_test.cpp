@@ -91,8 +91,8 @@ TEST(DataObjectIOContractTest, UppercaseExtensionsDispatchCorrectly)
 TEST(DataObjectIOContractTest, FileFormatDescriptorsAreUniqueAndConsistent)
 {
     std::unordered_set<std::string> extension_set;
-    const auto registry{ rg::BuildDefaultFileFormatRegistry() };
-    for (const auto & descriptor : registry.GetAllDescriptors())
+    const auto catalog{ rg::BuildDefaultFileFormatCatalog() };
+    for (const auto & descriptor : catalog.GetAllDescriptors())
     {
         EXPECT_TRUE(extension_set.insert(descriptor.extension).second);
         if (descriptor.kind == rg::DataObjectKind::Model)

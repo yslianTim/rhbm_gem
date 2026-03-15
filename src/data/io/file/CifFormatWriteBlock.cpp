@@ -10,12 +10,8 @@
 
 namespace rhbm_gem {
 
-AtomicModelDataBlock * CifFormat::GetDataBlockPtr()
-{
-    return m_data_block.get();
-}
-
-void CifFormat::Write(const ModelObject & model_object, std::ostream & stream, int model_par)
+void CifFormat::WriteModel(
+    const ModelObject & model_object, std::ostream & stream, int model_par)
 {
     stream << "data_" << model_object.GetKeyTag() << '\n';
     stream << "#\n";

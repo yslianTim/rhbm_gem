@@ -12,7 +12,6 @@ TEST(DataPublicHeaderSurfaceTest, DataPublicHeadersMatchApprovedSurface) {
         "data/io/FileIO.hpp",
         "data/object/AtomClassifier.hpp",
         "data/object/AtomObject.hpp",
-        "data/object/AtomicModelDataBlock.hpp",
         "data/object/BondClassifier.hpp",
         "data/object/BondObject.hpp",
         "data/object/ChemicalComponentEntry.hpp",

@@ -1,10 +1,12 @@
 #include "internal/io/sqlite/DatabaseManager.hpp"
 #include "internal/migration/DatabaseSchemaManager.hpp"
-#include "internal/io/sqlite/MapObjectDAO.hpp"
-#include "internal/io/sqlite/ModelObjectDAOSqlite.hpp"
+#include "internal/io/sqlite/MapObjectStorage.hpp"
+#include "internal/io/sqlite/ModelObjectStorage.hpp"
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 #include <system_error>
 
@@ -33,8 +35,8 @@ DatabaseManager::DatabaseManager(const std::filesystem::path & database_path) :
     }
 
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
-    m_model_store = std::make_shared<ModelObjectDAOSqlite>(m_database.get());
-    m_map_store = std::make_shared<MapObjectDAO>(m_database.get());
+    m_model_store = std::make_shared<ModelObjectStorage>(m_database.get());
+    m_map_store = std::make_shared<MapObjectStorage>(m_database.get());
     DatabaseSchemaManager schema_manager{ m_database.get() };
     m_schema_version = schema_manager.EnsureSchema();
 }
@@ -63,12 +65,12 @@ void DatabaseManager::SaveDataObject(
 
     if (type_name == "model")
     {
-        m_model_store->Save(*data_object, key_tag);
+        m_model_store->Save(ExpectModelObject(*data_object, "DatabaseManager::SaveDataObject()"), key_tag);
         return;
     }
     if (type_name == "map")
     {
-        m_map_store->Save(*data_object, key_tag);
+        m_map_store->Save(ExpectMapObject(*data_object, "DatabaseManager::SaveDataObject()"), key_tag);
         return;
     }
     throw std::runtime_error("Unsupported data object type: " + type_name);

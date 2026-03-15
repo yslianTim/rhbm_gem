@@ -42,19 +42,17 @@ flowchart LR
 
     subgraph F["File I/O"]
       B --> C["ReadDataObject / WriteDataObject"]
-      C --> D["FileFormatRegistry (singleton)"]
-      D --> E["kind switch: model/map"]
-      E --> F1["Model backend factory"]
-      E --> F2["Map backend factory"]
-      F1 --> G1["Pdb/Cif backend"]
-      F2 --> G2["Mrc/CCP4 backend"]
+      C --> D["FileFormatCatalog (singleton)"]
+      D --> E["descriptor lookup + kind switch"]
+      E --> F1["Pdb/Cif codec"]
+      E --> F2["Mrc/CCP4 codec"]
     end
 
     subgraph P["SQLite persistence"]
       B --> H["DatabaseManager"]
       H --> I["object_catalog upsert / lookup"]
-      I --> J["model -> ModelObjectDAOSqlite"]
-      I --> K["map -> MapObjectDAO"]
+      I --> J["model -> ModelObjectStorage"]
+      I --> K["map -> MapObjectStorage"]
       H --> L["DatabaseSchemaManager"]
       L --> M["v2 bootstrap/validation"]
       L --> N["legacy v1 migration (optional)"]
@@ -82,7 +80,7 @@ Contract:
 
 - Descriptor lookup is performed once per operation.
 - Routing is explicit by descriptor kind (`model` or `map`).
-- Backend creation is fixed (`CreateModelFileFormatBackend`, `CreateMapFileFormatBackend`).
+- Codec dispatch is fixed inside `FileIO.cpp` via `FileFormatCatalog`.
 - Generic write uses strict type contracts:
   - model branch -> `ExpectModelObject(...)`
   - map branch -> `ExpectMapObject(...)`
@@ -108,8 +106,8 @@ Contract:
 - own transaction boundary for each save/load
 - upsert/query `object_catalog(key_tag, object_type)`
 - route by stable type name only:
-  - `model` -> `ModelObjectDAOSqlite`
-  - `map` -> `MapObjectDAO`
+  - `model` -> `ModelObjectStorage`
+  - `map` -> `MapObjectStorage`
 
 Behavior:
 
@@ -203,14 +201,14 @@ Painter typed object validation:
 
 Allowed extension:
 
-- add model/map file backend via `FileFormatRegistry` + backend factory
-- evolve model/map schema and corresponding fixed DAO implementation
+- add model/map file codec via `FileFormatCatalog`
+- evolve model/map schema and corresponding fixed storage implementation
 - add reusable typed model/map operations in `CommandDataSupport`
 
 Out of scope:
 
 - runtime registration of arbitrary top-level `DataObject` types
-- runtime registration of DAO factories
+- runtime registration of storage factories
 - runtime resolver/factory override chains for file kind dispatch
 
 ## 11. Key Files
@@ -224,10 +222,8 @@ Core orchestration:
 
 File registry/backends:
 
-- `src/data/internal/io/file/FileFormatRegistry.hpp`
-- `src/data/io/file/FileFormatRegistry.cpp`
-- `src/data/internal/io/file/FileFormatBackendFactory.hpp`
-- `src/data/io/file/FileFormatBackendFactory.cpp`
+- `src/data/internal/io/file/FileFormatCatalog.hpp`
+- `src/data/io/file/FileFormatCatalog.cpp`
 
 Dispatch + typed ops:
 
@@ -245,10 +241,10 @@ SQLite/schema:
 - `src/data/io/sqlite/DatabaseManager.cpp`
 - `src/data/internal/migration/DatabaseSchemaManager.hpp`
 - `src/data/schema/DatabaseSchemaManager.cpp`
-- `src/data/internal/io/sqlite/ModelObjectDAOSqlite.hpp`
-- `src/data/io/sqlite/ModelObjectDAOSqlite.cpp`
-- `src/data/internal/io/sqlite/MapObjectDAO.hpp`
-- `src/data/io/sqlite/MapObjectDAO.cpp`
+- `src/data/internal/io/sqlite/ModelObjectStorage.hpp`
+- `src/data/io/sqlite/ModelObjectStorage.cpp`
+- `src/data/internal/io/sqlite/MapObjectStorage.hpp`
+- `src/data/io/sqlite/MapObjectStorage.cpp`
 - `src/data/internal/io/sqlite/SQLiteWrapper.hpp`
 - optional legacy migration helper:
   - `src/data/internal/migration/LegacyModelObjectReader.hpp`

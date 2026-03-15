@@ -35,10 +35,10 @@ struct FileFormatDescriptor
     std::optional<MapFormatBackend> map_backend;
 };
 
-class FileFormatRegistry
+class FileFormatCatalog
 {
 public:
-    explicit FileFormatRegistry(std::vector<FileFormatDescriptor> descriptors);
+    explicit FileFormatCatalog(std::vector<FileFormatDescriptor> descriptors);
 
     const FileFormatDescriptor & Lookup(const std::string & extension) const;
     const FileFormatDescriptor & LookupForRead(const std::string & extension) const;
@@ -50,6 +50,6 @@ private:
     std::unordered_map<std::string, std::size_t> m_descriptor_index_map;
 };
 
-FileFormatRegistry BuildDefaultFileFormatRegistry();
+FileFormatCatalog BuildDefaultFileFormatCatalog();
 
 } // namespace rhbm_gem

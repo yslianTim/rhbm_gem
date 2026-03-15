@@ -1,7 +1,5 @@
-#include "internal/io/sqlite/ModelObjectDAOSqlite.hpp"
+#include "internal/io/sqlite/ModelObjectStorage.hpp"
 
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "internal/io/sqlite/SQLiteWrapper.hpp"
 
@@ -32,16 +30,16 @@ void DeleteRowsForKey(
 
 namespace rhbm_gem {
 
-ModelObjectDAOSqlite::ModelObjectDAOSqlite(SQLiteWrapper * db_manager) :
+ModelObjectStorage::ModelObjectStorage(SQLiteWrapper * db_manager) :
     m_database{ db_manager }
 {
 }
 
-ModelObjectDAOSqlite::~ModelObjectDAOSqlite()
+ModelObjectStorage::~ModelObjectStorage()
 {
 }
 
-void ModelObjectDAOSqlite::EnsureSchema(SQLiteWrapper & database)
+void ModelObjectStorage::CreateTables(SQLiteWrapper & database)
 {
     for (const auto create_sql : model_io::kCreateModelTableSqlList)
     {
@@ -49,10 +47,8 @@ void ModelObjectDAOSqlite::EnsureSchema(SQLiteWrapper & database)
     }
 }
 
-void ModelObjectDAOSqlite::Save(const DataObjectBase & obj, const std::string & key_tag)
+void ModelObjectStorage::Save(const ModelObject & model_obj, const std::string & key_tag)
 {
-    const auto & model_obj{ ExpectModelObject(obj, "ModelObjectDAOSqlite::Save()") };
-
     for (const auto table_name : model_io::kModelTablesScopedByKey)
     {
         DeleteRowsForKey(*m_database, std::string(table_name), key_tag);
@@ -62,7 +58,7 @@ void ModelObjectDAOSqlite::Save(const DataObjectBase & obj, const std::string & 
     model_io::SaveAnalysis(*m_database, model_obj, key_tag);
 }
 
-std::unique_ptr<DataObjectBase> ModelObjectDAOSqlite::Load(const std::string & key_tag)
+std::unique_ptr<ModelObject> ModelObjectStorage::Load(const std::string & key_tag)
 {
     auto model_object{ std::make_unique<ModelObject>() };
     model_io::LoadStructure(*m_database, *model_object, key_tag);

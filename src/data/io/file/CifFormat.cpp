@@ -1,5 +1,4 @@
 #include "internal/io/file/CifFormat.hpp"
-#include "internal/io/file/ICifCategoryParser.hpp"
 #include "internal/io/file/MmCifLoopParser.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -8,7 +7,7 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
-#include <rhbm_gem/data/object/AtomicModelDataBlock.hpp>
+#include "internal/object/AtomicModelDataBlock.hpp"
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
@@ -137,8 +136,7 @@ struct AtomAltLocKeyHash
 } // namespace
 
 CifFormat::CifFormat() :
-    m_data_block{ std::make_unique<AtomicModelDataBlock>() },
-    m_category_parser{ std::make_unique<MmCifCategoryParser>() }
+    m_data_block{ std::make_unique<AtomicModelDataBlock>() }
 {
 }
 
@@ -187,7 +185,8 @@ void CifFormat::ParseMmCifDocument(std::istream & stream, const std::string & so
     m_loop_category_map = std::move(parsed_document.loop_category_map);
 }
 
-void CifFormat::Read(std::istream & stream, const std::string & source_name)
+std::unique_ptr<ModelObject> CifFormat::ReadModel(
+    std::istream & stream, const std::string & source_name)
 {
     ParseMmCifDocument(stream, source_name);
     LoadChemicalComponentBlock();
@@ -208,6 +207,7 @@ void CifFormat::Read(std::istream & stream, const std::string & source_name)
     ConstructBondList();
     LoadStructureConnectionBlock();
     LogHeaderSummary();
+    return m_data_block->TakeModelObject();
 }
 
 void CifFormat::LoadChemicalComponentBlock()

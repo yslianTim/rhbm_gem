@@ -48,9 +48,7 @@ target_sources(rhbm_gem PRIVATE
     data/io/file/CifFormatCategoryLoaders.cpp
     data/io/file/CifFormatOrchestration.cpp
     data/io/file/CifFormatWriteBlock.cpp
-    data/io/file/ICifCategoryParser.cpp
-    data/io/file/FileFormatBackendFactory.cpp
-    data/io/file/FileFormatRegistry.cpp
+    data/io/file/FileFormatCatalog.cpp
     data/io/file/FileIO.cpp
     data/io/file/MapAxisOrderHelper.cpp
     data/io/file/MmCifLoopParser.cpp
@@ -58,9 +56,9 @@ target_sources(rhbm_gem PRIVATE
     data/io/file/MrcFormat.cpp
     data/io/file/PdbFormat.cpp
     data/io/sqlite/DatabaseManager.cpp
-    data/io/sqlite/MapObjectDAO.cpp
+    data/io/sqlite/MapObjectStorage.cpp
     data/io/sqlite/ModelAnalysisPersistence.cpp
-    data/io/sqlite/ModelObjectDAOSqlite.cpp
+    data/io/sqlite/ModelObjectStorage.cpp
     data/io/sqlite/ModelStructurePersistence.cpp
     data/schema/DatabaseSchemaManager.cpp
     data/io/DataObjectManager.cpp

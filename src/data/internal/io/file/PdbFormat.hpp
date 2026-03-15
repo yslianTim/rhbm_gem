@@ -4,13 +4,13 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
-#include "ModelFileFormatBase.hpp"
 
 namespace rhbm_gem {
 
 class AtomicModelDataBlock;
+class ModelObject;
 
-class PdbFormat : public ModelFileFormatBase
+class PdbFormat
 {
     enum class PDB_HEADER
     {
@@ -90,9 +90,8 @@ class PdbFormat : public ModelFileFormatBase
 public:
     PdbFormat();
     ~PdbFormat();
-    void Read(std::istream & stream, const std::string & source_name) override;
-    void Write(const ModelObject & model_object, std::ostream & stream, int par) override;
-    AtomicModelDataBlock * GetDataBlockPtr() override;
+    std::unique_ptr<ModelObject> ReadModel(std::istream & stream, const std::string & source_name);
+    void WriteModel(const ModelObject & model_object, std::ostream & stream, int par);
 
 private:
     void LoadAtomSiteData(std::istream & stream);

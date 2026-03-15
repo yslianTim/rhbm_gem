@@ -11,15 +11,15 @@ namespace rhbm_gem {
 
 class DataObjectBase;
 class SQLiteWrapper;
-class ModelObjectDAOSqlite;
-class MapObjectDAO;
+class ModelObjectStorage;
+class MapObjectStorage;
 
 class DatabaseManager
 {
     std::filesystem::path m_database_path;
     std::unique_ptr<SQLiteWrapper> m_database;
-    std::shared_ptr<ModelObjectDAOSqlite> m_model_store;
-    std::shared_ptr<MapObjectDAO> m_map_store;
+    std::shared_ptr<ModelObjectStorage> m_model_store;
+    std::shared_ptr<MapObjectStorage> m_map_store;
     DatabaseSchemaVersion m_schema_version;
     mutable std::mutex m_db_mutex;  // Protects database operations
 

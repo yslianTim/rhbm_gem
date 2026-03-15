@@ -1,13 +1,33 @@
 #pragma once
 
 #include <array>
+#include <memory>
+#include <string>
 #include <string_view>
 
-namespace rhbm_gem::persistence {
+namespace rhbm_gem {
 
-inline constexpr std::string_view kMapTableName = "map_list";
+class SQLiteWrapper;
+class MapObject;
 
-inline constexpr std::string_view kCreateMapTableSql = R"sql(
+class MapObjectStorage
+{
+    SQLiteWrapper * m_database;
+
+public:
+    explicit MapObjectStorage(SQLiteWrapper * database);
+    ~MapObjectStorage();
+    static void CreateTables(SQLiteWrapper & database);
+    void Save(const MapObject & map_object, const std::string & key_tag);
+    std::unique_ptr<MapObject> Load(const std::string & key_tag);
+
+};
+
+namespace map_storage {
+
+inline constexpr std::string_view kTableName = "map_list";
+
+inline constexpr std::string_view kCreateTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS map_list (
         key_tag TEXT PRIMARY KEY REFERENCES object_catalog(key_tag) ON DELETE CASCADE,
         grid_size_x INTEGER,
@@ -23,7 +43,7 @@ inline constexpr std::string_view kCreateMapTableSql = R"sql(
     )
 )sql";
 
-inline constexpr std::string_view kInsertMapSql = R"sql(
+inline constexpr std::string_view kInsertSql = R"sql(
     INSERT INTO map_list (
         key_tag,
         grid_size_x, grid_size_y, grid_size_z,
@@ -45,7 +65,7 @@ inline constexpr std::string_view kInsertMapSql = R"sql(
         map_value_array = excluded.map_value_array
 )sql";
 
-inline constexpr std::string_view kSelectMapSql = R"sql(
+inline constexpr std::string_view kSelectSql = R"sql(
     SELECT
         key_tag,
         grid_size_x, grid_size_y, grid_size_z,
@@ -55,8 +75,10 @@ inline constexpr std::string_view kSelectMapSql = R"sql(
     FROM map_list WHERE key_tag = ? LIMIT 1;
 )sql";
 
-inline constexpr std::array<std::string_view, 1> kMapCanonicalTableNames{
-    kMapTableName
+inline constexpr std::array<std::string_view, 1> kCanonicalTableNames{
+    kTableName
 };
 
-} // namespace rhbm_gem::persistence
+} // namespace map_storage
+
+} // namespace rhbm_gem
