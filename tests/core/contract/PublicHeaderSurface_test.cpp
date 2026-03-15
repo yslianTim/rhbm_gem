@@ -42,3 +42,25 @@ TEST(PublicHeaderSurfaceTest, CommandMetadataProfilesRemainStable) {
     EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::Database));
     EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::OutputFolder));
 }
+
+TEST(PublicHeaderSurfaceTest, CommandContractHeaderProvidesSharedCommandContract) {
+    const auto default_data_root{ rhbm_gem::GetDefaultDataRootPath() };
+    const auto default_database_path{ rhbm_gem::GetDefaultDatabasePath() };
+
+    rhbm_gem::ExecutionReport report{};
+    rhbm_gem::ValidationIssue issue{
+        "--example",
+        rhbm_gem::ValidationPhase::Prepare,
+        LogLevel::Warning,
+        "example",
+        true};
+    report.validation_issues.push_back(issue);
+
+    EXPECT_FALSE(default_data_root.empty());
+    EXPECT_EQ(default_database_path.filename(), "database.sqlite");
+    ASSERT_EQ(report.validation_issues.size(), 1u);
+    EXPECT_EQ(report.validation_issues.front().option_name, "--example");
+    EXPECT_EQ(report.validation_issues.front().phase, rhbm_gem::ValidationPhase::Prepare);
+    EXPECT_EQ(report.validation_issues.front().level, LogLevel::Warning);
+    EXPECT_TRUE(report.validation_issues.front().auto_corrected);
+}

@@ -108,13 +108,6 @@ struct HRLModelTestRequest
     double alpha_g{ 0.2 };
 };
 
-struct ExecutionReport
-{
-    bool prepared{ false };
-    bool executed{ false };
-    std::vector<ValidationIssue> validation_issues{};
-};
-
 void ConfigureCommandCli(::CLI::App & app);
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \

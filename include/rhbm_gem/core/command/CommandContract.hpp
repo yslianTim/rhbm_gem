@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -44,6 +45,13 @@ struct ValidationIssue
     LogLevel level;
     std::string message;
     bool auto_corrected{ false };
+};
+
+struct ExecutionReport
+{
+    bool prepared{ false };
+    bool executed{ false };
+    std::vector<ValidationIssue> validation_issues{};
 };
 
 } // namespace rhbm_gem

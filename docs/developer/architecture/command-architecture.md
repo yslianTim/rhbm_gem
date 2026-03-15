@@ -71,9 +71,18 @@ options, and wires the callback to the matching `Run*` function.
 
 There is no exported runtime-binder function object layer anymore.
 
-## 4. Public request surface
+## 4. Public contract and request surface
 
-Public requests live in `include/rhbm_gem/core/command/CommandApi.hpp`.
+Shared command contract types live in `include/rhbm_gem/core/command/CommandContract.hpp`.
+
+This header owns:
+
+- default command data/database paths
+- `ValidationPhase`
+- `ValidationIssue`
+- `ExecutionReport`
+
+Public requests and `Run*` entrypoints live in `include/rhbm_gem/core/command/CommandApi.hpp`.
 
 Shared request fields:
 
