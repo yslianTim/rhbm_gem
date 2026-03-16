@@ -71,7 +71,7 @@ cmake --build build --target lint_repo
 
 - Place new tests in the matching domain directory.
 - Place new fixture files under `tests/fixtures/`.
-- Use `tests/support/` for shared test-only seams (for example internal dependency shims).
+- Use `tests/support/` for shared test-only seams and reusable helpers/assertions.
 - Add the source to the correct grouped target in `tests/CMakeLists.txt`.
 - Ensure the target has the correct `domain:*` and `intent:*` labels.
 - Prefer searchable suite names (for example `DataObjectSchemaMigrationTest`) over generic names.

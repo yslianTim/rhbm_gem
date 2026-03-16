@@ -17,7 +17,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "internal/sqlite/DatabaseManager.hpp"
 #include "internal/sqlite/SQLiteWrapper.hpp"
-#include "CommandTestHelpers.hpp"
+#include "support/CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 

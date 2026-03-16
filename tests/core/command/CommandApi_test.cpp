@@ -2,8 +2,8 @@
 
 #include <fstream>
 
-#include "CommandTestHelpers.hpp"
-#include "CommandValidationAssertions.hpp"
+#include "support/CommandTestHelpers.hpp"
+#include "support/CommandValidationAssertions.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
 namespace rg = rhbm_gem;

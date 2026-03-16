@@ -3,7 +3,7 @@
 #include <memory>
 #include <string>
 
-#include "CommandTestHelpers.hpp"
+#include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>

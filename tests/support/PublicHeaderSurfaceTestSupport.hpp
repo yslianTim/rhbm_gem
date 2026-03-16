@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "CommandTestHelpers.hpp"
+#include "support/CommandTestHelpers.hpp"
 
 namespace contract_test_support {
 

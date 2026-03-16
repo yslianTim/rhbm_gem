@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "CommandTestHelpers.hpp"
+#include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/CommandCatalog.hpp"
 #include <CLI/CLI.hpp>

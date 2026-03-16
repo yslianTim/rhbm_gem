@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "CommandTestHelpers.hpp"
+#include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "command/MapVisualizationCommand.hpp"
 

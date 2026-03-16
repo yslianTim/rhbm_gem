@@ -2,8 +2,8 @@
 
 #include <filesystem>
 
-#include "CommandValidationAssertions.hpp"
-#include "CommandTestHelpers.hpp"
+#include "support/CommandValidationAssertions.hpp"
+#include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "command/ResultDumpCommand.hpp"
 

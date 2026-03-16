@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "CommandValidationAssertions.hpp"
+#include "support/CommandValidationAssertions.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "command/PotentialDisplayCommand.hpp"
 

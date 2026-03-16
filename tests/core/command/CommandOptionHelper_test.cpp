@@ -5,7 +5,7 @@
 #include <fstream>
 
 #include "command/CommandBase.hpp"
-#include "CommandTestHelpers.hpp"
+#include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rg = rhbm_gem;
