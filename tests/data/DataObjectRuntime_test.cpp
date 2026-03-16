@@ -33,6 +33,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/math/SamplerBase.hpp>
+#include "internal/file/MapAxisOrderHelper.hpp"
 #include "CommandTestHelpers.hpp"
 #include "command/CommandDataSupport.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
@@ -215,6 +216,67 @@ TEST(DataObjectFileIOTest, MapReadWriteFormatMatrix) {
             EXPECT_FLOAT_EQ(loaded_values[i], static_cast<float>(i));
         }
     }
+}
+
+TEST(MapAxisOrderHelperTest, CanonicalOrderReturnsOriginalBufferAndPreservesValues) {
+    std::array<int, 3> array_size{2, 2, 2};
+    std::array<int, 3> axis_order{1, 2, 3};
+    auto raw_data{std::make_unique<float[]>(8)};
+    for (size_t i = 0; i < 8; ++i) {
+        raw_data[i] = static_cast<float>(i + 1);
+    }
+    const auto* original_ptr{raw_data.get()};
+
+    auto reordered{
+        rg::map_io::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order)};
+
+    ASSERT_NE(reordered, nullptr);
+    EXPECT_EQ(reordered.get(), original_ptr);
+    for (size_t i = 0; i < 8; ++i) {
+        EXPECT_FLOAT_EQ(reordered[i], static_cast<float>(i + 1));
+    }
+}
+
+TEST(MapAxisOrderHelperTest, NonCanonicalOrderReordersToXYZ) {
+    std::array<int, 3> array_size{2, 3, 4};
+    std::array<int, 3> axis_order{3, 1, 2};
+    const size_t voxel_count{24};
+    auto raw_data{std::make_unique<float[]>(voxel_count)};
+    for (size_t i = 0; i < voxel_count; ++i) {
+        raw_data[i] = static_cast<float>(i);
+    }
+
+    auto reordered{
+        rg::map_io::ReorderToCanonicalXYZ(std::move(raw_data), array_size, axis_order)};
+
+    ASSERT_NE(reordered, nullptr);
+    EXPECT_FLOAT_EQ(reordered[0], 0.0f);
+    EXPECT_FLOAT_EQ(reordered[1], 2.0f);
+    EXPECT_FLOAT_EQ(reordered[2], 4.0f);
+    EXPECT_FLOAT_EQ(reordered[3], 6.0f);
+    EXPECT_FLOAT_EQ(reordered[4], 8.0f);
+    EXPECT_FLOAT_EQ(reordered[5], 10.0f);
+    EXPECT_FLOAT_EQ(reordered[6], 12.0f);
+    EXPECT_FLOAT_EQ(reordered[12], 1.0f);
+    EXPECT_FLOAT_EQ(reordered[23], 23.0f);
+}
+
+TEST(MapAxisOrderHelperTest, RejectsInvalidDimensionsAndAxisMappings) {
+    auto valid_data{std::make_unique<float[]>(1)};
+    valid_data[0] = 1.0f;
+    EXPECT_THROW(
+        (void)rg::map_io::ReorderToCanonicalXYZ(
+            std::move(valid_data), std::array<int, 3>{0, 1, 1}, std::array<int, 3>{1, 2, 3}),
+        std::runtime_error);
+
+    auto invalid_axis_data{std::make_unique<float[]>(1)};
+    invalid_axis_data[0] = 1.0f;
+    EXPECT_THROW(
+        (void)rg::map_io::ReorderToCanonicalXYZ(
+            std::move(invalid_axis_data),
+            std::array<int, 3>{1, 1, 1},
+            std::array<int, 3>{1, 1, 3}),
+        std::runtime_error);
 }
 
 TEST(DataObjectFileIOTest, UppercaseExtensionsDispatchCorrectly) {
