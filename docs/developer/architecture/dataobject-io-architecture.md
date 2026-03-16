@@ -1,13 +1,14 @@
-# DataObject I/O, Typed Object Helpers, and Iteration Architecture
+# DataObject I/O and Iteration Architecture
 
-This document defines current runtime contracts for:
+This document describes the current runtime contract for:
 
 - file I/O
 - SQLite persistence
-- typed object helpers
-- manager iteration and typed workflow integration
+- typed object dispatch
+- `DataObjectManager` iteration
+- shared typed command helpers that sit on top of these layers
 
-Related guides:
+Related references:
 
 - [`../development-guidelines.md`](../development-guidelines.md)
 - [`./command-architecture.md`](./command-architecture.md)
@@ -15,12 +16,12 @@ Related guides:
 
 ## 1. Scope
 
-Top-level DataObject roots are fixed to:
+Top-level persisted/file-backed `DataObject` roots are fixed to:
 
 - `ModelObject`
 - `MapObject`
 
-`AtomObject` and `BondObject` are model-domain objects and are not top-level file/database roots.
+`AtomObject` and `BondObject` are model-domain objects. They are not top-level file or database roots.
 
 ## 2. Supported Surface
 
@@ -31,8 +32,10 @@ Top-level DataObject roots are fixed to:
 
 Rules:
 
-- Extension matching is case-insensitive.
-- `.mmcif` and `.mcif` are read-only aliases to CIF backend.
+- extension lookup is case-insensitive
+- `.mmcif` and `.mcif` use the CIF reader and are read-only
+- `.mrc` uses the MRC backend
+- `.map` and `.ccp4` use the CCP4 backend
 
 ## 3. Runtime Topology
 
@@ -42,123 +45,172 @@ flowchart LR
 
     subgraph F["File I/O"]
       B --> C["ReadDataObject / WriteDataObject"]
-      C --> D["FileFormatCatalog (singleton)"]
-      D --> E["descriptor lookup + kind switch"]
-      E --> F1["Pdb/Cif codec"]
-      E --> F2["Mrc/CCP4 codec"]
+      C --> D["FileFormatCatalog"]
+      D --> E["descriptor lookup by extension"]
+      E --> F1["PDB / CIF model codecs"]
+      E --> F2["MRC / CCP4 map codecs"]
     end
 
     subgraph P["SQLite persistence"]
       B --> H["DatabaseManager"]
-      H --> I["object_catalog upsert / lookup"]
-      I --> J["model -> ModelObjectStorage"]
-      I --> K["map -> MapObjectStorage"]
-      H --> L["DatabaseSchemaManager"]
-      L --> M["v2 bootstrap/validation"]
-      L --> N["legacy v1 migration (optional)"]
+      H --> I["DatabaseSchemaManager::EnsureSchema()"]
+      H --> J["object_catalog upsert / lookup"]
+      J --> K["ModelObjectStorage"]
+      J --> L["MapObjectStorage"]
     end
 
-    subgraph D2["Dispatch + Iteration"]
-      B --> Q["ForEachDataObject snapshot traversal"]
-      R["DataObjectDispatch"] --> R1["AsModelObject / AsMapObject"]
-      R --> R2["ExpectModelObject / ExpectMapObject"]
-      R --> R3["GetCatalogTypeName"]
-      S["CommandDataSupport"] --> S1["typed Model/Map helpers"]
+    subgraph T["Typed helpers"]
+      B --> M["ForEachDataObject(...)"]
+      N["DataObjectDispatch"] --> N1["AsModelObject / AsMapObject"]
+      N --> N2["ExpectModelObject / ExpectMapObject"]
+      N --> N3["GetCatalogTypeName"]
+      O["CommandDataSupport"] --> O1["command_data_loader helpers"]
+      O --> O2["shared ModelObject / MapObject operations"]
+      P2["PainterTypeCheck / MapSampling"] --> O
     end
 ```
 
 ## 4. File I/O Contract
 
-Public API (`include/rhbm_gem/data/io/FileIO.hpp`):
+Public API:
 
 - `ReadDataObject(path)`
 - `WriteDataObject(path, obj)`
 - `ReadModel(path)` / `WriteModel(path, model, model_parameter=0)`
 - `ReadMap(path)` / `WriteMap(path, map)`
 
-Contract:
+Behavior:
 
-- Descriptor lookup is performed once per operation.
-- Routing is explicit by descriptor kind (`model` or `map`).
-- Codec dispatch is fixed inside `FileIO.cpp` via `FileFormatCatalog`.
-- Generic write uses strict type contracts:
-  - model branch -> `ExpectModelObject(...)`
-  - map branch -> `ExpectMapObject(...)`
-- Entry points return success or throw `std::runtime_error` with path + operation context.
+- `FileFormatCatalog` resolves one descriptor per operation.
+- descriptor routing is explicit by `DataObjectKind` (`Model` or `Map`).
+- `WriteDataObject(...)` enforces type/backend agreement with:
+  - `ExpectModelObject(data_object, "WriteDataObject()")`
+  - `ExpectMapObject(data_object, "WriteDataObject()")`
+- typed entry points fail if the extension resolves to the wrong kind.
+- all public entry points wrap failures in `std::runtime_error` with file path and operation context.
 
-`DataObjectManager` file integration:
+`DataObjectManager` integration:
 
-- `ProcessFile(...)`: reads object, sets key tag, stores object in memory.
-- `ProduceFile(...)`: writes in-memory object by key.
-- missing key in `ProduceFile(...)` logs warning and returns.
+- `ProcessFile(filename, key_tag)`:
+  - reads a `DataObject`
+  - sets `key_tag` on the loaded object
+  - calls `Display()`
+  - stores the object in memory
+- `ProduceFile(filename, key_tag)`:
+  - logs a warning and returns if the key is missing in memory
+  - otherwise writes the in-memory object to disk
+  - wraps writer failures with file path and key-tag context
 
-## 5. SQLite Persistence Contract
+Replacing an existing in-memory key is allowed and logs a warning.
 
-`DataObjectManager` DB entry points:
+## 5. In-Memory Object Contract
 
+`DataObjectManager` stores objects in:
+
+- `std::unordered_map<std::string, std::shared_ptr<DataObjectBase>>`
+
+Concurrency boundaries:
+
+- `m_map_mutex` protects the in-memory object map
+- `m_db_mutex` protects database-manager state and manager-level DB entry points
+
+Lookup helpers:
+
+- `HasDataObject(key_tag)` returns presence only
+- `GetDataObject(key_tag)` throws if the key is missing
+- `GetTypedDataObject<T>(key_tag)` throws if the key is missing or the runtime type does not match `T`
+
+`AddDataObject(...)` is private manager infrastructure. It rejects null pointers, replaces duplicate keys, and logs when replacement occurs.
+
+## 6. SQLite Persistence Contract
+
+Manager entry points:
+
+- `SetDatabaseManager(db_path)`
 - `SaveDataObject(key_tag, renamed_key_tag="")`
 - `LoadDataObject(key_tag)`
 
+`SetDatabaseManager(...)`:
+
+- creates a `DatabaseManager`
+- if the manager already points at the same path, it logs a warning and keeps the existing instance
+
 `DatabaseManager` responsibilities:
 
+- create the database parent directory if needed
 - open SQLite
-- ensure schema via `DatabaseSchemaManager::EnsureSchema()`
-- own transaction boundary for each save/load
-- upsert/query `object_catalog(key_tag, object_type)`
-- route by stable type name only:
+- ensure or validate schema through `DatabaseSchemaManager::EnsureSchema()`
+- own the transaction boundary for each save/load
+- upsert and query `object_catalog(key_tag, object_type)`
+- route by stable catalog type name only:
   - `model` -> `ModelObjectStorage`
   - `map` -> `MapObjectStorage`
 
-Behavior:
+Behavior differences to keep straight:
 
-- save throws when input pointer is null.
-- load throws when key is missing.
-- unknown catalog type throws fail-fast runtime error.
-- `SaveDataObject(key, renamed)` only changes persisted key; in-memory map key is unchanged.
+- `DataObjectManager::SaveDataObject(...)`
+  - throws if the DB manager is not initialized
+  - logs a warning and returns if the in-memory key is missing
+  - `renamed_key_tag` changes only the persisted key, not the in-memory key
+- `DatabaseManager::SaveDataObject(...)`
+  - throws if the input pointer is null
+  - throws if `GetCatalogTypeName(...)` cannot resolve a supported top-level type
+- `LoadDataObject(...)`
+  - throws if the DB manager is not initialized
+  - throws if the catalog row is missing
+  - loads the object and stores it in the in-memory map under the requested key
 
-## 6. Schema Contract
+## 7. Schema Contract
 
-Version source: `PRAGMA user_version`.
+Schema version source: `PRAGMA user_version`.
 
 Supported states:
 
-- `2`: validate normalized v2 schema.
-- `1`: migrate legacy v1 to v2 only when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`.
-- `0`:
-  - empty DB -> bootstrap v2
-  - legacy-v1 layout -> migrate when legacy support is enabled
-  - non-empty non-legacy -> fail fast
-- other versions -> fail fast
+- `2`
+  - validate the normalized v2 schema
+- `1`
+  - migrate legacy v1 to normalized v2 only when compiled with `RHBM_GEM_LEGACY_V1_SUPPORT`
+  - otherwise fail fast
+- `0`
+  - empty database -> bootstrap normalized v2
+  - unversioned legacy-v1 layout -> migrate only when legacy support is enabled
+  - other non-empty layouts -> fail fast
+- any other version -> fail fast
 
-v2 invariants:
+Normalized v2 invariants:
 
-- `object_catalog(key_tag, object_type)` is the polymorphic root.
-- `object_type` is constrained to `model` or `map`.
-- `model_object.key_tag` and `map_list.key_tag` reference `object_catalog(key_tag)` with `ON DELETE CASCADE`.
-- model payload tables reference `model_object(key_tag)` with `ON DELETE CASCADE`.
-- validation checks table presence, PK/FK shape, and catalog/payload key consistency.
+- `object_catalog(key_tag, object_type)` is the polymorphic root catalog
+- `object_type` is required and limited to `model` or `map`
+- legacy `object_metadata` must not exist
+- `model_object.key_tag` references `object_catalog(key_tag)` with `ON DELETE CASCADE`
+- `map_list.key_tag` references `object_catalog(key_tag)` with `ON DELETE CASCADE`
+- every model payload table references `model_object(key_tag)` with `ON DELETE CASCADE`
+- schema validation checks required tables, primary-key shape, foreign-key shape, and catalog/payload key consistency
 
-## 7. Typed Object Helper Contract
+The schema manager validates the existing v2 shape; it does not silently repair arbitrary damaged v2 databases.
 
-`DataObjectDispatch` API (`include/rhbm_gem/data/object/DataObjectDispatch.hpp`):
+## 8. Typed Object Dispatch Contract
 
-- probes: `AsModelObject(...)`, `AsMapObject(...)`
-- strict checks: `ExpectModelObject(...)`, `ExpectMapObject(...)`
-- catalog helper: `GetCatalogTypeName(...)`
+API:
 
-Contract:
+- `AsModelObject(...)`, `AsMapObject(...)`
+- `ExpectModelObject(...)`, `ExpectMapObject(...)`
+- `GetCatalogTypeName(...)`
 
-- probe helpers return typed pointer or `nullptr`.
-- expect helpers return typed reference or throw with caller context + resolved runtime type.
+Behavior:
+
+- `As*` helpers return a typed pointer or `nullptr`
+- `Expect*` helpers return a typed reference or throw with caller context and resolved runtime type
 - `GetCatalogTypeName(...)` returns:
   - `model` for `ModelObject`
   - `map` for `MapObject`
-- `GetCatalogTypeName(...)` throws for non-top-level types (`AtomObject`, `BondObject`, unresolved types).
-- The helper belongs to the `data/object` layer because it expresses `DataObjectBase` hierarchy typing rules, not a separate runtime subsystem.
+- `GetCatalogTypeName(...)` throws for non-top-level types such as `AtomObject` and `BondObject`
 
-## 8. Manager Iteration Contract
+`DataObjectDispatch` belongs to the `data/object` layer because it encodes `DataObjectBase` hierarchy rules, not command policy.
 
-`DataObjectManager::ForEachDataObject(...)` supports mutable and const traversal with:
+## 9. Manager Iteration Contract
+
+`DataObjectManager::ForEachDataObject(...)` has mutable and const overloads plus:
 
 ```cpp
 struct IterateOptions
@@ -170,49 +222,61 @@ struct IterateOptions
 Behavior:
 
 - empty key list:
-  - `deterministic_order=true`: lexicographic key order
-  - `deterministic_order=false`: container iteration order
-- non-empty key list: callback order follows input key list order
-- missing keys are skipped with warning logs
-- empty callback throws runtime error
-- traversal is snapshot-based; callbacks run after snapshot capture
+  - `deterministic_order=true`: iterate keys in lexicographic order
+  - `deterministic_order=false`: iterate current container order
+- non-empty key list:
+  - callback order follows the caller-provided key order
+  - missing keys are skipped with warning logs
+- empty callback throws `std::runtime_error`
+- traversal is snapshot-based:
+  - the manager copies matching `shared_ptr`s while holding `m_map_mutex`
+  - callbacks run after the mutex is released
 
-## 9. Typed Workflow and Painter Boundaries
+The snapshot protects iteration from map-level mutations such as `ClearDataObjects()`. It does not make the underlying objects immutable.
 
-Shared typed workflow helpers (`src/core/command/CommandDataSupport.*`):
+## 10. Shared Typed Command Helpers
 
-- `NormalizeMapObject`
-- `PrepareModelObject`
-- `ApplyModelSelection`
-- `CollectModelAtoms`
-- `PrepareSimulationAtoms`
-- `BuildModelAtomBondContext`
+Current shared helpers live in `src/core/command/CommandDataSupport.*`.
 
-Map sampling helper:
+Loader helpers in `namespace command_data_loader`:
 
-- `SampleMapValues(...)` (`include/rhbm_gem/core/command/MapSampling.hpp`)
+- `ProcessModelFile(...)`
+- `ProcessMapFile(...)`
+- `OptionalProcessMapFile(...)`
+- `LoadModelObject(...)`
 
-Painter typed object validation:
+Reusable typed operations:
 
-- `RequirePainterObject(...)` in `src/core/internal/PainterTypeCheck.hpp`
-- painter implementations route data/reference ingestion explicitly after validation
-- null or mismatched typed input throws runtime error
+- `NormalizeMapObject(...)`
+- `PrepareModelObject(...)`
+- `ApplyModelSelection(...)`
+- `CollectModelAtoms(...)`
+- `PrepareSimulationAtoms(...)`
+- `BuildModelAtomBondContext(...)`
 
-## 10. Extension Boundaries
+Related typed helpers:
+
+- `SampleMapValues(...)` in [`include/rhbm_gem/core/command/MapSampling.hpp`](../../../include/rhbm_gem/core/command/MapSampling.hpp)
+- `RequirePainterObject(...)` in [`src/core/internal/PainterTypeCheck.hpp`](../../../src/core/internal/PainterTypeCheck.hpp)
+
+These helpers are current shared boundaries for typed command logic. Add command-specific behavior locally unless multiple commands need the same contract.
+
+## 11. Extension Boundaries
 
 Allowed extension:
 
-- add model/map file codec via `FileFormatCatalog`
-- evolve model/map schema and corresponding fixed storage implementation
-- add reusable typed model/map operations in `CommandDataSupport`
+- add model or map file formats through `FileFormatCatalog`
+- evolve the fixed model/map SQLite storage implementations
+- add reusable typed model/map helpers in `CommandDataSupport`
+- extend manager iteration policy through `IterateOptions`
 
 Out of scope:
 
-- runtime registration of arbitrary top-level `DataObject` types
+- runtime registration of arbitrary top-level `DataObject` roots
 - runtime registration of storage factories
-- runtime resolver/factory override chains for file kind dispatch
+- replacing file or DB routing with plugin chains
 
-## 11. Key Files
+## 12. Key Files
 
 Core orchestration:
 
@@ -221,12 +285,12 @@ Core orchestration:
 - `include/rhbm_gem/data/io/FileIO.hpp`
 - `src/data/io/file/FileIO.cpp`
 
-File registry/backends:
+File format registry:
 
 - `src/data/internal/file/FileFormatCatalog.hpp`
 - `src/data/io/file/FileFormatCatalog.cpp`
 
-Typed object helpers + typed ops:
+Typed dispatch and shared helpers:
 
 - `include/rhbm_gem/data/object/DataObjectDispatch.hpp`
 - `src/data/object/DataObjectDispatch.cpp`
@@ -236,7 +300,7 @@ Typed object helpers + typed ops:
 - `src/core/command/MapSampling.cpp`
 - `src/core/internal/PainterTypeCheck.hpp`
 
-SQLite/schema:
+SQLite persistence:
 
 - `src/data/internal/sqlite/DatabaseManager.hpp`
 - `src/data/io/sqlite/DatabaseManager.cpp`
@@ -246,7 +310,11 @@ SQLite/schema:
 - `src/data/io/sqlite/ModelObjectStorage.cpp`
 - `src/data/internal/sqlite/MapObjectStorage.hpp`
 - `src/data/io/sqlite/MapObjectStorage.cpp`
-- `src/data/internal/sqlite/SQLiteWrapper.hpp`
-- optional legacy migration helper:
-  - `src/data/internal/sqlite/LegacyModelObjectReader.hpp`
-  - `src/data/io/sqlite/legacy_v1/LegacyModelObjectReader.cpp`
+
+Reference tests:
+
+- `tests/data/schema/DataObjectIOContract_test.cpp`
+- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
+- `tests/data/schema/DataObjectSchemaBootstrap_test.cpp`
+- `tests/data/schema/DataObjectSchemaValidation_test.cpp`
+- `tests/data/schema/DataObjectSchemaMigration_test.cpp`

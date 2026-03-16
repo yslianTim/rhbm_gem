@@ -1,6 +1,11 @@
 # Adding DataObject Operations and Iteration
 
-This guide explains how to extend behavior on existing `DataObject` types (`ModelObject`, `MapObject`) and manager iteration.
+This guide explains how to extend behavior around the current top-level `DataObject` types:
+
+- `ModelObject`
+- `MapObject`
+
+It also covers `DataObjectManager` iteration. It does not cover adding new top-level `DataObject` roots; that is not part of the current architecture.
 
 Related references:
 
@@ -9,16 +14,34 @@ Related references:
 
 ## 1. Pick the Correct Boundary
 
-Use the narrowest boundary that matches the change:
+Use the narrowest boundary that matches the change.
 
-- `CommandDataSupport` (`src/core/command/CommandDataSupport.*`)
-  - reusable cross-command typed logic on `ModelObject`/`MapObject`
-- command-local workflow (`src/core/workflow/*CommandWorkflow*.cpp`)
-  - behavior only needed by one command; keep private command-workflow headers under `src/core/internal/workflow/`
-- `DataObjectManager::ForEachDataObject(...)`
-  - iteration policy or callback contract changes
+`command_data_loader` helpers in `src/core/command/CommandDataSupport.hpp`
 
-Do not move command-specific branching into shared `CommandDataSupport` unless multiple commands need the same contract.
+- use for typed file/database loading with consistent error context
+- current helpers are `ProcessModelFile(...)`, `ProcessMapFile(...)`, `OptionalProcessMapFile(...)`, and `LoadModelObject(...)`
+
+`CommandDataSupport` in `src/core/command/CommandDataSupport.*`
+
+- use for reusable typed operations on `ModelObject` or `MapObject`
+- keep this layer focused on logic that is shared by multiple commands
+
+`MapSampling` in `include/rhbm_gem/core/command/MapSampling.hpp` and `src/core/command/MapSampling.cpp`
+
+- use only for reusable map sampling behavior
+
+command-local code in `src/core/command/*.cpp` or `src/core/workflow/*.cpp`
+
+- use when behavior is specific to one command or one workflow path
+
+`DataObjectManager::ForEachDataObject(...)`
+
+- use only when selection by key, traversal order, or snapshot iteration belongs in the manager layer
+
+`DataObjectDispatch`
+
+- use when generic code needs to probe or enforce `DataObjectBase` runtime type
+- do not move command policy into `DataObjectDispatch`
 
 ## 2. Required File Updates
 
@@ -26,26 +49,34 @@ If you add or change reusable typed operations:
 
 - `src/core/command/CommandDataSupport.hpp`
 - `src/core/command/CommandDataSupport.cpp`
-- command call sites using the operation
+- command call sites using the helper
 - `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
-- related command tests under `tests/core/command/`
-- docs when contract changes
+- related command tests under `tests/core/`
+- docs when the contract changes
 
-If you change manager iteration behavior, also update:
+If you add or change loader helpers in `command_data_loader`:
+
+- `src/core/command/CommandDataSupport.hpp`
+- command call sites
+- tests that cover the new load path and failure context
+
+If you change manager iteration behavior:
 
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
 - `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
 - `tests/data/io/DataObjectManager_test.cpp`
+- docs when callback or ordering semantics change
 
 ## 3. Operation Design Rules
 
-For `CommandDataSupport`:
+For shared typed helpers:
 
-- Keep signatures typed (`ModelObject &`, `MapObject &`), not generic base pointers.
-- Keep behavior deterministic for the same object state + options.
-- Validate preconditions and throw explicit runtime errors when violated.
-- Keep command execution side effects out of shared helpers.
+- keep signatures typed: `ModelObject &`, `MapObject &`, or typed result structs
+- keep behavior deterministic for the same object state and options
+- validate preconditions and throw explicit `std::runtime_error` when violated
+- keep command execution, logging policy, and UI concerns out of shared helpers
+- prefer small option structs over long parameter lists when behavior may grow
 
 Example pattern:
 
@@ -61,66 +92,68 @@ void PruneModelAtoms(
     ModelPruneOptions options = {});
 ```
 
-## 4. Iteration Extension Rules
+## 4. Iteration Rules
 
 Current `ForEachDataObject(...)` contract:
 
-- mutable and const overloads
-- optional key filtering via `key_tag_list`
-- `IterateOptions::deterministic_order` controls default-order behavior when key list is empty
-- explicit key list preserves caller order
+- mutable and const overloads exist
+- `key_tag_list` optionally filters traversal
+- `IterateOptions::deterministic_order` only affects the empty-key-list case
+- explicit key lists preserve caller order
 - missing keys are skipped with warning logs
-- empty callback throws runtime error
-- snapshot traversal: callback runs outside map lock
+- empty callbacks throw `std::runtime_error`
+- callbacks run after the manager finishes building a `shared_ptr` snapshot
 
 When extending iteration:
 
-1. Preserve default behavior unless there is a deliberate contract update.
-2. Add options in `IterateOptions` in header first.
-3. Implement option behavior in snapshot-building path in `.cpp`.
-4. Keep callback validation and error shape explicit.
-5. Keep callbacks outside map lock.
+1. preserve current defaults unless you are intentionally changing the contract
+2. add options to `IterateOptions` in the header first
+3. implement the option in the snapshot-building path in `DataObjectManager.cpp`
+4. keep callback validation explicit
+5. keep callbacks outside the manager map lock
 
-## 5. Typed Dispatch in Callbacks
-
-`DataObjectDispatch` lives in the object layer at `include/rhbm_gem/data/object/DataObjectDispatch.hpp` because it is a typed helper over the `DataObjectBase` hierarchy.
+## 5. Typed Dispatch Inside Generic Code
 
 Use probe helpers for optional branches:
 
 - `AsModelObject(...)`
 - `AsMapObject(...)`
 
-Use expect helpers when mismatch must fail fast:
+Use expect helpers when a mismatch is a contract violation:
 
 - `ExpectModelObject(...)`
 - `ExpectMapObject(...)`
 
-Keep callback body short; move multi-step logic to typed helper functions.
+Use `GetCatalogTypeName(...)` only for top-level persistence routing.
+
+If callback bodies start growing, move the multi-step logic into typed helpers instead of adding more branching inline.
 
 ## 6. Command Integration Pattern
 
-Typical flow in command code:
+Typical command flow:
 
-1. load/build typed objects (`GetTypedDataObject<T>()` or command data-loader helpers)
-2. apply shared typed operations from `CommandDataSupport`
-3. use manager iteration only when key selection/order belongs to manager layer
-4. keep `ExecuteImpl()` orchestration-focused
+1. load typed objects with `GetTypedDataObject<T>()` or `command_data_loader` helpers
+2. apply shared typed operations from `CommandDataSupport` when the behavior is reused
+3. use `ForEachDataObject(...)` only when manager-owned key filtering or ordering matters
+4. keep `ExecuteImpl()` focused on orchestration
 
 ## 7. Test Checklist
 
 Add or update tests for:
 
-- operation happy path
-- operation invalid preconditions
-- iteration order (default and explicit key list)
-- iteration snapshot behavior under map mutation
-- callback-empty rejection behavior
+- happy-path behavior
+- invalid preconditions or type mismatches
+- iteration order for default traversal
+- iteration order for explicit key lists
+- snapshot behavior under map mutation
+- empty-callback rejection
+- new loader helper failure context when you add a loader wrapper
 
 Common suites:
 
 - `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
 - `tests/data/io/DataObjectManager_test.cpp`
-- related command suites under `tests/core/command/`
+- related command suites under `tests/core/`
 
 ## 8. Documentation Checklist
 
