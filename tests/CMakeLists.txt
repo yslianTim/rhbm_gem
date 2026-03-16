@@ -51,9 +51,14 @@ function(add_rhbm_gtest_target target_name)
     add_dependencies(tests_all ${target_name})
 endfunction()
 
-file(GLOB RHBM_GEM_CORE_COMMAND_TEST_SOURCES CONFIGURE_DEPENDS
-    RELATIVE "${CMAKE_CURRENT_LIST_DIR}"
-    "${CMAKE_CURRENT_LIST_DIR}/core/command/*Command_test.cpp"
+set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
+    core/command/HRLModelTestCommand_test.cpp
+    core/command/MapSimulationCommand_test.cpp
+    core/command/MapVisualizationCommand_test.cpp
+    core/command/PositionEstimationCommand_test.cpp
+    core/command/PotentialAnalysisCommand_test.cpp
+    core/command/PotentialDisplayCommand_test.cpp
+    core/command/ResultDumpCommand_test.cpp
 )
 
 # core

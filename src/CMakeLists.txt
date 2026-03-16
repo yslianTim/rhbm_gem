@@ -1,9 +1,14 @@
 add_library(rhbm_gem)
 target_compile_features(rhbm_gem PUBLIC cxx_std_17)
 
-file(GLOB RHBM_GEM_COMMAND_SOURCES CONFIGURE_DEPENDS
-    RELATIVE "${CMAKE_CURRENT_LIST_DIR}"
-    "${CMAKE_CURRENT_LIST_DIR}/core/command/*Command.cpp"
+set(RHBM_GEM_COMMAND_SOURCES
+    core/command/HRLModelTestCommand.cpp
+    core/command/MapSimulationCommand.cpp
+    core/command/MapVisualizationCommand.cpp
+    core/command/PositionEstimationCommand.cpp
+    core/command/PotentialAnalysisCommand.cpp
+    core/command/PotentialDisplayCommand.cpp
+    core/command/ResultDumpCommand.cpp
 )
 
 target_sources(rhbm_gem PRIVATE

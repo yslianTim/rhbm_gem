@@ -40,6 +40,8 @@ Python bindings:
 Tests and docs:
 
 - `tests/core/command/<YourCommand>_test.cpp`
+- `src/CMakeLists.txt` to add `src/core/command/<YourCommand>.cpp`
+- `tests/CMakeLists.txt` to add `tests/core/command/<YourCommand>_test.cpp`
 - any integration/contract tests impacted by the public surface
 - developer/user docs touched by the command surface
 
@@ -168,9 +170,10 @@ Before merge:
 1. The command is implemented in `src/core/command/`.
 2. `CommandApi.hpp` contains the new request.
 3. `CommandList.def` contains the new manifest entry.
-4. CLI binding is added in `CommandCatalog.cpp`.
-5. Python bindings are updated if the binding surface changed.
-6. Tests and docs are aligned with the final command surface.
+4. `src/CMakeLists.txt` and `tests/CMakeLists.txt` include the new source/test file.
+5. CLI binding is added in `CommandCatalog.cpp`.
+6. Python bindings are updated if the binding surface changed.
+7. Tests and docs are aligned with the final command surface.
 
 Recommended checks:
 
