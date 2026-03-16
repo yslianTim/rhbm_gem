@@ -313,8 +313,5 @@ SQLite persistence:
 
 Reference tests:
 
-- `tests/data/schema/DataObjectIOContract_test.cpp`
-- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
-- `tests/data/schema/DataObjectSchemaBootstrap_test.cpp`
-- `tests/data/schema/DataObjectSchemaValidation_test.cpp`
-- `tests/data/schema/DataObjectSchemaMigration_test.cpp`
+- `tests/data/DataObjectRuntime_test.cpp`
+- `tests/data/DataObjectSchema_test.cpp`

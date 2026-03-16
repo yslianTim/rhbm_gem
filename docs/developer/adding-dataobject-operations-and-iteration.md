@@ -50,7 +50,7 @@ If you add or change reusable typed operations:
 - `src/core/command/CommandDataSupport.hpp`
 - `src/core/command/CommandDataSupport.cpp`
 - command call sites using the helper
-- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
+- `tests/data/DataObjectRuntime_test.cpp`
 - related command tests under `tests/core/`
 - docs when the contract changes
 
@@ -64,8 +64,7 @@ If you change manager iteration behavior:
 
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
-- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
-- `tests/data/io/DataObjectManager_test.cpp`
+- `tests/data/DataObjectRuntime_test.cpp`
 - docs when callback or ordering semantics change
 
 ## 3. Operation Design Rules
@@ -151,8 +150,7 @@ Add or update tests for:
 
 Common suites:
 
-- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
-- `tests/data/io/DataObjectManager_test.cpp`
+- `tests/data/DataObjectRuntime_test.cpp`
 - related command suites under `tests/core/`
 
 ## 8. Documentation Checklist
