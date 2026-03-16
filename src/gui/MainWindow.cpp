@@ -79,7 +79,8 @@ QWidget * BuildPathSelector(QLineEdit *& line_edit, QPushButton *& browse_button
 template <typename EnumType>
 void PopulateEnumCombo(QComboBox * combo)
 {
-    for (const auto & entry : rhbm_gem::EnumOptionTraits<EnumType>::kBindingEntries)
+    const auto binding_entries{ rhbm_gem::GetEnumBindingEntries<EnumType>() };
+    for (const auto & entry : binding_entries)
     {
         const QString label{
             QString::fromUtf8(entry.token.data(), static_cast<int>(entry.token.size()))

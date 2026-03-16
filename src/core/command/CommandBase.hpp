@@ -172,13 +172,10 @@ protected:
             ResetParseIssues(option_name);
             using UnderlyingType = std::underlying_type_t<EnumType>;
             const auto raw_numeric{ static_cast<UnderlyingType>(raw_value) };
-            for (const auto & entry : EnumOptionTraits<EnumType>::kBindingEntries)
+            if (IsSupportedEnumValue(raw_value))
             {
-                if (static_cast<UnderlyingType>(entry.value) == raw_numeric)
-                {
-                    field = raw_value;
-                    return;
-                }
+                field = raw_value;
+                return;
             }
 
             field = fallback_value;

@@ -14,7 +14,8 @@ namespace {
 template <typename EnumType>
 void BindEnumEntries(py::enum_<EnumType> & py_enum)
 {
-    for (const auto & entry : EnumOptionTraits<EnumType>::kBindingEntries)
+    const auto binding_entries{ GetEnumBindingEntries<EnumType>() };
+    for (const auto & entry : binding_entries)
     {
         const std::string name{ entry.token };
         py_enum.value(name.c_str(), entry.value);
