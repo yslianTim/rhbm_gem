@@ -15,22 +15,22 @@
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include "internal/sqlite/DatabaseManager.hpp"
+#include "internal/sqlite/SQLiteWrapper.hpp"
 #include "CommandTestHelpers.hpp"
-#include "support/DataInternalTestSeam.hpp"
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-constexpr const char * kUpsertObjectMetadataSql =
+constexpr const char* kUpsertObjectMetadataSql =
     "INSERT INTO object_metadata(key_tag, object_type) VALUES (?, ?) "
     "ON CONFLICT(key_tag) DO UPDATE SET object_type = excluded.object_type;";
 
 void UpsertObjectMetadata(
-    rg::SQLiteWrapper & database,
-    const std::string & key_tag,
-    const std::string & object_type)
-{
+    rg::SQLiteWrapper& database,
+    const std::string& key_tag,
+    const std::string& object_type) {
     database.Execute(
         "CREATE TABLE IF NOT EXISTS object_metadata (key_tag TEXT PRIMARY KEY, object_type TEXT);");
     database.Prepare(kUpsertObjectMetadataSql);
@@ -41,11 +41,10 @@ void UpsertObjectMetadata(
 }
 
 void CreateLegacyMapListWithoutForeignKeyTable(
-    const std::filesystem::path & database_path,
-    const rg::MapObject & map_object,
-    const std::string & key_tag)
-{
-    rg::SQLiteWrapper database{ database_path };
+    const std::filesystem::path& database_path,
+    const rg::MapObject& map_object,
+    const std::string& key_tag) {
+    rg::SQLiteWrapper database{database_path};
     database.Execute("DROP TABLE IF EXISTS map_list;");
     database.Execute(
         "CREATE TABLE map_list ("
@@ -56,9 +55,9 @@ void CreateLegacyMapListWithoutForeignKeyTable(
         "map_value_array BLOB"
         ");");
 
-    const auto grid_size{ map_object.GetGridSize() };
-    const auto grid_spacing{ map_object.GetGridSpacing() };
-    const auto origin{ map_object.GetOrigin() };
+    const auto grid_size{map_object.GetGridSize()};
+    const auto grid_spacing{map_object.GetGridSpacing()};
+    const auto origin{map_object.GetOrigin()};
     std::vector<float> values(map_object.GetMapValueArraySize());
     std::memcpy(values.data(), map_object.GetMapValueArray(), values.size() * sizeof(float));
 
@@ -83,61 +82,53 @@ void CreateLegacyMapListWithoutForeignKeyTable(
     database.StepOnce();
 }
 
-void CreateVersion2MetadataBasedMapShapeDatabase(const std::filesystem::path & database_path)
-{
-    std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
-    for (size_t i = 0; i < 8; ++i)
-    {
+void CreateVersion2MetadataBasedMapShapeDatabase(const std::filesystem::path& database_path) {
+    std::array<int, 3> grid_size{2, 2, 2};
+    std::array<float, 3> grid_spacing{1.0f, 1.0f, 1.0f};
+    std::array<float, 3> origin{0.0f, 0.0f, 0.0f};
+    auto values{std::make_unique<float[]>(8)};
+    for (size_t i = 0; i < 8; ++i) {
         values[i] = static_cast<float>(i);
     }
-    rg::MapObject map_object{ grid_size, grid_spacing, origin, std::move(values) };
+    rg::MapObject map_object{grid_size, grid_spacing, origin, std::move(values)};
 
     CreateLegacyMapListWithoutForeignKeyTable(database_path, map_object, "map_only");
-    rg::SQLiteWrapper database{ database_path };
+    rg::SQLiteWrapper database{database_path};
     UpsertObjectMetadata(database, "map_only", "map");
     database.Execute("PRAGMA user_version = 2;");
 }
 
-int GetUserVersion(const std::filesystem::path & database_path)
-{
-    rg::SQLiteWrapper database{ database_path };
+int GetUserVersion(const std::filesystem::path& database_path) {
+    rg::SQLiteWrapper database{database_path};
     database.Prepare("PRAGMA user_version;");
     rg::SQLiteWrapper::StatementGuard guard(database);
-    const auto rc{ database.StepNext() };
-    if (rc != rg::SQLiteWrapper::StepRow())
-    {
+    const auto rc{database.StepNext()};
+    if (rc != rg::SQLiteWrapper::StepRow()) {
         return 0;
     }
     return database.GetColumn<int>(0);
 }
 
-void SetUserVersion(const std::filesystem::path & database_path, int user_version)
-{
-    rg::SQLiteWrapper database{ database_path };
+void SetUserVersion(const std::filesystem::path& database_path, int user_version) {
+    rg::SQLiteWrapper database{database_path};
     database.Execute("PRAGMA user_version = " + std::to_string(user_version) + ";");
 }
 
-void ExecuteSql(const std::filesystem::path & database_path, const std::string & sql)
-{
-    rg::SQLiteWrapper database{ database_path };
+void ExecuteSql(const std::filesystem::path& database_path, const std::string& sql) {
+    rg::SQLiteWrapper database{database_path};
     database.Execute(sql);
 }
 
 void ExecuteSqlWithForeignKeysOff(
-    const std::filesystem::path & database_path,
-    const std::string & sql)
-{
-    rg::SQLiteWrapper database{ database_path };
+    const std::filesystem::path& database_path,
+    const std::string& sql) {
+    rg::SQLiteWrapper database{database_path};
     database.Execute("PRAGMA foreign_keys = OFF;");
     database.Execute(sql);
 }
 
-bool HasTable(const std::filesystem::path & database_path, const std::string & table_name)
-{
-    rg::SQLiteWrapper database{ database_path };
+bool HasTable(const std::filesystem::path& database_path, const std::string& table_name) {
+    rg::SQLiteWrapper database{database_path};
     database.Prepare(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;");
     rg::SQLiteWrapper::StatementGuard guard(database);
@@ -146,86 +137,70 @@ bool HasTable(const std::filesystem::path & database_path, const std::string & t
 }
 
 int CountRows(
-    const std::filesystem::path & database_path,
-    const std::string & table_name,
-    const std::string & key_tag = "")
-{
-    rg::SQLiteWrapper database{ database_path };
+    const std::filesystem::path& database_path,
+    const std::string& table_name,
+    const std::string& key_tag = "") {
+    rg::SQLiteWrapper database{database_path};
     const auto sql{
         key_tag.empty()
             ? "SELECT COUNT(*) FROM " + table_name + ";"
-            : "SELECT COUNT(*) FROM " + table_name + " WHERE key_tag = ?;"
-    };
+            : "SELECT COUNT(*) FROM " + table_name + " WHERE key_tag = ?;"};
     database.Prepare(sql);
     rg::SQLiteWrapper::StatementGuard guard(database);
-    if (!key_tag.empty())
-    {
+    if (!key_tag.empty()) {
         database.Bind<std::string>(1, key_tag);
     }
-    if (database.StepNext() != rg::SQLiteWrapper::StepRow())
-    {
+    if (database.StepNext() != rg::SQLiteWrapper::StepRow()) {
         throw std::runtime_error("Failed to count rows in " + table_name);
     }
     return database.GetColumn<int>(0);
 }
 
 bool HasForeignKey(
-    const std::filesystem::path & database_path,
-    const std::string & table_name,
-    const std::string & from_column,
-    const std::string & referenced_table,
-    const std::string & referenced_column,
-    const std::string & on_delete)
-{
-    rg::SQLiteWrapper database{ database_path };
+    const std::filesystem::path& database_path,
+    const std::string& table_name,
+    const std::string& from_column,
+    const std::string& referenced_table,
+    const std::string& referenced_column,
+    const std::string& on_delete) {
+    rg::SQLiteWrapper database{database_path};
     database.Prepare("PRAGMA foreign_key_list(" + table_name + ");");
     rg::SQLiteWrapper::StatementGuard guard(database);
-    while (true)
-    {
-        const auto rc{ database.StepNext() };
-        if (rc == rg::SQLiteWrapper::StepDone())
-        {
+    while (true) {
+        const auto rc{database.StepNext()};
+        if (rc == rg::SQLiteWrapper::StepDone()) {
             return false;
         }
-        if (rc != rg::SQLiteWrapper::StepRow())
-        {
+        if (rc != rg::SQLiteWrapper::StepRow()) {
             throw std::runtime_error("Failed to inspect foreign_key_list for " + table_name);
         }
         if (database.GetColumn<std::string>(3) == from_column &&
             database.GetColumn<std::string>(2) == referenced_table &&
             database.GetColumn<std::string>(4) == referenced_column &&
-            database.GetColumn<std::string>(6) == on_delete)
-        {
+            database.GetColumn<std::string>(6) == on_delete) {
             return true;
         }
     }
 }
 
-std::string SanitizeLegacyKey(const std::string & key_tag)
-{
+std::string SanitizeLegacyKey(const std::string& key_tag) {
     std::string sanitized_key_tag;
     sanitized_key_tag.reserve(key_tag.size());
-    for (char ch : key_tag)
-    {
-        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')
-        {
+    for (char ch : key_tag) {
+        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
             sanitized_key_tag.push_back(ch);
-        }
-        else
-        {
+        } else {
             sanitized_key_tag.push_back('_');
         }
     }
     return sanitized_key_tag;
 }
 
-std::filesystem::path LegacyFixturePath()
-{
+std::filesystem::path LegacyFixturePath() {
     return command_test::TestDataPath("legacy/legacy_model_v1.sqlite");
 }
 
-void CopyLegacyFixtureDatabase(const std::filesystem::path & database_path)
-{
+void CopyLegacyFixtureDatabase(const std::filesystem::path& database_path) {
     std::filesystem::copy_file(
         LegacyFixturePath(),
         database_path,
@@ -233,13 +208,12 @@ void CopyLegacyFixtureDatabase(const std::filesystem::path & database_path)
 }
 
 void RenameLegacyModel(
-    const std::filesystem::path & database_path,
-    const std::string & old_key_tag,
-    const std::string & new_key_tag,
-    const std::string & new_pdb_id)
-{
-    const auto old_sanitized{ SanitizeLegacyKey(old_key_tag) };
-    const auto new_sanitized{ SanitizeLegacyKey(new_key_tag) };
+    const std::filesystem::path& database_path,
+    const std::string& old_key_tag,
+    const std::string& new_key_tag,
+    const std::string& new_pdb_id) {
+    const auto old_sanitized{SanitizeLegacyKey(old_key_tag)};
+    const auto new_sanitized{SanitizeLegacyKey(new_key_tag)};
     ExecuteSql(
         database_path,
         "ALTER TABLE atom_list_in_" + old_sanitized + " RENAME TO atom_list_in_" + new_sanitized +
@@ -259,13 +233,12 @@ void RenameLegacyModel(
 }
 
 void DuplicateLegacyModel(
-    const std::filesystem::path & database_path,
-    const std::string & source_key_tag,
-    const std::string & new_key_tag,
-    const std::string & new_pdb_id)
-{
-    const auto source_sanitized{ SanitizeLegacyKey(source_key_tag) };
-    const auto new_sanitized{ SanitizeLegacyKey(new_key_tag) };
+    const std::filesystem::path& database_path,
+    const std::string& source_key_tag,
+    const std::string& new_key_tag,
+    const std::string& new_pdb_id) {
+    const auto source_sanitized{SanitizeLegacyKey(source_key_tag)};
+    const auto new_sanitized{SanitizeLegacyKey(new_key_tag)};
     ExecuteSql(
         database_path,
         "CREATE TABLE atom_list_in_" + new_sanitized +
@@ -277,75 +250,70 @@ void DuplicateLegacyModel(
     ExecuteSql(
         database_path,
         "INSERT INTO model_list(key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method) "
-        "SELECT '" + new_key_tag + "', atom_size, '" + new_pdb_id +
+        "SELECT '" +
+            new_key_tag + "', atom_size, '" + new_pdb_id +
             "', emd_id, map_resolution, resolution_method "
-        "FROM model_list WHERE key_tag = '" + source_key_tag + "';");
+            "FROM model_list WHERE key_tag = '" +
+            source_key_tag + "';");
     ExecuteSql(
         database_path,
         "INSERT INTO object_metadata(key_tag, object_type) VALUES ('" + new_key_tag + "', 'model');");
 }
 
 std::shared_ptr<rg::ModelObject> LoadFixtureModel(
-    const std::filesystem::path & model_path,
-    const std::string & key_tag = "model")
-{
+    const std::filesystem::path& model_path,
+    const std::string& key_tag = "model") {
     rg::DataObjectManager manager{};
     manager.ProcessFile(model_path, key_tag);
     return manager.GetTypedDataObject<rg::ModelObject>(key_tag);
 }
 
-rg::MapObject MakeTinyMapObject(float scale = 1.0f)
-{
-    std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
-    for (size_t i = 0; i < 8; ++i)
-    {
+rg::MapObject MakeTinyMapObject(float scale = 1.0f) {
+    std::array<int, 3> grid_size{2, 2, 2};
+    std::array<float, 3> grid_spacing{1.0f, 1.0f, 1.0f};
+    std::array<float, 3> origin{0.0f, 0.0f, 0.0f};
+    auto values{std::make_unique<float[]>(8)};
+    for (size_t i = 0; i < 8; ++i) {
         values[i] = static_cast<float>(i) * scale;
     }
-    return rg::MapObject{ grid_size, grid_spacing, origin, std::move(values) };
+    return rg::MapObject{grid_size, grid_spacing, origin, std::move(values)};
 }
 
 void SaveTinyMapThroughManager(
-    rg::DataObjectManager & manager,
-    const std::filesystem::path & map_path,
-    const std::string & key_tag,
-    float scale = 1.0f)
-{
-    auto map_object{ MakeTinyMapObject(scale) };
+    rg::DataObjectManager& manager,
+    const std::filesystem::path& map_path,
+    const std::string& key_tag,
+    float scale = 1.0f) {
+    auto map_object{MakeTinyMapObject(scale)};
     rg::WriteMap(map_path, map_object);
     manager.ProcessFile(map_path, key_tag);
     manager.SaveDataObject(key_tag);
 }
 
-class FailingDataObject final : public rg::DataObjectBase
-{
-public:
-    std::unique_ptr<rg::DataObjectBase> Clone() const override
-    {
+class FailingDataObject final : public rg::DataObjectBase {
+  public:
+    std::unique_ptr<rg::DataObjectBase> Clone() const override {
         return std::make_unique<FailingDataObject>(*this);
     }
 
     void Display() const override {}
     void Update() override {}
-    void SetKeyTag(const std::string & label) override { m_key_tag = label; }
+    void SetKeyTag(const std::string& label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 
-private:
+  private:
     std::string m_key_tag;
 };
 
 } // namespace
 
-TEST(DataObjectSchemaBootstrapTest, EmptyDatabaseBootstrapsNormalizedSchema)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_bootstrap" };
-    const auto database_path{ temp_dir.path() / "bootstrap.sqlite" };
+TEST(DataObjectSchemaBootstrapTest, EmptyDatabaseBootstrapsNormalizedSchema) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_bootstrap"};
+    const auto database_path{temp_dir.path() / "bootstrap.sqlite"};
 
-    rg::DatabaseManager database_manager{ database_path };
+    rg::DatabaseManager database_manager{database_path};
 
-    EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+    EXPECT_EQ(GetUserVersion(database_path), 2);
     EXPECT_TRUE(HasTable(database_path, "object_catalog"));
     EXPECT_FALSE(HasTable(database_path, "object_metadata"));
     EXPECT_TRUE(HasTable(database_path, "model_object"));
@@ -353,12 +321,11 @@ TEST(DataObjectSchemaBootstrapTest, EmptyDatabaseBootstrapsNormalizedSchema)
     EXPECT_EQ(GetUserVersion(database_path), 2);
 }
 
-TEST(DataObjectSchemaBootstrapTest, SaveUnsupportedTypeRollsBackCatalogMutation)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_atomic_save" };
-    const auto database_path{ temp_dir.path() / "atomic.sqlite" };
+TEST(DataObjectSchemaBootstrapTest, SaveUnsupportedTypeRollsBackCatalogMutation) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_atomic_save"};
+    const auto database_path{temp_dir.path() / "atomic.sqlite"};
 
-    rg::DatabaseManager database_manager{ database_path };
+    rg::DatabaseManager database_manager{database_path};
     FailingDataObject data_object;
     data_object.SetKeyTag("failing");
 
@@ -366,21 +333,19 @@ TEST(DataObjectSchemaBootstrapTest, SaveUnsupportedTypeRollsBackCatalogMutation)
     EXPECT_EQ(CountRows(database_path, "object_catalog"), 0);
 }
 
-TEST(DataObjectSchemaBootstrapTest, UnknownSchemaVersionThrows)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_unknown_version" };
-    const auto database_path{ temp_dir.path() / "unknown.sqlite" };
+TEST(DataObjectSchemaBootstrapTest, UnknownSchemaVersionThrows) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_unknown_version"};
+    const auto database_path{temp_dir.path() / "unknown.sqlite"};
 
     SetUserVersion(database_path, 99);
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_final_v2_loadable" };
-    const auto database_path{ temp_dir.path() / "final_v2.sqlite" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto map_path{ temp_dir.path() / "map_only.map" };
+TEST(DataObjectSchemaPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_final_v2_loadable"};
+    const auto database_path{temp_dir.path() / "final_v2.sqlite"};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
+    const auto map_path{temp_dir.path() / "map_only.map"};
 
     {
         rg::DataObjectManager manager{};
@@ -400,21 +365,19 @@ TEST(DataObjectSchemaPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable)
     EXPECT_NE(manager.GetTypedDataObject<rg::MapObject>("map"), nullptr);
 }
 
-TEST(DataObjectSchemaPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_roundtrip" };
-    const auto database_path{ temp_dir.path() / "roundtrip.sqlite" };
-    const auto model_path{ command_test::TestDataPath("test_model_keyvalue_entity.cif") };
+TEST(DataObjectSchemaPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_roundtrip"};
+    const auto database_path{temp_dir.path() / "roundtrip.sqlite"};
+    const auto model_path{command_test::TestDataPath("test_model_keyvalue_entity.cif")};
 
-    auto original_model{ LoadFixtureModel(model_path) };
-    const auto original_chain_map{ original_model->GetChainIDListMap() };
-    for (const auto & atom : original_model->GetAtomList())
-    {
+    auto original_model{LoadFixtureModel(model_path)};
+    const auto original_chain_map{original_model->GetChainIDListMap()};
+    for (const auto& atom : original_model->GetAtomList()) {
         atom->SetSelectedFlag(true);
     }
     original_model->FilterAtomFromSymmetry(false);
     original_model->Update();
-    const auto original_selected_count{ original_model->GetNumberOfSelectedAtom() };
+    const auto original_selected_count{original_model->GetNumberOfSelectedAtom()};
 
     rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
@@ -423,12 +386,11 @@ TEST(DataObjectSchemaPersistenceTest, DatabaseRoundTripPreservesChainMetadataAnd
     manager.ClearDataObjects();
     manager.LoadDataObject("model");
 
-    auto loaded_model{ manager.GetTypedDataObject<rg::ModelObject>("model") };
+    auto loaded_model{manager.GetTypedDataObject<rg::ModelObject>("model")};
     EXPECT_EQ(loaded_model->GetChainIDListMap(), original_chain_map);
     EXPECT_GT(CountRows(database_path, "model_chain_map", "model"), 0);
 
-    for (const auto & atom : loaded_model->GetAtomList())
-    {
+    for (const auto& atom : loaded_model->GetAtomList()) {
         atom->SetSelectedFlag(true);
     }
     loaded_model->FilterAtomFromSymmetry(false);
@@ -436,11 +398,10 @@ TEST(DataObjectSchemaPersistenceTest, DatabaseRoundTripPreservesChainMetadataAnd
     EXPECT_EQ(loaded_model->GetNumberOfSelectedAtom(), original_selected_count);
 }
 
-TEST(DataObjectSchemaPersistenceTest, DistinctUnsanitizedKeysDoNotCollideInV2Schema)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_key_collision" };
-    const auto database_path{ temp_dir.path() / "collision.sqlite" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+TEST(DataObjectSchemaPersistenceTest, DistinctUnsanitizedKeysDoNotCollideInV2Schema) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_key_collision"};
+    const auto database_path{temp_dir.path() / "collision.sqlite"};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
 
     rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
@@ -460,11 +421,10 @@ TEST(DataObjectSchemaPersistenceTest, DistinctUnsanitizedKeysDoNotCollideInV2Sch
     EXPECT_EQ(CountRows(database_path, "model_object"), 2);
 }
 
-TEST(DataObjectSchemaPersistenceTest, SaveRenamedKeyDoesNotRenameInMemoryObject)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_rename_semantics" };
-    const auto database_path{ temp_dir.path() / "rename.sqlite" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+TEST(DataObjectSchemaPersistenceTest, SaveRenamedKeyDoesNotRenameInMemoryObject) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_rename_semantics"};
+    const auto database_path{temp_dir.path() / "rename.sqlite"};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
 
     rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
@@ -478,14 +438,13 @@ TEST(DataObjectSchemaPersistenceTest, SaveRenamedKeyDoesNotRenameInMemoryObject)
     EXPECT_TRUE(manager.HasDataObject("saved_model"));
 }
 
-TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v2_metadata_row" };
-    const auto database_path{ temp_dir.path() / "metadata_row.sqlite" };
-    const auto map_object{ MakeTinyMapObject() };
+TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_v2_metadata_row"};
+    const auto database_path{temp_dir.path() / "metadata_row.sqlite"};
+    const auto map_object{MakeTinyMapObject()};
 
     {
-        rg::DatabaseManager database_manager{ database_path };
+        rg::DatabaseManager database_manager{database_path};
         database_manager.SaveDataObject(&map_object, "map_only");
     }
 
@@ -500,20 +459,18 @@ TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast)
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaCompatibilityTest, Version2MetadataBasedShapeFailsFast)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_v2_metadata_shape" };
-    const auto database_path{ temp_dir.path() / "metadata_shape.sqlite" };
+TEST(DataObjectSchemaCompatibilityTest, Version2MetadataBasedShapeFailsFast) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_v2_metadata_shape"};
+    const auto database_path{temp_dir.path() / "metadata_shape.sqlite"};
 
     CreateVersion2MetadataBasedMapShapeDatabase(database_path);
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaCompatibilityTest, ManagedButUnversionedDatabaseFailsFast)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_unversioned_nonlegacy" };
-    const auto database_path{ temp_dir.path() / "managed_unversioned.sqlite" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+TEST(DataObjectSchemaCompatibilityTest, ManagedButUnversionedDatabaseFailsFast) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_unversioned_nonlegacy"};
+    const auto database_path{temp_dir.path() / "managed_unversioned.sqlite"};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
 
     {
         rg::DataObjectManager manager{};
@@ -526,23 +483,21 @@ TEST(DataObjectSchemaCompatibilityTest, ManagedButUnversionedDatabaseFailsFast)
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaCompatibilityTest, MixedUnknownSchemaFailsFast)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_mixed_unknown" };
-    const auto database_path{ temp_dir.path() / "mixed_unknown.sqlite" };
+TEST(DataObjectSchemaCompatibilityTest, MixedUnknownSchemaFailsFast) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_mixed_unknown"};
+    const auto database_path{temp_dir.path() / "mixed_unknown.sqlite"};
 
     ExecuteSql(database_path, "CREATE TABLE foreign_table (id INTEGER PRIMARY KEY);");
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThrows)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_missing_v2_table" };
-    const auto database_path{ temp_dir.path() / "missing_v2.sqlite" };
+TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThrows) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_missing_v2_table"};
+    const auto database_path{temp_dir.path() / "missing_v2.sqlite"};
 
     {
-        rg::DatabaseManager database_manager{ database_path };
-        EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+        rg::DatabaseManager database_manager{database_path};
+        EXPECT_EQ(GetUserVersion(database_path), 2);
     }
     ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
     SetUserVersion(database_path, 2);
@@ -550,14 +505,13 @@ TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThr
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeignKeys)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_missing_fk" };
-    const auto database_path{ temp_dir.path() / "missing_fk.sqlite" };
+TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeignKeys) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_missing_fk"};
+    const auto database_path{temp_dir.path() / "missing_fk.sqlite"};
 
     {
-        rg::DatabaseManager database_manager{ database_path };
-        EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+        rg::DatabaseManager database_manager{database_path};
+        EXPECT_EQ(GetUserVersion(database_path), 2);
     }
 
     ExecuteSql(database_path, "DROP TABLE map_list;");
@@ -583,14 +537,13 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeig
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequiredCatalogColumns)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_bad_catalog_columns" };
-    const auto database_path{ temp_dir.path() / "bad_catalog_columns.sqlite" };
+TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequiredCatalogColumns) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_bad_catalog_columns"};
+    const auto database_path{temp_dir.path() / "bad_catalog_columns.sqlite"};
 
     {
-        rg::DatabaseManager database_manager{ database_path };
-        EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+        rg::DatabaseManager database_manager{database_path};
+        EXPECT_EQ(GetUserVersion(database_path), 2);
     }
 
     ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
@@ -602,14 +555,13 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequir
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObjectTypeValue)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_bad_catalog_type" };
-    const auto database_path{ temp_dir.path() / "bad_catalog_type.sqlite" };
+TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObjectTypeValue) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_bad_catalog_type"};
+    const auto database_path{temp_dir.path() / "bad_catalog_type.sqlite"};
 
     {
-        rg::DatabaseManager database_manager{ database_path };
-        EXPECT_EQ(database_manager.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+        rg::DatabaseManager database_manager{database_path};
+        EXPECT_EQ(GetUserVersion(database_path), 2);
     }
 
     ExecuteSqlWithForeignKeysOff(database_path, "DROP TABLE object_catalog;");
@@ -624,11 +576,10 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObject
     EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_fk_orphan" };
-    const auto database_path{ temp_dir.path() / "orphan.sqlite" };
-    rg::DatabaseManager database_manager{ database_path };
+TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_fk_orphan"};
+    const auto database_path{temp_dir.path() / "orphan.sqlite"};
+    rg::DatabaseManager database_manager{database_path};
 
     EXPECT_THROW(
         ExecuteSql(
@@ -638,11 +589,10 @@ TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows)
         std::runtime_error);
 }
 
-TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_catalog_cascade" };
-    const auto database_path{ temp_dir.path() / "cascade.sqlite" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_catalog_cascade"};
+    const auto database_path{temp_dir.path() / "cascade.sqlite"};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
 
     rg::DataObjectManager manager{};
     manager.SetDatabaseManager(database_path);
@@ -658,10 +608,9 @@ TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows)
 
 #ifdef RHBM_GEM_LEGACY_V1_SUPPORT
 
-TEST(DataObjectSchemaMigrationTest, LegacyFixtureMigratesToNormalizedSchema)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_migrate_legacy" };
-    const auto database_path{ temp_dir.path() / "legacy.sqlite" };
+TEST(DataObjectSchemaMigrationTest, LegacyFixtureMigratesToNormalizedSchema) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_migrate_legacy"};
+    const auto database_path{temp_dir.path() / "legacy.sqlite"};
 
     CopyLegacyFixtureDatabase(database_path);
     ASSERT_EQ(GetUserVersion(database_path), 0);
@@ -669,21 +618,20 @@ TEST(DataObjectSchemaMigrationTest, LegacyFixtureMigratesToNormalizedSchema)
 
     rg::DataObjectManager manager{};
     ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    rg::DatabaseManager verifier{ database_path };
-    EXPECT_EQ(verifier.GetSchemaVersion(), rg::DatabaseSchemaVersion::NormalizedV2);
+    rg::DatabaseManager verifier{database_path};
+    EXPECT_EQ(GetUserVersion(database_path), 2);
 
     ASSERT_NO_THROW(manager.LoadDataObject("legacy_model"));
-    auto model{ manager.GetTypedDataObject<rg::ModelObject>("legacy_model") };
+    auto model{manager.GetTypedDataObject<rg::ModelObject>("legacy_model")};
     EXPECT_EQ(model->GetPdbID(), "LEGACY");
     EXPECT_TRUE(HasTable(database_path, "model_object"));
     EXPECT_FALSE(HasTable(database_path, "model_list"));
     EXPECT_EQ(GetUserVersion(database_path), 2);
 }
 
-TEST(DataObjectSchemaMigrationTest, FailedLegacyMigrationRollsBackToLegacyState)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_migrate_rollback" };
-    const auto database_path{ temp_dir.path() / "legacy_rollback.sqlite" };
+TEST(DataObjectSchemaMigrationTest, FailedLegacyMigrationRollsBackToLegacyState) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_migrate_rollback"};
+    const auto database_path{temp_dir.path() / "legacy_rollback.sqlite"};
 
     CopyLegacyFixtureDatabase(database_path);
     RenameLegacyModel(database_path, "legacy_model", "key_a", "MODEL_A");
@@ -699,10 +647,9 @@ TEST(DataObjectSchemaMigrationTest, FailedLegacyMigrationRollsBackToLegacyState)
     EXPECT_EQ(GetUserVersion(database_path), 0);
 }
 
-TEST(DataObjectSchemaMigrationTest, LegacyMigrationUsesModelListWhenMetadataIncomplete)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_partial_metadata" };
-    const auto database_path{ temp_dir.path() / "partial_metadata.sqlite" };
+TEST(DataObjectSchemaMigrationTest, LegacyMigrationUsesModelListWhenMetadataIncomplete) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_partial_metadata"};
+    const auto database_path{temp_dir.path() / "partial_metadata.sqlite"};
 
     CopyLegacyFixtureDatabase(database_path);
     RenameLegacyModel(database_path, "legacy_model", "key_a", "MODEL_A");
@@ -722,15 +669,14 @@ TEST(DataObjectSchemaMigrationTest, LegacyMigrationUsesModelListWhenMetadataInco
     EXPECT_FALSE(HasTable(database_path, "object_metadata"));
 }
 
-TEST(DataObjectSchemaMigrationTest, LegacyMigrationIgnoresMetadataOnlyGhostKeys)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_ghost_metadata" };
-    const auto database_path{ temp_dir.path() / "ghost_metadata.sqlite" };
+TEST(DataObjectSchemaMigrationTest, LegacyMigrationIgnoresMetadataOnlyGhostKeys) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_ghost_metadata"};
+    const auto database_path{temp_dir.path() / "ghost_metadata.sqlite"};
 
     CopyLegacyFixtureDatabase(database_path);
     RenameLegacyModel(database_path, "legacy_model", "real_model", "REAL");
     {
-        rg::SQLiteWrapper database{ database_path };
+        rg::SQLiteWrapper database{database_path};
         UpsertObjectMetadata(database, "ghost_model", "model");
     }
 
@@ -744,10 +690,9 @@ TEST(DataObjectSchemaMigrationTest, LegacyMigrationIgnoresMetadataOnlyGhostKeys)
     EXPECT_FALSE(HasTable(database_path, "object_metadata"));
 }
 
-TEST(DataObjectSchemaMigrationTest, LegacyMigrationDropsOnlyOwnedTables)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_owned_table_drop" };
-    const auto database_path{ temp_dir.path() / "owned_drop.sqlite" };
+TEST(DataObjectSchemaMigrationTest, LegacyMigrationDropsOnlyOwnedTables) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_owned_table_drop"};
+    const auto database_path{temp_dir.path() / "owned_drop.sqlite"};
 
     CopyLegacyFixtureDatabase(database_path);
     ExecuteSql(database_path, "CREATE TABLE custom_atom_list_in_notes (value INTEGER);");
@@ -758,11 +703,10 @@ TEST(DataObjectSchemaMigrationTest, LegacyMigrationDropsOnlyOwnedTables)
     EXPECT_FALSE(HasTable(database_path, "atom_list_in_legacy_model"));
 }
 
-TEST(DataObjectSchemaMigrationTest, LegacyV1MapListWithoutFkMigratesToFinalV2)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_schema_legacy_map_fk_rebuild" };
-    const auto database_path{ temp_dir.path() / "legacy_map_fk.sqlite" };
-    const auto map_object{ MakeTinyMapObject(4.0f) };
+TEST(DataObjectSchemaMigrationTest, LegacyV1MapListWithoutFkMigratesToFinalV2) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_legacy_map_fk_rebuild"};
+    const auto database_path{temp_dir.path() / "legacy_map_fk.sqlite"};
+    const auto map_object{MakeTinyMapObject(4.0f)};
 
     CopyLegacyFixtureDatabase(database_path);
     CreateLegacyMapListWithoutForeignKeyTable(database_path, map_object, "legacy_map");

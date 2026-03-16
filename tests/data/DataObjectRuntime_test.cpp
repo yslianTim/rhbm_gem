@@ -35,21 +35,17 @@
 #include <rhbm_gem/utils/math/SamplerBase.hpp>
 #include "CommandTestHelpers.hpp"
 #include "command/CommandDataSupport.hpp"
-#include "support/DataInternalTestSeam.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-class BlockingModelCallback
-{
-public:
-    void operator()(rg::DataObjectBase & data_object)
-    {
-        auto * model{ rg::AsModelObject(data_object) };
-        if (model == nullptr)
-        {
+class BlockingModelCallback {
+  public:
+    void operator()(rg::DataObjectBase& data_object) {
+        auto* model{rg::AsModelObject(data_object)};
+        if (model == nullptr) {
             return;
         }
 
@@ -64,14 +60,12 @@ public:
         m_cv_release.wait(lock, [this] { return m_released; });
     }
 
-    bool WaitStarted(std::chrono::milliseconds timeout)
-    {
+    bool WaitStarted(std::chrono::milliseconds timeout) {
         std::unique_lock<std::mutex> lock(m_mutex);
         return m_cv_started.wait_for(lock, timeout, [this] { return m_started; });
     }
 
-    void Release()
-    {
+    void Release() {
         {
             std::lock_guard<std::mutex> lock(m_mutex);
             m_released = true;
@@ -79,66 +73,61 @@ public:
         m_cv_release.notify_all();
     }
 
-    std::string Key() const
-    {
+    std::string Key() const {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_key;
     }
 
-private:
+  private:
     mutable std::mutex m_mutex;
     std::condition_variable m_cv_started;
     std::condition_variable m_cv_release;
-    bool m_started{ false };
-    bool m_released{ false };
+    bool m_started{false};
+    bool m_released{false};
     std::string m_key;
 };
 
-class SinglePointSampler : public ::SamplerBase
-{
-public:
+class SinglePointSampler : public ::SamplerBase {
+  public:
     void Print() const override {}
 
     std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
-        const std::array<float, 3> & position,
-        const std::array<float, 3> & axis_vector) const override
-    {
+        const std::array<float, 3>& position,
+        const std::array<float, 3>& axis_vector) const override {
         (void)axis_vector;
-        return { std::make_tuple(0.0f, position) };
+        return {std::make_tuple(0.0f, position)};
     }
 
     unsigned int GetSamplingSize() const override { return m_sampling_size; }
     void SetSamplingSize(unsigned int value) override { m_sampling_size = value; }
 
-private:
-    unsigned int m_sampling_size{ 1 };
+  private:
+    unsigned int m_sampling_size{1};
 };
 
 std::shared_ptr<rg::ModelObject> LoadModelFixture(
-    rg::DataObjectManager & manager,
-    const std::filesystem::path & model_path,
-    const std::string & key_tag = "model")
-{
+    rg::DataObjectManager& manager,
+    const std::filesystem::path& model_path,
+    const std::string& key_tag = "model") {
     manager.ProcessFile(model_path, key_tag);
     return manager.GetTypedDataObject<rg::ModelObject>(key_tag);
 }
 
-std::unique_ptr<rg::ModelObject> MakeModelWithBond()
-{
+std::unique_ptr<rg::ModelObject> MakeModelWithBond() {
     std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
     atom_list.reserve(2);
 
-    auto atom_1{ std::make_unique<rg::AtomObject>() };
+    auto atom_1{std::make_unique<rg::AtomObject>()};
     atom_1->SetSerialID(1);
     atom_1->SetPosition(0.0f, 0.0f, 0.0f);
 
-    auto atom_2{ std::make_unique<rg::AtomObject>() };
+    auto atom_2{std::make_unique<rg::AtomObject>()};
     atom_2->SetSerialID(2);
     atom_2->SetPosition(1.0f, 0.0f, 0.0f);
 
     atom_list.emplace_back(std::move(atom_1));
     atom_list.emplace_back(std::move(atom_2));
-    auto model{ std::make_unique<rg::ModelObject>(std::move(atom_list)) };
+    auto model{std::make_unique<rg::ModelObject>(std::move(atom_list))};
 
     std::vector<std::unique_ptr<rg::BondObject>> bond_list;
     bond_list.emplace_back(std::make_unique<rg::BondObject>(
@@ -148,23 +137,20 @@ std::unique_ptr<rg::ModelObject> MakeModelWithBond()
     return model;
 }
 
-rg::MapObject MakeMapObject()
-{
-    std::array<int, 3> grid_size{ 2, 2, 2 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 0.0f, 0.0f, 0.0f };
-    auto values{ std::make_unique<float[]>(8) };
-    for (size_t i = 0; i < 8; ++i)
-    {
+rg::MapObject MakeMapObject() {
+    std::array<int, 3> grid_size{2, 2, 2};
+    std::array<float, 3> grid_spacing{1.0f, 1.0f, 1.0f};
+    std::array<float, 3> origin{0.0f, 0.0f, 0.0f};
+    auto values{std::make_unique<float[]>(8)};
+    for (size_t i = 0; i < 8; ++i) {
         values[i] = static_cast<float>(i + 1);
     }
-    return rg::MapObject{ grid_size, grid_spacing, origin, std::move(values) };
+    return rg::MapObject{grid_size, grid_spacing, origin, std::move(values)};
 }
 
 std::filesystem::path CopyFixtureWithNewName(
-    const std::filesystem::path & source_path,
-    const std::filesystem::path & output_path)
-{
+    const std::filesystem::path& source_path,
+    const std::filesystem::path& output_path) {
     std::filesystem::copy_file(
         source_path,
         output_path,
@@ -172,17 +158,15 @@ std::filesystem::path CopyFixtureWithNewName(
     return output_path;
 }
 
-struct ImportRegressionCase
-{
-    const char * name;
+struct ImportRegressionCase {
+    const char* name;
     std::filesystem::path path;
-    std::function<void(rg::ModelObject &)> verify;
+    std::function<void(rg::ModelObject&)> verify;
 };
 
 } // namespace
 
-TEST(DataObjectPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
-{
+TEST(DataObjectPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
         "data/io/DataObjectManager.hpp",
         "data/io/FileIO.hpp",
@@ -197,107 +181,72 @@ TEST(DataObjectPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
         "data/object/LocalPotentialEntry.hpp",
         "data/object/MapObject.hpp",
         "data/object/ModelObject.hpp",
-        "data/object/PotentialEntryQuery.hpp"
-    };
+        "data/object/PotentialEntryQuery.hpp"};
 
     EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("data"), expected);
 }
 
-TEST(DataObjectFileIOTest, MapReadWriteFormatMatrix)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_map_formats" };
-    std::array<int, 3> grid_size{ 4, 4, 4 };
-    std::array<float, 3> grid_spacing{ 1.0f, 1.0f, 1.0f };
-    std::array<float, 3> origin{ 1.0f, 2.0f, 3.0f };
+TEST(DataObjectFileIOTest, MapReadWriteFormatMatrix) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_map_formats"};
+    std::array<int, 3> grid_size{4, 4, 4};
+    std::array<float, 3> grid_spacing{1.0f, 1.0f, 1.0f};
+    std::array<float, 3> origin{1.0f, 2.0f, 3.0f};
     const size_t voxel_size{
-        static_cast<size_t>(grid_size[0] * grid_size[1] * grid_size[2])
-    };
-    auto values{ std::make_unique<float[]>(voxel_size) };
-    for (size_t i = 0; i < voxel_size; ++i)
-    {
+        static_cast<size_t>(grid_size[0] * grid_size[1] * grid_size[2])};
+    auto values{std::make_unique<float[]>(voxel_size)};
+    for (size_t i = 0; i < voxel_size; ++i) {
         values[i] = static_cast<float>(i);
     }
-    rg::MapObject map{ grid_size, grid_spacing, origin, std::move(values) };
+    rg::MapObject map{grid_size, grid_spacing, origin, std::move(values)};
 
-    for (const std::string & extension : { ".map", ".ccp4" })
-    {
+    for (const std::string& extension : {".map", ".ccp4"}) {
         SCOPED_TRACE(extension);
-        const auto path{ temp_dir.path() / ("runtime_map" + extension) };
+        const auto path{temp_dir.path() / ("runtime_map" + extension)};
         ASSERT_NO_THROW(rg::WriteMap(path, map));
-        auto loaded_map{ rg::ReadMap(path) };
+        auto loaded_map{rg::ReadMap(path)};
         ASSERT_NE(loaded_map, nullptr);
         EXPECT_EQ(loaded_map->GetGridSize(), grid_size);
         EXPECT_EQ(loaded_map->GetGridSpacing(), grid_spacing);
         EXPECT_EQ(loaded_map->GetOrigin(), origin);
 
-        const auto * loaded_values{ loaded_map->GetMapValueArray() };
+        const auto* loaded_values{loaded_map->GetMapValueArray()};
         ASSERT_NE(loaded_values, nullptr);
-        for (size_t i = 0; i < voxel_size; ++i)
-        {
+        for (size_t i = 0; i < voxel_size; ++i) {
             EXPECT_FLOAT_EQ(loaded_values[i], static_cast<float>(i));
         }
     }
 }
 
-TEST(DataObjectFileIOTest, UppercaseExtensionsDispatchCorrectly)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_uppercase_ext" };
-    const auto source_model_path{ command_test::TestDataPath("test_model.cif") };
+TEST(DataObjectFileIOTest, UppercaseExtensionsDispatchCorrectly) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_uppercase_ext"};
+    const auto source_model_path{command_test::TestDataPath("test_model.cif")};
     const auto uppercase_model_path{
-        CopyFixtureWithNewName(source_model_path, temp_dir.path() / "TEST_MODEL.MMCIF")
-    };
+        CopyFixtureWithNewName(source_model_path, temp_dir.path() / "TEST_MODEL.MMCIF")};
 
     rg::DataObjectManager manager{};
     ASSERT_NO_THROW(manager.ProcessFile(uppercase_model_path, "model"));
     EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
 
-    const auto map_object{ MakeMapObject() };
-    const auto uppercase_map_path{ temp_dir.path() / "TEST_MAP.MAP" };
+    const auto map_object{MakeMapObject()};
+    const auto uppercase_map_path{temp_dir.path() / "TEST_MAP.MAP"};
     ASSERT_NO_THROW(rg::WriteMap(uppercase_map_path, map_object));
-    auto loaded_map{ rg::ReadMap(uppercase_map_path) };
+    auto loaded_map{rg::ReadMap(uppercase_map_path)};
     ASSERT_NE(loaded_map, nullptr);
     EXPECT_EQ(loaded_map->GetGridSize(), map_object.GetGridSize());
 }
 
-TEST(DataObjectFileIOTest, FileFormatDescriptorsAreUniqueAndConsistent)
-{
-    std::unordered_set<std::string> extensions;
-    const auto catalog{ rg::BuildDefaultFileFormatCatalog() };
-    for (const auto & descriptor : catalog.GetAllDescriptors())
-    {
-        EXPECT_TRUE(extensions.insert(descriptor.extension).second);
-        if (descriptor.kind == rg::DataObjectKind::Model)
-        {
-            EXPECT_TRUE(descriptor.model_backend.has_value());
-            EXPECT_FALSE(descriptor.map_backend.has_value());
-        }
-        else
-        {
-            EXPECT_TRUE(descriptor.map_backend.has_value());
-            EXPECT_FALSE(descriptor.model_backend.has_value());
-        }
-
-        if (descriptor.extension == ".mmcif" || descriptor.extension == ".mcif")
-        {
-            EXPECT_TRUE(descriptor.supports_read);
-            EXPECT_FALSE(descriptor.supports_write);
-        }
-    }
-}
-
-TEST(DataObjectFileIOTest, PdbWriteRoundTripBasicFields)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_pdb_roundtrip" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto output_path{ temp_dir.path() / "roundtrip.pdb" };
+TEST(DataObjectFileIOTest, PdbWriteRoundTripBasicFields) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_pdb_roundtrip"};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
+    const auto output_path{temp_dir.path() / "roundtrip.pdb"};
 
     rg::DataObjectManager manager{};
     manager.ProcessFile(model_path, "source");
-    auto source_model{ manager.GetTypedDataObject<rg::ModelObject>("source") };
+    auto source_model{manager.GetTypedDataObject<rg::ModelObject>("source")};
     ASSERT_NO_THROW(manager.ProduceFile(output_path, "source"));
     ASSERT_NO_THROW(manager.ProcessFile(output_path, "roundtrip"));
 
-    auto roundtrip_model{ manager.GetTypedDataObject<rg::ModelObject>("roundtrip") };
+    auto roundtrip_model{manager.GetTypedDataObject<rg::ModelObject>("roundtrip")};
     ASSERT_GT(roundtrip_model->GetNumberOfAtom(), 0);
     EXPECT_EQ(roundtrip_model->GetNumberOfAtom(), source_model->GetNumberOfAtom());
     EXPECT_EQ(
@@ -308,13 +257,12 @@ TEST(DataObjectFileIOTest, PdbWriteRoundTripBasicFields)
         source_model->GetAtomList().front()->GetChainID());
 }
 
-TEST(DataObjectFileIOTest, ModelWriteSupportMatrixAllowsPdbAndCifAndRejectsMmcif)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_output_matrix" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto pdb_output_path{ temp_dir.path() / "supported_output.pdb" };
-    const auto cif_output_path{ temp_dir.path() / "supported_output.cif" };
-    const auto unsupported_output_path{ temp_dir.path() / "unsupported_output.mmcif" };
+TEST(DataObjectFileIOTest, ModelWriteSupportMatrixAllowsPdbAndCifAndRejectsMmcif) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_output_matrix"};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
+    const auto pdb_output_path{temp_dir.path() / "supported_output.pdb"};
+    const auto cif_output_path{temp_dir.path() / "supported_output.cif"};
+    const auto unsupported_output_path{temp_dir.path() / "unsupported_output.mmcif"};
 
     rg::DataObjectManager manager{};
     manager.ProcessFile(model_path, "model");
@@ -323,12 +271,11 @@ TEST(DataObjectFileIOTest, ModelWriteSupportMatrixAllowsPdbAndCifAndRejectsMmcif
     EXPECT_THROW(manager.ProduceFile(unsupported_output_path, "model"), std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, ProcessFileThrowsOnMalformedModelInput)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_bad_model" };
-    const auto malformed_path{ temp_dir.path() / "bad_model.cif" };
+TEST(DataObjectFileIOTest, ProcessFileThrowsOnMalformedModelInput) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_bad_model"};
+    const auto malformed_path{temp_dir.path() / "bad_model.cif"};
     {
-        std::ofstream output{ malformed_path };
+        std::ofstream output{malformed_path};
         output << "data_bad\nloop_\n_atom_site.id\n";
     }
 
@@ -336,12 +283,11 @@ TEST(DataObjectFileIOTest, ProcessFileThrowsOnMalformedModelInput)
     EXPECT_THROW(manager.ProcessFile(malformed_path, "broken"), std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, ProcessFileThrowsOnMalformedMapInput)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_bad_map" };
-    const auto malformed_path{ temp_dir.path() / "bad_map.map" };
+TEST(DataObjectFileIOTest, ProcessFileThrowsOnMalformedMapInput) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_bad_map"};
+    const auto malformed_path{temp_dir.path() / "bad_map.map"};
     {
-        std::ofstream output{ malformed_path, std::ios::binary };
+        std::ofstream output{malformed_path, std::ios::binary};
         output << "bad";
     }
 
@@ -349,24 +295,22 @@ TEST(DataObjectFileIOTest, ProcessFileThrowsOnMalformedMapInput)
     EXPECT_THROW(manager.ProcessFile(malformed_path, "broken_map"), std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, ProduceFileThrowsWhenWriterCannotOpenTarget)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_bad_output_target" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto output_path{ temp_dir.path() / "missing_dir" / "output.cif" };
+TEST(DataObjectFileIOTest, ProduceFileThrowsWhenWriterCannotOpenTarget) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_bad_output_target"};
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
+    const auto output_path{temp_dir.path() / "missing_dir" / "output.cif"};
 
     rg::DataObjectManager manager{};
     manager.ProcessFile(model_path, "model");
     EXPECT_THROW(manager.ProduceFile(output_path, "model"), std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, FunctionFileIoThrowsWhenReadFails)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_file_io_failure" };
-    const auto missing_model_path{ temp_dir.path() / "missing_model.cif" };
-    const auto malformed_map_path{ temp_dir.path() / "bad_map.map" };
+TEST(DataObjectFileIOTest, FunctionFileIoThrowsWhenReadFails) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_file_io_failure"};
+    const auto missing_model_path{temp_dir.path() / "missing_model.cif"};
+    const auto malformed_map_path{temp_dir.path() / "bad_map.map"};
     {
-        std::ofstream output{ malformed_map_path, std::ios::binary };
+        std::ofstream output{malformed_map_path, std::ios::binary};
         output << "bad";
     }
 
@@ -374,228 +318,186 @@ TEST(DataObjectFileIOTest, FunctionFileIoThrowsWhenReadFails)
     EXPECT_THROW((void)rg::ReadMap(malformed_map_path), std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, WriteDataObjectRejectsUnsupportedTopLevelObjectType)
-{
+TEST(DataObjectFileIOTest, WriteDataObjectRejectsUnsupportedTopLevelObjectType) {
     rg::AtomObject atom;
     EXPECT_THROW(rg::WriteDataObject("unused.pdb", atom), std::runtime_error);
     EXPECT_THROW(rg::WriteDataObject("unused.map", atom), std::runtime_error);
 }
 
-TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix)
-{
-    const command_test::ScopedTempDir temp_dir{ "data_runtime_mmcif_fixture" };
+TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix) {
+    const command_test::ScopedTempDir temp_dir{"data_runtime_mmcif_fixture"};
     const auto mmcif_path{
         CopyFixtureWithNewName(
             command_test::TestDataPath("test_model.cif"),
-            temp_dir.path() / "test_model_runtime.mmcif")
-    };
+            temp_dir.path() / "test_model_runtime.mmcif")};
 
     const std::vector<ImportRegressionCase> cases{
-        {
-            "CifExtensionLoadsOneAtom",
-            command_test::TestDataPath("test_model.cif"),
-            [](rg::ModelObject & model) {
-                EXPECT_EQ(model.GetNumberOfAtom(), 1);
-            }
-        },
-        {
-            "MmcifExtensionLoadsOneAtom",
-            mmcif_path,
-            [](rg::ModelObject & model) {
-                EXPECT_EQ(model.GetNumberOfAtom(), 1);
-            }
-        },
-        {
-            "MissingModelNumberDefaultsSerialId",
-            command_test::TestDataPath("test_model_missing_model_num.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                EXPECT_EQ(model.GetAtomList().front()->GetSerialID(), 1);
-            }
-        },
-        {
-            "ModelTwoUsesSerialFallback",
-            command_test::TestDataPath("test_model_model2_only.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                EXPECT_EQ(model.GetAtomList().front()->GetSerialID(), 1);
-            }
-        },
-        {
-            "DoubleQuotedAtomIdPreserved",
-            command_test::TestDataPath("test_model_atom_id_double_quote.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                EXPECT_EQ(model.GetAtomList().front()->GetAtomID(), "CA A");
-            }
-        },
-        {
-            "LoopMultilineQuotedTokenPreserved",
-            command_test::TestDataPath("test_model_loop_multiline.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                EXPECT_EQ(model.GetAtomList().front()->GetAtomID(), "CA A");
-            }
-        },
-        {
-            "KeyValueEntityMetadataSupportsSymmetrySelection",
-            command_test::TestDataPath("test_model_keyvalue_entity.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                for (const auto & atom : model.GetAtomList())
-                {
-                    atom->SetSelectedFlag(true);
-                }
-                model.FilterAtomFromSymmetry(false);
-                model.Update();
-                EXPECT_EQ(model.GetNumberOfSelectedAtom(), 1);
-            }
-        },
-        {
-            "MissingChainMapSkipsSymmetryFiltering",
-            command_test::TestDataPath("test_model.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                for (const auto & atom : model.GetAtomList())
-                {
-                    atom->SetSelectedFlag(true);
-                }
-                model.SetChainIDListMap(
-                    std::unordered_map<std::string, std::vector<std::string>>{});
-                model.FilterAtomFromSymmetry(false);
-                model.Update();
-                EXPECT_EQ(model.GetNumberOfSelectedAtom(), 1);
-            }
-        },
-        {
-            "AuthOnlyColumnsPopulateFallbackFields",
-            command_test::TestDataPath("test_model_auth_only.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                EXPECT_EQ(model.GetAtomList().front()->GetComponentID(), "ALA");
-                EXPECT_EQ(model.GetAtomList().front()->GetChainID(), "A");
-                EXPECT_EQ(model.GetAtomList().front()->GetSequenceID(), 1);
-            }
-        },
-        {
-            "MissingNumericFieldsUseDefaults",
-            command_test::TestDataPath("test_model_missing_numeric.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                EXPECT_FLOAT_EQ(model.GetAtomList().front()->GetOccupancy(), 1.0f);
-                EXPECT_FLOAT_EQ(model.GetAtomList().front()->GetTemperature(), 0.0f);
-            }
-        },
-        {
-            "DatabaseOrderKeepsEmdbIdentifier",
-            command_test::TestDataPath("test_model_database_order.cif"),
-            [](rg::ModelObject & model) {
-                EXPECT_EQ(model.GetEmdID(), "EMD-1234");
-            }
-        },
-        {
-            "AltBIndicatorPreserved",
-            command_test::TestDataPath("test_model_alt_b_only.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 1);
-                EXPECT_EQ(model.GetAtomList().front()->GetIndicator(), "B");
-            }
-        },
-        {
-            "InvalidSecondaryRangeDoesNotDropAtoms",
-            command_test::TestDataPath("test_model_invalid_secondary_range.cif"),
-            [](rg::ModelObject & model) {
-                EXPECT_EQ(model.GetNumberOfAtom(), 1);
-            }
-        },
-        {
-            "StructConnImportBuildsBondAndBondKeySystem",
-            command_test::TestDataPath("test_model_auth_seq_alnum_struct_conn.cif"),
-            [](rg::ModelObject & model) {
-                ASSERT_EQ(model.GetNumberOfAtom(), 2);
-                ASSERT_GE(model.GetNumberOfBond(), 1);
-                ASSERT_NE(model.GetBondKeySystemPtr(), nullptr);
-                EXPECT_NE(
-                    model.GetBondKeySystemPtr()->GetBondId(
-                        model.GetBondList().front()->GetBondKey()),
-                    "UNK");
-            }
-        }
-    };
+        {"CifExtensionLoadsOneAtom",
+         command_test::TestDataPath("test_model.cif"),
+         [](rg::ModelObject& model) {
+             EXPECT_EQ(model.GetNumberOfAtom(), 1);
+         }},
+        {"MmcifExtensionLoadsOneAtom",
+         mmcif_path,
+         [](rg::ModelObject& model) {
+             EXPECT_EQ(model.GetNumberOfAtom(), 1);
+         }},
+        {"MissingModelNumberDefaultsSerialId",
+         command_test::TestDataPath("test_model_missing_model_num.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             EXPECT_EQ(model.GetAtomList().front()->GetSerialID(), 1);
+         }},
+        {"ModelTwoUsesSerialFallback",
+         command_test::TestDataPath("test_model_model2_only.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             EXPECT_EQ(model.GetAtomList().front()->GetSerialID(), 1);
+         }},
+        {"DoubleQuotedAtomIdPreserved",
+         command_test::TestDataPath("test_model_atom_id_double_quote.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             EXPECT_EQ(model.GetAtomList().front()->GetAtomID(), "CA A");
+         }},
+        {"LoopMultilineQuotedTokenPreserved",
+         command_test::TestDataPath("test_model_loop_multiline.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             EXPECT_EQ(model.GetAtomList().front()->GetAtomID(), "CA A");
+         }},
+        {"KeyValueEntityMetadataSupportsSymmetrySelection",
+         command_test::TestDataPath("test_model_keyvalue_entity.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             for (const auto& atom : model.GetAtomList()) {
+                 atom->SetSelectedFlag(true);
+             }
+             model.FilterAtomFromSymmetry(false);
+             model.Update();
+             EXPECT_EQ(model.GetNumberOfSelectedAtom(), 1);
+         }},
+        {"MissingChainMapSkipsSymmetryFiltering",
+         command_test::TestDataPath("test_model.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             for (const auto& atom : model.GetAtomList()) {
+                 atom->SetSelectedFlag(true);
+             }
+             model.SetChainIDListMap(
+                 std::unordered_map<std::string, std::vector<std::string>>{});
+             model.FilterAtomFromSymmetry(false);
+             model.Update();
+             EXPECT_EQ(model.GetNumberOfSelectedAtom(), 1);
+         }},
+        {"AuthOnlyColumnsPopulateFallbackFields",
+         command_test::TestDataPath("test_model_auth_only.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             EXPECT_EQ(model.GetAtomList().front()->GetComponentID(), "ALA");
+             EXPECT_EQ(model.GetAtomList().front()->GetChainID(), "A");
+             EXPECT_EQ(model.GetAtomList().front()->GetSequenceID(), 1);
+         }},
+        {"MissingNumericFieldsUseDefaults",
+         command_test::TestDataPath("test_model_missing_numeric.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             EXPECT_FLOAT_EQ(model.GetAtomList().front()->GetOccupancy(), 1.0f);
+             EXPECT_FLOAT_EQ(model.GetAtomList().front()->GetTemperature(), 0.0f);
+         }},
+        {"DatabaseOrderKeepsEmdbIdentifier",
+         command_test::TestDataPath("test_model_database_order.cif"),
+         [](rg::ModelObject& model) {
+             EXPECT_EQ(model.GetEmdID(), "EMD-1234");
+         }},
+        {"AltBIndicatorPreserved",
+         command_test::TestDataPath("test_model_alt_b_only.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 1);
+             EXPECT_EQ(model.GetAtomList().front()->GetIndicator(), "B");
+         }},
+        {"InvalidSecondaryRangeDoesNotDropAtoms",
+         command_test::TestDataPath("test_model_invalid_secondary_range.cif"),
+         [](rg::ModelObject& model) {
+             EXPECT_EQ(model.GetNumberOfAtom(), 1);
+         }},
+        {"StructConnImportBuildsBondAndBondKeySystem",
+         command_test::TestDataPath("test_model_auth_seq_alnum_struct_conn.cif"),
+         [](rg::ModelObject& model) {
+             ASSERT_EQ(model.GetNumberOfAtom(), 2);
+             ASSERT_GE(model.GetNumberOfBond(), 1);
+             ASSERT_NE(model.GetBondKeySystemPtr(), nullptr);
+             EXPECT_NE(
+                 model.GetBondKeySystemPtr()->GetBondId(
+                     model.GetBondList().front()->GetBondKey()),
+                 "UNK");
+         }}};
 
-    for (const auto & case_data : cases)
-    {
+    for (const auto& case_data : cases) {
         SCOPED_TRACE(case_data.name);
         rg::DataObjectManager manager{};
-        auto model{ LoadModelFixture(manager, case_data.path) };
+        auto model{LoadModelFixture(manager, case_data.path)};
         case_data.verify(*model);
     }
 }
 
-TEST(DataObjectManagerIterationTest, ForEachDataObjectUsesDeterministicOrderByDefault)
-{
+TEST(DataObjectManagerIterationTest, ForEachDataObjectUsesDeterministicOrderByDefault) {
     rg::DataObjectManager manager{};
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
 
     rg::DataObjectManager::IterateOptions options;
     std::vector<std::string> keys;
     manager.ForEachDataObject(
-        [&keys](const rg::DataObjectBase & data_object) {
-            if (const auto * model{ rg::AsModelObject(data_object) })
-            {
+        [&keys](const rg::DataObjectBase& data_object) {
+            if (const auto* model{rg::AsModelObject(data_object)}) {
                 keys.push_back(model->GetKeyTag());
             }
         },
         {},
         options);
 
-    EXPECT_EQ(keys, (std::vector<std::string>{ "a_model", "b_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{"a_model", "b_model"}));
 }
 
-TEST(DataObjectManagerIterationTest, ForEachDataObjectPreservesExplicitKeyOrder)
-{
+TEST(DataObjectManagerIterationTest, ForEachDataObjectPreservesExplicitKeyOrder) {
     rg::DataObjectManager manager{};
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
 
     std::vector<std::string> keys;
     manager.ForEachDataObject(
-        [&keys](const rg::DataObjectBase & data_object) {
-            if (const auto * model{ rg::AsModelObject(data_object) })
-            {
+        [&keys](const rg::DataObjectBase& data_object) {
+            if (const auto* model{rg::AsModelObject(data_object)}) {
                 keys.push_back(model->GetKeyTag());
             }
         },
-        { "b_model", "a_model" });
+        {"b_model", "a_model"});
 
-    EXPECT_EQ(keys, (std::vector<std::string>{ "b_model", "a_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{"b_model", "a_model"}));
 }
 
-TEST(DataObjectManagerIterationTest, ConstOverloadWorks)
-{
+TEST(DataObjectManagerIterationTest, ConstOverloadWorks) {
     rg::DataObjectManager manager{};
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
     manager.ProcessFile(model_path, "b_model");
     manager.ProcessFile(model_path, "a_model");
 
-    const rg::DataObjectManager & const_manager{ manager };
+    const rg::DataObjectManager& const_manager{manager};
     std::vector<std::string> keys;
     const_manager.ForEachDataObject(
-        [&keys](const rg::DataObjectBase & data_object) {
-            if (const auto * model{ rg::AsModelObject(data_object) })
-            {
+        [&keys](const rg::DataObjectBase& data_object) {
+            if (const auto* model{rg::AsModelObject(data_object)}) {
                 keys.push_back(model->GetKeyTag());
             }
         });
 
-    EXPECT_EQ(keys, (std::vector<std::string>{ "a_model", "b_model" }));
+    EXPECT_EQ(keys, (std::vector<std::string>{"a_model", "b_model"}));
 }
 
-TEST(DataObjectManagerIterationTest, SnapshotAllowsClearDuringCallback)
-{
+TEST(DataObjectManagerIterationTest, SnapshotAllowsClearDuringCallback) {
     rg::DataObjectManager manager{};
     manager.ProcessFile(command_test::TestDataPath("test_model.cif"), "model");
 
@@ -603,12 +505,9 @@ TEST(DataObjectManagerIterationTest, SnapshotAllowsClearDuringCallback)
     std::exception_ptr worker_error;
     std::thread worker(
         [&] {
-            try
-            {
-                manager.ForEachDataObject(std::ref(callback), { "model" });
-            }
-            catch (...)
-            {
+            try {
+                manager.ForEachDataObject(std::ref(callback), {"model"});
+            } catch (...) {
                 worker_error = std::current_exception();
             }
         });
@@ -622,21 +521,19 @@ TEST(DataObjectManagerIterationTest, SnapshotAllowsClearDuringCallback)
     EXPECT_EQ(callback.Key(), "model");
 }
 
-TEST(DataObjectManagerIterationTest, RejectsEmptyCallback)
-{
+TEST(DataObjectManagerIterationTest, RejectsEmptyCallback) {
     rg::DataObjectManager manager{};
-    std::function<void(rg::DataObjectBase &)> mutable_callback;
+    std::function<void(rg::DataObjectBase&)> mutable_callback;
     EXPECT_THROW(manager.ForEachDataObject(mutable_callback), std::runtime_error);
 
-    const rg::DataObjectManager & const_manager{ manager };
-    std::function<void(const rg::DataObjectBase &)> const_callback;
+    const rg::DataObjectManager& const_manager{manager};
+    std::function<void(const rg::DataObjectBase&)> const_callback;
     EXPECT_THROW(const_manager.ForEachDataObject(const_callback), std::runtime_error);
 }
 
-TEST(DataObjectDispatchTest, AsHelpersResolveModelAndMap)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
+TEST(DataObjectDispatchTest, AsHelpersResolveModelAndMap) {
+    auto model{MakeModelWithBond()};
+    auto map{MakeMapObject()};
     rg::AtomObject atom;
 
     EXPECT_EQ(rg::AsModelObject(*model), model.get());
@@ -646,34 +543,31 @@ TEST(DataObjectDispatchTest, AsHelpersResolveModelAndMap)
     EXPECT_EQ(rg::AsModelObject(atom), nullptr);
     EXPECT_EQ(rg::AsMapObject(atom), nullptr);
 
-    const rg::DataObjectBase & const_model_ref{ *model };
-    const rg::DataObjectBase & const_map_ref{ map };
+    const rg::DataObjectBase& const_model_ref{*model};
+    const rg::DataObjectBase& const_map_ref{map};
     EXPECT_EQ(rg::AsModelObject(const_model_ref), model.get());
     EXPECT_EQ(rg::AsMapObject(const_map_ref), &map);
 }
 
-TEST(DataObjectDispatchTest, ExpectHelpersResolveModelAndMap)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
+TEST(DataObjectDispatchTest, ExpectHelpersResolveModelAndMap) {
+    auto model{MakeModelWithBond()};
+    auto map{MakeMapObject()};
 
-    const auto & model_ref{ rg::ExpectModelObject(*model, "dispatch-test-model") };
-    const auto & map_ref{ rg::ExpectMapObject(map, "dispatch-test-map") };
+    const auto& model_ref{rg::ExpectModelObject(*model, "dispatch-test-model")};
+    const auto& map_ref{rg::ExpectMapObject(map, "dispatch-test-map")};
     EXPECT_EQ(&model_ref, model.get());
     EXPECT_EQ(&map_ref, &map);
 }
 
-TEST(DataObjectDispatchTest, ExpectHelpersThrowOnUnsupportedTargetType)
-{
+TEST(DataObjectDispatchTest, ExpectHelpersThrowOnUnsupportedTargetType) {
     rg::AtomObject atom;
     EXPECT_THROW((void)rg::ExpectModelObject(atom, "dispatch-test-model"), std::runtime_error);
     EXPECT_THROW((void)rg::ExpectMapObject(atom, "dispatch-test-map"), std::runtime_error);
 }
 
-TEST(DataObjectDispatchTest, CatalogTypeNameUsesStableTopLevelNames)
-{
-    auto model{ MakeModelWithBond() };
-    auto map{ MakeMapObject() };
+TEST(DataObjectDispatchTest, CatalogTypeNameUsesStableTopLevelNames) {
+    auto model{MakeModelWithBond()};
+    auto map{MakeMapObject()};
     rg::AtomObject atom;
 
     EXPECT_EQ(rg::GetCatalogTypeName(*model), "model");
@@ -681,19 +575,15 @@ TEST(DataObjectDispatchTest, CatalogTypeNameUsesStableTopLevelNames)
     EXPECT_THROW((void)rg::GetCatalogTypeName(atom), std::runtime_error);
 }
 
-TEST(DataObjectOperationTest, SampleMapValuesReturnsExpectedPointValueAndIsDeterministic)
-{
-    auto map{ MakeMapObject() };
+TEST(DataObjectOperationTest, SampleMapValuesReturnsExpectedPointValueAndIsDeterministic) {
+    auto map{MakeMapObject()};
     SinglePointSampler sampler;
     const auto first{
-        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f })
-    };
+        rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
     const auto second{
-        rg::SampleMapValues(map, sampler, { 1.0f, 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f })
-    };
+        rg::SampleMapValues(map, sampler, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f})};
     const auto first_again{
-        rg::SampleMapValues(map, sampler, { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f })
-    };
+        rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
 
     ASSERT_EQ(first.size(), 1);
     ASSERT_EQ(second.size(), 1);
@@ -705,8 +595,7 @@ TEST(DataObjectOperationTest, SampleMapValuesReturnsExpectedPointValueAndIsDeter
     EXPECT_FLOAT_EQ(std::get<1>(first_again.front()), std::get<1>(first.front()));
 }
 
-TEST(DataObjectOperationTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType)
-{
+TEST(DataObjectOperationTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType) {
     rg::AtomPainter painter;
     rg::AtomObject atom;
     atom.SetSelectedFlag(true);
@@ -714,14 +603,13 @@ TEST(DataObjectOperationTest, AtomPainterDispatchesByTypedIngestionAndRejectsUns
     painter.AddDataObject(&atom);
     painter.AddReferenceDataObject(&atom, "ref");
 
-    auto model{ MakeModelWithBond() };
+    auto model{MakeModelWithBond()};
     EXPECT_THROW(painter.AddDataObject(model.get()), std::runtime_error);
     EXPECT_THROW(painter.AddReferenceDataObject(model.get(), "ref"), std::runtime_error);
 }
 
-TEST(DataObjectOperationTest, ModelBasedPaintersDispatchByTypedIngestionAndRejectUnsupportedType)
-{
-    auto model{ MakeModelWithBond() };
+TEST(DataObjectOperationTest, ModelBasedPaintersDispatchByTypedIngestionAndRejectUnsupportedType) {
+    auto model{MakeModelWithBond()};
     rg::AtomObject atom;
 
     rg::ModelPainter model_painter;
@@ -745,18 +633,16 @@ TEST(DataObjectOperationTest, ModelBasedPaintersDispatchByTypedIngestionAndRejec
     EXPECT_THROW(demo_painter.AddDataObject(&atom), std::runtime_error);
 }
 
-TEST(DataObjectOperationTest, PainterNullIngestThrows)
-{
+TEST(DataObjectOperationTest, PainterNullIngestThrows) {
     rg::ModelPainter painter;
     EXPECT_THROW(painter.AddDataObject(nullptr), std::runtime_error);
     EXPECT_THROW(painter.AddReferenceDataObject(nullptr, "ref"), std::runtime_error);
 }
 
-TEST(DataObjectOperationTest, NormalizeMapObjectNormalizesMapValues)
-{
-    auto map{ MakeMapObject() };
-    const auto original_value{ map.GetMapValue(0) };
-    const auto original_sd{ map.GetMapValueSD() };
+TEST(DataObjectOperationTest, NormalizeMapObjectNormalizesMapValues) {
+    auto map{MakeMapObject()};
+    const auto original_value{map.GetMapValue(0)};
+    const auto original_sd{map.GetMapValueSD()};
     ASSERT_GT(original_sd, 0.0f);
 
     rg::NormalizeMapObject(map);
@@ -764,15 +650,12 @@ TEST(DataObjectOperationTest, NormalizeMapObjectNormalizesMapValues)
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
 }
 
-TEST(DataObjectOperationTest, PrepareModelObjectSelectsAndInitializesLocalEntries)
-{
-    auto model{ MakeModelWithBond() };
-    for (auto & atom : model->GetAtomList())
-    {
+TEST(DataObjectOperationTest, PrepareModelObjectSelectsAndInitializesLocalEntries) {
+    auto model{MakeModelWithBond()};
+    for (auto& atom : model->GetAtomList()) {
         atom->SetSelectedFlag(false);
     }
-    for (auto & bond : model->GetBondList())
-    {
+    for (auto& bond : model->GetBondList()) {
         bond->SetSelectedFlag(false);
     }
     model->Update();
@@ -790,22 +673,19 @@ TEST(DataObjectOperationTest, PrepareModelObjectSelectsAndInitializesLocalEntrie
 
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
     EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
-    for (const auto * atom : model->GetSelectedAtomList())
-    {
+    for (const auto* atom : model->GetSelectedAtomList()) {
         ASSERT_NE(atom, nullptr);
         EXPECT_NE(atom->GetLocalPotentialEntry(), nullptr);
     }
-    for (const auto * bond : model->GetSelectedBondList())
-    {
+    for (const auto* bond : model->GetSelectedBondList()) {
         ASSERT_NE(bond, nullptr);
         EXPECT_NE(bond->GetLocalPotentialEntry(), nullptr);
     }
 }
 
-TEST(DataObjectOperationTest, ApplyModelSelectionSelectsByAtomSelectorRules)
-{
-    auto model{ MakeModelWithBond() };
-    auto & atom_list{ model->GetAtomList() };
+TEST(DataObjectOperationTest, ApplyModelSelectionSelectsByAtomSelectorRules) {
+    auto model{MakeModelWithBond()};
+    auto& atom_list{model->GetAtomList()};
     ASSERT_EQ(atom_list.size(), 2);
     atom_list.at(0)->SetChainID("A");
     atom_list.at(1)->SetChainID("B");
@@ -820,10 +700,9 @@ TEST(DataObjectOperationTest, ApplyModelSelectionSelectsByAtomSelectorRules)
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
 }
 
-TEST(DataObjectOperationTest, CollectModelAtomsSupportsSelectionAndEntryFilters)
-{
-    auto model{ MakeModelWithBond() };
-    auto & atoms{ model->GetAtomList() };
+TEST(DataObjectOperationTest, CollectModelAtomsSupportsSelectionAndEntryFilters) {
+    auto model{MakeModelWithBond()};
+    auto& atoms{model->GetAtomList()};
     ASSERT_EQ(atoms.size(), 2);
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(false);
@@ -832,26 +711,25 @@ TEST(DataObjectOperationTest, CollectModelAtomsSupportsSelectionAndEntryFilters)
 
     rg::ModelAtomCollectorOptions selected_only_options;
     selected_only_options.selected_only = true;
-    const auto selected_only_atoms{ rg::CollectModelAtoms(*model, selected_only_options) };
+    const auto selected_only_atoms{rg::CollectModelAtoms(*model, selected_only_options)};
     ASSERT_EQ(selected_only_atoms.size(), 1);
     EXPECT_EQ(selected_only_atoms.front(), atoms[0].get());
 
     rg::ModelAtomCollectorOptions require_entry_options;
     require_entry_options.selected_only = false;
     require_entry_options.require_local_potential_entry = true;
-    const auto require_entry_atoms{ rg::CollectModelAtoms(*model, require_entry_options) };
+    const auto require_entry_atoms{rg::CollectModelAtoms(*model, require_entry_options)};
     ASSERT_EQ(require_entry_atoms.size(), 1);
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
-TEST(DataObjectOperationTest, PrepareSimulationAtomsCollectsAtomChargeAndRange)
-{
-    auto model{ MakeModelWithBond() };
+TEST(DataObjectOperationTest, PrepareSimulationAtomsCollectsAtomChargeAndRange) {
+    auto model{MakeModelWithBond()};
     rg::SimulationAtomPreparationOptions options;
     options.partial_charge_choice = rg::PartialCharge::NEUTRAL;
     options.include_unknown_atoms = true;
 
-    const auto result{ rg::PrepareSimulationAtoms(*model, options) };
+    const auto result{rg::PrepareSimulationAtoms(*model, options)};
     ASSERT_TRUE(result.has_atom);
     EXPECT_EQ(result.atom_list.size(), 2);
     ASSERT_EQ(result.atom_charge_map.size(), 2);
@@ -861,11 +739,10 @@ TEST(DataObjectOperationTest, PrepareSimulationAtomsCollectsAtomChargeAndRange)
     EXPECT_FLOAT_EQ(result.range_maximum[0], 1.0f);
 }
 
-TEST(DataObjectOperationTest, BuildModelAtomBondContextBuildsSelectedContextMaps)
-{
-    auto model{ MakeModelWithBond() };
-    auto & atoms{ model->GetAtomList() };
-    auto & bonds{ model->GetBondList() };
+TEST(DataObjectOperationTest, BuildModelAtomBondContextBuildsSelectedContextMaps) {
+    auto model{MakeModelWithBond()};
+    auto& atoms{model->GetAtomList()};
+    auto& bonds{model->GetBondList()};
     ASSERT_EQ(atoms.size(), 2);
     ASSERT_EQ(bonds.size(), 1);
     atoms[0]->SetSelectedFlag(true);
@@ -873,7 +750,7 @@ TEST(DataObjectOperationTest, BuildModelAtomBondContextBuildsSelectedContextMaps
     bonds[0]->SetSelectedFlag(true);
     model->Update();
 
-    const auto context{ rg::BuildModelAtomBondContext(*model) };
+    const auto context{rg::BuildModelAtomBondContext(*model)};
     ASSERT_EQ(context.atom_map.size(), 2);
     ASSERT_EQ(context.bond_map.size(), 2);
     EXPECT_EQ(context.atom_map.at(1), atoms[0].get());

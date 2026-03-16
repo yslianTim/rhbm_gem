@@ -32,7 +32,7 @@ target_sources(rhbm_gem PRIVATE
     # data
     data/object/AtomClassifier.cpp
     data/object/AtomObject.cpp
-    data/object/AtomicModelDataBlock.cpp
+    data/io/file/ModelImportState.cpp
     data/object/BondClassifier.cpp
     data/object/BondObject.cpp
     data/object/ChemicalComponentEntry.cpp
@@ -44,15 +44,8 @@ target_sources(rhbm_gem PRIVATE
     data/object/PotentialEntryQuery.cpp
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp
-    data/io/file/CifFormatBondConstruction.cpp
-    data/io/file/CifFormatCategoryLoaders.cpp
-    data/io/file/CifFormatOrchestration.cpp
-    data/io/file/CifFormatWriteBlock.cpp
-    data/io/file/FileFormatCatalog.cpp
     data/io/file/FileIO.cpp
     data/io/file/MapAxisOrderHelper.cpp
-    data/io/file/MmCifLoopParser.cpp
-    data/io/file/MmCifTokenizer.cpp
     data/io/file/MrcFormat.cpp
     data/io/file/PdbFormat.cpp
     data/io/sqlite/DatabaseManager.cpp

@@ -45,8 +45,8 @@ flowchart LR
 
     subgraph F["File I/O"]
       B --> C["ReadDataObject / WriteDataObject"]
-      C --> D["FileFormatCatalog"]
-      D --> E["descriptor lookup by extension"]
+      C --> D["fixed descriptor lookup by extension"]
+      D --> E["kind/backend resolution"]
       E --> F1["PDB / CIF model codecs"]
       E --> F2["MRC / CCP4 map codecs"]
     end
@@ -81,7 +81,7 @@ Public API:
 
 Behavior:
 
-- `FileFormatCatalog` resolves one descriptor per operation.
+- `FileIO.cpp` resolves one compile-time descriptor per operation.
 - descriptor routing is explicit by `DataObjectKind` (`Model` or `Map`).
 - `WriteDataObject(...)` enforces type/backend agreement with:
   - `ExpectModelObject(data_object, "WriteDataObject()")`
@@ -265,7 +265,7 @@ These helpers are current shared boundaries for typed command logic. Add command
 
 Allowed extension:
 
-- add model or map file formats through `FileFormatCatalog`
+- add model or map file formats through the descriptor table in `FileIO.cpp`
 - evolve the fixed model/map SQLite storage implementations
 - add reusable typed model/map helpers in `CommandDataSupport`
 - extend manager iteration policy through `IterateOptions`
@@ -285,10 +285,11 @@ Core orchestration:
 - `include/rhbm_gem/data/io/FileIO.hpp`
 - `src/data/io/file/FileIO.cpp`
 
-File format registry:
+File format routing and codecs:
 
-- `src/data/internal/file/FileFormatCatalog.hpp`
-- `src/data/io/file/FileFormatCatalog.cpp`
+- `src/data/io/file/FileIO.cpp`
+- `src/data/internal/file/CifFormat.hpp`
+- `src/data/io/file/CifFormat.cpp`
 
 Typed dispatch and shared helpers:
 
