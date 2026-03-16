@@ -11,13 +11,12 @@ This project uses a two-axis test organization model:
 | --- | --- | --- |
 | `tests/core/command/` | `core` | Command workflows, option handling, command-level validation |
 | `tests/core/contract/` | `core` | Command catalog/metadata/surface contracts and docs sync checks |
-| `tests/data/io/` | `data` | DataObjectManager and file I/O integration contracts |
-| `tests/data/schema/` | `data` | Schema bootstrap, migration, schema validation, persistence contracts |
+| `tests/data/` | `data` | DataObjectManager, file I/O, schema validation, migration, and persistence contracts |
 | `tests/utils/math/` | `utils` | Numeric/statistical/geometry helper algorithms |
 | `tests/utils/domain/` | `utils` | Domain helpers (string/logging/file-path/chemistry-related helpers) |
 | `tests/utils/hrl/` | `utils` | HRL-specific algorithm and transform tests |
 | `tests/integration/` | `integration` | Python binding smoke/validation scripts and end-to-end command pipeline checks |
-| `tests/data/` | fixture | Shared fixture files used by C++ and Python tests |
+| `tests/fixtures/` | fixture | Shared fixture files used by C++ and Python tests |
 
 ## Label Vocabulary
 
@@ -71,7 +70,8 @@ cmake --build build --target lint_repo
 ## Adding New Tests
 
 - Place new tests in the matching domain directory.
+- Place new fixture files under `tests/fixtures/`.
 - Use `tests/support/` for shared test-only seams (for example internal dependency shims).
-- Add the source to the correct grouped target in `tests/cmake/*.cmake`.
+- Add the source to the correct grouped target in `tests/CMakeLists.txt`.
 - Ensure the target has the correct `domain:*` and `intent:*` labels.
 - Prefer searchable suite names (for example `DataObjectSchemaMigrationTest`) over generic names.

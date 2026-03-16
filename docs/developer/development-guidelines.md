@@ -19,7 +19,7 @@ The goal is stable, maintainable, and diagnosable software.
 
 - `[Required]` Keep public C++ interfaces in `include/` and implementations in `src/`.
 - `[Required]` Keep responsibilities separated: command orchestration in `core`, file/persistence logic in `data`, reusable helpers in `utils`.
-- `[Required]` Keep tests in `tests/` and test fixtures in `tests/data/`.
+- `[Required]` Keep tests in `tests/` and test fixtures in `tests/fixtures/`.
 - `[Required]` Keep test sources aligned to domain folders (`tests/core`, `tests/data`, `tests/utils`, `tests/integration`) and intent-specific subfolders where applicable.
 - `[Required]` For `src/core`, place command orchestration in `src/core/command/`, workflow implementation in `src/core/workflow/`, painter implementation in `src/core/painter/`, and private helpers in `src/core/internal/`.
 - `[Required]` Treat `internal/` path placement as the internal-API marker; do not add redundant `*Internal` filename suffixes inside `internal/`, and prefer moving private headers into an `internal/` subtree over suffix-based labeling.
@@ -95,7 +95,7 @@ Change-integration principles:
 - `[Required]` Keep tests deterministic and independent of machine-local state.
 - `[Required]` Add new `*_test.cpp` files to the matching grouped file under `tests/cmake/`.
 - `[Required]` Every test target declared through `add_rhbm_gtest_target(...)` must carry both `domain:*` and `intent:*` CTest labels.
-- `[Required]` Every file referenced by `TestDataPath(...)` must exist under `tests/data/` and be tracked by git.
+- `[Required]` Every file referenced by `TestDataPath(...)` must exist under `tests/fixtures/` and be tracked by git.
 - `[Required]` Schema/persistence changes require regression coverage for bootstrap or migration behavior, rollback behavior on failure, and round-trip correctness.
 - `[Recommended]` Prefer searchable suite names that encode intent (for example `DataObjectSchemaMigrationTest`) over generic suite names.
 - `[Recommended]` Use minimal fixtures and temporary directories/files for generated outputs.

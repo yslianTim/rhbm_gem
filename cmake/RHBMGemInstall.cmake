@@ -47,7 +47,7 @@ install(
     PATTERN "*.py"
 )
 install(
-    FILES "${PROJECT_SOURCE_DIR}/tests/data/test_model.cif"
+    FILES "${PROJECT_SOURCE_DIR}/tests/fixtures/test_model.cif"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python/data"
 )
 

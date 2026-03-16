@@ -21,7 +21,7 @@ inline std::filesystem::path ProjectRootPath()
 
 inline std::filesystem::path TestDataPath(const std::string & file_name)
 {
-    return std::filesystem::path(__FILE__).parent_path() / "data" / file_name;
+    return std::filesystem::path(__FILE__).parent_path() / "fixtures" / file_name;
 }
 
 inline std::filesystem::path MakeUniqueTempDir(const std::string & prefix)

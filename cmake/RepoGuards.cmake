@@ -210,7 +210,7 @@ function(rhbm_guard_check_fixture_tracking)
 
     set(FIXTURE_VIOLATIONS)
     foreach(FIXTURE_REL_PATH IN LISTS REFERENCED_FIXTURES)
-        set(FIXTURE_ABS_PATH "${PROJECT_SOURCE_DIR}/tests/data/${FIXTURE_REL_PATH}")
+        set(FIXTURE_ABS_PATH "${PROJECT_SOURCE_DIR}/tests/fixtures/${FIXTURE_REL_PATH}")
         file(RELATIVE_PATH FIXTURE_REPO_PATH "${PROJECT_SOURCE_DIR}" "${FIXTURE_ABS_PATH}")
 
         if(NOT EXISTS "${FIXTURE_ABS_PATH}")
@@ -235,7 +235,7 @@ function(rhbm_guard_check_fixture_tracking)
         message(FATAL_ERROR
             "Fixture tracking guard failed.\n"
             "  - ${FIXTURE_VIOLATIONS_TEXT}\n"
-            "All files referenced by TestDataPath(...) must exist under tests/data/ and be tracked by git.")
+            "All files referenced by TestDataPath(...) must exist under tests/fixtures/ and be tracked by git.")
     endif()
 endfunction()
 

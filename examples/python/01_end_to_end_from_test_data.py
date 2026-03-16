@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def find_default_model(script_path: Path) -> Path:
-    source_tree_candidate = script_path.parents[2] / "tests" / "data" / "test_model.cif"
+    source_tree_candidate = script_path.parents[2] / "tests" / "fixtures" / "test_model.cif"
     installed_candidate = script_path.parent / "data" / "test_model.cif"
     for candidate in (source_tree_candidate, installed_candidate):
         if candidate.exists():
