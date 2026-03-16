@@ -2,7 +2,7 @@
 """Generate a command scaffold.
 
 By default this script only creates command/binding/test/doc skeleton files.
-When ``--wire`` is set, it also updates the manifest in-place.
+When ``--wire`` is set, it also updates the manifest and CMake source lists.
 """
 
 from __future__ import annotations
@@ -69,6 +69,27 @@ def _append_command_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
         f"    {spec.profile})\n"
     )
     return text.rstrip() + block, True
+
+
+def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple[str, bool]:
+    pattern = re.compile(
+        rf"(^set\({re.escape(variable_name)}\n)(.*?)(^\))",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    if not match:
+        raise RuntimeError(f"could not find set({variable_name} ...) block")
+
+    entry_line = f"    {entry}"
+    body_lines = [line for line in match.group(2).splitlines() if line.strip()]
+    if entry_line in body_lines:
+        return text, False
+
+    body_lines.append(entry_line)
+    body_lines.sort(key=lambda line: line.strip().lower())
+    updated_body = "\n".join(body_lines) + "\n"
+    updated_text = text[:match.start(2)] + updated_body + text[match.start(3):]
+    return updated_text, True
 
 
 def _update_file(
@@ -191,12 +212,37 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
     command_def = root / "include" / "rhbm_gem" / "core" / "command" / "CommandList.def"
+    source_cmake = root / "src" / "CMakeLists.txt"
+    tests_cmake = root / "tests" / "CMakeLists.txt"
+
     _update_file(
         command_def,
         lambda text: _append_command_entry(text, spec),
         dry_run,
         strict,
         "Append a new RHBM_GEM_COMMAND(...) block to CommandList.def.",
+    )
+    _update_file(
+        source_cmake,
+        lambda text: _append_cmake_list_entry(
+            text,
+            "RHBM_GEM_COMMAND_SOURCES",
+            f"core/command/{spec.command_type}.cpp",
+        ),
+        dry_run,
+        strict,
+        f"Add core/command/{spec.command_type}.cpp to RHBM_GEM_COMMAND_SOURCES.",
+    )
+    _update_file(
+        tests_cmake,
+        lambda text: _append_cmake_list_entry(
+            text,
+            "RHBM_GEM_CORE_COMMAND_TEST_SOURCES",
+            f"core/command/{spec.command_type}_test.cpp",
+        ),
+        dry_run,
+        strict,
+        f"Add core/command/{spec.command_type}_test.cpp to RHBM_GEM_CORE_COMMAND_TEST_SOURCES.",
     )
 
 
@@ -230,12 +276,12 @@ def main() -> int:
     parser.add_argument(
         "--wire",
         action="store_true",
-        help=("Also update CommandList.def."),
+        help=("Also update CommandList.def and the command/test CMake source lists."),
     )
     parser.add_argument(
         "--strict",
         action="store_true",
-        help=("Only valid with --wire. Fail-fast when manifest update fails."),
+        help=("Only valid with --wire. Fail-fast when manifest or CMake wiring fails."),
     )
     args = parser.parse_args()
     if args.strict and not args.wire:
@@ -260,9 +306,9 @@ def main() -> int:
 
     print("\nScaffold complete.")
     if args.wire:
-        print("Registration/manifests were wired automatically.")
+        print("Registration/manifests and CMake source lists were wired automatically.")
     else:
-        print("Next: wire CommandList.def and add request/CLI binding code.")
+        print("Next: wire CommandList.def, update the CMake source lists, and add request/CLI binding code.")
     return 0
 
 
