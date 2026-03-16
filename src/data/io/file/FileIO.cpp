@@ -5,7 +5,7 @@
 #include "internal/file/FileFormatCatalog.hpp"
 #include "internal/file/MrcFormat.hpp"
 #include "internal/file/PdbFormat.hpp"
-#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
+#include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

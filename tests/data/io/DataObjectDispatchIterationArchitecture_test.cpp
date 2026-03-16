@@ -18,7 +18,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
 #include "CommandTestHelpers.hpp"
-#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
+#include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include "command/CommandDataSupport.hpp"

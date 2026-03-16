@@ -1,10 +1,10 @@
-# DataObject I/O, Dispatch, and Iteration Architecture
+# DataObject I/O, Typed Object Helpers, and Iteration Architecture
 
 This document defines current runtime contracts for:
 
 - file I/O
 - SQLite persistence
-- typed dispatch
+- typed object helpers
 - manager iteration and typed workflow integration
 
 Related guides:
@@ -138,9 +138,9 @@ v2 invariants:
 - model payload tables reference `model_object(key_tag)` with `ON DELETE CASCADE`.
 - validation checks table presence, PK/FK shape, and catalog/payload key consistency.
 
-## 7. Typed Dispatch Contract
+## 7. Typed Object Helper Contract
 
-`DataObjectDispatch` API (`include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`):
+`DataObjectDispatch` API (`include/rhbm_gem/data/object/DataObjectDispatch.hpp`):
 
 - probes: `AsModelObject(...)`, `AsMapObject(...)`
 - strict checks: `ExpectModelObject(...)`, `ExpectMapObject(...)`
@@ -154,6 +154,7 @@ Contract:
   - `model` for `ModelObject`
   - `map` for `MapObject`
 - `GetCatalogTypeName(...)` throws for non-top-level types (`AtomObject`, `BondObject`, unresolved types).
+- The helper belongs to the `data/object` layer because it expresses `DataObjectBase` hierarchy typing rules, not a separate runtime subsystem.
 
 ## 8. Manager Iteration Contract
 
@@ -225,10 +226,10 @@ File registry/backends:
 - `src/data/internal/file/FileFormatCatalog.hpp`
 - `src/data/io/file/FileFormatCatalog.cpp`
 
-Dispatch + typed ops:
+Typed object helpers + typed ops:
 
-- `include/rhbm_gem/data/dispatch/DataObjectDispatch.hpp`
-- `src/data/dispatch/DataObjectDispatch.cpp`
+- `include/rhbm_gem/data/object/DataObjectDispatch.hpp`
+- `src/data/object/DataObjectDispatch.cpp`
 - `src/core/command/CommandDataSupport.hpp`
 - `src/core/command/CommandDataSupport.cpp`
 - `include/rhbm_gem/core/command/MapSampling.hpp`

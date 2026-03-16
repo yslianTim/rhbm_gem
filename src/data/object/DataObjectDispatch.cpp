@@ -1,4 +1,4 @@
-#include <rhbm_gem/data/dispatch/DataObjectDispatch.hpp>
+#include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 
 #include <stdexcept>
 #include <string>

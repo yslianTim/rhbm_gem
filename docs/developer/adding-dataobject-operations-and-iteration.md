@@ -83,6 +83,8 @@ When extending iteration:
 
 ## 5. Typed Dispatch in Callbacks
 
+`DataObjectDispatch` lives in the object layer at `include/rhbm_gem/data/object/DataObjectDispatch.hpp` because it is a typed helper over the `DataObjectBase` hierarchy.
+
 Use probe helpers for optional branches:
 
 - `AsModelObject(...)`

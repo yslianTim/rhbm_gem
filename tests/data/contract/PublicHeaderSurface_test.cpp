@@ -7,7 +7,6 @@
 
 TEST(DataPublicHeaderSurfaceTest, DataPublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
-        "data/dispatch/DataObjectDispatch.hpp",
         "data/io/DataObjectManager.hpp",
         "data/io/FileIO.hpp",
         "data/object/AtomClassifier.hpp",
@@ -16,6 +15,7 @@ TEST(DataPublicHeaderSurfaceTest, DataPublicHeadersMatchApprovedSurface) {
         "data/object/BondObject.hpp",
         "data/object/ChemicalComponentEntry.hpp",
         "data/object/DataObjectBase.hpp",
+        "data/object/DataObjectDispatch.hpp",
         "data/object/GroupPotentialEntry.hpp",
         "data/object/LocalPotentialEntry.hpp",
         "data/object/MapObject.hpp",
