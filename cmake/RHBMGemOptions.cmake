@@ -21,8 +21,6 @@ option(RHBM_GEM_BUILD_GUI
     "Attempt to build the Qt6 GUI executable when Qt6 is available" ON)
 option(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
     "Enable experimental bond-analysis workflow in PotentialAnalysisCommand" OFF)
-option(RHBM_GEM_LEGACY_V1_SUPPORT
-    "Enable migration support for legacy v1 SQLite schema" ON)
 
 set(RHBM_GEM_DEP_PROVIDER "SYSTEM" CACHE STRING
     "Dependency provider mode: SYSTEM or FETCH")

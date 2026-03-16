@@ -68,22 +68,100 @@ const FileFormatDescriptor& ResolveFormatDescriptor(const std::string& extension
     throw std::runtime_error("Unsupported file format: " + extension);
 }
 
-const FileFormatDescriptor& ResolveDescriptorForRead(const std::filesystem::path& filename) {
-    const auto& descriptor{ResolveFormatDescriptor(FilePathHelper::GetExtension(filename))};
-    if (!descriptor.supports_read) {
+const FileFormatDescriptor& ResolveDescriptor(
+    const std::filesystem::path& filename,
+    bool for_write) {
+    const auto extension{FilePathHelper::GetExtension(filename)};
+    const auto& descriptor{ResolveFormatDescriptor(extension)};
+    const bool supported{for_write ? descriptor.supports_write : descriptor.supports_read};
+    if (!supported) {
         throw std::runtime_error(
-            "Unsupported file format for read: " + FilePathHelper::GetExtension(filename));
+            "Unsupported file format for " + std::string(for_write ? "write" : "read") +
+            ": " + extension);
     }
     return descriptor;
 }
 
-const FileFormatDescriptor& ResolveDescriptorForWrite(const std::filesystem::path& filename) {
-    const auto& descriptor{ResolveFormatDescriptor(FilePathHelper::GetExtension(filename))};
-    if (!descriptor.supports_write) {
-        throw std::runtime_error(
-            "Unsupported file format for write: " + FilePathHelper::GetExtension(filename));
+template <typename StreamType>
+StreamType OpenBinaryFile(const std::filesystem::path& filename, std::ios::openmode mode) {
+    StreamType stream{filename, mode};
+    if (!stream) {
+        throw std::runtime_error("Cannot open the file: " + filename.string());
     }
-    return descriptor;
+    return stream;
+}
+
+std::unique_ptr<ModelObject> ReadModelWithBackend(
+    std::istream& file,
+    const std::string& filename,
+    ModelFormatBackend backend) {
+    switch (backend) {
+    case ModelFormatBackend::Pdb: {
+        PdbFormat codec;
+        return codec.ReadModel(file, filename);
+    }
+    case ModelFormatBackend::Cif: {
+        CifFormat codec;
+        return codec.ReadModel(file, filename);
+    }
+    }
+    throw std::runtime_error("Unsupported model file format backend.");
+}
+
+void WriteModelWithBackend(
+    std::ostream& outfile,
+    const ModelObject& model_object,
+    int model_parameter,
+    ModelFormatBackend backend) {
+    switch (backend) {
+    case ModelFormatBackend::Pdb: {
+        PdbFormat codec;
+        codec.WriteModel(model_object, outfile, model_parameter);
+        return;
+    }
+    case ModelFormatBackend::Cif: {
+        CifFormat codec;
+        codec.WriteModel(model_object, outfile, model_parameter);
+        return;
+    }
+    }
+    throw std::runtime_error("Unsupported model file format backend.");
+}
+
+std::unique_ptr<MapObject> ReadMapWithBackend(
+    std::istream& file,
+    const std::string& filename,
+    MapFormatBackend backend) {
+    switch (backend) {
+    case MapFormatBackend::Mrc: {
+        MrcFormat codec;
+        return codec.ReadMap(file, filename);
+    }
+    case MapFormatBackend::Ccp4: {
+        CCP4Format codec;
+        return codec.ReadMap(file, filename);
+    }
+    }
+    throw std::runtime_error("Unsupported map file format backend.");
+}
+
+void WriteMapWithBackend(
+    std::ostream& outfile,
+    const MapObject& map_object,
+    MapFormatBackend backend) {
+    switch (backend) {
+    case MapFormatBackend::Mrc: {
+        MrcFormat codec;
+        codec.WriteMap(map_object, outfile);
+        return;
+    }
+    case MapFormatBackend::Ccp4: {
+        CCP4Format codec;
+        codec.WriteMap(map_object, outfile);
+        return;
+    }
+    }
+    throw std::runtime_error("Unsupported map file format backend.");
 }
 
 std::unique_ptr<ModelObject> ReadModelWithDescriptor(
@@ -93,21 +171,8 @@ std::unique_ptr<ModelObject> ReadModelWithDescriptor(
         throw std::runtime_error("Unsupported model file format.");
     }
 
-    std::ifstream file{filename, std::ios::binary};
-    if (!file) {
-        throw std::runtime_error("Cannot open the file: " + filename.string());
-    }
-    switch (*descriptor.model_backend) {
-    case ModelFormatBackend::Pdb: {
-        PdbFormat codec;
-        return codec.ReadModel(file, filename.string());
-    }
-    case ModelFormatBackend::Cif: {
-        CifFormat codec;
-        return codec.ReadModel(file, filename.string());
-    }
-    }
-    throw std::runtime_error("Unsupported model file format backend.");
+    auto file{OpenBinaryFile<std::ifstream>(filename, std::ios::binary)};
+    return ReadModelWithBackend(file, filename.string(), *descriptor.model_backend);
 }
 
 void WriteModelWithDescriptor(
@@ -119,23 +184,8 @@ void WriteModelWithDescriptor(
         throw std::runtime_error("Unsupported model file format.");
     }
 
-    std::ofstream outfile{filename, std::ios::binary};
-    if (!outfile) {
-        throw std::runtime_error("Cannot open the file: " + filename.string());
-    }
-    switch (*descriptor.model_backend) {
-    case ModelFormatBackend::Pdb: {
-        PdbFormat codec;
-        codec.WriteModel(model_object, outfile, model_parameter);
-        return;
-    }
-    case ModelFormatBackend::Cif: {
-        CifFormat codec;
-        codec.WriteModel(model_object, outfile, model_parameter);
-        return;
-    }
-    }
-    throw std::runtime_error("Unsupported model file format backend.");
+    auto outfile{OpenBinaryFile<std::ofstream>(filename, std::ios::binary)};
+    WriteModelWithBackend(outfile, model_object, model_parameter, *descriptor.model_backend);
 }
 
 std::unique_ptr<MapObject> ReadMapWithDescriptor(
@@ -145,21 +195,8 @@ std::unique_ptr<MapObject> ReadMapWithDescriptor(
         throw std::runtime_error("Unsupported map file format.");
     }
 
-    std::ifstream file{filename, std::ios::binary};
-    if (!file) {
-        throw std::runtime_error("Cannot open the file: " + filename.string());
-    }
-    switch (*descriptor.map_backend) {
-    case MapFormatBackend::Mrc: {
-        MrcFormat codec;
-        return codec.ReadMap(file, filename.string());
-    }
-    case MapFormatBackend::Ccp4: {
-        CCP4Format codec;
-        return codec.ReadMap(file, filename.string());
-    }
-    }
-    throw std::runtime_error("Unsupported map file format backend.");
+    auto file{OpenBinaryFile<std::ifstream>(filename, std::ios::binary)};
+    return ReadMapWithBackend(file, filename.string(), *descriptor.map_backend);
 }
 
 void WriteMapWithDescriptor(
@@ -170,30 +207,15 @@ void WriteMapWithDescriptor(
         throw std::runtime_error("Unsupported map file format.");
     }
 
-    std::ofstream outfile{filename, std::ios::binary | std::ios::trunc};
-    if (!outfile) {
-        throw std::runtime_error("Cannot open the file: " + filename.string());
-    }
-    switch (*descriptor.map_backend) {
-    case MapFormatBackend::Mrc: {
-        MrcFormat codec;
-        codec.WriteMap(map_object, outfile);
-        return;
-    }
-    case MapFormatBackend::Ccp4: {
-        CCP4Format codec;
-        codec.WriteMap(map_object, outfile);
-        return;
-    }
-    }
-    throw std::runtime_error("Unsupported map file format backend.");
+    auto outfile{OpenBinaryFile<std::ofstream>(filename, std::ios::binary | std::ios::trunc)};
+    WriteMapWithBackend(outfile, map_object, *descriptor.map_backend);
 }
 
 } // namespace
 
 std::unique_ptr<DataObjectBase> ReadDataObject(const std::filesystem::path& filename) {
     try {
-        const auto& descriptor{ResolveDescriptorForRead(filename)};
+        const auto& descriptor{ResolveDescriptor(filename, false)};
         switch (descriptor.kind) {
         case DataObjectKind::Model:
             return ReadModelWithDescriptor(filename, descriptor);
@@ -209,7 +231,7 @@ std::unique_ptr<DataObjectBase> ReadDataObject(const std::filesystem::path& file
 
 void WriteDataObject(const std::filesystem::path& filename, const DataObjectBase& data_object) {
     try {
-        const auto& descriptor{ResolveDescriptorForWrite(filename)};
+        const auto& descriptor{ResolveDescriptor(filename, true)};
         switch (descriptor.kind) {
         case DataObjectKind::Model:
             WriteModelWithDescriptor(
@@ -233,7 +255,7 @@ void WriteDataObject(const std::filesystem::path& filename, const DataObjectBase
 
 std::unique_ptr<ModelObject> ReadModel(const std::filesystem::path& filename) {
     try {
-        const auto& descriptor{ResolveDescriptorForRead(filename)};
+        const auto& descriptor{ResolveDescriptor(filename, false)};
         return ReadModelWithDescriptor(filename, descriptor);
     } catch (const std::exception& ex) {
         throw std::runtime_error(
@@ -246,7 +268,7 @@ void WriteModel(
     const ModelObject& model_object,
     int model_parameter) {
     try {
-        const auto& descriptor{ResolveDescriptorForWrite(filename)};
+        const auto& descriptor{ResolveDescriptor(filename, true)};
         WriteModelWithDescriptor(filename, descriptor, model_object, model_parameter);
     } catch (const std::exception& ex) {
         throw std::runtime_error(
@@ -256,7 +278,7 @@ void WriteModel(
 
 std::unique_ptr<MapObject> ReadMap(const std::filesystem::path& filename) {
     try {
-        const auto& descriptor{ResolveDescriptorForRead(filename)};
+        const auto& descriptor{ResolveDescriptor(filename, false)};
         return ReadMapWithDescriptor(filename, descriptor);
     } catch (const std::exception& ex) {
         throw std::runtime_error(
@@ -266,7 +288,7 @@ std::unique_ptr<MapObject> ReadMap(const std::filesystem::path& filename) {
 
 void WriteMap(const std::filesystem::path& filename, const MapObject& map_object) {
     try {
-        const auto& descriptor{ResolveDescriptorForWrite(filename)};
+        const auto& descriptor{ResolveDescriptor(filename, true)};
         WriteMapWithDescriptor(filename, descriptor, map_object);
     } catch (const std::exception& ex) {
         throw std::runtime_error(

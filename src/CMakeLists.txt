@@ -48,10 +48,8 @@ target_sources(rhbm_gem PRIVATE
     data/io/file/MapAxisOrderHelper.cpp
     data/io/file/MrcFormat.cpp
     data/io/file/PdbFormat.cpp
-    data/io/sqlite/DatabaseManager.cpp
-    data/io/sqlite/MapObjectStorage.cpp
     data/io/sqlite/ModelObjectStorage.cpp
-    data/io/sqlite/DatabaseSchemaManager.cpp
+    data/io/sqlite/SQLitePersistence.cpp
     data/io/DataObjectManager.cpp
 
     # utils
@@ -80,12 +78,6 @@ target_sources(rhbm_gem PRIVATE
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
     target_sources(rhbm_gem PRIVATE
         core/workflow/PotentialAnalysisBondWorkflow.cpp
-    )
-endif()
-
-if(RHBM_GEM_LEGACY_V1_SUPPORT)
-    target_sources(rhbm_gem PRIVATE
-        data/io/sqlite/legacy_v1/LegacyModelObjectReader.cpp
     )
 endif()
 
@@ -119,10 +111,6 @@ rhbm_gem_apply_library_install_rpath(rhbm_gem)
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
     target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
 endif()
-if(RHBM_GEM_LEGACY_V1_SUPPORT)
-    target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_LEGACY_V1_SUPPORT)
-endif()
-
 install(
     TARGETS rhbm_gem rhbm_gem_dependencies
     EXPORT RHBM_GEMTargets

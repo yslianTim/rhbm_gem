@@ -78,10 +78,10 @@ DataObject I/O principles:
 - `[Required]` Keep file-format support definitions centralized in a single registry-style source of truth.
 - `[Required]` Use explicit fixed routing with centralized registry-driven descriptor lookup.
 - `[Required]` Reader/writer and DAO paths should fail fast with clear exceptions when contracts are violated.
-- `[Required]` Keep schema versioning, validation, and migration centralized in schema-management components.
+- `[Required]` Keep schema versioning, bootstrap, and validation centralized in persistence-management components.
 - `[Required]` Keep normal save/load hot paths separate from bootstrap/repair logic.
 - `[Required]` Keep database transaction boundaries at a manager/service boundary; DAO methods should remain focused on persistence mapping.
-- `[Required]` Keep legacy compatibility and migration helpers internal (`src/`) unless explicitly promoted to public API.
+- `[Required]` Keep persistence-only helpers internal (`src/`) unless explicitly promoted to public API.
 
 Change-integration principles:
 

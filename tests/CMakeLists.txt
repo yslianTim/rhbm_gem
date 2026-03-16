@@ -104,10 +104,6 @@ add_rhbm_gtest_target(rhbm_tests_data_schema
         data/DataObjectSchema_test.cpp
 )
 
-if(RHBM_GEM_LEGACY_V1_SUPPORT)
-    target_compile_definitions(rhbm_tests_data_schema PRIVATE RHBM_GEM_LEGACY_V1_SUPPORT)
-endif()
-
 # utils
 add_rhbm_gtest_target(rhbm_tests_utils_math
     DOMAIN utils

@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include <array>
-#include <cctype>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -15,7 +14,7 @@
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "internal/sqlite/DatabaseManager.hpp"
+#include "internal/sqlite/SQLitePersistence.hpp"
 #include "internal/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 
@@ -183,83 +182,6 @@ bool HasForeignKey(
     }
 }
 
-std::string SanitizeLegacyKey(const std::string& key_tag) {
-    std::string sanitized_key_tag;
-    sanitized_key_tag.reserve(key_tag.size());
-    for (char ch : key_tag) {
-        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
-            sanitized_key_tag.push_back(ch);
-        } else {
-            sanitized_key_tag.push_back('_');
-        }
-    }
-    return sanitized_key_tag;
-}
-
-std::filesystem::path LegacyFixturePath() {
-    return command_test::TestDataPath("legacy/legacy_model_v1.sqlite");
-}
-
-void CopyLegacyFixtureDatabase(const std::filesystem::path& database_path) {
-    std::filesystem::copy_file(
-        LegacyFixturePath(),
-        database_path,
-        std::filesystem::copy_options::overwrite_existing);
-}
-
-void RenameLegacyModel(
-    const std::filesystem::path& database_path,
-    const std::string& old_key_tag,
-    const std::string& new_key_tag,
-    const std::string& new_pdb_id) {
-    const auto old_sanitized{SanitizeLegacyKey(old_key_tag)};
-    const auto new_sanitized{SanitizeLegacyKey(new_key_tag)};
-    ExecuteSql(
-        database_path,
-        "ALTER TABLE atom_list_in_" + old_sanitized + " RENAME TO atom_list_in_" + new_sanitized +
-            ";");
-    ExecuteSql(
-        database_path,
-        "ALTER TABLE bond_list_in_" + old_sanitized + " RENAME TO bond_list_in_" + new_sanitized +
-            ";");
-    ExecuteSql(
-        database_path,
-        "UPDATE model_list SET key_tag = '" + new_key_tag + "', pdb_id = '" + new_pdb_id +
-            "' WHERE key_tag = '" + old_key_tag + "';");
-    ExecuteSql(
-        database_path,
-        "UPDATE object_metadata SET key_tag = '" + new_key_tag +
-            "' WHERE key_tag = '" + old_key_tag + "' AND object_type = 'model';");
-}
-
-void DuplicateLegacyModel(
-    const std::filesystem::path& database_path,
-    const std::string& source_key_tag,
-    const std::string& new_key_tag,
-    const std::string& new_pdb_id) {
-    const auto source_sanitized{SanitizeLegacyKey(source_key_tag)};
-    const auto new_sanitized{SanitizeLegacyKey(new_key_tag)};
-    ExecuteSql(
-        database_path,
-        "CREATE TABLE atom_list_in_" + new_sanitized +
-            " AS SELECT * FROM atom_list_in_" + source_sanitized + ";");
-    ExecuteSql(
-        database_path,
-        "CREATE TABLE bond_list_in_" + new_sanitized +
-            " AS SELECT * FROM bond_list_in_" + source_sanitized + ";");
-    ExecuteSql(
-        database_path,
-        "INSERT INTO model_list(key_tag, atom_size, pdb_id, emd_id, map_resolution, resolution_method) "
-        "SELECT '" +
-            new_key_tag + "', atom_size, '" + new_pdb_id +
-            "', emd_id, map_resolution, resolution_method "
-            "FROM model_list WHERE key_tag = '" +
-            source_key_tag + "';");
-    ExecuteSql(
-        database_path,
-        "INSERT INTO object_metadata(key_tag, object_type) VALUES ('" + new_key_tag + "', 'model');");
-}
-
 std::shared_ptr<rg::ModelObject> LoadFixtureModel(
     const std::filesystem::path& model_path,
     const std::string& key_tag = "model") {
@@ -311,7 +233,7 @@ TEST(DataObjectSchemaBootstrapTest, EmptyDatabaseBootstrapsNormalizedSchema) {
     const command_test::ScopedTempDir temp_dir{"data_schema_bootstrap"};
     const auto database_path{temp_dir.path() / "bootstrap.sqlite"};
 
-    rg::DatabaseManager database_manager{database_path};
+    rg::SQLitePersistence database_manager{database_path};
 
     EXPECT_EQ(GetUserVersion(database_path), 2);
     EXPECT_TRUE(HasTable(database_path, "object_catalog"));
@@ -325,7 +247,7 @@ TEST(DataObjectSchemaBootstrapTest, SaveUnsupportedTypeRollsBackCatalogMutation)
     const command_test::ScopedTempDir temp_dir{"data_schema_atomic_save"};
     const auto database_path{temp_dir.path() / "atomic.sqlite"};
 
-    rg::DatabaseManager database_manager{database_path};
+    rg::SQLitePersistence database_manager{database_path};
     FailingDataObject data_object;
     data_object.SetKeyTag("failing");
 
@@ -338,7 +260,15 @@ TEST(DataObjectSchemaBootstrapTest, UnknownSchemaVersionThrows) {
     const auto database_path{temp_dir.path() / "unknown.sqlite"};
 
     SetUserVersion(database_path, 99);
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
+}
+
+TEST(DataObjectSchemaBootstrapTest, VersionOneSchemaFailsFast) {
+    const command_test::ScopedTempDir temp_dir{"data_schema_version_one"};
+    const auto database_path{temp_dir.path() / "version_one.sqlite"};
+
+    SetUserVersion(database_path, 1);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable) {
@@ -444,7 +374,7 @@ TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast) {
     const auto map_object{MakeTinyMapObject()};
 
     {
-        rg::DatabaseManager database_manager{database_path};
+        rg::SQLitePersistence database_manager{database_path};
         database_manager.SaveDataObject(&map_object, "map_only");
     }
 
@@ -456,7 +386,7 @@ TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast) {
         "INSERT INTO object_metadata(key_tag, object_type) VALUES ('map_only', 'map');");
     SetUserVersion(database_path, 2);
 
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaCompatibilityTest, Version2MetadataBasedShapeFailsFast) {
@@ -464,7 +394,7 @@ TEST(DataObjectSchemaCompatibilityTest, Version2MetadataBasedShapeFailsFast) {
     const auto database_path{temp_dir.path() / "metadata_shape.sqlite"};
 
     CreateVersion2MetadataBasedMapShapeDatabase(database_path);
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaCompatibilityTest, ManagedButUnversionedDatabaseFailsFast) {
@@ -480,7 +410,7 @@ TEST(DataObjectSchemaCompatibilityTest, ManagedButUnversionedDatabaseFailsFast) 
     }
 
     SetUserVersion(database_path, 0);
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaCompatibilityTest, MixedUnknownSchemaFailsFast) {
@@ -488,7 +418,7 @@ TEST(DataObjectSchemaCompatibilityTest, MixedUnknownSchemaFailsFast) {
     const auto database_path{temp_dir.path() / "mixed_unknown.sqlite"};
 
     ExecuteSql(database_path, "CREATE TABLE foreign_table (id INTEGER PRIMARY KEY);");
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThrows) {
@@ -496,13 +426,13 @@ TEST(DataObjectSchemaValidationTest, NormalizedV2DatabaseMissingRequiredTableThr
     const auto database_path{temp_dir.path() / "missing_v2.sqlite"};
 
     {
-        rg::DatabaseManager database_manager{database_path};
+        rg::SQLitePersistence database_manager{database_path};
         EXPECT_EQ(GetUserVersion(database_path), 2);
     }
     ExecuteSql(database_path, "DROP TABLE model_bond_group_potential;");
     SetUserVersion(database_path, 2);
 
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeignKeys) {
@@ -510,7 +440,7 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeig
     const auto database_path{temp_dir.path() / "missing_fk.sqlite"};
 
     {
-        rg::DatabaseManager database_manager{database_path};
+        rg::SQLitePersistence database_manager{database_path};
         EXPECT_EQ(GetUserVersion(database_path), 2);
     }
 
@@ -534,7 +464,7 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingForeig
             "object_catalog",
             "key_tag",
             "CASCADE"));
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequiredCatalogColumns) {
@@ -542,7 +472,7 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequir
     const auto database_path{temp_dir.path() / "bad_catalog_columns.sqlite"};
 
     {
-        rg::DatabaseManager database_manager{database_path};
+        rg::SQLitePersistence database_manager{database_path};
         EXPECT_EQ(GetUserVersion(database_path), 2);
     }
 
@@ -552,7 +482,7 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsMissingRequir
         "CREATE TABLE object_catalog (key_tag TEXT PRIMARY KEY);");
     SetUserVersion(database_path, 2);
 
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObjectTypeValue) {
@@ -560,7 +490,7 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObject
     const auto database_path{temp_dir.path() / "bad_catalog_type.sqlite"};
 
     {
-        rg::DatabaseManager database_manager{database_path};
+        rg::SQLitePersistence database_manager{database_path};
         EXPECT_EQ(GetUserVersion(database_path), 2);
     }
 
@@ -573,13 +503,13 @@ TEST(DataObjectSchemaValidationTest, FinalV2SchemaValidationRejectsUnknownObject
         "INSERT INTO object_catalog(key_tag, object_type) VALUES ('unknown_root', 'unknown');");
     SetUserVersion(database_path, 2);
 
-    EXPECT_THROW((void)rg::DatabaseManager(database_path), std::runtime_error);
+    EXPECT_THROW((void)rg::SQLitePersistence(database_path), std::runtime_error);
 }
 
 TEST(DataObjectSchemaValidationTest, ForeignKeyRejectsOrphanModelChildRows) {
     const command_test::ScopedTempDir temp_dir{"data_schema_fk_orphan"};
     const auto database_path{temp_dir.path() / "orphan.sqlite"};
-    rg::DatabaseManager database_manager{database_path};
+    rg::SQLitePersistence database_manager{database_path};
 
     EXPECT_THROW(
         ExecuteSql(
@@ -605,138 +535,3 @@ TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows) {
     EXPECT_EQ(CountRows(database_path, "model_object"), 0);
     EXPECT_EQ(CountRows(database_path, "model_atom"), 0);
 }
-
-#ifdef RHBM_GEM_LEGACY_V1_SUPPORT
-
-TEST(DataObjectSchemaMigrationTest, LegacyFixtureMigratesToNormalizedSchema) {
-    const command_test::ScopedTempDir temp_dir{"data_schema_migrate_legacy"};
-    const auto database_path{temp_dir.path() / "legacy.sqlite"};
-
-    CopyLegacyFixtureDatabase(database_path);
-    ASSERT_EQ(GetUserVersion(database_path), 0);
-    ASSERT_TRUE(HasTable(database_path, "model_list"));
-
-    rg::DataObjectManager manager{};
-    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    rg::DatabaseManager verifier{database_path};
-    EXPECT_EQ(GetUserVersion(database_path), 2);
-
-    ASSERT_NO_THROW(manager.LoadDataObject("legacy_model"));
-    auto model{manager.GetTypedDataObject<rg::ModelObject>("legacy_model")};
-    EXPECT_EQ(model->GetPdbID(), "LEGACY");
-    EXPECT_TRUE(HasTable(database_path, "model_object"));
-    EXPECT_FALSE(HasTable(database_path, "model_list"));
-    EXPECT_EQ(GetUserVersion(database_path), 2);
-}
-
-TEST(DataObjectSchemaMigrationTest, FailedLegacyMigrationRollsBackToLegacyState) {
-    const command_test::ScopedTempDir temp_dir{"data_schema_migrate_rollback"};
-    const auto database_path{temp_dir.path() / "legacy_rollback.sqlite"};
-
-    CopyLegacyFixtureDatabase(database_path);
-    RenameLegacyModel(database_path, "legacy_model", "key_a", "MODEL_A");
-    DuplicateLegacyModel(database_path, "key_a", "key_b", "MODEL_B");
-    ExecuteSql(
-        database_path,
-        "UPDATE model_list SET atom_size = 999 WHERE key_tag = 'key_b';");
-
-    rg::DataObjectManager manager{};
-    EXPECT_THROW(manager.SetDatabaseManager(database_path), std::runtime_error);
-    EXPECT_TRUE(HasTable(database_path, "model_list"));
-    EXPECT_FALSE(HasTable(database_path, "model_object"));
-    EXPECT_EQ(GetUserVersion(database_path), 0);
-}
-
-TEST(DataObjectSchemaMigrationTest, LegacyMigrationUsesModelListWhenMetadataIncomplete) {
-    const command_test::ScopedTempDir temp_dir{"data_schema_partial_metadata"};
-    const auto database_path{temp_dir.path() / "partial_metadata.sqlite"};
-
-    CopyLegacyFixtureDatabase(database_path);
-    RenameLegacyModel(database_path, "legacy_model", "key_a", "MODEL_A");
-    DuplicateLegacyModel(database_path, "key_a", "key_b", "MODEL_B");
-    ExecuteSql(
-        database_path,
-        "DELETE FROM object_metadata WHERE key_tag = 'key_b' AND object_type = 'model';");
-
-    rg::DataObjectManager manager{};
-    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    ASSERT_NO_THROW(manager.LoadDataObject("key_a"));
-    ASSERT_NO_THROW(manager.LoadDataObject("key_b"));
-    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("key_a")->GetPdbID(), "MODEL_A");
-    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("key_b")->GetPdbID(), "MODEL_B");
-    EXPECT_EQ(CountRows(database_path, "model_object"), 2);
-    EXPECT_EQ(CountRows(database_path, "object_catalog"), 2);
-    EXPECT_FALSE(HasTable(database_path, "object_metadata"));
-}
-
-TEST(DataObjectSchemaMigrationTest, LegacyMigrationIgnoresMetadataOnlyGhostKeys) {
-    const command_test::ScopedTempDir temp_dir{"data_schema_ghost_metadata"};
-    const auto database_path{temp_dir.path() / "ghost_metadata.sqlite"};
-
-    CopyLegacyFixtureDatabase(database_path);
-    RenameLegacyModel(database_path, "legacy_model", "real_model", "REAL");
-    {
-        rg::SQLiteWrapper database{database_path};
-        UpsertObjectMetadata(database, "ghost_model", "model");
-    }
-
-    rg::DataObjectManager manager{};
-    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    ASSERT_NO_THROW(manager.LoadDataObject("real_model"));
-    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("real_model")->GetPdbID(), "REAL");
-    EXPECT_THROW(manager.LoadDataObject("ghost_model"), std::runtime_error);
-    EXPECT_EQ(CountRows(database_path, "model_object"), 1);
-    EXPECT_EQ(CountRows(database_path, "object_catalog"), 1);
-    EXPECT_FALSE(HasTable(database_path, "object_metadata"));
-}
-
-TEST(DataObjectSchemaMigrationTest, LegacyMigrationDropsOnlyOwnedTables) {
-    const command_test::ScopedTempDir temp_dir{"data_schema_owned_table_drop"};
-    const auto database_path{temp_dir.path() / "owned_drop.sqlite"};
-
-    CopyLegacyFixtureDatabase(database_path);
-    ExecuteSql(database_path, "CREATE TABLE custom_atom_list_in_notes (value INTEGER);");
-
-    rg::DataObjectManager manager{};
-    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    EXPECT_TRUE(HasTable(database_path, "custom_atom_list_in_notes"));
-    EXPECT_FALSE(HasTable(database_path, "atom_list_in_legacy_model"));
-}
-
-TEST(DataObjectSchemaMigrationTest, LegacyV1MapListWithoutFkMigratesToFinalV2) {
-    const command_test::ScopedTempDir temp_dir{"data_schema_legacy_map_fk_rebuild"};
-    const auto database_path{temp_dir.path() / "legacy_map_fk.sqlite"};
-    const auto map_object{MakeTinyMapObject(4.0f)};
-
-    CopyLegacyFixtureDatabase(database_path);
-    CreateLegacyMapListWithoutForeignKeyTable(database_path, map_object, "legacy_map");
-    SetUserVersion(database_path, 1);
-
-    EXPECT_FALSE(
-        HasForeignKey(
-            database_path,
-            "map_list",
-            "key_tag",
-            "object_catalog",
-            "key_tag",
-            "CASCADE"));
-
-    rg::DataObjectManager manager{};
-    ASSERT_NO_THROW(manager.SetDatabaseManager(database_path));
-    EXPECT_EQ(GetUserVersion(database_path), 2);
-    EXPECT_TRUE(
-        HasForeignKey(
-            database_path,
-            "map_list",
-            "key_tag",
-            "object_catalog",
-            "key_tag",
-            "CASCADE"));
-    ASSERT_NO_THROW(manager.LoadDataObject("legacy_map"));
-    EXPECT_EQ(
-        manager.GetTypedDataObject<rg::MapObject>("legacy_map")->GetGridSize(),
-        map_object.GetGridSize());
-    EXPECT_EQ(GetUserVersion(database_path), 2);
-}
-
-#endif
