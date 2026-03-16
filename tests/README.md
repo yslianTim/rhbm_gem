@@ -43,6 +43,12 @@ Build all test targets:
 cmake --build build --target tests_all -j
 ```
 
+Build output note:
+
+- C++ tests are compiled into a single executable: `build/bin/RHBM-GEM-TEST`
+- `ctest` still exposes grouped entries such as `rhbm_tests_core_command` and `rhbm_tests_data_schema`
+- those grouped CTest entries run filtered subsets from the same `RHBM-GEM-TEST` binary
+
 Run all tests:
 
 ```bash

@@ -70,6 +70,9 @@ Build all C++ test targets:
 cmake --build build --target tests_all -j
 ```
 
+The C++ unit tests are linked into a single executable at `build/bin/RHBM-GEM-TEST`. The `ctest`
+entries remain split by domain/intent grouping and invoke filtered subsets from that one binary.
+
 Run all tests:
 
 ```bash
