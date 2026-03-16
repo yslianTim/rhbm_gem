@@ -209,6 +209,59 @@ TEST(CommandCatalogTest, RunSurfaceAndPythonBindingsMatchManifestOrder)
         std::string::npos);
 }
 
+TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
+{
+    const auto bindings{
+        ReadFileContent(command_test::ProjectRootPath() / "bindings" / "CommandApiBindings.cpp")
+    };
+
+    ASSERT_FALSE(bindings.empty());
+
+    for (const std::string_view request_name : {
+             "CommonCommandRequest",
+             "PotentialAnalysisRequest",
+             "PotentialDisplayRequest",
+             "ResultDumpRequest",
+             "MapSimulationRequest",
+             "MapVisualizationRequest",
+             "PositionEstimationRequest",
+             "HRLModelTestRequest",
+         })
+    {
+        EXPECT_NE(
+            bindings.find(
+                "py::class_<" + std::string(request_name) + ">(module, \""
+                + std::string(request_name) + "\")"),
+            std::string::npos)
+            << request_name;
+    }
+
+    for (const std::string_view common_field : {
+             "thread_size",
+             "verbose_level",
+             "database_path",
+             "folder_path",
+         })
+    {
+        EXPECT_NE(
+            bindings.find(".def_readwrite(\"" + std::string(common_field) + "\""),
+            std::string::npos)
+            << common_field;
+    }
+
+    for (const std::string_view report_field : {
+             "prepared",
+             "executed",
+             "validation_issues",
+         })
+    {
+        EXPECT_NE(
+            bindings.find(".def_readonly(\"" + std::string(report_field) + "\""),
+            std::string::npos)
+            << report_field;
+    }
+}
+
 TEST(CommandCatalogTest, ModelTestCliNameMapsToHRLModelTestCommandId)
 {
     const auto & catalog{ rg::CommandCatalog() };
