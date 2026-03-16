@@ -95,6 +95,7 @@ void DemoPainter::Painting()
         model->BuildKDTreeRoot();
     }
 
+    ModelObject * demo_model_object{ nullptr };
     std::vector<ModelObject *> demo_model_list{ nullptr, nullptr, nullptr, nullptr };
     std::vector<ModelObject *> demo_fsc_model_list
     {
@@ -110,6 +111,7 @@ void DemoPainter::Painting()
     {
         if (model->GetPdbID() == "6Z6U" && model->GetEmdID() == "EMD-11103")
         {
+            demo_model_object = model;
             demo_model_list[3] = model;
             demo_fsc_model_list[0] = model;
             demo_alpha_carbon_list[0] = model;
@@ -164,8 +166,8 @@ void DemoPainter::Painting()
         }
     };
 
-    PaintGroupGausMergeResidueDemo(demo_alpha_carbon_list, "figure_gaus_backbone_boxplot.pdf");
-/*
+    //PaintGroupGausMergeResidueDemo(demo_alpha_carbon_list, "figure_gaus_backbone_boxplot.pdf");
+
     PaintAtomMapValueExample(demo_model_object, "figure_1_a.pdf");
     PaintGroupGausMainChainSummary(demo_model_list, "figure_1_b.pdf");
     PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_c1.pdf", 0);
@@ -183,7 +185,7 @@ void DemoPainter::Painting()
             PaintGroupGausMainChainSingle(model, "figure_2_d.pdf");
             PainMapValueComparisonSingle("figure_5.pdf", demo_model_object, model);
         }
-    }*/
+    }
 }
 
 void DemoPainter::PainMapValueComparisonSingle(
