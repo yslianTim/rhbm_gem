@@ -5,8 +5,8 @@ This document describes the current runtime contract for:
 - file I/O
 - SQLite persistence
 - typed object dispatch
-- `DataObjectManager` iteration
-- shared typed command helpers layered on top of these boundaries
+- `DataObjectManager` storage and iteration
+- shared command helpers built on top of these boundaries
 
 Related references:
 
@@ -16,12 +16,12 @@ Related references:
 
 ## 1. Scope
 
-Top-level persisted/file-backed `DataObject` roots are fixed to:
+Top-level file-backed and SQLite-persisted `DataObject` roots are fixed to:
 
 - `ModelObject`
 - `MapObject`
 
-`AtomObject` and `BondObject` are model-domain objects. They are never top-level file or SQLite roots.
+`AtomObject` and `BondObject` are model-domain objects. They are not top-level file or database roots.
 
 ## 2. Supported Surface
 
@@ -30,12 +30,13 @@ Top-level persisted/file-backed `DataObject` roots are fixed to:
 | `ModelObject` | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` | yes |
 | `MapObject` | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` | yes |
 
-Rules:
+Rules enforced by `src/data/io/file/FileIO.cpp`:
 
 - extension lookup is case-insensitive
 - `.mmcif` and `.mcif` use the CIF reader and are read-only
 - `.mrc` uses the MRC backend
 - `.map` and `.ccp4` use the CCP4 backend
+- typed file entry points fail when the extension resolves to the wrong top-level kind
 
 ## 3. Runtime Topology
 
@@ -45,28 +46,24 @@ flowchart LR
 
     subgraph F["File I/O"]
       B --> C["ReadDataObject / WriteDataObject"]
-      C --> D["fixed descriptor lookup by extension"]
-      D --> E["backend dispatch"]
-      E --> F1["PDB / CIF model codecs"]
-      E --> F2["MRC / CCP4 map codecs"]
+      C --> D["descriptor lookup by extension"]
+      D --> E["PDB / CIF / MRC / CCP4 backends"]
     end
 
     subgraph P["SQLite persistence"]
       B --> H["SQLitePersistence"]
       H --> I["schema bootstrap / validation"]
-      H --> J["object_catalog upsert / lookup"]
+      H --> J["object_catalog routing"]
       J --> K["ModelObjectStorage"]
-      J --> L["inline MapObject persistence"]
+      J --> L["inline MapObject save/load"]
     end
 
     subgraph T["Typed helpers"]
       B --> M["ForEachDataObject(...)"]
-      N["DataObjectDispatch"] --> N1["AsModelObject / AsMapObject"]
-      N --> N2["ExpectModelObject / ExpectMapObject"]
-      N --> N3["GetCatalogTypeName"]
+      N["DataObjectDispatch"] --> N1["As* / Expect* helpers"]
+      N --> N2["GetCatalogTypeName"]
       O["CommandDataSupport"] --> O1["command_data_loader helpers"]
       O --> O2["shared ModelObject / MapObject operations"]
-      P2["PainterTypeCheck / MapSampling"] --> O
     end
 ```
 
@@ -81,22 +78,19 @@ Public API:
 
 Behavior:
 
-- `FileIO.cpp` owns the single descriptor registry for file-format support.
-- descriptor routing is explicit by `DataObjectKind` (`Model` or `Map`).
+- `FileIO.cpp` owns the fixed descriptor table for supported extensions.
 - `WriteDataObject(...)` enforces type/backend agreement through:
   - `ExpectModelObject(data_object, "WriteDataObject()")`
   - `ExpectMapObject(data_object, "WriteDataObject()")`
-- typed entry points fail if the extension resolves to the wrong kind.
-- all public entry points wrap failures in `std::runtime_error` with file path and operation context.
+- all public entry points wrap failures in `std::runtime_error` with file path and operation context
 
 `DataObjectManager` integration:
 
-- `ProcessFile(filename, key_tag)` reads, assigns `key_tag`, calls `Display()`, and stores the object in memory.
-- `ProduceFile(filename, key_tag)` logs and returns when the key is missing; otherwise it writes the in-memory object to disk.
+- `ProcessFile(filename, key_tag)` reads the file, sets `key_tag`, calls `Display()`, and stores the object in memory
+- `ProduceFile(filename, key_tag)` logs a warning and returns when the key is missing; otherwise it writes the in-memory object to disk
+- replacing an existing in-memory key is allowed and logs a warning
 
-Replacing an existing in-memory key is allowed and logs a warning.
-
-## 5. In-Memory Object Contract
+## 5. In-Memory Manager Contract
 
 `DataObjectManager` stores objects in:
 
@@ -107,13 +101,19 @@ Concurrency boundaries:
 - `m_map_mutex` protects the in-memory object map
 - `m_db_mutex` protects manager-level persistence access
 
-Lookup helpers:
+Public lookup and lifecycle helpers:
 
-- `HasDataObject(key_tag)` returns presence only
+- `ClearDataObjects()`
+- `HasDataObject(key_tag)`
+- `GetDataObject(key_tag)`
+- `GetTypedDataObject<T>(key_tag)`
+
+Behavior:
+
 - `GetDataObject(key_tag)` throws if the key is missing
 - `GetTypedDataObject<T>(key_tag)` throws if the key is missing or the runtime type does not match `T`
-
-`AddDataObject(...)` is private manager infrastructure. It rejects null pointers, replaces duplicate keys, and logs replacement.
+- private `AddDataObject(...)` logs and replaces duplicate keys
+- private `AddDataObject(...)` logs an error and returns `false` for `nullptr`
 
 ## 6. SQLite Persistence Contract
 
@@ -123,18 +123,22 @@ Manager entry points:
 - `SaveDataObject(key_tag, renamed_key_tag="")`
 - `LoadDataObject(key_tag)`
 
-`SetDatabaseManager(...)` creates an internal `SQLitePersistence` boundary object. If the same path is already active, it logs a warning and keeps the existing instance.
+`SetDatabaseManager(...)` behavior:
+
+- creates an internal `SQLitePersistence` object
+- if the same database path is already active, logs a warning and keeps the existing instance
+- if the path is empty, `SQLitePersistence` falls back to `database.sqlite`
 
 `SQLitePersistence` responsibilities:
 
 - create the database parent directory if needed
 - open SQLite
 - bootstrap or validate only the current normalized schema
-- own the transaction boundary for each save/load
-- upsert and query `object_catalog(key_tag, object_type)`
-- route by stable catalog type name only:
+- own a transaction for each save/load operation
+- route by catalog type name stored in `object_catalog(key_tag, object_type)`
+- dispatch supported top-level types only:
   - `model` -> `ModelObjectStorage`
-  - `map` -> inline map save/load helpers in the same persistence unit
+  - `map` -> inline map save/load helpers in `SQLitePersistence.cpp`
 
 Behavior differences to keep straight:
 
@@ -148,31 +152,32 @@ Behavior differences to keep straight:
 - `LoadDataObject(...)`
   - throws if the DB manager is not initialized
   - throws if the catalog row is missing
-  - loads the object and stores it in the in-memory map under the requested key
+  - loads the object and stores it in memory under the requested key
 
 ## 7. Schema Contract
 
-Schema version source: `PRAGMA user_version`.
+Schema version source:
+
+- `PRAGMA user_version`
 
 Supported states:
 
 - `2`
   - validate the current normalized schema
 - `0`
-  - empty database -> bootstrap the current normalized schema
+  - bootstrap only when the database is otherwise empty
 - any other state
   - fail fast as unsupported
 
 Current schema invariants:
 
-- `object_catalog(key_tag, object_type)` is the polymorphic root catalog
+- `object_catalog(key_tag, object_type)` is the top-level catalog
 - `object_type` is required and limited to `model` or `map`
 - `model_object.key_tag` references `object_catalog(key_tag)` with `ON DELETE CASCADE`
 - `map_list.key_tag` references `object_catalog(key_tag)` with `ON DELETE CASCADE`
 - every model payload table references `model_object(key_tag)` with `ON DELETE CASCADE`
 - validation checks required tables, primary-key shape, foreign-key shape, and catalog/payload key consistency
-
-The persistence layer validates the existing current schema; it does not silently repair arbitrary damaged databases.
+- unsupported shapes such as `object_metadata` fail validation instead of being migrated in place
 
 ## 8. Typed Object Dispatch Contract
 
@@ -191,8 +196,6 @@ Behavior:
   - `map` for `MapObject`
 - `GetCatalogTypeName(...)` throws for non-top-level types such as `AtomObject` and `BondObject`
 
-`DataObjectDispatch` belongs to the `data/object` layer because it encodes `DataObjectBase` hierarchy rules, not command policy.
-
 ## 9. Manager Iteration Contract
 
 `DataObjectManager::ForEachDataObject(...)` has mutable and const overloads plus:
@@ -208,18 +211,21 @@ Behavior:
 
 - empty key list:
   - `deterministic_order=true`: iterate keys in lexicographic order
-  - `deterministic_order=false`: iterate current container order
+  - `deterministic_order=false`: iterate current `unordered_map` container order
 - non-empty key list:
   - callback order follows the caller-provided key order
   - missing keys are skipped with warning logs
-- empty callback throws `std::runtime_error`
+- empty callbacks throw `std::runtime_error`
 - traversal is snapshot-based:
   - the manager copies matching `shared_ptr`s while holding `m_map_mutex`
   - callbacks run after the mutex is released
 
-## 10. Shared Typed Command Helpers
+## 10. Shared Command Helpers
 
-Current shared helpers live in `src/core/command/CommandDataSupport.*`.
+Cross-command helpers live in:
+
+- `src/core/command/CommandDataSupport.hpp`
+- `src/core/command/CommandDataSupport.cpp`
 
 Loader helpers in `namespace command_data_loader`:
 
@@ -228,7 +234,7 @@ Loader helpers in `namespace command_data_loader`:
 - `OptionalProcessMapFile(...)`
 - `LoadModelObject(...)`
 
-Reusable typed operations:
+Shared typed operations:
 
 - `NormalizeMapObject(...)`
 - `PrepareModelObject(...)`
@@ -237,22 +243,9 @@ Reusable typed operations:
 - `PrepareSimulationAtoms(...)`
 - `BuildModelAtomBondContext(...)`
 
-## 11. Extension Boundaries
+These helpers are internal command-layer utilities, not part of the public `include/` header surface.
 
-Allowed extension:
-
-- add model or map file formats through the descriptor table in `FileIO.cpp`
-- evolve the fixed model/map SQLite storage implementations
-- add reusable typed model/map helpers in `CommandDataSupport`
-- extend manager iteration policy through `IterateOptions`
-
-Out of scope:
-
-- runtime registration of arbitrary top-level `DataObject` roots
-- runtime registration of storage factories
-- replacing file or DB routing with plugin chains
-
-## 12. Key Files
+## 11. Key Files
 
 Core orchestration:
 

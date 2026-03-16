@@ -1,11 +1,11 @@
 # Adding DataObject Operations and Iteration
 
-This guide explains how to extend behavior around the current top-level `DataObject` types:
+This guide covers how to extend behavior around the current top-level `DataObject` types:
 
 - `ModelObject`
 - `MapObject`
 
-It also covers `DataObjectManager` iteration. It does not cover adding new top-level `DataObject` roots; that is not part of the current architecture.
+It also covers `DataObjectManager` iteration and the shared command helpers that already exist in the repository.
 
 Related references:
 
@@ -24,7 +24,8 @@ Use the narrowest boundary that matches the change.
 `CommandDataSupport` in `src/core/command/CommandDataSupport.*`
 
 - use for reusable typed operations on `ModelObject` or `MapObject`
-- keep this layer focused on logic that is shared by multiple commands
+- current shared operations are `NormalizeMapObject(...)`, `PrepareModelObject(...)`, `ApplyModelSelection(...)`, `CollectModelAtoms(...)`, `PrepareSimulationAtoms(...)`, and `BuildModelAtomBondContext(...)`
+- keep this layer focused on logic shared by multiple commands
 
 `MapSampling` in `include/rhbm_gem/core/command/MapSampling.hpp` and `src/core/command/MapSampling.cpp`
 
@@ -41,7 +42,7 @@ command-local code in `src/core/command/*.cpp` or `src/core/workflow/*.cpp`
 `DataObjectDispatch`
 
 - use when generic code needs to probe or enforce `DataObjectBase` runtime type
-- do not move command policy into `DataObjectDispatch`
+- keep command policy out of `DataObjectDispatch`
 
 ## 2. Required File Updates
 
@@ -125,7 +126,7 @@ Use expect helpers when a mismatch is a contract violation:
 
 Use `GetCatalogTypeName(...)` only for top-level persistence routing.
 
-If callback bodies start growing, move the multi-step logic into typed helpers instead of adding more branching inline.
+If callback bodies or command-local branches start growing, move the multi-step logic into typed helpers instead of adding more dispatch inline.
 
 ## 6. Command Integration Pattern
 
