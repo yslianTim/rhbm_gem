@@ -262,8 +262,8 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestCommandOptions & options)
             );
 
             mean_matrix_ols.col(i) = residual_mean_ols_list.front();
-            mean_matrix_mdpde.col(i) = residual_mean_mdpde_list.front();
             sigma_matrix_ols.col(i) = residual_sigma_ols_list.front();
+            mean_matrix_mdpde.col(i) = residual_mean_mdpde_list.front();
             sigma_matrix_mdpde.col(i) = residual_sigma_mdpde_list.front();
             mean_matrix_train.col(i) = residual_mean_mdpde_list.back();
             sigma_matrix_train.col(i) = residual_sigma_mdpde_list.back();
@@ -680,7 +680,10 @@ void PrintDataOutlierResult(
                 ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
                 ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
-                graph->Draw("PL3");
+                if (options.tester_choice != TesterType::MODEL_ALPHA_DATA)
+                {
+                    graph->Draw("PL3");
+                }
             }
 
             if (i == 0)
@@ -729,10 +732,10 @@ void PrintDataOutlierResult(
     }
     else
     {
+        legend->AddEntry(graph_train_list[0][0].front().get(),
+            "MDPDE (#alpha_{r} from Alg.4)", "plf");
         legend->AddEntry(graph_mdpde_list[0][0].front().get(),
             "MDPDE (#alpha_{r} = 0.1)", "plf");
-        legend->AddEntry(graph_train_list[0][0].front().get(),
-            "MDPDE (#alpha_{r} from training)", "plf");
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "Ordinary Least Squares", "plf");
     }
@@ -748,7 +751,7 @@ void PrintDataOutlierResult(
     ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
     ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
-    bottom_title_text->AddText("Data Outlier Ratio (%)");
+    bottom_title_text->AddText("Data Contamination Ratio (%)");
     bottom_title_text->Draw();
 
     canvas->cd();
@@ -761,7 +764,7 @@ void PrintDataOutlierResult(
     ROOTHelper::SetPaveTextDefaultStyle(right_title_text.get());
     ROOTHelper::SetFillAttribute(right_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
-    right_title_text->AddText("Normalized Bias #font[2]{b}");
+    right_title_text->AddText("Normalized Bias");
     auto text{ right_title_text->GetLineWith("Bias") };
     text->SetTextAngle(90.0f);
     right_title_text->Draw();
@@ -915,7 +918,10 @@ void PrintMemberOutlierResult(
                 ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
                 ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
-                graph->Draw("PL3");
+                if (options.tester_choice != TesterType::MODEL_ALPHA_MEMBER)
+                {
+                    graph->Draw("PL3");
+                }
             }
 
             if (i == 0)
@@ -966,10 +972,10 @@ void PrintMemberOutlierResult(
     }
     else
     {
+        legend->AddEntry(graph_train_list[0][0].front().get(),
+            "MDPDE (#alpha_{g} from Alg.5)", "plf");
         legend->AddEntry(graph_mdpde_list[0][0].front().get(),
             "MDPDE (#alpha_{g} = 0.2)", "plf");
-        legend->AddEntry(graph_train_list[0][0].front().get(),
-            "MDPDE (#alpha_{g} from training)", "plf");
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "MDPDE (#alpha_{g} = 0)", "plf");
     }
@@ -985,7 +991,7 @@ void PrintMemberOutlierResult(
     ROOTHelper::SetPaveTextDefaultStyle(bottom_title_text.get());
     ROOTHelper::SetFillAttribute(bottom_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
-    bottom_title_text->AddText("Member Outlier Ratio (%)");
+    bottom_title_text->AddText("Member Contamination Ratio (%)");
     bottom_title_text->Draw();
 
     canvas->cd();
@@ -998,7 +1004,7 @@ void PrintMemberOutlierResult(
     ROOTHelper::SetPaveTextDefaultStyle(right_title_text.get());
     ROOTHelper::SetFillAttribute(right_title_text.get(), 4000);
     ROOTHelper::SetTextAttribute(right_title_text.get(), 50.0f, 133, 22);
-    right_title_text->AddText("Normalized Bias #font[2]{b}");
+    right_title_text->AddText("Normalized Bias");
     auto text{ right_title_text->GetLineWith("Bias") };
     text->SetTextAngle(90.0f);
     right_title_text->Draw();
