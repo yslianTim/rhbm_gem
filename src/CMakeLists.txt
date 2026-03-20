@@ -74,7 +74,7 @@ target_sources(rhbm_gem PRIVATE
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
     target_sources(rhbm_gem PRIVATE
-        core/workflow/PotentialAnalysisBondWorkflow.cpp
+        core/experimental/PotentialAnalysisBondWorkflow.cpp
     )
 endif()
 

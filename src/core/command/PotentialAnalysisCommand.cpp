@@ -1,5 +1,6 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "command/CommandDataSupport.hpp"
+#include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -352,15 +353,6 @@ bool EmitTrainingReportIfRequested(
 
 } // namespace rhbm_gem::detail
 
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
-namespace rhbm_gem::detail {
-void RunPotentialAnalysisBondWorkflow(
-    ModelObject & model_object,
-    MapObject & map_object,
-    const PotentialAnalysisCommandOptions & options);
-} // namespace rhbm_gem::detail
-#endif
-
 namespace rhbm_gem {
 bool PotentialAnalysisCommand::BuildDataObject()
 {
@@ -559,7 +551,8 @@ void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled()
 {
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
     if (m_model_object == nullptr || m_map_object == nullptr) return;
-    detail::RunPotentialAnalysisBondWorkflow(*m_model_object, *m_map_object, m_options);
+    experimental::RunPotentialAnalysisBondWorkflow(
+        *m_model_object, *m_map_object, m_options);
 #endif
 }
 

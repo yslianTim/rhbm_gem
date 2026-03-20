@@ -1,19 +1,21 @@
+#include "experimental/PotentialAnalysisBondWorkflow.hpp"
+
 #include "command/PotentialAnalysisCommand.hpp"
+#include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/math/CylinderSampler.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/HRLDataTransform.hpp>
 #include <rhbm_gem/utils/hrl/HRLGroupEstimator.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelAlgorithms.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/core/command/MapSampling.hpp>
-#include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/math/CylinderSampler.hpp>
+#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 #include <array>
 #include <atomic>
@@ -25,7 +27,7 @@
 #include <omp.h>
 #endif
 
-namespace rhbm_gem::detail {
+namespace rhbm_gem::experimental {
 
 namespace {
 
@@ -200,9 +202,9 @@ void RunLocalBondFitting(
         local_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
         local_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
 
-        #ifdef USE_OPENMP
-            #pragma omp critical
-        #endif
+#ifdef USE_OPENMP
+        #pragma omp critical
+#endif
         {
             bond_count++;
             Logger::ProgressPercent(bond_count, selected_bond_size);
@@ -327,9 +329,8 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
     }
 }
 
-} // namespace
-
-void RunPotentialAnalysisBondWorkflow(const PotentialAnalysisBondWorkflowContext & context)
+void RunPotentialAnalysisBondWorkflowImpl(
+    const PotentialAnalysisBondWorkflowContext & context)
 {
     RunBondMapValueSampling(context);
     RunBondGroupClassification(context);
@@ -349,7 +350,7 @@ void RunPotentialAnalysisBondWorkflow(
         map_object,
         options,
     };
-    RunPotentialAnalysisBondWorkflow(context);
+    RunPotentialAnalysisBondWorkflowImpl(context);
 }
 
-} // namespace rhbm_gem::detail
+} // namespace rhbm_gem::experimental
