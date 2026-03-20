@@ -104,15 +104,12 @@ void PotentialDisplayCommand::ApplyRequest(const PotentialDisplayRequest & reque
     SetPainterChoice(request.painter_choice);
     SetModelKeyTagList(request.model_key_tag_list);
     SetRefModelKeyTagListMap(request.ref_model_key_tag_list);
-    MutateOptions([&]()
-    {
-        m_options.pick_chain_id = request.pick_chain_id;
-        m_options.veto_chain_id = request.veto_chain_id;
-        m_options.pick_residue = request.pick_residue;
-        m_options.veto_residue = request.veto_residue;
-        m_options.pick_element = request.pick_element;
-        m_options.veto_element = request.veto_element;
-    });
+    AssignOption(m_options.pick_chain_id, request.pick_chain_id);
+    AssignOption(m_options.veto_chain_id, request.veto_chain_id);
+    AssignOption(m_options.pick_residue, request.pick_residue);
+    AssignOption(m_options.veto_residue, request.veto_residue);
+    AssignOption(m_options.pick_element, request.pick_element);
+    AssignOption(m_options.veto_element, request.veto_element);
 }
 
 bool PotentialDisplayCommand::ExecuteImpl()

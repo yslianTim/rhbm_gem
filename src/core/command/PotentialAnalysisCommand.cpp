@@ -85,12 +85,12 @@ void PotentialAnalysisCommand::ApplyRequest(const PotentialAnalysisRequest & req
     ApplyCommonRequest(request.common);
     SetModelFilePath(request.model_file_path);
     SetMapFilePath(request.map_file_path);
-    MutateOptions([&]() { m_options.is_simulation = request.simulation_flag; });
+    AssignOption(m_options.is_simulation, request.simulation_flag);
     SetSimulatedMapResolution(request.simulated_map_resolution);
     SetSavedKeyTag(request.saved_key_tag);
-    MutateOptions([&]() { m_options.training_report_dir = request.training_report_dir; });
-    MutateOptions([&]() { m_options.use_training_alpha = request.training_alpha_flag; });
-    MutateOptions([&]() { m_options.is_asymmetry = request.asymmetry_flag; });
+    AssignOption(m_options.training_report_dir, request.training_report_dir);
+    AssignOption(m_options.use_training_alpha, request.training_alpha_flag);
+    AssignOption(m_options.is_asymmetry, request.asymmetry_flag);
     SetSamplingSize(request.sampling_size);
     SetSamplingRangeMinimum(request.sampling_range_min);
     SetSamplingRangeMaximum(request.sampling_range_max);

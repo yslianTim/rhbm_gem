@@ -13,6 +13,7 @@ namespace {
 struct LifecycleCommandOptions : public rg::CommandOptions
 {
     bool fail_prepare{ false };
+    bool execution_toggle{ false };
 };
 
 class LifecycleCommand final
@@ -36,7 +37,12 @@ public:
 
     void SetFailPrepare(bool value)
     {
-        MutateOptions([&]() { m_options.fail_prepare = value; });
+        AssignOption(m_options.fail_prepare, value);
+    }
+
+    void SetExecutionToggle(bool value)
+    {
+        AssignOption(m_options.execution_toggle, value);
     }
 
     void ValidateOptions() override
@@ -105,4 +111,20 @@ TEST(CommandExecutionContractTest, RepeatedExecuteResetsRuntimeStateBetweenRuns)
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.reset_count, 2);
     EXPECT_EQ(command.execute_impl_count, 2);
+}
+
+TEST(CommandExecutionContractTest, MutatingAssignedOptionAfterPrepareForcesFreshPrepareInExecute)
+{
+    LifecycleCommand command{};
+
+    ASSERT_TRUE(command.PrepareForExecution());
+    EXPECT_EQ(command.validate_count, 1);
+    EXPECT_EQ(command.reset_count, 1);
+
+    command.SetExecutionToggle(true);
+
+    ASSERT_TRUE(command.Execute());
+    EXPECT_EQ(command.validate_count, 2);
+    EXPECT_EQ(command.reset_count, 2);
+    EXPECT_EQ(command.execute_impl_count, 1);
 }

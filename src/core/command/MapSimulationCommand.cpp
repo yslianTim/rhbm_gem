@@ -49,7 +49,7 @@ void MapSimulationCommand::ApplyRequest(const MapSimulationRequest & request)
 {
     ApplyCommonRequest(request.common);
     SetModelFilePath(request.model_file_path);
-    MutateOptions([&]() { m_options.map_file_name = request.map_file_name; });
+    AssignOption(m_options.map_file_name, request.map_file_name);
     SetPotentialModelChoice(request.potential_model_choice);
     SetPartialChargeChoice(request.partial_charge_choice);
     SetCutoffDistance(request.cutoff_distance);

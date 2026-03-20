@@ -24,6 +24,36 @@ TEST(PotentialAnalysisCommandTest, SimulationRequiresPositiveResolutionAtPrepare
         nullptr);
 }
 
+TEST(PotentialAnalysisCommandTest, ReapplyingFixedRequestClearsPriorPrepareIssue)
+{
+    rg::PotentialAnalysisCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
+    rg::PotentialAnalysisRequest request{};
+    request.simulation_flag = true;
+    request.simulated_map_resolution = 0.0;
+    command.ApplyRequest(request);
+
+    ASSERT_FALSE(command.PrepareForExecution());
+    ASSERT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--sim-resolution",
+            rg::ValidationPhase::Prepare,
+            LogLevel::Error),
+        nullptr);
+
+    request.simulated_map_resolution = 2.0;
+    command.ApplyRequest(request);
+
+    EXPECT_EQ(
+        command_test::FindValidationIssue(
+            command,
+            "--sim-resolution",
+            rg::ValidationPhase::Prepare,
+            LogLevel::Error),
+        nullptr);
+    EXPECT_TRUE(command.PrepareForExecution());
+}
+
 TEST(PotentialAnalysisCommandTest, InvertedSamplingRangeBecomesPrepareValidationError)
 {
     rg::PotentialAnalysisCommand command{rg::CommonOptionProfile::DatabaseWorkflow};

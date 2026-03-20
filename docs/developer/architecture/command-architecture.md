@@ -120,7 +120,9 @@ Current pattern:
 
 Useful `CommandBase` helpers:
 
-- `MutateOptions(...)`
+- `AssignOption(...)` for plain field assignment that should invalidate prepared state
+- `MutateOptions(...)` for advanced setters that also manage parse issues, fallback logic, or
+  derived state
 - `AddValidationError(...)`
 - `AddNormalizationWarning(...)`
 - `ResetParseIssues(...)`

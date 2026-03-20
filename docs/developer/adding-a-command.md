@@ -101,7 +101,9 @@ Use this shape:
 
 Useful base helpers from `CommandBase`:
 
-- `MutateOptions(...)`
+- `AssignOption(...)` for plain field assignment that should invalidate prepared state
+- `MutateOptions(...)` for advanced setters that also manage parse issues, fallback logic, or
+  derived state
 - `SetRequiredExistingPathOption(...)`
 - `SetOptionalExistingPathOption(...)`
 - `SetFinitePositiveScalarOption(...)`

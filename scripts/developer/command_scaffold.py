@@ -163,6 +163,8 @@ namespace rhbm_gem {{
 void {spec.command_type}::ApplyRequest(const {spec.command_type.removesuffix("Command")}Request & request)
 {{
     ApplyCommonRequest(request.common);
+    // Prefer AssignOption(...) for plain request-to-option assignment.
+    // Use MutateOptions(...) only when the setter also manages validation issues or derived state.
 }}
 
 void {spec.command_type}::ValidateOptions()

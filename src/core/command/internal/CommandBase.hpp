@@ -62,6 +62,14 @@ protected:
         InvalidatePreparedState();
         std::forward<Mutator>(mutator)();
     }
+    template <typename FieldType, typename ValueType>
+    void AssignOption(FieldType & field, ValueType && value)
+    {
+        MutateOptions([&]()
+        {
+            field = std::forward<ValueType>(value);
+        });
+    }
     void AddValidationError(
         std::string_view option_name,
         const std::string & message,

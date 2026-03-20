@@ -31,7 +31,7 @@ public:
 
     void SetForceInvalid(bool value)
     {
-        MutateOptions([&]() { m_options.force_invalid = value; });
+        AssignOption(m_options.force_invalid, value);
     }
 
     void ConfigureFilesystemOptions(

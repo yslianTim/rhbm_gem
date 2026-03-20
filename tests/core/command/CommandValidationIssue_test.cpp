@@ -45,7 +45,7 @@ public:
 
     void SetPrepareError(bool value)
     {
-        MutateOptions([&]() { m_options.add_prepare_error = value; });
+        AssignOption(m_options.add_prepare_error, value);
     }
 
     void SetCommonOptionsForTest(int thread_size, int verbose_level)
