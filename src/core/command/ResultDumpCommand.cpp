@@ -135,6 +135,11 @@ bool ResultDumpCommand::BuildDataObjectList()
     return true;
 }
 
+void ResultDumpCommand::RunQScoreDumping()
+{
+
+}
+
 void ResultDumpCommand::RunAtomOutlierDumping()
 {
     for (const auto & model_object : m_model_object_list)

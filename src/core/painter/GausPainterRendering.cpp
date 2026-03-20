@@ -106,6 +106,7 @@ void GausPainter::Painting()
         PaintAtomGroupGausAminoAcidMainChainComponentSimple(model_object, "atom_group_gaus_amino_acid_main_chain_component_simple_"+ label);
         PaintAtomLocalGausSummary(model_object, "atom_local_gaus_summary_"+ label);
         PaintAtomGroupGausSummary(model_object, "atom_group_gaus_summary_"+ label);
+        PaintAtomQScoreAminoAcidMainChainComponent(model_object, "atom_qscore_amino_acid_main_chain_component_"+ label);
         PaintAtomGroupMapValueAminoAcidMainChainComponent(model_object, "atom_group_map_value_amino_acid_main_chain_component_"+ label);
         PaintAtomGroupGausAminoAcidMainChainComponent(model_object, "atom_group_gaus_amino_acid_main_chain_component_"+ label);
         PaintAtomGroupGausAminoAcidMainChainStructure(model_object, "atom_group_gaus_amino_acid_main_chain_structure_"+ label);
@@ -745,6 +746,111 @@ void GausPainter::PaintAtomGroupGausSummary(
     #endif
 }
 
+void GausPainter::PaintAtomQScoreAminoAcidMainChainComponent(
+    ModelObject * model_object, const std::string & name)
+{
+    auto file_path{ m_folder_path + name };
+    Logger::Log(LogLevel::Info, "GausPainter::PaintAtomQScoreAminoAcidMainChainComponent");
+
+    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
+
+    #ifdef HAVE_ROOT
+
+    gStyle->SetLineScalePS(1.5);
+    gStyle->SetGridColor(kGray);
+    auto canvas{ ROOTHelper::CreateCanvas("test","", 1500, 600) };
+    ROOTHelper::SetCanvasDefaultStyle(canvas.get());
+    ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
+
+    const int main_chain_element_count{ 3 };
+    std::unique_ptr<TH2> frame;
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_ori_map[main_chain_element_count];
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> gaus_graph_new_map[main_chain_element_count];
+    for (size_t k = 0; k < main_chain_element_count; k++)
+    {
+        gaus_graph_ori_map[k] = plot_builder->CreateAtomQScoreToSequenceIDGraphMap(k, 0);
+        gaus_graph_new_map[k] = plot_builder->CreateAtomQScoreToSequenceIDGraphMap(k, 1);
+    }
+
+    for (auto & [chain_id, gaus_graph] : gaus_graph_ori_map[0])
+    {
+        for (size_t k = 0; k < main_chain_element_count; k++)
+        {
+            std::vector<double> x_array;
+            std::vector<double> y_array;
+            double y_min, y_max;
+
+            y_array.reserve(static_cast<size_t>(gaus_graph->GetN()));
+            for (int p = 0; p < gaus_graph_ori_map[k].at(chain_id)->GetN(); p++)
+            {
+                x_array.emplace_back(gaus_graph_ori_map[k].at(chain_id)->GetPointX(p));
+                y_array.emplace_back(gaus_graph_ori_map[k].at(chain_id)->GetPointY(p));
+            }
+            for (int p = 0; p < gaus_graph_new_map[k].at(chain_id)->GetN(); p++)
+            {
+                y_array.emplace_back(gaus_graph_new_map[k].at(chain_id)->GetPointY(p));
+            }
+            auto y_range{ ArrayStats<double>::ComputeScalingPercentileRangeTuple(y_array, 0.4) };
+            y_min = std::get<0>(y_range);
+            y_max = std::get<1>(y_range);
+
+            auto x_range{ ArrayStats<double>::ComputeScalingRangeTuple(x_array, 0.05) };
+            auto x_min{ std::get<0>(x_range) };
+            auto x_max{ std::get<1>(x_range) };
+
+            std::unique_ptr<TPaveText> subtitle1_text;
+            std::unique_ptr<TPaveText> subtitle2_text;
+            std::unique_ptr<TPaveText> subtitle3_text;
+            std::unique_ptr<TLegend> legend;
+            ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
+            ROOTHelper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
+            ROOTHelper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.16, 0.12);
+            if (frame == nullptr)
+            {
+                frame = ROOTHelper::CreateHist2D("frame","", 500, 0.0, 1.0, 500, 0.0, 1.0);
+                ROOTHelper::SetAxisTitleAttribute(frame->GetXaxis(), 45.0f, 0.9f, 133);
+                ROOTHelper::SetAxisLabelAttribute(frame->GetXaxis(), 40.0f, 0.01f, 133);
+                ROOTHelper::SetAxisTickAttribute(frame->GetXaxis(), static_cast<float>(0.05), 510);
+                ROOTHelper::SetAxisTitleAttribute(frame->GetYaxis(), 45.0f, 1.3f, 133);
+                ROOTHelper::SetAxisLabelAttribute(frame->GetYaxis(), 40.0f, 0.005f, 133);
+                ROOTHelper::SetAxisTickAttribute(frame->GetYaxis(), static_cast<float>(0.02), 506);
+                frame->GetXaxis()->CenterTitle();
+                frame->GetYaxis()->CenterTitle();
+                frame->SetStats(0);
+            }
+            frame->GetXaxis()->SetTitle(Form("Residue ID #[]{Chain %s}", chain_id.data()));
+            frame->GetYaxis()->SetTitle("Q-Score");
+            frame->GetXaxis()->SetLimits(x_min, x_max);
+            frame->GetYaxis()->SetLimits(y_min, y_max);
+            frame->Draw();
+        
+            ROOTHelper::SetMarkerAttribute(gaus_graph_ori_map[k].at(chain_id).get(), 20, 1.2f, kBlue);
+            ROOTHelper::SetLineAttribute(gaus_graph_ori_map[k].at(chain_id).get(), 1, 1, kBlue);
+            ROOTHelper::SetMarkerAttribute(gaus_graph_new_map[k].at(chain_id).get(), 25, 1.2f, kRed);
+            ROOTHelper::SetLineAttribute(gaus_graph_new_map[k].at(chain_id).get(), 1, 1, kRed);
+            gaus_graph_ori_map[k].at(chain_id)->Draw("PL X0");
+            gaus_graph_new_map[k].at(chain_id)->Draw("PL X0");
+
+            legend = ROOTHelper::CreateLegend(0.10, 0.90, 1.00, 1.00, false);
+            ROOTHelper::SetLegendDefaultStyle(legend.get());
+            ROOTHelper::SetFillAttribute(legend.get(), 4000);
+            ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
+            legend->SetMargin(0.15f);
+            legend->SetNColumns(2);
+            legend->AddEntry(gaus_graph_ori_map[k].at(chain_id).get(),
+                "Original", "lp");
+            legend->AddEntry(gaus_graph_new_map[k].at(chain_id).get(),
+                "Using Gaussian parameters from this estimation", "lp");
+            legend->Draw();
+            ROOTHelper::PrintCanvasPad(canvas.get(), file_path);
+        }
+    }
+    ROOTHelper::PrintCanvasClose(canvas.get(), file_path);
+    Logger::Log(LogLevel::Info, " Output file: " + file_path);
+    #endif
+}
+
 void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
     ModelObject * model_object, const std::string & name)
 {
@@ -935,8 +1041,9 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
         ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
         legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
-            Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
-            entry_iter->GetAtomAlphaR(group_key_list.at(0), class_key), entry_iter->GetAtomAlphaG(group_key_list.at(0), class_key)), "l");
+            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with selected #alpha_{r} and #alpha_{g}", "l");
+            //Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
+            //entry_iter->GetAtomAlphaR(group_key_list.at(0), class_key), entry_iter->GetAtomAlphaG(group_key_list.at(0), class_key)), "l");
         legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
             "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = #alpha_{g} = 0", "l");
         legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),

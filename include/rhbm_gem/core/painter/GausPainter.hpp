@@ -45,6 +45,7 @@ private:
     void AppendReferenceModelObject(ModelObject & data_object, const std::string & label);
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
+    void PaintAtomQScoreAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausAminoAcidMainChainComponentSimple(ModelObject * model_object, const std::string & name);

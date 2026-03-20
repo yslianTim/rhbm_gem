@@ -7,6 +7,7 @@
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -135,6 +136,49 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
         }
         auto x_value{ static_cast<double>(sequence_id) };
         graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, entry->GetMapValueNearCenter());
+        count_map[chain_id]++;
+    }
+    return graph_map;
+}
+
+std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
+PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
+    size_t main_chain_element_id, const int par_choice)
+{
+    if (IsModelObjectAvailable() == false)
+    {
+        return {};
+    }
+    auto model_object{ m_query.GetModelObject() };
+
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
+    std::unordered_map<std::string, int> count_map;
+
+    for (auto & atom : model_object->GetSelectedAtomList())
+    {
+        if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
+        if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
+        auto entry{ atom->GetLocalPotentialEntry() };
+        auto sequence_id{ atom->GetSequenceID() };
+        auto chain_id{ atom->GetChainID() };
+        if (sequence_id < 0) continue;
+        if (graph_map.find(chain_id) == graph_map.end())
+        {
+            graph_map[chain_id] = ROOTHelper::CreateGraphErrors();
+            count_map[chain_id] = 0;
+        }
+        auto x_value{ static_cast<double>(sequence_id) };
+        auto q_score{ entry->CalculateQScore(par_choice) };
+        // tmp
+        if (sequence_id == 20 || sequence_id == 40 || sequence_id == 60 || sequence_id == 80 || sequence_id == 100)
+        {
+            if (main_chain_element_id == 0)
+            {   
+                Logger::Log(LogLevel::Info, Form("Sequence ID %d, Q-Score: %.4f, %d", sequence_id, q_score, par_choice));
+            }
+        }
+        // end tmp
+        graph_map[chain_id]->SetPoint(count_map[chain_id], x_value, q_score);
         count_map[chain_id]++;
     }
     return graph_map;

@@ -48,6 +48,7 @@ public:
     std::unique_ptr<::TGraphErrors> CreateNormalizedBondGausEstimateScatterGraph(Element element, double reference_amplitude, bool reverse=false);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomMapValueToSequenceIDGraphMap(size_t main_chain_element_id, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
+    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomQScoreToSequenceIDGraphMap(size_t main_chain_element_id, const int par_choice=0);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateBondGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(size_t main_chain_element_id, const std::string & class_key, const int par_id=0, Residue residue=Residue::UNK);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(std::vector<GroupKey> & group_key_list, const std::string & class_key, const int par_id=0);
