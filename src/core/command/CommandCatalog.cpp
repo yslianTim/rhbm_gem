@@ -1,4 +1,4 @@
-#include "internal/CommandCatalog.hpp"
+#include "command/internal/CommandCatalog.hpp"
 
 #include <CLI/CLI.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>

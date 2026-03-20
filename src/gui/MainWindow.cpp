@@ -1,6 +1,6 @@
 #include "MainWindow.hpp"
 
-#include "internal/CommandCatalog.hpp"
+#include "command/internal/CommandCatalog.hpp"
 
 #include <QCheckBox>
 #include <QComboBox>

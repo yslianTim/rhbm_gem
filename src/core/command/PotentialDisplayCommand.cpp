@@ -1,6 +1,6 @@
 #include "PotentialDisplayCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "CommandDataSupport.hpp"
+#include "command/internal/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

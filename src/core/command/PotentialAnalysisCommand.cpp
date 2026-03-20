@@ -1,5 +1,5 @@
 #include "PotentialAnalysisCommand.hpp"
-#include "command/CommandDataSupport.hpp"
+#include "command/internal/CommandDataSupport.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/MapSampling.hpp>

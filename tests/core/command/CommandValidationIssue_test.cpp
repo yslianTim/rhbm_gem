@@ -4,7 +4,7 @@
 #include <vector>
 
 
-#include "command/CommandBase.hpp"
+#include "command/internal/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;

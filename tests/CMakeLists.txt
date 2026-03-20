@@ -171,7 +171,6 @@ target_link_libraries(rhbm_tests PRIVATE
 target_include_directories(rhbm_tests PRIVATE
     "${PROJECT_BINARY_DIR}"
     "${PROJECT_SOURCE_DIR}/src/core"
-    "${PROJECT_SOURCE_DIR}/src/core/internal"
     "${PROJECT_SOURCE_DIR}/src/gui/internal"
     "${PROJECT_SOURCE_DIR}/src/data"
     "${PROJECT_SOURCE_DIR}/src/data/internal"

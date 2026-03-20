@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "CommandBase.hpp"
+#include "command/internal/CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 template <typename T> struct KDNode;

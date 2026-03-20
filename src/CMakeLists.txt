@@ -91,7 +91,6 @@ target_include_directories(rhbm_gem PUBLIC
 target_include_directories(rhbm_gem PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/core"
-    "${CMAKE_CURRENT_SOURCE_DIR}/core/internal"
     "${CMAKE_CURRENT_SOURCE_DIR}/data"
     "${CMAKE_CURRENT_SOURCE_DIR}/data/internal"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils"
@@ -153,7 +152,6 @@ if(TARGET rhbm_gem_gui_dependencies)
     target_include_directories(${GUI_EXEC_TARGET} PRIVATE
         "${PROJECT_SOURCE_DIR}/src/gui"
         "${PROJECT_SOURCE_DIR}/src/core"
-        "${PROJECT_SOURCE_DIR}/src/core/internal"
     )
     rhbm_gem_apply_executable_install_rpath(${GUI_EXEC_TARGET})
 

@@ -4,7 +4,7 @@
 #include <string>
 #include <filesystem>
 
-#include "CommandBase.hpp"
+#include "command/internal/CommandBase.hpp"
 
 namespace rhbm_gem {
 

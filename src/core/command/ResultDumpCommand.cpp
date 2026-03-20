@@ -1,5 +1,5 @@
 #include "ResultDumpCommand.hpp"
-#include "CommandDataSupport.hpp"
+#include "command/internal/CommandDataSupport.hpp"
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>

@@ -35,7 +35,7 @@
 #include <rhbm_gem/utils/math/SamplerBase.hpp>
 #include "internal/file/MapAxisOrderHelper.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include "command/CommandDataSupport.hpp"
+#include "command/internal/CommandDataSupport.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 
 namespace rg = rhbm_gem;
