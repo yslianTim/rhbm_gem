@@ -20,8 +20,7 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
         "core/painter/DemoPainter.hpp",
         "core/painter/GausPainter.hpp",
         "core/painter/ModelPainter.hpp",
-        "core/painter/PainterBase.hpp",
-        "core/painter/PotentialPlotBuilder.hpp"};
+        "core/painter/PainterBase.hpp"};
 
     EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("core"), expected);
 }

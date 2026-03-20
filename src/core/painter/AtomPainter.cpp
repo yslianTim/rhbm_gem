@@ -2,11 +2,11 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
+#include "internal/PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include "internal/PainterTypeCheck.hpp"
+#include "internal/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -29,20 +29,11 @@
 
 namespace rhbm_gem {
 
-AtomPainter::AtomPainter() :
-    m_folder_path{ "./" }
-{
-
-}
+AtomPainter::AtomPainter() = default;
 
 AtomPainter::~AtomPainter()
 {
 
-}
-
-void AtomPainter::SetFolder(const std::string & folder_path)
-{
-    m_folder_path = FilePathHelper::EnsureTrailingSlash(folder_path);
 }
 
 void AtomPainter::AddDataObject(DataObjectBase * data_object)
@@ -58,7 +49,9 @@ void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std
     auto & typed_data_object{
         painter_internal::RequirePainterObject<AtomObject>(
             data_object, "AtomPainter", "AddReferenceDataObject") };
-    AppendReferenceAtomObject(typed_data_object, label);
+    (void)label;
+    if (typed_data_object.GetLocalPotentialEntry() == nullptr) return;
+    if (typed_data_object.GetSelectedFlag() == false) return;
 }
 
 void AtomPainter::AppendAtomObject(AtomObject & data_object)
@@ -66,13 +59,6 @@ void AtomPainter::AppendAtomObject(AtomObject & data_object)
     if (data_object.GetLocalPotentialEntry() == nullptr) return;
     if (data_object.GetSelectedFlag() == false) return;
     m_atom_object_list.push_back(&data_object);
-}
-
-void AtomPainter::AppendReferenceAtomObject(AtomObject & data_object, const std::string & label)
-{
-    if (data_object.GetLocalPotentialEntry() == nullptr) return;
-    if (data_object.GetSelectedFlag() == false) return;
-    m_ref_atom_object_map[label] = &data_object;
 }
 
 void AtomPainter::Painting()

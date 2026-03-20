@@ -30,10 +30,6 @@ public:
     explicit PotentialPlotBuilder(ModelObject * model_object);
     explicit PotentialPlotBuilder(AtomObject * atom_object);
     explicit PotentialPlotBuilder(BondObject * bond_object);
-    ~PotentialPlotBuilder();
-
-    PotentialEntryQuery & GetQuery();
-    const PotentialEntryQuery & GetQuery() const;
 
 #ifdef HAVE_ROOT
     std::unique_ptr<::TH1D> CreateComponentCountHistogram(std::vector<GroupKey> & group_key_list, const std::string & class_key) const;

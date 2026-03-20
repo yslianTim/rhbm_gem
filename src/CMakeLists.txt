@@ -19,20 +19,12 @@ target_sources(rhbm_gem PRIVATE
     core/command/CommandCatalog.cpp
     core/command/CommandBase.cpp
     core/painter/ComparisonPainter.cpp
-    core/painter/DemoPainterAdvancedRender.cpp
-    core/painter/DemoPainterRendering.cpp
-    core/painter/DemoPainterWorkflow.cpp
-    core/painter/GausPainterComponentRender.cpp
-    core/painter/GausPainterRendering.cpp
-    core/painter/GausPainterFitting.cpp
+    core/painter/DemoPainter.cpp
+    core/painter/GausPainter.cpp
+    core/painter/ModelPainter.cpp
     core/painter/PotentialPlotBuilder.cpp
-    core/painter/PotentialPlotBuilderSequenceGraphs.cpp
     ${RHBM_GEM_COMMAND_SOURCES}
     core/command/MapSampling.cpp
-    core/painter/ModelPainterMapValueRender.cpp
-    core/painter/ModelPainterRender.cpp
-    core/painter/ModelPainterAnnotation.cpp
-    core/painter/ModelPainterStyle.cpp
 
     # data
     data/object/AtomClassifier.cpp

@@ -19,20 +19,16 @@ class AtomObject;
 class AtomPainter : public PainterBase
 {
     std::vector<AtomObject *> m_atom_object_list;
-    std::unordered_map<std::string, AtomObject *> m_ref_atom_object_map;
-    std::string m_folder_path;
 
 public:
     AtomPainter();
     ~AtomPainter();
-    void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting() override;
 
 private:
     void AppendAtomObject(AtomObject & data_object);
-    void AppendReferenceAtomObject(AtomObject & data_object, const std::string & label);
     void PaintDemoPlot(const std::string & name);
     void PaintAtomSamplingDataSummary(const std::string & name);
 };

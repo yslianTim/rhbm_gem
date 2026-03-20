@@ -23,16 +23,13 @@ class BondClassifier;
 
 class GausPainter : public PainterBase
 {
-    std::string m_folder_path;
     std::vector<ModelObject *> m_model_object_list;
-    std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
     std::unique_ptr<BondClassifier> m_bond_classifier;
 
 public:
     GausPainter();
     ~GausPainter();
-    void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting() override;
@@ -42,7 +39,6 @@ public:
 
 private:
     void AppendModelObject(ModelObject & data_object);
-    void AppendReferenceModelObject(ModelObject & data_object, const std::string & label);
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomQScoreAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);

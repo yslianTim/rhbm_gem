@@ -3,9 +3,8 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
+#include "internal/PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -13,6 +12,7 @@
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include "internal/PainterTypeCheck.hpp"
+#include "internal/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -36,7 +36,7 @@
 namespace rhbm_gem {
 
 ComparisonPainter::ComparisonPainter() :
-    m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
+    m_atom_classifier{ std::make_unique<AtomClassifier>() }
 {
 
 }
@@ -44,11 +44,6 @@ ComparisonPainter::ComparisonPainter() :
 ComparisonPainter::~ComparisonPainter()
 {
 
-}
-
-void ComparisonPainter::SetFolder(const std::string & folder_path)
-{
-    m_folder_path = FilePathHelper::EnsureTrailingSlash(folder_path);
 }
 
 void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
@@ -61,23 +56,18 @@ void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
 
 void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    auto & typed_data_object{
-        painter_internal::RequirePainterObject<ModelObject>(
-            data_object, "ComparisonPainter", "AddReferenceDataObject") };
-    AppendReferenceModelObject(typed_data_object, label);
+    painter_internal::AppendPainterReferenceObject<ModelObject>(
+        data_object,
+        label,
+        "ComparisonPainter",
+        "AddReferenceDataObject",
+        m_ref_model_object_list_map);
 }
 
 void ComparisonPainter::AppendModelObject(ModelObject & data_object)
 {
     m_model_object_list.emplace_back(&data_object);
     m_resolution_list.emplace_back(data_object.GetResolution());
-}
-
-void ComparisonPainter::AppendReferenceModelObject(
-    ModelObject & data_object,
-    const std::string & label)
-{
-    m_ref_model_object_list_map[label].emplace_back(&data_object);
 }
 
 void ComparisonPainter::Painting()
@@ -663,7 +653,8 @@ void ComparisonPainter::PainMapValueComparison(
         {
             auto group_key{ m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(i) };
             auto graph{ ROOTHelper::CreateGraphErrors() };
-            BuildMapValueScatterGraph(group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
+            painter_internal::BuildMapValueScatterGraph(
+                group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
             r_square[i] = ROOTHelper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
             auto function{ ROOTHelper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
             function->SetParameters(intercept[i], slope[i]);
@@ -868,38 +859,6 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     }
 }
 
-void ComparisonPainter::BuildMapValueScatterGraph(
-    GroupKey group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
-    int bin_size, double x_min, double x_max)
-{
-    auto entry1_iter{ std::make_unique<PotentialEntryQuery>(model1) };
-    auto plot_builder1{ std::make_unique<PotentialPlotBuilder>(model1) };
-    auto entry2_iter{ std::make_unique<PotentialEntryQuery>(model2) };
-    auto plot_builder2{ std::make_unique<PotentialPlotBuilder>(model2) };
-    if (entry1_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
-    if (entry2_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
-    auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
-    auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
-    auto count{ 0 };
-    for (auto & [atom_id, atom_object1] : model1_atom_map)
-    {
-        if (model2_atom_map.find(atom_id) == model2_atom_map.end()) continue;
-        auto atom_object2{ model2_atom_map.at(atom_id) };
-        auto atom1_iter{ std::make_unique<PotentialEntryQuery>(atom_object1) };
-        auto atom_plot_builder1{ std::make_unique<PotentialPlotBuilder>(atom_object1) };
-        auto atom2_iter{ std::make_unique<PotentialEntryQuery>(atom_object2) };
-        auto atom_plot_builder2{ std::make_unique<PotentialPlotBuilder>(atom_object2) };
-        auto data1_array{ atom1_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
-        auto data2_array{ atom2_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
-        for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
-        {
-            auto x_value{ std::get<1>(data1_array.at(i)) };
-            auto y_value{ std::get<1>(data2_array.at(i)) };
-            graph->SetPoint(count, x_value, y_value);
-            count++;
-        }
-    }
-}
 #endif
 
 } // namespace rhbm_gem

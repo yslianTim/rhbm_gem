@@ -23,7 +23,6 @@ class AtomClassifier;
 
 class DemoPainter : public PainterBase
 {
-    std::string m_folder_path;
     std::vector<ModelObject *> m_model_object_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
     std::unique_ptr<AtomClassifier> m_atom_classifier;
@@ -31,14 +30,11 @@ class DemoPainter : public PainterBase
 public:
     DemoPainter();
     ~DemoPainter();
-    void SetFolder(const std::string & folder_path) override;
     void AddDataObject(DataObjectBase * data_object) override;
     void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
     void Painting() override;
 
 private:
-    void AppendModelObject(ModelObject & data_object);
-    void AppendReferenceModelObject(ModelObject & data_object, const std::string & label);
     void PainMapValueComparisonSingle(const std::string & name, ModelObject * model_object, ModelObject * ref_model_object);
     void PaintAtomMapValueExample(ModelObject * model_object, const std::string & name);
     void PaintGroupGausMainChainSummary(const std::vector<ModelObject *> & model_list, const std::string & name);
@@ -52,11 +48,8 @@ private:
     void PaintGroupGausMergeResidueDemo(const std::vector<ModelObject *> & model_list, const std::string & name);
 
 #ifdef HAVE_ROOT
-    void PrintGausResultGlobalPad(::TPad * pad, ::TH2 * hist, double left_margin, double right_margin, double bottom_margin, double top_margin, bool is_right_side_pad);
-    void PrintGausTitlePad(::TPad * pad, ::TPaveText * text, const std::string & title, float text_size);
     void PrintGausResultPad(::TPad * pad, ::TH2 * hist, bool draw_x_axis, bool draw_title_label, bool is_right_side_pad);
     void PrintGausCorrelationPad(::TPad * pad, ::TH2 * hist, bool draw_x_axis, bool draw_title_label);
-    void BuildMapValueScatterGraph(GroupKey group_key, ::TGraphErrors * graph, ModelObject * model1, ModelObject * model2, int bin_size, double x_min, double x_max);
 #endif
 };
 
