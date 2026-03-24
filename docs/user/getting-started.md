@@ -309,19 +309,20 @@ cmake --build build-py -j
 cmake --install build-py
 ```
 
-2. Find the installed `site-packages` directory and verify the import:
+2. Find the installed `site-packages` directory, export `PYTHONPATH` for the current shell, and verify the import:
 
 ```bash
 PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 PY_SITE_LIB="${INSTALL_PREFIX}/lib/python${PYVER}/site-packages"
 PY_SITE_LIB64="${INSTALL_PREFIX}/lib64/python${PYVER}/site-packages"
 PY_SITE_PATHS="${PY_SITE_LIB}:${PY_SITE_LIB64}"
+export PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}"
 
-PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 -c "import rhbm_gem_module as rgm; print(rgm.__file__)"
 ```
 
 Note: If you installed the project to a different prefix, update `INSTALL_PREFIX` before computing `PY_SITE_PATHS`.
+Keep this shell session open for **Python Examples**. If you start a new shell later, rerun the `export PYTHONPATH=...` command first.
 
 For custom Python layouts such as `RHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR` or an explicit `RHBM_GEM_PYTHON_INSTALL_DIR`, see [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters) and [`../developer/build-and-configuration.md#validation-examples`](../developer/build-and-configuration.md#validation-examples).
 
@@ -368,33 +369,30 @@ Once the import check succeeds, continue with the example workflow for your plat
 
 ### macOS and Linux
 
-These commands assume `INSTALL_PREFIX` and `PY_SITE_PATHS` are still set from **Python Bindings**.
+These commands assume `INSTALL_PREFIX`, `PY_SITE_PATHS`, and `PYTHONPATH` are still set in the same shell from **Python Bindings**.
 
 1. Run the quickstart example from the source tree:
 
 ```bash
-PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 resources/examples/python/00_quickstart.py
 ```
 
 2. Run the end-to-end pipeline example from the source tree:
 
 ```bash
-PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 resources/examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
 ```
 
 3. Run the installed copy of the pipeline example:
 
 ```bash
-PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/python/01_end_to_end_from_test_data.py" \
   --workdir /tmp/rhbm_py_demo_installed
 ```
 
 ### Windows (PowerShell)
 
-These commands assume `$InstallPrefix` and `$PySite` are still set from **Python Bindings**.
+These commands assume `$InstallPrefix`, `$PySite`, and `$env:PYTHONPATH` are still set in the same PowerShell session from **Python Bindings**.
 
 1. Run the quickstart example from the source tree:
 
