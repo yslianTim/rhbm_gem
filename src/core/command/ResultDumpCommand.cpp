@@ -135,11 +135,6 @@ bool ResultDumpCommand::BuildDataObjectList()
     return true;
 }
 
-void ResultDumpCommand::RunQScoreDumping()
-{
-
-}
-
 void ResultDumpCommand::RunAtomOutlierDumping()
 {
     for (const auto & model_object : m_model_object_list)
@@ -310,7 +305,7 @@ void ResultDumpCommand::RunGausEstimatesDumping()
     for (const auto & model_object : m_model_object_list)
     {
         const auto key_tag{ model_object->GetKeyTag() };
-        const std::string csv_file_name{ "atom_gaus_list_" + model_object->GetPdbID() };
+        const std::string csv_file_name{ "local_gaus_list_" + model_object->GetPdbID() };
         const auto output_csv_file{ BuildOutputPath(csv_file_name, ".csv") };
         std::ofstream outfile(output_csv_file);
         if (!outfile.is_open())
@@ -334,7 +329,7 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         }
         outfile.close();
         Logger::Log(LogLevel::Info, "Output file: " + output_csv_file.string());
-
+/*
         const std::string amplitude_file_name{ model_object->GetPdbID() + "_gaus_amplitude" };
         const auto output_amplitude_cif_file{ BuildOutputPath(amplitude_file_name, ".cif") };
         WriteModel(output_amplitude_cif_file, *model_object, 0);
@@ -348,7 +343,7 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         const std::string intensity_file_name{ model_object->GetPdbID() + "_gaus_intensity" };
         const auto output_intensity_cif_file{ BuildOutputPath(intensity_file_name, ".cif") };
         WriteModel(output_intensity_cif_file, *model_object, 2);
-        Logger::Log(LogLevel::Info, "Output file: " + output_intensity_cif_file.string());
+        Logger::Log(LogLevel::Info, "Output file: " + output_intensity_cif_file.string());*/
     }
 }
 
