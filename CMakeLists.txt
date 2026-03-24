@@ -56,9 +56,6 @@ foreach(config IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
 endforeach()
 
 add_subdirectory(src)
-if(BUILD_PYTHON_BINDINGS)
-    add_subdirectory(bindings)
-endif()
 
 include(RHBMGemInstall)
 include(RHBMGemDevTools)

@@ -35,7 +35,7 @@ Manifest and CLI registration:
 
 Python bindings:
 
-- `bindings/CommandApiBindings.cpp`
+- `src/python/CommandApiBindings.cpp`
 
 Tests and docs:
 
@@ -148,13 +148,13 @@ Shared flags come from the profile:
 
 ## 8. Add Python bindings
 
-Update `bindings/CommandApiBindings.cpp`:
+Update `src/python/CommandApiBindings.cpp`:
 
 1. Bind the new `*Request` type.
 2. The `Run*` export list is expanded from the manifest, so no separate binding list needs to be
    maintained.
 
-Shared enums and diagnostics live in `bindings/CommonBindings.cpp`, so that file only needs
+Shared enums and diagnostics live in `src/python/CommonBindings.cpp`, so that file only needs
 changes if the command introduces a new shared enum.
 
 ## 9. Tests and documentation

@@ -190,7 +190,7 @@ TEST(CommandCatalogTest, RunSurfaceAndPythonBindingsMatchManifestOrder)
             project_root / "include" / "rhbm_gem" / "core" / "command" / "CommandApi.hpp")
     };
     const auto bindings{
-        ReadFileContent(project_root / "bindings" / "CommandApiBindings.cpp")
+        ReadFileContent(project_root / "src" / "python" / "CommandApiBindings.cpp")
     };
 
     ASSERT_FALSE(command_api.empty());
@@ -212,7 +212,8 @@ TEST(CommandCatalogTest, RunSurfaceAndPythonBindingsMatchManifestOrder)
 TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
 {
     const auto bindings{
-        ReadFileContent(command_test::ProjectRootPath() / "bindings" / "CommandApiBindings.cpp")
+        ReadFileContent(
+            command_test::ProjectRootPath() / "src" / "python" / "CommandApiBindings.cpp")
     };
 
     ASSERT_FALSE(bindings.empty());

@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 def run_script(script_name: str, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(PROJECT_ROOT / "examples" / "python" / script_name), *args],
+        [sys.executable, str(PROJECT_ROOT / "resources" / "examples" / "python" / script_name), *args],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,

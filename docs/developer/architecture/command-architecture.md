@@ -23,7 +23,7 @@ This manifest is expanded directly with X-macros by:
 - `include/rhbm_gem/core/command/CommandApi.hpp`
 - `src/core/command/CommandApi.cpp`
 - `src/core/command/CommandCatalog.cpp`
-- `bindings/CommandApiBindings.cpp`
+- `src/python/CommandApiBindings.cpp`
 
 The manifest does not generate request structs or command-specific CLI field bindings.
 
@@ -182,12 +182,12 @@ This module groups:
 
 Python bindings are split across:
 
-- `bindings/CoreBindings.cpp`
-- `bindings/CommonBindings.cpp`
-- `bindings/CommandApiBindings.cpp`
+- `src/python/CoreBindings.cpp`
+- `src/python/CommonBindings.cpp`
+- `src/python/CommandApiBindings.cpp`
 
-`bindings/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
-`bindings/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
+`src/python/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
+`src/python/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
 functions via the manifest X-macro.
 
 The GUI is not manifest-driven for forms. `src/gui/MainWindow.cpp` still builds request objects

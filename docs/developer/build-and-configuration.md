@@ -57,7 +57,7 @@ cat build-cov/coverage/coverage_detail.txt
 
 Notes:
 
-1. Default summary includes only `src/` files.
+1. Default summary includes only core `src/` files and excludes `src/python/`.
 2. To include `tests/`, configure with `-DCOVERAGE_INCLUDE_TESTS=ON`.
 3. Coverage artifacts are generated under the build directory.
 4. `ENABLE_COVERAGE=ON` requires `BUILD_TESTING=ON`.
@@ -204,7 +204,7 @@ Beginner / common:
 | `COVERAGE_INCLUDE_TESTS` | `OFF` | Include `tests/` files in the coverage summary when coverage is enabled. |
 | `RHBM_GEM_DEP_PROVIDER` | `SYSTEM` | Dependency provider mode: `SYSTEM` or `FETCH`. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
-| `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `bindings/`. |
+| `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `src/python/`. |
 | `RHBM_GEM_BUILD_GUI` | `ON` | Build the Qt6 GUI executable (`RHBM-GEM-GUI`) when Qt6 Core/Widgets are available. |
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |

@@ -135,6 +135,10 @@ install(
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
 
+if(BUILD_PYTHON_BINDINGS)
+    add_subdirectory(python)
+endif()
+
 if(TARGET rhbm_gem_gui_dependencies)
     set(GUI_EXEC_TARGET ${PROJECT_NAME}_gui)
     add_executable(${GUI_EXEC_TARGET}

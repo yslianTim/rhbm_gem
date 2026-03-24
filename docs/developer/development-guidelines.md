@@ -22,6 +22,7 @@ The goal is stable, maintainable, and diagnosable software.
 - `[Required]` Keep tests in `tests/` and test fixtures in `tests/fixtures/`.
 - `[Required]` Keep test sources aligned to domain folders (`tests/core`, `tests/data`, `tests/utils`, `tests/integration`) and intent-specific subfolders where applicable.
 - `[Required]` For `src/core`, place command orchestration in `src/core/command/`, workflow implementation in `src/core/workflow/`, painter implementation in `src/core/painter/`, and private helpers in `src/core/internal/`.
+- `[Required]` Keep the Python binding adapter layer in `src/python/`; it should expose pybind11 surfaces only and should not become a home for core business logic.
 - `[Required]` Treat `internal/` path placement as the internal-API marker; do not add redundant `*Internal` filename suffixes inside `internal/`, and prefer moving private headers into an `internal/` subtree over suffix-based labeling.
 - `[Required]` For workflow code, keep implementation units (`*.cpp`) in `src/core/workflow/`; place private workflow headers in `src/core/internal/workflow/` when they are not part of shared workflow-facing contracts.
 - `[Required]` Keep reusable automation tools under `resources/tools/`; do not add scripts at repository root.

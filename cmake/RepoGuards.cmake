@@ -123,7 +123,6 @@ function(rhbm_guard_check_parameterless_void)
         "${PROJECT_SOURCE_DIR}/src"
         "${PROJECT_SOURCE_DIR}/include"
         "${PROJECT_SOURCE_DIR}/tests"
-        "${PROJECT_SOURCE_DIR}/bindings"
     )
 
     set(_parameterless_void_signature_pattern
@@ -301,7 +300,7 @@ function(rhbm_guard_check_structure)
     set(PUBLIC_INCLUDE_VIOLATIONS)
 
     foreach(TRACKED_FILE IN LISTS TRACKED_FILE_LIST)
-        if(NOT TRACKED_FILE MATCHES "^(src|tests|bindings|examples)/.*\\.(hpp|cpp)$")
+        if(NOT TRACKED_FILE MATCHES "^(src|tests|examples)/.*\\.(hpp|cpp)$")
             continue()
         endif()
 
@@ -339,7 +338,7 @@ function(rhbm_guard_check_absolute_paths)
 
     set(ABSOLUTE_PATH_VIOLATIONS)
     foreach(TRACKED_FILE IN LISTS TRACKED_FILE_LIST)
-        if(NOT TRACKED_FILE MATCHES "^(src|include|bindings|examples|scripts|cmake)/.*\\.(hpp|cpp|h|py|cmake|sh)$")
+        if(NOT TRACKED_FILE MATCHES "^(src|include|examples|scripts|cmake)/.*\\.(hpp|cpp|h|py|cmake|sh)$")
             continue()
         endif()
         if(TRACKED_FILE STREQUAL "cmake/RepoGuards.cmake")
