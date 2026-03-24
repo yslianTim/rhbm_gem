@@ -24,7 +24,7 @@ The goal is stable, maintainable, and diagnosable software.
 - `[Required]` For `src/core`, place command orchestration in `src/core/command/`, workflow implementation in `src/core/workflow/`, painter implementation in `src/core/painter/`, and private helpers in `src/core/internal/`.
 - `[Required]` Treat `internal/` path placement as the internal-API marker; do not add redundant `*Internal` filename suffixes inside `internal/`, and prefer moving private headers into an `internal/` subtree over suffix-based labeling.
 - `[Required]` For workflow code, keep implementation units (`*.cpp`) in `src/core/workflow/`; place private workflow headers in `src/core/internal/workflow/` when they are not part of shared workflow-facing contracts.
-- `[Required]` Keep reusable automation scripts under `scripts/`; do not add scripts at repository root.
+- `[Required]` Keep reusable automation tools under `resources/tools/`; do not add scripts at repository root.
 - `[Required]` Project-owned public types in `core` and `data` must use namespace `rhbm_gem`.
 - `[Required]` Do not use `using namespace` in headers.
 - `[Recommended]` Keep header/source pairing clear and predictable for new modules.
@@ -117,6 +117,6 @@ Change-integration principles:
 ## 11. Quality Checks and CI Alignment
 
 - `[Required]` Keep repository guard checks passing through `lint_repo` (structure, hygiene, logging style, fixture tracking, command-manifest sync, and absolute-path checks).
-- `[Recommended]` Run targeted formatter checks with `scripts/developer/run_clang_format_check.sh` when touching covered painter/parser paths.
-- `[Recommended]` Run targeted static analysis with `scripts/developer/run_clang_tidy_check.sh` (baseline mode when appropriate) when touching covered painter/parser paths.
-- `[Recommended]` For broad or risky changes, run `scripts/developer/run_ctest_with_classification.sh` in addition to normal `ctest`.
+- `[Recommended]` Run targeted formatter checks with `resources/tools/developer/run_clang_format_check.sh` when touching covered painter/parser paths.
+- `[Recommended]` Run targeted static analysis with `resources/tools/developer/run_clang_tidy_check.sh` (baseline mode when appropriate) when touching covered painter/parser paths.
+- `[Recommended]` For broad or risky changes, run `resources/tools/developer/run_ctest_with_classification.sh` in addition to normal `ctest`.

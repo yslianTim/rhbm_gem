@@ -112,25 +112,25 @@ contract tests.
 Format check for painter/parser directories:
 
 ```bash
-bash scripts/developer/run_clang_format_check.sh
+bash resources/tools/developer/run_clang_format_check.sh
 ```
 
 Clang-tidy check for painter/parser directories:
 
 ```bash
-bash scripts/developer/run_clang_tidy_check.sh build
+bash resources/tools/developer/run_clang_tidy_check.sh build
 ```
 
 Clang-tidy baseline guard (no-regression policy):
 
 ```bash
-bash scripts/developer/run_clang_tidy_check.sh build --baseline scripts/developer/clang_tidy_baseline.json
+bash resources/tools/developer/run_clang_tidy_check.sh build --baseline resources/tools/developer/clang_tidy_baseline.json
 ```
 
 CTest with failure classification output:
 
 ```bash
-bash scripts/developer/run_ctest_with_classification.sh build -j8
+bash resources/tools/developer/run_ctest_with_classification.sh build -j8
 ```
 
 CI layout:

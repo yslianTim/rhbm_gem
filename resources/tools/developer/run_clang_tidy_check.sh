@@ -70,7 +70,7 @@ if [[ -n "${BASELINE_FILE}" ]]; then
     if [[ "${UPDATE_BASELINE}" -eq 1 ]]; then
         BASELINE_ARGS+=(--update-baseline)
     fi
-    python3 scripts/developer/check_clang_tidy_baseline.py "${BASELINE_ARGS[@]}"
+    python3 resources/tools/developer/check_clang_tidy_baseline.py "${BASELINE_ARGS[@]}"
 fi
 
 echo "clang-tidy check passed for ${#FILES[@]} files."

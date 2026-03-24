@@ -41,7 +41,19 @@ install(
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
 )
 install(
-    DIRECTORY "${PROJECT_SOURCE_DIR}/examples/python/"
+    DIRECTORY "${PROJECT_SOURCE_DIR}/resources/examples/python/"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/resources/examples/python"
+    FILES_MATCHING
+    PATTERN "*.py"
+)
+install(
+    FILES "${PROJECT_SOURCE_DIR}/tests/fixtures/test_model.cif"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/resources/examples/python/data"
+)
+
+# Temporary compatibility alias for the legacy installed example path.
+install(
+    DIRECTORY "${PROJECT_SOURCE_DIR}/resources/examples/python/"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/examples/python"
     FILES_MATCHING
     PATTERN "*.py"

@@ -9,8 +9,7 @@ The content is split by audience so you can go straight to the guide that matche
 - Verify the Python bindings.
 - Run the example workflows.
 - Start with [`user/README.md`](user/README.md) and [`user/getting-started.md`](user/getting-started.md).
-- [`../examples/python/00_quickstart.py`](../examples/python/00_quickstart.py)
-- [`../examples/python/01_end_to_end_from_test_data.py`](../examples/python/01_end_to_end_from_test_data.py)
+- Browse shared examples and helper resources in [`../resources/README.md`](../resources/README.md).
 
 ## Developer Documentation
 

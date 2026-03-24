@@ -37,20 +37,17 @@ jobs:
       - name: Build
         run: cmake --build build --target tests_all lint_repo -j2
 
-      - name: Command sync
-        run: python3 scripts/developer/check_command_sync.py
-
       - name: Run tests (core/data/integration)
         run: ctest --test-dir build --output-on-failure -L "domain:(core|data|integration)"
 
       - name: clang-format check (painter + parser dirs)
-        run: bash scripts/developer/run_clang_format_check.sh
+        run: bash resources/tools/developer/run_clang_format_check.sh
 
       - name: clang-tidy check (painter + parser dirs)
         run: >
-          bash scripts/developer/run_clang_tidy_check.sh
+          bash resources/tools/developer/run_clang_tidy_check.sh
           build
-          --baseline scripts/developer/clang_tidy_baseline.json
+          --baseline resources/tools/developer/clang_tidy_baseline.json
 
   nightly-full:
     if: github.event_name == 'schedule'
@@ -100,17 +97,14 @@ jobs:
         id: build_step
         run: cmake --build build-${{ matrix.name }} --target tests_all lint_repo -j2
 
-      - name: Command sync (${{ matrix.name }})
-        run: python3 scripts/developer/check_command_sync.py
-
       - name: clang-tidy baseline check (${{ matrix.name }})
         run: >
-          bash scripts/developer/run_clang_tidy_check.sh
+          bash resources/tools/developer/run_clang_tidy_check.sh
           build-${{ matrix.name }}
-          --baseline scripts/developer/clang_tidy_baseline.json
+          --baseline resources/tools/developer/clang_tidy_baseline.json
 
       - name: Run full tests (${{ matrix.name }})
-        run: bash scripts/developer/run_ctest_with_classification.sh build-${{ matrix.name }} -j2
+        run: bash resources/tools/developer/run_ctest_with_classification.sh build-${{ matrix.name }} -j2
 
       - name: Failure classification (build)
         if: failure() && steps.build_step.outcome == 'failure'

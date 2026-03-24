@@ -74,13 +74,13 @@ Parameters:
 Create skeleton files:
 
 ```bash
-python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkflow
+python3 resources/tools/developer/command_scaffold.py --name Example --profile FileWorkflow
 ```
 
 Create skeleton files, append the manifest entry, and update the command/test CMake source lists:
 
 ```bash
-python3 scripts/developer/command_scaffold.py --name Example --profile FileWorkflow --wire
+python3 resources/tools/developer/command_scaffold.py --name Example --profile FileWorkflow --wire
 ```
 
 ## 5. Implement the command class

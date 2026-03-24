@@ -374,21 +374,21 @@ These commands assume `INSTALL_PREFIX` and `PY_SITE_PATHS` are still set from **
 
 ```bash
 PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
-python3 examples/python/00_quickstart.py
+python3 resources/examples/python/00_quickstart.py
 ```
 
 2. Run the end-to-end pipeline example from the source tree:
 
 ```bash
 PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
-python3 examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
+python3 resources/examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
 ```
 
 3. Run the installed copy of the pipeline example:
 
 ```bash
 PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
-python3 "${INSTALL_PREFIX}/share/RHBM_GEM/examples/python/01_end_to_end_from_test_data.py" \
+python3 "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/python/01_end_to_end_from_test_data.py" \
   --workdir /tmp/rhbm_py_demo_installed
 ```
 
@@ -399,27 +399,31 @@ These commands assume `$InstallPrefix` and `$PySite` are still set from **Python
 1. Run the quickstart example from the source tree:
 
 ```powershell
-python .\examples\python\00_quickstart.py
+python .\resources\examples\python\00_quickstart.py
 ```
 
 2. Run the end-to-end pipeline example from the source tree:
 
 ```powershell
-python .\examples\python\01_end_to_end_from_test_data.py --workdir "$env:TEMP\rhbm_py_demo"
+python .\resources\examples\python\01_end_to_end_from_test_data.py --workdir "$env:TEMP\rhbm_py_demo"
 ```
 
 3. Run the installed copy of the pipeline example:
 
 ```powershell
-python "$InstallPrefix\share\RHBM_GEM\examples\python\01_end_to_end_from_test_data.py" `
+python "$InstallPrefix\share\RHBM_GEM\resources\examples\python\01_end_to_end_from_test_data.py" `
   --workdir "$env:TEMP\rhbm_py_demo_installed"
 ```
 
 The pipeline example should create:
 
 1. SQLite database: `<workdir>/demo.sqlite`
-2. Simulated map files: `<workdir>/maps/sim_map_*.map`
-3. Dump files: `<workdir>/dump/*`
+2. Simulated map outputs under `<workdir>/maps/`
+3. Dump outputs under `<workdir>/dump/`
+
+Compatibility note:
+
+- The installed legacy path `share/RHBM_GEM/examples/python/...` is still shipped temporarily for compatibility, but `share/RHBM_GEM/resources/examples/python/...` is now the canonical location.
 
 ## Troubleshooting
 

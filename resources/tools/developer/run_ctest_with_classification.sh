@@ -27,7 +27,7 @@ if [[ "${CTEST_STATUS}" -eq 0 ]]; then
     exit 0
 fi
 
-python3 scripts/developer/classify_ctest_failures.py \
+python3 resources/tools/developer/classify_ctest_failures.py \
     --build-dir "${BUILD_DIR}" \
     --ctest-log "${LOG_FILE}"
 exit "${CTEST_STATUS}"

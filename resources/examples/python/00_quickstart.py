@@ -66,7 +66,7 @@ def main() -> int:
     print("")
 
     print("Next step:")
-    print("  python3 examples/python/01_end_to_end_from_test_data.py")
+    print("  python3 resources/examples/python/01_end_to_end_from_test_data.py")
     return 0
 
 
