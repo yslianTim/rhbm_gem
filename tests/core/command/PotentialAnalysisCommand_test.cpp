@@ -51,7 +51,14 @@ TEST(PotentialAnalysisCommandTest, ReapplyingFixedRequestClearsPriorPrepareIssue
             rg::ValidationPhase::Prepare,
             LogLevel::Error),
         nullptr);
-    EXPECT_TRUE(command.PrepareForExecution());
+    EXPECT_FALSE(command.PrepareForExecution());
+    EXPECT_EQ(
+        command_test::FindValidationIssue(
+            command,
+            "--sim-resolution",
+            rg::ValidationPhase::Prepare,
+            LogLevel::Error),
+        nullptr);
 }
 
 TEST(PotentialAnalysisCommandTest, InvertedSamplingRangeBecomesPrepareValidationError)
