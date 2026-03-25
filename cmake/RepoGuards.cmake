@@ -406,6 +406,19 @@ function(rhbm_guard_run_install_smoke)
             "stderr:\n${INSTALL_STDERR}\n")
     endif()
 
+    set(CLI_EXAMPLE_INSTALL_DIR "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/cli")
+    foreach(required_cli_example
+        "00_quickstart.sh"
+        "01_estimate_three_examples.sh"
+        "common.sh"
+    )
+        if(NOT EXISTS "${CLI_EXAMPLE_INSTALL_DIR}/${required_cli_example}")
+            message(FATAL_ERROR
+                "Install consumer smoke test did not install expected CLI example: "
+                "${CLI_EXAMPLE_INSTALL_DIR}/${required_cli_example}")
+        endif()
+    endforeach()
+
     execute_process(
         COMMAND "${CMAKE_COMMAND}"
             -S "${CONSUMER_SOURCE_DIR}"

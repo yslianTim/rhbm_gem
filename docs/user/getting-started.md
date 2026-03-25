@@ -284,6 +284,43 @@ Notes:
 - If you installed ROOT, remove `-DRHBM_GEM_ROOT_MODE=OFF` or replace it with `-DRHBM_GEM_ROOT_MODE=AUTO`.
 - This workflow intentionally uses `-DRHBM_GEM_DEP_PROVIDER=FETCH`, `-DBUILD_TESTING=OFF`, `-DBUILD_PYTHON_BINDINGS=OFF`, and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
 
+## CLI Quickstart (macOS and Linux)
+
+Use [`../../resources/examples/cli/00_quickstart.sh`](../../resources/examples/cli/00_quickstart.sh) when you want a Bash example that downloads one model/map pair and runs the CLI end to end.
+
+This script is supported on macOS and Linux only. Windows users should keep using the manual `RHBM-GEM.exe` commands from the **Installation** section above.
+
+The script resolves the executable in this order:
+
+1. `--executable /path/to/RHBM-GEM`
+2. `RHBM_GEM_EXECUTABLE`
+3. `RHBM-GEM` on `PATH`
+4. Installed prefix inferred from the script location
+5. Common source-tree build directories such as `build-local/bin/` and `build/bin/`
+
+If you built from the source tree, run the quickstart from the repository root after `cmake --build`:
+
+```bash
+bash resources/examples/cli/00_quickstart.sh --workdir /tmp/rhbm_cli_demo
+```
+
+If you installed to `~/.local`, you can run the installed copy directly:
+
+```bash
+bash "$HOME/.local/share/RHBM_GEM/resources/examples/cli/00_quickstart.sh" \
+  --workdir /tmp/rhbm_cli_demo_installed
+```
+
+If `~/.local/bin` is not on `PATH`, pass the executable explicitly:
+
+```bash
+bash "$HOME/.local/share/RHBM_GEM/resources/examples/cli/00_quickstart.sh" \
+  --workdir /tmp/rhbm_cli_demo_installed \
+  --executable "$HOME/.local/bin/RHBM-GEM"
+```
+
+For offline reruns with pre-staged input files under `<workdir>/data`, add `--skip-download`.
+
 ## Python Bindings
 
 The Python module is named `rhbm_gem_module`.

@@ -41,6 +41,13 @@ install(
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
 )
 install(
+    PROGRAMS
+        "${PROJECT_SOURCE_DIR}/resources/examples/cli/00_quickstart.sh"
+        "${PROJECT_SOURCE_DIR}/resources/examples/cli/01_estimate_three_examples.sh"
+        "${PROJECT_SOURCE_DIR}/resources/examples/cli/common.sh"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/resources/examples/cli"
+)
+install(
     DIRECTORY "${PROJECT_SOURCE_DIR}/resources/examples/python/"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/resources/examples/python"
     FILES_MATCHING

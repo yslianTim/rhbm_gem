@@ -227,6 +227,22 @@ add_rhbm_gtest_group(rhbm_tests_integration_command
     SOURCES ${INTEGRATION_COMMAND_TEST_SOURCES}
 )
 
+if(UNIX)
+    find_program(BASH_EXECUTABLE NAMES bash)
+    if(BASH_EXECUTABLE)
+        add_test(
+            NAME cli_quickstart_smoke_test
+            COMMAND "${BASH_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tests/integration/cli_quickstart_smoke.sh"
+                "${PROJECT_SOURCE_DIR}"
+        )
+        set_tests_properties(
+            cli_quickstart_smoke_test
+            PROPERTIES LABELS "domain:integration;intent:command"
+        )
+    endif()
+endif()
+
 if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABLE)
     add_dependencies(tests_all rhbm_gem_module)
 
