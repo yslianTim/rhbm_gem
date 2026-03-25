@@ -47,7 +47,6 @@ Tests and docs:
 
 Optional:
 
-- `src/gui/MainWindow.cpp` and `src/gui/MainWindow.hpp` if the GUI should expose the command
 - `docs/developer/commands/<your-command>.md` for command-specific notes
 
 ## 3. Manifest shape

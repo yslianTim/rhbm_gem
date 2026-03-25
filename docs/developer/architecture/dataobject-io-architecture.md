@@ -42,7 +42,7 @@ Rules enforced by `src/data/io/file/FileIO.cpp`:
 
 ```mermaid
 flowchart LR
-    A["Commands / tests / GUI / bindings"] --> B["DataObjectManager"]
+    A["Commands / tests / bindings"] --> B["DataObjectManager"]
 
     subgraph F["File I/O"]
       B --> C["ReadDataObject / WriteDataObject"]

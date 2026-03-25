@@ -40,7 +40,7 @@ std::size_t CountRegularFiles(const std::filesystem::path & directory)
 
 TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
 {
-    command_test::ScopedTempDir temp_dir{ "gui_executor_pipeline" };
+    command_test::ScopedTempDir temp_dir{ "command_executor_pipeline" };
     const auto maps_dir{ temp_dir.path() / "maps" };
     const auto analysis_output_dir{ temp_dir.path() / "analysis_output" };
     const auto dump_output_dir{ temp_dir.path() / "dump_output" };
@@ -71,7 +71,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     analysis_request.common.folder_path = analysis_output_dir;
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
     analysis_request.map_file_path = generated_map_file;
-    analysis_request.saved_key_tag = "gui_pipeline_model";
+    analysis_request.saved_key_tag = "pipeline_model";
     analysis_request.sampling_size = 200;
 
     const auto analysis_result{
@@ -84,7 +84,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     dump_request.common.database_path = database_path;
     dump_request.common.folder_path = dump_output_dir;
     dump_request.printer_choice = rg::PrinterType::GAUS_ESTIMATES;
-    dump_request.model_key_tag_list = "gui_pipeline_model";
+    dump_request.model_key_tag_list = "pipeline_model";
 
     const auto dump_result{
         rg::RunResultDump(dump_request)
