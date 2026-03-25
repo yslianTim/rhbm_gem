@@ -64,7 +64,7 @@ If you plan to keep `BUILD_TESTING=ON`, install GTest too:
 brew install googletest
 ```
 
-5. Optional (Recommended): install these only if you need the related features:
+5. Optional: install these only if you need the related features:
 
 ```bash
 brew install root
