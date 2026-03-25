@@ -47,7 +47,7 @@ include(CTest)
 include(RHBMGemOptions)
 include(RHBMGemDependencies)
 
-# Keep all runtime targets (CLI, GUI, tests) in a single predictable folder.
+# Keep executable runtime targets (CLI and tests) in a single predictable folder.
 set(RHBM_GEM_RUNTIME_OUTPUT_DIR "${PROJECT_BINARY_DIR}/bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${RHBM_GEM_RUNTIME_OUTPUT_DIR}")
 foreach(config IN ITEMS Debug Release RelWithDebInfo MinSizeRel)

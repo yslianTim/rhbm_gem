@@ -20,9 +20,9 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 | Python interface or Python examples | Python 3; on Linux also install `python3-dev` |
 | Plots or figure output | ROOT on the platform where you will build |
 
-A few dependencies are optional:
+Some dependencies are provider-dependent or optional:
 
-- Core C++ dependencies (`Eigen3`, `SQLite3`, and `CLI11`) are selected by `RHBM_GEM_DEP_PROVIDER`.
+- Core C++ dependencies (`Eigen3`, `SQLite3`, `CLI11`, and Boost) are selected by `RHBM_GEM_DEP_PROVIDER`.
 - `pybind11` and Python development headers are required only when `BUILD_PYTHON_BINDINGS=ON`.
 - `GTest` is required only when `BUILD_TESTING=ON`.
 - Use `RHBM_GEM_DEP_PROVIDER=SYSTEM` to require system packages.
@@ -55,7 +55,7 @@ brew install cmake python libomp
 4. Optional (Recommended when using `RHBM_GEM_DEP_PROVIDER=SYSTEM`): install system packages:
 
 ```bash
-brew install eigen sqlite3 pybind11 cli11
+brew install eigen sqlite3 pybind11 cli11 boost
 ```
 
 If you plan to keep `BUILD_TESTING=ON`, install GTest too:
@@ -64,11 +64,10 @@ If you plan to keep `BUILD_TESTING=ON`, install GTest too:
 brew install googletest
 ```
 
-5. Optional (Recommended): install these only if you need the related features:
+5. Optional: install these only if you need the related features:
 
 ```bash
 brew install root
-brew install boost
 ```
 
 6. If you installed ROOT, verify it before running CMake:
@@ -91,10 +90,16 @@ sudo apt update
 sudo apt install -y build-essential cmake pkg-config python3
 ```
 
-2. Optional: if you plan to use Python bindings, or you want distro packages with `RHBM_GEM_DEP_PROVIDER=SYSTEM`, also install:
+2. Optional: if you want distro packages with `RHBM_GEM_DEP_PROVIDER=SYSTEM`, install the core development packages:
 
 ```bash
-sudo apt install -y python3-dev libsqlite3-dev libeigen3-dev pybind11-dev
+sudo apt install -y libsqlite3-dev libeigen3-dev libboost-dev
+```
+
+If you plan to use Python bindings, also install:
+
+```bash
+sudo apt install -y python3-dev pybind11-dev
 ```
 
 If you plan to keep `BUILD_TESTING=ON`, install GTest too:
@@ -104,10 +109,6 @@ sudo apt install -y libgtest-dev
 ```
 
 3. Optional: install these only if you need the related features:
-
-```bash
-sudo apt install -y libboost-dev
-```
 
 If you need ROOT, install it with either your distro package manager or conda:
 
@@ -142,7 +143,7 @@ Notes:
 
 2. For a basic build without system packages, configure with `-DRHBM_GEM_DEP_PROVIDER=FETCH`.
 
-3. Optional: if you prefer `vcpkg` packages, or you need Boost-backed features, prepare them now:
+3. Optional: if you prefer `vcpkg` packages, or you want a `SYSTEM`-mode dependency set on Windows, prepare them now:
 
 ```powershell
 git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
@@ -175,7 +176,7 @@ Notes:
 
 Finish **Environment Setup** first, then choose one installation workflow and follow only that workflow.
 
-The commands below intentionally use `RHBM_GEM_DEP_PROVIDER=FETCH`, `BUILD_TESTING=OFF`, and `BUILD_PYTHON_BINDINGS=OFF` for a predictable first install. This avoids requiring system `Eigen3`/`SQLite3`/`CLI11`/`GTest` packages during onboarding.
+The commands below intentionally use `RHBM_GEM_DEP_PROVIDER=FETCH`, `BUILD_TESTING=OFF`, and `BUILD_PYTHON_BINDINGS=OFF` for a predictable first install. This avoids requiring system `Eigen3`/`SQLite3`/`CLI11`/`Boost`/`GTest` packages during onboarding.
 Runtime executables from any build directory are placed under `<build-dir>/bin/`.
 
 ### macOS and Linux: user-local install
@@ -462,7 +463,7 @@ Compatibility note:
 
 ## Troubleshooting
 
-1. Missing `Eigen3`, `SQLite3`, `pybind11`, or `CLI11`
+1. Missing `Eigen3`, `SQLite3`, `pybind11`, `CLI11`, or `Boost`
    Fallback sources are used only with `-DRHBM_GEM_DEP_PROVIDER=FETCH`. In `SYSTEM` mode, install the required packages first.
 2. Missing `GTest` during configure
    If you do not need tests, set `-DBUILD_TESTING=OFF` (the installation workflows in this guide already do this).

@@ -138,29 +138,3 @@ install(
 if(BUILD_PYTHON_BINDINGS)
     add_subdirectory(python)
 endif()
-
-if(TARGET rhbm_gem_gui_dependencies)
-    set(GUI_EXEC_TARGET ${PROJECT_NAME}_gui)
-    add_executable(${GUI_EXEC_TARGET}
-        gui/main.cpp
-        gui/MainWindow.cpp
-    )
-    set_target_properties(${GUI_EXEC_TARGET} PROPERTIES
-        OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-GUI"
-    )
-    target_link_libraries(${GUI_EXEC_TARGET} PRIVATE
-        rhbm_gem
-        rhbm_gem_gui_dependencies
-        CompilerFlags
-    )
-    target_include_directories(${GUI_EXEC_TARGET} PRIVATE
-        "${PROJECT_SOURCE_DIR}/src/gui"
-        "${PROJECT_SOURCE_DIR}/src/core"
-    )
-    rhbm_gem_apply_executable_install_rpath(${GUI_EXEC_TARGET})
-
-    install(
-        TARGETS ${GUI_EXEC_TARGET}
-        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    )
-endif()

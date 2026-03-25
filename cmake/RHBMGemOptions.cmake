@@ -17,8 +17,6 @@ option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
 option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
 option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
-option(RHBM_GEM_BUILD_GUI
-    "Attempt to build the Qt6 GUI executable when Qt6 is available" ON)
 option(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
     "Enable experimental bond-analysis workflow in PotentialAnalysisCommand" OFF)
 

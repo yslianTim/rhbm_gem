@@ -5,14 +5,14 @@ This guide is for contributors and maintainers who need the full build surface: 
 If you only want to install and run the project, use [`../user/getting-started.md`](../user/getting-started.md). For the end-user workflow, start with [`../user/getting-started.md#environment-setup`](../user/getting-started.md#environment-setup), then continue to [`../user/getting-started.md#installation`](../user/getting-started.md#installation), [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings), and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
 
 Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOptions`, `RHBMGemDependencies`, `RHBMGemInstall`, `RHBMGemDevTools`) to keep maintenance localized while keeping test and lint entrypoints co-located.
-All runtime targets from a build tree (CLI, GUI, and C++ test executables) are emitted under `<build-dir>/bin/`.
+All executable runtime targets from a build tree (CLI and C++ test executables) are emitted under `<build-dir>/bin/`.
 
 ## Dependency Strategy
 
 This project uses CMake + C++17 with a single dependency-provider switch:
 
-- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: require system packages for Eigen3, CLI11, SQLite3, pybind11 (if bindings enabled), and GTest (if tests enabled).
-- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3, CLI11, SQLite3, Boost, pybind11, and GTest.
+- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: require system packages for Eigen3, CLI11, SQLite3, and Boost; also require `pybind11` plus Python development headers when bindings are enabled, and GTest when tests are enabled.
+- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3, CLI11, SQLite3, and Boost; additionally fetch `pybind11` when bindings are enabled and GTest when tests are enabled.
 
 To force fetched dependency sources:
 
@@ -207,7 +207,6 @@ Beginner / common:
 | `RHBM_GEM_DEP_PROVIDER` | `SYSTEM` | Dependency provider mode: `SYSTEM` or `FETCH`. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
 | `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `src/python/`. |
-| `RHBM_GEM_BUILD_GUI` | `ON` | Build the Qt6 GUI executable (`RHBM-GEM-GUI`) when Qt6 Core/Widgets are available. |
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS` | `OFF` | Enable the experimental bond-analysis workflow hook inside `PotentialAnalysisCommand`. |
@@ -255,10 +254,6 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_DEP_PROVIDER=SYSTEM
 
 # Pure C++ build (skip Python bindings)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=OFF
-
-# Build the Qt6 GUI executable (optional; target exists only when Qt6 Core/Widgets is found)
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_BUILD_GUI=ON
-cmake --build build --target RHBM_GEM_gui -j
 
 # Force ROOT/OpenMP requirements
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_ROOT_MODE=ON -DRHBM_GEM_OPENMP_MODE=ON

@@ -48,7 +48,6 @@ flowchart LR
     C --> D["Run* in CommandApi"]
 
     E["Python (pybind11)"] --> D
-    F["GUI (subset in MainWindow)"] --> D
 
     D --> G["Construct concrete command with profile"]
     G --> H["ApplyRequest(...)"]
@@ -178,7 +177,7 @@ This module groups:
 - atom collection and simulation helpers
 - atom/bond context construction
 
-## 8. Python and GUI integration
+## 8. Python integration
 
 Python bindings are split across:
 
@@ -189,6 +188,3 @@ Python bindings are split across:
 `src/python/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
 `src/python/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
 functions via the manifest X-macro.
-
-The GUI is not manifest-driven for forms. `src/gui/MainWindow.cpp` still builds request objects
-manually for its supported subset, but reads names/profile metadata from `CommandCatalog()`.

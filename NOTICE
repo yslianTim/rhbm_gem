@@ -1,0 +1,11 @@
+RHBM-GEM
+Copyright 2024-2026 Yu-Hsiang Lien
+
+This repository contains the RHBM-GEM project.
+
+Unless otherwise noted, the original source code, build scripts, example
+programs, and documentation in this repository are licensed under the
+Apache License, Version 2.0. See the LICENSE file for the full license text.
+
+Third-party components remain under their own license terms. See
+THIRD_PARTY_NOTICES.md for dependency notices and redistribution guidance.
