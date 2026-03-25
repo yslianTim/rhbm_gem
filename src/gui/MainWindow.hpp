@@ -3,9 +3,12 @@
 #include <QMainWindow>
 #include <QString>
 
+#include <functional>
 #include <future>
+#include <vector>
 
-#include <rhbm_gem/gui/GuiCommandExecutor.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandMetadata.hpp>
 
 class QCheckBox;
 class QComboBox;
@@ -83,11 +86,11 @@ private:
         QPushButton * map_browse{ nullptr };
     };
 
-    enum class CommandPage
+    struct GuiCommandRegistration
     {
-        MapSimulation = 0,
-        PotentialAnalysis = 1,
-        ResultDump = 2
+        rhbm_gem::CommandId id{ rhbm_gem::CommandId::PotentialAnalysis };
+        std::function<QWidget *()> build_page{};
+        std::function<rhbm_gem::ExecutionReport()> run{};
     };
 
     QListWidget * m_command_list{ nullptr };
@@ -97,14 +100,16 @@ private:
     QPlainTextEdit * m_result_view{ nullptr };
     QTimer * m_execution_poll_timer{ nullptr };
     bool m_execution_running{ false };
-    std::future<rhbm_gem::gui::ExecutionResult> m_execution_future{};
+    std::future<rhbm_gem::ExecutionReport> m_execution_future{};
     QString m_active_command_name{};
 
     MapSimulationControls m_map_simulation{};
     PotentialAnalysisControls m_potential_analysis{};
     ResultDumpControls m_result_dump{};
+    std::vector<GuiCommandRegistration> m_gui_commands{};
 
     void BuildUi();
+    void InitializeGuiCommands();
     QWidget * BuildMapSimulationPage();
     QWidget * BuildPotentialAnalysisPage();
     QWidget * BuildResultDumpPage();
@@ -120,13 +125,13 @@ private:
 
     void StartExecution();
     void PollExecutionState();
-    void OnExecutionFinished(const rhbm_gem::gui::ExecutionResult & result);
+    void OnExecutionFinished(const rhbm_gem::ExecutionReport & result);
 
-    rhbm_gem::gui::MapSimulationRequest BuildMapSimulationRequest() const;
-    rhbm_gem::gui::PotentialAnalysisRequest BuildPotentialAnalysisRequest() const;
-    rhbm_gem::gui::ResultDumpRequest BuildResultDumpRequest() const;
+    rhbm_gem::MapSimulationRequest BuildMapSimulationRequest() const;
+    rhbm_gem::PotentialAnalysisRequest BuildPotentialAnalysisRequest() const;
+    rhbm_gem::ResultDumpRequest BuildResultDumpRequest() const;
 
-    static QString FormatExecutionSummary(const rhbm_gem::gui::ExecutionResult & result);
+    static QString FormatExecutionSummary(const rhbm_gem::ExecutionReport & result);
     static QString FormatValidationIssues(
         const std::vector<rhbm_gem::ValidationIssue> & issues);
     static QString ValidationPhaseLabel(rhbm_gem::ValidationPhase phase);

@@ -35,6 +35,11 @@ void LocalPainter::PaintTemplate1(
     const std::string & y_axis_title,
     const std::string & file_path)
 {
+    (void)data_matrix;
+    (void)alpha_list;
+    (void)x_axis_title;
+    (void)y_axis_title;
+    (void)file_path;
     std::vector<std::string> title_y_list{
         "Amplitude #font[2]{A}", "Width #tau"
     };
@@ -162,6 +167,17 @@ void LocalPainter::PaintHistogram2D(
     const std::string & z_axis_title,
     const std::string & file_name)
 {
+    (void)data_array;
+    (void)x_bin_size;
+    (void)x_min;
+    (void)x_max;
+    (void)y_bin_size;
+    (void)y_min;
+    (void)y_max;
+    (void)x_axis_title;
+    (void)y_axis_title;
+    (void)z_axis_title;
+    (void)file_name;
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(2);
     gStyle->SetGridColor(kGray);

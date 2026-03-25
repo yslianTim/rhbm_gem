@@ -1,12 +1,11 @@
-#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
-#include "internal/CommandDataLoaderInternal.hpp"
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "MapVisualizationCommand.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
+#include "command/internal/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
@@ -31,56 +30,31 @@
 namespace {
 constexpr std::string_view kModelKey{ "model" };
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kModelFlags{ "-a,--model" };
 constexpr std::string_view kModelOption{ "--model" };
-constexpr std::string_view kMapFlags{ "-m,--map" };
 constexpr std::string_view kMapOption{ "--map" };
-constexpr std::string_view kAtomIdFlags{ "-i,--atom-id" };
 constexpr std::string_view kAtomIdOption{ "--atom-id" };
-constexpr std::string_view kSamplingFlags{ "-s,--sampling" };
 constexpr std::string_view kSamplingOption{ "--sampling" };
 constexpr std::string_view kWindowSizeOption{ "--window-size" };
 }
 
 namespace rhbm_gem {
 
-MapVisualizationCommand::MapVisualizationCommand(const DataIoServices & data_io_services) :
-    CommandWithProfileOptions<MapVisualizationCommandOptions, CommandId::MapVisualization>{
-        data_io_services },
+MapVisualizationCommand::MapVisualizationCommand(CommonOptionProfile profile) :
+    CommandWithOptions<MapVisualizationCommandOptions>{
+        CommonOptionMaskForProfile(profile) },
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
 }
 
-void MapVisualizationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
+void MapVisualizationCommand::ApplyRequest(const MapVisualizationRequest & request)
 {
-    command_cli::AddPathOption(
-        cmd, kModelFlags,
-        [&](const std::filesystem::path & value) { SetModelFilePath(value); },
-        "Model file path",
-        std::nullopt,
-        true);
-    command_cli::AddPathOption(
-        cmd, kMapFlags,
-        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
-        "Map file path",
-        std::nullopt,
-        true);
-    command_cli::AddScalarOption<int>(
-        cmd, kAtomIdFlags,
-        [&](int value) { SetAtomSerialID(value); },
-        "Atom serial ID for visualization",
-        m_options.atom_serial_id);
-    command_cli::AddScalarOption<int>(
-        cmd, kSamplingFlags,
-        [&](int value) { SetSamplingSize(value); },
-        "Number of sampling points per atom",
-        m_options.sampling_size);
-    command_cli::AddScalarOption<double>(
-        cmd, kWindowSizeOption,
-        [&](double value) { SetWindowSize(value); },
-        "Window size for sampling",
-        m_options.window_size);
+    ApplyCommonRequest(request.common);
+    SetModelFilePath(request.model_file_path);
+    SetMapFilePath(request.map_file_path);
+    SetAtomSerialID(request.atom_serial_id);
+    SetSamplingSize(request.sampling_size);
+    SetWindowSize(request.window_size);
 }
 
 bool MapVisualizationCommand::ExecuteImpl()

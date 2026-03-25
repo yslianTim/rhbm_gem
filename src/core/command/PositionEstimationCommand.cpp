@@ -1,9 +1,8 @@
-#include <rhbm_gem/core/command/PositionEstimationCommand.hpp>
-#include "internal/CommandDataLoaderInternal.hpp"
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "PositionEstimationCommand.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
+#include "command/internal/CommandDataSupport.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
-#include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -26,7 +25,6 @@
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };
-constexpr std::string_view kMapFlags{ "-m,--map" };
 constexpr std::string_view kMapOption{ "--map" };
 constexpr std::string_view kIterationOption{ "--iter" };
 constexpr std::string_view kKnnOption{ "--knn" };
@@ -49,9 +47,9 @@ struct QuantizedPointHash
 
 namespace rhbm_gem {
 
-PositionEstimationCommand::PositionEstimationCommand(const DataIoServices & data_io_services) :
-    CommandWithProfileOptions<PositionEstimationCommandOptions, CommandId::PositionEstimation>{
-        data_io_services },
+PositionEstimationCommand::PositionEstimationCommand(CommonOptionProfile profile) :
+    CommandWithOptions<PositionEstimationCommandOptions>{
+        CommonOptionMaskForProfile(profile) },
     m_selected_voxel_list{}, m_query_point_list{}, m_position_list{},
     m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {
@@ -59,39 +57,15 @@ PositionEstimationCommand::PositionEstimationCommand(const DataIoServices & data
 
 PositionEstimationCommand::~PositionEstimationCommand() = default;
 
-void PositionEstimationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
+void PositionEstimationCommand::ApplyRequest(const PositionEstimationRequest & request)
 {
-    command_cli::AddPathOption(
-        cmd, kMapFlags,
-        [&](const std::filesystem::path & value) { SetMapFilePath(value); },
-        "Map file path",
-        std::nullopt,
-        true);
-    command_cli::AddScalarOption<int>(
-        cmd, kIterationOption,
-        [&](int value) { SetIterationCount(value); },
-        "Iteration count for estimation",
-        m_options.iteration_count);
-    command_cli::AddScalarOption<int>(
-        cmd, kKnnOption,
-        [&](int value) { SetKNNSize(value); },
-        "KNN size for estimation",
-        static_cast<int>(m_options.knn_size));
-    command_cli::AddScalarOption<double>(
-        cmd, kAlphaOption,
-        [&](double value) { SetAlpha(value); },
-        "Alpha value for robust regression",
-        static_cast<double>(m_options.alpha));
-    command_cli::AddScalarOption<double>(
-        cmd, kThresholdOption,
-        [&](double value) { SetThresholdRatio(value); },
-        "Ratio of threshold of map values",
-        static_cast<double>(m_options.threshold_ratio));
-    command_cli::AddScalarOption<double>(
-        cmd, kDedupToleranceOption,
-        [&](double value) { SetDedupTolerance(value); },
-        "Tolerance for deduplicating points",
-        static_cast<double>(m_options.dedup_tolerance));
+    ApplyCommonRequest(request.common);
+    SetMapFilePath(request.map_file_path);
+    SetIterationCount(request.iteration_count);
+    SetKNNSize(request.knn_size);
+    SetAlpha(request.alpha);
+    SetThresholdRatio(request.threshold_ratio);
+    SetDedupTolerance(request.dedup_tolerance);
 }
 
 bool PositionEstimationCommand::ExecuteImpl()

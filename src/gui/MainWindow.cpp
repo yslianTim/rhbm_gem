@@ -1,5 +1,7 @@
 #include "MainWindow.hpp"
 
+#include "command/internal/CommandCatalog.hpp"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
@@ -21,9 +23,43 @@
 
 #include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
+#include <algorithm>
 #include <chrono>
+#include <stdexcept>
 
 namespace {
+
+const rhbm_gem::CommandDescriptor & RequireCommandDescriptor(rhbm_gem::CommandId command_id)
+{
+    const auto & catalog{ rhbm_gem::CommandCatalog() };
+    const auto iter{
+        std::find_if(
+            catalog.begin(),
+            catalog.end(),
+            [command_id](const rhbm_gem::CommandDescriptor & descriptor)
+            {
+                return descriptor.id == command_id;
+            })
+    };
+    if (iter == catalog.end())
+    {
+        throw std::runtime_error("GUI command descriptor is missing from CommandCatalog().");
+    }
+    return *iter;
+}
+
+QString CommandName(rhbm_gem::CommandId command_id)
+{
+    const auto & descriptor{ RequireCommandDescriptor(command_id) };
+    return QString::fromUtf8(descriptor.name.data(), static_cast<int>(descriptor.name.size()));
+}
+
+bool CommandUsesDatabase(rhbm_gem::CommandId command_id)
+{
+    return rhbm_gem::HasCommonOption(
+        rhbm_gem::CommonOptionsForCommand(RequireCommandDescriptor(command_id)),
+        rhbm_gem::CommonOption::Database);
+}
 
 QWidget * BuildPathSelector(QLineEdit *& line_edit, QPushButton *& browse_button)
 {
@@ -43,7 +79,8 @@ QWidget * BuildPathSelector(QLineEdit *& line_edit, QPushButton *& browse_button
 template <typename EnumType>
 void PopulateEnumCombo(QComboBox * combo)
 {
-    for (const auto & entry : rhbm_gem::EnumOptionTraits<EnumType>::kBindingEntries)
+    const auto binding_entries{ rhbm_gem::GetEnumBindingEntries<EnumType>() };
+    for (const auto & entry : binding_entries)
     {
         const QString label{
             QString::fromUtf8(entry.token.data(), static_cast<int>(entry.token.size()))
@@ -90,8 +127,36 @@ MainWindow::MainWindow(QWidget * parent) :
     ConnectUi();
 }
 
+void MainWindow::InitializeGuiCommands()
+{
+    if (!m_gui_commands.empty())
+    {
+        return;
+    }
+
+    m_gui_commands = {
+        GuiCommandRegistration{
+            rhbm_gem::CommandId::MapSimulation,
+            [this]() { return BuildMapSimulationPage(); },
+            [this]() { return rhbm_gem::RunMapSimulation(BuildMapSimulationRequest()); }
+        },
+        GuiCommandRegistration{
+            rhbm_gem::CommandId::PotentialAnalysis,
+            [this]() { return BuildPotentialAnalysisPage(); },
+            [this]() { return rhbm_gem::RunPotentialAnalysis(BuildPotentialAnalysisRequest()); }
+        },
+        GuiCommandRegistration{
+            rhbm_gem::CommandId::ResultDump,
+            [this]() { return BuildResultDumpPage(); },
+            [this]() { return rhbm_gem::RunResultDump(BuildResultDumpRequest()); }
+        },
+    };
+}
+
 void MainWindow::BuildUi()
 {
+    InitializeGuiCommands();
+
     setWindowTitle("RHBM-GEM GUI");
     resize(1180, 820);
 
@@ -102,15 +167,14 @@ void MainWindow::BuildUi()
 
     auto * top_splitter{ new QSplitter(Qt::Horizontal, central) };
     m_command_list = new QListWidget(top_splitter);
-    m_command_list->addItem("map_simulation");
-    m_command_list->addItem("potential_analysis");
-    m_command_list->addItem("result_dump");
     m_command_list->setMinimumWidth(220);
 
     m_command_stack = new QStackedWidget(top_splitter);
-    m_command_stack->addWidget(BuildMapSimulationPage());
-    m_command_stack->addWidget(BuildPotentialAnalysisPage());
-    m_command_stack->addWidget(BuildResultDumpPage());
+    for (const auto & command : m_gui_commands)
+    {
+        m_command_list->addItem(CommandName(command.id));
+        m_command_stack->addWidget(command.build_page());
+    }
 
     top_splitter->addWidget(m_command_list);
     top_splitter->addWidget(m_command_stack);
@@ -145,7 +209,10 @@ QWidget * MainWindow::BuildMapSimulationPage()
     layout->setFormAlignment(Qt::AlignTop);
     layout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
-    AddCommonControls(layout, m_map_simulation.common, false);
+    AddCommonControls(
+        layout,
+        m_map_simulation.common,
+        CommandUsesDatabase(rhbm_gem::CommandId::MapSimulation));
 
     layout->addRow("Model File (--model)", BuildPathSelector(
         m_map_simulation.model_path, m_map_simulation.model_browse));
@@ -193,7 +260,10 @@ QWidget * MainWindow::BuildPotentialAnalysisPage()
     layout->setFormAlignment(Qt::AlignTop);
     layout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
-    AddCommonControls(layout, m_potential_analysis.common, true);
+    AddCommonControls(
+        layout,
+        m_potential_analysis.common,
+        CommandUsesDatabase(rhbm_gem::CommandId::PotentialAnalysis));
 
     layout->addRow("Model File (--model)", BuildPathSelector(
         m_potential_analysis.model_path, m_potential_analysis.model_browse));
@@ -284,7 +354,10 @@ QWidget * MainWindow::BuildResultDumpPage()
     layout->setFormAlignment(Qt::AlignTop);
     layout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
 
-    AddCommonControls(layout, m_result_dump.common, true);
+    AddCommonControls(
+        layout,
+        m_result_dump.common,
+        CommandUsesDatabase(rhbm_gem::CommandId::ResultDump));
 
     m_result_dump.printer_choice = new QComboBox(page);
     PopulateEnumCombo<rhbm_gem::PrinterType>(m_result_dump.printer_choice);
@@ -503,40 +576,17 @@ void MainWindow::StartExecution()
 {
     if (m_execution_running) return;
 
-    const auto command_page{ static_cast<CommandPage>(m_command_stack->currentIndex()) };
-    switch (command_page)
+    const int command_index{ m_command_stack->currentIndex() };
+    if (command_index < 0 || static_cast<std::size_t>(command_index) >= m_gui_commands.size())
     {
-    case CommandPage::MapSimulation:
+        return;
+    }
+    const auto & command{ m_gui_commands[static_cast<std::size_t>(command_index)] };
+    m_active_command_name = CommandName(command.id);
+    m_execution_future = std::async(std::launch::async, [runner = command.run]()
     {
-        const auto request{ BuildMapSimulationRequest() };
-        m_active_command_name = "map_simulation";
-        m_execution_future = std::async(std::launch::async, [request]()
-        {
-            return rhbm_gem::gui::GuiCommandExecutor::ExecuteMapSimulation(request);
-        });
-        break;
-    }
-    case CommandPage::PotentialAnalysis:
-    {
-        const auto request{ BuildPotentialAnalysisRequest() };
-        m_active_command_name = "potential_analysis";
-        m_execution_future = std::async(std::launch::async, [request]()
-        {
-            return rhbm_gem::gui::GuiCommandExecutor::ExecutePotentialAnalysis(request);
-        });
-        break;
-    }
-    case CommandPage::ResultDump:
-    {
-        const auto request{ BuildResultDumpRequest() };
-        m_active_command_name = "result_dump";
-        m_execution_future = std::async(std::launch::async, [request]()
-        {
-            return rhbm_gem::gui::GuiCommandExecutor::ExecuteResultDump(request);
-        });
-        break;
-    }
-    }
+        return runner();
+    });
 
     m_execution_running = true;
     m_execution_poll_timer->start();
@@ -564,7 +614,7 @@ void MainWindow::PollExecutionState()
     OnExecutionFinished(m_execution_future.get());
 }
 
-void MainWindow::OnExecutionFinished(const rhbm_gem::gui::ExecutionResult & result)
+void MainWindow::OnExecutionFinished(const rhbm_gem::ExecutionReport & result)
 {
     const QString summary{ FormatExecutionSummary(result) };
     const QString timestamp{ QDateTime::currentDateTime().toString(Qt::ISODate) };
@@ -588,9 +638,9 @@ void MainWindow::OnExecutionFinished(const rhbm_gem::gui::ExecutionResult & resu
     m_run_button->setEnabled(true);
 }
 
-rhbm_gem::gui::MapSimulationRequest MainWindow::BuildMapSimulationRequest() const
+rhbm_gem::MapSimulationRequest MainWindow::BuildMapSimulationRequest() const
 {
-    rhbm_gem::gui::MapSimulationRequest request;
+    rhbm_gem::MapSimulationRequest request;
     request.common.thread_size = m_map_simulation.common.jobs->value();
     request.common.verbose_level = m_map_simulation.common.verbose->value();
     request.common.folder_path = ReadPath(m_map_simulation.common.folder_path);
@@ -606,9 +656,9 @@ rhbm_gem::gui::MapSimulationRequest MainWindow::BuildMapSimulationRequest() cons
     return request;
 }
 
-rhbm_gem::gui::PotentialAnalysisRequest MainWindow::BuildPotentialAnalysisRequest() const
+rhbm_gem::PotentialAnalysisRequest MainWindow::BuildPotentialAnalysisRequest() const
 {
-    rhbm_gem::gui::PotentialAnalysisRequest request;
+    rhbm_gem::PotentialAnalysisRequest request;
     request.common.thread_size = m_potential_analysis.common.jobs->value();
     request.common.verbose_level = m_potential_analysis.common.verbose->value();
     request.common.database_path = ReadPath(m_potential_analysis.common.database_path);
@@ -633,9 +683,9 @@ rhbm_gem::gui::PotentialAnalysisRequest MainWindow::BuildPotentialAnalysisReques
     return request;
 }
 
-rhbm_gem::gui::ResultDumpRequest MainWindow::BuildResultDumpRequest() const
+rhbm_gem::ResultDumpRequest MainWindow::BuildResultDumpRequest() const
 {
-    rhbm_gem::gui::ResultDumpRequest request;
+    rhbm_gem::ResultDumpRequest request;
     request.common.thread_size = m_result_dump.common.jobs->value();
     request.common.verbose_level = m_result_dump.common.verbose->value();
     request.common.database_path = ReadPath(m_result_dump.common.database_path);
@@ -647,7 +697,7 @@ rhbm_gem::gui::ResultDumpRequest MainWindow::BuildResultDumpRequest() const
     return request;
 }
 
-QString MainWindow::FormatExecutionSummary(const rhbm_gem::gui::ExecutionResult & result)
+QString MainWindow::FormatExecutionSummary(const rhbm_gem::ExecutionReport & result)
 {
     QString summary;
     summary += QString("Prepared: %1\n").arg(result.prepared ? "true" : "false");
@@ -695,8 +745,6 @@ QString MainWindow::ValidationPhaseLabel(rhbm_gem::ValidationPhase phase)
         return "parse";
     case rhbm_gem::ValidationPhase::Prepare:
         return "prepare";
-    case rhbm_gem::ValidationPhase::Runtime:
-        return "runtime";
     default:
         return "unknown";
     }

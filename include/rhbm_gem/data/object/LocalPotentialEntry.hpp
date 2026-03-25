@@ -80,6 +80,7 @@ public:
     double GetIntensityVariancePosterior(const std::string & key) const;
     bool GetOutlierTag(const std::string & key) const;
     double GetStatisticalDistance(const std::string & key) const;
+    double CalculateQScore(int par_choice) const;
 
 private:
     double CalculateIntensityEstimate(double amplitude, double width) const;

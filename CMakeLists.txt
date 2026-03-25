@@ -1,7 +1,4 @@
 cmake_minimum_required(VERSION 3.18)
-message(STATUS "----------------------------")
-message(STATUS "---   RHBM-GEM Project   ---")
-message(STATUS "----------------------------")
 project(RHBM_GEM
     VERSION 1.0
     DESCRIPTION RHBM-GEM
@@ -15,36 +12,50 @@ include(CMakePackageConfigHelpers)
 
 # Keep installed binaries relocatable with project-local shared libraries.
 if(APPLE)
-    set(CMAKE_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+    set(RHBM_GEM_EXECUTABLE_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+    set(RHBM_GEM_LIBRARY_INSTALL_RPATH "@loader_path")
 elseif(UNIX)
-    set(CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+    set(RHBM_GEM_EXECUTABLE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+    set(RHBM_GEM_LIBRARY_INSTALL_RPATH "$ORIGIN")
 endif()
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
-# Centralize all primary output artifacts under the top-level build directory.
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
-if(CMAKE_CONFIGURATION_TYPES)
-    foreach(_config IN LISTS CMAKE_CONFIGURATION_TYPES)
-        string(TOUPPER "${_config}" _config_upper)
-        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${_config_upper} "${PROJECT_BINARY_DIR}")
-        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${_config_upper} "${PROJECT_BINARY_DIR}")
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${_config_upper} "${PROJECT_BINARY_DIR}")
-    endforeach()
-    unset(_config_upper)
-    unset(_config)
-endif()
+function(rhbm_gem_set_install_rpath target_name install_rpath)
+    if("${install_rpath}" STREQUAL "")
+        return()
+    endif()
+
+    set_target_properties(${target_name} PROPERTIES
+        INSTALL_RPATH "${install_rpath}"
+    )
+endfunction()
+
+function(rhbm_gem_apply_library_install_rpath target_name)
+    if(DEFINED RHBM_GEM_LIBRARY_INSTALL_RPATH)
+        rhbm_gem_set_install_rpath(${target_name} "${RHBM_GEM_LIBRARY_INSTALL_RPATH}")
+    endif()
+endfunction()
+
+function(rhbm_gem_apply_executable_install_rpath target_name)
+    if(DEFINED RHBM_GEM_EXECUTABLE_INSTALL_RPATH)
+        rhbm_gem_set_install_rpath(${target_name} "${RHBM_GEM_EXECUTABLE_INSTALL_RPATH}")
+    endif()
+endfunction()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+include(CTest)
 include(RHBMGemOptions)
 include(RHBMGemDependencies)
 
+# Keep all runtime targets (CLI, GUI, tests) in a single predictable folder.
+set(RHBM_GEM_RUNTIME_OUTPUT_DIR "${PROJECT_BINARY_DIR}/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${RHBM_GEM_RUNTIME_OUTPUT_DIR}")
+foreach(config IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${config}" config_upper)
+    set("CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config_upper}" "${RHBM_GEM_RUNTIME_OUTPUT_DIR}")
+endforeach()
+
 add_subdirectory(src)
-if(BUILD_PYTHON_BINDINGS)
-    add_subdirectory(bindings)
-endif()
 
 include(RHBMGemInstall)
-include(RHBMGemTesting)
+include(RHBMGemDevTools)

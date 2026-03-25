@@ -1,25 +1,13 @@
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
-#include "internal/io/file/FileProcessFactoryBase.hpp"
-#include "internal/io/file/FileFormatRegistry.hpp"
-#include "internal/io/file/FileProcessFactoryResolver.hpp"
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include "internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp"
-#include "internal/io/sqlite/DatabaseManager.hpp"
+#include "internal/sqlite/SQLitePersistence.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
 #include <utility>
 
 namespace rhbm_gem {
-
-struct DataObjectManager::Impl
-{
-    std::unique_ptr<DatabaseManager> m_db_manager;
-    std::shared_ptr<const FileFormatRegistry> m_file_format_registry;
-    std::shared_ptr<const FileProcessFactoryResolver> m_file_factory_resolver;
-    std::shared_ptr<const DataObjectDAOFactoryRegistry> m_dao_factory_registry;
-};
 
 namespace {
 
@@ -83,35 +71,23 @@ std::vector<SharedPtrType> BuildDataObjectSnapshot(
     return data_object_list;
 }
 
-std::unique_ptr<FileProcessFactoryBase> CreateFileFactory(
-    const FileProcessFactoryResolver & resolver,
-    const std::filesystem::path & filename)
+std::shared_ptr<DataObjectBase> LookupDataObject(
+    const std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> & data_object_map,
+    std::mutex & map_mutex,
+    const std::string & key_tag)
 {
-    return resolver.CreateFactory(FilePathHelper::GetExtension(filename));
+    std::lock_guard<std::mutex> lock(map_mutex);
+    const auto iter{ data_object_map.find(key_tag) };
+    if (iter == data_object_map.end())
+    {
+        throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
+    }
+    return iter->second;
 }
 
 } // namespace
 
-DataObjectManager::DataObjectManager(const DataIoServices & data_io_services) :
-    m_impl{ std::make_unique<Impl>() }
-{
-    m_impl->m_db_manager = nullptr;
-    m_impl->m_file_format_registry = data_io_services.FileFormatRegistryPtr();
-    m_impl->m_file_factory_resolver = data_io_services.FileProcessFactoryResolverPtr();
-    m_impl->m_dao_factory_registry = data_io_services.DaoFactoryRegistryPtr();
-    if (!m_impl->m_file_format_registry)
-    {
-        throw std::runtime_error("DataObjectManager requires a valid file format registry.");
-    }
-    if (!m_impl->m_file_factory_resolver)
-    {
-        throw std::runtime_error("DataObjectManager requires a valid file factory resolver.");
-    }
-    if (!m_impl->m_dao_factory_registry)
-    {
-        throw std::runtime_error("DataObjectManager requires a valid DAO factory registry.");
-    }
-}
+DataObjectManager::DataObjectManager() = default;
 
 DataObjectManager::~DataObjectManager() = default;
 
@@ -124,16 +100,14 @@ void DataObjectManager::ClearDataObjects()
 void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
-    if (m_impl->m_db_manager && m_impl->m_db_manager->GetDatabasePath() == dbname)
+    if (m_db_manager && m_db_manager->GetDatabasePath() == dbname)
     {
         Logger::Log(LogLevel::Warning,
                     "Database already existed in the path: " + dbname.string()
-                    + ", skip re-allocation of DatabaseManager.");
+                    + ", skip re-allocation of SQLitePersistence.");
         return;
     }
-    m_impl->m_db_manager = std::make_unique<DatabaseManager>(
-        dbname,
-        m_impl->m_dao_factory_registry);
+    m_db_manager = std::make_unique<SQLitePersistence>(dbname);
 }
 
 void DataObjectManager::ProcessFile(
@@ -141,8 +115,7 @@ void DataObjectManager::ProcessFile(
 {
     try
     {
-        auto factory{ CreateFileFactory(*m_impl->m_file_factory_resolver, filename) };
-        auto data_object{ factory->CreateDataObject(filename) };
+        auto data_object{ ReadDataObject(filename) };
         data_object->SetKeyTag(key_tag);
         data_object->Display();
         std::shared_ptr<DataObjectBase> shared_object{ std::move(data_object) };
@@ -168,8 +141,7 @@ void DataObjectManager::ProduceFile(
     try
     {
         auto data_object{ GetDataObject(key_tag) };
-        auto factory{ CreateFileFactory(*m_impl->m_file_factory_resolver, filename) };
-        factory->OutputDataObject(filename, *data_object);
+        WriteDataObject(filename, *data_object);
     }
     catch (const std::exception & ex)
     {
@@ -207,11 +179,11 @@ void DataObjectManager::LoadDataObject(const std::string & key_tag)
     std::unique_ptr<DataObjectBase> data_object;
     {
         std::lock_guard<std::mutex> lock(m_db_mutex);
-        if (m_impl->m_db_manager == nullptr)
+        if (m_db_manager == nullptr)
         {
             throw std::runtime_error("Database manager is not initialized.");
         }
-        data_object = m_impl->m_db_manager->LoadDataObject(key_tag);
+        data_object = m_db_manager->LoadDataObject(key_tag);
     }
     try
     {
@@ -234,23 +206,22 @@ void DataObjectManager::SaveDataObject(
     const std::string & key_tag, const std::string & renamed_key_tag) const
 {
     std::lock_guard<std::mutex> db_lock(m_db_mutex);
-    if (m_impl->m_db_manager == nullptr)
+    if (m_db_manager == nullptr)
     {
         throw std::runtime_error("Database manager is not initialized.");
     }
 
     std::shared_ptr<DataObjectBase> data_object;
+    try
     {
-        std::lock_guard<std::mutex> lock(m_map_mutex);
-        auto iter{ m_data_object_map.find(key_tag) };
-        if (iter == m_data_object_map.end())
-        {
-            Logger::Log(LogLevel::Warning,
-                        "The data object with key tag: [" + key_tag + "] isn't presented, "
-                        "skip saving data object.");
-            return;
-        }
-        data_object = iter->second;
+        data_object = LookupDataObject(m_data_object_map, m_map_mutex, key_tag);
+    }
+    catch (const std::exception &)
+    {
+        Logger::Log(LogLevel::Warning,
+                    "The data object with key tag: [" + key_tag + "] isn't presented, "
+                    "skip saving data object.");
+        return;
     }
 
     auto saved_key_tag{ renamed_key_tag.empty() ? key_tag : renamed_key_tag };
@@ -259,16 +230,16 @@ void DataObjectManager::SaveDataObject(
         Logger::Log(LogLevel::Info,
                     "The data object with key tag: [" + key_tag + "] will be renamed to: [" +
                     renamed_key_tag + "] and saved into database: " +
-                    m_impl->m_db_manager->GetDatabasePath().string());
+                    m_db_manager->GetDatabasePath().string());
     }
     else
     {
         Logger::Log(LogLevel::Info,
                     "The data object with key tag: [" + key_tag + "] will be saved into database: " +
-                    m_impl->m_db_manager->GetDatabasePath().string());
+                    m_db_manager->GetDatabasePath().string());
     }
 
-    m_impl->m_db_manager->SaveDataObject(data_object.get(), saved_key_tag);
+    m_db_manager->SaveDataObject(data_object.get(), saved_key_tag);
 }
 
 void DataObjectManager::ForEachDataObject(
@@ -331,13 +302,7 @@ std::shared_ptr<DataObjectBase> DataObjectManager::GetDataObject(
 std::shared_ptr<const DataObjectBase> DataObjectManager::GetDataObject(
     const std::string & key_tag) const
 {
-    std::lock_guard<std::mutex> lock(m_map_mutex);
-    auto iter{ m_data_object_map.find(key_tag) };
-    if (iter == m_data_object_map.end())
-    {
-        throw std::runtime_error("Cannot find the data object with key tag: " + key_tag);
-    }
-    return iter->second;
+    return LookupDataObject(m_data_object_map, m_map_mutex, key_tag);
 }
 
 } // namespace rhbm_gem

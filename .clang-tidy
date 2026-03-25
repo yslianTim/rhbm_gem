@@ -1,0 +1,4 @@
+Checks: "-*,clang-analyzer-*"
+WarningsAsErrors: ""
+HeaderFilterRegex: "src/(core/painter|data/io/file)/.*"
+FormatStyle: none

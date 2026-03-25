@@ -1,56 +1,10 @@
 #include <gtest/gtest.h>
 
-#include "CommandValidationAssertions.hpp"
-#include "CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/MapVisualizationCommand.hpp>
+#include "support/CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
+#include "command/MapVisualizationCommand.hpp"
 
 namespace rg = rhbm_gem;
-
-TEST(MapVisualizationCommandTest, NonPositiveAtomIdBecomesValidationErrorAtPrepare)
-{
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
-    command.SetAtomSerialID(0);
-
-    EXPECT_FALSE(command.PrepareForExecution());
-    ASSERT_NE(
-        command_test::FindValidationIssue(
-            command,
-            "--atom-id",
-            rg::ValidationPhase::Parse,
-            LogLevel::Error),
-        nullptr);
-}
-
-TEST(MapVisualizationCommandTest, NonPositiveWindowSizeBecomesValidationErrorAtPrepare)
-{
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
-    command.SetWindowSize(0.0);
-
-    EXPECT_FALSE(command.PrepareForExecution());
-    ASSERT_NE(
-        command_test::FindValidationIssue(
-            command,
-            "--window-size",
-            rg::ValidationPhase::Parse,
-            LogLevel::Error),
-        nullptr);
-}
-
-TEST(MapVisualizationCommandTest, SamplingSizeNormalizationReportsAutoCorrectedWarning)
-{
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
-    command.SetSamplingSize(0);
-
-    const auto * issue{
-        command_test::FindValidationIssue(
-            command,
-            "--sampling",
-            rg::ValidationPhase::Parse,
-            LogLevel::Warning)
-    };
-    ASSERT_NE(issue, nullptr);
-    EXPECT_TRUE(issue->auto_corrected);
-}
 
 TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)
 {
@@ -62,11 +16,13 @@ TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
-    command.SetFolderPath(output_dir);
-    command.SetModelFilePath(model_path);
-    command.SetMapFilePath(map_path);
-    command.SetAtomSerialID(999);
+    rg::MapVisualizationCommand command{rg::CommonOptionProfile::FileWorkflow};
+    rg::MapVisualizationRequest request{};
+    request.common.folder_path = output_dir;
+    request.model_file_path = model_path;
+    request.map_file_path = map_path;
+    request.atom_serial_id = 999;
+    command.ApplyRequest(request);
 
     EXPECT_FALSE(command.Execute());
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".pdf"), 0);
@@ -83,11 +39,13 @@ TEST(MapVisualizationCommandTest, ExecuteWritesPdfToConfiguredFolder)
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapVisualizationCommand command{ command_test::BuildDataIoServices() };
-    command.SetFolderPath(output_dir);
-    command.SetModelFilePath(model_path);
-    command.SetMapFilePath(map_path);
-    command.SetAtomSerialID(1);
+    rg::MapVisualizationCommand command{rg::CommonOptionProfile::FileWorkflow};
+    rg::MapVisualizationRequest request{};
+    request.common.folder_path = output_dir;
+    request.model_file_path = model_path;
+    request.map_file_path = map_path;
+    request.atom_serial_id = 1;
+    command.ApplyRequest(request);
 
     ASSERT_TRUE(command.Execute());
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".pdf"), 1);

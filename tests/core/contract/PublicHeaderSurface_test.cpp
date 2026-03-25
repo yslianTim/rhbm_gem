@@ -1,191 +1,65 @@
 #include <gtest/gtest.h>
 
-#include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <string>
+#include <vector>
 
-#include "CommandTestHelpers.hpp"
+#include "support/PublicHeaderSurfaceTestSupport.hpp"
+#include <rhbm_gem/core/command/CommandMetadata.hpp>
 
-TEST(PublicHeaderSurfaceTest, ExperimentalBondWorkflowHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "core" / "PotentialAnalysisBondWorkflow.hpp"
-    };
+TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
+    const std::vector<std::string> expected{
+        "core/command/CommandApi.hpp",
+        "core/command/CommandContract.hpp",
+        "core/command/CommandList.def",
+        "core/command/CommandMetadata.hpp",
+        "core/command/MapSampling.hpp",
+        "core/command/OptionEnumClass.hpp",
+        "core/command/OptionEnumTraits.hpp",
+        "core/painter/AtomPainter.hpp",
+        "core/painter/ComparisonPainter.hpp",
+        "core/painter/DemoPainter.hpp",
+        "core/painter/GausPainter.hpp",
+        "core/painter/ModelPainter.hpp",
+        "core/painter/PainterBase.hpp"};
 
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+    EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("core"), expected);
 }
 
-TEST(PublicHeaderSurfaceTest, BuiltInCommandCatalogHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "core" / "BuiltInCommandCatalog.hpp"
-    };
+TEST(PublicHeaderSurfaceTest, CommandMetadataProfilesRemainStable) {
+    constexpr auto file_workflow_mask{
+        rhbm_gem::CommonOptionMaskForProfile(rhbm_gem::CommonOptionProfile::FileWorkflow)};
+    constexpr auto database_workflow_mask{
+        rhbm_gem::CommonOptionMaskForProfile(rhbm_gem::CommonOptionProfile::DatabaseWorkflow)};
 
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+    EXPECT_TRUE(rhbm_gem::HasCommonOption(file_workflow_mask, rhbm_gem::CommonOption::Threading));
+    EXPECT_TRUE(rhbm_gem::HasCommonOption(file_workflow_mask, rhbm_gem::CommonOption::Verbose));
+    EXPECT_TRUE(rhbm_gem::HasCommonOption(file_workflow_mask, rhbm_gem::CommonOption::OutputFolder));
+    EXPECT_FALSE(rhbm_gem::HasCommonOption(file_workflow_mask, rhbm_gem::CommonOption::Database));
+
+    EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::Threading));
+    EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::Verbose));
+    EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::Database));
+    EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::OutputFolder));
 }
 
-TEST(PublicHeaderSurfaceTest, CommandIdHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "core" / "CommandId.hpp"
-    };
+TEST(PublicHeaderSurfaceTest, CommandContractHeaderProvidesSharedCommandContract) {
+    const auto default_data_root{ rhbm_gem::GetDefaultDataRootPath() };
+    const auto default_database_path{ rhbm_gem::GetDefaultDatabasePath() };
 
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
+    rhbm_gem::ExecutionReport report{};
+    rhbm_gem::ValidationIssue issue{
+        "--example",
+        rhbm_gem::ValidationPhase::Prepare,
+        LogLevel::Warning,
+        "example",
+        true};
+    report.validation_issues.push_back(issue);
 
-TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderNoLongerExposesLegacySurfaceWrapper)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto header_path{
-        project_root / "include" / "rhbm_gem" / "core" / "command" / "CommandMetadata.hpp"
-    };
-
-    std::ifstream header_stream(header_path);
-    ASSERT_TRUE(header_stream.is_open());
-    const std::string header_content{
-        std::istreambuf_iterator<char>(header_stream),
-        std::istreambuf_iterator<char>()
-    };
-
-    EXPECT_EQ(header_content.find("struct CommandSurface"), std::string::npos);
-    EXPECT_EQ(header_content.find("MakeCommandSurface"), std::string::npos);
-    EXPECT_NE(header_content.find("enum class CommandId"), std::string::npos);
-    EXPECT_NE(header_content.find("enum class CommonOption"), std::string::npos);
-}
-
-TEST(PublicHeaderSurfaceTest, CommandBaseHeaderDoesNotExposeLegacyCallerFacingHooks)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto header_path{
-        project_root / "include" / "rhbm_gem" / "core" / "command" / "CommandBase.hpp"
-    };
-
-    std::ifstream header_stream(header_path);
-    ASSERT_TRUE(header_stream.is_open());
-    const std::string header_content{
-        std::istreambuf_iterator<char>(header_stream),
-        std::istreambuf_iterator<char>()
-    };
-    const auto public_pos{ header_content.find("public:") };
-    const auto protected_pos{ header_content.find("protected:") };
-    ASSERT_NE(public_pos, std::string::npos);
-    ASSERT_NE(protected_pos, std::string::npos);
-    ASSERT_LT(public_pos, protected_pos);
-    const std::string public_surface{
-        header_content.substr(public_pos, protected_pos - public_pos)
-    };
-
-    EXPECT_EQ(public_surface.find("RegisterCLIOptions"), std::string::npos);
-    EXPECT_EQ(public_surface.find("ReportValidationIssues"), std::string::npos);
-    EXPECT_EQ(public_surface.find("GetOptions"), std::string::npos);
-    EXPECT_EQ(public_surface.find("GetCommandId"), std::string::npos);
-    EXPECT_EQ(header_content.find("ProcessTypedFile"), std::string::npos);
-    EXPECT_EQ(header_content.find("OptionalProcessTypedFile"), std::string::npos);
-    EXPECT_EQ(header_content.find("LoadTypedObject"), std::string::npos);
-}
-
-TEST(PublicHeaderSurfaceTest, LegacyModelObjectDaoHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "LegacyModelObjectDAO.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
-
-TEST(PublicHeaderSurfaceTest, FileReaderBaseHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "FileReaderBase.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
-
-TEST(PublicHeaderSurfaceTest, FileWriterBaseHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "FileWriterBase.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
-
-TEST(PublicHeaderSurfaceTest, FileProcessFactoryRegistryHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "FileProcessFactoryRegistry.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
-
-TEST(PublicHeaderSurfaceTest, DataObjectManagerHeaderDoesNotExposeInternalDebugAccessors)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto header_path{
-        project_root / "include" / "rhbm_gem" / "data" / "io" / "DataObjectManager.hpp"
-    };
-
-    std::ifstream header_stream(header_path);
-    ASSERT_TRUE(header_stream.is_open());
-    const std::string header_content{
-        std::istreambuf_iterator<char>(header_stream),
-        std::istreambuf_iterator<char>()
-    };
-
-    EXPECT_EQ(header_content.find("GetDatabaseManager"), std::string::npos);
-    EXPECT_EQ(header_content.find("GetDataObjectMap"), std::string::npos);
-}
-
-TEST(PublicHeaderSurfaceTest, DatabaseManagerHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "DatabaseManager.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
-}
-
-TEST(PublicHeaderSurfaceTest, ModelObjectDAOSqliteHeaderIsNotPublic)
-{
-    const auto project_root{
-        command_test::ProjectRootPath()
-    };
-    const auto leaked_header{
-        project_root / "include" / "rhbm_gem" / "data" / "ModelObjectDAOSqlite.hpp"
-    };
-
-    EXPECT_FALSE(std::filesystem::exists(leaked_header)) << leaked_header.string();
+    EXPECT_FALSE(default_data_root.empty());
+    EXPECT_EQ(default_database_path.filename(), "database.sqlite");
+    ASSERT_EQ(report.validation_issues.size(), 1u);
+    EXPECT_EQ(report.validation_issues.front().option_name, "--example");
+    EXPECT_EQ(report.validation_issues.front().phase, rhbm_gem::ValidationPhase::Prepare);
+    EXPECT_EQ(report.validation_issues.front().level, LogLevel::Warning);
+    EXPECT_TRUE(report.validation_issues.front().auto_corrected);
 }

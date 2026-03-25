@@ -1,8 +1,7 @@
-#include <rhbm_gem/core/command/CommandBase.hpp>
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "command/internal/CommandBase.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
-#include <CLI/CLI.hpp>
 #include <algorithm>
 #include <array>
 #include <string>
@@ -12,14 +11,12 @@ namespace rhbm_gem {
 
 namespace {
 
-constexpr std::array<std::string_view, 3> kValidationPhaseLabels{
+constexpr std::array<std::string_view, 2> kValidationPhaseLabels{
     "parse",
-    "prepare",
-    "runtime"
+    "prepare"
 };
 constexpr std::string_view kJobsOption{ "--jobs" };
 constexpr std::string_view kVerboseOption{ "--verbose" };
-constexpr std::string_view kDatabaseOption{ "--database" };
 constexpr std::string_view kFolderOption{ "--folder" };
 
 std::string BuildIssuePrefix(const ValidationIssue & issue)
@@ -41,8 +38,9 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
 
 } // namespace
 
-CommandBase::CommandBase(const DataIoServices & data_io_services) :
-    m_data_manager{ data_io_services }
+CommandBase::CommandBase(CommonOptionMask common_options) :
+    m_data_manager{},
+    m_common_options{ common_options }
 {
 }
 
@@ -67,55 +65,6 @@ bool CommandBase::Execute()
             "Command execution failed. Aborting command execution.");
     }
     return executed;
-}
-
-void CommandBase::RegisterCLIOptions(CLI::App * command)
-{
-    RegisterCLIOptionsBasic(command);
-    RegisterCLIOptionsExtend(command);
-}
-
-void CommandBase::RegisterCLIOptionsBasic(CLI::App * command)
-{
-    auto & options{ GetOptions() };
-    const auto common_options{ GetCommonOptionsMask() };
-
-    if (HasCommonOption(common_options, CommonOption::Threading))
-    {
-        command_cli::AddScalarOption<int>(
-            command,
-            "-j,--jobs",
-            [&](int value) { SetThreadSize(value); },
-            "Number of threads",
-            options.thread_size);
-    }
-    if (HasCommonOption(common_options, CommonOption::Verbose))
-    {
-        command_cli::AddScalarOption<int>(
-            command,
-            "-v,--verbose",
-            [&](int value) { SetVerboseLevel(value); },
-            "Verbose level",
-            options.verbose_level);
-    }
-    if (HasCommonOption(common_options, CommonOption::Database))
-    {
-        command_cli::AddPathOption(
-            command,
-            "-d,--database",
-            [&](const std::filesystem::path & value) { SetDatabasePath(value); },
-            "Database file path",
-            options.database_path);
-    }
-    if (HasCommonOption(common_options, CommonOption::OutputFolder))
-    {
-        command_cli::AddPathOption(
-            command,
-            "-o,--folder",
-            [&](const std::filesystem::path & value) { SetFolderPath(value); },
-            "folder path for output files",
-            options.folder_path);
-    }
 }
 
 bool CommandBase::PrepareForExecution()
@@ -181,6 +130,22 @@ void CommandBase::SetFolderPath(const std::filesystem::path & path)
     });
 }
 
+void CommandBase::ApplyCommonRequest(const CommonCommandRequest & request)
+{
+    SetThreadSize(request.thread_size);
+    SetVerboseLevel(request.verbose_level);
+
+    const auto common_options{ GetCommonOptionsMask() };
+    if (HasCommonOption(common_options, CommonOption::Database))
+    {
+        SetDatabasePath(request.database_path);
+    }
+    if (HasCommonOption(common_options, CommonOption::OutputFolder))
+    {
+        SetFolderPath(request.folder_path);
+    }
+}
+
 void CommandBase::ReportValidationIssues() const
 {
     for (const auto & issue : m_validation_issues)
@@ -191,15 +156,14 @@ void CommandBase::ReportValidationIssues() const
     }
 }
 
-bool CommandBase::HasValidationErrors(std::optional<ValidationPhase> phase) const
+bool CommandBase::HasValidationErrors() const
 {
     return std::any_of(
         m_validation_issues.begin(),
         m_validation_issues.end(),
-        [phase](const ValidationIssue & issue)
+        [](const ValidationIssue & issue)
         {
-            return issue.level == LogLevel::Error
-                && (!phase.has_value() || issue.phase == phase.value());
+            return issue.level == LogLevel::Error;
         });
 }
 
@@ -342,11 +306,6 @@ void CommandBase::AddValidationIssue(
     });
 }
 
-void CommandBase::RequireDatabaseManager()
-{
-    m_data_manager.SetDatabaseManager(GetOptions().database_path);
-}
-
 std::filesystem::path CommandBase::BuildOutputPath(
     std::string_view stem,
     std::string_view extension) const
@@ -383,24 +342,6 @@ bool CommandBase::RunValidationPass()
 bool CommandBase::RunFilesystemPreflight()
 {
     const auto common_options{ GetCommonOptionsMask() };
-
-    if (HasCommonOption(common_options, CommonOption::Database))
-    {
-        ClearValidationIssues(kDatabaseOption, ValidationPhase::Prepare);
-        const auto parent_path{ GetOptions().database_path.parent_path() };
-        if (!parent_path.empty() && !std::filesystem::exists(parent_path))
-        {
-            std::error_code error_code;
-            std::filesystem::create_directories(parent_path, error_code);
-            if (error_code)
-            {
-                AddValidationError(
-                    kDatabaseOption,
-                    "Failed to create parent directory '" + parent_path.string()
-                        + "': " + error_code.message());
-            }
-        }
-    }
 
     if (HasCommonOption(common_options, CommonOption::OutputFolder))
     {

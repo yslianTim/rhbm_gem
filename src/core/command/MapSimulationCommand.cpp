@@ -1,12 +1,11 @@
-#include <rhbm_gem/core/command/MapSimulationCommand.hpp>
-#include "internal/CommandDataLoaderInternal.hpp"
-#include <rhbm_gem/core/command/CommandOptionBinding.hpp>
+#include "MapSimulationCommand.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
+#include "command/internal/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/data/io/MapFileWriter.hpp>
-#include "workflow/DataObjectWorkflowOps.hpp"
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
@@ -21,34 +20,19 @@
 
 namespace {
 constexpr std::string_view kModelKey{ "model" };
-constexpr std::string_view kModelFlags{ "-a,--model" };
 constexpr std::string_view kModelOption{ "--model" };
-constexpr std::string_view kMapNameFlags{ "-n,--name" };
-constexpr std::string_view kCutoffFlags{ "-c,--cut-off" };
 constexpr std::string_view kPotentialModelOption{ "--potential-model" };
 constexpr std::string_view kChargeOption{ "--charge" };
 constexpr std::string_view kCutoffOption{ "--cut-off" };
-constexpr std::string_view kGridSpacingFlags{ "-g,--grid-spacing" };
 constexpr std::string_view kGridSpacingOption{ "--grid-spacing" };
 constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
-
-std::string SerializeBlurringWidths(const std::vector<double> & widths)
-{
-    std::string output;
-    for (size_t index = 0; index < widths.size(); ++index)
-    {
-        if (index != 0) output += ",";
-        output += StringHelper::ToStringWithPrecision<double>(widths[index], 2);
-    }
-    return output;
-}
 }
 
 namespace rhbm_gem {
 
-MapSimulationCommand::MapSimulationCommand(const DataIoServices & data_io_services) :
-    CommandWithProfileOptions<MapSimulationCommandOptions, CommandId::MapSimulation>{
-        data_io_services },
+MapSimulationCommand::MapSimulationCommand(CommonOptionProfile profile) :
+    CommandWithOptions<MapSimulationCommandOptions>{
+        CommonOptionMaskForProfile(profile) },
     m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),
@@ -61,44 +45,16 @@ MapSimulationCommand::MapSimulationCommand(const DataIoServices & data_io_servic
 {
 }
 
-void MapSimulationCommand::RegisterCLIOptionsExtend(CLI::App * cmd)
+void MapSimulationCommand::ApplyRequest(const MapSimulationRequest & request)
 {
-    command_cli::AddPathOption(
-        cmd, kModelFlags,
-        [&](const std::filesystem::path & value) { SetModelFilePath(value); },
-        "Model file path",
-        std::nullopt,
-        true);
-    command_cli::AddStringOption(
-        cmd, kMapNameFlags,
-        [&](const std::string & value) { SetMapFileName(value); },
-        "File name for output map files",
-        m_options.map_file_name);
-    command_cli::AddEnumOption<PotentialModel>(
-        cmd, kPotentialModelOption,
-        [&](PotentialModel value) { SetPotentialModelChoice(value); },
-        "Atomic potential model option",
-        PotentialModel::FIVE_GAUS_CHARGE);
-    command_cli::AddEnumOption<PartialCharge>(
-        cmd, kChargeOption,
-        [&](PartialCharge value) { SetPartialChargeChoice(value); },
-        "Partial charge table option",
-        PartialCharge::PARTIAL);
-    command_cli::AddScalarOption<double>(
-        cmd, kCutoffFlags,
-        [&](double value) { SetCutoffDistance(value); },
-        "Cutoff distance",
-        m_options.cutoff_distance);
-    command_cli::AddScalarOption<double>(
-        cmd, kGridSpacingFlags,
-        [&](double value) { SetGridSpacing(value); },
-        "Grid spacing",
-        m_options.grid_spacing);
-    command_cli::AddStringOption(
-        cmd, kBlurringWidthOption,
-        [&](const std::string & value) { SetBlurringWidthList(value); },
-        "Blurring width (list) setting",
-        SerializeBlurringWidths(m_options.blurring_width_list));
+    ApplyCommonRequest(request.common);
+    SetModelFilePath(request.model_file_path);
+    AssignOption(m_options.map_file_name, request.map_file_name);
+    SetPotentialModelChoice(request.potential_model_choice);
+    SetPartialChargeChoice(request.partial_charge_choice);
+    SetCutoffDistance(request.cutoff_distance);
+    SetGridSpacing(request.grid_spacing);
+    SetBlurringWidthList(request.blurring_width_list);
 }
 
 bool MapSimulationCommand::ExecuteImpl()
@@ -171,11 +127,6 @@ void MapSimulationCommand::SetModelFilePath(const std::filesystem::path & value)
     SetRequiredExistingPathOption(m_options.model_file_path, value, kModelOption, "Model file");
 }
 
-void MapSimulationCommand::SetMapFileName(const std::string & value)
-{
-    MutateOptions([&]() { m_options.map_file_name = value; });
-}
-
 void MapSimulationCommand::SetGridSpacing(double value)
 {
     SetNormalizedScalarOption(
@@ -246,8 +197,7 @@ void MapSimulationCommand::RunMapSimulation()
         const auto output_file_name{
             BuildOutputPath(m_options.map_file_name + "_" + map_key_tag, ".map")
         };
-        MapFileWriter writer{ output_file_name.string(), map_object.get() };
-        writer.Write();
+        WriteMap(output_file_name, *map_object);
     }
 }
 

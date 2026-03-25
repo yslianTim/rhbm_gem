@@ -1,54 +1,84 @@
 # Adding DataObject Operations and Iteration
 
-This guide is for extending behavior on current `DataObject` types (`ModelObject`, `MapObject`)
-without adding a new top-level `DataObject` subtype.
+This guide covers how to extend behavior around the current top-level `DataObject` types:
 
-Use this when you need to:
+- `ModelObject`
+- `MapObject`
 
-- add or refine reusable operations on existing objects
-- extend command workflows that process existing objects
-- adjust `DataObjectManager::ForEachDataObject(...)` iteration behavior/options
+It also covers `DataObjectManager` iteration and the shared command helpers that already exist in the repository.
 
 Related references:
 
-- [`architecture/dataobject-typed-dispatch-architecture.md`](architecture/dataobject-typed-dispatch-architecture.md)
 - [`architecture/dataobject-io-architecture.md`](architecture/dataobject-io-architecture.md)
 - [`adding-a-command.md`](adding-a-command.md)
 
-## 1. Decide the extension boundary first
+## 1. Pick the Correct Boundary
 
-Choose the narrowest boundary that matches your change:
+Use the narrowest boundary that matches the change.
 
-- `DataObjectWorkflowOps`:
-  - cross-command reusable operation on `ModelObject`/`MapObject`
-- command-local `*Workflow.cpp`:
-  - command-specific behavior that should not become global shared API
-- `DataObjectManager::ForEachDataObject(...)`:
-  - iteration policy change (ordering, selection, callback contract)
+`command_data_loader` helpers in `src/core/command/CommandDataSupport.hpp`
 
-Avoid putting command-specific branching into `DataObjectWorkflowOps`.
+- use for typed file/database loading with consistent error context
+- current helpers are `ProcessModelFile(...)`, `ProcessMapFile(...)`, `OptionalProcessMapFile(...)`, and `LoadModelObject(...)`
 
-## 2. Required change set
+`CommandDataSupport` in `src/core/command/CommandDataSupport.*`
 
-For operation extension on existing objects, update these areas together:
+- use for reusable typed operations on `ModelObject` or `MapObject`
+- current shared operations are `NormalizeMapObject(...)`, `PrepareModelObject(...)`, `ApplyModelSelection(...)`, `CollectModelAtoms(...)`, `PrepareSimulationAtoms(...)`, and `BuildModelAtomBondContext(...)`
+- keep this layer focused on logic shared by multiple commands
 
-- `src/core/workflow/DataObjectWorkflowOps.hpp`
-- `src/core/workflow/DataObjectWorkflowOps.cpp`
-- command workflow call sites that consume the new operation
-- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
-- relevant command tests under `tests/core/command/`
-- architecture/developer docs when operation contract changes
+`MapSampling` in `include/rhbm_gem/core/command/MapSampling.hpp` and `src/core/command/MapSampling.cpp`
 
-For iteration method extension, additionally update:
+- use only for reusable map sampling behavior
+
+command-local code in `src/core/command/*.cpp` or `src/core/workflow/*.cpp`
+
+- use when behavior is specific to one command or one workflow path
+
+`DataObjectManager::ForEachDataObject(...)`
+
+- use only when selection by key, traversal order, or snapshot iteration belongs in the manager layer
+
+`DataObjectDispatch`
+
+- use when generic code needs to probe or enforce `DataObjectBase` runtime type
+- keep command policy out of `DataObjectDispatch`
+
+## 2. Required File Updates
+
+If you add or change reusable typed operations:
+
+- `src/core/command/CommandDataSupport.hpp`
+- `src/core/command/CommandDataSupport.cpp`
+- command call sites using the helper
+- `tests/data/DataObjectRuntime_test.cpp`
+- related command tests under `tests/core/`
+- docs when the contract changes
+
+If you add or change loader helpers in `command_data_loader`:
+
+- `src/core/command/CommandDataSupport.hpp`
+- command call sites
+- tests that cover the new load path and failure context
+
+If you change manager iteration behavior:
 
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
-- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
-- `tests/data/io/DataObjectManager_test.cpp`
+- `tests/data/DataObjectRuntime_test.cpp`
+- docs when callback or ordering semantics change
 
-## 3. Add a reusable operation in `DataObjectWorkflowOps`
+## 3. Operation Design Rules
 
-Header pattern (`src/core/workflow/DataObjectWorkflowOps.hpp`):
+For shared typed helpers:
+
+- keep signatures typed: `ModelObject &`, `MapObject &`, or typed result structs
+- keep behavior deterministic for the same object state and options
+- validate preconditions and throw explicit `std::runtime_error` when violated
+- keep command execution, logging policy, and UI concerns out of shared helpers
+- prefer small option structs over long parameter lists when behavior may grow
+
+Example pattern:
 
 ```cpp
 struct ModelPruneOptions
@@ -62,97 +92,72 @@ void PruneModelAtoms(
     ModelPruneOptions options = {});
 ```
 
-Implementation rules (`src/core/workflow/DataObjectWorkflowOps.cpp`):
+## 4. Iteration Rules
 
-- keep behavior deterministic for the same model state and options
-- keep function contracts typed (`ModelObject &`, `MapObject &`) instead of generic base pointers
-- fail with explicit exceptions for invalid preconditions
-- keep command-only side effects out of shared operations
+Current `ForEachDataObject(...)` contract:
 
-## 4. Extend `ForEachDataObject(...)` safely
+- mutable and const overloads exist
+- `key_tag_list` optionally filters traversal
+- `IterateOptions::deterministic_order` only affects the empty-key-list case
+- explicit key lists preserve caller order
+- missing keys are skipped with warning logs
+- empty callbacks throw `std::runtime_error`
+- callbacks run after the manager finishes building a `shared_ptr` snapshot
 
-Current `ForEachDataObject` contract includes:
+When extending iteration:
 
-- mutable and const callback overloads
-- optional key filtering by `key_tag_list` (missing keys are skipped with warning logs)
-- `IterateOptions::deterministic_order` applies when `key_tag_list` is empty
-  (`true` sorts keys lexicographically; `false` uses current container order)
-- when `key_tag_list` is not empty, callback order follows `key_tag_list` order
-- snapshot-based traversal (callbacks run after snapshot capture)
-- empty callback throws (`ForEachDataObject(): callback is empty.`
-  / `ForEachDataObject() const: callback is empty.`)
+1. preserve current defaults unless you are intentionally changing the contract
+2. add options to `IterateOptions` in the header first
+3. implement the option in the snapshot-building path in `DataObjectManager.cpp`
+4. keep callback validation explicit
+5. keep callbacks outside the manager map lock
 
-When extending iteration behavior:
+## 5. Typed Dispatch Inside Generic Code
 
-1. Keep default behavior backward-compatible.
-2. Add new options to `DataObjectManager::IterateOptions` in header.
-3. Apply option behavior inside snapshot-building path in `DataObjectManager.cpp`.
-4. Preserve callback-empty validation and existing exception shape.
-5. Preserve snapshot semantics (do not hold map lock during callback execution).
-
-Example usage pattern at call site:
-
-```cpp
-rhbm_gem::DataObjectManager::IterateOptions options;
-options.deterministic_order = true;
-
-manager.ForEachDataObject(
-    [](rhbm_gem::DataObjectBase & data_object)
-    {
-        if (auto * model = rhbm_gem::AsModelObject(data_object))
-        {
-            rhbm_gem::ModelPreparationOptions prep;
-            prep.update_model = true;
-            rhbm_gem::PrepareModelObject(*model, prep);
-        }
-    },
-    {},
-    options);
-```
-
-## 5. Add typed operation branches in iteration callbacks
-
-Prefer `As*` helpers for optional branches:
+Use probe helpers for optional branches:
 
 - `AsModelObject(...)`
 - `AsMapObject(...)`
 
-Use `Expect*` helpers only when mismatch must terminate the workflow with a hard error:
+Use expect helpers when a mismatch is a contract violation:
 
 - `ExpectModelObject(...)`
 - `ExpectMapObject(...)`
 
-Keep callback logic short; move multi-step workflows into typed helper functions.
+Use `GetCatalogTypeName(...)` only for top-level persistence routing.
 
-## 6. Command integration pattern
+If callback bodies or command-local branches start growing, move the multi-step logic into typed helpers instead of adding more dispatch inline.
 
-When a command needs the new operation:
+## 6. Command Integration Pattern
 
-1. load/build typed objects through command data-loader helpers or `GetTypedDataObject<T>()`
-2. run shared operation from `DataObjectWorkflowOps`
-3. use manager iteration only when key-selection/ordering policy is owned by manager-level keys
-4. keep command `ExecuteImpl()` orchestration-focused
+Typical command flow:
 
-## 7. Testing checklist
+1. load typed objects with `GetTypedDataObject<T>()` or `command_data_loader` helpers
+2. apply shared typed operations from `CommandDataSupport` when the behavior is reused
+3. use `ForEachDataObject(...)` only when manager-owned key filtering or ordering matters
+4. keep `ExecuteImpl()` focused on orchestration
 
-Add or extend tests for:
+## 7. Test Checklist
 
-- operation happy-path behavior
-- operation edge cases and invalid preconditions
-- iteration order with and without explicit key list
-- iteration snapshot behavior under map mutation (`ClearDataObjects()` during callback)
-- callback-empty rejection behavior
+Add or update tests for:
 
-Common files:
+- happy-path behavior
+- invalid preconditions or type mismatches
+- iteration order for default traversal
+- iteration order for explicit key lists
+- snapshot behavior under map mutation
+- empty-callback rejection
+- new loader helper failure context when you add a loader wrapper
 
-- `tests/data/io/DataObjectDispatchIterationArchitecture_test.cpp`
-- `tests/data/io/DataObjectManager_test.cpp` (when manager-level load/save or key handling is affected)
-- command-specific suites under `tests/core/command/`
+Common suites:
 
-## 8. Documentation checklist
+- `tests/data/DataObjectRuntime_test.cpp`
+- related command suites under `tests/core/`
 
-When extension changes developer-facing contracts, update:
+## 8. Documentation Checklist
 
-- `docs/developer/architecture/dataobject-typed-dispatch-architecture.md`
+When contracts change, update:
+
+- `docs/developer/architecture/dataobject-io-architecture.md`
 - this guide
-- command docs when command behavior or flags changed
+- command docs if command behavior or options changed

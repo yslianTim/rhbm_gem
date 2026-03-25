@@ -1,31 +1,27 @@
-# DataObject I/O Architecture
+# DataObject I/O and Iteration Architecture
 
-This document is the developer manual for file and SQLite I/O of top-level `DataObject` instances.
+This document describes the current runtime contract for:
 
-Use this document to:
+- file I/O
+- SQLite persistence
+- typed object dispatch
+- `DataObjectManager` storage and iteration
+- shared command helpers built on top of these boundaries
 
-- trace file import/export behavior from `DataObjectManager`
-- understand SQLite save/load behavior and schema expectations
-- extend supported file formats
-- add a new persistent top-level `DataObject`
-
-This document describes current behavior only.
-
-Related guides:
+Related references:
 
 - [`../development-guidelines.md`](../development-guidelines.md)
 - [`./command-architecture.md`](./command-architecture.md)
-- [`./dataobject-typed-dispatch-architecture.md`](./dataobject-typed-dispatch-architecture.md)
 - [`../adding-dataobject-operations-and-iteration.md`](../adding-dataobject-operations-and-iteration.md)
 
 ## 1. Scope
 
-Top-level I/O roots in this project:
+Top-level file-backed and SQLite-persisted `DataObject` roots are fixed to:
 
 - `ModelObject`
 - `MapObject`
 
-`AtomObject` and `BondObject` are internal to `ModelObject` and are not standalone file/database roots.
+`AtomObject` and `BondObject` are model-domain objects. They are not top-level file or database roots.
 
 ## 2. Supported Surface
 
@@ -34,345 +30,245 @@ Top-level I/O roots in this project:
 | `ModelObject` | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` | yes |
 | `MapObject` | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` | yes |
 
-Notes:
+Rules enforced by `src/data/io/file/FileIO.cpp`:
 
-- Extension matching is case-insensitive (`FilePathHelper::GetExtension` + lowercasing).
-- `.mmcif` and `.mcif` are read-only aliases to the CIF backend.
+- extension lookup is case-insensitive
+- `.mmcif` and `.mcif` use the CIF reader and are read-only
+- `.mrc` uses the MRC backend
+- `.map` and `.ccp4` use the CCP4 backend
+- typed file entry points fail when the extension resolves to the wrong top-level kind
 
 ## 3. Runtime Topology
 
 ```mermaid
 flowchart LR
-    A["Commands / tests"] --> B["DataObjectManager"]
+    A["Commands / tests / GUI / bindings"] --> B["DataObjectManager"]
 
     subgraph F["File I/O"]
-        B --> C["FilePathHelper::GetExtension"]
-        C --> D["FileProcessFactoryResolver"]
-        D --> E["ModelObjectFactory"]
-        D --> F2["MapObjectFactory"]
-        E --> G["ModelFileReader / ModelFileWriter"]
-        F2 --> H["MapFileReader / MapFileWriter"]
-        G --> I["FileFormatRegistry + backend factory"]
-        H --> I
-        I --> J["Pdb/Cif/Mrc/CCP4 backend"]
+      B --> C["ReadDataObject / WriteDataObject"]
+      C --> D["descriptor lookup by extension"]
+      D --> E["PDB / CIF / MRC / CCP4 backends"]
     end
 
     subgraph P["SQLite persistence"]
-        B --> L["DatabaseManager"]
-        L --> M["DatabaseSchemaManager"]
-        M --> M2["ManagedStoreRegistry"]
-        L --> N["object_catalog + DataObjectDAOFactoryRegistry"]
-        N --> O["ModelObjectDAO (v2 impl)"]
-        N --> P2["MapObjectDAO"]
-        M --> Q["LegacyModelObjectReader (optional migration path)"]
-        O --> R["SQLiteWrapper"]
-        P2 --> R
-        Q --> R
+      B --> H["SQLitePersistence"]
+      H --> I["schema bootstrap / validation"]
+      H --> J["object_catalog routing"]
+      J --> K["ModelObjectStorage"]
+      J --> L["inline MapObject save/load"]
+    end
+
+    subgraph T["Typed helpers"]
+      B --> M["ForEachDataObject(...)"]
+      N["DataObjectDispatch"] --> N1["As* / Expect* helpers"]
+      N --> N2["GetCatalogTypeName"]
+      O["CommandDataSupport"] --> O1["command_data_loader helpers"]
+      O --> O2["shared ModelObject / MapObject operations"]
     end
 ```
 
 ## 4. File I/O Contract
 
-### 4.1 Entry points
+Public API:
 
-- `DataObjectManager::ProcessFile(filename, key_tag)`
-- `DataObjectManager::ProduceFile(filename, key_tag)`
+- `ReadDataObject(path)`
+- `WriteDataObject(path, obj)`
+- `ReadModel(path)` / `WriteModel(path, model, model_parameter=0)`
+- `ReadMap(path)` / `WriteMap(path, map)`
 
 Behavior:
 
-- `ProcessFile(...)` creates a `DataObject`, sets its key tag, and inserts/replaces it in memory.
-- `ProduceFile(...)` writes an existing in-memory object selected by key tag.
-- Reusing a key tag replaces the previous in-memory object (`insert_or_assign`).
+- `FileIO.cpp` owns the fixed descriptor table for supported extensions.
+- `WriteDataObject(...)` enforces type/backend agreement through:
+  - `ExpectModelObject(data_object, "WriteDataObject()")`
+  - `ExpectMapObject(data_object, "WriteDataObject()")`
+- all public entry points wrap failures in `std::runtime_error` with file path and operation context
 
-### 4.2 Dispatch and resolver
+`DataObjectManager` integration:
 
-- `FileFormatRegistry` is the source of truth for extension-kind-read/write/backend descriptors.
-- `DefaultFileProcessFactoryResolver` maps extension kind to `ModelObjectFactory` or `MapObjectFactory`.
-- `OverrideableFileProcessFactoryResolver` supports per-extension overrides and falls back to default resolution.
-- Override register/unregister/lookup paths are mutex-protected.
+- `ProcessFile(filename, key_tag)` reads the file, sets `key_tag`, calls `Display()`, and stores the object in memory
+- `ProduceFile(filename, key_tag)` logs a warning and returns when the key is missing; otherwise it writes the in-memory object to disk
+- replacing an existing in-memory key is allowed and logs a warning
 
-### 4.3 Model pipeline
+## 5. In-Memory Manager Contract
 
-Read path:
+`DataObjectManager` stores objects in:
 
-1. `ModelFileReader` checks descriptor support via `LookupForRead(...)`.
-2. Backend (`PdbFormat` or `CifFormat`) parses into `AtomicModelDataBlock`.
-3. `ModelObjectFactory` builds `ModelObject`.
+- `std::unordered_map<std::string, std::shared_ptr<DataObjectBase>>`
 
-Current assembly rules in `ModelObjectFactory`:
+Concurrency boundaries:
 
-- choose model number `1` when present, otherwise fallback to first available model
-- move atom list for the selected model only
-- move parsed bond list and keep bonds whose endpoints are both in the selected atom set
-- copy/move metadata and key systems:
-  - `pdb_id`, `emd_id`, `resolution`, `resolution_method`
-  - `chain_id_list_map`
-  - chemical component dictionary
-  - component/atom/bond key systems
+- `m_map_mutex` protects the in-memory object map
+- `m_db_mutex` protects manager-level persistence access
 
-Write path:
+Public lookup and lifecycle helpers:
 
-- `ModelFileWriter` checks write support via `LookupForWrite(...)`.
-- Output backends are `.pdb` and `.cif` only.
+- `ClearDataObjects()`
+- `HasDataObject(key_tag)`
+- `GetDataObject(key_tag)`
+- `GetTypedDataObject<T>(key_tag)`
 
-### 4.4 Map pipeline
+Behavior:
 
-Read/write path:
+- `GetDataObject(key_tag)` throws if the key is missing
+- `GetTypedDataObject<T>(key_tag)` throws if the key is missing or the runtime type does not match `T`
+- private `AddDataObject(...)` logs and replaces duplicate keys
+- private `AddDataObject(...)` logs an error and returns `false` for `nullptr`
 
-- `MapFileReader` / `MapFileWriter` dispatch through `FileFormatRegistry`.
-- Backends are `MrcFormat` and `CCP4Format`.
-
-`MapFileFormatBase` contract:
-
-```cpp
-virtual void Read(std::istream & stream, const std::string & source_name) = 0;
-virtual void Write(const MapObject & map_object, std::ostream & stream) = 0;
-virtual std::unique_ptr<float[]> GetDataArray() = 0;
-virtual std::array<int, 3> GetGridSize() = 0;
-virtual std::array<float, 3> GetGridSpacing() = 0;
-virtual std::array<float, 3> GetOrigin() = 0;
-```
-
-`MapObjectFactory` builds `MapObject` directly from those values.
-
-Ownership rule:
-
-- `MapFileReader::GetMapValueArray()` transfers ownership of the voxel array to the caller.
-
-### 4.5 Error behavior
-
-- Missing key in `ProduceFile(...)` logs a warning and returns.
-- Missing key in `SaveDataObject(...)` logs a warning and returns.
-- Parse/write/load failures throw exceptions.
-- `ProcessFile(...)` and `ProduceFile(...)` wrap failures with file path and key context.
-- `LoadDataObject(...)` propagates failures from `DatabaseManager`/DAO layers
-  (messages are produced by the persistence path and may include key context).
-
-## 5. SQLite Persistence Contract
-
-### 5.1 Entry points
+## 6. SQLite Persistence Contract
 
 Manager entry points:
 
+- `SetDatabaseManager(db_path)`
 - `SaveDataObject(key_tag, renamed_key_tag="")`
 - `LoadDataObject(key_tag)`
 
-Precondition:
+`SetDatabaseManager(...)` behavior:
 
-- call `SetDatabaseManager(...)` before save/load; otherwise operations throw.
+- creates an internal `SQLitePersistence` object
+- if the same database path is already active, logs a warning and keeps the existing instance
+- if the path is empty, `SQLitePersistence` falls back to `database.sqlite`
 
-Rename semantics:
+`SQLitePersistence` responsibilities:
 
-- `SaveDataObject(original, renamed)` changes only the persisted key.
-- in-memory key remains `original`.
+- create the database parent directory if needed
+- open SQLite
+- bootstrap or validate only the current normalized schema
+- own a transaction for each save/load operation
+- route by catalog type name stored in `object_catalog(key_tag, object_type)`
+- dispatch supported top-level types only:
+  - `model` -> `ModelObjectStorage`
+  - `map` -> inline map save/load helpers in `SQLitePersistence.cpp`
 
-### 5.2 `DatabaseManager` responsibilities
+Behavior differences to keep straight:
 
-`DatabaseManager`:
+- `DataObjectManager::SaveDataObject(...)`
+  - throws if the DB manager is not initialized
+  - logs a warning and returns if the in-memory key is missing
+  - `renamed_key_tag` changes only the persisted key, not the in-memory key
+- `SQLitePersistence::SaveDataObject(...)`
+  - throws if the input pointer is null
+  - throws if `GetCatalogTypeName(...)` cannot resolve a supported top-level type
+- `LoadDataObject(...)`
+  - throws if the DB manager is not initialized
+  - throws if the catalog row is missing
+  - loads the object and stores it in memory under the requested key
 
-- owns `SQLiteWrapper`
-- calls `DatabaseSchemaManager::EnsureSchema()` in constructor
-- defines the transaction boundary for each save/load
-- dispatches DAOs by `object_catalog.object_type`
-- caches DAO instances by `std::type_index`
+## 7. Schema Contract
 
-Save flow:
+Schema version source:
 
-1. begin transaction (`SQLiteWrapper::TransactionGuard`)
-2. upsert `(key_tag, object_type)` into `object_catalog`
-3. resolve DAO and call `dao->Save(...)`
-4. commit/rollback by RAII
+- `PRAGMA user_version`
 
-Load flow:
+Supported states:
 
-1. begin transaction
-2. read `object_type` from `object_catalog`
-3. resolve DAO and call `dao->Load(...)`
-4. commit/rollback by RAII
+- `2`
+  - validate the current normalized schema
+- `0`
+  - bootstrap only when the database is otherwise empty
+- any other state
+  - fail fast as unsupported
 
-DAO contract:
+Current schema invariants:
 
-- DAO implementations are transaction-free and rely on the outer `DatabaseManager` transaction.
+- `object_catalog(key_tag, object_type)` is the top-level catalog
+- `object_type` is required and limited to `model` or `map`
+- `model_object.key_tag` references `object_catalog(key_tag)` with `ON DELETE CASCADE`
+- `map_list.key_tag` references `object_catalog(key_tag)` with `ON DELETE CASCADE`
+- every model payload table references `model_object(key_tag)` with `ON DELETE CASCADE`
+- validation checks required tables, primary-key shape, foreign-key shape, and catalog/payload key consistency
+- unsupported shapes such as `object_metadata` fail validation instead of being migrated in place
 
-### 5.3 Catalog dispatch contract
+## 8. Typed Object Dispatch Contract
 
-`object_catalog` is the polymorphic root table:
+API:
 
-```sql
-CREATE TABLE IF NOT EXISTS object_catalog (
-    key_tag TEXT PRIMARY KEY,
-    object_type TEXT NOT NULL,
-    CHECK (object_type IN ('model', 'map'))
-);
-```
+- `AsModelObject(...)`, `AsMapObject(...)`
+- `ExpectModelObject(...)`, `ExpectMapObject(...)`
+- `GetCatalogTypeName(...)`
 
-`object_type` values are stable persisted names and must match DAO registration names.
+Behavior:
 
-### 5.4 Schema lifecycle policy
+- `As*` helpers return a typed pointer or `nullptr`
+- `Expect*` helpers return a typed reference or throw with caller context and resolved runtime type
+- `GetCatalogTypeName(...)` returns:
+  - `model` for `ModelObject`
+  - `map` for `MapObject`
+- `GetCatalogTypeName(...)` throws for non-top-level types such as `AtomObject` and `BondObject`
 
-Schema version source: `PRAGMA user_version`
+## 9. Manager Iteration Contract
 
-- `2`: validate normalized v2 schema only
-- `1`: migrate to normalized v2 when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`; otherwise reject
-- `0` + empty database: create normalized v2
-- `0` + recognized legacy v1 layout: migrate to normalized v2 when
-  `RHBM_GEM_LEGACY_V1_SUPPORT=ON`; otherwise reject
-- `0` + non-empty non-legacy layout: reject
-- any other version: reject
-
-Normalized v2 ownership model:
-
-- `object_catalog(key_tag, object_type)` is the root
-- `model_object.key_tag` and `map_list.key_tag` reference `object_catalog(key_tag)` with `ON DELETE CASCADE`
-- model child tables reference `model_object(key_tag)` with `ON DELETE CASCADE`
-
-Migration behavior (when triggered and legacy support is enabled) keeps only the final v2 layout:
-
-- migrate legacy model payload through `LegacyModelObjectReader` into `ModelObjectDAOSqlite`
-- migrate legacy map payload into final `map_list`
-- rebuild `object_catalog`
-- drop owned legacy tables and remove legacy `object_metadata` if present
-- set `user_version = 2` and validate final schema
-
-### 5.5 Managed store registry
-
-`ManagedStoreRegistry` defines descriptors for `model` and `map` stores:
-
-- `managed_table_names`
-- `ensure_schema_v2(...)`
-- `validate_schema_v2(...)`
-- `list_keys(...)`
-
-`DatabaseSchemaManager` uses these descriptors to centralize schema creation/validation and to verify catalog keys vs payload keys.
-
-### 5.6 DAO registration and stable names
-
-Built-in DAO registration is centralized in `RegisterBuiltInDataObjectDaos(...)`,
-which is invoked by `DataIoServices::BuildDefault()`:
-
-- `ModelObject` -> `ModelObjectDAO` registered as `"model"`
-- `MapObject` -> `MapObjectDAO` registered as `"map"`
-
-For extension/testing use cases, `DataObjectDAORegistrar` is available:
+`DataObjectManager::ForEachDataObject(...)` has mutable and const overloads plus:
 
 ```cpp
-DataObjectDAORegistrar<DataObjectType, DAOType>(registry, "stable_name")
+struct IterateOptions
+{
+    bool deterministic_order{ true };
+};
 ```
 
-`stable_name` is persisted in `object_catalog.object_type`.
+Behavior:
 
-### 5.7 Per-object persistence details
+- empty key list:
+  - `deterministic_order=true`: iterate keys in lexicographic order
+  - `deterministic_order=false`: iterate current `unordered_map` container order
+- non-empty key list:
+  - callback order follows the caller-provided key order
+  - missing keys are skipped with warning logs
+- empty callbacks throw `std::runtime_error`
+- traversal is snapshot-based:
+  - the manager copies matching `shared_ptr`s while holding `m_map_mutex`
+  - callbacks run after the mutex is released
 
-`ModelObject` (normalized v2 tables):
+## 10. Shared Command Helpers
 
-- root: `model_object`
-- chain map: `model_chain_map`
-- chemical components: `model_component`, `model_component_atom`, `model_component_bond`
-- structure: `model_atom`, `model_bond`
-- analysis: `model_atom_local_potential`, `model_bond_local_potential`,
-  `model_atom_posterior`, `model_bond_posterior`,
-  `model_atom_group_potential`, `model_bond_group_potential`
+Cross-command helpers live in:
 
-Save strategy:
+- `src/core/command/CommandDataSupport.hpp`
+- `src/core/command/CommandDataSupport.cpp`
 
-- clear key-scoped rows in model child tables, then write current structure/analysis payload
-- update root row via `model_object` upsert
+Loader helpers in `namespace command_data_loader`:
 
-Load behavior:
+- `ProcessModelFile(...)`
+- `ProcessMapFile(...)`
+- `OptionalProcessMapFile(...)`
+- `LoadModelObject(...)`
 
-- load structure first, then analysis
-- rebuild selected views/group mappings through `LoadAnalysis(...)` + `ModelObject::Update()`
+Shared typed operations:
 
-`MapObject`:
+- `NormalizeMapObject(...)`
+- `PrepareModelObject(...)`
+- `ApplyModelSelection(...)`
+- `CollectModelAtoms(...)`
+- `PrepareSimulationAtoms(...)`
+- `BuildModelAtomBondContext(...)`
 
-- stored in shared `map_list` with grid size/spacing/origin and voxel BLOB
-- DAO uses single-row upsert by key tag and reconstructs `MapObject` on load
+These helpers are internal command-layer utilities, not part of the public `include/` header surface.
 
-## 6. Iteration and Typed Dispatch Integration
-
-I/O paths hand off objects to command workflows through manager iteration and typed helpers.
-
-Current contracts:
-
-- `DataObjectManager::ForEachDataObject(...)` supports mutable and const callbacks
-- default traversal with empty key list is deterministic key order
-- explicit key list preserves caller order
-- iteration uses snapshot semantics, so map mutation (for example `ClearDataObjects()`) does not invalidate an active traversal
-- `DataObjectDispatch` provides runtime typed helpers: `AsModelObject`, `AsMapObject`, `ExpectModelObject`, `ExpectMapObject`, `GetCatalogTypeName`
-
-## 7. Extension Playbooks
-
-### 7.1 Add a new file format
-
-1. Implement backend (`ModelFileFormatBase` or `MapFileFormatBase`).
-2. Add descriptor entry in `FileFormatRegistry`.
-3. Extend `FileFormatBackendFactory` only when adding a new backend enum branch.
-4. Add read/write tests for the support matrix.
-5. Update this document.
-
-### 7.2 Add a new persistent top-level `DataObject`
-
-1. Add new `DataObjectBase` subtype.
-2. Implement `DataObjectDAOBase` subtype.
-3. Register DAO with stable name via `DataObjectDAORegistrar`.
-4. Add managed store descriptor (`ensure/validate/list_keys/managed tables`).
-5. Extend `object_catalog` constraints and schema validation for the new `object_type`.
-6. Keep DAO transaction-free.
-7. Add schema migration and round-trip tests.
-8. Update this document.
-
-## 8. Key Files
+## 11. Key Files
 
 Core orchestration:
 
 - `include/rhbm_gem/data/io/DataObjectManager.hpp`
 - `src/data/io/DataObjectManager.cpp`
-- `include/rhbm_gem/utils/domain/FilePathHelper.hpp`
-- `src/utils/domain/FilePathHelper.cpp`
+- `include/rhbm_gem/data/io/FileIO.hpp`
+- `src/data/io/file/FileIO.cpp`
 
-File dispatch and factories:
+SQLite persistence:
 
-- `src/data/internal/io/file/FileFormatRegistry.hpp`
-- `src/data/io/file/FileFormatRegistry.cpp`
-- `src/data/internal/io/file/FileProcessFactoryResolver.hpp`
-- `src/data/io/file/FileProcessFactoryResolver.cpp`
-- `src/data/internal/io/file/FileProcessFactoryBase.hpp`
-- `src/data/internal/io/file/FileFormatBackendFactory.hpp`
-- `src/data/io/file/FileFormatBackendFactory.cpp`
-- `src/data/io/file/ModelObjectFactory.cpp`
-- `src/data/io/file/MapObjectFactory.cpp`
+- `src/data/internal/sqlite/SQLitePersistence.hpp`
+- `src/data/io/sqlite/SQLitePersistence.cpp`
+- `src/data/internal/sqlite/ModelObjectStorage.hpp`
+- `src/data/io/sqlite/ModelObjectStorage.cpp`
 
-Model/map file I/O:
+Typed dispatch and shared helpers:
 
-- `include/rhbm_gem/data/io/ModelFileReader.hpp`, `src/data/io/file/ModelFileReader.cpp`
-- `include/rhbm_gem/data/io/ModelFileWriter.hpp`, `src/data/io/file/ModelFileWriter.cpp`
-- `include/rhbm_gem/data/io/MapFileReader.hpp`, `src/data/io/file/MapFileReader.cpp`
-- `include/rhbm_gem/data/io/MapFileWriter.hpp`, `src/data/io/file/MapFileWriter.cpp`
-- `src/data/internal/io/file/PdbFormat.hpp`, `src/data/io/file/PdbFormat.cpp`
-- `src/data/internal/io/file/CifFormat.hpp`, `src/data/io/file/CifFormat.cpp`
-- `src/data/internal/io/file/MrcFormat.hpp`, `src/data/io/file/MrcFormat.cpp`
-- `src/data/internal/io/file/CCP4Format.hpp`, `src/data/io/file/CCP4Format.cpp`
+- `include/rhbm_gem/data/object/DataObjectDispatch.hpp`
+- `src/data/object/DataObjectDispatch.cpp`
+- `src/core/command/CommandDataSupport.hpp`
+- `src/core/command/CommandDataSupport.cpp`
 
-Database/schema/DAO:
+Reference tests:
 
-- `src/data/internal/io/sqlite/DatabaseManager.hpp`, `src/data/io/sqlite/DatabaseManager.cpp`
-- `src/data/internal/migration/DatabaseSchemaManager.hpp`, `src/data/schema/DatabaseSchemaManager.cpp`
-- `src/data/internal/io/sqlite/DataObjectDAOFactoryRegistry.hpp`, `src/data/io/sqlite/DataObjectDAOFactoryRegistry.cpp`
-- `src/data/io/sqlite/BuiltInDataObjectDaos.cpp`
-- `src/data/internal/io/sqlite/ManagedStoreRegistry.hpp`, `src/data/io/sqlite/ManagedStoreRegistry.cpp`
-- `src/data/internal/io/sqlite/ModelObjectDAO.hpp` (thin alias over `ModelObjectDAOSqlite`)
-- `src/data/internal/io/sqlite/ModelObjectDAOSqlite.hpp`, `src/data/io/sqlite/ModelObjectDAOSqlite.cpp` (class `ModelObjectDAOSqlite`)
-- `src/data/internal/io/sqlite/MapObjectDAO.hpp`, `src/data/io/sqlite/MapObjectDAO.cpp`
-- `src/data/io/sqlite/ModelSchemaSql.hpp`
-- `src/data/io/sqlite/ModelStructurePersistence.hpp`, `src/data/io/sqlite/ModelStructurePersistence.cpp`
-- `src/data/io/sqlite/ModelAnalysisPersistence.hpp`, `src/data/io/sqlite/ModelAnalysisPersistence.cpp`
-- `src/data/internal/migration/LegacyModelObjectReader.hpp`, `src/data/migration/legacy_v1/LegacyModelObjectReader.cpp` (when `RHBM_GEM_LEGACY_V1_SUPPORT=ON`)
-- `src/data/internal/io/sqlite/SQLiteWrapper.hpp`
-
-## 9. Common Pitfalls
-
-- `ProcessFile(...)` and `LoadDataObject(...)` replace in-memory object on key collision.
-- `ClearDataObjects()` clears memory only; it does not delete DB rows.
-- `ProduceFile(...)` chooses writer by output filename extension.
-- Schema bootstrap/validation runs in `DatabaseManager` construction, not on every save/load.
-- `SQLiteWrapper` keeps one active prepared statement per connection.
+- `tests/data/DataObjectRuntime_test.cpp`
+- `tests/data/DataObjectSchema_test.cpp`

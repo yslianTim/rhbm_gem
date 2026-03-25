@@ -6,13 +6,10 @@ namespace rhbm_gem {
 
 enum class CommandId
 {
-    PotentialAnalysis = 0,
-    PotentialDisplay,
-    ResultDump,
-    MapSimulation,
-    MapVisualization,
-    PositionEstimation,
-    ModelTest
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
+    COMMAND_ID,
+#include <rhbm_gem/core/command/CommandList.def>
+#undef RHBM_GEM_COMMAND
 };
 
 enum class CommonOption : std::uint8_t
@@ -70,13 +67,6 @@ constexpr CommonOptionMask CommonOptionMaskForProfile(CommonOptionProfile profil
     default:
         return CommonOption::Threading | CommonOption::Verbose | CommonOption::OutputFolder;
     }
-}
-
-constexpr CommonOptionProfile InferCommonOptionProfile(CommonOptionMask mask)
-{
-    return HasCommonOption(mask, CommonOption::Database)
-        ? CommonOptionProfile::DatabaseWorkflow
-        : CommonOptionProfile::FileWorkflow;
 }
 
 } // namespace rhbm_gem

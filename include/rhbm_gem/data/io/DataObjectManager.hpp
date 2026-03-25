@@ -9,19 +9,17 @@
 #include <mutex>
 #include <functional>
 
-#include <rhbm_gem/data/io/DataIoServices.hpp>
-
 namespace rhbm_gem {
 
 class DataObjectBase;
+class SQLitePersistence;
 
 class DataObjectManager
 {
-    struct Impl;
-    std::unique_ptr<Impl> m_impl;
+    std::unique_ptr<SQLitePersistence> m_db_manager;
     std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> m_data_object_map;
     mutable std::mutex m_map_mutex; // protects m_data_object_map
-    mutable std::mutex m_db_mutex;  // protects m_impl database state
+    mutable std::mutex m_db_mutex;  // protects m_db_manager database state
 
 public:
     struct IterateOptions
@@ -29,7 +27,7 @@ public:
         bool deterministic_order{ true };
     };
 
-    explicit DataObjectManager(const DataIoServices & data_io_services);
+    DataObjectManager();
     ~DataObjectManager();
     DataObjectManager(const DataObjectManager &) = delete;
     DataObjectManager & operator=(const DataObjectManager &) = delete;

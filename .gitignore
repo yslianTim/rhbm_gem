@@ -1,7 +1,8 @@
 # Build outputs and compiler artifacts
 build/
 build*/
-.build/
+Testing/
+local/
 Debug/
 Release/
 coverage/
@@ -53,7 +54,7 @@ data/local/
 output/
 
 # Local one-off scripts
-scripts/local/
+scripts/user/local/
 
 # Local database files stored at repository root (legacy)
 /*.sqlite

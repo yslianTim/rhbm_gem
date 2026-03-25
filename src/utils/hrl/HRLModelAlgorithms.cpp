@@ -7,9 +7,7 @@
 #include <stdexcept>
 #include <string>
 
-#ifdef HAVE_BOOST
 #include <boost/math/distributions/chi_squared.hpp>
-#endif
 
 namespace
 {
@@ -104,31 +102,8 @@ void ValidateDiagonalSize(
 
 double CalculateChiSquareQuantile(int df)
 {
-#ifdef HAVE_BOOST
     const boost::math::chi_squared_distribution<double> distribution(static_cast<double>(df));
     return boost::math::quantile(distribution, 0.99);
-#else
-    switch (df)
-    {
-        case 1: return 6.63;
-        case 2: return 9.21;
-        case 3: return 11.34;
-        case 4: return 13.28;
-        case 5: return 15.09;
-        case 6: return 16.81;
-        case 7: return 18.48;
-        case 8: return 20.09;
-        case 9: return 21.67;
-        case 10: return 23.21;
-        default:
-        {
-            const double z{ 2.3263478740408408 };
-            const double d{ static_cast<double>(df) };
-            const double term{ 1.0 - 2.0 / (9.0 * d) + z * std::sqrt(2.0 / (9.0 * d)) };
-            return d * term * term * term;
-        }
-    }
-#endif
 }
 } // namespace
 

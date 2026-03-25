@@ -1,0 +1,113 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - "codex/**"
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  pr-fast:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-format clang-tidy
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DRHBM_GEM_DEP_PROVIDER=FETCH \
+            -DBUILD_PYTHON_BINDINGS=OFF \
+            -DRHBM_GEM_ROOT_MODE=OFF \
+            -DRHBM_GEM_OPENMP_MODE=OFF
+
+      - name: Build
+        run: cmake --build build --target tests_all lint_repo -j2
+
+      - name: Run tests (core/data/integration)
+        run: ctest --test-dir build --output-on-failure -L "domain:(core|data|integration)"
+
+      - name: clang-format check (painter + parser dirs)
+        run: bash resources/tools/developer/run_clang_format_check.sh
+
+      - name: clang-tidy check (painter + parser dirs)
+        run: >
+          bash resources/tools/developer/run_clang_tidy_check.sh
+          build
+          --baseline resources/tools/developer/clang_tidy_baseline.json
+
+  nightly-full:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: base
+            openmp: OFF
+            root: OFF
+            legacy: ON
+          - name: openmp-on
+            openmp: ON
+            root: OFF
+            legacy: ON
+          - name: legacy-off
+            openmp: OFF
+            root: OFF
+            legacy: OFF
+          - name: root-auto
+            openmp: OFF
+            root: AUTO
+            legacy: ON
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-tidy
+
+      - name: Configure (${{ matrix.name }})
+        run: |
+          cmake -S . -B build-${{ matrix.name }} \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DRHBM_GEM_DEP_PROVIDER=FETCH \
+            -DBUILD_PYTHON_BINDINGS=OFF \
+            -DRHBM_GEM_OPENMP_MODE=${{ matrix.openmp }} \
+            -DRHBM_GEM_ROOT_MODE=${{ matrix.root }} \
+            -DRHBM_GEM_LEGACY_V1_SUPPORT=${{ matrix.legacy }}
+
+      - name: Build (${{ matrix.name }})
+        id: build_step
+        run: cmake --build build-${{ matrix.name }} --target tests_all lint_repo -j2
+
+      - name: clang-tidy baseline check (${{ matrix.name }})
+        run: >
+          bash resources/tools/developer/run_clang_tidy_check.sh
+          build-${{ matrix.name }}
+          --baseline resources/tools/developer/clang_tidy_baseline.json
+
+      - name: Run full tests (${{ matrix.name }})
+        run: bash resources/tools/developer/run_ctest_with_classification.sh build-${{ matrix.name }} -j2
+
+      - name: Failure classification (build)
+        if: failure() && steps.build_step.outcome == 'failure'
+        run: |
+          echo "Failure category: build"
+          exit 1

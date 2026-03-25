@@ -3,16 +3,16 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include <rhbm_gem/core/painter/PotentialPlotBuilder.hpp>
+#include "internal/PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "internal/PainterIngestionInternal.hpp"
+#include "internal/PainterTypeCheck.hpp"
+#include "internal/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -36,7 +36,7 @@
 namespace rhbm_gem {
 
 ComparisonPainter::ComparisonPainter() :
-    m_folder_path{ "./" }, m_atom_classifier{ std::make_unique<AtomClassifier>() }
+    m_atom_classifier{ std::make_unique<AtomClassifier>() }
 {
 
 }
@@ -46,42 +46,26 @@ ComparisonPainter::~ComparisonPainter()
 
 }
 
-void ComparisonPainter::SetFolder(const std::string & folder_path)
-{
-    m_folder_path = FilePathHelper::EnsureTrailingSlash(folder_path);
-}
-
 void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
 {
-    painter_internal::AddDataObject<ModelObject>(
-        data_object,
-        m_ingest_mode,
-        IngestMode::Data,
-        IngestMode::Reference,
-        m_ingest_label,
-        "ComparisonPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+    auto & typed_data_object{
+        painter_internal::RequirePainterObject<ModelObject>(
+            data_object, "ComparisonPainter", "AddDataObject") };
+    AppendModelObject(typed_data_object);
 }
 
 void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
 {
-    painter_internal::AddReferenceDataObject<ModelObject>(
+    painter_internal::AppendPainterReferenceObject<ModelObject>(
         data_object,
         label,
-        m_ingest_mode,
-        IngestMode::Reference,
-        m_ingest_label,
         "ComparisonPainter",
-        [this](ModelObject & typed_data_object) { IngestModelObject(typed_data_object); });
+        "AddReferenceDataObject",
+        m_ref_model_object_list_map);
 }
 
-void ComparisonPainter::IngestModelObject(ModelObject & data_object)
+void ComparisonPainter::AppendModelObject(ModelObject & data_object)
 {
-    if (m_ingest_mode == IngestMode::Reference)
-    {
-        m_ref_model_object_list_map[m_ingest_label].emplace_back(&data_object);
-        return;
-    }
     m_model_object_list.emplace_back(&data_object);
     m_resolution_list.emplace_back(data_object.GetResolution());
 }
@@ -121,9 +105,8 @@ void ComparisonPainter::PaintGroupGausEstimateComparison(const std::string & nam
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
     auto sim_amber95_model_object_list{ m_ref_model_object_list_map.at("amber95")};
 
-    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
-
     #ifdef HAVE_ROOT
+    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
     const int extra_pad_size{ 5 };
@@ -454,9 +437,8 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
     auto sim_no_charge_model_object_list{ m_ref_model_object_list_map.at("no_charge")};
     auto sim_amber95_model_object_list{ m_ref_model_object_list_map.at("amber95")};
 
-    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
-
     #ifdef HAVE_ROOT
+    const char * data_index[10]{"A","B","C","D","E","F","G","H","I","J"};
     gStyle->SetLineScalePS(1.5);
     gStyle->SetGridColor(kGray);
     const int col_size{ 5 };
@@ -642,6 +624,8 @@ void ComparisonPainter::PainMapValueComparison(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ComparisonPainter::PainMapValueComparison");
+    (void)model_object;
+    (void)ref_model_object_list;
 
     #ifdef HAVE_ROOT
     gStyle->SetLineScalePS(1.5);
@@ -669,7 +653,8 @@ void ComparisonPainter::PainMapValueComparison(
         {
             auto group_key{ m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(i) };
             auto graph{ ROOTHelper::CreateGraphErrors() };
-            BuildMapValueScatterGraph(group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
+            painter_internal::BuildMapValueScatterGraph(
+                group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
             r_square[i] = ROOTHelper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
             auto function{ ROOTHelper::CreateFunction1D(Form("fit_%d", static_cast<int>(i)), "x*[1]+[0]") };
             function->SetParameters(intercept[i], slope[i]);
@@ -874,38 +859,6 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     }
 }
 
-void ComparisonPainter::BuildMapValueScatterGraph(
-    GroupKey group_key, TGraphErrors * graph, ModelObject * model1, ModelObject * model2,
-    int bin_size, double x_min, double x_max)
-{
-    auto entry1_iter{ std::make_unique<PotentialEntryQuery>(model1) };
-    auto plot_builder1{ std::make_unique<PotentialPlotBuilder>(model1) };
-    auto entry2_iter{ std::make_unique<PotentialEntryQuery>(model2) };
-    auto plot_builder2{ std::make_unique<PotentialPlotBuilder>(model2) };
-    if (entry1_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
-    if (entry2_iter->IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) == false) return;
-    auto model1_atom_map{ entry1_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
-    auto model2_atom_map{ entry2_iter->GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
-    auto count{ 0 };
-    for (auto & [atom_id, atom_object1] : model1_atom_map)
-    {
-        if (model2_atom_map.find(atom_id) == model2_atom_map.end()) continue;
-        auto atom_object2{ model2_atom_map.at(atom_id) };
-        auto atom1_iter{ std::make_unique<PotentialEntryQuery>(atom_object1) };
-        auto atom_plot_builder1{ std::make_unique<PotentialPlotBuilder>(atom_object1) };
-        auto atom2_iter{ std::make_unique<PotentialEntryQuery>(atom_object2) };
-        auto atom_plot_builder2{ std::make_unique<PotentialPlotBuilder>(atom_object2) };
-        auto data1_array{ atom1_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
-        auto data2_array{ atom2_iter->GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
-        for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
-        {
-            auto x_value{ std::get<1>(data1_array.at(i)) };
-            auto y_value{ std::get<1>(data2_array.at(i)) };
-            graph->SetPoint(count, x_value, y_value);
-            count++;
-        }
-    }
-}
 #endif
 
 } // namespace rhbm_gem

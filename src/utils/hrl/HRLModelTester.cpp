@@ -169,22 +169,7 @@ bool HRLModelTester::RunBetaMDPDETest(
 
     const size_t subset_size_alpha_r{ 5 };
     std::vector<double> train_alpha_r_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5 };
-    auto train_data_entry_list{
-        BuildRandomLinearDataEntry(
-            static_cast<size_t>(sampling_entry_size), gaus_true, data_error_sigma, outlier_ratio
-        )
-    };
-    auto error_array{
-        HRLAlphaTrainer::EvaluateAlphaR(
-            train_data_entry_list,
-            subset_size_alpha_r,
-            train_alpha_r_list
-        )
-    };
-    int error_min_id;
-    error_array.minCoeff(&error_min_id);
-    auto alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(error_min_id)) };
-    local_alpha_r_list.emplace_back(alpha_r_train);
+    local_alpha_r_list.emplace_back(0.0);
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -196,6 +181,19 @@ bool HRLModelTester::RunBetaMDPDETest(
                 static_cast<size_t>(sampling_entry_size), gaus_true, data_error_sigma, outlier_ratio
             )
         };
+
+        auto error_array{
+            HRLAlphaTrainer::EvaluateAlphaR(
+                data_entry_list,
+                subset_size_alpha_r,
+                train_alpha_r_list
+            )
+        };
+        int error_min_id;
+        error_array.minCoeff(&error_min_id);
+        auto alpha_r_train{ train_alpha_r_list.at(static_cast<size_t>(error_min_id)) };
+        local_alpha_r_list.back() = alpha_r_train; // update training alpha_r for each replica
+
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         HRLExecutionOptions options;
         options.quiet_mode = true;
@@ -272,35 +270,7 @@ bool HRLModelTester::RunMuMDPDETest(
 
     const size_t subset_size_alpha_g{ 10 };
     std::vector<double> train_alpha_g_list{ 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 };
-    std::vector<double> alpha_g_train_list;
-    alpha_g_train_list.reserve(2);
-    for (size_t k = 0; k < 2; k++)
-    {
-        auto train_random_gaus_array{
-            BuildRandomGausParameters(
-                member_size, gaus_prior, gaus_sigma,
-                outlier_prior, outlier_sigma, outlier_ratio
-            )
-        };
-        auto train_beta_matrix{ BuildBetaMatrix(train_random_gaus_array) };
-        std::vector<Eigen::VectorXd> train_data_entry_list;
-        for (int m = 0; m < train_beta_matrix.cols(); m++) train_data_entry_list.emplace_back(train_beta_matrix.col(m));
-
-        auto error_array{
-            HRLAlphaTrainer::EvaluateAlphaG(
-                train_data_entry_list,
-                subset_size_alpha_g,
-                train_alpha_g_list
-            )
-        };
-        int error_min_id;
-        error_array.minCoeff(&error_min_id);
-        alpha_g_train_list.emplace_back(train_alpha_g_list.at(static_cast<size_t>(error_min_id)));
-    }
-    // Find median value of alpha_g_train_list
-    std::sort(alpha_g_train_list.begin(), alpha_g_train_list.end());
-    auto alpha_g_train{ alpha_g_train_list.at(alpha_g_train_list.size() / 2) };
-    local_alpha_g_list.emplace_back(alpha_g_train);
+    local_alpha_g_list.emplace_back(0.0);
 
 #ifdef USE_OPENMP
     #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
@@ -314,7 +284,22 @@ bool HRLModelTester::RunMuMDPDETest(
                 outlier_prior, outlier_sigma, outlier_ratio
             )
         };
+
         auto beta_matrix{ BuildBetaMatrix(random_gaus_array) };
+        std::vector<Eigen::VectorXd> train_data_entry_list;
+        for (int m = 0; m < beta_matrix.cols(); m++) train_data_entry_list.emplace_back(beta_matrix.col(m));
+
+        auto error_array{
+            HRLAlphaTrainer::EvaluateAlphaG(
+                train_data_entry_list,
+                subset_size_alpha_g,
+                train_alpha_g_list
+            )
+        };
+        int error_min_id;
+        error_array.minCoeff(&error_min_id);
+        local_alpha_g_list.back() = train_alpha_g_list.at(static_cast<size_t>(error_min_id));
+        
         HRLExecutionOptions options;
         options.quiet_mode = true;
         options.thread_size = thread_size;

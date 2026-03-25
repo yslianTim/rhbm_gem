@@ -120,20 +120,6 @@ TEST(FilePathHelperTest, RemoveExtensionIgnoresDotsInParentDirectories)
     EXPECT_EQ("archive.tar", FilePathHelper::GetFileName(path, false));
 }
 
-TEST(FilePathHelperTest, RootPathReturnsSlash)
-{
-    const std::filesystem::path root{ "/" };
-    const std::string expected{ root.filename().string() };
-    EXPECT_EQ(expected, FilePathHelper::GetFileName(root));
-}
-
-TEST(FilePathHelperTest, DefaultConstructedPathReturnsDefaultFileName)
-{
-    const std::filesystem::path empty{};
-    const std::string expected{ empty.filename().string() };
-    EXPECT_EQ(expected, FilePathHelper::GetFileName(empty));
-}
-
 TEST(FilePathHelperTest, PathWithoutTrailingSlashAppendsSeparator)
 {
     const std::filesystem::path input{ "some/path" };

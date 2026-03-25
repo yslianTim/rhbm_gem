@@ -19,7 +19,6 @@ RHBM-GEM uses CMake + C++17. Choose your platform first, then install any option
 | A standard C++ build | A compiler toolchain, CMake, and the platform prerequisites for your OS |
 | Python interface or Python examples | Python 3; on Linux also install `python3-dev` |
 | Plots or figure output | ROOT on the platform where you will build |
-| Boost-backed features | Boost, or leave `RHBM_GEM_BOOST_MODE=AUTO` / set `RHBM_GEM_BOOST_MODE=OFF` |
 
 A few dependencies are optional:
 
@@ -29,7 +28,6 @@ A few dependencies are optional:
 - Use `RHBM_GEM_DEP_PROVIDER=SYSTEM` to require system packages.
 - Use `RHBM_GEM_DEP_PROVIDER=FETCH` to use pinned `FetchContent` sources (network access required during configure).
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
-- `Boost` is optional and has no bundled fallback. In `AUTO` mode, CMake enables Boost-backed features only when Boost is found.
 - Runtime database default path is `${HOME}/.rhbmgem/data/database.sqlite`. Set `RHBM_GEM_DATA_DIR` to change the default root.
 
 For the full dependency policy and override flags such as `RHBM_GEM_DEP_PROVIDER`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
@@ -83,7 +81,6 @@ root-config --prefix
 Notes:
 
 - Install `root` only if you need plotting or figure output.
-- Install `boost` only if you need Boost-backed features.
 
 ### Linux (Ubuntu/Debian example)
 
@@ -179,6 +176,7 @@ Notes:
 Finish **Environment Setup** first, then choose one installation workflow and follow only that workflow.
 
 The commands below intentionally use `RHBM_GEM_DEP_PROVIDER=FETCH`, `BUILD_TESTING=OFF`, and `BUILD_PYTHON_BINDINGS=OFF` for a predictable first install. This avoids requiring system `Eigen3`/`SQLite3`/`CLI11`/`GTest` packages during onboarding.
+Runtime executables from any build directory are placed under `<build-dir>/bin/`.
 
 ### macOS and Linux: user-local install
 
@@ -199,7 +197,7 @@ cmake --build build-local -j
 2. Verify the executable from the build tree:
 
 ```bash
-./build-local/RHBM-GEM --help
+./build-local/bin/RHBM-GEM --help
 ```
 
 3. Install to your user-local prefix:
@@ -232,7 +230,7 @@ cmake --build build -j
 2. Verify the executable from the build tree:
 
 ```bash
-./build/RHBM-GEM --help
+./build/bin/RHBM-GEM --help
 ```
 
 3. Install to the default prefix:
@@ -286,6 +284,43 @@ Notes:
 - If you installed ROOT, remove `-DRHBM_GEM_ROOT_MODE=OFF` or replace it with `-DRHBM_GEM_ROOT_MODE=AUTO`.
 - This workflow intentionally uses `-DRHBM_GEM_DEP_PROVIDER=FETCH`, `-DBUILD_TESTING=OFF`, `-DBUILD_PYTHON_BINDINGS=OFF`, and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
 
+## CLI Quickstart (macOS and Linux)
+
+Use [`../../resources/examples/cli/00_quickstart.sh`](../../resources/examples/cli/00_quickstart.sh) when you want a Bash example that downloads one model/map pair and runs the CLI end to end.
+
+This script is supported on macOS and Linux only. Windows users should keep using the manual `RHBM-GEM.exe` commands from the **Installation** section above.
+
+The script resolves the executable in this order:
+
+1. `--executable /path/to/RHBM-GEM`
+2. `RHBM_GEM_EXECUTABLE`
+3. `RHBM-GEM` on `PATH`
+4. Installed prefix inferred from the script location
+5. Common source-tree build directories such as `build-local/bin/` and `build/bin/`
+
+If you built from the source tree, run the quickstart from the repository root after `cmake --build`:
+
+```bash
+bash resources/examples/cli/00_quickstart.sh --workdir /tmp/rhbm_cli_demo
+```
+
+If you installed to `~/.local`, you can run the installed copy directly:
+
+```bash
+bash "$HOME/.local/share/RHBM_GEM/resources/examples/cli/00_quickstart.sh" \
+  --workdir /tmp/rhbm_cli_demo_installed
+```
+
+If `~/.local/bin` is not on `PATH`, pass the executable explicitly:
+
+```bash
+bash "$HOME/.local/share/RHBM_GEM/resources/examples/cli/00_quickstart.sh" \
+  --workdir /tmp/rhbm_cli_demo_installed \
+  --executable "$HOME/.local/bin/RHBM-GEM"
+```
+
+For offline reruns with pre-staged input files under `<workdir>/data`, add `--skip-download`.
+
 ## Python Bindings
 
 The Python module is named `rhbm_gem_module`.
@@ -311,19 +346,20 @@ cmake --build build-py -j
 cmake --install build-py
 ```
 
-2. Find the installed `site-packages` directory and verify the import:
+2. Find the installed `site-packages` directory, export `PYTHONPATH` for the current shell, and verify the import:
 
 ```bash
 PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 PY_SITE_LIB="${INSTALL_PREFIX}/lib/python${PYVER}/site-packages"
 PY_SITE_LIB64="${INSTALL_PREFIX}/lib64/python${PYVER}/site-packages"
 PY_SITE_PATHS="${PY_SITE_LIB}:${PY_SITE_LIB64}"
+export PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}"
 
-PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
 python3 -c "import rhbm_gem_module as rgm; print(rgm.__file__)"
 ```
 
 Note: If you installed the project to a different prefix, update `INSTALL_PREFIX` before computing `PY_SITE_PATHS`.
+Keep this shell session open for **Python Examples**. If you start a new shell later, rerun the `export PYTHONPATH=...` command first.
 
 For custom Python layouts such as `RHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR` or an explicit `RHBM_GEM_PYTHON_INSTALL_DIR`, see [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters) and [`../developer/build-and-configuration.md#validation-examples`](../developer/build-and-configuration.md#validation-examples).
 
@@ -370,72 +406,71 @@ Once the import check succeeds, continue with the example workflow for your plat
 
 ### macOS and Linux
 
-These commands assume `INSTALL_PREFIX` and `PY_SITE_PATHS` are still set from **Python Bindings**.
+These commands assume `INSTALL_PREFIX`, `PY_SITE_PATHS`, and `PYTHONPATH` are still set in the same shell from **Python Bindings**.
 
 1. Run the quickstart example from the source tree:
 
 ```bash
-PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
-python3 examples/python/00_quickstart.py
+python3 resources/examples/python/00_quickstart.py
 ```
 
 2. Run the end-to-end pipeline example from the source tree:
 
 ```bash
-PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
-python3 examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
+python3 resources/examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
 ```
 
 3. Run the installed copy of the pipeline example:
 
 ```bash
-PYTHONPATH="${PY_SITE_PATHS}${PYTHONPATH:+:${PYTHONPATH}}" \
-python3 "${INSTALL_PREFIX}/share/RHBM_GEM/examples/python/01_end_to_end_from_test_data.py" \
+python3 "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/python/01_end_to_end_from_test_data.py" \
   --workdir /tmp/rhbm_py_demo_installed
 ```
 
 ### Windows (PowerShell)
 
-These commands assume `$InstallPrefix` and `$PySite` are still set from **Python Bindings**.
+These commands assume `$InstallPrefix`, `$PySite`, and `$env:PYTHONPATH` are still set in the same PowerShell session from **Python Bindings**.
 
 1. Run the quickstart example from the source tree:
 
 ```powershell
-python .\examples\python\00_quickstart.py
+python .\resources\examples\python\00_quickstart.py
 ```
 
 2. Run the end-to-end pipeline example from the source tree:
 
 ```powershell
-python .\examples\python\01_end_to_end_from_test_data.py --workdir "$env:TEMP\rhbm_py_demo"
+python .\resources\examples\python\01_end_to_end_from_test_data.py --workdir "$env:TEMP\rhbm_py_demo"
 ```
 
 3. Run the installed copy of the pipeline example:
 
 ```powershell
-python "$InstallPrefix\share\RHBM_GEM\examples\python\01_end_to_end_from_test_data.py" `
+python "$InstallPrefix\share\RHBM_GEM\resources\examples\python\01_end_to_end_from_test_data.py" `
   --workdir "$env:TEMP\rhbm_py_demo_installed"
 ```
 
 The pipeline example should create:
 
 1. SQLite database: `<workdir>/demo.sqlite`
-2. Simulated map files: `<workdir>/maps/sim_map_*.map`
-3. Dump files: `<workdir>/dump/*`
+2. Simulated map outputs under `<workdir>/maps/`
+3. Dump outputs under `<workdir>/dump/`
+
+Compatibility note:
+
+- The installed legacy path `share/RHBM_GEM/examples/python/...` is still shipped temporarily for compatibility, but `share/RHBM_GEM/resources/examples/python/...` is now the canonical location.
 
 ## Troubleshooting
 
 1. Missing `Eigen3`, `SQLite3`, `pybind11`, or `CLI11`
    Fallback sources are used only with `-DRHBM_GEM_DEP_PROVIDER=FETCH`. In `SYSTEM` mode, install the required packages first.
-2. Missing Boost
-   Boost has no bundled fallback. Keep `RHBM_GEM_BOOST_MODE=AUTO` or set `RHBM_GEM_BOOST_MODE=OFF` if Boost is unavailable.
-3. Missing `GTest` during configure
+2. Missing `GTest` during configure
    If you do not need tests, set `-DBUILD_TESTING=OFF` (the installation workflows in this guide already do this).
-4. `ModuleNotFoundError: No module named 'rhbm_gem_module'`
+3. `ModuleNotFoundError: No module named 'rhbm_gem_module'`
    Verify `BUILD_PYTHON_BINDINGS=ON`, run `cmake --install`, and make sure `PYTHONPATH` points to the actual install `site-packages` path.
-5. Install prefix mismatch
+4. Install prefix mismatch
    If you install under a different prefix, recompute the `site-packages` path from that prefix instead of reusing the examples for `~/.local` or `%USERPROFILE%\AppData\Local\RHBM-GEM`.
-6. `Could not find sample model ...`
+5. `Could not find sample model ...`
    Pass `--model /path/to/your_model.cif` explicitly.
 
 ## Verbosity Levels

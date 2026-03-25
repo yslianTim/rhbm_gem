@@ -4,10 +4,9 @@
 #include <filesystem>
 #include <fstream>
 
-#include <CLI/CLI.hpp>
-
-#include <rhbm_gem/core/command/CommandBase.hpp>
-#include "CommandTestHelpers.hpp"
+#include "command/internal/CommandBase.hpp"
+#include "support/CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -18,39 +17,21 @@ struct CommandOptionHelperCommandOptions : public rg::CommandOptions
     std::filesystem::path required_path;
     std::filesystem::path optional_path;
     int count{ 1 };
-    int mode{ 0 };
+    rg::PrinterType printer{ rg::PrinterType::GAUS_ESTIMATES };
 };
 
 class CommandOptionHelperCommand final
-    : public rg::CommandWithOptions<
-          CommandOptionHelperCommandOptions,
-          rg::CommandId::ModelTest,
-          rg::CommonOption::Threading
-              | rg::CommonOption::Verbose
-              | rg::CommonOption::OutputFolder>
+    : public rg::CommandWithOptions<CommandOptionHelperCommandOptions>
 {
 public:
     using Options = CommandOptionHelperCommandOptions;
 
-    explicit CommandOptionHelperCommand(const rg::DataIoServices & data_io_services) :
-        rg::CommandWithOptions<
-            CommandOptionHelperCommandOptions,
-            rg::CommandId::ModelTest,
+    explicit CommandOptionHelperCommand() :
+        rg::CommandWithOptions<CommandOptionHelperCommandOptions>{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder>{ data_io_services }
+                | rg::CommonOption::OutputFolder}
     {
-    }
-
-    int validate_count{ 0 };
-    int reset_count{ 0 };
-    int execute_count{ 0 };
-
-    void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
-
-    void SetMode(int value)
-    {
-        MutateOptions([&]() { m_options.mode = value; });
     }
 
     void SetRequiredPath(const std::filesystem::path & value)
@@ -76,42 +57,30 @@ public:
 
     int Count() const { return m_options.count; }
 
-    void ValidateOptions() override
+    void SetPrinter(rg::PrinterType value)
     {
-        ++validate_count;
+        SetValidatedEnumOption(
+            m_options.printer,
+            value,
+            "--printer",
+            rg::PrinterType::GAUS_ESTIMATES,
+            "Printer choice");
     }
 
-    void ResetRuntimeState() override
-    {
-        ++reset_count;
-    }
+    rg::PrinterType Printer() const { return m_options.printer; }
+
+    void ValidateOptions() override {}
+
+    void ResetRuntimeState() override {}
 
 private:
     bool ExecuteImpl() override
     {
-        ++execute_count;
         return true;
     }
 };
 
 } // namespace
-
-TEST(CommandOptionHelperTest, MutateOptionsInvalidatesPreparedState)
-{
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    CommandOptionHelperCommand command{ data_io_services };
-
-    ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_EQ(command.validate_count, 1);
-    EXPECT_EQ(command.reset_count, 1);
-
-    command.SetMode(3);
-
-    ASSERT_TRUE(command.Execute());
-    EXPECT_EQ(command.validate_count, 2);
-    EXPECT_EQ(command.reset_count, 2);
-    EXPECT_EQ(command.execute_count, 1);
-}
 
 TEST(CommandOptionHelperTest, PathHelpersValidateRequiredAndOptionalInputs)
 {
@@ -122,9 +91,7 @@ TEST(CommandOptionHelperTest, PathHelpersValidateRequiredAndOptionalInputs)
         output << "fixture";
     }
     const auto missing_file{ temp_dir.path() / "missing.txt" };
-
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    CommandOptionHelperCommand command{ data_io_services };
+    CommandOptionHelperCommand command{};
     command.SetRequiredPath(existing_file);
     EXPECT_TRUE(command.GetValidationIssues().empty());
 
@@ -171,8 +138,7 @@ TEST(CommandOptionHelperTest, PathHelpersValidateRequiredAndOptionalInputs)
 
 TEST(CommandOptionHelperTest, NormalizedScalarHelperReportsAutoCorrectedWarning)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    CommandOptionHelperCommand command{ data_io_services };
+    CommandOptionHelperCommand command{};
 
     command.SetPositiveCount(0);
 
@@ -182,4 +148,18 @@ TEST(CommandOptionHelperTest, NormalizedScalarHelperReportsAutoCorrectedWarning)
     EXPECT_EQ(command.GetValidationIssues().front().phase, rg::ValidationPhase::Parse);
     EXPECT_EQ(command.GetValidationIssues().front().level, LogLevel::Warning);
     EXPECT_TRUE(command.GetValidationIssues().front().auto_corrected);
+}
+
+TEST(CommandOptionHelperTest, ValidatedEnumHelperFallsBackAndReportsParseError)
+{
+    CommandOptionHelperCommand command{};
+
+    command.SetPrinter(static_cast<rg::PrinterType>(999));
+
+    EXPECT_EQ(command.Printer(), rg::PrinterType::GAUS_ESTIMATES);
+    ASSERT_EQ(command.GetValidationIssues().size(), 1u);
+    EXPECT_EQ(command.GetValidationIssues().front().option_name, "--printer");
+    EXPECT_EQ(command.GetValidationIssues().front().phase, rg::ValidationPhase::Parse);
+    EXPECT_EQ(command.GetValidationIssues().front().level, LogLevel::Error);
+    EXPECT_FALSE(command.GetValidationIssues().front().auto_corrected);
 }

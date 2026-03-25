@@ -5,13 +5,14 @@ This project is licensed under Apache License 2.0. This file summarizes third-pa
 ## Scope and Dependency Selection
 
 - The build option `RHBM_GEM_DEP_PROVIDER=SYSTEM` requires system packages for Eigen3, CLI11, pybind11, SQLite3, and (when tests are enabled) GoogleTest.
-- The build option `RHBM_GEM_DEP_PROVIDER=FETCH` uses CMake FetchContent for Eigen3, CLI11, pybind11, SQLite3, and GoogleTest from pinned release sources with SHA256 checksums.
+- The build option `RHBM_GEM_DEP_PROVIDER=FETCH` uses CMake FetchContent for Eigen3, CLI11, pybind11, SQLite3, Boost, and GoogleTest from pinned release sources with SHA256 checksums.
 - Test dependencies (for example GoogleTest) are only used when `BUILD_TESTING=ON`.
 
 ## Components
 
 | Component | Usage in this project | License | Source mode | Upstream license file(s) |
 |---|---|---|---|---|
+| Boost | Math/statistics helper headers (`boost::math`) | Boost Software License 1.0 | `SYSTEM` mode uses system package discovery; `FETCH` mode provides pinned header fallback | `https://github.com/boostorg/boost/blob/boost-1.90.0/LICENSE_1_0.txt` |
 | CLI11 | Command-line parsing | BSD-3-Clause | `SYSTEM` provider uses system package; `FETCH` provider uses pinned FetchContent | `https://github.com/CLIUtils/CLI11/blob/v2.5.0/LICENSE` |
 | Eigen | Linear algebra templates | MPL-2.0 (primary), with additional notices in upstream package | `SYSTEM` provider uses system package; `FETCH` provider uses pinned FetchContent | `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.README`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.MPL2`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.BSD`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.LGPL`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.GPL`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.APACHE`, `https://gitlab.com/libeigen/eigen/-/blob/5.0.1/COPYING.MINPACK` |
 | pybind11 | Python bindings | BSD-3-Clause | `SYSTEM` provider uses system package; `FETCH` provider uses pinned FetchContent | `https://github.com/pybind/pybind11/blob/v3.0.2/LICENSE` |

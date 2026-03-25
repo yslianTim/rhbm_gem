@@ -3,10 +3,9 @@
 #include <algorithm>
 #include <vector>
 
-#include <CLI/CLI.hpp>
 
-#include <rhbm_gem/core/command/CommandBase.hpp>
-#include "CommandTestHelpers.hpp"
+#include "command/internal/CommandBase.hpp"
+#include "support/CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -18,27 +17,18 @@ struct ValidationIssueCommandOptions : public rg::CommandOptions
 };
 
 class ValidationIssueCommand final
-    : public rg::CommandWithOptions<
-          ValidationIssueCommandOptions,
-          rg::CommandId::ModelTest,
-          rg::CommonOption::Threading
-              | rg::CommonOption::Verbose
-              | rg::CommonOption::OutputFolder>
+    : public rg::CommandWithOptions<ValidationIssueCommandOptions>
 {
 public:
     using Options = ValidationIssueCommandOptions;
 
-    explicit ValidationIssueCommand(const rg::DataIoServices & data_io_services) :
-        rg::CommandWithOptions<
-            ValidationIssueCommandOptions,
-            rg::CommandId::ModelTest,
+    explicit ValidationIssueCommand() :
+        rg::CommandWithOptions<ValidationIssueCommandOptions>{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder>{ data_io_services }
+                | rg::CommonOption::OutputFolder}
     {
     }
-
-    void RegisterCLIOptionsExtend(CLI::App * /*command*/) override {}
 
     void SetProblematicValue(int value)
     {
@@ -55,7 +45,13 @@ public:
 
     void SetPrepareError(bool value)
     {
-        MutateOptions([&]() { m_options.add_prepare_error = value; });
+        AssignOption(m_options.add_prepare_error, value);
+    }
+
+    void SetCommonOptionsForTest(int thread_size, int verbose_level)
+    {
+        SetThreadSize(thread_size);
+        SetVerboseLevel(verbose_level);
     }
 
     void ValidateOptions() override
@@ -75,8 +71,7 @@ private:
 
 TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    ValidationIssueCommand command{ data_io_services };
+    ValidationIssueCommand command{};
     command.SetProblematicValue(0);
     command.SetPrepareError(true);
 
@@ -115,10 +110,8 @@ TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
 
 TEST(CommandValidationIssueTest, BaseNormalizationWarningsAreProgrammaticallyVisible)
 {
-    const auto data_io_services{ command_test::BuildDataIoServices() };
-    ValidationIssueCommand command{ data_io_services };
-    command.SetThreadSize(0);
-    command.SetVerboseLevel(99);
+    ValidationIssueCommand command{};
+    command.SetCommonOptionsForTest(0, 99);
 
     const auto & issues{ command.GetValidationIssues() };
     ASSERT_EQ(issues.size(), 2u);
