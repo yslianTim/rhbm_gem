@@ -115,7 +115,7 @@ Change-integration principles:
 - `[Required]` Keep `CommandList.def`, runtime registration, Python bindings, and public docs aligned.
 - `[Recommended]` Prefer concise, principle-driven guidance over temporary implementation details.
 
-## 11. Quality Checks and CI Alignment
+## 11. Quality Checks and Validation Alignment
 
 - `[Required]` Keep repository guard checks passing through `lint_repo` (structure, hygiene, logging style, fixture tracking, command-manifest sync, and absolute-path checks).
 - `[Recommended]` Run targeted formatter checks with `resources/tools/developer/run_clang_format_check.sh` when touching covered painter/parser paths.

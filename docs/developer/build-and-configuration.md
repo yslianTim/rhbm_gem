@@ -133,10 +133,12 @@ CTest with failure classification output:
 bash resources/tools/developer/run_ctest_with_classification.sh build -j8
 ```
 
-CI layout:
+This repository does not use GitHub-hosted CI. Run quality checks locally, or wire these commands into an external CI system if you need automation.
 
-1. Pull request / push: fast gate (`lint_repo` + `core/data/integration` tests + format/tidy checks)
-2. Nightly schedule: full test run with feature-mode matrix (`OPENMP` / `ROOT` / `LEGACY`) + failure classification (`build` / `contract` / `runtime`)
+Suggested local validation bundles:
+
+1. Fast validation: `lint_repo` + focused `ctest` labels for the area you changed, plus targeted format/tidy checks when touching covered painter/parser paths
+2. Full validation: full `ctest` run + feature-mode configuration checks (`OPENMP` / `ROOT` / `LEGACY`) + failure classification output when investigating broader regressions
 
 ## Feature Mode Checks (`AUTO` / `OFF` / `ON`)
 
