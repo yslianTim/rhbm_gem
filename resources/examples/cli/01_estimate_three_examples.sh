@@ -1,4 +1,32 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+#
+# Script:
+#   01_estimate_three_examples.sh
+#
+# Purpose:
+#   Download three example model/map pairs (PDB-6Z6U/EMD-11103, PDB-6DRV/EMD-8908, PDB-9GXM/EMD-51667),
+#   run `potential_analysis`, and then export three estimation results with `result_dump`.
+#
+# Audience / Platform:
+#   New RHBM-GEM CLI users on macOS or Linux.
+#   This script is not intended for Windows environments.
+#
+# Prerequisites:
+#   Resolve `RHBM-GEM` via `--executable`, `RHBM_GEM_EXECUTABLE`, or `PATH`.
+#   Require `curl` or `wget` for downloads.
+#   Use `--skip-download` for offline reruns after staging files under `<workdir>/data`.
+#
+# Inputs / Outputs:
+#   Download and read inputs from `<workdir>/data`.
+#   Write generated outputs under `<workdir>`.
+#
+# References:
+#   resources/README.md
+#   resources/examples/cli/common.sh
+#   https://www.rcsb.org/structure/6Z6U
+#   https://www.rcsb.org/structure/6DRV
+#   https://www.rcsb.org/structure/9GXM
 set -euo pipefail
 
 script_dir="$(
