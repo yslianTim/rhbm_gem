@@ -1,4 +1,31 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+#
+# Script:
+#   00_quickstart.sh
+#
+# Purpose:
+#   Download one example model/map pair (PDB-6Z6U/EMD-11103),
+#   run `potential_analysis`, and then export the estimation results with `result_dump`.
+#
+# Audience / Platform:
+#   New RHBM-GEM CLI users on macOS or Linux.
+#   This script is not intended for Windows environments.
+#
+# Prerequisites:
+#   Resolve `RHBM-GEM` via `--executable`, `RHBM_GEM_EXECUTABLE`, or `PATH`.
+#   Require `curl` or `wget` for downloads.
+#   Use `--skip-download` for offline reruns after staging files under `<workdir>/data`.
+#
+# Inputs / Outputs:
+#   Download and read inputs from `<workdir>/data`.
+#   Write generated outputs under `<workdir>`.
+#
+# References:
+#   docs/user/getting-started.md (CLI Quickstart)
+#   resources/README.md
+#   resources/examples/cli/common.sh
+#   https://www.rcsb.org/structure/6Z6U
 set -euo pipefail
 
 script_dir="$(
