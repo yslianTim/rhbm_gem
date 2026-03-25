@@ -11,8 +11,8 @@ All executable runtime targets from a build tree (CLI and C++ test executables) 
 
 This project uses CMake + C++17 with a single dependency-provider switch:
 
-- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: require system packages for Eigen3, CLI11, SQLite3, pybind11 (if bindings enabled), and GTest (if tests enabled).
-- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3, CLI11, SQLite3, Boost, pybind11, and GTest.
+- `RHBM_GEM_DEP_PROVIDER=SYSTEM`: require system packages for Eigen3, CLI11, SQLite3, and Boost; also require `pybind11` plus Python development headers when bindings are enabled, and GTest when tests are enabled.
+- `RHBM_GEM_DEP_PROVIDER=FETCH`: use pinned `FetchContent` sources for Eigen3, CLI11, SQLite3, and Boost; additionally fetch `pybind11` when bindings are enabled and GTest when tests are enabled.
 
 To force fetched dependency sources:
 
