@@ -23,5 +23,6 @@ For the full documentation map, start at [`docs/README.md`](docs/README.md).
 ## License and Third-Party Notices
 
 - Project license: Apache License 2.0 (see `LICENSE`).
+- Project notice file and copyright statement: see `NOTICE`.
 - Third-party licenses and attribution summary: see `THIRD_PARTY_NOTICES.md`.
 - Release and compliance guidance for maintainers: [`docs/developer/release-compliance.md`](docs/developer/release-compliance.md).

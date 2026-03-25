@@ -1,6 +1,16 @@
 # Third-Party Notices
 
-This project is licensed under Apache License 2.0. This file summarizes third-party components that may be used when building, testing, or installing the project.
+RHBM-GEM
+Copyright 2024-2026 Yu-Hsiang Lien
+
+Unless otherwise noted, the original source code, build scripts, example
+programs, and documentation in this repository are licensed under the Apache
+License, Version 2.0. See `LICENSE` and `NOTICE`.
+
+This file summarizes third-party components that may be used when building,
+testing, installing, or redistributing the project. It is provided for
+attribution and compliance guidance and does not modify the license terms of
+this project or of any third-party component.
 
 ## Scope and Dependency Selection
 
@@ -28,9 +38,9 @@ This project is licensed under Apache License 2.0. This file summarizes third-pa
 
 ## Redistribution Notes
 
-- Keep this file and the main `LICENSE` file in source and binary distributions.
+- Keep `LICENSE`, `NOTICE`, and this file in source and binary distributions.
 - In `FETCH` installs or binary packages, account for the fetched Eigen, CLI11, Boost, and SQLite artifacts redistributed by the install/export rules.
 - Preserve copyright and license notices required by third-party licenses.
-- If shipping binaries, include attribution/notice documents in the package and/or accompanying documentation.
+- If shipping binaries, include attribution/notice documents and the applicable upstream third-party license texts in the package and/or accompanying documentation.
 - If enabling optional system integrations such as ROOT, OpenMP, or Python, verify the selected local packages' license terms separately because they are not bundled by this repository.
 - If distributing large data artifacts (for example `.sqlite` datasets), verify data-source-specific license terms separately from software license compliance.
