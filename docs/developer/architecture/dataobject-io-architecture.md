@@ -10,9 +10,9 @@ This document describes the current runtime contract for:
 
 Related references:
 
-- [`../development-guidelines.md`](../development-guidelines.md)
-- [`./command-architecture.md`](./command-architecture.md)
-- [`../adding-dataobject-operations-and-iteration.md`](../adding-dataobject-operations-and-iteration.md)
+- [`/docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
+- [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
+- [`/docs/developer/adding-dataobject-operations-and-iteration.md`](/docs/developer/adding-dataobject-operations-and-iteration.md)
 
 ## 1. Scope
 
@@ -30,7 +30,7 @@ Top-level file-backed and SQLite-persisted `DataObject` roots are fixed to:
 | `ModelObject` | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` | yes |
 | `MapObject` | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` | yes |
 
-Rules enforced by `src/data/io/file/FileIO.cpp`:
+Rules enforced by `/src/data/io/file/FileIO.cpp`:
 
 - extension lookup is case-insensitive
 - `.mmcif` and `.mcif` use the CIF reader and are read-only
@@ -224,8 +224,8 @@ Behavior:
 
 Cross-command helpers live in:
 
-- `src/core/command/CommandDataSupport.hpp`
-- `src/core/command/CommandDataSupport.cpp`
+- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/command/CommandDataSupport.cpp`
 
 Loader helpers in `namespace command_data_loader`:
 
@@ -243,32 +243,32 @@ Shared typed operations:
 - `PrepareSimulationAtoms(...)`
 - `BuildModelAtomBondContext(...)`
 
-These helpers are internal command-layer utilities, not part of the public `include/` header surface.
+These helpers are internal command-layer utilities, not part of the public `/include/` header surface.
 
 ## 11. Key Files
 
 Core orchestration:
 
-- `include/rhbm_gem/data/io/DataObjectManager.hpp`
-- `src/data/io/DataObjectManager.cpp`
-- `include/rhbm_gem/data/io/FileIO.hpp`
-- `src/data/io/file/FileIO.cpp`
+- `/include/rhbm_gem/data/io/DataObjectManager.hpp`
+- `/src/data/io/DataObjectManager.cpp`
+- `/include/rhbm_gem/data/io/FileIO.hpp`
+- `/src/data/io/file/FileIO.cpp`
 
 SQLite persistence:
 
-- `src/data/internal/sqlite/SQLitePersistence.hpp`
-- `src/data/io/sqlite/SQLitePersistence.cpp`
-- `src/data/internal/sqlite/ModelObjectStorage.hpp`
-- `src/data/io/sqlite/ModelObjectStorage.cpp`
+- `/src/data/internal/sqlite/SQLitePersistence.hpp`
+- `/src/data/io/sqlite/SQLitePersistence.cpp`
+- `/src/data/internal/sqlite/ModelObjectStorage.hpp`
+- `/src/data/io/sqlite/ModelObjectStorage.cpp`
 
 Typed dispatch and shared helpers:
 
-- `include/rhbm_gem/data/object/DataObjectDispatch.hpp`
-- `src/data/object/DataObjectDispatch.cpp`
-- `src/core/command/CommandDataSupport.hpp`
-- `src/core/command/CommandDataSupport.cpp`
+- `/include/rhbm_gem/data/object/DataObjectDispatch.hpp`
+- `/src/data/object/DataObjectDispatch.cpp`
+- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/command/CommandDataSupport.cpp`
 
 Reference tests:
 
-- `tests/data/DataObjectRuntime_test.cpp`
-- `tests/data/DataObjectSchema_test.cpp`
+- `/tests/data/DataObjectRuntime_test.cpp`
+- `/tests/data/DataObjectSchema_test.cpp`

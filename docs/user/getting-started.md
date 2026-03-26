@@ -8,7 +8,7 @@ Follow the sections in this order:
 2. Choose one **Installation** workflow.
 3. If needed, continue with **Python Bindings** and **Python Examples**.
 
-If you need coverage, build-matrix validation, or advanced CMake settings, use [`../developer/build-and-configuration.md`](../developer/build-and-configuration.md) instead. For advanced dependency selection, feature-mode control, and custom Python install layouts, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy), [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters), and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
+If you need coverage, build-matrix validation, or advanced CMake settings, use [`/docs/developer/build-and-configuration.md`](/docs/developer/build-and-configuration.md) instead. For advanced dependency selection, feature-mode control, and custom Python install layouts, see [`/docs/developer/build-and-configuration.md#dependency-strategy`](/docs/developer/build-and-configuration.md#dependency-strategy), [`/docs/developer/build-and-configuration.md#cmake-parameters`](/docs/developer/build-and-configuration.md#cmake-parameters), and [`/docs/developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](/docs/developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
 
 ## Environment Setup
 
@@ -30,7 +30,7 @@ Some dependencies are provider-dependent or optional:
 - `ROOT` is optional. If it is not available, the build still succeeds, but ROOT-based plotting paths are compiled out.
 - Runtime database default path is `${HOME}/.rhbmgem/data/database.sqlite`. Set `RHBM_GEM_DATA_DIR` to change the default root.
 
-For the full dependency policy and override flags such as `RHBM_GEM_DEP_PROVIDER`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
+For the full dependency policy and override flags such as `RHBM_GEM_DEP_PROVIDER`, `OpenMP_ROOT`, `Boost_ROOT`, and `Python_EXECUTABLE`, see [`/docs/developer/build-and-configuration.md#dependency-strategy`](/docs/developer/build-and-configuration.md#dependency-strategy) and [`/docs/developer/build-and-configuration.md#cmake-parameters`](/docs/developer/build-and-configuration.md#cmake-parameters).
 
 ### macOS (Homebrew)
 
@@ -170,7 +170,7 @@ Notes:
 - The installation workflow later in this guide does not require `vcpkg` for a basic build if you set `-DRHBM_GEM_DEP_PROVIDER=FETCH`.
 - If you use `vcpkg`, reuse the same toolchain arguments when you configure the project later.
 - If you installed ROOT through conda, keep that environment active while you configure, build, and install the project.
-- The project defaults are still documented in [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy). This guide chooses the simplest Windows path instead of listing every supported configuration.
+- The project defaults are still documented in [`/docs/developer/build-and-configuration.md#dependency-strategy`](/docs/developer/build-and-configuration.md#dependency-strategy). This guide chooses the simplest Windows path instead of listing every supported configuration.
 
 ## Installation
 
@@ -283,11 +283,11 @@ Notes:
 
 - If you prepared Windows builds with `vcpkg` in **Environment Setup**, add the same toolchain arguments to the configure command in this workflow.
 - If you installed ROOT, remove `-DRHBM_GEM_ROOT_MODE=OFF` or replace it with `-DRHBM_GEM_ROOT_MODE=AUTO`.
-- This workflow intentionally uses `-DRHBM_GEM_DEP_PROVIDER=FETCH`, `-DBUILD_TESTING=OFF`, `-DBUILD_PYTHON_BINDINGS=OFF`, and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`../developer/build-and-configuration.md#dependency-strategy`](../developer/build-and-configuration.md#dependency-strategy) and [`../developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](../developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
+- This workflow intentionally uses `-DRHBM_GEM_DEP_PROVIDER=FETCH`, `-DBUILD_TESTING=OFF`, `-DBUILD_PYTHON_BINDINGS=OFF`, and `-DRHBM_GEM_ROOT_MODE=OFF` to keep the first setup simple. For the project defaults and advanced alternatives, see [`/docs/developer/build-and-configuration.md#dependency-strategy`](/docs/developer/build-and-configuration.md#dependency-strategy) and [`/docs/developer/build-and-configuration.md#feature-mode-checks-auto--off--on`](/docs/developer/build-and-configuration.md#feature-mode-checks-auto--off--on).
 
 ## CLI Quickstart (macOS and Linux)
 
-Use [`../../resources/examples/cli/00_quickstart.sh`](../../resources/examples/cli/00_quickstart.sh) when you want a Bash example that downloads one model/map pair and runs the CLI end to end.
+Use [`/resources/examples/cli/00_quickstart.sh`](/resources/examples/cli/00_quickstart.sh) when you want a Bash example that downloads one model/map pair and runs the CLI end to end.
 
 This script is supported on macOS and Linux only. Windows users should keep using the manual `RHBM-GEM.exe` commands from the **Installation** section above.
 
@@ -362,7 +362,7 @@ python3 -c "import rhbm_gem_module as rgm; print(rgm.__file__)"
 Note: If you installed the project to a different prefix, update `INSTALL_PREFIX` before computing `PY_SITE_PATHS`.
 Keep this shell session open for **Python Examples**. If you start a new shell later, rerun the `export PYTHONPATH=...` command first.
 
-For custom Python layouts such as `RHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR` or an explicit `RHBM_GEM_PYTHON_INSTALL_DIR`, see [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters) and [`../developer/build-and-configuration.md#validation-examples`](../developer/build-and-configuration.md#validation-examples).
+For custom Python layouts such as `RHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR` or an explicit `RHBM_GEM_PYTHON_INSTALL_DIR`, see [`/docs/developer/build-and-configuration.md#cmake-parameters`](/docs/developer/build-and-configuration.md#cmake-parameters) and [`/docs/developer/build-and-configuration.md#validation-examples`](/docs/developer/build-and-configuration.md#validation-examples).
 
 ### Windows (PowerShell)
 
@@ -399,7 +399,7 @@ Notes:
 
 - If you prepared Windows builds with `vcpkg` in **Environment Setup**, add the same toolchain arguments to the configure command here.
 - If you installed ROOT, remove `-DRHBM_GEM_ROOT_MODE=OFF` or replace it with `-DRHBM_GEM_ROOT_MODE=AUTO`.
-- For custom Python install layouts, see [`../developer/build-and-configuration.md#cmake-parameters`](../developer/build-and-configuration.md#cmake-parameters).
+- For custom Python install layouts, see [`/docs/developer/build-and-configuration.md#cmake-parameters`](/docs/developer/build-and-configuration.md#cmake-parameters).
 
 ## Python Examples
 

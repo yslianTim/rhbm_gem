@@ -140,7 +140,7 @@ The separation is mostly about maintainability. The atom workflow remains the de
 - Update [`/tests/core/command/PotentialAnalysisCommand_test.cpp`](/tests/core/command/PotentialAnalysisCommand_test.cpp) when validation semantics or fallback behavior change.
 - Update [`/tests/core/command/PotentialAnalysisExperimentalBondGate_test.cpp`](/tests/core/command/PotentialAnalysisExperimentalBondGate_test.cpp) when the compile-time bond-gate behavior changes.
 - Update [`/tests/core/command/CommandApi_test.cpp`](/tests/core/command/CommandApi_test.cpp) if the public `RunPotentialAnalysis(...)` request/report behavior changes.
-- Keep `PotentialAnalysisRequest`, `BindPotentialAnalysisRequestOptions(...)`, and the Python binding in `src/python/CommandApiBindings.cpp` synchronized.
+- Keep `PotentialAnalysisRequest`, `BindPotentialAnalysisRequestOptions(...)`, and the Python binding in `/src/python/CommandApiBindings.cpp` synchronized.
 - If command membership, manifest order, or workflow profile changes, expect [`/tests/core/contract/CommandCatalog_test.cpp`](/tests/core/contract/CommandCatalog_test.cpp) coverage to matter.
 
 ## Related References

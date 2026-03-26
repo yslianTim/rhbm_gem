@@ -9,29 +9,29 @@ It also covers `DataObjectManager` iteration and the shared command helpers that
 
 Related references:
 
-- [`architecture/dataobject-io-architecture.md`](architecture/dataobject-io-architecture.md)
-- [`adding-a-command.md`](adding-a-command.md)
+- [`/docs/developer/architecture/dataobject-io-architecture.md`](/docs/developer/architecture/dataobject-io-architecture.md)
+- [`/docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
 
 ## 1. Pick the Correct Boundary
 
 Use the narrowest boundary that matches the change.
 
-`command_data_loader` helpers in `src/core/command/CommandDataSupport.hpp`
+`command_data_loader` helpers in `/src/core/command/CommandDataSupport.hpp`
 
 - use for typed file/database loading with consistent error context
 - current helpers are `ProcessModelFile(...)`, `ProcessMapFile(...)`, `OptionalProcessMapFile(...)`, and `LoadModelObject(...)`
 
-`CommandDataSupport` in `src/core/command/CommandDataSupport.*`
+`CommandDataSupport` in `/src/core/command/CommandDataSupport.*`
 
 - use for reusable typed operations on `ModelObject` or `MapObject`
 - current shared operations are `NormalizeMapObject(...)`, `PrepareModelObject(...)`, `ApplyModelSelection(...)`, `CollectModelAtoms(...)`, `PrepareSimulationAtoms(...)`, and `BuildModelAtomBondContext(...)`
 - keep this layer focused on logic shared by multiple commands
 
-`MapSampling` in `include/rhbm_gem/core/command/MapSampling.hpp` and `src/core/command/MapSampling.cpp`
+`MapSampling` in `/include/rhbm_gem/core/command/MapSampling.hpp` and `/src/core/command/MapSampling.cpp`
 
 - use only for reusable map sampling behavior
 
-command-local code in `src/core/command/*.cpp` or `src/core/workflow/*.cpp`
+command-local code in `/src/core/command/*.cpp` or `/src/core/workflow/*.cpp`
 
 - use when behavior is specific to one command or one workflow path
 
@@ -48,24 +48,24 @@ command-local code in `src/core/command/*.cpp` or `src/core/workflow/*.cpp`
 
 If you add or change reusable typed operations:
 
-- `src/core/command/CommandDataSupport.hpp`
-- `src/core/command/CommandDataSupport.cpp`
+- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/command/CommandDataSupport.cpp`
 - command call sites using the helper
-- `tests/data/DataObjectRuntime_test.cpp`
-- related command tests under `tests/core/`
+- `/tests/data/DataObjectRuntime_test.cpp`
+- related command tests under `/tests/core/`
 - docs when the contract changes
 
 If you add or change loader helpers in `command_data_loader`:
 
-- `src/core/command/CommandDataSupport.hpp`
+- `/src/core/command/CommandDataSupport.hpp`
 - command call sites
 - tests that cover the new load path and failure context
 
 If you change manager iteration behavior:
 
-- `include/rhbm_gem/data/io/DataObjectManager.hpp`
-- `src/data/io/DataObjectManager.cpp`
-- `tests/data/DataObjectRuntime_test.cpp`
+- `/include/rhbm_gem/data/io/DataObjectManager.hpp`
+- `/src/data/io/DataObjectManager.cpp`
+- `/tests/data/DataObjectRuntime_test.cpp`
 - docs when callback or ordering semantics change
 
 ## 3. Operation Design Rules
@@ -151,13 +151,13 @@ Add or update tests for:
 
 Common suites:
 
-- `tests/data/DataObjectRuntime_test.cpp`
-- related command suites under `tests/core/`
+- `/tests/data/DataObjectRuntime_test.cpp`
+- related command suites under `/tests/core/`
 
 ## 8. Documentation Checklist
 
 When contracts change, update:
 
-- `docs/developer/architecture/dataobject-io-architecture.md`
+- `/docs/developer/architecture/dataobject-io-architecture.md`
 - this guide
 - command docs if command behavior or options changed

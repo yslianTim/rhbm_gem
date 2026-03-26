@@ -17,15 +17,15 @@ The goal is stable, maintainable, and diagnosable software.
 
 ## 3. Project Structure and Module Boundaries
 
-- `[Required]` Keep public C++ interfaces in `include/` and implementations in `src/`.
+- `[Required]` Keep public C++ interfaces in `/include/` and implementations in `/src/`.
 - `[Required]` Keep responsibilities separated: command orchestration in `core`, file/persistence logic in `data`, reusable helpers in `utils`.
-- `[Required]` Keep tests in `tests/` and test fixtures in `tests/fixtures/`.
-- `[Required]` Keep test sources aligned to domain folders (`tests/core`, `tests/data`, `tests/utils`, `tests/integration`) and intent-specific subfolders where applicable.
-- `[Required]` For `src/core`, place command orchestration in `src/core/command/`, workflow implementation in `src/core/workflow/`, painter implementation in `src/core/painter/`, and private helpers in `src/core/internal/`.
-- `[Required]` Keep the Python binding adapter layer in `src/python/`; it should expose pybind11 surfaces only and should not become a home for core business logic.
+- `[Required]` Keep tests in `/tests/` and test fixtures in `/tests/fixtures/`.
+- `[Required]` Keep test sources aligned to domain folders (`/tests/core`, `/tests/data`, `/tests/utils`, `/tests/integration`) and intent-specific subfolders where applicable.
+- `[Required]` For `/src/core`, place command orchestration in `/src/core/command/`, workflow implementation in `/src/core/workflow/`, painter implementation in `/src/core/painter/`, and private helpers in `/src/core/internal/`.
+- `[Required]` Keep the Python binding adapter layer in `/src/python/`; it should expose pybind11 surfaces only and should not become a home for core business logic.
 - `[Required]` Treat `internal/` path placement as the internal-API marker; do not add redundant `*Internal` filename suffixes inside `internal/`, and prefer moving private headers into an `internal/` subtree over suffix-based labeling.
-- `[Required]` For workflow code, keep implementation units (`*.cpp`) in `src/core/workflow/`; place private workflow headers in `src/core/internal/workflow/` when they are not part of shared workflow-facing contracts.
-- `[Required]` Keep reusable automation tools under `resources/tools/`; do not add scripts at repository root.
+- `[Required]` For workflow code, keep implementation units (`*.cpp`) in `/src/core/workflow/`; place private workflow headers in `/src/core/internal/workflow/` when they are not part of shared workflow-facing contracts.
+- `[Required]` Keep reusable automation tools under `/resources/tools/`; do not add scripts at repository root.
 - `[Required]` Project-owned public types in `core` and `data` must use namespace `rhbm_gem`.
 - `[Required]` Do not use `using namespace` in headers.
 - `[Recommended]` Keep header/source pairing clear and predictable for new modules.
@@ -62,10 +62,10 @@ The goal is stable, maintainable, and diagnosable software.
 
 See:
 
-- [`./architecture/command-architecture.md`](./architecture/command-architecture.md)
-- [`./adding-a-command.md`](./adding-a-command.md)
-- [`./architecture/dataobject-io-architecture.md`](./architecture/dataobject-io-architecture.md)
-- [`./adding-dataobject-operations-and-iteration.md`](./adding-dataobject-operations-and-iteration.md)
+- [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
+- [`/docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
+- [`/docs/developer/architecture/dataobject-io-architecture.md`](/docs/developer/architecture/dataobject-io-architecture.md)
+- [`/docs/developer/adding-dataobject-operations-and-iteration.md`](/docs/developer/adding-dataobject-operations-and-iteration.md)
 
 Command-layer principles:
 
@@ -82,7 +82,7 @@ DataObject I/O principles:
 - `[Required]` Keep schema versioning, bootstrap, and validation centralized in persistence-management components.
 - `[Required]` Keep normal save/load hot paths separate from bootstrap/repair logic.
 - `[Required]` Keep database transaction boundaries at a manager/service boundary; DAO methods should remain focused on persistence mapping.
-- `[Required]` Keep persistence-only helpers internal (`src/`) unless explicitly promoted to public API.
+- `[Required]` Keep persistence-only helpers internal (`/src/`) unless explicitly promoted to public API.
 
 Change-integration principles:
 
@@ -94,16 +94,16 @@ Change-integration principles:
 - `[Required]` New features, behavior changes, and bug fixes require tests (except documentation-only changes).
 - `[Required]` Cover both happy paths and failure paths that are part of supported behavior.
 - `[Required]` Keep tests deterministic and independent of machine-local state.
-- `[Required]` Add new `*_test.cpp` files to the matching grouped file under `tests/cmake/`.
+- `[Required]` Add new `*_test.cpp` files to the matching grouped file under `/tests/cmake/`.
 - `[Required]` Every test target declared through `add_rhbm_gtest_target(...)` must carry both `domain:*` and `intent:*` CTest labels.
-- `[Required]` Every file referenced by `TestDataPath(...)` must exist under `tests/fixtures/` and be tracked by git.
+- `[Required]` Every file referenced by `TestDataPath(...)` must exist under `/tests/fixtures/` and be tracked by git.
 - `[Required]` Schema/persistence changes require regression coverage for bootstrap or migration behavior, rollback behavior on failure, and round-trip correctness.
 - `[Recommended]` Prefer searchable suite names that encode intent (for example `DataObjectSchemaMigrationTest`) over generic suite names.
 - `[Recommended]` Use minimal fixtures and temporary directories/files for generated outputs.
 
 ## 9. Public API, CLI, and Python Surface Governance
 
-- `[Required]` Treat headers under `include/`, CLI subcommands/options, Python bindings, and documented workflows as public surfaces.
+- `[Required]` Treat headers under `/include/`, CLI subcommands/options, Python bindings, and documented workflows as public surfaces.
 - `[Required]` Review compatibility impact for all public-surface changes.
 - `[Required]` Keep C++ behavior, CLI behavior, Python binding behavior, and documentation aligned.
 - `[Recommended]` Add smoke-style tests for key documented user workflows.
@@ -118,6 +118,6 @@ Change-integration principles:
 ## 11. Quality Checks and Validation Alignment
 
 - `[Required]` Keep repository guard checks passing through `lint_repo` (structure, hygiene, logging style, fixture tracking, command-manifest sync, and absolute-path checks).
-- `[Recommended]` Run targeted formatter checks with `resources/tools/developer/run_clang_format_check.sh` when touching covered painter/parser paths.
-- `[Recommended]` Run targeted static analysis with `resources/tools/developer/run_clang_tidy_check.sh` (baseline mode when appropriate) when touching covered painter/parser paths.
-- `[Recommended]` For broad or risky changes, run `resources/tools/developer/run_ctest_with_classification.sh` in addition to normal `ctest`.
+- `[Recommended]` Run targeted formatter checks with `/resources/tools/developer/run_clang_format_check.sh` when touching covered painter/parser paths.
+- `[Recommended]` Run targeted static analysis with `/resources/tools/developer/run_clang_tidy_check.sh` (baseline mode when appropriate) when touching covered painter/parser paths.
+- `[Recommended]` For broad or risky changes, run `/resources/tools/developer/run_ctest_with_classification.sh` in addition to normal `ctest`.

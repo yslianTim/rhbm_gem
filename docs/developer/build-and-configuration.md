@@ -2,9 +2,9 @@
 
 This guide is for contributors and maintainers who need the full build surface: dependency selection, CMake parameters, feature-mode validation, and coverage workflows.
 
-If you only want to install and run the project, use [`../user/getting-started.md`](../user/getting-started.md). For the end-user workflow, start with [`../user/getting-started.md#environment-setup`](../user/getting-started.md#environment-setup), then continue to [`../user/getting-started.md#installation`](../user/getting-started.md#installation), [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings), and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
+If you only want to install and run the project, use [`/docs/user/getting-started.md`](/docs/user/getting-started.md). For the end-user workflow, start with [`/docs/user/getting-started.md#environment-setup`](/docs/user/getting-started.md#environment-setup), then continue to [`/docs/user/getting-started.md#installation`](/docs/user/getting-started.md#installation), [`/docs/user/getting-started.md#python-bindings`](/docs/user/getting-started.md#python-bindings), and [`/docs/user/getting-started.md#python-examples`](/docs/user/getting-started.md#python-examples).
 
-Top-level CMake logic is split into modular files under `cmake/` (`RHBMGemOptions`, `RHBMGemDependencies`, `RHBMGemInstall`, `RHBMGemDevTools`) to keep maintenance localized while keeping test and lint entrypoints co-located.
+Top-level CMake logic is split into modular files under `/cmake/` (`RHBMGemOptions`, `RHBMGemDependencies`, `RHBMGemInstall`, `RHBMGemDevTools`) to keep maintenance localized while keeping test and lint entrypoints co-located.
 All executable runtime targets from a build tree (CLI and C++ test executables) are emitted under `<build-dir>/bin/`.
 
 ## Dependency Strategy
@@ -57,8 +57,8 @@ cat build-cov/coverage/coverage_detail.txt
 
 Notes:
 
-1. Default summary includes only core `src/` files and excludes `src/python/`.
-2. To include `tests/`, configure with `-DCOVERAGE_INCLUDE_TESTS=ON`.
+1. Default summary includes only core `/src/` files and excludes `/src/python/`.
+2. To include `/tests/`, configure with `-DCOVERAGE_INCLUDE_TESTS=ON`.
 3. Coverage artifacts are generated under the build directory.
 4. `ENABLE_COVERAGE=ON` requires `BUILD_TESTING=ON`.
 
@@ -203,10 +203,10 @@ Beginner / common:
 | `CMAKE_INSTALL_PREFIX` | platform-dependent | Base install path for `cmake --install`. |
 | `BUILD_TESTING` | `ON` | Build test targets (aggregate target: `tests_all`). |
 | `ENABLE_COVERAGE` | `OFF` | Enable `gcov` coverage instrumentation and the `coverage` target. |
-| `COVERAGE_INCLUDE_TESTS` | `OFF` | Include `tests/` files in the coverage summary when coverage is enabled. |
+| `COVERAGE_INCLUDE_TESTS` | `OFF` | Include `/tests/` files in the coverage summary when coverage is enabled. |
 | `RHBM_GEM_DEP_PROVIDER` | `SYSTEM` | Dependency provider mode: `SYSTEM` or `FETCH`. |
 | `BUILD_SHARED_LIBS` | `ON` | Build shared libraries instead of static libraries. |
-| `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `src/python/`. |
+| `BUILD_PYTHON_BINDINGS` | `ON` | Build the pybind11 module in `/src/python/`. |
 | `RHBM_GEM_OPENMP_MODE` | `AUTO` | OpenMP mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ROOT_MODE` | `AUTO` | ROOT mode control: `AUTO`, `ON`, or `OFF`. |
 | `RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS` | `OFF` | Enable the experimental bond-analysis workflow hook inside `PotentialAnalysisCommand`. |
@@ -240,7 +240,7 @@ ctest --test-dir build
 
 ## Validation Examples
 
-These examples are for validating configuration behavior and CMake options. For platform-specific end-user setup and install flows, use [`../user/getting-started.md#environment-setup`](../user/getting-started.md#environment-setup), [`../user/getting-started.md#installation`](../user/getting-started.md#installation), [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings), and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
+These examples are for validating configuration behavior and CMake options. For platform-specific end-user setup and install flows, use [`/docs/user/getting-started.md#environment-setup`](/docs/user/getting-started.md#environment-setup), [`/docs/user/getting-started.md#installation`](/docs/user/getting-started.md#installation), [`/docs/user/getting-started.md#python-bindings`](/docs/user/getting-started.md#python-bindings), and [`/docs/user/getting-started.md#python-examples`](/docs/user/getting-started.md#python-examples).
 
 ```bash
 # Release build, no tests
@@ -271,7 +271,7 @@ PYTHONPATH="$HOME/.local/lib/python${PYVER}/site-packages:$HOME/.local/lib64/pyt
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRHBM_GEM_PYTHON_INSTALL_LAYOUT=LIBDIR
 ```
 
-Note: The Python examples here demonstrate layout validation only. For the user-facing install and example flow, follow [`../user/getting-started.md#python-bindings`](../user/getting-started.md#python-bindings) and [`../user/getting-started.md#python-examples`](../user/getting-started.md#python-examples).
+Note: The Python examples here demonstrate layout validation only. For the user-facing install and example flow, follow [`/docs/user/getting-started.md#python-bindings`](/docs/user/getting-started.md#python-bindings) and [`/docs/user/getting-started.md#python-examples`](/docs/user/getting-started.md#python-examples).
 
 After installation, downstream CMake projects can consume this project with:
 

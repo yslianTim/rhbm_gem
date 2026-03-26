@@ -4,8 +4,8 @@ Checklist for adding a new top-level command to the current command system.
 
 Related references:
 
-- [`architecture/command-architecture.md`](architecture/command-architecture.md)
-- [`development-guidelines.md`](development-guidelines.md)
+- [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
+- [`/docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
 
 ## 1. Decide whether it should be a new command
 
@@ -19,39 +19,39 @@ behavior branch.
 
 Concrete command implementation:
 
-- `src/core/command/<YourCommand>.hpp`
-- `src/core/command/<YourCommand>.cpp`
+- `/src/core/command/<YourCommand>.hpp`
+- `/src/core/command/<YourCommand>.cpp`
 
 Public command API:
 
-- `include/rhbm_gem/core/command/CommandContract.hpp` only if shared diagnostics/defaults change
-- `include/rhbm_gem/core/command/CommandApi.hpp`
-- `src/core/command/CommandApi.cpp`
+- `/include/rhbm_gem/core/command/CommandContract.hpp` only if shared diagnostics/defaults change
+- `/include/rhbm_gem/core/command/CommandApi.hpp`
+- `/src/core/command/CommandApi.cpp`
 
 Manifest and CLI registration:
 
-- `include/rhbm_gem/core/command/CommandList.def`
-- `src/core/command/CommandCatalog.cpp`
+- `/include/rhbm_gem/core/command/CommandList.def`
+- `/src/core/command/CommandCatalog.cpp`
 
 Python bindings:
 
-- `src/python/CommandApiBindings.cpp`
+- `/src/python/CommandApiBindings.cpp`
 
 Tests and docs:
 
-- `tests/core/command/<YourCommand>_test.cpp`
-- `src/CMakeLists.txt` to add `src/core/command/<YourCommand>.cpp`
-- `tests/CMakeLists.txt` to add `tests/core/command/<YourCommand>_test.cpp`
+- `/tests/core/command/<YourCommand>_test.cpp`
+- `/src/CMakeLists.txt` to add `/src/core/command/<YourCommand>.cpp`
+- `/tests/CMakeLists.txt` to add `/tests/core/command/<YourCommand>_test.cpp`
 - any integration/contract tests impacted by the public surface
 - developer/user docs touched by the command surface
 
 Optional:
 
-- [`commands/README.md`](commands/README.md) for the command-doc index and `docs/developer/commands/<your-command>.md` for command-specific notes
+- [`/docs/developer/commands/README.md`](/docs/developer/commands/README.md) for the command-doc index and `/docs/developer/commands/<your-command>.md` for command-specific notes
 
 ## 3. Manifest shape
 
-Add an entry to `include/rhbm_gem/core/command/CommandList.def`:
+Add an entry to `/include/rhbm_gem/core/command/CommandList.def`:
 
 ```cpp
 RHBM_GEM_COMMAND(
@@ -84,7 +84,7 @@ python3 resources/tools/developer/command_scaffold.py --name Example --profile F
 
 ## 5. Implement the command class
 
-Current command classes are internal implementation types under `src/core/command/`.
+Current command classes are internal implementation types under `/src/core/command/`.
 
 Use this shape:
 
@@ -113,10 +113,10 @@ Useful base helpers from `CommandBase`:
 
 ## 6. Add the public request and run entrypoint
 
-Add the request struct to `include/rhbm_gem/core/command/CommandApi.hpp`.
+Add the request struct to `/include/rhbm_gem/core/command/CommandApi.hpp`.
 
 Shared diagnostics and `ExecutionReport` live in
-`include/rhbm_gem/core/command/CommandContract.hpp`, so adding a normal command usually does not
+`/include/rhbm_gem/core/command/CommandContract.hpp`, so adding a normal command usually does not
 require contract changes.
 
 `Run*` declarations/definitions are expanded from `CommandList.def`, so once the manifest entry
@@ -132,7 +132,7 @@ Each `Run*` entrypoint follows this pattern:
 
 ## 7. Bind CLI options
 
-In `src/core/command/CommandCatalog.cpp`:
+In `/src/core/command/CommandCatalog.cpp`:
 
 1. Add `Bind<YourCommand>RequestOptions(...)` for command-specific flags.
 2. `RegisterCommandSubcommands(...)` will pick it up through the manifest X-macro expansion.
@@ -147,20 +147,20 @@ Shared flags come from the profile:
 
 ## 8. Add Python bindings
 
-Update `src/python/CommandApiBindings.cpp`:
+Update `/src/python/CommandApiBindings.cpp`:
 
 1. Bind the new `*Request` type.
 2. The `Run*` export list is expanded from the manifest, so no separate binding list needs to be
    maintained.
 
-Shared enums and diagnostics live in `src/python/CommonBindings.cpp`, so that file only needs
+Shared enums and diagnostics live in `/src/python/CommonBindings.cpp`, so that file only needs
 changes if the command introduces a new shared enum.
 
 ## 9. Tests and documentation
 
 Add or update:
 
-- command unit tests under `tests/core/command/`
+- command unit tests under `/tests/core/command/`
 - integration tests if the public API or Python surface changes
 - developer/user docs if the command changes the documented surface
 
@@ -168,10 +168,10 @@ Add or update:
 
 Before merge:
 
-1. The command is implemented in `src/core/command/`.
+1. The command is implemented in `/src/core/command/`.
 2. `CommandApi.hpp` contains the new request.
 3. `CommandList.def` contains the new manifest entry.
-4. `src/CMakeLists.txt` and `tests/CMakeLists.txt` include the new source/test file.
+4. `/src/CMakeLists.txt` and `/tests/CMakeLists.txt` include the new source/test file.
 5. CLI binding is added in `CommandCatalog.cpp`.
 6. Python bindings are updated if the binding surface changed.
 7. Tests and docs are aligned with the final command surface.
