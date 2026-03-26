@@ -24,7 +24,7 @@ For the full documentation map, start at [`/docs/README.md`](/docs/README.md).
 
 ## Examples
 
-- Browse runnable examples and helper assets in [`/resources/README.md`](/resources/README.md).
+Browse runnable examples and helper assets in [`/resources/README.md`](/resources/README.md).
 
 ## License, Citation, and Third-Party Notices
 
