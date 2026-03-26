@@ -110,10 +110,19 @@ if(RHBM_GEM_DEP_PROVIDER STREQUAL "SYSTEM")
         find_package(Boost REQUIRED)
     endif()
 
+    if(TARGET SQLite3::SQLite3)
+        set(_rhbm_gem_sqlite_target SQLite3::SQLite3)
+    elseif(TARGET SQLite::SQLite3)
+        set(_rhbm_gem_sqlite_target SQLite::SQLite3)
+    else()
+        message(FATAL_ERROR
+            "System SQLite3 package was found but did not export a supported imported target.")
+    endif()
+
     target_link_libraries(rhbm_gem_dependencies INTERFACE
         Eigen3::Eigen
         CLI11::CLI11
-        SQLite::SQLite3
+        ${_rhbm_gem_sqlite_target}
     )
 else()
     message(STATUS "Dependency provider: FETCH")
