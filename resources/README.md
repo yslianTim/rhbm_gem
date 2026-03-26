@@ -2,6 +2,12 @@
 
 This directory groups non-core project assets under a single top-level path.
 
+Ownership rules:
+
+- Keep runnable examples, reusable templates, and helper tooling here.
+- Keep repository-reading guides, architecture notes, and process documentation under [`../docs/`](../docs/README.md).
+- Do not add `resources/docs/`; if content is primarily read rather than executed, it belongs in `docs/`.
+
 - User-facing examples live under `resources/examples/`.
 - User execution templates live under `resources/tools/user/`.
 - Developer workflow automation lives under `resources/tools/developer/`.

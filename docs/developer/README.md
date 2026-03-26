@@ -9,4 +9,5 @@ Start here if you are changing the codebase, validating build configurations, or
 3. Read [`architecture/command-architecture.md`](architecture/command-architecture.md) and [`architecture/dataobject-io-architecture.md`](architecture/dataobject-io-architecture.md) when you need architecture context for commands, data object traversal policies, typed dispatch, I/O, or persistence.
 4. Read [`adding-dataobject-operations-and-iteration.md`](adding-dataobject-operations-and-iteration.md) when you need implementation checklists for extending operations/iteration on existing `DataObject` types.
 5. Read [`adding-a-command.md`](adding-a-command.md) when you need a concrete implementation template for a new command.
-6. Read [`release-compliance.md`](release-compliance.md) before preparing source or binary releases.
+6. Browse [`commands/README.md`](commands/README.md) for command-specific developer notes generated alongside individual commands.
+7. Read [`release-compliance.md`](release-compliance.md) before preparing source or binary releases.

@@ -47,7 +47,7 @@ Tests and docs:
 
 Optional:
 
-- `docs/developer/commands/<your-command>.md` for command-specific notes
+- [`commands/README.md`](commands/README.md) for the command-doc index and `docs/developer/commands/<your-command>.md` for command-specific notes
 
 ## 3. Manifest shape
 

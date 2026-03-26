@@ -8,6 +8,12 @@ Read the manuscript of method here: [https://doi.org/10.1101/2025.07.10.664269](
 
 For the full documentation map, start at [`docs/README.md`](docs/README.md).
 
+Ownership rules:
+
+- Keep narrative, repository-level guidance under `docs/`.
+- Keep runnable examples, templates, and installable helper assets under `resources/`.
+- Do not create `resources/docs/`; if a document is mainly read in the source tree, it belongs in `docs/`.
+
 ### User Documentation
 
 - Set up your environment and install RHBM-GEM.
@@ -21,6 +27,10 @@ For the full documentation map, start at [`docs/README.md`](docs/README.md).
 - Extend commands, data I/O, or other internal components.
 - Validate build configurations and prepare releases.
 - Start with [`docs/developer/README.md`](docs/developer/README.md) and [`docs/developer/build-and-configuration.md`](docs/developer/build-and-configuration.md).
+
+### Resources
+
+- Browse runnable examples and helper assets in [`resources/README.md`](resources/README.md).
 
 ## License, Citation, and Third-Party Notices
 
