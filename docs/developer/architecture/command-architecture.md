@@ -4,14 +4,14 @@ Current command registration and execution flow.
 
 Related guides:
 
-- [`../adding-a-command.md`](../adding-a-command.md)
-- [`../development-guidelines.md`](../development-guidelines.md)
+- [`/docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
+- [`/docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
 
 ## 1. Source of truth
 
 Top-level command membership is defined in:
 
-- `include/rhbm_gem/core/command/CommandList.def`
+- `/include/rhbm_gem/core/command/CommandList.def`
 
 Each entry uses:
 
@@ -19,11 +19,11 @@ Each entry uses:
 
 This manifest is expanded directly with X-macros by:
 
-- `include/rhbm_gem/core/command/CommandMetadata.hpp`
-- `include/rhbm_gem/core/command/CommandApi.hpp`
-- `src/core/command/CommandApi.cpp`
-- `src/core/command/CommandCatalog.cpp`
-- `src/python/CommandApiBindings.cpp`
+- `/include/rhbm_gem/core/command/CommandMetadata.hpp`
+- `/include/rhbm_gem/core/command/CommandApi.hpp`
+- `/src/core/command/CommandApi.cpp`
+- `/src/core/command/CommandCatalog.cpp`
+- `/src/python/CommandApiBindings.cpp`
 
 The manifest does not generate request structs or command-specific CLI field bindings.
 
@@ -75,7 +75,7 @@ There is no exported runtime-binder function object layer anymore.
 
 ## 4. Public contract and request surface
 
-Shared command contract types live in `include/rhbm_gem/core/command/CommandContract.hpp`.
+Shared command contract types live in `/include/rhbm_gem/core/command/CommandContract.hpp`.
 
 This header owns:
 
@@ -84,7 +84,7 @@ This header owns:
 - `ValidationIssue`
 - `ExecutionReport`
 
-Public requests and `Run*` entrypoints live in `include/rhbm_gem/core/command/CommandApi.hpp`.
+Public requests and `Run*` entrypoints live in `/include/rhbm_gem/core/command/CommandApi.hpp`.
 
 Shared request fields:
 
@@ -104,7 +104,7 @@ directly for shared diagnostics/default-path behavior.
 
 ## 5. Concrete command contract
 
-Concrete command classes are internal types under `src/core/command/`.
+Concrete command classes are internal types under `/src/core/command/`.
 
 Current pattern:
 
@@ -166,8 +166,8 @@ generic command preparation.
 
 Cross-command model/map helper logic lives in:
 
-- `src/core/command/CommandDataSupport.hpp`
-- `src/core/command/CommandDataSupport.cpp`
+- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/command/CommandDataSupport.cpp`
 
 This module groups:
 
@@ -181,10 +181,10 @@ This module groups:
 
 Python bindings are split across:
 
-- `src/python/CoreBindings.cpp`
-- `src/python/CommonBindings.cpp`
-- `src/python/CommandApiBindings.cpp`
+- `/src/python/CoreBindings.cpp`
+- `/src/python/CommonBindings.cpp`
+- `/src/python/CommandApiBindings.cpp`
 
-`src/python/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
-`src/python/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
+`/src/python/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
+`/src/python/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
 functions via the manifest X-macro.

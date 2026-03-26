@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: MIT
 #
 # Script:
-#   01_estimate_three_examples.sh
+#   01_end_to_end_from_three_examples.sh
 #
 # Purpose:
 #   Download three example model/map pairs (PDB-6Z6U/EMD-11103, PDB-6DRV/EMD-8908, PDB-9GXM/EMD-51667),
-#   run `potential_analysis`, and then export three estimation results with `result_dump`.
+#   run `potential_analysis`, and then export three estimation results with `result_dump`
+#   as an end-to-end CLI example.
 #
 # Audience / Platform:
 #   New RHBM-GEM CLI users on macOS or Linux.
@@ -39,8 +40,8 @@ source "${script_dir}/common.sh"
 usage() {
     cat <<'EOF'
 Usage:
-  bash resources/examples/cli/01_estimate_three_examples.sh <work_dir> [--executable /path/to/RHBM-GEM]
-  bash resources/examples/cli/01_estimate_three_examples.sh --workdir <work_dir> [--executable /path/to/RHBM-GEM]
+  bash resources/examples/cli/01_end_to_end_from_three_examples.sh <work_dir> [--executable /path/to/RHBM-GEM]
+  bash resources/examples/cli/01_end_to_end_from_three_examples.sh --workdir <work_dir> [--executable /path/to/RHBM-GEM]
 EOF
 }
 

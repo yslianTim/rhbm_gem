@@ -76,25 +76,41 @@ def assert_quickstart_smoke() -> None:
 def assert_end_to_end_smoke() -> None:
     with tempfile.TemporaryDirectory(prefix="rhbm_examples_smoke_") as temp_dir:
         workdir = Path(temp_dir) / "pipeline_output"
-        result = run_script(
-            "01_end_to_end_from_test_data.py",
-            "--sampling-size",
-            "10",
-            "--workdir",
-            str(workdir),
+        data_dir = workdir / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        staged_examples = (
+            ("6Z6U.cif", "emd_11103_additional.map"),
+            ("6DRV.cif", "emd_8908_additional.map"),
+            ("9GXM.cif", "emd_51667_additional_1.map"),
         )
+
+        for model_name, map_name in staged_examples:
+            model_path = data_dir / model_name
+            shutil.copyfile(PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif", model_path)
+
+            simulation_request = rgm.MapSimulationRequest()
+            simulation_request.model_file_path = str(model_path)
+            simulation_request.common.folder_path = str(data_dir)
+            simulation_request.map_file_name = Path(map_name).stem
+            simulation_request.blurring_width_list = "1.50"
+            ensure_execute(rgm.RunMapSimulation(simulation_request), "RunMapSimulation")
+
+            generated_maps = sorted(data_dir.glob(f"{Path(map_name).stem}_*.map"))
+            assert len(generated_maps) == 1, generated_maps
+            generated_maps[0].replace(data_dir / map_name)
+
+        result = run_script("01_end_to_end_from_three_examples.py", "--workdir", str(workdir), "--skip-download")
 
         output = f"{result.stdout}\n{result.stderr}"
         assert result.returncode == 0, output
-        assert "Pipeline completed successfully." in result.stdout, output
+        assert "Three-example workflow completed successfully." in result.stdout, output
 
-        maps_dir = workdir / "maps"
-        dump_dir = workdir / "dump"
-        db_file = workdir / "demo.sqlite"
+        db_file = workdir / "data" / "database.sqlite"
+        dump_outputs = sorted(path for path in workdir.iterdir() if path.is_file())
 
         assert db_file.exists(), output
-        assert sorted(maps_dir.glob("*.map")), output
-        assert sorted(dump_dir.glob("*")), output
+        assert dump_outputs, output
 
 
 def main() -> int:

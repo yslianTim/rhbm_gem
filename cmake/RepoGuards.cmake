@@ -164,6 +164,10 @@ function(rhbm_guard_check_hygiene)
             list(APPEND HYGIENE_VIOLATIONS "${TRACKED_FILE} (generated CMake metadata must not be tracked)")
         elseif(TRACKED_FILE MATCHES "^build/")
             list(APPEND HYGIENE_VIOLATIONS "${TRACKED_FILE} (build artifacts must not be tracked)")
+        elseif(TRACKED_FILE MATCHES "(^|/)__pycache__(/|$)")
+            list(APPEND HYGIENE_VIOLATIONS "${TRACKED_FILE} (Python cache directories must not be tracked)")
+        elseif(TRACKED_FILE MATCHES "\\.pyc$")
+            list(APPEND HYGIENE_VIOLATIONS "${TRACKED_FILE} (Python bytecode files must not be tracked)")
         elseif(TRACKED_FILE MATCHES "(^|/)\\.DS_Store$")
             list(APPEND HYGIENE_VIOLATIONS "${TRACKED_FILE} (OS metadata must not be tracked)")
         elseif(TRACKED_FILE MATCHES "^[^/]+\\.sqlite$")
@@ -240,6 +244,34 @@ endfunction()
 
 function(rhbm_guard_check_structure)
     rhbm_guard_find_git(GIT_EXECUTABLE)
+
+    set(REQUIRED_DOCUMENTATION_PATHS
+        "docs/README.md"
+        "docs/user/README.md"
+        "docs/developer/README.md"
+        "docs/developer/commands/README.md"
+        "resources/README.md"
+    )
+    set(MISSING_DOCUMENTATION_PATHS)
+    foreach(REQUIRED_PATH IN LISTS REQUIRED_DOCUMENTATION_PATHS)
+        if(NOT EXISTS "${PROJECT_SOURCE_DIR}/${REQUIRED_PATH}")
+            list(APPEND MISSING_DOCUMENTATION_PATHS "${REQUIRED_PATH}")
+        endif()
+    endforeach()
+    if(MISSING_DOCUMENTATION_PATHS)
+        list(JOIN MISSING_DOCUMENTATION_PATHS "\n  - " MISSING_DOCUMENTATION_PATHS_TEXT)
+        message(FATAL_ERROR
+            "Structure guard failed.\n"
+            "  - Missing required documentation entry points.\n"
+            "  - ${MISSING_DOCUMENTATION_PATHS_TEXT}")
+    endif()
+
+    if(EXISTS "${PROJECT_SOURCE_DIR}/resources/docs")
+        message(FATAL_ERROR
+            "Structure guard failed.\n"
+            "  - resources/docs must not exist.\n"
+            "  - Keep narrative documentation under docs/ and executable assets under resources/.")
+    endif()
 
     file(GLOB CORE_ROOT_HPP RELATIVE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src/core/*.hpp")
     if(CORE_ROOT_HPP)
@@ -409,7 +441,7 @@ function(rhbm_guard_run_install_smoke)
     set(CLI_EXAMPLE_INSTALL_DIR "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/cli")
     foreach(required_cli_example
         "00_quickstart.sh"
-        "01_estimate_three_examples.sh"
+        "01_end_to_end_from_three_examples.sh"
         "common.sh"
     )
         if(NOT EXISTS "${CLI_EXAMPLE_INSTALL_DIR}/${required_cli_example}")

@@ -1,4 +1,4 @@
-# Robust Hierarchical Bayesian Model for Gaussian Estimation of cryo-EM Maps (RHBM-GEM)
+# Robust Hierarchical Linear (Bayesian) Model for Gaussian Estimation of cryo-EM Maps (RHBM-GEM)
 
 RHBM-GEM provides a robust hierarchical Bayesian framework to extract atom-specific signal features (amplitude and width) from cryo-EM maps, explicitly accounting for noise and contamination via Gaussian modeling.
 
@@ -6,25 +6,35 @@ Read the manuscript of method here: [https://doi.org/10.1101/2025.07.10.664269](
 
 ## Documentation
 
-For the full documentation map, start at [`docs/README.md`](docs/README.md).
+For the full documentation map, start at [`/docs/README.md`](/docs/README.md).
+
+Ownership rules:
+
+- Keep narrative, repository-level guidance under `/docs/`.
+- Keep runnable examples, templates, and installable helper assets under `/resources/`.
+- Do not create `/docs/`; if a document is mainly read in the source tree, it belongs in `/docs/`.
 
 ### User Documentation
 
 - Set up your environment and install RHBM-GEM.
 - Verify the Python bindings.
 - Run the supported example workflows.
-- Start with [`docs/user/README.md`](docs/user/README.md) and [`docs/user/getting-started.md`](docs/user/getting-started.md).
+- Start with [`/docs/user/README.md`](/docs/user/README.md) and [`/docs/user/getting-started.md`](/docs/user/getting-started.md).
 
 ### Developer Documentation
 
 - Change the repository and follow project conventions.
 - Extend commands, data I/O, or other internal components.
 - Validate build configurations and prepare releases.
-- Start with [`docs/developer/README.md`](docs/developer/README.md) and [`docs/developer/build-and-configuration.md`](docs/developer/build-and-configuration.md).
+- Start with [`/docs/developer/README.md`](/docs/developer/README.md) and [`/docs/developer/build-and-configuration.md`](/docs/developer/build-and-configuration.md).
+
+### Resources
+
+- Browse runnable examples and helper assets in [`/resources/README.md`](/resources/README.md).
 
 ## License, Citation, and Third-Party Notices
 
 - Project-owned source code, build scripts, examples, and documentation in this repository are licensed under the MIT License (see `LICENSE`).
 - Third-party licenses and attribution summary: see `THIRD_PARTY_NOTICES.md`.
 - If you use this work in research, cite the manuscript linked above; software license terms and scholarly citation expectations are separate.
-- Release and compliance guidance for maintainers: [`docs/developer/release-compliance.md`](docs/developer/release-compliance.md).
+- Release and compliance guidance for maintainers: [`/docs/developer/release-compliance.md`](/docs/developer/release-compliance.md).

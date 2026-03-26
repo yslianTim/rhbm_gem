@@ -289,7 +289,7 @@ def main() -> int:
     if args.strict and not args.wire:
         parser.error("--strict requires --wire.")
 
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     spec = build_spec(args)
 
     doc_stem = re.sub(r"(?<!^)([A-Z])", r"-\1", spec.command_type.removesuffix("Command")).lower()

@@ -100,6 +100,7 @@ endif()
 set(CORE_CONTRACT_TEST_SOURCES
     core/contract/CommandCatalog_test.cpp
     core/contract/CommandExecutionContract_test.cpp
+    core/contract/DocumentationLayout_test.cpp
     core/contract/EnumOptionTraits_test.cpp
     core/contract/PotentialPlotBuilder_test.cpp
     core/contract/PublicHeaderSurface_test.cpp
@@ -240,6 +241,19 @@ if(UNIX)
             PROPERTIES LABELS "domain:integration;intent:command"
         )
     endif()
+endif()
+
+if(DEFINED Python_EXECUTABLE)
+    add_test(
+        NAME command_scaffold_smoke_test
+        COMMAND ${Python_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/tests/integration/command_scaffold_smoke.py
+            ${PROJECT_SOURCE_DIR}
+    )
+    set_tests_properties(
+        command_scaffold_smoke_test
+        PROPERTIES LABELS "domain:integration;intent:contract"
+    )
 endif()
 
 if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABLE)
