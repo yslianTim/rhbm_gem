@@ -1,4 +1,30 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+#
+# Script:
+#   00_quickstart.py
+#
+# Purpose:
+#   Download one example model/map pair (PDB-6Z6U/EMD-11103),
+#   run `potential_analysis`, and then export the estimation results with `result_dump`
+#   through the Python bindings.
+#
+# Audience / Platform:
+#   New RHBM-GEM Python users on macOS, Linux, or Windows after the bindings are installed.
+#
+# Prerequisites:
+#   Import `rhbm_gem_module` successfully before running this script.
+#   Use `--skip-download` for offline reruns after staging files under `<workdir>/data`.
+#
+# Inputs / Outputs:
+#   Download and read inputs from `<workdir>/data`.
+#   Write the SQLite database under `<workdir>/data` and generated outputs under `<workdir>`.
+#
+# References:
+#   docs/user/getting-started.md (Python Examples)
+#   resources/README.md
+#   resources/examples/cli/00_quickstart.sh
+#   https://www.rcsb.org/structure/6Z6U
 """Run the Python quickstart on one example model/map pair."""
 
 from __future__ import annotations
