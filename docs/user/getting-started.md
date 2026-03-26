@@ -417,16 +417,16 @@ python3 resources/examples/python/00_quickstart.py
 
 By default, the quickstart writes under `example_output/python_quickstart`. To choose a different location, pass `--workdir /tmp/rhbm_py_quickstart`.
 
-2. Run the end-to-end pipeline example from the source tree:
+2. Run the end-to-end three-example workflow from the source tree:
 
 ```bash
-python3 resources/examples/python/01_end_to_end_from_test_data.py --workdir /tmp/rhbm_py_demo
+python3 resources/examples/python/01_end_to_end_from_three_examples.py --workdir /tmp/rhbm_py_demo
 ```
 
-3. Run the installed copy of the pipeline example:
+3. Run the installed copy of the three-example workflow:
 
 ```bash
-python3 "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/python/01_end_to_end_from_test_data.py" \
+python3 "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/python/01_end_to_end_from_three_examples.py" \
   --workdir /tmp/rhbm_py_demo_installed
 ```
 
@@ -442,24 +442,24 @@ python .\resources\examples\python\00_quickstart.py
 
 By default, the quickstart writes under `example_output/python_quickstart`. To choose a different location, pass `--workdir "$env:TEMP\rhbm_py_quickstart"`.
 
-2. Run the end-to-end pipeline example from the source tree:
+2. Run the end-to-end three-example workflow from the source tree:
 
 ```powershell
-python .\resources\examples\python\01_end_to_end_from_test_data.py --workdir "$env:TEMP\rhbm_py_demo"
+python .\resources\examples\python\01_end_to_end_from_three_examples.py --workdir "$env:TEMP\rhbm_py_demo"
 ```
 
-3. Run the installed copy of the pipeline example:
+3. Run the installed copy of the three-example workflow:
 
 ```powershell
-python "$InstallPrefix\share\RHBM_GEM\resources\examples\python\01_end_to_end_from_test_data.py" `
+python "$InstallPrefix\share\RHBM_GEM\resources\examples\python\01_end_to_end_from_three_examples.py" `
   --workdir "$env:TEMP\rhbm_py_demo_installed"
 ```
 
-The pipeline example should create:
+The three-example workflow should create:
 
-1. SQLite database: `<workdir>/demo.sqlite`
-2. Simulated map outputs under `<workdir>/maps/`
-3. Dump outputs under `<workdir>/dump/`
+1. SQLite database: `<workdir>/data/database.sqlite`
+2. Downloaded or pre-staged input files under `<workdir>/data/`
+3. Dump outputs under `<workdir>/`
 
 Compatibility note:
 
