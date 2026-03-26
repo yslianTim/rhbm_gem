@@ -26,7 +26,7 @@ function(rhbm_gem_install_fetched_headers)
     )
 endfunction()
 
-# Install public headers and legal notices.
+# Install public headers and licensing documents.
 install(
     DIRECTORY "${PROJECT_SOURCE_DIR}/include/rhbm_gem/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem"
@@ -37,7 +37,6 @@ install(
 install(
     FILES
         "${PROJECT_SOURCE_DIR}/LICENSE"
-        "${PROJECT_SOURCE_DIR}/NOTICE"
         "${PROJECT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}"
 )
