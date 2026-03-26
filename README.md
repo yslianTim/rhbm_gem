@@ -22,9 +22,9 @@ For the full documentation map, start at [`docs/README.md`](docs/README.md).
 - Validate build configurations and prepare releases.
 - Start with [`docs/developer/README.md`](docs/developer/README.md) and [`docs/developer/build-and-configuration.md`](docs/developer/build-and-configuration.md).
 
-## License and Third-Party Notices
+## License, Citation, and Third-Party Notices
 
-- Project license: Apache License 2.0 (see `LICENSE`).
-- Project notice file and copyright statement: see `NOTICE`.
+- Project-owned source code, build scripts, examples, and documentation in this repository are licensed under the MIT License (see `LICENSE`).
 - Third-party licenses and attribution summary: see `THIRD_PARTY_NOTICES.md`.
+- If you use this work in research, cite the manuscript linked above; software license terms and scholarly citation expectations are separate.
 - Release and compliance guidance for maintainers: [`docs/developer/release-compliance.md`](docs/developer/release-compliance.md).

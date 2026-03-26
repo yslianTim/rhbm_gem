@@ -10,7 +10,7 @@ This directory groups non-core project assets under a single top-level path.
 
 - `resources/examples/cli/00_quickstart.sh`: CLI quickstart with executable auto-discovery for macOS/Linux.
 - `resources/examples/cli/01_estimate_three_examples.sh`: CLI batch example for three downloaded structures.
-- `resources/examples/python/00_quickstart.py`: smoke-test the Python bindings.
+- `resources/examples/python/00_quickstart.py`: Python quickstart that downloads one example model/map pair and runs analysis plus result dump through the bindings.
 - `resources/examples/python/01_end_to_end_from_test_data.py`: run the bundled end-to-end Python demo.
 
 ## User Scripts

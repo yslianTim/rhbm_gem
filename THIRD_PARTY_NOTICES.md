@@ -4,8 +4,8 @@ RHBM-GEM
 Copyright 2024-2026 Yu-Hsiang Lien
 
 Unless otherwise noted, the original source code, build scripts, example
-programs, and documentation in this repository are licensed under the Apache
-License, Version 2.0. See `LICENSE` and `NOTICE`.
+programs, and documentation in this repository are licensed under the MIT
+License. See `LICENSE`.
 
 This file summarizes third-party components that may be used when building,
 testing, installing, or redistributing the project. It is provided for
@@ -38,7 +38,7 @@ this project or of any third-party component.
 
 ## Redistribution Notes
 
-- Keep `LICENSE`, `NOTICE`, and this file in source and binary distributions.
+- Keep `LICENSE` and this file in source and binary distributions.
 - In `FETCH` installs or binary packages, account for the fetched Eigen, CLI11, Boost, and SQLite artifacts redistributed by the install/export rules.
 - Preserve copyright and license notices required by third-party licenses.
 - If shipping binaries, include attribution/notice documents and the applicable upstream third-party license texts in the package and/or accompanying documentation.
