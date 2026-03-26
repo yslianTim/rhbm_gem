@@ -43,7 +43,7 @@ install(
 install(
     PROGRAMS
         "${PROJECT_SOURCE_DIR}/resources/examples/cli/00_quickstart.sh"
-        "${PROJECT_SOURCE_DIR}/resources/examples/cli/01_estimate_three_examples.sh"
+        "${PROJECT_SOURCE_DIR}/resources/examples/cli/01_end_to_end_from_three_examples.sh"
         "${PROJECT_SOURCE_DIR}/resources/examples/cli/common.sh"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/resources/examples/cli"
 )

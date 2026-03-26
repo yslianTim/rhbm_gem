@@ -1,4 +1,4 @@
-# Robust Hierarchical Bayesian Model for Gaussian Estimation of cryo-EM Maps (RHBM-GEM)
+# Robust Hierarchical Linear (Bayesian) Model for Gaussian Estimation of cryo-EM Maps (RHBM-GEM)
 
 RHBM-GEM provides a robust hierarchical Bayesian framework to extract atom-specific signal features (amplitude and width) from cryo-EM maps, explicitly accounting for noise and contamination via Gaussian modeling.
 
