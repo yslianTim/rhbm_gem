@@ -28,7 +28,7 @@ Browse runnable examples and helper assets in [`/resources/README.md`](/resource
 
 ## License, Citation, and Third-Party Notices
 
-- Project-owned source code, build scripts, examples, and documentation in this repository are licensed under the MIT License (see [`/LICENSE`](LICENSE)).
-- Third-party licenses and attribution summary: see [`/THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+- Project-owned source code, build scripts, examples, and documentation in this repository are licensed under the MIT License (see [`LICENSE`](/LICENSE)).
+- Third-party licenses and attribution summary: see [`THIRD_PARTY_NOTICES.md`](/THIRD_PARTY_NOTICES.md).
 - If you use this work in research, cite the manuscript linked above; software license terms and scholarly citation expectations are separate.
 - Release and compliance guidance for maintainers: [`/docs/developer/release-compliance.md`](/docs/developer/release-compliance.md).
