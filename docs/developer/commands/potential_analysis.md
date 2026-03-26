@@ -4,13 +4,13 @@ This page documents `potential_analysis` as the canonical example of the current
 
 ## Where It Fits In The Command System
 
-The top-level source of truth for command membership is [`../../../include/rhbm_gem/core/command/CommandList.def`](../../../include/rhbm_gem/core/command/CommandList.def). The `PotentialAnalysis` entry there is expanded with X-macros into the current command surfaces:
+The top-level source of truth for command membership is [`/include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def). The `PotentialAnalysis` entry there is expanded with X-macros into the current command surfaces:
 
-- [`../../../include/rhbm_gem/core/command/CommandMetadata.hpp`](../../../include/rhbm_gem/core/command/CommandMetadata.hpp) for `CommandId` and shared option-profile metadata
-- [`../../../include/rhbm_gem/core/command/CommandApi.hpp`](../../../include/rhbm_gem/core/command/CommandApi.hpp) for `RunPotentialAnalysis(...)`
-- [`../../../src/core/command/CommandApi.cpp`](../../../src/core/command/CommandApi.cpp) for the concrete `RunPotentialAnalysis(...)` definition
-- [`../../../src/core/command/CommandCatalog.cpp`](../../../src/core/command/CommandCatalog.cpp) for CLI registration
-- [`../../../src/python/CommandApiBindings.cpp`](../../../src/python/CommandApiBindings.cpp) for Python exposure
+- [`/include/rhbm_gem/core/command/CommandMetadata.hpp`](/include/rhbm_gem/core/command/CommandMetadata.hpp) for `CommandId` and shared option-profile metadata
+- [`/include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp) for `RunPotentialAnalysis(...)`
+- [`/src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) for the concrete `RunPotentialAnalysis(...)` definition
+- [`/src/core/command/CommandCatalog.cpp`](/src/core/command/CommandCatalog.cpp) for CLI registration
+- [`/src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) for Python exposure
 
 `potential_analysis` is registered with the `DatabaseWorkflow` profile, so it inherits the shared command options controlled by `CommonOptionProfile`:
 
@@ -19,11 +19,11 @@ The top-level source of truth for command membership is [`../../../include/rhbm_
 - `-d,--database`
 - `-o,--folder`
 
-The CLI entrypoint starts in [`../../../src/main.cpp`](../../../src/main.cpp), which calls `ConfigureCommandCli(...)`. That delegates to `RegisterCommandSubcommands(...)`, which registers the `potential_analysis` subcommand and routes execution to `RunPotentialAnalysis(...)`. Python bindings converge on the same `RunPotentialAnalysis(...)` function rather than maintaining a separate execution path.
+The CLI entrypoint starts in [`/src/main.cpp`](/src/main.cpp), which calls `ConfigureCommandCli(...)`. That delegates to `RegisterCommandSubcommands(...)`, which registers the `potential_analysis` subcommand and routes execution to `RunPotentialAnalysis(...)`. Python bindings converge on the same `RunPotentialAnalysis(...)` function rather than maintaining a separate execution path.
 
 ## Registration And Public Surface
 
-The manifest entry in [`../../../include/rhbm_gem/core/command/CommandList.def`](../../../include/rhbm_gem/core/command/CommandList.def) currently declares:
+The manifest entry in [`/include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def) currently declares:
 
 ```cpp
 RHBM_GEM_COMMAND(
@@ -33,7 +33,7 @@ RHBM_GEM_COMMAND(
     DatabaseWorkflow)
 ```
 
-The public request surface is handwritten in [`../../../include/rhbm_gem/core/command/CommandApi.hpp`](../../../include/rhbm_gem/core/command/CommandApi.hpp) as `PotentialAnalysisRequest`. Its fields are easier to maintain when viewed in groups:
+The public request surface is handwritten in [`/include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp) as `PotentialAnalysisRequest`. Its fields are easier to maintain when viewed in groups:
 
 - Common command options: `common.thread_size`, `common.verbose_level`, `common.database_path`, `common.folder_path`
 - Input paths: `model_file_path`, `map_file_path`
@@ -42,9 +42,9 @@ The public request surface is handwritten in [`../../../include/rhbm_gem/core/co
 - Fit controls: `fit_range_min`, `fit_range_max`
 - Alpha controls: `alpha_r`, `alpha_g`
 
-The shared execution contract comes from [`../../../include/rhbm_gem/core/command/CommandContract.hpp`](../../../include/rhbm_gem/core/command/CommandContract.hpp). `ExecutionReport` communicates whether preparation and execution succeeded and carries the collected `ValidationIssue` list.
+The shared execution contract comes from [`/include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp). `ExecutionReport` communicates whether preparation and execution succeeded and carries the collected `ValidationIssue` list.
 
-CLI binding for command-specific fields lives in [`../../../src/core/command/CommandCatalog.cpp`](../../../src/core/command/CommandCatalog.cpp) inside `BindPotentialAnalysisRequestOptions(...)`. That binder makes `--model` and `--map` required and wires the rest of the request fields directly into the request object used by the subcommand callback.
+CLI binding for command-specific fields lives in [`/src/core/command/CommandCatalog.cpp`](/src/core/command/CommandCatalog.cpp) inside `BindPotentialAnalysisRequestOptions(...)`. That binder makes `--model` and `--map` required and wires the rest of the request fields directly into the request object used by the subcommand callback.
 
 One important maintenance distinction is that request structs and per-command CLI binders are handwritten, while `Run*` declarations, `Run*` definitions, command descriptors, and Python `Run*` exports are generated from the manifest entry.
 
@@ -62,16 +62,16 @@ flowchart LR
     H --> I["Sample, fit, save"]
 ```
 
-`RunPotentialAnalysis(...)` is emitted in [`../../../src/core/command/CommandApi.cpp`](../../../src/core/command/CommandApi.cpp) through the shared `RunCommand(...)` template. That template constructs the concrete command with the manifest profile, calls `ApplyRequest(...)`, runs `PrepareForExecution()`, and then calls `Execute()` only when preparation succeeds.
+`RunPotentialAnalysis(...)` is emitted in [`/src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) through the shared `RunCommand(...)` template. That template constructs the concrete command with the manifest profile, calls `ApplyRequest(...)`, runs `PrepareForExecution()`, and then calls `Execute()` only when preparation succeeds.
 
-Inside `PotentialAnalysisCommand::ApplyRequest(...)`, [`../../../src/core/command/PotentialAnalysisCommand.cpp`](../../../src/core/command/PotentialAnalysisCommand.cpp) first delegates shared fields through `ApplyCommonRequest(...)`, then applies command-specific setters for paths, sampling, fitting, alpha values, and execution switches.
+Inside `PotentialAnalysisCommand::ApplyRequest(...)`, [`/src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp) first delegates shared fields through `ApplyCommonRequest(...)`, then applies command-specific setters for paths, sampling, fitting, alpha values, and execution switches.
 
 Validation happens in two phases:
 
 - Parse-phase validation is typically attached to setters and captures malformed or normalized request values as the request is applied.
 - Prepare-phase validation runs in `ValidateOptions()` and checks cross-field invariants that depend on the final option set.
 
-`CommandBase` owns the generic preparation lifecycle in [`../../../src/core/command/CommandBase.cpp`](../../../src/core/command/CommandBase.cpp). For `potential_analysis`, that means output-folder preflight is handled centrally, but the database is not opened during generic preparation. `DataObjectManager::SetDatabaseManager(...)` is deferred until `BuildDataObject()`, which is part of command execution.
+`CommandBase` owns the generic preparation lifecycle in [`/src/core/command/CommandBase.cpp`](/src/core/command/CommandBase.cpp). For `potential_analysis`, that means output-folder preflight is handled centrally, but the database is not opened during generic preparation. `DataObjectManager::SetDatabaseManager(...)` is deferred until `BuildDataObject()`, which is part of command execution.
 
 ## Command-Specific Option Semantics
 
@@ -102,9 +102,9 @@ The behaviors below are worth documenting because they are encoded in setters ra
 
 The boundary between shared helpers and command-owned orchestration is intentional:
 
-- [`../../../src/core/command/CommandDataSupport.cpp`](../../../src/core/command/CommandDataSupport.cpp) owns reusable model/map helpers such as `NormalizeMapObject(...)` and `PrepareModelObject(...)`.
-- [`../../../src/core/command/PotentialAnalysisCommand.cpp`](../../../src/core/command/PotentialAnalysisCommand.cpp) owns the high-level orchestration and the command-specific option semantics.
-- [`../../../src/core/experimental/PotentialAnalysisBondWorkflow.cpp`](../../../src/core/experimental/PotentialAnalysisBondWorkflow.cpp) isolates the bond-analysis path so the primary atom workflow remains readable.
+- [`/src/core/command/CommandDataSupport.cpp`](/src/core/command/CommandDataSupport.cpp) owns reusable model/map helpers such as `NormalizeMapObject(...)` and `PrepareModelObject(...)`.
+- [`/src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp) owns the high-level orchestration and the command-specific option semantics.
+- [`/src/core/experimental/PotentialAnalysisBondWorkflow.cpp`](/src/core/experimental/PotentialAnalysisBondWorkflow.cpp) isolates the bond-analysis path so the primary atom workflow remains readable.
 
 Two command-specific preparation details matter during maintenance:
 
@@ -129,22 +129,22 @@ Persistence happens in `SaveDataObject()`, which writes the processed model obje
 
 ## Experimental Bond Workflow
 
-The bond-analysis branch is guarded by `RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS`. In [`../../../src/core/command/PotentialAnalysisCommand.cpp`](../../../src/core/command/PotentialAnalysisCommand.cpp), `RunExperimentalBondWorkflowIfEnabled()` compiles to a no-op when the feature flag is disabled.
+The bond-analysis branch is guarded by `RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS`. In [`/src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp), `RunExperimentalBondWorkflowIfEnabled()` compiles to a no-op when the feature flag is disabled.
 
-Even when the flag is enabled, the command only enters the bond workflow if both the model and map objects were built successfully. The implementation then delegates bond sampling, grouping, local fitting, and group fitting to [`../../../src/core/experimental/PotentialAnalysisBondWorkflow.cpp`](../../../src/core/experimental/PotentialAnalysisBondWorkflow.cpp).
+Even when the flag is enabled, the command only enters the bond workflow if both the model and map objects were built successfully. The implementation then delegates bond sampling, grouping, local fitting, and group fitting to [`/src/core/experimental/PotentialAnalysisBondWorkflow.cpp`](/src/core/experimental/PotentialAnalysisBondWorkflow.cpp).
 
 The separation is mostly about maintainability. The atom workflow remains the default mental model for the command, while the bond workflow stays isolated behind a compile-time gate. Tests should continue validating feature reachability through public command behavior rather than by including private workflow headers directly.
 
 ## Testing And Maintenance Checklist
 
-- Update [`../../../tests/core/command/PotentialAnalysisCommand_test.cpp`](../../../tests/core/command/PotentialAnalysisCommand_test.cpp) when validation semantics or fallback behavior change.
-- Update [`../../../tests/core/command/PotentialAnalysisExperimentalBondGate_test.cpp`](../../../tests/core/command/PotentialAnalysisExperimentalBondGate_test.cpp) when the compile-time bond-gate behavior changes.
-- Update [`../../../tests/core/command/CommandApi_test.cpp`](../../../tests/core/command/CommandApi_test.cpp) if the public `RunPotentialAnalysis(...)` request/report behavior changes.
+- Update [`/tests/core/command/PotentialAnalysisCommand_test.cpp`](/tests/core/command/PotentialAnalysisCommand_test.cpp) when validation semantics or fallback behavior change.
+- Update [`/tests/core/command/PotentialAnalysisExperimentalBondGate_test.cpp`](/tests/core/command/PotentialAnalysisExperimentalBondGate_test.cpp) when the compile-time bond-gate behavior changes.
+- Update [`/tests/core/command/CommandApi_test.cpp`](/tests/core/command/CommandApi_test.cpp) if the public `RunPotentialAnalysis(...)` request/report behavior changes.
 - Keep `PotentialAnalysisRequest`, `BindPotentialAnalysisRequestOptions(...)`, and the Python binding in `src/python/CommandApiBindings.cpp` synchronized.
-- If command membership, manifest order, or workflow profile changes, expect [`../../../tests/core/contract/CommandCatalog_test.cpp`](../../../tests/core/contract/CommandCatalog_test.cpp) coverage to matter.
+- If command membership, manifest order, or workflow profile changes, expect [`/tests/core/contract/CommandCatalog_test.cpp`](/tests/core/contract/CommandCatalog_test.cpp) coverage to matter.
 
 ## Related References
 
-- [`../adding-a-command.md`](../adding-a-command.md)
-- [`../architecture/command-architecture.md`](../architecture/command-architecture.md)
-- [`../../../resources/README.md`](../../../resources/README.md)
+- [`/docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
+- [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
+- [`/resources/README.md`](/resources/README.md)

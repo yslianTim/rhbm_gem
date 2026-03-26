@@ -25,7 +25,7 @@ std::string ReadFileContent(const fs::path & path)
         std::istreambuf_iterator<char>{});
 }
 
-std::vector<std::string> CollectProjectRelativeMarkdownLinks(const std::string & content)
+std::vector<std::string> CollectRepositoryMarkdownLinks(const std::string & content)
 {
     const std::regex link_pattern{ R"(\[[^\]]+\]\(([^)]+)\))" };
 
@@ -80,6 +80,8 @@ std::vector<fs::path> DocumentationFilesToValidate()
 
 TEST(DocumentationLayoutTest, MarkdownLinksResolveWithinRepository)
 {
+    const auto project_root{ command_test::ProjectRootPath() };
+
     for (const auto & markdown_path : DocumentationFilesToValidate())
     {
         SCOPED_TRACE(markdown_path.string());
@@ -87,13 +89,16 @@ TEST(DocumentationLayoutTest, MarkdownLinksResolveWithinRepository)
         const auto content{ ReadFileContent(markdown_path) };
         ASSERT_FALSE(content.empty()) << markdown_path;
 
-        for (const auto & relative_target : CollectProjectRelativeMarkdownLinks(content))
+        for (const auto & target : CollectRepositoryMarkdownLinks(content))
         {
+            const fs::path target_path{ target };
             const auto resolved_target{
-                (markdown_path.parent_path() / relative_target).lexically_normal()
+                target_path.is_absolute()
+                    ? (project_root / target_path.relative_path()).lexically_normal()
+                    : (markdown_path.parent_path() / target_path).lexically_normal()
             };
             EXPECT_TRUE(fs::exists(resolved_target))
-                << "Broken markdown link target: " << relative_target
+                << "Broken markdown link target: " << target
                 << " from " << markdown_path.string();
         }
     }
