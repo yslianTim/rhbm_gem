@@ -403,7 +403,7 @@ Notes:
 
 ## Python Examples
 
-Once the import check succeeds, continue with the example workflow for your platform. Each workflow runs the quickstart script, then the end-to-end pipeline from the source tree, and finally the installed copy of the same pipeline example.
+Once the import check succeeds, continue with the example workflow for your platform. The Python quickstart downloads one example model/map pair, runs `potential_analysis`, and exports the Gaussian estimation results through the Python bindings. If you prefer an offline rerun, stage `6Z6U.cif` and `emd_11103_additional.map` under `<workdir>/data` and add `--skip-download`.
 
 ### macOS and Linux
 
@@ -414,6 +414,8 @@ These commands assume `INSTALL_PREFIX`, `PY_SITE_PATHS`, and `PYTHONPATH` are st
 ```bash
 python3 resources/examples/python/00_quickstart.py
 ```
+
+By default, the quickstart writes under `example_output/python_quickstart`. To choose a different location, pass `--workdir /tmp/rhbm_py_quickstart`.
 
 2. Run the end-to-end pipeline example from the source tree:
 
@@ -437,6 +439,8 @@ These commands assume `$InstallPrefix`, `$PySite`, and `$env:PYTHONPATH` are sti
 ```powershell
 python .\resources\examples\python\00_quickstart.py
 ```
+
+By default, the quickstart writes under `example_output/python_quickstart`. To choose a different location, pass `--workdir "$env:TEMP\rhbm_py_quickstart"`.
 
 2. Run the end-to-end pipeline example from the source tree:
 
