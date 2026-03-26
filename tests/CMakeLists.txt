@@ -75,8 +75,6 @@ endfunction()
 set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
     core/command/HRLModelTestCommand_test.cpp
     core/command/MapSimulationCommand_test.cpp
-    core/command/MapVisualizationCommand_test.cpp
-    core/command/PositionEstimationCommand_test.cpp
     core/command/PotentialAnalysisCommand_test.cpp
     core/command/PotentialDisplayCommand_test.cpp
     core/command/ResultDumpCommand_test.cpp
@@ -92,6 +90,8 @@ set(CORE_COMMAND_TEST_SOURCES
 )
 
 set(RHBM_GEM_EXPERIMENTAL_TEST_SOURCES
+    core/command/MapVisualizationCommand_test.cpp
+    core/command/PositionEstimationCommand_test.cpp
     core/command/PotentialAnalysisExperimentalFeatureGate_test.cpp
 )
 
@@ -265,9 +265,10 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
 
     function(add_python_integration_test test_name script_name labels)
         add_test(
-            NAME ${test_name}
-            COMMAND ${CMAKE_COMMAND} -E env
+        NAME ${test_name}
+        COMMAND ${CMAKE_COMMAND} -E env
                 "PYTHONPATH=$<TARGET_FILE_DIR:rhbm_gem_module>"
+                "RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=${RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE}"
                 ${Python_EXECUTABLE}
                 ${PROJECT_SOURCE_DIR}/tests/integration/${script_name}
         )

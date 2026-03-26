@@ -74,6 +74,7 @@ void BindCommandApi(py::module_ & module)
         .def_readwrite("grid_spacing", &MapSimulationRequest::grid_spacing)
         .def_readwrite("blurring_width_list", &MapSimulationRequest::blurring_width_list);
 
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     py::class_<MapVisualizationRequest>(module, "MapVisualizationRequest")
         .def(py::init<>())
         .def_readwrite("common", &MapVisualizationRequest::common)
@@ -92,6 +93,7 @@ void BindCommandApi(py::module_ & module)
         .def_readwrite("alpha", &PositionEstimationRequest::alpha)
         .def_readwrite("threshold_ratio", &PositionEstimationRequest::threshold_ratio)
         .def_readwrite("dedup_tolerance", &PositionEstimationRequest::dedup_tolerance);
+#endif
 
     py::class_<HRLModelTestRequest>(module, "HRLModelTestRequest")
         .def(py::init<>())

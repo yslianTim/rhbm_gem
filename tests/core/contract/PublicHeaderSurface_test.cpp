@@ -11,6 +11,8 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
         "core/command/CommandApi.hpp",
         "core/command/CommandContract.hpp",
         "core/command/CommandList.def",
+        "core/command/CommandListExperimental.def",
+        "core/command/CommandListStable.def",
         "core/command/CommandMetadata.hpp",
         "core/command/MapSampling.hpp",
         "core/command/OptionEnumClass.hpp",

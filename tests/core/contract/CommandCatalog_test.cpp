@@ -55,20 +55,36 @@ std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTo
 
 std::vector<std::string> ParseCommandIdTokensFromManifest()
 {
-    const auto manifest_path{
+    const auto manifest_dir{
         command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
-            / "CommandList.def"
     };
-    std::ifstream manifest_stream{ manifest_path };
-    if (!manifest_stream.is_open())
+    std::string manifest;
+
+    const auto append_manifest = [&](const std::filesystem::path & manifest_path)
+    {
+        std::ifstream manifest_stream{ manifest_path };
+        if (!manifest_stream.is_open())
+        {
+            return false;
+        }
+        manifest.append(
+            std::istreambuf_iterator<char>{ manifest_stream },
+            std::istreambuf_iterator<char>{});
+        manifest.push_back('\n');
+        return true;
+    };
+
+    if (!append_manifest(manifest_dir / "CommandListStable.def"))
     {
         return {};
     }
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    if (!append_manifest(manifest_dir / "CommandListExperimental.def"))
+    {
+        return {};
+    }
+#endif
 
-    const std::string manifest{
-        std::istreambuf_iterator<char>{ manifest_stream },
-        std::istreambuf_iterator<char>{}
-    };
     const std::regex command_pattern{
         R"(RHBM_GEM_COMMAND\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)"
     };
@@ -224,9 +240,20 @@ TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
              "PotentialDisplayRequest",
              "ResultDumpRequest",
              "MapSimulationRequest",
+             "HRLModelTestRequest",
+         })
+    {
+        EXPECT_NE(
+            bindings.find(
+                "py::class_<" + std::string(request_name) + ">(module, \""
+                + std::string(request_name) + "\")"),
+            std::string::npos)
+            << request_name;
+    }
+
+    for (const std::string_view request_name : {
              "MapVisualizationRequest",
              "PositionEstimationRequest",
-             "HRLModelTestRequest",
          })
     {
         EXPECT_NE(

@@ -1,0 +1,10 @@
+RHBM_GEM_COMMAND(
+    MapVisualization,
+    "map_visualization",
+    "Run map visualization",
+    FileWorkflow)
+RHBM_GEM_COMMAND(
+    PositionEstimation,
+    "position_estimation",
+    "Run atom position estimation",
+    FileWorkflow)

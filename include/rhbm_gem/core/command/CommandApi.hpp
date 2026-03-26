@@ -77,6 +77,7 @@ struct MapSimulationRequest
     std::string blurring_width_list{ "1.50" };
 };
 
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 struct MapVisualizationRequest
 {
     CommonCommandRequest common{};
@@ -97,6 +98,7 @@ struct PositionEstimationRequest
     double threshold_ratio{ 0.01 };
     double dedup_tolerance{ 1.0e-2 };
 };
+#endif
 
 struct HRLModelTestRequest
 {
