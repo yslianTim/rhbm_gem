@@ -11,6 +11,10 @@ set(RHBM_GEM_COMMAND_SOURCES
     core/command/ResultDumpCommand.cpp
 )
 
+set(RHBM_GEM_EXPERIMENTAL_SOURCES
+    core/experimental/PotentialAnalysisBondWorkflow.cpp
+)
+
 target_sources(rhbm_gem PRIVATE
     # core
     core/command/CommandApi.cpp
@@ -72,9 +76,9 @@ target_sources(rhbm_gem PRIVATE
     utils/hrl/HRLModelTester.cpp
 )
 
-if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
+if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
     target_sources(rhbm_gem PRIVATE
-        core/experimental/PotentialAnalysisBondWorkflow.cpp
+        ${RHBM_GEM_EXPERIMENTAL_SOURCES}
     )
 endif()
 
@@ -104,8 +108,8 @@ if(WIN32 AND BUILD_SHARED_LIBS)
 endif()
 rhbm_gem_apply_library_install_rpath(rhbm_gem)
 
-if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
-    target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
+if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
+    target_compile_definitions(rhbm_gem PRIVATE RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
 endif()
 install(
     TARGETS rhbm_gem rhbm_gem_dependencies

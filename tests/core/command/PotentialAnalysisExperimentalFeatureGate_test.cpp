@@ -6,7 +6,7 @@
 
 namespace rg = rhbm_gem;
 
-TEST(PotentialAnalysisExperimentalBondGateTest, ExecuteRemainsReachableWhenFeatureIsEnabled)
+TEST(PotentialAnalysisExperimentalFeatureGateTest, ExecuteRemainsReachableWhenFeatureIsEnabled)
 {
     command_test::ScopedTempDir temp_dir{ "potential_analysis_bond_gate" };
     const auto model_path{ command_test::TestDataPath("test_model.cif") };

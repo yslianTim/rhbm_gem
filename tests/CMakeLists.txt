@@ -91,9 +91,13 @@ set(CORE_COMMAND_TEST_SOURCES
     ${RHBM_GEM_CORE_COMMAND_TEST_SOURCES}
 )
 
-if(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS)
+set(RHBM_GEM_EXPERIMENTAL_TEST_SOURCES
+    core/command/PotentialAnalysisExperimentalFeatureGate_test.cpp
+)
+
+if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
     list(APPEND CORE_COMMAND_TEST_SOURCES
-        core/command/PotentialAnalysisExperimentalBondGate_test.cpp
+        ${RHBM_GEM_EXPERIMENTAL_TEST_SOURCES}
     )
 endif()
 
