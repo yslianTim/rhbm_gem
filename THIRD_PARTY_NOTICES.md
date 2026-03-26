@@ -5,7 +5,7 @@ Copyright 2024-2026 Yu-Hsiang Lien
 
 Unless otherwise noted, the original source code, build scripts, example
 programs, and documentation in this repository are licensed under the MIT
-License. See `LICENSE`.
+License. See [`LICENSE`](/LICENSE).
 
 This file summarizes third-party components that may be used when building,
 testing, installing, or redistributing the project. It is provided for
