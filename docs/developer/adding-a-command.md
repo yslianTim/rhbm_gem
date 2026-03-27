@@ -24,7 +24,7 @@ Concrete command implementation:
 
 Public command API:
 
-- `/include/rhbm_gem/core/command/CommandContract.hpp` only if shared diagnostics/defaults change
+- `/include/rhbm_gem/core/command/CommandMetadata.hpp` if shared diagnostics/defaults or metadata change
 - `/include/rhbm_gem/core/command/CommandApi.hpp`
 - `/src/core/command/CommandApi.cpp`
 
@@ -122,9 +122,9 @@ Useful base helpers from `CommandBase`:
 
 Add the request struct to `/include/rhbm_gem/core/command/CommandApi.hpp`.
 
-Shared diagnostics and `ExecutionReport` live in
-`/include/rhbm_gem/core/command/CommandContract.hpp`, so adding a normal command usually does not
-require contract changes.
+Shared diagnostics/defaults live in `/include/rhbm_gem/core/command/CommandMetadata.hpp`, while
+`ExecutionReport` lives in `/include/rhbm_gem/core/command/CommandApi.hpp`, so adding a normal
+command usually does not require changes to either shared contract layer.
 
 `Run*` declarations/definitions are expanded from `CommandList.def`, so once the manifest entry
 exists in the correct fragment you only need to ensure the request struct, command class, and

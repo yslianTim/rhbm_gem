@@ -42,7 +42,7 @@ The public request surface is handwritten in [`include/rhbm_gem/core/command/Com
 - Fit controls: `fit_range_min`, `fit_range_max`
 - Alpha controls: `alpha_r`, `alpha_g`
 
-The shared execution contract comes from [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp). `ExecutionReport` communicates whether preparation and execution succeeded and carries the collected `ValidationIssue` list.
+Shared validation/default-path types come from [`include/rhbm_gem/core/command/CommandMetadata.hpp`](/include/rhbm_gem/core/command/CommandMetadata.hpp), and the public execution result comes from [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp). `ExecutionReport` communicates whether preparation and execution succeeded and carries the collected `ValidationIssue` list.
 
 CLI binding for command-specific fields lives in [`src/core/command/CommandCatalog.cpp`](/src/core/command/CommandCatalog.cpp) inside `BindPotentialAnalysisRequestOptions(...)`. That binder makes `--model` and `--map` required and wires the rest of the request fields directly into the request object used by the subcommand callback.
 

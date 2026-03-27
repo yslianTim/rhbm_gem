@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandContract.hpp>
+#include <rhbm_gem/core/command/CommandMetadata.hpp>
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace CLI
@@ -13,6 +13,13 @@ namespace CLI
 }
 
 namespace rhbm_gem {
+
+struct ExecutionReport
+{
+    bool prepared{ false };
+    bool executed{ false };
+    std::vector<ValidationIssue> validation_issues{};
+};
 
 struct CommonCommandRequest
 {

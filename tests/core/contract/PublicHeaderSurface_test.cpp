@@ -4,12 +4,12 @@
 #include <vector>
 
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
 
 TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
         "core/command/CommandApi.hpp",
-        "core/command/CommandContract.hpp",
         "core/command/CommandList.def",
         "core/command/CommandMetadata.hpp",
         "core/command/OptionEnumClass.hpp",
@@ -41,24 +41,37 @@ TEST(PublicHeaderSurfaceTest, CommandMetadataProfilesRemainStable) {
     EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::OutputFolder));
 }
 
-TEST(PublicHeaderSurfaceTest, CommandContractHeaderProvidesSharedCommandContract) {
+TEST(PublicHeaderSurfaceTest, CommandMetadataHeaderProvidesSharedValidationAndDefaults) {
     const auto default_data_root{ rhbm_gem::GetDefaultDataRootPath() };
     const auto default_database_path{ rhbm_gem::GetDefaultDatabasePath() };
 
-    rhbm_gem::ExecutionReport report{};
     rhbm_gem::ValidationIssue issue{
         "--example",
         rhbm_gem::ValidationPhase::Prepare,
         LogLevel::Warning,
         "example",
         true};
-    report.validation_issues.push_back(issue);
 
     EXPECT_FALSE(default_data_root.empty());
     EXPECT_EQ(default_database_path.filename(), "database.sqlite");
+    EXPECT_EQ(issue.option_name, "--example");
+    EXPECT_EQ(issue.phase, rhbm_gem::ValidationPhase::Prepare);
+    EXPECT_EQ(issue.level, LogLevel::Warning);
+    EXPECT_TRUE(issue.auto_corrected);
+}
+
+TEST(PublicHeaderSurfaceTest, CommandApiHeaderProvidesExecutionReport) {
+    rhbm_gem::ExecutionReport report{};
+    report.validation_issues.push_back(rhbm_gem::ValidationIssue{
+        "--example",
+        rhbm_gem::ValidationPhase::Prepare,
+        LogLevel::Warning,
+        "example",
+        true});
+
+    EXPECT_FALSE(report.prepared);
+    EXPECT_FALSE(report.executed);
     ASSERT_EQ(report.validation_issues.size(), 1u);
     EXPECT_EQ(report.validation_issues.front().option_name, "--example");
     EXPECT_EQ(report.validation_issues.front().phase, rhbm_gem::ValidationPhase::Prepare);
-    EXPECT_EQ(report.validation_issues.front().level, LogLevel::Warning);
-    EXPECT_TRUE(report.validation_issues.front().auto_corrected);
 }

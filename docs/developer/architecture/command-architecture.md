@@ -79,16 +79,18 @@ There is no exported runtime-binder function object layer anymore.
 
 ## 4. Public contract and request surface
 
-Shared command contract types live in `/include/rhbm_gem/core/command/CommandContract.hpp`.
+Shared command metadata, default paths, and validation types live in
+`/include/rhbm_gem/core/command/CommandMetadata.hpp`.
 
 This header owns:
 
+- command/profile metadata
 - default command data/database paths
 - `ValidationPhase`
 - `ValidationIssue`
-- `ExecutionReport`
 
-Public requests and `Run*` entrypoints live in `/include/rhbm_gem/core/command/CommandApi.hpp`.
+Public requests, `ExecutionReport`, and `Run*` entrypoints live in
+`/include/rhbm_gem/core/command/CommandApi.hpp`.
 Experimental request types and `Run*` entrypoints are compiled into that public surface only when
 `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` is enabled for the linked target.
 
@@ -99,9 +101,9 @@ Shared request fields:
 - `database_path`
 - `folder_path`
 
-`CommandApi.hpp` includes `CommandContract.hpp`, so callers that only need the public `Run*`
-surface can include one header, while lower-level consumers can depend on `CommandContract.hpp`
-directly for shared diagnostics/default-path behavior.
+`CommandApi.hpp` includes `CommandMetadata.hpp`, so callers that only need the public `Run*`
+surface can include one header, while lower-level consumers can depend on `CommandMetadata.hpp`
+directly for shared metadata, diagnostics, and default-path behavior.
 
 `CommonOptionProfile` in `CommandMetadata.hpp` controls shared CLI/common-option behavior:
 
