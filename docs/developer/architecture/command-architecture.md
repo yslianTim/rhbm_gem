@@ -105,6 +105,9 @@ Shared request fields:
 surface can include one header, while lower-level consumers can depend on `CommandMetadata.hpp`
 directly for shared metadata, diagnostics, and default-path behavior.
 
+Shared command enums, plus the CLI alias / Python binding / validation mappings derived from them,
+live in `/include/rhbm_gem/core/command/OptionEnumClass.hpp`.
+
 `CommonOptionProfile` in `CommandMetadata.hpp` controls shared CLI/common-option behavior:
 
 - `FileWorkflow` -> `Threading | Verbose | OutputFolder`
@@ -143,6 +146,10 @@ Useful `CommandBase` helpers:
 - `SetPositiveScalarOption(...)`
 - `SetValidatedEnumOption(...)`
 - `BuildOutputPath(...)`
+
+`SetValidatedEnumOption(...)` validates against the enum mappings declared in
+`/include/rhbm_gem/core/command/OptionEnumClass.hpp`, and the same mapping data is also reused by
+CLI registration and Python bindings.
 
 ## 6. Lifecycle and validation
 

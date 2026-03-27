@@ -12,7 +12,7 @@
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rhbm_gem {
 

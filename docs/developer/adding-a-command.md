@@ -126,6 +126,10 @@ Shared diagnostics/defaults live in `/include/rhbm_gem/core/command/CommandMetad
 `ExecutionReport` lives in `/include/rhbm_gem/core/command/CommandApi.hpp`, so adding a normal
 command usually does not require changes to either shared contract layer.
 
+If the command introduces or extends a shared command enum, update the enum declaration and its
+CLI / Python / validation mappings together in
+`/include/rhbm_gem/core/command/OptionEnumClass.hpp`.
+
 `Run*` declarations/definitions are expanded from `CommandList.def`, so once the manifest entry
 exists in the correct fragment you only need to ensure the request struct, command class, and
 includes are present.
@@ -162,7 +166,8 @@ Update `/src/python/CommandApiBindings.cpp`:
    maintained.
 
 Shared enums and diagnostics live in `/src/python/CommonBindings.cpp`, so that file only needs
-changes if the command introduces a new shared enum.
+changes if the command introduces a new shared enum. The enum token source of truth remains
+`/include/rhbm_gem/core/command/OptionEnumClass.hpp`.
 
 ## 9. Tests and documentation
 

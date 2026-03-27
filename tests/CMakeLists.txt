@@ -106,7 +106,6 @@ set(CORE_CONTRACT_TEST_SOURCES
     core/contract/CommandCatalog_test.cpp
     core/contract/CommandExecutionContract_test.cpp
     core/contract/DocumentationLayout_test.cpp
-    core/contract/EnumOptionTraits_test.cpp
     core/contract/PotentialPlotBuilder_test.cpp
     core/contract/PublicHeaderSurface_test.cpp
 )

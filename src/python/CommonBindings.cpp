@@ -4,7 +4,6 @@
 
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
 namespace py = pybind11;
 

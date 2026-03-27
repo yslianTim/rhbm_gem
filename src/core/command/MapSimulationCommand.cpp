@@ -13,8 +13,6 @@
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
-
 #include <algorithm>
 #include <limits>
 

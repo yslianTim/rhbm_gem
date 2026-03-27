@@ -3,7 +3,7 @@
 #include <CLI/CLI.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/CommandMetadata.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
+#include <rhbm_gem/core/command/OptionEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 #include <filesystem>

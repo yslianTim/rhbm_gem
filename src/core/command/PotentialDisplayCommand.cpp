@@ -15,7 +15,6 @@
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 namespace {
