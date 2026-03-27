@@ -13,11 +13,6 @@ Top-level command membership is defined in:
 
 - `/include/rhbm_gem/core/command/CommandList.def`
 
-That aggregate manifest currently layers:
-
-- `/include/rhbm_gem/core/command/CommandListStable.def`
-- `/include/rhbm_gem/core/command/CommandListExperimental.def`
-
 Each entry uses:
 
 - `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)`
@@ -40,7 +35,8 @@ Always-on command list:
 4. `map_simulation`
 5. `model_test`
 
-Experimental command list (`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON` only):
+Experimental command list (`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON` only, via the guarded block in
+`CommandList.def`):
 
 1. `map_visualization`
 2. `position_estimation`

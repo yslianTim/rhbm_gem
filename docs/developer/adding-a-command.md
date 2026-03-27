@@ -31,8 +31,6 @@ Public command API:
 Manifest and CLI registration:
 
 - `/include/rhbm_gem/core/command/CommandList.def`
-- `/include/rhbm_gem/core/command/CommandListStable.def` for stable commands
-- `/include/rhbm_gem/core/command/CommandListExperimental.def` for commands gated by `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE`
 - `/src/core/command/CommandCatalog.cpp`
 
 Python bindings:
@@ -53,13 +51,11 @@ Optional:
 
 ## 3. Manifest shape
 
-Add an entry to the appropriate manifest fragment:
+Add an entry to `/include/rhbm_gem/core/command/CommandList.def`.
 
-- stable command: `/include/rhbm_gem/core/command/CommandListStable.def`
-- experimental command: `/include/rhbm_gem/core/command/CommandListExperimental.def`
-
-`/include/rhbm_gem/core/command/CommandList.def` remains the aggregate entrypoint consumed by the
-X-macro expansions.
+Stable commands are listed directly in the manifest. Commands gated by
+`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` stay in the same file inside the experimental `#ifdef`
+section.
 
 Example entry:
 
@@ -181,7 +177,7 @@ Before merge:
 
 1. The command is implemented in `/src/core/command/`.
 2. `CommandApi.hpp` contains the new request.
-3. The correct command manifest fragment contains the new entry, and `CommandList.def` still aggregates it.
+3. `CommandList.def` contains the new entry in the correct stable or experimental section.
 4. `/src/CMakeLists.txt` and `/tests/CMakeLists.txt` include the new source/test file.
 5. CLI binding is added in `CommandCatalog.cpp`.
 6. Python bindings are updated if the binding surface changed.

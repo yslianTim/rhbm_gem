@@ -55,34 +55,26 @@ std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTo
 
 std::vector<std::string> ParseCommandIdTokensFromManifest()
 {
-    const auto manifest_dir{
+    const auto manifest_path{
         command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
+        / "CommandList.def"
     };
-    std::string manifest;
-
-    const auto append_manifest = [&](const std::filesystem::path & manifest_path)
-    {
-        std::ifstream manifest_stream{ manifest_path };
-        if (!manifest_stream.is_open())
-        {
-            return false;
-        }
-        manifest.append(
-            std::istreambuf_iterator<char>{ manifest_stream },
-            std::istreambuf_iterator<char>{});
-        manifest.push_back('\n');
-        return true;
-    };
-
-    if (!append_manifest(manifest_dir / "CommandListStable.def"))
+    std::ifstream manifest_stream{ manifest_path };
+    if (!manifest_stream.is_open())
     {
         return {};
     }
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    if (!append_manifest(manifest_dir / "CommandListExperimental.def"))
-    {
-        return {};
-    }
+
+    std::string manifest{
+        std::istreambuf_iterator<char>{ manifest_stream },
+        std::istreambuf_iterator<char>{}
+    };
+
+#ifndef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    const std::regex experimental_block_pattern{
+        R"(#ifdef\s+RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE[\s\S]*?#endif\s*)"
+    };
+    manifest = std::regex_replace(manifest, experimental_block_pattern, "");
 #endif
 
     const std::regex command_pattern{
@@ -109,6 +101,23 @@ std::string ReadFileContent(const std::filesystem::path & path)
     return std::string(
         std::istreambuf_iterator<char>{ input },
         std::istreambuf_iterator<char>{});
+}
+
+bool ManifestContainsExperimentalGuard()
+{
+    const auto manifest{
+        ReadFileContent(
+            command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
+            / "CommandList.def")
+    };
+    if (manifest.empty())
+    {
+        return false;
+    }
+
+    return manifest.find("#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE") != std::string::npos
+        && manifest.find("MapVisualization") != std::string::npos
+        && manifest.find("PositionEstimation") != std::string::npos;
 }
 
 } // namespace
@@ -196,6 +205,11 @@ TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
         EXPECT_EQ(manifest_ids[index], expected.first);
         EXPECT_EQ(static_cast<int>(expected.second), static_cast<int>(index));
     }
+}
+
+TEST(CommandCatalogTest, ManifestKeepsExperimentalEntriesBehindFeatureGuard)
+{
+    EXPECT_TRUE(ManifestContainsExperimentalGuard());
 }
 
 TEST(CommandCatalogTest, RunSurfaceAndPythonBindingsMatchManifestOrder)
