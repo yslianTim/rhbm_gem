@@ -549,7 +549,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
 
 void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled()
 {
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     if (m_model_object == nullptr || m_map_object == nullptr) return;
     experimental::RunPotentialAnalysisBondWorkflow(
         *m_model_object, *m_map_object, m_options);

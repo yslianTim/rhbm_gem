@@ -51,7 +51,13 @@ Optional:
 
 ## 3. Manifest shape
 
-Add an entry to `/include/rhbm_gem/core/command/CommandList.def`:
+Add an entry to `/include/rhbm_gem/core/command/CommandList.def`.
+
+Stable commands are listed directly in the manifest. Commands gated by
+`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` stay in the same file inside the experimental `#ifdef`
+section.
+
+Example entry:
 
 ```cpp
 RHBM_GEM_COMMAND(
@@ -120,7 +126,8 @@ Shared diagnostics and `ExecutionReport` live in
 require contract changes.
 
 `Run*` declarations/definitions are expanded from `CommandList.def`, so once the manifest entry
-exists you only need to ensure the request struct, command class, and includes are present.
+exists in the correct fragment you only need to ensure the request struct, command class, and
+includes are present.
 
 Each `Run*` entrypoint follows this pattern:
 
@@ -170,7 +177,7 @@ Before merge:
 
 1. The command is implemented in `/src/core/command/`.
 2. `CommandApi.hpp` contains the new request.
-3. `CommandList.def` contains the new manifest entry.
+3. `CommandList.def` contains the new entry in the correct stable or experimental section.
 4. `/src/CMakeLists.txt` and `/tests/CMakeLists.txt` include the new source/test file.
 5. CLI binding is added in `CommandCatalog.cpp`.
 6. Python bindings are updated if the binding surface changed.

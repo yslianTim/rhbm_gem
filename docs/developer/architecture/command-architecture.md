@@ -27,15 +27,19 @@ This manifest is expanded directly with X-macros by:
 
 The manifest does not generate request structs or command-specific CLI field bindings.
 
-Current command list:
+Always-on command list:
 
 1. `potential_analysis`
 2. `potential_display`
 3. `result_dump`
 4. `map_simulation`
-5. `map_visualization`
-6. `position_estimation`
-7. `model_test`
+5. `model_test`
+
+Experimental command list (`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE=ON` only, via the guarded block in
+`CommandList.def`):
+
+1. `map_visualization`
+2. `position_estimation`
 
 ## 2. Execution surfaces
 
@@ -85,6 +89,8 @@ This header owns:
 - `ExecutionReport`
 
 Public requests and `Run*` entrypoints live in `/include/rhbm_gem/core/command/CommandApi.hpp`.
+Experimental request types and `Run*` entrypoints are compiled into that public surface only when
+`RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` is enabled for the linked target.
 
 Shared request fields:
 
@@ -187,4 +193,5 @@ Python bindings are split across:
 
 `/src/python/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
 `/src/python/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
-functions via the manifest X-macro.
+functions via the manifest X-macro. Experimental command bindings follow the same gate as the
+public C++ surface.

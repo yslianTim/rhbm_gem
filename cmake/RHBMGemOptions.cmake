@@ -17,8 +17,8 @@ option(ENABLE_COVERAGE "Enable gcov coverage instrumentation" OFF)
 option(COVERAGE_INCLUDE_TESTS "Include tests in coverage summary" OFF)
 option(BUILD_PYTHON_BINDINGS "Build pybind11 Python extension module" ON)
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
-option(RHBM_GEM_ENABLE_EXPERIMENTAL_BOND_ANALYSIS
-    "Enable experimental bond-analysis workflow in PotentialAnalysisCommand" OFF)
+option(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    "Enable experimental features across the project" OFF)
 
 set(RHBM_GEM_DEP_PROVIDER "SYSTEM" CACHE STRING
     "Dependency provider mode: SYSTEM or FETCH")

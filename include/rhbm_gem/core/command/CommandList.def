@@ -19,6 +19,13 @@ RHBM_GEM_COMMAND(
     "Run map simulation command",
     FileWorkflow)
 RHBM_GEM_COMMAND(
+    HRLModelTest,
+    "model_test",
+    "Run HRL model simulation test",
+    FileWorkflow)
+
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+RHBM_GEM_COMMAND(
     MapVisualization,
     "map_visualization",
     "Run map visualization",
@@ -28,8 +35,4 @@ RHBM_GEM_COMMAND(
     "position_estimation",
     "Run atom position estimation",
     FileWorkflow)
-RHBM_GEM_COMMAND(
-    HRLModelTest,
-    "model_test",
-    "Run HRL model simulation test",
-    FileWorkflow)
+#endif

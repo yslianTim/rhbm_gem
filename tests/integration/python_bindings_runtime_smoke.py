@@ -1,20 +1,14 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import rhbm_gem_module as m
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-REQUEST_TYPES = (
-    m.PotentialAnalysisRequest,
-    m.PotentialDisplayRequest,
-    m.ResultDumpRequest,
-    m.MapSimulationRequest,
-    m.MapVisualizationRequest,
-    m.PositionEstimationRequest,
-    m.HRLModelTestRequest,
+EXPERIMENTAL_FEATURE_ENABLED = (
+    os.environ.get("RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE", "OFF").upper() == "ON"
 )
 
 EXPECTED_COMMON_FIELDS = {
@@ -35,9 +29,35 @@ def assert_module_surface() -> None:
     assert hasattr(m, "TesterType")
     assert hasattr(m.TesterType, "BENCHMARK")
 
+    if EXPERIMENTAL_FEATURE_ENABLED:
+        assert hasattr(m, "MapVisualizationRequest")
+        assert hasattr(m, "PositionEstimationRequest")
+        assert hasattr(m, "RunMapVisualization")
+        assert hasattr(m, "RunPositionEstimation")
+    else:
+        assert not hasattr(m, "MapVisualizationRequest")
+        assert not hasattr(m, "PositionEstimationRequest")
+        assert not hasattr(m, "RunMapVisualization")
+        assert not hasattr(m, "RunPositionEstimation")
+
 
 def assert_request_objects_are_usable() -> None:
-    for request_type in REQUEST_TYPES:
+    request_types = [
+        m.PotentialAnalysisRequest,
+        m.PotentialDisplayRequest,
+        m.ResultDumpRequest,
+        m.MapSimulationRequest,
+        m.HRLModelTestRequest,
+    ]
+    if EXPERIMENTAL_FEATURE_ENABLED:
+        request_types.extend(
+            [
+                m.MapVisualizationRequest,
+                m.PositionEstimationRequest,
+            ]
+        )
+
+    for request_type in request_types:
         request = request_type()
         common = request.common
         missing = [field for field in EXPECTED_COMMON_FIELDS if not hasattr(common, field)]

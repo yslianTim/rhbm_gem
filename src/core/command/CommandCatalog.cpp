@@ -434,6 +434,7 @@ void BindMapSimulationRequestOptions(
         request.blurring_width_list);
 }
 
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 void BindMapVisualizationRequestOptions(
     CLI::App * command,
     rhbm_gem::MapVisualizationRequest & request)
@@ -514,6 +515,7 @@ void BindPositionEstimationRequestOptions(
         "Tolerance for deduplicating points",
         request.dedup_tolerance);
 }
+#endif
 
 void BindHRLModelTestRequestOptions(
     CLI::App * command,

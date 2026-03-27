@@ -57,7 +57,7 @@ std::vector<std::string> ParseCommandIdTokensFromManifest()
 {
     const auto manifest_path{
         command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
-            / "CommandList.def"
+        / "CommandList.def"
     };
     std::ifstream manifest_stream{ manifest_path };
     if (!manifest_stream.is_open())
@@ -65,10 +65,18 @@ std::vector<std::string> ParseCommandIdTokensFromManifest()
         return {};
     }
 
-    const std::string manifest{
+    std::string manifest{
         std::istreambuf_iterator<char>{ manifest_stream },
         std::istreambuf_iterator<char>{}
     };
+
+#ifndef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    const std::regex experimental_block_pattern{
+        R"(#ifdef\s+RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE[\s\S]*?#endif\s*)"
+    };
+    manifest = std::regex_replace(manifest, experimental_block_pattern, "");
+#endif
+
     const std::regex command_pattern{
         R"(RHBM_GEM_COMMAND\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)"
     };
@@ -93,6 +101,23 @@ std::string ReadFileContent(const std::filesystem::path & path)
     return std::string(
         std::istreambuf_iterator<char>{ input },
         std::istreambuf_iterator<char>{});
+}
+
+bool ManifestContainsExperimentalGuard()
+{
+    const auto manifest{
+        ReadFileContent(
+            command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
+            / "CommandList.def")
+    };
+    if (manifest.empty())
+    {
+        return false;
+    }
+
+    return manifest.find("#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE") != std::string::npos
+        && manifest.find("MapVisualization") != std::string::npos
+        && manifest.find("PositionEstimation") != std::string::npos;
 }
 
 } // namespace
@@ -182,6 +207,11 @@ TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
     }
 }
 
+TEST(CommandCatalogTest, ManifestKeepsExperimentalEntriesBehindFeatureGuard)
+{
+    EXPECT_TRUE(ManifestContainsExperimentalGuard());
+}
+
 TEST(CommandCatalogTest, RunSurfaceAndPythonBindingsMatchManifestOrder)
 {
     const auto project_root{ command_test::ProjectRootPath() };
@@ -224,9 +254,20 @@ TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
              "PotentialDisplayRequest",
              "ResultDumpRequest",
              "MapSimulationRequest",
+             "HRLModelTestRequest",
+         })
+    {
+        EXPECT_NE(
+            bindings.find(
+                "py::class_<" + std::string(request_name) + ">(module, \""
+                + std::string(request_name) + "\")"),
+            std::string::npos)
+            << request_name;
+    }
+
+    for (const std::string_view request_name : {
              "MapVisualizationRequest",
              "PositionEstimationRequest",
-             "HRLModelTestRequest",
          })
     {
         EXPECT_NE(
