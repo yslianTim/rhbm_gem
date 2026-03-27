@@ -1,12 +1,12 @@
-#include "MapVisualizationCommand.hpp"
+#include "internal/command/MapVisualizationCommand.hpp"
+#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/MapSampling.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/internal/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>

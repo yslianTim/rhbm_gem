@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <filesystem>
 
-#include "command/internal/CommandBase.hpp"
+#include "CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 class AtomSelector;

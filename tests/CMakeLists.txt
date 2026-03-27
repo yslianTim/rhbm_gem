@@ -83,6 +83,7 @@ set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
 set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandApi_test.cpp
     core/command/CommandBase_test.cpp
+    core/command/MapSampling_test.cpp
     core/command/CommandOptionHelper_test.cpp
     core/command/CommandScalarValidationHelper_test.cpp
     core/command/CommandValidationIssue_test.cpp

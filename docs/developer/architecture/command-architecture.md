@@ -110,7 +110,8 @@ directly for shared diagnostics/default-path behavior.
 
 ## 5. Concrete command contract
 
-Concrete command classes are internal types under `/src/core/command/`.
+Concrete command classes are internal types with headers under `/src/core/internal/command/`
+and implementation units under `/src/core/command/`.
 
 Current pattern:
 
@@ -172,7 +173,7 @@ generic command preparation.
 
 Cross-command model/map helper logic lives in:
 
-- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/internal/command/CommandDataSupport.hpp`
 - `/src/core/command/CommandDataSupport.cpp`
 
 This module groups:

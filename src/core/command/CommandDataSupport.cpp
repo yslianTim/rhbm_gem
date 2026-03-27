@@ -1,4 +1,4 @@
-#include "command/internal/CommandDataSupport.hpp"
+#include "internal/command/CommandDataSupport.hpp"
 
 #include <algorithm>
 #include <memory>

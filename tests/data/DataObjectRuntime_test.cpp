@@ -17,7 +17,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
@@ -32,10 +31,9 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
-#include <rhbm_gem/utils/math/SamplerBase.hpp>
 #include "internal/file/MapAxisOrderHelper.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include "command/internal/CommandDataSupport.hpp"
+#include "internal/command/CommandDataSupport.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 
 namespace rg = rhbm_gem;
@@ -86,24 +84,6 @@ class BlockingModelCallback {
     bool m_started{false};
     bool m_released{false};
     std::string m_key;
-};
-
-class SinglePointSampler : public ::SamplerBase {
-  public:
-    void Print() const override {}
-
-    std::vector<std::tuple<float, std::array<float, 3>>> GenerateSamplingPoints(
-        const std::array<float, 3>& position,
-        const std::array<float, 3>& axis_vector) const override {
-        (void)axis_vector;
-        return {std::make_tuple(0.0f, position)};
-    }
-
-    unsigned int GetSamplingSize() const override { return m_sampling_size; }
-    void SetSamplingSize(unsigned int value) override { m_sampling_size = value; }
-
-  private:
-    unsigned int m_sampling_size{1};
 };
 
 std::shared_ptr<rg::ModelObject> LoadModelFixture(
@@ -635,26 +615,6 @@ TEST(DataObjectDispatchTest, CatalogTypeNameUsesStableTopLevelNames) {
     EXPECT_EQ(rg::GetCatalogTypeName(*model), "model");
     EXPECT_EQ(rg::GetCatalogTypeName(map), "map");
     EXPECT_THROW((void)rg::GetCatalogTypeName(atom), std::runtime_error);
-}
-
-TEST(DataObjectOperationTest, SampleMapValuesReturnsExpectedPointValueAndIsDeterministic) {
-    auto map{MakeMapObject()};
-    SinglePointSampler sampler;
-    const auto first{
-        rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
-    const auto second{
-        rg::SampleMapValues(map, sampler, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f})};
-    const auto first_again{
-        rg::SampleMapValues(map, sampler, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f})};
-
-    ASSERT_EQ(first.size(), 1);
-    ASSERT_EQ(second.size(), 1);
-    ASSERT_EQ(first_again.size(), 1);
-    EXPECT_FLOAT_EQ(std::get<0>(first.front()), 0.0f);
-    EXPECT_FLOAT_EQ(std::get<0>(second.front()), 0.0f);
-    EXPECT_FLOAT_EQ(std::get<1>(first.front()), map.GetMapValue(0, 0, 0));
-    EXPECT_FLOAT_EQ(std::get<1>(second.front()), map.GetMapValue(1, 1, 1));
-    EXPECT_FLOAT_EQ(std::get<1>(first_again.front()), std::get<1>(first.front()));
 }
 
 TEST(DataObjectOperationTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType) {

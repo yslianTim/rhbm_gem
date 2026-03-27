@@ -19,7 +19,7 @@ behavior branch.
 
 Concrete command implementation:
 
-- `/src/core/command/<YourCommand>.hpp`
+- `/src/core/internal/command/<YourCommand>.hpp`
 - `/src/core/command/<YourCommand>.cpp`
 
 Public command API:
@@ -90,7 +90,8 @@ python3 resources/tools/developer/command_scaffold.py --name Example --profile F
 
 ## 5. Implement the command class
 
-Current command classes are internal implementation types under `/src/core/command/`.
+Current command classes are internal implementation types with headers under
+`/src/core/internal/command/` and implementation units under `/src/core/command/`.
 
 Use this shape:
 
@@ -175,7 +176,7 @@ Add or update:
 
 Before merge:
 
-1. The command is implemented in `/src/core/command/`.
+1. The command header is implemented in `/src/core/internal/command/` and the source in `/src/core/command/`.
 2. `CommandApi.hpp` contains the new request.
 3. `CommandList.def` contains the new entry in the correct stable or experimental section.
 4. `/src/CMakeLists.txt` and `/tests/CMakeLists.txt` include the new source/test file.

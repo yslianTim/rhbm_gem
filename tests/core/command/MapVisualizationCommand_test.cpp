@@ -2,7 +2,7 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/MapVisualizationCommand.hpp"
+#include "internal/command/MapVisualizationCommand.hpp"
 
 namespace rg = rhbm_gem;
 

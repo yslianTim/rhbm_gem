@@ -28,7 +28,7 @@ def main() -> int:
 
     stdout = result.stdout
     expected_paths = [
-        project_root / "src" / "core" / "command" / "ExampleCommand.hpp",
+        project_root / "src" / "core" / "internal" / "command" / "ExampleCommand.hpp",
         project_root / "src" / "core" / "command" / "ExampleCommand.cpp",
         project_root / "tests" / "core" / "command" / "ExampleCommand_test.cpp",
         project_root / "docs" / "developer" / "commands" / "example.md",

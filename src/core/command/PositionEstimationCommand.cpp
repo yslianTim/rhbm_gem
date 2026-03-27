@@ -1,6 +1,6 @@
-#include "PositionEstimationCommand.hpp"
+#include "internal/command/PositionEstimationCommand.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/internal/CommandDataSupport.hpp"
+#include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>

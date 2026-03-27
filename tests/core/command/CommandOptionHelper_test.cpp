@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include "command/internal/CommandBase.hpp"
+#include "internal/command/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 

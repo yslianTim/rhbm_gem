@@ -2,7 +2,7 @@
 
 #include "support/CommandValidationAssertions.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/HRLModelTestCommand.hpp"
+#include "internal/command/HRLModelTestCommand.hpp"
 
 namespace rg = rhbm_gem;
 

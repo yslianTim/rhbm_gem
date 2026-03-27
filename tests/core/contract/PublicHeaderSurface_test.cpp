@@ -12,7 +12,6 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
         "core/command/CommandContract.hpp",
         "core/command/CommandList.def",
         "core/command/CommandMetadata.hpp",
-        "core/command/MapSampling.hpp",
         "core/command/OptionEnumClass.hpp",
         "core/command/OptionEnumTraits.hpp",
         "core/painter/AtomPainter.hpp",

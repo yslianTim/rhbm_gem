@@ -148,7 +148,7 @@ private:
 
 
 def _source_template(spec: ScaffoldSpec) -> str:
-    return f"""#include "{spec.command_type}.hpp"
+    return f"""#include "internal/command/{spec.command_type}.hpp"
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
@@ -295,7 +295,7 @@ def main() -> int:
 
     doc_stem = re.sub(r"(?<!^)([A-Z])", r"-\1", spec.command_type.removesuffix("Command")).lower()
     files = {
-        root / "src" / "core" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
+        root / "src" / "core" / "internal" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
         root / "src" / "core" / "command" / f"{spec.command_type}.cpp": _source_template(spec),
         root / "tests" / "core" / "command" / f"{spec.command_type}_test.cpp": _test_template(spec),
         root / "docs" / "developer" / "commands" / f"{doc_stem}.md": _doc_template(spec),

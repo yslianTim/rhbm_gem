@@ -16,7 +16,7 @@ Related references:
 
 Use the narrowest boundary that matches the change.
 
-`command_data_loader` helpers in `/src/core/command/CommandDataSupport.hpp`
+`command_data_loader` helpers in `/src/core/internal/command/CommandDataSupport.hpp`
 
 - use for typed file/database loading with consistent error context
 - current helpers are `ProcessModelFile(...)`, `ProcessMapFile(...)`, `OptionalProcessMapFile(...)`, and `LoadModelObject(...)`
@@ -27,9 +27,6 @@ Use the narrowest boundary that matches the change.
 - current shared operations are `NormalizeMapObject(...)`, `PrepareModelObject(...)`, `ApplyModelSelection(...)`, `CollectModelAtoms(...)`, `PrepareSimulationAtoms(...)`, and `BuildModelAtomBondContext(...)`
 - keep this layer focused on logic shared by multiple commands
 
-`MapSampling` in `/include/rhbm_gem/core/command/MapSampling.hpp` and `/src/core/command/MapSampling.cpp`
-
-- use only for reusable map sampling behavior
 
 command-local code in `/src/core/command/*.cpp` or `/src/core/workflow/*.cpp`
 
@@ -48,7 +45,7 @@ command-local code in `/src/core/command/*.cpp` or `/src/core/workflow/*.cpp`
 
 If you add or change reusable typed operations:
 
-- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/internal/command/CommandDataSupport.hpp`
 - `/src/core/command/CommandDataSupport.cpp`
 - command call sites using the helper
 - `/tests/data/DataObjectRuntime_test.cpp`
@@ -57,7 +54,7 @@ If you add or change reusable typed operations:
 
 If you add or change loader helpers in `command_data_loader`:
 
-- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/internal/command/CommandDataSupport.hpp`
 - command call sites
 - tests that cover the new load path and failure context
 

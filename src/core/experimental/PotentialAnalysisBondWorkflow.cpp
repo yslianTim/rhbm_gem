@@ -1,7 +1,7 @@
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 
-#include "command/PotentialAnalysisCommand.hpp"
-#include <rhbm_gem/core/command/MapSampling.hpp>
+#include "internal/command/MapSampling.hpp"
+#include "internal/command/PotentialAnalysisCommand.hpp"
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>

@@ -2,7 +2,7 @@
 
 #include "support/CommandValidationAssertions.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/PotentialAnalysisCommand.hpp"
+#include "internal/command/PotentialAnalysisCommand.hpp"
 
 namespace rg = rhbm_gem;
 

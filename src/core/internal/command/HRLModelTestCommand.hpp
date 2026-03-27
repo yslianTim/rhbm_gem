@@ -5,7 +5,7 @@
 #include <vector>
 #include <Eigen/Dense>
 
-#include "command/internal/CommandBase.hpp"
+#include "CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 namespace rhbm_gem {

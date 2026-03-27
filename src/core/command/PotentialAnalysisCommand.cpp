@@ -1,8 +1,8 @@
-#include "PotentialAnalysisCommand.hpp"
-#include "command/internal/CommandDataSupport.hpp"
+#include "internal/command/PotentialAnalysisCommand.hpp"
+#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
