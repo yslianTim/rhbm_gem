@@ -11,6 +11,10 @@
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 template <typename T> struct KDNode;
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
@@ -18,6 +22,7 @@ class ModelObject;
 class MapObject;
 class AtomObject;
 struct MapSimulationRequest;
+void BindMapSimulationRequestOptions(CLI::App * command, MapSimulationRequest & request);
 
 struct MapSimulationCommandOptions
 {

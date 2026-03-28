@@ -1,4 +1,5 @@
 #include "internal/command/PotentialAnalysisCommand.hpp"
+#include "internal/command/CommandCliSupport.hpp"
 #include "internal/command/CommandDataSupport.hpp"
 #include "internal/command/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
@@ -60,12 +61,12 @@ constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 
 HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
-    const rhbm_gem::PotentialAnalysisExecutionOptions & options,
+    int thread_size,
     bool quiet_mode)
 {
     HRLExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
-    execution_options.thread_size = options.thread_size;
+    execution_options.thread_size = thread_size;
     return execution_options;
 }
 }
@@ -77,6 +78,109 @@ PotentialAnalysisCommand::PotentialAnalysisCommand(CommonOptionProfile profile) 
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
+}
+
+void BindPotentialAnalysisRequestOptions(
+    CLI::App * command,
+    PotentialAnalysisRequest & request)
+{
+    command_cli::AddPathOption(
+        command,
+        "-a,--model",
+        [&](const std::filesystem::path & value) { request.model_file_path = value; },
+        "Model file path",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        command,
+        "-m,--map",
+        [&](const std::filesystem::path & value) { request.map_file_path = value; },
+        "Map file path",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        command,
+        "--training-report-dir",
+        [&](const std::filesystem::path & value) { request.training_report_dir = value; },
+        "Optional output directory for alpha training reports");
+    command_cli::AddScalarOption<bool>(
+        command,
+        "--simulation",
+        [&](bool value) { request.simulation_flag = value; },
+        "Simulation flag",
+        request.simulation_flag);
+    command_cli::AddScalarOption<double>(
+        command,
+        "-r,--sim-resolution",
+        [&](double value) { request.simulated_map_resolution = value; },
+        "Set simulated map's resolution (blurring width)",
+        request.simulated_map_resolution);
+    command_cli::AddStringOption(
+        command,
+        "-k,--save-key",
+        [&](const std::string & value) { request.saved_key_tag = value; },
+        "New key tag for saving ModelObject results into database",
+        request.saved_key_tag);
+    command_cli::AddScalarOption<bool>(
+        command,
+        "--training-alpha",
+        [&](bool value) { request.training_alpha_flag = value; },
+        "Turn On/Off alpha training flag",
+        request.training_alpha_flag);
+    command_cli::AddScalarOption<bool>(
+        command,
+        "--asymmetry",
+        [&](bool value) { request.asymmetry_flag = value; },
+        "Turn On/Off asymmetry flag",
+        request.asymmetry_flag);
+    command_cli::AddScalarOption<int>(
+        command,
+        "-s,--sampling",
+        [&](int value) { request.sampling_size = value; },
+        "Number of sampling points per atom",
+        request.sampling_size);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--sampling-min",
+        [&](double value) { request.sampling_range_min = value; },
+        "Minimum sampling range",
+        request.sampling_range_min);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--sampling-max",
+        [&](double value) { request.sampling_range_max = value; },
+        "Maximum sampling range",
+        request.sampling_range_max);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--sampling-height",
+        [&](double value) { request.sampling_height = value; },
+        "Maximum sampling height",
+        request.sampling_height);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--fit-min",
+        [&](double value) { request.fit_range_min = value; },
+        "Minimum fitting range",
+        request.fit_range_min);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--fit-max",
+        [&](double value) { request.fit_range_max = value; },
+        "Maximum fitting range",
+        request.fit_range_max);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--alpha-r",
+        [&](double value) { request.alpha_r = value; },
+        "Alpha value for R",
+        request.alpha_r);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--alpha-g",
+        [&](double value) { request.alpha_g = value; },
+        "Alpha value for G",
+        request.alpha_g);
 }
 
 void PotentialAnalysisCommand::ApplyRequest(const PotentialAnalysisRequest & request)
@@ -114,29 +218,6 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     RunExperimentalBondWorkflowIfEnabled();
     SaveDataObject();
     return true;
-}
-
-PotentialAnalysisExecutionOptions PotentialAnalysisCommand::GetExecutionOptions() const
-{
-    PotentialAnalysisExecutionOptions options;
-    options.thread_size = ThreadSize();
-    options.use_training_alpha = m_options.use_training_alpha;
-    options.is_asymmetry = m_options.is_asymmetry;
-    options.is_simulation = m_options.is_simulation;
-    options.sampling_size = m_options.sampling_size;
-    options.sampling_range_min = m_options.sampling_range_min;
-    options.sampling_range_max = m_options.sampling_range_max;
-    options.sampling_height = m_options.sampling_height;
-    options.fit_range_min = m_options.fit_range_min;
-    options.fit_range_max = m_options.fit_range_max;
-    options.alpha_r = m_options.alpha_r;
-    options.alpha_g = m_options.alpha_g;
-    options.resolution_simulation = m_options.resolution_simulation;
-    options.model_file_path = m_options.model_file_path;
-    options.map_file_path = m_options.map_file_path;
-    options.training_report_dir = m_options.training_report_dir;
-    options.saved_key_tag = m_options.saved_key_tag;
-    return options;
 }
 
 void PotentialAnalysisCommand::ValidateOptions()
@@ -309,7 +390,7 @@ std::vector<double> BuildOrderedAlphaGTrainingList()
 }
 
 std::filesystem::path ResolveTrainingReportPath(
-    const PotentialAnalysisExecutionOptions & options,
+    const PotentialAnalysisCommandOptions & options,
     std::string_view report_file_name)
 {
     if (options.training_report_dir.empty())
@@ -324,7 +405,7 @@ bool EmitTrainingReportIfRequested(
     const std::vector<double> & alpha_list,
     std::string_view x_label,
     std::string_view y_label,
-    const PotentialAnalysisExecutionOptions & options,
+    const PotentialAnalysisCommandOptions & options,
     std::string_view report_file_name)
 {
     const auto report_path{ ResolveTrainingReportPath(options, report_file_name) };
@@ -504,7 +585,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
                 data_covariance_list
             );
             HRLGroupEstimator estimator(
-                MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true));
+                MakePotentialAnalysisExecutionOptions(ThreadSize(), true));
             const auto result = estimator.Estimate(input, alpha_g);
 
             auto gaus_group_mean{
@@ -574,7 +655,7 @@ void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled()
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     if (m_model_object == nullptr || m_map_object == nullptr) return;
     experimental::RunPotentialAnalysisBondWorkflow(
-        *m_model_object, *m_map_object, GetExecutionOptions());
+        *m_model_object, *m_map_object, m_options, ThreadSize());
 #endif
 }
 
@@ -611,7 +692,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
         const auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         const auto algorithm_options{
-            MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true)
+            MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
         };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
@@ -651,7 +732,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
             alpha_list,
             "#alpha_{r}",
             "Deviation with OLS",
-            GetExecutionOptions(),
+            m_options,
             "alpha_r_bias.pdf")
     };
     if (!report_emitted)
@@ -702,7 +783,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
         }
         const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(data_entry_list, true) };
         const auto algorithm_options{
-            MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true)
+            MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
         };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
@@ -738,7 +819,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
             alpha_list,
             "#alpha_{g}",
             "Deviation with Mean",
-            GetExecutionOptions(),
+            m_options,
             "alpha_g_bias.pdf")
     };
     if (!report_emitted)
@@ -778,7 +859,8 @@ namespace detail {
 void RunAtomSamplingWorkflow(
     ModelObject & model_object,
     const MapObject & map_object,
-    const PotentialAnalysisExecutionOptions & options)
+    const PotentialAnalysisCommandOptions & options,
+    int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
     auto sampler{ std::make_unique<SphereSampler>() };
@@ -792,7 +874,7 @@ void RunAtomSamplingWorkflow(
     size_t atom_count{ 0 };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel num_threads(options.thread_size)
+    #pragma omp parallel num_threads(thread_size)
     {
         #pragma omp for
         for (size_t i = 0; i < atom_size; i++)
@@ -864,7 +946,7 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
 
 void RunLocalAtomFittingWorkflow(
     ModelObject & model_object,
-    const PotentialAnalysisExecutionOptions & options,
+    int thread_size,
     double universal_alpha_r)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
@@ -875,7 +957,7 @@ void RunLocalAtomFittingWorkflow(
         LogLevel::Info,
         "Run Local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(options.thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(thread_size)
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
@@ -887,7 +969,7 @@ void RunLocalAtomFittingWorkflow(
                 universal_alpha_r,
                 dataset.X,
                 dataset.y,
-                MakePotentialAnalysisExecutionOptions(options, true))
+                MakePotentialAnalysisExecutionOptions(thread_size, true))
         };
 
         local_entry->SetBetaEstimateOLS(result.beta_ols);
@@ -922,7 +1004,7 @@ void RunLocalAtomFittingWorkflow(
 void PotentialAnalysisCommand::RunAtomMapValueSampling()
 {
     if (m_map_object == nullptr || m_model_object == nullptr) return;
-    detail::RunAtomSamplingWorkflow(*m_model_object, *m_map_object, GetExecutionOptions());
+    detail::RunAtomSamplingWorkflow(*m_model_object, *m_map_object, m_options, ThreadSize());
 }
 
 void PotentialAnalysisCommand::RunAtomGroupClassification()
@@ -1026,7 +1108,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true)
+                MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
             )
         };
         
@@ -1082,7 +1164,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true)
+                MakePotentialAnalysisExecutionOptions(ThreadSize(), true)
             )
         };
         
@@ -1113,7 +1195,7 @@ void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
     if (m_model_object == nullptr) return;
     detail::RunLocalAtomFittingWorkflow(
         *m_model_object,
-        GetExecutionOptions(),
+        ThreadSize(),
         universal_alpha_r);
 }
 

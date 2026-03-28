@@ -1,4 +1,5 @@
 #include "internal/command/MapSimulationCommand.hpp"
+#include "internal/command/CommandCliSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -40,6 +41,57 @@ MapSimulationCommand::MapSimulationCommand(CommonOptionProfile profile) :
         std::numeric_limits<float>::lowest(),
         std::numeric_limits<float>::lowest() }
 {
+}
+
+void BindMapSimulationRequestOptions(
+    CLI::App * command,
+    MapSimulationRequest & request)
+{
+    request.blurring_width_list.clear();
+
+    command_cli::AddPathOption(
+        command,
+        "-a,--model",
+        [&](const std::filesystem::path & value) { request.model_file_path = value; },
+        "Model file path",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        command,
+        "-n,--name",
+        [&](const std::string & value) { request.map_file_name = value; },
+        "File name for output map files",
+        request.map_file_name);
+    command_cli::AddEnumOption<PotentialModel>(
+        command,
+        "--potential-model",
+        [&](PotentialModel value) { request.potential_model_choice = value; },
+        "Atomic potential model option",
+        PotentialModel::FIVE_GAUS_CHARGE);
+    command_cli::AddEnumOption<PartialCharge>(
+        command,
+        "--charge",
+        [&](PartialCharge value) { request.partial_charge_choice = value; },
+        "Partial charge table option",
+        PartialCharge::PARTIAL);
+    command_cli::AddScalarOption<double>(
+        command,
+        "-c,--cut-off",
+        [&](double value) { request.cutoff_distance = value; },
+        "Cutoff distance",
+        request.cutoff_distance);
+    command_cli::AddScalarOption<double>(
+        command,
+        "-g,--grid-spacing",
+        [&](double value) { request.grid_spacing = value; },
+        "Grid spacing",
+        request.grid_spacing);
+    command_cli::AddStringOption(
+        command,
+        "--blurring-width",
+        [&](const std::string & value) { request.blurring_width_list = value; },
+        "Blurring width (list) setting",
+        request.blurring_width_list);
 }
 
 void MapSimulationCommand::ApplyRequest(const MapSimulationRequest & request)

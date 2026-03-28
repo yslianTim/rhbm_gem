@@ -9,7 +9,7 @@ The top-level source of truth for command membership is [`include/rhbm_gem/core/
 - [`include/rhbm_gem/core/command/CommandMetadata.hpp`](/include/rhbm_gem/core/command/CommandMetadata.hpp) for `CommandId` and shared option-profile metadata
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp) for `RunPotentialAnalysis(...)`
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) for the concrete `RunPotentialAnalysis(...)` definition
-- [`src/core/command/CommandCatalog.cpp`](/src/core/command/CommandCatalog.cpp) for CLI registration
+- [`src/core/command/CommandCliSupport.cpp`](/src/core/command/CommandCliSupport.cpp) for manifest-driven CLI registration
 - [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) for Python exposure
 
 `potential_analysis` is registered with the `DatabaseWorkflow` profile, so it inherits the shared command options controlled by `CommonOptionProfile`:
@@ -19,7 +19,7 @@ The top-level source of truth for command membership is [`include/rhbm_gem/core/
 - `-d,--database`
 - `-o,--folder`
 
-The CLI entrypoint starts in [`src/main.cpp`](/src/main.cpp), which calls `ConfigureCommandCli(...)`. That delegates to `RegisterCommandSubcommands(...)`, which registers the `potential_analysis` subcommand and routes execution to `RunPotentialAnalysis(...)`. Python bindings converge on the same `RunPotentialAnalysis(...)` function rather than maintaining a separate execution path.
+The CLI entrypoint starts in [`src/main.cpp`](/src/main.cpp), which calls `ConfigureCommandCli(...)`. That function expands the manifest directly, registers the `potential_analysis` subcommand, and routes execution to `RunPotentialAnalysis(...)`. Python bindings converge on the same `RunPotentialAnalysis(...)` function rather than maintaining a separate execution path.
 
 ## Registration And Public Surface
 
@@ -44,7 +44,7 @@ The public request surface is handwritten in [`include/rhbm_gem/core/command/Com
 
 Shared validation/default-path types come from [`include/rhbm_gem/core/command/CommandMetadata.hpp`](/include/rhbm_gem/core/command/CommandMetadata.hpp), and the public execution result comes from [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp). `ExecutionReport` communicates whether preparation and execution succeeded and carries the collected `ValidationIssue` list.
 
-CLI binding for command-specific fields lives in [`src/core/command/CommandCatalog.cpp`](/src/core/command/CommandCatalog.cpp) inside `BindPotentialAnalysisRequestOptions(...)`. That binder makes `--model` and `--map` required and wires the rest of the request fields directly into the request object used by the subcommand callback.
+CLI binding for command-specific fields lives in [`src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp) inside `BindPotentialAnalysisRequestOptions(...)`. `CommandCliSupport.cpp` calls that binder during manifest-driven registration. The binder makes `--model` and `--map` required and wires the rest of the request fields directly into the request object used by the subcommand callback.
 
 One important maintenance distinction is that request structs and per-command CLI binders are handwritten, while `Run*` declarations, `Run*` definitions, command descriptors, and Python `Run*` exports are generated from the manifest entry.
 

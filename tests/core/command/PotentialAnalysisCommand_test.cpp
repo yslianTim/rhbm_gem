@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <fstream>
+
 #include "support/CommandValidationAssertions.hpp"
+#include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/command/PotentialAnalysisCommand.hpp"
 
@@ -92,6 +95,36 @@ TEST(PotentialAnalysisCommandTest, EmptySavedKeyBecomesValidationError)
             command,
             "--save-key",
             rg::ValidationPhase::Parse,
+            LogLevel::Error),
+        nullptr);
+}
+
+TEST(PotentialAnalysisCommandTest, ReapplyingInvalidRequestAfterSuccessfulPrepareRefreshesState)
+{
+    command_test::ScopedTempDir temp_dir{ "potential_analysis_reprepare" };
+    const auto dummy_map_path{ temp_dir.path() / "dummy.map" };
+    std::ofstream(dummy_map_path) << "dummy";
+
+    rg::PotentialAnalysisCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
+    rg::PotentialAnalysisRequest request{};
+    request.common.database_path = temp_dir.path() / "demo.sqlite";
+    request.model_file_path = command_test::TestDataPath("test_model.cif");
+    request.map_file_path = dummy_map_path;
+    request.simulation_flag = true;
+    request.simulated_map_resolution = 2.0;
+    command.ApplyRequest(request);
+
+    ASSERT_TRUE(command.PrepareForExecution());
+
+    request.simulated_map_resolution = 0.0;
+    command.ApplyRequest(request);
+
+    EXPECT_FALSE(command.PrepareForExecution());
+    ASSERT_NE(
+        command_test::FindValidationIssue(
+            command,
+            "--sim-resolution",
+            rg::ValidationPhase::Prepare,
             LogLevel::Error),
         nullptr);
 }

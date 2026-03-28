@@ -1,4 +1,5 @@
 #include "internal/command/PotentialDisplayCommand.hpp"
+#include "internal/command/CommandCliSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -92,6 +93,68 @@ PotentialDisplayCommand::PotentialDisplayCommand(CommonOptionProfile profile) :
     CommandBase{ profile },
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
+}
+
+void BindPotentialDisplayRequestOptions(
+    CLI::App * command,
+    PotentialDisplayRequest & request)
+{
+    command_cli::AddEnumOption<PainterType>(
+        command,
+        "-p,--painter",
+        [&](PainterType value) { request.painter_choice = value; },
+        "Painter choice",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        command,
+        "-k,--model-keylist",
+        [&](const std::string & value) { request.model_key_tag_list = value; },
+        "List of model key tag to be display",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        command,
+        "-r,--ref-model-keylist",
+        [&](const std::string & value) { request.ref_model_key_tag_list = value; },
+        "List of reference model key tag to be display",
+        request.ref_model_key_tag_list);
+    command_cli::AddStringOption(
+        command,
+        "--pick-chain",
+        [&](const std::string & value) { request.pick_chain_id = value; },
+        "Pick chain ID",
+        request.pick_chain_id);
+    command_cli::AddStringOption(
+        command,
+        "--pick-residue",
+        [&](const std::string & value) { request.pick_residue = value; },
+        "Pick residue type",
+        request.pick_residue);
+    command_cli::AddStringOption(
+        command,
+        "--pick-element",
+        [&](const std::string & value) { request.pick_element = value; },
+        "Pick element type",
+        request.pick_element);
+    command_cli::AddStringOption(
+        command,
+        "--veto-chain",
+        [&](const std::string & value) { request.veto_chain_id = value; },
+        "Veto chain ID",
+        request.veto_chain_id);
+    command_cli::AddStringOption(
+        command,
+        "--veto-residue",
+        [&](const std::string & value) { request.veto_residue = value; },
+        "Veto residue type",
+        request.veto_residue);
+    command_cli::AddStringOption(
+        command,
+        "--veto-element",
+        [&](const std::string & value) { request.veto_element = value; },
+        "Veto element type",
+        request.veto_element);
 }
 
 PotentialDisplayCommand::~PotentialDisplayCommand() = default;

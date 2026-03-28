@@ -1,4 +1,5 @@
 #include "internal/command/ResultDumpCommand.hpp"
+#include "internal/command/CommandCliSupport.hpp"
 #include "internal/command/CommandDataSupport.hpp"
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
@@ -37,6 +38,32 @@ ResultDumpCommand::ResultDumpCommand(CommonOptionProfile profile) :
     CommandBase{ profile },
     m_map_key_tag{ kMapKey }, m_map_object{ nullptr }
 {
+}
+
+void BindResultDumpRequestOptions(
+    CLI::App * command,
+    ResultDumpRequest & request)
+{
+    command_cli::AddEnumOption<PrinterType>(
+        command,
+        "-p,--printer",
+        [&](PrinterType value) { request.printer_choice = value; },
+        "Printer choice",
+        std::nullopt,
+        true);
+    command_cli::AddStringOption(
+        command,
+        "-k,--model-keylist",
+        [&](const std::string & value) { request.model_key_tag_list = value; },
+        "List of model key tag to be display",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        command,
+        "-m,--map",
+        [&](const std::filesystem::path & value) { request.map_file_path = value; },
+        "Map file path",
+        request.map_file_path);
 }
 
 void ResultDumpCommand::ApplyRequest(const ResultDumpRequest & request)

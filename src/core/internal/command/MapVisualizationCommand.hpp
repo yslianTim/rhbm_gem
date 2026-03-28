@@ -6,12 +6,18 @@
 
 #include "CommandBase.hpp"
 
+namespace CLI
+{
+    class App;
+}
+
 namespace rhbm_gem {
 
 class ModelObject;
 class MapObject;
 class AtomObject;
 struct MapVisualizationRequest;
+void BindMapVisualizationRequestOptions(CLI::App * command, MapVisualizationRequest & request);
 
 struct MapVisualizationCommandOptions
 {

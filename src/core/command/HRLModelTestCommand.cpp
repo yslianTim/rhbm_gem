@@ -1,4 +1,5 @@
 #include "internal/command/HRLModelTestCommand.hpp"
+#include "internal/command/CommandCliSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -44,6 +45,42 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 HRLModelTestCommand::HRLModelTestCommand(CommonOptionProfile profile) :
     CommandBase{ profile }
 {
+}
+
+void BindHRLModelTestRequestOptions(
+    CLI::App * command,
+    HRLModelTestRequest & request)
+{
+    command_cli::AddEnumOption<TesterType>(
+        command,
+        "-t,--tester",
+        [&](TesterType value) { request.tester_choice = value; },
+        "Tester option",
+        TesterType::DATA_OUTLIER);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--fit-min",
+        [&](double value) { request.fit_range_min = value; },
+        "Minimum fitting range",
+        request.fit_range_min);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--fit-max",
+        [&](double value) { request.fit_range_max = value; },
+        "Maximum fitting range",
+        request.fit_range_max);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--alpha-r",
+        [&](double value) { request.alpha_r = value; },
+        "Alpha value for R",
+        request.alpha_r);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--alpha-g",
+        [&](double value) { request.alpha_g = value; },
+        "Alpha value for G",
+        request.alpha_g);
 }
 
 void HRLModelTestCommand::ApplyRequest(const HRLModelTestRequest & request)
@@ -121,21 +158,17 @@ void HRLModelTestCommand::SetAlphaG(double value)
 
 namespace rhbm_gem::detail {
 
-struct HRLModelTestExecutionOptions
+struct HRLModelTestExecutionContext
 {
-    TesterType tester_choice{ TesterType::BENCHMARK };
-    double fit_range_min{ 0.0 };
-    double fit_range_max{ 1.0 };
-    double alpha_r{ 0.1 };
-    double alpha_g{ 0.2 };
-    int thread_size{ 1 };
-    std::filesystem::path output_folder{};
+    const HRLModelTestCommandOptions & options;
+    int thread_size;
+    const std::filesystem::path & output_folder;
 };
 
 namespace {
 
 std::filesystem::path BuildOutputPath(
-    const HRLModelTestExecutionOptions & options,
+    const HRLModelTestExecutionContext & options,
     std::string_view stem)
 {
     return options.output_folder / std::string(stem);
@@ -144,7 +177,7 @@ std::filesystem::path BuildOutputPath(
 } // namespace
 
 void PrintDataOutlierResult(
-    const HRLModelTestExecutionOptions & options,
+    const HRLModelTestExecutionContext & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
@@ -155,7 +188,7 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list);
 
 void PrintMemberOutlierResult(
-    const HRLModelTestExecutionOptions & options,
+    const HRLModelTestExecutionContext & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
@@ -165,7 +198,7 @@ void PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list);
 
-void RunSimulationTestOnBenchMark(const HRLModelTestExecutionOptions & options)
+void RunSimulationTestOnBenchMark(const HRLModelTestExecutionContext & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
 
@@ -187,7 +220,7 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionOptions & options)
     auto error_sigma{ 1.0 };
     auto outlier_ratio{ 0.0 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
+    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
     tester->RunBetaMDPDETest(
         alpha_r_list,
         residual_mean_ols_list, residual_mean_mdpde_list,
@@ -216,7 +249,7 @@ void RunSimulationTestOnBenchMark(const HRLModelTestExecutionOptions & options)
     Logger::Log(LogLevel::Info, mdpde_stream.str());
 }
 
-void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionOptions & options)
+void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionContext & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnDataOutlier");
 
@@ -230,7 +263,7 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionOptions & options
     auto replica_size{ 100 };
     auto sampling_entry_size{ 1000 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
+    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
     std::vector<double> alpha_r_list{ 0.1 };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
@@ -295,7 +328,7 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionOptions & options
     );
 }
 
-void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionOptions & options)
+void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionContext & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnMemberOutlier");
 
@@ -313,7 +346,7 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionOptions & optio
     auto replica_size{ 100 };
     auto member_size{ 100 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
+    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
     std::vector<double> alpha_g_list{ 0.2 };
     std::vector<Eigen::VectorXd> outlier_prior_list{
@@ -389,7 +422,7 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionOptions & optio
     );
 }
 
-void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionOptions & options)
+void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionContext & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
 
@@ -403,7 +436,7 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionOptions & opti
     auto replica_size{ 100 };
     auto sampling_entry_size{ 1000 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
+    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
     std::vector<double> alpha_r_list{ 0.1, 0.4 };
     std::vector<double> error_list{ 0.1, 0.2, 0.3 };
@@ -460,7 +493,7 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionOptions & opti
     );
 }
 
-void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionOptions & options)
+void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionContext & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
 
@@ -478,7 +511,7 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionOptions & op
     auto replica_size{ 100 };
     auto member_size{ 100 };
     auto tester{ std::make_unique<HRLModelTester>(gaus_par_size, linear_basis_size, replica_size) };
-    tester->SetFittingRange(options.fit_range_min, options.fit_range_max);
+    tester->SetFittingRange(options.options.fit_range_min, options.options.fit_range_max);
 
     std::vector<double> alpha_g_list{ 0.2, 0.5 };
     std::vector<Eigen::VectorXd> outlier_prior_list{
@@ -547,7 +580,7 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionOptions & op
 }
 
 void PrintDataOutlierResult(
-    const HRLModelTestExecutionOptions & options,
+    const HRLModelTestExecutionContext & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
@@ -629,8 +662,8 @@ void PrintDataOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? -2.0 : -0.7;
-        x_max[i] = (options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? 47.0 : 22.0;
+        x_min[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? -2.0 : -0.7;
+        x_max[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA) ? 47.0 : 22.0;
     }
     for (size_t j = 0; j < row_size; j++)
     {
@@ -690,7 +723,7 @@ void PrintDataOutlierResult(
                 ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
                 ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
-                if (options.tester_choice != TesterType::MODEL_ALPHA_DATA)
+                if (options.options.tester_choice != TesterType::MODEL_ALPHA_DATA)
                 {
                     graph->Draw("PL3");
                 }
@@ -733,7 +766,7 @@ void PrintDataOutlierResult(
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    if (options.tester_choice == TesterType::MODEL_ALPHA_DATA)
+    if (options.options.tester_choice == TesterType::MODEL_ALPHA_DATA)
     {
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "MDPDE (#alpha_{r} = 0.1)", "plf");
@@ -786,7 +819,7 @@ void PrintDataOutlierResult(
 }
 
 void PrintMemberOutlierResult(
-    const HRLModelTestExecutionOptions & options,
+    const HRLModelTestExecutionContext & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
@@ -867,8 +900,8 @@ void PrintMemberOutlierResult(
     double y_max[row_size]{ 0.0 };
     for (size_t i = 0; i < col_size; i++)
     {
-        x_min[i] = (options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : -0.7;
-        x_max[i] = (options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? 47.0 : 22.0;
+        x_min[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? -2.0 : -0.7;
+        x_max[i] = (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER) ? 47.0 : 22.0;
     }
     auto y_range{ ArrayStats<double>::ComputeScalingRangeTuple(global_y_array, 0.3) };
     for (size_t j = 0; j < row_size; j++)
@@ -928,7 +961,7 @@ void PrintMemberOutlierResult(
                 ROOTHelper::SetMarkerAttribute(graph.get(), 25, 1.5f, color_train);
                 ROOTHelper::SetLineAttribute(graph.get(), 3, 2, color_train);
                 ROOTHelper::SetFillAttribute(graph.get(), 1001, color_train, 0.2f);
-                if (options.tester_choice != TesterType::MODEL_ALPHA_MEMBER)
+                if (options.options.tester_choice != TesterType::MODEL_ALPHA_MEMBER)
                 {
                     graph->Draw("PL3");
                 }
@@ -973,7 +1006,7 @@ void PrintMemberOutlierResult(
     ROOTHelper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
     legend->SetMargin(0.25f);
     legend->SetNColumns(3);
-    if (options.tester_choice == TesterType::MODEL_ALPHA_MEMBER)
+    if (options.options.tester_choice == TesterType::MODEL_ALPHA_MEMBER)
     {
         legend->AddEntry(graph_ols_list[0][0].front().get(),
             "MDPDE (#alpha_{g} = 0.2)", "plf");
@@ -1025,9 +1058,9 @@ void PrintMemberOutlierResult(
     #endif
 }
 
-bool RunHRLModelTestWorkflow(const HRLModelTestExecutionOptions & options)
+bool RunHRLModelTestWorkflow(const HRLModelTestExecutionContext & options)
 {
-    switch (options.tester_choice)
+    switch (options.options.tester_choice)
     {
     case TesterType::BENCHMARK:
         RunSimulationTestOnBenchMark(options);
@@ -1048,7 +1081,7 @@ bool RunHRLModelTestWorkflow(const HRLModelTestExecutionOptions & options)
         Logger::Log(
             LogLevel::Error,
             "Invalid tester choice reached execution path: ["
-                + std::to_string(static_cast<int>(options.tester_choice)) + "]");
+                + std::to_string(static_cast<int>(options.options.tester_choice)) + "]");
         return false;
     }
 }
@@ -1060,12 +1093,8 @@ namespace rhbm_gem {
 
 bool HRLModelTestCommand::ExecuteImpl()
 {
-    return detail::RunHRLModelTestWorkflow(detail::HRLModelTestExecutionOptions{
-        m_options.tester_choice,
-        m_options.fit_range_min,
-        m_options.fit_range_max,
-        m_options.alpha_r,
-        m_options.alpha_g,
+    return detail::RunHRLModelTestWorkflow(detail::HRLModelTestExecutionContext{
+        m_options,
         ThreadSize(),
         OutputFolder(),
     });

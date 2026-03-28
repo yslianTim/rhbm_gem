@@ -10,12 +10,17 @@
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
 class AtomSelector;
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
 class DataObjectManager;
 class ModelObject;
 struct PotentialDisplayRequest;
+void BindPotentialDisplayRequestOptions(CLI::App * command, PotentialDisplayRequest & request);
 
 struct PotentialDisplayCommandOptions
 {

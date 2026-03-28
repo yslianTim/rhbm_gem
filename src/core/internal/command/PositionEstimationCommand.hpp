@@ -10,10 +10,15 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 
 template <typename T> struct KDNode;
+namespace CLI
+{
+    class App;
+}
 
 namespace rhbm_gem {
 
 struct PositionEstimationRequest;
+void BindPositionEstimationRequestOptions(CLI::App * command, PositionEstimationRequest & request);
 
 struct PositionEstimationCommandOptions
 {

@@ -1,4 +1,5 @@
 #include "internal/command/MapVisualizationCommand.hpp"
+#include "internal/command/CommandCliSupport.hpp"
 #include "internal/command/CommandDataSupport.hpp"
 #include "internal/command/MapSampling.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
@@ -44,6 +45,44 @@ MapVisualizationCommand::MapVisualizationCommand(CommonOptionProfile profile) :
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
+}
+
+void BindMapVisualizationRequestOptions(
+    CLI::App * command,
+    MapVisualizationRequest & request)
+{
+    command_cli::AddPathOption(
+        command,
+        "-a,--model",
+        [&](const std::filesystem::path & value) { request.model_file_path = value; },
+        "Model file path",
+        std::nullopt,
+        true);
+    command_cli::AddPathOption(
+        command,
+        "-m,--map",
+        [&](const std::filesystem::path & value) { request.map_file_path = value; },
+        "Map file path",
+        std::nullopt,
+        true);
+    command_cli::AddScalarOption<int>(
+        command,
+        "-i,--atom-id",
+        [&](int value) { request.atom_serial_id = value; },
+        "Atom serial ID for visualization",
+        request.atom_serial_id);
+    command_cli::AddScalarOption<int>(
+        command,
+        "-s,--sampling",
+        [&](int value) { request.sampling_size = value; },
+        "Number of sampling points per atom",
+        request.sampling_size);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--window-size",
+        [&](double value) { request.window_size = value; },
+        "Window size for sampling",
+        request.window_size);
 }
 
 void MapVisualizationCommand::ApplyRequest(const MapVisualizationRequest & request)

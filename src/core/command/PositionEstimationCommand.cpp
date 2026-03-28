@@ -1,4 +1,5 @@
 #include "internal/command/PositionEstimationCommand.hpp"
+#include "internal/command/CommandCliSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -55,6 +56,49 @@ PositionEstimationCommand::PositionEstimationCommand(CommonOptionProfile profile
 }
 
 PositionEstimationCommand::~PositionEstimationCommand() = default;
+
+void BindPositionEstimationRequestOptions(
+    CLI::App * command,
+    PositionEstimationRequest & request)
+{
+    command_cli::AddPathOption(
+        command,
+        "-m,--map",
+        [&](const std::filesystem::path & value) { request.map_file_path = value; },
+        "Map file path",
+        std::nullopt,
+        true);
+    command_cli::AddScalarOption<int>(
+        command,
+        "--iter",
+        [&](int value) { request.iteration_count = value; },
+        "Iteration count for estimation",
+        request.iteration_count);
+    command_cli::AddScalarOption<int>(
+        command,
+        "--knn",
+        [&](int value) { request.knn_size = value; },
+        "KNN size for estimation",
+        request.knn_size);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--alpha",
+        [&](double value) { request.alpha = value; },
+        "Alpha value for robust regression",
+        request.alpha);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--threshold",
+        [&](double value) { request.threshold_ratio = value; },
+        "Ratio of threshold of map values",
+        request.threshold_ratio);
+    command_cli::AddScalarOption<double>(
+        command,
+        "--dedup-tolerance",
+        [&](double value) { request.dedup_tolerance = value; },
+        "Tolerance for deduplicating points",
+        request.dedup_tolerance);
+}
 
 void PositionEstimationCommand::ApplyRequest(const PositionEstimationRequest & request)
 {

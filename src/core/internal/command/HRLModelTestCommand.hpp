@@ -8,9 +8,15 @@
 #include "CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
+namespace CLI
+{
+    class App;
+}
+
 namespace rhbm_gem {
 
 struct HRLModelTestRequest;
+void BindHRLModelTestRequestOptions(CLI::App * command, HRLModelTestRequest & request);
 
 struct HRLModelTestCommandOptions
 {

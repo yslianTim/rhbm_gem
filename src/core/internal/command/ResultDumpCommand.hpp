@@ -9,12 +9,18 @@
 #include "CommandBase.hpp"
 #include <rhbm_gem/core/command/OptionEnumClass.hpp>
 
+namespace CLI
+{
+    class App;
+}
+
 namespace rhbm_gem {
 
 class AtomObject;
 class ModelObject;
 class MapObject;
 struct ResultDumpRequest;
+void BindResultDumpRequestOptions(CLI::App * command, ResultDumpRequest & request);
 
 struct ResultDumpCommandOptions
 {

@@ -22,10 +22,12 @@ This manifest is expanded directly with X-macros by:
 - `/include/rhbm_gem/core/command/CommandMetadata.hpp`
 - `/include/rhbm_gem/core/command/CommandApi.hpp`
 - `/src/core/command/CommandApi.cpp`
-- `/src/core/command/CommandCatalog.cpp`
+- `/src/core/command/CommandCliSupport.cpp`
 - `/src/python/CommandApiBindings.cpp`
 
 The manifest does not generate request structs or command-specific CLI field bindings.
+Command-specific binders now live beside each concrete command implementation under
+`/src/core/command/`.
 
 Always-on command list:
 
@@ -48,7 +50,7 @@ All entrypoints converge on the public `Run*` functions in `CommandApi`.
 ```mermaid
 flowchart LR
     A["CLI (src/main.cpp)"] --> B["ConfigureCommandCli(...)"]
-    B --> C["RegisterCommandSubcommands(...)"]
+    B --> C["Manifest-driven CLI registration"]
     C --> D["Run* in CommandApi"]
 
     E["Python (pybind11)"] --> D
@@ -61,21 +63,16 @@ flowchart LR
 
 ## 3. Registry shape
 
-`CommandCatalog()` returns metadata only:
-
-- `id`
-- `name`
-- `description`
-- `profile`
-
 `ConfigureCommandCli(CLI::App &)` is the public top-level CLI setup entrypoint.
-It enables `require_subcommand(1)` and then delegates to `RegisterCommandSubcommands(CLI::App &)`.
+It enables `require_subcommand(1)` and then expands `CommandList.def` directly to register each
+subcommand.
 
-`RegisterCommandSubcommands(CLI::App &)` is the lower-level registry wiring entrypoint.
-It creates the request object, binds common options from the profile, binds command-specific
-options, and wires the callback to the matching `Run*` function.
+The shared registration code lives in `/src/core/command/CommandCliSupport.cpp`.
+It creates the request object, binds common options from the profile, calls the
+command-local `Bind<Command>RequestOptions(...)` function, and wires the callback to the matching
+`Run*` function.
 
-There is no exported runtime-binder function object layer anymore.
+There is no separate runtime catalog or descriptor layer anymore.
 
 ## 4. Public contract and request surface
 

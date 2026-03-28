@@ -209,7 +209,7 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandList.def`.
    If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandApi.hpp`.
-3. Add command-specific CLI binding in `src/core/command/CommandCatalog.cpp`.
+3. Add command-specific CLI binding in `src/core/command/{spec.command_type}.cpp`.
 """
 
 
