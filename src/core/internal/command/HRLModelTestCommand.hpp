@@ -12,7 +12,7 @@ namespace rhbm_gem {
 
 struct HRLModelTestRequest;
 
-struct HRLModelTestCommandOptions : public CommandOptions
+struct HRLModelTestCommandOptions
 {
     TesterType tester_choice{ TesterType::BENCHMARK };
     double fit_range_min{ 0.0 };
@@ -21,17 +21,16 @@ struct HRLModelTestCommandOptions : public CommandOptions
     double alpha_g{ 0.2 };
 };
 
-class HRLModelTestCommand
-    : public CommandWithOptions<HRLModelTestCommandOptions>
+class HRLModelTestCommand : public CommandBase
 {
 public:
-    using Options = HRLModelTestCommandOptions;
-
     explicit HRLModelTestCommand(CommonOptionProfile profile);
     ~HRLModelTestCommand() = default;
     void ApplyRequest(const HRLModelTestRequest & request);
 
 private:
+    HRLModelTestCommandOptions m_options{};
+
     void SetTesterChoice(TesterType value);
     void SetFitRangeMinimum(double value);
     void SetFitRangeMaximum(double value);

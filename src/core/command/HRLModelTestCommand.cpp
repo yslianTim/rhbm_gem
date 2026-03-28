@@ -42,8 +42,7 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 } // namespace
 
 HRLModelTestCommand::HRLModelTestCommand(CommonOptionProfile profile) :
-    CommandWithOptions<HRLModelTestCommandOptions>{
-        CommonOptionMaskForProfile(profile) }
+    CommandBase{ profile }
 {
 }
 
@@ -122,19 +121,30 @@ void HRLModelTestCommand::SetAlphaG(double value)
 
 namespace rhbm_gem::detail {
 
+struct HRLModelTestExecutionOptions
+{
+    TesterType tester_choice{ TesterType::BENCHMARK };
+    double fit_range_min{ 0.0 };
+    double fit_range_max{ 1.0 };
+    double alpha_r{ 0.1 };
+    double alpha_g{ 0.2 };
+    int thread_size{ 1 };
+    std::filesystem::path output_folder{};
+};
+
 namespace {
 
 std::filesystem::path BuildOutputPath(
-    const HRLModelTestCommandOptions & options,
+    const HRLModelTestExecutionOptions & options,
     std::string_view stem)
 {
-    return options.folder_path / std::string(stem);
+    return options.output_folder / std::string(stem);
 }
 
 } // namespace
 
 void PrintDataOutlierResult(
-    const HRLModelTestCommandOptions & options,
+    const HRLModelTestExecutionOptions & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
@@ -145,7 +155,7 @@ void PrintDataOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list);
 
 void PrintMemberOutlierResult(
-    const HRLModelTestCommandOptions & options,
+    const HRLModelTestExecutionOptions & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
@@ -155,7 +165,7 @@ void PrintMemberOutlierResult(
     const std::vector<Eigen::MatrixXd> & sigma_matrix_mdpde_list,
     const std::vector<Eigen::MatrixXd> & sigma_matrix_train_list);
 
-void RunSimulationTestOnBenchMark(const HRLModelTestCommandOptions & options)
+void RunSimulationTestOnBenchMark(const HRLModelTestExecutionOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnBenchMark");
 
@@ -206,7 +216,7 @@ void RunSimulationTestOnBenchMark(const HRLModelTestCommandOptions & options)
     Logger::Log(LogLevel::Info, mdpde_stream.str());
 }
 
-void RunSimulationTestOnDataOutlier(const HRLModelTestCommandOptions & options)
+void RunSimulationTestOnDataOutlier(const HRLModelTestExecutionOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnDataOutlier");
 
@@ -285,7 +295,7 @@ void RunSimulationTestOnDataOutlier(const HRLModelTestCommandOptions & options)
     );
 }
 
-void RunSimulationTestOnMemberOutlier(const HRLModelTestCommandOptions & options)
+void RunSimulationTestOnMemberOutlier(const HRLModelTestExecutionOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnMemberOutlier");
 
@@ -379,7 +389,7 @@ void RunSimulationTestOnMemberOutlier(const HRLModelTestCommandOptions & options
     );
 }
 
-void RunSimulationTestOnModelAlphaData(const HRLModelTestCommandOptions & options)
+void RunSimulationTestOnModelAlphaData(const HRLModelTestExecutionOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaData");
 
@@ -450,7 +460,7 @@ void RunSimulationTestOnModelAlphaData(const HRLModelTestCommandOptions & option
     );
 }
 
-void RunSimulationTestOnModelAlphaMember(const HRLModelTestCommandOptions & options)
+void RunSimulationTestOnModelAlphaMember(const HRLModelTestExecutionOptions & options)
 {
     ScopeTimer timer("HRLModelTestCommand::RunSimulationTestOnModelAlphaMember");
 
@@ -537,7 +547,7 @@ void RunSimulationTestOnModelAlphaMember(const HRLModelTestCommandOptions & opti
 }
 
 void PrintDataOutlierResult(
-    const HRLModelTestCommandOptions & options,
+    const HRLModelTestExecutionOptions & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_ols_list,
@@ -776,7 +786,7 @@ void PrintDataOutlierResult(
 }
 
 void PrintMemberOutlierResult(
-    const HRLModelTestCommandOptions & options,
+    const HRLModelTestExecutionOptions & options,
     const std::string & name,
     const std::vector<double> & outlier_list,
     const std::vector<Eigen::MatrixXd> & mean_matrix_median_list,
@@ -1015,7 +1025,7 @@ void PrintMemberOutlierResult(
     #endif
 }
 
-bool RunHRLModelTestWorkflow(const HRLModelTestCommandOptions & options)
+bool RunHRLModelTestWorkflow(const HRLModelTestExecutionOptions & options)
 {
     switch (options.tester_choice)
     {
@@ -1050,7 +1060,15 @@ namespace rhbm_gem {
 
 bool HRLModelTestCommand::ExecuteImpl()
 {
-    return detail::RunHRLModelTestWorkflow(m_options);
+    return detail::RunHRLModelTestWorkflow(detail::HRLModelTestExecutionOptions{
+        m_options.tester_choice,
+        m_options.fit_range_min,
+        m_options.fit_range_max,
+        m_options.alpha_r,
+        m_options.alpha_g,
+        ThreadSize(),
+        OutputFolder(),
+    });
 }
 
 } // namespace rhbm_gem

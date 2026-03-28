@@ -15,7 +15,7 @@ namespace rhbm_gem {
 
 struct PositionEstimationRequest;
 
-struct PositionEstimationCommandOptions : public CommandOptions
+struct PositionEstimationCommandOptions
 {
     int iteration_count{ 15 };
     size_t knn_size{ 20 };
@@ -25,13 +25,10 @@ struct PositionEstimationCommandOptions : public CommandOptions
     std::filesystem::path map_file_path;
 };
 
-class PositionEstimationCommand
-    : public CommandWithOptions<PositionEstimationCommandOptions>
+class PositionEstimationCommand : public CommandBase
 {
-public:
-    using Options = PositionEstimationCommandOptions;
-
 private:
+    PositionEstimationCommandOptions m_options{};
     std::vector<VoxelNode> m_selected_voxel_list;
     std::vector<VoxelNode> m_query_point_list;
     std::vector<std::array<float, 3>> m_position_list;

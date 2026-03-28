@@ -60,7 +60,7 @@ constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 
 HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
-    const rhbm_gem::PotentialAnalysisCommandOptions & options,
+    const rhbm_gem::PotentialAnalysisExecutionOptions & options,
     bool quiet_mode)
 {
     HRLExecutionOptions execution_options;
@@ -73,8 +73,7 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
 namespace rhbm_gem {
 
 PotentialAnalysisCommand::PotentialAnalysisCommand(CommonOptionProfile profile) :
-    CommandWithOptions<PotentialAnalysisCommandOptions>{
-        CommonOptionMaskForProfile(profile) },
+    CommandBase{ profile },
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
@@ -115,6 +114,29 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     RunExperimentalBondWorkflowIfEnabled();
     SaveDataObject();
     return true;
+}
+
+PotentialAnalysisExecutionOptions PotentialAnalysisCommand::GetExecutionOptions() const
+{
+    PotentialAnalysisExecutionOptions options;
+    options.thread_size = ThreadSize();
+    options.use_training_alpha = m_options.use_training_alpha;
+    options.is_asymmetry = m_options.is_asymmetry;
+    options.is_simulation = m_options.is_simulation;
+    options.sampling_size = m_options.sampling_size;
+    options.sampling_range_min = m_options.sampling_range_min;
+    options.sampling_range_max = m_options.sampling_range_max;
+    options.sampling_height = m_options.sampling_height;
+    options.fit_range_min = m_options.fit_range_min;
+    options.fit_range_max = m_options.fit_range_max;
+    options.alpha_r = m_options.alpha_r;
+    options.alpha_g = m_options.alpha_g;
+    options.resolution_simulation = m_options.resolution_simulation;
+    options.model_file_path = m_options.model_file_path;
+    options.map_file_path = m_options.map_file_path;
+    options.training_report_dir = m_options.training_report_dir;
+    options.saved_key_tag = m_options.saved_key_tag;
+    return options;
 }
 
 void PotentialAnalysisCommand::ValidateOptions()
@@ -287,7 +309,7 @@ std::vector<double> BuildOrderedAlphaGTrainingList()
 }
 
 std::filesystem::path ResolveTrainingReportPath(
-    const PotentialAnalysisCommandOptions & options,
+    const PotentialAnalysisExecutionOptions & options,
     std::string_view report_file_name)
 {
     if (options.training_report_dir.empty())
@@ -302,7 +324,7 @@ bool EmitTrainingReportIfRequested(
     const std::vector<double> & alpha_list,
     std::string_view x_label,
     std::string_view y_label,
-    const PotentialAnalysisCommandOptions & options,
+    const PotentialAnalysisExecutionOptions & options,
     std::string_view report_file_name)
 {
     const auto report_path{ ResolveTrainingReportPath(options, report_file_name) };
@@ -359,7 +381,7 @@ bool PotentialAnalysisCommand::BuildDataObject()
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
-        m_data_manager.SetDatabaseManager(m_options.database_path);
+        m_data_manager.SetDatabaseManager(DatabasePath());
         m_model_object = command_data_loader::ProcessModelFile(
             m_data_manager, m_options.model_file_path, m_model_key_tag, "model file");
         m_map_object = command_data_loader::ProcessMapFile(
@@ -444,7 +466,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
         std::atomic<size_t> key_count{ 0 };
 
 #ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+        #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
 #endif
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
@@ -482,7 +504,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
                 data_covariance_list
             );
             HRLGroupEstimator estimator(
-                MakePotentialAnalysisExecutionOptions(m_options, true));
+                MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true));
             const auto result = estimator.Estimate(input, alpha_g);
 
             auto gaus_group_mean{
@@ -552,7 +574,7 @@ void PotentialAnalysisCommand::RunExperimentalBondWorkflowIfEnabled()
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
     if (m_model_object == nullptr || m_map_object == nullptr) return;
     experimental::RunPotentialAnalysisBondWorkflow(
-        *m_model_object, *m_map_object, m_options);
+        *m_model_object, *m_map_object, GetExecutionOptions());
 #endif
 }
 
@@ -581,7 +603,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
     Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
@@ -589,7 +611,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
         const auto & data_entry_list{ local_entry->GetBasisAndResponseEntryList() };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         const auto algorithm_options{
-            MakePotentialAnalysisExecutionOptions(m_options, true)
+            MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true)
         };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
@@ -629,7 +651,7 @@ void PotentialAnalysisCommand::StudyAtomLocalFittingViaAlphaR(
             alpha_list,
             "#alpha_{r}",
             "Deviation with OLS",
-            m_options,
+            GetExecutionOptions(),
             "alpha_r_bias.pdf")
     };
     if (!report_emitted)
@@ -665,7 +687,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
     Eigen::MatrixXd gaus_bias_matrix{ Eigen::MatrixXd::Zero(3, alpha_size) };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
 #endif
     for (size_t i = 0; i < group_size; i++)
     {
@@ -680,7 +702,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
         }
         const auto beta_matrix{ HRLDataTransform::BuildBetaMatrix(data_entry_list, true) };
         const auto algorithm_options{
-            MakePotentialAnalysisExecutionOptions(m_options, true)
+            MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true)
         };
 
         Eigen::MatrixXd local_bias_array{ Eigen::MatrixXd::Zero(3, alpha_size) };
@@ -716,7 +738,7 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
             alpha_list,
             "#alpha_{g}",
             "Deviation with Mean",
-            m_options,
+            GetExecutionOptions(),
             "alpha_g_bias.pdf")
     };
     if (!report_emitted)
@@ -756,7 +778,7 @@ namespace detail {
 void RunAtomSamplingWorkflow(
     ModelObject & model_object,
     const MapObject & map_object,
-    const PotentialAnalysisCommandOptions & options)
+    const PotentialAnalysisExecutionOptions & options)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunAtomMapValueSampling");
     auto sampler{ std::make_unique<SphereSampler>() };
@@ -842,7 +864,7 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
 
 void RunLocalAtomFittingWorkflow(
     ModelObject & model_object,
-    const PotentialAnalysisCommandOptions & options,
+    const PotentialAnalysisExecutionOptions & options,
     double universal_alpha_r)
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
@@ -900,7 +922,7 @@ void RunLocalAtomFittingWorkflow(
 void PotentialAnalysisCommand::RunAtomMapValueSampling()
 {
     if (m_map_object == nullptr || m_model_object == nullptr) return;
-    detail::RunAtomSamplingWorkflow(*m_model_object, *m_map_object, m_options);
+    detail::RunAtomSamplingWorkflow(*m_model_object, *m_map_object, GetExecutionOptions());
 }
 
 void PotentialAnalysisCommand::RunAtomGroupClassification()
@@ -993,7 +1015,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
     Eigen::ArrayXd beta_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
@@ -1004,7 +1026,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaR(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                MakePotentialAnalysisExecutionOptions(m_options, true)
+                MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true)
             )
         };
         
@@ -1041,7 +1063,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
     Eigen::ArrayXd mu_error_sum_array{ Eigen::ArrayXd::Zero(alpha_size) };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(m_options.thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(ThreadSize())
 #endif
     for (size_t i = 0; i < group_size; i++)
     {
@@ -1060,7 +1082,7 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
                 data_entry_list,
                 subset_size,
                 alpha_list,
-                MakePotentialAnalysisExecutionOptions(m_options, true)
+                MakePotentialAnalysisExecutionOptions(GetExecutionOptions(), true)
             )
         };
         
@@ -1089,7 +1111,10 @@ double PotentialAnalysisCommand::TrainUniversalAlphaG(
 void PotentialAnalysisCommand::RunLocalAtomFitting(double universal_alpha_r)
 {
     if (m_model_object == nullptr) return;
-    detail::RunLocalAtomFittingWorkflow(*m_model_object, m_options, universal_alpha_r);
+    detail::RunLocalAtomFittingWorkflow(
+        *m_model_object,
+        GetExecutionOptions(),
+        universal_alpha_r);
 }
 
 

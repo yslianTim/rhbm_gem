@@ -44,6 +44,11 @@ CommandBase::CommandBase(CommonOptionMask common_options) :
 {
 }
 
+CommandBase::CommandBase(CommonOptionProfile profile) :
+    CommandBase{ CommonOptionMaskForProfile(profile) }
+{
+}
+
 bool CommandBase::Execute()
 {
     const bool was_prepared{ m_is_prepared_for_execution };
@@ -54,7 +59,7 @@ bool CommandBase::Execute()
 
     if (was_prepared)
     {
-        Logger::SetLogLevel(GetOptions().verbose_level);
+        Logger::SetLogLevel(VerboseLevel());
     }
 
     const bool executed{ ExecuteImpl() };
@@ -86,9 +91,8 @@ void CommandBase::InvalidatePreparedState()
 
 void CommandBase::SetThreadSize(int value)
 {
-    auto & options{ GetOptions() };
     SetNormalizedScalarOption(
-        options.thread_size,
+        m_common_options_state.thread_size,
         value,
         kJobsOption,
         [](int candidate) { return candidate >= 1; },
@@ -98,9 +102,8 @@ void CommandBase::SetThreadSize(int value)
 
 void CommandBase::SetVerboseLevel(int value)
 {
-    auto & options{ GetOptions() };
     SetNormalizedScalarOption(
-        options.verbose_level,
+        m_common_options_state.verbose_level,
         value,
         kVerboseOption,
         [](int candidate)
@@ -114,19 +117,20 @@ void CommandBase::SetVerboseLevel(int value)
 
 void CommandBase::SetDatabasePath(const std::filesystem::path & path)
 {
-    auto & options{ GetOptions() };
     MutateOptions([&]()
     {
-        options.database_path = path.empty() ? std::filesystem::path{} : path.lexically_normal();
+        m_common_options_state.database_path = path.empty()
+            ? std::filesystem::path{}
+            : path.lexically_normal();
     });
 }
 
 void CommandBase::SetFolderPath(const std::filesystem::path & path)
 {
-    auto & options{ GetOptions() };
     MutateOptions([&]()
     {
-        options.folder_path = std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
+        m_common_options_state.folder_path =
+            std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
     });
 }
 
@@ -315,12 +319,12 @@ std::filesystem::path CommandBase::BuildOutputPath(
     {
         normalized_extension.insert(normalized_extension.begin(), '.');
     }
-    return GetOptions().folder_path / (std::string(stem) + normalized_extension);
+    return OutputFolder() / (std::string(stem) + normalized_extension);
 }
 
 void CommandBase::BeginPreparationPass()
 {
-    Logger::SetLogLevel(GetOptions().verbose_level);
+    Logger::SetLogLevel(VerboseLevel());
     ResetRuntimeState();
     m_data_manager.ClearDataObjects();
     InvalidatePreparedState();
@@ -346,7 +350,7 @@ bool CommandBase::RunFilesystemPreflight()
     if (HasCommonOption(common_options, CommonOption::OutputFolder))
     {
         ClearValidationIssues(kFolderOption, ValidationPhase::Prepare);
-        const auto & folder_path{ GetOptions().folder_path };
+        const auto & folder_path{ OutputFolder() };
         if (!folder_path.empty() && !std::filesystem::exists(folder_path))
         {
             std::error_code error_code;

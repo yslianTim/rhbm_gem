@@ -13,7 +13,7 @@ class MapObject;
 class AtomObject;
 struct MapVisualizationRequest;
 
-struct MapVisualizationCommandOptions : public CommandOptions
+struct MapVisualizationCommandOptions
 {
     int atom_serial_id{ 1 };
     int sampling_size{ 100 };
@@ -22,13 +22,10 @@ struct MapVisualizationCommandOptions : public CommandOptions
     std::filesystem::path map_file_path;
 };
 
-class MapVisualizationCommand
-    : public CommandWithOptions<MapVisualizationCommandOptions>
+class MapVisualizationCommand : public CommandBase
 {
-public:
-    using Options = MapVisualizationCommandOptions;
-
 private:
+    MapVisualizationCommandOptions m_options{};
     std::string m_model_key_tag, m_map_key_tag;
     std::shared_ptr<MapObject> m_map_object;
     std::shared_ptr<ModelObject> m_model_object;

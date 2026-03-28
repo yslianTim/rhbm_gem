@@ -11,19 +11,16 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-struct ValidationIssueCommandOptions : public rg::CommandOptions
+struct ValidationIssueCommandOptions
 {
     bool add_prepare_error{ false };
 };
 
-class ValidationIssueCommand final
-    : public rg::CommandWithOptions<ValidationIssueCommandOptions>
+class ValidationIssueCommand final : public rg::CommandBase
 {
 public:
-    using Options = ValidationIssueCommandOptions;
-
     explicit ValidationIssueCommand() :
-        rg::CommandWithOptions<ValidationIssueCommandOptions>{
+        rg::CommandBase{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
                 | rg::CommonOption::OutputFolder}
@@ -64,6 +61,8 @@ public:
     }
 
 private:
+    ValidationIssueCommandOptions m_options{};
+
     bool ExecuteImpl() override { return true; }
 };
 

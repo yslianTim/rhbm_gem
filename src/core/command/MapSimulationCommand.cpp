@@ -29,8 +29,7 @@ constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
 namespace rhbm_gem {
 
 MapSimulationCommand::MapSimulationCommand(CommonOptionProfile profile) :
-    CommandWithOptions<MapSimulationCommandOptions>{
-        CommonOptionMaskForProfile(profile) },
+    CommandBase{ profile },
     m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),
@@ -244,7 +243,7 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
     auto origin{ CalculateOrigin(grid_spacing) };
     auto grid_size{ CalculateGridSize(grid_spacing) };
     auto map_object{ std::make_unique<MapObject>(grid_size, grid_spacing, origin) };
-    map_object->SetThreadSize(static_cast<int>(m_options.thread_size));
+    map_object->SetThreadSize(ThreadSize());
 
     auto voxel_size{ map_object->GetMapValueArraySize() };
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
@@ -280,7 +279,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
         " /- Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms."
     );
 #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(m_options.thread_size) private(in_range_grid_node_list)
+    #pragma omp parallel for num_threads(ThreadSize()) private(in_range_grid_node_list)
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {

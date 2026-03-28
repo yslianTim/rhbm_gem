@@ -48,8 +48,7 @@ struct QuantizedPointHash
 namespace rhbm_gem {
 
 PositionEstimationCommand::PositionEstimationCommand(CommonOptionProfile profile) :
-    CommandWithOptions<PositionEstimationCommandOptions>{
-        CommonOptionMaskForProfile(profile) },
+    CommandBase{ profile },
     m_selected_voxel_list{}, m_query_point_list{}, m_position_list{},
     m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {
@@ -188,10 +187,10 @@ bool PositionEstimationCommand::BuildVoxelList()
     };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel num_threads(m_options.thread_size)
+    #pragma omp parallel num_threads(ThreadSize())
     {
         std::vector<VoxelNode> thread_local_list;
-        thread_local_list.reserve(selected_count / static_cast<size_t>(m_options.thread_size) + 1);
+        thread_local_list.reserve(selected_count / static_cast<size_t>(ThreadSize()) + 1);
 
         #pragma omp for schedule(static)
         for (size_t i = 0; i < array_size; i++)
@@ -222,7 +221,7 @@ bool PositionEstimationCommand::BuildVoxelList()
     Logger::Log(LogLevel::Info,
         " /- Building KD-Tree from "+ std::to_string(m_selected_voxel_list.size()) + " voxels...");
     m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(
-        m_selected_voxel_list, 0, m_options.thread_size, true);
+        m_selected_voxel_list, 0, ThreadSize(), true);
 
     Logger::Log(LogLevel::Info,
         "Number of selected voxels to be estimated from map = "
@@ -262,7 +261,7 @@ void PositionEstimationCommand::RunMapValueConvergence()
         auto point_size{ m_query_point_list.size() };
         size_t point_count{ 0 };
 #ifdef USE_OPENMP
-        #pragma omp parallel for num_threads(m_options.thread_size)
+        #pragma omp parallel for num_threads(ThreadSize())
 #endif
         for (size_t i = 0; i < m_query_point_list.size(); i++)
         {

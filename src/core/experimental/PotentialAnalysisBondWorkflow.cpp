@@ -35,11 +35,11 @@ struct PotentialAnalysisBondWorkflowContext
 {
     ModelObject & model_object;
     MapObject & map_object;
-    const PotentialAnalysisCommandOptions & options;
+    const PotentialAnalysisExecutionOptions & options;
 };
 
 HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
-    const PotentialAnalysisCommandOptions & options,
+    const PotentialAnalysisExecutionOptions & options,
     bool quiet_mode)
 {
     HRLExecutionOptions execution_options;
@@ -51,7 +51,7 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
 void RunBondSampling(
     ModelObject & model_object,
     const MapObject & map_object,
-    const PotentialAnalysisCommandOptions & options)
+    const PotentialAnalysisExecutionOptions & options)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
     auto sampler{ std::make_unique<CylinderSampler>() };
@@ -343,7 +343,7 @@ void RunPotentialAnalysisBondWorkflowImpl(
 void RunPotentialAnalysisBondWorkflow(
     ModelObject & model_object,
     MapObject & map_object,
-    const PotentialAnalysisCommandOptions & options)
+    const PotentialAnalysisExecutionOptions & options)
 {
     PotentialAnalysisBondWorkflowContext context{
         model_object,

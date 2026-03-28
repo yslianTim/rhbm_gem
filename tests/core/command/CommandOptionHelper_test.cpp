@@ -12,7 +12,7 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-struct CommandOptionHelperCommandOptions : public rg::CommandOptions
+struct CommandOptionHelperCommandOptions
 {
     std::filesystem::path required_path;
     std::filesystem::path optional_path;
@@ -20,14 +20,11 @@ struct CommandOptionHelperCommandOptions : public rg::CommandOptions
     rg::PrinterType printer{ rg::PrinterType::GAUS_ESTIMATES };
 };
 
-class CommandOptionHelperCommand final
-    : public rg::CommandWithOptions<CommandOptionHelperCommandOptions>
+class CommandOptionHelperCommand final : public rg::CommandBase
 {
 public:
-    using Options = CommandOptionHelperCommandOptions;
-
     explicit CommandOptionHelperCommand() :
-        rg::CommandWithOptions<CommandOptionHelperCommandOptions>{
+        rg::CommandBase{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
                 | rg::CommonOption::OutputFolder}
@@ -74,6 +71,8 @@ public:
     void ResetRuntimeState() override {}
 
 private:
+    CommandOptionHelperCommandOptions m_options{};
+
     bool ExecuteImpl() override
     {
         return true;

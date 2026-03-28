@@ -10,18 +10,16 @@ namespace rg = rhbm_gem;
 
 namespace {
 
-struct TestCommandOptions : public rg::CommandOptions
+struct TestCommandOptions
 {
     bool force_invalid{ false };
 };
 
-class TestCommand final
-    : public rg::CommandWithOptions<TestCommandOptions>
+class TestCommand final : public rg::CommandBase
 {
 public:
-    using Options = TestCommandOptions;
     explicit TestCommand() :
-        CommandWithOptions{
+        CommandBase{
             rg::CommonOption::Threading
             | rg::CommonOption::Verbose
             | rg::CommonOption::Database
@@ -54,6 +52,8 @@ public:
     void ResetRuntimeState() override {}
 
 private:
+    TestCommandOptions m_options{};
+
     bool ExecuteImpl() override
     {
         return true;

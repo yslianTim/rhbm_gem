@@ -17,7 +17,7 @@ class DataObjectManager;
 class ModelObject;
 struct PotentialDisplayRequest;
 
-struct PotentialDisplayCommandOptions : public CommandOptions
+struct PotentialDisplayCommandOptions
 {
     PainterType painter_choice{ PainterType::MODEL };
     std::vector<std::string> model_key_tag_list{};
@@ -30,13 +30,10 @@ struct PotentialDisplayCommandOptions : public CommandOptions
     std::string veto_element{ "" };
 };
 
-class PotentialDisplayCommand
-    : public CommandWithOptions<PotentialDisplayCommandOptions>
+class PotentialDisplayCommand : public CommandBase
 {
-public:
-    using Options = PotentialDisplayCommandOptions;
-
 private:
+    PotentialDisplayCommandOptions m_options{};
     std::unordered_map<std::string, std::vector<std::string>> m_ref_model_key_tag_list_map;
     std::unique_ptr<::AtomSelector> m_atom_selector;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;

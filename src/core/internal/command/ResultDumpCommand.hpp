@@ -16,20 +16,17 @@ class ModelObject;
 class MapObject;
 struct ResultDumpRequest;
 
-struct ResultDumpCommandOptions : public CommandOptions
+struct ResultDumpCommandOptions
 {
     PrinterType printer_choice{ PrinterType::GAUS_ESTIMATES };
     std::vector<std::string> model_key_tag_list{};
     std::filesystem::path map_file_path{ "" };
 };
 
-class ResultDumpCommand
-    : public CommandWithOptions<ResultDumpCommandOptions>
+class ResultDumpCommand : public CommandBase
 {
-public:
-    using Options = ResultDumpCommandOptions;
-
 private:
+    ResultDumpCommandOptions m_options{};
     std::string m_map_key_tag;
     std::unordered_map<std::string, std::vector<AtomObject *>> m_selected_atom_list_map;
     std::vector<std::shared_ptr<ModelObject>> m_model_object_list;

@@ -19,7 +19,7 @@ class MapObject;
 class AtomObject;
 struct MapSimulationRequest;
 
-struct MapSimulationCommandOptions : public CommandOptions
+struct MapSimulationCommandOptions
 {
     std::filesystem::path model_file_path;
     std::string map_file_name{"sim_map"};
@@ -30,13 +30,10 @@ struct MapSimulationCommandOptions : public CommandOptions
     std::vector<double> blurring_width_list{};
 };
 
-class MapSimulationCommand
-    : public CommandWithOptions<MapSimulationCommandOptions>
+class MapSimulationCommand : public CommandBase
 {
-public:
-    using Options = MapSimulationCommandOptions;
-
 private:
+    MapSimulationCommandOptions m_options{};
     std::vector<AtomObject *> m_selected_atom_list;
     std::unordered_map<int, double> m_atom_charge_map;
     std::shared_ptr<ModelObject> m_model_object;

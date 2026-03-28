@@ -22,7 +22,7 @@ constexpr CommonOptionMask kDefaultCommandCommonOptions{
 
 struct CommonCommandRequest;
 
-struct CommandOptions
+struct CommonCommandOptions
 {
     int thread_size{ 1 };
     int verbose_level{ 3 };
@@ -43,11 +43,16 @@ protected:
     DataObjectManager m_data_manager;
     std::vector<ValidationIssue> m_validation_issues;
 
+    explicit CommandBase(CommonOptionProfile profile);
     explicit CommandBase(CommonOptionMask common_options = kDefaultCommandCommonOptions);
 
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
+    int ThreadSize() const { return m_common_options_state.thread_size; }
+    int VerboseLevel() const { return m_common_options_state.verbose_level; }
+    const std::filesystem::path & DatabasePath() const { return m_common_options_state.database_path; }
+    const std::filesystem::path & OutputFolder() const { return m_common_options_state.folder_path; }
     void SetThreadSize(int value);
     void SetVerboseLevel(int value);
     void SetDatabasePath(const std::filesystem::path & path);
@@ -198,10 +203,9 @@ protected:
         std::string_view extension) const;
 
 private:
-    virtual const CommandOptions & GetOptions() const = 0;
-    virtual CommandOptions & GetOptions() = 0;
     CommonOptionMask GetCommonOptionsMask() const { return m_common_options; }
 
+    CommonCommandOptions m_common_options_state{};
     CommonOptionMask m_common_options;
     bool m_is_prepared_for_execution{ false };
     void InvalidatePreparedState();
@@ -252,25 +256,6 @@ private:
         LogLevel level,
         const std::string & message,
         bool auto_corrected);
-};
-
-template <typename OptionsT>
-class CommandWithOptions : public CommandBase
-{
-protected:
-    OptionsT m_options{};
-
-public:
-    using Options = OptionsT;
-    explicit CommandWithOptions(
-        CommonOptionMask common_options = kDefaultCommandCommonOptions) :
-        CommandBase{ common_options }
-    {
-    }
-
-private:
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
 };
 
 } // namespace rhbm_gem

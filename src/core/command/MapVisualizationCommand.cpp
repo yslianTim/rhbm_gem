@@ -40,8 +40,7 @@ constexpr std::string_view kWindowSizeOption{ "--window-size" };
 namespace rhbm_gem {
 
 MapVisualizationCommand::MapVisualizationCommand(CommonOptionProfile profile) :
-    CommandWithOptions<MapVisualizationCommandOptions>{
-        CommonOptionMaskForProfile(profile) },
+    CommandBase{ profile },
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
