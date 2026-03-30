@@ -14,35 +14,17 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/CommandMetadata.hpp>
+#include <rhbm_gem/core/command/CommandContract.hpp>
 #include <CLI/CLI.hpp>
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-struct ExpectedCommandMetadata
+std::vector<rg::CommandDescriptor> BuildExpectedCommandMetadata()
 {
-    rg::CommandId id;
-    std::string_view name;
-    std::string_view description;
-    rg::CommonOptionProfile profile;
-    bool uses_database;
-};
-
-std::vector<ExpectedCommandMetadata> BuildExpectedCommandMetadata()
-{
-    std::vector<ExpectedCommandMetadata> expected;
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
-    expected.push_back(ExpectedCommandMetadata{                                                 \
-        rg::CommandId::COMMAND_ID,                                                              \
-        CLI_NAME,                                                                               \
-        DESCRIPTION,                                                                            \
-        rg::CommonOptionProfile::PROFILE,                                                       \
-        rg::CommonOptionProfile::PROFILE == rg::CommonOptionProfile::DatabaseWorkflow});
-#include <rhbm_gem/core/command/CommandList.def>
-#undef RHBM_GEM_COMMAND
-    return expected;
+    const auto catalog{ rg::GetCommandCatalog() };
+    return { catalog.begin(), catalog.end() };
 }
 
 std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTokens()
@@ -141,19 +123,22 @@ TEST(CommandCatalogTest, ConfigureCommandCliBuildsOneSubcommandPerManifestEntry)
     std::unordered_set<std::string> unique_names;
     for (std::size_t index = 0; index < expected_metadata.size(); ++index)
     {
-        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].name);
+        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].cli_name);
         EXPECT_EQ(subcommands[index]->get_description(), expected_metadata[index].description);
 
-        const auto common_options{ rg::CommonOptionMaskForProfile(expected_metadata[index].profile) };
+        const auto common_options{
+            rg::CommonOptionMaskForProfile(expected_metadata[index].common_option_profile)
+        };
         EXPECT_EQ(
             rg::HasCommonOption(common_options, rg::CommonOption::Database),
-            expected_metadata[index].uses_database);
+            expected_metadata[index].common_option_profile
+                == rg::CommonOptionProfile::DatabaseWorkflow);
         EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Threading));
         EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Verbose));
         EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder));
 
         unique_ids.insert(static_cast<int>(expected_metadata[index].id));
-        unique_names.emplace(expected_metadata[index].name);
+        unique_names.emplace(expected_metadata[index].cli_name);
     }
 
     EXPECT_EQ(unique_ids.size(), expected_metadata.size());
@@ -272,15 +257,15 @@ TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
     }
 }
 
-TEST(CommandCatalogTest, ModelTestCliNameMapsToHRLModelTestCommandId)
+TEST(CommandCatalogTest, CommandCatalogExposesStableModelTestDescriptor)
 {
     const auto expected_metadata{ BuildExpectedCommandMetadata() };
     const auto iter = std::find_if(
         expected_metadata.begin(),
         expected_metadata.end(),
-        [](const ExpectedCommandMetadata & descriptor)
+        [](const rg::CommandDescriptor & descriptor)
         {
-            return descriptor.name == std::string_view{ "model_test" };
+            return descriptor.cli_name == std::string_view{ "model_test" };
         });
 
     ASSERT_NE(iter, expected_metadata.end());
@@ -294,9 +279,11 @@ TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
 
     for (const auto & descriptor : BuildExpectedCommandMetadata())
     {
-        auto * subcommand{ app.get_subcommand(std::string(descriptor.name)) };
-        ASSERT_NE(subcommand, nullptr) << descriptor.name;
-        const auto common_options{ rg::CommonOptionMaskForProfile(descriptor.profile) };
+        auto * subcommand{ app.get_subcommand(std::string(descriptor.cli_name)) };
+        ASSERT_NE(subcommand, nullptr) << descriptor.cli_name;
+        const auto common_options{
+            rg::CommonOptionMaskForProfile(descriptor.common_option_profile)
+        };
 
         const std::string help_text{
             subcommand->help(subcommand->get_name(), CLI::AppFormatMode::Sub)
@@ -304,11 +291,11 @@ TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
         EXPECT_EQ(
             help_text.find("--database") != std::string::npos,
             rg::HasCommonOption(common_options, rg::CommonOption::Database))
-            << descriptor.name;
+            << descriptor.cli_name;
         EXPECT_EQ(
             help_text.find("--folder") != std::string::npos,
             rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder))
-            << descriptor.name;
+            << descriptor.cli_name;
     }
 }
 

@@ -2,7 +2,7 @@
 
 #include <CLI/CLI.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 #include <filesystem>
 #include <functional>
@@ -108,7 +108,7 @@ inline CLI::Option * AddEnumOption(
             required)
     };
     option->transform(CLI::CheckedTransformer(
-        rhbm_gem::BuildEnumCLIMap<EnumType>(), CLI::ignore_case));
+        rhbm_gem::BuildCommandEnumCliMap<EnumType>(), CLI::ignore_case));
     return option;
 }
 

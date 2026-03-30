@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

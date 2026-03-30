@@ -6,7 +6,7 @@
 
 #include "internal/command/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 namespace rg = rhbm_gem;
 

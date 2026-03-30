@@ -7,7 +7,7 @@
 #include <filesystem>
 
 #include "CommandBase.hpp"
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 class AtomSelector;
 namespace CLI

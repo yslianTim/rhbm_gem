@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandMetadata.hpp>
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandContract.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 namespace CLI
 {

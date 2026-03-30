@@ -9,10 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandMetadata.hpp>
+#include <rhbm_gem/core/command/CommandContract.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 namespace rhbm_gem {
 
@@ -184,7 +184,7 @@ protected:
             ResetParseIssues(option_name);
             using UnderlyingType = std::underlying_type_t<EnumType>;
             const auto raw_numeric{ static_cast<UnderlyingType>(raw_value) };
-            if (IsSupportedEnumValue(raw_value))
+            if (IsSupportedCommandEnumValue(raw_value))
             {
                 field = raw_value;
                 return;

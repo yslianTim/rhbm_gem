@@ -24,7 +24,7 @@ Concrete command implementation:
 
 Public command API:
 
-- `/include/rhbm_gem/core/command/CommandMetadata.hpp` if shared diagnostics/defaults or metadata change
+- `/include/rhbm_gem/core/command/CommandContract.hpp` if shared diagnostics/defaults or metadata change
 - `/include/rhbm_gem/core/command/CommandApi.hpp`
 - `/src/core/command/CommandApi.cpp`
 
@@ -122,13 +122,13 @@ Useful base helpers from `CommandBase`:
 
 Add the request struct to `/include/rhbm_gem/core/command/CommandApi.hpp`.
 
-Shared diagnostics/defaults live in `/include/rhbm_gem/core/command/CommandMetadata.hpp`, while
+Shared diagnostics/defaults live in `/include/rhbm_gem/core/command/CommandContract.hpp`, while
 `ExecutionReport` lives in `/include/rhbm_gem/core/command/CommandApi.hpp`, so adding a normal
 command usually does not require changes to either shared contract layer.
 
 If the command introduces or extends a shared command enum, update the enum declaration and its
 CLI / Python / validation mappings together in
-`/include/rhbm_gem/core/command/OptionEnumClass.hpp`.
+`/include/rhbm_gem/core/command/CommandEnumClass.hpp`.
 
 `Run*` declarations/definitions are expanded from `CommandList.def`, so once the manifest entry
 exists in the correct fragment you only need to ensure the request struct, command class, and
@@ -170,7 +170,7 @@ Update `/src/python/CommandApiBindings.cpp`:
 
 Shared enums and diagnostics live in `/src/python/CommonBindings.cpp`, so that file only needs
 changes if the command introduces a new shared enum. The enum token source of truth remains
-`/include/rhbm_gem/core/command/OptionEnumClass.hpp`.
+`/include/rhbm_gem/core/command/CommandEnumClass.hpp`.
 
 ## 9. Tests and documentation
 

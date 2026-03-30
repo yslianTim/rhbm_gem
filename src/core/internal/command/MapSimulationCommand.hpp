@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "CommandBase.hpp"
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 template <typename T> struct KDNode;
 namespace CLI

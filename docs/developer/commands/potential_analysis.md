@@ -6,7 +6,7 @@ This page documents `potential_analysis` as the canonical example of the current
 
 The top-level source of truth for command membership is [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def). The `PotentialAnalysis` entry there is expanded with X-macros into the current command surfaces:
 
-- [`include/rhbm_gem/core/command/CommandMetadata.hpp`](/include/rhbm_gem/core/command/CommandMetadata.hpp) for `CommandId` and shared option-profile metadata
+- [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp) for `CommandId` and shared option-profile metadata
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp) for `RunPotentialAnalysis(...)`
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) for the concrete `RunPotentialAnalysis(...)` definition
 - [`src/core/command/CommandCliSupport.cpp`](/src/core/command/CommandCliSupport.cpp) for manifest-driven CLI registration
@@ -42,7 +42,7 @@ The public request surface is handwritten in [`include/rhbm_gem/core/command/Com
 - Fit controls: `fit_range_min`, `fit_range_max`
 - Alpha controls: `alpha_r`, `alpha_g`
 
-Shared validation/default-path types come from [`include/rhbm_gem/core/command/CommandMetadata.hpp`](/include/rhbm_gem/core/command/CommandMetadata.hpp), and the public execution result comes from [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp). `ExecutionReport` communicates whether preparation and execution succeeded and carries the collected `ValidationIssue` list.
+Shared validation/default-path types come from [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp), and the public execution result comes from [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp). `ExecutionReport` communicates whether preparation and execution succeeded and carries the collected `ValidationIssue` list.
 
 CLI binding for command-specific fields lives in [`src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp) inside `BindPotentialAnalysisRequestOptions(...)`. `CommandCliSupport.cpp` calls that binder during manifest-driven registration. The binder makes `--model` and `--map` required and wires the rest of the request fields directly into the request object used by the subcommand callback.
 

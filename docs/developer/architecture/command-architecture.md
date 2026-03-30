@@ -19,7 +19,7 @@ Each entry uses:
 
 This manifest is expanded directly with X-macros by:
 
-- `/include/rhbm_gem/core/command/CommandMetadata.hpp`
+- `/include/rhbm_gem/core/command/CommandContract.hpp`
 - `/include/rhbm_gem/core/command/CommandApi.hpp`
 - `/src/core/command/CommandApi.cpp`
 - `/src/core/command/CommandCliSupport.cpp`
@@ -77,7 +77,7 @@ There is no separate runtime catalog or descriptor layer anymore.
 ## 4. Public contract and request surface
 
 Shared command metadata, default paths, and validation types live in
-`/include/rhbm_gem/core/command/CommandMetadata.hpp`.
+`/include/rhbm_gem/core/command/CommandContract.hpp`.
 
 This header owns:
 
@@ -98,14 +98,14 @@ Shared request fields:
 - `database_path`
 - `folder_path`
 
-`CommandApi.hpp` includes `CommandMetadata.hpp`, so callers that only need the public `Run*`
-surface can include one header, while lower-level consumers can depend on `CommandMetadata.hpp`
+`CommandApi.hpp` includes `CommandContract.hpp`, so callers that only need the public `Run*`
+surface can include one header, while lower-level consumers can depend on `CommandContract.hpp`
 directly for shared metadata, diagnostics, and default-path behavior.
 
 Shared command enums, plus the CLI alias / Python binding / validation mappings derived from them,
-live in `/include/rhbm_gem/core/command/OptionEnumClass.hpp`.
+live in `/include/rhbm_gem/core/command/CommandEnumClass.hpp`.
 
-`CommonOptionProfile` in `CommandMetadata.hpp` controls shared CLI/common-option behavior:
+`CommonOptionProfile` in `CommandContract.hpp` controls shared CLI/common-option behavior:
 
 - `FileWorkflow` -> `Threading | Verbose | OutputFolder`
 - `DatabaseWorkflow` -> `Threading | Verbose | Database | OutputFolder`
@@ -145,7 +145,7 @@ Useful `CommandBase` helpers:
 - `BuildOutputPath(...)`
 
 `SetValidatedEnumOption(...)` validates against the enum mappings declared in
-`/include/rhbm_gem/core/command/OptionEnumClass.hpp`, and the same mapping data is also reused by
+`/include/rhbm_gem/core/command/CommandEnumClass.hpp`, and the same mapping data is also reused by
 CLI registration and Python bindings.
 
 ## 6. Lifecycle and validation
