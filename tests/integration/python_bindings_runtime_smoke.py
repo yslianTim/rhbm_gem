@@ -66,11 +66,11 @@ def assert_request_objects_are_usable() -> None:
     simulation = m.MapSimulationRequest()
     simulation.model_file_path = str(PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif")
     simulation.common.folder_path = "runtime_smoke_output"
-    simulation.blurring_width_list = "1.50"
+    simulation.blurring_width_list = [1.50]
 
     assert Path(simulation.model_file_path).name == "test_model.cif"
     assert Path(simulation.common.folder_path) == Path("runtime_smoke_output")
-    assert simulation.blurring_width_list == "1.50"
+    assert simulation.blurring_width_list == [1.50]
 
 
 def has_issue(report, option_name: str, phase) -> bool:

@@ -2,7 +2,7 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/PositionEstimationCommand.hpp"
+#include "internal/command/PositionEstimationCommand.hpp"
 
 namespace rg = rhbm_gem;
 

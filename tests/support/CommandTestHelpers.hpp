@@ -11,6 +11,7 @@
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 namespace command_test {
 
@@ -89,7 +90,7 @@ inline std::filesystem::path GenerateMapFile(
     request.common.folder_path = output_dir;
     request.model_file_path = model_path;
     request.map_file_name = map_name;
-    request.blurring_width_list = blurring_widths;
+    request.blurring_width_list = StringHelper::ParseListOption<double>(blurring_widths);
 
     const auto report{ rhbm_gem::RunMapSimulation(request) };
     if (!report.executed)

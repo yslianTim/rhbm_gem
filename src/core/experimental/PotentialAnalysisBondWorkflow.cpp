@@ -1,7 +1,7 @@
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 
-#include "command/PotentialAnalysisCommand.hpp"
-#include <rhbm_gem/core/command/MapSampling.hpp>
+#include "internal/command/MapSampling.hpp"
+#include "internal/command/PotentialAnalysisCommand.hpp"
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
@@ -35,23 +35,25 @@ struct PotentialAnalysisBondWorkflowContext
 {
     ModelObject & model_object;
     MapObject & map_object;
-    const PotentialAnalysisCommandOptions & options;
+    const PotentialAnalysisRequest & options;
+    int thread_size;
 };
 
 HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
-    const PotentialAnalysisCommandOptions & options,
+    int thread_size,
     bool quiet_mode)
 {
     HRLExecutionOptions execution_options;
     execution_options.quiet_mode = quiet_mode;
-    execution_options.thread_size = options.thread_size;
+    execution_options.thread_size = thread_size;
     return execution_options;
 }
 
 void RunBondSampling(
     ModelObject & model_object,
     const MapObject & map_object,
-    const PotentialAnalysisCommandOptions & options)
+    const PotentialAnalysisRequest & options,
+    int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
     auto sampler{ std::make_unique<CylinderSampler>() };
@@ -66,7 +68,7 @@ void RunBondSampling(
     size_t bond_count{ 0 };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel num_threads(options.thread_size)
+    #pragma omp parallel num_threads(thread_size)
     {
         #pragma omp for
         for (size_t i = 0; i < bond_size; i++)
@@ -148,7 +150,7 @@ void RunBondGrouping(ModelObject & model_object)
 
 void RunBondMapValueSampling(const PotentialAnalysisBondWorkflowContext & context)
 {
-    RunBondSampling(context.model_object, context.map_object, context.options);
+    RunBondSampling(context.model_object, context.map_object, context.options, context.thread_size);
 }
 
 void RunBondGroupClassification(const PotentialAnalysisBondWorkflowContext & context)
@@ -169,7 +171,7 @@ void RunLocalBondFitting(
         LogLevel::Info,
         "Run Local bond fitting for " + std::to_string(selected_bond_size) + " bonds.");
 #ifdef USE_OPENMP
-    #pragma omp parallel for schedule(dynamic) num_threads(context.options.thread_size)
+    #pragma omp parallel for schedule(dynamic) num_threads(context.thread_size)
 #endif
     for (size_t i = 0; i < selected_bond_size; i++)
     {
@@ -181,7 +183,7 @@ void RunLocalBondFitting(
                 universal_alpha_r,
                 dataset.X,
                 dataset.y,
-                MakePotentialAnalysisExecutionOptions(context.options, true))
+                MakePotentialAnalysisExecutionOptions(context.thread_size, true))
         };
 
         local_entry->SetBetaEstimateOLS(result.beta_ols);
@@ -228,7 +230,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         std::atomic<size_t> key_count{ 0 };
 
 #ifdef USE_OPENMP
-        #pragma omp parallel for schedule(dynamic) num_threads(context.options.thread_size)
+        #pragma omp parallel for schedule(dynamic) num_threads(context.thread_size)
 #endif
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
@@ -264,7 +266,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                     data_covariance_list)
             };
             HRLGroupEstimator estimator(
-                MakePotentialAnalysisExecutionOptions(context.options, true));
+                MakePotentialAnalysisExecutionOptions(context.thread_size, true));
             const auto result{ estimator.Estimate(input, context.options.alpha_g) };
 
             auto gaus_group_mean{
@@ -343,12 +345,14 @@ void RunPotentialAnalysisBondWorkflowImpl(
 void RunPotentialAnalysisBondWorkflow(
     ModelObject & model_object,
     MapObject & map_object,
-    const PotentialAnalysisCommandOptions & options)
+    const PotentialAnalysisRequest & options,
+    int thread_size)
 {
     PotentialAnalysisBondWorkflowContext context{
         model_object,
         map_object,
         options,
+        thread_size,
     };
     RunPotentialAnalysisBondWorkflowImpl(context);
 }

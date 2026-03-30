@@ -3,8 +3,7 @@
 #include <pybind11/stl/filesystem.h>
 
 #include <rhbm_gem/core/command/CommandContract.hpp>
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 namespace py = pybind11;
 
@@ -14,7 +13,7 @@ namespace {
 template <typename EnumType>
 void BindEnumEntries(py::enum_<EnumType> & py_enum)
 {
-    const auto binding_entries{ GetEnumBindingEntries<EnumType>() };
+    const auto binding_entries{ GetCommandEnumBindingEntries<EnumType>() };
     for (const auto & entry : binding_entries)
     {
         const std::string name{ entry.token };

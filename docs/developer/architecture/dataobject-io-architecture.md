@@ -224,7 +224,7 @@ Behavior:
 
 Cross-command helpers live in:
 
-- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/internal/command/CommandDataSupport.hpp`
 - `/src/core/command/CommandDataSupport.cpp`
 
 Loader helpers in `namespace command_data_loader`:
@@ -265,7 +265,7 @@ Typed dispatch and shared helpers:
 
 - `/include/rhbm_gem/data/object/DataObjectDispatch.hpp`
 - `/src/data/object/DataObjectDispatch.cpp`
-- `/src/core/command/CommandDataSupport.hpp`
+- `/src/core/internal/command/CommandDataSupport.hpp`
 - `/src/core/command/CommandDataSupport.cpp`
 
 Reference tests:

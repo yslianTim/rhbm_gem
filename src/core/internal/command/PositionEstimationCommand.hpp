@@ -6,31 +6,15 @@
 #include <string>
 #include <vector>
 
-#include "command/internal/CommandBase.hpp"
+#include "CommandBase.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 
 template <typename T> struct KDNode;
 
 namespace rhbm_gem {
 
-struct PositionEstimationRequest;
-
-struct PositionEstimationCommandOptions : public CommandOptions
+class PositionEstimationCommand : public CommandWithRequest<PositionEstimationRequest>
 {
-    int iteration_count{ 15 };
-    size_t knn_size{ 20 };
-    float alpha{ 2.0 };
-    float threshold_ratio{ 0.01f };
-    float dedup_tolerance{ 1.0e-2f };
-    std::filesystem::path map_file_path;
-};
-
-class PositionEstimationCommand
-    : public CommandWithOptions<PositionEstimationCommandOptions>
-{
-public:
-    using Options = PositionEstimationCommandOptions;
-
 private:
     std::vector<VoxelNode> m_selected_voxel_list;
     std::vector<VoxelNode> m_query_point_list;
@@ -41,15 +25,9 @@ private:
 public:
     explicit PositionEstimationCommand(CommonOptionProfile profile);
     ~PositionEstimationCommand() override;
-    void ApplyRequest(const PositionEstimationRequest & request);
 
 private:
-    void SetMapFilePath(const std::filesystem::path & path);
-    void SetIterationCount(int value);
-    void SetKNNSize(int value);
-    void SetAlpha(double value);
-    void SetThresholdRatio(double value);
-    void SetDedupTolerance(double value);
+    void NormalizeRequest() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
     bool BuildDataObject();

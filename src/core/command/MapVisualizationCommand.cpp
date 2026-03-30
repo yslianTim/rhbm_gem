@@ -1,12 +1,11 @@
-#include "MapVisualizationCommand.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/internal/CommandDataSupport.hpp"
+#include "internal/command/MapVisualizationCommand.hpp"
+#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/MapSampling.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/core/command/MapSampling.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -40,21 +39,44 @@ constexpr std::string_view kWindowSizeOption{ "--window-size" };
 namespace rhbm_gem {
 
 MapVisualizationCommand::MapVisualizationCommand(CommonOptionProfile profile) :
-    CommandWithOptions<MapVisualizationCommandOptions>{
-        CommonOptionMaskForProfile(profile) },
+    CommandWithRequest<MapVisualizationRequest>{ profile },
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
 }
 
-void MapVisualizationCommand::ApplyRequest(const MapVisualizationRequest & request)
+void MapVisualizationCommand::NormalizeRequest()
 {
-    ApplyCommonRequest(request.common);
-    SetModelFilePath(request.model_file_path);
-    SetMapFilePath(request.map_file_path);
-    SetAtomSerialID(request.atom_serial_id);
-    SetSamplingSize(request.sampling_size);
-    SetWindowSize(request.window_size);
+    auto & request{ MutableRequest() };
+    SetRequiredExistingPathOption(
+        request.model_file_path,
+        request.model_file_path,
+        kModelOption,
+        "Model file");
+    SetRequiredExistingPathOption(
+        request.map_file_path,
+        request.map_file_path,
+        kMapOption,
+        "Map file");
+    SetPositiveScalarOption(
+        request.atom_serial_id,
+        request.atom_serial_id,
+        kAtomIdOption,
+        1,
+        "Atom serial ID must be positive.");
+    SetNormalizedScalarOption(
+        request.sampling_size,
+        request.sampling_size,
+        kSamplingOption,
+        [](int candidate) { return candidate > 0; },
+        100,
+        "Sampling size must be positive, reset to default value = 100");
+    SetFinitePositiveScalarOption(
+        request.window_size,
+        request.window_size,
+        kWindowSizeOption,
+        5.0,
+        "Window size must be a finite positive value.");
 }
 
 bool MapVisualizationCommand::ExecuteImpl()
@@ -71,56 +93,16 @@ void MapVisualizationCommand::ResetRuntimeState()
     m_model_object.reset();
 }
 
-void MapVisualizationCommand::SetModelFilePath(const std::filesystem::path & path)
-{
-    SetRequiredExistingPathOption(m_options.model_file_path, path, kModelOption, "Model file");
-}
-
-void MapVisualizationCommand::SetMapFilePath(const std::filesystem::path & path)
-{
-    SetRequiredExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
-}
-
-void MapVisualizationCommand::SetAtomSerialID(int value)
-{
-    SetPositiveScalarOption(
-        m_options.atom_serial_id,
-        value,
-        kAtomIdOption,
-        1,
-        "Atom serial ID must be positive.");
-}
-
-void MapVisualizationCommand::SetSamplingSize(int value)
-{
-    SetNormalizedScalarOption(
-        m_options.sampling_size,
-        value,
-        kSamplingOption,
-        [](int candidate) { return candidate > 0; },
-        100,
-        "Sampling size must be positive, reset to default value = 100");
-}
-
-void MapVisualizationCommand::SetWindowSize(double value)
-{
-    SetFinitePositiveScalarOption(
-        m_options.window_size,
-        value,
-        kWindowSizeOption,
-        5.0,
-        "Window size must be a finite positive value.");
-}
-
 bool MapVisualizationCommand::BuildDataObject()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
         m_model_object = command_data_loader::ProcessModelFile(
-            m_data_manager, m_options.model_file_path, m_model_key_tag, "model file");
+            m_data_manager, request.model_file_path, m_model_key_tag, "model file");
         m_map_object = command_data_loader::ProcessMapFile(
-            m_data_manager, m_options.map_file_path, m_map_key_tag, "map file");
+            m_data_manager, request.map_file_path, m_map_key_tag, "map file");
     }
     catch (const std::exception & e)
     {
@@ -153,6 +135,7 @@ void MapVisualizationCommand::RunModelObjectPreprocessing()
 
 bool MapVisualizationCommand::RunAtomMapValueSampling()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
     if (m_map_object == nullptr || m_model_object == nullptr)
     {
@@ -160,29 +143,29 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
         return false;
     }
     auto sampler{ std::make_unique<GridSampler>() };
-    sampler->SetSamplingSize(static_cast<unsigned int>(m_options.sampling_size));
-    sampler->SetWindowSize(static_cast<float>(m_options.window_size));
+    sampler->SetSamplingSize(static_cast<unsigned int>(request.sampling_size));
+    sampler->SetWindowSize(static_cast<float>(request.window_size));
     sampler->Print();
     
     auto context{ BuildModelAtomBondContext(*m_model_object) };
     const auto & atom_map{ context.atom_map };
     const auto & bond_map{ context.bond_map };
 
-    const auto atom_iter{ atom_map.find(m_options.atom_serial_id) };
+    const auto atom_iter{ atom_map.find(request.atom_serial_id) };
     if (atom_iter == atom_map.end())
     {
         Logger::Log(LogLevel::Error,
-            "Cannot find atom serial ID " + std::to_string(m_options.atom_serial_id)
+            "Cannot find atom serial ID " + std::to_string(request.atom_serial_id)
             + " in the selected atom list.");
         return false;
     }
 
-    const auto bond_iter{ bond_map.find(m_options.atom_serial_id) };
+    const auto bond_iter{ bond_map.find(request.atom_serial_id) };
     if (bond_iter == bond_map.end() || bond_iter->second.empty())
     {
         Logger::Log(LogLevel::Error,
             "Cannot derive a bond context for atom serial ID "
-            + std::to_string(m_options.atom_serial_id) + ".");
+            + std::to_string(request.atom_serial_id) + ".");
         return false;
     }
 
@@ -201,7 +184,7 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
     if (!found_reference_bond)
     {
         Logger::Log(LogLevel::Error,
-            "Cannot visualize atom serial ID " + std::to_string(m_options.atom_serial_id)
+            "Cannot visualize atom serial ID " + std::to_string(request.atom_serial_id)
             + " because all available bond vectors are degenerate.");
         return false;
     }
@@ -218,7 +201,7 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
         {
             Logger::Log(LogLevel::Error,
                 "Cannot construct a stable visualization axis for atom serial ID "
-                + std::to_string(m_options.atom_serial_id) + ".");
+                + std::to_string(request.atom_serial_id) + ".");
             return false;
         }
     }
@@ -243,15 +226,15 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
         map_value_list.emplace_back(static_cast<double>(value));
     }
 
-    auto x_min{ target_atom_position.at(0) - 0.5 * m_options.window_size };
-    auto x_max{ target_atom_position.at(0) + 0.5 * m_options.window_size };
-    auto y_min{ target_atom_position.at(1) - 0.5 * m_options.window_size };
-    auto y_max{ target_atom_position.at(1) + 0.5 * m_options.window_size };
+    auto x_min{ target_atom_position.at(0) - 0.5 * request.window_size };
+    auto x_max{ target_atom_position.at(0) + 0.5 * request.window_size };
+    auto y_min{ target_atom_position.at(1) - 0.5 * request.window_size };
+    auto y_max{ target_atom_position.at(1) + 0.5 * request.window_size };
 
     LocalPainter::PaintHistogram2D(
         map_value_list,
-        m_options.sampling_size, x_min, x_max,
-        m_options.sampling_size, y_min, y_max,
+        request.sampling_size, x_min, x_max,
+        request.sampling_size, y_min, y_max,
         "#font[2]{u} Position #[]{#AA}",
         "#font[2]{v} Position #[]{#AA}",
         "Normalized Map Value",
@@ -263,6 +246,7 @@ bool MapVisualizationCommand::RunAtomMapValueSampling()
 
 std::filesystem::path MapVisualizationCommand::BuildOutputFilePath() const
 {
+    const auto & request{ RequestOptions() };
     std::string model_name;
     if (m_model_object && !m_model_object->GetPdbID().empty())
     {
@@ -270,7 +254,7 @@ std::filesystem::path MapVisualizationCommand::BuildOutputFilePath() const
     }
     else
     {
-        model_name = FilePathHelper::GetFileName(m_options.model_file_path, false);
+        model_name = FilePathHelper::GetFileName(request.model_file_path, false);
         if (model_name.empty())
         {
             model_name = "model";
@@ -278,7 +262,7 @@ std::filesystem::path MapVisualizationCommand::BuildOutputFilePath() const
     }
 
     const std::string file_name{
-        "map_slice_" + model_name + "_atom" + std::to_string(m_options.atom_serial_id)
+        "map_slice_" + model_name + "_atom" + std::to_string(request.atom_serial_id)
     };
     return BuildOutputPath(file_name, ".pdf");
 }

@@ -3,27 +3,24 @@
 #include <vector>
 
 
-#include "command/internal/CommandBase.hpp"
+#include "internal/command/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-struct LifecycleCommandOptions : public rg::CommandOptions
+struct LifecycleCommandOptions
 {
     bool fail_prepare{ false };
     bool execution_toggle{ false };
 };
 
-class LifecycleCommand final
-    : public rg::CommandWithOptions<LifecycleCommandOptions>
+class LifecycleCommand final : public rg::CommandBase
 {
 public:
-    using Options = LifecycleCommandOptions;
-
     explicit LifecycleCommand() :
-        rg::CommandWithOptions<LifecycleCommandOptions>{
+        rg::CommandBase{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
                 | rg::CommonOption::OutputFolder}
@@ -62,6 +59,8 @@ public:
     }
 
 private:
+    LifecycleCommandOptions m_options{};
+
     bool ExecuteImpl() override
     {
         ++execute_impl_count;

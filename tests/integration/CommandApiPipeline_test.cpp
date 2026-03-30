@@ -54,7 +54,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     simulation_request.common.folder_path = maps_dir;
     simulation_request.model_file_path = command_test::TestDataPath("test_model.cif");
     simulation_request.map_file_name = "sim_map";
-    simulation_request.blurring_width_list = "1.50";
+    simulation_request.blurring_width_list = { 1.50 };
 
     const auto simulation_result{
         rg::RunMapSimulation(simulation_request)
@@ -84,7 +84,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     dump_request.common.database_path = database_path;
     dump_request.common.folder_path = dump_output_dir;
     dump_request.printer_choice = rg::PrinterType::GAUS_ESTIMATES;
-    dump_request.model_key_tag_list = "pipeline_model";
+    dump_request.model_key_tag_list = { "pipeline_model" };
 
     const auto dump_result{
         rg::RunResultDump(dump_request)

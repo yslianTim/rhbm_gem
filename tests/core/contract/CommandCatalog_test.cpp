@@ -14,33 +14,17 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/internal/CommandCatalog.hpp"
+#include <rhbm_gem/core/command/CommandContract.hpp>
 #include <CLI/CLI.hpp>
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-struct ExpectedCommandMetadata
+std::vector<rg::CommandDescriptor> BuildExpectedCommandMetadata()
 {
-    rg::CommandId id;
-    std::string_view name;
-    rg::CommonOptionProfile profile;
-    bool uses_database;
-};
-
-std::vector<ExpectedCommandMetadata> BuildExpectedCommandMetadata()
-{
-    std::vector<ExpectedCommandMetadata> expected;
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
-    expected.push_back(ExpectedCommandMetadata{                                                 \
-        rg::CommandId::COMMAND_ID,                                                              \
-        CLI_NAME,                                                                               \
-        rg::CommonOptionProfile::PROFILE,                                                       \
-        rg::CommonOptionProfile::PROFILE == rg::CommonOptionProfile::DatabaseWorkflow});
-#include <rhbm_gem/core/command/CommandList.def>
-#undef RHBM_GEM_COMMAND
-    return expected;
+    const auto catalog{ rg::GetCommandCatalog() };
+    return { catalog.begin(), catalog.end() };
 }
 
 std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTokens()
@@ -122,57 +106,6 @@ bool ManifestContainsExperimentalGuard()
 
 } // namespace
 
-TEST(CommandCatalogTest, CatalogMatchesExpectedMetadataAndOrder)
-{
-    const auto expected_metadata{ BuildExpectedCommandMetadata() };
-    const auto & catalog{ rg::CommandCatalog() };
-    ASSERT_EQ(catalog.size(), expected_metadata.size());
-
-    std::unordered_set<int> unique_ids;
-    std::unordered_set<std::string> unique_names;
-    for (std::size_t index = 0; index < expected_metadata.size(); ++index)
-    {
-        const auto & descriptor{ catalog[index] };
-        const auto & expected{ expected_metadata[index] };
-        const auto common_options{ rg::CommonOptionsForCommand(descriptor) };
-
-        EXPECT_EQ(descriptor.id, expected.id);
-        EXPECT_EQ(std::string_view{ descriptor.name }, expected.name);
-        EXPECT_EQ(descriptor.profile, expected.profile);
-        EXPECT_EQ(
-            rg::HasCommonOption(common_options, rg::CommonOption::Database),
-            expected.uses_database);
-        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Threading));
-        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Verbose));
-        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder));
-
-        unique_ids.insert(static_cast<int>(descriptor.id));
-        unique_names.emplace(descriptor.name);
-    }
-
-    EXPECT_EQ(unique_ids.size(), catalog.size());
-    EXPECT_EQ(unique_names.size(), catalog.size());
-}
-
-TEST(CommandCatalogTest, RegisterCommandSubcommandsBuildsOneSubcommandPerManifestEntry)
-{
-    CLI::App app{"catalog"};
-    rg::RegisterCommandSubcommands(app);
-
-    const auto subcommands{
-        app.get_subcommands([](CLI::App * subcommand)
-        {
-            return subcommand != nullptr && !subcommand->get_name().empty();
-        })
-    };
-    const auto expected_metadata{ BuildExpectedCommandMetadata() };
-    ASSERT_EQ(subcommands.size(), expected_metadata.size());
-    for (std::size_t index = 0; index < expected_metadata.size(); ++index)
-    {
-        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].name);
-    }
-}
-
 TEST(CommandCatalogTest, ConfigureCommandCliBuildsOneSubcommandPerManifestEntry)
 {
     CLI::App app{"RHBM-GEM"};
@@ -186,10 +119,30 @@ TEST(CommandCatalogTest, ConfigureCommandCliBuildsOneSubcommandPerManifestEntry)
     };
     const auto expected_metadata{ BuildExpectedCommandMetadata() };
     ASSERT_EQ(subcommands.size(), expected_metadata.size());
+    std::unordered_set<int> unique_ids;
+    std::unordered_set<std::string> unique_names;
     for (std::size_t index = 0; index < expected_metadata.size(); ++index)
     {
-        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].name);
+        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].cli_name);
+        EXPECT_EQ(subcommands[index]->get_description(), expected_metadata[index].description);
+
+        const auto common_options{
+            rg::CommonOptionMaskForProfile(expected_metadata[index].common_option_profile)
+        };
+        EXPECT_EQ(
+            rg::HasCommonOption(common_options, rg::CommonOption::Database),
+            expected_metadata[index].common_option_profile
+                == rg::CommonOptionProfile::DatabaseWorkflow);
+        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Threading));
+        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Verbose));
+        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder));
+
+        unique_ids.insert(static_cast<int>(expected_metadata[index].id));
+        unique_names.emplace(expected_metadata[index].cli_name);
     }
+
+    EXPECT_EQ(unique_ids.size(), expected_metadata.size());
+    EXPECT_EQ(unique_names.size(), expected_metadata.size());
 }
 
 TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
@@ -248,48 +201,20 @@ TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
 
     ASSERT_FALSE(bindings.empty());
 
-    for (const std::string_view request_name : {
-             "CommonCommandRequest",
-             "PotentialAnalysisRequest",
-             "PotentialDisplayRequest",
-             "ResultDumpRequest",
-             "MapSimulationRequest",
-             "HRLModelTestRequest",
-         })
-    {
-        EXPECT_NE(
-            bindings.find(
-                "py::class_<" + std::string(request_name) + ">(module, \""
-                + std::string(request_name) + "\")"),
-            std::string::npos)
-            << request_name;
-    }
+    EXPECT_NE(
+        bindings.find("BindRequestType<CommonCommandRequest>(module, \"CommonCommandRequest\")"),
+        std::string::npos);
+    EXPECT_NE(
+        bindings.find("BindRequestType<COMMAND_ID##Request>(module, #COMMAND_ID \"Request\")"),
+        std::string::npos);
+    EXPECT_NE(
+        bindings.find("#include <rhbm_gem/core/command/CommandList.def>"),
+        std::string::npos);
 
-    for (const std::string_view request_name : {
-             "MapVisualizationRequest",
-             "PositionEstimationRequest",
-         })
-    {
-        EXPECT_NE(
-            bindings.find(
-                "py::class_<" + std::string(request_name) + ">(module, \""
-                + std::string(request_name) + "\")"),
-            std::string::npos)
-            << request_name;
-    }
-
-    for (const std::string_view common_field : {
-             "thread_size",
-             "verbose_level",
-             "database_path",
-             "folder_path",
-         })
-    {
-        EXPECT_NE(
-            bindings.find(".def_readwrite(\"" + std::string(common_field) + "\""),
-            std::string::npos)
-            << common_field;
-    }
+    EXPECT_NE(bindings.find("py_request.def(py::init<>())"), std::string::npos);
+    EXPECT_NE(bindings.find("Request::VisitFields"), std::string::npos);
+    EXPECT_NE(bindings.find("BindRequestField(py_request, field);"), std::string::npos);
+    EXPECT_NE(bindings.find("py_request.def_readwrite(field.python_name, field.member);"), std::string::npos);
 
     for (const std::string_view report_field : {
              "prepared",
@@ -304,18 +229,18 @@ TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
     }
 }
 
-TEST(CommandCatalogTest, ModelTestCliNameMapsToHRLModelTestCommandId)
+TEST(CommandCatalogTest, CommandCatalogExposesStableModelTestDescriptor)
 {
-    const auto & catalog{ rg::CommandCatalog() };
+    const auto expected_metadata{ BuildExpectedCommandMetadata() };
     const auto iter = std::find_if(
-        catalog.begin(),
-        catalog.end(),
+        expected_metadata.begin(),
+        expected_metadata.end(),
         [](const rg::CommandDescriptor & descriptor)
         {
-            return std::string_view{ descriptor.name } == "model_test";
+            return descriptor.cli_name == std::string_view{ "model_test" };
         });
 
-    ASSERT_NE(iter, catalog.end());
+    ASSERT_NE(iter, expected_metadata.end());
     EXPECT_EQ(iter->id, rg::CommandId::HRLModelTest);
 }
 
@@ -324,11 +249,13 @@ TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
     CLI::App app{"RHBM-GEM"};
     rg::ConfigureCommandCli(app);
 
-    for (const auto & descriptor : rg::CommandCatalog())
+    for (const auto & descriptor : BuildExpectedCommandMetadata())
     {
-        auto * subcommand{ app.get_subcommand(std::string(descriptor.name)) };
-        ASSERT_NE(subcommand, nullptr) << descriptor.name;
-        const auto common_options{ rg::CommonOptionsForCommand(descriptor) };
+        auto * subcommand{ app.get_subcommand(std::string(descriptor.cli_name)) };
+        ASSERT_NE(subcommand, nullptr) << descriptor.cli_name;
+        const auto common_options{
+            rg::CommonOptionMaskForProfile(descriptor.common_option_profile)
+        };
 
         const std::string help_text{
             subcommand->help(subcommand->get_name(), CLI::AppFormatMode::Sub)
@@ -336,11 +263,11 @@ TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
         EXPECT_EQ(
             help_text.find("--database") != std::string::npos,
             rg::HasCommonOption(common_options, rg::CommonOption::Database))
-            << descriptor.name;
+            << descriptor.cli_name;
         EXPECT_EQ(
             help_text.find("--folder") != std::string::npos,
             rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder))
-            << descriptor.name;
+            << descriptor.cli_name;
     }
 }
 
@@ -351,6 +278,19 @@ TEST(CommandCatalogTest, ConfigureCommandCliPropagatesCommandFailureAsRuntimeErr
 
     EXPECT_THROW(
         app.parse("map_simulation --model missing.cif --blurring-width 1.0", false),
+        CLI::RuntimeError);
+}
+
+TEST(CommandCatalogTest, ConfigureCommandCliAcceptsRepeatedReferenceGroups)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::ConfigureCommandCli(app);
+
+    EXPECT_THROW(
+        app.parse(
+            "potential_display --painter model --model-keylist model_a "
+            "--ref-group A=m1,m2 --ref-group B=m3",
+            false),
         CLI::RuntimeError);
 }
 

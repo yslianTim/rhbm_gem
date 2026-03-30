@@ -6,29 +6,16 @@
 #include <unordered_map>
 #include <filesystem>
 
-#include "command/internal/CommandBase.hpp"
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
+#include "CommandBase.hpp"
 
 namespace rhbm_gem {
 
 class AtomObject;
 class ModelObject;
 class MapObject;
-struct ResultDumpRequest;
 
-struct ResultDumpCommandOptions : public CommandOptions
+class ResultDumpCommand : public CommandWithRequest<ResultDumpRequest>
 {
-    PrinterType printer_choice{ PrinterType::GAUS_ESTIMATES };
-    std::vector<std::string> model_key_tag_list{};
-    std::filesystem::path map_file_path{ "" };
-};
-
-class ResultDumpCommand
-    : public CommandWithOptions<ResultDumpCommandOptions>
-{
-public:
-    using Options = ResultDumpCommandOptions;
-
 private:
     std::string m_map_key_tag;
     std::unordered_map<std::string, std::vector<AtomObject *>> m_selected_atom_list_map;
@@ -38,12 +25,9 @@ private:
 public:
     explicit ResultDumpCommand(CommonOptionProfile profile);
     ~ResultDumpCommand() override = default;
-    void ApplyRequest(const ResultDumpRequest & request);
 
 private:
-    void SetPrinterChoice(PrinterType value);
-    void SetMapFilePath(const std::filesystem::path & path);
-    void SetModelKeyTagList(const std::string & value);
+    void NormalizeRequest() override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

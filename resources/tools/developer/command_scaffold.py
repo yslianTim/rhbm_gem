@@ -92,6 +92,21 @@ def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple
     return updated_text, True
 
 
+def _append_registry_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
+    include_line = f'#include "{spec.command_type}.hpp"'
+    if include_line in text:
+        return text, False
+
+    include_pattern = re.compile(r'^(#include\s+"[^"]+Command\.hpp")\n', re.MULTILINE)
+    matches = list(include_pattern.finditer(text))
+    if not matches:
+        raise RuntimeError("could not find any command include in CommandRegistry.hpp")
+
+    insert_at = matches[-1].end()
+    updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
+    return updated, True
+
+
 def _update_file(
     path: Path,
     transform: Callable[[str], tuple[str, bool]],
@@ -125,19 +140,15 @@ namespace rhbm_gem {{
 
 struct {spec.command_type.removesuffix("Command")}Request;
 
-struct {spec.command_type}Options : public CommandOptions
-{{
-}};
-
 class {spec.command_type}
-    : public CommandWithOptions<{spec.command_type}Options>
+    : public CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>
 {{
 public:
     explicit {spec.command_type}(CommonOptionProfile profile);
     ~{spec.command_type}() override = default;
-    void ApplyRequest(const {spec.command_type.removesuffix("Command")}Request & request);
 
 private:
+    void NormalizeRequest() override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;
@@ -148,23 +159,23 @@ private:
 
 
 def _source_template(spec: ScaffoldSpec) -> str:
-    return f"""#include "{spec.command_type}.hpp"
+    return f"""#include "internal/command/{spec.command_type}.hpp"
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
 namespace rhbm_gem {{
 
 {spec.command_type}::{spec.command_type}(CommonOptionProfile profile) :
-    CommandWithOptions<{spec.command_type}Options>{{
-        CommonOptionMaskForProfile(profile)}}{{}}
+    CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>{{ profile }}
 {{
 }}
 
-void {spec.command_type}::ApplyRequest(const {spec.command_type.removesuffix("Command")}Request & request)
+void {spec.command_type}::NormalizeRequest()
 {{
-    ApplyCommonRequest(request.common);
-    // Prefer AssignOption(...) for plain request-to-option assignment.
-    // Use MutateOptions(...) only when the setter also manages validation issues or derived state.
+    auto & request{{ MutableRequest() }};
+    (void)request;
+    // Normalize typed request fields here. Use CommandBase helpers when you need
+    // validation issues, filesystem checks, or fallback behavior.
 }}
 
 void {spec.command_type}::ValidateOptions()
@@ -209,12 +220,14 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandList.def`.
    If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandApi.hpp`.
-3. Add command-specific CLI binding in `src/core/command/CommandCatalog.cpp`.
+   Define `VisitFields(...)` there so CLI and Python bindings pick it up automatically.
+3. Add `#include "{spec.command_type}.hpp"` to `src/core/internal/command/CommandRegistry.hpp`.
 """
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
     command_def = root / "include" / "rhbm_gem" / "core" / "command" / "CommandList.def"
+    command_registry = root / "src" / "core" / "internal" / "command" / "CommandRegistry.hpp"
     source_cmake = root / "src" / "CMakeLists.txt"
     tests_cmake = root / "tests" / "CMakeLists.txt"
 
@@ -224,6 +237,13 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         dry_run,
         strict,
         "Append a new RHBM_GEM_COMMAND(...) block to CommandList.def.",
+    )
+    _update_file(
+        command_registry,
+        lambda text: _append_registry_include(text, spec),
+        dry_run,
+        strict,
+        f'Add #include "{spec.command_type}.hpp" to CommandRegistry.hpp.',
     )
     _update_file(
         source_cmake,
@@ -295,7 +315,7 @@ def main() -> int:
 
     doc_stem = re.sub(r"(?<!^)([A-Z])", r"-\1", spec.command_type.removesuffix("Command")).lower()
     files = {
-        root / "src" / "core" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
+        root / "src" / "core" / "internal" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
         root / "src" / "core" / "command" / f"{spec.command_type}.cpp": _source_template(spec),
         root / "tests" / "core" / "command" / f"{spec.command_type}_test.cpp": _test_template(spec),
         root / "docs" / "developer" / "commands" / f"{doc_stem}.md": _doc_template(spec),
@@ -311,7 +331,7 @@ def main() -> int:
     if args.wire:
         print("Registration/manifests and CMake source lists were wired automatically.")
     else:
-        print("Next: wire CommandList.def, update the CMake source lists, and add request/CLI binding code.")
+        print("Next: wire CommandList.def, update CommandRegistry.hpp and CMake source lists, and add the public request schema.")
     return 0
 
 

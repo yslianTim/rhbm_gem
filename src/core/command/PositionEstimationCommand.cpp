@@ -1,6 +1,5 @@
-#include "PositionEstimationCommand.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/internal/CommandDataSupport.hpp"
+#include "internal/command/PositionEstimationCommand.hpp"
+#include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
@@ -48,8 +47,7 @@ struct QuantizedPointHash
 namespace rhbm_gem {
 
 PositionEstimationCommand::PositionEstimationCommand(CommonOptionProfile profile) :
-    CommandWithOptions<PositionEstimationCommandOptions>{
-        CommonOptionMaskForProfile(profile) },
+    CommandWithRequest<PositionEstimationRequest>{ profile },
     m_selected_voxel_list{}, m_query_point_list{}, m_position_list{},
     m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {
@@ -57,23 +55,54 @@ PositionEstimationCommand::PositionEstimationCommand(CommonOptionProfile profile
 
 PositionEstimationCommand::~PositionEstimationCommand() = default;
 
-void PositionEstimationCommand::ApplyRequest(const PositionEstimationRequest & request)
+void PositionEstimationCommand::NormalizeRequest()
 {
-    ApplyCommonRequest(request.common);
-    SetMapFilePath(request.map_file_path);
-    SetIterationCount(request.iteration_count);
-    SetKNNSize(request.knn_size);
-    SetAlpha(request.alpha);
-    SetThresholdRatio(request.threshold_ratio);
-    SetDedupTolerance(request.dedup_tolerance);
+    auto & request{ MutableRequest() };
+    SetRequiredExistingPathOption(request.map_file_path, request.map_file_path, kMapOption, "Map file");
+    SetNormalizedScalarOption(
+        request.iteration_count,
+        request.iteration_count,
+        kIterationOption,
+        [](int candidate) { return candidate > 0; },
+        15,
+        "Iteration count must be positive, reset to default 15");
+    SetNormalizedScalarOption(
+        request.knn_size,
+        request.knn_size,
+        kKnnOption,
+        [](std::size_t candidate) { return candidate > 0; },
+        static_cast<std::size_t>(20),
+        "KNN size must be positive, reset to default 20");
+    SetNormalizedScalarOption(
+        request.alpha,
+        request.alpha,
+        kAlphaOption,
+        [](double candidate) { return candidate > 0.0; },
+        2.0,
+        "Alpha must be positive, reset to default 2.0");
+    SetNormalizedScalarOption(
+        request.threshold_ratio,
+        request.threshold_ratio,
+        kThresholdOption,
+        [](double candidate) { return candidate > 0.0 && candidate <= 1.0; },
+        0.01,
+        "Threshold ratio must be in (0, 1], reset to default 0.01");
+    SetNormalizedScalarOption(
+        request.dedup_tolerance,
+        request.dedup_tolerance,
+        kDedupToleranceOption,
+        [](double candidate) { return candidate > 0.0; },
+        1.0e-2,
+        "Dedup tolerance must be positive, reset to default 0.01");
 }
 
 bool PositionEstimationCommand::ExecuteImpl()
 {
+    const auto & request{ RequestOptions() };
     if (BuildDataObject() == false) return false;
     if (BuildVoxelList() == false) return false;
     RunMapValueConvergence();
-    RunUniquePointList(m_options.dedup_tolerance);
+    RunUniquePointList(static_cast<float>(request.dedup_tolerance));
     OutputPointList();
     return true;
 }
@@ -87,73 +116,14 @@ void PositionEstimationCommand::ResetRuntimeState()
     m_map_object.reset();
 }
 
-void PositionEstimationCommand::SetMapFilePath(const std::filesystem::path & path)
-{
-    SetRequiredExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
-}
-
-void PositionEstimationCommand::SetIterationCount(int value)
-{
-    SetNormalizedScalarOption(
-        m_options.iteration_count,
-        value,
-        kIterationOption,
-        [](int candidate) { return candidate > 0; },
-        15,
-        "Iteration count must be positive, reset to default 15");
-}
-
-void PositionEstimationCommand::SetKNNSize(int value)
-{
-    SetNormalizedScalarOption(
-        m_options.knn_size,
-        value,
-        kKnnOption,
-        [](int candidate) { return candidate > 0; },
-        static_cast<size_t>(20),
-        "KNN size must be positive, reset to default 20");
-}
-
-void PositionEstimationCommand::SetAlpha(double value)
-{
-    SetNormalizedScalarOption(
-        m_options.alpha,
-        value,
-        kAlphaOption,
-        [](double candidate) { return candidate > 0.0; },
-        2.0f,
-        "Alpha must be positive, reset to default 2.0");
-}
-
-void PositionEstimationCommand::SetThresholdRatio(double value)
-{
-    SetNormalizedScalarOption(
-        m_options.threshold_ratio,
-        value,
-        kThresholdOption,
-        [](double candidate) { return candidate > 0.0 && candidate <= 1.0; },
-        0.01f,
-        "Threshold ratio must be in (0, 1], reset to default 0.01");
-}
-
-void PositionEstimationCommand::SetDedupTolerance(double value)
-{
-    SetNormalizedScalarOption(
-        m_options.dedup_tolerance,
-        value,
-        kDedupToleranceOption,
-        [](double candidate) { return candidate > 0.0; },
-        1.0e-2f,
-        "Dedup tolerance must be positive, reset to default 0.01");
-}
-
 bool PositionEstimationCommand::BuildDataObject()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
         m_map_object = command_data_loader::ProcessMapFile(
-            m_data_manager, m_options.map_file_path, kMapKey, "map file");
+            m_data_manager, request.map_file_path, kMapKey, "map file");
         NormalizeMapObject(*m_map_object);
     }
     catch (const std::exception & e)
@@ -167,10 +137,11 @@ bool PositionEstimationCommand::BuildDataObject()
 
 bool PositionEstimationCommand::BuildVoxelList()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("PositionEstimationCommand::BuildVoxelList");
     m_selected_voxel_list.clear();
     auto array_size{ m_map_object->GetMapValueArraySize() };
-    auto threshold{ m_map_object->GetMapValueMax() * m_options.threshold_ratio };
+    auto threshold{ m_map_object->GetMapValueMax() * static_cast<float>(request.threshold_ratio) };
 
     const float * map_values{ m_map_object->GetMapValueArray() };
     auto selected_count{
@@ -188,10 +159,10 @@ bool PositionEstimationCommand::BuildVoxelList()
     };
 
 #ifdef USE_OPENMP
-    #pragma omp parallel num_threads(m_options.thread_size)
+    #pragma omp parallel num_threads(ThreadSize())
     {
         std::vector<VoxelNode> thread_local_list;
-        thread_local_list.reserve(selected_count / static_cast<size_t>(m_options.thread_size) + 1);
+        thread_local_list.reserve(selected_count / static_cast<size_t>(ThreadSize()) + 1);
 
         #pragma omp for schedule(static)
         for (size_t i = 0; i < array_size; i++)
@@ -222,7 +193,7 @@ bool PositionEstimationCommand::BuildVoxelList()
     Logger::Log(LogLevel::Info,
         " /- Building KD-Tree from "+ std::to_string(m_selected_voxel_list.size()) + " voxels...");
     m_kd_tree_root = KDTreeAlgorithm<VoxelNode>::BuildKDTree(
-        m_selected_voxel_list, 0, m_options.thread_size, true);
+        m_selected_voxel_list, 0, ThreadSize(), true);
 
     Logger::Log(LogLevel::Info,
         "Number of selected voxels to be estimated from map = "
@@ -236,7 +207,7 @@ void PositionEstimationCommand::RunMapValueConvergence()
 {
     ScopeTimer timer("PositionEstimationCommand::RunMapValueConvergence");
 
-    auto knn_size{ m_options.knn_size };
+    auto knn_size{ request.knn_size };
     if (m_selected_voxel_list.size() < knn_size)
     {
         if (m_selected_voxel_list.empty())
@@ -252,7 +223,7 @@ void PositionEstimationCommand::RunMapValueConvergence()
     }
 
     m_query_point_list = m_selected_voxel_list;
-    auto iteration_size{ static_cast<std::size_t>(m_options.iteration_count) };
+    auto iteration_size{ static_cast<std::size_t>(request.iteration_count) };
     Logger::Log(LogLevel::Info, " /- Running map value convergence iteration...");
     for (size_t t = 1; t <= iteration_size; t++)
     {
@@ -262,7 +233,7 @@ void PositionEstimationCommand::RunMapValueConvergence()
         auto point_size{ m_query_point_list.size() };
         size_t point_count{ 0 };
 #ifdef USE_OPENMP
-        #pragma omp parallel for num_threads(m_options.thread_size)
+        #pragma omp parallel for num_threads(ThreadSize())
 #endif
         for (size_t i = 0; i < m_query_point_list.size(); i++)
         {
@@ -302,7 +273,7 @@ void PositionEstimationCommand::UpdatePointPosition(size_t index, size_t knn_siz
         return;
     }
 
-    const auto alpha{ m_options.alpha };
+    const auto alpha{ static_cast<float>(RequestOptions().alpha) };
     float weight_sum{ 0.0f };
     std::array<float, 3> point_position_update{ 0.0f, 0.0f, 0.0f };
     for (size_t j = 0; j < knn_count; j++)
@@ -388,7 +359,7 @@ void PositionEstimationCommand::OutputPointList() const
         "Outputting point position list: " + std::to_string(m_position_list.size()) + " points.");
 
     auto map_file_name{
-        "point_list_" + FilePathHelper::GetFileName(m_options.map_file_path, false) };
+        "point_list_" + FilePathHelper::GetFileName(RequestOptions().map_file_path, false) };
     auto output_file{ BuildOutputPath(map_file_name, ".cmm") };
     ChimeraXHelper::WriteCMMPoints(m_position_list, output_file, 0.05f);
     Logger::Log(LogLevel::Info, "Output file: " + output_file.string());

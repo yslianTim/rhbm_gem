@@ -1,6 +1,5 @@
-#include "PotentialDisplayCommand.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/internal/CommandDataSupport.hpp"
+#include "internal/command/PotentialDisplayCommand.hpp"
+#include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -15,57 +14,12 @@
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 namespace {
 constexpr std::string_view kPainterOption{ "--painter" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
-constexpr std::string_view kRefModelKeyListOption{ "--ref-model-keylist" };
-
-bool ParseReferenceModelKeyTagListMap(
-    const std::string & value,
-    std::unordered_map<std::string, std::vector<std::string>> & output_map,
-    std::string & error_message)
-{
-    output_map.clear();
-    size_t pos{ 0 };
-    const size_t len{ value.size() };
-
-    while (pos < len)
-    {
-        if (value[pos] != '[')
-        {
-            error_message = "Expected '[' at position " + std::to_string(pos) + ".";
-            output_map.clear();
-            return false;
-        }
-
-        const size_t end_name{ value.find(']', pos + 1) };
-        if (end_name == std::string::npos)
-        {
-            error_message = "Expected ']' after reference group name.";
-            output_map.clear();
-            return false;
-        }
-
-        std::string group_name{ value.substr(pos + 1, end_name - (pos + 1)) };
-        const size_t start_members{ end_name + 1 };
-        size_t end_block{ value.find(';', start_members) };
-        if (end_block == std::string::npos)
-        {
-            end_block = len;
-        }
-
-        std::string members_string{ value.substr(start_members, end_block - start_members) };
-        output_map.emplace(
-            std::move(group_name),
-            StringHelper::SplitStringLineFromDelimiter(members_string, ','));
-        pos = end_block + 1;
-    }
-
-    return true;
-}
+constexpr std::string_view kRefGroupOption{ "--ref-group" };
 
 void IngestModelSetsToPainter(
     rhbm_gem::PainterBase & painter,
@@ -90,27 +44,53 @@ void IngestModelSetsToPainter(
 namespace rhbm_gem {
 
 PotentialDisplayCommand::PotentialDisplayCommand(CommonOptionProfile profile) :
-    CommandWithOptions<PotentialDisplayCommandOptions>{
-        CommonOptionMaskForProfile(profile) },
+    CommandWithRequest<PotentialDisplayRequest>{ profile },
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 }
 
-PotentialDisplayCommand::~PotentialDisplayCommand() = default;
-
-void PotentialDisplayCommand::ApplyRequest(const PotentialDisplayRequest & request)
+void PotentialDisplayCommand::NormalizeRequest()
 {
-    ApplyCommonRequest(request.common);
-    SetPainterChoice(request.painter_choice);
-    SetModelKeyTagList(request.model_key_tag_list);
-    SetRefModelKeyTagListMap(request.ref_model_key_tag_list);
-    AssignOption(m_options.pick_chain_id, request.pick_chain_id);
-    AssignOption(m_options.veto_chain_id, request.veto_chain_id);
-    AssignOption(m_options.pick_residue, request.pick_residue);
-    AssignOption(m_options.veto_residue, request.veto_residue);
-    AssignOption(m_options.pick_element, request.pick_element);
-    AssignOption(m_options.veto_element, request.veto_element);
+    auto & request{ MutableRequest() };
+    SetValidatedEnumOption(
+        request.painter_choice,
+        request.painter_choice,
+        kPainterOption,
+        PainterType::MODEL,
+        "Painter choice");
+    MutateOptions([&]()
+    {
+        ResetParseIssues(kModelKeyListOption);
+        ResetParseIssues(kRefGroupOption);
+        if (request.model_key_tag_list.empty())
+        {
+            AddValidationError(
+                kModelKeyListOption,
+                "Model key list cannot be empty.",
+                ValidationPhase::Parse);
+        }
+        for (const auto & [group_name, members] : request.reference_model_groups)
+        {
+            if (group_name.empty())
+            {
+                AddValidationError(
+                    kRefGroupOption,
+                    "Reference group name cannot be empty.",
+                    ValidationPhase::Parse);
+                continue;
+            }
+            if (members.empty())
+            {
+                AddValidationError(
+                    kRefGroupOption,
+                    "Reference group '" + group_name + "' cannot be empty.",
+                    ValidationPhase::Parse);
+            }
+        }
+    });
 }
+
+PotentialDisplayCommand::~PotentialDisplayCommand() = default;
 
 bool PotentialDisplayCommand::ExecuteImpl()
 {
@@ -126,65 +106,17 @@ void PotentialDisplayCommand::ResetRuntimeState()
     m_ref_model_object_list_map.clear();
 }
 
-void PotentialDisplayCommand::SetPainterChoice(PainterType value)
-{
-    SetValidatedEnumOption(
-        m_options.painter_choice,
-        value,
-        kPainterOption,
-        PainterType::MODEL,
-        "Painter choice");
-}
-
-void PotentialDisplayCommand::SetModelKeyTagList(const std::string & value)
-{
-    MutateOptions([&]()
-    {
-        m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-        ResetParseIssues(kModelKeyListOption);
-        if (m_options.model_key_tag_list.empty())
-        {
-            AddValidationError(
-                kModelKeyListOption,
-                "Model key list cannot be empty.",
-                ValidationPhase::Parse);
-        }
-    });
-}
-
-void PotentialDisplayCommand::SetRefModelKeyTagListMap(const std::string & value)
-{
-    MutateOptions([&]()
-    {
-        m_options.ref_model_key_tag_list = value;
-        m_ref_model_key_tag_list_map.clear();
-        ResetParseIssues(kRefModelKeyListOption);
-        if (value.empty()) return;
-
-        std::string error_message;
-        if (!ParseReferenceModelKeyTagListMap(value, m_ref_model_key_tag_list_map, error_message))
-        {
-            AddValidationError(kRefModelKeyListOption, error_message, ValidationPhase::Parse);
-            return;
-        }
-
-        Logger::Log(
-            LogLevel::Debug,
-            "Parsed " + std::to_string(m_ref_model_key_tag_list_map.size())
-            + " reference model groups.");
-    });
-}
-
 bool PotentialDisplayCommand::BuildDataObject()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        m_data_manager.SetDatabaseManager(m_options.database_path);
-        auto model_size{ m_options.model_key_tag_list.size() };
+        m_data_manager.SetDatabaseManager(DatabasePath());
+        auto model_size{ request.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");
-        for (auto & key : m_options.model_key_tag_list)
+        for (const auto & key : request.model_key_tag_list)
         {
             Logger::ProgressBar(model_count, model_size);
             m_model_object_list.emplace_back(
@@ -192,7 +124,7 @@ bool PotentialDisplayCommand::BuildDataObject()
                     m_data_manager, key, "model object"));
             model_count++;
         }
-        for (auto & [map_key, key_tag_list] : m_ref_model_key_tag_list_map)
+        for (const auto & [map_key, key_tag_list] : request.reference_model_groups)
         {
             auto ref_model_size{ key_tag_list.size() };
             size_t ref_model_count{ 1 };
@@ -208,7 +140,7 @@ bool PotentialDisplayCommand::BuildDataObject()
         }
         Logger::Log(LogLevel::Info,
             "Total number of model object sets to be display: "
-            + std::to_string(m_options.model_key_tag_list.size()));
+            + std::to_string(request.model_key_tag_list.size()));
     }
     catch(const std::exception & e)
     {
@@ -221,14 +153,15 @@ bool PotentialDisplayCommand::BuildDataObject()
 
 void PotentialDisplayCommand::RunDataObjectSelection()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer{ "PotentialDisplayCommand::RunDataObjectSelection" };
     if (m_atom_selector == nullptr) return;
-    m_atom_selector->PickChainID(m_options.pick_chain_id);
-    m_atom_selector->PickResidueType(m_options.pick_residue);
-    m_atom_selector->PickElementType(m_options.pick_element);
-    m_atom_selector->VetoChainID(m_options.veto_chain_id);
-    m_atom_selector->VetoResidueType(m_options.veto_residue);
-    m_atom_selector->VetoElementType(m_options.veto_element);
+    m_atom_selector->PickChainID(request.pick_chain_id);
+    m_atom_selector->PickResidueType(request.pick_residue);
+    m_atom_selector->PickElementType(request.pick_element);
+    m_atom_selector->VetoChainID(request.veto_chain_id);
+    m_atom_selector->VetoResidueType(request.veto_residue);
+    m_atom_selector->VetoElementType(request.veto_element);
 
     for (const auto & model_object : m_model_object_list)
     {
@@ -238,9 +171,10 @@ void PotentialDisplayCommand::RunDataObjectSelection()
 
 void PotentialDisplayCommand::RunDisplay()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer{ "PotentialDisplayCommand::RunDisplay" };
     std::unique_ptr<PainterBase> painter{ nullptr };
-    switch (m_options.painter_choice)
+    switch (request.painter_choice)
     {
         case PainterType::GAUS:
             painter = std::make_unique<GausPainter>();
@@ -275,7 +209,7 @@ void PotentialDisplayCommand::RunDisplay()
         default:
             Logger::Log(LogLevel::Warning,
                         "Invalid painter choice input: ["
-                        + std::to_string(static_cast<int>(m_options.painter_choice)) + "]");
+                        + std::to_string(static_cast<int>(request.painter_choice)) + "]");
             Logger::Log(LogLevel::Warning,
                         "Available Painter Choices:\n"
                         "  [0] AtomPainter\n"
@@ -286,7 +220,7 @@ void PotentialDisplayCommand::RunDisplay()
     }
     if (painter)
     {
-        painter->SetFolder(m_options.folder_path.string());
+        painter->SetFolder(OutputFolder().string());
         painter->Painting();
     }
 }

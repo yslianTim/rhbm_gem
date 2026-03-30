@@ -9,26 +9,15 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandMetadata.hpp>
-#include <rhbm_gem/core/command/CommandContract.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
 
 namespace rhbm_gem {
 
 constexpr CommonOptionMask kDefaultCommandCommonOptions{
     CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)
-};
-
-struct CommonCommandRequest;
-
-struct CommandOptions
-{
-    int thread_size{ 1 };
-    int verbose_level{ 3 };
-    std::filesystem::path database_path{ GetDefaultDatabasePath() };
-    std::filesystem::path folder_path{""};
 };
 
 class CommandBase
@@ -44,11 +33,17 @@ protected:
     DataObjectManager m_data_manager;
     std::vector<ValidationIssue> m_validation_issues;
 
+    explicit CommandBase(CommonOptionProfile profile);
     explicit CommandBase(CommonOptionMask common_options = kDefaultCommandCommonOptions);
 
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
+    int ThreadSize() const { return m_common_request.thread_size; }
+    int VerboseLevel() const { return m_common_request.verbose_level; }
+    const std::filesystem::path & DatabasePath() const { return m_common_request.database_path; }
+    const std::filesystem::path & OutputFolder() const { return m_common_request.folder_path; }
+    const CommonCommandRequest & CommonRequest() const { return m_common_request; }
     void SetThreadSize(int value);
     void SetVerboseLevel(int value);
     void SetDatabasePath(const std::filesystem::path & path);
@@ -180,7 +175,7 @@ protected:
             ResetParseIssues(option_name);
             using UnderlyingType = std::underlying_type_t<EnumType>;
             const auto raw_numeric{ static_cast<UnderlyingType>(raw_value) };
-            if (IsSupportedEnumValue(raw_value))
+            if (IsSupportedCommandEnumValue(raw_value))
             {
                 field = raw_value;
                 return;
@@ -199,10 +194,9 @@ protected:
         std::string_view extension) const;
 
 private:
-    virtual const CommandOptions & GetOptions() const = 0;
-    virtual CommandOptions & GetOptions() = 0;
     CommonOptionMask GetCommonOptionsMask() const { return m_common_options; }
 
+    CommonCommandRequest m_common_request{};
     CommonOptionMask m_common_options;
     bool m_is_prepared_for_execution{ false };
     void InvalidatePreparedState();
@@ -255,23 +249,37 @@ private:
         bool auto_corrected);
 };
 
-template <typename OptionsT>
-class CommandWithOptions : public CommandBase
+template <typename Request>
+class CommandWithRequest : public CommandBase
 {
-protected:
-    OptionsT m_options{};
-
 public:
-    using Options = OptionsT;
-    explicit CommandWithOptions(
-        CommonOptionMask common_options = kDefaultCommandCommonOptions) :
+    using RequestType = Request;
+
+    explicit CommandWithRequest(CommonOptionProfile profile) :
+        CommandBase{ profile }
+    {
+    }
+
+    explicit CommandWithRequest(CommonOptionMask common_options = kDefaultCommandCommonOptions) :
         CommandBase{ common_options }
     {
     }
 
+    void ApplyRequest(const Request & request)
+    {
+        AssignOption(m_request, request);
+        ApplyCommonRequest(m_request.common);
+        m_request.common = CommonRequest();
+        NormalizeRequest();
+    }
+
+protected:
+    const Request & RequestOptions() const { return m_request; }
+    Request & MutableRequest() { return m_request; }
+    virtual void NormalizeRequest() {}
+
 private:
-    const CommandOptions & GetOptions() const override { return m_options; }
-    CommandOptions & GetOptions() override { return m_options; }
+    Request m_request{};
 };
 
 } // namespace rhbm_gem

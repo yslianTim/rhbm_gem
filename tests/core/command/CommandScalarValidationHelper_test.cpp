@@ -5,14 +5,14 @@
 #include <limits>
 
 
-#include "command/internal/CommandBase.hpp"
+#include "internal/command/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-struct CommandScalarValidationHelperCommandOptions : public rg::CommandOptions
+struct CommandScalarValidationHelperCommandOptions
 {
     double finite_positive_value{ 2.0 };
     double finite_non_negative_value{ 0.0 };
@@ -20,14 +20,11 @@ struct CommandScalarValidationHelperCommandOptions : public rg::CommandOptions
     double command_local_value{ 1.25 };
 };
 
-class CommandScalarValidationHelperCommand final
-    : public rg::CommandWithOptions<CommandScalarValidationHelperCommandOptions>
+class CommandScalarValidationHelperCommand final : public rg::CommandBase
 {
 public:
-    using Options = CommandScalarValidationHelperCommandOptions;
-
     explicit CommandScalarValidationHelperCommand() :
-        rg::CommandWithOptions<CommandScalarValidationHelperCommandOptions>{
+        rg::CommandBase{
             rg::CommonOption::Threading
                 | rg::CommonOption::Verbose
                 | rg::CommonOption::OutputFolder}
@@ -89,6 +86,8 @@ public:
     int PositiveCountValue() const { return m_options.positive_count; }
 
 private:
+    CommandScalarValidationHelperCommandOptions m_options{};
+
     bool ExecuteImpl() override { return true; }
 };
 

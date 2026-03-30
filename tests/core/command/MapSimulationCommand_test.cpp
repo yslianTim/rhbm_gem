@@ -2,7 +2,7 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/MapSimulationCommand.hpp"
+#include "internal/command/MapSimulationCommand.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -15,7 +15,7 @@ TEST(MapSimulationCommandTest, ExecuteFiltersInvalidBlurringWidths)
     request.common.folder_path = temp_dir.path();
     request.map_file_name = "sim_map";
     request.model_file_path = command_test::TestDataPath("test_model.cif");
-    request.blurring_width_list = "1.0,-2.0,3.0";
+    request.blurring_width_list = { 1.0, -2.0, 3.0 };
     command.ApplyRequest(request);
 
     ASSERT_TRUE(command.Execute());
@@ -31,7 +31,7 @@ TEST(MapSimulationCommandTest, ExecuteFailsWhenAllBlurringWidthsAreInvalid)
     request.common.folder_path = temp_dir.path();
     request.map_file_name = "sim_map";
     request.model_file_path = command_test::TestDataPath("test_model.cif");
-    request.blurring_width_list = "-1.0,0.0";
+    request.blurring_width_list = { -1.0, 0.0 };
     command.ApplyRequest(request);
 
     EXPECT_FALSE(command.Execute());

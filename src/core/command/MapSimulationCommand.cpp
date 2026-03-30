@@ -1,6 +1,5 @@
-#include "MapSimulationCommand.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
-#include "command/internal/CommandDataSupport.hpp"
+#include "internal/command/MapSimulationCommand.hpp"
+#include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -8,13 +7,11 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
-#include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/core/command/OptionEnumTraits.hpp>
-
 #include <algorithm>
 #include <limits>
 
@@ -31,8 +28,7 @@ constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
 namespace rhbm_gem {
 
 MapSimulationCommand::MapSimulationCommand(CommonOptionProfile profile) :
-    CommandWithOptions<MapSimulationCommandOptions>{
-        CommonOptionMaskForProfile(profile) },
+    CommandWithRequest<MapSimulationRequest>{ profile },
     m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),
@@ -45,16 +41,56 @@ MapSimulationCommand::MapSimulationCommand(CommonOptionProfile profile) :
 {
 }
 
-void MapSimulationCommand::ApplyRequest(const MapSimulationRequest & request)
+void MapSimulationCommand::NormalizeRequest()
 {
-    ApplyCommonRequest(request.common);
-    SetModelFilePath(request.model_file_path);
-    AssignOption(m_options.map_file_name, request.map_file_name);
-    SetPotentialModelChoice(request.potential_model_choice);
-    SetPartialChargeChoice(request.partial_charge_choice);
-    SetCutoffDistance(request.cutoff_distance);
-    SetGridSpacing(request.grid_spacing);
-    SetBlurringWidthList(request.blurring_width_list);
+    auto & request{ MutableRequest() };
+    SetRequiredExistingPathOption(request.model_file_path, request.model_file_path, kModelOption, "Model file");
+    SetValidatedEnumOption(
+        request.potential_model_choice,
+        request.potential_model_choice,
+        kPotentialModelOption,
+        PotentialModel::FIVE_GAUS_CHARGE,
+        "Potential model");
+    SetValidatedEnumOption(
+        request.partial_charge_choice,
+        request.partial_charge_choice,
+        kChargeOption,
+        PartialCharge::PARTIAL,
+        "Partial charge choice");
+    SetNormalizedScalarOption(
+        request.cutoff_distance,
+        request.cutoff_distance,
+        kCutoffOption,
+        [](double candidate) { return candidate > 0.0; },
+        5.0,
+        "Cutoff distance must be positive, reset to default 5.0");
+    SetNormalizedScalarOption(
+        request.grid_spacing,
+        request.grid_spacing,
+        kGridSpacingOption,
+        [](double candidate) { return candidate > 0.0; },
+        0.5,
+        "Grid spacing must be positive, reset to default 0.5");
+
+    MutateOptions([&]()
+    {
+        ResetParseIssues(kBlurringWidthOption);
+        std::vector<double> filtered_widths;
+        filtered_widths.reserve(request.blurring_width_list.size());
+        for (const auto width : request.blurring_width_list)
+        {
+            if (width <= 0.0)
+            {
+                AddNormalizationWarning(
+                    kBlurringWidthOption,
+                    "Blurring width must be positive, dropping current setting: "
+                        + std::to_string(width));
+                continue;
+            }
+            filtered_widths.push_back(width);
+        }
+        request.blurring_width_list = std::move(filtered_widths);
+    });
 }
 
 bool MapSimulationCommand::ExecuteImpl()
@@ -66,8 +102,9 @@ bool MapSimulationCommand::ExecuteImpl()
 
 void MapSimulationCommand::ValidateOptions()
 {
+    const auto & request{ RequestOptions() };
     ResetPrepareIssues(kBlurringWidthOption);
-    if (m_options.blurring_width_list.empty())
+    if (request.blurring_width_list.empty())
     {
         AddValidationError(kBlurringWidthOption,
             "At least one positive blurring width is required.");
@@ -91,82 +128,14 @@ void MapSimulationCommand::ResetRuntimeState()
     };
 }
 
-void MapSimulationCommand::SetPotentialModelChoice(PotentialModel value)
-{
-    SetValidatedEnumOption(
-        m_options.potential_model_choice,
-        value,
-        kPotentialModelOption,
-        PotentialModel::FIVE_GAUS_CHARGE,
-        "Potential model");
-}
-
-void MapSimulationCommand::SetPartialChargeChoice(PartialCharge value)
-{
-    SetValidatedEnumOption(
-        m_options.partial_charge_choice,
-        value,
-        kChargeOption,
-        PartialCharge::PARTIAL,
-        "Partial charge choice");
-}
-
-void MapSimulationCommand::SetCutoffDistance(double value)
-{
-    SetNormalizedScalarOption(
-        m_options.cutoff_distance,
-        value,
-        kCutoffOption,
-        [](double candidate) { return candidate > 0.0; },
-        5.0,
-        "Cutoff distance must be positive, reset to default 5.0");
-}
-
-void MapSimulationCommand::SetModelFilePath(const std::filesystem::path & value)
-{
-    SetRequiredExistingPathOption(m_options.model_file_path, value, kModelOption, "Model file");
-}
-
-void MapSimulationCommand::SetGridSpacing(double value)
-{
-    SetNormalizedScalarOption(
-        m_options.grid_spacing,
-        value,
-        kGridSpacingOption,
-        [](double candidate) { return candidate > 0.0; },
-        0.5,
-        "Grid spacing must be positive, reset to default 0.5");
-}
-
-void MapSimulationCommand::SetBlurringWidthList(const std::string & value)
-{
-    MutateOptions([&]()
-    {
-        ResetParseIssues(kBlurringWidthOption);
-        const auto parsed_list{ StringHelper::ParseListOption<double>(value, ',') };
-        m_options.blurring_width_list.clear();
-        m_options.blurring_width_list.reserve(parsed_list.size());
-        for (const auto width : parsed_list)
-        {
-            if (width <= 0.0)
-            {
-                AddNormalizationWarning(kBlurringWidthOption,
-                    "Blurring width must be positive, dropping current setting: "
-                        + std::to_string(width));
-                continue;
-            }
-            m_options.blurring_width_list.push_back(width);
-        }
-    });
-}
-
 bool MapSimulationCommand::BuildDataObject()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
         m_model_object = command_data_loader::ProcessModelFile(
-            m_data_manager, m_options.model_file_path, kModelKey, "model file");
+            m_data_manager, request.model_file_path, kModelKey, "model file");
         BuildAtomList(m_model_object.get());
     }
     catch(const std::exception & e)
@@ -180,14 +149,15 @@ bool MapSimulationCommand::BuildDataObject()
 
 void MapSimulationCommand::RunMapSimulation()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("MapSimulationCommand::RunMapSimulation");
     
     Logger::Log(LogLevel::Info,
         "Total number of blurring width sets to be simulated: "
-        + std::to_string(m_options.blurring_width_list.size()));
+        + std::to_string(request.blurring_width_list.size()));
     
     auto map_object{ CreateMapObject() };
-    for (auto & blurring_width : m_options.blurring_width_list)
+    for (auto & blurring_width : request.blurring_width_list)
     {
         auto map_key_tag{
             m_model_object->GetPdbID() + "_bw" +
@@ -195,7 +165,7 @@ void MapSimulationCommand::RunMapSimulation()
         };
         PopulateMapValueArray(map_object.get(), blurring_width);
         const auto output_file_name{
-            BuildOutputPath(m_options.map_file_name + "_" + map_key_tag, ".map")
+            BuildOutputPath(request.map_file_name + "_" + map_key_tag, ".map")
         };
         WriteMap(output_file_name, *map_object);
     }
@@ -203,6 +173,7 @@ void MapSimulationCommand::RunMapSimulation()
 
 void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
 {
+    const auto & request{ RequestOptions() };
     if (model_object == nullptr)
     {
         Logger::Log(LogLevel::Error, "MapSimulationCommand::BuildAtomList(): model object is null.");
@@ -210,7 +181,7 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
     }
 
     SimulationAtomPreparationOptions options;
-    options.partial_charge_choice = m_options.partial_charge_choice;
+    options.partial_charge_choice = request.partial_charge_choice;
     options.include_unknown_atoms = true;
     auto result{ PrepareSimulationAtoms(*model_object, options) };
 
@@ -220,12 +191,12 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
     {
         m_atom_range_minimum = result.range_minimum;
         m_atom_range_maximum = result.range_maximum;
-        m_atom_range_minimum[0] -= static_cast<float>(m_options.cutoff_distance);
-        m_atom_range_minimum[1] -= static_cast<float>(m_options.cutoff_distance);
-        m_atom_range_minimum[2] -= static_cast<float>(m_options.cutoff_distance);
-        m_atom_range_maximum[0] += static_cast<float>(m_options.cutoff_distance);
-        m_atom_range_maximum[1] += static_cast<float>(m_options.cutoff_distance);
-        m_atom_range_maximum[2] += static_cast<float>(m_options.cutoff_distance);
+        m_atom_range_minimum[0] -= static_cast<float>(request.cutoff_distance);
+        m_atom_range_minimum[1] -= static_cast<float>(request.cutoff_distance);
+        m_atom_range_minimum[2] -= static_cast<float>(request.cutoff_distance);
+        m_atom_range_maximum[0] += static_cast<float>(request.cutoff_distance);
+        m_atom_range_maximum[1] += static_cast<float>(request.cutoff_distance);
+        m_atom_range_maximum[2] += static_cast<float>(request.cutoff_distance);
     }
 
     Logger::Log(LogLevel::Info,
@@ -236,17 +207,18 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
 
 std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("MapSimulationCommand::CreateMapObject");
     std::array<float, 3> grid_spacing{
-        static_cast<float>(m_options.grid_spacing),
-        static_cast<float>(m_options.grid_spacing),
-        static_cast<float>(m_options.grid_spacing)
+        static_cast<float>(request.grid_spacing),
+        static_cast<float>(request.grid_spacing),
+        static_cast<float>(request.grid_spacing)
     };
 
     auto origin{ CalculateOrigin(grid_spacing) };
     auto grid_size{ CalculateGridSize(grid_spacing) };
     auto map_object{ std::make_unique<MapObject>(grid_size, grid_spacing, origin) };
-    map_object->SetThreadSize(static_cast<int>(m_options.thread_size));
+    map_object->SetThreadSize(ThreadSize());
 
     auto voxel_size{ map_object->GetMapValueArraySize() };
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
@@ -259,6 +231,7 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
 
 void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double blurring_width)
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("MapSimulationCommand::PopulateMapValueArray");
     Logger::Log(LogLevel::Info,
         " /- Start map value array production with blurring width = "+
@@ -267,7 +240,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
 
     auto electric_potential{ std::make_unique<ElectricPotential>() };
     electric_potential->SetBlurringWidth(blurring_width);
-    electric_potential->SetModelChoice(static_cast<int>(m_options.potential_model_choice));
+    electric_potential->SetModelChoice(static_cast<int>(request.potential_model_choice));
 
     auto voxel_size{ map_object->GetMapValueArraySize() };
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
@@ -282,7 +255,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
         " /- Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms."
     );
 #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(m_options.thread_size) private(in_range_grid_node_list)
+    #pragma omp parallel for num_threads(ThreadSize()) private(in_range_grid_node_list)
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
@@ -294,7 +267,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
         GridNode query_node(0, &query_map_object);
 
         KDTreeAlgorithm<GridNode>::RangeSearch(
-            kd_tree_root, &query_node, m_options.cutoff_distance, in_range_grid_node_list);
+            kd_tree_root, &query_node, request.cutoff_distance, in_range_grid_node_list);
         
         for (auto & grid_node : in_range_grid_node_list)
         {

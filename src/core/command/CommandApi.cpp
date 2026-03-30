@@ -1,12 +1,6 @@
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
-#include "HRLModelTestCommand.hpp"
-#include "MapSimulationCommand.hpp"
-#include "MapVisualizationCommand.hpp"
-#include "PositionEstimationCommand.hpp"
-#include "PotentialAnalysisCommand.hpp"
-#include "PotentialDisplayCommand.hpp"
-#include "ResultDumpCommand.hpp"
+#include "internal/command/CommandRegistry.hpp"
 
 namespace rhbm_gem {
 namespace {
@@ -37,9 +31,9 @@ ExecutionReport RunCommand(CommonOptionProfile profile, const RequestType & requ
 } // namespace
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
-    ExecutionReport Run##COMMAND_ID(const COMMAND_ID##Request & request)                        \
-    {                                                                                            \
-        return RunCommand<COMMAND_ID##Command>(CommonOptionProfile::PROFILE, request);          \
+    ExecutionReport Run##COMMAND_ID(const COMMAND_ID##Request & request)                       \
+    {                                                                                          \
+        return RunCommand<COMMAND_ID##Command>(CommonOptionProfile::PROFILE, request);         \
     }
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND

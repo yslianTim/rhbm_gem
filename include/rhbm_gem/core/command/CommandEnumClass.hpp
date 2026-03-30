@@ -1,24 +1,23 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <string_view>
 #include <type_traits>
 
-#include <rhbm_gem/core/command/OptionEnumClass.hpp>
-
 namespace rhbm_gem {
 
 template <typename EnumType>
-struct EnumOptionEntry
+struct CommandEnumEntry
 {
     std::string_view token;
     EnumType value;
 };
 
 template <typename EnumType, std::size_t AliasCount>
-struct EnumOptionDefinition
+struct CommandEnumDefinition
 {
     EnumType value;
     std::string_view binding_token;
@@ -26,13 +25,53 @@ struct EnumOptionDefinition
 };
 
 template <typename EnumType>
-struct EnumOptionTraits;
+struct CommandEnumTraits;
+
+enum class PainterType : int
+{
+    GAUS       = 0,
+    MODEL      = 1,
+    COMPARISON = 2,
+    DEMO       = 3,
+    ATOM       = 4
+};
+
+enum class PrinterType : int
+{
+    ATOM_POSITION  = 0,
+    MAP_VALUE      = 1,
+    GAUS_ESTIMATES = 2,
+    ATOM_OUTLIER   = 3
+};
+
+enum class PotentialModel : int
+{
+    SINGLE_GAUS      = 0,
+    FIVE_GAUS_CHARGE = 1,
+    SINGLE_GAUS_USER = 2
+};
+
+enum class PartialCharge : int
+{
+    NEUTRAL = 0,
+    PARTIAL = 1,
+    AMBER   = 2
+};
+
+enum class TesterType : int
+{
+    BENCHMARK = 0,
+    DATA_OUTLIER = 1,
+    MEMBER_OUTLIER = 2,
+    MODEL_ALPHA_DATA = 3,
+    MODEL_ALPHA_MEMBER = 4
+};
 
 template <typename EnumType, std::size_t AliasCount, std::size_t OptionCount>
-constexpr std::array<EnumOptionEntry<EnumType>, OptionCount> MakeEnumBindingEntries(
-    const std::array<EnumOptionDefinition<EnumType, AliasCount>, OptionCount> & options)
+constexpr std::array<CommandEnumEntry<EnumType>, OptionCount> MakeCommandEnumBindingEntries(
+    const std::array<CommandEnumDefinition<EnumType, AliasCount>, OptionCount> & options)
 {
-    std::array<EnumOptionEntry<EnumType>, OptionCount> binding_entries{};
+    std::array<CommandEnumEntry<EnumType>, OptionCount> binding_entries{};
     for (std::size_t index = 0; index < OptionCount; ++index)
     {
         binding_entries[index] = { options[index].binding_token, options[index].value };
@@ -41,16 +80,16 @@ constexpr std::array<EnumOptionEntry<EnumType>, OptionCount> MakeEnumBindingEntr
 }
 
 template <typename EnumType>
-constexpr auto GetEnumBindingEntries()
+constexpr auto GetCommandEnumBindingEntries()
 {
-    return MakeEnumBindingEntries(EnumOptionTraits<EnumType>::kOptions);
+    return MakeCommandEnumBindingEntries(CommandEnumTraits<EnumType>::kOptions);
 }
 
 template <typename EnumType>
-std::map<std::string, EnumType> BuildEnumCLIMap()
+std::map<std::string, EnumType> BuildCommandEnumCliMap()
 {
     std::map<std::string, EnumType> option_map;
-    for (const auto & option : EnumOptionTraits<EnumType>::kOptions)
+    for (const auto & option : CommandEnumTraits<EnumType>::kOptions)
     {
         for (const auto alias : option.cli_aliases)
         {
@@ -61,11 +100,11 @@ std::map<std::string, EnumType> BuildEnumCLIMap()
 }
 
 template <typename EnumType>
-constexpr bool IsSupportedEnumValue(EnumType value)
+constexpr bool IsSupportedCommandEnumValue(EnumType value)
 {
     using UnderlyingType = std::underlying_type_t<EnumType>;
     const auto raw_numeric{ static_cast<UnderlyingType>(value) };
-    for (const auto & option : EnumOptionTraits<EnumType>::kOptions)
+    for (const auto & option : CommandEnumTraits<EnumType>::kOptions)
     {
         if (static_cast<UnderlyingType>(option.value) == raw_numeric)
         {
@@ -76,9 +115,9 @@ constexpr bool IsSupportedEnumValue(EnumType value)
 }
 
 template <>
-struct EnumOptionTraits<PainterType>
+struct CommandEnumTraits<PainterType>
 {
-    inline static constexpr std::array<EnumOptionDefinition<PainterType, 2>, 5> kOptions{{
+    inline static constexpr std::array<CommandEnumDefinition<PainterType, 2>, 5> kOptions{{
         { PainterType::GAUS, "GAUS", { "0", "gaus" } },
         { PainterType::ATOM, "ATOM", { "4", "atom" } },
         { PainterType::MODEL, "MODEL", { "1", "model" } },
@@ -88,9 +127,9 @@ struct EnumOptionTraits<PainterType>
 };
 
 template <>
-struct EnumOptionTraits<PrinterType>
+struct CommandEnumTraits<PrinterType>
 {
-    inline static constexpr std::array<EnumOptionDefinition<PrinterType, 2>, 4> kOptions{{
+    inline static constexpr std::array<CommandEnumDefinition<PrinterType, 2>, 4> kOptions{{
         { PrinterType::ATOM_POSITION, "ATOM_POSITION", { "0", "atom_pos" } },
         { PrinterType::MAP_VALUE, "MAP_VALUE", { "1", "map" } },
         { PrinterType::GAUS_ESTIMATES, "GAUS_ESTIMATES", { "2", "gaus" } },
@@ -99,9 +138,9 @@ struct EnumOptionTraits<PrinterType>
 };
 
 template <>
-struct EnumOptionTraits<PotentialModel>
+struct CommandEnumTraits<PotentialModel>
 {
-    inline static constexpr std::array<EnumOptionDefinition<PotentialModel, 2>, 3> kOptions{{
+    inline static constexpr std::array<CommandEnumDefinition<PotentialModel, 2>, 3> kOptions{{
         { PotentialModel::SINGLE_GAUS, "SINGLE_GAUS", { "0", "single" } },
         { PotentialModel::FIVE_GAUS_CHARGE, "FIVE_GAUS_CHARGE", { "1", "five" } },
         { PotentialModel::SINGLE_GAUS_USER, "SINGLE_GAUS_USER", { "2", "user" } }
@@ -109,9 +148,9 @@ struct EnumOptionTraits<PotentialModel>
 };
 
 template <>
-struct EnumOptionTraits<PartialCharge>
+struct CommandEnumTraits<PartialCharge>
 {
-    inline static constexpr std::array<EnumOptionDefinition<PartialCharge, 2>, 3> kOptions{{
+    inline static constexpr std::array<CommandEnumDefinition<PartialCharge, 2>, 3> kOptions{{
         { PartialCharge::NEUTRAL, "NEUTRAL", { "0", "neutral" } },
         { PartialCharge::PARTIAL, "PARTIAL", { "1", "partial" } },
         { PartialCharge::AMBER, "AMBER", { "2", "amber" } }
@@ -119,9 +158,9 @@ struct EnumOptionTraits<PartialCharge>
 };
 
 template <>
-struct EnumOptionTraits<TesterType>
+struct CommandEnumTraits<TesterType>
 {
-    inline static constexpr std::array<EnumOptionDefinition<TesterType, 2>, 5> kOptions{{
+    inline static constexpr std::array<CommandEnumDefinition<TesterType, 2>, 5> kOptions{{
         { TesterType::BENCHMARK, "BENCHMARK", { "0", "benchmark" } },
         { TesterType::DATA_OUTLIER, "DATA_OUTLIER", { "1", "data_outlier" } },
         { TesterType::MEMBER_OUTLIER, "MEMBER_OUTLIER", { "2", "member_outlier" } },

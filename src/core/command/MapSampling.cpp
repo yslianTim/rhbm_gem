@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/command/MapSampling.hpp>
+#include "internal/command/MapSampling.hpp"
 
 #include <algorithm>
 
