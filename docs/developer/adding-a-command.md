@@ -26,16 +26,11 @@ Public command API:
 
 - `/include/rhbm_gem/core/command/CommandContract.hpp` if shared diagnostics/defaults or metadata change
 - `/include/rhbm_gem/core/command/CommandApi.hpp`
-- `/src/core/command/CommandApi.cpp`
 
-Manifest and CLI registration:
+Manifest and internal registration:
 
 - `/include/rhbm_gem/core/command/CommandList.def`
-- `/src/core/command/CommandOptionSupport.cpp`
-
-Python bindings:
-
-- `/src/python/CommandApiBindings.cpp`
+- `/src/core/internal/command/CommandRegistry.hpp`
 
 Tests and docs:
 
@@ -82,7 +77,8 @@ Create skeleton files:
 python3 resources/tools/developer/command_scaffold.py --name Example --profile FileWorkflow
 ```
 
-Create skeleton files, append the manifest entry, and update the command/test CMake source lists:
+Create skeleton files, append the manifest entry, update `CommandRegistry.hpp`, and update the
+command/test CMake source lists:
 
 ```bash
 python3 resources/tools/developer/command_scaffold.py --name Example --profile FileWorkflow --wire
@@ -95,15 +91,22 @@ Current command classes are internal implementation types with headers under
 
 Use this shape:
 
-1. Define `Options` deriving from `CommandOptions`.
-2. Derive the command from `CommandWithOptions<...>`.
-3. Construct the command with a `CommonOptionProfile`.
-4. Implement `ApplyRequest(const XxxRequest &)`.
-5. Call `ApplyCommonRequest(request.common)` inside `ApplyRequest(...)`.
-6. Keep per-field normalization in setters or `ApplyRequest(...)`.
-7. Keep cross-field validation in `ValidateOptions()`.
-8. Reset transient execution state in `ResetRuntimeState()`.
-9. Keep `ExecuteImpl()` focused on orchestration.
+1. Derive the command from `CommandWithRequest<XxxRequest>`.
+2. Construct the command with a `CommonOptionProfile`.
+3. Keep per-field normalization in `NormalizeRequest()`.
+4. Keep cross-field validation in `ValidateOptions()`.
+5. Reset transient execution state in `ResetRuntimeState()`.
+6. Keep `ExecuteImpl()` focused on orchestration.
+
+`CommandWithRequest<XxxRequest>` already:
+
+- stores the public request as the canonical config
+- applies `request.common` through `ApplyCommonRequest(...)`
+- synchronizes normalized common fields back into `request.common`
+- invalidates prepared state when the request changes
+
+Only keep extra private members for execution-time transient state such as loaded objects, caches,
+or derived lookup tables.
 
 Useful base helpers from `CommandBase`:
 
@@ -122,6 +125,9 @@ Useful base helpers from `CommandBase`:
 
 Add the request struct to `/include/rhbm_gem/core/command/CommandApi.hpp`.
 
+Each public request is also the schema source of truth for CLI and Python, so define
+`static void VisitFields(Visitor &&)` on the request and describe every bindable field there.
+
 Shared diagnostics/defaults live in `/include/rhbm_gem/core/command/CommandContract.hpp`, while
 `ExecutionReport` lives in `/include/rhbm_gem/core/command/CommandApi.hpp`, so adding a normal
 command usually does not require changes to either shared contract layer.
@@ -132,7 +138,7 @@ CLI / Python / validation mappings together in
 
 `Run*` declarations/definitions are expanded from `CommandList.def`, so once the manifest entry
 exists in the correct fragment you only need to ensure the request struct, command class, and
-includes are present.
+registry include are present.
 
 Each `Run*` entrypoint follows this pattern:
 
@@ -142,14 +148,17 @@ Each `Run*` entrypoint follows this pattern:
 4. Call `Execute()` if preparation succeeds.
 5. Return an `ExecutionReport`.
 
-## 7. Bind CLI options
+## 7. CLI registration
 
-In `/src/core/command/<YourCommand>.cpp`:
+CLI registration is generic.
 
-1. Add `Bind<YourCommand>RequestOptions(...)` for command-specific flags.
-2. `ConfigureCommandCli(...)` will pick it up through the manifest X-macro expansion in
-   `/src/core/command/CommandOptionSupport.cpp`.
-3. Shared flags are bound automatically from the manifest profile.
+1. `ConfigureCommandCli(...)` expands the manifest in `/src/core/command/CommandOptionSupport.cpp`.
+2. `RegisterCommand<...>()` creates the subcommand and binds fields by walking
+   `XxxRequest::VisitFields(...)`.
+3. Shared flags are filtered from `CommonCommandRequest::VisitFields(...)` using the manifest
+   profile.
+4. Only add custom parsing code when a field shape cannot be expressed by the built-in field
+   specs.
 
 Shared flags come from the profile:
 
@@ -158,15 +167,15 @@ Shared flags come from the profile:
 - `-d,--database` for `DatabaseWorkflow`
 - `-o,--folder`
 
-## 8. Add Python bindings
+## 8. Python bindings
 
-Update `/src/python/CommandApiBindings.cpp`:
+Python request binding is also generic.
 
-1. Bind the new `*Request` type.
-2. The `Run*` export list is expanded from the manifest, so no separate binding list needs to be
-   maintained.
-3. The Python module entrypoint also lives in this file, so command-facing binding updates stay in
-   one place.
+1. `BindCommandApi(...)` expands the manifest in `/src/python/CommandApiBindings.cpp`.
+2. `BindRequestType<XxxRequest>(...)` walks `XxxRequest::VisitFields(...)` and emits the
+   `def_readwrite(...)` properties.
+3. The `Run*` export list is still expanded from the manifest, so no separate handwritten request
+   binding list needs to be maintained.
 
 Shared enums and diagnostics live in `/src/python/CommonBindings.cpp`, so that file only needs
 changes if the command introduces a new shared enum. The enum token source of truth remains
@@ -185,12 +194,11 @@ Add or update:
 Before merge:
 
 1. The command header is implemented in `/src/core/internal/command/` and the source in `/src/core/command/`.
-2. `CommandApi.hpp` contains the new request.
+2. `CommandApi.hpp` contains the new request and its `VisitFields(...)` schema.
 3. `CommandList.def` contains the new entry in the correct stable or experimental section.
-4. `/src/CMakeLists.txt` and `/tests/CMakeLists.txt` include the new source/test file.
-5. CLI binding is added beside the command implementation and wired through `CommandOptionSupport.cpp`.
-6. Python bindings are updated if the binding surface changed.
-7. Tests and docs are aligned with the final command surface.
+4. `CommandRegistry.hpp` includes the new command header.
+5. `/src/CMakeLists.txt` and `/tests/CMakeLists.txt` include the new source/test file.
+6. Tests and docs are aligned with the final command surface.
 
 Recommended checks:
 

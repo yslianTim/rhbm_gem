@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace rhbm_gem::command_cli {
 
@@ -57,6 +58,34 @@ inline CLI::Option * AddStringOption(
         help,
         std::move(default_value),
         required);
+}
+
+template <typename Setter>
+inline CLI::Option * AddRepeatableStringOption(
+    CLI::App * command,
+    std::string_view flags,
+    Setter && setter,
+    std::string_view help,
+    bool required = false)
+{
+    auto * option{
+        command->add_option_function<std::vector<std::string>>(
+            std::string(flags),
+            [callback = std::forward<Setter>(setter)](const std::vector<std::string> & values) mutable
+            {
+                for (const auto & value : values)
+                {
+                    std::invoke(callback, value);
+                }
+            },
+            std::string(help))
+    };
+    option->multi_option_policy(CLI::MultiOptionPolicy::TakeAll);
+    if (required)
+    {
+        option->required();
+    }
+    return option;
 }
 
 template <typename Setter>

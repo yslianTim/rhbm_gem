@@ -10,15 +10,15 @@ TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidatio
     rg::PotentialDisplayCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::PotentialDisplayRequest request{};
     request.painter_choice = rg::PainterType::MODEL;
-    request.model_key_tag_list = "model_key";
-    request.ref_model_key_tag_list = "invalid";
+    request.model_key_tag_list = { "model_key" };
+    request.reference_model_groups[""] = { "invalid" };
     command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
     ASSERT_NE(
         command_test::FindValidationIssue(
             command,
-            "--ref-model-keylist",
+            "--ref-group",
             std::nullopt,
             LogLevel::Error),
         nullptr);
@@ -28,15 +28,18 @@ TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareVa
     rg::PotentialDisplayCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::PotentialDisplayRequest request{};
     request.painter_choice = rg::PainterType::MODEL;
-    request.model_key_tag_list = "model_key";
-    request.ref_model_key_tag_list = "[with_charge]ref_a,ref_b;[no_charge]ref_c";
+    request.model_key_tag_list = { "model_key" };
+    request.reference_model_groups = {
+        { "with_charge", { "ref_a", "ref_b" } },
+        { "no_charge", { "ref_c" } },
+    };
     command.ApplyRequest(request);
 
     EXPECT_TRUE(command.PrepareForExecution());
     EXPECT_EQ(
         command_test::FindValidationIssue(
             command,
-            "--ref-model-keylist",
+            "--ref-group",
             std::nullopt,
             LogLevel::Error),
         nullptr);

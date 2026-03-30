@@ -201,48 +201,20 @@ TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
 
     ASSERT_FALSE(bindings.empty());
 
-    for (const std::string_view request_name : {
-             "CommonCommandRequest",
-             "PotentialAnalysisRequest",
-             "PotentialDisplayRequest",
-             "ResultDumpRequest",
-             "MapSimulationRequest",
-             "HRLModelTestRequest",
-         })
-    {
-        EXPECT_NE(
-            bindings.find(
-                "py::class_<" + std::string(request_name) + ">(module, \""
-                + std::string(request_name) + "\")"),
-            std::string::npos)
-            << request_name;
-    }
+    EXPECT_NE(
+        bindings.find("BindRequestType<CommonCommandRequest>(module, \"CommonCommandRequest\")"),
+        std::string::npos);
+    EXPECT_NE(
+        bindings.find("BindRequestType<COMMAND_ID##Request>(module, #COMMAND_ID \"Request\")"),
+        std::string::npos);
+    EXPECT_NE(
+        bindings.find("#include <rhbm_gem/core/command/CommandList.def>"),
+        std::string::npos);
 
-    for (const std::string_view request_name : {
-             "MapVisualizationRequest",
-             "PositionEstimationRequest",
-         })
-    {
-        EXPECT_NE(
-            bindings.find(
-                "py::class_<" + std::string(request_name) + ">(module, \""
-                + std::string(request_name) + "\")"),
-            std::string::npos)
-            << request_name;
-    }
-
-    for (const std::string_view common_field : {
-             "thread_size",
-             "verbose_level",
-             "database_path",
-             "folder_path",
-         })
-    {
-        EXPECT_NE(
-            bindings.find(".def_readwrite(\"" + std::string(common_field) + "\""),
-            std::string::npos)
-            << common_field;
-    }
+    EXPECT_NE(bindings.find("py_request.def(py::init<>())"), std::string::npos);
+    EXPECT_NE(bindings.find("Request::VisitFields"), std::string::npos);
+    EXPECT_NE(bindings.find("BindRequestField(py_request, field);"), std::string::npos);
+    EXPECT_NE(bindings.find("py_request.def_readwrite(field.python_name, field.member);"), std::string::npos);
 
     for (const std::string_view report_field : {
              "prepared",
@@ -306,6 +278,19 @@ TEST(CommandCatalogTest, ConfigureCommandCliPropagatesCommandFailureAsRuntimeErr
 
     EXPECT_THROW(
         app.parse("map_simulation --model missing.cif --blurring-width 1.0", false),
+        CLI::RuntimeError);
+}
+
+TEST(CommandCatalogTest, ConfigureCommandCliAcceptsRepeatedReferenceGroups)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::ConfigureCommandCli(app);
+
+    EXPECT_THROW(
+        app.parse(
+            "potential_display --painter model --model-keylist model_a "
+            "--ref-group A=m1,m2 --ref-group B=m3",
+            false),
         CLI::RuntimeError);
 }
 

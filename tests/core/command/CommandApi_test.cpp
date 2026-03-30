@@ -27,7 +27,7 @@ TEST(CommandApiTest, MapSimulationRejectsInvalidBlurringWidthList)
 {
     rg::MapSimulationRequest request;
     request.model_file_path = command_test::TestDataPath("test_model.cif");
-    request.blurring_width_list = "-1.0,0.0";
+    request.blurring_width_list = { -1.0, 0.0 };
 
     const auto result{ rg::RunMapSimulation(request) };
     EXPECT_FALSE(result.prepared);
@@ -72,7 +72,7 @@ TEST(CommandApiTest, ResultDumpMapPathIsOnlyRequiredForMapPrinter)
 
     rg::ResultDumpRequest map_request;
     map_request.common.database_path = temp_dir.path() / "demo.sqlite";
-    map_request.model_key_tag_list = "demo_model";
+    map_request.model_key_tag_list = { "demo_model" };
     map_request.printer_choice = rg::PrinterType::MAP_VALUE;
 
     const auto map_result{ rg::RunResultDump(map_request) };
@@ -88,7 +88,7 @@ TEST(CommandApiTest, ResultDumpMapPathIsOnlyRequiredForMapPrinter)
 
     rg::ResultDumpRequest gaus_request;
     gaus_request.common.database_path = temp_dir.path() / "demo.sqlite";
-    gaus_request.model_key_tag_list = "demo_model";
+    gaus_request.model_key_tag_list = { "demo_model" };
     gaus_request.printer_choice = rg::PrinterType::GAUS_ESTIMATES;
 
     const auto gaus_result{ rg::RunResultDump(gaus_request) };

@@ -8,37 +8,18 @@
 #include <vector>
 
 #include "CommandBase.hpp"
-#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 template <typename T> struct KDNode;
-namespace CLI
-{
-    class App;
-}
 
 namespace rhbm_gem {
 
 class ModelObject;
 class MapObject;
 class AtomObject;
-struct MapSimulationRequest;
-void BindMapSimulationRequestOptions(CLI::App * command, MapSimulationRequest & request);
 
-struct MapSimulationCommandOptions
-{
-    std::filesystem::path model_file_path;
-    std::string map_file_name{"sim_map"};
-    PotentialModel potential_model_choice{ PotentialModel::FIVE_GAUS_CHARGE };
-    PartialCharge partial_charge_choice{ PartialCharge::PARTIAL };
-    double cutoff_distance{ 5.0 };
-    double grid_spacing{ 0.5 };
-    std::vector<double> blurring_width_list{};
-};
-
-class MapSimulationCommand : public CommandBase
+class MapSimulationCommand : public CommandWithRequest<MapSimulationRequest>
 {
 private:
-    MapSimulationCommandOptions m_options{};
     std::vector<AtomObject *> m_selected_atom_list;
     std::unordered_map<int, double> m_atom_charge_map;
     std::shared_ptr<ModelObject> m_model_object;
@@ -47,15 +28,9 @@ private:
 public:
     explicit MapSimulationCommand(CommonOptionProfile profile);
     ~MapSimulationCommand() override = default;
-    void ApplyRequest(const MapSimulationRequest & request);
 
 private:
-    void SetPotentialModelChoice(PotentialModel value);
-    void SetPartialChargeChoice(PartialCharge value);
-    void SetCutoffDistance(double value);
-    void SetModelFilePath(const std::filesystem::path & value);
-    void SetGridSpacing(double value);
-    void SetBlurringWidthList(const std::string & value);
+    void NormalizeRequest() override;
     void ValidateOptions() override;
     void ResetRuntimeState() override;
     bool ExecuteImpl() override;

@@ -17,7 +17,7 @@ Each entry uses:
 
 - `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)`
 
-This manifest is expanded directly with X-macros by:
+The manifest is expanded directly with X-macros by:
 
 - `/include/rhbm_gem/core/command/CommandContract.hpp`
 - `/include/rhbm_gem/core/command/CommandApi.hpp`
@@ -25,9 +25,14 @@ This manifest is expanded directly with X-macros by:
 - `/src/core/command/CommandOptionSupport.cpp`
 - `/src/python/CommandApiBindings.cpp`
 
-The manifest does not generate request structs or command-specific CLI field bindings.
-Command-specific binders now live beside each concrete command implementation under
-`/src/core/command/`.
+The manifest does not generate request structs. Request field schemas live in
+`/include/rhbm_gem/core/command/CommandApi.hpp` through each request type's `VisitFields(...)`
+definition, and both CLI and Python walk that schema instead of maintaining handwritten field
+binding lists.
+
+Concrete command headers are aggregated by:
+
+- `/src/core/internal/command/CommandRegistry.hpp`
 
 Always-on command list:
 
@@ -55,24 +60,26 @@ flowchart LR
 
     E["Python (pybind11)"] --> D
 
-    D --> G["Construct concrete command with profile"]
-    G --> H["ApplyRequest(...)"]
+    D --> F["Construct concrete command with profile"]
+    F --> G["ApplyRequest(...)"]
+    G --> H["NormalizeRequest()"]
     H --> I["PrepareForExecution()"]
     I --> J["Execute()"]
 ```
 
-## 3. Registry shape
+## 3. Registry and registration
 
 `ConfigureCommandCli(CLI::App &)` is the public top-level CLI setup entrypoint.
 It enables `require_subcommand(1)` and then expands `CommandList.def` directly to register each
 subcommand.
 
 The shared registration code lives in `/src/core/command/CommandOptionSupport.cpp`.
-It creates the request object, binds common options from the profile, calls the
-command-local `Bind<Command>RequestOptions(...)` function, and wires the callback to the matching
-`Run*` function.
+It creates one request object per subcommand, binds common and command-specific fields by walking
+the request descriptors, and wires the callback to the matching `Run*` function.
 
-There is no separate runtime catalog or descriptor layer anymore.
+`/src/core/command/CommandApi.cpp` and `/src/core/command/CommandOptionSupport.cpp` both include
+`/src/core/internal/command/CommandRegistry.hpp`, so new commands only need one internal include
+aggregation point.
 
 ## 4. Public contract and request surface
 
@@ -86,7 +93,7 @@ This header owns:
 - `ValidationPhase`
 - `ValidationIssue`
 
-Public requests, `ExecutionReport`, and `Run*` entrypoints live in
+Public requests, `ExecutionReport`, request field descriptors, and `Run*` entrypoints live in
 `/include/rhbm_gem/core/command/CommandApi.hpp`.
 Experimental request types and `Run*` entrypoints are compiled into that public surface only when
 `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` is enabled for the linked target.
@@ -117,14 +124,16 @@ and implementation units under `/src/core/command/`.
 
 Current pattern:
 
-1. Define `Options` deriving from `CommandOptions`.
-2. Derive the command from `CommandWithOptions<Options>`.
+1. Derive the command from `CommandWithRequest<XxxRequest>`.
+2. Treat the public request as the canonical configuration object.
 3. Construct the command with a profile supplied by the caller (`Run*` from the manifest).
-4. Implement `ApplyRequest(const XxxRequest &)`.
-5. Call `ApplyCommonRequest(request.common)` inside `ApplyRequest(...)`.
-6. Keep cross-field validation in `ValidateOptions()`.
-7. Reset transient execution state in `ResetRuntimeState()`.
-8. Keep `ExecuteImpl()` focused on orchestration.
+4. Keep per-field normalization in `NormalizeRequest()`.
+5. Keep cross-field validation in `ValidateOptions()`.
+6. Reset transient execution state in `ResetRuntimeState()`.
+7. Keep `ExecuteImpl()` focused on orchestration.
+
+`CommandWithRequest<XxxRequest>` applies `request.common`, keeps normalized common fields in sync,
+and removes the old duplicated private options layer.
 
 Useful `CommandBase` helpers:
 
@@ -199,5 +208,6 @@ Python bindings are split across:
 
 `/src/python/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
 `/src/python/CommandApiBindings.cpp` owns the `PYBIND11_MODULE(...)` entrypoint and exposes request
-structs, `ExecutionReport`, and all `Run*` functions via the manifest X-macro. Experimental
-command bindings follow the same gate as the public C++ surface.
+structs, `ExecutionReport`, and all `Run*` functions via the manifest X-macro. Request properties
+are emitted generically by walking each request type's `VisitFields(...)`. Experimental command
+bindings follow the same gate as the public C++ surface.

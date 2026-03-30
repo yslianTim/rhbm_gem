@@ -1,8 +1,6 @@
 #include "internal/command/ResultDumpCommand.hpp"
-#include "internal/command/CommandOptionSupport.hpp"
 #include "internal/command/CommandDataSupport.hpp"
 
-#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -18,7 +16,6 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
-#include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 
 #include <algorithm>
@@ -35,49 +32,39 @@ constexpr std::string_view kMapOption{ "--map" };
 namespace rhbm_gem {
 
 ResultDumpCommand::ResultDumpCommand(CommonOptionProfile profile) :
-    CommandBase{ profile },
+    CommandWithRequest<ResultDumpRequest>{ profile },
     m_map_key_tag{ kMapKey }, m_map_object{ nullptr }
 {
 }
 
-void BindResultDumpRequestOptions(
-    CLI::App * command,
-    ResultDumpRequest & request)
+void ResultDumpCommand::NormalizeRequest()
 {
-    command_cli::AddEnumOption<PrinterType>(
-        command,
-        "-p,--printer",
-        [&](PrinterType value) { request.printer_choice = value; },
-        "Printer choice",
-        std::nullopt,
-        true);
-    command_cli::AddStringOption(
-        command,
-        "-k,--model-keylist",
-        [&](const std::string & value) { request.model_key_tag_list = value; },
-        "List of model key tag to be display",
-        std::nullopt,
-        true);
-    command_cli::AddPathOption(
-        command,
-        "-m,--map",
-        [&](const std::filesystem::path & value) { request.map_file_path = value; },
-        "Map file path",
-        request.map_file_path);
-}
-
-void ResultDumpCommand::ApplyRequest(const ResultDumpRequest & request)
-{
-    ApplyCommonRequest(request.common);
-    SetPrinterChoice(request.printer_choice);
-    SetModelKeyTagList(request.model_key_tag_list);
-    SetMapFilePath(request.map_file_path);
+    auto & request{ MutableRequest() };
+    SetValidatedEnumOption(
+        request.printer_choice,
+        request.printer_choice,
+        kPrinterOption,
+        PrinterType::GAUS_ESTIMATES,
+        "Printer choice");
+    SetOptionalExistingPathOption(request.map_file_path, request.map_file_path, kMapOption, "Map file");
+    MutateOptions([&]()
+    {
+        ResetParseIssues(kModelKeyListOption);
+        if (request.model_key_tag_list.empty())
+        {
+            AddValidationError(
+                kModelKeyListOption,
+                "Model key list cannot be empty.",
+                ValidationPhase::Parse);
+        }
+    });
 }
 
 void ResultDumpCommand::ValidateOptions()
 {
+    const auto & request{ RequestOptions() };
     ResetPrepareIssues(kMapOption);
-    if (m_options.printer_choice == PrinterType::MAP_VALUE && m_options.map_file_path.empty())
+    if (request.printer_choice == PrinterType::MAP_VALUE && request.map_file_path.empty())
     {
         AddValidationError(kMapOption,
             "A map file is required when '--printer map' is selected.");
@@ -91,50 +78,20 @@ void ResultDumpCommand::ResetRuntimeState()
     m_map_object.reset();
 }
 
-void ResultDumpCommand::SetPrinterChoice(PrinterType value)
-{
-    SetValidatedEnumOption(
-        m_options.printer_choice,
-        value,
-        kPrinterOption,
-        PrinterType::GAUS_ESTIMATES,
-        "Printer choice");
-}
-
-void ResultDumpCommand::SetMapFilePath(const std::filesystem::path & path)
-{
-    SetOptionalExistingPathOption(m_options.map_file_path, path, kMapOption, "Map file");
-}
-
-void ResultDumpCommand::SetModelKeyTagList(const std::string & value)
-{
-    MutateOptions([&]()
-    {
-        m_options.model_key_tag_list = StringHelper::ParseListOption<std::string>(value, ',');
-        ResetParseIssues(kModelKeyListOption);
-        if (m_options.model_key_tag_list.empty())
-        {
-            AddValidationError(
-                kModelKeyListOption,
-                "Model key list cannot be empty.",
-                ValidationPhase::Parse);
-        }
-    });
-}
-
 bool ResultDumpCommand::BuildDataObjectList()
 {
+    const auto & request{ RequestOptions() };
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     try
     {
         m_data_manager.SetDatabaseManager(DatabasePath());
         m_map_object = command_data_loader::OptionalProcessMapFile(
             m_data_manager,
-            m_options.map_file_path,
+            request.map_file_path,
             m_map_key_tag,
             "map file");
         m_selected_atom_list_map.clear();
-        for (auto & key : m_options.model_key_tag_list)
+        for (const auto & key : request.model_key_tag_list)
         {
             auto model_object{ command_data_loader::LoadModelObject(
                 m_data_manager,
@@ -419,7 +376,7 @@ void ResultDumpCommand::RunDumpWorkflow()
     Logger::Log(
         LogLevel::Info,
         "Total number of model object sets to be dump: "
-            + std::to_string(m_options.model_key_tag_list.size()));
+            + std::to_string(RequestOptions().model_key_tag_list.size()));
 
     const bool has_selected_atoms{
         std::any_of(
@@ -435,7 +392,7 @@ void ResultDumpCommand::RunDumpWorkflow()
         return;
     }
 
-    switch (m_options.printer_choice)
+    switch (RequestOptions().printer_choice)
     {
     case PrinterType::ATOM_POSITION:
         RunAtomPositionDumping();
@@ -454,7 +411,7 @@ void ResultDumpCommand::RunDumpWorkflow()
         Logger::Log(
             LogLevel::Warning,
             "Invalid printer choice input : ["
-                + std::to_string(static_cast<int>(m_options.printer_choice)) + "]");
+                + std::to_string(static_cast<int>(RequestOptions().printer_choice)) + "]");
         Logger::Log(
             LogLevel::Warning,
             "Available Printer Choices:\n"

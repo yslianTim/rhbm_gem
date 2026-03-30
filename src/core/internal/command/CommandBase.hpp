@@ -9,25 +9,15 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/command/CommandContract.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/core/command/CommandEnumClass.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 
 constexpr CommonOptionMask kDefaultCommandCommonOptions{
     CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)
-};
-
-struct CommonCommandRequest;
-
-struct CommonCommandOptions
-{
-    int thread_size{ 1 };
-    int verbose_level{ 3 };
-    std::filesystem::path database_path{ GetDefaultDatabasePath() };
-    std::filesystem::path folder_path{""};
 };
 
 class CommandBase
@@ -49,10 +39,11 @@ protected:
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
-    int ThreadSize() const { return m_common_options_state.thread_size; }
-    int VerboseLevel() const { return m_common_options_state.verbose_level; }
-    const std::filesystem::path & DatabasePath() const { return m_common_options_state.database_path; }
-    const std::filesystem::path & OutputFolder() const { return m_common_options_state.folder_path; }
+    int ThreadSize() const { return m_common_request.thread_size; }
+    int VerboseLevel() const { return m_common_request.verbose_level; }
+    const std::filesystem::path & DatabasePath() const { return m_common_request.database_path; }
+    const std::filesystem::path & OutputFolder() const { return m_common_request.folder_path; }
+    const CommonCommandRequest & CommonRequest() const { return m_common_request; }
     void SetThreadSize(int value);
     void SetVerboseLevel(int value);
     void SetDatabasePath(const std::filesystem::path & path);
@@ -205,7 +196,7 @@ protected:
 private:
     CommonOptionMask GetCommonOptionsMask() const { return m_common_options; }
 
-    CommonCommandOptions m_common_options_state{};
+    CommonCommandRequest m_common_request{};
     CommonOptionMask m_common_options;
     bool m_is_prepared_for_execution{ false };
     void InvalidatePreparedState();
@@ -256,6 +247,39 @@ private:
         LogLevel level,
         const std::string & message,
         bool auto_corrected);
+};
+
+template <typename Request>
+class CommandWithRequest : public CommandBase
+{
+public:
+    using RequestType = Request;
+
+    explicit CommandWithRequest(CommonOptionProfile profile) :
+        CommandBase{ profile }
+    {
+    }
+
+    explicit CommandWithRequest(CommonOptionMask common_options = kDefaultCommandCommonOptions) :
+        CommandBase{ common_options }
+    {
+    }
+
+    void ApplyRequest(const Request & request)
+    {
+        AssignOption(m_request, request);
+        ApplyCommonRequest(m_request.common);
+        m_request.common = CommonRequest();
+        NormalizeRequest();
+    }
+
+protected:
+    const Request & RequestOptions() const { return m_request; }
+    Request & MutableRequest() { return m_request; }
+    virtual void NormalizeRequest() {}
+
+private:
+    Request m_request{};
 };
 
 } // namespace rhbm_gem

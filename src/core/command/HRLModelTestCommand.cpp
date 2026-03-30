@@ -1,6 +1,4 @@
 #include "internal/command/HRLModelTestCommand.hpp"
-#include "internal/command/CommandOptionSupport.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>
@@ -43,115 +41,55 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 } // namespace
 
 HRLModelTestCommand::HRLModelTestCommand(CommonOptionProfile profile) :
-    CommandBase{ profile }
+    CommandWithRequest<HRLModelTestRequest>{ profile }
 {
 }
 
-void BindHRLModelTestRequestOptions(
-    CLI::App * command,
-    HRLModelTestRequest & request)
+void HRLModelTestCommand::NormalizeRequest()
 {
-    command_cli::AddEnumOption<TesterType>(
-        command,
-        "-t,--tester",
-        [&](TesterType value) { request.tester_choice = value; },
-        "Tester option",
-        TesterType::DATA_OUTLIER);
-    command_cli::AddScalarOption<double>(
-        command,
-        "--fit-min",
-        [&](double value) { request.fit_range_min = value; },
-        "Minimum fitting range",
-        request.fit_range_min);
-    command_cli::AddScalarOption<double>(
-        command,
-        "--fit-max",
-        [&](double value) { request.fit_range_max = value; },
-        "Maximum fitting range",
-        request.fit_range_max);
-    command_cli::AddScalarOption<double>(
-        command,
-        "--alpha-r",
-        [&](double value) { request.alpha_r = value; },
-        "Alpha value for R",
-        request.alpha_r);
-    command_cli::AddScalarOption<double>(
-        command,
-        "--alpha-g",
-        [&](double value) { request.alpha_g = value; },
-        "Alpha value for G",
-        request.alpha_g);
-}
-
-void HRLModelTestCommand::ApplyRequest(const HRLModelTestRequest & request)
-{
-    ApplyCommonRequest(request.common);
-    SetTesterChoice(request.tester_choice);
-    SetFitRangeMinimum(request.fit_range_min);
-    SetFitRangeMaximum(request.fit_range_max);
-    SetAlphaR(request.alpha_r);
-    SetAlphaG(request.alpha_g);
+    auto & request{ MutableRequest() };
+    SetValidatedEnumOption(
+        request.tester_choice,
+        request.tester_choice,
+        kTesterOption,
+        TesterType::BENCHMARK,
+        "Tester choice");
+    SetFiniteNonNegativeScalarOption(
+        request.fit_range_min,
+        request.fit_range_min,
+        kFitMinOption,
+        0.0,
+        "Minimum fitting range must be a finite non-negative value.");
+    SetFiniteNonNegativeScalarOption(
+        request.fit_range_max,
+        request.fit_range_max,
+        kFitMaxOption,
+        1.0,
+        "Maximum fitting range must be a finite non-negative value.");
+    SetFinitePositiveScalarOption(
+        request.alpha_r,
+        request.alpha_r,
+        kAlphaROption,
+        0.1,
+        "Alpha-R must be a finite positive value.");
+    SetFinitePositiveScalarOption(
+        request.alpha_g,
+        request.alpha_g,
+        kAlphaGOption,
+        0.2,
+        "Alpha-G must be a finite positive value.");
 }
 
 void HRLModelTestCommand::ValidateOptions()
 {
+    const auto & request{ RequestOptions() };
     ResetPrepareIssues(kFitRangeIssue);
-    if (m_options.fit_range_min > m_options.fit_range_max)
+    if (request.fit_range_min > request.fit_range_max)
     {
         AddValidationError(
             kFitRangeIssue,
             "Expected --fit-min <= --fit-max.");
     }
-}
-
-void HRLModelTestCommand::SetTesterChoice(TesterType value)
-{
-    SetValidatedEnumOption(
-        m_options.tester_choice,
-        value,
-        kTesterOption,
-        TesterType::BENCHMARK,
-        "Tester choice");
-}
-
-void HRLModelTestCommand::SetFitRangeMinimum(double value)
-{
-    SetFiniteNonNegativeScalarOption(
-        m_options.fit_range_min,
-        value,
-        kFitMinOption,
-        0.0,
-        "Minimum fitting range must be a finite non-negative value.");
-}
-
-void HRLModelTestCommand::SetFitRangeMaximum(double value)
-{
-    SetFiniteNonNegativeScalarOption(
-        m_options.fit_range_max,
-        value,
-        kFitMaxOption,
-        1.0,
-        "Maximum fitting range must be a finite non-negative value.");
-}
-
-void HRLModelTestCommand::SetAlphaR(double value)
-{
-    SetFinitePositiveScalarOption(
-        m_options.alpha_r,
-        value,
-        kAlphaROption,
-        0.1,
-        "Alpha-R must be a finite positive value.");
-}
-
-void HRLModelTestCommand::SetAlphaG(double value)
-{
-    SetFinitePositiveScalarOption(
-        m_options.alpha_g,
-        value,
-        kAlphaGOption,
-        0.2,
-        "Alpha-G must be a finite positive value.");
 }
 
 } // namespace rhbm_gem
@@ -160,7 +98,7 @@ namespace rhbm_gem::detail {
 
 struct HRLModelTestExecutionContext
 {
-    const HRLModelTestCommandOptions & options;
+    const HRLModelTestRequest & options;
     int thread_size;
     const std::filesystem::path & output_folder;
 };
@@ -1094,7 +1032,7 @@ namespace rhbm_gem {
 bool HRLModelTestCommand::ExecuteImpl()
 {
     return detail::RunHRLModelTestWorkflow(detail::HRLModelTestExecutionContext{
-        m_options,
+        RequestOptions(),
         ThreadSize(),
         OutputFolder(),
     });

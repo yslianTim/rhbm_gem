@@ -176,7 +176,7 @@ def main() -> int:
     dump_request = rgm.ResultDumpRequest()
     dump_request.common.database_path = str(database_path)
     dump_request.common.folder_path = str(workdir)
-    dump_request.model_key_tag_list = KEY_TAG
+    dump_request.model_key_tag_list = [KEY_TAG]
     dump_request.printer_choice = rgm.PrinterType.GAUS_ESTIMATES
     ensure_execute(rgm.RunResultDump(dump_request), "RunResultDump")
 

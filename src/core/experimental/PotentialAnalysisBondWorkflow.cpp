@@ -35,7 +35,7 @@ struct PotentialAnalysisBondWorkflowContext
 {
     ModelObject & model_object;
     MapObject & map_object;
-    const PotentialAnalysisCommandOptions & options;
+    const PotentialAnalysisRequest & options;
     int thread_size;
 };
 
@@ -52,7 +52,7 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
 void RunBondSampling(
     ModelObject & model_object,
     const MapObject & map_object,
-    const PotentialAnalysisCommandOptions & options,
+    const PotentialAnalysisRequest & options,
     int thread_size)
 {
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunBondMapValueSampling");
@@ -345,7 +345,7 @@ void RunPotentialAnalysisBondWorkflowImpl(
 void RunPotentialAnalysisBondWorkflow(
     ModelObject & model_object,
     MapObject & map_object,
-    const PotentialAnalysisCommandOptions & options,
+    const PotentialAnalysisRequest & options,
     int thread_size)
 {
     PotentialAnalysisBondWorkflowContext context{

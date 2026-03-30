@@ -14,7 +14,7 @@ TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
     rg::ResultDumpCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::ResultDumpRequest request{};
     request.printer_choice = rg::PrinterType::MAP_VALUE;
-    request.model_key_tag_list = "model";
+    request.model_key_tag_list = { "model" };
     command.ApplyRequest(request);
 
     EXPECT_FALSE(command.PrepareForExecution());
@@ -44,14 +44,14 @@ TEST(ResultDumpCommandTest, ExecuteTwiceDoesNotReuseStaleLoadedModels)
     request.printer_choice = rg::PrinterType::ATOM_POSITION;
 
     request.common.folder_path = output_dir_a;
-    request.model_key_tag_list = "key_a";
+    request.model_key_tag_list = { "key_a" };
     command.ApplyRequest(request);
     ASSERT_TRUE(command.Execute());
     EXPECT_TRUE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_A.csv"));
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir_a, ".csv"), 1);
 
     request.common.folder_path = output_dir_b;
-    request.model_key_tag_list = "key_b";
+    request.model_key_tag_list = { "key_b" };
     command.ApplyRequest(request);
     ASSERT_TRUE(command.Execute());
     EXPECT_TRUE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_B.csv"));
@@ -76,7 +76,7 @@ TEST(ResultDumpCommandTest, ExecuteUsesCurrentDatabasePathAndOutputFolderOptions
     rg::ResultDumpCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
     rg::ResultDumpRequest request{};
     request.printer_choice = rg::PrinterType::ATOM_POSITION;
-    request.model_key_tag_list = "shared_key";
+    request.model_key_tag_list = { "shared_key" };
 
     request.common.database_path = database_path_a;
     request.common.folder_path = output_dir_a;

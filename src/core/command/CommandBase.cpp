@@ -1,5 +1,4 @@
 #include "internal/command/CommandBase.hpp"
-#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <algorithm>
@@ -92,7 +91,7 @@ void CommandBase::InvalidatePreparedState()
 void CommandBase::SetThreadSize(int value)
 {
     SetNormalizedScalarOption(
-        m_common_options_state.thread_size,
+        m_common_request.thread_size,
         value,
         kJobsOption,
         [](int candidate) { return candidate >= 1; },
@@ -103,7 +102,7 @@ void CommandBase::SetThreadSize(int value)
 void CommandBase::SetVerboseLevel(int value)
 {
     SetNormalizedScalarOption(
-        m_common_options_state.verbose_level,
+        m_common_request.verbose_level,
         value,
         kVerboseOption,
         [](int candidate)
@@ -119,7 +118,7 @@ void CommandBase::SetDatabasePath(const std::filesystem::path & path)
 {
     MutateOptions([&]()
     {
-        m_common_options_state.database_path = path.empty()
+        m_common_request.database_path = path.empty()
             ? std::filesystem::path{}
             : path.lexically_normal();
     });
@@ -129,7 +128,7 @@ void CommandBase::SetFolderPath(const std::filesystem::path & path)
 {
     MutateOptions([&]()
     {
-        m_common_options_state.folder_path =
+        m_common_request.folder_path =
             std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
     });
 }
