@@ -1,5 +1,5 @@
 #include "internal/command/HRLModelTestCommand.hpp"
-#include "internal/command/CommandCliSupport.hpp"
+#include "internal/command/CommandOptionSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>

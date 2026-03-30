@@ -1,7 +1,6 @@
 #pragma once
 
 #include <CLI/CLI.hpp>
-#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/CommandEnumClass.hpp>
 
 #include <filesystem>
@@ -110,50 +109,6 @@ inline CLI::Option * AddEnumOption(
     option->transform(CLI::CheckedTransformer(
         rhbm_gem::BuildCommandEnumCliMap<EnumType>(), CLI::ignore_case));
     return option;
-}
-
-inline void BindCommonOptions(
-    CLI::App * command,
-    CommonCommandRequest & common,
-    CommonOptionProfile profile)
-{
-    const auto common_options{ CommonOptionMaskForProfile(profile) };
-    if (HasCommonOption(common_options, CommonOption::Threading))
-    {
-        AddScalarOption<int>(
-            command,
-            "-j,--jobs",
-            [&](int value) { common.thread_size = value; },
-            "Number of threads",
-            common.thread_size);
-    }
-    if (HasCommonOption(common_options, CommonOption::Verbose))
-    {
-        AddScalarOption<int>(
-            command,
-            "-v,--verbose",
-            [&](int value) { common.verbose_level = value; },
-            "Verbose level",
-            common.verbose_level);
-    }
-    if (HasCommonOption(common_options, CommonOption::Database))
-    {
-        AddPathOption(
-            command,
-            "-d,--database",
-            [&](const std::filesystem::path & value) { common.database_path = value; },
-            "Database file path",
-            common.database_path);
-    }
-    if (HasCommonOption(common_options, CommonOption::OutputFolder))
-    {
-        AddPathOption(
-            command,
-            "-o,--folder",
-            [&](const std::filesystem::path & value) { common.folder_path = value; },
-            "folder path for output files",
-            common.folder_path);
-    }
 }
 
 } // namespace rhbm_gem::command_cli

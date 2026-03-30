@@ -22,7 +22,7 @@ This manifest is expanded directly with X-macros by:
 - `/include/rhbm_gem/core/command/CommandContract.hpp`
 - `/include/rhbm_gem/core/command/CommandApi.hpp`
 - `/src/core/command/CommandApi.cpp`
-- `/src/core/command/CommandCliSupport.cpp`
+- `/src/core/command/CommandOptionSupport.cpp`
 - `/src/python/CommandApiBindings.cpp`
 
 The manifest does not generate request structs or command-specific CLI field bindings.
@@ -67,7 +67,7 @@ flowchart LR
 It enables `require_subcommand(1)` and then expands `CommandList.def` directly to register each
 subcommand.
 
-The shared registration code lives in `/src/core/command/CommandCliSupport.cpp`.
+The shared registration code lives in `/src/core/command/CommandOptionSupport.cpp`.
 It creates the request object, binds common options from the profile, calls the
 command-local `Bind<Command>RequestOptions(...)` function, and wires the callback to the matching
 `Run*` function.

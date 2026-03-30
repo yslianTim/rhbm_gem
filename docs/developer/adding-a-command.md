@@ -31,7 +31,7 @@ Public command API:
 Manifest and CLI registration:
 
 - `/include/rhbm_gem/core/command/CommandList.def`
-- `/src/core/command/CommandCliSupport.cpp`
+- `/src/core/command/CommandOptionSupport.cpp`
 
 Python bindings:
 
@@ -148,7 +148,7 @@ In `/src/core/command/<YourCommand>.cpp`:
 
 1. Add `Bind<YourCommand>RequestOptions(...)` for command-specific flags.
 2. `ConfigureCommandCli(...)` will pick it up through the manifest X-macro expansion in
-   `/src/core/command/CommandCliSupport.cpp`.
+   `/src/core/command/CommandOptionSupport.cpp`.
 3. Shared flags are bound automatically from the manifest profile.
 
 Shared flags come from the profile:
@@ -188,7 +188,7 @@ Before merge:
 2. `CommandApi.hpp` contains the new request.
 3. `CommandList.def` contains the new entry in the correct stable or experimental section.
 4. `/src/CMakeLists.txt` and `/tests/CMakeLists.txt` include the new source/test file.
-5. CLI binding is added beside the command implementation and wired through `CommandCliSupport.cpp`.
+5. CLI binding is added beside the command implementation and wired through `CommandOptionSupport.cpp`.
 6. Python bindings are updated if the binding surface changed.
 7. Tests and docs are aligned with the final command surface.
 

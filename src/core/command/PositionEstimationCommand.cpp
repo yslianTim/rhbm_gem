@@ -1,5 +1,5 @@
 #include "internal/command/PositionEstimationCommand.hpp"
-#include "internal/command/CommandCliSupport.hpp"
+#include "internal/command/CommandOptionSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>

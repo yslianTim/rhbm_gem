@@ -1,5 +1,5 @@
 #include "internal/command/PotentialAnalysisCommand.hpp"
-#include "internal/command/CommandCliSupport.hpp"
+#include "internal/command/CommandOptionSupport.hpp"
 #include "internal/command/CommandDataSupport.hpp"
 #include "internal/command/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
