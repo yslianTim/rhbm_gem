@@ -218,19 +218,15 @@ This module contains:
 
 ## 8. Python integration
 
-Python bindings are split across:
+Python bindings live in:
 
-- [`src/python/CommonBindings.cpp`](/src/python/CommonBindings.cpp)
 - [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
 
-`CommonBindings.cpp` exposes:
+`CommandApiBindings.cpp` exposes:
 
 - shared enums from `CommandEnumClass.hpp`
 - `ValidationPhase`
 - `ValidationIssue`
-
-`CommandApiBindings.cpp` exposes:
-
 - `CommonCommandRequest`
 - one request type per manifest entry
 - `ExecutionReport`

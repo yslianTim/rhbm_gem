@@ -187,8 +187,9 @@ Python registration is also generic:
 2. `BindRequestType<XxxRequest>(...)` walks `VisitFields(...)` and emits `def_readwrite(...)`
 3. `module.def("RunXxx", ...)` is expanded from the manifest
 
-[`src/python/CommonBindings.cpp`](/src/python/CommonBindings.cpp) only needs changes when the command adds a new shared enum or
-shared validation/common type.
+[`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) also owns the shared Python
+bindings for command enums plus validation/common types. It only needs manual changes when the
+command adds a new shared enum or shared validation/common type.
 
 ## 8. Build wiring for stable vs experimental commands
 
