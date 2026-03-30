@@ -1,6 +1,5 @@
 set(BINDINGS_SOURCES
     CommonBindings.cpp
-    CoreBindings.cpp
     CommandApiBindings.cpp
 )
 

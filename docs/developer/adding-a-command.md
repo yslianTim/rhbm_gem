@@ -165,6 +165,8 @@ Update `/src/python/CommandApiBindings.cpp`:
 1. Bind the new `*Request` type.
 2. The `Run*` export list is expanded from the manifest, so no separate binding list needs to be
    maintained.
+3. The Python module entrypoint also lives in this file, so command-facing binding updates stay in
+   one place.
 
 Shared enums and diagnostics live in `/src/python/CommonBindings.cpp`, so that file only needs
 changes if the command introduces a new shared enum. The enum token source of truth remains

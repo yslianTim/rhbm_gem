@@ -194,11 +194,10 @@ This module groups:
 
 Python bindings are split across:
 
-- `/src/python/CoreBindings.cpp`
 - `/src/python/CommonBindings.cpp`
 - `/src/python/CommandApiBindings.cpp`
 
 `/src/python/CommonBindings.cpp` exposes shared enums plus `ValidationPhase` / `ValidationIssue`.
-`/src/python/CommandApiBindings.cpp` exposes request structs, `ExecutionReport`, and all `Run*`
-functions via the manifest X-macro. Experimental command bindings follow the same gate as the
-public C++ surface.
+`/src/python/CommandApiBindings.cpp` owns the `PYBIND11_MODULE(...)` entrypoint and exposes request
+structs, `ExecutionReport`, and all `Run*` functions via the manifest X-macro. Experimental
+command bindings follow the same gate as the public C++ surface.
