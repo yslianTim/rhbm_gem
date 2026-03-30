@@ -229,7 +229,7 @@ def main() -> int:
     key_tags: list[str] = []
     for spec, model_path, map_path in staged_inputs:
         analysis_request = rgm.PotentialAnalysisRequest()
-        analysis_request.common.database_path = str(database_path)
+        analysis_request.database_path = str(database_path)
         analysis_request.common.thread_size = JOBS
         analysis_request.model_file_path = str(model_path)
         analysis_request.map_file_path = str(map_path)
@@ -244,7 +244,7 @@ def main() -> int:
 
     print("[3/3] Result dump")
     dump_request = rgm.ResultDumpRequest()
-    dump_request.common.database_path = str(database_path)
+    dump_request.database_path = str(database_path)
     dump_request.common.folder_path = str(workdir)
     dump_request.model_key_tag_list = key_tags
     dump_request.printer_choice = rgm.PrinterType.GAUS_ESTIMATES

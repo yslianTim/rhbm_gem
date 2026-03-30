@@ -65,8 +65,7 @@ Example:
 RHBM_GEM_COMMAND(
     Example,
     "example",
-    "Run example command",
-    FileWorkflow)
+    "Run example command")
 ```
 
 Parameters:
@@ -74,20 +73,19 @@ Parameters:
 1. `COMMAND_ID`: token used by `CommandId`, request/run symbol names, and concrete command names
 2. `CLI_NAME`: subcommand token
 3. `DESCRIPTION`: CLI help text
-4. `PROFILE`: `FileWorkflow` or `DatabaseWorkflow`
 
 ## 4. Scaffold command files
 
 Generate skeleton files:
 
 ```bash
-python3 resources/tools/developer/command_scaffold.py --name Example --profile FileWorkflow
+python3 resources/tools/developer/command_scaffold.py --name Example
 ```
 
 Generate skeleton files and wire stable registration/build lists:
 
 ```bash
-python3 resources/tools/developer/command_scaffold.py --name Example --profile FileWorkflow --wire
+python3 resources/tools/developer/command_scaffold.py --name Example --wire
 ```
 
 `--wire` updates:
@@ -113,7 +111,7 @@ Concrete command classes live under [`src/core/internal/command/`](/src/core/int
 Use this shape:
 
 1. derive from `CommandWithRequest<XxxRequest>`
-2. construct the command with a `CommonOptionProfile`
+2. construct the command with the default `CommandWithRequest<XxxRequest>{}` base
 3. keep field normalization in `NormalizeRequest()`
 4. keep cross-field validation in `ValidateOptions()`
 5. reset transient execution state in `ResetRuntimeState()`
@@ -160,7 +158,7 @@ place you do not add a separate handwritten `RunXxx(...)` declaration or binding
 
 Each `Run*` entrypoint follows this sequence:
 
-1. construct the concrete command with the manifest profile
+1. construct the concrete command
 2. call `ApplyRequest(...)`
 3. call `PrepareForExecution()`
 4. call `Execute()` if preparation succeeds
@@ -172,13 +170,13 @@ CLI registration is generic:
 
 1. `ConfigureCommandCli(...)` expands the manifest in [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp)
 2. `RegisterCommand<...>()` creates the subcommand and binds request fields from `VisitFields(...)`
-3. common fields from `CommonCommandRequest::VisitFields(...)` are filtered by the manifest profile
+3. common fields from `CommonCommandRequest::VisitFields(...)` are always bound
+4. command-specific fields such as `database_path` are bound from the request schema itself
 
-Shared CLI options come from the profile:
+Shared CLI options come from `CommonCommandRequest`:
 
 - `-j,--jobs`
 - `-v,--verbose`
-- `-d,--database` for `DatabaseWorkflow`
 - `-o,--folder`
 
 Python registration is also generic:

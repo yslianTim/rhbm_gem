@@ -6,9 +6,9 @@ namespace rhbm_gem {
 namespace {
 
 template <typename CommandType, typename RequestType>
-ExecutionReport RunCommand(CommonOptionProfile profile, const RequestType & request)
+ExecutionReport RunCommand(const RequestType & request)
 {
-    CommandType command{ profile };
+    CommandType command{};
     command.ApplyRequest(request);
 
     ExecutionReport report;
@@ -30,10 +30,10 @@ ExecutionReport RunCommand(CommonOptionProfile profile, const RequestType & requ
 
 } // namespace
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
     ExecutionReport Run##COMMAND_ID(const COMMAND_ID##Request & request)                       \
     {                                                                                          \
-        return RunCommand<COMMAND_ID##Command>(CommonOptionProfile::PROFILE, request);         \
+        return RunCommand<COMMAND_ID##Command>(request);                                       \
     }
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND

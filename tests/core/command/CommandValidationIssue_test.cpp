@@ -19,13 +19,7 @@ struct ValidationIssueCommandOptions
 class ValidationIssueCommand final : public rg::CommandBase
 {
 public:
-    explicit ValidationIssueCommand() :
-        rg::CommandBase{
-            rg::CommonOption::Threading
-                | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder}
-    {
-    }
+    ValidationIssueCommand() = default;
 
     void SetProblematicValue(int value)
     {

@@ -11,8 +11,7 @@ The command is declared in
 RHBM_GEM_COMMAND(
     PotentialAnalysis,
     "potential_analysis",
-    "Run potential analysis",
-    DatabaseWorkflow)
+    "Run potential analysis")
 ```
 
 That manifest entry is expanded into:
@@ -28,7 +27,7 @@ The concrete implementation lives in:
 - [`src/core/internal/command/PotentialAnalysisCommand.hpp`](/src/core/internal/command/PotentialAnalysisCommand.hpp)
 - [`src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp)
 
-`potential_analysis` uses the `DatabaseWorkflow` profile, so it exposes these shared CLI options:
+`potential_analysis` exposes these common and command-specific CLI options:
 
 - `-j,--jobs`
 - `-v,--verbose`
@@ -43,7 +42,8 @@ Its `VisitFields(...)` definition is the schema used by both CLI registration an
 
 The request fields are:
 
-- Common options: `common.thread_size`, `common.verbose_level`, `common.database_path`, `common.folder_path`
+- Common options: `common.thread_size`, `common.verbose_level`, `common.folder_path`
+- Database option: `database_path`
 - Input paths: `model_file_path`, `map_file_path`
 - Runtime flags: `simulation_flag`, `simulated_map_resolution`, `saved_key_tag`, `training_report_dir`, `training_alpha_flag`, `asymmetry_flag`
 - Sampling controls: `sampling_size`, `sampling_range_min`, `sampling_range_max`, `sampling_height`
@@ -97,7 +97,7 @@ preparation. Its parent directory is created only if training-report emission is
 
 `BuildDataObject()`:
 
-- calls `m_data_manager.SetDatabaseManager(DatabasePath())`
+- calls `m_data_manager.SetDatabaseManager(request.database_path)`
 - loads the model through `command_data_loader::ProcessModelFile(...)`
 - loads the map through `command_data_loader::ProcessMapFile(...)`
 - updates the model resolution metadata when `simulation_flag` is enabled

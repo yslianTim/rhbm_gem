@@ -23,13 +23,7 @@ struct CommandOptionHelperCommandOptions
 class CommandOptionHelperCommand final : public rg::CommandBase
 {
 public:
-    explicit CommandOptionHelperCommand() :
-        rg::CommandBase{
-            rg::CommonOption::Threading
-                | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder}
-    {
-    }
+    CommandOptionHelperCommand() = default;
 
     void SetRequiredPath(const std::filesystem::path & value)
     {

@@ -11,7 +11,7 @@ namespace rg = rhbm_gem;
 
 TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
 {
-    rg::ResultDumpCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
+    rg::ResultDumpCommand command{};
     rg::ResultDumpRequest request{};
     request.printer_choice = rg::PrinterType::MAP_VALUE;
     request.model_key_tag_list = { "model" };
@@ -41,19 +41,19 @@ TEST(ResultDumpCommandTest, ExecuteTwiceRefreshesRuntimeStateAndUsesCurrentPaths
     command_test::SeedSavedModel(database_path_a, model_path, "shared_key", "MODEL_FROM_A");
     command_test::SeedSavedModel(database_path_b, model_path, "shared_key", "MODEL_FROM_B");
 
-    rg::ResultDumpCommand command{rg::CommonOptionProfile::DatabaseWorkflow};
+    rg::ResultDumpCommand command{};
     rg::ResultDumpRequest request{};
     request.printer_choice = rg::PrinterType::ATOM_POSITION;
     request.model_key_tag_list = { "shared_key" };
 
-    request.common.database_path = database_path_a;
+    request.database_path = database_path_a;
     request.common.folder_path = output_dir_a;
     command.ApplyRequest(request);
     ASSERT_TRUE(command.Execute());
     EXPECT_TRUE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_A.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_B.csv"));
 
-    request.common.database_path = database_path_b;
+    request.database_path = database_path_b;
     request.common.folder_path = output_dir_b;
     command.ApplyRequest(request);
     ASSERT_TRUE(command.Execute());

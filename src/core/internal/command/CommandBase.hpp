@@ -16,10 +16,6 @@
 
 namespace rhbm_gem {
 
-constexpr CommonOptionMask kDefaultCommandCommonOptions{
-    CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)
-};
-
 class CommandBase
 {
 public:
@@ -33,20 +29,17 @@ protected:
     DataObjectManager m_data_manager;
     std::vector<ValidationIssue> m_validation_issues;
 
-    explicit CommandBase(CommonOptionProfile profile);
-    explicit CommandBase(CommonOptionMask common_options = kDefaultCommandCommonOptions);
+    CommandBase() = default;
 
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
     int ThreadSize() const { return m_common_request.thread_size; }
     int VerboseLevel() const { return m_common_request.verbose_level; }
-    const std::filesystem::path & DatabasePath() const { return m_common_request.database_path; }
     const std::filesystem::path & OutputFolder() const { return m_common_request.folder_path; }
     const CommonCommandRequest & CommonRequest() const { return m_common_request; }
     void SetThreadSize(int value);
     void SetVerboseLevel(int value);
-    void SetDatabasePath(const std::filesystem::path & path);
     void SetFolderPath(const std::filesystem::path & path);
     void ApplyCommonRequest(const CommonCommandRequest & request);
 
@@ -194,10 +187,7 @@ protected:
         std::string_view extension) const;
 
 private:
-    CommonOptionMask GetCommonOptionsMask() const { return m_common_options; }
-
     CommonCommandRequest m_common_request{};
-    CommonOptionMask m_common_options;
     bool m_is_prepared_for_execution{ false };
     void InvalidatePreparedState();
     void BeginPreparationPass();
@@ -255,13 +245,8 @@ class CommandWithRequest : public CommandBase
 public:
     using RequestType = Request;
 
-    explicit CommandWithRequest(CommonOptionProfile profile) :
-        CommandBase{ profile }
-    {
-    }
-
-    explicit CommandWithRequest(CommonOptionMask common_options = kDefaultCommandCommonOptions) :
-        CommandBase{ common_options }
+    CommandWithRequest() :
+        CommandBase{}
     {
     }
 

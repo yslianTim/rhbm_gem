@@ -17,8 +17,6 @@ def main() -> int:
             str(scaffold_script),
             "--name",
             "Example",
-            "--profile",
-            "FileWorkflow",
             "--dry-run",
         ],
         check=True,

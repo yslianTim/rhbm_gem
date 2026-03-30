@@ -23,7 +23,7 @@ private:
     std::unordered_map<std::string, std::vector<std::shared_ptr<ModelObject>>> m_ref_model_object_list_map;
 
 public:
-    explicit PotentialDisplayCommand(CommonOptionProfile profile);
+    PotentialDisplayCommand();
     ~PotentialDisplayCommand() override;
 
 private:

@@ -29,11 +29,18 @@ std::vector<rg::CommandDescriptor> BuildExpectedCommandMetadata()
 std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTokens()
 {
     std::vector<std::pair<std::string_view, rg::CommandId>> expected;
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
     expected.emplace_back(#COMMAND_ID, rg::CommandId::COMMAND_ID);
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND
     return expected;
+}
+
+bool CommandUsesDatabase(std::string_view cli_name)
+{
+    return cli_name == "potential_analysis"
+        || cli_name == "potential_display"
+        || cli_name == "result_dump";
 }
 
 std::string ReadManifestContent()
@@ -130,17 +137,6 @@ TEST(CommandCatalogTest, ConfigureCommandCliBuildsOneSubcommandPerManifestEntry)
         EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].cli_name);
         EXPECT_EQ(subcommands[index]->get_description(), expected_metadata[index].description);
 
-        const auto common_options{
-            rg::CommonOptionMaskForProfile(expected_metadata[index].common_option_profile)
-        };
-        EXPECT_EQ(
-            rg::HasCommonOption(common_options, rg::CommonOption::Database),
-            expected_metadata[index].common_option_profile
-                == rg::CommonOptionProfile::DatabaseWorkflow);
-        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Threading));
-        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::Verbose));
-        EXPECT_TRUE(rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder));
-
         unique_ids.insert(static_cast<int>(expected_metadata[index].id));
         unique_names.emplace(expected_metadata[index].cli_name);
     }
@@ -182,21 +178,15 @@ TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
     {
         auto * subcommand{ app.get_subcommand(std::string(descriptor.cli_name)) };
         ASSERT_NE(subcommand, nullptr) << descriptor.cli_name;
-        const auto common_options{
-            rg::CommonOptionMaskForProfile(descriptor.common_option_profile)
-        };
 
         const std::string help_text{
             subcommand->help(subcommand->get_name(), CLI::AppFormatMode::Sub)
         };
         EXPECT_EQ(
             help_text.find("--database") != std::string::npos,
-            rg::HasCommonOption(common_options, rg::CommonOption::Database))
+            CommandUsesDatabase(descriptor.cli_name))
             << descriptor.cli_name;
-        EXPECT_EQ(
-            help_text.find("--folder") != std::string::npos,
-            rg::HasCommonOption(common_options, rg::CommonOption::OutputFolder))
-            << descriptor.cli_name;
+        EXPECT_NE(help_text.find("--folder"), std::string::npos) << descriptor.cli_name;
     }
 }
 

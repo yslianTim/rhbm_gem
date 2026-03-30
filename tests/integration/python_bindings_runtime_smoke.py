@@ -14,8 +14,13 @@ EXPERIMENTAL_FEATURE_ENABLED = (
 EXPECTED_COMMON_FIELDS = {
     "thread_size",
     "verbose_level",
-    "database_path",
     "folder_path",
+}
+
+DATABASE_REQUEST_TYPES = {
+    "PotentialAnalysisRequest",
+    "PotentialDisplayRequest",
+    "ResultDumpRequest",
 }
 
 
@@ -62,6 +67,10 @@ def assert_request_objects_are_usable() -> None:
         common = request.common
         missing = [field for field in EXPECTED_COMMON_FIELDS if not hasattr(common, field)]
         assert not missing, f"{request_type.__name__}.common missing fields: {missing}"
+        has_database_path = hasattr(request, "database_path")
+        assert has_database_path == (request_type.__name__ in DATABASE_REQUEST_TYPES), (
+            f"{request_type.__name__} database_path presence mismatch"
+        )
 
     simulation = m.MapSimulationRequest()
     simulation.model_file_path = str(PROJECT_ROOT / "tests" / "fixtures" / "test_model.cif")

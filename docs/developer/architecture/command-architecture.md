@@ -16,7 +16,7 @@ Top-level command membership is defined in:
 
 Each entry uses:
 
-- `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)`
+- `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)`
 
 The manifest is expanded with X-macros by:
 
@@ -60,7 +60,7 @@ flowchart LR
 
     E["Python (pybind11)"] --> D
 
-    D --> F["Construct concrete command with profile"]
+    D --> F["Construct concrete command"]
     F --> G["ApplyRequest(...)"]
     G --> H["Apply common request and NormalizeRequest()"]
     H --> I["PrepareForExecution()"]
@@ -77,8 +77,7 @@ For each manifest entry it:
 
 1. creates a subcommand
 2. constructs one request object
-3. binds common fields from `CommonCommandRequest::VisitFields(...)` according to the command
-   profile
+3. binds common fields from `CommonCommandRequest::VisitFields(...)`
 4. binds command-specific fields from `XxxRequest::VisitFields(...)`
 5. routes the callback to the matching `Run*` function
 
@@ -96,8 +95,6 @@ This header defines:
 
 - `CommandId`
 - `CommandDescriptor`
-- `CommonOption`
-- `CommonOptionProfile`
 - default data and database path helpers
 - `ValidationPhase`
 - `ValidationIssue`
@@ -110,13 +107,13 @@ Shared request fields are declared on `CommonCommandRequest`:
 
 - `thread_size`
 - `verbose_level`
-- `database_path`
 - `folder_path`
 
-`CommonOptionProfile` controls which shared CLI options appear on a command:
+Database-backed commands declare `database_path` on their own request type:
 
-- `FileWorkflow` -> `Threading | Verbose | OutputFolder`
-- `DatabaseWorkflow` -> `Threading | Verbose | Database | OutputFolder`
+- `PotentialAnalysisRequest`
+- `PotentialDisplayRequest`
+- `ResultDumpRequest`
 
 Shared command enums and their CLI/Python mappings live in:
 
@@ -131,7 +128,7 @@ The standard shape is:
 
 1. derive from `CommandWithRequest<XxxRequest>`
 2. use the public request as the command configuration object
-3. construct the command with a `CommonOptionProfile`
+3. construct the command with the default `CommandWithRequest<XxxRequest>{}` base
 4. keep field normalization in `NormalizeRequest()`
 5. keep cross-field checks in `ValidateOptions()`
 6. keep transient execution cleanup in `ResetRuntimeState()`
@@ -165,7 +162,7 @@ Useful `CommandBase` helpers:
 
 Each `Run*` function in `CommandApi.cpp` follows this sequence:
 
-1. construct the concrete command with the manifest profile
+1. construct the concrete command
 2. call `ApplyRequest(...)`
 3. call `PrepareForExecution()`
 4. return early with `prepared=false` if preparation fails
@@ -193,8 +190,8 @@ Each `Run*` function in `CommandApi.cpp` follows this sequence:
 
 `RunFilesystemPreflight()`:
 
-- creates the output folder only when the command profile exposes `folder_path`, the path is not
-  empty, and the directory does not already exist
+- creates the output folder when `folder_path` is not empty and the directory does not already
+  exist
 - records a prepare-phase validation error if directory creation fails
 - does not create database parent directories
 

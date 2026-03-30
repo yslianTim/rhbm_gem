@@ -71,8 +71,8 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
 
 namespace rhbm_gem {
 
-PotentialAnalysisCommand::PotentialAnalysisCommand(CommonOptionProfile profile) :
-    CommandWithRequest<PotentialAnalysisRequest>{ profile },
+PotentialAnalysisCommand::PotentialAnalysisCommand() :
+    CommandWithRequest<PotentialAnalysisRequest>{},
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
@@ -294,7 +294,7 @@ bool PotentialAnalysisCommand::BuildDataObject()
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
-        m_data_manager.SetDatabaseManager(DatabasePath());
+        m_data_manager.SetDatabaseManager(request.database_path);
         m_model_object = command_data_loader::ProcessModelFile(
             m_data_manager, request.model_file_path, m_model_key_tag, "model file");
         m_map_object = command_data_loader::ProcessMapFile(

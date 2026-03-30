@@ -18,25 +18,15 @@ struct TestCommandOptions
 class TestCommand final : public rg::CommandBase
 {
 public:
-    explicit TestCommand() :
-        CommandBase{
-            rg::CommonOption::Threading
-            | rg::CommonOption::Verbose
-            | rg::CommonOption::Database
-            | rg::CommonOption::OutputFolder}
-    {
-    }
+    TestCommand() = default;
 
     void SetForceInvalid(bool value)
     {
         AssignOption(m_options.force_invalid, value);
     }
 
-    void ConfigureFilesystemOptions(
-        const std::filesystem::path & database_path,
-        const std::filesystem::path & folder_path)
+    void ConfigureFilesystemOptions(const std::filesystem::path & folder_path)
     {
-        SetDatabasePath(database_path);
         SetFolderPath(folder_path);
     }
 
@@ -62,19 +52,16 @@ private:
 
 } // namespace
 
-TEST(CommandBaseTest, PrepareCreatesOutputFolderButLeavesDatabaseParentToDatabaseLayer)
+TEST(CommandBaseTest, PrepareCreatesOutputFolder)
 {
     command_test::ScopedTempDir temp_dir{"command_base_setters"};
-    const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
     const auto folder_path{ temp_dir.path() / "out" };
     TestCommand command{};
-    command.ConfigureFilesystemOptions(database_path, folder_path);
+    command.ConfigureFilesystemOptions(folder_path);
 
-    EXPECT_FALSE(std::filesystem::exists(database_path.parent_path()));
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 
     ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_FALSE(std::filesystem::exists(database_path.parent_path()));
     EXPECT_TRUE(std::filesystem::exists(folder_path));
 }
 
@@ -94,13 +81,11 @@ TEST(CommandBaseTest, PrepareForExecutionReportsValidationIssues)
 TEST(CommandBaseTest, ValidationFailureSkipsFilesystemPreflight)
 {
     command_test::ScopedTempDir temp_dir{"command_base_prepare_validation_failure"};
-    const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
     const auto folder_path{ temp_dir.path() / "out" };
     TestCommand command{};
-    command.ConfigureFilesystemOptions(database_path, folder_path);
+    command.ConfigureFilesystemOptions(folder_path);
     command.SetForceInvalid(true);
 
     ASSERT_FALSE(command.PrepareForExecution());
-    EXPECT_FALSE(std::filesystem::exists(database_path.parent_path()));
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 }

@@ -31,8 +31,8 @@ constexpr std::string_view kMapOption{ "--map" };
 
 namespace rhbm_gem {
 
-ResultDumpCommand::ResultDumpCommand(CommonOptionProfile profile) :
-    CommandWithRequest<ResultDumpRequest>{ profile },
+ResultDumpCommand::ResultDumpCommand() :
+    CommandWithRequest<ResultDumpRequest>{},
     m_map_key_tag{ kMapKey }, m_map_object{ nullptr }
 {
 }
@@ -84,7 +84,7 @@ bool ResultDumpCommand::BuildDataObjectList()
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     try
     {
-        m_data_manager.SetDatabaseManager(DatabasePath());
+        m_data_manager.SetDatabaseManager(request.database_path);
         m_map_object = command_data_loader::OptionalProcessMapFile(
             m_data_manager,
             request.map_file_path,

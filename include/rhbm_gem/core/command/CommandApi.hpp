@@ -162,7 +162,6 @@ struct CommonCommandRequest
 {
     int thread_size{ 1 };
     int verbose_level{ 3 };
-    std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path folder_path{};
 
     template <typename Visitor>
@@ -180,11 +179,6 @@ struct CommonCommandRequest
             "Verbose level",
             &Self::verbose_level));
         visitor(MakePathField<Self>(
-            "database_path",
-            "-d,--database",
-            "Database file path",
-            &Self::database_path));
-        visitor(MakePathField<Self>(
             "folder_path",
             "-o,--folder",
             "folder path for output files",
@@ -195,6 +189,7 @@ struct CommonCommandRequest
 struct PotentialAnalysisRequest
 {
     CommonCommandRequest common{};
+    std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path model_file_path{};
     std::filesystem::path map_file_path{};
     bool simulation_flag{ false };
@@ -217,6 +212,11 @@ struct PotentialAnalysisRequest
     {
         using Self = PotentialAnalysisRequest;
         visitor(MakeObjectField<Self>("common", &Self::common));
+        visitor(MakePathField<Self>(
+            "database_path",
+            "-d,--database",
+            "Database file path",
+            &Self::database_path));
         visitor(MakePathField<Self>(
             "model_file_path",
             "-a,--model",
@@ -305,6 +305,7 @@ struct PotentialAnalysisRequest
 struct PotentialDisplayRequest
 {
     CommonCommandRequest common{};
+    std::filesystem::path database_path{ GetDefaultDatabasePath() };
     PainterType painter_choice{ PainterType::MODEL };
     std::vector<std::string> model_key_tag_list{};
     std::unordered_map<std::string, std::vector<std::string>> reference_model_groups{};
@@ -320,6 +321,11 @@ struct PotentialDisplayRequest
     {
         using Self = PotentialDisplayRequest;
         visitor(MakeObjectField<Self>("common", &Self::common));
+        visitor(MakePathField<Self>(
+            "database_path",
+            "-d,--database",
+            "Database file path",
+            &Self::database_path));
         visitor(MakeEnumField<Self>(
             "painter_choice",
             "-p,--painter",
@@ -373,6 +379,7 @@ struct PotentialDisplayRequest
 struct ResultDumpRequest
 {
     CommonCommandRequest common{};
+    std::filesystem::path database_path{ GetDefaultDatabasePath() };
     PrinterType printer_choice{ PrinterType::GAUS_ESTIMATES };
     std::vector<std::string> model_key_tag_list{};
     std::filesystem::path map_file_path{};
@@ -382,6 +389,11 @@ struct ResultDumpRequest
     {
         using Self = ResultDumpRequest;
         visitor(MakeObjectField<Self>("common", &Self::common));
+        visitor(MakePathField<Self>(
+            "database_path",
+            "-d,--database",
+            "Database file path",
+            &Self::database_path));
         visitor(MakeEnumField<Self>(
             "printer_choice",
             "-p,--printer",
@@ -596,7 +608,7 @@ struct PositionEstimationRequest
 
 void ConfigureCommandCli(::CLI::App & app);
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
     ExecutionReport Run##COMMAND_ID(const COMMAND_ID##Request & request);
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND

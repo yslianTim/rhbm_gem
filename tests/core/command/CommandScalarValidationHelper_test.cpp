@@ -23,13 +23,7 @@ struct CommandScalarValidationHelperCommandOptions
 class CommandScalarValidationHelperCommand final : public rg::CommandBase
 {
 public:
-    explicit CommandScalarValidationHelperCommand() :
-        rg::CommandBase{
-            rg::CommonOption::Threading
-                | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder}
-    {
-    }
+    CommandScalarValidationHelperCommand() = default;
 
     void SetFinitePositiveValue(double value)
     {

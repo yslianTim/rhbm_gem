@@ -43,8 +43,8 @@ void IngestModelSetsToPainter(
 
 namespace rhbm_gem {
 
-PotentialDisplayCommand::PotentialDisplayCommand(CommonOptionProfile profile) :
-    CommandWithRequest<PotentialDisplayRequest>{ profile },
+PotentialDisplayCommand::PotentialDisplayCommand() :
+    CommandWithRequest<PotentialDisplayRequest>{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 }
@@ -112,7 +112,7 @@ bool PotentialDisplayCommand::BuildDataObject()
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        m_data_manager.SetDatabaseManager(DatabasePath());
+        m_data_manager.SetDatabaseManager(request.database_path);
         auto model_size{ request.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");

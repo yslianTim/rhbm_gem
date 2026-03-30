@@ -102,16 +102,6 @@ std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
     return { group_name, members };
 }
 
-std::optional<rhbm_gem::CommonOption> ResolveCommonOptionByField(std::string_view python_name)
-{
-    using rhbm_gem::CommonOption;
-    if (python_name == "thread_size") return CommonOption::Threading;
-    if (python_name == "verbose_level") return CommonOption::Verbose;
-    if (python_name == "database_path") return CommonOption::Database;
-    if (python_name == "folder_path") return CommonOption::OutputFolder;
-    return std::nullopt;
-}
-
 template <typename Request, typename FieldType>
 void BindCliField(
     CLI::App * /*command*/,
@@ -231,20 +221,10 @@ void BindRequestFields(CLI::App * command, Request * request)
     });
 }
 
-void BindCommonOptions(
-    CLI::App * command,
-    rhbm_gem::CommonCommandRequest * common,
-    rhbm_gem::CommonOptionProfile profile)
+void BindCommonOptions(CLI::App * command, rhbm_gem::CommonCommandRequest * common)
 {
-    const auto common_options{ rhbm_gem::CommonOptionMaskForProfile(profile) };
     rhbm_gem::CommonCommandRequest::VisitFields([&](const auto & field)
     {
-        const auto common_option{ ResolveCommonOptionByField(field.python_name) };
-        if (!common_option.has_value()
-            || !rhbm_gem::HasCommonOption(common_options, common_option.value()))
-        {
-            return;
-        }
         BindCliField(command, common, field);
     });
 }
@@ -253,8 +233,7 @@ template <typename CommandType, typename RequestType, auto RunCommandFn>
 void RegisterCommand(
     CLI::App & app,
     std::string_view name,
-    std::string_view description,
-    rhbm_gem::CommonOptionProfile profile)
+    std::string_view description)
 {
     CLI::App * command{
         app.add_subcommand(
@@ -262,7 +241,7 @@ void RegisterCommand(
             std::string(description))
     };
     auto request{ std::make_shared<RequestType>() };
-    BindCommonOptions(command, &request->common, profile);
+    BindCommonOptions(command, &request->common);
     BindRequestFields(command, request.get());
     command->callback([request]()
     {
@@ -283,12 +262,11 @@ void ConfigureCommandCli(CLI::App & app)
 {
     app.require_subcommand(1);
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
     RegisterCommand<COMMAND_ID##Command, COMMAND_ID##Request, &Run##COMMAND_ID>(               \
         app,                                                                                   \
         CLI_NAME,                                                                              \
-        DESCRIPTION,                                                                           \
-        CommonOptionProfile::PROFILE);
+        DESCRIPTION);
 #include <rhbm_gem/core/command/CommandList.def>
 #undef RHBM_GEM_COMMAND
 }

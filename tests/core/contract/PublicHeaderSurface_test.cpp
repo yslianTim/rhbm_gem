@@ -145,21 +145,10 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("core"), expected);
 }
 
-TEST(PublicHeaderSurfaceTest, CommandContractProfilesRemainStable) {
-    constexpr auto file_workflow_mask{
-        rhbm_gem::CommonOptionMaskForProfile(rhbm_gem::CommonOptionProfile::FileWorkflow)};
-    constexpr auto database_workflow_mask{
-        rhbm_gem::CommonOptionMaskForProfile(rhbm_gem::CommonOptionProfile::DatabaseWorkflow)};
-
-    EXPECT_TRUE(rhbm_gem::HasCommonOption(file_workflow_mask, rhbm_gem::CommonOption::Threading));
-    EXPECT_TRUE(rhbm_gem::HasCommonOption(file_workflow_mask, rhbm_gem::CommonOption::Verbose));
-    EXPECT_TRUE(rhbm_gem::HasCommonOption(file_workflow_mask, rhbm_gem::CommonOption::OutputFolder));
-    EXPECT_FALSE(rhbm_gem::HasCommonOption(file_workflow_mask, rhbm_gem::CommonOption::Database));
-
-    EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::Threading));
-    EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::Verbose));
-    EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::Database));
-    EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::OutputFolder));
+TEST(PublicHeaderSurfaceTest, CommandContractExposesStableDefaultDatabasePathHelper) {
+    const auto default_path{ rhbm_gem::GetDefaultDatabasePath() };
+    EXPECT_FALSE(default_path.empty());
+    EXPECT_EQ(default_path.filename(), "database.sqlite");
 }
 
 TYPED_TEST(CommandEnumMappingTest, CliAndBindingMappingsStayInSync)

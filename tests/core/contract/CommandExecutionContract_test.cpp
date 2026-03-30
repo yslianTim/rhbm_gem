@@ -19,13 +19,7 @@ struct LifecycleCommandOptions
 class LifecycleCommand final : public rg::CommandBase
 {
 public:
-    explicit LifecycleCommand() :
-        rg::CommandBase{
-            rg::CommonOption::Threading
-                | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder}
-    {
-    }
+    LifecycleCommand() = default;
 
     int validate_count{ 0 };
     int reset_count{ 0 };

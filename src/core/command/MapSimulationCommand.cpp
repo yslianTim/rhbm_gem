@@ -27,8 +27,8 @@ constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
 
 namespace rhbm_gem {
 
-MapSimulationCommand::MapSimulationCommand(CommonOptionProfile profile) :
-    CommandWithRequest<MapSimulationRequest>{ profile },
+MapSimulationCommand::MapSimulationCommand() :
+    CommandWithRequest<MapSimulationRequest>{},
     m_selected_atom_list{}, m_atom_charge_map{}, m_model_object{ nullptr },
     m_atom_range_minimum{
         std::numeric_limits<float>::max(),

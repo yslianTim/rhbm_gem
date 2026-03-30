@@ -37,17 +37,6 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
 
 } // namespace
 
-CommandBase::CommandBase(CommonOptionMask common_options) :
-    m_data_manager{},
-    m_common_options{ common_options }
-{
-}
-
-CommandBase::CommandBase(CommonOptionProfile profile) :
-    CommandBase{ CommonOptionMaskForProfile(profile) }
-{
-}
-
 bool CommandBase::Execute()
 {
     const bool was_prepared{ m_is_prepared_for_execution };
@@ -114,16 +103,6 @@ void CommandBase::SetVerboseLevel(int value)
         "Invalid verbose level: " + std::to_string(value) + ", using default level 3 [Info]");
 }
 
-void CommandBase::SetDatabasePath(const std::filesystem::path & path)
-{
-    MutateOptions([&]()
-    {
-        m_common_request.database_path = path.empty()
-            ? std::filesystem::path{}
-            : path.lexically_normal();
-    });
-}
-
 void CommandBase::SetFolderPath(const std::filesystem::path & path)
 {
     MutateOptions([&]()
@@ -137,16 +116,7 @@ void CommandBase::ApplyCommonRequest(const CommonCommandRequest & request)
 {
     SetThreadSize(request.thread_size);
     SetVerboseLevel(request.verbose_level);
-
-    const auto common_options{ GetCommonOptionsMask() };
-    if (HasCommonOption(common_options, CommonOption::Database))
-    {
-        SetDatabasePath(request.database_path);
-    }
-    if (HasCommonOption(common_options, CommonOption::OutputFolder))
-    {
-        SetFolderPath(request.folder_path);
-    }
+    SetFolderPath(request.folder_path);
 }
 
 void CommandBase::ReportValidationIssues() const
@@ -344,23 +314,18 @@ bool CommandBase::RunValidationPass()
 
 bool CommandBase::RunFilesystemPreflight()
 {
-    const auto common_options{ GetCommonOptionsMask() };
-
-    if (HasCommonOption(common_options, CommonOption::OutputFolder))
+    ClearValidationIssues(kFolderOption, ValidationPhase::Prepare);
+    const auto & folder_path{ OutputFolder() };
+    if (!folder_path.empty() && !std::filesystem::exists(folder_path))
     {
-        ClearValidationIssues(kFolderOption, ValidationPhase::Prepare);
-        const auto & folder_path{ OutputFolder() };
-        if (!folder_path.empty() && !std::filesystem::exists(folder_path))
+        std::error_code error_code;
+        std::filesystem::create_directories(folder_path, error_code);
+        if (error_code)
         {
-            std::error_code error_code;
-            std::filesystem::create_directories(folder_path, error_code);
-            if (error_code)
-            {
-                AddValidationError(
-                    kFolderOption,
-                    "Failed to create output directory '" + folder_path.string()
-                        + "': " + error_code.message());
-            }
+            AddValidationError(
+                kFolderOption,
+                "Failed to create output directory '" + folder_path.string()
+                    + "': " + error_code.message());
         }
     }
 

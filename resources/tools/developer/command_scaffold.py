@@ -21,7 +21,6 @@ class ScaffoldSpec:
     command_type: str
     cli_name: str
     description: str
-    profile: str
 
 
 def _to_title_case(text: str) -> str:
@@ -65,8 +64,7 @@ def _append_command_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
         "RHBM_GEM_COMMAND(\n"
         f"    {spec.command_id},\n"
         f'    "{spec.cli_name}",\n'
-        f'    "{spec.description}",\n'
-        f"    {spec.profile})\n"
+        f'    "{spec.description}")\n'
     )
     return text.rstrip() + block, True
 
@@ -144,7 +142,7 @@ class {spec.command_type}
     : public CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>
 {{
 public:
-    explicit {spec.command_type}(CommonOptionProfile profile);
+    {spec.command_type}();
     ~{spec.command_type}() override = default;
 
 private:
@@ -165,8 +163,8 @@ def _source_template(spec: ScaffoldSpec) -> str:
 
 namespace rhbm_gem {{
 
-{spec.command_type}::{spec.command_type}(CommonOptionProfile profile) :
-    CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>{{ profile }}
+{spec.command_type}::{spec.command_type}() :
+    CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>{{}}
 {{
 }}
 
@@ -280,7 +278,6 @@ def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
         command_type=command_type,
         cli_name=cli_name,
         description=description,
-        profile=args.profile,
     )
 
 
@@ -289,12 +286,6 @@ def main() -> int:
     parser.add_argument("--name", required=True, help="Base command name, e.g. Example or ExampleCommand.")
     parser.add_argument("--cli-name", help="CLI subcommand token. Defaults to name converted to snake_case.")
     parser.add_argument("--description", help="Command description text.")
-    parser.add_argument(
-        "--profile",
-        default="FileWorkflow",
-        choices=("FileWorkflow", "DatabaseWorkflow"),
-        help="CommonOptionProfile for the generated command.",
-    )
     parser.add_argument("--dry-run", action="store_true", help="Print planned files without writing.")
     parser.add_argument(
         "--wire",

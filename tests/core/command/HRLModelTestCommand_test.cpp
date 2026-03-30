@@ -8,7 +8,7 @@ namespace rg = rhbm_gem;
 
 TEST(HRLModelTestCommandTest, FitRangeOrderingBecomesPrepareValidationError)
 {
-    rg::HRLModelTestCommand command{rg::CommonOptionProfile::FileWorkflow};
+    rg::HRLModelTestCommand command{};
     rg::HRLModelTestRequest request{};
     request.fit_range_min = 2.0;
     request.fit_range_max = 1.0;

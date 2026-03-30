@@ -67,7 +67,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     ASSERT_TRUE(std::filesystem::exists(generated_map_file));
 
     rg::PotentialAnalysisRequest analysis_request;
-    analysis_request.common.database_path = database_path;
+    analysis_request.database_path = database_path;
     analysis_request.common.folder_path = analysis_output_dir;
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
     analysis_request.map_file_path = generated_map_file;
@@ -81,7 +81,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     ASSERT_TRUE(analysis_result.executed);
 
     rg::ResultDumpRequest dump_request;
-    dump_request.common.database_path = database_path;
+    dump_request.database_path = database_path;
     dump_request.common.folder_path = dump_output_dir;
     dump_request.printer_choice = rg::PrinterType::GAUS_ESTIMATES;
     dump_request.model_key_tag_list = { "pipeline_model" };

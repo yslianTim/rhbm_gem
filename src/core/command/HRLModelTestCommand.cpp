@@ -40,8 +40,8 @@ constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 } // namespace
 
-HRLModelTestCommand::HRLModelTestCommand(CommonOptionProfile profile) :
-    CommandWithRequest<HRLModelTestRequest>{ profile }
+HRLModelTestCommand::HRLModelTestCommand() :
+    CommandWithRequest<HRLModelTestRequest>{}
 {
 }
 

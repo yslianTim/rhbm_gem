@@ -16,7 +16,7 @@ TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapVisualizationCommand command{rg::CommonOptionProfile::FileWorkflow};
+    rg::MapVisualizationCommand command{};
     rg::MapVisualizationRequest request{};
     request.common.folder_path = output_dir;
     request.model_file_path = model_path;
@@ -39,7 +39,7 @@ TEST(MapVisualizationCommandTest, ExecuteWritesPdfToConfiguredFolder)
     const auto output_dir{ temp_dir.path() / "out" };
     const auto map_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
 
-    rg::MapVisualizationCommand command{rg::CommonOptionProfile::FileWorkflow};
+    rg::MapVisualizationCommand command{};
     rg::MapVisualizationRequest request{};
     request.common.folder_path = output_dir;
     request.model_file_path = model_path;
