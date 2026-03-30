@@ -4,8 +4,8 @@ This guide documents how to add a command to the existing command system.
 
 Related references:
 
-- [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
-- [`/docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
+- [`docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
+- [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
 
 ## 1. Decide whether it should be a new command
 
@@ -22,39 +22,39 @@ Extend an existing command when the change is only a new mode, option, or small 
 
 Concrete command implementation:
 
-- `/src/core/internal/command/<YourCommand>.hpp`
-- `/src/core/command/<YourCommand>.cpp`
+- `src/core/internal/command/<YourCommand>.hpp`
+- `src/core/command/<YourCommand>.cpp`
 
 Public command API:
 
-- `/include/rhbm_gem/core/command/CommandApi.hpp`
-- `/include/rhbm_gem/core/command/CommandContract.hpp` only if shared metadata, diagnostics, or default paths change
-- `/include/rhbm_gem/core/command/CommandEnumClass.hpp` only if the command adds or extends a shared enum
+- [`include/rhbm_gem/core/command/CommandApi.hpp`](include/rhbm_gem/core/command/CommandApi.hpp)
+- [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp) only if shared metadata, diagnostics, or default paths change
+- [`include/rhbm_gem/core/command/CommandEnumClass.hpp`](/include/rhbm_gem/core/command/CommandEnumClass.hpp) only if the command adds or extends a shared enum
 
 Manifest and internal registration:
 
-- `/include/rhbm_gem/core/command/CommandList.def`
-- `/src/core/internal/command/CommandRegistry.hpp`
+- [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def)
+- [`src/core/internal/command/CommandRegistry.hpp`](/src/core/internal/command/CommandRegistry.hpp)
 
 Build wiring:
 
-- `/src/CMakeLists.txt`
-- `/tests/CMakeLists.txt`
+- [`src/CMakeLists.txt`](/src/CMakeLists.txt)
+- [`tests/CMakeLists.txt`](/tests/CMakeLists.txt)
 
 Tests and docs:
 
-- `/tests/core/command/<YourCommand>_test.cpp`
+- `tests/core/command/<YourCommand>_test.cpp`
 - impacted contract or integration tests
 - developer or user docs that describe the command surface
 
 Optional:
 
-- [`/docs/developer/commands/README.md`](/docs/developer/commands/README.md)
-- `/docs/developer/commands/<your-command>.md`
+- [`docs/developer/commands/README.md`](/docs/developer/commands/README.md)
+- `docs/developer/commands/<your-command>.md`
 
 ## 3. Add the manifest entry
 
-Add an entry to `/include/rhbm_gem/core/command/CommandList.def`.
+Add an entry to [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def).
 
 Stable commands go in the main list.
 Experimental commands go inside the `#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
@@ -108,7 +108,7 @@ The scaffold does not:
 
 ## 5. Implement the command class
 
-Concrete command classes live under `/src/core/internal/command/` and `/src/core/command/`.
+Concrete command classes live under [`src/core/internal/command/`](/src/core/internal/command/) and [`src/core/command/`](/src/core/command/).
 
 Use this shape:
 
@@ -145,7 +145,7 @@ Useful `CommandBase` helpers:
 
 ## 6. Add the public request and run entrypoint
 
-Add the request struct to `/include/rhbm_gem/core/command/CommandApi.hpp`.
+Add the request struct to [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
 
 Each public request must define `VisitFields(Visitor &&)` and describe every bindable field there.
 CLI registration and Python bindings both consume that schema.
@@ -170,7 +170,7 @@ Each `Run*` entrypoint follows this sequence:
 
 CLI registration is generic:
 
-1. `ConfigureCommandCli(...)` expands the manifest in `/src/core/command/CommandOptionSupport.cpp`
+1. `ConfigureCommandCli(...)` expands the manifest in [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp)
 2. `RegisterCommand<...>()` creates the subcommand and binds request fields from `VisitFields(...)`
 3. common fields from `CommonCommandRequest::VisitFields(...)` are filtered by the manifest profile
 
@@ -183,21 +183,21 @@ Shared CLI options come from the profile:
 
 Python registration is also generic:
 
-1. `BindCommandApi(...)` expands the manifest in `/src/python/CommandApiBindings.cpp`
+1. `BindCommandApi(...)` expands the manifest in [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
 2. `BindRequestType<XxxRequest>(...)` walks `VisitFields(...)` and emits `def_readwrite(...)`
 3. `module.def("RunXxx", ...)` is expanded from the manifest
 
-`src/python/CommonBindings.cpp` only needs changes when the command adds a new shared enum or
+[`src/python/CommonBindings.cpp`](/src/python/CommonBindings.cpp) only needs changes when the command adds a new shared enum or
 shared validation/common type.
 
 ## 8. Build wiring for stable vs experimental commands
 
-`src/CMakeLists.txt` has two command source lists:
+[`src/CMakeLists.txt`](/src/CMakeLists.txt) has two command source lists:
 
 - `RHBM_GEM_COMMAND_SOURCES` for stable commands
 - `RHBM_GEM_EXPERIMENTAL_SOURCES` for experimental commands
 
-`tests/CMakeLists.txt` has two command test lists:
+[`tests/CMakeLists.txt`](/tests/CMakeLists.txt) has two command test lists:
 
 - `RHBM_GEM_CORE_COMMAND_TEST_SOURCES` for stable command tests
 - `RHBM_GEM_EXPERIMENTAL_TEST_SOURCES` for experimental command tests
@@ -209,7 +209,7 @@ If the command is experimental, wire it into the experimental lists manually.
 
 Add or update:
 
-- command unit tests under `/tests/core/command/`
+- command unit tests under [`tests/core/command/`](/tests/core/command/)
 - contract tests if command metadata, manifest order, or the public surface changes
 - integration tests if the end-to-end command behavior changes
 - developer or user docs that describe the command
@@ -218,7 +218,7 @@ Add or update:
 
 Before merge:
 
-1. the command header exists under `/src/core/internal/command/` and the source exists under `/src/core/command/`
+1. the command header exists under [`src/core/internal/command/`](/src/core/internal/command/) and the source exists under [`src/core/command/`](/src/core/command/)
 2. `CommandApi.hpp` contains the request struct and its `VisitFields(...)` schema
 3. `CommandList.def` contains the manifest entry in the correct stable or experimental section
 4. `CommandRegistry.hpp` includes the new command header
