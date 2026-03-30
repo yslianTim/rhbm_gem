@@ -84,6 +84,16 @@ struct MapSimulationRequest
     std::string blurring_width_list{ "1.50" };
 };
 
+struct HRLModelTestRequest
+{
+    CommonCommandRequest common{};
+    TesterType tester_choice{ TesterType::BENCHMARK };
+    double fit_range_min{ 0.0 };
+    double fit_range_max{ 1.0 };
+    double alpha_r{ 0.1 };
+    double alpha_g{ 0.2 };
+};
+
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 struct MapVisualizationRequest
 {
@@ -106,16 +116,6 @@ struct PositionEstimationRequest
     double dedup_tolerance{ 1.0e-2 };
 };
 #endif
-
-struct HRLModelTestRequest
-{
-    CommonCommandRequest common{};
-    TesterType tester_choice{ TesterType::BENCHMARK };
-    double fit_range_min{ 0.0 };
-    double fit_range_max{ 1.0 };
-    double alpha_r{ 0.1 };
-    double alpha_g{ 0.2 };
-};
 
 void ConfigureCommandCli(::CLI::App & app);
 
