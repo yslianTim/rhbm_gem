@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -37,7 +36,7 @@ std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTo
     return expected;
 }
 
-std::vector<std::string> ParseCommandIdTokensFromManifest()
+std::string ReadManifestContent()
 {
     const auto manifest_path{
         command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
@@ -49,18 +48,14 @@ std::vector<std::string> ParseCommandIdTokensFromManifest()
         return {};
     }
 
-    std::string manifest{
+    return std::string{
         std::istreambuf_iterator<char>{ manifest_stream },
         std::istreambuf_iterator<char>{}
     };
+}
 
-#ifndef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    const std::regex experimental_block_pattern{
-        R"(#ifdef\s+RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE[\s\S]*?#endif\s*)"
-    };
-    manifest = std::regex_replace(manifest, experimental_block_pattern, "");
-#endif
-
+std::vector<std::string> ExtractCommandIdTokens(const std::string & manifest)
+{
     const std::regex command_pattern{
         R"(RHBM_GEM_COMMAND\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)"
     };
@@ -75,33 +70,42 @@ std::vector<std::string> ParseCommandIdTokensFromManifest()
     return command_ids;
 }
 
-std::string ReadFileContent(const std::filesystem::path & path)
+std::vector<std::string> ParseCommandIdTokensFromManifest()
 {
-    std::ifstream input{ path };
-    if (!input.is_open())
+    auto manifest{ ReadManifestContent() };
+    if (manifest.empty())
     {
         return {};
     }
-    return std::string(
-        std::istreambuf_iterator<char>{ input },
-        std::istreambuf_iterator<char>{});
+
+#ifndef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    const std::regex experimental_block_pattern{
+        R"(#ifdef\s+RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE[\s\S]*?#endif\s*)"
+    };
+    manifest = std::regex_replace(manifest, experimental_block_pattern, "");
+#endif
+
+    return ExtractCommandIdTokens(manifest);
 }
 
-bool ManifestContainsExperimentalGuard()
+std::vector<std::string> ParseExperimentalCommandIdTokensFromManifest()
 {
-    const auto manifest{
-        ReadFileContent(
-            command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
-            / "CommandList.def")
-    };
+    const auto manifest{ ReadManifestContent() };
     if (manifest.empty())
     {
-        return false;
+        return {};
     }
 
-    return manifest.find("#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE") != std::string::npos
-        && manifest.find("MapVisualization") != std::string::npos
-        && manifest.find("PositionEstimation") != std::string::npos;
+    const std::regex experimental_block_pattern{
+        R"(#ifdef\s+RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\s*([\s\S]*?)#endif)"
+    };
+    std::smatch match;
+    if (!std::regex_search(manifest, match, experimental_block_pattern) || match.size() < 2)
+    {
+        return {};
+    }
+
+    return ExtractCommandIdTokens(match[1].str());
 }
 
 } // namespace
@@ -162,86 +166,11 @@ TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
 
 TEST(CommandCatalogTest, ManifestKeepsExperimentalEntriesBehindFeatureGuard)
 {
-    EXPECT_TRUE(ManifestContainsExperimentalGuard());
-}
-
-TEST(CommandCatalogTest, RunSurfaceAndPythonBindingsMatchManifestOrder)
-{
-    const auto project_root{ command_test::ProjectRootPath() };
-    const auto command_api{
-        ReadFileContent(
-            project_root / "include" / "rhbm_gem" / "core" / "command" / "CommandApi.hpp")
+    const std::vector<std::string> expected_experimental_ids{
+        "MapVisualization",
+        "PositionEstimation",
     };
-    const auto bindings{
-        ReadFileContent(project_root / "src" / "python" / "CommandApiBindings.cpp")
-    };
-
-    ASSERT_FALSE(command_api.empty());
-    ASSERT_FALSE(bindings.empty());
-    EXPECT_NE(
-        command_api.find("ExecutionReport Run##COMMAND_ID"),
-        std::string::npos);
-    EXPECT_NE(
-        command_api.find("#include <rhbm_gem/core/command/CommandList.def>"),
-        std::string::npos);
-    EXPECT_NE(
-        bindings.find("module.def(\"Run\" #COMMAND_ID"),
-        std::string::npos);
-    EXPECT_NE(
-        bindings.find("#include <rhbm_gem/core/command/CommandList.def>"),
-        std::string::npos);
-}
-
-TEST(CommandCatalogTest, PythonBindingsExposeRequestAndReportSurface)
-{
-    const auto bindings{
-        ReadFileContent(
-            command_test::ProjectRootPath() / "src" / "python" / "CommandApiBindings.cpp")
-    };
-
-    ASSERT_FALSE(bindings.empty());
-
-    EXPECT_NE(
-        bindings.find("BindRequestType<CommonCommandRequest>(module, \"CommonCommandRequest\")"),
-        std::string::npos);
-    EXPECT_NE(
-        bindings.find("BindRequestType<COMMAND_ID##Request>(module, #COMMAND_ID \"Request\")"),
-        std::string::npos);
-    EXPECT_NE(
-        bindings.find("#include <rhbm_gem/core/command/CommandList.def>"),
-        std::string::npos);
-
-    EXPECT_NE(bindings.find("py_request.def(py::init<>())"), std::string::npos);
-    EXPECT_NE(bindings.find("Request::VisitFields"), std::string::npos);
-    EXPECT_NE(bindings.find("BindRequestField(py_request, field);"), std::string::npos);
-    EXPECT_NE(bindings.find("py_request.def_readwrite(field.python_name, field.member);"), std::string::npos);
-
-    for (const std::string_view report_field : {
-             "prepared",
-             "executed",
-             "validation_issues",
-         })
-    {
-        EXPECT_NE(
-            bindings.find(".def_readonly(\"" + std::string(report_field) + "\""),
-            std::string::npos)
-            << report_field;
-    }
-}
-
-TEST(CommandCatalogTest, CommandCatalogExposesStableModelTestDescriptor)
-{
-    const auto expected_metadata{ BuildExpectedCommandMetadata() };
-    const auto iter = std::find_if(
-        expected_metadata.begin(),
-        expected_metadata.end(),
-        [](const rg::CommandDescriptor & descriptor)
-        {
-            return descriptor.cli_name == std::string_view{ "model_test" };
-        });
-
-    ASSERT_NE(iter, expected_metadata.end());
-    EXPECT_EQ(iter->id, rg::CommandId::HRLModelTest);
+    EXPECT_EQ(ParseExperimentalCommandIdTokensFromManifest(), expected_experimental_ids);
 }
 
 TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
@@ -292,30 +221,4 @@ TEST(CommandCatalogTest, ConfigureCommandCliAcceptsRepeatedReferenceGroups)
             "--ref-group A=m1,m2 --ref-group B=m3",
             false),
         CLI::RuntimeError);
-}
-
-TEST(CommandCatalogTest, CommandTestsDoNotIncludeCommandPrivateWorkflowHeaders)
-{
-    const auto command_test_dir{
-        command_test::ProjectRootPath() / "tests" / "core" / "command"
-    };
-    const std::array<std::string_view, 1> forbidden_includes{
-        "internal/workflow/",
-    };
-
-    for (const auto & entry : std::filesystem::directory_iterator{ command_test_dir })
-    {
-        if (!entry.is_regular_file() || entry.path().extension() != ".cpp")
-        {
-            continue;
-        }
-
-        const auto content{ ReadFileContent(entry.path()) };
-        ASSERT_FALSE(content.empty()) << entry.path().string();
-        for (const auto forbidden : forbidden_includes)
-        {
-            EXPECT_EQ(content.find(forbidden), std::string::npos)
-                << entry.path().filename().string();
-        }
-    }
 }

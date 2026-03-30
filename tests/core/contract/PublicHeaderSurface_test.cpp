@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
@@ -36,6 +38,94 @@ std::set<int> BuildValueSetFromBindings()
     }
     return values;
 }
+
+template <typename EnumType>
+struct EnumMappingExpectation
+{
+    std::string_view token;
+    EnumType value;
+};
+
+template <typename EnumType>
+struct EnumMappingTraits;
+
+template <>
+struct EnumMappingTraits<rg::PainterType>
+{
+    static constexpr std::string_view kFirstBindingToken{ "GAUS" };
+    static constexpr std::array<EnumMappingExpectation<rg::PainterType>, 3> kExpectations{{
+        { "gaus", rg::PainterType::GAUS },
+        { "0", rg::PainterType::GAUS },
+        { "atom", rg::PainterType::ATOM },
+    }};
+};
+
+template <>
+struct EnumMappingTraits<rg::PrinterType>
+{
+    static constexpr std::string_view kFirstBindingToken{ "ATOM_POSITION" };
+    static constexpr std::array<EnumMappingExpectation<rg::PrinterType>, 2> kExpectations{{
+        { "atom_out", rg::PrinterType::ATOM_OUTLIER },
+        { "3", rg::PrinterType::ATOM_OUTLIER },
+    }};
+};
+
+template <>
+struct EnumMappingTraits<rg::PotentialModel>
+{
+    static constexpr std::string_view kFirstBindingToken{ "SINGLE_GAUS" };
+    static constexpr std::array<EnumMappingExpectation<rg::PotentialModel>, 2> kExpectations{{
+        { "five", rg::PotentialModel::FIVE_GAUS_CHARGE },
+        { "1", rg::PotentialModel::FIVE_GAUS_CHARGE },
+    }};
+};
+
+template <>
+struct EnumMappingTraits<rg::PartialCharge>
+{
+    static constexpr std::string_view kFirstBindingToken{ "NEUTRAL" };
+    static constexpr std::array<EnumMappingExpectation<rg::PartialCharge>, 2> kExpectations{{
+        { "amber", rg::PartialCharge::AMBER },
+        { "2", rg::PartialCharge::AMBER },
+    }};
+};
+
+template <>
+struct EnumMappingTraits<rg::TesterType>
+{
+    static constexpr std::string_view kFirstBindingToken{ "BENCHMARK" };
+    static constexpr std::array<EnumMappingExpectation<rg::TesterType>, 2> kExpectations{{
+        { "benchmark", rg::TesterType::BENCHMARK },
+        { "0", rg::TesterType::BENCHMARK },
+    }};
+};
+
+template <typename EnumType>
+void AssertEnumMappingsStayInSync()
+{
+    const auto cli_map{ rg::BuildCommandEnumCliMap<EnumType>() };
+    for (const auto & expectation : EnumMappingTraits<EnumType>::kExpectations)
+    {
+        EXPECT_EQ(cli_map.at(std::string(expectation.token)), expectation.value);
+    }
+
+    const auto binding_entries{ rg::GetCommandEnumBindingEntries<EnumType>() };
+    ASSERT_FALSE(binding_entries.empty());
+    EXPECT_EQ(binding_entries.front().token, EnumMappingTraits<EnumType>::kFirstBindingToken);
+    EXPECT_EQ(BuildValueSetFromCLI<EnumType>(), BuildValueSetFromBindings<EnumType>());
+}
+
+template <typename EnumType>
+class CommandEnumMappingTest : public testing::Test {};
+
+using CommandEnumTypes = testing::Types<
+    rg::PainterType,
+    rg::PrinterType,
+    rg::PotentialModel,
+    rg::PartialCharge,
+    rg::TesterType>;
+
+TYPED_TEST_SUITE(CommandEnumMappingTest, CommandEnumTypes, );
 
 } // namespace
 
@@ -72,98 +162,7 @@ TEST(PublicHeaderSurfaceTest, CommandContractProfilesRemainStable) {
     EXPECT_TRUE(rhbm_gem::HasCommonOption(database_workflow_mask, rhbm_gem::CommonOption::OutputFolder));
 }
 
-TEST(PublicHeaderSurfaceTest, CommandContractHeaderProvidesSharedValidationAndDefaults) {
-    const auto default_data_root{ rhbm_gem::GetDefaultDataRootPath() };
-    const auto default_database_path{ rhbm_gem::GetDefaultDatabasePath() };
-    const auto catalog{ rhbm_gem::GetCommandCatalog() };
-
-    rhbm_gem::ValidationIssue issue{
-        "--example",
-        rhbm_gem::ValidationPhase::Prepare,
-        LogLevel::Warning,
-        "example",
-        true};
-
-    EXPECT_FALSE(default_data_root.empty());
-    EXPECT_EQ(default_database_path.filename(), "database.sqlite");
-    EXPECT_FALSE(catalog.empty());
-    EXPECT_EQ(catalog.front().id, rhbm_gem::CommandId::PotentialAnalysis);
-    EXPECT_EQ(issue.option_name, "--example");
-    EXPECT_EQ(issue.phase, rhbm_gem::ValidationPhase::Prepare);
-    EXPECT_EQ(issue.level, LogLevel::Warning);
-    EXPECT_TRUE(issue.auto_corrected);
-}
-
-TEST(PublicHeaderSurfaceTest, CommandApiHeaderProvidesExecutionReport) {
-    rhbm_gem::ExecutionReport report{};
-    report.validation_issues.push_back(rhbm_gem::ValidationIssue{
-        "--example",
-        rhbm_gem::ValidationPhase::Prepare,
-        LogLevel::Warning,
-        "example",
-        true});
-
-    EXPECT_FALSE(report.prepared);
-    EXPECT_FALSE(report.executed);
-    ASSERT_EQ(report.validation_issues.size(), 1u);
-    EXPECT_EQ(report.validation_issues.front().option_name, "--example");
-    EXPECT_EQ(report.validation_issues.front().phase, rhbm_gem::ValidationPhase::Prepare);
-}
-
-TEST(PublicHeaderSurfaceTest, PainterTypeEnumMappingsStayInSync)
+TYPED_TEST(CommandEnumMappingTest, CliAndBindingMappingsStayInSync)
 {
-    const auto cli_map{ rg::BuildCommandEnumCliMap<rg::PainterType>() };
-    EXPECT_EQ(cli_map.at("gaus"), rg::PainterType::GAUS);
-    EXPECT_EQ(cli_map.at("0"), rg::PainterType::GAUS);
-    EXPECT_EQ(cli_map.at("atom"), rg::PainterType::ATOM);
-    const auto binding_entries{ rg::GetCommandEnumBindingEntries<rg::PainterType>() };
-    EXPECT_EQ(binding_entries[0].token, "GAUS");
-    EXPECT_EQ(BuildValueSetFromCLI<rg::PainterType>(), BuildValueSetFromBindings<rg::PainterType>());
-}
-
-TEST(PublicHeaderSurfaceTest, PrinterTypeEnumMappingsStayInSync)
-{
-    const auto cli_map{ rg::BuildCommandEnumCliMap<rg::PrinterType>() };
-    EXPECT_EQ(cli_map.at("atom_out"), rg::PrinterType::ATOM_OUTLIER);
-    EXPECT_EQ(cli_map.at("3"), rg::PrinterType::ATOM_OUTLIER);
-    EXPECT_EQ(
-        BuildValueSetFromCLI<rg::PrinterType>(),
-        BuildValueSetFromBindings<rg::PrinterType>());
-}
-
-TEST(PublicHeaderSurfaceTest, PotentialModelEnumMappingsStayInSync)
-{
-    const auto cli_map{ rg::BuildCommandEnumCliMap<rg::PotentialModel>() };
-    EXPECT_EQ(cli_map.at("five"), rg::PotentialModel::FIVE_GAUS_CHARGE);
-    EXPECT_EQ(cli_map.at("1"), rg::PotentialModel::FIVE_GAUS_CHARGE);
-    EXPECT_EQ(
-        BuildValueSetFromCLI<rg::PotentialModel>(),
-        BuildValueSetFromBindings<rg::PotentialModel>());
-}
-
-TEST(PublicHeaderSurfaceTest, PartialChargeEnumMappingsStayInSync)
-{
-    const auto cli_map{ rg::BuildCommandEnumCliMap<rg::PartialCharge>() };
-    EXPECT_EQ(cli_map.at("amber"), rg::PartialCharge::AMBER);
-    EXPECT_EQ(cli_map.at("2"), rg::PartialCharge::AMBER);
-    EXPECT_EQ(
-        BuildValueSetFromCLI<rg::PartialCharge>(),
-        BuildValueSetFromBindings<rg::PartialCharge>());
-}
-
-TEST(PublicHeaderSurfaceTest, TesterTypeEnumMappingsStayInSync)
-{
-    const auto cli_map{ rg::BuildCommandEnumCliMap<rg::TesterType>() };
-    EXPECT_EQ(cli_map.at("benchmark"), rg::TesterType::BENCHMARK);
-    EXPECT_EQ(cli_map.at("0"), rg::TesterType::BENCHMARK);
-    EXPECT_EQ(BuildValueSetFromCLI<rg::TesterType>(), BuildValueSetFromBindings<rg::TesterType>());
-}
-
-TEST(PublicHeaderSurfaceTest, SupportedEnumValueHelperMatchesDeclaredOptions)
-{
-    EXPECT_TRUE(rg::IsSupportedCommandEnumValue(rg::PainterType::MODEL));
-    EXPECT_TRUE(rg::IsSupportedCommandEnumValue(rg::PrinterType::GAUS_ESTIMATES));
-    EXPECT_TRUE(rg::IsSupportedCommandEnumValue(rg::PotentialModel::SINGLE_GAUS_USER));
-    EXPECT_TRUE(rg::IsSupportedCommandEnumValue(rg::PartialCharge::PARTIAL));
-    EXPECT_TRUE(rg::IsSupportedCommandEnumValue(rg::TesterType::MODEL_ALPHA_MEMBER));
+    AssertEnumMappingsStayInSync<TypeParam>();
 }

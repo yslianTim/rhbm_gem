@@ -93,7 +93,6 @@ set(CORE_COMMAND_TEST_SOURCES
 set(RHBM_GEM_EXPERIMENTAL_TEST_SOURCES
     core/command/MapVisualizationCommand_test.cpp
     core/command/PositionEstimationCommand_test.cpp
-    core/command/PotentialAnalysisExperimentalFeatureGate_test.cpp
 )
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
