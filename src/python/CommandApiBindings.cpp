@@ -24,12 +24,6 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
     }
 }
 
-template <typename Request, typename FieldSpec, typename... ClassOptions>
-void BindRequestField(py::class_<Request, ClassOptions...> & py_request, const FieldSpec & field)
-{
-    py_request.def_readwrite(field.python_name, field.member);
-}
-
 template <typename Request>
 void BindRequestType(py::module_ & module, const char * type_name)
 {
@@ -37,7 +31,7 @@ void BindRequestType(py::module_ & module, const char * type_name)
     py_request.def(py::init<>());
     internal::VisitRequestFields<Request>([&](const auto & field)
     {
-        BindRequestField(py_request, field);
+        py_request.def_readwrite(field.python_name, field.member);
     });
 }
 
