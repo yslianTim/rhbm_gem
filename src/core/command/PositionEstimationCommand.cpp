@@ -31,25 +31,6 @@ constexpr std::string_view kAlphaOption{ "--alpha" };
 constexpr std::string_view kThresholdOption{ "--threshold" };
 constexpr std::string_view kDedupToleranceOption{ "--dedup-tolerance" };
 
-std::shared_ptr<rhbm_gem::MapObject> LoadMapFromFile(
-    rhbm_gem::DataObjectManager & data_manager,
-    const std::filesystem::path & path,
-    std::string_view key_tag,
-    std::string_view label)
-{
-    try
-    {
-        data_manager.ProcessFile(path, std::string(key_tag));
-        return data_manager.GetTypedDataObject<rhbm_gem::MapObject>(std::string(key_tag));
-    }
-    catch (const std::exception & ex)
-    {
-        throw std::runtime_error(
-            "Failed to process " + std::string(label) + " from '" + path.string()
-            + "' as MapObject: " + ex.what());
-    }
-}
-
 struct QuantizedPointHash
 {
     std::size_t operator()(const std::array<int64_t, 3> & a) const noexcept
@@ -141,14 +122,15 @@ bool PositionEstimationCommand::BuildDataObject()
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
-        m_map_object = LoadMapFromFile(
-            m_data_manager, request.map_file_path, kMapKey, "map file");
+        m_data_manager.ProcessFile(request.map_file_path, std::string(kMapKey));
+        m_map_object = m_data_manager.GetTypedDataObject<MapObject>(std::string(kMapKey));
         m_map_object->MapValueArrayNormalization();
     }
     catch (const std::exception & e)
     {
         Logger::Log(LogLevel::Error,
-            "PositionEstimationCommand::BuildDataObject : " + std::string(e.what()));
+            "PositionEstimationCommand::BuildDataObject : Failed to load map file '"
+                + request.map_file_path.string() + "' as MapObject: " + std::string(e.what()));
         return false;
     }
     return true;

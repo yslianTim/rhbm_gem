@@ -65,6 +65,53 @@ TEST(CommandWorkflowScenariosTest, ResultDumpRerunRefreshesRuntimeStateAndUsesCu
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir_b, ".csv"), 1);
 }
 
+TEST(CommandWorkflowScenariosTest, ResultDumpDatabaseLoadFailureRetainsCommandContext)
+{
+    command_test::ScopedTempDir temp_dir{ "result_dump_missing_model" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto database_path{ temp_dir.path() / "db" / "database.sqlite" };
+
+    std::filesystem::create_directories(database_path.parent_path());
+    command_test::SeedSavedModel(database_path, model_path, "present_key", "MODEL_PRESENT");
+
+    rg::ResultDumpCommand command{};
+    rg::ResultDumpRequest request{};
+    request.database_path = database_path;
+    request.model_key_tag_list = { "missing_key" };
+    request.printer_choice = rg::PrinterType::ATOM_POSITION;
+    command.ApplyRequest(request);
+
+    testing::internal::CaptureStderr();
+    EXPECT_FALSE(command.Run());
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    EXPECT_NE(error_output.find("ResultDumpCommand::BuildDataObjectList"), std::string::npos);
+    EXPECT_NE(error_output.find("Failed to load dump inputs"), std::string::npos);
+    EXPECT_NE(error_output.find("missing_key"), std::string::npos);
+}
+
+TEST(CommandWorkflowScenariosTest, MapSimulationFileLoadFailureRetainsCommandContext)
+{
+    command_test::ScopedTempDir temp_dir{ "map_simulation_wrong_input_type" };
+    const auto model_path{ command_test::TestDataPath("test_model.cif") };
+    const auto map_dir{ temp_dir.path() / "map" };
+    const auto wrong_input_path{ command_test::GenerateMapFile(map_dir, model_path, "fixture_map") };
+
+    rg::MapSimulationCommand command{};
+    rg::MapSimulationRequest request{};
+    request.output_dir = temp_dir.path() / "out";
+    request.model_file_path = wrong_input_path;
+    request.map_file_name = "sim_map";
+    request.blurring_width_list = { 1.0 };
+    command.ApplyRequest(request);
+
+    testing::internal::CaptureStderr();
+    EXPECT_FALSE(command.Run());
+    const std::string error_output{ testing::internal::GetCapturedStderr() };
+    EXPECT_NE(error_output.find("MapSimulationCommand::BuildDataObject"), std::string::npos);
+    EXPECT_NE(error_output.find("Failed to load model file"), std::string::npos);
+    EXPECT_NE(error_output.find("ModelObject"), std::string::npos);
+}
+
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 
 TEST(CommandWorkflowScenariosTest, MapVisualizationInvalidAtomIdFailsWithoutWritingOutput)

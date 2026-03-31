@@ -5,7 +5,7 @@ This guide covers how to extend behavior around the current top-level `DataObjec
 - `ModelObject`
 - `MapObject`
 
-It also covers `DataObjectManager` iteration and the shared command helpers that already exist in the repository.
+It also covers `DataObjectManager` iteration and when command-local typed helpers are worth promoting into shared internal utilities.
 
 Related references:
 
@@ -17,8 +17,8 @@ Related references:
 Use the narrowest boundary that matches the change.
 
 - use for reusable typed operations on `ModelObject` or `MapObject`
-- current shared operations are `NormalizeMapObject(...)`, `PrepareModelForPotentialAnalysis(...)`, `PrepareModelForVisualization(...)`, `ApplyModelSelection(...)`, `CollectSelectedAtoms(...)`, `CollectAtomsWithLocalPotentialEntries(...)`, `PrepareSimulationAtoms(...)`, and `BuildModelAtomBondContext(...)`
-- keep this layer focused on logic shared by multiple commands
+- do not introduce a shared helper just to wrap a single `DataObjectManager` call
+- promote command-local helpers only when multiple commands share the same multi-step typed workflow
 
 `DataObjectManager::ForEachDataObject(...)`
 
@@ -53,6 +53,7 @@ For shared typed helpers:
 - validate preconditions and throw explicit `std::runtime_error` when violated
 - keep command execution, logging policy, and UI concerns out of shared helpers
 - prefer named workflow helpers when only a few combinations are valid in real commands
+- avoid one-hop loader wrappers that only forward to `ProcessFile(...)`, `LoadDataObject(...)`, or `GetTypedDataObject<T>(...)`
 
 Example pattern:
 
@@ -101,9 +102,11 @@ If callback bodies or command-local branches start growing, move the multi-step 
 
 Typical command flow:
 
-1. load typed objects with `GetTypedDataObject<T>()`
-2. use `ForEachDataObject(...)` only when manager-owned key filtering or ordering matters
-3. keep `ExecuteImpl()` focused on orchestration
+1. call `ProcessFile(...)` or `LoadDataObject(...)` directly where the command orchestrates loading
+2. immediately resolve the typed object with `GetTypedDataObject<T>()`
+3. wrap failures with command-specific context in `BuildDataObject(...)` or the closest orchestration layer
+4. use `ForEachDataObject(...)` only when manager-owned key filtering or ordering matters
+5. keep `ExecuteImpl()` focused on orchestration
 
 ## 7. Test Checklist
 
@@ -115,7 +118,7 @@ Add or update tests for:
 - iteration order for explicit key lists
 - snapshot behavior under map mutation
 - empty-callback rejection
-- new loader helper failure context when you add a loader wrapper
+- command-level failure context when direct manager loading fails
 
 Common suites:
 

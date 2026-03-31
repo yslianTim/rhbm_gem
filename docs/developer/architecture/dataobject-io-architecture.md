@@ -227,25 +227,26 @@ Behavior:
 
 ## 10. Shared Command Helpers
 
-Loader helpers:
+There is no repository-wide shared loader facade for commands.
 
-- `LoadModelFromFile(...)`
-- `LoadMapFromFile(...)`
-- `MaybeLoadMapFromFile(...)`
-- `LoadModelFromDatabase(...)`
+Current guidance:
 
-Shared typed operations:
+- simple file/database loading should call `DataObjectManager` directly in the command orchestration layer
+- command-specific error context should be added in the command `BuildDataObject(...)` or equivalent `try/catch`
+- keep one-hop wrappers local only when they add real policy, not when they only forward to:
+  - `ProcessFile(...)`
+  - `LoadDataObject(...)`
+  - `GetTypedDataObject<T>(...)`
 
-- `NormalizeMapObject(...)`
+Some typed workflow helpers still exist only as command-local functions such as:
+
 - `PrepareModelForPotentialAnalysis(...)`
 - `PrepareModelForVisualization(...)`
 - `ApplyModelSelection(...)`
-- `CollectSelectedAtoms(...)`
-- `CollectAtomsWithLocalPotentialEntries(...)`
 - `PrepareSimulationAtoms(...)`
 - `BuildModelAtomBondContext(...)`
 
-These helpers are internal command-layer utilities, not part of the public `/include/` header surface.
+Promote these to a shared internal helper layer only when they are reused by multiple commands and the extracted workflow is materially larger than a one-hop wrapper.
 
 ## 11. Key Files
 

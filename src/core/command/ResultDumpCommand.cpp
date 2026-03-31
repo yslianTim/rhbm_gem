@@ -28,43 +28,6 @@ constexpr std::string_view kMapKey{ "map" };
 constexpr std::string_view kPrinterOption{ "--printer" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
 constexpr std::string_view kMapOption{ "--map" };
-
-std::shared_ptr<rhbm_gem::ModelObject> LoadModelFromDatabase(
-    rhbm_gem::DataObjectManager & data_manager,
-    std::string_view key_tag,
-    std::string_view label)
-{
-    try
-    {
-        data_manager.LoadDataObject(std::string(key_tag));
-        return data_manager.GetTypedDataObject<rhbm_gem::ModelObject>(std::string(key_tag));
-    }
-    catch (const std::exception & ex)
-    {
-        throw std::runtime_error(
-            "Failed to load " + std::string(label) + " with key tag '"
-            + std::string(key_tag) + "' as ModelObject: " + ex.what());
-    }
-}
-
-std::shared_ptr<rhbm_gem::MapObject> LoadMapFromFile(
-    rhbm_gem::DataObjectManager & data_manager,
-    const std::filesystem::path & path,
-    std::string_view key_tag,
-    std::string_view label)
-{
-    try
-    {
-        data_manager.ProcessFile(path, std::string(key_tag));
-        return data_manager.GetTypedDataObject<rhbm_gem::MapObject>(std::string(key_tag));
-    }
-    catch (const std::exception & ex)
-    {
-        throw std::runtime_error(
-            "Failed to process " + std::string(label) + " from '" + path.string()
-            + "' as MapObject: " + ex.what());
-    }
-}
 }
 
 namespace rhbm_gem {
@@ -116,19 +79,14 @@ bool ResultDumpCommand::BuildDataObjectList()
         }
         else
         {
-            m_map_object = LoadMapFromFile(
-                m_data_manager,
-                request.map_file_path,
-                m_map_key_tag,
-                "map file");
+            m_data_manager.ProcessFile(request.map_file_path, m_map_key_tag);
+            m_map_object = m_data_manager.GetTypedDataObject<MapObject>(m_map_key_tag);
         }
         m_selected_atom_list_map.clear();
         for (const auto & key : request.model_key_tag_list)
         {
-            auto model_object{ LoadModelFromDatabase(
-                m_data_manager,
-                key,
-                "model object") };
+            m_data_manager.LoadDataObject(key);
+            auto model_object{ m_data_manager.GetTypedDataObject<ModelObject>(key) };
             m_model_object_list.emplace_back(model_object);
             const auto & selected_atom_list{ model_object->GetSelectedAtomList() };
             m_selected_atom_list_map[key] = {
@@ -145,7 +103,8 @@ bool ResultDumpCommand::BuildDataObjectList()
     {
         Logger::Log(
             LogLevel::Error,
-            "ResultDumpCommand::BuildDataObjectList : " + std::string(e.what()));
+            "ResultDumpCommand::BuildDataObjectList : Failed to load dump inputs: "
+                + std::string(e.what()));
         return false;
     }
     return true;

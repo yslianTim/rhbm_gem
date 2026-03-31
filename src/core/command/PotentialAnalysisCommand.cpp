@@ -57,27 +57,6 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 
-template <typename TypedDataObject>
-std::shared_ptr<TypedDataObject> LoadTypedObjectFromFile(
-    rhbm_gem::DataObjectManager & data_manager,
-    const std::filesystem::path & path,
-    std::string_view key_tag,
-    std::string_view label,
-    std::string_view object_type_name)
-{
-    try
-    {
-        data_manager.ProcessFile(path, std::string(key_tag));
-        return data_manager.GetTypedDataObject<TypedDataObject>(std::string(key_tag));
-    }
-    catch (const std::exception & ex)
-    {
-        throw std::runtime_error(
-            "Failed to process " + std::string(label) + " from '" + path.string()
-            + "' as " + std::string(object_type_name) + ": " + ex.what());
-    }
-}
-
 void SelectAllAtoms(rhbm_gem::ModelObject & model_object)
 {
     for (auto & atom : model_object.GetAtomList())
@@ -371,18 +350,10 @@ bool PotentialAnalysisCommand::BuildDataObject()
     try
     {
         m_data_manager.SetDatabaseManager(request.database_path);
-        m_model_object = LoadTypedObjectFromFile<ModelObject>(
-            m_data_manager,
-            request.model_file_path,
-            m_model_key_tag,
-            "model file",
-            "ModelObject");
-        m_map_object = LoadTypedObjectFromFile<MapObject>(
-            m_data_manager,
-            request.map_file_path,
-            m_map_key_tag,
-            "map file",
-            "MapObject");
+        m_data_manager.ProcessFile(request.model_file_path, m_model_key_tag);
+        m_model_object = m_data_manager.GetTypedDataObject<ModelObject>(m_model_key_tag);
+        m_data_manager.ProcessFile(request.map_file_path, m_map_key_tag);
+        m_map_object = m_data_manager.GetTypedDataObject<MapObject>(m_map_key_tag);
         if (request.simulation_flag)
         {
             UpdateModelObjectForSimulation(m_model_object.get());
@@ -391,7 +362,7 @@ bool PotentialAnalysisCommand::BuildDataObject()
     catch (const std::exception & e)
     {
         Logger::Log(LogLevel::Error,
-            "PotentialAnalysisCommand::Execute() : " + std::string(e.what()));
+            "PotentialAnalysisCommand::BuildDataObject : " + std::string(e.what()));
         return false;
     }
     return true;

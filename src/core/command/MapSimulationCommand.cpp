@@ -25,27 +25,6 @@ constexpr std::string_view kCutoffOption{ "--cut-off" };
 constexpr std::string_view kGridSpacingOption{ "--grid-spacing" };
 constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
 
-template <typename TypedDataObject>
-std::shared_ptr<TypedDataObject> LoadTypedObjectFromFile(
-    rhbm_gem::DataObjectManager & data_manager,
-    const std::filesystem::path & path,
-    std::string_view key_tag,
-    std::string_view label,
-    std::string_view object_type_name)
-{
-    try
-    {
-        data_manager.ProcessFile(path, std::string(key_tag));
-        return data_manager.GetTypedDataObject<TypedDataObject>(std::string(key_tag));
-    }
-    catch (const std::exception & ex)
-    {
-        throw std::runtime_error(
-            "Failed to process " + std::string(label) + " from '" + path.string()
-            + "' as " + std::string(object_type_name) + ": " + ex.what());
-    }
-}
-
 struct SimulationAtomPreparationResult
 {
     std::vector<rhbm_gem::AtomObject *> atom_list;
@@ -223,14 +202,15 @@ bool MapSimulationCommand::BuildDataObject()
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
-        m_model_object = LoadTypedObjectFromFile<ModelObject>(
-            m_data_manager, request.model_file_path, kModelKey, "model file", "ModelObject");
+        m_data_manager.ProcessFile(request.model_file_path, std::string(kModelKey));
+        m_model_object = m_data_manager.GetTypedDataObject<ModelObject>(std::string(kModelKey));
         BuildAtomList(m_model_object.get());
     }
     catch(const std::exception & e)
     {
         Logger::Log(LogLevel::Error,
-            "MapSimulationCommand::BuildDataObject : " + std::string(e.what()));
+            "MapSimulationCommand::BuildDataObject : Failed to load model file '"
+                + request.model_file_path.string() + "' as ModelObject: " + std::string(e.what()));
         return false;
     }
     return true;

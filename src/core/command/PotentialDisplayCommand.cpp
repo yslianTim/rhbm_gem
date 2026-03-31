@@ -22,24 +22,6 @@ constexpr std::string_view kPainterOption{ "--painter" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
 constexpr std::string_view kRefGroupOption{ "--ref-group" };
 
-std::shared_ptr<rhbm_gem::ModelObject> LoadModelFromDatabase(
-    rhbm_gem::DataObjectManager & data_manager,
-    std::string_view key_tag,
-    std::string_view label)
-{
-    try
-    {
-        data_manager.LoadDataObject(std::string(key_tag));
-        return data_manager.GetTypedDataObject<rhbm_gem::ModelObject>(std::string(key_tag));
-    }
-    catch (const std::exception & ex)
-    {
-        throw std::runtime_error(
-            "Failed to load " + std::string(label) + " with key tag '"
-            + std::string(key_tag) + "' as ModelObject: " + ex.what());
-    }
-}
-
 void ApplyModelSelection(
     rhbm_gem::ModelObject & model_object,
     ::AtomSelector & selector)
@@ -143,9 +125,9 @@ bool PotentialDisplayCommand::BuildDataObject()
         for (const auto & key : request.model_key_tag_list)
         {
             Logger::ProgressBar(model_count, model_size);
+            m_data_manager.LoadDataObject(key);
             m_model_object_list.emplace_back(
-                LoadModelFromDatabase(
-                    m_data_manager, key, "model object"));
+                m_data_manager.GetTypedDataObject<ModelObject>(key));
             model_count++;
         }
         for (const auto & [map_key, key_tag_list] : request.reference_model_groups)
@@ -156,9 +138,9 @@ bool PotentialDisplayCommand::BuildDataObject()
             for (auto & key_tag : key_tag_list)
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
+                m_data_manager.LoadDataObject(key_tag);
                 m_ref_model_object_list_map[map_key].emplace_back(
-                    LoadModelFromDatabase(
-                        m_data_manager, key_tag, "reference model object"));
+                    m_data_manager.GetTypedDataObject<ModelObject>(key_tag));
                 ref_model_count++;
             }
         }
@@ -169,7 +151,8 @@ bool PotentialDisplayCommand::BuildDataObject()
     catch(const std::exception & e)
     {
         Logger::Log(LogLevel::Error,
-            "PotentialDisplayCommand::BuildDataObject : " + std::string(e.what()));
+            "PotentialDisplayCommand::BuildDataObject : Failed to load model data from database: "
+                + std::string(e.what()));
         return false;
     }
     return true;
