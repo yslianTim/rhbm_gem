@@ -6,7 +6,6 @@ This document describes the current runtime contract for:
 - SQLite persistence
 - typed object dispatch
 - `DataObjectManager` storage and iteration
-- shared command helpers built on top of these boundaries
 
 Related references:
 
@@ -62,8 +61,8 @@ flowchart LR
       B --> M["ForEachDataObject(...)"]
       N["DataObjectDispatch"] --> N1["As* / Expect* helpers"]
       N --> N2["GetCatalogTypeName"]
-      O["CommandDataSupport"] --> O1["command_data_loader helpers"]
-      O --> O2["shared ModelObject / MapObject operations"]
+      O["CommandDataLoader"] --> O1["typed file / database loaders"]
+      P["CommandModelSupport"] --> P1["shared ModelObject / MapObject operations"]
     end
 ```
 
@@ -222,24 +221,21 @@ Behavior:
 
 ## 10. Shared Command Helpers
 
-Cross-command helpers live in:
+Loader helpers:
 
-- `/src/core/internal/command/CommandDataSupport.hpp`
-- `/src/core/command/CommandDataSupport.cpp`
-
-Loader helpers in `namespace command_data_loader`:
-
-- `ProcessModelFile(...)`
-- `ProcessMapFile(...)`
-- `OptionalProcessMapFile(...)`
-- `LoadModelObject(...)`
+- `LoadModelFromFile(...)`
+- `LoadMapFromFile(...)`
+- `MaybeLoadMapFromFile(...)`
+- `LoadModelFromDatabase(...)`
 
 Shared typed operations:
 
 - `NormalizeMapObject(...)`
-- `PrepareModelObject(...)`
+- `PrepareModelForPotentialAnalysis(...)`
+- `PrepareModelForVisualization(...)`
 - `ApplyModelSelection(...)`
-- `CollectModelAtoms(...)`
+- `CollectSelectedAtoms(...)`
+- `CollectAtomsWithLocalPotentialEntries(...)`
 - `PrepareSimulationAtoms(...)`
 - `BuildModelAtomBondContext(...)`
 
@@ -250,8 +246,8 @@ These helpers are internal command-layer utilities, not part of the public `/inc
 Core orchestration:
 
 - `/include/rhbm_gem/data/io/DataObjectManager.hpp`
-- `/src/data/io/DataObjectManager.cpp`
 - `/include/rhbm_gem/data/io/FileIO.hpp`
+- `/src/data/io/DataObjectManager.cpp`
 - `/src/data/io/file/FileIO.cpp`
 
 SQLite persistence:
@@ -265,8 +261,6 @@ Typed dispatch and shared helpers:
 
 - `/include/rhbm_gem/data/object/DataObjectDispatch.hpp`
 - `/src/data/object/DataObjectDispatch.cpp`
-- `/src/core/internal/command/CommandDataSupport.hpp`
-- `/src/core/command/CommandDataSupport.cpp`
 
 Reference tests:
 

@@ -20,7 +20,7 @@ private:
     std::shared_ptr<ModelObject> m_model_object;
 
 public:
-    explicit MapVisualizationCommand(CommonOptionProfile profile);
+    MapVisualizationCommand();
     ~MapVisualizationCommand() override = default;
 
 private:

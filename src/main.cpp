@@ -1,7 +1,7 @@
 #include <iostream>
 #include <CLI/CLI.hpp>
 
-#include <rhbm_gem/core/command/CommandApi.hpp>
+#include "core/internal/command/CommandCli.hpp"
 
 int main(int argc, char * argv[])
 {

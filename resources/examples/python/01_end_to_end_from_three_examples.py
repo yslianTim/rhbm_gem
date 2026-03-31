@@ -118,18 +118,18 @@ def resolve_workdir(args: argparse.Namespace) -> Path:
     return selected.resolve()
 
 
-def ensure_execute(report: rgm.ExecutionReport, step_name: str) -> None:
-    if report.prepared and report.executed:
+def ensure_execute(result: rgm.CommandResult, step_name: str) -> None:
+    if result.succeeded:
         return
 
     details = "\n".join(
-        f"[{issue.phase}/{issue.level}] {issue.option_name}: {issue.message}"
-        for issue in report.validation_issues
+        f"{issue.option_name}: {issue.message}"
+        for issue in result.issues
     )
     if not details:
         details = "(no validation issue details)"
     raise RuntimeError(
-        f"{step_name} failed (prepared={report.prepared}, executed={report.executed}).\n{details}"
+        f"{step_name} failed.\n{details}"
     )
 
 
@@ -229,8 +229,8 @@ def main() -> int:
     key_tags: list[str] = []
     for spec, model_path, map_path in staged_inputs:
         analysis_request = rgm.PotentialAnalysisRequest()
-        analysis_request.common.database_path = str(database_path)
-        analysis_request.common.thread_size = JOBS
+        analysis_request.database_path = str(database_path)
+        analysis_request.job_count = JOBS
         analysis_request.model_file_path = str(model_path)
         analysis_request.map_file_path = str(map_path)
         analysis_request.saved_key_tag = spec.key_tag
@@ -244,8 +244,8 @@ def main() -> int:
 
     print("[3/3] Result dump")
     dump_request = rgm.ResultDumpRequest()
-    dump_request.common.database_path = str(database_path)
-    dump_request.common.folder_path = str(workdir)
+    dump_request.database_path = str(database_path)
+    dump_request.output_dir = str(workdir)
     dump_request.model_key_tag_list = key_tags
     dump_request.printer_choice = rgm.PrinterType.GAUS_ESTIMATES
     ensure_execute(rgm.RunResultDump(dump_request), "RunResultDump")

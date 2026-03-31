@@ -1,38 +1,31 @@
 RHBM_GEM_COMMAND(
     PotentialAnalysis,
     "potential_analysis",
-    "Run potential analysis",
-    DatabaseWorkflow)
+    "Run potential analysis")
 RHBM_GEM_COMMAND(
     PotentialDisplay,
     "potential_display",
-    "Run potential display",
-    DatabaseWorkflow)
+    "Run potential display")
 RHBM_GEM_COMMAND(
     ResultDump,
     "result_dump",
-    "Run result dump",
-    DatabaseWorkflow)
+    "Run result dump")
 RHBM_GEM_COMMAND(
     MapSimulation,
     "map_simulation",
-    "Run map simulation command",
-    FileWorkflow)
+    "Run map simulation command")
 RHBM_GEM_COMMAND(
     HRLModelTest,
     "model_test",
-    "Run HRL model simulation test",
-    FileWorkflow)
+    "Run HRL model simulation test")
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
 RHBM_GEM_COMMAND(
     MapVisualization,
     "map_visualization",
-    "Run map visualization",
-    FileWorkflow)
+    "Run map visualization")
 RHBM_GEM_COMMAND(
     PositionEstimation,
     "position_estimation",
-    "Run atom position estimation",
-    FileWorkflow)
+    "Run atom position estimation")
 #endif

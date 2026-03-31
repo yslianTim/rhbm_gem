@@ -1,233 +1,145 @@
 # Adding a Command
 
-This guide documents how to add a command to the existing command system.
-
 Related references:
 
 - [`docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
 - [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
 
-## 1. Decide whether it should be a new command
+## Files You Usually Touch
 
-Add a new top-level command when the workflow needs its own:
+Public API:
 
-- request type
-- CLI surface
-- validation path
-- execution path
+- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
+- [`include/rhbm_gem/core/command/CommandEnums.hpp`](/include/rhbm_gem/core/command/CommandEnums.hpp) only when the command needs a new shared enum
 
-Extend an existing command when the change is only a new mode, option, or small behavior branch.
+Internal wiring:
 
-## 2. Files you usually need to touch
+- [`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def)
+- [`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp)
+- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) to include the new concrete command header
 
-Concrete command implementation:
+Concrete implementation:
 
-- `src/core/internal/command/<YourCommand>.hpp`
-- `src/core/command/<YourCommand>.cpp`
+- [`src/core/internal/command/`](/src/core/internal/command/)
+- [`src/core/command/`](/src/core/command/)
 
-Public command API:
+## Manifest
 
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](include/rhbm_gem/core/command/CommandApi.hpp)
-- [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp) only if shared metadata, diagnostics, or default paths change
-- [`include/rhbm_gem/core/command/CommandEnumClass.hpp`](/include/rhbm_gem/core/command/CommandEnumClass.hpp) only if the command adds or extends a shared enum
+Top-level command membership is defined in
+[`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def).
 
-Manifest and internal registration:
-
-- [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def)
-- [`src/core/internal/command/CommandRegistry.hpp`](/src/core/internal/command/CommandRegistry.hpp)
-
-Build wiring:
-
-- [`src/CMakeLists.txt`](/src/CMakeLists.txt)
-- [`tests/CMakeLists.txt`](/tests/CMakeLists.txt)
-
-Tests and docs:
-
-- `tests/core/command/<YourCommand>_test.cpp`
-- impacted contract or integration tests
-- developer or user docs that describe the command surface
-
-Optional:
-
-- [`docs/developer/commands/README.md`](/docs/developer/commands/README.md)
-- `docs/developer/commands/<your-command>.md`
-
-## 3. Add the manifest entry
-
-Add an entry to [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def).
-
-Stable commands go in the main list.
-Experimental commands go inside the `#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
-
-Example:
+Each entry uses:
 
 ```cpp
 RHBM_GEM_COMMAND(
     Example,
     "example",
-    "Run example command",
-    FileWorkflow)
+    "Run example command")
 ```
 
-Parameters:
+Stable commands live in the main list. Experimental commands stay inside the
+`#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
 
-1. `COMMAND_ID`: token used by `CommandId`, request/run symbol names, and concrete command names
-2. `CLI_NAME`: subcommand token
-3. `DESCRIPTION`: CLI help text
-4. `PROFILE`: `FileWorkflow` or `DatabaseWorkflow`
+The manifest drives:
 
-## 4. Scaffold command files
+- public `Run*` declarations in `CommandApi.hpp`
+- `ListCommands()`
+- `Run*` definitions in `CommandApi.cpp`
+- CLI registration in `CommandCli.cpp`
+- Python request-type and `Run*` binding registration in `CommandApiBindings.cpp`
 
-Generate skeleton files:
+## Public Request DTO
 
-```bash
-python3 resources/tools/developer/command_scaffold.py --name Example --profile FileWorkflow
-```
+Add `<YourCommand>Request` to
+[`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
 
-Generate skeleton files and wire stable registration/build lists:
+Requests are plain DTOs. Shared options come from `CommandRequestBase`:
 
-```bash
-python3 resources/tools/developer/command_scaffold.py --name Example --profile FileWorkflow --wire
-```
+- `job_count`
+- `verbosity`
+- `output_dir`
 
-`--wire` updates:
+Command-specific fields live directly on the request type.
 
-- `include/rhbm_gem/core/command/CommandList.def`
-- `src/core/internal/command/CommandRegistry.hpp`
-- `src/CMakeLists.txt` stable command source list: `RHBM_GEM_COMMAND_SOURCES`
-- `tests/CMakeLists.txt` stable command test list: `RHBM_GEM_CORE_COMMAND_TEST_SOURCES`
+Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandApi.hpp`.
 
-The scaffold does not:
+`Run*` declarations are generated from `CommandManifest.def`, so adding a request DTO does not
+require a handwritten `RunYourCommand(...)` declaration.
 
-- add the public request struct to `CommandApi.hpp`
-- place entries into the experimental manifest section
-- place command sources into `RHBM_GEM_EXPERIMENTAL_SOURCES`
-- place tests into `RHBM_GEM_EXPERIMENTAL_TEST_SOURCES`
-- add enum definitions to `CommandEnumClass.hpp`
-- add command-specific validation, execution logic, or documentation beyond the generated stub
+## Internal Request Schema
 
-## 5. Implement the command class
+Add a `CommandRequestSchema<<YourCommand>Request>` specialization to
+[`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp).
 
-Concrete command classes live under [`src/core/internal/command/`](/src/core/internal/command/) and [`src/core/command/`](/src/core/command/).
+That internal schema is the single source for:
+
+- CLI flag registration
+- Python field binding
+
+Use the internal helpers there:
+
+- `MakeScalarField(...)`
+- `MakePathField(...)`
+- `MakeEnumField(...)`
+- `MakeCsvListField(...)`
+- `MakeRefGroupField(...)`
+
+## Concrete Command
+
+Implement the concrete command under:
+
+- [`src/core/internal/command/`](/src/core/internal/command/)
+- [`src/core/command/`](/src/core/command/)
 
 Use this shape:
 
 1. derive from `CommandWithRequest<XxxRequest>`
-2. construct the command with a `CommonOptionProfile`
-3. keep field normalization in `NormalizeRequest()`
-4. keep cross-field validation in `ValidateOptions()`
-5. reset transient execution state in `ResetRuntimeState()`
-6. keep `ExecuteImpl()` focused on orchestration
+2. implement `NormalizeRequest()`
+3. implement `ValidateOptions()`
+4. implement `ResetRuntimeState()`
+5. implement `ExecuteImpl()`
 
 `CommandWithRequest<XxxRequest>` already:
 
-- stores the public request on the command
-- applies `request.common` through `ApplyCommonRequest(...)`
-- synchronizes normalized common values back into `request.common`
-- calls `NormalizeRequest()` from `ApplyRequest(...)`
-- invalidates prepared state when the request changes
+- stores the typed request internally
+- binds the request to `CommandBase`
+- coerces `CommandRequestBase` shared options through `CoerceBaseRequest(...)`
+- calls `NormalizeRequest()`
 
-Keep extra private members for execution-time state only, such as loaded objects, caches, or
-derived lookup tables.
+## Registration Surfaces
 
-Useful `CommandBase` helpers:
+[`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) owns public `Run*`
+definitions and `ListCommands()`.
 
-- `AssignOption(...)`
-- `MutateOptions(...)`
-- `SetRequiredExistingPathOption(...)`
-- `SetOptionalExistingPathOption(...)`
-- `SetNormalizedScalarOption(...)`
-- `SetFinitePositiveScalarOption(...)`
-- `SetFiniteNonNegativeScalarOption(...)`
-- `SetPositiveScalarOption(...)`
-- `SetValidatedEnumOption(...)`
-- `BuildOutputPath(...)`
+[`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp) owns CLI registration
+through the internal `ConfigureCommandCli(...)`.
 
-## 6. Add the public request and run entrypoint
+[`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) binds:
 
-Add the request struct to [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
+- `CommandRequestBase`
+- one request type per command
+- `CommandResult`
+- shared enums
+- `ValidationIssue`
 
-Each public request must define `VisitFields(Visitor &&)` and describe every bindable field there.
-CLI registration and Python bindings both consume that schema.
+The manifest controls which request types and `Run*` functions are registered there. The
+request-field list still comes from `CommandRequestSchema`.
 
-Update shared contract headers only when needed:
+## Validation Checklist
 
-- use `CommandContract.hpp` for shared metadata, diagnostics, or defaults
-- use `CommandEnumClass.hpp` for shared enum declarations and their CLI/Python mappings
+Before merge, verify:
 
-`Run*` declarations and definitions come from `CommandList.def`, so after the manifest entry is in
-place you do not add a separate handwritten `RunXxx(...)` declaration or binding list.
-
-Each `Run*` entrypoint follows this sequence:
-
-1. construct the concrete command with the manifest profile
-2. call `ApplyRequest(...)`
-3. call `PrepareForExecution()`
-4. call `Execute()` if preparation succeeds
-5. return an `ExecutionReport`
-
-## 7. CLI and Python registration
-
-CLI registration is generic:
-
-1. `ConfigureCommandCli(...)` expands the manifest in [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp)
-2. `RegisterCommand<...>()` creates the subcommand and binds request fields from `VisitFields(...)`
-3. common fields from `CommonCommandRequest::VisitFields(...)` are filtered by the manifest profile
-
-Shared CLI options come from the profile:
-
-- `-j,--jobs`
-- `-v,--verbose`
-- `-d,--database` for `DatabaseWorkflow`
-- `-o,--folder`
-
-Python registration is also generic:
-
-1. `BindCommandApi(...)` expands the manifest in [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
-2. `BindRequestType<XxxRequest>(...)` walks `VisitFields(...)` and emits `def_readwrite(...)`
-3. `module.def("RunXxx", ...)` is expanded from the manifest
-
-[`src/python/CommonBindings.cpp`](/src/python/CommonBindings.cpp) only needs changes when the command adds a new shared enum or
-shared validation/common type.
-
-## 8. Build wiring for stable vs experimental commands
-
-[`src/CMakeLists.txt`](/src/CMakeLists.txt) has two command source lists:
-
-- `RHBM_GEM_COMMAND_SOURCES` for stable commands
-- `RHBM_GEM_EXPERIMENTAL_SOURCES` for experimental commands
-
-[`tests/CMakeLists.txt`](/tests/CMakeLists.txt) has two command test lists:
-
-- `RHBM_GEM_CORE_COMMAND_TEST_SOURCES` for stable command tests
-- `RHBM_GEM_EXPERIMENTAL_TEST_SOURCES` for experimental command tests
-
-If the command is experimental, wire it into the experimental lists manually.
-`command_scaffold.py --wire` only updates the stable lists.
-
-## 9. Tests and documentation
-
-Add or update:
-
-- command unit tests under [`tests/core/command/`](/tests/core/command/)
-- contract tests if command metadata, manifest order, or the public surface changes
-- integration tests if the end-to-end command behavior changes
-- developer or user docs that describe the command
-
-## 10. Validation checklist
-
-Before merge:
-
-1. the command header exists under [`src/core/internal/command/`](/src/core/internal/command/) and the source exists under [`src/core/command/`](/src/core/command/)
-2. `CommandApi.hpp` contains the request struct and its `VisitFields(...)` schema
-3. `CommandList.def` contains the manifest entry in the correct stable or experimental section
-4. `CommandRegistry.hpp` includes the new command header
-5. `src/CMakeLists.txt` and `tests/CMakeLists.txt` include the source and test file in the correct stable or experimental list
-6. tests and docs match the final command surface
+1. the command header exists under `src/core/internal/command/` and the source exists under `src/core/command/`
+2. `CommandApi.hpp` contains the new request DTO
+3. `CommandRequestSchema.hpp` contains the internal schema specialization
+4. `CommandManifest.def` contains the manifest entry in the correct stable or experimental section
+5. `CommandApi.cpp` includes the new command header
+6. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
+7. grouped command tests cover validation and workflow behavior
 
 Recommended checks:
 
 ```bash
 cmake --build build --target tests_all -j
-ctest --output-on-failure -R "Command|Contract|bindings"
+ctest --test-dir build --output-on-failure -R "rhbm_tests_core_command|rhbm_tests_core_contract"
 ```

@@ -51,7 +51,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     std::filesystem::create_directories(dump_output_dir);
 
     rg::MapSimulationRequest simulation_request;
-    simulation_request.common.folder_path = maps_dir;
+    simulation_request.output_dir = maps_dir;
     simulation_request.model_file_path = command_test::TestDataPath("test_model.cif");
     simulation_request.map_file_name = "sim_map";
     simulation_request.blurring_width_list = { 1.50 };
@@ -59,16 +59,15 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     const auto simulation_result{
         rg::RunMapSimulation(simulation_request)
     };
-    ASSERT_TRUE(simulation_result.prepared);
-    ASSERT_TRUE(simulation_result.executed);
+    ASSERT_TRUE(simulation_result.succeeded);
 
     const auto generated_map_file{ FindGeneratedMap(maps_dir) };
     ASSERT_FALSE(generated_map_file.empty());
     ASSERT_TRUE(std::filesystem::exists(generated_map_file));
 
     rg::PotentialAnalysisRequest analysis_request;
-    analysis_request.common.database_path = database_path;
-    analysis_request.common.folder_path = analysis_output_dir;
+    analysis_request.database_path = database_path;
+    analysis_request.output_dir = analysis_output_dir;
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
     analysis_request.map_file_path = generated_map_file;
     analysis_request.saved_key_tag = "pipeline_model";
@@ -77,19 +76,17 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     const auto analysis_result{
         rg::RunPotentialAnalysis(analysis_request)
     };
-    ASSERT_TRUE(analysis_result.prepared);
-    ASSERT_TRUE(analysis_result.executed);
+    ASSERT_TRUE(analysis_result.succeeded);
 
     rg::ResultDumpRequest dump_request;
-    dump_request.common.database_path = database_path;
-    dump_request.common.folder_path = dump_output_dir;
+    dump_request.database_path = database_path;
+    dump_request.output_dir = dump_output_dir;
     dump_request.printer_choice = rg::PrinterType::GAUS_ESTIMATES;
     dump_request.model_key_tag_list = { "pipeline_model" };
 
     const auto dump_result{
         rg::RunResultDump(dump_request)
     };
-    ASSERT_TRUE(dump_result.prepared);
-    ASSERT_TRUE(dump_result.executed);
+    ASSERT_TRUE(dump_result.succeeded);
     EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);
 }

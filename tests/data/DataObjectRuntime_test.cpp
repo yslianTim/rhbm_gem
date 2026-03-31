@@ -33,7 +33,6 @@
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include "internal/file/MapAxisOrderHelper.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include "internal/command/CommandDataSupport.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 
 namespace rg = rhbm_gem;
@@ -667,12 +666,12 @@ TEST(DataObjectOperationTest, NormalizeMapObjectNormalizesMapValues) {
     const auto original_sd{map.GetMapValueSD()};
     ASSERT_GT(original_sd, 0.0f);
 
-    rg::NormalizeMapObject(map);
+    map.MapValueArrayNormalization();
 
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
 }
 
-TEST(DataObjectOperationTest, PrepareModelObjectSelectsAndInitializesLocalEntries) {
+TEST(DataObjectOperationTest, PotentialAnalysisPreparationSelectsAndInitializesLocalEntries) {
     auto model{MakeModelWithBond()};
     for (auto& atom : model->GetAtomList()) {
         atom->SetSelectedFlag(false);
@@ -684,14 +683,21 @@ TEST(DataObjectOperationTest, PrepareModelObjectSelectsAndInitializesLocalEntrie
     ASSERT_EQ(model->GetNumberOfSelectedAtom(), 0);
     ASSERT_EQ(model->GetNumberOfSelectedBond(), 0);
 
-    rg::ModelPreparationOptions options;
-    options.select_all_atoms = true;
-    options.select_all_bonds = true;
-    options.update_model = true;
-    options.initialize_atom_local_entries = true;
-    options.initialize_bond_local_entries = true;
-
-    rg::PrepareModelObject(*model, options);
+    for (auto& atom : model->GetAtomList()) {
+        atom->SetSelectedFlag(true);
+    }
+    for (auto& bond : model->GetBondList()) {
+        bond->SetSelectedFlag(true);
+    }
+    model->FilterAtomFromSymmetry(false);
+    model->FilterBondFromSymmetry(false);
+    model->Update();
+    for (auto* atom : model->GetSelectedAtomList()) {
+        atom->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+    }
+    for (auto* bond : model->GetSelectedBondList()) {
+        bond->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+    }
 
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
     EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
@@ -705,7 +711,7 @@ TEST(DataObjectOperationTest, PrepareModelObjectSelectsAndInitializesLocalEntrie
     }
 }
 
-TEST(DataObjectOperationTest, ApplyModelSelectionSelectsByAtomSelectorRules) {
+TEST(DataObjectOperationTest, AtomSelectorCanDriveModelSelectionState) {
     auto model{MakeModelWithBond()};
     auto& atom_list{model->GetAtomList()};
     ASSERT_EQ(atom_list.size(), 2);
@@ -716,13 +722,22 @@ TEST(DataObjectOperationTest, ApplyModelSelectionSelectsByAtomSelectorRules) {
 
     ::AtomSelector selector;
     selector.PickChainID("A");
-    rg::ApplyModelSelection(*model, selector);
+    for (auto& atom : model->GetAtomList()) {
+        atom->SetSelectedFlag(
+            selector.GetSelectionFlag(
+                atom->GetChainID(),
+                atom->GetResidue(),
+                atom->GetElement()));
+    }
+    model->Update();
 
     EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
+    ASSERT_EQ(model->GetSelectedAtomList().size(), 1);
+    EXPECT_EQ(model->GetSelectedAtomList().front(), atom_list.at(0).get());
 }
 
-TEST(DataObjectOperationTest, CollectModelAtomsSupportsSelectionAndEntryFilters) {
+TEST(DataObjectOperationTest, ModelSelectionAndLocalEntriesRemainDirectlyQueryable) {
     auto model{MakeModelWithBond()};
     auto& atoms{model->GetAtomList()};
     ASSERT_EQ(atoms.size(), 2);
@@ -731,37 +746,53 @@ TEST(DataObjectOperationTest, CollectModelAtomsSupportsSelectionAndEntryFilters)
     atoms[0]->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     model->Update();
 
-    rg::ModelAtomCollectorOptions selected_only_options;
-    selected_only_options.selected_only = true;
-    const auto selected_only_atoms{rg::CollectModelAtoms(*model, selected_only_options)};
+    const auto& selected_only_atoms{model->GetSelectedAtomList()};
     ASSERT_EQ(selected_only_atoms.size(), 1);
     EXPECT_EQ(selected_only_atoms.front(), atoms[0].get());
 
-    rg::ModelAtomCollectorOptions require_entry_options;
-    require_entry_options.selected_only = false;
-    require_entry_options.require_local_potential_entry = true;
-    const auto require_entry_atoms{rg::CollectModelAtoms(*model, require_entry_options)};
+    std::vector<rg::AtomObject*> require_entry_atoms;
+    for (auto& atom : model->GetAtomList()) {
+        if (atom->GetLocalPotentialEntry() != nullptr) {
+            require_entry_atoms.emplace_back(atom.get());
+        }
+    }
     ASSERT_EQ(require_entry_atoms.size(), 1);
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
-TEST(DataObjectOperationTest, PrepareSimulationAtomsCollectsAtomChargeAndRange) {
+TEST(DataObjectOperationTest, ModelAtomsExposeInputsNeededForSimulationPreparation) {
     auto model{MakeModelWithBond()};
-    rg::SimulationAtomPreparationOptions options;
-    options.partial_charge_choice = rg::PartialCharge::NEUTRAL;
-    options.include_unknown_atoms = true;
-
-    const auto result{rg::PrepareSimulationAtoms(*model, options)};
-    ASSERT_TRUE(result.has_atom);
-    EXPECT_EQ(result.atom_list.size(), 2);
-    ASSERT_EQ(result.atom_charge_map.size(), 2);
-    EXPECT_DOUBLE_EQ(result.atom_charge_map.at(1), 0.0);
-    EXPECT_DOUBLE_EQ(result.atom_charge_map.at(2), 0.0);
-    EXPECT_FLOAT_EQ(result.range_minimum[0], 0.0f);
-    EXPECT_FLOAT_EQ(result.range_maximum[0], 1.0f);
+    std::vector<rg::AtomObject*> atom_list;
+    std::unordered_map<int, double> atom_charge_map;
+    std::array<float, 3> range_minimum{
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max()};
+    std::array<float, 3> range_maximum{
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest()};
+    for (auto& atom : model->GetAtomList()) {
+        atom_list.emplace_back(atom.get());
+        atom_charge_map.emplace(atom->GetSerialID(), 0.0);
+        const auto& atom_position{atom->GetPositionRef()};
+        range_minimum[0] = std::min(range_minimum[0], atom_position[0]);
+        range_minimum[1] = std::min(range_minimum[1], atom_position[1]);
+        range_minimum[2] = std::min(range_minimum[2], atom_position[2]);
+        range_maximum[0] = std::max(range_maximum[0], atom_position[0]);
+        range_maximum[1] = std::max(range_maximum[1], atom_position[1]);
+        range_maximum[2] = std::max(range_maximum[2], atom_position[2]);
+    }
+    ASSERT_FALSE(atom_list.empty());
+    EXPECT_EQ(atom_list.size(), 2);
+    ASSERT_EQ(atom_charge_map.size(), 2);
+    EXPECT_DOUBLE_EQ(atom_charge_map.at(1), 0.0);
+    EXPECT_DOUBLE_EQ(atom_charge_map.at(2), 0.0);
+    EXPECT_FLOAT_EQ(range_minimum[0], 0.0f);
+    EXPECT_FLOAT_EQ(range_maximum[0], 1.0f);
 }
 
-TEST(DataObjectOperationTest, BuildModelAtomBondContextBuildsSelectedContextMaps) {
+TEST(DataObjectOperationTest, SelectedAtomAndBondStateCanBuildContextMapsDirectly) {
     auto model{MakeModelWithBond()};
     auto& atoms{model->GetAtomList()};
     auto& bonds{model->GetBondList()};
@@ -772,11 +803,20 @@ TEST(DataObjectOperationTest, BuildModelAtomBondContextBuildsSelectedContextMaps
     bonds[0]->SetSelectedFlag(true);
     model->Update();
 
-    const auto context{rg::BuildModelAtomBondContext(*model)};
-    ASSERT_EQ(context.atom_map.size(), 2);
-    ASSERT_EQ(context.bond_map.size(), 2);
-    EXPECT_EQ(context.atom_map.at(1), atoms[0].get());
-    EXPECT_EQ(context.atom_map.at(2), atoms[1].get());
-    EXPECT_EQ(context.bond_map.at(1).size(), 1);
-    EXPECT_EQ(context.bond_map.at(2).size(), 1);
+    std::unordered_map<int, rg::AtomObject*> atom_map;
+    std::unordered_map<int, std::vector<rg::BondObject*>> bond_map;
+    for (auto* atom : model->GetSelectedAtomList()) {
+        atom_map.emplace(atom->GetSerialID(), atom);
+    }
+    for (auto* bond : model->GetSelectedBondList()) {
+        bond_map[bond->GetAtomSerialID1()].emplace_back(bond);
+        bond_map[bond->GetAtomSerialID2()].emplace_back(bond);
+    }
+
+    ASSERT_EQ(atom_map.size(), 2);
+    ASSERT_EQ(bond_map.size(), 2);
+    EXPECT_EQ(atom_map.at(1), atoms[0].get());
+    EXPECT_EQ(atom_map.at(2), atoms[1].get());
+    EXPECT_EQ(bond_map.at(1).size(), 1);
+    EXPECT_EQ(bond_map.at(2).size(), 1);
 }

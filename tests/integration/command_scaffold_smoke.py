@@ -17,8 +17,6 @@ def main() -> int:
             str(scaffold_script),
             "--name",
             "Example",
-            "--profile",
-            "FileWorkflow",
             "--dry-run",
         ],
         check=True,
@@ -30,7 +28,6 @@ def main() -> int:
     expected_paths = [
         project_root / "src" / "core" / "internal" / "command" / "ExampleCommand.hpp",
         project_root / "src" / "core" / "command" / "ExampleCommand.cpp",
-        project_root / "tests" / "core" / "command" / "ExampleCommand_test.cpp",
         project_root / "docs" / "developer" / "commands" / "example.md",
     ]
 
@@ -46,6 +43,16 @@ def main() -> int:
     for unexpected_fragment in unexpected_fragments:
         if unexpected_fragment in stdout:
             raise AssertionError(f"Dry-run output used resources/ as repo root.\n{stdout}")
+
+    guidance_fragments = [
+        str(project_root / "tests" / "core" / "command"),
+        str(project_root / "tests" / "core" / "command" / "CommandValidationScenarios_test.cpp"),
+        str(project_root / "tests" / "core" / "command" / "CommandWorkflowScenarios_test.cpp"),
+        "extend the grouped command tests",
+    ]
+    for fragment in guidance_fragments:
+        if fragment not in stdout:
+            raise AssertionError(f"Expected dry-run output to mention {fragment}.\n{stdout}")
 
     return 0
 

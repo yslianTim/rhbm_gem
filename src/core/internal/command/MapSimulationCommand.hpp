@@ -26,7 +26,7 @@ private:
     std::array<float, 3> m_atom_range_minimum, m_atom_range_maximum;
 
 public:
-    explicit MapSimulationCommand(CommonOptionProfile profile);
+    MapSimulationCommand();
     ~MapSimulationCommand() override = default;
 
 private:

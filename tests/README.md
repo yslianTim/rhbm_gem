@@ -76,6 +76,12 @@ cmake --build build --target lint_repo
 ## Adding New Tests
 
 - Place new tests in the matching domain directory.
+- For `tests/core/command/`, prefer extending the existing grouped files:
+- `CommandBaseLifecycle_test.cpp` for base lifecycle/preflight behavior.
+- `CommandValidationHelpers_test.cpp` for reusable helper semantics.
+- `CommandValidationScenarios_test.cpp` for command-specific validation rules.
+- `CommandWorkflowScenarios_test.cpp` for command workflows and output side effects.
+- Only create a new command `*_test.cpp` when you are introducing a new testing responsibility.
 - Place new fixture files under `tests/fixtures/`.
 - Use `tests/support/` for shared test-only seams and reusable helpers/assertions.
 - Add the source to the correct grouped target in `tests/CMakeLists.txt`.

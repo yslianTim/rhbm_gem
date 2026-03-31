@@ -1,41 +1,65 @@
 #include <rhbm_gem/core/command/CommandApi.hpp>
 
-#include "internal/command/CommandRegistry.hpp"
+#include "internal/command/HRLModelTestCommand.hpp"
+#include "internal/command/MapSimulationCommand.hpp"
+#include "internal/command/PotentialAnalysisCommand.hpp"
+#include "internal/command/PotentialDisplayCommand.hpp"
+#include "internal/command/ResultDumpCommand.hpp"
+
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+#include "internal/command/MapVisualizationCommand.hpp"
+#include "internal/command/PositionEstimationCommand.hpp"
+#endif
 
 namespace rhbm_gem {
 namespace {
 
-template <typename CommandType, typename RequestType>
-ExecutionReport RunCommand(CommonOptionProfile profile, const RequestType & request)
+std::vector<ValidationIssue> BuildPublicValidationIssues(
+    const std::vector<ValidationIssueRecord> & internal_issues)
 {
-    CommandType command{ profile };
+    std::vector<ValidationIssue> public_issues;
+    public_issues.reserve(internal_issues.size());
+    for (const auto & issue : internal_issues)
+    {
+        public_issues.push_back(ValidationIssue{
+            issue.option_name,
+            issue.message
+        });
+    }
+    return public_issues;
+}
+
+template <typename CommandType, typename RequestType>
+CommandResult RunCommand(const RequestType & request)
+{
+    CommandType command{};
     command.ApplyRequest(request);
 
-    ExecutionReport report;
-    report.prepared = command.PrepareForExecution();
-    report.validation_issues = command.GetValidationIssues();
-    if (!report.prepared)
-    {
-        return report;
-    }
-
-    report.executed = command.Execute();
-    const auto & post_execution_issues{ command.GetValidationIssues() };
-    if (!post_execution_issues.empty())
-    {
-        report.validation_issues = post_execution_issues;
-    }
-    return report;
+    CommandResult result;
+    result.succeeded = command.Run();
+    result.issues = BuildPublicValidationIssues(command.GetValidationIssues());
+    return result;
 }
 
 } // namespace
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)                           \
-    ExecutionReport Run##COMMAND_ID(const COMMAND_ID##Request & request)                       \
+const std::vector<CommandInfo> & ListCommands()
+{
+    static const std::vector<CommandInfo> commands{
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
+        CommandInfo{ CLI_NAME, DESCRIPTION },
+#include "CommandManifest.def"
+#undef RHBM_GEM_COMMAND
+    };
+    return commands;
+}
+
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
+    CommandResult Run##COMMAND_ID(const COMMAND_ID##Request & request)                         \
     {                                                                                          \
-        return RunCommand<COMMAND_ID##Command>(CommonOptionProfile::PROFILE, request);         \
+        return RunCommand<COMMAND_ID##Command>(request);                                       \
     }
-#include <rhbm_gem/core/command/CommandList.def>
+#include "CommandManifest.def"
 #undef RHBM_GEM_COMMAND
 
 } // namespace rhbm_gem

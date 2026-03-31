@@ -40,56 +40,68 @@ constexpr std::string_view kAlphaROption{ "--alpha-r" };
 constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 } // namespace
 
-HRLModelTestCommand::HRLModelTestCommand(CommonOptionProfile profile) :
-    CommandWithRequest<HRLModelTestRequest>{ profile }
+HRLModelTestCommand::HRLModelTestCommand() :
+    CommandWithRequest<HRLModelTestRequest>{}
 {
 }
 
 void HRLModelTestCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetValidatedEnumOption(
-        request.tester_choice,
+    CoerceEnum(
         request.tester_choice,
         kTesterOption,
         TesterType::BENCHMARK,
         "Tester choice");
-    SetFiniteNonNegativeScalarOption(
-        request.fit_range_min,
+    CoerceScalar(
         request.fit_range_min,
         kFitMinOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
         0.0,
+        LogLevel::Error,
         "Minimum fitting range must be a finite non-negative value.");
-    SetFiniteNonNegativeScalarOption(
-        request.fit_range_max,
+    CoerceScalar(
         request.fit_range_max,
         kFitMaxOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
         1.0,
+        LogLevel::Error,
         "Maximum fitting range must be a finite non-negative value.");
-    SetFinitePositiveScalarOption(
-        request.alpha_r,
+    CoerceScalar(
         request.alpha_r,
         kAlphaROption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         0.1,
+        LogLevel::Error,
         "Alpha-R must be a finite positive value.");
-    SetFinitePositiveScalarOption(
-        request.alpha_g,
+    CoerceScalar(
         request.alpha_g,
         kAlphaGOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         0.2,
+        LogLevel::Error,
         "Alpha-G must be a finite positive value.");
 }
 
 void HRLModelTestCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ResetPrepareIssues(kFitRangeIssue);
-    if (request.fit_range_min > request.fit_range_max)
-    {
-        AddValidationError(
-            kFitRangeIssue,
-            "Expected --fit-min <= --fit-max.");
-    }
+    RequireCondition(
+        request.fit_range_min <= request.fit_range_max,
+        kFitRangeIssue,
+        "Expected --fit-min <= --fit-max.");
 }
 
 } // namespace rhbm_gem

@@ -18,7 +18,7 @@ constexpr std::string_view kJobsOption{ "--jobs" };
 constexpr std::string_view kVerboseOption{ "--verbose" };
 constexpr std::string_view kFolderOption{ "--folder" };
 
-std::string BuildIssuePrefix(const ValidationIssue & issue)
+std::string BuildIssuePrefix(const ValidationIssueRecord & issue)
 {
     const auto phase_index{ static_cast<std::size_t>(issue.phase) };
     const auto phase_label{
@@ -37,32 +37,21 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
 
 } // namespace
 
-CommandBase::CommandBase(CommonOptionMask common_options) :
-    m_data_manager{},
-    m_common_options{ common_options }
+bool CommandBase::Run()
 {
-}
-
-CommandBase::CommandBase(CommonOptionProfile profile) :
-    CommandBase{ CommonOptionMaskForProfile(profile) }
-{
-}
-
-bool CommandBase::Execute()
-{
-    const bool was_prepared{ m_is_prepared_for_execution };
-    if (!was_prepared && !PrepareForExecution())
+    BeginPreparationPass();
+    if (!RunValidationPass())
     {
         return false;
     }
 
-    if (was_prepared)
+    if (!RunFilesystemPreflight())
     {
-        Logger::SetLogLevel(VerboseLevel());
+        return false;
     }
 
+    m_was_prepared = true;
     const bool executed{ ExecuteImpl() };
-    m_is_prepared_for_execution = false;
     if (!executed)
     {
         Logger::Log(LogLevel::Error,
@@ -71,39 +60,25 @@ bool CommandBase::Execute()
     return executed;
 }
 
-bool CommandBase::PrepareForExecution()
-{
-    BeginPreparationPass();
-    if (!RunValidationPass())
-    {
-        return false;
-    }
-
-    return RunFilesystemPreflight();
-}
-
 void CommandBase::InvalidatePreparedState()
 {
-    m_is_prepared_for_execution = false;
+    m_was_prepared = false;
     ClearValidationIssues(ValidationPhase::Prepare);
 }
 
-void CommandBase::SetThreadSize(int value)
+void CommandBase::CoerceBaseRequest(CommandRequestBase & request)
 {
-    SetNormalizedScalarOption(
-        m_common_request.thread_size,
-        value,
+    InvalidatePreparedState();
+    const auto raw_verbose_level{ request.verbosity };
+    CoerceScalar(
+        request.job_count,
         kJobsOption,
         [](int candidate) { return candidate >= 1; },
         1,
+        LogLevel::Warning,
         "Thread size must be positive. Using 1 instead.");
-}
-
-void CommandBase::SetVerboseLevel(int value)
-{
-    SetNormalizedScalarOption(
-        m_common_request.verbose_level,
-        value,
+    CoerceScalar(
+        request.verbosity,
         kVerboseOption,
         [](int candidate)
         {
@@ -111,42 +86,11 @@ void CommandBase::SetVerboseLevel(int value)
                 && candidate <= static_cast<int>(LogLevel::Debug);
         },
         static_cast<int>(LogLevel::Info),
-        "Invalid verbose level: " + std::to_string(value) + ", using default level 3 [Info]");
-}
-
-void CommandBase::SetDatabasePath(const std::filesystem::path & path)
-{
-    MutateOptions([&]()
-    {
-        m_common_request.database_path = path.empty()
-            ? std::filesystem::path{}
-            : path.lexically_normal();
-    });
-}
-
-void CommandBase::SetFolderPath(const std::filesystem::path & path)
-{
-    MutateOptions([&]()
-    {
-        m_common_request.folder_path =
-            std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
-    });
-}
-
-void CommandBase::ApplyCommonRequest(const CommonCommandRequest & request)
-{
-    SetThreadSize(request.thread_size);
-    SetVerboseLevel(request.verbose_level);
-
-    const auto common_options{ GetCommonOptionsMask() };
-    if (HasCommonOption(common_options, CommonOption::Database))
-    {
-        SetDatabasePath(request.database_path);
-    }
-    if (HasCommonOption(common_options, CommonOption::OutputFolder))
-    {
-        SetFolderPath(request.folder_path);
-    }
+        LogLevel::Warning,
+        "Invalid verbose level: " + std::to_string(raw_verbose_level)
+            + ", using default level 3 [Info]");
+    request.output_dir =
+        std::filesystem::path(FilePathHelper::EnsureTrailingSlash(request.output_dir));
 }
 
 void CommandBase::ReportValidationIssues() const
@@ -164,7 +108,7 @@ bool CommandBase::HasValidationErrors() const
     return std::any_of(
         m_validation_issues.begin(),
         m_validation_issues.end(),
-        [](const ValidationIssue & issue)
+        [](const ValidationIssueRecord & issue)
         {
             return issue.level == LogLevel::Error;
         });
@@ -185,14 +129,60 @@ void CommandBase::AddNormalizationWarning(
     AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Warning, message, true);
 }
 
-void CommandBase::ResetParseIssues(std::string_view option_name)
+void CommandBase::ClearParseIssues(std::string_view option_name)
 {
     ClearValidationIssues(option_name, ValidationPhase::Parse);
 }
 
-void CommandBase::ResetPrepareIssues(std::string_view option_name)
+void CommandBase::ClearPrepareIssues(std::string_view option_name)
 {
     ClearValidationIssues(option_name, ValidationPhase::Prepare);
+}
+
+void CommandBase::BeginValidationMutation(ValidationPhase phase)
+{
+    if (phase == ValidationPhase::Parse)
+    {
+        InvalidatePreparedState();
+        return;
+    }
+
+    m_was_prepared = false;
+}
+
+void CommandBase::RequireNonEmptyText(
+    std::string_view field,
+    std::string_view option_name,
+    std::string_view label,
+    ValidationPhase phase)
+{
+    BeginValidationMutation(phase);
+    ClearValidationIssues(option_name, phase);
+    if (!field.empty())
+    {
+        return;
+    }
+
+    AddValidationError(
+        option_name,
+        std::string(label) + " cannot be empty.",
+        phase);
+}
+
+void CommandBase::RequireCondition(
+    bool condition,
+    std::string_view option_name,
+    const std::string & message,
+    ValidationPhase phase)
+{
+    BeginValidationMutation(phase);
+    ClearValidationIssues(option_name, phase);
+    if (condition)
+    {
+        return;
+    }
+
+    AddValidationError(option_name, message, phase);
 }
 
 void CommandBase::ClearValidationIssues(
@@ -203,7 +193,7 @@ void CommandBase::ClearValidationIssues(
         std::remove_if(
             m_validation_issues.begin(),
             m_validation_issues.end(),
-            [option_name, phase](const ValidationIssue & issue)
+            [option_name, phase](const ValidationIssueRecord & issue)
             {
                 return issue.option_name == option_name
                     && (!phase.has_value() || issue.phase == phase.value());
@@ -217,7 +207,7 @@ void CommandBase::ClearValidationIssues(std::optional<ValidationPhase> phase)
         std::remove_if(
             m_validation_issues.begin(),
             m_validation_issues.end(),
-            [phase](const ValidationIssue & issue)
+            [phase](const ValidationIssueRecord & issue)
             {
                 return !phase.has_value() || issue.phase == phase.value();
             }),
@@ -267,30 +257,22 @@ void CommandBase::ValidateOptionalExistingPath(
     }
 }
 
-void CommandBase::SetRequiredExistingPathOption(
+void CommandBase::ValidateRequiredPath(
     std::filesystem::path & field,
-    const std::filesystem::path & value,
     std::string_view option_name,
     std::string_view label)
 {
-    MutateOptions([&]()
-    {
-        field = value;
-        ValidateRequiredExistingPath(field, option_name, label);
-    });
+    InvalidatePreparedState();
+    ValidateRequiredExistingPath(field, option_name, label);
 }
 
-void CommandBase::SetOptionalExistingPathOption(
+void CommandBase::ValidateOptionalPath(
     std::filesystem::path & field,
-    const std::filesystem::path & value,
     std::string_view option_name,
     std::string_view label)
 {
-    MutateOptions([&]()
-    {
-        field = value;
-        ValidateOptionalExistingPath(field, option_name, label);
-    });
+    InvalidatePreparedState();
+    ValidateOptionalExistingPath(field, option_name, label);
 }
 
 void CommandBase::AddValidationIssue(
@@ -300,7 +282,7 @@ void CommandBase::AddValidationIssue(
     const std::string & message,
     bool auto_corrected)
 {
-    m_validation_issues.push_back(ValidationIssue{
+    m_validation_issues.push_back(ValidationIssueRecord{
         std::string(option_name),
         phase,
         level,
@@ -335,7 +317,6 @@ bool CommandBase::RunValidationPass()
     if (HasValidationErrors())
     {
         ReportValidationIssues();
-        m_is_prepared_for_execution = false;
         return false;
     }
 
@@ -344,29 +325,23 @@ bool CommandBase::RunValidationPass()
 
 bool CommandBase::RunFilesystemPreflight()
 {
-    const auto common_options{ GetCommonOptionsMask() };
-
-    if (HasCommonOption(common_options, CommonOption::OutputFolder))
+    ClearValidationIssues(kFolderOption, ValidationPhase::Prepare);
+    const auto & folder_path{ OutputFolder() };
+    if (!folder_path.empty() && !std::filesystem::exists(folder_path))
     {
-        ClearValidationIssues(kFolderOption, ValidationPhase::Prepare);
-        const auto & folder_path{ OutputFolder() };
-        if (!folder_path.empty() && !std::filesystem::exists(folder_path))
+        std::error_code error_code;
+        std::filesystem::create_directories(folder_path, error_code);
+        if (error_code)
         {
-            std::error_code error_code;
-            std::filesystem::create_directories(folder_path, error_code);
-            if (error_code)
-            {
-                AddValidationError(
-                    kFolderOption,
-                    "Failed to create output directory '" + folder_path.string()
-                        + "': " + error_code.message());
-            }
+            AddValidationError(
+                kFolderOption,
+                "Failed to create output directory '" + folder_path.string()
+                    + "': " + error_code.message());
         }
     }
 
     ReportValidationIssues();
-    m_is_prepared_for_execution = !HasValidationErrors();
-    return m_is_prepared_for_execution;
+    return !HasValidationErrors();
 }
 
 } // namespace rhbm_gem

@@ -18,7 +18,7 @@ private:
     std::shared_ptr<ModelObject> m_model_object;
 
 public:
-    explicit PotentialAnalysisCommand(CommonOptionProfile profile);
+    PotentialAnalysisCommand();
     ~PotentialAnalysisCommand() override = default;
 
 private:

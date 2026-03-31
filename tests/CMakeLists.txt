@@ -73,28 +73,18 @@ function(add_rhbm_gtest_group test_name)
 endfunction()
 
 set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
-    core/command/HRLModelTestCommand_test.cpp
-    core/command/MapSimulationCommand_test.cpp
-    core/command/PotentialAnalysisCommand_test.cpp
-    core/command/PotentialDisplayCommand_test.cpp
-    core/command/ResultDumpCommand_test.cpp
+    core/command/CommandValidationScenarios_test.cpp
+    core/command/CommandWorkflowScenarios_test.cpp
 )
 
 set(CORE_COMMAND_TEST_SOURCES
-    core/command/CommandApi_test.cpp
-    core/command/CommandBase_test.cpp
+    core/command/CommandBaseLifecycle_test.cpp
+    core/command/CommandValidationHelpers_test.cpp
     core/command/MapSampling_test.cpp
-    core/command/CommandOptionHelper_test.cpp
-    core/command/CommandScalarValidationHelper_test.cpp
-    core/command/CommandValidationIssue_test.cpp
     ${RHBM_GEM_CORE_COMMAND_TEST_SOURCES}
 )
 
-set(RHBM_GEM_EXPERIMENTAL_TEST_SOURCES
-    core/command/MapVisualizationCommand_test.cpp
-    core/command/PositionEstimationCommand_test.cpp
-    core/command/PotentialAnalysisExperimentalFeatureGate_test.cpp
-)
+set(RHBM_GEM_EXPERIMENTAL_TEST_SOURCES)
 
 if(RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE)
     list(APPEND CORE_COMMAND_TEST_SOURCES

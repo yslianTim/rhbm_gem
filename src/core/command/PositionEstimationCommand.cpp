@@ -1,5 +1,4 @@
 #include "internal/command/PositionEstimationCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
@@ -17,6 +16,7 @@
 #include <unordered_set>
 #include <cmath>
 #include <cstdint>
+#include <stdexcept>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -30,6 +30,25 @@ constexpr std::string_view kKnnOption{ "--knn" };
 constexpr std::string_view kAlphaOption{ "--alpha" };
 constexpr std::string_view kThresholdOption{ "--threshold" };
 constexpr std::string_view kDedupToleranceOption{ "--dedup-tolerance" };
+
+std::shared_ptr<rhbm_gem::MapObject> LoadMapFromFile(
+    rhbm_gem::DataObjectManager & data_manager,
+    const std::filesystem::path & path,
+    std::string_view key_tag,
+    std::string_view label)
+{
+    try
+    {
+        data_manager.ProcessFile(path, std::string(key_tag));
+        return data_manager.GetTypedDataObject<rhbm_gem::MapObject>(std::string(key_tag));
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error(
+            "Failed to process " + std::string(label) + " from '" + path.string()
+            + "' as MapObject: " + ex.what());
+    }
+}
 
 struct QuantizedPointHash
 {
@@ -46,8 +65,8 @@ struct QuantizedPointHash
 
 namespace rhbm_gem {
 
-PositionEstimationCommand::PositionEstimationCommand(CommonOptionProfile profile) :
-    CommandWithRequest<PositionEstimationRequest>{ profile },
+PositionEstimationCommand::PositionEstimationCommand() :
+    CommandWithRequest<PositionEstimationRequest>{},
     m_selected_voxel_list{}, m_query_point_list{}, m_position_list{},
     m_kd_tree_root{ nullptr }, m_map_object{ nullptr }
 {
@@ -58,41 +77,41 @@ PositionEstimationCommand::~PositionEstimationCommand() = default;
 void PositionEstimationCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetRequiredExistingPathOption(request.map_file_path, request.map_file_path, kMapOption, "Map file");
-    SetNormalizedScalarOption(
-        request.iteration_count,
+    ValidateRequiredPath(request.map_file_path, kMapOption, "Map file");
+    CoerceScalar(
         request.iteration_count,
         kIterationOption,
         [](int candidate) { return candidate > 0; },
         15,
+        LogLevel::Warning,
         "Iteration count must be positive, reset to default 15");
-    SetNormalizedScalarOption(
-        request.knn_size,
+    CoerceScalar(
         request.knn_size,
         kKnnOption,
         [](std::size_t candidate) { return candidate > 0; },
         static_cast<std::size_t>(20),
+        LogLevel::Warning,
         "KNN size must be positive, reset to default 20");
-    SetNormalizedScalarOption(
-        request.alpha,
+    CoerceScalar(
         request.alpha,
         kAlphaOption,
         [](double candidate) { return candidate > 0.0; },
         2.0,
+        LogLevel::Warning,
         "Alpha must be positive, reset to default 2.0");
-    SetNormalizedScalarOption(
-        request.threshold_ratio,
+    CoerceScalar(
         request.threshold_ratio,
         kThresholdOption,
         [](double candidate) { return candidate > 0.0 && candidate <= 1.0; },
         0.01,
+        LogLevel::Warning,
         "Threshold ratio must be in (0, 1], reset to default 0.01");
-    SetNormalizedScalarOption(
-        request.dedup_tolerance,
+    CoerceScalar(
         request.dedup_tolerance,
         kDedupToleranceOption,
         [](double candidate) { return candidate > 0.0; },
         1.0e-2,
+        LogLevel::Warning,
         "Dedup tolerance must be positive, reset to default 0.01");
 }
 
@@ -122,9 +141,9 @@ bool PositionEstimationCommand::BuildDataObject()
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
-        m_map_object = command_data_loader::ProcessMapFile(
+        m_map_object = LoadMapFromFile(
             m_data_manager, request.map_file_path, kMapKey, "map file");
-        NormalizeMapObject(*m_map_object);
+        m_map_object->MapValueArrayNormalization();
     }
     catch (const std::exception & e)
     {

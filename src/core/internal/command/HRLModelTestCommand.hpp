@@ -9,7 +9,7 @@ namespace rhbm_gem {
 class HRLModelTestCommand : public CommandWithRequest<HRLModelTestRequest>
 {
 public:
-    explicit HRLModelTestCommand(CommonOptionProfile profile);
+    HRLModelTestCommand();
     ~HRLModelTestCommand() = default;
 
 private:

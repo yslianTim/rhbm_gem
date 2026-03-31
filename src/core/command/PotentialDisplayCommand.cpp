@@ -1,5 +1,4 @@
 #include "internal/command/PotentialDisplayCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -16,10 +15,45 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
+#include <stdexcept>
+
 namespace {
 constexpr std::string_view kPainterOption{ "--painter" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
 constexpr std::string_view kRefGroupOption{ "--ref-group" };
+
+std::shared_ptr<rhbm_gem::ModelObject> LoadModelFromDatabase(
+    rhbm_gem::DataObjectManager & data_manager,
+    std::string_view key_tag,
+    std::string_view label)
+{
+    try
+    {
+        data_manager.LoadDataObject(std::string(key_tag));
+        return data_manager.GetTypedDataObject<rhbm_gem::ModelObject>(std::string(key_tag));
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error(
+            "Failed to load " + std::string(label) + " with key tag '"
+            + std::string(key_tag) + "' as ModelObject: " + ex.what());
+    }
+}
+
+void ApplyModelSelection(
+    rhbm_gem::ModelObject & model_object,
+    ::AtomSelector & selector)
+{
+    for (auto & atom : model_object.GetAtomList())
+    {
+        atom->SetSelectedFlag(
+            selector.GetSelectionFlag(
+                atom->GetChainID(),
+                atom->GetResidue(),
+                atom->GetElement()));
+    }
+    model_object.Update();
+}
 
 void IngestModelSetsToPainter(
     rhbm_gem::PainterBase & painter,
@@ -43,8 +77,8 @@ void IngestModelSetsToPainter(
 
 namespace rhbm_gem {
 
-PotentialDisplayCommand::PotentialDisplayCommand(CommonOptionProfile profile) :
-    CommandWithRequest<PotentialDisplayRequest>{ profile },
+PotentialDisplayCommand::PotentialDisplayCommand() :
+    CommandWithRequest<PotentialDisplayRequest>{},
     m_atom_selector{ std::make_unique<AtomSelector>() }
 {
 }
@@ -52,42 +86,32 @@ PotentialDisplayCommand::PotentialDisplayCommand(CommonOptionProfile profile) :
 void PotentialDisplayCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetValidatedEnumOption(
-        request.painter_choice,
+    CoerceEnum(
         request.painter_choice,
         kPainterOption,
         PainterType::MODEL,
         "Painter choice");
-    MutateOptions([&]()
+    RequireNonEmptyList(request.model_key_tag_list, kModelKeyListOption, "Model key list");
+    InvalidatePreparedState();
+    ClearParseIssues(kRefGroupOption);
+    for (const auto & [group_name, members] : request.reference_model_groups)
     {
-        ResetParseIssues(kModelKeyListOption);
-        ResetParseIssues(kRefGroupOption);
-        if (request.model_key_tag_list.empty())
+        if (group_name.empty())
         {
             AddValidationError(
-                kModelKeyListOption,
-                "Model key list cannot be empty.",
+                kRefGroupOption,
+                "Reference group name cannot be empty.",
+                ValidationPhase::Parse);
+            continue;
+        }
+        if (members.empty())
+        {
+            AddValidationError(
+                kRefGroupOption,
+                "Reference group '" + group_name + "' cannot be empty.",
                 ValidationPhase::Parse);
         }
-        for (const auto & [group_name, members] : request.reference_model_groups)
-        {
-            if (group_name.empty())
-            {
-                AddValidationError(
-                    kRefGroupOption,
-                    "Reference group name cannot be empty.",
-                    ValidationPhase::Parse);
-                continue;
-            }
-            if (members.empty())
-            {
-                AddValidationError(
-                    kRefGroupOption,
-                    "Reference group '" + group_name + "' cannot be empty.",
-                    ValidationPhase::Parse);
-            }
-        }
-    });
+    }
 }
 
 PotentialDisplayCommand::~PotentialDisplayCommand() = default;
@@ -112,7 +136,7 @@ bool PotentialDisplayCommand::BuildDataObject()
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        m_data_manager.SetDatabaseManager(DatabasePath());
+        m_data_manager.SetDatabaseManager(request.database_path);
         auto model_size{ request.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");
@@ -120,7 +144,7 @@ bool PotentialDisplayCommand::BuildDataObject()
         {
             Logger::ProgressBar(model_count, model_size);
             m_model_object_list.emplace_back(
-                command_data_loader::LoadModelObject(
+                LoadModelFromDatabase(
                     m_data_manager, key, "model object"));
             model_count++;
         }
@@ -133,7 +157,7 @@ bool PotentialDisplayCommand::BuildDataObject()
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
                 m_ref_model_object_list_map[map_key].emplace_back(
-                    command_data_loader::LoadModelObject(
+                    LoadModelFromDatabase(
                         m_data_manager, key_tag, "reference model object"));
                 ref_model_count++;
             }
@@ -196,10 +220,7 @@ void PotentialDisplayCommand::RunDisplay()
             painter = std::make_unique<AtomPainter>();
             for (const auto & model_object : m_model_object_list)
             {
-                ModelAtomCollectorOptions collector_options;
-                collector_options.selected_only = true;
-                auto atom_list{ CollectModelAtoms(*model_object, collector_options) };
-                for (auto * atom : atom_list)
+                for (auto * atom : model_object->GetSelectedAtomList())
                 {
                     painter->AddDataObject(atom);
                 }

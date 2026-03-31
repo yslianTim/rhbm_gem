@@ -11,227 +11,160 @@
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
-#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+
+#include "internal/command/CommandEnumMetadata.hpp"
 
 namespace rhbm_gem {
 
-constexpr CommonOptionMask kDefaultCommandCommonOptions{
-    CommonOptionMaskForProfile(CommonOptionProfile::FileWorkflow)
+enum class ValidationPhase : std::uint8_t
+{
+    Parse = 0,
+    Prepare = 1
+};
+
+struct ValidationIssueRecord
+{
+    std::string option_name;
+    ValidationPhase phase;
+    LogLevel level;
+    std::string message;
+    bool auto_corrected{ false };
 };
 
 class CommandBase
 {
 public:
     virtual ~CommandBase() = default;
-    bool Execute();
-    bool PrepareForExecution();
+    bool Run();
+    bool WasPrepared() const { return m_was_prepared; }
     bool HasValidationErrors() const;
-    const std::vector<ValidationIssue> & GetValidationIssues() const { return m_validation_issues; }
+    const std::vector<ValidationIssueRecord> & GetValidationIssues() const { return m_validation_issues; }
 
 protected:
     DataObjectManager m_data_manager;
-    std::vector<ValidationIssue> m_validation_issues;
+    std::vector<ValidationIssueRecord> m_validation_issues;
 
-    explicit CommandBase(CommonOptionProfile profile);
-    explicit CommandBase(CommonOptionMask common_options = kDefaultCommandCommonOptions);
+    CommandBase() = default;
 
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
-    int ThreadSize() const { return m_common_request.thread_size; }
-    int VerboseLevel() const { return m_common_request.verbose_level; }
-    const std::filesystem::path & DatabasePath() const { return m_common_request.database_path; }
-    const std::filesystem::path & OutputFolder() const { return m_common_request.folder_path; }
-    const CommonCommandRequest & CommonRequest() const { return m_common_request; }
-    void SetThreadSize(int value);
-    void SetVerboseLevel(int value);
-    void SetDatabasePath(const std::filesystem::path & path);
-    void SetFolderPath(const std::filesystem::path & path);
-    void ApplyCommonRequest(const CommonCommandRequest & request);
-
-    // Core command extension API used by concrete command setters and validators.
-    template <typename Mutator>
-    void MutateOptions(Mutator && mutator)
-    {
-        InvalidatePreparedState();
-        std::forward<Mutator>(mutator)();
-    }
-    template <typename FieldType, typename ValueType>
-    void AssignOption(FieldType & field, ValueType && value)
-    {
-        MutateOptions([&]()
-        {
-            field = std::forward<ValueType>(value);
-        });
-    }
+    int ThreadSize() const { return BaseRequest().job_count; }
+    int VerboseLevel() const { return BaseRequest().verbosity; }
+    const std::filesystem::path & OutputFolder() const { return BaseRequest().output_dir; }
+    void BindBaseRequest(CommandRequestBase & request) { m_base_request = &request; }
+    void InvalidatePreparedState();
+    void CoerceBaseRequest(CommandRequestBase & request);
     void AddValidationError(
         std::string_view option_name,
         const std::string & message,
         ValidationPhase phase = ValidationPhase::Prepare);
     void AddNormalizationWarning(std::string_view option_name, const std::string & message);
-    void ResetParseIssues(std::string_view option_name);
-    void ResetPrepareIssues(std::string_view option_name);
+    void ClearParseIssues(std::string_view option_name);
+    void ClearPrepareIssues(std::string_view option_name);
 
-    // Base convenience helpers built on top of the core extension API.
-    void SetRequiredExistingPathOption(
+    void ValidateRequiredPath(
         std::filesystem::path & field,
-        const std::filesystem::path & value,
         std::string_view option_name,
         std::string_view label);
-    void SetOptionalExistingPathOption(
+    void ValidateOptionalPath(
         std::filesystem::path & field,
-        const std::filesystem::path & value,
         std::string_view option_name,
         std::string_view label);
-    // Invalid input is normalized to a fallback value and recorded as a parse warning.
-    template <typename FieldType, typename RawType, typename Predicate>
-    void SetNormalizedScalarOption(
+    void RequireNonEmptyText(
+        std::string_view field,
+        std::string_view option_name,
+        std::string_view label,
+        ValidationPhase phase = ValidationPhase::Parse);
+    template <typename Container>
+    void RequireNonEmptyList(
+        const Container & field,
+        std::string_view option_name,
+        std::string_view label,
+        ValidationPhase phase = ValidationPhase::Parse)
+    {
+        BeginValidationMutation(phase);
+        ClearValidationIssues(option_name, phase);
+        if (!field.empty())
+        {
+            return;
+        }
+
+        AddValidationError(
+            option_name,
+            std::string(label) + " cannot be empty.",
+            phase);
+    }
+    void RequireCondition(
+        bool condition,
+        std::string_view option_name,
+        const std::string & message,
+        ValidationPhase phase = ValidationPhase::Prepare);
+    template <typename FieldType, typename Predicate>
+    void CoerceScalar(
         FieldType & field,
-        RawType raw_value,
         std::string_view option_name,
         Predicate is_valid,
         FieldType fallback_value,
-        const std::string & warning_message)
+        LogLevel issue_level,
+        const std::string & message)
     {
-        MutateOptions([&]()
+        InvalidatePreparedState();
+        ClearParseIssues(option_name);
+        if (is_valid(field))
         {
-            ResetParseIssues(option_name);
-            if (is_valid(raw_value))
-            {
-                field = static_cast<FieldType>(raw_value);
-                return;
-            }
+            return;
+        }
 
-            field = fallback_value;
-            AddNormalizationWarning(std::string(option_name), warning_message);
-        });
+        field = fallback_value;
+        if (issue_level == LogLevel::Warning)
+        {
+            AddNormalizationWarning(option_name, message);
+            return;
+        }
+
+        AddValidationIssue(option_name, ValidationPhase::Parse, issue_level, message, false);
     }
-    template <typename FieldType, typename RawType>
-    void SetFinitePositiveScalarOption(
+    template <typename FieldType>
+    void CoerceEnum(
         FieldType & field,
-        RawType raw_value,
         std::string_view option_name,
         FieldType fallback_value,
-        const std::string & error_message)
-    {
-        SetValidatedScalarOption(
-            field,
-            raw_value,
-            option_name,
-            [](RawType candidate)
-            {
-                return std::isfinite(static_cast<long double>(candidate)) && candidate > 0;
-            },
-            fallback_value,
-            error_message);
-    }
-    template <typename FieldType, typename RawType>
-    void SetFiniteNonNegativeScalarOption(
-        FieldType & field,
-        RawType raw_value,
-        std::string_view option_name,
-        FieldType fallback_value,
-        const std::string & error_message)
-    {
-        SetValidatedScalarOption(
-            field,
-            raw_value,
-            option_name,
-            [](RawType candidate)
-            {
-                return std::isfinite(static_cast<long double>(candidate)) && candidate >= 0;
-            },
-            fallback_value,
-            error_message);
-    }
-    template <typename FieldType, typename RawType>
-    void SetPositiveScalarOption(
-        FieldType & field,
-        RawType raw_value,
-        std::string_view option_name,
-        FieldType fallback_value,
-        const std::string & error_message)
-    {
-        SetValidatedScalarOption(
-            field,
-            raw_value,
-            option_name,
-            [](RawType candidate) { return candidate > 0; },
-            fallback_value,
-            error_message);
-    }
-    // Invalid enum input falls back to a safe value and is recorded as a parse error.
-    template <typename EnumType>
-    void SetValidatedEnumOption(
-        EnumType & field,
-        EnumType raw_value,
-        std::string_view option_name,
-        EnumType fallback_value,
         std::string_view label)
     {
-        MutateOptions([&]()
+        InvalidatePreparedState();
+        ClearParseIssues(option_name);
+        using UnderlyingType = std::underlying_type_t<FieldType>;
+        const auto raw_numeric{ static_cast<UnderlyingType>(field) };
+        if (internal::IsSupportedCommandEnumValue(field))
         {
-            ResetParseIssues(option_name);
-            using UnderlyingType = std::underlying_type_t<EnumType>;
-            const auto raw_numeric{ static_cast<UnderlyingType>(raw_value) };
-            if (IsSupportedCommandEnumValue(raw_value))
-            {
-                field = raw_value;
-                return;
-            }
+            return;
+        }
 
-            field = fallback_value;
-            AddValidationError(
-                std::string(option_name),
-                std::string(label) + " must be one of the supported values. Received: "
-                    + std::to_string(static_cast<long long>(raw_numeric)),
-                ValidationPhase::Parse);
-        });
+        field = fallback_value;
+        AddValidationError(
+            option_name,
+            std::string(label) + " must be one of the supported values. Received: "
+                + std::to_string(static_cast<long long>(raw_numeric)),
+            ValidationPhase::Parse);
     }
     std::filesystem::path BuildOutputPath(
         std::string_view stem,
         std::string_view extension) const;
 
 private:
-    CommonOptionMask GetCommonOptionsMask() const { return m_common_options; }
-
-    CommonCommandRequest m_common_request{};
-    CommonOptionMask m_common_options;
-    bool m_is_prepared_for_execution{ false };
-    void InvalidatePreparedState();
+    CommandRequestBase * m_base_request{ nullptr };
+    bool m_was_prepared{ false };
+    CommandRequestBase & BaseRequest() { return *m_base_request; }
+    const CommandRequestBase & BaseRequest() const { return *m_base_request; }
+    void BeginValidationMutation(ValidationPhase phase);
     void BeginPreparationPass();
     bool RunValidationPass();
     bool RunFilesystemPreflight();
     void ReportValidationIssues() const;
     void ClearValidationIssues(std::string_view option_name, std::optional<ValidationPhase> phase);
     void ClearValidationIssues(std::optional<ValidationPhase> phase = std::nullopt);
-    // Invalid input falls back to a safe value and is recorded as a parse error.
-    template <typename FieldType, typename RawType, typename Predicate>
-    void SetValidatedScalarOption(
-        FieldType & field,
-        RawType raw_value,
-        std::string_view option_name,
-        Predicate is_valid,
-        FieldType fallback_value,
-        const std::string & error_message)
-    {
-        MutateOptions([&]()
-        {
-            ResetParseIssues(option_name);
-            if (is_valid(raw_value))
-            {
-                field = static_cast<FieldType>(raw_value);
-                return;
-            }
-
-            field = fallback_value;
-            AddValidationError(
-                std::string(option_name),
-                error_message,
-                ValidationPhase::Parse);
-        });
-    }
     void ValidateRequiredExistingPath(
         const std::filesystem::path & path,
         std::string_view option_name,
@@ -253,23 +186,17 @@ template <typename Request>
 class CommandWithRequest : public CommandBase
 {
 public:
-    using RequestType = Request;
-
-    explicit CommandWithRequest(CommonOptionProfile profile) :
-        CommandBase{ profile }
+    CommandWithRequest() :
+        CommandBase{}
     {
-    }
-
-    explicit CommandWithRequest(CommonOptionMask common_options = kDefaultCommandCommonOptions) :
-        CommandBase{ common_options }
-    {
+        BindBaseRequest(m_request);
     }
 
     void ApplyRequest(const Request & request)
     {
-        AssignOption(m_request, request);
-        ApplyCommonRequest(m_request.common);
-        m_request.common = CommonRequest();
+        m_request = request;
+        InvalidatePreparedState();
+        CoerceBaseRequest(m_request);
         NormalizeRequest();
     }
 

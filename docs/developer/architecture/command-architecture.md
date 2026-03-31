@@ -1,241 +1,148 @@
 # Command Architecture
 
-This page documents the existing command system. It describes the implementation that is in the
-repository today.
+## Source of Truth
 
-Related guides:
-
-- [`docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
-- [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
-
-## 1. Source of truth
-
-Top-level command membership is defined in:
-
-- [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def)
+Top-level command membership is defined in
+[`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def).
 
 Each entry uses:
 
-- `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION, PROFILE)`
+- `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)`
 
-The manifest is expanded with X-macros by:
+That manifest is expanded by:
 
-- [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp)
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
-- [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp)
+- [`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp)
 - [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
 
-Request structs are declared in [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
-Each request type defines `VisitFields(...)`, and that field schema is reused by both CLI
-registration and Python bindings.
+## Public Surface
 
-Concrete command headers are aggregated by:
+Public command headers separate concerns:
 
-- [`src/core/internal/command/CommandRegistry.hpp`](/src/core/internal/command/CommandRegistry.hpp)
+- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
+  - `CommandRequestBase`
+  - one plain request DTO per command
+  - default data/database path helpers
+  - `ValidationIssue`
+  - `CommandResult`
+  - `ListCommands()`
+  - one `Run*` declaration per command
+- [`include/rhbm_gem/core/command/CommandEnums.hpp`](/include/rhbm_gem/core/command/CommandEnums.hpp)
+  - shared public enums
 
-Stable commands in `CommandList.def`:
+The public API is centered on typed requests, `Run*` entrypoints, shared enums, and path helpers.
+CLI wiring, enum metadata, and request binding schema stay internal.
 
-1. `potential_analysis`
-2. `potential_display`
-3. `result_dump`
-4. `map_simulation`
-5. `model_test`
+## Internal Binding Model
 
-Experimental commands in the `#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block:
+CLI and Python bindings share one internal schema in
+[`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp).
 
-1. `map_visualization`
-2. `position_estimation`
+That schema is the single source for:
 
-## 2. Execution surfaces
+- CLI option registration
+- Python request field binding
 
-All entrypoints converge on the public `Run*` functions declared in `CommandApi.hpp` and defined
-in `CommandApi.cpp`.
+Internal enum alias and binding metadata live in
+[`src/core/internal/command/CommandEnumMetadata.hpp`](/src/core/internal/command/CommandEnumMetadata.hpp).
+
+Public enum types stay small; alias maps and binding tokens are internal-only.
+
+## Execution Surfaces
+
+### CLI
+
+[`src/main.cpp`](/src/main.cpp) creates `CLI::App` and calls the internal
+[`ConfigureCommandCli(...)`](/src/core/internal/command/CommandCli.hpp).
+
+[`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp):
+
+1. enables `require_subcommand(1)`
+2. expands `CommandManifest.def`
+3. creates one subcommand per manifest entry
+4. binds shared `CommandRequestBase` fields
+5. binds command-specific fields from `CommandRequestSchema`
+6. routes the callback to the corresponding `Run*` function
+
+### Python
+
+[`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) binds:
+
+- `CommandRequestBase`
+- one request type per command
+- `CommandResult`
+- `ValidationIssue`
+- shared enums from `CommandEnums.hpp`
+
+Request type registration and `Run*` binding membership are expanded from
+`CommandManifest.def`. Individual request fields still come from
+`CommandRequestSchema`.
+
+## Runtime Flow
+
+All public execution entrypoints converge on the same flow:
 
 ```mermaid
 flowchart LR
-    A["CLI (src/main.cpp)"] --> B["ConfigureCommandCli(...)"]
-    B --> C["Manifest-driven CLI registration"]
-    C --> D["Run* in CommandApi"]
-
-    E["Python (pybind11)"] --> D
-
-    D --> F["Construct concrete command with profile"]
-    F --> G["ApplyRequest(...)"]
-    G --> H["Apply common request and NormalizeRequest()"]
-    H --> I["PrepareForExecution()"]
-    I --> J["Execute()"]
+    A["CLI callback or Python call"] --> B["Run* in CommandApi"]
+    B --> C["RunCommand(...)"]
+    C --> D["Construct concrete command"]
+    D --> E["ApplyRequest(...)"]
+    E --> F["command.Run()"]
+    F --> G["BeginPreparationPass()"]
+    G --> H["RunValidationPass()"]
+    H --> I["RunFilesystemPreflight()"]
+    I --> J["ExecuteImpl()"]
+    J --> K["CommandResult"]
 ```
 
-## 3. Registry and registration
+`Run*` returns `CommandResult` with:
 
-`ConfigureCommandCli(CLI::App &)` is the top-level CLI setup entrypoint. It enables
-`require_subcommand(1)` and expands `CommandList.def` to register each subcommand.
+- `succeeded == true` when execution completes
+- `succeeded == false` when validation, preflight, or execution stops the command
+- `issues` containing public validation diagnostics without exposing internal phase metadata
 
-Shared CLI registration lives in [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp).
-For each manifest entry it:
+## Concrete Command Shape
 
-1. creates a subcommand
-2. constructs one request object
-3. binds common fields from `CommonCommandRequest::VisitFields(...)` according to the command
-   profile
-4. binds command-specific fields from `XxxRequest::VisitFields(...)`
-5. routes the callback to the matching `Run*` function
+Concrete command classes live in:
 
-[`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) and [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp) both include
-[`src/core/internal/command/CommandRegistry.hpp`](/src/core/internal/command/CommandRegistry.hpp), so adding a command requires updating that
-header include list.
-
-## 4. Public contract and request surface
-
-Shared command metadata, default paths, and validation types live in:
-
-- [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp)
-
-This header defines:
-
-- `CommandId`
-- `CommandDescriptor`
-- `CommonOption`
-- `CommonOptionProfile`
-- default data and database path helpers
-- `ValidationPhase`
-- `ValidationIssue`
-
-Public request types, `ExecutionReport`, request field descriptors, and `Run*` entrypoints live in:
-
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
-
-Shared request fields are declared on `CommonCommandRequest`:
-
-- `thread_size`
-- `verbose_level`
-- `database_path`
-- `folder_path`
-
-`CommonOptionProfile` controls which shared CLI options appear on a command:
-
-- `FileWorkflow` -> `Threading | Verbose | OutputFolder`
-- `DatabaseWorkflow` -> `Threading | Verbose | Database | OutputFolder`
-
-Shared command enums and their CLI/Python mappings live in:
-
-- [`include/rhbm_gem/core/command/CommandEnumClass.hpp`](/include/rhbm_gem/core/command/CommandEnumClass.hpp)
-
-## 5. Concrete command contract
-
-Concrete command classes are internal types with headers under [`src/core/internal/command/`](/src/core/internal/command/)
-and implementation files under [`src/core/command/`](/src/core/command/).
+- [`src/core/internal/command/`](/src/core/internal/command/)
+- [`src/core/command/`](/src/core/command/)
 
 The standard shape is:
 
 1. derive from `CommandWithRequest<XxxRequest>`
-2. use the public request as the command configuration object
-3. construct the command with a `CommonOptionProfile`
-4. keep field normalization in `NormalizeRequest()`
-5. keep cross-field checks in `ValidateOptions()`
-6. keep transient execution cleanup in `ResetRuntimeState()`
-7. keep workflow orchestration in `ExecuteImpl()`
+2. keep request normalization in `NormalizeRequest()`
+3. keep semantic checks in `ValidateOptions()`
+4. clear transient runtime state in `ResetRuntimeState()`
+5. keep orchestration in `ExecuteImpl()`
 
-`CommandWithRequest<XxxRequest>::ApplyRequest(...)` performs this sequence:
+`CommandWithRequest<XxxRequest>`:
 
-1. copy the public request into the command
-2. apply `request.common` through `ApplyCommonRequest(...)`
-3. sync normalized common values back into `request.common`
-4. call `NormalizeRequest()`
+1. stores the typed request internally
+2. binds the request to `CommandBase`
+3. coerces shared base options through `CoerceBaseRequest(...)`
+4. calls `NormalizeRequest()`
 
-Useful `CommandBase` helpers:
+## Shared Request Base
 
-- `AssignOption(...)`
-- `MutateOptions(...)`
-- `AddValidationError(...)`
-- `AddNormalizationWarning(...)`
-- `ResetParseIssues(...)`
-- `ResetPrepareIssues(...)`
-- `SetRequiredExistingPathOption(...)`
-- `SetOptionalExistingPathOption(...)`
-- `SetNormalizedScalarOption(...)`
-- `SetFinitePositiveScalarOption(...)`
-- `SetFiniteNonNegativeScalarOption(...)`
-- `SetPositiveScalarOption(...)`
-- `SetValidatedEnumOption(...)`
-- `BuildOutputPath(...)`
+`CommandRequestBase` contributes these shared options:
 
-## 6. Lifecycle and validation
+- `job_count` exposed by CLI as `-j,--jobs`
+- `verbosity` exposed by CLI as `-v,--verbose`
+- `output_dir` exposed by CLI as `-o,--folder`
 
-Each `Run*` function in `CommandApi.cpp` follows this sequence:
+Command-specific fields live directly on each request DTO.
 
-1. construct the concrete command with the manifest profile
-2. call `ApplyRequest(...)`
-3. call `PrepareForExecution()`
-4. return early with `prepared=false` if preparation fails
-5. call `Execute()`
-6. return an `ExecutionReport`
+## Filesystem and Validation Behavior
 
-`PrepareForExecution()` in `CommandBase` performs:
+`CommandBase` performs:
 
-1. `BeginPreparationPass()`
-2. `RunValidationPass()`
-3. `RunFilesystemPreflight()`
+1. request normalization and validation issue tracking
+2. output-directory preflight for `output_dir`
+3. logger-level setup from `verbosity`
 
-`BeginPreparationPass()`:
-
-- sets the logger level from the common request
-- calls `ResetRuntimeState()`
-- clears loaded `DataObjectManager` objects
-- invalidates prepared state and clears prepare-phase issues
-
-`RunValidationPass()`:
-
-- calls `ValidateOptions()`
-- reports validation issues
-- fails preparation if any error-level issue exists
-
-`RunFilesystemPreflight()`:
-
-- creates the output folder only when the command profile exposes `folder_path`, the path is not
-  empty, and the directory does not already exist
-- records a prepare-phase validation error if directory creation fails
-- does not create database parent directories
-
-Database setup stays in command execution code. Commands that use SQLite call
-`DataObjectManager::SetDatabaseManager(...)` when they open the database during execution.
-
-## 7. Command support helpers
-
-Cross-command model and map helpers live in:
-
-- [`src/core/internal/command/CommandDataSupport.hpp`](/src/core/internal/command/CommandDataSupport.hpp)
-- [`src/core/command/CommandDataSupport.cpp`](/src/core/command/CommandDataSupport.cpp)
-
-This module contains:
-
-- typed file/database loaders in `command_data_loader::*`
-- map normalization helpers
-- model preparation helpers
-- atom collection and simulation helpers
-- atom and bond context construction helpers
-
-## 8. Python integration
-
-Python bindings are split across:
-
-- [`src/python/CommonBindings.cpp`](/src/python/CommonBindings.cpp)
-- [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
-
-`CommonBindings.cpp` exposes:
-
-- shared enums from `CommandEnumClass.hpp`
-- `ValidationPhase`
-- `ValidationIssue`
-
-`CommandApiBindings.cpp` exposes:
-
-- `CommonCommandRequest`
-- one request type per manifest entry
-- `ExecutionReport`
-- all `Run*` functions from the manifest
-
-Request properties are emitted by walking each request type's `VisitFields(...)`.
-Experimental request types and `Run*` bindings follow the same manifest and feature-flag rules as
-the public C++ API.
+The generic layer manages only the shared `output_dir`. Internal validation still tracks
+parse/prepare phase boundaries for issue clearing and log formatting, but those phases are
+not part of the public DTO surface.

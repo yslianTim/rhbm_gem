@@ -23,7 +23,7 @@ private:
     std::shared_ptr<MapObject> m_map_object;
 
 public:
-    explicit PositionEstimationCommand(CommonOptionProfile profile);
+    PositionEstimationCommand();
     ~PositionEstimationCommand() override;
 
 private:

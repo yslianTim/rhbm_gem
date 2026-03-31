@@ -2,9 +2,10 @@
 
 #include <vector>
 
-
 #include "internal/command/CommandBase.hpp"
+#include "support/CommandValidationAssertions.hpp"
 #include "support/CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -19,12 +20,9 @@ struct LifecycleCommandOptions
 class LifecycleCommand final : public rg::CommandBase
 {
 public:
-    explicit LifecycleCommand() :
-        rg::CommandBase{
-            rg::CommonOption::Threading
-                | rg::CommonOption::Verbose
-                | rg::CommonOption::OutputFolder}
+    LifecycleCommand()
     {
+        BindBaseRequest(m_base_request);
     }
 
     int validate_count{ 0 };
@@ -34,22 +32,20 @@ public:
 
     void SetFailPrepare(bool value)
     {
-        AssignOption(m_options.fail_prepare, value);
+        m_options.fail_prepare = value;
+        InvalidatePreparedState();
     }
 
     void SetExecutionToggle(bool value)
     {
-        AssignOption(m_options.execution_toggle, value);
+        m_options.execution_toggle = value;
+        InvalidatePreparedState();
     }
 
     void ValidateOptions() override
     {
         ++validate_count;
-        ResetPrepareIssues("--contract");
-        if (m_options.fail_prepare)
-        {
-            AddValidationError("--contract", "prepare failed");
-        }
+        RequireCondition(!m_options.fail_prepare, "--contract", "prepare failed");
     }
 
     void ResetRuntimeState() override
@@ -59,6 +55,7 @@ public:
     }
 
 private:
+    rg::CommandRequestBase m_base_request{};
     LifecycleCommandOptions m_options{};
 
     bool ExecuteImpl() override
@@ -75,55 +72,66 @@ private:
 
 } // namespace
 
-TEST(CommandExecutionContractTest, ExecuteRunsPrepareBeforeExecuteImpl)
+TEST(CommandExecutionContractTest, RunValidatesAndResetsBeforeExecuteImpl)
 {
     LifecycleCommand command{};
     command.SetFailPrepare(true);
 
-    EXPECT_FALSE(command.Execute());
+    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(command.WasPrepared());
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.reset_count, 1);
     EXPECT_EQ(command.execute_impl_count, 0);
 }
 
-TEST(CommandExecutionContractTest, ExplicitPrepareSkipsDuplicatePreflightInsideExecute)
+TEST(CommandExecutionContractTest, RunExecutesValidationResetAndExecuteOnce)
 {
     LifecycleCommand command{};
 
-    ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_EQ(command.validate_count, 1);
-    EXPECT_EQ(command.reset_count, 1);
-
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
+    EXPECT_TRUE(command.WasPrepared());
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.reset_count, 1);
     EXPECT_EQ(command.execute_impl_count, 1);
 }
 
-TEST(CommandExecutionContractTest, RepeatedExecuteResetsRuntimeStateBetweenRuns)
+TEST(CommandExecutionContractTest, RepeatedRunResetsRuntimeStateBetweenRuns)
 {
     LifecycleCommand command{};
 
-    ASSERT_TRUE(command.Execute());
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(command.Run());
 
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.reset_count, 2);
     EXPECT_EQ(command.execute_impl_count, 2);
 }
 
-TEST(CommandExecutionContractTest, MutatingAssignedOptionAfterPrepareForcesFreshPrepareInExecute)
+TEST(CommandExecutionContractTest, MutatingAssignedOptionBeforeSecondRunStillUsesFreshPreparation)
 {
     LifecycleCommand command{};
 
-    ASSERT_TRUE(command.PrepareForExecution());
+    ASSERT_TRUE(command.Run());
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.reset_count, 1);
+    EXPECT_EQ(command.execute_impl_count, 1);
 
     command.SetExecutionToggle(true);
 
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.reset_count, 2);
-    EXPECT_EQ(command.execute_impl_count, 1);
+    EXPECT_EQ(command.execute_impl_count, 2);
+}
+
+TEST(CommandExecutionContractTest, PublicRunEntryPointReportsPreparationFailureAndValidationIssues)
+{
+    const auto result{ rg::RunMapSimulation(rg::MapSimulationRequest{}) };
+
+    EXPECT_FALSE(result.succeeded);
+    EXPECT_NE(
+        command_test::FindValidationIssue(
+            result.issues,
+            "--model"),
+        nullptr);
 }

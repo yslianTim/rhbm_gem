@@ -23,7 +23,7 @@ private:
     std::shared_ptr<MapObject> m_map_object;
 
 public:
-    explicit ResultDumpCommand(CommonOptionProfile profile);
+    ResultDumpCommand();
     ~ResultDumpCommand() override = default;
 
 private:

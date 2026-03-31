@@ -1,5 +1,4 @@
 #include "internal/command/MapVisualizationCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
 #include "internal/command/MapSampling.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -14,6 +13,7 @@
 #include <rhbm_gem/utils/domain/LocalPainter.hpp>
 
 #include <unordered_set>
+#include <unordered_map>
 #include <tuple>
 #include <vector>
 #include <atomic>
@@ -34,12 +34,82 @@ constexpr std::string_view kMapOption{ "--map" };
 constexpr std::string_view kAtomIdOption{ "--atom-id" };
 constexpr std::string_view kSamplingOption{ "--sampling" };
 constexpr std::string_view kWindowSizeOption{ "--window-size" };
+
+template <typename TypedDataObject>
+std::shared_ptr<TypedDataObject> LoadTypedObjectFromFile(
+    rhbm_gem::DataObjectManager & data_manager,
+    const std::filesystem::path & path,
+    std::string_view key_tag,
+    std::string_view label,
+    std::string_view object_type_name)
+{
+    try
+    {
+        data_manager.ProcessFile(path, std::string(key_tag));
+        return data_manager.GetTypedDataObject<TypedDataObject>(std::string(key_tag));
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error(
+            "Failed to process " + std::string(label) + " from '" + path.string()
+            + "' as " + std::string(object_type_name) + ": " + ex.what());
+    }
+}
+
+struct ModelAtomBondContext
+{
+    std::unordered_map<int, rhbm_gem::AtomObject *> atom_map;
+    std::unordered_map<int, std::vector<rhbm_gem::BondObject *>> bond_map;
+};
+
+void SelectAllAtoms(rhbm_gem::ModelObject & model_object)
+{
+    for (auto & atom : model_object.GetAtomList())
+    {
+        atom->SetSelectedFlag(true);
+    }
+}
+
+void SelectAllBonds(rhbm_gem::ModelObject & model_object)
+{
+    for (auto & bond : model_object.GetBondList())
+    {
+        bond->SetSelectedFlag(true);
+    }
+}
+
+void PrepareModelForVisualization(rhbm_gem::ModelObject & model_object)
+{
+    SelectAllAtoms(model_object);
+    SelectAllBonds(model_object);
+    model_object.Update();
+}
+
+ModelAtomBondContext BuildModelAtomBondContext(rhbm_gem::ModelObject & model_object)
+{
+    ModelAtomBondContext result;
+    const auto & selected_atom_list{ model_object.GetSelectedAtomList() };
+    const auto & selected_bond_list{ model_object.GetSelectedBondList() };
+    result.atom_map.reserve(selected_atom_list.size());
+    result.bond_map.reserve(selected_atom_list.size());
+
+    for (auto * atom : selected_atom_list)
+    {
+        result.atom_map.emplace(atom->GetSerialID(), atom);
+    }
+    for (auto * bond : selected_bond_list)
+    {
+        result.bond_map[bond->GetAtomSerialID1()].emplace_back(bond);
+        result.bond_map[bond->GetAtomSerialID2()].emplace_back(bond);
+    }
+    return result;
+}
 }
 
 namespace rhbm_gem {
 
-MapVisualizationCommand::MapVisualizationCommand(CommonOptionProfile profile) :
-    CommandWithRequest<MapVisualizationRequest>{ profile },
+MapVisualizationCommand::MapVisualizationCommand() :
+    CommandWithRequest<MapVisualizationRequest>{},
     m_model_key_tag{ kModelKey }, m_map_key_tag{ kMapKey },
     m_map_object{ nullptr }, m_model_object{ nullptr }
 {
@@ -48,34 +118,37 @@ MapVisualizationCommand::MapVisualizationCommand(CommonOptionProfile profile) :
 void MapVisualizationCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetRequiredExistingPathOption(
-        request.model_file_path,
+    ValidateRequiredPath(
         request.model_file_path,
         kModelOption,
         "Model file");
-    SetRequiredExistingPathOption(
-        request.map_file_path,
+    ValidateRequiredPath(
         request.map_file_path,
         kMapOption,
         "Map file");
-    SetPositiveScalarOption(
-        request.atom_serial_id,
+    CoerceScalar(
         request.atom_serial_id,
         kAtomIdOption,
+        [](int candidate) { return candidate > 0; },
         1,
+        LogLevel::Error,
         "Atom serial ID must be positive.");
-    SetNormalizedScalarOption(
-        request.sampling_size,
+    CoerceScalar(
         request.sampling_size,
         kSamplingOption,
         [](int candidate) { return candidate > 0; },
         100,
+        LogLevel::Warning,
         "Sampling size must be positive, reset to default value = 100");
-    SetFinitePositiveScalarOption(
-        request.window_size,
+    CoerceScalar(
         request.window_size,
         kWindowSizeOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         5.0,
+        LogLevel::Error,
         "Window size must be a finite positive value.");
 }
 
@@ -99,10 +172,10 @@ bool MapVisualizationCommand::BuildDataObject()
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        m_model_object = command_data_loader::ProcessModelFile(
-            m_data_manager, request.model_file_path, m_model_key_tag, "model file");
-        m_map_object = command_data_loader::ProcessMapFile(
-            m_data_manager, request.map_file_path, m_map_key_tag, "map file");
+        m_model_object = LoadTypedObjectFromFile<ModelObject>(
+            m_data_manager, request.model_file_path, m_model_key_tag, "model file", "ModelObject");
+        m_map_object = LoadTypedObjectFromFile<MapObject>(
+            m_data_manager, request.map_file_path, m_map_key_tag, "map file", "MapObject");
     }
     catch (const std::exception & e)
     {
@@ -116,17 +189,13 @@ bool MapVisualizationCommand::BuildDataObject()
 void MapVisualizationCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunMapObjectPreprocessing");
-    NormalizeMapObject(*m_map_object);
+    m_map_object->MapValueArrayNormalization();
 }
 
 void MapVisualizationCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
-    ModelPreparationOptions options;
-    options.select_all_atoms = true;
-    options.select_all_bonds = true;
-    options.update_model = true;
-    PrepareModelObject(*m_model_object, options);
+    PrepareModelForVisualization(*m_model_object);
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
     Logger::Log(LogLevel::Info,

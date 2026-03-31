@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate a command scaffold.
 
-By default this script only creates command/binding/test/doc skeleton files.
-When ``--wire`` is set, it also updates the manifest and CMake source lists.
+By default this script creates command/binding/doc skeleton files.
+When ``--wire`` is set, it also updates the manifest and source CMake list.
+Command tests live in grouped files under ``tests/core/command/`` and are updated manually.
 """
 
 from __future__ import annotations
@@ -21,7 +22,6 @@ class ScaffoldSpec:
     command_type: str
     cli_name: str
     description: str
-    profile: str
 
 
 def _to_title_case(text: str) -> str:
@@ -65,8 +65,7 @@ def _append_command_entry(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
         "RHBM_GEM_COMMAND(\n"
         f"    {spec.command_id},\n"
         f'    "{spec.cli_name}",\n'
-        f'    "{spec.description}",\n'
-        f"    {spec.profile})\n"
+        f'    "{spec.description}")\n'
     )
     return text.rstrip() + block, True
 
@@ -92,15 +91,33 @@ def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple
     return updated_text, True
 
 
-def _append_registry_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    include_line = f'#include "{spec.command_type}.hpp"'
+def _append_command_api_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
+    include_line = f'#include "internal/command/{spec.command_type}.hpp"'
     if include_line in text:
         return text, False
 
-    include_pattern = re.compile(r'^(#include\s+"[^"]+Command\.hpp")\n', re.MULTILINE)
-    matches = list(include_pattern.finditer(text))
+    if spec.command_type in {"MapVisualizationCommand", "PositionEstimationCommand"}:
+        block_pattern = re.compile(
+            r'(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n)(.*?)(#endif\n)',
+            re.DOTALL,
+        )
+        match = block_pattern.search(text)
+        if not match:
+            raise RuntimeError("could not find experimental command include block in CommandApi.cpp")
+
+        body = match.group(2)
+        insert_at = match.start(2) + len(body)
+        updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
+        return updated, True
+
+    stable_pattern = re.compile(r'^(#include\s+"internal/command/[^"]+Command\.hpp")\n', re.MULTILINE)
+    matches = [
+        match for match in stable_pattern.finditer(text)
+        if "MapVisualizationCommand.hpp" not in match.group(1)
+        and "PositionEstimationCommand.hpp" not in match.group(1)
+    ]
     if not matches:
-        raise RuntimeError("could not find any command include in CommandRegistry.hpp")
+        raise RuntimeError("could not find stable command include block in CommandApi.cpp")
 
     insert_at = matches[-1].end()
     updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
@@ -144,7 +161,7 @@ class {spec.command_type}
     : public CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>
 {{
 public:
-    explicit {spec.command_type}(CommonOptionProfile profile);
+    {spec.command_type}();
     ~{spec.command_type}() override = default;
 
 private:
@@ -165,8 +182,8 @@ def _source_template(spec: ScaffoldSpec) -> str:
 
 namespace rhbm_gem {{
 
-{spec.command_type}::{spec.command_type}(CommonOptionProfile profile) :
-    CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>{{ profile }}
+{spec.command_type}::{spec.command_type}() :
+    CommandWithRequest<{spec.command_type.removesuffix("Command")}Request>{{}}
 {{
 }}
 
@@ -195,21 +212,6 @@ bool {spec.command_type}::ExecuteImpl()
 """
 
 
-def _test_template(spec: ScaffoldSpec) -> str:
-    suite = f"{spec.command_type}Test"
-    return f"""#include <gtest/gtest.h>
-
-namespace {{
-
-TEST({suite}, ScaffoldPlaceholder)
-{{
-    SUCCEED();
-}}
-
-}} // namespace
-"""
-
-
 def _doc_template(spec: ScaffoldSpec) -> str:
     return f"""# {spec.command_type}
 
@@ -217,33 +219,35 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 ## Registration Checklist
 
-1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandList.def`.
+1. Add `{spec.command_type.removesuffix("Command")}` into `src/core/command/CommandManifest.def`.
    If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandApi.hpp`.
-   Define `VisitFields(...)` there so CLI and Python bindings pick it up automatically.
-3. Add `#include "{spec.command_type}.hpp"` to `src/core/internal/command/CommandRegistry.hpp`.
+3. Add the internal request schema specialization in `src/core/internal/command/CommandRequestSchema.hpp`.
+4. Add `#include "internal/command/{spec.command_type}.hpp"` to `src/core/command/CommandApi.cpp`.
+4. Extend the grouped command tests under `tests/core/command/`.
+   Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
+   Workflow/output coverage usually belongs in `CommandWorkflowScenarios_test.cpp`.
 """
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
-    command_def = root / "include" / "rhbm_gem" / "core" / "command" / "CommandList.def"
-    command_registry = root / "src" / "core" / "internal" / "command" / "CommandRegistry.hpp"
+    command_def = root / "src" / "core" / "command" / "CommandManifest.def"
+    command_api = root / "src" / "core" / "command" / "CommandApi.cpp"
     source_cmake = root / "src" / "CMakeLists.txt"
-    tests_cmake = root / "tests" / "CMakeLists.txt"
 
     _update_file(
         command_def,
         lambda text: _append_command_entry(text, spec),
         dry_run,
         strict,
-        "Append a new RHBM_GEM_COMMAND(...) block to CommandList.def.",
+        "Append a new RHBM_GEM_COMMAND(...) block to CommandManifest.def.",
     )
     _update_file(
-        command_registry,
-        lambda text: _append_registry_include(text, spec),
+        command_api,
+        lambda text: _append_command_api_include(text, spec),
         dry_run,
         strict,
-        f'Add #include "{spec.command_type}.hpp" to CommandRegistry.hpp.',
+        f'Add #include "internal/command/{spec.command_type}.hpp" to CommandApi.cpp.',
     )
     _update_file(
         source_cmake,
@@ -255,17 +259,6 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         dry_run,
         strict,
         f"Add core/command/{spec.command_type}.cpp to RHBM_GEM_COMMAND_SOURCES.",
-    )
-    _update_file(
-        tests_cmake,
-        lambda text: _append_cmake_list_entry(
-            text,
-            "RHBM_GEM_CORE_COMMAND_TEST_SOURCES",
-            f"core/command/{spec.command_type}_test.cpp",
-        ),
-        dry_run,
-        strict,
-        f"Add core/command/{spec.command_type}_test.cpp to RHBM_GEM_CORE_COMMAND_TEST_SOURCES.",
     )
 
 
@@ -280,7 +273,6 @@ def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
         command_type=command_type,
         cli_name=cli_name,
         description=description,
-        profile=args.profile,
     )
 
 
@@ -289,17 +281,11 @@ def main() -> int:
     parser.add_argument("--name", required=True, help="Base command name, e.g. Example or ExampleCommand.")
     parser.add_argument("--cli-name", help="CLI subcommand token. Defaults to name converted to snake_case.")
     parser.add_argument("--description", help="Command description text.")
-    parser.add_argument(
-        "--profile",
-        default="FileWorkflow",
-        choices=("FileWorkflow", "DatabaseWorkflow"),
-        help="CommonOptionProfile for the generated command.",
-    )
     parser.add_argument("--dry-run", action="store_true", help="Print planned files without writing.")
     parser.add_argument(
         "--wire",
         action="store_true",
-        help=("Also update CommandList.def and the command/test CMake source lists."),
+        help=("Also update CommandManifest.def and the command source CMake list."),
     )
     parser.add_argument(
         "--strict",
@@ -317,21 +303,35 @@ def main() -> int:
     files = {
         root / "src" / "core" / "internal" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
         root / "src" / "core" / "command" / f"{spec.command_type}.cpp": _source_template(spec),
-        root / "tests" / "core" / "command" / f"{spec.command_type}_test.cpp": _test_template(spec),
         root / "docs" / "developer" / "commands" / f"{doc_stem}.md": _doc_template(spec),
     }
 
     for path, content in files.items():
         _write_new(path, content, args.dry_run)
 
+    grouped_test_dir = root / "tests" / "core" / "command"
+    print("\nTest guidance:")
+    print(f"  - Extend grouped command tests under {grouped_test_dir}")
+    print(
+        "  - Validation and request-shape coverage usually belongs in "
+        f"{grouped_test_dir / 'CommandValidationScenarios_test.cpp'}"
+    )
+    print(
+        "  - Workflow/output coverage usually belongs in "
+        f"{grouped_test_dir / 'CommandWorkflowScenarios_test.cpp'}"
+    )
+
     if args.wire:
         _wire_registration_files(root, spec, args.dry_run, args.strict)
 
     print("\nScaffold complete.")
     if args.wire:
-        print("Registration/manifests and CMake source lists were wired automatically.")
+        print("Registration/manifests and command source CMake list were wired automatically.")
     else:
-        print("Next: wire CommandList.def, update CommandRegistry.hpp and CMake source lists, and add the public request schema.")
+        print(
+            "Next: wire CommandManifest.def, update CommandApi.cpp includes and source CMake list, "
+            "add the public request DTO and internal request schema, and extend the grouped command tests."
+        )
     return 0
 
 

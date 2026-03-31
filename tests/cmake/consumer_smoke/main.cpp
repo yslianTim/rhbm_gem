@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/command/CommandContract.hpp>
+#include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
@@ -10,7 +10,6 @@ int main()
     (void)model_object;
 
     const std::string extension{ FilePathHelper::GetExtension("sample.cif") };
-    const auto option{ rhbm_gem::CommonOption::OutputFolder };
-    (void)option;
-    return extension == ".cif" ? 0 : 1;
+    const auto default_database_path{ rhbm_gem::GetDefaultDatabasePath() };
+    return extension == ".cif" && default_database_path.filename() == "database.sqlite" ? 0 : 1;
 }
