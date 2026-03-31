@@ -1,8 +1,8 @@
 # Potential Analysis Command
 
-This page documents the existing `potential_analysis` command implementation.
+This page documents the current `potential_analysis` command implementation.
 
-## Registration and public surface
+## Registration and Implementation Files
 
 The command is declared in
 [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def):
@@ -14,73 +14,133 @@ RHBM_GEM_COMMAND(
     "Run potential analysis")
 ```
 
-That manifest entry is expanded into:
+That manifest entry expands into:
 
-- [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp) for shared metadata and `CommandId`
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp) for `PotentialAnalysisRequest` and `RunPotentialAnalysis(...)`
-- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) for the `RunPotentialAnalysis(...)` definition and CLI registration
-- [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) for Python request and `Run*` bindings
+- `CommandId::PotentialAnalysis` and catalog metadata in
+  [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp)
+- `PotentialAnalysisRequest` and `RunPotentialAnalysis(...)` in
+  [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
+- the `RunPotentialAnalysis(...)` definition and CLI registration in
+  [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
+- Python request and `Run*` bindings in
+  [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
 
 The concrete implementation lives in:
 
 - [`src/core/internal/command/PotentialAnalysisCommand.hpp`](/src/core/internal/command/PotentialAnalysisCommand.hpp)
 - [`src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp)
 
-`potential_analysis` exposes these common and command-specific CLI options:
-
-- `-j,--jobs`
-- `-v,--verbose`
-- `-d,--database`
-- `-o,--folder`
-
-## Request schema
+## Request Surface
 
 `PotentialAnalysisRequest` is declared in
 [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
-Its `VisitFields(...)` definition is the schema used by both CLI registration and Python bindings.
+Its `VisitFields(...)` schema drives both CLI registration and Python bindings.
 
-The request fields are:
+Shared fields under `request.common`:
 
-- Common options: `common.thread_size`, `common.verbose_level`, `common.folder_path`
-- Database option: `database_path`
-- Input paths: `model_file_path`, `map_file_path`
-- Runtime flags: `simulation_flag`, `simulated_map_resolution`, `saved_key_tag`, `training_report_dir`, `training_alpha_flag`, `asymmetry_flag`
-- Sampling controls: `sampling_size`, `sampling_range_min`, `sampling_range_max`, `sampling_height`
-- Fitting controls: `fit_range_min`, `fit_range_max`
-- Alpha controls: `alpha_r`, `alpha_g`
+- `thread_size`
+- `verbose_level`
+- `folder_path`
 
-`RunPotentialAnalysis(...)` constructs `PotentialAnalysisCommand`, calls `ApplyRequest(...)`,
-calls `PrepareForExecution()`, and then executes the command only if preparation succeeds.
+Command-specific fields:
 
-## Request normalization and validation
+- `database_path`
+- `model_file_path`
+- `map_file_path`
+- `simulation_flag`
+- `simulated_map_resolution`
+- `saved_key_tag`
+- `training_report_dir`
+- `training_alpha_flag`
+- `asymmetry_flag`
+- `sampling_size`
+- `sampling_range_min`
+- `sampling_range_max`
+- `sampling_height`
+- `fit_range_min`
+- `fit_range_max`
+- `alpha_r`
+- `alpha_g`
 
-`PotentialAnalysisCommand::NormalizeRequest()` applies per-field normalization. The command uses
-`CommandBase` helpers for most request fields:
+Primary CLI flags exposed by this request:
 
-- `model_file_path` and `map_file_path` use `SetRequiredExistingPathOption(...)`
-- `simulated_map_resolution` uses `SetFiniteNonNegativeScalarOption(...)`
-- `sampling_size` uses `SetNormalizedScalarOption(...)`
-- `sampling_range_min` and `sampling_range_max` use `SetFiniteNonNegativeScalarOption(...)`
-- `sampling_height` uses `SetFinitePositiveScalarOption(...)`
-- `fit_range_min` and `fit_range_max` use `SetFiniteNonNegativeScalarOption(...)`
-- `alpha_r` and `alpha_g` use `SetFinitePositiveScalarOption(...)`
+- `-j,--jobs`
+- `-v,--verbose`
+- `-o,--folder`
+- `-d,--database`
+- `-a,--model`
+- `-m,--map`
+- `--simulation`
+- `-r,--sim-resolution`
+- `-k,--save-key`
+- `--training-report-dir`
+- `--training-alpha`
+- `--asymmetry`
+- `-s,--sampling`
+- `--sampling-min`
+- `--sampling-max`
+- `--sampling-height`
+- `--fit-min`
+- `--fit-max`
+- `--alpha-r`
+- `--alpha-g`
 
-Command-specific normalization details:
+## Request Application and Lifecycle
 
-- `saved_key_tag` treats an empty string as a parse-phase validation error, resets the value to
-  `"model"`, and records the issue on `--save-key`
-- `sampling_size` falls back to `1500` with a parse-phase warning when the value is not positive
+`RunPotentialAnalysis(...)` follows the shared command entrypoint flow:
 
-`PotentialAnalysisCommand::ValidateOptions()` performs prepare-phase checks:
+1. construct `PotentialAnalysisCommand`
+2. call `ApplyRequest(request)`
+3. call `Run()`
+4. return `ExecutionReport`
+
+`ApplyRequest(...)` first coerces common options, then runs `PotentialAnalysisCommand::NormalizeRequest()`.
+`Run()` performs validation, output-folder preflight, and `ExecuteImpl()`.
+
+## Normalization
+
+`PotentialAnalysisCommand::NormalizeRequest()` uses the current `CommandBase` helper API.
+
+Path normalization and parse-time path checks:
+
+- `model_file_path` uses `ValidateRequiredPath(...)`
+- `map_file_path` uses `ValidateRequiredPath(...)`
+
+Scalar normalization with `CoerceScalar(...)`:
+
+- `simulated_map_resolution` must be finite and non-negative
+- `sampling_size` must be positive
+- `sampling_range_min` and `sampling_range_max` must be finite and non-negative
+- `sampling_height` must be finite and positive
+- `fit_range_min` and `fit_range_max` must be finite and non-negative
+- `alpha_r` and `alpha_g` must be finite and positive
+
+Command-specific normalization behavior:
+
+- `saved_key_tag` is handled manually instead of through `CoerceScalar(...)`
+- when `saved_key_tag` is empty, the command resets it to `"model"` and records a parse-phase
+  error on `--save-key`
+- when `sampling_size <= 0`, the command resets it to `1500` and records an auto-corrected
+  parse-phase warning on `--sampling`
+
+## Prepare-Phase Validation
+
+`PotentialAnalysisCommand::ValidateOptions()` performs prepare-phase checks with
+`RequireCondition(...)`.
+
+Current command-specific prepare rules:
 
 - `--simulation true` requires `simulated_map_resolution > 0.0`
 - `--sampling-min <= --sampling-max`
 - `--fit-min <= --fit-max`
 
-`training_report_dir` is optional. The command does not validate or create it during generic
-preparation. Its parent directory is created only if training-report emission is attempted.
+Generic preparation from `CommandBase` also creates the output folder from `request.common.folder_path`
+when needed.
 
-## Execution flow
+`training_report_dir` is not validated or created during generic preparation. The command only
+tries to create directories for report output when report emission is actually requested.
+
+## Execution Flow
 
 `PotentialAnalysisCommand::ExecuteImpl()` runs this sequence:
 
@@ -89,72 +149,69 @@ preparation. Its parent directory is created only if training-report emission is
 3. `RunModelObjectPreprocessing()`
 4. `RunAtomMapValueSampling()`
 5. `RunAtomGroupClassification()`
-6. `RunAtomAlphaTraining()` or `RunLocalAtomFitting(...)`
+6. `RunAtomAlphaTraining()` or `RunLocalAtomFitting(request.alpha_r)`
 7. `RunAtomPotentialFitting()`
 8. `RunExperimentalBondWorkflowIfEnabled()`
 9. `SaveDataObject()`
 
-`BuildDataObject()`:
+Current behavior of the major steps:
 
-- calls `m_data_manager.SetDatabaseManager(request.database_path)`
-- loads the model through `command_data_loader::ProcessModelFile(...)`
-- loads the map through `command_data_loader::ProcessMapFile(...)`
-- updates the model resolution metadata when `simulation_flag` is enabled
+- `BuildDataObject()` sets the database manager, loads the model and map files, and updates the
+  model metadata when `simulation_flag` is enabled
+- `RunMapObjectPreprocessing()` normalizes the map value array
+- `RunModelObjectPreprocessing()` selects atoms and bonds, applies symmetry filtering unless
+  `asymmetry_flag` bypasses it, initializes local potential entries, and warns if symmetry
+  filtering leaves no selected atoms
+- `training_alpha_flag` selects the alpha-training branch; otherwise the command uses
+  `RunLocalAtomFitting(request.alpha_r)`
+- `RunAtomPotentialFitting()` uses trained per-group `alpha_g` values only when
+  `training_alpha_flag` is enabled; otherwise it uses the request value
 
-`RunMapObjectPreprocessing()` calls `NormalizeMapObject(...)`.
-
-`RunModelObjectPreprocessing()` calls `PrepareModelObject(...)` with:
-
-- atom selection enabled
-- bond selection enabled
-- symmetry filtering enabled for atoms and bonds unless `asymmetry_flag` bypasses it
-- local atom and bond entry initialization enabled
-
-If symmetry filtering removes every atom, the command logs a warning suggesting
-`--asymmetry true`.
-
-## Data persistence and reports
+## Data Persistence and Reports
 
 The command uses two internal transient keys:
 
-- `m_model_key_tag = "model"`
-- `m_map_key_tag = "map"`
+- `"model"`
+- `"map"`
 
-`SaveDataObject()` saves the processed model object from the internal `"model"` key to the
+`SaveDataObject()` writes the processed model object from the internal `"model"` key to the
 user-facing `saved_key_tag`.
 
-After saving, the command clears sampled distance and map-value lists for selected atoms that
+After saving, the command clears sampled distance and map-value vectors for selected atoms that
 still have a local potential entry.
 
-Alpha-training PDF output is optional. Report emission is routed through
-`detail::EmitTrainingReportIfRequested(...)`, which:
+Training-report generation is optional and goes through the internal helper
+`detail::EmitTrainingReportIfRequested(...)`.
 
-- returns early when `training_report_dir` is empty
-- creates the report directory only for the requested report path
-- logs warnings if directory creation or painting fails
+Current report behavior:
 
-## Experimental bond workflow
+- returns immediately when `training_report_dir` is empty
+- creates the report directory only for the requested output path
+- logs warnings when directory creation fails
+- logs warnings when painting fails or when no file is produced
+
+## Experimental Bond Workflow
 
 `RunExperimentalBondWorkflowIfEnabled()` is compiled only when
 `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` is enabled.
 
-When that feature flag is enabled, the method runs only if both the model and map objects were
-built successfully, then delegates to
+When the feature flag is enabled, the workflow runs only if both the model and map objects were
+built successfully. It delegates to
 [`src/core/experimental/PotentialAnalysisBondWorkflow.cpp`](/src/core/experimental/PotentialAnalysisBondWorkflow.cpp).
 
 When the feature flag is disabled, the method compiles to a no-op.
 
-## Tests to update when behavior changes
+## Tests to Check When Behavior Changes
 
 - [`tests/core/command/CommandValidationScenarios_test.cpp`](/tests/core/command/CommandValidationScenarios_test.cpp)
 - [`tests/core/command/CommandWorkflowScenarios_test.cpp`](/tests/core/command/CommandWorkflowScenarios_test.cpp)
-- [`tests/integration/CommandApiPipeline_test.cpp`](/tests/integration/CommandApiPipeline_test.cpp)
-- [`tests/integration/python_bindings_runtime_smoke.py`](/tests/integration/python_bindings_runtime_smoke.py)
 - [`tests/core/contract/CommandExecutionContract_test.cpp`](/tests/core/contract/CommandExecutionContract_test.cpp)
 - [`tests/core/contract/CommandCatalog_test.cpp`](/tests/core/contract/CommandCatalog_test.cpp)
+- [`tests/integration/CommandApiPipeline_test.cpp`](/tests/integration/CommandApiPipeline_test.cpp)
+- [`tests/integration/python_bindings_runtime_smoke.py`](/tests/integration/python_bindings_runtime_smoke.py)
 
-## Related references
+## Related References
 
-- [`docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
 - [`docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
+- [`docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
 - [`resources/README.md`](/resources/README.md)
