@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdlib>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -8,10 +9,31 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandEnums.hpp>
-#include <rhbm_gem/core/command/CommandPaths.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
+
+inline std::filesystem::path GetDefaultDataRootPath()
+{
+    if (const char * configured_root{ std::getenv("RHBM_GEM_DATA_DIR") };
+        configured_root != nullptr && configured_root[0] != '\0')
+    {
+        return std::filesystem::path(configured_root);
+    }
+
+    if (const char * home{ std::getenv("HOME") };
+        home != nullptr && home[0] != '\0')
+    {
+        return std::filesystem::path(home) / ".rhbmgem" / "data";
+    }
+
+    return std::filesystem::path(".rhbmgem") / "data";
+}
+
+inline std::filesystem::path GetDefaultDatabasePath()
+{
+    return GetDefaultDataRootPath() / "database.sqlite";
+}
 
 enum class ValidationPhase : std::uint8_t
 {
@@ -140,15 +162,9 @@ struct PositionEstimationRequest : public CommandRequestBase
 };
 #endif
 
-CommandResult RunPotentialAnalysis(const PotentialAnalysisRequest & request);
-CommandResult RunPotentialDisplay(const PotentialDisplayRequest & request);
-CommandResult RunResultDump(const ResultDumpRequest & request);
-CommandResult RunMapSimulation(const MapSimulationRequest & request);
-CommandResult RunHRLModelTest(const HRLModelTestRequest & request);
-
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-CommandResult RunMapVisualization(const MapVisualizationRequest & request);
-CommandResult RunPositionEstimation(const PositionEstimationRequest & request);
-#endif
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
+    CommandResult Run##COMMAND_ID(const COMMAND_ID##Request & request);
+#include "command/CommandManifest.def"
+#undef RHBM_GEM_COMMAND
 
 } // namespace rhbm_gem

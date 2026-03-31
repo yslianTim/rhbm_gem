@@ -97,30 +97,20 @@ void BindCommandApi(py::module_ & module)
         .def_readwrite("verbosity", &CommandRequestBase::verbosity)
         .def_readwrite("output_dir", &CommandRequestBase::output_dir);
 
-    BindRequestType<PotentialAnalysisRequest>(module, "PotentialAnalysisRequest");
-    BindRequestType<PotentialDisplayRequest>(module, "PotentialDisplayRequest");
-    BindRequestType<ResultDumpRequest>(module, "ResultDumpRequest");
-    BindRequestType<MapSimulationRequest>(module, "MapSimulationRequest");
-    BindRequestType<HRLModelTestRequest>(module, "HRLModelTestRequest");
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    BindRequestType<MapVisualizationRequest>(module, "MapVisualizationRequest");
-    BindRequestType<PositionEstimationRequest>(module, "PositionEstimationRequest");
-#endif
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
+    BindRequestType<COMMAND_ID##Request>(module, #COMMAND_ID "Request");
+#include "../core/command/CommandManifest.def"
+#undef RHBM_GEM_COMMAND
 
     py::class_<CommandResult>(module, "CommandResult")
         .def(py::init<>())
         .def_readonly("outcome", &CommandResult::outcome)
         .def_readonly("issues", &CommandResult::issues);
 
-    module.def("RunPotentialAnalysis", &RunPotentialAnalysis);
-    module.def("RunPotentialDisplay", &RunPotentialDisplay);
-    module.def("RunResultDump", &RunResultDump);
-    module.def("RunMapSimulation", &RunMapSimulation);
-    module.def("RunHRLModelTest", &RunHRLModelTest);
-#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-    module.def("RunMapVisualization", &RunMapVisualization);
-    module.def("RunPositionEstimation", &RunPositionEstimation);
-#endif
+#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
+    module.def("Run" #COMMAND_ID, &Run##COMMAND_ID);
+#include "../core/command/CommandManifest.def"
+#undef RHBM_GEM_COMMAND
 }
 
 } // namespace rhbm_gem::bindings

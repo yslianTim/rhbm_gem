@@ -10,7 +10,6 @@
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/core/command/CommandEnums.hpp>
-#include <rhbm_gem/core/command/CommandPaths.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -134,7 +133,6 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
         "core/command/CommandApi.hpp",
         "core/command/CommandEnums.hpp",
-        "core/command/CommandPaths.hpp",
         "core/painter/AtomPainter.hpp",
         "core/painter/ComparisonPainter.hpp",
         "core/painter/DemoPainter.hpp",
@@ -145,7 +143,7 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("core"), expected);
 }
 
-TEST(PublicHeaderSurfaceTest, CommandPathsExposeStableDefaultDatabasePathHelper) {
+TEST(PublicHeaderSurfaceTest, CommandApiExposesStableDefaultDatabasePathHelper) {
     const auto default_path{ rhbm_gem::GetDefaultDatabasePath() };
     EXPECT_FALSE(default_path.empty());
     EXPECT_EQ(default_path.filename(), "database.sqlite");

@@ -1,7 +1,5 @@
 # Command Architecture
 
-This page documents the command system as it exists in this repository today.
-
 ## Source of Truth
 
 Top-level command membership is defined in
@@ -13,16 +11,19 @@ Each entry uses:
 
 That manifest is expanded by:
 
+- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
 - [`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp)
+- [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
 
 ## Public Surface
 
-Public command headers now separate concerns:
+Public command headers separate concerns:
 
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
   - `CommandRequestBase`
   - one plain request DTO per command
+  - default data/database path helpers
   - `ValidationPhase`
   - `ValidationIssue`
   - `CommandOutcome`
@@ -31,10 +32,9 @@ Public command headers now separate concerns:
   - one `Run*` declaration per command
 - [`include/rhbm_gem/core/command/CommandEnums.hpp`](/include/rhbm_gem/core/command/CommandEnums.hpp)
   - shared public enums
-- [`include/rhbm_gem/core/command/CommandPaths.hpp`](/include/rhbm_gem/core/command/CommandPaths.hpp)
-  - default data/database path helpers
 
-The public surface does not expose CLI wiring, manifest macros, or request binding schema.
+The public API is centered on typed requests, `Run*` entrypoints, shared enums, and path helpers.
+CLI wiring, enum metadata, and request binding schema stay internal.
 
 ## Internal Binding Model
 
@@ -78,6 +78,10 @@ Public enum types stay small; alias maps and binding tokens are internal-only.
 - `ValidationPhase`
 - `ValidationIssue`
 - shared enums from `CommandEnums.hpp`
+
+Request type registration and `Run*` binding membership are expanded from
+`CommandManifest.def`. Individual request fields still come from
+`CommandRequestSchema`.
 
 ## Runtime Flow
 
@@ -129,11 +133,11 @@ The standard shape is:
 
 `CommandRequestBase` contributes these shared options:
 
-- `job_count` as `-j,--jobs`
-- `verbosity` as `-v,--verbose`
-- `output_dir` as `-o,--folder`
+- `job_count` exposed by CLI as `-j,--jobs`
+- `verbosity` exposed by CLI as `-v,--verbose`
+- `output_dir` exposed by CLI as `-o,--folder`
 
-Command-specific fields live directly on each request DTO; there is no nested `common` wrapper.
+Command-specific fields live directly on each request DTO.
 
 ## Filesystem and Validation Behavior
 

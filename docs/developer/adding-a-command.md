@@ -1,7 +1,5 @@
 # Adding a Command
 
-This guide describes how to add a command to the current command system.
-
 Related references:
 
 - [`docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
@@ -13,15 +11,12 @@ Public API:
 
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
 - [`include/rhbm_gem/core/command/CommandEnums.hpp`](/include/rhbm_gem/core/command/CommandEnums.hpp) only when the command needs a new shared enum
-- [`include/rhbm_gem/core/command/CommandPaths.hpp`](/include/rhbm_gem/core/command/CommandPaths.hpp) only when shared path defaults change
 
 Internal wiring:
 
 - [`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def)
 - [`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp)
-- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
-- [`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp)
-- [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
+- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) to include the new concrete command header
 
 Concrete implementation:
 
@@ -47,23 +42,29 @@ Stable commands live in the main list. Experimental commands stay inside the
 
 The manifest drives:
 
+- public `Run*` declarations in `CommandApi.hpp`
 - `ListCommands()`
 - `Run*` definitions in `CommandApi.cpp`
 - CLI registration in `CommandCli.cpp`
+- Python request-type and `Run*` binding registration in `CommandApiBindings.cpp`
 
 ## Public Request DTO
 
 Add `<YourCommand>Request` to
 [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
 
-Requests are plain DTOs. They no longer contain binding schema or nested `common` state.
-Shared options come from `CommandRequestBase`:
+Requests are plain DTOs. Shared options come from `CommandRequestBase`:
 
 - `job_count`
 - `verbosity`
 - `output_dir`
 
 Command-specific fields live directly on the request type.
+
+Shared default path helpers such as `GetDefaultDatabasePath()` also live in `CommandApi.hpp`.
+
+`Run*` declarations are generated from `CommandManifest.def`, so adding a request DTO does not
+require a handwritten `RunYourCommand(...)` declaration.
 
 ## Internal Request Schema
 
@@ -122,6 +123,9 @@ through the internal `ConfigureCommandCli(...)`.
 - shared enums
 - `ValidationPhase`
 - `ValidationIssue`
+
+The manifest controls which request types and `Run*` functions are registered there. The
+request-field list still comes from `CommandRequestSchema`.
 
 ## Validation Checklist
 

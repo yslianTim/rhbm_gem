@@ -1,7 +1,5 @@
 # Potential Analysis Command
 
-This page documents the current `potential_analysis` command implementation.
-
 ## Registration and Implementation Files
 
 The command membership entry lives in
@@ -67,18 +65,27 @@ Validation details are reported through `result.issues`.
 
 ## Command Behavior
 
-`PotentialAnalysisCommand::NormalizeRequest()` handles parse-time normalization:
+`PotentialAnalysisCommand::NormalizeRequest()` handles parse-phase normalization and validation:
 
 - validates required model and map paths
-- normalizes numeric ranges and sampling options
-- resets invalid `saved_key_tag` values back to `"model"` with a parse-phase issue
+- coerces invalid scalar inputs back to command defaults when the command is designed to recover
+- resets empty `saved_key_tag` values back to `"model"` and records a parse-phase issue
 
 `PotentialAnalysisCommand::ValidateOptions()` performs prepare-phase semantic checks:
 
 - `--simulation` requires positive simulated resolution
 - sampling and fit ranges must be ordered correctly
 
-Generic preparation in `CommandBase` also creates `output_dir` when needed.
+`PotentialAnalysisCommand::ExecuteImpl()`:
+
+- loads the database, model, and map objects
+- optionally switches the model object into simulation mode
+- runs map preprocessing and model preprocessing
+- performs atom sampling, classification, fitting, and optional alpha training
+- runs the experimental bond workflow when enabled
+- saves the resulting objects back through `DataObjectManager`
+
+`CommandBase` also creates `output_dir` during filesystem preflight when needed.
 
 ## Tests to Update When Behavior Changes
 
