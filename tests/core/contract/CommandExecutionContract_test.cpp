@@ -3,7 +3,9 @@
 #include <vector>
 
 #include "internal/command/CommandBase.hpp"
+#include "support/CommandValidationAssertions.hpp"
 #include "support/CommandTestHelpers.hpp"
+#include <rhbm_gem/core/command/CommandApi.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -120,4 +122,19 @@ TEST(CommandExecutionContractTest, MutatingAssignedOptionBeforeSecondRunStillUse
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.reset_count, 2);
     EXPECT_EQ(command.execute_impl_count, 2);
+}
+
+TEST(CommandExecutionContractTest, PublicRunEntryPointReportsPreparationFailureAndValidationIssues)
+{
+    const auto result{ rg::RunMapSimulation(rg::MapSimulationRequest{}) };
+
+    EXPECT_FALSE(result.prepared);
+    EXPECT_FALSE(result.executed);
+    EXPECT_NE(
+        command_test::FindValidationIssue(
+            result.validation_issues,
+            "--model",
+            rg::ValidationPhase::Parse,
+            LogLevel::Error),
+        nullptr);
 }

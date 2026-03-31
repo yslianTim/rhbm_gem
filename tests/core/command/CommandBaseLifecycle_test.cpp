@@ -54,9 +54,9 @@ private:
 
 } // namespace
 
-TEST(CommandBaseTest, RunCreatesOutputFolder)
+TEST(CommandBaseLifecycleTest, RunCreatesOutputFolder)
 {
-    command_test::ScopedTempDir temp_dir{"command_base_setters"};
+    command_test::ScopedTempDir temp_dir{ "command_base_setters" };
     const auto folder_path{ temp_dir.path() / "out" };
     TestCommand command{};
     command.ConfigureFilesystemOptions(folder_path);
@@ -68,7 +68,7 @@ TEST(CommandBaseTest, RunCreatesOutputFolder)
     EXPECT_TRUE(std::filesystem::exists(folder_path));
 }
 
-TEST(CommandBaseTest, RunReportsValidationIssues)
+TEST(CommandBaseLifecycleTest, RunReportsValidationIssues)
 {
     TestCommand command{};
     command.SetForceInvalid(true);
@@ -82,9 +82,9 @@ TEST(CommandBaseTest, RunReportsValidationIssues)
     EXPECT_NE(error_output.find("Option --test: forced invalid config"), std::string::npos);
 }
 
-TEST(CommandBaseTest, ValidationFailureSkipsFilesystemPreflight)
+TEST(CommandBaseLifecycleTest, ValidationFailureSkipsFilesystemPreflight)
 {
-    command_test::ScopedTempDir temp_dir{"command_base_prepare_validation_failure"};
+    command_test::ScopedTempDir temp_dir{ "command_base_prepare_validation_failure" };
     const auto folder_path{ temp_dir.path() / "out" };
     TestCommand command{};
     command.ConfigureFilesystemOptions(folder_path);

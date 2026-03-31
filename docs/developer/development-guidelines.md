@@ -94,7 +94,8 @@ Change-integration principles:
 - `[Required]` New features, behavior changes, and bug fixes require tests (except documentation-only changes).
 - `[Required]` Cover both happy paths and failure paths that are part of supported behavior.
 - `[Required]` Keep tests deterministic and independent of machine-local state.
-- `[Required]` Add new `*_test.cpp` files to the matching grouped file under `/tests/cmake/`.
+- `[Required]` Extend the matching grouped test file when one already covers the responsibility.
+- `[Required]` Only add a new `*_test.cpp` when the change introduces a genuinely new testing responsibility.
 - `[Required]` Every test target declared through `add_rhbm_gtest_target(...)` must carry both `domain:*` and `intent:*` CTest labels.
 - `[Required]` Every file referenced by `TestDataPath(...)` must exist under `/tests/fixtures/` and be tracked by git.
 - `[Required]` Schema/persistence changes require regression coverage for bootstrap or migration behavior, rollback behavior on failure, and round-trip correctness.

@@ -43,7 +43,7 @@ Build wiring:
 
 Tests and docs:
 
-- `tests/core/command/<YourCommand>_test.cpp`
+- existing grouped command tests under `tests/core/command/`
 - impacted contract or integration tests
 - developer or user docs that describe the command surface
 
@@ -93,16 +93,15 @@ python3 resources/tools/developer/command_scaffold.py --name Example --wire
 - `include/rhbm_gem/core/command/CommandList.def`
 - `src/core/command/CommandApi.cpp`
 - `src/CMakeLists.txt` stable command source list: `RHBM_GEM_COMMAND_SOURCES`
-- `tests/CMakeLists.txt` stable command test list: `RHBM_GEM_CORE_COMMAND_TEST_SOURCES`
 
 The scaffold does not:
 
 - add the public request struct to `CommandApi.hpp`
 - place entries into the experimental manifest section
 - place command sources into `RHBM_GEM_EXPERIMENTAL_SOURCES`
-- place tests into `RHBM_GEM_EXPERIMENTAL_TEST_SOURCES`
 - add enum definitions to `CommandEnumClass.hpp`
 - add command-specific validation, execution logic, or documentation beyond the generated stub
+- update grouped command test files under `tests/core/command/`
 
 ## 5. Implement the command class
 
@@ -130,15 +129,13 @@ derived lookup tables.
 
 Useful `CommandBase` helpers:
 
-- `AssignOption(...)`
-- `MutateOptions(...)`
-- `SetRequiredExistingPathOption(...)`
-- `SetOptionalExistingPathOption(...)`
-- `SetNormalizedScalarOption(...)`
-- `SetFinitePositiveScalarOption(...)`
-- `SetFiniteNonNegativeScalarOption(...)`
-- `SetPositiveScalarOption(...)`
-- `SetValidatedEnumOption(...)`
+- `ValidateRequiredPath(...)`
+- `ValidateOptionalPath(...)`
+- `RequireNonEmptyText(...)`
+- `RequireNonEmptyList(...)`
+- `RequireCondition(...)`
+- `CoerceScalar(...)`
+- `CoerceEnum(...)`
 - `BuildOutputPath(...)`
 
 ## 6. Add the public request and run entrypoint
@@ -196,13 +193,17 @@ command adds a new shared enum or shared validation/common type.
 - `RHBM_GEM_COMMAND_SOURCES` for stable commands
 - `RHBM_GEM_EXPERIMENTAL_SOURCES` for experimental commands
 
-[`tests/CMakeLists.txt`](/tests/CMakeLists.txt) has two command test lists:
+[`tests/core/command/`](/tests/core/command/) is organized by test responsibility rather than one
+file per command. In most cases you should extend one of the existing grouped files:
 
-- `RHBM_GEM_CORE_COMMAND_TEST_SOURCES` for stable command tests
-- `RHBM_GEM_EXPERIMENTAL_TEST_SOURCES` for experimental command tests
+- `CommandBaseLifecycle_test.cpp` for base lifecycle/preflight behavior
+- `CommandValidationHelpers_test.cpp` for reusable validation/helper semantics
+- `CommandValidationScenarios_test.cpp` for command-specific validation rules
+- `CommandWorkflowScenarios_test.cpp` for command workflows and output side effects
 
-If the command is experimental, wire it into the experimental lists manually.
-`command_scaffold.py --wire` only updates the stable lists.
+Only introduce a new command test file when you are creating a genuinely new test responsibility.
+If the command is experimental, keep the experimental-only cases behind the existing feature guards
+inside the grouped test files unless a separate responsibility file is warranted.
 
 ## 9. Tests and documentation
 
@@ -221,8 +222,9 @@ Before merge:
 2. `CommandApi.hpp` contains the request struct and its `VisitFields(...)` schema
 3. `CommandList.def` contains the manifest entry in the correct stable or experimental section
 4. `CommandApi.cpp` includes the new command header
-5. `src/CMakeLists.txt` and `tests/CMakeLists.txt` include the source and test file in the correct stable or experimental list
-6. tests and docs match the final command surface
+5. `src/CMakeLists.txt` includes the source in the correct stable or experimental list
+6. grouped command tests under `tests/core/command/` cover the new validation/workflow behavior
+7. tests and docs match the final command surface
 
 Recommended checks:
 

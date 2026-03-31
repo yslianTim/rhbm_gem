@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate a command scaffold.
 
-By default this script only creates command/binding/test/doc skeleton files.
-When ``--wire`` is set, it also updates the manifest and CMake source lists.
+By default this script creates command/binding/doc skeleton files.
+When ``--wire`` is set, it also updates the manifest and source CMake list.
+Command tests live in grouped files under ``tests/core/command/`` and are updated manually.
 """
 
 from __future__ import annotations
@@ -211,21 +212,6 @@ bool {spec.command_type}::ExecuteImpl()
 """
 
 
-def _test_template(spec: ScaffoldSpec) -> str:
-    suite = f"{spec.command_type}Test"
-    return f"""#include <gtest/gtest.h>
-
-namespace {{
-
-TEST({suite}, ScaffoldPlaceholder)
-{{
-    SUCCEED();
-}}
-
-}} // namespace
-"""
-
-
 def _doc_template(spec: ScaffoldSpec) -> str:
     return f"""# {spec.command_type}
 
@@ -238,6 +224,9 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandApi.hpp`.
    Define `VisitFields(...)` there so CLI and Python bindings pick it up automatically.
 3. Add `#include "internal/command/{spec.command_type}.hpp"` to `src/core/command/CommandApi.cpp`.
+4. Extend the grouped command tests under `tests/core/command/`.
+   Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
+   Workflow/output coverage usually belongs in `CommandWorkflowScenarios_test.cpp`.
 """
 
 
@@ -245,7 +234,6 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
     command_def = root / "include" / "rhbm_gem" / "core" / "command" / "CommandList.def"
     command_api = root / "src" / "core" / "command" / "CommandApi.cpp"
     source_cmake = root / "src" / "CMakeLists.txt"
-    tests_cmake = root / "tests" / "CMakeLists.txt"
 
     _update_file(
         command_def,
@@ -272,17 +260,6 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         strict,
         f"Add core/command/{spec.command_type}.cpp to RHBM_GEM_COMMAND_SOURCES.",
     )
-    _update_file(
-        tests_cmake,
-        lambda text: _append_cmake_list_entry(
-            text,
-            "RHBM_GEM_CORE_COMMAND_TEST_SOURCES",
-            f"core/command/{spec.command_type}_test.cpp",
-        ),
-        dry_run,
-        strict,
-        f"Add core/command/{spec.command_type}_test.cpp to RHBM_GEM_CORE_COMMAND_TEST_SOURCES.",
-    )
 
 
 def build_spec(args: argparse.Namespace) -> ScaffoldSpec:
@@ -308,7 +285,7 @@ def main() -> int:
     parser.add_argument(
         "--wire",
         action="store_true",
-        help=("Also update CommandList.def and the command/test CMake source lists."),
+        help=("Also update CommandList.def and the command source CMake list."),
     )
     parser.add_argument(
         "--strict",
@@ -326,21 +303,35 @@ def main() -> int:
     files = {
         root / "src" / "core" / "internal" / "command" / f"{spec.command_type}.hpp": _header_template(spec),
         root / "src" / "core" / "command" / f"{spec.command_type}.cpp": _source_template(spec),
-        root / "tests" / "core" / "command" / f"{spec.command_type}_test.cpp": _test_template(spec),
         root / "docs" / "developer" / "commands" / f"{doc_stem}.md": _doc_template(spec),
     }
 
     for path, content in files.items():
         _write_new(path, content, args.dry_run)
 
+    grouped_test_dir = root / "tests" / "core" / "command"
+    print("\nTest guidance:")
+    print(f"  - Extend grouped command tests under {grouped_test_dir}")
+    print(
+        "  - Validation and request-shape coverage usually belongs in "
+        f"{grouped_test_dir / 'CommandValidationScenarios_test.cpp'}"
+    )
+    print(
+        "  - Workflow/output coverage usually belongs in "
+        f"{grouped_test_dir / 'CommandWorkflowScenarios_test.cpp'}"
+    )
+
     if args.wire:
         _wire_registration_files(root, spec, args.dry_run, args.strict)
 
     print("\nScaffold complete.")
     if args.wire:
-        print("Registration/manifests and CMake source lists were wired automatically.")
+        print("Registration/manifests and command source CMake list were wired automatically.")
     else:
-        print("Next: wire CommandList.def, update CommandApi.cpp includes and CMake source lists, and add the public request schema.")
+        print(
+            "Next: wire CommandList.def, update CommandApi.cpp includes and source CMake list, "
+            "add the public request schema, and extend the grouped command tests."
+        )
     return 0
 
 
