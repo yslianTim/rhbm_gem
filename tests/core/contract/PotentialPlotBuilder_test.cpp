@@ -4,7 +4,7 @@
 #include <string>
 
 #include "support/CommandTestHelpers.hpp"
-#include "internal/PotentialPlotBuilder.hpp"
+#include "painter/PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>

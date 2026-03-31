@@ -15,12 +15,12 @@ Public API:
 Internal wiring:
 
 - [`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def)
-- [`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp)
+- [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) to include the new concrete command header
 
 Concrete implementation:
 
-- [`src/core/internal/command/`](/src/core/internal/command/)
+- [`src/core/command/detail/`](/src/core/command/detail/)
 - [`src/core/command/`](/src/core/command/)
 
 ## Manifest
@@ -69,7 +69,7 @@ require a handwritten `RunYourCommand(...)` declaration.
 ## Internal Request Schema
 
 Add a `CommandRequestSchema<<YourCommand>Request>` specialization to
-[`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp).
+[`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp).
 
 That internal schema is the single source for:
 
@@ -86,10 +86,8 @@ Use the internal helpers there:
 
 ## Concrete Command
 
-Implement the concrete command under:
-
-- [`src/core/internal/command/`](/src/core/internal/command/)
-- [`src/core/command/`](/src/core/command/)
+Implement the concrete command under [`src/core/command/`](/src/core/command/).
+Shared command-framework helpers stay under [`src/core/command/detail/`](/src/core/command/detail/).
 
 Use this shape:
 
@@ -129,7 +127,7 @@ request-field list still comes from `CommandRequestSchema`.
 
 Before merge, verify:
 
-1. the command header exists under `src/core/internal/command/` and the source exists under `src/core/command/`
+1. the command header and source exist together under `src/core/command/`
 2. `CommandApi.hpp` contains the new request DTO
 3. `CommandRequestSchema.hpp` contains the internal schema specialization
 4. `CommandManifest.def` contains the manifest entry in the correct stable or experimental section

@@ -3,15 +3,15 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "internal/PainterTypeCheck.hpp"
-#include "internal/PainterSupport.hpp"
+#include "detail/PainterTypeCheck.hpp"
+#include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -737,7 +737,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
 
 } // namespace rhbm_gem
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
@@ -1112,7 +1112,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>

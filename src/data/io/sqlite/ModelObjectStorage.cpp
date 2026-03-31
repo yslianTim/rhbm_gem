@@ -1,6 +1,6 @@
-#include "internal/sqlite/ModelObjectStorage.hpp"
+#include "ModelObjectStorage.hpp"
 
-#include "internal/sqlite/SQLiteWrapper.hpp"
+#include "SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>

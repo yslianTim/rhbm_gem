@@ -1,4 +1,4 @@
-#include "internal/command/ResultDumpCommand.hpp"
+#include "ResultDumpCommand.hpp"
 
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>

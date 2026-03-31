@@ -1,7 +1,7 @@
-#include "internal/file/CCP4Format.hpp"
+#include "CCP4Format.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include "internal/file/MapAxisOrderHelper.hpp"
+#include "MapAxisOrderHelper.hpp"
 
 #include <fstream>
 #include <cstring>

@@ -13,6 +13,12 @@ Related references:
 - [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
 - [`/docs/developer/adding-dataobject-operations-and-iteration.md`](/docs/developer/adding-dataobject-operations-and-iteration.md)
 
+Header boundary rule:
+
+- only `/include/rhbm_gem/data/**` is public API surface
+- headers stored under `/src/data/**` are internal implementation details
+- source-private data I/O headers live next to their `.cpp` files under `/src/data/io/file` and `/src/data/io/sqlite`
+
 ## 1. Scope
 
 Top-level file-backed and SQLite-persisted `DataObject` roots are fixed to:
@@ -252,9 +258,9 @@ Core orchestration:
 
 SQLite persistence:
 
-- `/src/data/internal/sqlite/SQLitePersistence.hpp`
+- `/src/data/io/sqlite/SQLitePersistence.hpp`
 - `/src/data/io/sqlite/SQLitePersistence.cpp`
-- `/src/data/internal/sqlite/ModelObjectStorage.hpp`
+- `/src/data/io/sqlite/ModelObjectStorage.hpp`
 - `/src/data/io/sqlite/ModelObjectStorage.cpp`
 
 Typed dispatch and shared helpers:

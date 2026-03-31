@@ -2,11 +2,11 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "internal/PainterTypeCheck.hpp"
-#include "internal/PainterSupport.hpp"
+#include "detail/PainterTypeCheck.hpp"
+#include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>

@@ -1,4 +1,4 @@
-#include "internal/file/MapAxisOrderHelper.hpp"
+#include "MapAxisOrderHelper.hpp"
 
 #include <cstddef>
 #include <stdexcept>

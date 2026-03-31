@@ -13,7 +13,7 @@
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
-#include "internal/command/CommandEnumMetadata.hpp"
+#include "CommandEnumMetadata.hpp"
 
 namespace rhbm_gem {
 

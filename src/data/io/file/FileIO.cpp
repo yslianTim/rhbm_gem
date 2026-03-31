@@ -1,9 +1,9 @@
 #include <rhbm_gem/data/io/FileIO.hpp>
 
-#include "internal/file/CCP4Format.hpp"
-#include "internal/file/CifFormat.hpp"
-#include "internal/file/MrcFormat.hpp"
-#include "internal/file/PdbFormat.hpp"
+#include "CCP4Format.hpp"
+#include "CifFormat.hpp"
+#include "MrcFormat.hpp"
+#include "PdbFormat.hpp"
 #include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

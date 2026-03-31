@@ -1,4 +1,4 @@
-#include "internal/command/CommandBase.hpp"
+#include "detail/CommandBase.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 
 #include <algorithm>

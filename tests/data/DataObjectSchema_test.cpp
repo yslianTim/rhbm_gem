@@ -14,8 +14,8 @@
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "internal/sqlite/SQLitePersistence.hpp"
-#include "internal/sqlite/SQLiteWrapper.hpp"
+#include "io/sqlite/SQLitePersistence.hpp"
+#include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;

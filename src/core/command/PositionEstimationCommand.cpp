@@ -1,4 +1,4 @@
-#include "internal/command/PositionEstimationCommand.hpp"
+#include "PositionEstimationCommand.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>

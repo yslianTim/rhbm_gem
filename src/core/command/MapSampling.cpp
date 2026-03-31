@@ -1,4 +1,4 @@
-#include "internal/command/MapSampling.hpp"
+#include "MapSampling.hpp"
 
 #include <algorithm>
 

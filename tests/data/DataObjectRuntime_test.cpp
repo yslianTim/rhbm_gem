@@ -31,7 +31,7 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
-#include "internal/file/MapAxisOrderHelper.hpp"
+#include "io/file/MapAxisOrderHelper.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 

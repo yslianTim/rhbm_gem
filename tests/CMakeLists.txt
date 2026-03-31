@@ -167,7 +167,6 @@ target_include_directories(rhbm_tests PRIVATE
     "${PROJECT_BINARY_DIR}"
     "${PROJECT_SOURCE_DIR}/src/core"
     "${PROJECT_SOURCE_DIR}/src/data"
-    "${PROJECT_SOURCE_DIR}/src/data/internal"
     "${PROJECT_SOURCE_DIR}/tests"
 )
 

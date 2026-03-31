@@ -1,7 +1,7 @@
-#include "internal/sqlite/SQLitePersistence.hpp"
+#include "SQLitePersistence.hpp"
 
-#include "internal/sqlite/ModelObjectStorage.hpp"
-#include "internal/sqlite/SQLiteWrapper.hpp"
+#include "ModelObjectStorage.hpp"
+#include "SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

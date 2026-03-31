@@ -1,4 +1,4 @@
-#include "internal/command/PotentialDisplayCommand.hpp"
+#include "PotentialDisplayCommand.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

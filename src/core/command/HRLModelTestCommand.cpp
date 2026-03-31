@@ -1,4 +1,4 @@
-#include "internal/command/HRLModelTestCommand.hpp"
+#include "HRLModelTestCommand.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/hrl/HRLModelTester.hpp>

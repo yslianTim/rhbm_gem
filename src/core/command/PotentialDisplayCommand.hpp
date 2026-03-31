@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <filesystem>
 
-#include "CommandBase.hpp"
+#include "detail/CommandBase.hpp"
 
 class AtomSelector;
 

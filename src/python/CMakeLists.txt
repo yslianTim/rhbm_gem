@@ -39,7 +39,6 @@ endif()
 target_link_libraries(${BINDINGS_MODULE_TARGET} PRIVATE rhbm_gem CompilerFlags)
 target_include_directories(${BINDINGS_MODULE_TARGET} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../core"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../core/internal"
 )
 
 rhbm_gem_set_install_rpath(${BINDINGS_MODULE_TARGET} "${_RHBM_GEM_DEFAULT_PYTHON_INSTALL_RPATH}")

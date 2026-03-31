@@ -21,10 +21,10 @@ The goal is stable, maintainable, and diagnosable software.
 - `[Required]` Keep responsibilities separated: command orchestration in `core`, file/persistence logic in `data`, reusable helpers in `utils`.
 - `[Required]` Keep tests in `/tests/` and test fixtures in `/tests/fixtures/`.
 - `[Required]` Keep test sources aligned to domain folders (`/tests/core`, `/tests/data`, `/tests/utils`, `/tests/integration`) and intent-specific subfolders where applicable.
-- `[Required]` For `/src/core`, place command orchestration in `/src/core/command/`, workflow implementation in `/src/core/workflow/`, painter implementation in `/src/core/painter/`, and private helpers in `/src/core/internal/`.
+- `[Required]` For `/src/core`, place command orchestration in `/src/core/command/`, workflow implementation in `/src/core/workflow/`, painter implementation in `/src/core/painter/`; keep concrete private headers next to their implementation and place shared subsystem-private helpers under a local `detail/` directory.
 - `[Required]` Keep the Python binding adapter layer in `/src/python/`; it should expose pybind11 surfaces only and should not become a home for core business logic.
-- `[Required]` Treat `internal/` path placement as the internal-API marker; do not add redundant `*Internal` filename suffixes inside `internal/`, and prefer moving private headers into an `internal/` subtree over suffix-based labeling.
-- `[Required]` For workflow code, keep implementation units (`*.cpp`) in `/src/core/workflow/`; place private workflow headers in `/src/core/internal/workflow/` when they are not part of shared workflow-facing contracts.
+- `[Required]` Treat any header outside `/include/` as internal implementation detail; use subsystem-local `detail/` directories for shared private helpers instead of broad cross-domain `internal/` buckets.
+- `[Required]` For workflow code, keep implementation units (`*.cpp`) in `/src/core/workflow/`; place shared workflow-private headers in `/src/core/workflow/detail/` when they are not part of workflow-facing contracts.
 - `[Required]` Keep reusable automation tools under `/resources/tools/`; do not add scripts at repository root.
 - `[Required]` Project-owned public types in `core` and `data` must use namespace `rhbm_gem`.
 - `[Required]` Do not use `using namespace` in headers.

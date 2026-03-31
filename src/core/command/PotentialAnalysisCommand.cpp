@@ -1,5 +1,5 @@
-#include "internal/command/PotentialAnalysisCommand.hpp"
-#include "internal/command/MapSampling.hpp"
+#include "PotentialAnalysisCommand.hpp"
+#include "MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>

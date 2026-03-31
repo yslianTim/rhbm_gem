@@ -95,7 +95,6 @@ target_include_directories(rhbm_gem PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/core"
     "${CMAKE_CURRENT_SOURCE_DIR}/data"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/internal"
     "${CMAKE_CURRENT_SOURCE_DIR}/utils"
 )
 

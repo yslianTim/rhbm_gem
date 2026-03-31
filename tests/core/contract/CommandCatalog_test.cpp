@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "internal/command/CommandCli.hpp"
+#include "command/detail/CommandCli.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <CLI/CLI.hpp>

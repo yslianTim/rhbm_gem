@@ -1,10 +1,10 @@
-#include "internal/command/CommandCli.hpp"
+#include "detail/CommandCli.hpp"
 
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-#include "internal/command/CommandEnumMetadata.hpp"
-#include "internal/command/CommandRequestSchema.hpp"
+#include "detail/CommandEnumMetadata.hpp"
+#include "detail/CommandRequestSchema.hpp"
 
 #include <CLI/CLI.hpp>
 #include <memory>

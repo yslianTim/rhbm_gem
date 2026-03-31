@@ -5,7 +5,7 @@
 #include <tuple>
 #include <vector>
 
-#include "internal/command/MapSampling.hpp"
+#include "command/MapSampling.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/SamplerBase.hpp>
 

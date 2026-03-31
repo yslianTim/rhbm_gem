@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <string>
 
-#include "internal/command/CommandBase.hpp"
+#include "command/detail/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 
 namespace rg = rhbm_gem;

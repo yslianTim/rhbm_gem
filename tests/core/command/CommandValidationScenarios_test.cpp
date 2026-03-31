@@ -2,11 +2,11 @@
 
 #include "support/CommandValidationAssertions.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/command/HRLModelTestCommand.hpp"
-#include "internal/command/MapSimulationCommand.hpp"
-#include "internal/command/PotentialAnalysisCommand.hpp"
-#include "internal/command/PotentialDisplayCommand.hpp"
-#include "internal/command/ResultDumpCommand.hpp"
+#include "command/HRLModelTestCommand.hpp"
+#include "command/MapSimulationCommand.hpp"
+#include "command/PotentialAnalysisCommand.hpp"
+#include "command/PotentialDisplayCommand.hpp"
+#include "command/ResultDumpCommand.hpp"
 
 namespace rg = rhbm_gem;
 

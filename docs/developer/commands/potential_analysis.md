@@ -11,14 +11,14 @@ Public request and entrypoint:
 
 Internal schema and wiring:
 
-- [`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp)
+- [`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp)
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
 - [`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp)
 - [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
 
 Concrete implementation:
 
-- [`src/core/internal/command/PotentialAnalysisCommand.hpp`](/src/core/internal/command/PotentialAnalysisCommand.hpp)
+- [`src/core/command/PotentialAnalysisCommand.hpp`](/src/core/command/PotentialAnalysisCommand.hpp)
 - [`src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp)
 
 ## Request Surface

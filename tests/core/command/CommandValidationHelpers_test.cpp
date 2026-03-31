@@ -7,7 +7,7 @@
 #include <limits>
 #include <vector>
 
-#include "internal/command/CommandBase.hpp"
+#include "command/detail/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandEnums.hpp>
 

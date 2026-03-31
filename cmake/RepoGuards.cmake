@@ -280,7 +280,7 @@ function(rhbm_guard_check_structure)
             "Structure guard failed.\n"
             "  - src/core root must not contain forwarding headers.\n"
             "  - ${CORE_ROOT_HPP_TEXT}\n"
-            "Move these headers into src/core/internal/, src/core/workflow/, or remove them.")
+            "Move these headers into src/core/command/, src/core/painter/, a subsystem detail/ directory, src/core/workflow/, or remove them.")
     endif()
 
     file(GLOB PUBLIC_CORE_FLAT_HPP

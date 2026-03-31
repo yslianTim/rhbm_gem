@@ -4,7 +4,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
@@ -15,8 +15,8 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "internal/PainterTypeCheck.hpp"
-#include "internal/PainterSupport.hpp"
+#include "detail/PainterTypeCheck.hpp"
+#include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -1072,7 +1072,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -1828,7 +1828,7 @@ std::unique_ptr<TPaveText> GausPainter::CreateResolutionPaveText(
 
 } // namespace rhbm_gem
 #include <rhbm_gem/core/painter/GausPainter.hpp>
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

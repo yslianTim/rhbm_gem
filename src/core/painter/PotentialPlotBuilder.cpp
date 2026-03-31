@@ -1,4 +1,4 @@
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -904,7 +904,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateBondGroupGausFunctionPrior(
 #endif
 
 } // namespace rhbm_gem
-#include "internal/PotentialPlotBuilder.hpp"
+#include "PotentialPlotBuilder.hpp"
 
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

@@ -4,12 +4,12 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include "internal/command/MapSimulationCommand.hpp"
-#include "internal/command/ResultDumpCommand.hpp"
+#include "command/MapSimulationCommand.hpp"
+#include "command/ResultDumpCommand.hpp"
 
 #ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
-#include "internal/command/MapVisualizationCommand.hpp"
-#include "internal/command/PositionEstimationCommand.hpp"
+#include "command/MapVisualizationCommand.hpp"
+#include "command/PositionEstimationCommand.hpp"
 #endif
 
 namespace rg = rhbm_gem;

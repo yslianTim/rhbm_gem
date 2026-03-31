@@ -37,7 +37,7 @@ CLI wiring, enum metadata, and request binding schema stay internal.
 ## Internal Binding Model
 
 CLI and Python bindings share one internal schema in
-[`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp).
+[`src/core/command/detail/CommandRequestSchema.hpp`](/src/core/command/detail/CommandRequestSchema.hpp).
 
 That schema is the single source for:
 
@@ -45,7 +45,7 @@ That schema is the single source for:
 - Python request field binding
 
 Internal enum alias and binding metadata live in
-[`src/core/internal/command/CommandEnumMetadata.hpp`](/src/core/internal/command/CommandEnumMetadata.hpp).
+[`src/core/command/detail/CommandEnumMetadata.hpp`](/src/core/command/detail/CommandEnumMetadata.hpp).
 
 Public enum types stay small; alias maps and binding tokens are internal-only.
 
@@ -54,7 +54,7 @@ Public enum types stay small; alias maps and binding tokens are internal-only.
 ### CLI
 
 [`src/main.cpp`](/src/main.cpp) creates `CLI::App` and calls the internal
-[`ConfigureCommandCli(...)`](/src/core/internal/command/CommandCli.hpp).
+[`ConfigureCommandCli(...)`](/src/core/command/detail/CommandCli.hpp).
 
 [`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp):
 
@@ -105,10 +105,11 @@ flowchart LR
 
 ## Concrete Command Shape
 
-Concrete command classes live in:
+Concrete command classes live in [`src/core/command/`](/src/core/command/).
 
-- [`src/core/internal/command/`](/src/core/internal/command/)
-- [`src/core/command/`](/src/core/command/)
+Shared command-framework internals live in:
+
+- [`src/core/command/detail/`](/src/core/command/detail/)
 
 The standard shape is:
 

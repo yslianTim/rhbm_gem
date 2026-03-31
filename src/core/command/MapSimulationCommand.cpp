@@ -1,4 +1,4 @@
-#include "internal/command/MapSimulationCommand.hpp"
+#include "MapSimulationCommand.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

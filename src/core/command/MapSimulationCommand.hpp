@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "CommandBase.hpp"
+#include "detail/CommandBase.hpp"
 
 template <typename T> struct KDNode;
 

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <CLI/CLI.hpp>
 
-#include "core/internal/command/CommandCli.hpp"
+#include "core/command/detail/CommandCli.hpp"
 
 int main(int argc, char * argv[])
 {

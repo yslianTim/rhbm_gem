@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "CommandBase.hpp"
+#include "detail/CommandBase.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 
 template <typename T> struct KDNode;
