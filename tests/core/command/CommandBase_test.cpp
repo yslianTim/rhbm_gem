@@ -18,7 +18,10 @@ struct TestCommandOptions
 class TestCommand final : public rg::CommandBase
 {
 public:
-    TestCommand() = default;
+    TestCommand()
+    {
+        BindCommonRequest(m_common_request);
+    }
 
     void SetForceInvalid(bool value)
     {
@@ -29,16 +32,12 @@ public:
     void ConfigureFilesystemOptions(const std::filesystem::path & folder_path)
     {
         m_common_request.folder_path = folder_path;
-        NormalizeCommonRequest(m_common_request);
+        CoerceCommonRequest(m_common_request);
     }
 
     void ValidateOptions() override
     {
-        ClearPrepareIssues("--test");
-        if (m_options.force_invalid)
-        {
-            AddValidationError("--test", "forced invalid config");
-        }
+        RequireCondition(!m_options.force_invalid, "--test", "forced invalid config");
     }
 
     void ResetRuntimeState() override {}
@@ -46,9 +45,6 @@ public:
 private:
     rg::CommonCommandRequest m_common_request{};
     TestCommandOptions m_options{};
-
-    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
-    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override
     {
@@ -58,7 +54,7 @@ private:
 
 } // namespace
 
-TEST(CommandBaseTest, PrepareCreatesOutputFolder)
+TEST(CommandBaseTest, RunCreatesOutputFolder)
 {
     command_test::ScopedTempDir temp_dir{"command_base_setters"};
     const auto folder_path{ temp_dir.path() / "out" };
@@ -67,19 +63,21 @@ TEST(CommandBaseTest, PrepareCreatesOutputFolder)
 
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 
-    ASSERT_TRUE(command.PrepareForExecution());
+    ASSERT_TRUE(command.Run());
+    EXPECT_TRUE(command.WasPrepared());
     EXPECT_TRUE(std::filesystem::exists(folder_path));
 }
 
-TEST(CommandBaseTest, PrepareForExecutionReportsValidationIssues)
+TEST(CommandBaseTest, RunReportsValidationIssues)
 {
     TestCommand command{};
     command.SetForceInvalid(true);
 
     testing::internal::CaptureStderr();
-    EXPECT_FALSE(command.PrepareForExecution());
+    EXPECT_FALSE(command.Run());
     const std::string error_output{ testing::internal::GetCapturedStderr() };
 
+    EXPECT_FALSE(command.WasPrepared());
     ASSERT_FALSE(command.GetValidationIssues().empty());
     EXPECT_NE(error_output.find("Option --test: forced invalid config"), std::string::npos);
 }
@@ -92,6 +90,7 @@ TEST(CommandBaseTest, ValidationFailureSkipsFilesystemPreflight)
     command.ConfigureFilesystemOptions(folder_path);
     command.SetForceInvalid(true);
 
-    ASSERT_FALSE(command.PrepareForExecution());
+    ASSERT_FALSE(command.Run());
+    EXPECT_FALSE(command.WasPrepared());
     EXPECT_FALSE(std::filesystem::exists(folder_path));
 }

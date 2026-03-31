@@ -24,7 +24,7 @@ TEST(MapVisualizationCommandTest, InvalidAtomIdFailsWithoutWritingOutput)
     request.atom_serial_id = 999;
     command.ApplyRequest(request);
 
-    EXPECT_FALSE(command.Execute());
+    EXPECT_FALSE(command.Run());
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".pdf"), 0);
 }
 
@@ -47,7 +47,7 @@ TEST(MapVisualizationCommandTest, ExecuteWritesPdfToConfiguredFolder)
     request.atom_serial_id = 1;
     command.ApplyRequest(request);
 
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".pdf"), 1);
 }
 #endif

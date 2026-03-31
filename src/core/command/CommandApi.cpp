@@ -319,19 +319,9 @@ ExecutionReport RunCommand(const RequestType & request)
     command.ApplyRequest(request);
 
     ExecutionReport report;
-    report.prepared = command.PrepareForExecution();
+    report.executed = command.Run();
+    report.prepared = command.WasPrepared();
     report.validation_issues = command.GetValidationIssues();
-    if (!report.prepared)
-    {
-        return report;
-    }
-
-    report.executed = command.Execute();
-    const auto & post_execution_issues{ command.GetValidationIssues() };
-    if (!post_execution_issues.empty())
-    {
-        report.validation_issues = post_execution_issues;
-    }
     return report;
 }
 

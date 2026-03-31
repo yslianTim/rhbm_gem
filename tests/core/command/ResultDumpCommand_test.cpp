@@ -17,7 +17,8 @@ TEST(ResultDumpCommandTest, MapPrinterWithoutMapFileReportsMapValidationError)
     request.model_key_tag_list = { "model" };
     command.ApplyRequest(request);
 
-    EXPECT_FALSE(command.PrepareForExecution());
+    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(command.WasPrepared());
     EXPECT_NE(
         command_test::FindValidationIssue(
             command,
@@ -49,14 +50,14 @@ TEST(ResultDumpCommandTest, ExecuteTwiceRefreshesRuntimeStateAndUsesCurrentPaths
     request.database_path = database_path_a;
     request.common.folder_path = output_dir_a;
     command.ApplyRequest(request);
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
     EXPECT_TRUE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_A.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_B.csv"));
 
     request.database_path = database_path_b;
     request.common.folder_path = output_dir_b;
     command.ApplyRequest(request);
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
     EXPECT_TRUE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_FROM_B.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_FROM_A.csv"));
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir_b, ".csv"), 1);

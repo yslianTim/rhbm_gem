@@ -1,6 +1,4 @@
 #include "internal/command/PotentialDisplayCommand.hpp"
-#include "internal/command/CommandDataLoader.hpp"
-#include "internal/command/CommandModelSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -17,10 +15,45 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
+#include <stdexcept>
+
 namespace {
 constexpr std::string_view kPainterOption{ "--painter" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
 constexpr std::string_view kRefGroupOption{ "--ref-group" };
+
+std::shared_ptr<rhbm_gem::ModelObject> LoadModelFromDatabase(
+    rhbm_gem::DataObjectManager & data_manager,
+    std::string_view key_tag,
+    std::string_view label)
+{
+    try
+    {
+        data_manager.LoadDataObject(std::string(key_tag));
+        return data_manager.GetTypedDataObject<rhbm_gem::ModelObject>(std::string(key_tag));
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error(
+            "Failed to load " + std::string(label) + " with key tag '"
+            + std::string(key_tag) + "' as ModelObject: " + ex.what());
+    }
+}
+
+void ApplyModelSelection(
+    rhbm_gem::ModelObject & model_object,
+    ::AtomSelector & selector)
+{
+    for (auto & atom : model_object.GetAtomList())
+    {
+        atom->SetSelectedFlag(
+            selector.GetSelectionFlag(
+                atom->GetChainID(),
+                atom->GetResidue(),
+                atom->GetElement()));
+    }
+    model_object.Update();
+}
 
 void IngestModelSetsToPainter(
     rhbm_gem::PainterBase & painter,
@@ -53,21 +86,14 @@ PotentialDisplayCommand::PotentialDisplayCommand() :
 void PotentialDisplayCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    NormalizeEnum(
+    CoerceEnum(
         request.painter_choice,
         kPainterOption,
         PainterType::MODEL,
         "Painter choice");
+    RequireNonEmptyList(request.model_key_tag_list, kModelKeyListOption, "Model key list");
     InvalidatePreparedState();
-    ClearParseIssues(kModelKeyListOption);
     ClearParseIssues(kRefGroupOption);
-    if (request.model_key_tag_list.empty())
-    {
-        AddValidationError(
-            kModelKeyListOption,
-            "Model key list cannot be empty.",
-            ValidationPhase::Parse);
-    }
     for (const auto & [group_name, members] : request.reference_model_groups)
     {
         if (group_name.empty())
@@ -194,8 +220,7 @@ void PotentialDisplayCommand::RunDisplay()
             painter = std::make_unique<AtomPainter>();
             for (const auto & model_object : m_model_object_list)
             {
-                auto atom_list{ CollectSelectedAtoms(*model_object) };
-                for (auto * atom : atom_list)
+                for (auto * atom : model_object->GetSelectedAtomList())
                 {
                     painter->AddDataObject(atom);
                 }

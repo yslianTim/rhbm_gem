@@ -14,7 +14,8 @@ TEST(PotentialDisplayCommandTest, MalformedReferenceModelKeyListBecomesValidatio
     request.reference_model_groups[""] = { "invalid" };
     command.ApplyRequest(request);
 
-    EXPECT_FALSE(command.PrepareForExecution());
+    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(command.WasPrepared());
     ASSERT_NE(
         command_test::FindValidationIssue(
             command,
@@ -35,7 +36,8 @@ TEST(PotentialDisplayCommandTest, WellFormedReferenceModelKeyListPassesPrepareVa
     };
     command.ApplyRequest(request);
 
-    EXPECT_TRUE(command.PrepareForExecution());
+    EXPECT_FALSE(command.Run());
+    EXPECT_TRUE(command.WasPrepared());
     EXPECT_EQ(
         command_test::FindValidationIssue(
             command,

@@ -23,24 +23,27 @@ struct CommandOptionHelperCommandOptions
 class CommandOptionHelperCommand final : public rg::CommandBase
 {
 public:
-    CommandOptionHelperCommand() = default;
+    CommandOptionHelperCommand()
+    {
+        BindCommonRequest(m_common_request);
+    }
 
     void SetRequiredPath(const std::filesystem::path & value)
     {
         m_options.required_path = value;
-        NormalizeRequiredPath(m_options.required_path, "--input", "Input file");
+        ValidateRequiredPath(m_options.required_path, "--input", "Input file");
     }
 
     void SetOptionalPath(const std::filesystem::path & value)
     {
         m_options.optional_path = value;
-        NormalizeOptionalPath(m_options.optional_path, "--optional", "Optional file");
+        ValidateOptionalPath(m_options.optional_path, "--optional", "Optional file");
     }
 
     void SetPositiveCount(int value)
     {
         m_options.count = value;
-        NormalizeScalar(
+        CoerceScalar(
             m_options.count,
             "--count",
             [](int candidate) { return candidate > 0; },
@@ -54,7 +57,7 @@ public:
     void SetPrinter(rg::PrinterType value)
     {
         m_options.printer = value;
-        NormalizeEnum(
+        CoerceEnum(
             m_options.printer,
             "--printer",
             rg::PrinterType::GAUS_ESTIMATES,
@@ -70,9 +73,6 @@ public:
 private:
     rg::CommonCommandRequest m_common_request{};
     CommandOptionHelperCommandOptions m_options{};
-
-    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
-    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override
     {

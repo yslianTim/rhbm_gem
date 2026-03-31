@@ -23,12 +23,15 @@ struct CommandScalarValidationHelperCommandOptions
 class CommandScalarValidationHelperCommand final : public rg::CommandBase
 {
 public:
-    CommandScalarValidationHelperCommand() = default;
+    CommandScalarValidationHelperCommand()
+    {
+        BindCommonRequest(m_common_request);
+    }
 
     void SetFinitePositiveValue(double value)
     {
         m_options.finite_positive_value = value;
-        NormalizeScalar(
+        CoerceScalar(
             m_options.finite_positive_value,
             "--finite-positive",
             [](double candidate)
@@ -43,7 +46,7 @@ public:
     void SetFiniteNonNegativeValue(double value)
     {
         m_options.finite_non_negative_value = value;
-        NormalizeScalar(
+        CoerceScalar(
             m_options.finite_non_negative_value,
             "--finite-non-negative",
             [](double candidate)
@@ -58,7 +61,7 @@ public:
     void SetPositiveCountValue(int value)
     {
         m_options.positive_count = value;
-        NormalizeScalar(
+        CoerceScalar(
             m_options.positive_count,
             "--positive-count",
             [](int candidate) { return candidate > 0; },
@@ -92,9 +95,6 @@ public:
 private:
     rg::CommonCommandRequest m_common_request{};
     CommandScalarValidationHelperCommandOptions m_options{};
-
-    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
-    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override { return true; }
 };

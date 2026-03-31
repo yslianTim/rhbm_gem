@@ -2,7 +2,6 @@
 
 #include <vector>
 
-
 #include "internal/command/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
 
@@ -19,7 +18,10 @@ struct LifecycleCommandOptions
 class LifecycleCommand final : public rg::CommandBase
 {
 public:
-    LifecycleCommand() = default;
+    LifecycleCommand()
+    {
+        BindCommonRequest(m_common_request);
+    }
 
     int validate_count{ 0 };
     int reset_count{ 0 };
@@ -41,11 +43,7 @@ public:
     void ValidateOptions() override
     {
         ++validate_count;
-        ClearPrepareIssues("--contract");
-        if (m_options.fail_prepare)
-        {
-            AddValidationError("--contract", "prepare failed");
-        }
+        RequireCondition(!m_options.fail_prepare, "--contract", "prepare failed");
     }
 
     void ResetRuntimeState() override
@@ -57,9 +55,6 @@ public:
 private:
     rg::CommonCommandRequest m_common_request{};
     LifecycleCommandOptions m_options{};
-
-    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
-    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override
     {
@@ -75,55 +70,54 @@ private:
 
 } // namespace
 
-TEST(CommandExecutionContractTest, ExecuteRunsPrepareBeforeExecuteImpl)
+TEST(CommandExecutionContractTest, RunValidatesAndResetsBeforeExecuteImpl)
 {
     LifecycleCommand command{};
     command.SetFailPrepare(true);
 
-    EXPECT_FALSE(command.Execute());
+    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(command.WasPrepared());
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.reset_count, 1);
     EXPECT_EQ(command.execute_impl_count, 0);
 }
 
-TEST(CommandExecutionContractTest, ExplicitPrepareSkipsDuplicatePreflightInsideExecute)
+TEST(CommandExecutionContractTest, RunExecutesValidationResetAndExecuteOnce)
 {
     LifecycleCommand command{};
 
-    ASSERT_TRUE(command.PrepareForExecution());
-    EXPECT_EQ(command.validate_count, 1);
-    EXPECT_EQ(command.reset_count, 1);
-
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
+    EXPECT_TRUE(command.WasPrepared());
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.reset_count, 1);
     EXPECT_EQ(command.execute_impl_count, 1);
 }
 
-TEST(CommandExecutionContractTest, RepeatedExecuteResetsRuntimeStateBetweenRuns)
+TEST(CommandExecutionContractTest, RepeatedRunResetsRuntimeStateBetweenRuns)
 {
     LifecycleCommand command{};
 
-    ASSERT_TRUE(command.Execute());
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
+    ASSERT_TRUE(command.Run());
 
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.reset_count, 2);
     EXPECT_EQ(command.execute_impl_count, 2);
 }
 
-TEST(CommandExecutionContractTest, MutatingAssignedOptionAfterPrepareForcesFreshPrepareInExecute)
+TEST(CommandExecutionContractTest, MutatingAssignedOptionBeforeSecondRunStillUsesFreshPreparation)
 {
     LifecycleCommand command{};
 
-    ASSERT_TRUE(command.PrepareForExecution());
+    ASSERT_TRUE(command.Run());
     EXPECT_EQ(command.validate_count, 1);
     EXPECT_EQ(command.reset_count, 1);
+    EXPECT_EQ(command.execute_impl_count, 1);
 
     command.SetExecutionToggle(true);
 
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
     EXPECT_EQ(command.validate_count, 2);
     EXPECT_EQ(command.reset_count, 2);
-    EXPECT_EQ(command.execute_impl_count, 1);
+    EXPECT_EQ(command.execute_impl_count, 2);
 }

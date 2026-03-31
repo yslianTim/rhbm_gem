@@ -48,12 +48,12 @@ HRLModelTestCommand::HRLModelTestCommand() :
 void HRLModelTestCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    NormalizeEnum(
+    CoerceEnum(
         request.tester_choice,
         kTesterOption,
         TesterType::BENCHMARK,
         "Tester choice");
-    NormalizeScalar(
+    CoerceScalar(
         request.fit_range_min,
         kFitMinOption,
         [](double candidate)
@@ -63,7 +63,7 @@ void HRLModelTestCommand::NormalizeRequest()
         0.0,
         LogLevel::Error,
         "Minimum fitting range must be a finite non-negative value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.fit_range_max,
         kFitMaxOption,
         [](double candidate)
@@ -73,7 +73,7 @@ void HRLModelTestCommand::NormalizeRequest()
         1.0,
         LogLevel::Error,
         "Maximum fitting range must be a finite non-negative value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.alpha_r,
         kAlphaROption,
         [](double candidate)
@@ -83,7 +83,7 @@ void HRLModelTestCommand::NormalizeRequest()
         0.1,
         LogLevel::Error,
         "Alpha-R must be a finite positive value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.alpha_g,
         kAlphaGOption,
         [](double candidate)
@@ -98,13 +98,10 @@ void HRLModelTestCommand::NormalizeRequest()
 void HRLModelTestCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ClearPrepareIssues(kFitRangeIssue);
-    if (request.fit_range_min > request.fit_range_max)
-    {
-        AddValidationError(
-            kFitRangeIssue,
-            "Expected --fit-min <= --fit-max.");
-    }
+    RequireCondition(
+        request.fit_range_min <= request.fit_range_max,
+        kFitRangeIssue,
+        "Expected --fit-min <= --fit-max.");
 }
 
 } // namespace rhbm_gem

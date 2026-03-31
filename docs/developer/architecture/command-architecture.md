@@ -189,24 +189,7 @@ Each `Run*` function in `CommandApi.cpp` follows this sequence:
 Database setup stays in command execution code. Commands that use SQLite call
 `DataObjectManager::SetDatabaseManager(...)` when they open the database during execution.
 
-## 7. Command support helpers
-
-Cross-command model and map helpers live in:
-
-- [`src/core/internal/command/CommandDataLoader.hpp`](/src/core/internal/command/CommandDataLoader.hpp)
-- [`src/core/command/CommandDataLoader.cpp`](/src/core/command/CommandDataLoader.cpp)
-- [`src/core/internal/command/CommandModelSupport.hpp`](/src/core/internal/command/CommandModelSupport.hpp)
-- [`src/core/command/CommandModelSupport.cpp`](/src/core/command/CommandModelSupport.cpp)
-
-These modules contain:
-
-- typed file/database loaders such as `LoadModelFromFile(...)`
-- map normalization helpers
-- model preparation helpers
-- atom collection and simulation helpers
-- atom and bond context construction helpers
-
-## 8. Python integration
+## 7. Python integration
 
 Python bindings live in:
 

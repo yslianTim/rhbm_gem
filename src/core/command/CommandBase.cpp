@@ -37,21 +37,21 @@ std::string BuildIssuePrefix(const ValidationIssue & issue)
 
 } // namespace
 
-bool CommandBase::Execute()
+bool CommandBase::Run()
 {
-    const bool was_prepared{ m_is_prepared_for_execution };
-    if (!was_prepared && !PrepareForExecution())
+    BeginPreparationPass();
+    if (!RunValidationPass())
     {
         return false;
     }
 
-    if (was_prepared)
+    if (!RunFilesystemPreflight())
     {
-        Logger::SetLogLevel(VerboseLevel());
+        return false;
     }
 
+    m_was_prepared = true;
     const bool executed{ ExecuteImpl() };
-    m_is_prepared_for_execution = false;
     if (!executed)
     {
         Logger::Log(LogLevel::Error,
@@ -60,35 +60,24 @@ bool CommandBase::Execute()
     return executed;
 }
 
-bool CommandBase::PrepareForExecution()
-{
-    BeginPreparationPass();
-    if (!RunValidationPass())
-    {
-        return false;
-    }
-
-    return RunFilesystemPreflight();
-}
-
 void CommandBase::InvalidatePreparedState()
 {
-    m_is_prepared_for_execution = false;
+    m_was_prepared = false;
     ClearValidationIssues(ValidationPhase::Prepare);
 }
 
-void CommandBase::NormalizeCommonRequest(CommonCommandRequest & request)
+void CommandBase::CoerceCommonRequest(CommonCommandRequest & request)
 {
     InvalidatePreparedState();
     const auto raw_verbose_level{ request.verbose_level };
-    NormalizeScalar(
+    CoerceScalar(
         request.thread_size,
         kJobsOption,
         [](int candidate) { return candidate >= 1; },
         1,
         LogLevel::Warning,
         "Thread size must be positive. Using 1 instead.");
-    NormalizeScalar(
+    CoerceScalar(
         request.verbose_level,
         kVerboseOption,
         [](int candidate)
@@ -148,6 +137,52 @@ void CommandBase::ClearParseIssues(std::string_view option_name)
 void CommandBase::ClearPrepareIssues(std::string_view option_name)
 {
     ClearValidationIssues(option_name, ValidationPhase::Prepare);
+}
+
+void CommandBase::BeginValidationMutation(ValidationPhase phase)
+{
+    if (phase == ValidationPhase::Parse)
+    {
+        InvalidatePreparedState();
+        return;
+    }
+
+    m_was_prepared = false;
+}
+
+void CommandBase::RequireNonEmptyText(
+    std::string_view field,
+    std::string_view option_name,
+    std::string_view label,
+    ValidationPhase phase)
+{
+    BeginValidationMutation(phase);
+    ClearValidationIssues(option_name, phase);
+    if (!field.empty())
+    {
+        return;
+    }
+
+    AddValidationError(
+        option_name,
+        std::string(label) + " cannot be empty.",
+        phase);
+}
+
+void CommandBase::RequireCondition(
+    bool condition,
+    std::string_view option_name,
+    const std::string & message,
+    ValidationPhase phase)
+{
+    BeginValidationMutation(phase);
+    ClearValidationIssues(option_name, phase);
+    if (condition)
+    {
+        return;
+    }
+
+    AddValidationError(option_name, message, phase);
 }
 
 void CommandBase::ClearValidationIssues(
@@ -222,7 +257,7 @@ void CommandBase::ValidateOptionalExistingPath(
     }
 }
 
-void CommandBase::NormalizeRequiredPath(
+void CommandBase::ValidateRequiredPath(
     std::filesystem::path & field,
     std::string_view option_name,
     std::string_view label)
@@ -231,7 +266,7 @@ void CommandBase::NormalizeRequiredPath(
     ValidateRequiredExistingPath(field, option_name, label);
 }
 
-void CommandBase::NormalizeOptionalPath(
+void CommandBase::ValidateOptionalPath(
     std::filesystem::path & field,
     std::string_view option_name,
     std::string_view label)
@@ -282,7 +317,6 @@ bool CommandBase::RunValidationPass()
     if (HasValidationErrors())
     {
         ReportValidationIssues();
-        m_is_prepared_for_execution = false;
         return false;
     }
 
@@ -307,8 +341,7 @@ bool CommandBase::RunFilesystemPreflight()
     }
 
     ReportValidationIssues();
-    m_is_prepared_for_execution = !HasValidationErrors();
-    return m_is_prepared_for_execution;
+    return !HasValidationErrors();
 }
 
 } // namespace rhbm_gem

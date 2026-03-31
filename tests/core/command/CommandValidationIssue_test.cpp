@@ -19,7 +19,10 @@ struct ValidationIssueCommandOptions
 class ValidationIssueCommand final : public rg::CommandBase
 {
 public:
-    ValidationIssueCommand() = default;
+    ValidationIssueCommand()
+    {
+        BindCommonRequest(m_common_request);
+    }
 
     void SetProblematicValue(int value)
     {
@@ -42,7 +45,7 @@ public:
     {
         m_common_request.thread_size = thread_size;
         m_common_request.verbose_level = verbose_level;
-        NormalizeCommonRequest(m_common_request);
+        CoerceCommonRequest(m_common_request);
     }
 
     void ValidateOptions() override
@@ -58,9 +61,6 @@ private:
     rg::CommonCommandRequest m_common_request{};
     ValidationIssueCommandOptions m_options{};
 
-    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
-    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
-
     bool ExecuteImpl() override { return true; }
 };
 
@@ -72,7 +72,8 @@ TEST(CommandValidationIssueTest, KeepsParseAndPrepareIssuesForSameOption)
     command.SetProblematicValue(0);
     command.SetPrepareError(true);
 
-    EXPECT_FALSE(command.PrepareForExecution());
+    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(command.WasPrepared());
 
     const auto & issues{ command.GetValidationIssues() };
     ASSERT_EQ(issues.size(), 3u);

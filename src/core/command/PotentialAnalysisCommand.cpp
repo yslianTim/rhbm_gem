@@ -1,6 +1,4 @@
 #include "internal/command/PotentialAnalysisCommand.hpp"
-#include "internal/command/CommandDataLoader.hpp"
-#include "internal/command/CommandModelSupport.hpp"
 #include "internal/command/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -59,6 +57,63 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 
+template <typename TypedDataObject>
+std::shared_ptr<TypedDataObject> LoadTypedObjectFromFile(
+    rhbm_gem::DataObjectManager & data_manager,
+    const std::filesystem::path & path,
+    std::string_view key_tag,
+    std::string_view label,
+    std::string_view object_type_name)
+{
+    try
+    {
+        data_manager.ProcessFile(path, std::string(key_tag));
+        return data_manager.GetTypedDataObject<TypedDataObject>(std::string(key_tag));
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error(
+            "Failed to process " + std::string(label) + " from '" + path.string()
+            + "' as " + std::string(object_type_name) + ": " + ex.what());
+    }
+}
+
+void SelectAllAtoms(rhbm_gem::ModelObject & model_object)
+{
+    for (auto & atom : model_object.GetAtomList())
+    {
+        atom->SetSelectedFlag(true);
+    }
+}
+
+void SelectAllBonds(rhbm_gem::ModelObject & model_object)
+{
+    for (auto & bond : model_object.GetBondList())
+    {
+        bond->SetSelectedFlag(true);
+    }
+}
+
+void PrepareModelForPotentialAnalysis(
+    rhbm_gem::ModelObject & model_object,
+    bool asymmetry_flag)
+{
+    SelectAllAtoms(model_object);
+    SelectAllBonds(model_object);
+    model_object.FilterAtomFromSymmetry(asymmetry_flag);
+    model_object.FilterBondFromSymmetry(asymmetry_flag);
+    model_object.Update();
+
+    for (auto * atom : model_object.GetSelectedAtomList())
+    {
+        atom->AddLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+    }
+    for (auto * bond : model_object.GetSelectedBondList())
+    {
+        bond->AddLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+    }
+}
+
 HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     int thread_size,
     bool quiet_mode)
@@ -82,9 +137,9 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
 void PotentialAnalysisCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    NormalizeRequiredPath(request.model_file_path, kModelOption, "Model file");
-    NormalizeRequiredPath(request.map_file_path, kMapOption, "Map file");
-    NormalizeScalar(
+    ValidateRequiredPath(request.model_file_path, kModelOption, "Model file");
+    ValidateRequiredPath(request.map_file_path, kMapOption, "Map file");
+    CoerceScalar(
         request.simulated_map_resolution,
         kSimResolutionOption,
         [](double candidate)
@@ -104,14 +159,14 @@ void PotentialAnalysisCommand::NormalizeRequest()
             "Saved key tag cannot be empty. Using 'model' instead.",
             ValidationPhase::Parse);
     }
-    NormalizeScalar(
+    CoerceScalar(
         request.sampling_size,
         kSamplingOption,
         [](int candidate) { return candidate > 0; },
         1500,
         LogLevel::Warning,
         "Sampling size must be positive, reset to default value = 1500");
-    NormalizeScalar(
+    CoerceScalar(
         request.sampling_range_min,
         kSamplingMinOption,
         [](double candidate)
@@ -121,7 +176,7 @@ void PotentialAnalysisCommand::NormalizeRequest()
         0.0,
         LogLevel::Error,
         "Minimum sampling range must be a finite non-negative value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.sampling_range_max,
         kSamplingMaxOption,
         [](double candidate)
@@ -131,7 +186,7 @@ void PotentialAnalysisCommand::NormalizeRequest()
         1.5,
         LogLevel::Error,
         "Maximum sampling range must be a finite non-negative value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.sampling_height,
         kSamplingHeightOption,
         [](double candidate)
@@ -141,7 +196,7 @@ void PotentialAnalysisCommand::NormalizeRequest()
         0.1,
         LogLevel::Error,
         "Sampling height must be a finite positive value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.fit_range_min,
         kFitMinOption,
         [](double candidate)
@@ -151,7 +206,7 @@ void PotentialAnalysisCommand::NormalizeRequest()
         0.0,
         LogLevel::Error,
         "Minimum fitting range must be a finite non-negative value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.fit_range_max,
         kFitMaxOption,
         [](double candidate)
@@ -161,7 +216,7 @@ void PotentialAnalysisCommand::NormalizeRequest()
         1.0,
         LogLevel::Error,
         "Maximum fitting range must be a finite non-negative value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.alpha_r,
         kAlphaROption,
         [](double candidate)
@@ -171,7 +226,7 @@ void PotentialAnalysisCommand::NormalizeRequest()
         0.1,
         LogLevel::Error,
         "Alpha-R must be a finite positive value.");
-    NormalizeScalar(
+    CoerceScalar(
         request.alpha_g,
         kAlphaGOption,
         [](double candidate)
@@ -203,27 +258,18 @@ bool PotentialAnalysisCommand::ExecuteImpl()
 void PotentialAnalysisCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ClearPrepareIssues(kSimResolutionOption);
-    if (request.simulation_flag && request.simulated_map_resolution <= 0.0)
-    {
-        AddValidationError(
-            kSimResolutionOption,
-            "Expected a positive simulated-map resolution when '--simulation true' is selected.");
-    }
-
-    ClearPrepareIssues(kSamplingRangeIssue);
-    if (request.sampling_range_min > request.sampling_range_max)
-    {
-        AddValidationError(kSamplingRangeIssue,
-            "Expected --sampling-min <= --sampling-max.");
-    }
-
-    ClearPrepareIssues(kFitRangeIssue);
-    if (request.fit_range_min > request.fit_range_max)
-    {
-        AddValidationError(kFitRangeIssue,
-            "Expected --fit-min <= --fit-max.");
-    }
+    RequireCondition(
+        !request.simulation_flag || request.simulated_map_resolution > 0.0,
+        kSimResolutionOption,
+        "Expected a positive simulated-map resolution when '--simulation true' is selected.");
+    RequireCondition(
+        request.sampling_range_min <= request.sampling_range_max,
+        kSamplingRangeIssue,
+        "Expected --sampling-min <= --sampling-max.");
+    RequireCondition(
+        request.fit_range_min <= request.fit_range_max,
+        kFitRangeIssue,
+        "Expected --fit-min <= --fit-max.");
 }
 
 void PotentialAnalysisCommand::ResetRuntimeState()
@@ -325,10 +371,18 @@ bool PotentialAnalysisCommand::BuildDataObject()
     try
     {
         m_data_manager.SetDatabaseManager(request.database_path);
-        m_model_object = LoadModelFromFile(
-            m_data_manager, request.model_file_path, m_model_key_tag, "model file");
-        m_map_object = LoadMapFromFile(
-            m_data_manager, request.map_file_path, m_map_key_tag, "map file");
+        m_model_object = LoadTypedObjectFromFile<ModelObject>(
+            m_data_manager,
+            request.model_file_path,
+            m_model_key_tag,
+            "model file",
+            "ModelObject");
+        m_map_object = LoadTypedObjectFromFile<MapObject>(
+            m_data_manager,
+            request.map_file_path,
+            m_map_key_tag,
+            "map file",
+            "MapObject");
         if (request.simulation_flag)
         {
             UpdateModelObjectForSimulation(m_model_object.get());
@@ -362,7 +416,7 @@ void PotentialAnalysisCommand::UpdateModelObjectForSimulation(ModelObject * mode
 void PotentialAnalysisCommand::RunMapObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunMapObjectPreprocessing");
-    NormalizeMapObject(*m_map_object);
+    m_map_object->MapValueArrayNormalization();
 }
 
 void PotentialAnalysisCommand::RunModelObjectPreprocessing()

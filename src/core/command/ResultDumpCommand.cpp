@@ -1,8 +1,7 @@
 #include "internal/command/ResultDumpCommand.hpp"
-#include "internal/command/CommandDataLoader.hpp"
-#include "internal/command/CommandModelSupport.hpp"
 
 #include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
@@ -22,12 +21,50 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <stdexcept>
 
 namespace {
 constexpr std::string_view kMapKey{ "map" };
 constexpr std::string_view kPrinterOption{ "--printer" };
 constexpr std::string_view kModelKeyListOption{ "--model-keylist" };
 constexpr std::string_view kMapOption{ "--map" };
+
+std::shared_ptr<rhbm_gem::ModelObject> LoadModelFromDatabase(
+    rhbm_gem::DataObjectManager & data_manager,
+    std::string_view key_tag,
+    std::string_view label)
+{
+    try
+    {
+        data_manager.LoadDataObject(std::string(key_tag));
+        return data_manager.GetTypedDataObject<rhbm_gem::ModelObject>(std::string(key_tag));
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error(
+            "Failed to load " + std::string(label) + " with key tag '"
+            + std::string(key_tag) + "' as ModelObject: " + ex.what());
+    }
+}
+
+std::shared_ptr<rhbm_gem::MapObject> LoadMapFromFile(
+    rhbm_gem::DataObjectManager & data_manager,
+    const std::filesystem::path & path,
+    std::string_view key_tag,
+    std::string_view label)
+{
+    try
+    {
+        data_manager.ProcessFile(path, std::string(key_tag));
+        return data_manager.GetTypedDataObject<rhbm_gem::MapObject>(std::string(key_tag));
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error(
+            "Failed to process " + std::string(label) + " from '" + path.string()
+            + "' as MapObject: " + ex.what());
+    }
+}
 }
 
 namespace rhbm_gem {
@@ -41,32 +78,22 @@ ResultDumpCommand::ResultDumpCommand() :
 void ResultDumpCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    NormalizeEnum(
+    CoerceEnum(
         request.printer_choice,
         kPrinterOption,
         PrinterType::GAUS_ESTIMATES,
         "Printer choice");
-    NormalizeOptionalPath(request.map_file_path, kMapOption, "Map file");
-    InvalidatePreparedState();
-    ClearParseIssues(kModelKeyListOption);
-    if (request.model_key_tag_list.empty())
-    {
-        AddValidationError(
-            kModelKeyListOption,
-            "Model key list cannot be empty.",
-            ValidationPhase::Parse);
-    }
+    ValidateOptionalPath(request.map_file_path, kMapOption, "Map file");
+    RequireNonEmptyList(request.model_key_tag_list, kModelKeyListOption, "Model key list");
 }
 
 void ResultDumpCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ClearPrepareIssues(kMapOption);
-    if (request.printer_choice == PrinterType::MAP_VALUE && request.map_file_path.empty())
-    {
-        AddValidationError(kMapOption,
-            "A map file is required when '--printer map' is selected.");
-    }
+    RequireCondition(
+        request.printer_choice != PrinterType::MAP_VALUE || !request.map_file_path.empty(),
+        kMapOption,
+        "A map file is required when '--printer map' is selected.");
 }
 
 void ResultDumpCommand::ResetRuntimeState()
@@ -83,11 +110,18 @@ bool ResultDumpCommand::BuildDataObjectList()
     try
     {
         m_data_manager.SetDatabaseManager(request.database_path);
-        m_map_object = MaybeLoadMapFromFile(
-            m_data_manager,
-            request.map_file_path,
-            m_map_key_tag,
-            "map file");
+        if (request.map_file_path.empty())
+        {
+            m_map_object.reset();
+        }
+        else
+        {
+            m_map_object = LoadMapFromFile(
+                m_data_manager,
+                request.map_file_path,
+                m_map_key_tag,
+                "map file");
+        }
         m_selected_atom_list_map.clear();
         for (const auto & key : request.model_key_tag_list)
         {
@@ -96,7 +130,11 @@ bool ResultDumpCommand::BuildDataObjectList()
                 key,
                 "model object") };
             m_model_object_list.emplace_back(model_object);
-            m_selected_atom_list_map[key] = CollectAtomsWithLocalPotentialEntries(*model_object);
+            const auto & selected_atom_list{ model_object->GetSelectedAtomList() };
+            m_selected_atom_list_map[key] = {
+                selected_atom_list.begin(),
+                selected_atom_list.end()
+            };
             Logger::Log(
                 LogLevel::Info,
                 "Selected atoms for key tag [" + key + "]: "

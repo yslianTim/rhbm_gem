@@ -18,7 +18,7 @@ TEST(MapSimulationCommandTest, ExecuteFiltersInvalidBlurringWidths)
     request.blurring_width_list = { 1.0, -2.0, 3.0 };
     command.ApplyRequest(request);
 
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
     EXPECT_EQ(command_test::CountFilesWithExtension(temp_dir.path(), ".map"), 2);
 }
 
@@ -34,6 +34,7 @@ TEST(MapSimulationCommandTest, ExecuteFailsWhenAllBlurringWidthsAreInvalid)
     request.blurring_width_list = { -1.0, 0.0 };
     command.ApplyRequest(request);
 
-    EXPECT_FALSE(command.Execute());
+    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(command.WasPrepared());
     EXPECT_EQ(command_test::CountFilesWithExtension(temp_dir.path(), ".map"), 0);
 }

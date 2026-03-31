@@ -20,6 +20,6 @@ TEST(PositionEstimationCommandTest, ExecuteDoesNotRequireDatabaseConfiguration)
     request.map_file_path = map_path;
     command.ApplyRequest(request);
 
-    ASSERT_TRUE(command.Execute());
+    ASSERT_TRUE(command.Run());
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".cmm"), 1);
 }

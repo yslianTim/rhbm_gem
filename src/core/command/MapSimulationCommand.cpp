@@ -1,6 +1,4 @@
 #include "internal/command/MapSimulationCommand.hpp"
-#include "internal/command/CommandDataLoader.hpp"
-#include "internal/command/CommandModelSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -9,12 +7,14 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
+#include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 
 namespace {
 constexpr std::string_view kModelKey{ "model" };
@@ -24,6 +24,100 @@ constexpr std::string_view kChargeOption{ "--charge" };
 constexpr std::string_view kCutoffOption{ "--cut-off" };
 constexpr std::string_view kGridSpacingOption{ "--grid-spacing" };
 constexpr std::string_view kBlurringWidthOption{ "--blurring-width" };
+
+template <typename TypedDataObject>
+std::shared_ptr<TypedDataObject> LoadTypedObjectFromFile(
+    rhbm_gem::DataObjectManager & data_manager,
+    const std::filesystem::path & path,
+    std::string_view key_tag,
+    std::string_view label,
+    std::string_view object_type_name)
+{
+    try
+    {
+        data_manager.ProcessFile(path, std::string(key_tag));
+        return data_manager.GetTypedDataObject<TypedDataObject>(std::string(key_tag));
+    }
+    catch (const std::exception & ex)
+    {
+        throw std::runtime_error(
+            "Failed to process " + std::string(label) + " from '" + path.string()
+            + "' as " + std::string(object_type_name) + ": " + ex.what());
+    }
+}
+
+struct SimulationAtomPreparationResult
+{
+    std::vector<rhbm_gem::AtomObject *> atom_list;
+    std::unordered_map<int, double> atom_charge_map;
+    std::array<float, 3> range_minimum{
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max() };
+    std::array<float, 3> range_maximum{
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest() };
+    bool has_atom{ false };
+};
+
+double CalculateAtomChargeForSimulation(
+    const rhbm_gem::AtomObject & atom,
+    rhbm_gem::PartialCharge partial_charge_choice)
+{
+    switch (partial_charge_choice)
+    {
+    case rhbm_gem::PartialCharge::NEUTRAL:
+        return 0.0;
+    case rhbm_gem::PartialCharge::PARTIAL:
+        return ComponentHelper::GetPartialCharge(
+            atom.GetResidue(),
+            atom.GetSpot(),
+            atom.GetStructure());
+    case rhbm_gem::PartialCharge::AMBER:
+        return ComponentHelper::GetPartialCharge(
+            atom.GetResidue(),
+            atom.GetSpot(),
+            atom.GetStructure(),
+            true);
+    default:
+        Logger::Log(
+            LogLevel::Error,
+            "PrepareSimulationAtoms reached invalid partial-charge choice: "
+            + std::to_string(static_cast<int>(partial_charge_choice)));
+        return 0.0;
+    }
+}
+
+SimulationAtomPreparationResult PrepareSimulationAtoms(
+    rhbm_gem::ModelObject & model_object,
+    rhbm_gem::PartialCharge partial_charge_choice,
+    bool include_unknown_atoms)
+{
+    SimulationAtomPreparationResult result;
+    result.atom_list.reserve(model_object.GetNumberOfAtom());
+    for (auto & atom : model_object.GetAtomList())
+    {
+        if (!include_unknown_atoms && atom->IsUnknownAtom())
+        {
+            continue;
+        }
+        result.atom_list.emplace_back(atom.get());
+        result.atom_charge_map.emplace(
+            atom->GetSerialID(),
+            CalculateAtomChargeForSimulation(*atom, partial_charge_choice));
+
+        const auto & atom_position{ atom->GetPositionRef() };
+        result.range_minimum[0] = std::min(result.range_minimum[0], atom_position[0]);
+        result.range_minimum[1] = std::min(result.range_minimum[1], atom_position[1]);
+        result.range_minimum[2] = std::min(result.range_minimum[2], atom_position[2]);
+        result.range_maximum[0] = std::max(result.range_maximum[0], atom_position[0]);
+        result.range_maximum[1] = std::max(result.range_maximum[1], atom_position[1]);
+        result.range_maximum[2] = std::max(result.range_maximum[2], atom_position[2]);
+    }
+    result.has_atom = !result.atom_list.empty();
+    return result;
+}
 }
 
 namespace rhbm_gem {
@@ -45,25 +139,25 @@ MapSimulationCommand::MapSimulationCommand() :
 void MapSimulationCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    NormalizeRequiredPath(request.model_file_path, kModelOption, "Model file");
-    NormalizeEnum(
+    ValidateRequiredPath(request.model_file_path, kModelOption, "Model file");
+    CoerceEnum(
         request.potential_model_choice,
         kPotentialModelOption,
         PotentialModel::FIVE_GAUS_CHARGE,
         "Potential model");
-    NormalizeEnum(
+    CoerceEnum(
         request.partial_charge_choice,
         kChargeOption,
         PartialCharge::PARTIAL,
         "Partial charge choice");
-    NormalizeScalar(
+    CoerceScalar(
         request.cutoff_distance,
         kCutoffOption,
         [](double candidate) { return candidate > 0.0; },
         5.0,
         LogLevel::Warning,
         "Cutoff distance must be positive, reset to default 5.0");
-    NormalizeScalar(
+    CoerceScalar(
         request.grid_spacing,
         kGridSpacingOption,
         [](double candidate) { return candidate > 0.0; },
@@ -100,12 +194,10 @@ bool MapSimulationCommand::ExecuteImpl()
 void MapSimulationCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ClearPrepareIssues(kBlurringWidthOption);
-    if (request.blurring_width_list.empty())
-    {
-        AddValidationError(kBlurringWidthOption,
-            "At least one positive blurring width is required.");
-    }
+    RequireCondition(
+        !request.blurring_width_list.empty(),
+        kBlurringWidthOption,
+        "At least one positive blurring width is required.");
 }
 
 void MapSimulationCommand::ResetRuntimeState()
@@ -131,8 +223,8 @@ bool MapSimulationCommand::BuildDataObject()
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
-        m_model_object = LoadModelFromFile(
-            m_data_manager, request.model_file_path, kModelKey, "model file");
+        m_model_object = LoadTypedObjectFromFile<ModelObject>(
+            m_data_manager, request.model_file_path, kModelKey, "model file", "ModelObject");
         BuildAtomList(m_model_object.get());
     }
     catch(const std::exception & e)

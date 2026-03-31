@@ -14,7 +14,8 @@ TEST(HRLModelTestCommandTest, FitRangeOrderingBecomesPrepareValidationError)
     request.fit_range_max = 1.0;
     command.ApplyRequest(request);
 
-    EXPECT_FALSE(command.PrepareForExecution());
+    EXPECT_FALSE(command.Run());
+    EXPECT_FALSE(command.WasPrepared());
     ASSERT_NE(
         command_test::FindValidationIssue(
             command,
