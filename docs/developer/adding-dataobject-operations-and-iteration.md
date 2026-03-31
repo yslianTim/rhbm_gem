@@ -16,21 +16,9 @@ Related references:
 
 Use the narrowest boundary that matches the change.
 
-Loader helpers in `/src/core/internal/command/CommandDataLoader.hpp`
-
-- use for typed file/database loading with consistent error context
-- current helpers are `LoadModelFromFile(...)`, `LoadMapFromFile(...)`, `MaybeLoadMapFromFile(...)`, and `LoadModelFromDatabase(...)`
-
-`CommandModelSupport` in `/src/core/command/CommandModelSupport.*`
-
 - use for reusable typed operations on `ModelObject` or `MapObject`
 - current shared operations are `NormalizeMapObject(...)`, `PrepareModelForPotentialAnalysis(...)`, `PrepareModelForVisualization(...)`, `ApplyModelSelection(...)`, `CollectSelectedAtoms(...)`, `CollectAtomsWithLocalPotentialEntries(...)`, `PrepareSimulationAtoms(...)`, and `BuildModelAtomBondContext(...)`
 - keep this layer focused on logic shared by multiple commands
-
-
-command-local code in `/src/core/command/*.cpp` or `/src/core/workflow/*.cpp`
-
-- use when behavior is specific to one command or one workflow path
 
 `DataObjectManager::ForEachDataObject(...)`
 
@@ -45,18 +33,9 @@ command-local code in `/src/core/command/*.cpp` or `/src/core/workflow/*.cpp`
 
 If you add or change reusable typed operations:
 
-- `/src/core/internal/command/CommandModelSupport.hpp`
-- `/src/core/command/CommandModelSupport.cpp`
-- command call sites using the helper
 - `/tests/data/DataObjectRuntime_test.cpp`
 - related command tests under `/tests/core/`
 - docs when the contract changes
-
-If you add or change loader helpers:
-
-- `/src/core/internal/command/CommandDataLoader.hpp`
-- command call sites
-- tests that cover the new load path and failure context
 
 If you change manager iteration behavior:
 
@@ -122,10 +101,9 @@ If callback bodies or command-local branches start growing, move the multi-step 
 
 Typical command flow:
 
-1. load typed objects with `GetTypedDataObject<T>()` or `CommandDataLoader` helpers
-2. apply shared typed operations from `CommandModelSupport` when the behavior is reused
-3. use `ForEachDataObject(...)` only when manager-owned key filtering or ordering matters
-4. keep `ExecuteImpl()` focused on orchestration
+1. load typed objects with `GetTypedDataObject<T>()`
+2. use `ForEachDataObject(...)` only when manager-owned key filtering or ordering matters
+3. keep `ExecuteImpl()` focused on orchestration
 
 ## 7. Test Checklist
 
@@ -142,7 +120,6 @@ Add or update tests for:
 Common suites:
 
 - `/tests/data/DataObjectRuntime_test.cpp`
-- related command suites under `/tests/core/`
 
 ## 8. Documentation Checklist
 

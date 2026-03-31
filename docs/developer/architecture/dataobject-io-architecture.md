@@ -6,7 +6,6 @@ This document describes the current runtime contract for:
 - SQLite persistence
 - typed object dispatch
 - `DataObjectManager` storage and iteration
-- shared command helpers built on top of these boundaries
 
 Related references:
 
@@ -222,13 +221,6 @@ Behavior:
 
 ## 10. Shared Command Helpers
 
-Cross-command helpers live in:
-
-- `/src/core/internal/command/CommandDataLoader.hpp`
-- `/src/core/command/CommandDataLoader.cpp`
-- `/src/core/internal/command/CommandModelSupport.hpp`
-- `/src/core/command/CommandModelSupport.cpp`
-
 Loader helpers:
 
 - `LoadModelFromFile(...)`
@@ -254,8 +246,8 @@ These helpers are internal command-layer utilities, not part of the public `/inc
 Core orchestration:
 
 - `/include/rhbm_gem/data/io/DataObjectManager.hpp`
-- `/src/data/io/DataObjectManager.cpp`
 - `/include/rhbm_gem/data/io/FileIO.hpp`
+- `/src/data/io/DataObjectManager.cpp`
 - `/src/data/io/file/FileIO.cpp`
 
 SQLite persistence:
@@ -269,10 +261,6 @@ Typed dispatch and shared helpers:
 
 - `/include/rhbm_gem/data/object/DataObjectDispatch.hpp`
 - `/src/data/object/DataObjectDispatch.cpp`
-- `/src/core/internal/command/CommandDataLoader.hpp`
-- `/src/core/command/CommandDataLoader.cpp`
-- `/src/core/internal/command/CommandModelSupport.hpp`
-- `/src/core/command/CommandModelSupport.cpp`
 
 Reference tests:
 
