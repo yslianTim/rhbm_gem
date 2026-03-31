@@ -91,9 +91,7 @@ Behavior:
 
 - `LoadFileIntoMemory(filename, key_tag)` reads the file, sets `key_tag`, and stores the object in memory
 - `WriteMemoryObjectToFile(filename, key_tag)` writes the in-memory object to disk and throws if the key is missing
-- `TryWriteMemoryObjectToFile(filename, key_tag)` logs a warning and returns `false` when the key is missing
 - replacing an existing in-memory key is allowed and logs a warning
-- legacy compatibility wrappers (`ProcessFile`, `ProduceFile`, `SetDatabaseManager`) still forward to the preferred APIs above
 
 ## 5. In-Memory Manager Contract
 
@@ -126,7 +124,6 @@ Manager entry points:
 
 - `OpenDatabase(db_path)`
 - `SaveDataObject(key_tag, renamed_key_tag="")`
-- `TrySaveDataObject(key_tag, renamed_key_tag="")`
 - `LoadDataObject(key_tag)`
 
 `OpenDatabase(...)` behavior:
@@ -152,9 +149,6 @@ Behavior differences to keep straight:
   - throws if the DB manager is not initialized
   - throws if the in-memory key is missing
   - `renamed_key_tag` changes only the persisted key, not the in-memory key
-- `DataObjectManager::TrySaveDataObject(...)`
-  - logs a warning and returns `false` if the in-memory key is missing
-  - otherwise forwards to `SaveDataObject(...)`
 - `SQLitePersistence::SaveDataObject(...)`
   - throws if the input pointer is null
   - resolves the top-level kind once, then converts that kind to the catalog type name

@@ -378,16 +378,6 @@ TEST(DataObjectSchemaPersistenceTest, SaveDataObjectThrowsWhenMemoryKeyIsMissing
     EXPECT_THROW(manager.SaveDataObject("missing"), std::runtime_error);
 }
 
-TEST(DataObjectSchemaPersistenceTest, TrySaveDataObjectReturnsFalseWhenMemoryKeyIsMissing) {
-    const command_test::ScopedTempDir temp_dir{"data_schema_missing_memory_key_try"};
-    const auto database_path{temp_dir.path() / "missing_try.sqlite"};
-
-    rg::DataObjectManager manager{};
-    manager.OpenDatabase(database_path);
-
-    EXPECT_FALSE(manager.TrySaveDataObject("missing"));
-}
-
 TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast) {
     const command_test::ScopedTempDir temp_dir{"data_schema_v2_metadata_row"};
     const auto database_path{temp_dir.path() / "metadata_row.sqlite"};

@@ -611,6 +611,19 @@ std::unique_ptr<rhbm_gem::MapObject> LoadMapObject(
     return map_object;
 }
 
+rhbm_gem::TopLevelDataObjectKind ParseCatalogTypeName(std::string_view type_name)
+{
+    if (type_name == "model")
+    {
+        return rhbm_gem::TopLevelDataObjectKind::Model;
+    }
+    if (type_name == "map")
+    {
+        return rhbm_gem::TopLevelDataObjectKind::Map;
+    }
+    throw std::runtime_error("Unsupported data object type: " + std::string(type_name));
+}
+
 } // namespace
 
 namespace rhbm_gem {
@@ -671,6 +684,8 @@ void SQLitePersistence::SaveDataObject(const DataObjectBase * data_object, const
         SaveMapObject(*m_database, static_cast<const MapObject &>(*data_object), key_tag);
         return;
     }
+
+    throw std::runtime_error("Unsupported data object type.");
 }
 
 std::unique_ptr<DataObjectBase> SQLitePersistence::LoadDataObject(const std::string & key_tag)
@@ -692,17 +707,16 @@ std::unique_ptr<DataObjectBase> SQLitePersistence::LoadDataObject(const std::str
         throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
     }
 
-    const auto type_name{ m_database->GetColumn<std::string>(0) };
-    if (type_name == "model")
+    const auto kind{ ParseCatalogTypeName(m_database->GetColumn<std::string>(0)) };
+    switch (kind)
     {
+    case TopLevelDataObjectKind::Model:
         return m_model_store->Load(key_tag);
-    }
-    if (type_name == "map")
-    {
+    case TopLevelDataObjectKind::Map:
         return LoadMapObject(*m_database, key_tag);
     }
 
-    throw std::runtime_error("Unsupported data object type: " + type_name);
+    throw std::runtime_error("Unsupported data object type.");
 }
 
 } // namespace rhbm_gem

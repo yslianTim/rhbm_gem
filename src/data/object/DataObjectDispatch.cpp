@@ -125,11 +125,4 @@ std::string_view GetCatalogTypeName(TopLevelDataObjectKind kind) noexcept
     return "unknown";
 }
 
-std::string GetCatalogTypeName(const DataObjectBase & data_object)
-{
-    return std::string(
-        GetCatalogTypeName(
-            ResolveTopLevelDataObjectKind(data_object, "GetCatalogTypeName()")));
-}
-
 } // namespace rhbm_gem

@@ -110,11 +110,6 @@ void DataObjectManager::OpenDatabase(const std::filesystem::path & dbname)
     m_db_manager = std::make_unique<SQLitePersistence>(dbname);
 }
 
-void DataObjectManager::SetDatabaseManager(const std::filesystem::path & dbname)
-{
-    OpenDatabase(dbname);
-}
-
 void DataObjectManager::LoadFileIntoMemory(
     const std::filesystem::path & filename, const std::string & key_tag)
 {
@@ -132,12 +127,6 @@ void DataObjectManager::LoadFileIntoMemory(
     }
 }
 
-void DataObjectManager::ProcessFile(
-    const std::filesystem::path & filename, const std::string & key_tag)
-{
-    LoadFileIntoMemory(filename, key_tag);
-}
-
 void DataObjectManager::WriteMemoryObjectToFile(
     const std::filesystem::path & filename, const std::string & key_tag) const
 {
@@ -152,26 +141,6 @@ void DataObjectManager::WriteMemoryObjectToFile(
                                  + filename.string() + "' for key tag '"
                                  + key_tag + "': " + ex.what());
     }
-}
-
-bool DataObjectManager::TryWriteMemoryObjectToFile(
-    const std::filesystem::path & filename, const std::string & key_tag) const
-{
-    if (HasDataObject(key_tag) == false)
-    {
-        Logger::Log(LogLevel::Warning,
-                    "The data object with key tag: [" + key_tag + "] isn't presented, "
-                    "no file will be produced.");
-        return false;
-    }
-    WriteMemoryObjectToFile(filename, key_tag);
-    return true;
-}
-
-void DataObjectManager::ProduceFile(
-    const std::filesystem::path & filename, const std::string & key_tag)
-{
-    WriteMemoryObjectToFile(filename, key_tag);
 }
 
 bool DataObjectManager::AddDataObject(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object)
@@ -262,27 +231,6 @@ void DataObjectManager::SaveDataObject(
     }
 
     m_db_manager->SaveDataObject(data_object.get(), saved_key_tag);
-}
-
-bool DataObjectManager::TrySaveDataObject(
-    const std::string & key_tag, const std::string & renamed_key_tag) const
-{
-    {
-        std::lock_guard<std::mutex> db_lock(m_db_mutex);
-        if (m_db_manager == nullptr)
-        {
-            throw std::runtime_error("Database manager is not initialized.");
-        }
-    }
-    if (!HasDataObject(key_tag))
-    {
-        Logger::Log(LogLevel::Warning,
-                    "The data object with key tag: [" + key_tag + "] isn't presented, "
-                    "skip saving data object.");
-        return false;
-    }
-    SaveDataObject(key_tag, renamed_key_tag);
-    return true;
 }
 
 void DataObjectManager::ForEachDataObject(

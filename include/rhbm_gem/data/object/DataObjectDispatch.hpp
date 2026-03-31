@@ -38,6 +38,5 @@ TopLevelDataObjectKind ResolveTopLevelDataObjectKind(
     const DataObjectBase & data_object,
     std::string_view context);
 std::string_view GetCatalogTypeName(TopLevelDataObjectKind kind) noexcept;
-std::string GetCatalogTypeName(const DataObjectBase & data_object);
 
 } // namespace rhbm_gem

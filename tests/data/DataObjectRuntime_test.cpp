@@ -620,12 +620,9 @@ TEST(DataObjectDispatchTest, CatalogTypeNameUsesStableTopLevelNames) {
         rg::TopLevelDataObjectKind::Map);
     EXPECT_EQ(rg::GetCatalogTypeName(rg::TopLevelDataObjectKind::Model), "model");
     EXPECT_EQ(rg::GetCatalogTypeName(rg::TopLevelDataObjectKind::Map), "map");
-    EXPECT_EQ(rg::GetCatalogTypeName(*model), "model");
-    EXPECT_EQ(rg::GetCatalogTypeName(map), "map");
     EXPECT_THROW(
         (void)rg::ResolveTopLevelDataObjectKind(atom, "dispatch-kind"),
         std::runtime_error);
-    EXPECT_THROW((void)rg::GetCatalogTypeName(atom), std::runtime_error);
 }
 
 TEST(DataObjectOperationTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType) {
@@ -853,12 +850,4 @@ TEST(DataObjectFileIOTest, WriteMemoryObjectToFileThrowsWhenKeyIsMissing) {
 
     rg::DataObjectManager manager{};
     EXPECT_THROW(manager.WriteMemoryObjectToFile(output_path, "missing"), std::runtime_error);
-}
-
-TEST(DataObjectFileIOTest, TryWriteMemoryObjectToFileReturnsFalseWhenKeyIsMissing) {
-    const command_test::ScopedTempDir temp_dir{"data_runtime_missing_export_key_try"};
-    const auto output_path{temp_dir.path() / "missing.cif"};
-
-    rg::DataObjectManager manager{};
-    EXPECT_FALSE(manager.TryWriteMemoryObjectToFile(output_path, "missing"));
 }
