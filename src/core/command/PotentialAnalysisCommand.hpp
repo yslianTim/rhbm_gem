@@ -46,7 +46,7 @@ private:
     void RunLocalAtomFitting(double universal_alpha_r);
     void RunAtomPotentialFitting();
     void RunExperimentalBondWorkflowIfEnabled();
-    void SaveDataObject();
+    void SavePreparedModel();
 
     void StudyAtomLocalFittingViaAlphaR(
         const std::vector<AtomObject *> & atom_list,

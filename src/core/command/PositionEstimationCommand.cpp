@@ -122,8 +122,9 @@ bool PositionEstimationCommand::BuildDataObject()
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
-        m_data_manager.LoadFileIntoMemory(request.map_file_path, std::string(kMapKey));
-        m_map_object = m_data_manager.GetTypedDataObject<MapObject>(std::string(kMapKey));
+        m_map_object = m_data_manager.ImportFileAs<MapObject>(
+            request.map_file_path,
+            std::string(kMapKey));
         m_map_object->MapValueArrayNormalization();
     }
     catch (const std::exception & e)

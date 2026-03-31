@@ -1,11 +1,10 @@
 #include <rhbm_gem/data/io/FileIO.hpp>
 
+#include "../detail/TopLevelObjectRouting.hpp"
 #include "CCP4Format.hpp"
 #include "CifFormat.hpp"
 #include "MrcFormat.hpp"
 #include "PdbFormat.hpp"
-#include <rhbm_gem/data/object/DataObjectDispatch.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
@@ -33,7 +32,7 @@ enum class MapFormatBackend {
 
 struct FileFormatDescriptor {
     std::string extension;
-    TopLevelDataObjectKind kind;
+    io_detail::TopLevelObjectKind kind;
     bool supports_read;
     bool supports_write;
     std::optional<ModelFormatBackend> model_backend;
@@ -42,13 +41,13 @@ struct FileFormatDescriptor {
 
 const std::vector<FileFormatDescriptor>& GetFileFormatDescriptors() {
     static const std::vector<FileFormatDescriptor> descriptors{
-        {".pdb", TopLevelDataObjectKind::Model, true, true, ModelFormatBackend::Pdb, std::nullopt},
-        {".cif", TopLevelDataObjectKind::Model, true, true, ModelFormatBackend::Cif, std::nullopt},
-        {".mmcif", TopLevelDataObjectKind::Model, true, false, ModelFormatBackend::Cif, std::nullopt},
-        {".mcif", TopLevelDataObjectKind::Model, true, false, ModelFormatBackend::Cif, std::nullopt},
-        {".mrc", TopLevelDataObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Mrc},
-        {".map", TopLevelDataObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Ccp4},
-        {".ccp4", TopLevelDataObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Ccp4}};
+        {".pdb", io_detail::TopLevelObjectKind::Model, true, true, ModelFormatBackend::Pdb, std::nullopt},
+        {".cif", io_detail::TopLevelObjectKind::Model, true, true, ModelFormatBackend::Cif, std::nullopt},
+        {".mmcif", io_detail::TopLevelObjectKind::Model, true, false, ModelFormatBackend::Cif, std::nullopt},
+        {".mcif", io_detail::TopLevelObjectKind::Model, true, false, ModelFormatBackend::Cif, std::nullopt},
+        {".mrc", io_detail::TopLevelObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Mrc},
+        {".map", io_detail::TopLevelObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Ccp4},
+        {".ccp4", io_detail::TopLevelObjectKind::Map, true, true, std::nullopt, MapFormatBackend::Ccp4}};
     return descriptors;
 }
 
@@ -162,7 +161,7 @@ void WriteMapWithBackend(
 std::unique_ptr<ModelObject> ReadModelWithDescriptor(
     const std::filesystem::path& filename,
     const FileFormatDescriptor& descriptor) {
-    if (descriptor.kind != TopLevelDataObjectKind::Model || !descriptor.model_backend.has_value()) {
+    if (descriptor.kind != io_detail::TopLevelObjectKind::Model || !descriptor.model_backend.has_value()) {
         throw std::runtime_error("Unsupported model file format.");
     }
 
@@ -175,7 +174,7 @@ void WriteModelWithDescriptor(
     const FileFormatDescriptor& descriptor,
     const ModelObject& model_object,
     int model_parameter) {
-    if (descriptor.kind != TopLevelDataObjectKind::Model || !descriptor.model_backend.has_value()) {
+    if (descriptor.kind != io_detail::TopLevelObjectKind::Model || !descriptor.model_backend.has_value()) {
         throw std::runtime_error("Unsupported model file format.");
     }
 
@@ -186,7 +185,7 @@ void WriteModelWithDescriptor(
 std::unique_ptr<MapObject> ReadMapWithDescriptor(
     const std::filesystem::path& filename,
     const FileFormatDescriptor& descriptor) {
-    if (descriptor.kind != TopLevelDataObjectKind::Map || !descriptor.map_backend.has_value()) {
+    if (descriptor.kind != io_detail::TopLevelObjectKind::Map || !descriptor.map_backend.has_value()) {
         throw std::runtime_error("Unsupported map file format.");
     }
 
@@ -198,7 +197,7 @@ void WriteMapWithDescriptor(
     const std::filesystem::path& filename,
     const FileFormatDescriptor& descriptor,
     const MapObject& map_object) {
-    if (descriptor.kind != TopLevelDataObjectKind::Map || !descriptor.map_backend.has_value()) {
+    if (descriptor.kind != io_detail::TopLevelObjectKind::Map || !descriptor.map_backend.has_value()) {
         throw std::runtime_error("Unsupported map file format.");
     }
 
@@ -207,46 +206,6 @@ void WriteMapWithDescriptor(
 }
 
 } // namespace
-
-std::unique_ptr<DataObjectBase> ReadDataObject(const std::filesystem::path& filename) {
-    try {
-        const auto& descriptor{ResolveDescriptor(filename, false)};
-        switch (descriptor.kind) {
-        case TopLevelDataObjectKind::Model:
-            return ReadModelWithDescriptor(filename, descriptor);
-        case TopLevelDataObjectKind::Map:
-            return ReadMapWithDescriptor(filename, descriptor);
-        }
-    } catch (const std::exception& ex) {
-        throw std::runtime_error(
-            "Failed to read data object from '" + filename.string() + "': " + ex.what());
-    }
-    throw std::runtime_error("Failed to read data object from '" + filename.string() + "'.");
-}
-
-void WriteDataObject(const std::filesystem::path& filename, const DataObjectBase& data_object) {
-    try {
-        const auto& descriptor{ResolveDescriptor(filename, true)};
-        switch (descriptor.kind) {
-        case TopLevelDataObjectKind::Model:
-            WriteModelWithDescriptor(
-                filename,
-                descriptor,
-                ExpectModelObject(data_object, "WriteDataObject()"),
-                0);
-            return;
-        case TopLevelDataObjectKind::Map:
-            WriteMapWithDescriptor(
-                filename,
-                descriptor,
-                ExpectMapObject(data_object, "WriteDataObject()"));
-            return;
-        }
-    } catch (const std::exception& ex) {
-        throw std::runtime_error(
-            "Failed to write data object to '" + filename.string() + "': " + ex.what());
-    }
-}
 
 std::unique_ptr<ModelObject> ReadModel(const std::filesystem::path& filename) {
     try {

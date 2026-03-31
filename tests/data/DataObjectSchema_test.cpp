@@ -186,8 +186,7 @@ std::shared_ptr<rg::ModelObject> LoadFixtureModel(
     const std::filesystem::path& model_path,
     const std::string& key_tag = "model") {
     rg::DataObjectManager manager{};
-    manager.LoadFileIntoMemory(model_path, key_tag);
-    return manager.GetTypedDataObject<rg::ModelObject>(key_tag);
+    return manager.ImportFileAs<rg::ModelObject>(model_path, key_tag);
 }
 
 rg::MapObject MakeTinyMapObject(float scale = 1.0f) {
@@ -208,8 +207,8 @@ void SaveTinyMapThroughManager(
     float scale = 1.0f) {
     auto map_object{MakeTinyMapObject(scale)};
     rg::WriteMap(map_path, map_object);
-    manager.LoadFileIntoMemory(map_path, key_tag);
-    manager.SaveDataObject(key_tag);
+    manager.ImportFileAs<rg::MapObject>(map_path, key_tag);
+    manager.SaveToDatabase(key_tag);
 }
 
 class FailingDataObject final : public rg::DataObjectBase {
@@ -251,7 +250,7 @@ TEST(DataObjectSchemaBootstrapTest, SaveUnsupportedTypeRollsBackCatalogMutation)
     FailingDataObject data_object;
     data_object.SetKeyTag("failing");
 
-    EXPECT_THROW(database_manager.SaveDataObject(&data_object, "failing"), std::runtime_error);
+    EXPECT_THROW(database_manager.Save(data_object, "failing"), std::runtime_error);
     EXPECT_EQ(CountRows(database_path, "object_catalog"), 0);
 }
 
@@ -280,8 +279,8 @@ TEST(DataObjectSchemaPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable) {
     {
         rg::DataObjectManager manager{};
         manager.OpenDatabase(database_path);
-        manager.LoadFileIntoMemory(model_path, "model");
-        manager.SaveDataObject("model");
+        manager.ImportFileAs<rg::ModelObject>(model_path, "model");
+        manager.SaveToDatabase("model");
         SaveTinyMapThroughManager(manager, map_path, "map", 3.0f);
     }
 
@@ -289,10 +288,8 @@ TEST(DataObjectSchemaPersistenceTest, FinalV2CatalogDatabaseRemainsLoadable) {
 
     rg::DataObjectManager manager{};
     ASSERT_NO_THROW(manager.OpenDatabase(database_path));
-    ASSERT_NO_THROW(manager.LoadDataObject("model"));
-    ASSERT_NO_THROW(manager.LoadDataObject("map"));
-    EXPECT_NE(manager.GetTypedDataObject<rg::ModelObject>("model"), nullptr);
-    EXPECT_NE(manager.GetTypedDataObject<rg::MapObject>("map"), nullptr);
+    EXPECT_NE(manager.LoadFromDatabaseAs<rg::ModelObject>("model"), nullptr);
+    EXPECT_NE(manager.LoadFromDatabaseAs<rg::MapObject>("map"), nullptr);
 }
 
 TEST(DataObjectSchemaPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmetryFiltering) {
@@ -311,12 +308,12 @@ TEST(DataObjectSchemaPersistenceTest, DatabaseRoundTripPreservesChainMetadataAnd
 
     rg::DataObjectManager manager{};
     manager.OpenDatabase(database_path);
-    manager.LoadFileIntoMemory(model_path, "model");
-    manager.SaveDataObject("model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "model");
+    manager.SaveToDatabase("model");
     manager.ClearDataObjects();
-    manager.LoadDataObject("model");
+    manager.LoadFromDatabaseAs<rg::ModelObject>("model");
 
-    auto loaded_model{manager.GetTypedDataObject<rg::ModelObject>("model")};
+    auto loaded_model{manager.Require<rg::ModelObject>("model")};
     EXPECT_EQ(loaded_model->GetChainIDListMap(), original_chain_map);
     EXPECT_GT(CountRows(database_path, "model_chain_map", "model"), 0);
 
@@ -335,19 +332,19 @@ TEST(DataObjectSchemaPersistenceTest, DistinctUnsanitizedKeysDoNotCollideInV2Sch
 
     rg::DataObjectManager manager{};
     manager.OpenDatabase(database_path);
-    manager.LoadFileIntoMemory(model_path, "mem_a");
-    manager.LoadFileIntoMemory(model_path, "mem_b");
-    manager.GetTypedDataObject<rg::ModelObject>("mem_a")->SetPdbID("MODEL_A");
-    manager.GetTypedDataObject<rg::ModelObject>("mem_b")->SetPdbID("MODEL_B");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "mem_a");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "mem_b");
+    manager.Require<rg::ModelObject>("mem_a")->SetPdbID("MODEL_A");
+    manager.Require<rg::ModelObject>("mem_b")->SetPdbID("MODEL_B");
 
-    manager.SaveDataObject("mem_a", "a-b");
-    manager.SaveDataObject("mem_b", "a_b");
+    manager.SaveToDatabase("mem_a", "a-b");
+    manager.SaveToDatabase("mem_b", "a_b");
     manager.ClearDataObjects();
 
-    manager.LoadDataObject("a-b");
-    manager.LoadDataObject("a_b");
-    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("a-b")->GetPdbID(), "MODEL_A");
-    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("a_b")->GetPdbID(), "MODEL_B");
+    manager.LoadFromDatabaseAs<rg::ModelObject>("a-b");
+    manager.LoadFromDatabaseAs<rg::ModelObject>("a_b");
+    EXPECT_EQ(manager.Require<rg::ModelObject>("a-b")->GetPdbID(), "MODEL_A");
+    EXPECT_EQ(manager.Require<rg::ModelObject>("a_b")->GetPdbID(), "MODEL_B");
     EXPECT_EQ(CountRows(database_path, "model_object"), 2);
 }
 
@@ -358,24 +355,24 @@ TEST(DataObjectSchemaPersistenceTest, SaveRenamedKeyDoesNotRenameInMemoryObject)
 
     rg::DataObjectManager manager{};
     manager.OpenDatabase(database_path);
-    manager.LoadFileIntoMemory(model_path, "model");
-    manager.SaveDataObject("model", "saved_model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "model");
+    manager.SaveToDatabase("model", "saved_model");
 
-    EXPECT_TRUE(manager.HasDataObject("model"));
-    EXPECT_FALSE(manager.HasDataObject("saved_model"));
+    EXPECT_TRUE(manager.Contains("model"));
+    EXPECT_FALSE(manager.Contains("saved_model"));
 
-    ASSERT_NO_THROW(manager.LoadDataObject("saved_model"));
-    EXPECT_TRUE(manager.HasDataObject("saved_model"));
+    ASSERT_NO_THROW((void)manager.LoadFromDatabaseAs<rg::ModelObject>("saved_model"));
+    EXPECT_TRUE(manager.Contains("saved_model"));
 }
 
-TEST(DataObjectSchemaPersistenceTest, SaveDataObjectThrowsWhenMemoryKeyIsMissing) {
+TEST(DataObjectSchemaPersistenceTest, SaveToDatabaseThrowsWhenMemoryKeyIsMissing) {
     const command_test::ScopedTempDir temp_dir{"data_schema_missing_memory_key"};
     const auto database_path{temp_dir.path() / "missing.sqlite"};
 
     rg::DataObjectManager manager{};
     manager.OpenDatabase(database_path);
 
-    EXPECT_THROW(manager.SaveDataObject("missing"), std::runtime_error);
+    EXPECT_THROW(manager.SaveToDatabase("missing"), std::runtime_error);
 }
 
 TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast) {
@@ -385,7 +382,7 @@ TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast) {
 
     {
         rg::SQLitePersistence database_manager{database_path};
-        database_manager.SaveDataObject(&map_object, "map_only");
+        database_manager.Save(map_object, "map_only");
     }
 
     ExecuteSql(
@@ -415,8 +412,8 @@ TEST(DataObjectSchemaCompatibilityTest, ManagedButUnversionedDatabaseFailsFast) 
     {
         rg::DataObjectManager manager{};
         manager.OpenDatabase(database_path);
-        manager.LoadFileIntoMemory(model_path, "model");
-        manager.SaveDataObject("model");
+        manager.ImportFileAs<rg::ModelObject>(model_path, "model");
+        manager.SaveToDatabase("model");
     }
 
     SetUserVersion(database_path, 0);
@@ -536,8 +533,8 @@ TEST(DataObjectSchemaValidationTest, DeletingCatalogRootCascadesPayloadRows) {
 
     rg::DataObjectManager manager{};
     manager.OpenDatabase(database_path);
-    manager.LoadFileIntoMemory(model_path, "model");
-    manager.SaveDataObject("model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "model");
+    manager.SaveToDatabase("model");
 
     ExecuteSql(database_path, "DELETE FROM object_catalog WHERE key_tag = 'model';");
 

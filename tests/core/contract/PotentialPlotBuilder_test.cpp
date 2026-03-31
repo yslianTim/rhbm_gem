@@ -22,8 +22,7 @@ namespace {
 std::shared_ptr<rg::ModelObject> LoadModelFixture(const std::string & fixture_name)
 {
     rg::DataObjectManager manager{};
-    manager.LoadFileIntoMemory(command_test::TestDataPath(fixture_name), "model");
-    return manager.GetTypedDataObject<rg::ModelObject>("model");
+    return manager.ImportFileAs<rg::ModelObject>(command_test::TestDataPath(fixture_name), "model");
 }
 
 void EnsureLocalPotentialEntries(rg::ModelObject & model)

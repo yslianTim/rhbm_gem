@@ -90,8 +90,7 @@ std::shared_ptr<rg::ModelObject> LoadModelFixture(
     rg::DataObjectManager& manager,
     const std::filesystem::path& model_path,
     const std::string& key_tag = "model") {
-    manager.LoadFileIntoMemory(model_path, key_tag);
-    return manager.GetTypedDataObject<rg::ModelObject>(key_tag);
+    return manager.ImportFileAs<rg::ModelObject>(model_path, key_tag);
 }
 
 std::unique_ptr<rg::ModelObject> MakeModelWithBond() {
@@ -266,8 +265,8 @@ TEST(DataObjectFileIOTest, UppercaseExtensionsDispatchCorrectly) {
         CopyFixtureWithNewName(source_model_path, temp_dir.path() / "TEST_MODEL.MMCIF")};
 
     rg::DataObjectManager manager{};
-    ASSERT_NO_THROW(manager.LoadFileIntoMemory(uppercase_model_path, "model"));
-    EXPECT_EQ(manager.GetTypedDataObject<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
+    ASSERT_NO_THROW((void)manager.ImportFileAs<rg::ModelObject>(uppercase_model_path, "model"));
+    EXPECT_EQ(manager.Require<rg::ModelObject>("model")->GetNumberOfAtom(), 1);
 
     const auto map_object{MakeMapObject()};
     const auto uppercase_map_path{temp_dir.path() / "TEST_MAP.MAP"};
@@ -283,12 +282,11 @@ TEST(DataObjectFileIOTest, PdbWriteRoundTripBasicFields) {
     const auto output_path{temp_dir.path() / "roundtrip.pdb"};
 
     rg::DataObjectManager manager{};
-    manager.LoadFileIntoMemory(model_path, "source");
-    auto source_model{manager.GetTypedDataObject<rg::ModelObject>("source")};
-    ASSERT_NO_THROW(manager.WriteMemoryObjectToFile(output_path, "source"));
-    ASSERT_NO_THROW(manager.LoadFileIntoMemory(output_path, "roundtrip"));
+    auto source_model{manager.ImportFileAs<rg::ModelObject>(model_path, "source")};
+    ASSERT_NO_THROW(manager.ExportToFile(output_path, "source"));
+    ASSERT_NO_THROW((void)manager.ImportFileAs<rg::ModelObject>(output_path, "roundtrip"));
 
-    auto roundtrip_model{manager.GetTypedDataObject<rg::ModelObject>("roundtrip")};
+    auto roundtrip_model{manager.Require<rg::ModelObject>("roundtrip")};
     ASSERT_GT(roundtrip_model->GetNumberOfAtom(), 0);
     EXPECT_EQ(roundtrip_model->GetNumberOfAtom(), source_model->GetNumberOfAtom());
     EXPECT_EQ(
@@ -307,13 +305,13 @@ TEST(DataObjectFileIOTest, ModelWriteSupportMatrixAllowsPdbAndCifAndRejectsMmcif
     const auto unsupported_output_path{temp_dir.path() / "unsupported_output.mmcif"};
 
     rg::DataObjectManager manager{};
-    manager.LoadFileIntoMemory(model_path, "model");
-    EXPECT_NO_THROW(manager.WriteMemoryObjectToFile(pdb_output_path, "model"));
-    EXPECT_NO_THROW(manager.WriteMemoryObjectToFile(cif_output_path, "model"));
-    EXPECT_THROW(manager.WriteMemoryObjectToFile(unsupported_output_path, "model"), std::runtime_error);
+    manager.ImportFileAs<rg::ModelObject>(model_path, "model");
+    EXPECT_NO_THROW(manager.ExportToFile(pdb_output_path, "model"));
+    EXPECT_NO_THROW(manager.ExportToFile(cif_output_path, "model"));
+    EXPECT_THROW(manager.ExportToFile(unsupported_output_path, "model"), std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, LoadFileIntoMemoryThrowsOnMalformedModelInput) {
+TEST(DataObjectFileIOTest, ImportFileAsThrowsOnMalformedModelInput) {
     const command_test::ScopedTempDir temp_dir{"data_runtime_bad_model"};
     const auto malformed_path{temp_dir.path() / "bad_model.cif"};
     {
@@ -322,10 +320,12 @@ TEST(DataObjectFileIOTest, LoadFileIntoMemoryThrowsOnMalformedModelInput) {
     }
 
     rg::DataObjectManager manager{};
-    EXPECT_THROW(manager.LoadFileIntoMemory(malformed_path, "broken"), std::runtime_error);
+    EXPECT_THROW(
+        (void)manager.ImportFileAs<rg::ModelObject>(malformed_path, "broken"),
+        std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, LoadFileIntoMemoryThrowsOnMalformedMapInput) {
+TEST(DataObjectFileIOTest, ImportFileAsThrowsOnMalformedMapInput) {
     const command_test::ScopedTempDir temp_dir{"data_runtime_bad_map"};
     const auto malformed_path{temp_dir.path() / "bad_map.map"};
     {
@@ -334,20 +334,22 @@ TEST(DataObjectFileIOTest, LoadFileIntoMemoryThrowsOnMalformedMapInput) {
     }
 
     rg::DataObjectManager manager{};
-    EXPECT_THROW(manager.LoadFileIntoMemory(malformed_path, "broken_map"), std::runtime_error);
+    EXPECT_THROW(
+        (void)manager.ImportFileAs<rg::MapObject>(malformed_path, "broken_map"),
+        std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, WriteMemoryObjectToFileThrowsWhenWriterCannotOpenTarget) {
+TEST(DataObjectFileIOTest, ExportToFileThrowsWhenWriterCannotOpenTarget) {
     const command_test::ScopedTempDir temp_dir{"data_runtime_bad_output_target"};
     const auto model_path{command_test::TestDataPath("test_model.cif")};
     const auto output_path{temp_dir.path() / "missing_dir" / "output.cif"};
 
     rg::DataObjectManager manager{};
-    manager.LoadFileIntoMemory(model_path, "model");
-    EXPECT_THROW(manager.WriteMemoryObjectToFile(output_path, "model"), std::runtime_error);
+    manager.ImportFileAs<rg::ModelObject>(model_path, "model");
+    EXPECT_THROW(manager.ExportToFile(output_path, "model"), std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, FunctionFileIoThrowsWhenReadFails) {
+TEST(DataObjectFileIOTest, TypedFileIoThrowsWhenReadFails) {
     const command_test::ScopedTempDir temp_dir{"data_runtime_file_io_failure"};
     const auto missing_model_path{temp_dir.path() / "missing_model.cif"};
     const auto malformed_map_path{temp_dir.path() / "bad_map.map"};
@@ -360,10 +362,12 @@ TEST(DataObjectFileIOTest, FunctionFileIoThrowsWhenReadFails) {
     EXPECT_THROW((void)rg::ReadMap(malformed_map_path), std::runtime_error);
 }
 
-TEST(DataObjectFileIOTest, WriteDataObjectRejectsUnsupportedTopLevelObjectType) {
-    rg::AtomObject atom;
-    EXPECT_THROW(rg::WriteDataObject("unused.pdb", atom), std::runtime_error);
-    EXPECT_THROW(rg::WriteDataObject("unused.map", atom), std::runtime_error);
+TEST(DataObjectFileIOTest, ImportFileAsRejectsWrongTopLevelType) {
+    const auto model_path{command_test::TestDataPath("test_model.cif")};
+    rg::DataObjectManager manager{};
+    EXPECT_THROW(
+        (void)manager.ImportFileAs<rg::MapObject>(model_path, "wrong_kind"),
+        std::runtime_error);
 }
 
 TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix) {
@@ -486,8 +490,8 @@ TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix) {
 TEST(DataObjectManagerIterationTest, ForEachDataObjectUsesDeterministicOrderByDefault) {
     rg::DataObjectManager manager{};
     const auto model_path{command_test::TestDataPath("test_model.cif")};
-    manager.LoadFileIntoMemory(model_path, "b_model");
-    manager.LoadFileIntoMemory(model_path, "a_model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "b_model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "a_model");
 
     rg::DataObjectManager::IterateOptions options;
     std::vector<std::string> keys;
@@ -506,8 +510,8 @@ TEST(DataObjectManagerIterationTest, ForEachDataObjectUsesDeterministicOrderByDe
 TEST(DataObjectManagerIterationTest, ForEachDataObjectPreservesExplicitKeyOrder) {
     rg::DataObjectManager manager{};
     const auto model_path{command_test::TestDataPath("test_model.cif")};
-    manager.LoadFileIntoMemory(model_path, "b_model");
-    manager.LoadFileIntoMemory(model_path, "a_model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "b_model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "a_model");
 
     std::vector<std::string> keys;
     manager.ForEachDataObject(
@@ -524,8 +528,8 @@ TEST(DataObjectManagerIterationTest, ForEachDataObjectPreservesExplicitKeyOrder)
 TEST(DataObjectManagerIterationTest, ConstOverloadWorks) {
     rg::DataObjectManager manager{};
     const auto model_path{command_test::TestDataPath("test_model.cif")};
-    manager.LoadFileIntoMemory(model_path, "b_model");
-    manager.LoadFileIntoMemory(model_path, "a_model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "b_model");
+    manager.ImportFileAs<rg::ModelObject>(model_path, "a_model");
 
     const rg::DataObjectManager& const_manager{manager};
     std::vector<std::string> keys;
@@ -541,7 +545,7 @@ TEST(DataObjectManagerIterationTest, ConstOverloadWorks) {
 
 TEST(DataObjectManagerIterationTest, SnapshotAllowsClearDuringCallback) {
     rg::DataObjectManager manager{};
-    manager.LoadFileIntoMemory(command_test::TestDataPath("test_model.cif"), "model");
+    manager.ImportFileAs<rg::ModelObject>(command_test::TestDataPath("test_model.cif"), "model");
 
     BlockingModelCallback callback;
     std::exception_ptr worker_error;
@@ -605,24 +609,6 @@ TEST(DataObjectDispatchTest, ExpectHelpersThrowOnUnsupportedTargetType) {
     rg::AtomObject atom;
     EXPECT_THROW((void)rg::ExpectModelObject(atom, "dispatch-test-model"), std::runtime_error);
     EXPECT_THROW((void)rg::ExpectMapObject(atom, "dispatch-test-map"), std::runtime_error);
-}
-
-TEST(DataObjectDispatchTest, CatalogTypeNameUsesStableTopLevelNames) {
-    auto model{MakeModelWithBond()};
-    auto map{MakeMapObject()};
-    rg::AtomObject atom;
-
-    EXPECT_EQ(
-        rg::ResolveTopLevelDataObjectKind(*model, "dispatch-kind"),
-        rg::TopLevelDataObjectKind::Model);
-    EXPECT_EQ(
-        rg::ResolveTopLevelDataObjectKind(map, "dispatch-kind"),
-        rg::TopLevelDataObjectKind::Map);
-    EXPECT_EQ(rg::GetCatalogTypeName(rg::TopLevelDataObjectKind::Model), "model");
-    EXPECT_EQ(rg::GetCatalogTypeName(rg::TopLevelDataObjectKind::Map), "map");
-    EXPECT_THROW(
-        (void)rg::ResolveTopLevelDataObjectKind(atom, "dispatch-kind"),
-        std::runtime_error);
 }
 
 TEST(DataObjectOperationTest, AtomPainterDispatchesByTypedIngestionAndRejectsUnsupportedType) {
@@ -829,14 +815,14 @@ TEST(DataObjectOperationTest, SelectedAtomAndBondStateCanBuildContextMapsDirectl
     EXPECT_EQ(bond_map.at(1).size(), 1);
     EXPECT_EQ(bond_map.at(2).size(), 1);
 }
-TEST(DataObjectFileIOTest, LoadFileIntoMemoryDoesNotCallDisplay) {
+TEST(DataObjectFileIOTest, ImportFileAsDoesNotCallDisplay) {
     const auto model_path{command_test::TestDataPath("test_model.cif")};
 
     rg::DataObjectManager manager{};
     Logger::SetLogLevel(LogLevel::Info);
     testing::internal::CaptureStdout();
     testing::internal::CaptureStderr();
-    ASSERT_NO_THROW(manager.LoadFileIntoMemory(model_path, "model"));
+    ASSERT_NO_THROW((void)manager.ImportFileAs<rg::ModelObject>(model_path, "model"));
     const auto stdout_output{testing::internal::GetCapturedStdout()};
     const auto stderr_output{testing::internal::GetCapturedStderr()};
     const auto combined_output{stdout_output + stderr_output};
@@ -844,10 +830,10 @@ TEST(DataObjectFileIOTest, LoadFileIntoMemoryDoesNotCallDisplay) {
     EXPECT_EQ(combined_output.find("MapObject Display"), std::string::npos);
 }
 
-TEST(DataObjectFileIOTest, WriteMemoryObjectToFileThrowsWhenKeyIsMissing) {
+TEST(DataObjectFileIOTest, ExportToFileThrowsWhenKeyIsMissing) {
     const command_test::ScopedTempDir temp_dir{"data_runtime_missing_export_key"};
     const auto output_path{temp_dir.path() / "missing.cif"};
 
     rg::DataObjectManager manager{};
-    EXPECT_THROW(manager.WriteMemoryObjectToFile(output_path, "missing"), std::runtime_error);
+    EXPECT_THROW(manager.ExportToFile(output_path, "missing"), std::runtime_error);
 }

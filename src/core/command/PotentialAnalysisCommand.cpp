@@ -230,7 +230,7 @@ bool PotentialAnalysisCommand::ExecuteImpl()
     else RunLocalAtomFitting(request.alpha_r);
     RunAtomPotentialFitting();
     RunExperimentalBondWorkflowIfEnabled();
-    SaveDataObject();
+    SavePreparedModel();
     return true;
 }
 
@@ -350,10 +350,12 @@ bool PotentialAnalysisCommand::BuildDataObject()
     try
     {
         m_data_manager.OpenDatabase(request.database_path);
-        m_data_manager.LoadFileIntoMemory(request.model_file_path, m_model_key_tag);
-        m_model_object = m_data_manager.GetTypedDataObject<ModelObject>(m_model_key_tag);
-        m_data_manager.LoadFileIntoMemory(request.map_file_path, m_map_key_tag);
-        m_map_object = m_data_manager.GetTypedDataObject<MapObject>(m_map_key_tag);
+        m_model_object = m_data_manager.ImportFileAs<ModelObject>(
+            request.model_file_path,
+            m_model_key_tag);
+        m_map_object = m_data_manager.ImportFileAs<MapObject>(
+            request.map_file_path,
+            m_map_key_tag);
         if (request.simulation_flag)
         {
             UpdateModelObjectForSimulation(m_model_object.get());
@@ -712,12 +714,12 @@ void PotentialAnalysisCommand::StudyAtomGroupFittingViaAlphaG(
     Logger::Log(LogLevel::Debug, alpha_g_bias_stream.str());
 }
 
-void PotentialAnalysisCommand::SaveDataObject()
+void PotentialAnalysisCommand::SavePreparedModel()
 {
-    ScopeTimer timer("PotentialAnalysisCommand::SaveDataObject");
+    ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
     if (m_model_object == nullptr) return;
 
-    m_data_manager.SaveDataObject(m_model_key_tag, RequestOptions().saved_key_tag);
+    m_data_manager.SaveToDatabase(m_model_key_tag, RequestOptions().saved_key_tag);
 
     for (auto atom : m_model_object->GetSelectedAtomList())
     {

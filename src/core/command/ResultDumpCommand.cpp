@@ -79,14 +79,12 @@ bool ResultDumpCommand::BuildDataObjectList()
         }
         else
         {
-            m_data_manager.LoadFileIntoMemory(request.map_file_path, m_map_key_tag);
-            m_map_object = m_data_manager.GetTypedDataObject<MapObject>(m_map_key_tag);
+            m_map_object = m_data_manager.ImportFileAs<MapObject>(request.map_file_path, m_map_key_tag);
         }
         m_selected_atom_list_map.clear();
         for (const auto & key : request.model_key_tag_list)
         {
-            m_data_manager.LoadDataObject(key);
-            auto model_object{ m_data_manager.GetTypedDataObject<ModelObject>(key) };
+            auto model_object{ m_data_manager.LoadFromDatabaseAs<ModelObject>(key) };
             m_model_object_list.emplace_back(model_object);
             const auto & selected_atom_list{ model_object->GetSelectedAtomList() };
             m_selected_atom_list_map[key] = {

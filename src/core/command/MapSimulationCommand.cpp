@@ -202,8 +202,9 @@ bool MapSimulationCommand::BuildDataObject()
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
-        m_data_manager.LoadFileIntoMemory(request.model_file_path, std::string(kModelKey));
-        m_model_object = m_data_manager.GetTypedDataObject<ModelObject>(std::string(kModelKey));
+        m_model_object = m_data_manager.ImportFileAs<ModelObject>(
+            request.model_file_path,
+            std::string(kModelKey));
         BuildAtomList(m_model_object.get());
     }
     catch(const std::exception & e)

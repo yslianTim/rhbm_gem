@@ -2,7 +2,6 @@
 
 #include <stdexcept>
 #include <string>
-#include <string_view>
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -94,35 +93,6 @@ MapObject & ExpectMapObject(
     throw std::runtime_error(
         std::string(context) + ": expected MapObject but got "
         + ResolveDataObjectTypeName(data_object) + ".");
-}
-
-TopLevelDataObjectKind ResolveTopLevelDataObjectKind(
-    const DataObjectBase & data_object,
-    std::string_view context)
-{
-    if (dynamic_cast<const ModelObject *>(&data_object) != nullptr)
-    {
-        return TopLevelDataObjectKind::Model;
-    }
-    if (dynamic_cast<const MapObject *>(&data_object) != nullptr)
-    {
-        return TopLevelDataObjectKind::Map;
-    }
-    throw std::runtime_error(
-        std::string(context) + ": expected top-level DataObject but got "
-        + ResolveDataObjectTypeName(data_object) + ".");
-}
-
-std::string_view GetCatalogTypeName(TopLevelDataObjectKind kind) noexcept
-{
-    switch (kind)
-    {
-    case TopLevelDataObjectKind::Model:
-        return "model";
-    case TopLevelDataObjectKind::Map:
-        return "map";
-    }
-    return "unknown";
 }
 
 } // namespace rhbm_gem

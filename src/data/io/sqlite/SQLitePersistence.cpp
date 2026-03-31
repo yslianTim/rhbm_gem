@@ -1,9 +1,9 @@
 #include "SQLitePersistence.hpp"
 
+#include "../detail/TopLevelObjectRouting.hpp"
 #include "ModelObjectStorage.hpp"
 #include "SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
@@ -611,19 +611,6 @@ std::unique_ptr<rhbm_gem::MapObject> LoadMapObject(
     return map_object;
 }
 
-rhbm_gem::TopLevelDataObjectKind ParseCatalogTypeName(std::string_view type_name)
-{
-    if (type_name == "model")
-    {
-        return rhbm_gem::TopLevelDataObjectKind::Model;
-    }
-    if (type_name == "map")
-    {
-        return rhbm_gem::TopLevelDataObjectKind::Map;
-    }
-    throw std::runtime_error("Unsupported data object type: " + std::string(type_name));
-}
-
 } // namespace
 
 namespace rhbm_gem {
@@ -656,19 +643,14 @@ SQLitePersistence::SQLitePersistence(const std::filesystem::path & database_path
 
 SQLitePersistence::~SQLitePersistence() = default;
 
-void SQLitePersistence::SaveDataObject(const DataObjectBase * data_object, const std::string & key_tag)
+void SQLitePersistence::Save(const DataObjectBase & data_object, const std::string & key_tag)
 {
-    if (data_object == nullptr)
-    {
-        throw std::runtime_error("Null data object pointer provided.");
-    }
-
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
 
     const auto kind{
-        ResolveTopLevelDataObjectKind(*data_object, "SQLitePersistence::SaveDataObject()") };
-    const auto type_name{ std::string(GetCatalogTypeName(kind)) };
+        io_detail::ResolveTopLevelObjectKind(data_object, "SQLitePersistence::Save()") };
+    const auto type_name{ std::string(io_detail::GetCatalogTypeName(kind)) };
     m_database->Prepare(std::string(kUpsertCatalogSql));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
@@ -677,18 +659,18 @@ void SQLitePersistence::SaveDataObject(const DataObjectBase * data_object, const
 
     switch (kind)
     {
-    case TopLevelDataObjectKind::Model:
-        m_model_store->Save(static_cast<const ModelObject &>(*data_object), key_tag);
+    case io_detail::TopLevelObjectKind::Model:
+        m_model_store->Save(static_cast<const ModelObject &>(data_object), key_tag);
         return;
-    case TopLevelDataObjectKind::Map:
-        SaveMapObject(*m_database, static_cast<const MapObject &>(*data_object), key_tag);
+    case io_detail::TopLevelObjectKind::Map:
+        SaveMapObject(*m_database, static_cast<const MapObject &>(data_object), key_tag);
         return;
     }
 
     throw std::runtime_error("Unsupported data object type.");
 }
 
-std::unique_ptr<DataObjectBase> SQLitePersistence::LoadDataObject(const std::string & key_tag)
+std::unique_ptr<DataObjectBase> SQLitePersistence::Load(const std::string & key_tag)
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
@@ -707,12 +689,12 @@ std::unique_ptr<DataObjectBase> SQLitePersistence::LoadDataObject(const std::str
         throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
     }
 
-    const auto kind{ ParseCatalogTypeName(m_database->GetColumn<std::string>(0)) };
+    const auto kind{ io_detail::ParseCatalogTypeName(m_database->GetColumn<std::string>(0)) };
     switch (kind)
     {
-    case TopLevelDataObjectKind::Model:
+    case io_detail::TopLevelObjectKind::Model:
         return m_model_store->Load(key_tag);
-    case TopLevelDataObjectKind::Map:
+    case io_detail::TopLevelObjectKind::Map:
         return LoadMapObject(*m_database, key_tag);
     }
 

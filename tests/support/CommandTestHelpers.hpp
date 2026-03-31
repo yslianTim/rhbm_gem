@@ -70,14 +70,13 @@ inline void SeedSavedModel(
 {
     rhbm_gem::DataObjectManager manager{};
     manager.OpenDatabase(database_path);
-    manager.LoadFileIntoMemory(model_path, "model");
-    auto model{ manager.GetTypedDataObject<rhbm_gem::ModelObject>("model") };
+    auto model{ manager.ImportFileAs<rhbm_gem::ModelObject>(model_path, "model") };
     model->SetPdbID(pdb_id);
     for (auto & atom : model->GetAtomList())
     {
         atom->AddLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
     }
-    manager.SaveDataObject("model", saved_key);
+    manager.SaveToDatabase("model", saved_key);
 }
 
 inline std::filesystem::path GenerateMapFile(

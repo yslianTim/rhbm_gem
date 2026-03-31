@@ -151,10 +151,12 @@ bool MapVisualizationCommand::BuildDataObject()
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        m_data_manager.LoadFileIntoMemory(request.model_file_path, m_model_key_tag);
-        m_model_object = m_data_manager.GetTypedDataObject<ModelObject>(m_model_key_tag);
-        m_data_manager.LoadFileIntoMemory(request.map_file_path, m_map_key_tag);
-        m_map_object = m_data_manager.GetTypedDataObject<MapObject>(m_map_key_tag);
+        m_model_object = m_data_manager.ImportFileAs<ModelObject>(
+            request.model_file_path,
+            m_model_key_tag);
+        m_map_object = m_data_manager.ImportFileAs<MapObject>(
+            request.map_file_path,
+            m_map_key_tag);
     }
     catch (const std::exception & e)
     {

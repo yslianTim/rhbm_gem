@@ -50,7 +50,7 @@ flowchart LR
     A["Commands / tests / bindings"] --> B["DataObjectManager"]
 
     subgraph F["File I/O"]
-      B --> C["ReadDataObject / WriteDataObject"]
+      B --> C["ImportFileAs<T> / ExportToFile"]
       C --> D["descriptor lookup by extension"]
       D --> E["PDB / CIF / MRC / CCP4 backends"]
     end
@@ -66,7 +66,7 @@ flowchart LR
     subgraph T["Typed helpers"]
       B --> M["ForEachDataObject(...)"]
       N["DataObjectDispatch"] --> N1["As* / Expect* helpers"]
-      N --> N2["ResolveTopLevelDataObjectKind / GetCatalogTypeName"]
+      O["src/data/io/detail/TopLevelObjectRouting.hpp"] --> O1["catalog type / top-level kind routing"]
     end
 ```
 
@@ -74,23 +74,19 @@ flowchart LR
 
 Public API:
 
-- `ReadDataObject(path)`
-- `WriteDataObject(path, obj)`
 - `ReadModel(path)` / `WriteModel(path, model, model_parameter=0)`
 - `ReadMap(path)` / `WriteMap(path, map)`
 
 Behavior:
 
 - `FileIO.cpp` owns the fixed descriptor table for supported extensions.
-- `WriteDataObject(...)` enforces type/backend agreement through:
-  - `ExpectModelObject(data_object, "WriteDataObject()")`
-  - `ExpectMapObject(data_object, "WriteDataObject()")`
-- all public entry points wrap failures in `std::runtime_error` with file path and operation context
+- only typed file entry points are public; generic top-level file routing is internal-only
+- all public typed entry points wrap failures in `std::runtime_error` with file path and operation context
 
 `DataObjectManager` integration:
 
-- `LoadFileIntoMemory(filename, key_tag)` reads the file, sets `key_tag`, and stores the object in memory
-- `WriteMemoryObjectToFile(filename, key_tag)` writes the in-memory object to disk and throws if the key is missing
+- `ImportFileAs<T>(filename, key_tag)` reads a typed object, sets `key_tag`, stores it in memory, and returns `shared_ptr<T>`
+- `ExportToFile(filename, key_tag)` writes the stored object to disk and throws if the key is missing or the stored type is unsupported for export
 - replacing an existing in-memory key is allowed and logs a warning
 
 ## 5. In-Memory Manager Contract
@@ -102,29 +98,33 @@ Behavior:
 Concurrency boundaries:
 
 - `m_map_mutex` protects the in-memory object map
-- `m_db_mutex` protects manager-level persistence access
+- SQLite operation serialization is owned by `SQLitePersistence`
 
 Public lookup and lifecycle helpers:
 
 - `ClearDataObjects()`
-- `HasDataObject(key_tag)`
+- `Contains(key_tag)`
 - `GetDataObject(key_tag)`
-- `GetTypedDataObject<T>(key_tag)`
+- `Require<T>(key_tag)`
+- `ImportFileAs<T>(path, key_tag)`
+- `LoadFromDatabaseAs<T>(key_tag)`
+- `ExportToFile(path, key_tag)`
+- `SaveToDatabase(key_tag, persisted_key="")`
 
 Behavior:
 
 - `GetDataObject(key_tag)` throws if the key is missing
-- `GetTypedDataObject<T>(key_tag)` throws if the key is missing or the runtime type does not match `T`
-- private `AddDataObject(...)` logs and replaces duplicate keys
-- private `AddDataObject(...)` logs an error and returns `false` for `nullptr`
+- `Require<T>(key_tag)` throws if the key is missing or the runtime type does not match `T`
+- `ImportFileAs<T>(...)` and `LoadFromDatabaseAs<T>(...)` both return typed pointers and do not require a follow-up lookup
+- private store insertion logs replacement events and rejects `nullptr`
 
 ## 6. SQLite Persistence Contract
 
 Manager entry points:
 
 - `OpenDatabase(db_path)`
-- `SaveDataObject(key_tag, renamed_key_tag="")`
-- `LoadDataObject(key_tag)`
+- `SaveToDatabase(key_tag, persisted_key="")`
+- `LoadFromDatabaseAs<T>(key_tag)`
 
 `OpenDatabase(...)` behavior:
 
@@ -145,17 +145,17 @@ Manager entry points:
 
 Behavior differences to keep straight:
 
-- `DataObjectManager::SaveDataObject(...)`
+- `DataObjectManager::SaveToDatabase(...)`
   - throws if the DB manager is not initialized
   - throws if the in-memory key is missing
-  - `renamed_key_tag` changes only the persisted key, not the in-memory key
-- `SQLitePersistence::SaveDataObject(...)`
-  - throws if the input pointer is null
-  - resolves the top-level kind once, then converts that kind to the catalog type name
-- `LoadDataObject(...)`
+  - `persisted_key` changes only the persisted key, not the in-memory key
+- `SQLitePersistence::Save(...)`
+  - resolves the top-level kind via source-private routing helpers
+- `LoadFromDatabaseAs<T>(...)`
   - throws if the DB manager is not initialized
   - throws if the catalog row is missing
-  - loads the object and stores it in memory under the requested key
+  - throws if the loaded runtime type does not match `T`
+  - stores the object in memory under the requested key and returns `shared_ptr<T>`
 
 ## 7. Schema Contract
 
@@ -188,20 +188,12 @@ API:
 
 - `AsModelObject(...)`, `AsMapObject(...)`
 - `ExpectModelObject(...)`, `ExpectMapObject(...)`
-- `ResolveTopLevelDataObjectKind(...)`
-- `GetCatalogTypeName(kind)`
 
 Behavior:
 
 - `As*` helpers return a typed pointer or `nullptr`
 - `Expect*` helpers return a typed reference or throw with caller context and resolved runtime type
-- `ResolveTopLevelDataObjectKind(...)` returns:
-  - `TopLevelDataObjectKind::Model` for `ModelObject`
-  - `TopLevelDataObjectKind::Map` for `MapObject`
-- `GetCatalogTypeName(kind)` returns:
-  - `model` for `TopLevelDataObjectKind::Model`
-  - `map` for `TopLevelDataObjectKind::Map`
-- `ResolveTopLevelDataObjectKind(...)` throws for non-top-level types such as `AtomObject` and `BondObject`
+- catalog type name and top-level persistence routing are no longer public API; they live in source-private I/O helpers
 
 ## 9. Manager Iteration Contract
 
@@ -229,16 +221,14 @@ Behavior:
 
 ## 10. Shared Command Helpers
 
-There is no repository-wide shared loader facade for commands.
-
 Current guidance:
 
-- simple file/database loading should call `DataObjectManager` directly in the command orchestration layer
+- simple file/database loading should call typed `DataObjectManager` entry points directly in the command orchestration layer
 - command-specific error context should be added in the command `BuildDataObject(...)` or equivalent `try/catch`
 - keep one-hop wrappers local only when they add real policy, not when they only forward to:
-  - `LoadFileIntoMemory(...)`
-  - `LoadDataObject(...)`
-  - `GetTypedDataObject<T>(...)`
+  - `ImportFileAs<T>(...)`
+  - `LoadFromDatabaseAs<T>(...)`
+  - `Require<T>(...)`
 
 Some typed workflow helpers still exist only as command-local functions such as:
 

@@ -5,12 +5,8 @@
 
 namespace rhbm_gem {
 
-class DataObjectBase;
 class ModelObject;
 class MapObject;
-
-std::unique_ptr<DataObjectBase> ReadDataObject(const std::filesystem::path & filename);
-void WriteDataObject(const std::filesystem::path & filename, const DataObjectBase & data_object);
 
 std::unique_ptr<ModelObject> ReadModel(const std::filesystem::path & filename);
 void WriteModel(

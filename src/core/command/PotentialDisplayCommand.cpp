@@ -125,9 +125,7 @@ bool PotentialDisplayCommand::BuildDataObject()
         for (const auto & key : request.model_key_tag_list)
         {
             Logger::ProgressBar(model_count, model_size);
-            m_data_manager.LoadDataObject(key);
-            m_model_object_list.emplace_back(
-                m_data_manager.GetTypedDataObject<ModelObject>(key));
+            m_model_object_list.emplace_back(m_data_manager.LoadFromDatabaseAs<ModelObject>(key));
             model_count++;
         }
         for (const auto & [map_key, key_tag_list] : request.reference_model_groups)
@@ -138,9 +136,8 @@ bool PotentialDisplayCommand::BuildDataObject()
             for (auto & key_tag : key_tag_list)
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
-                m_data_manager.LoadDataObject(key_tag);
                 m_ref_model_object_list_map[map_key].emplace_back(
-                    m_data_manager.GetTypedDataObject<ModelObject>(key_tag));
+                    m_data_manager.LoadFromDatabaseAs<ModelObject>(key_tag));
                 ref_model_count++;
             }
         }
