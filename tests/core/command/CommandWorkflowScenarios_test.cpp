@@ -20,7 +20,7 @@ TEST(CommandWorkflowScenariosTest, MapSimulationGeneratesMapForEachValidBlurring
 
     rg::MapSimulationCommand command{};
     rg::MapSimulationRequest request{};
-    request.common.folder_path = temp_dir.path();
+    request.output_dir = temp_dir.path();
     request.map_file_name = "sim_map";
     request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.blurring_width_list = { 1.0, -2.0, 3.0 };
@@ -50,14 +50,14 @@ TEST(CommandWorkflowScenariosTest, ResultDumpRerunRefreshesRuntimeStateAndUsesCu
     request.model_key_tag_list = { "shared_key" };
 
     request.database_path = database_path_a;
-    request.common.folder_path = output_dir_a;
+    request.output_dir = output_dir_a;
     command.ApplyRequest(request);
     ASSERT_TRUE(command.Run());
     EXPECT_TRUE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_A.csv"));
     EXPECT_FALSE(std::filesystem::exists(output_dir_a / "atom_position_list_MODEL_FROM_B.csv"));
 
     request.database_path = database_path_b;
-    request.common.folder_path = output_dir_b;
+    request.output_dir = output_dir_b;
     command.ApplyRequest(request);
     ASSERT_TRUE(command.Run());
     EXPECT_TRUE(std::filesystem::exists(output_dir_b / "atom_position_list_MODEL_FROM_B.csv"));
@@ -79,7 +79,7 @@ TEST(CommandWorkflowScenariosTest, MapVisualizationInvalidAtomIdFailsWithoutWrit
 
     rg::MapVisualizationCommand command{};
     rg::MapVisualizationRequest request{};
-    request.common.folder_path = output_dir;
+    request.output_dir = output_dir;
     request.model_file_path = model_path;
     request.map_file_path = map_path;
     request.atom_serial_id = 999;
@@ -102,7 +102,7 @@ TEST(CommandWorkflowScenariosTest, MapVisualizationWritesPdfToConfiguredFolder)
 
     rg::MapVisualizationCommand command{};
     rg::MapVisualizationRequest request{};
-    request.common.folder_path = output_dir;
+    request.output_dir = output_dir;
     request.model_file_path = model_path;
     request.map_file_path = map_path;
     request.atom_serial_id = 1;
@@ -123,7 +123,7 @@ TEST(CommandWorkflowScenariosTest, PositionEstimationDoesNotRequireDatabaseConfi
 
     rg::PositionEstimationCommand command{};
     rg::PositionEstimationRequest request{};
-    request.common.folder_path = output_dir;
+    request.output_dir = output_dir;
     request.map_file_path = map_path;
     command.ApplyRequest(request);
 

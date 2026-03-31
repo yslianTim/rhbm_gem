@@ -22,7 +22,7 @@ class LifecycleCommand final : public rg::CommandBase
 public:
     LifecycleCommand()
     {
-        BindCommonRequest(m_common_request);
+        BindBaseRequest(m_base_request);
     }
 
     int validate_count{ 0 };
@@ -55,7 +55,7 @@ public:
     }
 
 private:
-    rg::CommonCommandRequest m_common_request{};
+    rg::CommandRequestBase m_base_request{};
     LifecycleCommandOptions m_options{};
 
     bool ExecuteImpl() override
@@ -128,11 +128,10 @@ TEST(CommandExecutionContractTest, PublicRunEntryPointReportsPreparationFailureA
 {
     const auto result{ rg::RunMapSimulation(rg::MapSimulationRequest{}) };
 
-    EXPECT_FALSE(result.prepared);
-    EXPECT_FALSE(result.executed);
+    EXPECT_EQ(result.outcome, rg::CommandOutcome::ValidationFailed);
     EXPECT_NE(
         command_test::FindValidationIssue(
-            result.validation_issues,
+            result.issues,
             "--model",
             rg::ValidationPhase::Parse,
             LogLevel::Error),

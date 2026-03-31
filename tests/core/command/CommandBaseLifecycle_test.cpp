@@ -20,7 +20,7 @@ class TestCommand final : public rg::CommandBase
 public:
     TestCommand()
     {
-        BindCommonRequest(m_common_request);
+        BindBaseRequest(m_base_request);
     }
 
     void SetForceInvalid(bool value)
@@ -31,8 +31,8 @@ public:
 
     void ConfigureFilesystemOptions(const std::filesystem::path & folder_path)
     {
-        m_common_request.folder_path = folder_path;
-        CoerceCommonRequest(m_common_request);
+        m_base_request.output_dir = folder_path;
+        CoerceBaseRequest(m_base_request);
     }
 
     void ValidateOptions() override
@@ -43,7 +43,7 @@ public:
     void ResetRuntimeState() override {}
 
 private:
-    rg::CommonCommandRequest m_common_request{};
+    rg::CommandRequestBase m_base_request{};
     TestCommandOptions m_options{};
 
     bool ExecuteImpl() override

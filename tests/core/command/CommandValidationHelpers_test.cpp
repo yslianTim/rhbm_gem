@@ -9,7 +9,7 @@
 
 #include "internal/command/CommandBase.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include <rhbm_gem/core/command/CommandEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandEnums.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -33,7 +33,7 @@ class ValidationHelperCommand final : public rg::CommandBase
 public:
     ValidationHelperCommand()
     {
-        BindCommonRequest(m_common_request);
+        BindBaseRequest(m_base_request);
     }
 
     void SetRequiredPath(const std::filesystem::path & value)
@@ -157,9 +157,9 @@ public:
 
     void SetCommonOptionsForTest(int thread_size, int verbose_level)
     {
-        m_common_request.thread_size = thread_size;
-        m_common_request.verbose_level = verbose_level;
-        CoerceCommonRequest(m_common_request);
+        m_base_request.job_count = thread_size;
+        m_base_request.verbosity = verbose_level;
+        CoerceBaseRequest(m_base_request);
     }
 
     void ValidateOptions() override
@@ -174,7 +174,7 @@ public:
     void ResetRuntimeState() override {}
 
 private:
-    rg::CommonCommandRequest m_common_request{};
+    rg::CommandRequestBase m_base_request{};
     ValidationHelperCommandOptions m_options{};
 
     bool ExecuteImpl() override { return true; }

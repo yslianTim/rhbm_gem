@@ -10,9 +10,10 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+
+#include "internal/command/CommandEnumMetadata.hpp"
 
 namespace rhbm_gem {
 
@@ -34,12 +35,12 @@ protected:
     virtual void ValidateOptions() {}
     virtual void ResetRuntimeState() {}
     virtual bool ExecuteImpl() = 0;
-    int ThreadSize() const { return CommonRequest().thread_size; }
-    int VerboseLevel() const { return CommonRequest().verbose_level; }
-    const std::filesystem::path & OutputFolder() const { return CommonRequest().folder_path; }
-    void BindCommonRequest(CommonCommandRequest & request) { m_common_request = &request; }
+    int ThreadSize() const { return BaseRequest().job_count; }
+    int VerboseLevel() const { return BaseRequest().verbosity; }
+    const std::filesystem::path & OutputFolder() const { return BaseRequest().output_dir; }
+    void BindBaseRequest(CommandRequestBase & request) { m_base_request = &request; }
     void InvalidatePreparedState();
-    void CoerceCommonRequest(CommonCommandRequest & request);
+    void CoerceBaseRequest(CommandRequestBase & request);
     void AddValidationError(
         std::string_view option_name,
         const std::string & message,
@@ -121,7 +122,7 @@ protected:
         ClearParseIssues(option_name);
         using UnderlyingType = std::underlying_type_t<FieldType>;
         const auto raw_numeric{ static_cast<UnderlyingType>(field) };
-        if (IsSupportedCommandEnumValue(field))
+        if (internal::IsSupportedCommandEnumValue(field))
         {
             return;
         }
@@ -138,10 +139,10 @@ protected:
         std::string_view extension) const;
 
 private:
-    CommonCommandRequest * m_common_request{ nullptr };
+    CommandRequestBase * m_base_request{ nullptr };
     bool m_was_prepared{ false };
-    CommonCommandRequest & CommonRequest() { return *m_common_request; }
-    const CommonCommandRequest & CommonRequest() const { return *m_common_request; }
+    CommandRequestBase & BaseRequest() { return *m_base_request; }
+    const CommandRequestBase & BaseRequest() const { return *m_base_request; }
     void BeginValidationMutation(ValidationPhase phase);
     void BeginPreparationPass();
     bool RunValidationPass();
@@ -173,14 +174,14 @@ public:
     CommandWithRequest() :
         CommandBase{}
     {
-        BindCommonRequest(m_request.common);
+        BindBaseRequest(m_request);
     }
 
     void ApplyRequest(const Request & request)
     {
         m_request = request;
         InvalidatePreparedState();
-        CoerceCommonRequest(m_request.common);
+        CoerceBaseRequest(m_request);
         NormalizeRequest();
     }
 

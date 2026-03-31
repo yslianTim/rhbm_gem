@@ -92,7 +92,7 @@ def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple
 
 
 def _append_command_api_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
-    include_line = f'#include "{spec.command_type}.hpp"'
+    include_line = f'#include "internal/command/{spec.command_type}.hpp"'
     if include_line in text:
         return text, False
 
@@ -219,11 +219,11 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 ## Registration Checklist
 
-1. Add `{spec.command_type.removesuffix("Command")}` into `include/rhbm_gem/core/command/CommandList.def`.
+1. Add `{spec.command_type.removesuffix("Command")}` into `src/core/command/CommandManifest.def`.
    If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandApi.hpp`.
-   Define `VisitFields(...)` there so CLI and Python bindings pick it up automatically.
-3. Add `#include "internal/command/{spec.command_type}.hpp"` to `src/core/command/CommandApi.cpp`.
+3. Add the internal request schema specialization in `src/core/internal/command/CommandRequestSchema.hpp`.
+4. Add `#include "internal/command/{spec.command_type}.hpp"` to `src/core/command/CommandApi.cpp`.
 4. Extend the grouped command tests under `tests/core/command/`.
    Validation-only coverage usually belongs in `CommandValidationScenarios_test.cpp`.
    Workflow/output coverage usually belongs in `CommandWorkflowScenarios_test.cpp`.
@@ -231,7 +231,7 @@ Scaffold generated for CLI command `{spec.cli_name}`.
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
-    command_def = root / "include" / "rhbm_gem" / "core" / "command" / "CommandList.def"
+    command_def = root / "src" / "core" / "command" / "CommandManifest.def"
     command_api = root / "src" / "core" / "command" / "CommandApi.cpp"
     source_cmake = root / "src" / "CMakeLists.txt"
 
@@ -240,7 +240,7 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         lambda text: _append_command_entry(text, spec),
         dry_run,
         strict,
-        "Append a new RHBM_GEM_COMMAND(...) block to CommandList.def.",
+        "Append a new RHBM_GEM_COMMAND(...) block to CommandManifest.def.",
     )
     _update_file(
         command_api,
@@ -285,7 +285,7 @@ def main() -> int:
     parser.add_argument(
         "--wire",
         action="store_true",
-        help=("Also update CommandList.def and the command source CMake list."),
+        help=("Also update CommandManifest.def and the command source CMake list."),
     )
     parser.add_argument(
         "--strict",
@@ -329,8 +329,8 @@ def main() -> int:
         print("Registration/manifests and command source CMake list were wired automatically.")
     else:
         print(
-            "Next: wire CommandList.def, update CommandApi.cpp includes and source CMake list, "
-            "add the public request schema, and extend the grouped command tests."
+            "Next: wire CommandManifest.def, update CommandApi.cpp includes and source CMake list, "
+            "add the public request DTO and internal request schema, and extend the grouped command tests."
         )
     return 0
 

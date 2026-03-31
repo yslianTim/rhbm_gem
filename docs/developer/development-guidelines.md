@@ -113,7 +113,7 @@ Change-integration principles:
 
 - `[Required]` Update `README.md` when changes affect build options, dependencies, install/export behavior, public commands, bindings, or examples.
 - `[Required]` Update this guideline document when project-wide engineering rules change.
-- `[Required]` Keep `CommandList.def`, runtime registration, Python bindings, and public docs aligned.
+- `[Required]` Keep `CommandManifest.def`, runtime registration, Python bindings, and public docs aligned.
 - `[Recommended]` Prefer concise, principle-driven guidance over temporary implementation details.
 
 ## 11. Quality Checks and Validation Alignment

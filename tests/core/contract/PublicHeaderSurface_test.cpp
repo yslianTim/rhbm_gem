@@ -6,10 +6,11 @@
 #include <string_view>
 #include <vector>
 
+#include "internal/command/CommandEnumMetadata.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/CommandContract.hpp>
-#include <rhbm_gem/core/command/CommandEnumClass.hpp>
+#include <rhbm_gem/core/command/CommandEnums.hpp>
+#include <rhbm_gem/core/command/CommandPaths.hpp>
 
 namespace rg = rhbm_gem;
 
@@ -19,7 +20,7 @@ template <typename EnumType>
 std::set<int> BuildValueSetFromCLI()
 {
     std::set<int> values;
-    for (const auto & [token, value] : rg::BuildCommandEnumCliMap<EnumType>())
+    for (const auto & [token, value] : rg::internal::BuildCommandEnumCliMap<EnumType>())
     {
         static_cast<void>(token);
         values.insert(static_cast<int>(value));
@@ -31,7 +32,7 @@ template <typename EnumType>
 std::set<int> BuildValueSetFromBindings()
 {
     std::set<int> values;
-    const auto binding_entries{ rg::GetCommandEnumBindingEntries<EnumType>() };
+    const auto binding_entries{ rg::internal::GetCommandEnumBindingEntries<EnumType>() };
     for (const auto & entry : binding_entries)
     {
         values.insert(static_cast<int>(entry.value));
@@ -103,13 +104,13 @@ struct EnumMappingTraits<rg::TesterType>
 template <typename EnumType>
 void AssertEnumMappingsStayInSync()
 {
-    const auto cli_map{ rg::BuildCommandEnumCliMap<EnumType>() };
+    const auto cli_map{ rg::internal::BuildCommandEnumCliMap<EnumType>() };
     for (const auto & expectation : EnumMappingTraits<EnumType>::kExpectations)
     {
         EXPECT_EQ(cli_map.at(std::string(expectation.token)), expectation.value);
     }
 
-    const auto binding_entries{ rg::GetCommandEnumBindingEntries<EnumType>() };
+    const auto binding_entries{ rg::internal::GetCommandEnumBindingEntries<EnumType>() };
     ASSERT_FALSE(binding_entries.empty());
     EXPECT_EQ(binding_entries.front().token, EnumMappingTraits<EnumType>::kFirstBindingToken);
     EXPECT_EQ(BuildValueSetFromCLI<EnumType>(), BuildValueSetFromBindings<EnumType>());
@@ -132,9 +133,8 @@ TYPED_TEST_SUITE(CommandEnumMappingTest, CommandEnumTypes, );
 TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     const std::vector<std::string> expected{
         "core/command/CommandApi.hpp",
-        "core/command/CommandContract.hpp",
-        "core/command/CommandEnumClass.hpp",
-        "core/command/CommandList.def",
+        "core/command/CommandEnums.hpp",
+        "core/command/CommandPaths.hpp",
         "core/painter/AtomPainter.hpp",
         "core/painter/ComparisonPainter.hpp",
         "core/painter/DemoPainter.hpp",
@@ -145,7 +145,7 @@ TEST(PublicHeaderSurfaceTest, CorePublicHeadersMatchApprovedSurface) {
     EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("core"), expected);
 }
 
-TEST(PublicHeaderSurfaceTest, CommandContractExposesStableDefaultDatabasePathHelper) {
+TEST(PublicHeaderSurfaceTest, CommandPathsExposeStableDefaultDatabasePathHelper) {
     const auto default_path{ rhbm_gem::GetDefaultDatabasePath() };
     EXPECT_FALSE(default_path.empty());
     EXPECT_EQ(default_path.filename(), "database.sqlite");

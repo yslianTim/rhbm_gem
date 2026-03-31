@@ -22,15 +22,15 @@ def run_script(script_name: str, *args: str) -> subprocess.CompletedProcess[str]
     )
 
 
-def ensure_execute(report: rgm.ExecutionReport, step_name: str) -> None:
+def ensure_execute(result: rgm.CommandResult, step_name: str) -> None:
     details = "\n".join(
         f"[{issue.phase}/{issue.level}] {issue.option_name}: {issue.message}"
-        for issue in report.validation_issues
+        for issue in result.issues
     )
-    if report.prepared and report.executed:
+    if result.outcome == rgm.CommandOutcome.Succeeded:
         return
     raise AssertionError(
-        f"{step_name} failed (prepared={report.prepared}, executed={report.executed}).\n{details}"
+        f"{step_name} failed (outcome={result.outcome}).\n{details}"
     )
 
 
@@ -43,7 +43,7 @@ def stage_quickstart_inputs(workdir: Path) -> None:
 
     simulation_request = rgm.MapSimulationRequest()
     simulation_request.model_file_path = str(model_path)
-    simulation_request.common.folder_path = str(data_dir)
+    simulation_request.output_dir = str(data_dir)
     simulation_request.map_file_name = "emd_11103_additional"
     simulation_request.blurring_width_list = [1.50]
     ensure_execute(rgm.RunMapSimulation(simulation_request), "RunMapSimulation")
@@ -91,7 +91,7 @@ def assert_end_to_end_smoke() -> None:
 
             simulation_request = rgm.MapSimulationRequest()
             simulation_request.model_file_path = str(model_path)
-            simulation_request.common.folder_path = str(data_dir)
+            simulation_request.output_dir = str(data_dir)
             simulation_request.map_file_name = Path(map_name).stem
             simulation_request.blurring_width_list = [1.50]
             ensure_execute(rgm.RunMapSimulation(simulation_request), "RunMapSimulation")

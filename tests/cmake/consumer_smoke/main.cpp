@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/command/CommandContract.hpp>
+#include <rhbm_gem/core/command/CommandPaths.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 

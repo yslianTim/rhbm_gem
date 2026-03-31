@@ -66,19 +66,19 @@ void CommandBase::InvalidatePreparedState()
     ClearValidationIssues(ValidationPhase::Prepare);
 }
 
-void CommandBase::CoerceCommonRequest(CommonCommandRequest & request)
+void CommandBase::CoerceBaseRequest(CommandRequestBase & request)
 {
     InvalidatePreparedState();
-    const auto raw_verbose_level{ request.verbose_level };
+    const auto raw_verbose_level{ request.verbosity };
     CoerceScalar(
-        request.thread_size,
+        request.job_count,
         kJobsOption,
         [](int candidate) { return candidate >= 1; },
         1,
         LogLevel::Warning,
         "Thread size must be positive. Using 1 instead.");
     CoerceScalar(
-        request.verbose_level,
+        request.verbosity,
         kVerboseOption,
         [](int candidate)
         {
@@ -89,8 +89,8 @@ void CommandBase::CoerceCommonRequest(CommonCommandRequest & request)
         LogLevel::Warning,
         "Invalid verbose level: " + std::to_string(raw_verbose_level)
             + ", using default level 3 [Info]");
-    request.folder_path =
-        std::filesystem::path(FilePathHelper::EnsureTrailingSlash(request.folder_path));
+    request.output_dir =
+        std::filesystem::path(FilePathHelper::EnsureTrailingSlash(request.output_dir));
 }
 
 void CommandBase::ReportValidationIssues() const

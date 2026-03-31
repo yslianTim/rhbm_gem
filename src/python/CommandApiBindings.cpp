@@ -3,8 +3,9 @@
 #include <pybind11/stl/filesystem.h>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/CommandContract.hpp>
-#include <rhbm_gem/core/command/CommandEnumClass.hpp>
+
+#include "internal/command/CommandEnumMetadata.hpp"
+#include "internal/command/CommandRequestSchema.hpp"
 
 namespace py = pybind11;
 
@@ -15,7 +16,7 @@ namespace {
 template <typename EnumType>
 void BindEnumEntries(py::enum_<EnumType> & py_enum)
 {
-    const auto binding_entries{ GetCommandEnumBindingEntries<EnumType>() };
+    const auto binding_entries{ internal::GetCommandEnumBindingEntries<EnumType>() };
     for (const auto & entry : binding_entries)
     {
         const std::string name{ entry.token };
@@ -23,8 +24,8 @@ void BindEnumEntries(py::enum_<EnumType> & py_enum)
     }
 }
 
-template <typename Request, typename FieldSpec>
-void BindRequestField(py::class_<Request> & py_request, const FieldSpec & field)
+template <typename Request, typename FieldSpec, typename... ClassOptions>
+void BindRequestField(py::class_<Request, ClassOptions...> & py_request, const FieldSpec & field)
 {
     py_request.def_readwrite(field.python_name, field.member);
 }
@@ -32,9 +33,9 @@ void BindRequestField(py::class_<Request> & py_request, const FieldSpec & field)
 template <typename Request>
 void BindRequestType(py::module_ & module, const char * type_name)
 {
-    auto py_request{ py::class_<Request>(module, type_name) };
+    auto py_request{ py::class_<Request, CommandRequestBase>(module, type_name) };
     py_request.def(py::init<>());
-    Request::VisitFields([&](const auto & field)
+    internal::VisitRequestFields<Request>([&](const auto & field)
     {
         BindRequestField(py_request, field);
     });
@@ -54,6 +55,11 @@ void BindCommonTypes(py::module_ & module)
     py::enum_<ValidationPhase>(module, "ValidationPhase")
         .value("Parse", ValidationPhase::Parse)
         .value("Prepare", ValidationPhase::Prepare);
+
+    py::enum_<CommandOutcome>(module, "CommandOutcome")
+        .value("ValidationFailed", CommandOutcome::ValidationFailed)
+        .value("ExecutionFailed", CommandOutcome::ExecutionFailed)
+        .value("Succeeded", CommandOutcome::Succeeded);
 
     py::class_<ValidationIssue>(module, "ValidationIssue")
         .def_readonly("option_name", &ValidationIssue::option_name)
@@ -85,23 +91,36 @@ void BindCommonTypes(py::module_ & module)
 
 void BindCommandApi(py::module_ & module)
 {
-    BindRequestType<CommonCommandRequest>(module, "CommonCommandRequest");
-
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-    BindRequestType<COMMAND_ID##Request>(module, #COMMAND_ID "Request");
-#include <rhbm_gem/core/command/CommandList.def>
-#undef RHBM_GEM_COMMAND
-
-    py::class_<ExecutionReport>(module, "ExecutionReport")
+    py::class_<CommandRequestBase>(module, "CommandRequestBase")
         .def(py::init<>())
-        .def_readonly("prepared", &ExecutionReport::prepared)
-        .def_readonly("executed", &ExecutionReport::executed)
-        .def_readonly("validation_issues", &ExecutionReport::validation_issues);
+        .def_readwrite("job_count", &CommandRequestBase::job_count)
+        .def_readwrite("verbosity", &CommandRequestBase::verbosity)
+        .def_readwrite("output_dir", &CommandRequestBase::output_dir);
 
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-    module.def("Run" #COMMAND_ID, &Run##COMMAND_ID);
-#include <rhbm_gem/core/command/CommandList.def>
-#undef RHBM_GEM_COMMAND
+    BindRequestType<PotentialAnalysisRequest>(module, "PotentialAnalysisRequest");
+    BindRequestType<PotentialDisplayRequest>(module, "PotentialDisplayRequest");
+    BindRequestType<ResultDumpRequest>(module, "ResultDumpRequest");
+    BindRequestType<MapSimulationRequest>(module, "MapSimulationRequest");
+    BindRequestType<HRLModelTestRequest>(module, "HRLModelTestRequest");
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    BindRequestType<MapVisualizationRequest>(module, "MapVisualizationRequest");
+    BindRequestType<PositionEstimationRequest>(module, "PositionEstimationRequest");
+#endif
+
+    py::class_<CommandResult>(module, "CommandResult")
+        .def(py::init<>())
+        .def_readonly("outcome", &CommandResult::outcome)
+        .def_readonly("issues", &CommandResult::issues);
+
+    module.def("RunPotentialAnalysis", &RunPotentialAnalysis);
+    module.def("RunPotentialDisplay", &RunPotentialDisplay);
+    module.def("RunResultDump", &RunResultDump);
+    module.def("RunMapSimulation", &RunMapSimulation);
+    module.def("RunHRLModelTest", &RunHRLModelTest);
+#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE
+    module.def("RunMapVisualization", &RunMapVisualization);
+    module.def("RunPositionEstimation", &RunPositionEstimation);
+#endif
 }
 
 } // namespace rhbm_gem::bindings

@@ -87,13 +87,13 @@ inline std::filesystem::path GenerateMapFile(
     const std::string & blurring_widths = "1.0")
 {
     rhbm_gem::MapSimulationRequest request{};
-    request.common.folder_path = output_dir;
+    request.output_dir = output_dir;
     request.model_file_path = model_path;
     request.map_file_name = map_name;
     request.blurring_width_list = StringHelper::ParseListOption<double>(blurring_widths);
 
-    const auto report{ rhbm_gem::RunMapSimulation(request) };
-    if (!report.executed)
+    const auto result{ rhbm_gem::RunMapSimulation(request) };
+    if (result.outcome != rhbm_gem::CommandOutcome::Succeeded)
     {
         throw std::runtime_error("Failed to generate map fixture.");
     }

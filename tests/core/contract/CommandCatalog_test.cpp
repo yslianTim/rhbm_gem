@@ -11,28 +11,28 @@
 #include <utility>
 #include <vector>
 
+#include "internal/command/CommandCli.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/core/command/CommandContract.hpp>
 #include <CLI/CLI.hpp>
 
 namespace rg = rhbm_gem;
 
 namespace {
 
-std::vector<rg::CommandDescriptor> BuildExpectedCommandMetadata()
+std::vector<rg::CommandInfo> BuildExpectedCommandMetadata()
 {
-    const auto catalog{ rg::GetCommandCatalog() };
+    const auto & catalog{ rg::ListCommands() };
     return { catalog.begin(), catalog.end() };
 }
 
-std::vector<std::pair<std::string_view, rg::CommandId>> BuildExpectedCommandIdTokens()
+std::vector<std::string> BuildExpectedCommandNames()
 {
-    std::vector<std::pair<std::string_view, rg::CommandId>> expected;
-#define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-    expected.emplace_back(#COMMAND_ID, rg::CommandId::COMMAND_ID);
-#include <rhbm_gem/core/command/CommandList.def>
-#undef RHBM_GEM_COMMAND
+    std::vector<std::string> expected;
+    for (const auto & command : rg::ListCommands())
+    {
+        expected.emplace_back(command.name);
+    }
     return expected;
 }
 
@@ -46,8 +46,7 @@ bool CommandUsesDatabase(std::string_view cli_name)
 std::string ReadManifestContent()
 {
     const auto manifest_path{
-        command_test::ProjectRootPath() / "include" / "rhbm_gem" / "core" / "command"
-        / "CommandList.def"
+        command_test::ProjectRootPath() / "src" / "core" / "command" / "CommandManifest.def"
     };
     std::ifstream manifest_stream{ manifest_path };
     if (!manifest_stream.is_open())
@@ -61,23 +60,23 @@ std::string ReadManifestContent()
     };
 }
 
-std::vector<std::string> ExtractCommandIdTokens(const std::string & manifest)
+std::vector<std::string> ExtractCommandNames(const std::string & manifest)
 {
     const std::regex command_pattern{
-        R"(RHBM_GEM_COMMAND\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,)"
+        R"manifest(RHBM_GEM_COMMAND\(\s*[A-Za-z_][A-Za-z0-9_]*\s*,\s*"([^"]+)")manifest"
     };
 
-    std::vector<std::string> command_ids;
+    std::vector<std::string> command_names;
     for (std::sregex_iterator iter{ manifest.begin(), manifest.end(), command_pattern };
         iter != std::sregex_iterator{};
         ++iter)
     {
-        command_ids.push_back((*iter)[1].str());
+        command_names.push_back((*iter)[1].str());
     }
-    return command_ids;
+    return command_names;
 }
 
-std::vector<std::string> ParseCommandIdTokensFromManifest()
+std::vector<std::string> ParseCommandNamesFromManifest()
 {
     auto manifest{ ReadManifestContent() };
     if (manifest.empty())
@@ -92,10 +91,10 @@ std::vector<std::string> ParseCommandIdTokensFromManifest()
     manifest = std::regex_replace(manifest, experimental_block_pattern, "");
 #endif
 
-    return ExtractCommandIdTokens(manifest);
+    return ExtractCommandNames(manifest);
 }
 
-std::vector<std::string> ParseExperimentalCommandIdTokensFromManifest()
+std::vector<std::string> ParseExperimentalCommandNamesFromManifest()
 {
     const auto manifest{ ReadManifestContent() };
     if (manifest.empty())
@@ -112,7 +111,7 @@ std::vector<std::string> ParseExperimentalCommandIdTokensFromManifest()
         return {};
     }
 
-    return ExtractCommandIdTokens(match[1].str());
+    return ExtractCommandNames(match[1].str());
 }
 
 } // namespace
@@ -130,43 +129,30 @@ TEST(CommandCatalogTest, ConfigureCommandCliBuildsOneSubcommandPerManifestEntry)
     };
     const auto expected_metadata{ BuildExpectedCommandMetadata() };
     ASSERT_EQ(subcommands.size(), expected_metadata.size());
-    std::unordered_set<int> unique_ids;
     std::unordered_set<std::string> unique_names;
     for (std::size_t index = 0; index < expected_metadata.size(); ++index)
     {
-        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].cli_name);
+        EXPECT_EQ(subcommands[index]->get_name(), expected_metadata[index].name);
         EXPECT_EQ(subcommands[index]->get_description(), expected_metadata[index].description);
 
-        unique_ids.insert(static_cast<int>(expected_metadata[index].id));
-        unique_names.emplace(expected_metadata[index].cli_name);
+        unique_names.emplace(expected_metadata[index].name);
     }
 
-    EXPECT_EQ(unique_ids.size(), expected_metadata.size());
     EXPECT_EQ(unique_names.size(), expected_metadata.size());
 }
 
-TEST(CommandCatalogTest, CommandIdEnumMatchesManifestOrderAndIndexing)
+TEST(CommandCatalogTest, ListCommandsMatchesManifestOrder)
 {
-    const auto expected_command_ids{ BuildExpectedCommandIdTokens() };
-    const auto manifest_ids{ ParseCommandIdTokensFromManifest() };
-    ASSERT_FALSE(manifest_ids.empty());
-    ASSERT_EQ(manifest_ids.size(), expected_command_ids.size());
-
-    for (std::size_t index = 0; index < expected_command_ids.size(); ++index)
-    {
-        const auto & expected{ expected_command_ids[index] };
-        EXPECT_EQ(manifest_ids[index], expected.first);
-        EXPECT_EQ(static_cast<int>(expected.second), static_cast<int>(index));
-    }
+    EXPECT_EQ(ParseCommandNamesFromManifest(), BuildExpectedCommandNames());
 }
 
 TEST(CommandCatalogTest, ManifestKeepsExperimentalEntriesBehindFeatureGuard)
 {
-    const std::vector<std::string> expected_experimental_ids{
-        "MapVisualization",
-        "PositionEstimation",
+    const std::vector<std::string> expected_experimental_names{
+        "map_visualization",
+        "position_estimation",
     };
-    EXPECT_EQ(ParseExperimentalCommandIdTokensFromManifest(), expected_experimental_ids);
+    EXPECT_EQ(ParseExperimentalCommandNamesFromManifest(), expected_experimental_names);
 }
 
 TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
@@ -176,17 +162,17 @@ TEST(CommandCatalogTest, ConfigureCommandCliSharedOptionsMatchCommandMetadata)
 
     for (const auto & descriptor : BuildExpectedCommandMetadata())
     {
-        auto * subcommand{ app.get_subcommand(std::string(descriptor.cli_name)) };
-        ASSERT_NE(subcommand, nullptr) << descriptor.cli_name;
+        auto * subcommand{ app.get_subcommand(std::string(descriptor.name)) };
+        ASSERT_NE(subcommand, nullptr) << descriptor.name;
 
         const std::string help_text{
             subcommand->help(subcommand->get_name(), CLI::AppFormatMode::Sub)
         };
         EXPECT_EQ(
             help_text.find("--database") != std::string::npos,
-            CommandUsesDatabase(descriptor.cli_name))
-            << descriptor.cli_name;
-        EXPECT_NE(help_text.find("--folder"), std::string::npos) << descriptor.cli_name;
+            CommandUsesDatabase(descriptor.name))
+            << descriptor.name;
+        EXPECT_NE(help_text.find("--folder"), std::string::npos) << descriptor.name;
     }
 }
 

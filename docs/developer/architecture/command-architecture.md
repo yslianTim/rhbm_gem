@@ -2,127 +2,82 @@
 
 This page documents the command system as it exists in this repository today.
 
-Related guides:
-
-- [`docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
-- [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
-
 ## Source of Truth
 
 Top-level command membership is defined in
-[`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def).
+[`src/core/command/CommandManifest.def`](/src/core/command/CommandManifest.def).
 
-Each manifest entry uses:
+Each entry uses:
 
 - `RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)`
 
 That manifest is expanded by:
 
-- [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp)
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
-- [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
+- [`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp)
 
-Stable commands in the manifest:
+## Public Surface
 
-1. `potential_analysis`
-2. `potential_display`
-3. `result_dump`
-4. `map_simulation`
-5. `model_test`
+Public command headers now separate concerns:
 
-Experimental commands behind `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE`:
+- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
+  - `CommandRequestBase`
+  - one plain request DTO per command
+  - `ValidationPhase`
+  - `ValidationIssue`
+  - `CommandOutcome`
+  - `CommandResult`
+  - `ListCommands()`
+  - one `Run*` declaration per command
+- [`include/rhbm_gem/core/command/CommandEnums.hpp`](/include/rhbm_gem/core/command/CommandEnums.hpp)
+  - shared public enums
+- [`include/rhbm_gem/core/command/CommandPaths.hpp`](/include/rhbm_gem/core/command/CommandPaths.hpp)
+  - default data/database path helpers
 
-1. `map_visualization`
-2. `position_estimation`
+The public surface does not expose CLI wiring, manifest macros, or request binding schema.
 
-## Public Contract
+## Internal Binding Model
 
-Shared command metadata and validation types live in
-[`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp).
+CLI and Python bindings share one internal schema in
+[`src/core/internal/command/CommandRequestSchema.hpp`](/src/core/internal/command/CommandRequestSchema.hpp).
 
-This header defines:
+That schema is the single source for:
 
-- `CommandId`
-- `CommandDescriptor`
-- `GetCommandCatalog()`
-- `ValidationPhase`
-- `ValidationIssue`
-- default data and database path helpers
+- CLI option registration
+- Python request field binding
 
-Public request types and execution entrypoints live in
-[`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
+Internal enum alias and binding metadata live in
+[`src/core/internal/command/CommandEnumMetadata.hpp`](/src/core/internal/command/CommandEnumMetadata.hpp).
 
-This header defines:
-
-- `CommonCommandRequest`
-- one request type per command
-- `ExecutionReport`
-- `ConfigureCommandCli(...)`
-- one `Run*` declaration per manifest entry
-
-Shared enums and their CLI/Python mappings live in
-[`include/rhbm_gem/core/command/CommandEnumClass.hpp`](/include/rhbm_gem/core/command/CommandEnumClass.hpp).
-
-## Request Schema and Binding Model
-
-Each request type declares a static `VisitFields(Visitor &&)` schema. The same schema is used by
-both CLI registration and Python bindings.
-
-`CommandApi.hpp` currently supports these field-spec categories:
-
-- object fields via `MakeObjectField(...)`
-- scalar fields via `MakeScalarField(...)`
-- path fields via `MakePathField(...)`
-- enum fields via `MakeEnumField(...)`
-- CSV list fields via `MakeCsvListField(...)`
-- reference-group fields via `MakeRefGroupField(...)`
-
-`CommonCommandRequest` contributes these shared options:
-
-- `thread_size` as `-j,--jobs`
-- `verbose_level` as `-v,--verbose`
-- `folder_path` as `-o,--folder`
-
-Command-specific request structs add their own fields. For example:
-
-- database-backed commands add `database_path`
-- `PotentialDisplayRequest` uses CSV list and ref-group bindings for model keys and reference sets
-- experimental commands follow the same schema rules when the feature flag is enabled
+Public enum types stay small; alias maps and binding tokens are internal-only.
 
 ## Execution Surfaces
 
 ### CLI
 
-The CLI entrypoint is [`src/main.cpp`](/src/main.cpp). It creates `CLI::App`, calls
-`ConfigureCommandCli(app)`, and then delegates parsing to CLI11.
+[`src/main.cpp`](/src/main.cpp) creates `CLI::App` and calls the internal
+[`ConfigureCommandCli(...)`](/src/core/internal/command/CommandCli.hpp).
 
-`ConfigureCommandCli(...)` in [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp):
+[`src/core/command/CommandCli.cpp`](/src/core/command/CommandCli.cpp):
 
 1. enables `require_subcommand(1)`
-2. expands `CommandList.def`
+2. expands `CommandManifest.def`
 3. creates one subcommand per manifest entry
-4. binds common fields from `CommonCommandRequest::VisitFields(...)`
-5. binds command-specific fields from `XxxRequest::VisitFields(...)`
-6. routes each callback to the corresponding `Run*` function
-
-If a command finishes with `report.executed == false`, the CLI callback throws
-`CLI::RuntimeError(1)`.
+4. binds shared `CommandRequestBase` fields
+5. binds command-specific fields from `CommandRequestSchema`
+6. routes the callback to the corresponding `Run*` function
 
 ### Python
 
-Python bindings live in
-[`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp).
+[`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) binds:
 
-The binding layer expands the same manifest to expose:
-
-- `CommonCommandRequest`
+- `CommandRequestBase`
 - one request type per command
-- `ExecutionReport`
-- shared enums from `CommandEnumClass.hpp`
+- `CommandOutcome`
+- `CommandResult`
 - `ValidationPhase`
 - `ValidationIssue`
-- one `Run*` binding per manifest entry
+- shared enums from `CommandEnums.hpp`
 
 ## Runtime Flow
 
@@ -139,108 +94,54 @@ flowchart LR
     G --> H["RunValidationPass()"]
     H --> I["RunFilesystemPreflight()"]
     I --> J["ExecuteImpl()"]
-    J --> K["ExecutionReport"]
+    J --> K["CommandResult"]
 ```
 
-In [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp), each manifest-expanded
-`Run*` function delegates to `RunCommand<CommandType>(request)`, which:
+`Run*` returns:
 
-1. constructs the concrete command
-2. calls `ApplyRequest(...)`
-3. calls `Run()`
-4. returns `ExecutionReport { prepared, executed, validation_issues }`
+- `CommandOutcome::Succeeded` when execution completes
+- `CommandOutcome::ValidationFailed` when validation/preflight stops execution
+- `CommandOutcome::ExecutionFailed` when preparation succeeds but `ExecuteImpl()` returns false
 
 ## Concrete Command Shape
 
 Concrete command classes live in:
 
-- headers under [`src/core/internal/command/`](/src/core/internal/command/)
-- implementations under [`src/core/command/`](/src/core/command/)
+- [`src/core/internal/command/`](/src/core/internal/command/)
+- [`src/core/command/`](/src/core/command/)
 
 The standard shape is:
 
 1. derive from `CommandWithRequest<XxxRequest>`
 2. keep request normalization in `NormalizeRequest()`
-3. keep cross-field or semantic checks in `ValidateOptions()`
-4. clear transient execution state in `ResetRuntimeState()`
+3. keep semantic checks in `ValidateOptions()`
+4. clear transient runtime state in `ResetRuntimeState()`
 5. keep orchestration in `ExecuteImpl()`
 
-`CommandWithRequest<XxxRequest>` stores the typed request internally. `ApplyRequest(...)`:
+`CommandWithRequest<XxxRequest>`:
 
-1. copies the public request into the command
-2. invalidates prepared state
-3. coerces shared common options through `CoerceCommonRequest(...)`
+1. stores the typed request internally
+2. binds the request to `CommandBase`
+3. coerces shared base options through `CoerceBaseRequest(...)`
 4. calls `NormalizeRequest()`
 
-## Validation and Preparation Lifecycle
+## Shared Request Base
 
-`CommandBase::Run()` in [`src/core/command/CommandBase.cpp`](/src/core/command/CommandBase.cpp)
-performs:
+`CommandRequestBase` contributes these shared options:
 
-1. `BeginPreparationPass()`
-2. `RunValidationPass()`
-3. `RunFilesystemPreflight()`
-4. `ExecuteImpl()`
+- `job_count` as `-j,--jobs`
+- `verbosity` as `-v,--verbose`
+- `output_dir` as `-o,--folder`
 
-`BeginPreparationPass()`:
+Command-specific fields live directly on each request DTO; there is no nested `common` wrapper.
 
-- sets the logger level from `verbose_level`
-- calls `ResetRuntimeState()`
-- clears loaded objects from `DataObjectManager`
-- invalidates prepared state and clears prepare-phase issues
+## Filesystem and Validation Behavior
 
-`RunValidationPass()`:
+`CommandBase` performs:
 
-- calls `ValidateOptions()`
-- reports validation issues if any error-level issue exists
-- stops execution on validation errors
+1. request normalization and validation issue tracking
+2. output-directory preflight for `output_dir`
+3. logger-level setup from `verbosity`
 
-`RunFilesystemPreflight()`:
-
-- creates `folder_path` when it is non-empty and does not exist
-- records a prepare-phase error if output-directory creation fails
-- does not create database parent directories
-
-When preparation succeeds, `m_was_prepared` becomes `true` before `ExecuteImpl()` runs.
-
-## Common Helper API
-
-The helper API currently exposed by `CommandBase` includes:
-
-- `ValidateRequiredPath(...)`
-- `ValidateOptionalPath(...)`
-- `RequireNonEmptyText(...)`
-- `RequireNonEmptyList(...)`
-- `RequireCondition(...)`
-- `CoerceScalar(...)`
-- `CoerceEnum(...)`
-- `BuildOutputPath(...)`
-- `ClearParseIssues(...)`
-- `ClearPrepareIssues(...)`
-- `AddValidationError(...)`
-- `AddNormalizationWarning(...)`
-- `InvalidatePreparedState()`
-- `CoerceCommonRequest(...)`
-
-Use parse-phase helpers in `NormalizeRequest()` and prepare-phase checks in `ValidateOptions()`.
-
-## Filesystem and Database Behavior
-
-The generic command layer only manages the output folder from `CommonCommandRequest`.
-
-- `folder_path` is normalized through `CoerceCommonRequest(...)`
-- output directories are created during filesystem preflight
-- database paths are carried as request data only
-- commands that need SQLite call `m_data_manager.SetDatabaseManager(...)` during execution
-
-## Related Files
-
-- [`src/main.cpp`](/src/main.cpp)
-- [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def)
-- [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp)
-- [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
-- [`include/rhbm_gem/core/command/CommandEnumClass.hpp`](/include/rhbm_gem/core/command/CommandEnumClass.hpp)
-- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
-- [`src/core/internal/command/CommandBase.hpp`](/src/core/internal/command/CommandBase.hpp)
-- [`src/core/command/CommandBase.cpp`](/src/core/command/CommandBase.cpp)
-- [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
+The generic layer manages only the shared `output_dir`. Database path handling remains
+command-specific.
