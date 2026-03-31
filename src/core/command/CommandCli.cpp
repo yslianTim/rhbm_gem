@@ -20,13 +20,13 @@ namespace rhbm_gem {
 namespace {
 
 template <typename ValueType>
-std::optional<ValueType> BuildCliDefault(const ValueType & value)
+std::optional<ValueType> MakeCliDefaultValue(const ValueType & value)
 {
     return value;
 }
 
 template <>
-std::optional<std::string> BuildCliDefault(const std::string & value)
+std::optional<std::string> MakeCliDefaultValue(const std::string & value)
 {
     if (value.empty())
     {
@@ -35,7 +35,7 @@ std::optional<std::string> BuildCliDefault(const std::string & value)
     return value;
 }
 
-std::optional<std::filesystem::path> BuildCliDefault(const std::filesystem::path & value)
+std::optional<std::filesystem::path> MakeCliDefaultValue(const std::filesystem::path & value)
 {
     if (value.empty())
     {
@@ -45,8 +45,13 @@ std::optional<std::filesystem::path> BuildCliDefault(const std::filesystem::path
 }
 
 template <typename ValueType>
-std::string JoinCsvValues(const std::vector<ValueType> & values, char delimiter)
+std::optional<std::string> MakeCliDefaultValue(const std::vector<ValueType> & values, char delimiter)
 {
+    if (values.empty())
+    {
+        return std::nullopt;
+    }
+
     std::ostringstream stream;
     for (std::size_t index = 0; index < values.size(); ++index)
     {
@@ -57,24 +62,6 @@ std::string JoinCsvValues(const std::vector<ValueType> & values, char delimiter)
         stream << values[index];
     }
     return stream.str();
-}
-
-template <typename ValueType>
-std::optional<std::string> BuildCliDefault(const std::vector<ValueType> & values, char delimiter)
-{
-    if (values.empty())
-    {
-        return std::nullopt;
-    }
-    return JoinCsvValues(values, delimiter);
-}
-
-void ApplyCommonOptionConfig(CLI::Option * option, bool required)
-{
-    if (required)
-    {
-        option->required();
-    }
 }
 
 std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
@@ -121,8 +108,11 @@ void BindCliField(
             },
             field.help)
     };
-    ApplyCommonOptionConfig(option, field.required);
-    if (const auto default_value{ BuildCliDefault(current_value) }; default_value.has_value())
+    if (field.required)
+    {
+        option->required();
+    }
+    if (const auto default_value{ MakeCliDefaultValue(current_value) }; default_value.has_value())
     {
         option->default_val(*default_value);
     }
@@ -143,8 +133,12 @@ void BindCliField(
             },
             field.help)
     };
-    ApplyCommonOptionConfig(option, field.required);
-    if (const auto default_value{ BuildCliDefault(request->*(field.member)) }; default_value.has_value())
+    if (field.required)
+    {
+        option->required();
+    }
+    if (const auto default_value{ MakeCliDefaultValue(request->*(field.member)) };
+        default_value.has_value())
     {
         option->default_val(default_value->string());
     }
@@ -165,8 +159,12 @@ void BindCliField(
             },
             field.help)
     };
-    ApplyCommonOptionConfig(option, field.required);
-    if (const auto default_value{ BuildCliDefault(request->*(field.member)) }; default_value.has_value())
+    if (field.required)
+    {
+        option->required();
+    }
+    if (const auto default_value{ MakeCliDefaultValue(request->*(field.member)) };
+        default_value.has_value())
     {
         option->default_val(*default_value);
     }
@@ -189,8 +187,11 @@ void BindCliField(
             },
             field.help)
     };
-    ApplyCommonOptionConfig(option, field.required);
-    if (const auto default_value{ BuildCliDefault(request->*(field.member), field.delimiter) };
+    if (field.required)
+    {
+        option->required();
+    }
+    if (const auto default_value{ MakeCliDefaultValue(request->*(field.member), field.delimiter) };
         default_value.has_value())
     {
         option->default_val(*default_value);
@@ -223,21 +224,12 @@ void BindCliField(
             },
             field.help)
     };
+    // Reference groups accumulate repeated CLI occurrences into one logical map.
     option->multi_option_policy(CLI::MultiOptionPolicy::TakeAll);
-    ApplyCommonOptionConfig(option, field.required);
-}
-
-template <typename Request>
-void BindRequestFields(CLI::App * command, Request * request)
-{
-    internal::VisitBaseRequestFields([&](const auto & field)
+    if (field.required)
     {
-        BindCliField(command, static_cast<CommandRequestBase *>(request), field);
-    });
-    internal::VisitRequestFields<Request>([&](const auto & field)
-    {
-        BindCliField(command, request, field);
-    });
+        option->required();
+    }
 }
 
 template <typename RequestType, auto RunCommandFn>
@@ -252,7 +244,17 @@ void RegisterCommand(
             std::string(description))
     };
     auto request{ std::make_shared<RequestType>() };
-    BindRequestFields(command, request.get());
+
+    // Base and command-specific fields are bound from the shared internal schema.
+    internal::VisitBaseRequestFields([&](const auto & field)
+    {
+        BindCliField(command, static_cast<CommandRequestBase *>(request.get()), field);
+    });
+    internal::VisitRequestFields<RequestType>([&](const auto & field)
+    {
+        BindCliField(command, request.get(), field);
+    });
+
     command->callback([request]()
     {
         ScopeTimer timer("Command CLI callback");
