@@ -1,7 +1,7 @@
 # Command Architecture
 
-This page documents the existing command system. It describes the implementation that is in the
-repository today.
+This page documents the command system. It describes the implementation that is in this
+repository.
 
 Related guides:
 

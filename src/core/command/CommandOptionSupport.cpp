@@ -1,10 +1,10 @@
 #include <CLI/CLI.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
+#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 #include "internal/command/CommandOptionSupport.hpp"
 #include "internal/command/CommandRegistry.hpp"
-#include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 #include <functional>
 #include <memory>

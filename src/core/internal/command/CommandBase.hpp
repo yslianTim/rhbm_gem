@@ -10,8 +10,8 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/core/command/CommandEnumClass.hpp>
+#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
@@ -243,8 +243,6 @@ template <typename Request>
 class CommandWithRequest : public CommandBase
 {
 public:
-    using RequestType = Request;
-
     CommandWithRequest() :
         CommandBase{}
     {

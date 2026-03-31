@@ -5,10 +5,10 @@
 #include <string>
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/utils/domain/AtomSelector.hpp>
+#include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
