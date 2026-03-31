@@ -128,12 +128,10 @@ TEST(CommandExecutionContractTest, PublicRunEntryPointReportsPreparationFailureA
 {
     const auto result{ rg::RunMapSimulation(rg::MapSimulationRequest{}) };
 
-    EXPECT_EQ(result.outcome, rg::CommandOutcome::ValidationFailed);
+    EXPECT_FALSE(result.succeeded);
     EXPECT_NE(
         command_test::FindValidationIssue(
             result.issues,
-            "--model",
-            rg::ValidationPhase::Parse,
-            LogLevel::Error),
+            "--model"),
         nullptr);
 }

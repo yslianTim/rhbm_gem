@@ -25,10 +25,7 @@ DATABASE_REQUEST_TYPES = {
 
 
 def assert_module_surface() -> None:
-    assert hasattr(m, "LogLevel")
-    assert hasattr(m, "ValidationPhase")
     assert hasattr(m, "ValidationIssue")
-    assert hasattr(m, "CommandOutcome")
     assert hasattr(m, "CommandResult")
     assert hasattr(m, "PrinterType")
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
@@ -82,9 +79,9 @@ def assert_request_objects_are_usable() -> None:
     assert simulation.blurring_width_list == [1.50]
 
 
-def has_issue(report, option_name: str, phase) -> bool:
+def has_issue(report, option_name: str) -> bool:
     return any(
-        issue.option_name == option_name and issue.phase == phase
+        issue.option_name == option_name
         for issue in report.issues
     )
 
@@ -92,15 +89,15 @@ def has_issue(report, option_name: str, phase) -> bool:
 def assert_command_result_runtime_behavior() -> None:
     report = m.RunMapSimulation(m.MapSimulationRequest())
     assert isinstance(report, m.CommandResult)
-    assert report.outcome == m.CommandOutcome.ValidationFailed
-    assert has_issue(report, "--model", m.ValidationPhase.Parse)
+    assert not report.succeeded
+    assert has_issue(report, "--model")
 
     analysis = m.PotentialAnalysisRequest()
     analysis.saved_key_tag = ""
     report = m.RunPotentialAnalysis(analysis)
     assert isinstance(report, m.CommandResult)
-    assert report.outcome == m.CommandOutcome.ValidationFailed
-    assert has_issue(report, "--save-key", m.ValidationPhase.Parse)
+    assert not report.succeeded
+    assert has_issue(report, "--save-key")
 
 
 def main() -> int:

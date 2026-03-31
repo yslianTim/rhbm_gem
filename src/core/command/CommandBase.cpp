@@ -18,7 +18,7 @@ constexpr std::string_view kJobsOption{ "--jobs" };
 constexpr std::string_view kVerboseOption{ "--verbose" };
 constexpr std::string_view kFolderOption{ "--folder" };
 
-std::string BuildIssuePrefix(const ValidationIssue & issue)
+std::string BuildIssuePrefix(const ValidationIssueRecord & issue)
 {
     const auto phase_index{ static_cast<std::size_t>(issue.phase) };
     const auto phase_label{
@@ -108,7 +108,7 @@ bool CommandBase::HasValidationErrors() const
     return std::any_of(
         m_validation_issues.begin(),
         m_validation_issues.end(),
-        [](const ValidationIssue & issue)
+        [](const ValidationIssueRecord & issue)
         {
             return issue.level == LogLevel::Error;
         });
@@ -193,7 +193,7 @@ void CommandBase::ClearValidationIssues(
         std::remove_if(
             m_validation_issues.begin(),
             m_validation_issues.end(),
-            [option_name, phase](const ValidationIssue & issue)
+            [option_name, phase](const ValidationIssueRecord & issue)
             {
                 return issue.option_name == option_name
                     && (!phase.has_value() || issue.phase == phase.value());
@@ -207,7 +207,7 @@ void CommandBase::ClearValidationIssues(std::optional<ValidationPhase> phase)
         std::remove_if(
             m_validation_issues.begin(),
             m_validation_issues.end(),
-            [phase](const ValidationIssue & issue)
+            [phase](const ValidationIssueRecord & issue)
             {
                 return !phase.has_value() || issue.phase == phase.value();
             }),
@@ -282,7 +282,7 @@ void CommandBase::AddValidationIssue(
     const std::string & message,
     bool auto_corrected)
 {
-    m_validation_issues.push_back(ValidationIssue{
+    m_validation_issues.push_back(ValidationIssueRecord{
         std::string(option_name),
         phase,
         level,

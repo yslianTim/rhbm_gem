@@ -45,28 +45,9 @@ void BindRequestType(py::module_ & module, const char * type_name)
 
 void BindCommonTypes(py::module_ & module)
 {
-    py::enum_<LogLevel>(module, "LogLevel")
-        .value("Error", LogLevel::Error)
-        .value("Warning", LogLevel::Warning)
-        .value("Notice", LogLevel::Notice)
-        .value("Info", LogLevel::Info)
-        .value("Debug", LogLevel::Debug);
-
-    py::enum_<ValidationPhase>(module, "ValidationPhase")
-        .value("Parse", ValidationPhase::Parse)
-        .value("Prepare", ValidationPhase::Prepare);
-
-    py::enum_<CommandOutcome>(module, "CommandOutcome")
-        .value("ValidationFailed", CommandOutcome::ValidationFailed)
-        .value("ExecutionFailed", CommandOutcome::ExecutionFailed)
-        .value("Succeeded", CommandOutcome::Succeeded);
-
     py::class_<ValidationIssue>(module, "ValidationIssue")
         .def_readonly("option_name", &ValidationIssue::option_name)
-        .def_readonly("phase", &ValidationIssue::phase)
-        .def_readonly("level", &ValidationIssue::level)
-        .def_readonly("message", &ValidationIssue::message)
-        .def_readonly("auto_corrected", &ValidationIssue::auto_corrected);
+        .def_readonly("message", &ValidationIssue::message);
 
     auto painter_type{ py::enum_<PainterType>(module, "PainterType") };
     BindEnumEntries(painter_type);
@@ -104,7 +85,7 @@ void BindCommandApi(py::module_ & module)
 
     py::class_<CommandResult>(module, "CommandResult")
         .def(py::init<>())
-        .def_readonly("outcome", &CommandResult::outcome)
+        .def_readonly("succeeded", &CommandResult::succeeded)
         .def_readonly("issues", &CommandResult::issues);
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \

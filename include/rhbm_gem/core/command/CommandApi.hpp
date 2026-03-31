@@ -9,7 +9,6 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandEnums.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 
@@ -35,31 +34,15 @@ inline std::filesystem::path GetDefaultDatabasePath()
     return GetDefaultDataRootPath() / "database.sqlite";
 }
 
-enum class ValidationPhase : std::uint8_t
-{
-    Parse = 0,
-    Prepare = 1
-};
-
 struct ValidationIssue
 {
     std::string option_name;
-    ValidationPhase phase;
-    LogLevel level;
     std::string message;
-    bool auto_corrected{ false };
-};
-
-enum class CommandOutcome : std::uint8_t
-{
-    ValidationFailed = 0,
-    ExecutionFailed  = 1,
-    Succeeded        = 2
 };
 
 struct CommandResult
 {
-    CommandOutcome outcome{ CommandOutcome::ValidationFailed };
+    bool succeeded{ false };
     std::vector<ValidationIssue> issues{};
 };
 

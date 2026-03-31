@@ -24,13 +24,13 @@ def run_script(script_name: str, *args: str) -> subprocess.CompletedProcess[str]
 
 def ensure_execute(result: rgm.CommandResult, step_name: str) -> None:
     details = "\n".join(
-        f"[{issue.phase}/{issue.level}] {issue.option_name}: {issue.message}"
+        f"{issue.option_name}: {issue.message}"
         for issue in result.issues
     )
-    if result.outcome == rgm.CommandOutcome.Succeeded:
+    if result.succeeded:
         return
     raise AssertionError(
-        f"{step_name} failed (outcome={result.outcome}).\n{details}"
+        f"{step_name} failed.\n{details}"
     )
 
 

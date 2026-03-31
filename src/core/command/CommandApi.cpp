@@ -14,27 +14,30 @@
 namespace rhbm_gem {
 namespace {
 
+std::vector<ValidationIssue> BuildPublicValidationIssues(
+    const std::vector<ValidationIssueRecord> & internal_issues)
+{
+    std::vector<ValidationIssue> public_issues;
+    public_issues.reserve(internal_issues.size());
+    for (const auto & issue : internal_issues)
+    {
+        public_issues.push_back(ValidationIssue{
+            issue.option_name,
+            issue.message
+        });
+    }
+    return public_issues;
+}
+
 template <typename CommandType, typename RequestType>
 CommandResult RunCommand(const RequestType & request)
 {
     CommandType command{};
     command.ApplyRequest(request);
 
-    const bool executed{ command.Run() };
     CommandResult result;
-    if (executed)
-    {
-        result.outcome = CommandOutcome::Succeeded;
-    }
-    else if (command.WasPrepared())
-    {
-        result.outcome = CommandOutcome::ExecutionFailed;
-    }
-    else
-    {
-        result.outcome = CommandOutcome::ValidationFailed;
-    }
-    result.issues = command.GetValidationIssues();
+    result.succeeded = command.Run();
+    result.issues = BuildPublicValidationIssues(command.GetValidationIssues());
     return result;
 }
 

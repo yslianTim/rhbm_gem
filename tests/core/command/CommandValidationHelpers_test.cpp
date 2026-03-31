@@ -180,7 +180,7 @@ private:
     bool ExecuteImpl() override { return true; }
 };
 
-const rg::ValidationIssue * FindIssue(
+const rg::ValidationIssueRecord * FindIssue(
     const ValidationHelperCommand & command,
     const char * option_name)
 {
@@ -189,7 +189,7 @@ const rg::ValidationIssue * FindIssue(
         std::find_if(
             issues.begin(),
             issues.end(),
-            [option_name](const rg::ValidationIssue & issue)
+            [option_name](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == option_name;
             })
@@ -217,7 +217,7 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
         std::find_if(
             command.GetValidationIssues().begin(),
             command.GetValidationIssues().end(),
-            [](const rg::ValidationIssue & issue)
+            [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--input"
                     && issue.phase == rg::ValidationPhase::Parse
@@ -231,7 +231,7 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
         std::find_if(
             command.GetValidationIssues().begin(),
             command.GetValidationIssues().end(),
-            [](const rg::ValidationIssue & issue)
+            [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--optional";
             })
@@ -243,7 +243,7 @@ TEST(CommandValidationHelpersTest, PathHelpersValidateRequiredAndOptionalInputs)
         std::find_if(
             command.GetValidationIssues().begin(),
             command.GetValidationIssues().end(),
-            [](const rg::ValidationIssue & issue)
+            [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--optional"
                     && issue.phase == rg::ValidationPhase::Parse
@@ -383,7 +383,7 @@ TEST(CommandValidationHelpersTest, KeepsParseAndPrepareIssuesForSameOption)
         std::count_if(
             issues.begin(),
             issues.end(),
-            [](const rg::ValidationIssue & issue)
+            [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--problem"
                     && issue.phase == rg::ValidationPhase::Parse
@@ -395,7 +395,7 @@ TEST(CommandValidationHelpersTest, KeepsParseAndPrepareIssuesForSameOption)
         std::count_if(
             issues.begin(),
             issues.end(),
-            [](const rg::ValidationIssue & issue)
+            [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--problem"
                     && issue.phase == rg::ValidationPhase::Prepare
@@ -419,7 +419,7 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
         std::find_if(
             issues.begin(),
             issues.end(),
-            [](const rg::ValidationIssue & issue)
+            [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--jobs";
             })
@@ -433,7 +433,7 @@ TEST(CommandValidationHelpersTest, BaseNormalizationWarningsAreProgrammaticallyV
         std::find_if(
             issues.begin(),
             issues.end(),
-            [](const rg::ValidationIssue & issue)
+            [](const rg::ValidationIssueRecord & issue)
             {
                 return issue.option_name == "--verbose";
             })

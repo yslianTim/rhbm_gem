@@ -118,10 +118,8 @@ through the internal `ConfigureCommandCli(...)`.
 
 - `CommandRequestBase`
 - one request type per command
-- `CommandOutcome`
 - `CommandResult`
 - shared enums
-- `ValidationPhase`
 - `ValidationIssue`
 
 The manifest controls which request types and `Run*` functions are registered there. The

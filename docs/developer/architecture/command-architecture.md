@@ -24,9 +24,7 @@ Public command headers separate concerns:
   - `CommandRequestBase`
   - one plain request DTO per command
   - default data/database path helpers
-  - `ValidationPhase`
   - `ValidationIssue`
-  - `CommandOutcome`
   - `CommandResult`
   - `ListCommands()`
   - one `Run*` declaration per command
@@ -73,9 +71,7 @@ Public enum types stay small; alias maps and binding tokens are internal-only.
 
 - `CommandRequestBase`
 - one request type per command
-- `CommandOutcome`
 - `CommandResult`
-- `ValidationPhase`
 - `ValidationIssue`
 - shared enums from `CommandEnums.hpp`
 
@@ -101,11 +97,11 @@ flowchart LR
     J --> K["CommandResult"]
 ```
 
-`Run*` returns:
+`Run*` returns `CommandResult` with:
 
-- `CommandOutcome::Succeeded` when execution completes
-- `CommandOutcome::ValidationFailed` when validation/preflight stops execution
-- `CommandOutcome::ExecutionFailed` when preparation succeeds but `ExecuteImpl()` returns false
+- `succeeded == true` when execution completes
+- `succeeded == false` when validation, preflight, or execution stops the command
+- `issues` containing public validation diagnostics without exposing internal phase metadata
 
 ## Concrete Command Shape
 
@@ -147,5 +143,6 @@ Command-specific fields live directly on each request DTO.
 2. output-directory preflight for `output_dir`
 3. logger-level setup from `verbosity`
 
-The generic layer manages only the shared `output_dir`. Database path handling remains
-command-specific.
+The generic layer manages only the shared `output_dir`. Internal validation still tracks
+parse/prepare phase boundaries for issue clearing and log formatting, but those phases are
+not part of the public DTO surface.

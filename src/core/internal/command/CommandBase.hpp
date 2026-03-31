@@ -17,6 +17,21 @@
 
 namespace rhbm_gem {
 
+enum class ValidationPhase : std::uint8_t
+{
+    Parse = 0,
+    Prepare = 1
+};
+
+struct ValidationIssueRecord
+{
+    std::string option_name;
+    ValidationPhase phase;
+    LogLevel level;
+    std::string message;
+    bool auto_corrected{ false };
+};
+
 class CommandBase
 {
 public:
@@ -24,11 +39,11 @@ public:
     bool Run();
     bool WasPrepared() const { return m_was_prepared; }
     bool HasValidationErrors() const;
-    const std::vector<ValidationIssue> & GetValidationIssues() const { return m_validation_issues; }
+    const std::vector<ValidationIssueRecord> & GetValidationIssues() const { return m_validation_issues; }
 
 protected:
     DataObjectManager m_data_manager;
-    std::vector<ValidationIssue> m_validation_issues;
+    std::vector<ValidationIssueRecord> m_validation_issues;
 
     CommandBase() = default;
 

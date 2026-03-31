@@ -93,7 +93,7 @@ inline std::filesystem::path GenerateMapFile(
     request.blurring_width_list = StringHelper::ParseListOption<double>(blurring_widths);
 
     const auto result{ rhbm_gem::RunMapSimulation(request) };
-    if (result.outcome != rhbm_gem::CommandOutcome::Succeeded)
+    if (!result.succeeded)
     {
         throw std::runtime_error("Failed to generate map fixture.");
     }

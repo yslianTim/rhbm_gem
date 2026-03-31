@@ -259,7 +259,7 @@ void RegisterCommand(
     {
         ScopeTimer timer("Command CLI callback");
         const auto result{ RunCommandFn(*request) };
-        if (result.outcome != CommandOutcome::Succeeded)
+        if (!result.succeeded)
         {
             throw CLI::RuntimeError(1);
         }

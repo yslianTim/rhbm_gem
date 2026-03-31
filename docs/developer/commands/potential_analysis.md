@@ -55,13 +55,11 @@ Command-specific fields:
 
 `RunPotentialAnalysis(...)` returns `CommandResult`.
 
-Expected outcomes:
+Expected result contract:
 
-- `Succeeded` when the command completes
-- `ValidationFailed` when normalization, validation, or output-directory preflight stops execution
-- `ExecutionFailed` when preparation succeeds but execution still returns false
-
-Validation details are reported through `result.issues`.
+- `result.succeeded == true` when the command completes
+- `result.succeeded == false` when normalization, validation, preflight, or execution stops the command
+- `result.issues` reports public validation diagnostics as option/message pairs
 
 ## Command Behavior
 

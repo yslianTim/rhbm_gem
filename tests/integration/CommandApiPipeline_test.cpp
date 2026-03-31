@@ -59,7 +59,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     const auto simulation_result{
         rg::RunMapSimulation(simulation_request)
     };
-    ASSERT_EQ(simulation_result.outcome, rg::CommandOutcome::Succeeded);
+    ASSERT_TRUE(simulation_result.succeeded);
 
     const auto generated_map_file{ FindGeneratedMap(maps_dir) };
     ASSERT_FALSE(generated_map_file.empty());
@@ -76,7 +76,7 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     const auto analysis_result{
         rg::RunPotentialAnalysis(analysis_request)
     };
-    ASSERT_EQ(analysis_result.outcome, rg::CommandOutcome::Succeeded);
+    ASSERT_TRUE(analysis_result.succeeded);
 
     rg::ResultDumpRequest dump_request;
     dump_request.database_path = database_path;
@@ -87,6 +87,6 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     const auto dump_result{
         rg::RunResultDump(dump_request)
     };
-    ASSERT_EQ(dump_result.outcome, rg::CommandOutcome::Succeeded);
+    ASSERT_TRUE(dump_result.succeeded);
     EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);
 }
