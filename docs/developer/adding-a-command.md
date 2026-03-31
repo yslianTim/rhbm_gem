@@ -34,7 +34,7 @@ Public command API:
 Manifest and internal registration:
 
 - [`include/rhbm_gem/core/command/CommandList.def`](/include/rhbm_gem/core/command/CommandList.def)
-- [`src/core/internal/command/CommandRegistry.hpp`](/src/core/internal/command/CommandRegistry.hpp)
+- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
 
 Build wiring:
 
@@ -91,7 +91,7 @@ python3 resources/tools/developer/command_scaffold.py --name Example --wire
 `--wire` updates:
 
 - `include/rhbm_gem/core/command/CommandList.def`
-- `src/core/internal/command/CommandRegistry.hpp`
+- `src/core/command/CommandApi.cpp`
 - `src/CMakeLists.txt` stable command source list: `RHBM_GEM_COMMAND_SOURCES`
 - `tests/CMakeLists.txt` stable command test list: `RHBM_GEM_CORE_COMMAND_TEST_SOURCES`
 
@@ -168,7 +168,7 @@ Each `Run*` entrypoint follows this sequence:
 
 CLI registration is generic:
 
-1. `ConfigureCommandCli(...)` expands the manifest in [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp)
+1. `ConfigureCommandCli(...)` expands the manifest in [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
 2. `RegisterCommand<...>()` creates the subcommand and binds request fields from `VisitFields(...)`
 3. common fields from `CommonCommandRequest::VisitFields(...)` are always bound
 4. command-specific fields such as `database_path` are bound from the request schema itself
@@ -220,7 +220,7 @@ Before merge:
 1. the command header exists under [`src/core/internal/command/`](/src/core/internal/command/) and the source exists under [`src/core/command/`](/src/core/command/)
 2. `CommandApi.hpp` contains the request struct and its `VisitFields(...)` schema
 3. `CommandList.def` contains the manifest entry in the correct stable or experimental section
-4. `CommandRegistry.hpp` includes the new command header
+4. `CommandApi.cpp` includes the new command header
 5. `src/CMakeLists.txt` and `tests/CMakeLists.txt` include the source and test file in the correct stable or experimental list
 6. tests and docs match the final command surface
 

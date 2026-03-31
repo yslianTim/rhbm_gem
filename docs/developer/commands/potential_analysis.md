@@ -18,8 +18,7 @@ That manifest entry is expanded into:
 
 - [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp) for shared metadata and `CommandId`
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp) for `PotentialAnalysisRequest` and `RunPotentialAnalysis(...)`
-- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) for the `RunPotentialAnalysis(...)` definition
-- [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp) for CLI registration
+- [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) for the `RunPotentialAnalysis(...)` definition and CLI registration
 - [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp) for Python request and `Run*` bindings
 
 The concrete implementation lives in:

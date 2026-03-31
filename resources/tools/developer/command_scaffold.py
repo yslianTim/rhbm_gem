@@ -90,15 +90,33 @@ def _append_cmake_list_entry(text: str, variable_name: str, entry: str) -> tuple
     return updated_text, True
 
 
-def _append_registry_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
+def _append_command_api_include(text: str, spec: ScaffoldSpec) -> tuple[str, bool]:
     include_line = f'#include "{spec.command_type}.hpp"'
     if include_line in text:
         return text, False
 
-    include_pattern = re.compile(r'^(#include\s+"[^"]+Command\.hpp")\n', re.MULTILINE)
-    matches = list(include_pattern.finditer(text))
+    if spec.command_type in {"MapVisualizationCommand", "PositionEstimationCommand"}:
+        block_pattern = re.compile(
+            r'(#ifdef RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE\n)(.*?)(#endif\n)',
+            re.DOTALL,
+        )
+        match = block_pattern.search(text)
+        if not match:
+            raise RuntimeError("could not find experimental command include block in CommandApi.cpp")
+
+        body = match.group(2)
+        insert_at = match.start(2) + len(body)
+        updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
+        return updated, True
+
+    stable_pattern = re.compile(r'^(#include\s+"internal/command/[^"]+Command\.hpp")\n', re.MULTILINE)
+    matches = [
+        match for match in stable_pattern.finditer(text)
+        if "MapVisualizationCommand.hpp" not in match.group(1)
+        and "PositionEstimationCommand.hpp" not in match.group(1)
+    ]
     if not matches:
-        raise RuntimeError("could not find any command include in CommandRegistry.hpp")
+        raise RuntimeError("could not find stable command include block in CommandApi.cpp")
 
     insert_at = matches[-1].end()
     updated = text[:insert_at] + include_line + "\n" + text[insert_at:]
@@ -219,13 +237,13 @@ Scaffold generated for CLI command `{spec.cli_name}`.
    If it is experimental, place it inside the `RHBM_GEM_ENABLE_EXPERIMENTAL_FEATURE` block.
 2. Add the request struct in `include/rhbm_gem/core/command/CommandApi.hpp`.
    Define `VisitFields(...)` there so CLI and Python bindings pick it up automatically.
-3. Add `#include "{spec.command_type}.hpp"` to `src/core/internal/command/CommandRegistry.hpp`.
+3. Add `#include "internal/command/{spec.command_type}.hpp"` to `src/core/command/CommandApi.cpp`.
 """
 
 
 def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, strict: bool) -> None:
     command_def = root / "include" / "rhbm_gem" / "core" / "command" / "CommandList.def"
-    command_registry = root / "src" / "core" / "internal" / "command" / "CommandRegistry.hpp"
+    command_api = root / "src" / "core" / "command" / "CommandApi.cpp"
     source_cmake = root / "src" / "CMakeLists.txt"
     tests_cmake = root / "tests" / "CMakeLists.txt"
 
@@ -237,11 +255,11 @@ def _wire_registration_files(root: Path, spec: ScaffoldSpec, dry_run: bool, stri
         "Append a new RHBM_GEM_COMMAND(...) block to CommandList.def.",
     )
     _update_file(
-        command_registry,
-        lambda text: _append_registry_include(text, spec),
+        command_api,
+        lambda text: _append_command_api_include(text, spec),
         dry_run,
         strict,
-        f'Add #include "{spec.command_type}.hpp" to CommandRegistry.hpp.',
+        f'Add #include "internal/command/{spec.command_type}.hpp" to CommandApi.cpp.',
     )
     _update_file(
         source_cmake,
@@ -322,7 +340,7 @@ def main() -> int:
     if args.wire:
         print("Registration/manifests and CMake source lists were wired automatically.")
     else:
-        print("Next: wire CommandList.def, update CommandRegistry.hpp and CMake source lists, and add the public request schema.")
+        print("Next: wire CommandList.def, update CommandApi.cpp includes and CMake source lists, and add the public request schema.")
     return 0
 
 

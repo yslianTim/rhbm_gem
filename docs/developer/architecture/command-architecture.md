@@ -23,16 +23,11 @@ The manifest is expanded with X-macros by:
 - [`include/rhbm_gem/core/command/CommandContract.hpp`](/include/rhbm_gem/core/command/CommandContract.hpp)
 - [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp)
 - [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp)
-- [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp)
 - [`src/python/CommandApiBindings.cpp`](/src/python/CommandApiBindings.cpp)
 
 Request structs are declared in [`include/rhbm_gem/core/command/CommandApi.hpp`](/include/rhbm_gem/core/command/CommandApi.hpp).
 Each request type defines `VisitFields(...)`, and that field schema is reused by both CLI
 registration and Python bindings.
-
-Concrete command headers are aggregated by:
-
-- [`src/core/internal/command/CommandRegistry.hpp`](/src/core/internal/command/CommandRegistry.hpp)
 
 Stable commands in `CommandList.def`:
 
@@ -72,7 +67,7 @@ flowchart LR
 `ConfigureCommandCli(CLI::App &)` is the top-level CLI setup entrypoint. It enables
 `require_subcommand(1)` and expands `CommandList.def` to register each subcommand.
 
-Shared CLI registration lives in [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp).
+Shared CLI registration lives in [`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp).
 For each manifest entry it:
 
 1. creates a subcommand
@@ -80,10 +75,6 @@ For each manifest entry it:
 3. binds common fields from `CommonCommandRequest::VisitFields(...)`
 4. binds command-specific fields from `XxxRequest::VisitFields(...)`
 5. routes the callback to the matching `Run*` function
-
-[`src/core/command/CommandApi.cpp`](/src/core/command/CommandApi.cpp) and [`src/core/command/CommandOptionSupport.cpp`](/src/core/command/CommandOptionSupport.cpp) both include
-[`src/core/internal/command/CommandRegistry.hpp`](/src/core/internal/command/CommandRegistry.hpp), so adding a command requires updating that
-header include list.
 
 ## 4. Public contract and request surface
 
