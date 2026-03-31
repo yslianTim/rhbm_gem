@@ -69,8 +69,8 @@ inline void SeedSavedModel(
     const std::string & pdb_id)
 {
     rhbm_gem::DataObjectManager manager{};
-    manager.SetDatabaseManager(database_path);
-    manager.ProcessFile(model_path, "model");
+    manager.OpenDatabase(database_path);
+    manager.LoadFileIntoMemory(model_path, "model");
     auto model{ manager.GetTypedDataObject<rhbm_gem::ModelObject>("model") };
     model->SetPdbID(pdb_id);
     for (auto & atom : model->GetAtomList())

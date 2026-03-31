@@ -72,14 +72,14 @@ bool ResultDumpCommand::BuildDataObjectList()
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     try
     {
-        m_data_manager.SetDatabaseManager(request.database_path);
+        m_data_manager.OpenDatabase(request.database_path);
         if (request.map_file_path.empty())
         {
             m_map_object.reset();
         }
         else
         {
-            m_data_manager.ProcessFile(request.map_file_path, m_map_key_tag);
+            m_data_manager.LoadFileIntoMemory(request.map_file_path, m_map_key_tag);
             m_map_object = m_data_manager.GetTypedDataObject<MapObject>(m_map_key_tag);
         }
         m_selected_atom_list_map.clear();

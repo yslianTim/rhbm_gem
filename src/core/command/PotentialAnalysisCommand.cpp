@@ -349,10 +349,10 @@ bool PotentialAnalysisCommand::BuildDataObject()
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
-        m_data_manager.SetDatabaseManager(request.database_path);
-        m_data_manager.ProcessFile(request.model_file_path, m_model_key_tag);
+        m_data_manager.OpenDatabase(request.database_path);
+        m_data_manager.LoadFileIntoMemory(request.model_file_path, m_model_key_tag);
         m_model_object = m_data_manager.GetTypedDataObject<ModelObject>(m_model_key_tag);
-        m_data_manager.ProcessFile(request.map_file_path, m_map_key_tag);
+        m_data_manager.LoadFileIntoMemory(request.map_file_path, m_map_key_tag);
         m_map_object = m_data_manager.GetTypedDataObject<MapObject>(m_map_key_tag);
         if (request.simulation_flag)
         {

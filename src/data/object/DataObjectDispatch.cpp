@@ -96,25 +96,40 @@ MapObject & ExpectMapObject(
         + ResolveDataObjectTypeName(data_object) + ".");
 }
 
-std::string GetCatalogTypeName(const DataObjectBase & data_object)
+TopLevelDataObjectKind ResolveTopLevelDataObjectKind(
+    const DataObjectBase & data_object,
+    std::string_view context)
 {
     if (dynamic_cast<const ModelObject *>(&data_object) != nullptr)
     {
-        return "model";
+        return TopLevelDataObjectKind::Model;
     }
     if (dynamic_cast<const MapObject *>(&data_object) != nullptr)
     {
+        return TopLevelDataObjectKind::Map;
+    }
+    throw std::runtime_error(
+        std::string(context) + ": expected top-level DataObject but got "
+        + ResolveDataObjectTypeName(data_object) + ".");
+}
+
+std::string_view GetCatalogTypeName(TopLevelDataObjectKind kind) noexcept
+{
+    switch (kind)
+    {
+    case TopLevelDataObjectKind::Model:
+        return "model";
+    case TopLevelDataObjectKind::Map:
         return "map";
     }
-    if (dynamic_cast<const AtomObject *>(&data_object) != nullptr)
-    {
-        throw std::runtime_error("GetCatalogTypeName(): AtomObject is not a top-level catalog type.");
-    }
-    if (dynamic_cast<const BondObject *>(&data_object) != nullptr)
-    {
-        throw std::runtime_error("GetCatalogTypeName(): BondObject is not a top-level catalog type.");
-    }
-    throw std::runtime_error("GetCatalogTypeName(): no catalog type resolved.");
+    return "unknown";
+}
+
+std::string GetCatalogTypeName(const DataObjectBase & data_object)
+{
+    return std::string(
+        GetCatalogTypeName(
+            ResolveTopLevelDataObjectKind(data_object, "GetCatalogTypeName()")));
 }
 
 } // namespace rhbm_gem

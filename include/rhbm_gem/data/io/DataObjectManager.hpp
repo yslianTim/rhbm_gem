@@ -32,12 +32,23 @@ public:
     DataObjectManager(const DataObjectManager &) = delete;
     DataObjectManager & operator=(const DataObjectManager &) = delete;
     void ClearDataObjects();
+    void OpenDatabase(const std::filesystem::path & dbname);
+    void LoadFileIntoMemory(const std::filesystem::path & filename, const std::string & key_tag);
+    void WriteMemoryObjectToFile(
+        const std::filesystem::path & filename,
+        const std::string & key_tag) const;
+    bool TryWriteMemoryObjectToFile(
+        const std::filesystem::path & filename,
+        const std::string & key_tag) const;
     void SetDatabaseManager(const std::filesystem::path & dbname);
     void ProcessFile(const std::filesystem::path & filename, const std::string & key_tag);
     void ProduceFile(const std::filesystem::path & filename, const std::string & key_tag);
     bool HasDataObject(const std::string & key_tag) const;
     void LoadDataObject(const std::string & key_tag);
     void SaveDataObject(const std::string & key_tag, const std::string & renamed_key_tag="") const;
+    bool TrySaveDataObject(
+        const std::string & key_tag,
+        const std::string & renamed_key_tag="") const;
     void ForEachDataObject(
         const std::function<void(DataObjectBase &)> & callback,
         const std::vector<std::string> & key_tag_list={});

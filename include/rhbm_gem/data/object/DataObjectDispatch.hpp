@@ -9,6 +9,12 @@ class DataObjectBase;
 class ModelObject;
 class MapObject;
 
+enum class TopLevelDataObjectKind
+{
+    Model,
+    Map
+};
+
 ModelObject * AsModelObject(DataObjectBase & data_object) noexcept;
 const ModelObject * AsModelObject(const DataObjectBase & data_object) noexcept;
 MapObject * AsMapObject(DataObjectBase & data_object) noexcept;
@@ -28,6 +34,10 @@ MapObject & ExpectMapObject(
     DataObjectBase & data_object,
     std::string_view context);
 
+TopLevelDataObjectKind ResolveTopLevelDataObjectKind(
+    const DataObjectBase & data_object,
+    std::string_view context);
+std::string_view GetCatalogTypeName(TopLevelDataObjectKind kind) noexcept;
 std::string GetCatalogTypeName(const DataObjectBase & data_object);
 
 } // namespace rhbm_gem

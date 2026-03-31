@@ -653,25 +653,24 @@ void SQLitePersistence::SaveDataObject(const DataObjectBase * data_object, const
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
 
-    const auto type_name{ GetCatalogTypeName(*data_object) };
+    const auto kind{
+        ResolveTopLevelDataObjectKind(*data_object, "SQLitePersistence::SaveDataObject()") };
+    const auto type_name{ std::string(GetCatalogTypeName(kind)) };
     m_database->Prepare(std::string(kUpsertCatalogSql));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
     m_database->Bind<std::string>(2, type_name);
     m_database->StepOnce();
 
-    if (type_name == "model")
+    switch (kind)
     {
-        m_model_store->Save(ExpectModelObject(*data_object, "SQLitePersistence::SaveDataObject()"), key_tag);
+    case TopLevelDataObjectKind::Model:
+        m_model_store->Save(static_cast<const ModelObject &>(*data_object), key_tag);
+        return;
+    case TopLevelDataObjectKind::Map:
+        SaveMapObject(*m_database, static_cast<const MapObject &>(*data_object), key_tag);
         return;
     }
-    if (type_name == "map")
-    {
-        SaveMapObject(*m_database, ExpectMapObject(*data_object, "SQLitePersistence::SaveDataObject()"), key_tag);
-        return;
-    }
-
-    throw std::runtime_error("Unsupported data object type: " + type_name);
 }
 
 std::unique_ptr<DataObjectBase> SQLitePersistence::LoadDataObject(const std::string & key_tag)

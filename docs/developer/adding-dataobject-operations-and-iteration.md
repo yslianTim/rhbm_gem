@@ -53,7 +53,7 @@ For shared typed helpers:
 - validate preconditions and throw explicit `std::runtime_error` when violated
 - keep command execution, logging policy, and UI concerns out of shared helpers
 - prefer named workflow helpers when only a few combinations are valid in real commands
-- avoid one-hop loader wrappers that only forward to `ProcessFile(...)`, `LoadDataObject(...)`, or `GetTypedDataObject<T>(...)`
+- avoid one-hop loader wrappers that only forward to `LoadFileIntoMemory(...)`, `LoadDataObject(...)`, or `GetTypedDataObject<T>(...)`
 
 Example pattern:
 
@@ -94,7 +94,7 @@ Use expect helpers when a mismatch is a contract violation:
 - `ExpectModelObject(...)`
 - `ExpectMapObject(...)`
 
-Use `GetCatalogTypeName(...)` only for top-level persistence routing.
+Use `ResolveTopLevelDataObjectKind(...)` plus `GetCatalogTypeName(kind)` only for top-level persistence routing.
 
 If callback bodies or command-local branches start growing, move the multi-step logic into typed helpers instead of adding more dispatch inline.
 
@@ -102,7 +102,7 @@ If callback bodies or command-local branches start growing, move the multi-step 
 
 Typical command flow:
 
-1. call `ProcessFile(...)` or `LoadDataObject(...)` directly where the command orchestrates loading
+1. call `LoadFileIntoMemory(...)` or `LoadDataObject(...)` directly where the command orchestrates loading
 2. immediately resolve the typed object with `GetTypedDataObject<T>()`
 3. wrap failures with command-specific context in `BuildDataObject(...)` or the closest orchestration layer
 4. use `ForEachDataObject(...)` only when manager-owned key filtering or ordering matters

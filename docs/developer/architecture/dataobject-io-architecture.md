@@ -66,9 +66,7 @@ flowchart LR
     subgraph T["Typed helpers"]
       B --> M["ForEachDataObject(...)"]
       N["DataObjectDispatch"] --> N1["As* / Expect* helpers"]
-      N --> N2["GetCatalogTypeName"]
-      O["CommandDataLoader"] --> O1["typed file / database loaders"]
-      P["CommandModelSupport"] --> P1["shared ModelObject / MapObject operations"]
+      N --> N2["ResolveTopLevelDataObjectKind / GetCatalogTypeName"]
     end
 ```
 
@@ -91,9 +89,11 @@ Behavior:
 
 `DataObjectManager` integration:
 
-- `ProcessFile(filename, key_tag)` reads the file, sets `key_tag`, calls `Display()`, and stores the object in memory
-- `ProduceFile(filename, key_tag)` logs a warning and returns when the key is missing; otherwise it writes the in-memory object to disk
+- `LoadFileIntoMemory(filename, key_tag)` reads the file, sets `key_tag`, and stores the object in memory
+- `WriteMemoryObjectToFile(filename, key_tag)` writes the in-memory object to disk and throws if the key is missing
+- `TryWriteMemoryObjectToFile(filename, key_tag)` logs a warning and returns `false` when the key is missing
 - replacing an existing in-memory key is allowed and logs a warning
+- legacy compatibility wrappers (`ProcessFile`, `ProduceFile`, `SetDatabaseManager`) still forward to the preferred APIs above
 
 ## 5. In-Memory Manager Contract
 
@@ -124,11 +124,12 @@ Behavior:
 
 Manager entry points:
 
-- `SetDatabaseManager(db_path)`
+- `OpenDatabase(db_path)`
 - `SaveDataObject(key_tag, renamed_key_tag="")`
+- `TrySaveDataObject(key_tag, renamed_key_tag="")`
 - `LoadDataObject(key_tag)`
 
-`SetDatabaseManager(...)` behavior:
+`OpenDatabase(...)` behavior:
 
 - creates an internal `SQLitePersistence` object
 - if the same database path is already active, logs a warning and keeps the existing instance
@@ -149,11 +150,14 @@ Behavior differences to keep straight:
 
 - `DataObjectManager::SaveDataObject(...)`
   - throws if the DB manager is not initialized
-  - logs a warning and returns if the in-memory key is missing
+  - throws if the in-memory key is missing
   - `renamed_key_tag` changes only the persisted key, not the in-memory key
+- `DataObjectManager::TrySaveDataObject(...)`
+  - logs a warning and returns `false` if the in-memory key is missing
+  - otherwise forwards to `SaveDataObject(...)`
 - `SQLitePersistence::SaveDataObject(...)`
   - throws if the input pointer is null
-  - throws if `GetCatalogTypeName(...)` cannot resolve a supported top-level type
+  - resolves the top-level kind once, then converts that kind to the catalog type name
 - `LoadDataObject(...)`
   - throws if the DB manager is not initialized
   - throws if the catalog row is missing
@@ -190,16 +194,20 @@ API:
 
 - `AsModelObject(...)`, `AsMapObject(...)`
 - `ExpectModelObject(...)`, `ExpectMapObject(...)`
-- `GetCatalogTypeName(...)`
+- `ResolveTopLevelDataObjectKind(...)`
+- `GetCatalogTypeName(kind)`
 
 Behavior:
 
 - `As*` helpers return a typed pointer or `nullptr`
 - `Expect*` helpers return a typed reference or throw with caller context and resolved runtime type
-- `GetCatalogTypeName(...)` returns:
-  - `model` for `ModelObject`
-  - `map` for `MapObject`
-- `GetCatalogTypeName(...)` throws for non-top-level types such as `AtomObject` and `BondObject`
+- `ResolveTopLevelDataObjectKind(...)` returns:
+  - `TopLevelDataObjectKind::Model` for `ModelObject`
+  - `TopLevelDataObjectKind::Map` for `MapObject`
+- `GetCatalogTypeName(kind)` returns:
+  - `model` for `TopLevelDataObjectKind::Model`
+  - `map` for `TopLevelDataObjectKind::Map`
+- `ResolveTopLevelDataObjectKind(...)` throws for non-top-level types such as `AtomObject` and `BondObject`
 
 ## 9. Manager Iteration Contract
 
@@ -234,7 +242,7 @@ Current guidance:
 - simple file/database loading should call `DataObjectManager` directly in the command orchestration layer
 - command-specific error context should be added in the command `BuildDataObject(...)` or equivalent `try/catch`
 - keep one-hop wrappers local only when they add real policy, not when they only forward to:
-  - `ProcessFile(...)`
+  - `LoadFileIntoMemory(...)`
   - `LoadDataObject(...)`
   - `GetTypedDataObject<T>(...)`
 

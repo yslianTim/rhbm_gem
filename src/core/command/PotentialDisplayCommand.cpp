@@ -118,7 +118,7 @@ bool PotentialDisplayCommand::BuildDataObject()
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        m_data_manager.SetDatabaseManager(request.database_path);
+        m_data_manager.OpenDatabase(request.database_path);
         auto model_size{ request.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");
