@@ -16,15 +16,15 @@ Related references:
 
 Use the narrowest boundary that matches the change.
 
-`command_data_loader` helpers in `/src/core/internal/command/CommandDataSupport.hpp`
+Loader helpers in `/src/core/internal/command/CommandDataLoader.hpp`
 
 - use for typed file/database loading with consistent error context
-- current helpers are `ProcessModelFile(...)`, `ProcessMapFile(...)`, `OptionalProcessMapFile(...)`, and `LoadModelObject(...)`
+- current helpers are `LoadModelFromFile(...)`, `LoadMapFromFile(...)`, `MaybeLoadMapFromFile(...)`, and `LoadModelFromDatabase(...)`
 
-`CommandDataSupport` in `/src/core/command/CommandDataSupport.*`
+`CommandModelSupport` in `/src/core/command/CommandModelSupport.*`
 
 - use for reusable typed operations on `ModelObject` or `MapObject`
-- current shared operations are `NormalizeMapObject(...)`, `PrepareModelObject(...)`, `ApplyModelSelection(...)`, `CollectModelAtoms(...)`, `PrepareSimulationAtoms(...)`, and `BuildModelAtomBondContext(...)`
+- current shared operations are `NormalizeMapObject(...)`, `PrepareModelForPotentialAnalysis(...)`, `PrepareModelForVisualization(...)`, `ApplyModelSelection(...)`, `CollectSelectedAtoms(...)`, `CollectAtomsWithLocalPotentialEntries(...)`, `PrepareSimulationAtoms(...)`, and `BuildModelAtomBondContext(...)`
 - keep this layer focused on logic shared by multiple commands
 
 
@@ -45,16 +45,16 @@ command-local code in `/src/core/command/*.cpp` or `/src/core/workflow/*.cpp`
 
 If you add or change reusable typed operations:
 
-- `/src/core/internal/command/CommandDataSupport.hpp`
-- `/src/core/command/CommandDataSupport.cpp`
+- `/src/core/internal/command/CommandModelSupport.hpp`
+- `/src/core/command/CommandModelSupport.cpp`
 - command call sites using the helper
 - `/tests/data/DataObjectRuntime_test.cpp`
 - related command tests under `/tests/core/`
 - docs when the contract changes
 
-If you add or change loader helpers in `command_data_loader`:
+If you add or change loader helpers:
 
-- `/src/core/internal/command/CommandDataSupport.hpp`
+- `/src/core/internal/command/CommandDataLoader.hpp`
 - command call sites
 - tests that cover the new load path and failure context
 
@@ -73,20 +73,13 @@ For shared typed helpers:
 - keep behavior deterministic for the same object state and options
 - validate preconditions and throw explicit `std::runtime_error` when violated
 - keep command execution, logging policy, and UI concerns out of shared helpers
-- prefer small option structs over long parameter lists when behavior may grow
+- prefer named workflow helpers when only a few combinations are valid in real commands
 
 Example pattern:
 
 ```cpp
-struct ModelPruneOptions
-{
-    bool selected_only{ true };
-    bool remove_unknown_atoms{ false };
-};
-
-void PruneModelAtoms(
-    ModelObject & model_object,
-    ModelPruneOptions options = {});
+std::vector<AtomObject *> CollectSelectedAtoms(ModelObject & model_object);
+std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & model_object);
 ```
 
 ## 4. Iteration Rules
@@ -129,8 +122,8 @@ If callback bodies or command-local branches start growing, move the multi-step 
 
 Typical command flow:
 
-1. load typed objects with `GetTypedDataObject<T>()` or `command_data_loader` helpers
-2. apply shared typed operations from `CommandDataSupport` when the behavior is reused
+1. load typed objects with `GetTypedDataObject<T>()` or `CommandDataLoader` helpers
+2. apply shared typed operations from `CommandModelSupport` when the behavior is reused
 3. use `ForEachDataObject(...)` only when manager-owned key filtering or ordering matters
 4. keep `ExecuteImpl()` focused on orchestration
 

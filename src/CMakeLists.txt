@@ -19,7 +19,8 @@ target_sources(rhbm_gem PRIVATE
     # core
     core/command/CommandApi.cpp
     core/command/CommandOptionSupport.cpp
-    core/command/CommandDataSupport.cpp
+    core/command/CommandDataLoader.cpp
+    core/command/CommandModelSupport.cpp
     core/painter/AtomPainter.cpp
     core/command/CommandBase.cpp
     core/painter/ComparisonPainter.cpp

@@ -1,5 +1,6 @@
 #include "internal/command/MapVisualizationCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/CommandDataLoader.hpp"
+#include "internal/command/CommandModelSupport.hpp"
 #include "internal/command/MapSampling.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -48,34 +49,37 @@ MapVisualizationCommand::MapVisualizationCommand() :
 void MapVisualizationCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetRequiredExistingPathOption(
-        request.model_file_path,
+    NormalizeRequiredPath(
         request.model_file_path,
         kModelOption,
         "Model file");
-    SetRequiredExistingPathOption(
-        request.map_file_path,
+    NormalizeRequiredPath(
         request.map_file_path,
         kMapOption,
         "Map file");
-    SetPositiveScalarOption(
-        request.atom_serial_id,
+    NormalizeScalar(
         request.atom_serial_id,
         kAtomIdOption,
+        [](int candidate) { return candidate > 0; },
         1,
+        LogLevel::Error,
         "Atom serial ID must be positive.");
-    SetNormalizedScalarOption(
-        request.sampling_size,
+    NormalizeScalar(
         request.sampling_size,
         kSamplingOption,
         [](int candidate) { return candidate > 0; },
         100,
+        LogLevel::Warning,
         "Sampling size must be positive, reset to default value = 100");
-    SetFinitePositiveScalarOption(
-        request.window_size,
+    NormalizeScalar(
         request.window_size,
         kWindowSizeOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         5.0,
+        LogLevel::Error,
         "Window size must be a finite positive value.");
 }
 
@@ -99,9 +103,9 @@ bool MapVisualizationCommand::BuildDataObject()
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        m_model_object = command_data_loader::ProcessModelFile(
+        m_model_object = LoadModelFromFile(
             m_data_manager, request.model_file_path, m_model_key_tag, "model file");
-        m_map_object = command_data_loader::ProcessMapFile(
+        m_map_object = LoadMapFromFile(
             m_data_manager, request.map_file_path, m_map_key_tag, "map file");
     }
     catch (const std::exception & e)
@@ -122,11 +126,7 @@ void MapVisualizationCommand::RunMapObjectPreprocessing()
 void MapVisualizationCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
-    ModelPreparationOptions options;
-    options.select_all_atoms = true;
-    options.select_all_bonds = true;
-    options.update_model = true;
-    PrepareModelObject(*m_model_object, options);
+    PrepareModelForVisualization(*m_model_object);
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
     Logger::Log(LogLevel::Info,

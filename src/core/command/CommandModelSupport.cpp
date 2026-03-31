@@ -1,18 +1,41 @@
-#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/CommandModelSupport.hpp"
+
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/AtomSelector.hpp>
+#include <rhbm_gem/utils/domain/ComponentHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <algorithm>
 #include <memory>
 #include <string>
 
-#include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/utils/domain/AtomSelector.hpp>
-#include <rhbm_gem/utils/domain/ComponentHelper.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
-
 namespace rhbm_gem {
 namespace {
+
+void SelectAllAtoms(ModelObject & model_object)
+{
+    for (auto & atom : model_object.GetAtomList())
+    {
+        atom->SetSelectedFlag(true);
+    }
+}
+
+void SelectAllBonds(ModelObject & model_object)
+{
+    for (auto & bond : model_object.GetBondList())
+    {
+        bond->SetSelectedFlag(true);
+    }
+}
+
+void EnsureModelUpdated(ModelObject & model_object)
+{
+    model_object.Update();
+}
 
 double CalculateAtomChargeForSimulation(
     const AtomObject & atom,
@@ -49,58 +72,29 @@ void NormalizeMapObject(MapObject & map_object)
     map_object.MapValueArrayNormalization();
 }
 
-void PrepareModelObject(ModelObject & model_object, const ModelPreparationOptions & options)
+void PrepareModelForPotentialAnalysis(ModelObject & model_object, bool asymmetry_flag)
 {
-    if (options.select_all_atoms)
-    {
-        for (auto & atom : model_object.GetAtomList())
-        {
-            atom->SetSelectedFlag(true);
-        }
-    }
-    if (options.select_all_bonds)
-    {
-        for (auto & bond : model_object.GetBondList())
-        {
-            bond->SetSelectedFlag(true);
-        }
-    }
+    SelectAllAtoms(model_object);
+    SelectAllBonds(model_object);
+    model_object.FilterAtomFromSymmetry(asymmetry_flag);
+    model_object.FilterBondFromSymmetry(asymmetry_flag);
+    EnsureModelUpdated(model_object);
 
-    if (options.apply_atom_symmetry_filter)
+    for (auto * atom : model_object.GetSelectedAtomList())
     {
-        model_object.FilterAtomFromSymmetry(options.asymmetry_flag);
+        atom->AddLocalPotentialEntry(std::make_unique<LocalPotentialEntry>());
     }
-    if (options.apply_bond_symmetry_filter)
+    for (auto * bond : model_object.GetSelectedBondList())
     {
-        model_object.FilterBondFromSymmetry(options.asymmetry_flag);
+        bond->AddLocalPotentialEntry(std::make_unique<LocalPotentialEntry>());
     }
+}
 
-    bool has_updated{ false };
-    if (options.update_model)
-    {
-        model_object.Update();
-        has_updated = true;
-    }
-    if ((options.initialize_atom_local_entries || options.initialize_bond_local_entries)
-        && !has_updated)
-    {
-        model_object.Update();
-    }
-
-    if (options.initialize_atom_local_entries)
-    {
-        for (auto * atom : model_object.GetSelectedAtomList())
-        {
-            atom->AddLocalPotentialEntry(std::make_unique<LocalPotentialEntry>());
-        }
-    }
-    if (options.initialize_bond_local_entries)
-    {
-        for (auto * bond : model_object.GetSelectedBondList())
-        {
-            bond->AddLocalPotentialEntry(std::make_unique<LocalPotentialEntry>());
-        }
-    }
+void PrepareModelForVisualization(ModelObject & model_object)
+{
+    SelectAllAtoms(model_object);
+    SelectAllBonds(model_object);
+    EnsureModelUpdated(model_object);
 }
 
 void ApplyModelSelection(ModelObject & model_object, ::AtomSelector & selector)
@@ -115,19 +109,28 @@ void ApplyModelSelection(ModelObject & model_object, ::AtomSelector & selector)
     }
 }
 
-std::vector<AtomObject *> CollectModelAtoms(
-    ModelObject & model_object,
-    ModelAtomCollectorOptions options)
+std::vector<AtomObject *> CollectSelectedAtoms(ModelObject & model_object)
 {
     std::vector<AtomObject *> atom_list;
     atom_list.reserve(model_object.GetAtomList().size());
     for (auto & atom : model_object.GetAtomList())
     {
-        if (options.selected_only && !atom->GetSelectedFlag())
+        if (!atom->GetSelectedFlag())
         {
             continue;
         }
-        if (options.require_local_potential_entry && atom->GetLocalPotentialEntry() == nullptr)
+        atom_list.emplace_back(atom.get());
+    }
+    return atom_list;
+}
+
+std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & model_object)
+{
+    std::vector<AtomObject *> atom_list;
+    atom_list.reserve(model_object.GetAtomList().size());
+    for (auto & atom : model_object.GetAtomList())
+    {
+        if (atom->GetLocalPotentialEntry() == nullptr)
         {
             continue;
         }
@@ -138,20 +141,21 @@ std::vector<AtomObject *> CollectModelAtoms(
 
 SimulationAtomPreparationResult PrepareSimulationAtoms(
     ModelObject & model_object,
-    SimulationAtomPreparationOptions options)
+    PartialCharge partial_charge_choice,
+    bool include_unknown_atoms)
 {
     SimulationAtomPreparationResult result;
     result.atom_list.reserve(model_object.GetNumberOfAtom());
     for (auto & atom : model_object.GetAtomList())
     {
-        if (!options.include_unknown_atoms && atom->IsUnknownAtom())
+        if (!include_unknown_atoms && atom->IsUnknownAtom())
         {
             continue;
         }
         result.atom_list.emplace_back(atom.get());
         result.atom_charge_map.emplace(
             atom->GetSerialID(),
-            CalculateAtomChargeForSimulation(*atom, options.partial_charge_choice));
+            CalculateAtomChargeForSimulation(*atom, partial_charge_choice));
 
         const auto & atom_position{ atom->GetPositionRef() };
         result.range_minimum[0] = std::min(result.range_minimum[0], atom_position[0]);

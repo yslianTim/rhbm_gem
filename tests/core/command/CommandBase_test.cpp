@@ -22,17 +22,19 @@ public:
 
     void SetForceInvalid(bool value)
     {
-        AssignOption(m_options.force_invalid, value);
+        m_options.force_invalid = value;
+        InvalidatePreparedState();
     }
 
     void ConfigureFilesystemOptions(const std::filesystem::path & folder_path)
     {
-        SetFolderPath(folder_path);
+        m_common_request.folder_path = folder_path;
+        NormalizeCommonRequest(m_common_request);
     }
 
     void ValidateOptions() override
     {
-        ResetPrepareIssues("--test");
+        ClearPrepareIssues("--test");
         if (m_options.force_invalid)
         {
             AddValidationError("--test", "forced invalid config");
@@ -42,7 +44,11 @@ public:
     void ResetRuntimeState() override {}
 
 private:
+    rg::CommonCommandRequest m_common_request{};
     TestCommandOptions m_options{};
+
+    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
+    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override
     {

@@ -33,7 +33,7 @@
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include "internal/file/MapAxisOrderHelper.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/CommandModelSupport.hpp"
 #include "support/PublicHeaderSurfaceTestSupport.hpp"
 
 namespace rg = rhbm_gem;
@@ -672,7 +672,7 @@ TEST(DataObjectOperationTest, NormalizeMapObjectNormalizesMapValues) {
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
 }
 
-TEST(DataObjectOperationTest, PrepareModelObjectSelectsAndInitializesLocalEntries) {
+TEST(DataObjectOperationTest, PrepareModelForPotentialAnalysisSelectsAndInitializesLocalEntries) {
     auto model{MakeModelWithBond()};
     for (auto& atom : model->GetAtomList()) {
         atom->SetSelectedFlag(false);
@@ -684,14 +684,7 @@ TEST(DataObjectOperationTest, PrepareModelObjectSelectsAndInitializesLocalEntrie
     ASSERT_EQ(model->GetNumberOfSelectedAtom(), 0);
     ASSERT_EQ(model->GetNumberOfSelectedBond(), 0);
 
-    rg::ModelPreparationOptions options;
-    options.select_all_atoms = true;
-    options.select_all_bonds = true;
-    options.update_model = true;
-    options.initialize_atom_local_entries = true;
-    options.initialize_bond_local_entries = true;
-
-    rg::PrepareModelObject(*model, options);
+    rg::PrepareModelForPotentialAnalysis(*model, false);
 
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
     EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
@@ -722,7 +715,7 @@ TEST(DataObjectOperationTest, ApplyModelSelectionSelectsByAtomSelectorRules) {
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
 }
 
-TEST(DataObjectOperationTest, CollectModelAtomsSupportsSelectionAndEntryFilters) {
+TEST(DataObjectOperationTest, CollectAtomHelpersSupportSelectionAndEntryFilters) {
     auto model{MakeModelWithBond()};
     auto& atoms{model->GetAtomList()};
     ASSERT_EQ(atoms.size(), 2);
@@ -731,27 +724,18 @@ TEST(DataObjectOperationTest, CollectModelAtomsSupportsSelectionAndEntryFilters)
     atoms[0]->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     model->Update();
 
-    rg::ModelAtomCollectorOptions selected_only_options;
-    selected_only_options.selected_only = true;
-    const auto selected_only_atoms{rg::CollectModelAtoms(*model, selected_only_options)};
+    const auto selected_only_atoms{rg::CollectSelectedAtoms(*model)};
     ASSERT_EQ(selected_only_atoms.size(), 1);
     EXPECT_EQ(selected_only_atoms.front(), atoms[0].get());
 
-    rg::ModelAtomCollectorOptions require_entry_options;
-    require_entry_options.selected_only = false;
-    require_entry_options.require_local_potential_entry = true;
-    const auto require_entry_atoms{rg::CollectModelAtoms(*model, require_entry_options)};
+    const auto require_entry_atoms{rg::CollectAtomsWithLocalPotentialEntries(*model)};
     ASSERT_EQ(require_entry_atoms.size(), 1);
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
 TEST(DataObjectOperationTest, PrepareSimulationAtomsCollectsAtomChargeAndRange) {
     auto model{MakeModelWithBond()};
-    rg::SimulationAtomPreparationOptions options;
-    options.partial_charge_choice = rg::PartialCharge::NEUTRAL;
-    options.include_unknown_atoms = true;
-
-    const auto result{rg::PrepareSimulationAtoms(*model, options)};
+    const auto result{rg::PrepareSimulationAtoms(*model, rg::PartialCharge::NEUTRAL, true)};
     ASSERT_TRUE(result.has_atom);
     EXPECT_EQ(result.atom_list.size(), 2);
     ASSERT_EQ(result.atom_charge_map.size(), 2);

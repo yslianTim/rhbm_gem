@@ -27,51 +27,61 @@ public:
 
     void SetFinitePositiveValue(double value)
     {
-        SetFinitePositiveScalarOption(
+        m_options.finite_positive_value = value;
+        NormalizeScalar(
             m_options.finite_positive_value,
-            value,
             "--finite-positive",
+            [](double candidate)
+            {
+                return std::isfinite(candidate) && candidate > 0.0;
+            },
             2.0,
+            LogLevel::Error,
             "Finite positive value must be a finite positive number.");
     }
 
     void SetFiniteNonNegativeValue(double value)
     {
-        SetFiniteNonNegativeScalarOption(
+        m_options.finite_non_negative_value = value;
+        NormalizeScalar(
             m_options.finite_non_negative_value,
-            value,
             "--finite-non-negative",
+            [](double candidate)
+            {
+                return std::isfinite(candidate) && candidate >= 0.0;
+            },
             0.0,
+            LogLevel::Error,
             "Finite non-negative value must be a finite non-negative number.");
     }
 
     void SetPositiveCountValue(int value)
     {
-        SetPositiveScalarOption(
+        m_options.positive_count = value;
+        NormalizeScalar(
             m_options.positive_count,
-            value,
             "--positive-count",
+            [](int candidate) { return candidate > 0; },
             1,
+            LogLevel::Error,
             "Positive count must be positive.");
     }
 
     void SetCommandLocalValidatedValue(double value)
     {
-        MutateOptions([&]()
+        InvalidatePreparedState();
+        ClearParseIssues("--validated");
+        if (value == 3.5)
         {
-            ResetParseIssues("--validated");
-            if (value == 3.5)
-            {
-                m_options.command_local_value = value;
-                return;
-            }
+            m_options.command_local_value = value;
+            return;
+        }
 
-            m_options.command_local_value = 1.25;
-            AddValidationError(
-                "--validated",
-                "Validated value must equal 3.5.",
-                rg::ValidationPhase::Parse);
-        });
+        m_options.command_local_value = 1.25;
+        AddValidationError(
+            "--validated",
+            "Validated value must equal 3.5.",
+            rg::ValidationPhase::Parse);
     }
 
     double CommandLocalValidatedValue() const { return m_options.command_local_value; }
@@ -80,7 +90,11 @@ public:
     int PositiveCountValue() const { return m_options.positive_count; }
 
 private:
+    rg::CommonCommandRequest m_common_request{};
     CommandScalarValidationHelperCommandOptions m_options{};
+
+    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
+    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override { return true; }
 };

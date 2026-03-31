@@ -1,5 +1,6 @@
 #include "internal/command/PotentialAnalysisCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/CommandDataLoader.hpp"
+#include "internal/command/CommandModelSupport.hpp"
 #include "internal/command/MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
@@ -81,75 +82,104 @@ PotentialAnalysisCommand::PotentialAnalysisCommand() :
 void PotentialAnalysisCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetRequiredExistingPathOption(request.model_file_path, request.model_file_path, kModelOption, "Model file");
-    SetRequiredExistingPathOption(request.map_file_path, request.map_file_path, kMapOption, "Map file");
-    SetFiniteNonNegativeScalarOption(
-        request.simulated_map_resolution,
+    NormalizeRequiredPath(request.model_file_path, kModelOption, "Model file");
+    NormalizeRequiredPath(request.map_file_path, kMapOption, "Map file");
+    NormalizeScalar(
         request.simulated_map_resolution,
         kSimResolutionOption,
-        0.0,
-        "Simulated map resolution must be a finite non-negative value.");
-    MutateOptions([&]()
-    {
-        ResetParseIssues(kSaveKeyOption);
-        if (!request.saved_key_tag.empty())
+        [](double candidate)
         {
-            return;
-        }
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
+        0.0,
+        LogLevel::Error,
+        "Simulated map resolution must be a finite non-negative value.");
+    InvalidatePreparedState();
+    ClearParseIssues(kSaveKeyOption);
+    if (request.saved_key_tag.empty())
+    {
         request.saved_key_tag = "model";
         AddValidationError(
             kSaveKeyOption,
             "Saved key tag cannot be empty. Using 'model' instead.",
             ValidationPhase::Parse);
-    });
-    SetNormalizedScalarOption(
-        request.sampling_size,
+    }
+    NormalizeScalar(
         request.sampling_size,
         kSamplingOption,
         [](int candidate) { return candidate > 0; },
         1500,
+        LogLevel::Warning,
         "Sampling size must be positive, reset to default value = 1500");
-    SetFiniteNonNegativeScalarOption(
-        request.sampling_range_min,
+    NormalizeScalar(
         request.sampling_range_min,
         kSamplingMinOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
         0.0,
+        LogLevel::Error,
         "Minimum sampling range must be a finite non-negative value.");
-    SetFiniteNonNegativeScalarOption(
-        request.sampling_range_max,
+    NormalizeScalar(
         request.sampling_range_max,
         kSamplingMaxOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
         1.5,
+        LogLevel::Error,
         "Maximum sampling range must be a finite non-negative value.");
-    SetFinitePositiveScalarOption(
-        request.sampling_height,
+    NormalizeScalar(
         request.sampling_height,
         kSamplingHeightOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         0.1,
+        LogLevel::Error,
         "Sampling height must be a finite positive value.");
-    SetFiniteNonNegativeScalarOption(
-        request.fit_range_min,
+    NormalizeScalar(
         request.fit_range_min,
         kFitMinOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
         0.0,
+        LogLevel::Error,
         "Minimum fitting range must be a finite non-negative value.");
-    SetFiniteNonNegativeScalarOption(
-        request.fit_range_max,
+    NormalizeScalar(
         request.fit_range_max,
         kFitMaxOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
         1.0,
+        LogLevel::Error,
         "Maximum fitting range must be a finite non-negative value.");
-    SetFinitePositiveScalarOption(
-        request.alpha_r,
+    NormalizeScalar(
         request.alpha_r,
         kAlphaROption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         0.1,
+        LogLevel::Error,
         "Alpha-R must be a finite positive value.");
-    SetFinitePositiveScalarOption(
-        request.alpha_g,
+    NormalizeScalar(
         request.alpha_g,
         kAlphaGOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         0.2,
+        LogLevel::Error,
         "Alpha-G must be a finite positive value.");
 }
 
@@ -173,7 +203,7 @@ bool PotentialAnalysisCommand::ExecuteImpl()
 void PotentialAnalysisCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ResetPrepareIssues(kSimResolutionOption);
+    ClearPrepareIssues(kSimResolutionOption);
     if (request.simulation_flag && request.simulated_map_resolution <= 0.0)
     {
         AddValidationError(
@@ -181,14 +211,14 @@ void PotentialAnalysisCommand::ValidateOptions()
             "Expected a positive simulated-map resolution when '--simulation true' is selected.");
     }
 
-    ResetPrepareIssues(kSamplingRangeIssue);
+    ClearPrepareIssues(kSamplingRangeIssue);
     if (request.sampling_range_min > request.sampling_range_max)
     {
         AddValidationError(kSamplingRangeIssue,
             "Expected --sampling-min <= --sampling-max.");
     }
 
-    ResetPrepareIssues(kFitRangeIssue);
+    ClearPrepareIssues(kFitRangeIssue);
     if (request.fit_range_min > request.fit_range_max)
     {
         AddValidationError(kFitRangeIssue,
@@ -295,9 +325,9 @@ bool PotentialAnalysisCommand::BuildDataObject()
     try
     {
         m_data_manager.SetDatabaseManager(request.database_path);
-        m_model_object = command_data_loader::ProcessModelFile(
+        m_model_object = LoadModelFromFile(
             m_data_manager, request.model_file_path, m_model_key_tag, "model file");
-        m_map_object = command_data_loader::ProcessMapFile(
+        m_map_object = LoadMapFromFile(
             m_data_manager, request.map_file_path, m_map_key_tag, "map file");
         if (request.simulation_flag)
         {
@@ -338,16 +368,7 @@ void PotentialAnalysisCommand::RunMapObjectPreprocessing()
 void PotentialAnalysisCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunModelObjectPreprocessing");
-    ModelPreparationOptions options;
-    options.select_all_atoms = true;
-    options.select_all_bonds = true;
-    options.apply_atom_symmetry_filter = true;
-    options.apply_bond_symmetry_filter = true;
-    options.asymmetry_flag = RequestOptions().asymmetry_flag;
-    options.update_model = true;
-    options.initialize_atom_local_entries = true;
-    options.initialize_bond_local_entries = true;
-    PrepareModelObject(*m_model_object, options);
+    PrepareModelForPotentialAnalysis(*m_model_object, RequestOptions().asymmetry_flag);
     Logger::Log(LogLevel::Info,
         "Number of selected atom = " + std::to_string(m_model_object->GetNumberOfSelectedAtom()));
     Logger::Log(LogLevel::Info,

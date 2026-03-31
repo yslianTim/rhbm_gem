@@ -202,12 +202,14 @@ Database setup stays in command execution code. Commands that use SQLite call
 
 Cross-command model and map helpers live in:
 
-- [`src/core/internal/command/CommandDataSupport.hpp`](/src/core/internal/command/CommandDataSupport.hpp)
-- [`src/core/command/CommandDataSupport.cpp`](/src/core/command/CommandDataSupport.cpp)
+- [`src/core/internal/command/CommandDataLoader.hpp`](/src/core/internal/command/CommandDataLoader.hpp)
+- [`src/core/command/CommandDataLoader.cpp`](/src/core/command/CommandDataLoader.cpp)
+- [`src/core/internal/command/CommandModelSupport.hpp`](/src/core/internal/command/CommandModelSupport.hpp)
+- [`src/core/command/CommandModelSupport.cpp`](/src/core/command/CommandModelSupport.cpp)
 
-This module contains:
+These modules contain:
 
-- typed file/database loaders in `command_data_loader::*`
+- typed file/database loaders such as `LoadModelFromFile(...)`
 - map normalization helpers
 - model preparation helpers
 - atom collection and simulation helpers

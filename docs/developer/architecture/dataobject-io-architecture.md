@@ -62,8 +62,8 @@ flowchart LR
       B --> M["ForEachDataObject(...)"]
       N["DataObjectDispatch"] --> N1["As* / Expect* helpers"]
       N --> N2["GetCatalogTypeName"]
-      O["CommandDataSupport"] --> O1["command_data_loader helpers"]
-      O --> O2["shared ModelObject / MapObject operations"]
+      O["CommandDataLoader"] --> O1["typed file / database loaders"]
+      P["CommandModelSupport"] --> P1["shared ModelObject / MapObject operations"]
     end
 ```
 
@@ -224,22 +224,26 @@ Behavior:
 
 Cross-command helpers live in:
 
-- `/src/core/internal/command/CommandDataSupport.hpp`
-- `/src/core/command/CommandDataSupport.cpp`
+- `/src/core/internal/command/CommandDataLoader.hpp`
+- `/src/core/command/CommandDataLoader.cpp`
+- `/src/core/internal/command/CommandModelSupport.hpp`
+- `/src/core/command/CommandModelSupport.cpp`
 
-Loader helpers in `namespace command_data_loader`:
+Loader helpers:
 
-- `ProcessModelFile(...)`
-- `ProcessMapFile(...)`
-- `OptionalProcessMapFile(...)`
-- `LoadModelObject(...)`
+- `LoadModelFromFile(...)`
+- `LoadMapFromFile(...)`
+- `MaybeLoadMapFromFile(...)`
+- `LoadModelFromDatabase(...)`
 
 Shared typed operations:
 
 - `NormalizeMapObject(...)`
-- `PrepareModelObject(...)`
+- `PrepareModelForPotentialAnalysis(...)`
+- `PrepareModelForVisualization(...)`
 - `ApplyModelSelection(...)`
-- `CollectModelAtoms(...)`
+- `CollectSelectedAtoms(...)`
+- `CollectAtomsWithLocalPotentialEntries(...)`
 - `PrepareSimulationAtoms(...)`
 - `BuildModelAtomBondContext(...)`
 
@@ -265,8 +269,10 @@ Typed dispatch and shared helpers:
 
 - `/include/rhbm_gem/data/object/DataObjectDispatch.hpp`
 - `/src/data/object/DataObjectDispatch.cpp`
-- `/src/core/internal/command/CommandDataSupport.hpp`
-- `/src/core/command/CommandDataSupport.cpp`
+- `/src/core/internal/command/CommandDataLoader.hpp`
+- `/src/core/command/CommandDataLoader.cpp`
+- `/src/core/internal/command/CommandModelSupport.hpp`
+- `/src/core/command/CommandModelSupport.cpp`
 
 Reference tests:
 

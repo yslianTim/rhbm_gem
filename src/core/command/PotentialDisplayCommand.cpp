@@ -1,5 +1,6 @@
 #include "internal/command/PotentialDisplayCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/CommandDataLoader.hpp"
+#include "internal/command/CommandModelSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -52,42 +53,39 @@ PotentialDisplayCommand::PotentialDisplayCommand() :
 void PotentialDisplayCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetValidatedEnumOption(
-        request.painter_choice,
+    NormalizeEnum(
         request.painter_choice,
         kPainterOption,
         PainterType::MODEL,
         "Painter choice");
-    MutateOptions([&]()
+    InvalidatePreparedState();
+    ClearParseIssues(kModelKeyListOption);
+    ClearParseIssues(kRefGroupOption);
+    if (request.model_key_tag_list.empty())
     {
-        ResetParseIssues(kModelKeyListOption);
-        ResetParseIssues(kRefGroupOption);
-        if (request.model_key_tag_list.empty())
+        AddValidationError(
+            kModelKeyListOption,
+            "Model key list cannot be empty.",
+            ValidationPhase::Parse);
+    }
+    for (const auto & [group_name, members] : request.reference_model_groups)
+    {
+        if (group_name.empty())
         {
             AddValidationError(
-                kModelKeyListOption,
-                "Model key list cannot be empty.",
+                kRefGroupOption,
+                "Reference group name cannot be empty.",
+                ValidationPhase::Parse);
+            continue;
+        }
+        if (members.empty())
+        {
+            AddValidationError(
+                kRefGroupOption,
+                "Reference group '" + group_name + "' cannot be empty.",
                 ValidationPhase::Parse);
         }
-        for (const auto & [group_name, members] : request.reference_model_groups)
-        {
-            if (group_name.empty())
-            {
-                AddValidationError(
-                    kRefGroupOption,
-                    "Reference group name cannot be empty.",
-                    ValidationPhase::Parse);
-                continue;
-            }
-            if (members.empty())
-            {
-                AddValidationError(
-                    kRefGroupOption,
-                    "Reference group '" + group_name + "' cannot be empty.",
-                    ValidationPhase::Parse);
-            }
-        }
-    });
+    }
 }
 
 PotentialDisplayCommand::~PotentialDisplayCommand() = default;
@@ -120,7 +118,7 @@ bool PotentialDisplayCommand::BuildDataObject()
         {
             Logger::ProgressBar(model_count, model_size);
             m_model_object_list.emplace_back(
-                command_data_loader::LoadModelObject(
+                LoadModelFromDatabase(
                     m_data_manager, key, "model object"));
             model_count++;
         }
@@ -133,7 +131,7 @@ bool PotentialDisplayCommand::BuildDataObject()
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
                 m_ref_model_object_list_map[map_key].emplace_back(
-                    command_data_loader::LoadModelObject(
+                    LoadModelFromDatabase(
                         m_data_manager, key_tag, "reference model object"));
                 ref_model_count++;
             }
@@ -196,9 +194,7 @@ void PotentialDisplayCommand::RunDisplay()
             painter = std::make_unique<AtomPainter>();
             for (const auto & model_object : m_model_object_list)
             {
-                ModelAtomCollectorOptions collector_options;
-                collector_options.selected_only = true;
-                auto atom_list{ CollectModelAtoms(*model_object, collector_options) };
+                auto atom_list{ CollectSelectedAtoms(*model_object) };
                 for (auto * atom : atom_list)
                 {
                     painter->AddDataObject(atom);

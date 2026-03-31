@@ -27,22 +27,25 @@ public:
 
     void SetRequiredPath(const std::filesystem::path & value)
     {
-        SetRequiredExistingPathOption(m_options.required_path, value, "--input", "Input file");
+        m_options.required_path = value;
+        NormalizeRequiredPath(m_options.required_path, "--input", "Input file");
     }
 
     void SetOptionalPath(const std::filesystem::path & value)
     {
-        SetOptionalExistingPathOption(m_options.optional_path, value, "--optional", "Optional file");
+        m_options.optional_path = value;
+        NormalizeOptionalPath(m_options.optional_path, "--optional", "Optional file");
     }
 
     void SetPositiveCount(int value)
     {
-        SetNormalizedScalarOption(
+        m_options.count = value;
+        NormalizeScalar(
             m_options.count,
-            value,
             "--count",
             [](int candidate) { return candidate > 0; },
             4,
+            LogLevel::Warning,
             "Count must be positive, reset to default 4");
     }
 
@@ -50,9 +53,9 @@ public:
 
     void SetPrinter(rg::PrinterType value)
     {
-        SetValidatedEnumOption(
+        m_options.printer = value;
+        NormalizeEnum(
             m_options.printer,
-            value,
             "--printer",
             rg::PrinterType::GAUS_ESTIMATES,
             "Printer choice");
@@ -65,7 +68,11 @@ public:
     void ResetRuntimeState() override {}
 
 private:
+    rg::CommonCommandRequest m_common_request{};
     CommandOptionHelperCommandOptions m_options{};
+
+    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
+    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override
     {

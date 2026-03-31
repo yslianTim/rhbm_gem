@@ -28,18 +28,20 @@ public:
 
     void SetFailPrepare(bool value)
     {
-        AssignOption(m_options.fail_prepare, value);
+        m_options.fail_prepare = value;
+        InvalidatePreparedState();
     }
 
     void SetExecutionToggle(bool value)
     {
-        AssignOption(m_options.execution_toggle, value);
+        m_options.execution_toggle = value;
+        InvalidatePreparedState();
     }
 
     void ValidateOptions() override
     {
         ++validate_count;
-        ResetPrepareIssues("--contract");
+        ClearPrepareIssues("--contract");
         if (m_options.fail_prepare)
         {
             AddValidationError("--contract", "prepare failed");
@@ -53,7 +55,11 @@ public:
     }
 
 private:
+    rg::CommonCommandRequest m_common_request{};
     LifecycleCommandOptions m_options{};
+
+    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
+    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override
     {

@@ -1,30 +1,30 @@
 #include <CLI/CLI.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>
+#include <rhbm_gem/core/command/CommandEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-#include "internal/command/CommandOptionSupport.hpp"
 #include "internal/command/CommandRegistry.hpp"
 
-#include <functional>
 #include <memory>
 #include <optional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace {
 
 template <typename ValueType>
-std::optional<ValueType> BuildScalarDefault(const ValueType & value)
+std::optional<ValueType> BuildCliDefault(const ValueType & value)
 {
     return value;
 }
 
 template <>
-std::optional<std::string> BuildScalarDefault(const std::string & value)
+std::optional<std::string> BuildCliDefault(const std::string & value)
 {
     if (value.empty())
     {
@@ -33,7 +33,7 @@ std::optional<std::string> BuildScalarDefault(const std::string & value)
     return value;
 }
 
-std::optional<std::filesystem::path> BuildPathDefault(const std::filesystem::path & value)
+std::optional<std::filesystem::path> BuildCliDefault(const std::filesystem::path & value)
 {
     if (value.empty())
     {
@@ -65,13 +65,21 @@ std::string JoinCsvValues(const std::vector<ValueType> & values, char delimiter)
 }
 
 template <typename ValueType>
-std::optional<std::string> BuildCsvDefault(const std::vector<ValueType> & values, char delimiter)
+std::optional<std::string> BuildCliDefault(const std::vector<ValueType> & values, char delimiter)
 {
     if (values.empty())
     {
         return std::nullopt;
     }
     return JoinCsvValues(values, delimiter);
+}
+
+void ApplyCommonOptionConfig(CLI::Option * option, bool required)
+{
+    if (required)
+    {
+        option->required();
+    }
 }
 
 std::pair<std::string, std::vector<std::string>> ParseReferenceGroupArgument(
@@ -119,23 +127,37 @@ void BindCliField(
     const auto & current_value{ request->*(field.member) };
     if constexpr (std::is_same_v<FieldType, std::string>)
     {
-        rhbm_gem::command_cli::AddStringOption(
-            command,
-            field.cli_flags,
-            [request, member = field.member](const std::string & value) { request->*member = value; },
-            field.help,
-            BuildScalarDefault(current_value),
-            field.required);
+        auto * option{
+            command->add_option_function<std::string>(
+                field.cli_flags,
+                [request, member = field.member](const std::string & value)
+                {
+                    request->*member = value;
+                },
+                field.help)
+        };
+        ApplyCommonOptionConfig(option, field.required);
+        if (const auto default_value{ BuildCliDefault(current_value) }; default_value.has_value())
+        {
+            option->default_val(*default_value);
+        }
     }
     else
     {
-        rhbm_gem::command_cli::AddScalarOption<FieldType>(
-            command,
-            field.cli_flags,
-            [request, member = field.member](FieldType value) { request->*member = value; },
-            field.help,
-            BuildScalarDefault(current_value),
-            field.required);
+        auto * option{
+            command->add_option_function<FieldType>(
+                field.cli_flags,
+                [request, member = field.member](const FieldType & value)
+                {
+                    request->*member = value;
+                },
+                field.help)
+        };
+        ApplyCommonOptionConfig(option, field.required);
+        if (const auto default_value{ BuildCliDefault(current_value) }; default_value.has_value())
+        {
+            option->default_val(*default_value);
+        }
     }
 }
 
@@ -145,13 +167,20 @@ void BindCliField(
     Request * request,
     const rhbm_gem::RequestPathFieldSpec<Request> & field)
 {
-    rhbm_gem::command_cli::AddPathOption(
-        command,
-        field.cli_flags,
-        [request, member = field.member](const std::filesystem::path & value) { request->*member = value; },
-        field.help,
-        BuildPathDefault(request->*(field.member)),
-        field.required);
+    auto * option{
+        command->add_option_function<std::string>(
+            field.cli_flags,
+            [request, member = field.member](const std::string & value)
+            {
+                request->*member = std::filesystem::path{ value };
+            },
+            field.help)
+    };
+    ApplyCommonOptionConfig(option, field.required);
+    if (const auto default_value{ BuildCliDefault(request->*(field.member)) }; default_value.has_value())
+    {
+        option->default_val(default_value->string());
+    }
 }
 
 template <typename Request, typename EnumType>
@@ -160,13 +189,22 @@ void BindCliField(
     Request * request,
     const rhbm_gem::RequestEnumFieldSpec<Request, EnumType> & field)
 {
-    rhbm_gem::command_cli::AddEnumOption<EnumType>(
-        command,
-        field.cli_flags,
-        [request, member = field.member](EnumType value) { request->*member = value; },
-        field.help,
-        BuildScalarDefault(request->*(field.member)),
-        field.required);
+    auto * option{
+        command->add_option_function<EnumType>(
+            field.cli_flags,
+            [request, member = field.member](const EnumType & value)
+            {
+                request->*member = value;
+            },
+            field.help)
+    };
+    ApplyCommonOptionConfig(option, field.required);
+    if (const auto default_value{ BuildCliDefault(request->*(field.member)) }; default_value.has_value())
+    {
+        option->default_val(*default_value);
+    }
+    option->transform(CLI::CheckedTransformer(
+        rhbm_gem::BuildCommandEnumCliMap<EnumType>(), CLI::ignore_case));
 }
 
 template <typename Request, typename ElementType>
@@ -175,16 +213,21 @@ void BindCliField(
     Request * request,
     const rhbm_gem::RequestCsvListFieldSpec<Request, ElementType> & field)
 {
-    rhbm_gem::command_cli::AddStringOption(
-        command,
-        field.cli_flags,
-        [request, member = field.member, delimiter = field.delimiter](const std::string & value)
-        {
-            request->*member = StringHelper::ParseListOption<ElementType>(value, delimiter);
-        },
-        field.help,
-        BuildCsvDefault(request->*(field.member), field.delimiter),
-        field.required);
+    auto * option{
+        command->add_option_function<std::string>(
+            field.cli_flags,
+            [request, member = field.member, delimiter = field.delimiter](const std::string & value)
+            {
+                request->*member = StringHelper::ParseListOption<ElementType>(value, delimiter);
+            },
+            field.help)
+    };
+    ApplyCommonOptionConfig(option, field.required);
+    if (const auto default_value{ BuildCliDefault(request->*(field.member), field.delimiter) };
+        default_value.has_value())
+    {
+        option->default_val(*default_value);
+    }
 }
 
 template <typename Request>
@@ -193,23 +236,28 @@ void BindCliField(
     Request * request,
     const rhbm_gem::RequestRefGroupFieldSpec<Request> & field)
 {
-    rhbm_gem::command_cli::AddRepeatableStringOption(
-        command,
-        field.cli_flags,
-        [request,
-         member = field.member,
-         assignment_delimiter = field.assignment_delimiter,
-         item_delimiter = field.item_delimiter](const std::string & value)
-        {
-            auto & group_map{ request->*member };
-            const auto [group_name, members]{
-                ParseReferenceGroupArgument(value, assignment_delimiter, item_delimiter)
-            };
-            auto & stored_members{ group_map[group_name] };
-            stored_members.insert(stored_members.end(), members.begin(), members.end());
-        },
-        field.help,
-        field.required);
+    auto * option{
+        command->add_option_function<std::vector<std::string>>(
+            field.cli_flags,
+            [request,
+             member = field.member,
+             assignment_delimiter = field.assignment_delimiter,
+             item_delimiter = field.item_delimiter](const std::vector<std::string> & values)
+            {
+                auto & group_map{ request->*member };
+                for (const auto & value : values)
+                {
+                    const auto [group_name, members]{
+                        ParseReferenceGroupArgument(value, assignment_delimiter, item_delimiter)
+                    };
+                    auto & stored_members{ group_map[group_name] };
+                    stored_members.insert(stored_members.end(), members.begin(), members.end());
+                }
+            },
+            field.help)
+    };
+    option->multi_option_policy(CLI::MultiOptionPolicy::TakeAll);
+    ApplyCommonOptionConfig(option, field.required);
 }
 
 template <typename Request>
@@ -229,7 +277,7 @@ void BindCommonOptions(CLI::App * command, rhbm_gem::CommonCommandRequest * comm
     });
 }
 
-template <typename CommandType, typename RequestType, auto RunCommandFn>
+template <typename RequestType, auto RunCommandFn>
 void RegisterCommand(
     CLI::App & app,
     std::string_view name,
@@ -263,7 +311,7 @@ void ConfigureCommandCli(CLI::App & app)
     app.require_subcommand(1);
 
 #define RHBM_GEM_COMMAND(COMMAND_ID, CLI_NAME, DESCRIPTION)                                    \
-    RegisterCommand<COMMAND_ID##Command, COMMAND_ID##Request, &Run##COMMAND_ID>(               \
+    RegisterCommand<COMMAND_ID##Request, &Run##COMMAND_ID>(                                    \
         app,                                                                                   \
         CLI_NAME,                                                                              \
         DESCRIPTION);

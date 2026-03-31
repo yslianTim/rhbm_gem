@@ -1,5 +1,6 @@
 #include "internal/command/ResultDumpCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/CommandDataLoader.hpp"
+#include "internal/command/CommandModelSupport.hpp"
 
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
@@ -40,30 +41,27 @@ ResultDumpCommand::ResultDumpCommand() :
 void ResultDumpCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetValidatedEnumOption(
-        request.printer_choice,
+    NormalizeEnum(
         request.printer_choice,
         kPrinterOption,
         PrinterType::GAUS_ESTIMATES,
         "Printer choice");
-    SetOptionalExistingPathOption(request.map_file_path, request.map_file_path, kMapOption, "Map file");
-    MutateOptions([&]()
+    NormalizeOptionalPath(request.map_file_path, kMapOption, "Map file");
+    InvalidatePreparedState();
+    ClearParseIssues(kModelKeyListOption);
+    if (request.model_key_tag_list.empty())
     {
-        ResetParseIssues(kModelKeyListOption);
-        if (request.model_key_tag_list.empty())
-        {
-            AddValidationError(
-                kModelKeyListOption,
-                "Model key list cannot be empty.",
-                ValidationPhase::Parse);
-        }
-    });
+        AddValidationError(
+            kModelKeyListOption,
+            "Model key list cannot be empty.",
+            ValidationPhase::Parse);
+    }
 }
 
 void ResultDumpCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ResetPrepareIssues(kMapOption);
+    ClearPrepareIssues(kMapOption);
     if (request.printer_choice == PrinterType::MAP_VALUE && request.map_file_path.empty())
     {
         AddValidationError(kMapOption,
@@ -85,7 +83,7 @@ bool ResultDumpCommand::BuildDataObjectList()
     try
     {
         m_data_manager.SetDatabaseManager(request.database_path);
-        m_map_object = command_data_loader::OptionalProcessMapFile(
+        m_map_object = MaybeLoadMapFromFile(
             m_data_manager,
             request.map_file_path,
             m_map_key_tag,
@@ -93,15 +91,12 @@ bool ResultDumpCommand::BuildDataObjectList()
         m_selected_atom_list_map.clear();
         for (const auto & key : request.model_key_tag_list)
         {
-            auto model_object{ command_data_loader::LoadModelObject(
+            auto model_object{ LoadModelFromDatabase(
                 m_data_manager,
                 key,
                 "model object") };
             m_model_object_list.emplace_back(model_object);
-            ModelAtomCollectorOptions collector_options;
-            collector_options.selected_only = false;
-            collector_options.require_local_potential_entry = true;
-            m_selected_atom_list_map[key] = CollectModelAtoms(*model_object, collector_options);
+            m_selected_atom_list_map[key] = CollectAtomsWithLocalPotentialEntries(*model_object);
             Logger::Log(
                 LogLevel::Info,
                 "Selected atoms for key tag [" + key + "]: "

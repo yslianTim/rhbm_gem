@@ -1,5 +1,6 @@
 #include "internal/command/MapSimulationCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/CommandDataLoader.hpp"
+#include "internal/command/CommandModelSupport.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -44,53 +45,49 @@ MapSimulationCommand::MapSimulationCommand() :
 void MapSimulationCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetRequiredExistingPathOption(request.model_file_path, request.model_file_path, kModelOption, "Model file");
-    SetValidatedEnumOption(
-        request.potential_model_choice,
+    NormalizeRequiredPath(request.model_file_path, kModelOption, "Model file");
+    NormalizeEnum(
         request.potential_model_choice,
         kPotentialModelOption,
         PotentialModel::FIVE_GAUS_CHARGE,
         "Potential model");
-    SetValidatedEnumOption(
-        request.partial_charge_choice,
+    NormalizeEnum(
         request.partial_charge_choice,
         kChargeOption,
         PartialCharge::PARTIAL,
         "Partial charge choice");
-    SetNormalizedScalarOption(
-        request.cutoff_distance,
+    NormalizeScalar(
         request.cutoff_distance,
         kCutoffOption,
         [](double candidate) { return candidate > 0.0; },
         5.0,
+        LogLevel::Warning,
         "Cutoff distance must be positive, reset to default 5.0");
-    SetNormalizedScalarOption(
-        request.grid_spacing,
+    NormalizeScalar(
         request.grid_spacing,
         kGridSpacingOption,
         [](double candidate) { return candidate > 0.0; },
         0.5,
+        LogLevel::Warning,
         "Grid spacing must be positive, reset to default 0.5");
 
-    MutateOptions([&]()
+    InvalidatePreparedState();
+    ClearParseIssues(kBlurringWidthOption);
+    std::vector<double> filtered_widths;
+    filtered_widths.reserve(request.blurring_width_list.size());
+    for (const auto width : request.blurring_width_list)
     {
-        ResetParseIssues(kBlurringWidthOption);
-        std::vector<double> filtered_widths;
-        filtered_widths.reserve(request.blurring_width_list.size());
-        for (const auto width : request.blurring_width_list)
+        if (width <= 0.0)
         {
-            if (width <= 0.0)
-            {
-                AddNormalizationWarning(
-                    kBlurringWidthOption,
-                    "Blurring width must be positive, dropping current setting: "
-                        + std::to_string(width));
-                continue;
-            }
-            filtered_widths.push_back(width);
+            AddNormalizationWarning(
+                kBlurringWidthOption,
+                "Blurring width must be positive, dropping current setting: "
+                    + std::to_string(width));
+            continue;
         }
-        request.blurring_width_list = std::move(filtered_widths);
-    });
+        filtered_widths.push_back(width);
+    }
+    request.blurring_width_list = std::move(filtered_widths);
 }
 
 bool MapSimulationCommand::ExecuteImpl()
@@ -103,7 +100,7 @@ bool MapSimulationCommand::ExecuteImpl()
 void MapSimulationCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ResetPrepareIssues(kBlurringWidthOption);
+    ClearPrepareIssues(kBlurringWidthOption);
     if (request.blurring_width_list.empty())
     {
         AddValidationError(kBlurringWidthOption,
@@ -134,7 +131,7 @@ bool MapSimulationCommand::BuildDataObject()
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
-        m_model_object = command_data_loader::ProcessModelFile(
+        m_model_object = LoadModelFromFile(
             m_data_manager, request.model_file_path, kModelKey, "model file");
         BuildAtomList(m_model_object.get());
     }
@@ -180,10 +177,7 @@ void MapSimulationCommand::BuildAtomList(ModelObject * model_object)
         return;
     }
 
-    SimulationAtomPreparationOptions options;
-    options.partial_charge_choice = request.partial_charge_choice;
-    options.include_unknown_atoms = true;
-    auto result{ PrepareSimulationAtoms(*model_object, options) };
+    auto result{ PrepareSimulationAtoms(*model_object, request.partial_charge_choice, true) };
 
     m_selected_atom_list = result.atom_list;
     m_atom_charge_map = result.atom_charge_map;

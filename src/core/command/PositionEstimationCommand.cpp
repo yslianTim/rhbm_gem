@@ -1,5 +1,6 @@
 #include "internal/command/PositionEstimationCommand.hpp"
-#include "internal/command/CommandDataSupport.hpp"
+#include "internal/command/CommandDataLoader.hpp"
+#include "internal/command/CommandModelSupport.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
@@ -58,41 +59,41 @@ PositionEstimationCommand::~PositionEstimationCommand() = default;
 void PositionEstimationCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetRequiredExistingPathOption(request.map_file_path, request.map_file_path, kMapOption, "Map file");
-    SetNormalizedScalarOption(
-        request.iteration_count,
+    NormalizeRequiredPath(request.map_file_path, kMapOption, "Map file");
+    NormalizeScalar(
         request.iteration_count,
         kIterationOption,
         [](int candidate) { return candidate > 0; },
         15,
+        LogLevel::Warning,
         "Iteration count must be positive, reset to default 15");
-    SetNormalizedScalarOption(
-        request.knn_size,
+    NormalizeScalar(
         request.knn_size,
         kKnnOption,
         [](std::size_t candidate) { return candidate > 0; },
         static_cast<std::size_t>(20),
+        LogLevel::Warning,
         "KNN size must be positive, reset to default 20");
-    SetNormalizedScalarOption(
-        request.alpha,
+    NormalizeScalar(
         request.alpha,
         kAlphaOption,
         [](double candidate) { return candidate > 0.0; },
         2.0,
+        LogLevel::Warning,
         "Alpha must be positive, reset to default 2.0");
-    SetNormalizedScalarOption(
-        request.threshold_ratio,
+    NormalizeScalar(
         request.threshold_ratio,
         kThresholdOption,
         [](double candidate) { return candidate > 0.0 && candidate <= 1.0; },
         0.01,
+        LogLevel::Warning,
         "Threshold ratio must be in (0, 1], reset to default 0.01");
-    SetNormalizedScalarOption(
-        request.dedup_tolerance,
+    NormalizeScalar(
         request.dedup_tolerance,
         kDedupToleranceOption,
         [](double candidate) { return candidate > 0.0; },
         1.0e-2,
+        LogLevel::Warning,
         "Dedup tolerance must be positive, reset to default 0.01");
 }
 
@@ -122,7 +123,7 @@ bool PositionEstimationCommand::BuildDataObject()
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
-        m_map_object = command_data_loader::ProcessMapFile(
+        m_map_object = LoadMapFromFile(
             m_data_manager, request.map_file_path, kMapKey, "map file");
         NormalizeMapObject(*m_map_object);
     }

@@ -23,31 +23,31 @@ public:
 
     void SetProblematicValue(int value)
     {
-        MutateOptions([&]()
+        InvalidatePreparedState();
+        ClearParseIssues("--problem");
+        if (value <= 0)
         {
-            ResetParseIssues("--problem");
-            if (value <= 0)
-            {
-                AddNormalizationWarning("--problem", "normalized to 1");
-                AddNormalizationWarning("--problem", "clamped to safe range");
-            }
-        });
+            AddNormalizationWarning("--problem", "normalized to 1");
+            AddNormalizationWarning("--problem", "clamped to safe range");
+        }
     }
 
     void SetPrepareError(bool value)
     {
-        AssignOption(m_options.add_prepare_error, value);
+        m_options.add_prepare_error = value;
+        InvalidatePreparedState();
     }
 
     void SetCommonOptionsForTest(int thread_size, int verbose_level)
     {
-        SetThreadSize(thread_size);
-        SetVerboseLevel(verbose_level);
+        m_common_request.thread_size = thread_size;
+        m_common_request.verbose_level = verbose_level;
+        NormalizeCommonRequest(m_common_request);
     }
 
     void ValidateOptions() override
     {
-        ResetPrepareIssues("--problem");
+        ClearPrepareIssues("--problem");
         if (m_options.add_prepare_error)
         {
             AddValidationError("--problem", "semantic validation failed");
@@ -55,7 +55,11 @@ public:
     }
 
 private:
+    rg::CommonCommandRequest m_common_request{};
     ValidationIssueCommandOptions m_options{};
+
+    rg::CommonCommandRequest & MutableCommonRequest() override { return m_common_request; }
+    const rg::CommonCommandRequest & CommonRequest() const override { return m_common_request; }
 
     bool ExecuteImpl() override { return true; }
 };

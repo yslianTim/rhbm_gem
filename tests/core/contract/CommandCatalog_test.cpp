@@ -212,3 +212,44 @@ TEST(CommandCatalogTest, ConfigureCommandCliAcceptsRepeatedReferenceGroups)
             false),
         CLI::RuntimeError);
 }
+
+TEST(CommandCatalogTest, ConfigureCommandCliEnforcesRequiredOptionsBeforeCallback)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::ConfigureCommandCli(app);
+
+    EXPECT_THROW(app.parse("map_simulation", false), CLI::RequiredError);
+    EXPECT_THROW(app.parse("potential_display --model-keylist model_a", false), CLI::RequiredError);
+}
+
+TEST(CommandCatalogTest, ConfigureCommandCliAppliesEnumTransformBeforeCommandExecution)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::ConfigureCommandCli(app);
+
+    EXPECT_THROW(
+        app.parse("potential_display --painter MODEL --model-keylist model_a", false),
+        CLI::RuntimeError);
+    EXPECT_THROW(
+        app.parse("potential_display --painter not-a-painter --model-keylist model_a", false),
+        CLI::ValidationError);
+}
+
+TEST(CommandCatalogTest, ConfigureCommandCliRejectsMalformedReferenceGroupsAtParseTime)
+{
+    CLI::App app{"RHBM-GEM"};
+    rg::ConfigureCommandCli(app);
+
+    EXPECT_THROW(
+        app.parse(
+            "potential_display --painter model --model-keylist model_a "
+            "--ref-group =m1,m2",
+            false),
+        CLI::ValidationError);
+    EXPECT_THROW(
+        app.parse(
+            "potential_display --painter model --model-keylist model_a "
+            "--ref-group Group=",
+            false),
+        CLI::ValidationError);
+}

@@ -48,42 +48,57 @@ HRLModelTestCommand::HRLModelTestCommand() :
 void HRLModelTestCommand::NormalizeRequest()
 {
     auto & request{ MutableRequest() };
-    SetValidatedEnumOption(
-        request.tester_choice,
+    NormalizeEnum(
         request.tester_choice,
         kTesterOption,
         TesterType::BENCHMARK,
         "Tester choice");
-    SetFiniteNonNegativeScalarOption(
-        request.fit_range_min,
+    NormalizeScalar(
         request.fit_range_min,
         kFitMinOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
         0.0,
+        LogLevel::Error,
         "Minimum fitting range must be a finite non-negative value.");
-    SetFiniteNonNegativeScalarOption(
-        request.fit_range_max,
+    NormalizeScalar(
         request.fit_range_max,
         kFitMaxOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate >= 0.0;
+        },
         1.0,
+        LogLevel::Error,
         "Maximum fitting range must be a finite non-negative value.");
-    SetFinitePositiveScalarOption(
-        request.alpha_r,
+    NormalizeScalar(
         request.alpha_r,
         kAlphaROption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         0.1,
+        LogLevel::Error,
         "Alpha-R must be a finite positive value.");
-    SetFinitePositiveScalarOption(
-        request.alpha_g,
+    NormalizeScalar(
         request.alpha_g,
         kAlphaGOption,
+        [](double candidate)
+        {
+            return std::isfinite(candidate) && candidate > 0.0;
+        },
         0.2,
+        LogLevel::Error,
         "Alpha-G must be a finite positive value.");
 }
 
 void HRLModelTestCommand::ValidateOptions()
 {
     const auto & request{ RequestOptions() };
-    ResetPrepareIssues(kFitRangeIssue);
+    ClearPrepareIssues(kFitRangeIssue);
     if (request.fit_range_min > request.fit_range_max)
     {
         AddValidationError(

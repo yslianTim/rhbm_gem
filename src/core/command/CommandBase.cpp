@@ -77,22 +77,19 @@ void CommandBase::InvalidatePreparedState()
     ClearValidationIssues(ValidationPhase::Prepare);
 }
 
-void CommandBase::SetThreadSize(int value)
+void CommandBase::NormalizeCommonRequest(CommonCommandRequest & request)
 {
-    SetNormalizedScalarOption(
-        m_common_request.thread_size,
-        value,
+    InvalidatePreparedState();
+    const auto raw_verbose_level{ request.verbose_level };
+    NormalizeScalar(
+        request.thread_size,
         kJobsOption,
         [](int candidate) { return candidate >= 1; },
         1,
+        LogLevel::Warning,
         "Thread size must be positive. Using 1 instead.");
-}
-
-void CommandBase::SetVerboseLevel(int value)
-{
-    SetNormalizedScalarOption(
-        m_common_request.verbose_level,
-        value,
+    NormalizeScalar(
+        request.verbose_level,
         kVerboseOption,
         [](int candidate)
         {
@@ -100,23 +97,11 @@ void CommandBase::SetVerboseLevel(int value)
                 && candidate <= static_cast<int>(LogLevel::Debug);
         },
         static_cast<int>(LogLevel::Info),
-        "Invalid verbose level: " + std::to_string(value) + ", using default level 3 [Info]");
-}
-
-void CommandBase::SetFolderPath(const std::filesystem::path & path)
-{
-    MutateOptions([&]()
-    {
-        m_common_request.folder_path =
-            std::filesystem::path(FilePathHelper::EnsureTrailingSlash(path));
-    });
-}
-
-void CommandBase::ApplyCommonRequest(const CommonCommandRequest & request)
-{
-    SetThreadSize(request.thread_size);
-    SetVerboseLevel(request.verbose_level);
-    SetFolderPath(request.folder_path);
+        LogLevel::Warning,
+        "Invalid verbose level: " + std::to_string(raw_verbose_level)
+            + ", using default level 3 [Info]");
+    request.folder_path =
+        std::filesystem::path(FilePathHelper::EnsureTrailingSlash(request.folder_path));
 }
 
 void CommandBase::ReportValidationIssues() const
@@ -155,12 +140,12 @@ void CommandBase::AddNormalizationWarning(
     AddValidationIssue(option_name, ValidationPhase::Parse, LogLevel::Warning, message, true);
 }
 
-void CommandBase::ResetParseIssues(std::string_view option_name)
+void CommandBase::ClearParseIssues(std::string_view option_name)
 {
     ClearValidationIssues(option_name, ValidationPhase::Parse);
 }
 
-void CommandBase::ResetPrepareIssues(std::string_view option_name)
+void CommandBase::ClearPrepareIssues(std::string_view option_name)
 {
     ClearValidationIssues(option_name, ValidationPhase::Prepare);
 }
@@ -237,30 +222,22 @@ void CommandBase::ValidateOptionalExistingPath(
     }
 }
 
-void CommandBase::SetRequiredExistingPathOption(
+void CommandBase::NormalizeRequiredPath(
     std::filesystem::path & field,
-    const std::filesystem::path & value,
     std::string_view option_name,
     std::string_view label)
 {
-    MutateOptions([&]()
-    {
-        field = value;
-        ValidateRequiredExistingPath(field, option_name, label);
-    });
+    InvalidatePreparedState();
+    ValidateRequiredExistingPath(field, option_name, label);
 }
 
-void CommandBase::SetOptionalExistingPathOption(
+void CommandBase::NormalizeOptionalPath(
     std::filesystem::path & field,
-    const std::filesystem::path & value,
     std::string_view option_name,
     std::string_view label)
 {
-    MutateOptions([&]()
-    {
-        field = value;
-        ValidateOptionalExistingPath(field, option_name, label);
-    });
+    InvalidatePreparedState();
+    ValidateOptionalExistingPath(field, option_name, label);
 }
 
 void CommandBase::AddValidationIssue(
