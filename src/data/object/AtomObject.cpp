@@ -3,7 +3,6 @@
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
 
@@ -47,16 +46,6 @@ AtomObject::AtomObject(const AtomObject & other) :
 std::unique_ptr<DataObjectBase> AtomObject::Clone() const
 {
     return std::make_unique<AtomObject>(*this);
-}
-
-void AtomObject::Display() const
-{
-    Logger::Log(LogLevel::Info, "AtomObject Display: " + GetInfo());
-}
-
-void AtomObject::Update()
-{
-    Logger::Log(LogLevel::Info, "AtomObject Update: " + GetInfo());
 }
 
 std::unique_ptr<AtomObject> AtomObject::AtomObjectClone() const

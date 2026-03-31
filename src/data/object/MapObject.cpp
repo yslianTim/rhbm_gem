@@ -6,10 +6,8 @@
 
 #include <cstring>
 #include <string>
-#include <sstream>
 #include <cmath>
 #include <algorithm>
-#include <iomanip>
 #include <stdexcept>
 
 #ifdef USE_OPENMP
@@ -72,7 +70,7 @@ MapObject::MapObject(
         m_upper_bound.at(i) = static_cast<float>(m_overflow.at(i) + 0.5 * m_grid_spacing.at(i));
         m_lower_bound.at(i) = static_cast<float>(m_underflow.at(i) - 0.5 * m_grid_spacing.at(i));
     }
-    Update();
+    SyncValueArrayState();
 }
 
 MapObject::~MapObject()
@@ -92,7 +90,7 @@ MapObject::MapObject(const MapObject & other) :
     m_kd_tree_root{ nullptr }, m_grid_node_list{}
 {
     std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(float));
-    Update();
+    SyncValueArrayState();
 }
 
 std::unique_ptr<DataObjectBase> MapObject::Clone() const
@@ -100,44 +98,24 @@ std::unique_ptr<DataObjectBase> MapObject::Clone() const
     return std::make_unique<MapObject>(*this);
 }
 
-void MapObject::Display() const
-{
-    std::ostringstream oss;
-    oss << "MapObject Display:\n";
-    oss <<" o=====================================================o\n";
-    oss <<" |  Map Object  |   X-axis   |   Y-axis   |   Z-axis   |\n";
-    oss <<" o=====================================================o\n";
-    oss <<" | Grid size    | ";
-    oss << std::setw(10) << m_grid_size.at(0) <<" | "
-        << std::setw(10) << m_grid_size.at(1) <<" | "
-        << std::setw(10) << m_grid_size.at(2) <<" |\n";
-    oss <<" | Grid Spacing | ";
-    oss << std::setw(10) << m_grid_spacing.at(0) <<" | "
-        << std::setw(10) << m_grid_spacing.at(1) <<" | "
-        << std::setw(10) << m_grid_spacing.at(2) <<" |\n";
-    oss <<" | Origin (A)   | ";
-    oss << std::setw(10) << m_origin.at(0) <<" | "
-        << std::setw(10) << m_origin.at(1) <<" | "
-        << std::setw(10) << m_origin.at(2) <<" |\n";
-    oss <<" | Map Length(A)| ";
-    oss << std::setw(10) << m_map_length.at(0) <<" | "
-        << std::setw(10) << m_map_length.at(1) <<" | "
-        << std::setw(10) << m_map_length.at(2) <<" |\n";
-    oss <<" |-----------------------------------------------------|\n";
-    oss <<" | Map value min  | "<< std::setw(34) << m_map_value_min <<" |\n";
-    oss <<" | Map value max  | "<< std::setw(34) << m_map_value_max <<" |\n";
-    oss <<" | Map value mean | "<< std::setw(34) << m_map_value_mean <<" |\n";
-    oss <<" | Map value s.d. | "<< std::setw(34) << m_map_value_sd <<" |\n";
-    oss <<" o=====================================================o\n";
-    Logger::Log(LogLevel::Info, oss.str());
-}
-
-void MapObject::Update()
+void MapObject::RecomputeStatistics()
 {
     CalculateMapValueMin();
     CalculateMapValueMax();
     CalculateMapValueMean();
     CalculateMapValueSD();
+}
+
+void MapObject::InvalidateSpatialIndex()
+{
+    m_kd_tree_root.reset();
+    m_grid_node_list.clear();
+}
+
+void MapObject::SyncValueArrayState()
+{
+    InvalidateSpatialIndex();
+    RecomputeStatistics();
 }
 
 void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
@@ -150,7 +128,7 @@ void MapObject::SetMapValueArray(std::unique_ptr<float[]> map_value_array)
                     "The map value array will be replaced by new inserted data.");
     }
     m_map_value_array = std::move(map_value_array);
-    Update();
+    SyncValueArrayState();
 }
 
 size_t MapObject::GetGlobalIndex(int index_x, int index_y, int index_z) const
@@ -304,7 +282,7 @@ void MapObject::MapValueArrayNormalization()
     {
         m_map_value_array[i] /= m_map_value_sd;
     }
-    Update();
+    SyncValueArrayState();
 }
 
 void MapObject::BuildKDTreeRoot()

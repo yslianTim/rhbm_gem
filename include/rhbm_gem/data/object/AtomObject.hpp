@@ -38,8 +38,6 @@ public:
     ~AtomObject();
     AtomObject(const AtomObject & other);
     std::unique_ptr<DataObjectBase> Clone() const override;
-    void Display() const override;
-    void Update() override;
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 

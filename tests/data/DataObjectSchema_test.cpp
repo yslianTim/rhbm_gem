@@ -217,8 +217,6 @@ class FailingDataObject final : public rg::DataObjectBase {
         return std::make_unique<FailingDataObject>(*this);
     }
 
-    void Display() const override {}
-    void Update() override {}
     void SetKeyTag(const std::string& label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 
@@ -303,7 +301,7 @@ TEST(DataObjectSchemaPersistenceTest, DatabaseRoundTripPreservesChainMetadataAnd
         atom->SetSelectedFlag(true);
     }
     original_model->FilterAtomFromSymmetry(false);
-    original_model->Update();
+    original_model->SyncDerivedState();
     const auto original_selected_count{original_model->GetNumberOfSelectedAtom()};
 
     rg::DataObjectManager manager{};
@@ -321,7 +319,7 @@ TEST(DataObjectSchemaPersistenceTest, DatabaseRoundTripPreservesChainMetadataAnd
         atom->SetSelectedFlag(true);
     }
     loaded_model->FilterAtomFromSymmetry(false);
-    loaded_model->Update();
+    loaded_model->SyncDerivedState();
     EXPECT_EQ(loaded_model->GetNumberOfSelectedAtom(), original_selected_count);
 }
 

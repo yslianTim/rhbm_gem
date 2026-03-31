@@ -34,7 +34,7 @@ void ApplyModelSelection(
                 atom->GetResidue(),
                 atom->GetElement()));
     }
-    model_object.Update();
+    model_object.SyncDerivedState();
 }
 
 void IngestModelSetsToPainter(

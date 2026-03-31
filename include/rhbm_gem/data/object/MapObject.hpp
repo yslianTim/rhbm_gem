@@ -52,8 +52,6 @@ public:
     ~MapObject();
     MapObject(const MapObject & other);
     std::unique_ptr<DataObjectBase> Clone() const override;
-    void Display() const override;
-    void Update() override;
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 
@@ -75,6 +73,9 @@ public:
     ::KDNode<GridNode> * GetKDTreeRoot() const;
     void SetThreadSize(int value) { m_thread_size = value; }
     void SetMapValueArray(std::unique_ptr<float[]> map_value_array);
+    void RecomputeStatistics();
+    void InvalidateSpatialIndex();
+    void SyncValueArrayState();
     void MapValueArrayNormalization();
     void BuildKDTreeRoot();
 

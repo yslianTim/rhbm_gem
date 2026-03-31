@@ -81,7 +81,7 @@ void PrepareModelForPotentialAnalysis(
     SelectAllBonds(model_object);
     model_object.FilterAtomFromSymmetry(asymmetry_flag);
     model_object.FilterBondFromSymmetry(asymmetry_flag);
-    model_object.Update();
+    model_object.SyncDerivedState();
 
     for (auto * atom : model_object.GetSelectedAtomList())
     {

@@ -5,7 +5,6 @@
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
-#include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
@@ -25,7 +24,7 @@ ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_li
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
     m_bond_key_system{ std::make_unique<BondKeySystem>() }
 {
-    Update();
+    SyncDerivedState();
 }
 
 ModelObject::~ModelObject()
@@ -47,7 +46,7 @@ ModelObject::ModelObject(const ModelObject & other) :
     {
         m_atom_list.emplace_back(atom->AtomObjectClone());
     }
-    Update();
+    SyncDerivedState();
 }
 
 std::unique_ptr<DataObjectBase> ModelObject::Clone() const
@@ -55,32 +54,9 @@ std::unique_ptr<DataObjectBase> ModelObject::Clone() const
     return std::make_unique<ModelObject>(*this);
 }
 
-void ModelObject::Display() const
+void ModelObject::RebuildSelectionState()
 {
-    Logger::Log(LogLevel::Info, "ModelObject Display: " + GetKeyTag());
-    Logger::Log(LogLevel::Info,
-        " - PDB ID = " + m_pdb_id + "\n"
-        " - EMD ID = " + m_emd_id + "\n"
-        " - Map Resolution = " + StringHelper::ToStringWithPrecision(m_resolution, 2)
-            + " A (" + m_resolution_method + ")\n"
-        " - #Unique Entities = " + std::to_string(m_chain_id_list_map.size()) + "\n"
-        " - #Atoms = "+ std::to_string(m_atom_list.size()) +"\n"
-        " - #Bonds = "+ std::to_string(m_bond_list.size()) +"\n"
-        " - #Unique Components = " + std::to_string(m_chemical_component_entry_map.size()) + "\n"
-    );
-
-    for (auto & [component_key, entry]: m_chemical_component_entry_map)
-    {
-        Logger::Log(LogLevel::Debug,
-            "   - Component ID = " + entry->GetComponentId() + " "
-            " (#Atoms = "+ std::to_string(entry->GetComponentAtomEntryMap().size()) +
-            ", #Bonds = "+ std::to_string(entry->GetComponentBondEntryMap().size()) +")"
-        );
-    }
-}
-
-void ModelObject::Update()
-{
+    m_serial_id_atom_map.clear();
     for (auto & atom : m_atom_list)
     {
         m_serial_id_atom_map[atom->GetSerialID()] = atom.get();
@@ -89,27 +65,44 @@ void ModelObject::Update()
     BuildSelectedBondList();
 }
 
+void ModelObject::InvalidateDerivedCaches()
+{
+    m_center_of_mass_position.reset();
+    for (auto & axis_range : m_model_position_range)
+    {
+        axis_range.reset();
+    }
+    m_kd_tree_root.reset();
+}
+
+void ModelObject::SyncDerivedState()
+{
+    InvalidateDerivedCaches();
+    RebuildSelectionState();
+}
+
 void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)
 {
     m_atom_list.emplace_back(std::move(atom));
-    m_serial_id_atom_map[atom->GetSerialID()] = atom.get();
+    SyncDerivedState();
 }
 
 void ModelObject::AddBond(std::unique_ptr<BondObject> bond)
 {
     m_bond_list.emplace_back(std::move(bond));
+    SyncDerivedState();
 }
 
 void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list)
 {
     m_atom_list = std::move(atom_list);
-    Update();
+    SyncDerivedState();
 }
 
 void ModelObject::SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list)
 {
     m_bond_list = std::move(bond_list);
-    BuildSelectedBondList();
+    SyncDerivedState();
 }
 
 void ModelObject::AddAtomGroupPotentialEntry(

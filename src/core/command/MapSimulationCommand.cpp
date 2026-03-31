@@ -1,4 +1,5 @@
 #include "MapSimulationCommand.hpp"
+#include "detail/DataObjectSummaryLog.hpp"
 #include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -314,6 +315,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     std::fill_n(map_value_array.get(), voxel_size, 0.0f);
 
     auto atom_size{ m_selected_atom_list.size() };
+    map_object->BuildKDTreeRoot();
     auto kd_tree_root{ map_object->GetKDTreeRoot() };
     size_t atom_count{ 0 };
     std::vector<GridNode*> in_range_grid_node_list;
@@ -356,8 +358,7 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     }
 
     map_object->SetMapValueArray(std::move(map_value_array));
-    map_object->Update();
-    map_object->Display();
+    command_detail::LogMapSummary(*map_object);
 }
 
 std::array<int, 3> MapSimulationCommand::CalculateGridSize(

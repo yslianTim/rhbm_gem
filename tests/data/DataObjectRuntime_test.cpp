@@ -420,7 +420,7 @@ TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix) {
                  atom->SetSelectedFlag(true);
              }
              model.FilterAtomFromSymmetry(false);
-             model.Update();
+             model.SyncDerivedState();
              EXPECT_EQ(model.GetNumberOfSelectedAtom(), 1);
          }},
         {"MissingChainMapSkipsSymmetryFiltering",
@@ -433,7 +433,7 @@ TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix) {
              model.SetChainIDListMap(
                  std::unordered_map<std::string, std::vector<std::string>>{});
              model.FilterAtomFromSymmetry(false);
-             model.Update();
+             model.SyncDerivedState();
              EXPECT_EQ(model.GetNumberOfSelectedAtom(), 1);
          }},
         {"AuthOnlyColumnsPopulateFallbackFields",
@@ -664,6 +664,25 @@ TEST(DataObjectOperationTest, NormalizeMapObjectNormalizesMapValues) {
     map.MapValueArrayNormalization();
 
     EXPECT_NEAR(map.GetMapValue(0), original_value / original_sd, 1.0e-5f);
+    EXPECT_NEAR(map.GetMapValueSD(), 1.0f, 1.0e-5f);
+}
+
+TEST(DataObjectOperationTest, SetMapValueArrayRefreshesStatisticsAndInvalidatesSpatialIndex) {
+    auto map{MakeMapObject()};
+    map.BuildKDTreeRoot();
+    ASSERT_NE(map.GetKDTreeRoot(), nullptr);
+
+    auto replacement_values{std::make_unique<float[]>(8)};
+    for (size_t i = 0; i < 8; ++i) {
+        replacement_values[i] = static_cast<float>(10 + i);
+    }
+
+    map.SetMapValueArray(std::move(replacement_values));
+
+    EXPECT_EQ(map.GetKDTreeRoot(), nullptr);
+    EXPECT_FLOAT_EQ(map.GetMapValueMin(), 10.0f);
+    EXPECT_FLOAT_EQ(map.GetMapValueMax(), 17.0f);
+    EXPECT_FLOAT_EQ(map.GetMapValueMean(), 13.5f);
 }
 
 TEST(DataObjectOperationTest, PotentialAnalysisPreparationSelectsAndInitializesLocalEntries) {
@@ -674,7 +693,7 @@ TEST(DataObjectOperationTest, PotentialAnalysisPreparationSelectsAndInitializesL
     for (auto& bond : model->GetBondList()) {
         bond->SetSelectedFlag(false);
     }
-    model->Update();
+    model->SyncDerivedState();
     ASSERT_EQ(model->GetNumberOfSelectedAtom(), 0);
     ASSERT_EQ(model->GetNumberOfSelectedBond(), 0);
 
@@ -686,7 +705,7 @@ TEST(DataObjectOperationTest, PotentialAnalysisPreparationSelectsAndInitializesL
     }
     model->FilterAtomFromSymmetry(false);
     model->FilterBondFromSymmetry(false);
-    model->Update();
+    model->SyncDerivedState();
     for (auto* atom : model->GetSelectedAtomList()) {
         atom->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     }
@@ -724,7 +743,7 @@ TEST(DataObjectOperationTest, AtomSelectorCanDriveModelSelectionState) {
                 atom->GetResidue(),
                 atom->GetElement()));
     }
-    model->Update();
+    model->SyncDerivedState();
 
     EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
@@ -739,7 +758,7 @@ TEST(DataObjectOperationTest, ModelSelectionAndLocalEntriesRemainDirectlyQueryab
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(false);
     atoms[0]->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
-    model->Update();
+    model->SyncDerivedState();
 
     const auto& selected_only_atoms{model->GetSelectedAtomList()};
     ASSERT_EQ(selected_only_atoms.size(), 1);
@@ -796,7 +815,7 @@ TEST(DataObjectOperationTest, SelectedAtomAndBondStateCanBuildContextMapsDirectl
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(true);
     bonds[0]->SetSelectedFlag(true);
-    model->Update();
+    model->SyncDerivedState();
 
     std::unordered_map<int, rg::AtomObject*> atom_map;
     std::unordered_map<int, std::vector<rg::BondObject*>> bond_map;
@@ -815,6 +834,55 @@ TEST(DataObjectOperationTest, SelectedAtomAndBondStateCanBuildContextMapsDirectl
     EXPECT_EQ(bond_map.at(1).size(), 1);
     EXPECT_EQ(bond_map.at(2).size(), 1);
 }
+
+TEST(DataObjectOperationTest, AddAtomRebuildsSerialIndexWithoutUsingMovedFromPointer) {
+    rg::ModelObject model;
+    auto atom{std::make_unique<rg::AtomObject>()};
+    atom->SetSerialID(42);
+    atom->SetPosition(3.0f, 4.0f, 5.0f);
+
+    ASSERT_NO_THROW(model.AddAtom(std::move(atom)));
+    EXPECT_EQ(model.GetNumberOfAtom(), 1);
+    ASSERT_EQ(model.GetSerialIDAtomMap().size(), 1);
+    ASSERT_NE(model.GetAtomPtr(42), nullptr);
+    EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 3.0f);
+}
+
+TEST(DataObjectOperationTest, SetAtomListSyncsSelectionStateAndInvalidatesDerivedCaches) {
+    auto model{MakeModelWithBond()};
+    model->GetAtomList().at(0)->SetSelectedFlag(true);
+    model->GetAtomList().at(1)->SetSelectedFlag(true);
+    model->GetBondList().at(0)->SetSelectedFlag(true);
+    model->SyncDerivedState();
+    model->BuildKDTreeRoot();
+    ASSERT_NE(model->GetKDTreeRoot(), nullptr);
+    EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 0.5f);
+
+    std::vector<std::unique_ptr<rg::AtomObject>> replacement_atoms;
+    auto atom_1{std::make_unique<rg::AtomObject>()};
+    atom_1->SetSerialID(11);
+    atom_1->SetSelectedFlag(true);
+    atom_1->SetPosition(5.0f, 0.0f, 0.0f);
+    auto atom_2{std::make_unique<rg::AtomObject>()};
+    atom_2->SetSerialID(12);
+    atom_2->SetSelectedFlag(false);
+    atom_2->SetPosition(9.0f, 0.0f, 0.0f);
+    replacement_atoms.emplace_back(std::move(atom_1));
+    replacement_atoms.emplace_back(std::move(atom_2));
+
+    model->SetAtomList(std::move(replacement_atoms));
+
+    EXPECT_EQ(model->GetKDTreeRoot(), nullptr);
+    EXPECT_EQ(model->GetSerialIDAtomMap().count(11), 1);
+    EXPECT_EQ(model->GetSerialIDAtomMap().count(12), 1);
+    EXPECT_EQ(model->GetSerialIDAtomMap().count(1), 0);
+    EXPECT_EQ(model->GetNumberOfSelectedAtom(), 1);
+    EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 7.0f);
+    const auto x_range{model->GetModelPositionRange(0)};
+    EXPECT_DOUBLE_EQ(std::get<0>(x_range), 5.0);
+    EXPECT_DOUBLE_EQ(std::get<1>(x_range), 9.0);
+}
+
 TEST(DataObjectFileIOTest, ImportFileAsDoesNotCallDisplay) {
     const auto model_path{command_test::TestDataPath("test_model.cif")};
 

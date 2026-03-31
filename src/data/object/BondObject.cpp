@@ -4,7 +4,6 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
-#include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
 
@@ -77,16 +76,6 @@ BondObject::BondObject(const BondObject & other) :
 std::unique_ptr<DataObjectBase> BondObject::Clone() const
 {
     return std::make_unique<BondObject>(*this);
-}
-
-void BondObject::Display() const
-{
-    Logger::Log(LogLevel::Info, "BondObject Display: " + GetInfo());
-}
-
-void BondObject::Update()
-{
-    Logger::Log(LogLevel::Info, "BondObject Update: " + GetInfo());
 }
 
 std::unique_ptr<BondObject> BondObject::BondObjectClone() const

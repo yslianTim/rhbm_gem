@@ -61,7 +61,7 @@ void PrepareModelForVisualization(rhbm_gem::ModelObject & model_object)
 {
     SelectAllAtoms(model_object);
     SelectAllBonds(model_object);
-    model_object.Update();
+    model_object.SyncDerivedState();
 }
 
 ModelAtomBondContext BuildModelAtomBondContext(rhbm_gem::ModelObject & model_object)
