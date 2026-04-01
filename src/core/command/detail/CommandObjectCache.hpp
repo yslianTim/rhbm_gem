@@ -3,24 +3,35 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 
 namespace rhbm_gem {
 
-class DataObjectBase;
+class MapObject;
+class ModelObject;
 
 namespace command_detail {
 
 class CommandObjectCache
 {
+    using ObjectHandle = std::variant<std::shared_ptr<ModelObject>, std::shared_ptr<MapObject>>;
+
 public:
+    enum class ObjectKind
+    {
+        Model,
+        Map
+    };
+
     void Clear()
     {
         m_object_map.clear();
     }
 
-    void Put(const std::string & key_tag, std::shared_ptr<DataObjectBase> data_object)
+    void PutModel(const std::string & key_tag, std::shared_ptr<ModelObject> data_object)
     {
         if (!data_object)
         {
@@ -30,13 +41,42 @@ public:
         m_object_map.insert_or_assign(key_tag, std::move(data_object));
     }
 
-    std::shared_ptr<DataObjectBase> Get(const std::string & key_tag)
+    void PutMap(const std::string & key_tag, std::shared_ptr<MapObject> data_object)
     {
-        auto const_ptr{ std::as_const(*this).Get(key_tag) };
-        return std::const_pointer_cast<DataObjectBase>(const_ptr);
+        if (!data_object)
+        {
+            throw std::runtime_error(
+                "CommandObjectCache::Put(): nullptr provided for key tag: " + key_tag);
+        }
+        m_object_map.insert_or_assign(key_tag, std::move(data_object));
     }
 
-    std::shared_ptr<const DataObjectBase> Get(const std::string & key_tag) const
+    ObjectKind GetKind(const std::string & key_tag) const
+    {
+        return std::visit(
+            [](const auto & object_handle) -> ObjectKind {
+                using HandleType = std::decay_t<decltype(object_handle)>;
+                if constexpr (std::is_same_v<HandleType, std::shared_ptr<ModelObject>>)
+                {
+                    return ObjectKind::Model;
+                }
+                return ObjectKind::Map;
+            },
+            RequireEntry(key_tag));
+    }
+
+    std::shared_ptr<ModelObject> GetModel(const std::string & key_tag)
+    {
+        return GetTyped<ModelObject>(key_tag);
+    }
+
+    std::shared_ptr<MapObject> GetMap(const std::string & key_tag)
+    {
+        return GetTyped<MapObject>(key_tag);
+    }
+
+private:
+    const ObjectHandle & RequireEntry(const std::string & key_tag) const
     {
         const auto iter{ m_object_map.find(key_tag) };
         if (iter == m_object_map.end())
@@ -47,19 +87,17 @@ public:
     }
 
     template <typename TypedDataObject>
-    std::shared_ptr<TypedDataObject> Require(const std::string & key_tag)
+    std::shared_ptr<TypedDataObject> GetTyped(const std::string & key_tag) const
     {
-        auto base_object{ Get(key_tag) };
-        auto typed_object{ std::dynamic_pointer_cast<TypedDataObject>(base_object) };
-        if (!typed_object)
+        const auto & object_handle{ RequireEntry(key_tag) };
+        if (const auto typed_object{ std::get_if<std::shared_ptr<TypedDataObject>>(&object_handle) })
         {
-            throw std::runtime_error("Invalid data type for " + key_tag);
+            return *typed_object;
         }
-        return typed_object;
+        throw std::runtime_error("Invalid data type for " + key_tag);
     }
 
-private:
-    std::unordered_map<std::string, std::shared_ptr<DataObjectBase>> m_object_map;
+    std::unordered_map<std::string, ObjectHandle> m_object_map;
 };
 
 } // namespace command_detail

@@ -79,6 +79,7 @@ set(RHBM_GEM_CORE_COMMAND_TEST_SOURCES
 
 set(CORE_COMMAND_TEST_SOURCES
     core/command/CommandBaseLifecycle_test.cpp
+    core/command/CommandObjectCache_test.cpp
     core/command/CommandValidationHelpers_test.cpp
     core/command/MapSampling_test.cpp
     ${RHBM_GEM_CORE_COMMAND_TEST_SOURCES}
@@ -118,6 +119,7 @@ set(DATA_SCHEMA_TEST_SOURCES
     data/DataObjectSchemaBootstrap_test.cpp
     data/DataObjectSchemaCompatibility_test.cpp
     data/DataObjectSchemaValidation_test.cpp
+    data/SQLitePersistenceTypedApi_test.cpp
 )
 
 set(UTILS_MATH_TEST_SOURCES

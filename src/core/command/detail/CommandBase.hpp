@@ -14,7 +14,6 @@
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include "CommandObjectCache.hpp"
@@ -185,7 +184,14 @@ protected:
         }
         data_object->SetKeyTag(key_tag);
         std::shared_ptr<TypedDataObject> shared_object{ std::move(data_object) };
-        m_runtime_object_cache.Put(key_tag, shared_object);
+        if constexpr (std::is_same_v<TypedDataObject, ModelObject>)
+        {
+            m_runtime_object_cache.PutModel(key_tag, shared_object);
+        }
+        else
+        {
+            m_runtime_object_cache.PutMap(key_tag, shared_object);
+        }
         return shared_object;
     }
     template <typename TypedDataObject>
@@ -212,7 +218,14 @@ protected:
                 "LoadPersistedObject only supports ModelObject or MapObject.");
         }
         std::shared_ptr<TypedDataObject> shared_object{ std::move(data_object) };
-        m_runtime_object_cache.Put(key_tag, shared_object);
+        if constexpr (std::is_same_v<TypedDataObject, ModelObject>)
+        {
+            m_runtime_object_cache.PutModel(key_tag, shared_object);
+        }
+        else
+        {
+            m_runtime_object_cache.PutMap(key_tag, shared_object);
+        }
         return shared_object;
     }
     void SaveStoredObject(
@@ -224,18 +237,15 @@ protected:
             throw std::runtime_error("Database repository is not initialized.");
         }
         const auto saved_key_tag{ persisted_key.empty() ? key_tag : persisted_key };
-        auto data_object{ m_runtime_object_cache.Get(key_tag) };
-        if (const auto * model_object{ AsModelObject(*data_object) })
+        switch (m_runtime_object_cache.GetKind(key_tag))
         {
-            m_data_repository->SaveModel(*model_object, saved_key_tag);
+        case command_detail::CommandObjectCache::ObjectKind::Model:
+            m_data_repository->SaveModel(*m_runtime_object_cache.GetModel(key_tag), saved_key_tag);
+            return;
+        case command_detail::CommandObjectCache::ObjectKind::Map:
+            m_data_repository->SaveMap(*m_runtime_object_cache.GetMap(key_tag), saved_key_tag);
             return;
         }
-        if (const auto * map_object{ AsMapObject(*data_object) })
-        {
-            m_data_repository->SaveMap(*map_object, saved_key_tag);
-            return;
-        }
-        throw std::runtime_error("Unsupported data object type for persistence.");
     }
 
 private:

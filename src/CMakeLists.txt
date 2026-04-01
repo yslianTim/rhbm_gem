@@ -37,7 +37,6 @@ target_sources(rhbm_gem PRIVATE
     data/object/BondClassifier.cpp
     data/object/BondObject.cpp
     data/object/ChemicalComponentEntry.cpp
-    data/object/DataObjectDispatch.cpp
     data/object/GroupPotentialEntry.cpp
     data/object/LocalPotentialEntry.cpp
     data/object/MapObject.cpp

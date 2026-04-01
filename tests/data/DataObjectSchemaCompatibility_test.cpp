@@ -19,7 +19,7 @@ TEST(DataObjectSchemaCompatibilityTest, Version2WithObjectMetadataFailsFast)
 
     {
         rg::SQLitePersistence database_manager{ database_path };
-        database_manager.Save(map_object, "map_only");
+        database_manager.SaveMap(map_object, "map_only");
     }
 
     data_test::ExecuteSql(

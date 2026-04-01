@@ -18,36 +18,22 @@ DataRepository::~DataRepository() = default;
 
 std::unique_ptr<ModelObject> DataRepository::LoadModel(const std::string & key_tag) const
 {
-    auto base_object{ m_database->Load(key_tag) };
-    auto typed_object{ dynamic_cast<ModelObject *>(base_object.get()) };
-    if (!typed_object)
-    {
-        throw std::runtime_error("Invalid data type for " + key_tag);
-    }
-    (void)base_object.release();
-    return std::unique_ptr<ModelObject>{ typed_object };
+    return m_database->LoadModel(key_tag);
 }
 
 std::unique_ptr<MapObject> DataRepository::LoadMap(const std::string & key_tag) const
 {
-    auto base_object{ m_database->Load(key_tag) };
-    auto typed_object{ dynamic_cast<MapObject *>(base_object.get()) };
-    if (!typed_object)
-    {
-        throw std::runtime_error("Invalid data type for " + key_tag);
-    }
-    (void)base_object.release();
-    return std::unique_ptr<MapObject>{ typed_object };
+    return m_database->LoadMap(key_tag);
 }
 
 void DataRepository::SaveModel(const ModelObject & model_object, const std::string & key_tag) const
 {
-    m_database->Save(model_object, key_tag);
+    m_database->SaveModel(model_object, key_tag);
 }
 
 void DataRepository::SaveMap(const MapObject & map_object, const std::string & key_tag) const
 {
-    m_database->Save(map_object, key_tag);
+    m_database->SaveMap(map_object, key_tag);
 }
 
 } // namespace rhbm_gem

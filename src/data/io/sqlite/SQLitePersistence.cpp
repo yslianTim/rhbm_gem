@@ -1,9 +1,7 @@
 #include "SQLitePersistence.hpp"
 
-#include "../detail/ObjectRouting.hpp"
 #include "ModelObjectStorage.hpp"
 #include "SQLiteWrapper.hpp"
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
@@ -138,6 +136,37 @@ std::string ToUpperCopy(std::string value)
         value.begin(),
         [](const unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
     return value;
+}
+
+enum class CatalogObjectType
+{
+    Model,
+    Map
+};
+
+std::string_view GetCatalogTypeName(CatalogObjectType object_type) noexcept
+{
+    switch (object_type)
+    {
+    case CatalogObjectType::Model:
+        return "model";
+    case CatalogObjectType::Map:
+        return "map";
+    }
+    return "unknown";
+}
+
+CatalogObjectType ParseCatalogTypeName(std::string_view type_name)
+{
+    if (type_name == "model")
+    {
+        return CatalogObjectType::Model;
+    }
+    if (type_name == "map")
+    {
+        return CatalogObjectType::Map;
+    }
+    throw std::runtime_error("Unsupported data object type: " + std::string(type_name));
 }
 
 int QuerySingleInt(
@@ -611,6 +640,55 @@ std::unique_ptr<rhbm_gem::MapObject> LoadMapObject(
     return map_object;
 }
 
+void UpsertCatalogRow(
+    rhbm_gem::SQLiteWrapper & database,
+    const std::string & key_tag,
+    CatalogObjectType object_type)
+{
+    database.Prepare(std::string(kUpsertCatalogSql));
+    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    database.Bind<std::string>(1, key_tag);
+    database.Bind<std::string>(2, std::string(GetCatalogTypeName(object_type)));
+    database.StepOnce();
+}
+
+CatalogObjectType LoadCatalogRowType(
+    rhbm_gem::SQLiteWrapper & database,
+    const std::string & key_tag)
+{
+    database.Prepare(std::string(kLoadCatalogTypeSql));
+    rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
+    database.Bind<std::string>(1, key_tag);
+
+    const auto rc{ database.StepNext() };
+    if (rc == rhbm_gem::SQLiteWrapper::StepDone())
+    {
+        throw std::runtime_error("Cannot find the row with key_tag = " + key_tag);
+    }
+    if (rc != rhbm_gem::SQLiteWrapper::StepRow())
+    {
+        throw std::runtime_error("Step failed: " + database.ErrorMessage());
+    }
+    return ParseCatalogTypeName(database.GetColumn<std::string>(0));
+}
+
+void RequireCatalogObjectType(
+    rhbm_gem::SQLiteWrapper & database,
+    const std::string & key_tag,
+    CatalogObjectType expected_type,
+    std::string_view context)
+{
+    const auto actual_type{ LoadCatalogRowType(database, key_tag) };
+    if (actual_type == expected_type)
+    {
+        return;
+    }
+    throw std::runtime_error(
+        std::string(context) + ": expected "
+        + std::string(GetCatalogTypeName(expected_type)) + " but found "
+        + std::string(GetCatalogTypeName(actual_type)) + " for key_tag = " + key_tag);
+}
+
 } // namespace
 
 namespace rhbm_gem {
@@ -642,62 +720,38 @@ SQLitePersistence::SQLitePersistence(const std::filesystem::path & database_path
 
 SQLitePersistence::~SQLitePersistence() = default;
 
-void SQLitePersistence::Save(const DataObjectBase & data_object, const std::string & key_tag)
+void SQLitePersistence::SaveModel(const ModelObject & model_object, const std::string & key_tag)
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
-
-    const auto kind{
-        io_internal::ResolveTopLevelObjectKind(data_object, "SQLitePersistence::Save()") };
-    const auto type_name{ std::string(io_internal::GetCatalogTypeName(kind)) };
-    m_database->Prepare(std::string(kUpsertCatalogSql));
-    SQLiteWrapper::StatementGuard guard(*m_database);
-    m_database->Bind<std::string>(1, key_tag);
-    m_database->Bind<std::string>(2, type_name);
-    m_database->StepOnce();
-
-    switch (kind)
-    {
-    case io_internal::TopLevelObjectKind::Model:
-        ModelObjectStorage::Save(*m_database, static_cast<const ModelObject &>(data_object), key_tag);
-        return;
-    case io_internal::TopLevelObjectKind::Map:
-        SaveMapObject(*m_database, static_cast<const MapObject &>(data_object), key_tag);
-        return;
-    }
-
-    throw std::runtime_error("Unsupported data object type.");
+    UpsertCatalogRow(*m_database, key_tag, CatalogObjectType::Model);
+    ModelObjectStorage::Save(*m_database, model_object, key_tag);
 }
 
-std::unique_ptr<DataObjectBase> SQLitePersistence::Load(const std::string & key_tag)
+void SQLitePersistence::SaveMap(const MapObject & map_object, const std::string & key_tag)
 {
     std::lock_guard<std::mutex> lock(m_db_mutex);
     SQLiteWrapper::TransactionGuard transaction(*m_database);
+    UpsertCatalogRow(*m_database, key_tag, CatalogObjectType::Map);
+    SaveMapObject(*m_database, map_object, key_tag);
+}
 
-    m_database->Prepare(std::string(kLoadCatalogTypeSql));
-    SQLiteWrapper::StatementGuard guard(*m_database);
-    m_database->Bind<std::string>(1, key_tag);
+std::unique_ptr<ModelObject> SQLitePersistence::LoadModel(const std::string & key_tag)
+{
+    std::lock_guard<std::mutex> lock(m_db_mutex);
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
+    RequireCatalogObjectType(
+        *m_database, key_tag, CatalogObjectType::Model, "SQLitePersistence::LoadModel()");
+    return ModelObjectStorage::Load(*m_database, key_tag);
+}
 
-    const auto rc{ m_database->StepNext() };
-    if (rc == SQLiteWrapper::StepDone())
-    {
-        throw std::runtime_error("Cannot find the row with key_tag = " + key_tag);
-    }
-    if (rc != SQLiteWrapper::StepRow())
-    {
-        throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
-    }
-
-    const auto kind{ io_internal::ParseCatalogTypeName(m_database->GetColumn<std::string>(0)) };
-    switch (kind)
-    {
-    case io_internal::TopLevelObjectKind::Model:
-        return ModelObjectStorage::Load(*m_database, key_tag);
-    case io_internal::TopLevelObjectKind::Map:
-        return LoadMapObject(*m_database, key_tag);
-    }
-
-    throw std::runtime_error("Unsupported data object type.");
+std::unique_ptr<MapObject> SQLitePersistence::LoadMap(const std::string & key_tag)
+{
+    std::lock_guard<std::mutex> lock(m_db_mutex);
+    SQLiteWrapper::TransactionGuard transaction(*m_database);
+    RequireCatalogObjectType(
+        *m_database, key_tag, CatalogObjectType::Map, "SQLitePersistence::LoadMap()");
+    return LoadMapObject(*m_database, key_tag);
 }
 
 } // namespace rhbm_gem

@@ -7,9 +7,9 @@
 
 namespace rhbm_gem {
 
-class DataObjectBase;
+class MapObject;
 class SQLiteWrapper;
-class ModelObjectStorage;
+class ModelObject;
 
 class SQLitePersistence
 {
@@ -24,8 +24,10 @@ public:
     SQLitePersistence(const SQLitePersistence &) = delete;
     SQLitePersistence & operator=(const SQLitePersistence &) = delete;
 
-    void Save(const DataObjectBase & data_object, const std::string & key_tag);
-    std::unique_ptr<DataObjectBase> Load(const std::string & key_tag);
+    void SaveModel(const ModelObject & model_object, const std::string & key_tag);
+    void SaveMap(const MapObject & map_object, const std::string & key_tag);
+    std::unique_ptr<ModelObject> LoadModel(const std::string & key_tag);
+    std::unique_ptr<MapObject> LoadMap(const std::string & key_tag);
 
     const std::filesystem::path & GetDatabasePath() const noexcept { return m_database_path; }
 };

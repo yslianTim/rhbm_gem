@@ -87,7 +87,7 @@ cmake --build build --target lint_repo
 - `DataObjectFileIO_test.cpp` for file I/O and map-axis import behavior.
 - `DataObjectImportRegression_test.cpp` for CIF/MMCIF parser regression matrices.
 - `DataObjectRuntimeBehavior_test.cpp` for `ModelObject` / `MapObject` state behavior.
-- `DataObjectDispatchAndIngestion_test.cpp` for typed dispatch and painter ingestion contracts.
+- `DataObjectDispatchAndIngestion_test.cpp` for painter ingestion contracts.
 - `DataObjectPersistence_test.cpp`, `DataObjectSchemaBootstrap_test.cpp`, `DataObjectSchemaCompatibility_test.cpp`, and `DataObjectSchemaValidation_test.cpp` for database persistence/schema behavior.
 - Place new fixture files under `tests/fixtures/`.
 - Use `tests/support/` for shared test-only seams and reusable helpers/assertions.
