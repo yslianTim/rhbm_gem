@@ -1065,6 +1065,7 @@ PotentialPlotBuilder::CreateAtomQScoreToSequenceIDGraphMap(
         if (atom->GetElement() != AtomClassifier::GetMainChainElement(main_chain_element_id)) continue;
         if (atom->GetSpot() != AtomClassifier::GetMainChainSpot(main_chain_element_id)) continue;
         auto entry{ atom->GetLocalPotentialEntry() };
+        if (entry == nullptr) continue;
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         if (sequence_id < 0) continue;

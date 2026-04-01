@@ -303,6 +303,11 @@ double LocalPotentialEntry::CalculateIntensityVariance(
 
 double LocalPotentialEntry::CalculateQScore(int par_choice) const
 {
+    if (m_distance_and_map_value_list.empty())
+    {
+        return 0.0;
+    }
+
     auto q_score{ 0.0 };
     auto amplitude{ 0.0 };
     auto width{ 0.0 };
@@ -318,6 +323,12 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
         amplitude = GetAmplitudeEstimateMDPDE() * std::pow(2.0*Constants::pi*GetWidthEstimateMDPDE()*GetWidthEstimateMDPDE(), -1.5);
         width = GetWidthEstimateMDPDE();
         intersect = 0.0;
+    }
+
+    if (std::isfinite(amplitude) == false || std::isfinite(width) == false ||
+        std::isfinite(intersect) == false || width <= 0.0)
+    {
+        return 0.0;
     }
 
     std::vector<float> distance_list;
@@ -349,8 +360,16 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
         reference_value_norm_square += reference_value_diff * reference_value_diff;
     }
     denominator = std::sqrt(map_value_norm_square) * std::sqrt(reference_value_norm_square);
-    if (denominator == 0.0) return 0.0;
+    if (denominator == 0.0 || std::isfinite(denominator) == false || std::isfinite(numerator) == false)
+    {
+        return 0.0;
+    }
     q_score = numerator/denominator;
+
+    if (std::isfinite(q_score) == false)
+    {
+        return 0.0;
+    }
 
     return q_score;
 }

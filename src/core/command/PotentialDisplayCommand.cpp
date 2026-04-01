@@ -28,11 +28,15 @@ void ApplyModelSelection(
 {
     for (auto & atom : model_object.GetAtomList())
     {
-        atom->SetSelectedFlag(
+        const bool matches_selector{
             selector.GetSelectionFlag(
                 atom->GetChainID(),
                 atom->GetResidue(),
-                atom->GetElement()));
+                atom->GetElement())
+        };
+        const bool has_local_potential_entry{ atom->GetLocalPotentialEntry() != nullptr };
+        atom->SetSelectedFlag(
+            matches_selector && has_local_potential_entry);
     }
     model_object.SyncDerivedState();
 }
