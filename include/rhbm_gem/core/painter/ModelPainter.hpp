@@ -29,12 +29,10 @@ class ModelPainter : public PainterBase
 public:
     ModelPainter();
     ~ModelPainter();
-    void AddDataObject(DataObjectBase * data_object) override;
-    void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
+    void AddModel(ModelObject & data_object);
     void Painting() override;
 
 private:
-    void AppendModelObject(ModelObject & data_object);
     void PaintAtomGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintBondGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausNucleotideMainChain(ModelObject * model_object, const std::string & name);

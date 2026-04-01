@@ -1,7 +1,6 @@
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -9,7 +8,6 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "detail/PainterTypeCheck.hpp"
 #include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
@@ -44,28 +42,15 @@ ComparisonPainter::~ComparisonPainter()
 
 }
 
-void ComparisonPainter::AddDataObject(DataObjectBase * data_object)
-{
-    auto & typed_data_object{
-        painter_internal::RequirePainterObject<ModelObject>(
-            data_object, "ComparisonPainter", "AddDataObject") };
-    AppendModelObject(typed_data_object);
-}
-
-void ComparisonPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
-{
-    painter_internal::AppendPainterReferenceObject<ModelObject>(
-        data_object,
-        label,
-        "ComparisonPainter",
-        "AddReferenceDataObject",
-        m_ref_model_object_list_map);
-}
-
-void ComparisonPainter::AppendModelObject(ModelObject & data_object)
+void ComparisonPainter::AddModel(ModelObject & data_object)
 {
     m_model_object_list.emplace_back(&data_object);
     m_resolution_list.emplace_back(data_object.GetResolution());
+}
+
+void ComparisonPainter::AddReferenceModel(ModelObject & data_object, std::string_view label)
+{
+    m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
 }
 
 void ComparisonPainter::Painting()

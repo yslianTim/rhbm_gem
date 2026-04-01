@@ -30,15 +30,13 @@ class GausPainter : public PainterBase
 public:
     GausPainter();
     ~GausPainter();
-    void AddDataObject(DataObjectBase * data_object) override;
-    void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
+    void AddModel(ModelObject & data_object);
     void Painting() override;
 #ifdef HAVE_ROOT
     static void RemodelAxisLabels(::TAxis * axis, const std::vector<std::string> & label_list, double angle, int align);
 #endif
 
 private:
-    void AppendModelObject(ModelObject & data_object);
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomQScoreAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);

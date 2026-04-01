@@ -40,23 +40,38 @@ void ApplyModelSelection(
     model_object.RefreshDerivedState();
 }
 
-void IngestModelSetsToPainter(
-    rhbm_gem::PainterBase & painter,
-    const std::vector<std::shared_ptr<rhbm_gem::ModelObject>> & model_object_list,
-    const std::unordered_map<std::string, std::vector<std::shared_ptr<rhbm_gem::ModelObject>>> &
-        ref_model_object_list_map)
+template <typename PainterType>
+void AddModelsToPainter(
+    PainterType & painter,
+    const std::vector<std::shared_ptr<rhbm_gem::ModelObject>> & model_object_list)
 {
     for (const auto & model_object : model_object_list)
     {
-        painter.AddDataObject(model_object.get());
+        painter.AddModel(*model_object);
     }
+}
+
+template <typename PainterType>
+void AddReferenceModelsToPainter(
+    PainterType & painter,
+    const std::unordered_map<std::string, std::vector<std::shared_ptr<rhbm_gem::ModelObject>>> &
+        ref_model_object_list_map)
+{
     for (const auto & [class_key, ref_model_list] : ref_model_object_list_map)
     {
         for (const auto & model_object : ref_model_list)
         {
-            painter.AddReferenceDataObject(model_object.get(), class_key);
+            painter.AddReferenceModel(*model_object, class_key);
         }
     }
+}
+
+void RunPainter(
+    rhbm_gem::PainterBase & painter,
+    const std::filesystem::path & output_folder)
+{
+    painter.SetFolder(output_folder.string());
+    painter.Painting();
 }
 }
 
@@ -180,36 +195,49 @@ void PotentialDisplayCommand::RunDisplay()
 {
     const auto & request{ RequestOptions() };
     ScopeTimer timer{ "PotentialDisplayCommand::RunDisplay" };
-    std::unique_ptr<PainterBase> painter{ nullptr };
     switch (request.painter_choice)
     {
         case PainterType::GAUS:
-            painter = std::make_unique<GausPainter>();
-            IngestModelSetsToPainter(*painter, m_model_object_list, m_ref_model_object_list_map);
+        {
+            GausPainter painter;
+            AddModelsToPainter(painter, m_model_object_list);
+            RunPainter(painter, OutputFolder());
             break;
+        }
         case PainterType::MODEL:
-            painter = std::make_unique<ModelPainter>();
-            IngestModelSetsToPainter(*painter, m_model_object_list, m_ref_model_object_list_map);
+        {
+            ModelPainter painter;
+            AddModelsToPainter(painter, m_model_object_list);
+            RunPainter(painter, OutputFolder());
             break;
+        }
         case PainterType::COMPARISON:
-            painter = std::make_unique<ComparisonPainter>();
-            IngestModelSetsToPainter(*painter, m_model_object_list, m_ref_model_object_list_map);
+        {
+            ComparisonPainter painter;
+            AddModelsToPainter(painter, m_model_object_list);
+            AddReferenceModelsToPainter(painter, m_ref_model_object_list_map);
+            RunPainter(painter, OutputFolder());
             break;
+        }
         case PainterType::DEMO:
-            painter = std::make_unique<DemoPainter>();
-            IngestModelSetsToPainter(*painter, m_model_object_list, m_ref_model_object_list_map);
+        {
+            DemoPainter painter;
+            AddModelsToPainter(painter, m_model_object_list);
+            AddReferenceModelsToPainter(painter, m_ref_model_object_list_map);
+            RunPainter(painter, OutputFolder());
             break;
+        }
         case PainterType::ATOM:
-            painter = std::make_unique<AtomPainter>();
+        {
+            AtomPainter painter;
             for (const auto & model_object : m_model_object_list)
             {
-                for (auto * atom : model_object->GetSelectedAtomList())
-                {
-                    painter->AddDataObject(atom);
-                }
+                painter.AddModel(*model_object);
             }
             m_atom_selector->Print();
+            RunPainter(painter, OutputFolder());
             break;
+        }
         default:
             Logger::Log(LogLevel::Warning,
                         "Invalid painter choice input: ["
@@ -221,11 +249,6 @@ void PotentialDisplayCommand::RunDisplay()
                         "  [2] ComparisonPainter\n"
                         "  [3] DemoPainter");
             break;
-    }
-    if (painter)
-    {
-        painter->SetFolder(OutputFolder().string());
-        painter->Painting();
     }
 }
 

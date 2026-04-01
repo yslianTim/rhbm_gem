@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelPotentialView.hpp>
@@ -14,8 +13,6 @@
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
 #include <detail/PotentialSeriesOps.hpp>
-
-#include "PainterTypeCheck.hpp"
 
 #ifdef HAVE_ROOT
 #include <TAxis.h>
@@ -27,31 +24,6 @@
 #endif
 
 namespace rhbm_gem::painter_internal {
-
-template <typename ExpectedType>
-void AppendPainterObject(
-    DataObjectBase * data_object,
-    std::string_view painter_name,
-    std::string_view method_name,
-    std::vector<ExpectedType *> & object_list)
-{
-    auto & typed_data_object{
-        RequirePainterObject<ExpectedType>(data_object, painter_name, method_name) };
-    object_list.push_back(&typed_data_object);
-}
-
-template <typename ExpectedType>
-void AppendPainterReferenceObject(
-    DataObjectBase * data_object,
-    const std::string & label,
-    std::string_view painter_name,
-    std::string_view method_name,
-    std::unordered_map<std::string, std::vector<ExpectedType *>> & object_map)
-{
-    auto & typed_data_object{
-        RequirePainterObject<ExpectedType>(data_object, painter_name, method_name) };
-    object_map[label].push_back(&typed_data_object);
-}
 
 inline std::string BuildPainterOutputLabel(const ModelObject & model_object)
 {

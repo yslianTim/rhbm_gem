@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <memory>
-#include <stdexcept>
+#include <type_traits>
 
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
@@ -14,43 +14,41 @@
 
 namespace rg = rhbm_gem;
 
-TEST(DataObjectPainterIngestionTest, PainterTypedIngestionRequiresSupportedObjectTypes)
+TEST(DataObjectPainterIngestionTest, PainterTypedIngestionUsesConcreteModelApis)
 {
     auto model{ data_test::MakeModelWithBond() };
-    rg::AtomObject atom;
-    atom.SetSelectedFlag(true);
-    atom.AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+    model->SetKeyTag("model");
+    model->GetAtomList().front()->SetSelectedFlag(true);
+    model->GetAtomList().front()->AddLocalPotentialEntry(
+        std::make_unique<rg::LocalPotentialEntry>());
 
     rg::AtomPainter atom_painter;
-    atom_painter.AddDataObject(&atom);
-    atom_painter.AddReferenceDataObject(&atom, "ref");
-    EXPECT_THROW(atom_painter.AddDataObject(model.get()), std::runtime_error);
-    EXPECT_THROW(atom_painter.AddReferenceDataObject(model.get(), "ref"), std::runtime_error);
+    EXPECT_NO_THROW(atom_painter.AddModel(*model));
 
     rg::ModelPainter model_painter;
-    model_painter.AddDataObject(model.get());
-    model_painter.AddReferenceDataObject(model.get(), "ref");
-    EXPECT_THROW(model_painter.AddDataObject(&atom), std::runtime_error);
+    EXPECT_NO_THROW(model_painter.AddModel(*model));
 
     rg::GausPainter gaus_painter;
-    gaus_painter.AddDataObject(model.get());
-    gaus_painter.AddReferenceDataObject(model.get(), "ref");
-    EXPECT_THROW(gaus_painter.AddDataObject(&atom), std::runtime_error);
+    EXPECT_NO_THROW(gaus_painter.AddModel(*model));
 
     rg::ComparisonPainter comparison_painter;
-    comparison_painter.AddDataObject(model.get());
-    comparison_painter.AddReferenceDataObject(model.get(), "ref");
-    EXPECT_THROW(comparison_painter.AddDataObject(&atom), std::runtime_error);
+    EXPECT_NO_THROW(comparison_painter.AddModel(*model));
+    EXPECT_NO_THROW(comparison_painter.AddReferenceModel(*model, "ref"));
 
     rg::DemoPainter demo_painter;
-    demo_painter.AddDataObject(model.get());
-    demo_painter.AddReferenceDataObject(model.get(), "ref");
-    EXPECT_THROW(demo_painter.AddDataObject(&atom), std::runtime_error);
+    EXPECT_NO_THROW(demo_painter.AddModel(*model));
+    EXPECT_NO_THROW(demo_painter.AddReferenceModel(*model, "ref"));
 }
 
-TEST(DataObjectPainterIngestionTest, PainterNullIngestThrows)
+TEST(DataObjectPainterIngestionTest, PainterInterfacesAreConcreteAndTyped)
 {
-    rg::ModelPainter painter;
-    EXPECT_THROW(painter.AddDataObject(nullptr), std::runtime_error);
-    EXPECT_THROW(painter.AddReferenceDataObject(nullptr, "ref"), std::runtime_error);
+    static_assert(std::is_invocable_v<decltype(&rg::AtomPainter::AddModel), rg::AtomPainter &, rg::ModelObject &>);
+    static_assert(std::is_invocable_v<decltype(&rg::ModelPainter::AddModel), rg::ModelPainter &, rg::ModelObject &>);
+    static_assert(std::is_invocable_v<decltype(&rg::GausPainter::AddModel), rg::GausPainter &, rg::ModelObject &>);
+    static_assert(std::is_invocable_v<decltype(&rg::ComparisonPainter::AddModel), rg::ComparisonPainter &, rg::ModelObject &>);
+    static_assert(std::is_invocable_v<decltype(&rg::ComparisonPainter::AddReferenceModel), rg::ComparisonPainter &, rg::ModelObject &, std::string_view>);
+    static_assert(std::is_invocable_v<decltype(&rg::DemoPainter::AddModel), rg::DemoPainter &, rg::ModelObject &>);
+    static_assert(std::is_invocable_v<decltype(&rg::DemoPainter::AddReferenceModel), rg::DemoPainter &, rg::ModelObject &, std::string_view>);
+
+    SUCCEED();
 }

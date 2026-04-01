@@ -1,13 +1,11 @@
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "detail/PainterTypeCheck.hpp"
-#include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -37,22 +35,16 @@ AtomPainter::~AtomPainter()
 
 }
 
-void AtomPainter::AddDataObject(DataObjectBase * data_object)
+void AtomPainter::AddModel(ModelObject & data_object)
 {
-    auto & typed_data_object{
-        painter_internal::RequirePainterObject<AtomObject>(
-            data_object, "AtomPainter", "AddDataObject") };
-    AppendAtomObject(typed_data_object);
-}
-
-void AtomPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
-{
-    auto & typed_data_object{
-        painter_internal::RequirePainterObject<AtomObject>(
-            data_object, "AtomPainter", "AddReferenceDataObject") };
-    (void)label;
-    if (typed_data_object.GetLocalPotentialEntry() == nullptr) return;
-    if (typed_data_object.GetSelectedFlag() == false) return;
+    if (m_output_label.empty())
+    {
+        m_output_label = data_object.GetKeyTag();
+    }
+    for (auto * atom : data_object.GetSelectedAtomList())
+    {
+        AppendAtomObject(*atom);
+    }
 }
 
 void AtomPainter::AppendAtomObject(AtomObject & data_object)
@@ -69,7 +61,7 @@ void AtomPainter::Painting()
     Logger::Log(LogLevel::Info, "Number of atom objects to be painted: "
                 + std::to_string(m_atom_object_list.size()));
 
-    auto label{ m_atom_object_list.at(0)->GetKeyTag() };
+    auto label{ m_output_label.empty() ? std::string("atom") : m_output_label };
     label += ".pdf";
     
     //PaintDemoPlot("demo_plot" + label);

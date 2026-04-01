@@ -4,7 +4,6 @@
 #include <string>
 #include <unordered_map>
 
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -13,9 +12,8 @@ namespace rhbm_gem {
 
 class LocalPotentialEntry;
 
-class AtomObject : public DataObjectBase
+class AtomObject
 {
-    std::string m_key_tag;
     bool m_is_selected;
     bool m_is_special_atom;
     int m_serial_id, m_residue_id;
@@ -37,9 +35,6 @@ public:
     AtomObject();
     ~AtomObject();
     AtomObject(const AtomObject & other);
-    std::unique_ptr<DataObjectBase> Clone() const override;
-    void SetKeyTag(const std::string & label) override { m_key_tag = label; }
-    std::string GetKeyTag() const override { return m_key_tag; }
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialAtomFlag(bool value) { m_is_special_atom = value; }

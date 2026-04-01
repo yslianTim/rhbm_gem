@@ -93,11 +93,6 @@ MapObject::MapObject(const MapObject & other) :
     SyncValueArrayState();
 }
 
-std::unique_ptr<DataObjectBase> MapObject::Clone() const
-{
-    return std::make_unique<MapObject>(*this);
-}
-
 void MapObject::RecomputeStatistics()
 {
     CalculateMapValueMin();

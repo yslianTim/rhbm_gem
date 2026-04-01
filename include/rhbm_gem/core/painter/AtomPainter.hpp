@@ -15,16 +15,17 @@ class TPaveText;
 namespace rhbm_gem {
 
 class AtomObject;
+class ModelObject;
 
 class AtomPainter : public PainterBase
 {
     std::vector<AtomObject *> m_atom_object_list;
+    std::string m_output_label;
 
 public:
     AtomPainter();
     ~AtomPainter();
-    void AddDataObject(DataObjectBase * data_object) override;
-    void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
+    void AddModel(ModelObject & data_object);
     void Painting() override;
 
 private:

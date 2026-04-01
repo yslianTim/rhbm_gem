@@ -15,7 +15,6 @@ TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
         "data/object/BondClassifier.hpp",
         "data/object/BondObject.hpp",
         "data/object/ChemicalComponentEntry.hpp",
-        "data/object/DataObjectBase.hpp",
         "data/object/GaussianStatistics.hpp",
         "data/object/GroupPotentialEntry.hpp",
         "data/object/LocalPotentialEntry.hpp",

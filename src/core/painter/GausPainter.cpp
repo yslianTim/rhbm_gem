@@ -2,7 +2,6 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
@@ -16,7 +15,6 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "detail/PainterTypeCheck.hpp"
 #include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
@@ -52,22 +50,7 @@ GausPainter::~GausPainter()
 
 }
 
-void GausPainter::AddDataObject(DataObjectBase * data_object)
-{
-    painter_internal::AppendPainterObject<ModelObject>(
-        data_object, "GausPainter", "AddDataObject", m_model_object_list);
-}
-
-void GausPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
-{
-    auto & typed_data_object{
-        painter_internal::RequirePainterObject<ModelObject>(
-            data_object, "GausPainter", "AddReferenceDataObject") };
-    (void)label;
-    (void)typed_data_object;
-}
-
-void GausPainter::AppendModelObject(ModelObject & data_object)
+void GausPainter::AddModel(ModelObject & data_object)
 {
     m_model_object_list.push_back(&data_object);
 }
@@ -1071,7 +1054,6 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"

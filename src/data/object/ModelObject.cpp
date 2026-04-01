@@ -66,7 +66,6 @@ ModelObject::ModelObject(const ModelObject & other) :
         auto * atom_1{ atom_ptr_map.at(bond->GetAtomObject1()) };
         auto * atom_2{ atom_ptr_map.at(bond->GetAtomObject2()) };
         auto cloned_bond{ std::make_unique<BondObject>(atom_1, atom_2) };
-        cloned_bond->SetKeyTag(bond->GetKeyTag());
         cloned_bond->SetSelectedFlag(bond->GetSelectedFlag());
         cloned_bond->SetSpecialBondFlag(bond->GetSpecialBondFlag());
         cloned_bond->SetBondKey(bond->GetBondKey());
@@ -128,11 +127,6 @@ ModelObject::ModelObject(const ModelObject & other) :
     copy_group_entries(other.m_bond_group_potential_entry_map, m_bond_group_potential_entry_map);
 
     RefreshDerivedState();
-}
-
-std::unique_ptr<DataObjectBase> ModelObject::Clone() const
-{
-    return std::make_unique<ModelObject>(*this);
 }
 
 void ModelObject::RefreshDerivedState()

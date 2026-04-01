@@ -9,7 +9,6 @@
 namespace rhbm_gem {
 
 AtomObject::AtomObject() :
-    m_key_tag{ "" },
     m_is_selected{ false }, m_is_special_atom{ false },
     m_serial_id{ 0 }, m_residue_id{ 0 },
     m_component_id{ "" }, m_atom_id{ "" }, m_chain_id{ "" }, m_indicator{ "" },
@@ -29,7 +28,6 @@ AtomObject::~AtomObject()
 }
 
 AtomObject::AtomObject(const AtomObject & other) :
-    m_key_tag{ other.m_key_tag },
     m_is_selected{ other.m_is_selected }, m_is_special_atom{ other.m_is_special_atom },
     m_serial_id{ other.m_serial_id }, m_residue_id{ other.m_residue_id },
     m_component_id{ other.m_component_id }, m_atom_id{ other.m_atom_id },
@@ -47,11 +45,6 @@ AtomObject::AtomObject(const AtomObject & other) :
     {
         m_local_potential_entry = std::make_unique<LocalPotentialEntry>(*other.m_local_potential_entry);
     }
-}
-
-std::unique_ptr<DataObjectBase> AtomObject::Clone() const
-{
-    return std::make_unique<AtomObject>(*this);
 }
 
 void AtomObject::SetResidue(Residue value) { m_residue = value; }

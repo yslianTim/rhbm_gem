@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -30,8 +31,8 @@ class DemoPainter : public PainterBase
 public:
     DemoPainter();
     ~DemoPainter();
-    void AddDataObject(DataObjectBase * data_object) override;
-    void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
+    void AddModel(ModelObject & data_object);
+    void AddReferenceModel(ModelObject & data_object, std::string_view label);
     void Painting() override;
 
 private:

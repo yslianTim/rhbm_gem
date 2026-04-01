@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -31,12 +32,11 @@ class ComparisonPainter : public PainterBase
 public:
     ComparisonPainter();
     ~ComparisonPainter();
-    void AddDataObject(DataObjectBase * data_object) override;
-    void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label) override;
+    void AddModel(ModelObject & data_object);
+    void AddReferenceModel(ModelObject & data_object, std::string_view label);
     void Painting() override;
 
 private:
-    void AppendModelObject(ModelObject & data_object);
     void PaintGroupGausEstimateComparison(const std::string & name);
     void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
     void PainMapValueComparison(const std::string & name, ModelObject * model_object, const std::vector<ModelObject *> & ref_model_object_list);

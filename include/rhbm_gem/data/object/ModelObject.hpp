@@ -12,7 +12,6 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
 #include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 
 template <typename T> struct KDNode;
 
@@ -23,7 +22,7 @@ class BondObject;
 class ChemicalComponentEntry;
 class GroupPotentialEntry;
 
-class ModelObject : public DataObjectBase
+class ModelObject
 {
     std::vector<std::unique_ptr<AtomObject>> m_atom_list;
     std::vector<std::unique_ptr<BondObject>> m_bond_list;
@@ -49,9 +48,8 @@ public:
     explicit ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_list);
     ~ModelObject();
     ModelObject(const ModelObject & other);
-    std::unique_ptr<DataObjectBase> Clone() const override;
-    void SetKeyTag(const std::string & label) override { m_key_tag = label; }
-    std::string GetKeyTag() const override { return m_key_tag; }
+    void SetKeyTag(const std::string & label) { m_key_tag = label; }
+    std::string GetKeyTag() const { return m_key_tag; }
 
     void AddAtom(std::unique_ptr<AtomObject> atom);
     void AddBond(std::unique_ptr<BondObject> bond);

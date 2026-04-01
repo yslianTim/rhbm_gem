@@ -23,11 +23,6 @@ Use the narrowest boundary that matches the change.
 - do not promote command-private cache helpers into shared data-layer APIs
 - do not add a shared helper just to forward to a single file or repository call
 
-`DataObjectDispatch`
-
-- use when generic code needs to probe or enforce `DataObjectBase` runtime type
-- keep command policy and persistence policy out of `DataObjectDispatch`
-
 ## 2. Required File Updates
 
 If you add or change reusable typed operations:
@@ -86,21 +81,13 @@ std::vector<AtomObject *> CollectSelectedAtoms(ModelObject & model_object);
 std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & model_object);
 ```
 
-## 4. Typed Dispatch Inside Generic Code
+## 4. Typed Integration Inside Generic Code
 
-Use probe helpers for optional branches:
-
-- `AsModelObject(...)`
-- `AsMapObject(...)`
-
-Use expect helpers when a mismatch is a contract violation:
-
-- `ExpectModelObject(...)`
-- `ExpectMapObject(...)`
-
-Top-level persistence routing is source-private; do not add new public dispatch helpers for catalog naming or repository/file routing.
-
-If callback bodies or command-local branches start growing, move the multi-step logic into typed helpers instead of adding more dispatch inline.
+- prefer concrete typed methods over shared runtime-dispatch layers
+- if only `ModelObject` is supported, accept `ModelObject &` directly
+- if only `MapObject` is supported, accept `MapObject &` directly
+- keep top-level persistence routing source-private; do not add public dispatch helpers just for catalog naming or repository/file routing
+- if command-local branches start growing, move the multi-step logic into typed helpers instead of adding a new type-erased facade
 
 ## 5. Command Integration Pattern
 

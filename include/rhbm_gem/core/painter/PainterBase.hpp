@@ -6,7 +6,6 @@
 
 namespace rhbm_gem {
 
-class DataObjectBase;
 class PainterBase
 {
 public:
@@ -14,12 +13,6 @@ public:
     virtual void SetFolder(const std::string & folder_path)
     {
         m_folder_path = FilePathHelper::EnsureTrailingSlash(folder_path);
-    }
-    virtual void AddDataObject(DataObjectBase * data_object) = 0;
-    virtual void AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
-    {
-        (void)data_object;
-        (void)label;
     }
     virtual void Painting() = 0;
 

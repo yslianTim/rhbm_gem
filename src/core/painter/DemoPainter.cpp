@@ -1,7 +1,6 @@
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
@@ -12,7 +11,6 @@
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include "detail/PainterTypeCheck.hpp"
 #include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
@@ -54,20 +52,14 @@ DemoPainter::~DemoPainter()
 
 }
 
-void DemoPainter::AddDataObject(DataObjectBase * data_object)
+void DemoPainter::AddModel(ModelObject & data_object)
 {
-    painter_internal::AppendPainterObject<ModelObject>(
-        data_object, "DemoPainter", "AddDataObject", m_model_object_list);
+    m_model_object_list.push_back(&data_object);
 }
 
-void DemoPainter::AddReferenceDataObject(DataObjectBase * data_object, const std::string & label)
+void DemoPainter::AddReferenceModel(ModelObject & data_object, std::string_view label)
 {
-    painter_internal::AppendPainterReferenceObject<ModelObject>(
-        data_object,
-        label,
-        "DemoPainter",
-        "AddReferenceDataObject",
-        m_ref_model_object_list_map);
+    m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
 }
 
 void DemoPainter::Painting()
@@ -1113,7 +1105,6 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"

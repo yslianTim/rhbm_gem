@@ -10,7 +10,6 @@
 namespace rhbm_gem {
 
 BondObject::BondObject() :
-    m_key_tag{ "" },
     m_is_selected{ false }, m_bond_key{ 0 },
     m_bond_type{ BondType::UNK }, m_bond_order{ BondOrder::UNK },
     m_atom_serial_id_1{ 0 }, m_atom_serial_id_2{ 0 },
@@ -22,7 +21,6 @@ BondObject::BondObject() :
 }
 
 BondObject::BondObject(AtomObject * atom_object_1, AtomObject * atom_object_2) :
-    m_key_tag{ "" },
     m_is_selected{ false }, m_bond_key{ 0 },
     m_bond_type{ BondType::UNK }, m_bond_order{ BondOrder::UNK },
     m_atom_serial_id_1{ atom_object_1->GetSerialID() },
@@ -60,7 +58,6 @@ BondObject::~BondObject()
 }
 
 BondObject::BondObject(const BondObject & other) :
-    m_key_tag{ other.m_key_tag },
     m_is_selected{ other.m_is_selected }, m_bond_key{ other.m_bond_key },
     m_bond_type{ other.m_bond_type }, m_bond_order{ other.m_bond_order },
     m_atom_serial_id_1{ other.m_atom_serial_id_1 },
@@ -74,11 +71,6 @@ BondObject::BondObject(const BondObject & other) :
     {
         m_local_potential_entry = std::make_unique<LocalPotentialEntry>(*other.m_local_potential_entry);
     }
-}
-
-std::unique_ptr<DataObjectBase> BondObject::Clone() const
-{
-    return std::make_unique<BondObject>(*this);
 }
 
 std::string BondObject::GetInfo() const

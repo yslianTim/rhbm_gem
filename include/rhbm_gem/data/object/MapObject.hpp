@@ -6,8 +6,6 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
-
 template <typename T> struct KDNode;
 
 namespace rhbm_gem {
@@ -27,7 +25,7 @@ public:
     void SetPosition(const std::array<float, 3> & position) { m_position = position; }
 };
 
-class MapObject : public DataObjectBase
+class MapObject
 {
     std::string m_key_tag;
     int m_thread_size;
@@ -51,9 +49,8 @@ public:
               std::unique_ptr<float[]> map_value_array);
     ~MapObject();
     MapObject(const MapObject & other);
-    std::unique_ptr<DataObjectBase> Clone() const override;
-    void SetKeyTag(const std::string & label) override { m_key_tag = label; }
-    std::string GetKeyTag() const override { return m_key_tag; }
+    void SetKeyTag(const std::string & label) { m_key_tag = label; }
+    std::string GetKeyTag() const { return m_key_tag; }
 
     std::array<int, 3> GetGridSize() const { return m_grid_size; }
     std::array<float, 3> GetGridSpacing() const { return m_grid_spacing; }

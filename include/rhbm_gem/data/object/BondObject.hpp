@@ -3,7 +3,6 @@
 #include <array>
 #include <string>
 
-#include <rhbm_gem/data/object/DataObjectBase.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -14,9 +13,8 @@ namespace rhbm_gem {
 class AtomObject;
 class LocalPotentialEntry;
 
-class BondObject : public DataObjectBase
+class BondObject
 {
-    std::string m_key_tag;
     bool m_is_selected;
     bool m_is_special_bond;
     BondKey m_bond_key;
@@ -34,9 +32,6 @@ public:
     explicit BondObject(AtomObject * atom_object_1, AtomObject * atom_object_2);
     ~BondObject();
     BondObject(const BondObject & other);
-    std::unique_ptr<DataObjectBase> Clone() const override;
-    void SetKeyTag(const std::string & label) override { m_key_tag = label; }
-    std::string GetKeyTag() const override { return m_key_tag; }
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialBondFlag(bool value) { m_is_special_bond = value; }
