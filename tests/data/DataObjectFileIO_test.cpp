@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "io/file/MapAxisOrderHelper.hpp"
 #include "support/CommandTestHelpers.hpp"

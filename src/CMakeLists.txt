@@ -45,7 +45,7 @@ target_sources(rhbm_gem PRIVATE
     data/object/PotentialEntryQuery.cpp
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp
-    data/io/file/FileIO.cpp
+    data/io/file/ModelMapFileIO.cpp
     data/io/file/MapAxisOrderHelper.cpp
     data/io/file/MrcFormat.cpp
     data/io/file/PdbFormat.cpp

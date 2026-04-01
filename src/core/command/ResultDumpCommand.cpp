@@ -1,6 +1,6 @@
 #include "ResultDumpCommand.hpp"
 
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>

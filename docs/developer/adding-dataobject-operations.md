@@ -39,8 +39,8 @@ If you add or change reusable typed operations:
 
 If you change file I/O behavior:
 
-- `/include/rhbm_gem/data/io/FileIO.hpp`
-- `/src/data/io/file/FileIO.cpp`
+- `/include/rhbm_gem/data/io/ModelMapFileIO.hpp`
+- `/src/data/io/file/ModelMapFileIO.cpp`
 - format-specific codec files under `/src/data/io/file/`
 - `/tests/data/DataObjectFileIO_test.cpp`
 - `/tests/data/DataObjectImportRegression_test.cpp` when parser edge cases change

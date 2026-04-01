@@ -13,7 +13,7 @@
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 

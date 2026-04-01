@@ -9,7 +9,7 @@
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

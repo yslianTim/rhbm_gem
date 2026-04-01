@@ -9,7 +9,7 @@ TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
 {
     const std::vector<std::string> expected{
         "data/io/DataRepository.hpp",
-        "data/io/FileIO.hpp",
+        "data/io/ModelMapFileIO.hpp",
         "data/object/AtomClassifier.hpp",
         "data/object/AtomObject.hpp",
         "data/object/BondClassifier.hpp",

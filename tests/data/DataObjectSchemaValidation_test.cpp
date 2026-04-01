@@ -4,7 +4,7 @@
 #include <stdexcept>
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "io/sqlite/SQLitePersistence.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"

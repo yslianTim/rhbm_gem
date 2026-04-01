@@ -1,6 +1,6 @@
 #include "MapSimulationCommand.hpp"
 #include "detail/DataObjectSummaryLog.hpp"
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>

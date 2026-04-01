@@ -1,4 +1,4 @@
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 
 #include "CCP4Format.hpp"
 #include "CifFormat.hpp"

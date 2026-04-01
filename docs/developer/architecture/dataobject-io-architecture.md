@@ -44,7 +44,7 @@ Top-level file-backed and SQLite-persisted `DataObject` roots are fixed to:
 | `ModelObject` | `.pdb`, `.cif`, `.mmcif`, `.mcif` | `.pdb`, `.cif` | yes |
 | `MapObject` | `.mrc`, `.map`, `.ccp4` | `.mrc`, `.map`, `.ccp4` | yes |
 
-Rules enforced by `/src/data/io/file/FileIO.cpp`:
+Rules enforced by `/src/data/io/file/ModelMapFileIO.cpp`:
 
 - extension lookup is case-insensitive
 - `.mmcif` and `.mcif` use the CIF reader and are read-only
@@ -91,7 +91,7 @@ Public API:
 Behavior:
 
 - only typed file entry points are public
-- `FileIO.cpp` owns the extension-to-codec tables for model and map formats
+- `ModelMapFileIO.cpp` owns the extension-to-codec tables for model and map formats
 - all public entry points wrap failures in `std::runtime_error` with file path and operation context
 - `WriteModel(..., model_parameter)` is the only public file I/O parameter that varies by caller policy
 
@@ -184,10 +184,10 @@ Behavior:
 Core orchestration:
 
 - `/include/rhbm_gem/data/io/DataRepository.hpp`
-- `/include/rhbm_gem/data/io/FileIO.hpp`
+- `/include/rhbm_gem/data/io/ModelMapFileIO.hpp`
 - `/src/core/command/detail/CommandBase.hpp`
 - `/src/data/io/DataRepository.cpp`
-- `/src/data/io/file/FileIO.cpp`
+- `/src/data/io/file/ModelMapFileIO.cpp`
 
 SQLite persistence:
 

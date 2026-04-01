@@ -5,7 +5,7 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include "painter/PotentialPlotBuilder.hpp"
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

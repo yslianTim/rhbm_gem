@@ -9,7 +9,7 @@
 #include <vector>
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
-#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
