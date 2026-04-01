@@ -9,16 +9,10 @@ class SQLiteWrapper;
 class ModelObject;
 
 class ModelObjectStorage {
-    SQLiteWrapper* m_database;
-
   public:
-    explicit ModelObjectStorage(SQLiteWrapper* db_manager);
-    ~ModelObjectStorage();
-
     static void CreateTables(SQLiteWrapper& database);
-
-    void Save(const ModelObject& obj, const std::string& key_tag);
-    std::unique_ptr<ModelObject> Load(const std::string& key_tag);
+    static void Save(SQLiteWrapper& database, const ModelObject& obj, const std::string& key_tag);
+    static std::unique_ptr<ModelObject> Load(SQLiteWrapper& database, const std::string& key_tag);
 };
 
 } // namespace rhbm_gem

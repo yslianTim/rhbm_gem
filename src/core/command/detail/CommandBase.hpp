@@ -2,7 +2,9 @@
 
 #include <cmath>
 #include <filesystem>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -10,9 +12,12 @@
 #include <vector>
 
 #include <rhbm_gem/core/command/CommandApi.hpp>
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
+#include <rhbm_gem/data/object/DataObjectDispatch.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
+#include "CommandObjectCache.hpp"
 #include "CommandEnumMetadata.hpp"
 
 namespace rhbm_gem {
@@ -42,7 +47,8 @@ public:
     const std::vector<ValidationIssueRecord> & GetValidationIssues() const { return m_validation_issues; }
 
 protected:
-    DataObjectManager m_data_manager;
+    command_detail::CommandObjectCache m_runtime_object_cache;
+    std::unique_ptr<DataRepository> m_data_repository;
     std::vector<ValidationIssueRecord> m_validation_issues;
 
     CommandBase() = default;
@@ -152,6 +158,85 @@ protected:
     std::filesystem::path BuildOutputPath(
         std::string_view stem,
         std::string_view extension) const;
+    void AttachDataRepository(const std::filesystem::path & database_path)
+    {
+        m_data_repository = std::make_unique<DataRepository>(database_path);
+    }
+    template <typename TypedDataObject>
+    std::shared_ptr<TypedDataObject> LoadInputFile(
+        const std::filesystem::path & filename,
+        const std::string & key_tag)
+    {
+        std::unique_ptr<TypedDataObject> data_object;
+        if constexpr (std::is_same_v<TypedDataObject, ModelObject>)
+        {
+            data_object = ReadModel(filename);
+        }
+        else if constexpr (std::is_same_v<TypedDataObject, MapObject>)
+        {
+            data_object = ReadMap(filename);
+        }
+        else
+        {
+            static_assert(
+                std::is_same_v<TypedDataObject, ModelObject>
+                    || std::is_same_v<TypedDataObject, MapObject>,
+                "LoadInputFile only supports ModelObject or MapObject.");
+        }
+        data_object->SetKeyTag(key_tag);
+        std::shared_ptr<TypedDataObject> shared_object{ std::move(data_object) };
+        m_runtime_object_cache.Put(key_tag, shared_object);
+        return shared_object;
+    }
+    template <typename TypedDataObject>
+    std::shared_ptr<TypedDataObject> LoadPersistedObject(const std::string & key_tag)
+    {
+        if (m_data_repository == nullptr)
+        {
+            throw std::runtime_error("Database repository is not initialized.");
+        }
+        std::unique_ptr<TypedDataObject> data_object;
+        if constexpr (std::is_same_v<TypedDataObject, ModelObject>)
+        {
+            data_object = m_data_repository->LoadModel(key_tag);
+        }
+        else if constexpr (std::is_same_v<TypedDataObject, MapObject>)
+        {
+            data_object = m_data_repository->LoadMap(key_tag);
+        }
+        else
+        {
+            static_assert(
+                std::is_same_v<TypedDataObject, ModelObject>
+                    || std::is_same_v<TypedDataObject, MapObject>,
+                "LoadPersistedObject only supports ModelObject or MapObject.");
+        }
+        std::shared_ptr<TypedDataObject> shared_object{ std::move(data_object) };
+        m_runtime_object_cache.Put(key_tag, shared_object);
+        return shared_object;
+    }
+    void SaveStoredObject(
+        const std::string & key_tag,
+        const std::string & persisted_key = "")
+    {
+        if (m_data_repository == nullptr)
+        {
+            throw std::runtime_error("Database repository is not initialized.");
+        }
+        const auto saved_key_tag{ persisted_key.empty() ? key_tag : persisted_key };
+        auto data_object{ m_runtime_object_cache.Get(key_tag) };
+        if (const auto * model_object{ AsModelObject(*data_object) })
+        {
+            m_data_repository->SaveModel(*model_object, saved_key_tag);
+            return;
+        }
+        if (const auto * map_object{ AsMapObject(*data_object) })
+        {
+            m_data_repository->SaveMap(*map_object, saved_key_tag);
+            return;
+        }
+        throw std::runtime_error("Unsupported data object type for persistence.");
+    }
 
 private:
     CommandRequestBase * m_base_request{ nullptr };

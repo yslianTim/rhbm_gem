@@ -76,12 +76,25 @@ Expected result contract:
 
 `PotentialAnalysisCommand::ExecuteImpl()`:
 
-- loads the database, model, and map objects
+- builds command-owned data objects through `BuildDataObject()`
 - optionally switches the model object into simulation mode
 - runs map preprocessing and model preprocessing
 - performs atom sampling, classification, fitting, and optional alpha training
 - runs the experimental bond workflow when enabled
-- saves the resulting objects back through `DataObjectManager`
+- saves the prepared model through `SavePreparedModel()`
+
+`PotentialAnalysisCommand::BuildDataObject()`:
+
+- attaches `DataRepository` to `request.database_path`
+- loads the model and map through `LoadInputFile<T>(...)`, which delegates to `FileIO`
+- stores loaded objects in the command-local runtime cache owned by `CommandBase`
+- wraps load failures with command-specific error context
+
+`PotentialAnalysisCommand::SavePreparedModel()`:
+
+- persists the prepared model through `SaveStoredObject(...)`
+- writes to the repository using `request.saved_key_tag` as the persisted key
+- clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
 
 `CommandBase` also creates `output_dir` during filesystem preflight when needed.
 

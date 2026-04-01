@@ -5,7 +5,7 @@
 
 #include "support/CommandTestHelpers.hpp"
 #include "painter/PotentialPlotBuilder.hpp"
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -21,8 +21,9 @@ namespace {
 
 std::shared_ptr<rg::ModelObject> LoadModelFixture(const std::string & fixture_name)
 {
-    rg::DataObjectManager manager{};
-    return manager.ImportFileAs<rg::ModelObject>(command_test::TestDataPath(fixture_name), "model");
+    auto model{ rg::ReadModel(command_test::TestDataPath(fixture_name)) };
+    model->SetKeyTag("model");
+    return std::shared_ptr<rg::ModelObject>{ std::move(model) };
 }
 
 void EnsureLocalPotentialEntries(rg::ModelObject & model)

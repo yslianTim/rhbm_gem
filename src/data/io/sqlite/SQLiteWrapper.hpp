@@ -2,13 +2,9 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <string>
-#include <vector>
-#include <tuple>
-#include <utility>
-#include <memory>
 #include <exception>
 #include <filesystem>
+#include <string>
 
 #include "SQLiteBinder.hpp"
 #include "SQLiteColumnReader.hpp"
@@ -77,41 +73,6 @@ public:
         TransactionGuard & operator=(const TransactionGuard &) = delete;
     };
 
-    template<typename... Ts>
-    class QueryIterator
-    {
-        SQLiteWrapper & m_db;
-        StatementGuard m_guard;
-
-    public:
-        QueryIterator(SQLiteWrapper & db, const std::string & sql) : m_db{ db }, m_guard{ db }
-        {
-            m_db.Prepare(sql);
-        }
-
-        bool Next(std::tuple<Ts...> & row)
-        {
-            auto rc{ m_db.StepNext() };
-            if (rc == StepRow())
-            {
-                row = m_db.ReadRow<Ts...>(m_db, std::make_index_sequence<sizeof...(Ts)>{});
-                return true;
-            }
-            else if (rc == StepDone())
-            {
-                return false;
-            }
-            else
-            {
-                throw std::runtime_error("Query step failed: " + m_db.ErrorMessage());
-            }
-        }
-
-        QueryIterator(const QueryIterator &) = delete;
-        QueryIterator & operator=(const QueryIterator &) = delete;
-    };
-
-public:
     explicit SQLiteWrapper(const std::filesystem::path & database_path) :
         m_database_ptr{ nullptr }, m_statement_ptr{ nullptr }
     {
@@ -228,44 +189,6 @@ public:
         m_statement_ptr = nullptr;
     }
 
-    void ClearTable(const std::string & table_name)
-    {
-        std::string sql{ "DELETE FROM " + table_name + ";" };
-        this->Execute(sql);
-    }
-
-    template<typename... Ts>
-    std::vector<std::tuple<Ts...>> Query(const std::string & sql)
-    {
-        std::vector<std::tuple<Ts...>> results;
-        Prepare(sql);
-        StatementGuard guard(*this);
-        while (true)
-        {
-            auto return_code{ StepNext() };
-            if (return_code == StepDone())
-            {
-                break;
-            }
-            else if (return_code == StepRow())
-            {
-                std::tuple<Ts...> row{ ReadRow<Ts...>(*this, std::make_index_sequence<sizeof...(Ts)>{}) };
-                results.emplace_back(std::move(row));
-            }
-            else
-            {
-                throw std::runtime_error("Query step failed: " + ErrorMessage());
-            }
-        }
-        return results;
-    }
-
-    template<typename... Ts>
-    QueryIterator<Ts...> IterateQuery(const std::string & sql)
-    {
-        return QueryIterator<Ts...>(*this, sql);
-    }
-
     template<typename T>
     void Bind(int index, const T & value)
     {
@@ -290,14 +213,6 @@ public:
         }
         return SQLiteColumnReader<T>::Get(m_statement_ptr, index);
     }
-
-private:
-    template<typename... Ts, std::size_t... Is>
-    std::tuple<Ts...> ReadRow(SQLiteWrapper & db, std::index_sequence<Is...>)
-    {
-        return std::make_tuple(db.GetColumn<Ts>(Is)...);
-    }
-    
 };
 
 } // namespace rhbm_gem

@@ -1,7 +1,6 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -349,11 +348,11 @@ bool PotentialAnalysisCommand::BuildDataObject()
     ScopeTimer timer("PotentialAnalysisCommand::BuildDataObject");
     try
     {
-        m_data_manager.OpenDatabase(request.database_path);
-        m_model_object = m_data_manager.ImportFileAs<ModelObject>(
+        AttachDataRepository(request.database_path);
+        m_model_object = LoadInputFile<ModelObject>(
             request.model_file_path,
             m_model_key_tag);
-        m_map_object = m_data_manager.ImportFileAs<MapObject>(
+        m_map_object = LoadInputFile<MapObject>(
             request.map_file_path,
             m_map_key_tag);
         if (request.simulation_flag)
@@ -719,7 +718,7 @@ void PotentialAnalysisCommand::SavePreparedModel()
     ScopeTimer timer("PotentialAnalysisCommand::SavePreparedModel");
     if (m_model_object == nullptr) return;
 
-    m_data_manager.SaveToDatabase(m_model_key_tag, RequestOptions().saved_key_tag);
+    SaveStoredObject(m_model_key_tag, RequestOptions().saved_key_tag);
 
     for (auto atom : m_model_object->GetSelectedAtomList())
     {

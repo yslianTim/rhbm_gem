@@ -1,7 +1,6 @@
 #include "ResultDumpCommand.hpp"
 
 #include <rhbm_gem/data/io/FileIO.hpp>
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
@@ -72,19 +71,19 @@ bool ResultDumpCommand::BuildDataObjectList()
     ScopeTimer timer("ResultDumpCommand::BuildDataObjectList");
     try
     {
-        m_data_manager.OpenDatabase(request.database_path);
+        AttachDataRepository(request.database_path);
         if (request.map_file_path.empty())
         {
             m_map_object.reset();
         }
         else
         {
-            m_map_object = m_data_manager.ImportFileAs<MapObject>(request.map_file_path, m_map_key_tag);
+            m_map_object = LoadInputFile<MapObject>(request.map_file_path, m_map_key_tag);
         }
         m_selected_atom_list_map.clear();
         for (const auto & key : request.model_key_tag_list)
         {
-            auto model_object{ m_data_manager.LoadFromDatabaseAs<ModelObject>(key) };
+            auto model_object{ LoadPersistedObject<ModelObject>(key) };
             m_model_object_list.emplace_back(model_object);
             const auto & selected_atom_list{ model_object->GetSelectedAtomList() };
             m_selected_atom_list_map[key] = {

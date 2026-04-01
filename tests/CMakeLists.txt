@@ -100,12 +100,22 @@ set(CORE_CONTRACT_TEST_SOURCES
     core/contract/PublicHeaderSurface_test.cpp
 )
 
+set(DATA_CONTRACT_TEST_SOURCES
+    data/DataPublicSurface_test.cpp
+)
+
 set(DATA_RUNTIME_TEST_SOURCES
-    data/DataObjectRuntime_test.cpp
+    data/DataObjectDispatchAndIngestion_test.cpp
+    data/DataObjectFileIO_test.cpp
+    data/DataObjectImportRegression_test.cpp
+    data/DataObjectRuntimeBehavior_test.cpp
 )
 
 set(DATA_SCHEMA_TEST_SOURCES
-    data/DataObjectSchema_test.cpp
+    data/DataObjectPersistence_test.cpp
+    data/DataObjectSchemaBootstrap_test.cpp
+    data/DataObjectSchemaCompatibility_test.cpp
+    data/DataObjectSchemaValidation_test.cpp
 )
 
 set(UTILS_MATH_TEST_SOURCES
@@ -146,6 +156,7 @@ set(INTEGRATION_COMMAND_TEST_SOURCES
 set(RHBM_GEM_ALL_GTEST_SOURCES
     ${CORE_COMMAND_TEST_SOURCES}
     ${CORE_CONTRACT_TEST_SOURCES}
+    ${DATA_CONTRACT_TEST_SOURCES}
     ${DATA_RUNTIME_TEST_SOURCES}
     ${DATA_SCHEMA_TEST_SOURCES}
     ${UTILS_MATH_TEST_SOURCES}
@@ -184,9 +195,15 @@ add_rhbm_gtest_group(rhbm_tests_core_contract
     SOURCES ${CORE_CONTRACT_TEST_SOURCES}
 )
 
+add_rhbm_gtest_group(rhbm_tests_data_contract
+    DOMAIN data
+    INTENTS contract
+    SOURCES ${DATA_CONTRACT_TEST_SOURCES}
+)
+
 add_rhbm_gtest_group(rhbm_tests_data_runtime
     DOMAIN data
-    INTENTS io contract
+    INTENTS io
     SOURCES ${DATA_RUNTIME_TEST_SOURCES}
 )
 

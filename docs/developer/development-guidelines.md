@@ -65,7 +65,7 @@ See:
 - [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
 - [`/docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
 - [`/docs/developer/architecture/dataobject-io-architecture.md`](/docs/developer/architecture/dataobject-io-architecture.md)
-- [`/docs/developer/adding-dataobject-operations-and-iteration.md`](/docs/developer/adding-dataobject-operations-and-iteration.md)
+- [`/docs/developer/adding-dataobject-operations.md`](/docs/developer/adding-dataobject-operations.md)
 
 Command-layer principles:
 
@@ -77,7 +77,7 @@ Command-layer principles:
 DataObject I/O principles:
 
 - `[Required]` Keep file-format support definitions centralized in a single registry-style source of truth.
-- `[Required]` Use explicit fixed routing with centralized registry-driven descriptor lookup.
+- `[Required]` Use explicit fixed routing with centralized extension-to-codec or type-to-handler lookup.
 - `[Required]` Reader/writer and DAO paths should fail fast with clear exceptions when contracts are violated.
 - `[Required]` Keep schema versioning, bootstrap, and validation centralized in persistence-management components.
 - `[Required]` Keep normal save/load hot paths separate from bootstrap/repair logic.
@@ -87,7 +87,7 @@ DataObject I/O principles:
 Change-integration principles:
 
 - `[Required]` New commands must update CLI registration, Python bindings, tests, and developer docs together unless intentionally internal-only.
-- `[Recommended]` Keep manager classes as boundary objects that connect commands, file I/O, and persistence.
+- `[Recommended]` Keep boundary objects narrowly scoped; prefer separate command, file I/O, and persistence responsibilities over mixed facades.
 
 ## 8. Testing and Regression Policy
 

@@ -1,6 +1,5 @@
 #include "MapSimulationCommand.hpp"
 #include "detail/DataObjectSummaryLog.hpp"
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -203,7 +202,7 @@ bool MapSimulationCommand::BuildDataObject()
     ScopeTimer timer("MapSimulationCommand::BuildDataObject");
     try
     {
-        m_model_object = m_data_manager.ImportFileAs<ModelObject>(
+        m_model_object = LoadInputFile<ModelObject>(
             request.model_file_path,
             std::string(kModelKey));
         BuildAtomList(m_model_object.get());

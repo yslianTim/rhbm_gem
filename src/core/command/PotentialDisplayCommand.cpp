@@ -1,5 +1,4 @@
 #include "PotentialDisplayCommand.hpp"
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -122,14 +121,14 @@ bool PotentialDisplayCommand::BuildDataObject()
     ScopeTimer timer{ "PotentialDisplayCommand::BuildDataObject" };
     try
     {
-        m_data_manager.OpenDatabase(request.database_path);
+        AttachDataRepository(request.database_path);
         auto model_size{ request.model_key_tag_list.size() };
         size_t model_count{ 1 };
         Logger::Log(LogLevel::Info, "Load model object list:");
         for (const auto & key : request.model_key_tag_list)
         {
             Logger::ProgressBar(model_count, model_size);
-            m_model_object_list.emplace_back(m_data_manager.LoadFromDatabaseAs<ModelObject>(key));
+            m_model_object_list.emplace_back(LoadPersistedObject<ModelObject>(key));
             model_count++;
         }
         for (const auto & [map_key, key_tag_list] : request.reference_model_groups)
@@ -141,7 +140,7 @@ bool PotentialDisplayCommand::BuildDataObject()
             {
                 Logger::ProgressBar(ref_model_count, ref_model_size);
                 m_ref_model_object_list_map[map_key].emplace_back(
-                    m_data_manager.LoadFromDatabaseAs<ModelObject>(key_tag));
+                    LoadPersistedObject<ModelObject>(key_tag));
                 ref_model_count++;
             }
         }

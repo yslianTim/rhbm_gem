@@ -1,6 +1,6 @@
 #include "SQLitePersistence.hpp"
 
-#include "../detail/TopLevelObjectRouting.hpp"
+#include "../detail/ObjectRouting.hpp"
 #include "ModelObjectStorage.hpp"
 #include "SQLiteWrapper.hpp"
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
@@ -616,7 +616,7 @@ std::unique_ptr<rhbm_gem::MapObject> LoadMapObject(
 namespace rhbm_gem {
 
 SQLitePersistence::SQLitePersistence(const std::filesystem::path & database_path) :
-    m_database_path{ database_path }, m_database{ nullptr }, m_model_store{ nullptr }
+    m_database_path{ database_path }, m_database{ nullptr }
 {
     if (m_database_path.empty())
     {
@@ -637,7 +637,6 @@ SQLitePersistence::SQLitePersistence(const std::filesystem::path & database_path
     }
 
     m_database = std::make_unique<SQLiteWrapper>(m_database_path);
-    m_model_store = std::make_unique<ModelObjectStorage>(m_database.get());
     EnsureCurrentSchema(*m_database);
 }
 
@@ -649,8 +648,8 @@ void SQLitePersistence::Save(const DataObjectBase & data_object, const std::stri
     SQLiteWrapper::TransactionGuard transaction(*m_database);
 
     const auto kind{
-        io_detail::ResolveTopLevelObjectKind(data_object, "SQLitePersistence::Save()") };
-    const auto type_name{ std::string(io_detail::GetCatalogTypeName(kind)) };
+        io_internal::ResolveTopLevelObjectKind(data_object, "SQLitePersistence::Save()") };
+    const auto type_name{ std::string(io_internal::GetCatalogTypeName(kind)) };
     m_database->Prepare(std::string(kUpsertCatalogSql));
     SQLiteWrapper::StatementGuard guard(*m_database);
     m_database->Bind<std::string>(1, key_tag);
@@ -659,10 +658,10 @@ void SQLitePersistence::Save(const DataObjectBase & data_object, const std::stri
 
     switch (kind)
     {
-    case io_detail::TopLevelObjectKind::Model:
-        m_model_store->Save(static_cast<const ModelObject &>(data_object), key_tag);
+    case io_internal::TopLevelObjectKind::Model:
+        ModelObjectStorage::Save(*m_database, static_cast<const ModelObject &>(data_object), key_tag);
         return;
-    case io_detail::TopLevelObjectKind::Map:
+    case io_internal::TopLevelObjectKind::Map:
         SaveMapObject(*m_database, static_cast<const MapObject &>(data_object), key_tag);
         return;
     }
@@ -689,12 +688,12 @@ std::unique_ptr<DataObjectBase> SQLitePersistence::Load(const std::string & key_
         throw std::runtime_error("Step failed: " + m_database->ErrorMessage());
     }
 
-    const auto kind{ io_detail::ParseCatalogTypeName(m_database->GetColumn<std::string>(0)) };
+    const auto kind{ io_internal::ParseCatalogTypeName(m_database->GetColumn<std::string>(0)) };
     switch (kind)
     {
-    case io_detail::TopLevelObjectKind::Model:
-        return m_model_store->Load(key_tag);
-    case io_detail::TopLevelObjectKind::Map:
+    case io_internal::TopLevelObjectKind::Model:
+        return ModelObjectStorage::Load(*m_database, key_tag);
+    case io_internal::TopLevelObjectKind::Map:
         return LoadMapObject(*m_database, key_tag);
     }
 

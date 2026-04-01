@@ -307,7 +307,8 @@ void CommandBase::BeginPreparationPass()
 {
     Logger::SetLogLevel(VerboseLevel());
     ResetRuntimeState();
-    m_data_manager.ClearDataObjects();
+    m_runtime_object_cache.Clear();
+    m_data_repository.reset();
     InvalidatePreparedState();
 }
 

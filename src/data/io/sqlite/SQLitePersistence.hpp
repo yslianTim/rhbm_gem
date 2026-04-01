@@ -15,7 +15,6 @@ class SQLitePersistence
 {
     std::filesystem::path m_database_path;
     std::unique_ptr<SQLiteWrapper> m_database;
-    std::unique_ptr<ModelObjectStorage> m_model_store;
     mutable std::mutex m_db_mutex;
 
 public:

@@ -12,7 +12,6 @@ class AtomSelector;
 
 namespace rhbm_gem {
 
-class DataObjectManager;
 class ModelObject;
 
 class PotentialDisplayCommand : public CommandWithRequest<PotentialDisplayRequest>

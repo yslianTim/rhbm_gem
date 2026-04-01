@@ -1,23 +1,24 @@
-# DataObject I/O and Iteration Architecture
+# DataObject I/O Architecture
 
 This document describes the current runtime contract for:
 
-- file I/O
+- typed file I/O
 - SQLite persistence
 - typed object dispatch
-- `DataObjectManager` storage and iteration
+- command-side object loading and persistence
 
 Related references:
 
 - [`/docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
 - [`/docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
-- [`/docs/developer/adding-dataobject-operations-and-iteration.md`](/docs/developer/adding-dataobject-operations-and-iteration.md)
+- [`/docs/developer/adding-dataobject-operations.md`](/docs/developer/adding-dataobject-operations.md)
 
 Header boundary rule:
 
 - only `/include/rhbm_gem/data/**` is public API surface
 - headers stored under `/src/data/**` are internal implementation details
-- source-private data I/O headers live next to their `.cpp` files under `/src/data/io/file` and `/src/data/io/sqlite`
+- headers stored under `/src/core/command/detail/**` are command-internal orchestration helpers
+- source-private data I/O headers live under `/src/data/io/file`, `/src/data/io/sqlite`, and `/src/data/io/detail`
 
 ## 1. Scope
 
@@ -28,7 +29,15 @@ Top-level file-backed and SQLite-persisted `DataObject` roots are fixed to:
 
 `AtomObject` and `BondObject` are model-domain objects. They are not top-level file or database roots.
 
-## 2. Supported Surface
+## 2. Public Surface
+
+| Component | Public entry points | Responsibility |
+| --- | --- | --- |
+| `FileIO` | `ReadModel`, `WriteModel`, `ReadMap`, `WriteMap` | Typed file import/export |
+| `DataRepository` | `DataRepository(path)`, `LoadModel`, `LoadMap`, `SaveModel`, `SaveMap` | Database persistence only |
+| `DataObjectDispatch` | `AsModelObject`, `AsMapObject`, `ExpectModelObject`, `ExpectMapObject` | Runtime type probing and enforcement |
+
+## 3. Supported Formats
 
 | Top-level object | File read | File write | SQLite save/load |
 | --- | --- | --- | --- |
@@ -39,38 +48,40 @@ Rules enforced by `/src/data/io/file/FileIO.cpp`:
 
 - extension lookup is case-insensitive
 - `.mmcif` and `.mcif` use the CIF reader and are read-only
-- `.mrc` uses the MRC backend
-- `.map` and `.ccp4` use the CCP4 backend
-- typed file entry points fail when the extension resolves to the wrong top-level kind
+- `.mrc` uses the MRC codec
+- `.map` and `.ccp4` use the CCP4 codec
+- typed entry points fail when the extension resolves to an unsupported operation
 
-## 3. Runtime Topology
+## 4. Runtime Topology
 
 ```mermaid
 flowchart LR
-    A["Commands / tests / bindings"] --> B["DataObjectManager"]
+    A["Commands / tests / bindings"] --> B["FileIO public API"]
+    A --> C["DataRepository public API"]
+    A --> D["DataObjectDispatch"]
 
     subgraph F["File I/O"]
-      B --> C["ImportFileAs<T> / ExportToFile"]
-      C --> D["descriptor lookup by extension"]
-      D --> E["PDB / CIF / MRC / CCP4 backends"]
+      B --> E["model/map codec lookup by extension"]
+      E --> F1["PDB / CIF / MRC / CCP4 codecs"]
     end
 
     subgraph P["SQLite persistence"]
-      B --> H["SQLitePersistence"]
-      H --> I["schema bootstrap / validation"]
-      H --> J["object_catalog routing"]
-      J --> K["ModelObjectStorage"]
-      J --> L["inline MapObject save/load"]
+      C --> G["SQLitePersistence"]
+      G --> H["schema bootstrap / validation"]
+      G --> I["object_catalog routing"]
+      I --> J["ModelObjectStorage"]
+      I --> K["inline MapObject save/load"]
+      L["src/data/io/detail/ObjectRouting.hpp"] --> I
     end
 
-    subgraph T["Typed helpers"]
-      B --> M["ForEachDataObject(...)"]
-      N["DataObjectDispatch"] --> N1["As* / Expect* helpers"]
-      O["src/data/io/detail/TopLevelObjectRouting.hpp"] --> O1["catalog type / top-level kind routing"]
+    subgraph R["Command runtime"]
+      M["CommandBase helpers"] --> N["LoadInputFile<T> / LoadPersistedObject<T> / SaveStoredObject"]
+      M --> O["CommandObjectCache"]
+      A --> M
     end
 ```
 
-## 4. File I/O Contract
+## 5. File I/O Contract
 
 Public API:
 
@@ -79,83 +90,39 @@ Public API:
 
 Behavior:
 
-- `FileIO.cpp` owns the fixed descriptor table for supported extensions.
-- only typed file entry points are public; generic top-level file routing is internal-only
-- all public typed entry points wrap failures in `std::runtime_error` with file path and operation context
+- only typed file entry points are public
+- `FileIO.cpp` owns the extension-to-codec tables for model and map formats
+- all public entry points wrap failures in `std::runtime_error` with file path and operation context
+- `WriteModel(..., model_parameter)` is the only public file I/O parameter that varies by caller policy
 
-`DataObjectManager` integration:
+## 6. Database Persistence Contract
 
-- `ImportFileAs<T>(filename, key_tag)` reads a typed object, sets `key_tag`, stores it in memory, and returns `shared_ptr<T>`
-- `ExportToFile(filename, key_tag)` writes the stored object to disk and throws if the key is missing or the stored type is unsupported for export
-- replacing an existing in-memory key is allowed and logs a warning
+Public API:
 
-## 5. In-Memory Manager Contract
-
-`DataObjectManager` stores objects in:
-
-- `std::unordered_map<std::string, std::shared_ptr<DataObjectBase>>`
-
-Concurrency boundaries:
-
-- `m_map_mutex` protects the in-memory object map
-- SQLite operation serialization is owned by `SQLitePersistence`
-
-Public lookup and lifecycle helpers:
-
-- `ClearDataObjects()`
-- `Contains(key_tag)`
-- `GetDataObject(key_tag)`
-- `Require<T>(key_tag)`
-- `ImportFileAs<T>(path, key_tag)`
-- `LoadFromDatabaseAs<T>(key_tag)`
-- `ExportToFile(path, key_tag)`
-- `SaveToDatabase(key_tag, persisted_key="")`
+- `DataRepository(database_path)`
+- `LoadModel(key_tag)` / `LoadMap(key_tag)`
+- `SaveModel(model, key_tag)` / `SaveMap(map, key_tag)`
 
 Behavior:
 
-- `GetDataObject(key_tag)` throws if the key is missing
-- `Require<T>(key_tag)` throws if the key is missing or the runtime type does not match `T`
-- `ImportFileAs<T>(...)` and `LoadFromDatabaseAs<T>(...)` both return typed pointers and do not require a follow-up lookup
-- private store insertion logs replacement events and rejects `nullptr`
-
-## 6. SQLite Persistence Contract
-
-Manager entry points:
-
-- `OpenDatabase(db_path)`
-- `SaveToDatabase(key_tag, persisted_key="")`
-- `LoadFromDatabaseAs<T>(key_tag)`
-
-`OpenDatabase(...)` behavior:
-
-- creates an internal `SQLitePersistence` object
-- if the same database path is already active, logs a warning and keeps the existing instance
-- if the path is empty, `SQLitePersistence` falls back to `database.sqlite`
+- `DataRepository` is database-only; it does not perform file I/O
+- the database path is bound at construction time
+- `LoadModel(...)` and `LoadMap(...)` return typed `std::unique_ptr` objects
+- save methods persist under the explicit key passed by the caller
+- saving under a different persisted key does not rename the source object's in-memory `key_tag`
+- if the repository is constructed with an empty path, `SQLitePersistence` falls back to `database.sqlite`
 
 `SQLitePersistence` responsibilities:
 
 - create the database parent directory if needed
 - open SQLite
-- bootstrap or validate only the current normalized schema
+- bootstrap or validate the current normalized schema
+- serialize save/load operations with an internal mutex
 - own a transaction for each save/load operation
 - route by catalog type name stored in `object_catalog(key_tag, object_type)`
 - dispatch supported top-level types only:
   - `model` -> `ModelObjectStorage`
   - `map` -> inline map save/load helpers in `SQLitePersistence.cpp`
-
-Behavior differences to keep straight:
-
-- `DataObjectManager::SaveToDatabase(...)`
-  - throws if the DB manager is not initialized
-  - throws if the in-memory key is missing
-  - `persisted_key` changes only the persisted key, not the in-memory key
-- `SQLitePersistence::Save(...)`
-  - resolves the top-level kind via source-private routing helpers
-- `LoadFromDatabaseAs<T>(...)`
-  - throws if the DB manager is not initialized
-  - throws if the catalog row is missing
-  - throws if the loaded runtime type does not match `T`
-  - stores the object in memory under the requested key and returns `shared_ptr<T>`
 
 ## 7. Schema Contract
 
@@ -193,60 +160,33 @@ Behavior:
 
 - `As*` helpers return a typed pointer or `nullptr`
 - `Expect*` helpers return a typed reference or throw with caller context and resolved runtime type
-- catalog type name and top-level persistence routing are no longer public API; they live in source-private I/O helpers
+- catalog naming and top-level persistence routing stay in source-private I/O helpers
 
-## 9. Manager Iteration Contract
+## 9. Command Integration Contract
 
-`DataObjectManager::ForEachDataObject(...)` has mutable and const overloads plus:
+Commands built on `CommandBase` typically use these internal helpers:
 
-```cpp
-struct IterateOptions
-{
-    bool deterministic_order{ true };
-};
-```
+- `LoadInputFile<T>(path, key_tag)`
+- `AttachDataRepository(database_path)`
+- `LoadPersistedObject<T>(key_tag)`
+- `SaveStoredObject(key_tag, persisted_key="")`
 
 Behavior:
 
-- empty key list:
-  - `deterministic_order=true`: iterate keys in lexicographic order
-  - `deterministic_order=false`: iterate current `unordered_map` container order
-- non-empty key list:
-  - callback order follows the caller-provided key order
-  - missing keys are skipped with warning logs
-- empty callbacks throw `std::runtime_error`
-- traversal is snapshot-based:
-  - the manager copies matching `shared_ptr`s while holding `m_map_mutex`
-  - callbacks run after the mutex is released
+- `LoadInputFile<T>(...)` reads a typed object through `FileIO`, sets its `key_tag`, stores it in a command-private cache, and returns `shared_ptr<T>`
+- `LoadPersistedObject<T>(...)` loads through `DataRepository`, stores the result in the same command-private cache, and returns `shared_ptr<T>`
+- `SaveStoredObject(...)` resolves the cached runtime type via `DataObjectDispatch` and persists through `DataRepository`
+- the command-private `CommandObjectCache` is an implementation detail of `CommandBase`, not a shared data-layer contract
+- there is no shared manager-owned iteration API; traversal, ordering, and selection belong in command-local typed workflows or ordinary container iteration
 
-## 10. Shared Command Helpers
-
-Current guidance:
-
-- simple file/database loading should call typed `DataObjectManager` entry points directly in the command orchestration layer
-- command-specific error context should be added in the command `BuildDataObject(...)` or equivalent `try/catch`
-- keep one-hop wrappers local only when they add real policy, not when they only forward to:
-  - `ImportFileAs<T>(...)`
-  - `LoadFromDatabaseAs<T>(...)`
-  - `Require<T>(...)`
-
-Some typed workflow helpers still exist only as command-local functions such as:
-
-- `PrepareModelForPotentialAnalysis(...)`
-- `PrepareModelForVisualization(...)`
-- `ApplyModelSelection(...)`
-- `PrepareSimulationAtoms(...)`
-- `BuildModelAtomBondContext(...)`
-
-Promote these to a shared internal helper layer only when they are reused by multiple commands and the extracted workflow is materially larger than a one-hop wrapper.
-
-## 11. Key Files
+## 10. Key Files
 
 Core orchestration:
 
-- `/include/rhbm_gem/data/io/DataObjectManager.hpp`
+- `/include/rhbm_gem/data/io/DataRepository.hpp`
 - `/include/rhbm_gem/data/io/FileIO.hpp`
-- `/src/data/io/DataObjectManager.cpp`
+- `/src/core/command/detail/CommandBase.hpp`
+- `/src/data/io/DataRepository.cpp`
 - `/src/data/io/file/FileIO.cpp`
 
 SQLite persistence:
@@ -255,13 +195,18 @@ SQLite persistence:
 - `/src/data/io/sqlite/SQLitePersistence.cpp`
 - `/src/data/io/sqlite/ModelObjectStorage.hpp`
 - `/src/data/io/sqlite/ModelObjectStorage.cpp`
+- `/src/data/io/detail/ObjectRouting.hpp`
 
-Typed dispatch and shared helpers:
+Typed dispatch and reference tests:
 
 - `/include/rhbm_gem/data/object/DataObjectDispatch.hpp`
 - `/src/data/object/DataObjectDispatch.cpp`
-
-Reference tests:
-
-- `/tests/data/DataObjectRuntime_test.cpp`
-- `/tests/data/DataObjectSchema_test.cpp`
+- `/tests/data/DataPublicSurface_test.cpp`
+- `/tests/data/DataObjectDispatchAndIngestion_test.cpp`
+- `/tests/data/DataObjectFileIO_test.cpp`
+- `/tests/data/DataObjectImportRegression_test.cpp`
+- `/tests/data/DataObjectRuntimeBehavior_test.cpp`
+- `/tests/data/DataObjectPersistence_test.cpp`
+- `/tests/data/DataObjectSchemaBootstrap_test.cpp`
+- `/tests/data/DataObjectSchemaCompatibility_test.cpp`
+- `/tests/data/DataObjectSchemaValidation_test.cpp`

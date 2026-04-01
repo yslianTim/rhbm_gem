@@ -20,6 +20,6 @@ The content is split by audience so you can go straight to the guide that matche
 - [`docs/developer/development-guidelines.md`](/docs/developer/development-guidelines.md)
 - [`docs/developer/architecture/command-architecture.md`](/docs/developer/architecture/command-architecture.md)
 - [`docs/developer/architecture/dataobject-io-architecture.md`](/docs/developer/architecture/dataobject-io-architecture.md)
-- [`docs/developer/adding-dataobject-operations-and-iteration.md`](/docs/developer/adding-dataobject-operations-and-iteration.md)
+- [`docs/developer/adding-dataobject-operations.md`](/docs/developer/adding-dataobject-operations.md)
 - [`docs/developer/adding-a-command.md`](/docs/developer/adding-a-command.md)
 - [`docs/developer/commands/README.md`](/docs/developer/commands/README.md)

@@ -11,7 +11,7 @@ This project uses a two-axis test organization model:
 | --- | --- | --- |
 | `tests/core/command/` | `core` | Command workflows, option handling, command-level validation |
 | `tests/core/contract/` | `core` | Command catalog/metadata/surface contracts and docs sync checks |
-| `tests/data/` | `data` | DataObjectManager, file I/O, schema validation, migration, and persistence contracts |
+| `tests/data/` | `data` | Data public-surface guards, file I/O/runtime behavior, and schema/persistence validation |
 | `tests/utils/math/` | `utils` | Numeric/statistical/geometry helper algorithms |
 | `tests/utils/domain/` | `utils` | Domain helpers (string/logging/file-path/chemistry-related helpers) |
 | `tests/utils/hrl/` | `utils` | HRL-specific algorithm and transform tests |
@@ -46,7 +46,7 @@ cmake --build build --target tests_all -j
 Build output note:
 
 - C++ tests are compiled into a single executable: `build/bin/RHBM-GEM-TEST`
-- `ctest` still exposes grouped entries such as `rhbm_tests_core_command` and `rhbm_tests_data_schema`
+- `ctest` still exposes grouped entries such as `rhbm_tests_core_command`, `rhbm_tests_data_contract`, and `rhbm_tests_data_schema`
 - those grouped CTest entries run filtered subsets from the same `RHBM-GEM-TEST` binary
 
 Run all tests:
@@ -82,6 +82,13 @@ cmake --build build --target lint_repo
 - `CommandValidationScenarios_test.cpp` for command-specific validation rules.
 - `CommandWorkflowScenarios_test.cpp` for command workflows and output side effects.
 - Only create a new command `*_test.cpp` when you are introducing a new testing responsibility.
+- For `tests/data/`, prefer extending the responsibility-based files:
+- `DataPublicSurface_test.cpp` for public header surface guards.
+- `DataObjectFileIO_test.cpp` for file I/O and map-axis import behavior.
+- `DataObjectImportRegression_test.cpp` for CIF/MMCIF parser regression matrices.
+- `DataObjectRuntimeBehavior_test.cpp` for `ModelObject` / `MapObject` state behavior.
+- `DataObjectDispatchAndIngestion_test.cpp` for typed dispatch and painter ingestion contracts.
+- `DataObjectPersistence_test.cpp`, `DataObjectSchemaBootstrap_test.cpp`, `DataObjectSchemaCompatibility_test.cpp`, and `DataObjectSchemaValidation_test.cpp` for database persistence/schema behavior.
 - Place new fixture files under `tests/fixtures/`.
 - Use `tests/support/` for shared test-only seams and reusable helpers/assertions.
 - Add the source to the correct grouped target in `tests/CMakeLists.txt`.

@@ -3,11 +3,13 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
+#include <rhbm_gem/data/io/DataRepository.hpp>
+#include <rhbm_gem/data/io/FileIO.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -68,15 +70,15 @@ inline void SeedSavedModel(
     const std::string & saved_key,
     const std::string & pdb_id)
 {
-    rhbm_gem::DataObjectManager manager{};
-    manager.OpenDatabase(database_path);
-    auto model{ manager.ImportFileAs<rhbm_gem::ModelObject>(model_path, "model") };
+    rhbm_gem::DataRepository repository{ database_path };
+    auto model{ rhbm_gem::ReadModel(model_path) };
+    model->SetKeyTag("model");
     model->SetPdbID(pdb_id);
     for (auto & atom : model->GetAtomList())
     {
         atom->AddLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
     }
-    manager.SaveToDatabase("model", saved_key);
+    repository.SaveModel(*model, saved_key);
 }
 
 inline std::filesystem::path GenerateMapFile(

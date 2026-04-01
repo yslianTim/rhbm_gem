@@ -1453,13 +1453,6 @@ void LoadAnalysis(
 
 namespace rhbm_gem {
 
-ModelObjectStorage::ModelObjectStorage(SQLiteWrapper * db_manager) :
-    m_database{ db_manager }
-{
-}
-
-ModelObjectStorage::~ModelObjectStorage() = default;
-
 void ModelObjectStorage::CreateTables(SQLiteWrapper & database)
 {
     for (const auto create_sql : kCreateModelTableSqlList)
@@ -1468,22 +1461,27 @@ void ModelObjectStorage::CreateTables(SQLiteWrapper & database)
     }
 }
 
-void ModelObjectStorage::Save(const ModelObject & model_obj, const std::string & key_tag)
+void ModelObjectStorage::Save(
+    SQLiteWrapper & database,
+    const ModelObject & model_obj,
+    const std::string & key_tag)
 {
     for (const auto table_name : kModelTablesScopedByKey)
     {
-        DeleteRowsForKey(*m_database, std::string(table_name), key_tag);
+        DeleteRowsForKey(database, std::string(table_name), key_tag);
     }
 
-    SaveStructure(*m_database, model_obj, key_tag);
-    SaveAnalysis(*m_database, model_obj, key_tag);
+    SaveStructure(database, model_obj, key_tag);
+    SaveAnalysis(database, model_obj, key_tag);
 }
 
-std::unique_ptr<ModelObject> ModelObjectStorage::Load(const std::string & key_tag)
+std::unique_ptr<ModelObject> ModelObjectStorage::Load(
+    SQLiteWrapper & database,
+    const std::string & key_tag)
 {
     auto model_object{ std::make_unique<ModelObject>() };
-    LoadStructure(*m_database, *model_object, key_tag);
-    LoadAnalysis(*m_database, *model_object, key_tag);
+    LoadStructure(database, *model_object, key_tag);
+    LoadAnalysis(database, *model_object, key_tag);
     return model_object;
 }
 

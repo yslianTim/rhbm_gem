@@ -32,6 +32,7 @@ target_sources(rhbm_gem PRIVATE
     # data
     data/object/AtomClassifier.cpp
     data/object/AtomObject.cpp
+    data/io/DataRepository.cpp
     data/io/file/ModelImportState.cpp
     data/object/BondClassifier.cpp
     data/object/BondObject.cpp
@@ -50,7 +51,6 @@ target_sources(rhbm_gem PRIVATE
     data/io/file/PdbFormat.cpp
     data/io/sqlite/ModelObjectStorage.cpp
     data/io/sqlite/SQLitePersistence.cpp
-    data/io/DataObjectManager.cpp
 
     # utils
     utils/domain/AtomKeySystem.cpp

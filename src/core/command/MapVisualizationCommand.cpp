@@ -1,6 +1,5 @@
 #include "MapVisualizationCommand.hpp"
 #include "MapSampling.hpp"
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -151,10 +150,10 @@ bool MapVisualizationCommand::BuildDataObject()
     ScopeTimer timer("MapVisualizationCommand::BuildDataObject");
     try
     {
-        m_model_object = m_data_manager.ImportFileAs<ModelObject>(
+        m_model_object = LoadInputFile<ModelObject>(
             request.model_file_path,
             m_model_key_tag);
-        m_map_object = m_data_manager.ImportFileAs<MapObject>(
+        m_map_object = LoadInputFile<MapObject>(
             request.map_file_path,
             m_map_key_tag);
     }

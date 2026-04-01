@@ -1,6 +1,5 @@
 #include "PositionEstimationCommand.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include <rhbm_gem/data/io/DataObjectManager.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -122,7 +121,7 @@ bool PositionEstimationCommand::BuildDataObject()
     ScopeTimer timer("PositionEstimationCommand::BuildDataObject");
     try
     {
-        m_map_object = m_data_manager.ImportFileAs<MapObject>(
+        m_map_object = LoadInputFile<MapObject>(
             request.map_file_path,
             std::string(kMapKey));
         m_map_object->MapValueArrayNormalization();
