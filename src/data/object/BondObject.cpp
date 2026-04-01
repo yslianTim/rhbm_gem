@@ -70,23 +70,15 @@ BondObject::BondObject(const BondObject & other) :
     m_unit_vector{ other.m_unit_vector },
     m_local_potential_entry{ nullptr }
 {
-
+    if (other.m_local_potential_entry != nullptr)
+    {
+        m_local_potential_entry = std::make_unique<LocalPotentialEntry>(*other.m_local_potential_entry);
+    }
 }
 
 std::unique_ptr<DataObjectBase> BondObject::Clone() const
 {
     return std::make_unique<BondObject>(*this);
-}
-
-std::unique_ptr<BondObject> BondObject::BondObjectClone() const
-{
-    auto base_clone{ this->Clone() };
-    auto derived_ptr{ dynamic_cast<BondObject*>(base_clone.release()) };
-    if (!derived_ptr)
-    {
-        throw std::runtime_error("Clone() did not return an BondObject instance!");
-    }
-    return std::unique_ptr<BondObject>(derived_ptr);
 }
 
 std::string BondObject::GetInfo() const

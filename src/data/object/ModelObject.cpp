@@ -1,6 +1,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
@@ -35,23 +36,114 @@ ModelObject::~ModelObject()
 ModelObject::ModelObject(const ModelObject & other) :
     m_key_tag{ other.m_key_tag }, m_pdb_id{ other.m_pdb_id }, m_emd_id{ other.m_emd_id },
     m_resolution_method{ other.m_resolution_method }, m_resolution{ other.m_resolution },
+    m_chain_id_list_map{ other.m_chain_id_list_map },
     m_kd_tree_root{ nullptr },
-    m_component_key_system{ std::make_unique<ComponentKeySystem>() },
-    m_atom_key_system{ std::make_unique<AtomKeySystem>() },
-    m_bond_key_system{ std::make_unique<BondKeySystem>() }
+    m_component_key_system{
+        other.m_component_key_system != nullptr ?
+            std::make_unique<ComponentKeySystem>(*other.m_component_key_system) : nullptr },
+    m_atom_key_system{
+        other.m_atom_key_system != nullptr ?
+            std::make_unique<AtomKeySystem>(*other.m_atom_key_system) : nullptr },
+    m_bond_key_system{
+        other.m_bond_key_system != nullptr ?
+            std::make_unique<BondKeySystem>(*other.m_bond_key_system) : nullptr }
 {
-    m_atom_list.clear();
     m_atom_list.reserve(other.m_atom_list.size());
-    for (auto & atom : other.m_atom_list)
+    std::unordered_map<const AtomObject *, AtomObject *> atom_ptr_map;
+    atom_ptr_map.reserve(other.m_atom_list.size());
+    for (const auto & atom : other.m_atom_list)
     {
-        m_atom_list.emplace_back(atom->AtomObjectClone());
+        auto cloned_atom{ std::make_unique<AtomObject>(*atom) };
+        atom_ptr_map[atom.get()] = cloned_atom.get();
+        m_atom_list.emplace_back(std::move(cloned_atom));
     }
-    SyncDerivedState();
+
+    m_bond_list.reserve(other.m_bond_list.size());
+    std::unordered_map<const BondObject *, BondObject *> bond_ptr_map;
+    bond_ptr_map.reserve(other.m_bond_list.size());
+    for (const auto & bond : other.m_bond_list)
+    {
+        auto * atom_1{ atom_ptr_map.at(bond->GetAtomObject1()) };
+        auto * atom_2{ atom_ptr_map.at(bond->GetAtomObject2()) };
+        auto cloned_bond{ std::make_unique<BondObject>(atom_1, atom_2) };
+        cloned_bond->SetKeyTag(bond->GetKeyTag());
+        cloned_bond->SetSelectedFlag(bond->GetSelectedFlag());
+        cloned_bond->SetSpecialBondFlag(bond->GetSpecialBondFlag());
+        cloned_bond->SetBondKey(bond->GetBondKey());
+        cloned_bond->SetBondType(bond->GetBondType());
+        cloned_bond->SetBondOrder(bond->GetBondOrder());
+        if (bond->GetLocalPotentialEntry() != nullptr)
+        {
+            cloned_bond->AddLocalPotentialEntry(
+                std::make_unique<LocalPotentialEntry>(*bond->GetLocalPotentialEntry()));
+        }
+        bond_ptr_map[bond.get()] = cloned_bond.get();
+        m_bond_list.emplace_back(std::move(cloned_bond));
+    }
+
+    for (const auto & [component_key, entry] : other.m_chemical_component_entry_map)
+    {
+        m_chemical_component_entry_map[component_key] =
+            std::make_unique<ChemicalComponentEntry>(*entry);
+    }
+
+    auto copy_group_entries =
+        [&atom_ptr_map, &bond_ptr_map](
+            const auto & source_map,
+            auto & target_map)
+        {
+            for (const auto & [class_key, entry] : source_map)
+            {
+                if (entry == nullptr)
+                {
+                    target_map[class_key] = nullptr;
+                    continue;
+                }
+
+                auto cloned_entry{ std::make_unique<GroupPotentialEntry>() };
+                for (const auto & [group_key, bucket] : entry->GetGroups())
+                {
+                    auto & cloned_bucket{ cloned_entry->EnsureGroup(group_key) };
+                    cloned_bucket.mean = bucket.mean;
+                    cloned_bucket.mdpde = bucket.mdpde;
+                    cloned_bucket.prior = bucket.prior;
+                    cloned_bucket.prior_variance = bucket.prior_variance;
+                    cloned_bucket.alpha_g = bucket.alpha_g;
+                    cloned_bucket.atom_members.reserve(bucket.atom_members.size());
+                    for (auto * atom : bucket.atom_members)
+                    {
+                        cloned_bucket.atom_members.emplace_back(atom_ptr_map.at(atom));
+                    }
+                    cloned_bucket.bond_members.reserve(bucket.bond_members.size());
+                    for (auto * bond : bucket.bond_members)
+                    {
+                        cloned_bucket.bond_members.emplace_back(bond_ptr_map.at(bond));
+                    }
+                }
+                target_map[class_key] = std::move(cloned_entry);
+            }
+        };
+
+    copy_group_entries(other.m_atom_group_potential_entry_map, m_atom_group_potential_entry_map);
+    copy_group_entries(other.m_bond_group_potential_entry_map, m_bond_group_potential_entry_map);
+
+    RefreshDerivedState();
 }
 
 std::unique_ptr<DataObjectBase> ModelObject::Clone() const
 {
     return std::make_unique<ModelObject>(*this);
+}
+
+void ModelObject::RefreshDerivedState()
+{
+    SyncDerivedState();
+}
+
+void ModelObject::ApplySymmetrySelection(bool is_asymmetry)
+{
+    FilterSelectionFromSymmetry(is_asymmetry);
+    SyncDerivedState();
 }
 
 void ModelObject::RebuildSelectionState()
@@ -275,7 +367,7 @@ void ModelObject::BuildSelectedBondList()
     }
 }
 
-void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
+void ModelObject::FilterSelectionFromSymmetry(bool is_asymmetry)
 {
     if (is_asymmetry == true)
     {
@@ -284,7 +376,7 @@ void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
     if (m_chain_id_list_map.empty())
     {
         Logger::Log(LogLevel::Warning,
-            "FilterAtomFromSymmetry(): chain metadata is empty. "
+            "ApplySymmetrySelection(): chain metadata is empty. "
             "Skip symmetry filtering and keep current atom selection.");
         return;
     }
@@ -306,21 +398,6 @@ void ModelObject::FilterAtomFromSymmetry(bool is_asymmetry)
             }
         }
         if (in_candidate_chain == false) atom->SetSelectedFlag(false);
-    }
-}
-
-void ModelObject::FilterBondFromSymmetry(bool is_asymmetry)
-{
-    if (is_asymmetry == true)
-    {
-        return;
-    }
-    if (m_chain_id_list_map.empty())
-    {
-        Logger::Log(LogLevel::Warning,
-            "FilterBondFromSymmetry(): chain metadata is empty. "
-            "Skip symmetry filtering and keep current bond selection.");
-        return;
     }
 
     for (auto & bond : m_bond_list)

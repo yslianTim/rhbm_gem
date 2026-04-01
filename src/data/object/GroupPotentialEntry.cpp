@@ -1,11 +1,7 @@
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-
-#include <cmath>
 
 namespace rhbm_gem {
 
@@ -19,213 +15,199 @@ GroupPotentialEntry::~GroupPotentialEntry()
 
 }
 
-void GroupPotentialEntry::InsertGroupKey(GroupKey group_key)
+GroupPotentialBucket & GroupPotentialEntry::EnsureGroup(GroupKey group_key)
 {
-    m_group_key_set.insert(group_key);
+    return m_group_map[group_key];
 }
 
-void GroupPotentialEntry::ReserveAtomObjectPtrList(GroupKey group_key, int size)
+bool GroupPotentialEntry::HasGroup(GroupKey group_key) const
 {
-    m_group_atom_list_map[group_key].reserve(static_cast<size_t>(size));
+    return m_group_map.find(group_key) != m_group_map.end();
 }
 
-void GroupPotentialEntry::ReserveBondObjectPtrList(GroupKey group_key, int size)
+const GroupPotentialBucket & GroupPotentialEntry::GetGroup(GroupKey group_key) const
 {
-    m_group_bond_list_map[group_key].reserve(static_cast<size_t>(size));
+    return m_group_map.at(group_key);
 }
 
-void GroupPotentialEntry::AddAtomObjectPtr(GroupKey group_key, AtomObject * atom_object)
+const std::unordered_map<GroupKey, GroupPotentialBucket> & GroupPotentialEntry::GetGroups() const
 {
-    m_group_atom_list_map[group_key].emplace_back(atom_object);
+    return m_group_map;
 }
 
-void GroupPotentialEntry::AddBondObjectPtr(GroupKey group_key, BondObject * bond_object)
+std::vector<GroupKey> GroupPotentialEntry::GetGroupKeys() const
 {
-    m_group_bond_list_map[group_key].emplace_back(bond_object);
+    std::vector<GroupKey> group_keys;
+    group_keys.reserve(m_group_map.size());
+    for (const auto & [group_key, bucket] : m_group_map)
+    {
+        (void)bucket;
+        group_keys.emplace_back(group_key);
+    }
+    return group_keys;
 }
 
-void GroupPotentialEntry::AddGausEstimateMean(GroupKey group_key, double v0, double v1)
+void GroupPotentialEntry::AddAtomMember(GroupKey group_key, AtomObject * atom_object)
 {
-    m_gaus_estimate_mean_map[group_key] = std::make_tuple(v0, v1);
+    EnsureGroup(group_key).atom_members.emplace_back(atom_object);
 }
 
-void GroupPotentialEntry::AddGausEstimateMDPDE(GroupKey group_key, double v0, double v1)
+void GroupPotentialEntry::AddBondMember(GroupKey group_key, BondObject * bond_object)
 {
-    m_gaus_estimate_mdpde_map[group_key] = std::make_tuple(v0, v1);
+    EnsureGroup(group_key).bond_members.emplace_back(bond_object);
 }
 
-void GroupPotentialEntry::AddGausEstimatePrior(GroupKey group_key, double v0, double v1)
+void GroupPotentialEntry::SetMeanEstimate(
+    GroupKey group_key,
+    const GaussianEstimate & estimate)
 {
-    m_gaus_estimate_prior_map[group_key] = std::make_tuple(v0, v1);
+    EnsureGroup(group_key).mean = estimate;
 }
 
-void GroupPotentialEntry::AddGausVariancePrior(GroupKey group_key, double v0, double v1)
+void GroupPotentialEntry::SetMDPDEEstimate(
+    GroupKey group_key,
+    const GaussianEstimate & estimate)
 {
-    m_gaus_variance_prior_map[group_key] = std::make_tuple(v0, v1);
+    EnsureGroup(group_key).mdpde = estimate;
 }
 
-void GroupPotentialEntry::AddAlphaG(GroupKey group_key, double value)
+void GroupPotentialEntry::SetPriorEstimate(
+    GroupKey group_key,
+    const GaussianEstimate & estimate)
 {
-    m_alpha_g_map[group_key] = value;
+    EnsureGroup(group_key).prior = estimate;
 }
 
-int GroupPotentialEntry::GetAtomObjectPtrListSize(GroupKey group_key) const
+void GroupPotentialEntry::SetPriorVariance(
+    GroupKey group_key,
+    const GaussianEstimate & variance)
 {
-    return static_cast<int>(m_group_atom_list_map.at(group_key).size());
+    EnsureGroup(group_key).prior_variance = variance;
 }
 
-int GroupPotentialEntry::GetBondObjectPtrListSize(GroupKey group_key) const
+void GroupPotentialEntry::SetAlphaG(GroupKey group_key, double value)
 {
-    return static_cast<int>(m_group_bond_list_map.at(group_key).size());
+    EnsureGroup(group_key).alpha_g = value;
 }
 
-const std::vector<AtomObject *> & GroupPotentialEntry::GetAtomObjectPtrList(GroupKey group_key) const
+int GroupPotentialEntry::GetAtomMemberCount(GroupKey group_key) const
 {
-    return m_group_atom_list_map.at(group_key);
+    return static_cast<int>(GetGroup(group_key).atom_members.size());
 }
 
-const std::vector<BondObject *> & GroupPotentialEntry::GetBondObjectPtrList(GroupKey group_key) const
+int GroupPotentialEntry::GetBondMemberCount(GroupKey group_key) const
 {
-    return m_group_bond_list_map.at(group_key);
+    return static_cast<int>(GetGroup(group_key).bond_members.size());
 }
 
-std::tuple<double, double> GroupPotentialEntry::GetGausEstimateMean(GroupKey group_key) const
+const std::vector<AtomObject *> & GroupPotentialEntry::GetAtomMembers(GroupKey group_key) const
 {
-    return m_gaus_estimate_mean_map.at(group_key);
+    return GetGroup(group_key).atom_members;
 }
 
-std::tuple<double, double> GroupPotentialEntry::GetGausEstimateMDPDE(GroupKey group_key) const
+const std::vector<BondObject *> & GroupPotentialEntry::GetBondMembers(GroupKey group_key) const
 {
-    return m_gaus_estimate_mdpde_map.at(group_key);
+    return GetGroup(group_key).bond_members;
 }
 
-std::tuple<double, double> GroupPotentialEntry::GetGausEstimatePrior(GroupKey group_key) const
+const GaussianEstimate & GroupPotentialEntry::GetMeanEstimate(GroupKey group_key) const
 {
-    return m_gaus_estimate_prior_map.at(group_key);
+    return GetGroup(group_key).mean;
 }
 
-std::tuple<double, double> GroupPotentialEntry::GetGausVariancePrior(GroupKey group_key) const
+const GaussianEstimate & GroupPotentialEntry::GetMDPDEEstimate(GroupKey group_key) const
 {
-    return m_gaus_variance_prior_map.at(group_key);
+    return GetGroup(group_key).mdpde;
+}
+
+const GaussianEstimate & GroupPotentialEntry::GetPriorEstimate(GroupKey group_key) const
+{
+    return GetGroup(group_key).prior;
+}
+
+const GaussianEstimate & GroupPotentialEntry::GetPriorVariance(GroupKey group_key) const
+{
+    return GetGroup(group_key).prior_variance;
 }
 
 double GroupPotentialEntry::GetAlphaG(GroupKey group_key) const
 {
-    if (m_alpha_g_map.find(group_key) == m_alpha_g_map.end())
+    if (!HasGroup(group_key))
     {
-        Logger::Log(LogLevel::Warning,
-            "GroupPotentialEntry::GetAlphaG() - Group key not found: " + std::to_string(group_key));
+        Logger::Log(
+            LogLevel::Warning,
+            "GroupPotentialEntry::GetAlphaG() - Group key not found: "
+                + std::to_string(group_key));
         return 0.0;
     }
-    return m_alpha_g_map.at(group_key);
-}
-
-const std::unordered_set<GroupKey> & GroupPotentialEntry::GetGroupKeySet() const
-{
-    return m_group_key_set;
+    return GetGroup(group_key).alpha_g;
 }
 
 double GroupPotentialEntry::GetMuEstimateMean(GroupKey group_key, int par_id) const
 {
-    auto amplitude{ GetGausEstimateMean(group_key, 0) };
-    auto width{ GetGausEstimateMean(group_key, 1) };
-    Eigen::VectorXd coefficient_vector{
-        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
-    };
-    return coefficient_vector(par_id);
+    return GetMeanEstimate(group_key).ToBeta()(par_id);
 }
 
 double GroupPotentialEntry::GetMuEstimateMDPDE(GroupKey group_key, int par_id) const
 {
-    auto amplitude{ GetGausEstimateMDPDE(group_key, 0) };
-    auto width{ GetGausEstimateMDPDE(group_key, 1) };
-    Eigen::VectorXd coefficient_vector{
-        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
-    };
-    return coefficient_vector(par_id);
+    return GetMDPDEEstimate(group_key).ToBeta()(par_id);
 }
 
 double GroupPotentialEntry::GetMuEstimatePrior(GroupKey group_key, int par_id) const
 {
-    auto amplitude{ GetGausEstimatePrior(group_key, 0) };
-    auto width{ GetGausEstimatePrior(group_key, 1) };
-    Eigen::VectorXd coefficient_vector{
-        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
-    };
-    return coefficient_vector(par_id);
+    return GetPriorEstimate(group_key).ToBeta()(par_id);
 }
 
 double GroupPotentialEntry::GetGausEstimateMean(GroupKey group_key, int par_id) const
 {
-    return GetGausEstimateFromTuple(GetGausEstimateMean(group_key), par_id);
+    return GetGausEstimate(GetMeanEstimate(group_key), par_id);
 }
 
 double GroupPotentialEntry::GetGausEstimateMDPDE(GroupKey group_key, int par_id) const
 {
-    return GetGausEstimateFromTuple(GetGausEstimateMDPDE(group_key), par_id);
+    return GetGausEstimate(GetMDPDEEstimate(group_key), par_id);
 }
 
 double GroupPotentialEntry::GetGausEstimatePrior(GroupKey group_key, int par_id) const
 {
-    return GetGausEstimateFromTuple(GetGausEstimatePrior(group_key), par_id);
+    return GetGausEstimate(GetPriorEstimate(group_key), par_id);
 }
 
 double GroupPotentialEntry::GetGausVariancePrior(GroupKey group_key, int par_id) const
 {
-    return GetGausVarianceFromTuple(
-        GetGausEstimatePrior(group_key), GetGausVariancePrior(group_key), par_id);
+    return GetGausVariance(
+        GetPriorEstimate(group_key),
+        GetPriorVariance(group_key),
+        par_id);
 }
 
-double GroupPotentialEntry::GetGausEstimateFromTuple(
-    const std::tuple<double, double> & estimate, int par_id) const
+double GroupPotentialEntry::GetGausEstimate(
+    const GaussianEstimate & estimate,
+    int par_id) const
 {
+    return estimate.GetParameter(par_id);
+}
+
+double GroupPotentialEntry::GetGausVariance(
+    const GaussianEstimate & estimate,
+    const GaussianEstimate & variance,
+    int par_id) const
+{
+    GaussianPosterior posterior;
+    posterior.estimate = estimate;
+    posterior.variance = variance;
     switch (par_id)
     {
-        case 0: return std::get<0>(estimate);
-        case 1: return std::get<1>(estimate);
-        case 2: return CalculateIntensityEstimate(estimate);
-        default:
-            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
-            return 0.0;
+    case 0:
+        return variance.amplitude;
+    case 1:
+        return variance.width;
+    case 2:
+        return posterior.IntensityVariance();
+    default:
+        Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
+        return 0.0;
     }
-}
-
-double GroupPotentialEntry::GetGausVarianceFromTuple(
-    const std::tuple<double, double> & estimate,
-    const std::tuple<double, double> & variance, int par_id) const
-{
-    switch (par_id)
-    {
-        case 0: return std::get<0>(variance);
-        case 1: return std::get<1>(variance);
-        case 2: return CalculateIntensityVariance(estimate, variance);
-        default:
-            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
-            return 0.0;
-    }
-}
-
-double GroupPotentialEntry::CalculateIntensityEstimate(
-    const std::tuple<double, double> & estimate) const
-{
-    auto amplitude{ std::get<0>(estimate) };
-    auto width{ std::get<1>(estimate) };
-    if (width == 0.0) return 0.0;
-    return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
-}
-
-double GroupPotentialEntry::CalculateIntensityVariance(
-    const std::tuple<double, double> & estimate,
-    const std::tuple<double, double> & variance) const
-{
-    auto amplitude{ std::get<0>(estimate) };
-    auto width{ std::get<1>(estimate) };
-    auto sigma_amplitude{ std::get<0>(variance) };
-    auto sigma_width{ std::get<1>(variance) };
-    return std::sqrt(
-        std::pow(std::pow(Constants::two_pi * width * width, -1.5) * sigma_amplitude, 2) +
-        std::pow(-3.0 * amplitude * std::pow(Constants::two_pi, -1.5) * std::pow(width, -4) * sigma_width, 2)
-    );
 }
 
 } // namespace rhbm_gem

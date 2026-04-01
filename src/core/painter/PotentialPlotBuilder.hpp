@@ -6,7 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/data/object/LocalPotentialView.hpp>
+#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 #ifdef HAVE_ROOT
@@ -24,7 +25,9 @@ class ModelObject;
 
 class PotentialPlotBuilder
 {
-    PotentialEntryQuery m_query;
+    ModelObject * m_model_object{ nullptr };
+    AtomObject * m_atom_object{ nullptr };
+    BondObject * m_bond_object{ nullptr };
 
 public:
     explicit PotentialPlotBuilder(ModelObject * model_object);
@@ -75,6 +78,8 @@ public:
 #endif
 
 private:
+    ModelPotentialView GetModelView() const;
+    LocalPotentialView GetLocalView() const;
     bool IsModelObjectAvailable() const;
     bool IsAtomLocalEntryAvailable() const;
     size_t GetAtomResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;

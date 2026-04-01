@@ -38,25 +38,20 @@ AtomObject::AtomObject(const AtomObject & other) :
     m_component_key{ other.m_component_key }, m_atom_key{ other.m_atom_key },
     m_residue{ other.m_residue }, m_element{ other.m_element }, m_spot{ other.m_spot },
     m_structure{ other.m_structure },
-    m_position{ other.m_position }
+    m_position{ other.m_position },
+    m_alternate_position_map{ other.m_alternate_position_map },
+    m_alternate_occupancy_map{ other.m_alternate_occupancy_map },
+    m_alternate_temperature_map{ other.m_alternate_temperature_map }
 {
-
+    if (other.m_local_potential_entry != nullptr)
+    {
+        m_local_potential_entry = std::make_unique<LocalPotentialEntry>(*other.m_local_potential_entry);
+    }
 }
 
 std::unique_ptr<DataObjectBase> AtomObject::Clone() const
 {
     return std::make_unique<AtomObject>(*this);
-}
-
-std::unique_ptr<AtomObject> AtomObject::AtomObjectClone() const
-{
-    auto base_clone{ this->Clone() };
-    auto derived_ptr{ dynamic_cast<AtomObject*>(base_clone.release()) };
-    if (!derived_ptr)
-    {
-        throw std::runtime_error("Clone() did not return an AtomObject instance!");
-    }
-    return std::unique_ptr<AtomObject>(derived_ptr);
 }
 
 void AtomObject::SetResidue(Residue value) { m_residue = value; }

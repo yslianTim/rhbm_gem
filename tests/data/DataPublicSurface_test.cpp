@@ -17,10 +17,13 @@ TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
         "data/object/ChemicalComponentEntry.hpp",
         "data/object/DataObjectBase.hpp",
         "data/object/DataObjectDispatch.hpp",
+        "data/object/GaussianStatistics.hpp",
         "data/object/GroupPotentialEntry.hpp",
         "data/object/LocalPotentialEntry.hpp",
+        "data/object/LocalPotentialView.hpp",
         "data/object/MapObject.hpp",
         "data/object/ModelObject.hpp",
+        "data/object/ModelPotentialView.hpp",
         "data/object/PotentialEntryQuery.hpp" };
 
     EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("data"), expected);

@@ -60,7 +60,7 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     {
         bond->SetSelectedFlag(false);
     }
-    model->SyncDerivedState();
+    model->RefreshDerivedState();
     ASSERT_EQ(model->GetNumberOfSelectedAtom(), 0);
     ASSERT_EQ(model->GetNumberOfSelectedBond(), 0);
 
@@ -72,9 +72,7 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     {
         bond->SetSelectedFlag(true);
     }
-    model->FilterAtomFromSymmetry(false);
-    model->FilterBondFromSymmetry(false);
-    model->SyncDerivedState();
+    model->ApplySymmetrySelection(false);
     for (auto * atom : model->GetSelectedAtomList())
     {
         atom->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
@@ -118,7 +116,7 @@ TEST(DataObjectRuntimeBehaviorTest, AtomSelectorCanDriveModelSelectionState)
                 atom->GetResidue(),
                 atom->GetElement()));
     }
-    model->SyncDerivedState();
+    model->RefreshDerivedState();
 
     EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
@@ -134,7 +132,7 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(false);
     atoms[0]->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
-    model->SyncDerivedState();
+    model->RefreshDerivedState();
 
     const auto & selected_only_atoms{ model->GetSelectedAtomList() };
     ASSERT_EQ(selected_only_atoms.size(), 1);
@@ -197,7 +195,7 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedAtomsAndBondsRemainQueryableForConte
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(true);
     bonds[0]->SetSelectedFlag(true);
-    model->SyncDerivedState();
+    model->RefreshDerivedState();
 
     std::unordered_map<int, rg::AtomObject *> atom_map;
     std::unordered_map<int, std::vector<rg::BondObject *>> bond_map;
@@ -239,7 +237,7 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
     model->GetAtomList().at(0)->SetSelectedFlag(true);
     model->GetAtomList().at(1)->SetSelectedFlag(true);
     model->GetBondList().at(0)->SetSelectedFlag(true);
-    model->SyncDerivedState();
+    model->RefreshDerivedState();
     model->BuildKDTreeRoot();
     ASSERT_NE(model->GetKDTreeRoot(), nullptr);
     EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 0.5f);

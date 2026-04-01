@@ -1078,23 +1078,25 @@ void SaveAtomGroupPotentialEntryList(
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
-    for (const auto & group_key : group_entry.GetGroupKeySet())
+    for (const auto & group_pair : group_entry.GetGroups())
     {
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
+            const auto group_key{ group_pair.first };
+            const auto & bucket{ group_pair.second };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<GroupKey>(3, group_key);
-            statement_db.Bind<int>(4, group_entry.GetAtomObjectPtrListSize(group_key));
-            statement_db.Bind<double>(5, std::get<0>(group_entry.GetGausEstimateMean(group_key)));
-            statement_db.Bind<double>(6, std::get<1>(group_entry.GetGausEstimateMean(group_key)));
-            statement_db.Bind<double>(7, std::get<0>(group_entry.GetGausEstimateMDPDE(group_key)));
-            statement_db.Bind<double>(8, std::get<1>(group_entry.GetGausEstimateMDPDE(group_key)));
-            statement_db.Bind<double>(9, std::get<0>(group_entry.GetGausEstimatePrior(group_key)));
-            statement_db.Bind<double>(10, std::get<1>(group_entry.GetGausEstimatePrior(group_key)));
-            statement_db.Bind<double>(11, std::get<0>(group_entry.GetGausVariancePrior(group_key)));
-            statement_db.Bind<double>(12, std::get<1>(group_entry.GetGausVariancePrior(group_key)));
-            statement_db.Bind<double>(13, group_entry.GetAlphaG(group_key));
+            statement_db.Bind<int>(4, static_cast<int>(bucket.atom_members.size()));
+            statement_db.Bind<double>(5, bucket.mean.amplitude);
+            statement_db.Bind<double>(6, bucket.mean.width);
+            statement_db.Bind<double>(7, bucket.mdpde.amplitude);
+            statement_db.Bind<double>(8, bucket.mdpde.width);
+            statement_db.Bind<double>(9, bucket.prior.amplitude);
+            statement_db.Bind<double>(10, bucket.prior.width);
+            statement_db.Bind<double>(11, bucket.prior_variance.amplitude);
+            statement_db.Bind<double>(12, bucket.prior_variance.width);
+            statement_db.Bind<double>(13, bucket.alpha_g);
         });
     }
 }
@@ -1106,23 +1108,25 @@ void SaveBondGroupPotentialEntryList(
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondGroupSql) };
-    for (const auto & group_key : group_entry.GetGroupKeySet())
+    for (const auto & group_pair : group_entry.GetGroups())
     {
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
+            const auto group_key{ group_pair.first };
+            const auto & bucket{ group_pair.second };
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<GroupKey>(3, group_key);
-            statement_db.Bind<int>(4, group_entry.GetBondObjectPtrListSize(group_key));
-            statement_db.Bind<double>(5, std::get<0>(group_entry.GetGausEstimateMean(group_key)));
-            statement_db.Bind<double>(6, std::get<1>(group_entry.GetGausEstimateMean(group_key)));
-            statement_db.Bind<double>(7, std::get<0>(group_entry.GetGausEstimateMDPDE(group_key)));
-            statement_db.Bind<double>(8, std::get<1>(group_entry.GetGausEstimateMDPDE(group_key)));
-            statement_db.Bind<double>(9, std::get<0>(group_entry.GetGausEstimatePrior(group_key)));
-            statement_db.Bind<double>(10, std::get<1>(group_entry.GetGausEstimatePrior(group_key)));
-            statement_db.Bind<double>(11, std::get<0>(group_entry.GetGausVariancePrior(group_key)));
-            statement_db.Bind<double>(12, std::get<1>(group_entry.GetGausVariancePrior(group_key)));
-            statement_db.Bind<double>(13, group_entry.GetAlphaG(group_key));
+            statement_db.Bind<int>(4, static_cast<int>(bucket.bond_members.size()));
+            statement_db.Bind<double>(5, bucket.mean.amplitude);
+            statement_db.Bind<double>(6, bucket.mean.width);
+            statement_db.Bind<double>(7, bucket.mdpde.amplitude);
+            statement_db.Bind<double>(8, bucket.mdpde.width);
+            statement_db.Bind<double>(9, bucket.prior.amplitude);
+            statement_db.Bind<double>(10, bucket.prior.width);
+            statement_db.Bind<double>(11, bucket.prior_variance.amplitude);
+            statement_db.Bind<double>(12, bucket.prior_variance.width);
+            statement_db.Bind<double>(13, bucket.alpha_g);
         });
     }
 }
@@ -1153,10 +1157,12 @@ void LoadAtomLocalPotentialEntrySubList(
         auto iter{ entry_map.find(serial_id) };
         if (iter == entry_map.end()) continue;
         auto & entry{ iter->second };
-        entry->AddGausEstimatePosterior(
-            class_key, database.GetColumn<double>(1), database.GetColumn<double>(2));
-        entry->AddGausVariancePosterior(
-            class_key, database.GetColumn<double>(3), database.GetColumn<double>(4));
+        rhbm_gem::GaussianPosterior posterior;
+        posterior.estimate = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(1), database.GetColumn<double>(2) };
+        posterior.variance = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(3), database.GetColumn<double>(4) };
+        entry->SetPosterior(class_key, posterior);
         entry->AddOutlierTag(class_key, static_cast<bool>(database.GetColumn<int>(5)));
         entry->AddStatisticalDistance(class_key, database.GetColumn<double>(6));
     }
@@ -1189,10 +1195,12 @@ void LoadBondLocalPotentialEntrySubList(
         auto iter{ entry_map.find(atom_pair) };
         if (iter == entry_map.end()) continue;
         auto & entry{ iter->second };
-        entry->AddGausEstimatePosterior(
-            class_key, database.GetColumn<double>(2), database.GetColumn<double>(3));
-        entry->AddGausVariancePosterior(
-            class_key, database.GetColumn<double>(4), database.GetColumn<double>(5));
+        rhbm_gem::GaussianPosterior posterior;
+        posterior.estimate = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(2), database.GetColumn<double>(3) };
+        posterior.variance = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(4), database.GetColumn<double>(5) };
+        entry->SetPosterior(class_key, posterior);
         entry->AddOutlierTag(class_key, static_cast<bool>(database.GetColumn<int>(6)));
         entry->AddStatisticalDistance(class_key, database.GetColumn<double>(7));
     }
@@ -1222,8 +1230,12 @@ std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> LoadAtom
         const auto serial_id{ database.GetColumn<int>(0) };
         entry->AddDistanceAndMapValueList(
             database.GetColumn<std::vector<std::tuple<float, float>>>(2));
-        entry->AddGausEstimateOLS(database.GetColumn<double>(3), database.GetColumn<double>(4));
-        entry->AddGausEstimateMDPDE(database.GetColumn<double>(5), database.GetColumn<double>(6));
+        entry->SetEstimateOLS(
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(3), database.GetColumn<double>(4) });
+        entry->SetEstimateMDPDE(
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(5), database.GetColumn<double>(6) });
         entry->SetAlphaR(database.GetColumn<double>(7));
         entry_map[serial_id] = std::move(entry);
     }
@@ -1260,8 +1272,12 @@ std::map<std::pair<int, int>, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> Lo
         const auto key{ std::make_pair(database.GetColumn<int>(0), database.GetColumn<int>(1)) };
         entry->AddDistanceAndMapValueList(
             database.GetColumn<std::vector<std::tuple<float, float>>>(3));
-        entry->AddGausEstimateOLS(database.GetColumn<double>(4), database.GetColumn<double>(5));
-        entry->AddGausEstimateMDPDE(database.GetColumn<double>(6), database.GetColumn<double>(7));
+        entry->SetEstimateOLS(
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(4), database.GetColumn<double>(5) });
+        entry->SetEstimateMDPDE(
+            rhbm_gem::GaussianEstimate{
+                database.GetColumn<double>(6), database.GetColumn<double>(7) });
         entry->SetAlphaR(database.GetColumn<double>(8));
         entry_map[key] = std::move(entry);
     }
@@ -1298,18 +1314,22 @@ void LoadAtomGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        group_entry->InsertGroupKey(group_key);
-        group_entry->ReserveAtomObjectPtrList(group_key, database.GetColumn<int>(1));
-        group_entry->AddGausEstimateMean(group_key, database.GetColumn<double>(2), database.GetColumn<double>(3));
-        group_entry->AddGausEstimateMDPDE(group_key, database.GetColumn<double>(4), database.GetColumn<double>(5));
-        group_entry->AddGausEstimatePrior(group_key, database.GetColumn<double>(6), database.GetColumn<double>(7));
-        group_entry->AddGausVariancePrior(group_key, database.GetColumn<double>(8), database.GetColumn<double>(9));
-        group_entry->AddAlphaG(group_key, database.GetColumn<double>(10));
+        auto & bucket{ group_entry->EnsureGroup(group_key) };
+        bucket.atom_members.reserve(static_cast<size_t>(database.GetColumn<int>(1)));
+        bucket.mean = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(2), database.GetColumn<double>(3) };
+        bucket.mdpde = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(4), database.GetColumn<double>(5) };
+        bucket.prior = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(6), database.GetColumn<double>(7) };
+        bucket.prior_variance = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(8), database.GetColumn<double>(9) };
+        bucket.alpha_g = database.GetColumn<double>(10);
     }
 
     for (auto & atom : model_obj.GetSelectedAtomList())
     {
-        group_entry->AddAtomObjectPtr(
+        group_entry->AddAtomMember(
             rhbm_gem::AtomClassifier::GetGroupKeyInClass(atom, class_key), atom);
     }
 }
@@ -1338,18 +1358,22 @@ void LoadBondGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        group_entry->InsertGroupKey(group_key);
-        group_entry->ReserveBondObjectPtrList(group_key, database.GetColumn<int>(1));
-        group_entry->AddGausEstimateMean(group_key, database.GetColumn<double>(2), database.GetColumn<double>(3));
-        group_entry->AddGausEstimateMDPDE(group_key, database.GetColumn<double>(4), database.GetColumn<double>(5));
-        group_entry->AddGausEstimatePrior(group_key, database.GetColumn<double>(6), database.GetColumn<double>(7));
-        group_entry->AddGausVariancePrior(group_key, database.GetColumn<double>(8), database.GetColumn<double>(9));
-        group_entry->AddAlphaG(group_key, database.GetColumn<double>(10));
+        auto & bucket{ group_entry->EnsureGroup(group_key) };
+        bucket.bond_members.reserve(static_cast<size_t>(database.GetColumn<int>(1)));
+        bucket.mean = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(2), database.GetColumn<double>(3) };
+        bucket.mdpde = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(4), database.GetColumn<double>(5) };
+        bucket.prior = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(6), database.GetColumn<double>(7) };
+        bucket.prior_variance = rhbm_gem::GaussianEstimate{
+            database.GetColumn<double>(8), database.GetColumn<double>(9) };
+        bucket.alpha_g = database.GetColumn<double>(10);
     }
 
     for (auto & bond : model_obj.GetSelectedBondList())
     {
-        group_entry->AddBondObjectPtr(
+        group_entry->AddBondMember(
             rhbm_gem::BondClassifier::GetGroupKeyInClass(bond, class_key), bond);
     }
 }
@@ -1405,7 +1429,7 @@ void SaveAnalysis(
 
     for (const auto & [class_key, group_entry] : model_obj.GetAtomGroupPotentialEntryMap())
     {
-        if (group_entry == nullptr || group_entry->GetGroupKeySet().empty())
+        if (group_entry == nullptr || group_entry->GetGroups().empty())
         {
             continue;
         }
@@ -1414,7 +1438,7 @@ void SaveAnalysis(
     }
     for (const auto & [class_key, group_entry] : model_obj.GetBondGroupPotentialEntryMap())
     {
-        if (group_entry == nullptr || group_entry->GetGroupKeySet().empty())
+        if (group_entry == nullptr || group_entry->GetGroups().empty())
         {
             continue;
         }
@@ -1430,7 +1454,7 @@ void LoadAnalysis(
 {
     ApplyAtomLocalPotentialEntries(model_obj, LoadAtomLocalPotentialEntryMap(database, key_tag));
     ApplyBondLocalPotentialEntries(model_obj, LoadBondLocalPotentialEntryMap(database, key_tag));
-    model_obj.SyncDerivedState();
+    model_obj.RefreshDerivedState();
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {

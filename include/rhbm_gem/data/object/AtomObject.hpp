@@ -41,7 +41,6 @@ public:
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 
-    std::unique_ptr<AtomObject> AtomObjectClone() const;
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialAtomFlag(bool value) { m_is_special_atom = value; }
     void SetSerialID(int value) { m_serial_id = value; }

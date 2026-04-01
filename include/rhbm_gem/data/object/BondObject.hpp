@@ -38,7 +38,6 @@ public:
     void SetKeyTag(const std::string & label) override { m_key_tag = label; }
     std::string GetKeyTag() const override { return m_key_tag; }
 
-    std::unique_ptr<BondObject> BondObjectClone() const;
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialBondFlag(bool value) { m_is_special_bond = value; }
     void SetBondKey(BondKey value) { m_bond_key = value; }

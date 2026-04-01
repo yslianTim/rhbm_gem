@@ -73,13 +73,13 @@ public:
     ::KDNode<GridNode> * GetKDTreeRoot() const;
     void SetThreadSize(int value) { m_thread_size = value; }
     void SetMapValueArray(std::unique_ptr<float[]> map_value_array);
-    void RecomputeStatistics();
-    void InvalidateSpatialIndex();
-    void SyncValueArrayState();
     void MapValueArrayNormalization();
     void BuildKDTreeRoot();
 
 private:
+    void RecomputeStatistics();
+    void InvalidateSpatialIndex();
+    void SyncValueArrayState();
     void CheckIndex(int index_x, int index_y, int index_z) const;
     void CheckPosition(const std::array<float, 3> & position) const;
     void CalculateMapValueMean();

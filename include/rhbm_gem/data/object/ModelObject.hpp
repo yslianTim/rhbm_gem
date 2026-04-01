@@ -78,11 +78,8 @@ public:
     void SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system);
     void SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system);
     void BuildKDTreeRoot();
-    void RebuildSelectionState();
-    void InvalidateDerivedCaches();
-    void SyncDerivedState();
-    void FilterAtomFromSymmetry(bool is_asymmetry);
-    void FilterBondFromSymmetry(bool is_asymmetry);
+    void RefreshDerivedState();
+    void ApplySymmetrySelection(bool is_asymmetry);
 
     bool HasStandardRNAComponent() const;
     bool HasStandardDNAComponent() const;
@@ -122,8 +119,12 @@ public:
     std::vector<ComponentKey> GetComponentKeyList() const;
 
 private:
+    void RebuildSelectionState();
+    void InvalidateDerivedCaches();
+    void SyncDerivedState();
     void BuildSelectedAtomList();
     void BuildSelectedBondList();
+    void FilterSelectionFromSymmetry(bool is_asymmetry);
 };
 
 } // namespace rhbm_gem

@@ -13,6 +13,8 @@ namespace rhbm_gem {
 class AtomObject;
 class BondObject;
 class LocalPotentialEntry;
+class LocalPotentialView;
+class ModelPotentialView;
 class ModelObject;
 
 class PotentialEntryQuery
@@ -75,13 +77,8 @@ public:
 private:
     size_t GetAtomResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;
     size_t GetBondResidueCount(const std::string & class_key, Residue residue) const;
-    bool IsAtomObjectAvailable() const;
-    bool IsBondObjectAvailable() const;
-    bool IsAtomLocalEntryAvailable() const;
-    bool IsBondLocalEntryAvailable() const;
-    bool IsModelObjectAvailable() const;
-    bool CheckAtomGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
-    bool CheckBondGroupKey(GroupKey group_key, const std::string & class_key, bool verbose=true) const;
+    ModelPotentialView GetModelView() const;
+    LocalPotentialView GetLocalView() const;
 };
 
 } // namespace rhbm_gem

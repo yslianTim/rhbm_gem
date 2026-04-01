@@ -78,9 +78,7 @@ void PrepareModelForPotentialAnalysis(
 {
     SelectAllAtoms(model_object);
     SelectAllBonds(model_object);
-    model_object.FilterAtomFromSymmetry(asymmetry_flag);
-    model_object.FilterBondFromSymmetry(asymmetry_flag);
-    model_object.SyncDerivedState();
+    model_object.ApplySymmetrySelection(asymmetry_flag);
 
     for (auto * atom : model_object.GetSelectedAtomList())
     {
@@ -421,8 +419,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
 
         // Group Atom Potential Fitting
         auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
-        const auto & key_set{ group_potential_entry->GetGroupKeySet() };
-        std::vector<GroupKey> group_keys(key_set.begin(), key_set.end());
+        auto group_keys{ group_potential_entry->GetGroupKeys() };
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 
@@ -432,7 +429,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & atom_list{ group_potential_entry->GetAtomObjectPtrList(group_key) };
+            const auto & atom_list{ group_potential_entry->GetAtomMembers(group_key) };
             auto group_size{ atom_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;
@@ -499,8 +496,10 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
                 };
                 auto posterior_estimate{ std::get<0>(gaus_posterior) };
                 auto posterior_variance{ std::get<1>(gaus_posterior) };
-                atom_entry->AddGausEstimatePosterior(class_key, posterior_estimate(0), posterior_estimate(1));
-                atom_entry->AddGausVariancePosterior(class_key, posterior_variance(0), posterior_variance(1));
+                GaussianPosterior posterior;
+                posterior.estimate = GaussianEstimate{ posterior_estimate(0), posterior_estimate(1) };
+                posterior.variance = GaussianEstimate{ posterior_variance(0), posterior_variance(1) };
+                atom_entry->SetPosterior(class_key, posterior);
                 atom_entry->AddOutlierTag(class_key, result.outlier_flag_array(count));
                 atom_entry->AddStatisticalDistance(class_key, result.statistical_distance_array(count));
                 count++;
@@ -510,19 +509,15 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
             #pragma omp critical
 #endif
             {
-                group_potential_entry->AddGausEstimateMean(
-                    group_key, gaus_group_mean(0), gaus_group_mean(1)
-                );
-                group_potential_entry->AddGausEstimateMDPDE(
-                    group_key, gaus_group_mdpde(0), gaus_group_mdpde(1)
-                );
-                group_potential_entry->AddGausEstimatePrior(
-                    group_key, prior_estimate(0), prior_estimate(1)
-                );
-                group_potential_entry->AddGausVariancePrior(
-                    group_key, prior_variance(0), prior_variance(1)
-                );
-                group_potential_entry->AddAlphaG(group_key, alpha_g);
+                group_potential_entry->SetMeanEstimate(
+                    group_key, GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) });
+                group_potential_entry->SetMDPDEEstimate(
+                    group_key, GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) });
+                group_potential_entry->SetPriorEstimate(
+                    group_key, GaussianEstimate{ prior_estimate(0), prior_estimate(1) });
+                group_potential_entry->SetPriorVariance(
+                    group_key, GaussianEstimate{ prior_variance(0), prior_variance(1) });
+                group_potential_entry->SetAlphaG(group_key, alpha_g);
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
@@ -812,10 +807,9 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
         for (auto atom : model_object.GetSelectedAtomList())
         {
             auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-            group_potential_entry->AddAtomObjectPtr(group_key, atom);
-            group_potential_entry->InsertGroupKey(group_key);
+            group_potential_entry->AddAtomMember(group_key, atom);
         }
-        const auto group_size{ group_potential_entry->GetGroupKeySet().size() };
+        const auto group_size{ group_potential_entry->GetGroupKeys().size() };
         model_object.AddAtomGroupPotentialEntry(class_key, group_potential_entry);
         Logger::Log(
             LogLevel::Info,
@@ -867,8 +861,8 @@ void RunLocalAtomFittingWorkflow(
         auto gaus_mdpde{
             GausLinearTransformHelper::BuildGaus3DModel(result.beta_mdpde, model_par_init)
         };
-        local_entry->AddGausEstimateOLS(gaus_ols(0), gaus_ols(1));
-        local_entry->AddGausEstimateMDPDE(gaus_mdpde(0), gaus_mdpde(1));
+        local_entry->SetEstimateOLS(GaussianEstimate{ gaus_ols(0), gaus_ols(1) });
+        local_entry->SetEstimateMDPDE(GaussianEstimate{ gaus_mdpde(0), gaus_mdpde(1) });
 
 #ifdef USE_OPENMP
         #pragma omp critical
@@ -935,10 +929,10 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
         m_model_object->GetAtomGroupPotentialEntry(ChemicalDataHelper::GetComponentAtomClassKey())
     };
     std::vector<std::vector<AtomObject *>> atom_list_set;
-    atom_list_set.reserve(component_group_potential_entry->GetGroupKeySet().size());
-    for (auto group_key : component_group_potential_entry->GetGroupKeySet())
+    atom_list_set.reserve(component_group_potential_entry->GetGroupKeys().size());
+    for (auto group_key : component_group_potential_entry->GetGroupKeys())
     {
-        auto & group_atom_list{ component_group_potential_entry->GetAtomObjectPtrList(group_key) };
+        auto & group_atom_list{ component_group_potential_entry->GetAtomMembers(group_key) };
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
         atom_list_set.emplace_back(group_atom_list);
@@ -955,10 +949,9 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
-        const auto & group_key_set{ group_potential_entry->GetGroupKeySet() };
-        for (auto group_key : group_key_set)
+        for (auto group_key : group_potential_entry->GetGroupKeys())
         {
-            group_potential_entry->AddAlphaG(group_key, alpha_g);
+            group_potential_entry->SetAlphaG(group_key, alpha_g);
         }
     }
 

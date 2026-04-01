@@ -1,5 +1,4 @@
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -35,24 +34,11 @@ void LocalPotentialEntry::ClearDistanceAndMapValueList()
     m_distance_and_map_value_list.shrink_to_fit();
 }
 
-void LocalPotentialEntry::AddGausEstimateOLS(double v0, double v1)
+void LocalPotentialEntry::SetPosterior(
+    const std::string & key,
+    const GaussianPosterior & posterior)
 {
-    m_gaus_estimate_ols = std::make_tuple(v0, v1);
-}
-
-void LocalPotentialEntry::AddGausEstimateMDPDE(double v0, double v1)
-{
-    m_gaus_estimate_mdpde = std::make_tuple(v0, v1);
-}
-
-void LocalPotentialEntry::AddGausEstimatePosterior(const std::string & key, double v0, double v1)
-{
-    m_gaus_estimate_posterior_map[key] = std::make_tuple(v0, v1);
-}
-
-void LocalPotentialEntry::AddGausVariancePosterior(const std::string & key, double v0, double v1)
-{
-    m_gaus_variance_posterior_map[key] = std::make_tuple(v0, v1);
+    m_gaus_posterior_map[key] = posterior;
 }
 
 void LocalPotentialEntry::AddOutlierTag(const std::string & key, bool value)
@@ -73,6 +59,11 @@ int LocalPotentialEntry::GetDistanceAndMapValueListSize() const
 int LocalPotentialEntry::GetBasisAndResponseEntryListSize() const
 {
     return static_cast<int>(m_basis_and_response_entry_list_tmp.size());
+}
+
+const GaussianPosterior & LocalPotentialEntry::GetPosterior(const std::string & key) const
+{
+    return m_gaus_posterior_map.at(key);
 }
 
 const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList() const
@@ -143,22 +134,12 @@ double LocalPotentialEntry::GetMomentTwoEstimate() const
 
 double LocalPotentialEntry::GetBetaEstimateOLS(int par_id) const
 {
-    auto amplitude{ GetAmplitudeEstimateOLS() };
-    auto width{ GetWidthEstimateOLS() };
-    Eigen::VectorXd coefficient_vector{
-        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
-    };
-    return coefficient_vector(par_id);
+    return GetEstimateOLS().ToBeta()(par_id);
 }
 
 double LocalPotentialEntry::GetBetaEstimateMDPDE(int par_id) const
 {
-    auto amplitude{ GetAmplitudeEstimateMDPDE() };
-    auto width{ GetWidthEstimateMDPDE() };
-    Eigen::VectorXd coefficient_vector{
-        GausLinearTransformHelper::BuildLinearModelCoefficentVector(amplitude, width)
-    };
-    return coefficient_vector(par_id);
+    return GetEstimateMDPDE().ToBeta()(par_id);
 }
 
 double LocalPotentialEntry::GetGausEstimateOLS(int par_id) const
@@ -176,17 +157,17 @@ double LocalPotentialEntry::GetGausEstimateOLS(int par_id) const
 
 double LocalPotentialEntry::GetAmplitudeEstimateOLS() const
 {
-    return std::get<0>(m_gaus_estimate_ols);
+    return m_gaus_estimate_ols.amplitude;
 }
 
 double LocalPotentialEntry::GetWidthEstimateOLS() const
 {
-    return std::get<1>(m_gaus_estimate_ols);
+    return m_gaus_estimate_ols.width;
 }
 
 double LocalPotentialEntry::GetIntensityEstimateOLS() const
 {
-    return CalculateIntensityEstimate(GetAmplitudeEstimateOLS(), GetWidthEstimateOLS());
+    return m_gaus_estimate_ols.Intensity();
 }
 
 double LocalPotentialEntry::GetGausEstimateMDPDE(int par_id) const
@@ -204,17 +185,17 @@ double LocalPotentialEntry::GetGausEstimateMDPDE(int par_id) const
 
 double LocalPotentialEntry::GetAmplitudeEstimateMDPDE() const
 {
-    return std::get<0>(m_gaus_estimate_mdpde);
+    return m_gaus_estimate_mdpde.amplitude;
 }
 
 double LocalPotentialEntry::GetWidthEstimateMDPDE() const
 {
-    return std::get<1>(m_gaus_estimate_mdpde);
+    return m_gaus_estimate_mdpde.width;
 }
 
 double LocalPotentialEntry::GetIntensityEstimateMDPDE() const
 {
-    return CalculateIntensityEstimate(GetAmplitudeEstimateMDPDE(), GetWidthEstimateMDPDE());
+    return m_gaus_estimate_mdpde.Intensity();
 }
 
 double LocalPotentialEntry::GetGausEstimatePosterior(const std::string & key, int par_id) const
@@ -232,18 +213,17 @@ double LocalPotentialEntry::GetGausEstimatePosterior(const std::string & key, in
 
 double LocalPotentialEntry::GetAmplitudeEstimatePosterior(const std::string & key) const
 {
-    return std::get<0>(m_gaus_estimate_posterior_map.at(key));
+    return GetPosterior(key).estimate.amplitude;
 }
 
 double LocalPotentialEntry::GetWidthEstimatePosterior(const std::string & key) const
 {
-    return std::get<1>(m_gaus_estimate_posterior_map.at(key));
+    return GetPosterior(key).estimate.width;
 }
 
 double LocalPotentialEntry::GetIntensityEstimatePosterior(const std::string & key) const
 {
-    return CalculateIntensityEstimate(
-        GetAmplitudeEstimatePosterior(key), GetWidthEstimatePosterior(key));
+    return GetPosterior(key).estimate.Intensity();
 }
 
 double LocalPotentialEntry::GetGausVariancePosterior(const std::string & key, int par_id) const
@@ -261,19 +241,17 @@ double LocalPotentialEntry::GetGausVariancePosterior(const std::string & key, in
 
 double LocalPotentialEntry::GetAmplitudeVariancePosterior(const std::string & key) const
 {
-    return std::get<0>(m_gaus_variance_posterior_map.at(key));
+    return GetPosterior(key).variance.amplitude;
 }
 
 double LocalPotentialEntry::GetWidthVariancePosterior(const std::string & key) const
 {
-    return std::get<1>(m_gaus_variance_posterior_map.at(key));
+    return GetPosterior(key).variance.width;
 }
 
 double LocalPotentialEntry::GetIntensityVariancePosterior(const std::string & key) const
 {
-    return CalculateIntensityVariance(
-        GetAmplitudeEstimatePosterior(key), GetAmplitudeVariancePosterior(key),
-        GetWidthEstimatePosterior(key), GetWidthVariancePosterior(key));
+    return GetPosterior(key).IntensityVariance();
 }
 
 bool LocalPotentialEntry::GetOutlierTag(const std::string & key) const
@@ -284,21 +262,6 @@ bool LocalPotentialEntry::GetOutlierTag(const std::string & key) const
 double LocalPotentialEntry::GetStatisticalDistance(const std::string & key) const
 {
     return m_statistical_distance_map.at(key);
-}
-
-double LocalPotentialEntry::CalculateIntensityEstimate(double amplitude, double width) const
-{
-    if (width == 0.0) return 0.0;
-    return amplitude * std::pow(Constants::two_pi * width * width, -1.5);
-}
-
-double LocalPotentialEntry::CalculateIntensityVariance(
-    double amplitude, double sigma_amplitude, double width, double sigma_width) const
-{
-    return std::sqrt(
-        std::pow(std::pow(Constants::two_pi * width * width, -1.5) * sigma_amplitude, 2) +
-        std::pow(-3.0 * amplitude * std::pow(Constants::two_pi, -1.5) * std::pow(width, -4) * sigma_width, 2)
-    );
 }
 
 double LocalPotentialEntry::CalculateQScore(int par_choice) const

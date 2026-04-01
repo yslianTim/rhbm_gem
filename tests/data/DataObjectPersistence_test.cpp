@@ -61,8 +61,7 @@ TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmet
     {
         atom->SetSelectedFlag(true);
     }
-    original_model->FilterAtomFromSymmetry(false);
-    original_model->SyncDerivedState();
+    original_model->ApplySymmetrySelection(false);
     const auto original_selected_count{ original_model->GetNumberOfSelectedAtom() };
 
     rg::DataRepository repository{ database_path };
@@ -78,8 +77,7 @@ TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmet
     {
         atom->SetSelectedFlag(true);
     }
-    loaded_model->FilterAtomFromSymmetry(false);
-    loaded_model->SyncDerivedState();
+    loaded_model->ApplySymmetrySelection(false);
     EXPECT_EQ(loaded_model->GetNumberOfSelectedAtom(), original_selected_count);
 }
 
