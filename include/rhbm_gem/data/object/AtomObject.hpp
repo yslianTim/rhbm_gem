@@ -57,7 +57,7 @@ public:
     void SetSpot(const std::string & name);
     void SetPosition(float x, float y, float z);
     void SetPosition(const std::array<float, 3> & value) { m_position = value; }
-    void AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
+    void SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
     void AddAlternatePosition(const std::string & indicator, const std::array<float, 3> & value);
     void AddAlternateOccupancy(const std::string & indicator, float value);
     void AddAlternateTemperature(const std::string & indicator, float value);

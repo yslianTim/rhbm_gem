@@ -7,17 +7,17 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
+#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 namespace rhbm_gem::series_ops {
 
 inline std::vector<std::tuple<float, float>> BuildLinearModelDistanceAndMapValueList(
-    const LocalPotentialView & view)
+    const LocalPotentialEntry & entry)
 {
     Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
-    const auto & data_array{ view.GetDistanceAndMapValueList() };
+    const auto & data_array{ entry.GetDistanceAndMapValueList() };
     std::vector<std::tuple<float, float>> linear_model_distance_and_map_value_list;
     linear_model_distance_and_map_value_list.reserve(data_array.size());
     for (const auto & [distance, map_value] : data_array)
@@ -34,14 +34,14 @@ inline std::vector<std::tuple<float, float>> BuildLinearModelDistanceAndMapValue
 }
 
 inline std::vector<std::tuple<float, float>> BuildBinnedDistanceAndMapValueList(
-    const LocalPotentialView & view,
+    const LocalPotentialEntry & entry,
     int bin_size = 15,
     double x_min = 0.0,
     double x_max = 1.5)
 {
     const auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
     std::map<int, std::vector<float>> bin_map;
-    for (const auto & [distance, map_value] : view.GetDistanceAndMapValueList())
+    for (const auto & [distance, map_value] : entry.GetDistanceAndMapValueList())
     {
         const auto bin_index{ static_cast<int>(std::floor(distance / bin_spacing)) };
         bin_map[bin_index].emplace_back(map_value);
@@ -61,10 +61,10 @@ inline std::vector<std::tuple<float, float>> BuildBinnedDistanceAndMapValueList(
 }
 
 inline std::tuple<float, float> ComputeDistanceRange(
-    const LocalPotentialView & view,
+    const LocalPotentialEntry & entry,
     double margin_rate = 0.0)
 {
-    const auto & data_array{ view.GetDistanceAndMapValueList() };
+    const auto & data_array{ entry.GetDistanceAndMapValueList() };
     std::vector<float> distance_array;
     distance_array.reserve(data_array.size());
     for (const auto & [distance, map_value] : data_array)
@@ -77,10 +77,10 @@ inline std::tuple<float, float> ComputeDistanceRange(
 }
 
 inline std::tuple<float, float> ComputeMapValueRange(
-    const LocalPotentialView & view,
+    const LocalPotentialEntry & entry,
     double margin_rate = 0.0)
 {
-    const auto & data_array{ view.GetDistanceAndMapValueList() };
+    const auto & data_array{ entry.GetDistanceAndMapValueList() };
     std::vector<float> map_value_array;
     map_value_array.reserve(data_array.size());
     for (const auto & [distance, map_value] : data_array)
@@ -93,13 +93,13 @@ inline std::tuple<float, float> ComputeMapValueRange(
 }
 
 inline std::tuple<float, float> ComputeBinnedMapValueRange(
-    const LocalPotentialView & view,
+    const LocalPotentialEntry & entry,
     int bin_size = 15,
     double x_min = 0.0,
     double x_max = 1.5,
     double margin_rate = 0.0)
 {
-    const auto data_array{ BuildBinnedDistanceAndMapValueList(view, bin_size, x_min, x_max) };
+    const auto data_array{ BuildBinnedDistanceAndMapValueList(entry, bin_size, x_min, x_max) };
     std::vector<float> map_value_array;
     map_value_array.reserve(data_array.size());
     for (const auto & [distance, map_value] : data_array)

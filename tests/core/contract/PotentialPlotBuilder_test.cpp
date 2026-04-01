@@ -32,14 +32,14 @@ void EnsureLocalPotentialEntries(rg::ModelObject & model)
     {
         if (atom->GetLocalPotentialEntry() == nullptr)
         {
-            atom->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+            atom->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
         }
     }
     for (auto & bond : model.GetBondList())
     {
         if (bond->GetLocalPotentialEntry() == nullptr)
         {
-            bond->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+            bond->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
         }
     }
 }

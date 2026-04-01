@@ -15,8 +15,9 @@ TEST(GaussianValueObjectRegressionTest, LocalAndGroupIntensityStayEquivalent)
     local_entry.SetPosterior("component", rg::GaussianPosterior{ estimate, variance });
 
     rg::GroupPotentialEntry group_entry;
-    group_entry.SetPriorEstimate(42, estimate);
-    group_entry.SetPriorVariance(42, variance);
+    auto & group_bucket{ group_entry.EnsureGroup(42) };
+    group_bucket.prior = estimate;
+    group_bucket.prior_variance = variance;
 
     const auto & group{ group_entry.GetGroup(42) };
     rg::GaussianPosterior group_posterior;

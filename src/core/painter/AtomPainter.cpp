@@ -1,7 +1,7 @@
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
+#include <detail/LocalPotentialAccess.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -82,10 +82,10 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     auto pad_main{ ROOTHelper::CreatePad("pad","", 0.00, 0.00, 1.00, 1.00) };
     pad_main->Draw();
 
-    LocalPotentialView atom_view{ *atom_object };
+    const auto & atom_entry{ RequireLocalPotentialEntry(*atom_object) };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
-    auto map_value_range{ series_ops::ComputeMapValueRange(atom_view, 0.3) };
-    auto distance_range{ series_ops::ComputeDistanceRange(atom_view, 0.0) };
+    auto map_value_range{ series_ops::ComputeMapValueRange(atom_entry, 0.3) };
+    auto distance_range{ series_ops::ComputeDistanceRange(atom_entry, 0.0) };
 
     auto map_value_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
     auto map_value_ref_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
@@ -135,7 +135,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     ROOTHelper::SetLineAttribute(map_value_hist.get(), 1, 2, kAzure-5);
     map_value_hist->Draw("CANDLE2 SAME");
 
-    const auto & estimate{ atom_view.GetEstimateMDPDE() };
+    const auto & estimate{ atom_entry.GetEstimateMDPDE() };
     auto amplitude{ estimate.amplitude };
     auto width{ estimate.width };
     auto gaus_func{ ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width) };
@@ -174,7 +174,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     
     for (auto atom_object : m_atom_object_list)
     {
-        LocalPotentialView entry_view{ *atom_object };
+        const auto & entry_view{ RequireLocalPotentialEntry(*atom_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
         auto data_graph{ plot_builder->CreateDistanceToMapValueGraph() };
         auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(15) };

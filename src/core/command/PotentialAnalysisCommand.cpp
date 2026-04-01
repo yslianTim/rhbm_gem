@@ -82,11 +82,11 @@ void PrepareModelForPotentialAnalysis(
 
     for (auto * atom : model_object.GetSelectedAtomList())
     {
-        atom->AddLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+        atom->SetLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
     }
     for (auto * bond : model_object.GetSelectedBondList())
     {
-        bond->AddLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+        bond->SetLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
     }
 }
 
@@ -509,15 +509,12 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
             #pragma omp critical
 #endif
             {
-                group_potential_entry->SetMeanEstimate(
-                    group_key, GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) });
-                group_potential_entry->SetMDPDEEstimate(
-                    group_key, GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) });
-                group_potential_entry->SetPriorEstimate(
-                    group_key, GaussianEstimate{ prior_estimate(0), prior_estimate(1) });
-                group_potential_entry->SetPriorVariance(
-                    group_key, GaussianEstimate{ prior_variance(0), prior_variance(1) });
-                group_potential_entry->SetAlphaG(group_key, alpha_g);
+                auto & bucket{ group_potential_entry->EnsureGroup(group_key) };
+                bucket.mean = GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) };
+                bucket.mdpde = GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) };
+                bucket.prior = GaussianEstimate{ prior_estimate(0), prior_estimate(1) };
+                bucket.prior_variance = GaussianEstimate{ prior_variance(0), prior_variance(1) };
+                bucket.alpha_g = alpha_g;
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }
@@ -807,10 +804,10 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
         for (auto atom : model_object.GetSelectedAtomList())
         {
             auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-            group_potential_entry->AddAtomMember(group_key, atom);
+            group_potential_entry->EnsureGroup(group_key).atom_members.emplace_back(atom);
         }
         const auto group_size{ group_potential_entry->GetGroupKeys().size() };
-        model_object.AddAtomGroupPotentialEntry(class_key, group_potential_entry);
+        model_object.SetAtomGroupPotentialEntry(class_key, std::move(group_potential_entry));
         Logger::Log(
             LogLevel::Info,
             " - Class type: " + class_key + " include " + std::to_string(group_size)
@@ -951,7 +948,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
         auto group_potential_entry{ m_model_object->GetAtomGroupPotentialEntry(class_key) };
         for (auto group_key : group_potential_entry->GetGroupKeys())
         {
-            group_potential_entry->SetAlphaG(group_key, alpha_g);
+            group_potential_entry->EnsureGroup(group_key).alpha_g = alpha_g;
         }
     }
 

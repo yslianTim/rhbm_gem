@@ -8,9 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -28,8 +26,6 @@ class ModelPotentialView
 public:
     explicit ModelPotentialView(const ModelObject & model_object) :
         m_model_object(model_object) {}
-
-    const ModelObject & GetModelObject() const { return m_model_object; }
 
     double GetAtomGausEstimateMinimum(int par_id, Element element) const
     {
@@ -56,49 +52,94 @@ public:
         return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
     }
 
+    const GroupPotentialBucket * TryGetAtomGroup(
+        GroupKey group_key,
+        const std::string & class_key,
+        bool verbose = false) const
+    {
+        auto * entry{ FindAtomGroupEntry(class_key) };
+        if (entry == nullptr)
+        {
+            if (verbose)
+            {
+                Logger::Log(LogLevel::Error, "Atom class key not found: " + class_key);
+            }
+            return nullptr;
+        }
+        if (!entry->HasGroup(group_key))
+        {
+            if (verbose)
+            {
+                LogMissingAtomGroup(group_key, class_key);
+            }
+            return nullptr;
+        }
+        return &entry->GetGroup(group_key);
+    }
+
+    const GroupPotentialBucket * TryGetBondGroup(
+        GroupKey group_key,
+        const std::string & class_key,
+        bool verbose = false) const
+    {
+        auto * entry{ FindBondGroupEntry(class_key) };
+        if (entry == nullptr)
+        {
+            if (verbose)
+            {
+                Logger::Log(LogLevel::Error, "Bond class key not found: " + class_key);
+            }
+            return nullptr;
+        }
+        if (!entry->HasGroup(group_key))
+        {
+            if (verbose)
+            {
+                LogMissingBondGroup(group_key, class_key);
+            }
+            return nullptr;
+        }
+        return &entry->GetGroup(group_key);
+    }
+
     bool HasAtomGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const
     {
-        return CheckAtomGroupKey(group_key, class_key, verbose);
+        return TryGetAtomGroup(group_key, class_key, verbose) != nullptr;
     }
 
     bool HasBondGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const
     {
-        return CheckBondGroupKey(group_key, class_key, verbose);
-    }
-
-    double GetAtomGausEstimateMean(GroupKey group_key, const std::string & class_key, int par_id) const
-    {
-        return GetAtomGroup(group_key, class_key).mean.GetParameter(par_id);
+        return TryGetBondGroup(group_key, class_key, verbose) != nullptr;
     }
 
     double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return GetAtomGroup(group_key, class_key).prior.GetParameter(par_id);
+        return RequireAtomGroup(group_key, class_key)->prior.GetParameter(par_id);
     }
 
     double GetBondGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return GetBondGroup(group_key, class_key).prior.GetParameter(par_id);
+        return RequireBondGroup(group_key, class_key)->prior.GetParameter(par_id);
     }
 
     double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return BuildPriorPosterior(GetAtomGroup(group_key, class_key)).GetVariance(par_id);
+        return BuildPriorPosterior(*RequireAtomGroup(group_key, class_key)).GetVariance(par_id);
     }
 
     double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return BuildPriorPosterior(GetBondGroup(group_key, class_key)).GetVariance(par_id);
+        return BuildPriorPosterior(*RequireBondGroup(group_key, class_key)).GetVariance(par_id);
     }
 
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const
     {
-        return GetAtomGroup(group_key, class_key).atom_members;
+        return RequireAtomGroup(group_key, class_key)->atom_members;
     }
 
     const std::vector<BondObject *> & GetBondObjectList(GroupKey group_key, const std::string & class_key) const
     {
-        return GetBondGroup(group_key, class_key).bond_members;
+        return RequireBondGroup(group_key, class_key)->bond_members;
     }
 
     std::vector<AtomObject *> GetOutlierAtomObjectList(GroupKey group_key, const std::string & class_key) const
@@ -141,32 +182,12 @@ public:
         return local_entry->GetAlphaR();
     }
 
-    double GetBondAlphaR(GroupKey group_key, const std::string & class_key) const
-    {
-        const auto & bond_list{ GetBondObjectList(group_key, class_key) };
-        if (bond_list.empty())
-        {
-            throw std::runtime_error("Bond group has no members.");
-        }
-        auto * local_entry{ bond_list.front()->GetLocalPotentialEntry() };
-        if (local_entry == nullptr)
-        {
-            throw std::runtime_error("Local entry of the first bond member is not available.");
-        }
-        return local_entry->GetAlphaR();
-    }
-
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const
     {
-        return GetAtomGroup(group_key, class_key).alpha_g;
+        return RequireAtomGroup(group_key, class_key)->alpha_g;
     }
 
-    double GetBondAlphaG(GroupKey group_key, const std::string & class_key) const
-    {
-        return GetBondGroup(group_key, class_key).alpha_g;
-    }
-
-    Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const
+    Residue DecodeResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const
     {
         if (class_key == ChemicalDataHelper::GetSimpleAtomClassKey())
         {
@@ -186,7 +207,7 @@ public:
         return Residue::UNK;
     }
 
-    Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const
+    Residue DecodeResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const
     {
         if (class_key == ChemicalDataHelper::GetSimpleBondClassKey())
         {
@@ -201,94 +222,102 @@ public:
         return Residue::UNK;
     }
 
+    Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const
+    {
+        return DecodeResidueFromAtomGroupKey(group_key, class_key);
+    }
+
+    Residue GetResidueFromBondGroupKey(GroupKey group_key, const std::string & class_key) const
+    {
+        return DecodeResidueFromBondGroupKey(group_key, class_key);
+    }
+
 private:
-    const GroupPotentialEntry & GetAtomGroupEntry(const std::string & class_key) const
+    const GroupPotentialBucket * RequireAtomGroup(GroupKey group_key, const std::string & class_key) const
     {
-        return *m_model_object.GetAtomGroupPotentialEntry(class_key);
-    }
-
-    const GroupPotentialEntry & GetBondGroupEntry(const std::string & class_key) const
-    {
-        return *m_model_object.GetBondGroupPotentialEntry(class_key);
-    }
-
-    const GroupPotentialBucket & GetAtomGroup(GroupKey group_key, const std::string & class_key) const
-    {
-        if (!CheckAtomGroupKey(group_key, class_key, true))
+        auto * group{ TryGetAtomGroup(group_key, class_key, true) };
+        if (group == nullptr)
         {
             throw std::runtime_error("Atom group key is not available.");
         }
-        return GetAtomGroupEntry(class_key).GetGroup(group_key);
+        return group;
     }
 
-    const GroupPotentialBucket & GetBondGroup(GroupKey group_key, const std::string & class_key) const
+    const GroupPotentialBucket * RequireBondGroup(GroupKey group_key, const std::string & class_key) const
     {
-        if (!CheckBondGroupKey(group_key, class_key, true))
+        auto * group{ TryGetBondGroup(group_key, class_key, true) };
+        if (group == nullptr)
         {
             throw std::runtime_error("Bond group key is not available.");
         }
-        return GetBondGroupEntry(class_key).GetGroup(group_key);
+        return group;
     }
 
-    bool CheckAtomGroupKey(GroupKey group_key, const std::string & class_key, bool verbose) const
+    const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
     {
-        if (GetAtomGroupEntry(class_key).HasGroup(group_key))
+        const auto & entry_map{ m_model_object.GetAtomGroupPotentialEntryMap() };
+        auto iter{ entry_map.find(class_key) };
+        if (iter == entry_map.end())
         {
-            return true;
+            return nullptr;
         }
-        if (verbose)
-        {
-            std::ostringstream oss;
-            if (class_key == ChemicalDataHelper::GetSimpleAtomClassKey())
-            {
-                oss << "Atom class group key : "
-                    << KeyPackerSimpleAtomClass::GetKeyString(group_key)
-                    << " not found.";
-            }
-            else if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
-            {
-                oss << "Atom class group key : "
-                    << KeyPackerComponentAtomClass::GetKeyString(group_key)
-                    << " not found.";
-            }
-            else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
-            {
-                oss << "Atom class group key : "
-                    << KeyPackerStructureAtomClass::GetKeyString(group_key)
-                    << " not found.";
-            }
-            Logger::Log(LogLevel::Error, oss.str());
-        }
-        return false;
+        return iter->second.get();
     }
 
-    bool CheckBondGroupKey(GroupKey group_key, const std::string & class_key, bool verbose) const
+    const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
     {
-        if (GetBondGroupEntry(class_key).HasGroup(group_key))
+        const auto & entry_map{ m_model_object.GetBondGroupPotentialEntryMap() };
+        auto iter{ entry_map.find(class_key) };
+        if (iter == entry_map.end())
         {
-            return true;
+            return nullptr;
         }
-        if (verbose)
-        {
-            std::ostringstream oss;
-            if (class_key == ChemicalDataHelper::GetSimpleBondClassKey())
-            {
-                oss << "Bond class group key : "
-                    << KeyPackerSimpleBondClass::GetKeyString(group_key)
-                    << " not found.";
-            }
-            else if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
-            {
-                oss << "Bond class group key : "
-                    << KeyPackerComponentBondClass::GetKeyString(group_key)
-                    << " not found.";
-            }
-            Logger::Log(LogLevel::Error, oss.str());
-        }
-        return false;
+        return iter->second.get();
     }
 
-    GaussianPosterior BuildPriorPosterior(const GroupPotentialBucket & group) const
+    static void LogMissingAtomGroup(GroupKey group_key, const std::string & class_key)
+    {
+        std::ostringstream oss;
+        if (class_key == ChemicalDataHelper::GetSimpleAtomClassKey())
+        {
+            oss << "Atom class group key : "
+                << KeyPackerSimpleAtomClass::GetKeyString(group_key)
+                << " not found.";
+        }
+        else if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
+        {
+            oss << "Atom class group key : "
+                << KeyPackerComponentAtomClass::GetKeyString(group_key)
+                << " not found.";
+        }
+        else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
+        {
+            oss << "Atom class group key : "
+                << KeyPackerStructureAtomClass::GetKeyString(group_key)
+                << " not found.";
+        }
+        Logger::Log(LogLevel::Error, oss.str());
+    }
+
+    static void LogMissingBondGroup(GroupKey group_key, const std::string & class_key)
+    {
+        std::ostringstream oss;
+        if (class_key == ChemicalDataHelper::GetSimpleBondClassKey())
+        {
+            oss << "Bond class group key : "
+                << KeyPackerSimpleBondClass::GetKeyString(group_key)
+                << " not found.";
+        }
+        else if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
+        {
+            oss << "Bond class group key : "
+                << KeyPackerComponentBondClass::GetKeyString(group_key)
+                << " not found.";
+        }
+        Logger::Log(LogLevel::Error, oss.str());
+    }
+
+    static GaussianPosterior BuildPriorPosterior(const GroupPotentialBucket & group)
     {
         GaussianPosterior posterior;
         posterior.estimate = group.prior;

@@ -47,16 +47,6 @@ const std::vector<std::string> BondClassifier::m_main_chain_member_label_list
     "C-N"
 };
 
-BondClassifier::BondClassifier()
-{
-
-}
-
-BondClassifier::~BondClassifier()
-{
-
-}
-
 bool BondClassifier::IsMainChainMember(Link link, size_t & main_chain_member_id)
 {
     for (size_t i = 0; i < m_main_chain_member_count; i++)
@@ -158,7 +148,7 @@ GroupKey BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id)
     return KeyPackerSimpleBondClass::Pack(bond_key, false);
 }
 
-GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Residue residue) const
+GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Residue residue)
 {
     if (IsValidMainChainMemberID(id) == false)
     {
@@ -171,7 +161,7 @@ GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Resid
 }
 
 std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList(
-    size_t id) const
+    size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<GroupKey> group_key_list;

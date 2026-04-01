@@ -2,7 +2,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
+#include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -31,11 +31,7 @@
 
 namespace rhbm_gem {
 
-ComparisonPainter::ComparisonPainter() :
-    m_atom_classifier{ std::make_unique<AtomClassifier>() }
-{
-
-}
+ComparisonPainter::ComparisonPainter() = default;
 
 ComparisonPainter::~ComparisonPainter()
 {
@@ -634,7 +630,7 @@ void ComparisonPainter::PainMapValueComparison(
         std::vector<double> x_array, y_array;
         for (size_t i = 0; i < col_size; i++)
         {
-            auto group_key{ m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(i) };
+            auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(i) };
             auto graph{ ROOTHelper::CreateGraphErrors() };
             painter_internal::BuildMapValueScatterGraph(
                 group_key, graph.get(), ref_model_object, model_object, 15, 0.0, 1.5);
@@ -754,14 +750,14 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
     auto group_key
     {
         (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(target_id) :
-        m_atom_classifier->GetMainChainComponentAtomClassGroupKey(target_id, residue)
+        AtomClassifier::GetMainChainSimpleAtomClassGroupKey(target_id) :
+        AtomClassifier::GetMainChainComponentAtomClassGroupKey(target_id, residue)
     };
     auto ref_group_key
     {
         (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(reference_id) :
-        m_atom_classifier->GetMainChainComponentAtomClassGroupKey(reference_id, residue)
+        AtomClassifier::GetMainChainSimpleAtomClassGroupKey(reference_id) :
+        AtomClassifier::GetMainChainComponentAtomClassGroupKey(reference_id, residue)
     };
     auto count{ 0 };
     for (auto model_object : model_list)
@@ -792,14 +788,14 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     auto group_key
     {
         (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(target_id) :
-        m_atom_classifier->GetMainChainComponentAtomClassGroupKey(target_id, residue)
+        AtomClassifier::GetMainChainSimpleAtomClassGroupKey(target_id) :
+        AtomClassifier::GetMainChainComponentAtomClassGroupKey(target_id, residue)
     };
     auto ref_group_key
     {
         (class_key == ChemicalDataHelper::GetSimpleAtomClassKey()) ?
-        m_atom_classifier->GetMainChainSimpleAtomClassGroupKey(reference_id) :
-        m_atom_classifier->GetMainChainComponentAtomClassGroupKey(reference_id, residue)
+        AtomClassifier::GetMainChainSimpleAtomClassGroupKey(reference_id) :
+        AtomClassifier::GetMainChainComponentAtomClassGroupKey(reference_id, residue)
     };
     auto count{ 0 };
     auto model_count{ 0 };

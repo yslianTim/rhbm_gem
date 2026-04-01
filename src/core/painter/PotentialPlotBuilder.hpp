@@ -6,9 +6,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+
+#include <detail/LocalPotentialAccess.hpp>
+#include <detail/ModelPotentialView.hpp>
 
 #ifdef HAVE_ROOT
 class TH1D;
@@ -79,7 +80,7 @@ public:
 
 private:
     ModelPotentialView GetModelView() const;
-    LocalPotentialView GetLocalView() const;
+    const LocalPotentialEntry & GetLocalEntry() const;
     bool IsModelObjectAvailable() const;
     bool IsAtomLocalEntryAvailable() const;
     size_t GetAtomResidueCount(const std::string & class_key, Residue residue, Structure structure=static_cast<Structure>(0)) const;

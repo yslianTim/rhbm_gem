@@ -2,8 +2,8 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
+#include <detail/LocalPotentialAccess.hpp>
+#include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -41,12 +41,7 @@
 
 namespace rhbm_gem {
 
-ModelPainter::ModelPainter() :
-    m_atom_classifier{ std::make_unique<AtomClassifier>() },
-    m_bond_classifier{ std::make_unique<BondClassifier>() }
-{
-
-}
+ModelPainter::ModelPainter() = default;
 
 ModelPainter::~ModelPainter()
 {
@@ -136,10 +131,10 @@ void ModelPainter::PaintAtomGroupGausMainChain(
     std::vector<GroupKey> group_key_list[primary_element_size][structure_size+1];
     for (size_t i = 0; i < primary_element_size; i++)
     {
-        group_key_list[i][0] = m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(i);
-        group_key_list[i][1] = m_atom_classifier->GetMainChainStructureAtomClassGroupKeyList(i, structure_list[1]);
-        group_key_list[i][2] = m_atom_classifier->GetMainChainStructureAtomClassGroupKeyList(i, structure_list[2]);
-        group_key_list[i][3] = m_atom_classifier->GetMainChainStructureAtomClassGroupKeyList(i, structure_list[3]);
+        group_key_list[i][0] = AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(i);
+        group_key_list[i][1] = AtomClassifier::GetMainChainStructureAtomClassGroupKeyList(i, structure_list[1]);
+        group_key_list[i][2] = AtomClassifier::GetMainChainStructureAtomClassGroupKeyList(i, structure_list[2]);
+        group_key_list[i][3] = AtomClassifier::GetMainChainStructureAtomClassGroupKeyList(i, structure_list[3]);
     }
 
     for (size_t j = 0; j < structure_size + 1; j++)
@@ -335,7 +330,7 @@ void ModelPainter::PaintBondGroupGausMainChain(
     std::vector<GroupKey> group_key_list[primary_element_size];
     for (size_t i = 0; i < primary_element_size; i++)
     {
-        group_key_list[i] = m_bond_classifier->GetMainChainComponentBondClassGroupKeyList(i);
+        group_key_list[i] = BondClassifier::GetMainChainComponentBondClassGroupKeyList(i);
     }
 
     std::unique_ptr<TGraphErrors> amplitude_graph[primary_element_size];
@@ -536,7 +531,7 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
     for (size_t i = 0; i < component_size; i++)
     {
         group_key_list[i] =
-            m_atom_classifier->GetNucleotideMainChainComponentAtomClassGroupKeyList(component_id[i]);
+            AtomClassifier::GetNucleotideMainChainComponentAtomClassGroupKeyList(component_id[i]);
     }
 
     std::unique_ptr<TGraphErrors> amplitude_graph[component_size];
@@ -732,8 +727,8 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
+#include <detail/LocalPotentialAccess.hpp>
+#include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -781,19 +776,18 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     double width_prior[main_chain_element_size];
     std::vector<double> y_array;
     y_array.reserve(model_object->GetNumberOfSelectedAtom());
-    AtomClassifier classifier;
-    for (size_t k = 0; k < main_chain_element_size; k++)
+        for (size_t k = 0; k < main_chain_element_size; k++)
     {
-        auto group_key{ classifier.GetMainChainSimpleAtomClassGroupKey(k) };
+        auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(k) };
         if (!entry_iter->HasAtomGroup(group_key, class_key)) continue;
         for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
         {
-            auto atom_iter{ std::make_unique<LocalPotentialView>(*atom) };
             auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
             auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
-            auto map_value_range{ series_ops::ComputeMapValueRange(*atom_iter, 0.0) };
+            auto map_value_range{ series_ops::ComputeMapValueRange(
+                RequireLocalPotentialEntry(*atom), 0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
@@ -950,20 +944,19 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
     int member_entries[main_chain_element_size];
     std::vector<double> y_array;
     y_array.reserve(model_object->GetNumberOfSelectedBond());
-    BondClassifier classifier;
-    for (size_t k = 0; k < main_chain_element_size; k++)
+        for (size_t k = 0; k < main_chain_element_size; k++)
     {
-        auto group_key{ classifier.GetMainChainSimpleBondClassGroupKey(k) };
+        auto group_key{ BondClassifier::GetMainChainSimpleBondClassGroupKey(k) };
         if (!entry_iter->HasBondGroup(group_key, class_key, true)) continue;
 
         for (auto bond : entry_iter->GetBondObjectList(group_key, class_key))
         {
-            auto bond_iter{ std::make_unique<LocalPotentialView>(*bond) };
             auto bond_plot_builder{ std::make_unique<PotentialPlotBuilder>(bond) };
             auto graph{ bond_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
-            auto map_value_range{ series_ops::ComputeMapValueRange(*bond_iter, 0.0) };
+            auto map_value_range{ series_ops::ComputeMapValueRange(
+                RequireLocalPotentialEntry(*bond), 0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
@@ -1105,8 +1098,8 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
+#include <detail/LocalPotentialAccess.hpp>
+#include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -1178,7 +1171,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
         {
             for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
             {
-                auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
+                auto group_key{ AtomClassifier::GetMainChainComponentAtomClassGroupKey(i, residue) };
                 if (!entry_iter->HasAtomGroup(group_key, residue_class)) continue;
                 auto gaus_graph
                 {
@@ -2162,8 +2155,8 @@ void ModelPainter::PrintAtomWidthSummaryPad(TPad * pad, TH2 * hist)
     for (size_t i = 0; i < 4; i++)
     {
         auto index{ static_cast<int>(i) + 2 };
-        auto color{ m_atom_classifier->GetMainChainElementColor(i) };
-        auto label{ m_atom_classifier->GetMainChainElementLabel(i) };
+        auto color{ AtomClassifier::GetMainChainElementColor(i) };
+        auto label{ AtomClassifier::GetMainChainElementLabel(i) };
         hist->GetXaxis()->ChangeLabel(index, 0.0, -1, -1, color, -1, label.data());
     }
     hist->SetStats(0);
@@ -2193,8 +2186,8 @@ void ModelPainter::PrintBondWidthSummaryPad(TPad * pad, TH2 * hist)
     for (size_t i = 0; i < 4; i++)
     {
         auto index{ static_cast<int>(i) + 2 };
-        auto color{ m_bond_classifier->GetMainChainMemberColor(i) };
-        auto label{ m_bond_classifier->GetMainChainMemberLabel(i) };
+        auto color{ BondClassifier::GetMainChainMemberColor(i) };
+        auto label{ BondClassifier::GetMainChainMemberLabel(i) };
         hist->GetXaxis()->ChangeLabel(index, 45.0, -1, 21, color, -1, label.data());
     }
     hist->SetStats(0);

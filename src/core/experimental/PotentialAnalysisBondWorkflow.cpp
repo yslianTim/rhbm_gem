@@ -136,10 +136,10 @@ void RunBondGrouping(ModelObject & model_object)
         for (auto bond : model_object.GetSelectedBondList())
         {
             auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
-            group_potential_entry->AddBondMember(group_key, bond);
+            group_potential_entry->EnsureGroup(group_key).bond_members.emplace_back(bond);
         }
         const auto group_size{ group_potential_entry->GetGroupKeys().size() };
-        model_object.AddBondGroupPotentialEntry(class_key, group_potential_entry);
+        model_object.SetBondGroupPotentialEntry(class_key, std::move(group_potential_entry));
         Logger::Log(
             LogLevel::Info,
             " - Class type: " + class_key + " include "
@@ -313,15 +313,12 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             #pragma omp critical
 #endif
             {
-                group_potential_entry->SetMeanEstimate(
-                    group_key, GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) });
-                group_potential_entry->SetMDPDEEstimate(
-                    group_key, GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) });
-                group_potential_entry->SetPriorEstimate(
-                    group_key, GaussianEstimate{ prior_estimate(0), prior_estimate(1) });
-                group_potential_entry->SetPriorVariance(
-                    group_key, GaussianEstimate{ prior_variance(0), prior_variance(1) });
-                group_potential_entry->SetAlphaG(group_key, context.options.alpha_g);
+                auto & bucket{ group_potential_entry->EnsureGroup(group_key) };
+                bucket.mean = GaussianEstimate{ gaus_group_mean(0), gaus_group_mean(1) };
+                bucket.mdpde = GaussianEstimate{ gaus_group_mdpde(0), gaus_group_mdpde(1) };
+                bucket.prior = GaussianEstimate{ prior_estimate(0), prior_estimate(1) };
+                bucket.prior_variance = GaussianEstimate{ prior_variance(0), prior_variance(1) };
+                bucket.alpha_g = context.options.alpha_g;
                 key_count++;
                 Logger::ProgressBar(key_count, group_key_size);
             }

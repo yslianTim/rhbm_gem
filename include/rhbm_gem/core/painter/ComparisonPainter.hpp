@@ -20,14 +20,12 @@ class TGraphErrors;
 namespace rhbm_gem {
 
 class ModelObject;
-class AtomClassifier;
 
 class ComparisonPainter : public PainterBase
 {
     std::vector<ModelObject *> m_model_object_list;
     std::vector<double> m_resolution_list;
     std::unordered_map<std::string, std::vector<ModelObject *>> m_ref_model_object_list_map;
-    std::unique_ptr<AtomClassifier> m_atom_classifier;
 
 public:
     ComparisonPainter();

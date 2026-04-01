@@ -2,8 +2,8 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
+#include <detail/LocalPotentialAccess.hpp>
+#include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -38,12 +38,7 @@
 
 namespace rhbm_gem {
 
-GausPainter::GausPainter() :
-    m_atom_classifier{ std::make_unique<AtomClassifier>() },
-    m_bond_classifier{ std::make_unique<BondClassifier>() }
-{
-
-}
+GausPainter::GausPainter() = default;
 
 GausPainter::~GausPainter()
 {
@@ -237,10 +232,9 @@ void GausPainter::PaintAtomLocalGausSummary(
             y_array.reserve(member_size * 2);
             for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
             {
-                auto atom_iter{ std::make_unique<LocalPotentialView>(*atom) };
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                auto is_outlier{ atom_iter->IsOutlier(class_key) };
+                auto is_outlier{ RequireLocalPotentialEntry(*atom).GetOutlierTag(class_key) };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
@@ -849,7 +843,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
     ROOTHelper::PrintCanvasOpen(canvas.get(), file_path);
     for (size_t k = 0; k < spot_list.size(); k++)
     {
-        auto group_key_list{ m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(k) };
+        auto group_key_list{ AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(k) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
             if (!entry_iter->HasAtomGroup(*it, class_key))
@@ -886,10 +880,9 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
             y_array.reserve(member_size * 2);
             for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
             {
-                auto atom_iter{ std::make_unique<LocalPotentialView>(*atom) };
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                auto is_outlier{ atom_iter->IsOutlier(class_key) };
+                auto is_outlier{ RequireLocalPotentialEntry(*atom).GetOutlierTag(class_key) };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
@@ -1054,8 +1047,8 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
+#include <detail/LocalPotentialAccess.hpp>
+#include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
@@ -1131,7 +1124,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     {
         auto spot{ spot_list.at(i) };
         group_key_list_map.emplace(
-            spot, m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(i));
+            spot, AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(i));
         auto & group_key_list{ group_key_list_map.at(spot) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
@@ -1330,7 +1323,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         {
             auto structure{ structure_list.at(j) };
             group_key_list_map.emplace(
-                structure, m_atom_classifier->GetMainChainStructureAtomClassGroupKeyList(i, structure));
+                structure, AtomClassifier::GetMainChainStructureAtomClassGroupKeyList(i, structure));
             auto & group_key_list{ group_key_list_map.at(structure) };
             for (auto it = group_key_list.begin(); it != group_key_list.end(); )
             {
@@ -1816,8 +1809,8 @@ std::unique_ptr<TPaveText> GausPainter::CreateResolutionPaveText(
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
+#include <detail/LocalPotentialAccess.hpp>
+#include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -1887,7 +1880,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     {
         auto spot{ spot_list.at(i) };
         group_key_list_map.emplace(
-            spot, m_atom_classifier->GetMainChainComponentAtomClassGroupKeyList(i));
+            spot, AtomClassifier::GetMainChainComponentAtomClassGroupKeyList(i));
         auto & group_key_list{ group_key_list_map.at(spot) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {

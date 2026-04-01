@@ -76,7 +76,7 @@ inline void SeedSavedModel(
     model->SetPdbID(pdb_id);
     for (auto & atom : model->GetAtomList())
     {
-        atom->AddLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+        atom->SetLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
     }
     repository.SaveModel(*model, saved_key);
 }

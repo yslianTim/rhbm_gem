@@ -36,13 +36,6 @@ public:
     const GroupPotentialBucket & GetGroup(GroupKey group_key) const;
     const std::unordered_map<GroupKey, GroupPotentialBucket> & GetGroups() const;
     std::vector<GroupKey> GetGroupKeys() const;
-    void AddAtomMember(GroupKey group_key, AtomObject * atom_object);
-    void AddBondMember(GroupKey group_key, BondObject * bond_object);
-    void SetMeanEstimate(GroupKey group_key, const GaussianEstimate & estimate);
-    void SetMDPDEEstimate(GroupKey group_key, const GaussianEstimate & estimate);
-    void SetPriorEstimate(GroupKey group_key, const GaussianEstimate & estimate);
-    void SetPriorVariance(GroupKey group_key, const GaussianEstimate & variance);
-    void SetAlphaG(GroupKey group_key, double value);
 };
 
 } // namespace rhbm_gem

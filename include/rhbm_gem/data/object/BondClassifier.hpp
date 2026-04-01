@@ -23,9 +23,6 @@ class BondClassifier
     static const std::vector<std::string> m_main_chain_member_title_list;
 
 public:
-    BondClassifier();
-    ~BondClassifier();
-
     static bool IsMainChainMember(Link link, size_t & main_chain_member_id);
     static size_t GetMainChainMemberCount();
     static Link GetMainChainLink(size_t id);
@@ -39,8 +36,8 @@ public:
     static GroupKey GetGroupKeyInClass(ComponentKey component_key, BondKey bond_key);
 
     static GroupKey GetMainChainSimpleBondClassGroupKey(size_t id);
-    GroupKey GetMainChainComponentBondClassGroupKey(size_t id, Residue residue) const;
-    std::vector<GroupKey> GetMainChainComponentBondClassGroupKeyList(size_t id) const;
+    static GroupKey GetMainChainComponentBondClassGroupKey(size_t id, Residue residue);
+    static std::vector<GroupKey> GetMainChainComponentBondClassGroupKeyList(size_t id);
 
 private:
     static bool IsValidMainChainMemberID(size_t id);

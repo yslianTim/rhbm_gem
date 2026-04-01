@@ -5,13 +5,13 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
+#include <detail/LocalPotentialAccess.hpp>
+#include <detail/ModelPotentialView.hpp>
 #include <detail/PotentialSeriesOps.hpp>
 
 #ifdef HAVE_ROOT
@@ -105,19 +105,30 @@ inline void BuildMapValueScatterGraph(
 {
     const ModelPotentialView entry1_view{ *model1 };
     const ModelPotentialView entry2_view{ *model2 };
-    if (!entry1_view.HasAtomGroup(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()))
+    const auto * group1{ entry1_view.TryGetAtomGroup(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
+    if (group1 == nullptr)
     {
         return;
     }
-    if (!entry2_view.HasAtomGroup(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()))
+    const auto * group2{ entry2_view.TryGetAtomGroup(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
+    if (group2 == nullptr)
     {
         return;
     }
 
-    auto model1_atom_map{
-        entry1_view.GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
-    auto model2_atom_map{
-        entry2_view.GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
+    std::unordered_map<int, AtomObject *> model1_atom_map;
+    model1_atom_map.reserve(group1->atom_members.size());
+    for (auto * atom_object : group1->atom_members)
+    {
+        model1_atom_map[atom_object->GetSerialID()] = atom_object;
+    }
+
+    std::unordered_map<int, AtomObject *> model2_atom_map;
+    model2_atom_map.reserve(group2->atom_members.size());
+    for (auto * atom_object : group2->atom_members)
+    {
+        model2_atom_map[atom_object->GetSerialID()] = atom_object;
+    }
     auto count{ 0 };
     for (auto & [atom_id, atom_object1] : model1_atom_map)
     {
@@ -126,12 +137,10 @@ inline void BuildMapValueScatterGraph(
             continue;
         }
         auto * atom_object2{ model2_atom_map.at(atom_id) };
-        const LocalPotentialView atom1_view{ *atom_object1 };
-        const LocalPotentialView atom2_view{ *atom_object2 };
-        auto data1_array{
-            series_ops::BuildBinnedDistanceAndMapValueList(atom1_view, bin_size, x_min, x_max) };
-        auto data2_array{
-            series_ops::BuildBinnedDistanceAndMapValueList(atom2_view, bin_size, x_min, x_max) };
+        auto data1_array{ series_ops::BuildBinnedDistanceAndMapValueList(
+            RequireLocalPotentialEntry(*atom_object1), bin_size, x_min, x_max) };
+        auto data2_array{ series_ops::BuildBinnedDistanceAndMapValueList(
+            RequireLocalPotentialEntry(*atom_object2), bin_size, x_min, x_max) };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
             graph->SetPoint(count, std::get<1>(data1_array.at(i)), std::get<1>(data2_array.at(i)));

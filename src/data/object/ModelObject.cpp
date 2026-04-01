@@ -73,7 +73,7 @@ ModelObject::ModelObject(const ModelObject & other) :
         cloned_bond->SetBondOrder(bond->GetBondOrder());
         if (bond->GetLocalPotentialEntry() != nullptr)
         {
-            cloned_bond->AddLocalPotentialEntry(
+            cloned_bond->SetLocalPotentialEntry(
                 std::make_unique<LocalPotentialEntry>(*bond->GetLocalPotentialEntry()));
         }
         bond_ptr_map[bond.get()] = cloned_bond.get();
@@ -126,10 +126,15 @@ ModelObject::ModelObject(const ModelObject & other) :
     copy_group_entries(other.m_atom_group_potential_entry_map, m_atom_group_potential_entry_map);
     copy_group_entries(other.m_bond_group_potential_entry_map, m_bond_group_potential_entry_map);
 
-    RefreshDerivedState();
+    RebuildSelectionIndex();
 }
 
-void ModelObject::RefreshDerivedState()
+void ModelObject::RebuildSelectionIndex()
+{
+    SyncDerivedState();
+}
+
+void ModelObject::FinalizeLoad()
 {
     SyncDerivedState();
 }
@@ -191,14 +196,14 @@ void ModelObject::SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list
     SyncDerivedState();
 }
 
-void ModelObject::AddAtomGroupPotentialEntry(
-    const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
+void ModelObject::SetAtomGroupPotentialEntry(
+    const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
 {
     m_atom_group_potential_entry_map[class_key] = std::move(entry);
 }
 
-void ModelObject::AddBondGroupPotentialEntry(
-    const std::string & class_key, std::unique_ptr<GroupPotentialEntry> & entry)
+void ModelObject::SetBondGroupPotentialEntry(
+    const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
 {
     m_bond_group_potential_entry_map[class_key] = std::move(entry);
 }
@@ -210,7 +215,7 @@ void ModelObject::AddChemicalComponentEntry(
 }
 
 void ModelObject::SetChemicalComponentEntryMap(
-    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & entry_map)
+    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> entry_map)
 {
     m_chemical_component_entry_map = std::move(entry_map);
 }
@@ -308,17 +313,6 @@ GroupPotentialEntry * ModelObject::GetAtomGroupPotentialEntry(const std::string 
 GroupPotentialEntry * ModelObject::GetBondGroupPotentialEntry(const std::string & class_key) const
 {
     return m_bond_group_potential_entry_map.at(class_key).get();
-}
-
-ChemicalComponentEntry * ModelObject::GetChemicalComponentEntry(ComponentKey key) const
-{
-    return m_chemical_component_entry_map.at(key).get();
-}
-
-const std::map<int, AtomObject *> &
-ModelObject::GetSerialIDAtomMap() const
-{
-    return m_serial_id_atom_map;
 }
 
 const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &

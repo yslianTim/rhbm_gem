@@ -63,15 +63,15 @@ ModelPotentialView PotentialPlotBuilder::GetModelView() const
     return ModelPotentialView(*m_model_object);
 }
 
-LocalPotentialView PotentialPlotBuilder::GetLocalView() const
+const LocalPotentialEntry & PotentialPlotBuilder::GetLocalEntry() const
 {
     if (m_atom_object != nullptr)
     {
-        return LocalPotentialView(*m_atom_object);
+        return RequireLocalPotentialEntry(*m_atom_object);
     }
     if (m_bond_object != nullptr)
     {
-        return LocalPotentialView(*m_bond_object);
+        return RequireLocalPotentialEntry(*m_bond_object);
     }
     throw std::runtime_error("Local entry is not available.");
 }
@@ -95,14 +95,13 @@ size_t PotentialPlotBuilder::GetAtomResidueCount(
     const std::string & class_key, Residue residue, Structure structure) const
 {
     GroupKey group_key{ 0 };
-    AtomClassifier classifier;
-    if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
+        if (class_key == ChemicalDataHelper::GetComponentAtomClassKey())
     {
-        group_key = classifier.GetMainChainComponentAtomClassGroupKey(0, residue);
+        group_key = AtomClassifier::GetMainChainComponentAtomClassGroupKey(0, residue);
     }
     else if (class_key == ChemicalDataHelper::GetStructureAtomClassKey())
     {
-        group_key = classifier.GetMainChainStructureAtomClassGroupKey(0, structure, residue);
+        group_key = AtomClassifier::GetMainChainStructureAtomClassGroupKey(0, structure, residue);
     }
     if (IsAvailableAtomGroupKey(group_key, class_key) == false)
     {
@@ -115,10 +114,9 @@ size_t PotentialPlotBuilder::GetBondResidueCount(
     const std::string & class_key, Residue residue) const
 {
     GroupKey group_key{ 0 };
-    BondClassifier classifier;
-    if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
+        if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
     {
-        group_key = classifier.GetMainChainComponentBondClassGroupKey(0, residue);
+        group_key = BondClassifier::GetMainChainComponentBondClassGroupKey(0, residue);
     }
     if (IsAvailableBondGroupKey(group_key, class_key) == false)
     {
@@ -280,7 +278,7 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
 
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int dimension_id) const
 {
-    auto data_array{ series_ops::BuildLinearModelDistanceAndMapValueList(GetLocalView()) };
+    auto data_array{ series_ops::BuildLinearModelDistanceAndMapValueList(GetLocalEntry()) };
     std::vector<float> data_list;
     data_list.reserve(data_array.size());
     for (auto & [distance, map_value] : data_array)
@@ -314,15 +312,15 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(int d
 std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
     int x_bin_size, int y_bin_size) const
 {
-    auto distance_range{ series_ops::ComputeDistanceRange(GetLocalView(), 0.0) };
-    auto map_value_range{ series_ops::ComputeMapValueRange(GetLocalView(), 0.1) };
+    auto distance_range{ series_ops::ComputeDistanceRange(GetLocalEntry(), 0.0) };
+    auto map_value_range{ series_ops::ComputeMapValueRange(GetLocalEntry(), 0.1) };
     auto hist{
         ROOTHelper::CreateHist2D(
             "hist_distance_mapvalue", "Distance vs Map Value",
             x_bin_size, std::get<0>(distance_range), std::get<1>(distance_range),
             y_bin_size, std::get<0>(map_value_range), std::get<1>(map_value_range))
     };
-    for (auto & [distance, map_value] : GetLocalView().GetDistanceAndMapValueList())
+    for (auto & [distance, map_value] : GetLocalEntry().GetDistanceAndMapValueList())
     {
         hist->Fill(distance, map_value);
     }
@@ -712,7 +710,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGrap
 {
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
-    for (auto & [distance, map_value] : GetLocalView().GetDistanceAndMapValueList())
+    for (auto & [distance, map_value] : GetLocalEntry().GetDistanceAndMapValueList())
     {
         graph->SetPoint(count, distance, map_value);
         count++;
@@ -724,7 +722,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
 {
     auto graph{ ROOTHelper::CreateGraphErrors() };
     auto count{ 0 };
-    for (auto & [x, y] : series_ops::BuildLinearModelDistanceAndMapValueList(GetLocalView()))
+    for (auto & [x, y] : series_ops::BuildLinearModelDistanceAndMapValueList(GetLocalEntry()))
     {
         graph->SetPoint(count, x, y);
         count++;
@@ -735,7 +733,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToM
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToMapValueGraph(
     int bin_size, double x_min, double x_max)
 {
-    auto data_array{ series_ops::BuildBinnedDistanceAndMapValueList(GetLocalView(), bin_size, x_min, x_max) };
+    auto data_array{ series_ops::BuildBinnedDistanceAndMapValueList(GetLocalEntry(), bin_size, x_min, x_max) };
     auto graph{ ROOTHelper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
     for (auto & [distance, map_value] : data_array)

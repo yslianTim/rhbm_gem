@@ -179,11 +179,12 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
     model_object->SetResolution(GetResolution());
     model_object->SetResolutionMethod(GetResolutionMethod());
     model_object->SetChainIDListMap(GetChainIDListMap());
-    model_object->SetChemicalComponentEntryMap(GetChemicalComponentEntryMap());
+    model_object->SetChemicalComponentEntryMap(std::move(GetChemicalComponentEntryMap()));
     model_object->SetComponentKeySystem(MoveComponentKeySystem());
     model_object->SetAtomKeySystem(MoveAtomKeySystem());
     model_object->SetBondKeySystem(MoveBondKeySystem());
     model_object->SetBondList(std::move(filtered_bond_list));
+    model_object->FinalizeLoad();
     return model_object;
 }
 

@@ -103,7 +103,7 @@ std::string AtomObject::GetInfo() const
            std::to_string(m_position.at(2)) + ")";
 }
 
-void AtomObject::AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
+void AtomObject::SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
 {
     m_local_potential_entry = std::move(entry);
 }

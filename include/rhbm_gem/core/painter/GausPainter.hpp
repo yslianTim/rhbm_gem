@@ -18,14 +18,10 @@ class TPaveText;
 namespace rhbm_gem {
 
 class ModelObject;
-class AtomClassifier;
-class BondClassifier;
 
 class GausPainter : public PainterBase
 {
     std::vector<ModelObject *> m_model_object_list;
-    std::unique_ptr<AtomClassifier> m_atom_classifier;
-    std::unique_ptr<BondClassifier> m_bond_classifier;
 
 public:
     GausPainter();

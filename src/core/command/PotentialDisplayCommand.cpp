@@ -37,7 +37,7 @@ void ApplyModelSelection(
         atom->SetSelectedFlag(
             matches_selector && has_local_potential_entry);
     }
-    model_object.RefreshDerivedState();
+    model_object.RebuildSelectionIndex();
 }
 
 template <typename PainterType>

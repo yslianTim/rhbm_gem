@@ -5,14 +5,13 @@
 #include <vector>
 
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 #include "detail/PotentialSeriesOps.hpp"
 
 namespace rg = rhbm_gem;
 
-TEST(PotentialSeriesOpsTest, RangeAndBinningStayStableForLocalView)
+TEST(PotentialSeriesOpsTest, RangeAndBinningStayStableForLocalEntry)
 {
     rg::LocalPotentialEntry entry;
     entry.AddDistanceAndMapValueList({
@@ -21,11 +20,9 @@ TEST(PotentialSeriesOpsTest, RangeAndBinningStayStableForLocalView)
         {0.7f, 8.0f},
         {1.0f, -1.0f},
     });
-    const rg::LocalPotentialView view{ entry };
-
-    const auto distance_range{ rg::series_ops::ComputeDistanceRange(view, 0.0) };
-    const auto map_value_range{ rg::series_ops::ComputeMapValueRange(view, 0.0) };
-    const auto binned{ rg::series_ops::BuildBinnedDistanceAndMapValueList(view, 2, 0.0, 1.0) };
+    const auto distance_range{ rg::series_ops::ComputeDistanceRange(entry, 0.0) };
+    const auto map_value_range{ rg::series_ops::ComputeMapValueRange(entry, 0.0) };
+    const auto binned{ rg::series_ops::BuildBinnedDistanceAndMapValueList(entry, 2, 0.0, 1.0) };
 
     EXPECT_FLOAT_EQ(std::get<0>(distance_range), 0.0f);
     EXPECT_FLOAT_EQ(std::get<1>(distance_range), 1.0f);
@@ -44,9 +41,7 @@ TEST(PotentialSeriesOpsTest, LinearModelTransformKeepsPositiveSamplesOnly)
         {0.2f, -2.0f},
         {0.3f, 8.0f},
     });
-    const rg::LocalPotentialView view{ entry };
-
-    const auto transformed{ rg::series_ops::BuildLinearModelDistanceAndMapValueList(view) };
+    const auto transformed{ rg::series_ops::BuildLinearModelDistanceAndMapValueList(entry) };
     ASSERT_EQ(transformed.size(), 2U);
 
     Eigen::VectorXd init{ Eigen::VectorXd::Zero(3) };

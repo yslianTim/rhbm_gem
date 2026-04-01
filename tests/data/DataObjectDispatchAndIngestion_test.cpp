@@ -19,7 +19,7 @@ TEST(DataObjectPainterIngestionTest, PainterTypedIngestionUsesConcreteModelApis)
     auto model{ data_test::MakeModelWithBond() };
     model->SetKeyTag("model");
     model->GetAtomList().front()->SetSelectedFlag(true);
-    model->GetAtomList().front()->AddLocalPotentialEntry(
+    model->GetAtomList().front()->SetLocalPotentialEntry(
         std::make_unique<rg::LocalPotentialEntry>());
 
     rg::AtomPainter atom_painter;

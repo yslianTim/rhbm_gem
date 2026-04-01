@@ -60,7 +60,7 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     {
         bond->SetSelectedFlag(false);
     }
-    model->RefreshDerivedState();
+    model->RebuildSelectionIndex();
     ASSERT_EQ(model->GetNumberOfSelectedAtom(), 0);
     ASSERT_EQ(model->GetNumberOfSelectedBond(), 0);
 
@@ -75,11 +75,11 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     model->ApplySymmetrySelection(false);
     for (auto * atom : model->GetSelectedAtomList())
     {
-        atom->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+        atom->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     }
     for (auto * bond : model->GetSelectedBondList())
     {
-        bond->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+        bond->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     }
 
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
@@ -116,7 +116,7 @@ TEST(DataObjectRuntimeBehaviorTest, AtomSelectorCanDriveModelSelectionState)
                 atom->GetResidue(),
                 atom->GetElement()));
     }
-    model->RefreshDerivedState();
+    model->RebuildSelectionIndex();
 
     EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
@@ -131,8 +131,8 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     ASSERT_EQ(atoms.size(), 2);
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(false);
-    atoms[0]->AddLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
-    model->RefreshDerivedState();
+    atoms[0]->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+    model->RebuildSelectionIndex();
 
     const auto & selected_only_atoms{ model->GetSelectedAtomList() };
     ASSERT_EQ(selected_only_atoms.size(), 1);
@@ -195,7 +195,7 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedAtomsAndBondsRemainQueryableForConte
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(true);
     bonds[0]->SetSelectedFlag(true);
-    model->RefreshDerivedState();
+    model->RebuildSelectionIndex();
 
     std::unordered_map<int, rg::AtomObject *> atom_map;
     std::unordered_map<int, std::vector<rg::BondObject *>> bond_map;
@@ -226,7 +226,6 @@ TEST(DataObjectRuntimeBehaviorTest, AddAtomRebuildsSerialIndexWithoutUsingMovedF
 
     ASSERT_NO_THROW(model.AddAtom(std::move(atom)));
     EXPECT_EQ(model.GetNumberOfAtom(), 1);
-    ASSERT_EQ(model.GetSerialIDAtomMap().size(), 1);
     ASSERT_NE(model.GetAtomPtr(42), nullptr);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 3.0f);
 }
@@ -237,7 +236,7 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
     model->GetAtomList().at(0)->SetSelectedFlag(true);
     model->GetAtomList().at(1)->SetSelectedFlag(true);
     model->GetBondList().at(0)->SetSelectedFlag(true);
-    model->RefreshDerivedState();
+    model->RebuildSelectionIndex();
     model->BuildKDTreeRoot();
     ASSERT_NE(model->GetKDTreeRoot(), nullptr);
     EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 0.5f);
@@ -257,9 +256,9 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
     model->SetAtomList(std::move(replacement_atoms));
 
     EXPECT_EQ(model->GetKDTreeRoot(), nullptr);
-    EXPECT_EQ(model->GetSerialIDAtomMap().count(11), 1);
-    EXPECT_EQ(model->GetSerialIDAtomMap().count(12), 1);
-    EXPECT_EQ(model->GetSerialIDAtomMap().count(1), 0);
+    EXPECT_NE(model->GetAtomPtr(11), nullptr);
+    EXPECT_NE(model->GetAtomPtr(12), nullptr);
+    EXPECT_THROW(model->GetAtomPtr(1), std::out_of_range);
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), 1);
     EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 7.0f);
     const auto x_range{ model->GetModelPositionRange(0) };

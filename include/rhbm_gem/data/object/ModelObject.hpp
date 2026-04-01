@@ -61,22 +61,23 @@ public:
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetChainIDListMap(
         const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
-    void AddAtomGroupPotentialEntry(
+    void SetAtomGroupPotentialEntry(
         const std::string & class_key,
-        std::unique_ptr<GroupPotentialEntry> & entry);
-    void AddBondGroupPotentialEntry(
+        std::unique_ptr<GroupPotentialEntry> entry);
+    void SetBondGroupPotentialEntry(
         const std::string & class_key,
-        std::unique_ptr<GroupPotentialEntry> & entry);
+        std::unique_ptr<GroupPotentialEntry> entry);
     void AddChemicalComponentEntry(
         ComponentKey component_key,
         std::unique_ptr<ChemicalComponentEntry> entry);
     void SetChemicalComponentEntryMap(
-        std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> & entry_map);
+        std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> entry_map);
     void SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system);
     void SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system);
     void SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system);
     void BuildKDTreeRoot();
-    void RefreshDerivedState();
+    void RebuildSelectionIndex();
+    void FinalizeLoad();
     void ApplySymmetrySelection(bool is_asymmetry);
 
     bool HasStandardRNAComponent() const;
@@ -102,8 +103,6 @@ public:
     AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
     GroupPotentialEntry * GetAtomGroupPotentialEntry(const std::string & class_key) const;
     GroupPotentialEntry * GetBondGroupPotentialEntry(const std::string & class_key) const;
-    ChemicalComponentEntry * GetChemicalComponentEntry(ComponentKey key) const;
-    const std::map<int, AtomObject *> & GetSerialIDAtomMap() const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
     GetAtomGroupPotentialEntryMap() const;
     const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &

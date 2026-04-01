@@ -38,7 +38,7 @@ public:
     void SetBondKey(BondKey value) { m_bond_key = value; }
     void SetBondType(BondType value) { m_bond_type = value; }
     void SetBondOrder(BondOrder value) { m_bond_order = value; }
-    void AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
+    void SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
 
     std::string GetInfo() const;
     int GetAtomSerialID1() const { return m_atom_serial_id_1; }

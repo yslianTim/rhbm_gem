@@ -104,7 +104,7 @@ AtomKey BondObject::GetAtomKey2() const
     return m_atom_object_2->GetAtomKey();
 }
 
-void BondObject::AddLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
+void BondObject::SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
 {
     m_local_potential_entry = std::move(entry);
 }
