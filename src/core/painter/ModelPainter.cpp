@@ -8,6 +8,8 @@
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
+#include "data/object/AtomStyleCatalog.hpp"
+#include "data/object/BondStyleCatalog.hpp"
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -158,8 +160,8 @@ void ModelPainter::PaintAtomGroupGausMainChain(
                 amplitude_array.push_back(amplitude_graph[i]->GetPointY(p));
                 width_array.push_back(width_graph[i]->GetPointY(p));
             }
-            auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
-            auto element_marker{ AtomClassifier::GetMainChainElementSolidMarker(i) };
+            auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
+            auto element_marker{ AtomStyleCatalog::GetMainChainElementSolidMarker(i) };
             ROOTHelper::SetMarkerAttribute(amplitude_graph[i].get(), element_marker, 1.3f, element_color);
             ROOTHelper::SetMarkerAttribute(width_graph[i].get(), element_marker, 1.3f, element_color);
             ROOTHelper::SetMarkerAttribute(correlation_graph[i].get(), element_marker, 1.3f, element_color);
@@ -186,7 +188,7 @@ void ModelPainter::PaintAtomGroupGausMainChain(
             {
                 width_hist[i]->Fill(i, width_graph[i]->GetPointY(p));
             }
-            auto element_color{ AtomClassifier::GetMainChainElementColor(static_cast<size_t>(i)) };
+            auto element_color{ AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(i)) };
             ROOTHelper::SetLineAttribute(amplitude_hist[i].get(), 1, 1, element_color);
             ROOTHelper::SetLineAttribute(width_hist[i].get(), 1, 1, element_color);
             ROOTHelper::SetFillAttribute(amplitude_hist[i].get(), 1001, element_color, 0.3f);
@@ -352,8 +354,8 @@ void ModelPainter::PaintBondGroupGausMainChain(
             amplitude_array.push_back(amplitude_graph[i]->GetPointY(p));
             width_array.push_back(width_graph[i]->GetPointY(p));
         }
-        auto element_color{ BondClassifier::GetMainChainMemberColor(i) };
-        auto element_marker{ BondClassifier::GetMainChainMemberSolidMarker(i) };
+        auto element_color{ BondStyleCatalog::GetMainChainMemberColor(i) };
+        auto element_marker{ BondStyleCatalog::GetMainChainMemberSolidMarker(i) };
         ROOTHelper::SetMarkerAttribute(amplitude_graph[i].get(), element_marker, 1.3f, element_color);
         ROOTHelper::SetMarkerAttribute(width_graph[i].get(), element_marker, 1.3f, element_color);
         ROOTHelper::SetMarkerAttribute(correlation_graph[i].get(), element_marker, 1.3f, element_color);
@@ -379,7 +381,7 @@ void ModelPainter::PaintBondGroupGausMainChain(
         {
             width_hist[i]->Fill(i, width_graph[i]->GetPointY(p));
         }
-        auto element_color{ BondClassifier::GetMainChainMemberColor(static_cast<size_t>(i)) };
+        auto element_color{ BondStyleCatalog::GetMainChainMemberColor(static_cast<size_t>(i)) };
         ROOTHelper::SetLineAttribute(amplitude_hist[i].get(), 1, 1, element_color);
         ROOTHelper::SetLineAttribute(width_hist[i].get(), 1, 1, element_color);
         ROOTHelper::SetFillAttribute(amplitude_hist[i].get(), 1001, element_color, 0.3f);
@@ -553,8 +555,8 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
             amplitude_array.push_back(amplitude_graph[i]->GetPointY(p));
             width_array.push_back(width_graph[i]->GetPointY(p));
         }
-        auto component_color{ AtomClassifier::GetMainChainElementColor(i) }; // TODO: nucleotide color
-        auto component_marker{ AtomClassifier::GetMainChainElementSolidMarker(i) }; // TODO: nucleotide marker
+        auto component_color{ AtomStyleCatalog::GetMainChainElementColor(i) }; // TODO: nucleotide color
+        auto component_marker{ AtomStyleCatalog::GetMainChainElementSolidMarker(i) }; // TODO: nucleotide marker
         ROOTHelper::SetMarkerAttribute(amplitude_graph[i].get(), component_marker, 1.3f, component_color);
         ROOTHelper::SetMarkerAttribute(width_graph[i].get(), component_marker, 1.3f, component_color);
         ROOTHelper::SetMarkerAttribute(correlation_graph[i].get(), component_marker, 1.3f, component_color);
@@ -580,7 +582,7 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
         {
             width_hist[i]->Fill(i, width_graph[i]->GetPointY(p));
         }
-        auto element_color{ AtomClassifier::GetMainChainElementColor(static_cast<size_t>(i)) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(i)) };
         ROOTHelper::SetLineAttribute(amplitude_hist[i].get(), 1, 1, element_color);
         ROOTHelper::SetLineAttribute(width_hist[i].get(), 1, 1, element_color);
         ROOTHelper::SetFillAttribute(amplitude_hist[i].get(), 1001, element_color, 0.3f);
@@ -843,8 +845,8 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetPaveTextDefaultStyle(element_text[i].get());
             ROOTHelper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
             ROOTHelper::SetTextAttribute(element_text[i].get(), 40.0f, 103, 22);
-            ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, AtomClassifier::GetMainChainElementColor(static_cast<size_t>(i)), 0.5f);
-            element_text[i]->AddText(AtomClassifier::GetMainChainElementLabel(static_cast<size_t>(i)).data());
+            ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(i)), 0.5f);
+            element_text[i]->AddText(AtomStyleCatalog::GetMainChainElementLabel(static_cast<size_t>(i)).data());
             element_text[i]->Draw();
 
             result_text[i] = ROOTHelper::CreatePaveText(0.05, 0.08, 0.95, 0.25, "nbNDC", true);
@@ -1014,8 +1016,8 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetPaveTextDefaultStyle(element_text[i].get());
             ROOTHelper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
             ROOTHelper::SetTextAttribute(element_text[i].get(), 40.0f, 103, 22);
-            ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, BondClassifier::GetMainChainMemberColor(static_cast<size_t>(i)), 0.5f);
-            element_text[i]->AddText(BondClassifier::GetMainChainMemberLabel(static_cast<size_t>(i)).data());
+            ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, BondStyleCatalog::GetMainChainMemberColor(static_cast<size_t>(i)), 0.5f);
+            element_text[i]->AddText(BondStyleCatalog::GetMainChainMemberLabel(static_cast<size_t>(i)).data());
             element_text[i]->Draw();
 
             count_text[i] = ROOTHelper::CreatePaveText(0.03, 0.90, 0.54, 0.99, "nbNDC", true);
@@ -1230,7 +1232,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
     {
         for (int j = 0; j < row_size; j++)
         {
-            auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
+            auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
             ROOTHelper::SetPadLayout(gPad, 1, 1, 0, 0);
             auto x_factor{ ROOTHelper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
@@ -1671,7 +1673,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
                 for (size_t k = 0; k < main_chain_element_count; k++)
                 {
                     if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
-                    auto element_color{ AtomClassifier::GetMainChainElementColor(static_cast<size_t>(k)) };
+                    auto element_color{ AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(k)) };
                     ROOTHelper::SetMarkerAttribute(gaus_graph_map[j][k].at(chain_id).get(), 20, 0.7f, element_color);
                     ROOTHelper::SetLineAttribute(gaus_graph_map[j][k].at(chain_id).get(), 1, 1, element_color);
                     gaus_graph_map[j][k].at(chain_id)->Draw("PL X0");
@@ -1710,8 +1712,8 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
                     for (size_t k = 0; k < main_chain_element_count; k++)
                     {
                         if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
-                        auto label{ "#font[102]{" + AtomClassifier::GetMainChainElementLabel(k) +"}" };
-                        auto color{ AtomClassifier::GetMainChainElementColor(k) };
+                        auto label{ "#font[102]{" + AtomStyleCatalog::GetMainChainElementLabel(k) +"}" };
+                        auto color{ AtomStyleCatalog::GetMainChainElementColor(k) };
                         auto result{ Form("#color[%d]{%s}", color, label.data()) };
                         legend->AddEntry(gaus_graph_map[j][k].at(chain_id).get(), result, "pl");
                     }
@@ -1822,7 +1824,7 @@ void ModelPainter::PaintBondGausMainChain(ModelObject * model_object, const std:
                 for (size_t k = 0; k < main_chain_element_count; k++)
                 {
                     if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
-                    auto element_color{ BondClassifier::GetMainChainMemberColor(static_cast<size_t>(k)) };
+                    auto element_color{ BondStyleCatalog::GetMainChainMemberColor(static_cast<size_t>(k)) };
                     ROOTHelper::SetMarkerAttribute(gaus_graph_map[j][k].at(chain_id).get(), 20, 0.7f, element_color);
                     ROOTHelper::SetLineAttribute(gaus_graph_map[j][k].at(chain_id).get(), 1, 1, element_color);
                     gaus_graph_map[j][k].at(chain_id)->Draw("PL X0");
@@ -1861,8 +1863,8 @@ void ModelPainter::PaintBondGausMainChain(ModelObject * model_object, const std:
                     for (size_t k = 0; k < main_chain_element_count; k++)
                     {
                         if (gaus_graph_map[j][k].find(chain_id) == gaus_graph_map[j][k].end()) continue;
-                        auto label{ "#font[102]{" + BondClassifier::GetMainChainMemberLabel(k) +"}" };
-                        auto color{ BondClassifier::GetMainChainMemberColor(k) };
+                        auto label{ "#font[102]{" + BondStyleCatalog::GetMainChainMemberLabel(k) +"}" };
+                        auto color{ BondStyleCatalog::GetMainChainMemberColor(k) };
                         auto result{ Form("#color[%d]{%s}", color, label.data()) };
                         legend->AddEntry(gaus_graph_map[j][k].at(chain_id).get(), result, "pl");
                     }
@@ -1939,7 +1941,7 @@ void ModelPainter::PaintAtomRankMainChain(
     std::unique_ptr<TLegend> legend;
     for (int i = 0; i < col_size; i++)
     {
-        auto element_color{ AtomClassifier::GetMainChainElementColor(static_cast<size_t>(i)) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(i)) };
         for (int j = 0; j < row_size; j++)
         {
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), i, j);
@@ -1996,7 +1998,7 @@ void ModelPainter::PaintAtomRankMainChain(
                 ROOTHelper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
                 ROOTHelper::SetTextAttribute(element_text[i].get(), 30.0f, 133, 22);
                 ROOTHelper::SetFillAttribute(element_text[i].get(), 1001, element_color, 0.5f);
-                element_text[i]->AddText(AtomClassifier::GetMainChainElementLabel(static_cast<size_t>(i)).data());
+                element_text[i]->AddText(AtomStyleCatalog::GetMainChainElementLabel(static_cast<size_t>(i)).data());
                 element_text[i]->Draw();
             }
             if (i == col_size - 1)
@@ -2155,8 +2157,8 @@ void ModelPainter::PrintAtomWidthSummaryPad(TPad * pad, TH2 * hist)
     for (size_t i = 0; i < 4; i++)
     {
         auto index{ static_cast<int>(i) + 2 };
-        auto color{ AtomClassifier::GetMainChainElementColor(i) };
-        auto label{ AtomClassifier::GetMainChainElementLabel(i) };
+        auto color{ AtomStyleCatalog::GetMainChainElementColor(i) };
+        auto label{ AtomStyleCatalog::GetMainChainElementLabel(i) };
         hist->GetXaxis()->ChangeLabel(index, 0.0, -1, -1, color, -1, label.data());
     }
     hist->SetStats(0);
@@ -2186,8 +2188,8 @@ void ModelPainter::PrintBondWidthSummaryPad(TPad * pad, TH2 * hist)
     for (size_t i = 0; i < 4; i++)
     {
         auto index{ static_cast<int>(i) + 2 };
-        auto color{ BondClassifier::GetMainChainMemberColor(i) };
-        auto label{ BondClassifier::GetMainChainMemberLabel(i) };
+        auto color{ BondStyleCatalog::GetMainChainMemberColor(i) };
+        auto label{ BondStyleCatalog::GetMainChainMemberLabel(i) };
         hist->GetXaxis()->ChangeLabel(index, 45.0, -1, 21, color, -1, label.data());
     }
     hist->SetStats(0);

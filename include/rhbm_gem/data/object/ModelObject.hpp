@@ -21,6 +21,7 @@ class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
 class GroupPotentialEntry;
+class ModelAnalysisState;
 
 class ModelObject
 {
@@ -34,14 +35,13 @@ class ModelObject
     std::map<int, AtomObject*> m_serial_id_atom_map;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
-    std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_atom_group_potential_entry_map;
-    std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> m_bond_group_potential_entry_map;
     std::unique_ptr<::KDNode<AtomObject>> m_kd_tree_root;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
     std::unique_ptr<ComponentKeySystem> m_component_key_system;
     std::unique_ptr<AtomKeySystem> m_atom_key_system;
     std::unique_ptr<BondKeySystem> m_bond_key_system;
+    std::unique_ptr<ModelAnalysisState> m_analysis_state;
 
 public:
     ModelObject();
@@ -61,12 +61,6 @@ public:
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetChainIDListMap(
         const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
-    void SetAtomGroupPotentialEntry(
-        const std::string & class_key,
-        std::unique_ptr<GroupPotentialEntry> entry);
-    void SetBondGroupPotentialEntry(
-        const std::string & class_key,
-        std::unique_ptr<GroupPotentialEntry> entry);
     void AddChemicalComponentEntry(
         ComponentKey component_key,
         std::unique_ptr<ChemicalComponentEntry> entry);
@@ -101,18 +95,14 @@ public:
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
     AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
-    GroupPotentialEntry * GetAtomGroupPotentialEntry(const std::string & class_key) const;
-    GroupPotentialEntry * GetBondGroupPotentialEntry(const std::string & class_key) const;
-    const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-    GetAtomGroupPotentialEntryMap() const;
-    const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-    GetBondGroupPotentialEntryMap() const;
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
     GetChemicalComponentEntryMap() const;
     ::KDNode<AtomObject> * GetKDTreeRoot() const { return m_kd_tree_root.get(); }
     ComponentKeySystem * GetComponentKeySystemPtr() { return m_component_key_system.get(); }
     AtomKeySystem * GetAtomKeySystemPtr() { return m_atom_key_system.get(); }
     BondKeySystem * GetBondKeySystemPtr() { return m_bond_key_system.get(); }
+    ModelAnalysisState & GetAnalysisState();
+    const ModelAnalysisState & GetAnalysisState() const;
     std::vector<ComponentKey> GetComponentKeyList() const;
 
 private:

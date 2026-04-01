@@ -1,5 +1,6 @@
 #include "MapSimulationCommand.hpp"
 #include "detail/DataObjectSummaryLog.hpp"
+#include "data/object/MapSpatialIndex.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -291,7 +292,7 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
     std::fill_n(map_value_array.get(), voxel_size, 0.0f);
     map_object->SetMapValueArray(std::move(map_value_array));
-    map_object->BuildKDTreeRoot();
+    map_object->GetSpatialIndex().Build(ThreadSize());
 
     return map_object;
 }
@@ -314,8 +315,8 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     std::fill_n(map_value_array.get(), voxel_size, 0.0f);
 
     auto atom_size{ m_selected_atom_list.size() };
-    map_object->BuildKDTreeRoot();
-    auto kd_tree_root{ map_object->GetKDTreeRoot() };
+    map_object->GetSpatialIndex().Build(ThreadSize());
+    auto kd_tree_root{ map_object->GetSpatialIndex().GetRoot() };
     size_t atom_count{ 0 };
     std::vector<GridNode*> in_range_grid_node_list;
 

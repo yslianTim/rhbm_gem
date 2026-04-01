@@ -12,6 +12,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include "data/object/ModelAnalysisState.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -255,7 +256,7 @@ private:
 
     const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
     {
-        const auto & entry_map{ m_model_object.GetAtomGroupPotentialEntryMap() };
+        const auto & entry_map{ m_model_object.GetAnalysisState().GetAtomGroupPotentialEntryMap() };
         auto iter{ entry_map.find(class_key) };
         if (iter == entry_map.end())
         {
@@ -266,7 +267,7 @@ private:
 
     const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
     {
-        const auto & entry_map{ m_model_object.GetBondGroupPotentialEntryMap() };
+        const auto & entry_map{ m_model_object.GetAnalysisState().GetBondGroupPotentialEntryMap() };
         auto iter{ entry_map.find(class_key) };
         if (iter == entry_map.end())
         {

@@ -4,13 +4,10 @@
 #include <cstddef>
 #include <memory>
 #include <string>
-#include <vector>
-
-template <typename T> struct KDNode;
 
 namespace rhbm_gem {
 
-class GridNode;
+class MapSpatialIndex;
 
 class VoxelNode
 {
@@ -35,8 +32,7 @@ class MapObject
     std::array<float, 3> m_grid_spacing, m_origin, m_map_length;
     std::array<float, 3> m_overflow, m_underflow, m_upper_bound, m_lower_bound;
     std::unique_ptr<float[]> m_map_value_array;
-    std::unique_ptr<::KDNode<GridNode>> m_kd_tree_root;
-    std::vector<GridNode> m_grid_node_list;
+    std::unique_ptr<MapSpatialIndex> m_spatial_index;
 
 public:
     MapObject();
@@ -67,15 +63,14 @@ public:
     float GetMapValueMin() const { return m_map_value_min; }
     float GetMapValueMax() const { return m_map_value_max; }
     float GetMapValueSD() const { return m_map_value_sd; }
-    ::KDNode<GridNode> * GetKDTreeRoot() const;
+    MapSpatialIndex & GetSpatialIndex();
+    const MapSpatialIndex & GetSpatialIndex() const;
     void SetThreadSize(int value) { m_thread_size = value; }
     void SetMapValueArray(std::unique_ptr<float[]> map_value_array);
     void MapValueArrayNormalization();
-    void BuildKDTreeRoot();
 
 private:
     void RecomputeStatistics();
-    void InvalidateSpatialIndex();
     void SyncValueArrayState();
     void CheckIndex(int index_x, int index_y, int index_z) const;
     void CheckPosition(const std::array<float, 3> & position) const;
@@ -83,24 +78,6 @@ private:
     void CalculateMapValueMin();
     void CalculateMapValueMax();
     void CalculateMapValueSD();
-    void BuildGridNodeList();
-};
-
-class GridNode
-{
-    size_t m_grid_index;
-    const MapObject * m_map_object;
-
-public:
-    GridNode(size_t grid_index, const MapObject * map_object) :
-        m_grid_index{ grid_index }, m_map_object{ map_object } {}
-    size_t GetGridIndex() const { return m_grid_index; }
-    std::array<float, 3> GetPosition() const
-    {
-        return m_map_object->GetGridPosition(m_grid_index);
-    }
-    float GetValue() const { return m_map_object->GetMapValue(m_grid_index); }
-    void SetGridIndex(size_t grid_index) { m_grid_index = grid_index; }
 };
 
 } // namespace rhbm_gem

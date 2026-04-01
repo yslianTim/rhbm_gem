@@ -1,5 +1,6 @@
 #include "PotentialPlotBuilder.hpp"
 
+#include "data/object/ModelAnalysisState.hpp"
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>
@@ -412,7 +413,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
         }
         auto x_value{ static_cast<int>(GetModelView().GetResidueFromAtomGroupKey(group_key, class_key)) - 1 };
         const auto & group{
-            model_object->GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+            model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
         auto y_value{ group.prior.GetParameter(par_id) };
         auto y_error{ GetGroupPriorVariance(group, par_id) };
         graph->SetPoint(count, x_value, y_value);
@@ -441,7 +442,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateToResi
         }
         auto x_value{ static_cast<int>(GetModelView().GetResidueFromBondGroupKey(group_key, class_key)) - 1 };
         const auto & group{
-            model_object->GetBondGroupPotentialEntry(class_key)->GetGroup(group_key) };
+            model_object->GetAnalysisState().GetBondGroupPotentialEntry(class_key)->GetGroup(group_key) };
         auto y_value{ group.prior.GetParameter(par_id) };
         auto y_error{ GetGroupPriorVariance(group, par_id) };
         graph->SetPoint(count, x_value, y_value);
@@ -470,7 +471,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpot
             continue;
         }
         const auto & group{
-            model_object->GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+            model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
         auto x_value{ static_cast<double>(i) };
         auto y_value{ group.prior.GetParameter(par_id) };
         auto y_error{ GetGroupPriorVariance(group, par_id) };
@@ -506,7 +507,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
             continue;
         }
         const auto & group{
-            model_object->GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+            model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
         auto x_value{ static_cast<double>(i) };
         auto y_value{ group.prior.GetParameter(par_id) };
         auto y_error{ GetGroupPriorVariance(group, par_id) };
@@ -838,8 +839,9 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionOLS
         return nullptr;
     }
     auto atom_local_entry{ m_atom_object->GetLocalPotentialEntry() };
-    auto beta_0{ atom_local_entry->GetBetaEstimateOLS(0) };
-    auto beta_1{ atom_local_entry->GetBetaEstimateOLS(1) };
+    const auto beta{ atom_local_entry->GetEstimateOLS().ToBeta() };
+    auto beta_0{ beta(0) };
+    auto beta_1{ beta(1) };
     return ROOTHelper::CreateLinearModelFunction("linear", beta_0, beta_1);
 }
 
@@ -850,8 +852,9 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionMDP
         return nullptr;
     }
     auto atom_local_entry{ m_atom_object->GetLocalPotentialEntry() };
-    auto beta_0{ atom_local_entry->GetBetaEstimateMDPDE(0) };
-    auto beta_1{ atom_local_entry->GetBetaEstimateMDPDE(1) };
+    const auto beta{ atom_local_entry->GetEstimateMDPDE().ToBeta() };
+    auto beta_0{ beta(0) };
+    auto beta_1{ beta(1) };
     return ROOTHelper::CreateLinearModelFunction("linear", beta_0, beta_1);
 }
 
@@ -886,7 +889,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMea
     {
         return nullptr;
     }
-    const auto & group{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{
+        m_model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
     auto mu_0{ group.mean.ToBeta()(0) };
     auto mu_1{ group.mean.ToBeta()(1) };
     return ROOTHelper::CreateLinearModelFunction("linear_mean", mu_0, mu_1, x_min, x_max);
@@ -899,7 +903,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionPri
     {
         return nullptr;
     }
-    const auto & group{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{
+        m_model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
     auto mu_0{ group.prior.ToBeta()(0) };
     auto mu_1{ group.prior.ToBeta()(1) };
     return ROOTHelper::CreateLinearModelFunction("linear_prior", mu_0, mu_1, x_min, x_max);
@@ -912,7 +917,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
     {
         return nullptr;
     }
-    const auto & group{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{
+        m_model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
     auto amplitude{ group.mean.amplitude };
     auto width{ group.mean.width };
     return ROOTHelper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width);
@@ -925,7 +931,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     {
         return nullptr;
     }
-    const auto & group{ m_model_object->GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{
+        m_model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
     auto amplitude{ group.prior.amplitude };
     auto width{ group.prior.width };
     return ROOTHelper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width);
@@ -938,7 +945,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateBondGroupGausFunctionPrior(
     {
         return nullptr;
     }
-    const auto & group{ m_model_object->GetBondGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{
+        m_model_object->GetAnalysisState().GetBondGroupPotentialEntry(class_key)->GetGroup(group_key) };
     auto amplitude{ group.prior.amplitude };
     auto width{ group.prior.width };
     return ROOTHelper::CreateGaus2DFunctionIn1D("group_gaus_prior", amplitude, width);

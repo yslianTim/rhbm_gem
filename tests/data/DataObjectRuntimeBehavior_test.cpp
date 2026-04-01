@@ -11,6 +11,7 @@
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include "data/object/MapSpatialIndex.hpp"
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
@@ -32,8 +33,8 @@ TEST(DataObjectRuntimeBehaviorTest, NormalizeMapObjectNormalizesMapValues)
 TEST(DataObjectRuntimeBehaviorTest, SetMapValueArrayRefreshesStatisticsAndInvalidatesSpatialIndex)
 {
     auto map{ data_test::MakeMapObject() };
-    map.BuildKDTreeRoot();
-    ASSERT_NE(map.GetKDTreeRoot(), nullptr);
+    map.GetSpatialIndex().Build(1);
+    ASSERT_NE(map.GetSpatialIndex().GetRoot(), nullptr);
 
     auto replacement_values{ std::make_unique<float[]>(8) };
     for (size_t i = 0; i < 8; ++i)
@@ -43,7 +44,7 @@ TEST(DataObjectRuntimeBehaviorTest, SetMapValueArrayRefreshesStatisticsAndInvali
 
     map.SetMapValueArray(std::move(replacement_values));
 
-    EXPECT_EQ(map.GetKDTreeRoot(), nullptr);
+    EXPECT_EQ(map.GetSpatialIndex().GetRoot(), nullptr);
     EXPECT_FLOAT_EQ(map.GetMapValueMin(), 10.0f);
     EXPECT_FLOAT_EQ(map.GetMapValueMax(), 17.0f);
     EXPECT_FLOAT_EQ(map.GetMapValueMean(), 13.5f);

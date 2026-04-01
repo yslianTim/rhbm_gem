@@ -4,11 +4,12 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <cmath>
+#include <utility>
 
 namespace rhbm_gem {
 
 LocalPotentialEntry::LocalPotentialEntry() :
-    m_alpha_r{ 0.0 }, m_basis_and_response_entry_list_tmp{}
+    m_alpha_r{ 0.0 }
 {
 
 }
@@ -18,20 +19,9 @@ LocalPotentialEntry::~LocalPotentialEntry()
 
 }
 
-void LocalPotentialEntry::AddDistanceAndMapValueList(std::vector<std::tuple<float, float>> && list)
+void LocalPotentialEntry::SetDistanceAndMapValueList(std::vector<std::tuple<float, float>> value)
 {
-    m_distance_and_map_value_list = std::move(list);
-}
-
-void LocalPotentialEntry::AddBasisAndResponseEntryList(std::vector<Eigen::VectorXd> && list)
-{
-    m_basis_and_response_entry_list_tmp = std::move(list);
-}
-
-void LocalPotentialEntry::ClearDistanceAndMapValueList()
-{
-    m_distance_and_map_value_list.clear();
-    m_distance_and_map_value_list.shrink_to_fit();
+    m_distance_and_map_value_list = std::move(value);
 }
 
 void LocalPotentialEntry::SetPosterior(
@@ -56,11 +46,6 @@ int LocalPotentialEntry::GetDistanceAndMapValueListSize() const
     return static_cast<int>(m_distance_and_map_value_list.size());
 }
 
-int LocalPotentialEntry::GetBasisAndResponseEntryListSize() const
-{
-    return static_cast<int>(m_basis_and_response_entry_list_tmp.size());
-}
-
 const GaussianPosterior & LocalPotentialEntry::GetPosterior(const std::string & key) const
 {
     return m_gaus_posterior_map.at(key);
@@ -69,15 +54,6 @@ const GaussianPosterior & LocalPotentialEntry::GetPosterior(const std::string & 
 const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList() const
 {
     return m_distance_and_map_value_list;
-}
-
-const std::vector<Eigen::VectorXd> & LocalPotentialEntry::GetBasisAndResponseEntryList() const
-{
-    if (m_basis_and_response_entry_list_tmp.empty())
-    {
-        throw std::runtime_error("m_basis_and_response_entry_list_tmp is empty");
-    }
-    return m_basis_and_response_entry_list_tmp;
 }
 
 double LocalPotentialEntry::GetMapValueNearCenter() const
@@ -130,16 +106,6 @@ double LocalPotentialEntry::GetMomentTwoEstimate() const
     }
     y_sum /= static_cast<double>(count);
     return std::sqrt(y_sum/m_0/3.0);
-}
-
-double LocalPotentialEntry::GetBetaEstimateOLS(int par_id) const
-{
-    return GetEstimateOLS().ToBeta()(par_id);
-}
-
-double LocalPotentialEntry::GetBetaEstimateMDPDE(int par_id) const
-{
-    return GetEstimateMDPDE().ToBeta()(par_id);
 }
 
 bool LocalPotentialEntry::GetOutlierTag(const std::string & key) const

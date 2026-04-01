@@ -1,50 +1,16 @@
 #include <rhbm_gem/data/object/BondClassifier.hpp>
-#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/domain/KeyPacker.hpp>
-#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <stdexcept>
 
 namespace rhbm_gem {
 
-const std::vector<short> BondClassifier::m_main_chain_member_color_list
-{   // [Color defined in ROOT style]
-    // kRed+1, kViolet+1, kGreen+2, kAzure+2 
-    633,       881,      418,      862
-};
-
-const std::vector<short> BondClassifier::m_main_chain_member_solid_marker_list
-{   // [Marker defined in ROOT style]
-    21, 20, 22, 23
-};
-
-const std::vector<short> BondClassifier::m_main_chain_member_open_marker_list
-{   // [Marker defined in ROOT style]
-    25, 24, 26, 32
-};
-
 const std::vector<Link> BondClassifier::m_main_chain_member_link_list
 {
     Link::N_CA, Link::CA_C, Link::C_O, Link::C_N
-};
-
-const std::vector<std::string> BondClassifier::m_main_chain_member_title_list
-{
-    "N-CA Bond",
-    "CA-C Bond",
-    "C=O Bond",
-    "C-N Bond"
-};
-
-const std::vector<std::string> BondClassifier::m_main_chain_member_label_list
-{
-    "N-C_{#alpha}",
-    "C_{#alpha}-C",
-    "C=O",
-    "C-N"
 };
 
 bool BondClassifier::IsMainChainMember(Link link, size_t & main_chain_member_id)
@@ -75,44 +41,15 @@ bool BondClassifier::IsValidMainChainMemberID(size_t id)
     return true;
 }
 
-short BondClassifier::GetMainChainMemberColor(size_t id)
-{
-    if (IsValidMainChainMemberID(id) == false) return 1;
-    return m_main_chain_member_color_list.at(id);
-}
-
-short BondClassifier::GetMainChainMemberSolidMarker(size_t id)
-{
-    if (IsValidMainChainMemberID(id) == false) return 1;
-    return m_main_chain_member_solid_marker_list.at(id);
-}
-
-short BondClassifier::GetMainChainMemberOpenMarker(size_t id)
-{
-    if (IsValidMainChainMemberID(id) == false) return 1;
-    return m_main_chain_member_open_marker_list.at(id);
-}
-
 Link BondClassifier::GetMainChainLink(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return Link::UNK;
     return m_main_chain_member_link_list.at(id);
 }
 
-const std::string & BondClassifier::GetMainChainMemberLabel(size_t id)
-{
-    if (IsValidMainChainMemberID(id) == false) return m_main_chain_member_label_list.at(0);
-    return m_main_chain_member_label_list.at(id);
-}
-
-const std::string & BondClassifier::GetMainChainMemberTitle(size_t id)
-{
-    if (IsValidMainChainMemberID(id) == false) return m_main_chain_member_title_list.at(0);
-    return m_main_chain_member_title_list.at(id);
-}
-
 GroupKey BondClassifier::GetGroupKeyInClass(
-    const BondObject * bond_object, const std::string & class_key)
+    const BondObject * bond_object,
+    const std::string & class_key)
 {
     if (class_key == ChemicalDataHelper::GetSimpleBondClassKey())
     {
@@ -120,16 +57,13 @@ GroupKey BondClassifier::GetGroupKeyInClass(
             bond_object->GetBondKey(),
             bond_object->GetSpecialBondFlag());
     }
-    else if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
+    if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
     {
         return KeyPackerComponentBondClass::Pack(
             bond_object->GetComponentKey(),
             bond_object->GetBondKey());
     }
-    else
-    {
-        throw std::runtime_error("Unsupported class key."+ class_key);
-    }
+    throw std::runtime_error("Unsupported class key." + class_key);
 }
 
 GroupKey BondClassifier::GetGroupKeyInClass(ComponentKey component_key, BondKey bond_key)
@@ -144,8 +78,9 @@ GroupKey BondClassifier::GetMainChainSimpleBondClassGroupKey(size_t id)
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto bond_key{ static_cast<BondKey>(m_main_chain_member_link_list.at(id)) };
-    return KeyPackerSimpleBondClass::Pack(bond_key, false);
+    return KeyPackerSimpleBondClass::Pack(
+        static_cast<BondKey>(m_main_chain_member_link_list.at(id)),
+        false);
 }
 
 GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Residue residue)
@@ -155,22 +90,22 @@ GroupKey BondClassifier::GetMainChainComponentBondClassGroupKey(size_t id, Resid
         Logger::Log(LogLevel::Warning, "Invalid main chain member ID: " + std::to_string(id));
         return 0;
     }
-    auto bond_key{ static_cast<BondKey>(m_main_chain_member_link_list.at(id)) };
-    auto component_key{ static_cast<ComponentKey>(residue) };
-    return KeyPackerComponentBondClass::Pack(component_key, bond_key);
+    const auto component_key{ static_cast<ComponentKey>(residue) };
+    return KeyPackerComponentBondClass::Pack(
+        component_key,
+        static_cast<BondKey>(m_main_chain_member_link_list.at(id)));
 }
 
-std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList(
-    size_t id)
+std::vector<GroupKey> BondClassifier::GetMainChainComponentBondClassGroupKeyList(size_t id)
 {
     if (IsValidMainChainMemberID(id) == false) return {};
     std::vector<GroupKey> group_key_list;
     group_key_list.reserve(ChemicalDataHelper::GetStandardResidueCount());
-    for (auto residue_id : ChemicalDataHelper::GetStandardAminoAcidList())
+    for (const auto residue_id : ChemicalDataHelper::GetStandardAminoAcidList())
     {
         group_key_list.emplace_back(GetMainChainComponentBondClassGroupKey(id, residue_id));
     }
-    for (auto residue_id : ChemicalDataHelper::GetStandardNucleotideList())
+    for (const auto residue_id : ChemicalDataHelper::GetStandardNucleotideList())
     {
         group_key_list.emplace_back(GetMainChainComponentBondClassGroupKey(id, residue_id));
     }

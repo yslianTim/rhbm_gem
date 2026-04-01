@@ -14,7 +14,7 @@ namespace rg = rhbm_gem;
 TEST(PotentialSeriesOpsTest, RangeAndBinningStayStableForLocalEntry)
 {
     rg::LocalPotentialEntry entry;
-    entry.AddDistanceAndMapValueList({
+    entry.SetDistanceAndMapValueList({
         {0.0f, 2.0f},
         {0.2f, 4.0f},
         {0.7f, 8.0f},
@@ -36,7 +36,7 @@ TEST(PotentialSeriesOpsTest, RangeAndBinningStayStableForLocalEntry)
 TEST(PotentialSeriesOpsTest, LinearModelTransformKeepsPositiveSamplesOnly)
 {
     rg::LocalPotentialEntry entry;
-    entry.AddDistanceAndMapValueList({
+    entry.SetDistanceAndMapValueList({
         {0.1f, 4.0f},
         {0.2f, -2.0f},
         {0.3f, 8.0f},

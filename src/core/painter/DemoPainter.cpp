@@ -4,6 +4,7 @@
 #include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
+#include "data/object/AtomStyleCatalog.hpp"
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
@@ -226,9 +227,9 @@ void DemoPainter::PainMapValueComparisonSingle(
     std::unique_ptr<TPaveText> fit_info_text[col_size];
     for (size_t i = 0; i < col_size; i++)
     {
-        auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
-        auto element_marker{ AtomClassifier::GetMainChainElementOpenMarker(i) };
-        auto element_label{ AtomClassifier::GetMainChainElementLabel(i) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
+        auto element_marker{ AtomStyleCatalog::GetMainChainElementOpenMarker(i) };
+        auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(i) };
         for (int j = 0; j < row_size; j++)
         {
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
@@ -464,8 +465,8 @@ void DemoPainter::PaintGroupGausMainChainSummary(
                 width_array.push_back(width_graph[j][k]->GetPointY(p));
                 width_array_total.push_back(width_graph[j][k]->GetPointY(p));
             }
-            auto element_color{ AtomClassifier::GetMainChainElementColor(k) };
-            auto element_marker{ AtomClassifier::GetMainChainElementOpenMarker(k) };
+            auto element_color{ AtomStyleCatalog::GetMainChainElementColor(k) };
+            auto element_marker{ AtomStyleCatalog::GetMainChainElementOpenMarker(k) };
             ROOTHelper::SetMarkerAttribute(amplitude_graph[j][k].get(), element_marker, marker_size, element_color);
             ROOTHelper::SetMarkerAttribute(width_graph[j][k].get(), element_marker, marker_size, element_color);
             ROOTHelper::SetMarkerAttribute(correlation_graph[j][k].get(), element_marker, marker_size, element_color);
@@ -612,8 +613,8 @@ void DemoPainter::PaintGroupGausMainChainSingle(
             amplitude_array.push_back(amplitude_graph[k]->GetPointY(p));
             width_array.push_back(width_graph[k]->GetPointY(p));
         }
-        auto element_color{ AtomClassifier::GetMainChainElementColor(k) };
-        auto element_marker{ AtomClassifier::GetMainChainElementOpenMarker(k) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(k) };
+        auto element_marker{ AtomStyleCatalog::GetMainChainElementOpenMarker(k) };
         ROOTHelper::SetMarkerAttribute(amplitude_graph[k].get(), element_marker, marker_size, element_color);
         ROOTHelper::SetMarkerAttribute(width_graph[k].get(), element_marker, marker_size, element_color);
         ROOTHelper::SetMarkerAttribute(correlation_graph[k].get(), element_marker, marker_size, element_color);
@@ -677,8 +678,8 @@ void DemoPainter::PaintGroupGausMainChainSingle(
     ROOTHelper::SetFillAttribute(legend.get(), 4000);
     for (size_t k = 0; k < main_chain_element_count; k++)
     {
-        auto element_color{ AtomClassifier::GetMainChainElementColor(k) };
-        auto element_label{ AtomClassifier::GetMainChainElementLabel(k) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(k) };
+        auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(k) };
         auto label{ Form("#color[%d]{%s}", element_color, element_label.data()) };
         legend->AddEntry(correlation_graph[k].get(), label, "p");
     }
@@ -804,7 +805,7 @@ void DemoPainter::PaintGroupGausToFSC(
             x_array.push_back(graph[i]->GetPointX(p));
             y_array.push_back(graph[i]->GetPointY(p));
         }
-        auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
         ROOTHelper::SetMarkerAttribute(graph[i].get(), 20, 1.2f, element_color);
         ROOTHelper::SetLineAttribute(graph[i].get(), 1, 2, element_color);
 
@@ -827,8 +828,8 @@ void DemoPainter::PaintGroupGausToFSC(
     std::unique_ptr<TPaveText> r_square_text[col_size];
     for (size_t i = 0; i < col_size; i++)
     {
-        auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
-        auto element_label{ AtomClassifier::GetMainChainElementLabel(i) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
+        auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(i) };
         for (int j = 0; j < row_size; j++)
         {
             ROOTHelper::FindPadInCanvasPartition(canvas.get(), static_cast<int>(i), j);
@@ -1052,8 +1053,8 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
         frame[i]->GetXaxis()->SetLimits(35.0, 65.0);
         frame[i]->Draw("Y+");
 
-        auto element_color{ AtomClassifier::GetMainChainElementColor(static_cast<size_t>(element_id)) };
-        auto element_label{ AtomClassifier::GetMainChainElementLabel(static_cast<size_t>(element_id)) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(element_id)) };
+        auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(static_cast<size_t>(element_id)) };
         if (draw_box_plot == true)
         {
             ROOTHelper::SetLineAttribute(summary_hist[element_id].get(), 1, 1, element_color);
@@ -1237,8 +1238,8 @@ void DemoPainter::PaintGroupWidthScatterPlot(
     for (int i = 0; i < col_size; i++)
     {
         auto element_id{ i };
-        auto element_color{ AtomClassifier::GetMainChainElementColor(static_cast<size_t>(element_id)) };
-        auto element_label{ AtomClassifier::GetMainChainElementLabel(static_cast<size_t>(element_id)) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(static_cast<size_t>(element_id)) };
+        auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(static_cast<size_t>(element_id)) };
         for (int j = 0; j < row_size; j++)
         {
             auto model_id{ j };
@@ -1426,7 +1427,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     frame->Draw();
     for (size_t i = 0; i < main_chain_element_count; i++)
     {
-        auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
         ROOTHelper::SetMarkerAttribute(gaus_graph[i].get(), 20, 1.0f, element_color);
         ROOTHelper::SetLineAttribute(gaus_graph[i].get(), 1, 2, element_color);
         gaus_graph[i]->Draw("PL X0");
@@ -1444,7 +1445,7 @@ void DemoPainter::PaintAtomGausMainChainDemo(
     legend->AddEntry(gaus_pro_graph.get(), "PRO", "p");
     for (size_t i = 0; i < main_chain_element_count; i++)
     {
-        auto element_label{ AtomClassifier::GetMainChainElementLabel(i) };
+        auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(i) };
         legend->AddEntry(gaus_graph[i].get(), element_label.data(), "pl");
     }
     legend->Draw();
@@ -1531,7 +1532,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     frame->Draw();
     for (size_t i = 0; i < main_chain_element_count; i++)
     {
-        auto element_color{ AtomClassifier::GetMainChainElementColor(i) };
+        auto element_color{ AtomStyleCatalog::GetMainChainElementColor(i) };
         ROOTHelper::SetMarkerAttribute(gaus_graph[i].get(), 20, 1.0f, element_color);
         ROOTHelper::SetLineAttribute(gaus_graph[i].get(), 1, 2, element_color);
         gaus_graph[i]->Draw("PL X0");
@@ -1549,7 +1550,7 @@ void DemoPainter::PaintAtomGausMainChainDemoSingle(
     legend->AddEntry(gaus_pro_graph.get(), "PRO", "p");
     for (size_t i = 0; i < main_chain_element_count; i++)
     {
-        auto element_label{ AtomClassifier::GetMainChainElementLabel(i) };
+        auto element_label{ AtomStyleCatalog::GetMainChainElementLabel(i) };
         legend->AddEntry(gaus_graph[i].get(), element_label.data(), "pl");
     }
     legend->Draw();
@@ -1761,7 +1762,7 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
         for (size_t p = 0; p < spot_count; p++)
         {
             auto spot{ spot_list.at(p) };
-            auto spot_label{ AtomClassifier::GetMainChainSpotLabel(spot) };
+            auto spot_label{ AtomStyleCatalog::GetMainChainSpotLabel(spot) };
             auto x_value{ static_cast<double>(p) };
             if (i == 0) spot_label_list.emplace_back(spot_label);
             std::string name_amplitude{ "amplitude_hist_"+ spot_label + std::to_string(i) };
@@ -1902,8 +1903,8 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
             frame[i][j]->Draw((i == col_size - 1) ? "Y+" : "");
             for (auto & [spot, hist] : hist_map[i][j])
             {
-                auto spot_color{ AtomClassifier::GetMainChainSpotColor(spot) };
-                auto spot_marker{ AtomClassifier::GetMainChainSpotOpenMarker(spot) };
+                auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
+                auto spot_marker{ AtomStyleCatalog::GetMainChainSpotOpenMarker(spot) };
                 ROOTHelper::SetLineAttribute(hist.get(), 1, 1, spot_color);
                 ROOTHelper::SetFillAttribute(hist.get(), 1001, spot_color, 0.3f);
                 ROOTHelper::SetMarkerAttribute(hist.get(), spot_marker, 1.0f, spot_color);
@@ -1953,9 +1954,9 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     frame_extra1->Draw();
     for (auto & [spot, graph] : summary_graph1_map)
     {
-        auto spot_color{ AtomClassifier::GetMainChainSpotColor(spot) };
-        auto spot_marker{ AtomClassifier::GetMainChainSpotOpenMarker(spot) };
-        auto spot_line_style{ AtomClassifier::GetMainChainSpotLineStyle(spot) };
+        auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
+        auto spot_marker{ AtomStyleCatalog::GetMainChainSpotOpenMarker(spot) };
+        auto spot_line_style{ AtomStyleCatalog::GetMainChainSpotLineStyle(spot) };
         ROOTHelper::SetLineAttribute(graph.get(), spot_line_style, 1, spot_color);
         ROOTHelper::SetMarkerAttribute(graph.get(), spot_marker, 1.0f, spot_color);
         graph->Draw("PL");
@@ -1988,9 +1989,9 @@ void DemoPainter::PaintGroupGausMergeResidueDemo(
     frame_extra2->Draw();
     for (auto & [spot, graph] : summary_graph2_map)
     {
-        auto spot_color{ AtomClassifier::GetMainChainSpotColor(spot) };
-        auto spot_marker{ AtomClassifier::GetMainChainSpotOpenMarker(spot) };
-        auto spot_line_style{ AtomClassifier::GetMainChainSpotLineStyle(spot) };
+        auto spot_color{ AtomStyleCatalog::GetMainChainSpotColor(spot) };
+        auto spot_marker{ AtomStyleCatalog::GetMainChainSpotOpenMarker(spot) };
+        auto spot_line_style{ AtomStyleCatalog::GetMainChainSpotLineStyle(spot) };
         ROOTHelper::SetLineAttribute(graph.get(), spot_line_style, 1, spot_color);
         ROOTHelper::SetMarkerAttribute(graph.get(), spot_marker, 1.0f, spot_color);
         graph->Draw("PL");

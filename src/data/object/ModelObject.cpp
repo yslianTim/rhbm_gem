@@ -2,8 +2,10 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
+#include "data/object/LocalPotentialFitState.hpp"
+#include "data/object/ModelAnalysisState.hpp"
+#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -14,7 +16,8 @@ ModelObject::ModelObject() :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
-    m_bond_key_system{ std::make_unique<BondKeySystem>() }
+    m_bond_key_system{ std::make_unique<BondKeySystem>() },
+    m_analysis_state{ std::make_unique<ModelAnalysisState>() }
 {
 }
 
@@ -23,7 +26,8 @@ ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_li
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
-    m_bond_key_system{ std::make_unique<BondKeySystem>() }
+    m_bond_key_system{ std::make_unique<BondKeySystem>() },
+    m_analysis_state{ std::make_unique<ModelAnalysisState>() }
 {
     SyncDerivedState();
 }
@@ -46,7 +50,8 @@ ModelObject::ModelObject(const ModelObject & other) :
             std::make_unique<AtomKeySystem>(*other.m_atom_key_system) : nullptr },
     m_bond_key_system{
         other.m_bond_key_system != nullptr ?
-            std::make_unique<BondKeySystem>(*other.m_bond_key_system) : nullptr }
+            std::make_unique<BondKeySystem>(*other.m_bond_key_system) : nullptr },
+    m_analysis_state{ std::make_unique<ModelAnalysisState>() }
 {
     m_atom_list.reserve(other.m_atom_list.size());
     std::unordered_map<const AtomObject *, AtomObject *> atom_ptr_map;
@@ -89,13 +94,13 @@ ModelObject::ModelObject(const ModelObject & other) :
     auto copy_group_entries =
         [&atom_ptr_map, &bond_ptr_map](
             const auto & source_map,
-            auto & target_map)
+            auto set_entry)
         {
             for (const auto & [class_key, entry] : source_map)
             {
                 if (entry == nullptr)
                 {
-                    target_map[class_key] = nullptr;
+                    set_entry(class_key, nullptr);
                     continue;
                 }
 
@@ -119,12 +124,40 @@ ModelObject::ModelObject(const ModelObject & other) :
                         cloned_bucket.bond_members.emplace_back(bond_ptr_map.at(bond));
                     }
                 }
-                target_map[class_key] = std::move(cloned_entry);
+                set_entry(class_key, std::move(cloned_entry));
             }
         };
 
-    copy_group_entries(other.m_atom_group_potential_entry_map, m_atom_group_potential_entry_map);
-    copy_group_entries(other.m_bond_group_potential_entry_map, m_bond_group_potential_entry_map);
+    const auto & source_analysis_state{ other.GetAnalysisState() };
+    copy_group_entries(
+        source_analysis_state.GetAtomGroupPotentialEntryMap(),
+        [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
+        {
+            m_analysis_state->SetAtomGroupPotentialEntry(class_key, std::move(entry));
+        });
+    copy_group_entries(
+        source_analysis_state.GetBondGroupPotentialEntryMap(),
+        [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
+        {
+            m_analysis_state->SetBondGroupPotentialEntry(class_key, std::move(entry));
+        });
+
+    for (const auto & atom : m_atom_list)
+    {
+        if (const auto * fit_state{ source_analysis_state.FindAtomFitState(*atom) };
+            fit_state != nullptr)
+        {
+            m_analysis_state->EnsureAtomFitState(*atom) = *fit_state;
+        }
+    }
+    for (const auto & bond : m_bond_list)
+    {
+        if (const auto * fit_state{ source_analysis_state.FindBondFitState(*bond) };
+            fit_state != nullptr)
+        {
+            m_analysis_state->EnsureBondFitState(*bond) = *fit_state;
+        }
+    }
 
     RebuildSelectionIndex();
 }
@@ -175,37 +208,29 @@ void ModelObject::SyncDerivedState()
 void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)
 {
     m_atom_list.emplace_back(std::move(atom));
+    m_analysis_state->Clear();
     SyncDerivedState();
 }
 
 void ModelObject::AddBond(std::unique_ptr<BondObject> bond)
 {
     m_bond_list.emplace_back(std::move(bond));
+    m_analysis_state->Clear();
     SyncDerivedState();
 }
 
 void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list)
 {
     m_atom_list = std::move(atom_list);
+    m_analysis_state->Clear();
     SyncDerivedState();
 }
 
 void ModelObject::SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list)
 {
     m_bond_list = std::move(bond_list);
+    m_analysis_state->Clear();
     SyncDerivedState();
-}
-
-void ModelObject::SetAtomGroupPotentialEntry(
-    const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
-{
-    m_atom_group_potential_entry_map[class_key] = std::move(entry);
-}
-
-void ModelObject::SetBondGroupPotentialEntry(
-    const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
-{
-    m_bond_group_potential_entry_map[class_key] = std::move(entry);
 }
 
 void ModelObject::AddChemicalComponentEntry(
@@ -305,32 +330,20 @@ double ModelObject::GetModelLength(int axis)
     return std::get<1>(range_tuple) - std::get<0>(range_tuple);
 }
 
-GroupPotentialEntry * ModelObject::GetAtomGroupPotentialEntry(const std::string & class_key) const
-{
-    return m_atom_group_potential_entry_map.at(class_key).get();
-}
-
-GroupPotentialEntry * ModelObject::GetBondGroupPotentialEntry(const std::string & class_key) const
-{
-    return m_bond_group_potential_entry_map.at(class_key).get();
-}
-
-const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-ModelObject::GetAtomGroupPotentialEntryMap() const
-{
-    return m_atom_group_potential_entry_map;
-}
-
-const std::unordered_map<std::string, std::unique_ptr<GroupPotentialEntry>> &
-ModelObject::GetBondGroupPotentialEntryMap() const
-{
-    return m_bond_group_potential_entry_map;
-}
-
 const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
 ModelObject::GetChemicalComponentEntryMap() const
 {
     return m_chemical_component_entry_map;
+}
+
+ModelAnalysisState & ModelObject::GetAnalysisState()
+{
+    return *m_analysis_state;
+}
+
+const ModelAnalysisState & ModelObject::GetAnalysisState() const
+{
+    return *m_analysis_state;
 }
 
 void ModelObject::BuildSelectedAtomList()
