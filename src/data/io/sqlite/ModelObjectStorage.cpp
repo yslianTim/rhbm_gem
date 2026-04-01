@@ -979,10 +979,10 @@ void SaveAtomLocalPotentialEntryList(
             statement_db.Bind<int>(3, entry->GetDistanceAndMapValueListSize());
             statement_db.Bind<std::vector<std::tuple<float, float>>>(
                 4, entry->GetDistanceAndMapValueList());
-            statement_db.Bind<double>(5, entry->GetAmplitudeEstimateOLS());
-            statement_db.Bind<double>(6, entry->GetWidthEstimateOLS());
-            statement_db.Bind<double>(7, entry->GetAmplitudeEstimateMDPDE());
-            statement_db.Bind<double>(8, entry->GetWidthEstimateMDPDE());
+            statement_db.Bind<double>(5, entry->GetEstimateOLS().amplitude);
+            statement_db.Bind<double>(6, entry->GetEstimateOLS().width);
+            statement_db.Bind<double>(7, entry->GetEstimateMDPDE().amplitude);
+            statement_db.Bind<double>(8, entry->GetEstimateMDPDE().width);
             statement_db.Bind<double>(9, entry->GetAlphaR());
         });
     }
@@ -1007,10 +1007,10 @@ void SaveBondLocalPotentialEntryList(
             statement_db.Bind<int>(4, entry->GetDistanceAndMapValueListSize());
             statement_db.Bind<std::vector<std::tuple<float, float>>>(
                 5, entry->GetDistanceAndMapValueList());
-            statement_db.Bind<double>(6, entry->GetAmplitudeEstimateOLS());
-            statement_db.Bind<double>(7, entry->GetWidthEstimateOLS());
-            statement_db.Bind<double>(8, entry->GetAmplitudeEstimateMDPDE());
-            statement_db.Bind<double>(9, entry->GetWidthEstimateMDPDE());
+            statement_db.Bind<double>(6, entry->GetEstimateOLS().amplitude);
+            statement_db.Bind<double>(7, entry->GetEstimateOLS().width);
+            statement_db.Bind<double>(8, entry->GetEstimateMDPDE().amplitude);
+            statement_db.Bind<double>(9, entry->GetEstimateMDPDE().width);
             statement_db.Bind<double>(10, entry->GetAlphaR());
         });
     }
@@ -1033,10 +1033,10 @@ void SaveAtomLocalPotentialEntrySubList(
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<int>(3, atom_object->GetSerialID());
-            statement_db.Bind<double>(4, entry->GetAmplitudeEstimatePosterior(class_key));
-            statement_db.Bind<double>(5, entry->GetWidthEstimatePosterior(class_key));
-            statement_db.Bind<double>(6, entry->GetAmplitudeVariancePosterior(class_key));
-            statement_db.Bind<double>(7, entry->GetWidthVariancePosterior(class_key));
+            statement_db.Bind<double>(4, entry->GetPosterior(class_key).estimate.amplitude);
+            statement_db.Bind<double>(5, entry->GetPosterior(class_key).estimate.width);
+            statement_db.Bind<double>(6, entry->GetPosterior(class_key).variance.amplitude);
+            statement_db.Bind<double>(7, entry->GetPosterior(class_key).variance.width);
             statement_db.Bind<int>(8, static_cast<int>(entry->GetOutlierTag(class_key)));
             statement_db.Bind<double>(9, entry->GetStatisticalDistance(class_key));
         });
@@ -1061,10 +1061,10 @@ void SaveBondLocalPotentialEntrySubList(
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<int>(3, bond_object->GetAtomSerialID1());
             statement_db.Bind<int>(4, bond_object->GetAtomSerialID2());
-            statement_db.Bind<double>(5, entry->GetAmplitudeEstimatePosterior(class_key));
-            statement_db.Bind<double>(6, entry->GetWidthEstimatePosterior(class_key));
-            statement_db.Bind<double>(7, entry->GetAmplitudeVariancePosterior(class_key));
-            statement_db.Bind<double>(8, entry->GetWidthVariancePosterior(class_key));
+            statement_db.Bind<double>(5, entry->GetPosterior(class_key).estimate.amplitude);
+            statement_db.Bind<double>(6, entry->GetPosterior(class_key).estimate.width);
+            statement_db.Bind<double>(7, entry->GetPosterior(class_key).variance.amplitude);
+            statement_db.Bind<double>(8, entry->GetPosterior(class_key).variance.width);
             statement_db.Bind<int>(9, static_cast<int>(entry->GetOutlierTag(class_key)));
             statement_db.Bind<double>(10, entry->GetStatisticalDistance(class_key));
         });

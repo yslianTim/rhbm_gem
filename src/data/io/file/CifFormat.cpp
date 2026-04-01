@@ -1491,7 +1491,7 @@ void WriteAtomSiteBlock(
         if (atom->GetLocalPotentialEntry() == nullptr)
             continue;
         auto model_entry{atom->GetLocalPotentialEntry()};
-        auto gaus_estimate{model_entry->GetGausEstimateMDPDE(model_par)};
+        auto gaus_estimate{model_entry->GetEstimateMDPDE().GetParameter(model_par)};
         auto position{atom->GetPosition()};
         WriteAtomSiteBlockEntry(
             atom,

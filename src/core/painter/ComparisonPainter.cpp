@@ -2,9 +2,8 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
-#include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -782,15 +781,14 @@ void ComparisonPainter::BuildGausRatioToResolutionGraph(
     auto count{ 0 };
     for (auto model_object : model_list)
     {
-        auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
-        auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-        if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
-        if (entry_iter->IsAvailableAtomGroupKey(ref_group_key, class_key) == false) continue;
+        const ModelPotentialView entry_view{ *model_object };
+        if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
+        if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
         auto x_value{ model_object->GetResolution() };
-        auto y_value{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, par_id) };
-        auto y_error{ entry_iter->GetAtomGausVariancePrior(group_key, class_key, par_id) };
-        auto ref_y_value{ entry_iter->GetAtomGausEstimatePrior(ref_group_key, class_key, par_id) };
-        auto ref_y_error{ entry_iter->GetAtomGausVariancePrior(ref_group_key, class_key, par_id) };
+        auto y_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, par_id) };
+        auto y_error{ entry_view.GetAtomGausVariancePrior(group_key, class_key, par_id) };
+        auto ref_y_value{ entry_view.GetAtomGausEstimatePrior(ref_group_key, class_key, par_id) };
+        auto ref_y_error{ entry_view.GetAtomGausVariancePrior(ref_group_key, class_key, par_id) };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };
@@ -823,16 +821,15 @@ void ComparisonPainter::BuildAmplitudeRatioToWidthGraph(
     for (auto model_object : model_list)
     {
         model_count++;
-        auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
-        auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-        if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
-        if (entry_iter->IsAvailableAtomGroupKey(ref_group_key, class_key) == false) continue;
-        auto x_value{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1) };
-        auto y_value{ entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0) };
-        auto x_error{ std::sqrt(entry_iter->GetAtomGausVariancePrior(group_key, class_key, 1)) };
-        auto y_error{ std::sqrt(entry_iter->GetAtomGausVariancePrior(group_key, class_key, 0)) };
-        auto ref_y_value{ entry_iter->GetAtomGausEstimatePrior(ref_group_key, class_key, 0) };
-        auto ref_y_error{ std::sqrt(entry_iter->GetAtomGausVariancePrior(ref_group_key, class_key, 0)) };
+        const ModelPotentialView entry_view{ *model_object };
+        if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
+        if (!entry_view.HasAtomGroup(ref_group_key, class_key)) continue;
+        auto x_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, 1) };
+        auto y_value{ entry_view.GetAtomGausEstimatePrior(group_key, class_key, 0) };
+        auto x_error{ std::sqrt(entry_view.GetAtomGausVariancePrior(group_key, class_key, 1)) };
+        auto y_error{ std::sqrt(entry_view.GetAtomGausVariancePrior(group_key, class_key, 0)) };
+        auto ref_y_value{ entry_view.GetAtomGausEstimatePrior(ref_group_key, class_key, 0) };
+        auto ref_y_error{ std::sqrt(entry_view.GetAtomGausVariancePrior(ref_group_key, class_key, 0)) };
         if (x_value == 0.0 || ref_y_value == 0.0) continue;
         auto ratio{ y_value/ref_y_value };
         auto error{ ratio * std::sqrt(std::pow(y_error/y_value, 2) + std::pow(ref_y_error/ref_y_value, 2)) };

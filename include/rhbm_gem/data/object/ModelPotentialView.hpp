@@ -83,12 +83,12 @@ public:
 
     double GetAtomGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return GetAtomGroupEntry(class_key).GetGausVariancePrior(group_key, par_id);
+        return BuildPriorPosterior(GetAtomGroup(group_key, class_key)).GetVariance(par_id);
     }
 
     double GetBondGausVariancePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
-        return GetBondGroupEntry(class_key).GetGausVariancePrior(group_key, par_id);
+        return BuildPriorPosterior(GetBondGroup(group_key, class_key)).GetVariance(par_id);
     }
 
     const std::vector<AtomObject *> & GetAtomObjectList(GroupKey group_key, const std::string & class_key) const
@@ -158,12 +158,12 @@ public:
 
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const
     {
-        return GetAtomGroupEntry(class_key).GetAlphaG(group_key);
+        return GetAtomGroup(group_key, class_key).alpha_g;
     }
 
     double GetBondAlphaG(GroupKey group_key, const std::string & class_key) const
     {
-        return GetBondGroupEntry(class_key).GetAlphaG(group_key);
+        return GetBondGroup(group_key, class_key).alpha_g;
     }
 
     Residue GetResidueFromAtomGroupKey(GroupKey group_key, const std::string & class_key) const
@@ -286,6 +286,14 @@ private:
             Logger::Log(LogLevel::Error, oss.str());
         }
         return false;
+    }
+
+    GaussianPosterior BuildPriorPosterior(const GroupPotentialBucket & group) const
+    {
+        GaussianPosterior posterior;
+        posterior.estimate = group.prior;
+        posterior.variance = group.prior_variance;
+        return posterior;
     }
 };
 

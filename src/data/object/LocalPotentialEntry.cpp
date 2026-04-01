@@ -142,118 +142,6 @@ double LocalPotentialEntry::GetBetaEstimateMDPDE(int par_id) const
     return GetEstimateMDPDE().ToBeta()(par_id);
 }
 
-double LocalPotentialEntry::GetGausEstimateOLS(int par_id) const
-{
-    switch (par_id)
-    {
-        case 0: return GetAmplitudeEstimateOLS();
-        case 1: return GetWidthEstimateOLS();
-        case 2: return GetIntensityEstimateOLS();
-        default:
-            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
-            return 0.0;
-    }
-}
-
-double LocalPotentialEntry::GetAmplitudeEstimateOLS() const
-{
-    return m_gaus_estimate_ols.amplitude;
-}
-
-double LocalPotentialEntry::GetWidthEstimateOLS() const
-{
-    return m_gaus_estimate_ols.width;
-}
-
-double LocalPotentialEntry::GetIntensityEstimateOLS() const
-{
-    return m_gaus_estimate_ols.Intensity();
-}
-
-double LocalPotentialEntry::GetGausEstimateMDPDE(int par_id) const
-{
-    switch (par_id)
-    {
-        case 0: return GetAmplitudeEstimateMDPDE();
-        case 1: return GetWidthEstimateMDPDE();
-        case 2: return GetIntensityEstimateMDPDE();
-        default:
-            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
-            return 0.0;
-    }
-}
-
-double LocalPotentialEntry::GetAmplitudeEstimateMDPDE() const
-{
-    return m_gaus_estimate_mdpde.amplitude;
-}
-
-double LocalPotentialEntry::GetWidthEstimateMDPDE() const
-{
-    return m_gaus_estimate_mdpde.width;
-}
-
-double LocalPotentialEntry::GetIntensityEstimateMDPDE() const
-{
-    return m_gaus_estimate_mdpde.Intensity();
-}
-
-double LocalPotentialEntry::GetGausEstimatePosterior(const std::string & key, int par_id) const
-{
-    switch (par_id)
-    {
-        case 0: return GetAmplitudeEstimatePosterior(key);
-        case 1: return GetWidthEstimatePosterior(key);
-        case 2: return GetIntensityEstimatePosterior(key);
-        default:
-            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
-            return 0.0;
-    }
-}
-
-double LocalPotentialEntry::GetAmplitudeEstimatePosterior(const std::string & key) const
-{
-    return GetPosterior(key).estimate.amplitude;
-}
-
-double LocalPotentialEntry::GetWidthEstimatePosterior(const std::string & key) const
-{
-    return GetPosterior(key).estimate.width;
-}
-
-double LocalPotentialEntry::GetIntensityEstimatePosterior(const std::string & key) const
-{
-    return GetPosterior(key).estimate.Intensity();
-}
-
-double LocalPotentialEntry::GetGausVariancePosterior(const std::string & key, int par_id) const
-{
-    switch (par_id)
-    {
-        case 0: return GetAmplitudeVariancePosterior(key);
-        case 1: return GetWidthVariancePosterior(key);
-        case 2: return GetIntensityVariancePosterior(key);
-        default:
-            Logger::Log(LogLevel::Error, "Invalid parameter index: " + std::to_string(par_id));
-            return 0.0;
-    }
-}
-
-double LocalPotentialEntry::GetAmplitudeVariancePosterior(const std::string & key) const
-{
-    return GetPosterior(key).variance.amplitude;
-}
-
-double LocalPotentialEntry::GetWidthVariancePosterior(const std::string & key) const
-{
-    return GetPosterior(key).variance.width;
-}
-
-double LocalPotentialEntry::GetIntensityVariancePosterior(const std::string & key) const
-{
-    return GetPosterior(key).IntensityVariance();
-}
-
 bool LocalPotentialEntry::GetOutlierTag(const std::string & key) const
 {
     return m_outlier_tag_map.at(key);
@@ -283,8 +171,9 @@ double LocalPotentialEntry::CalculateQScore(int par_choice) const
     }
     else if (par_choice == 1)
     {
-        amplitude = GetAmplitudeEstimateMDPDE() * std::pow(2.0*Constants::pi*GetWidthEstimateMDPDE()*GetWidthEstimateMDPDE(), -1.5);
-        width = GetWidthEstimateMDPDE();
+        const auto & estimate{ GetEstimateMDPDE() };
+        amplitude = estimate.Intensity();
+        width = estimate.width;
         intersect = 0.0;
     }
 

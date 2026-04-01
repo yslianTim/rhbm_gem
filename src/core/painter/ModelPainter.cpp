@@ -3,8 +3,10 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/data/object/LocalPotentialView.hpp>
+#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
+#include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
@@ -108,7 +110,7 @@ void ModelPainter::PaintAtomGroupGausMainChain(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGroupGausMainChain");
 
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     
     #ifdef HAVE_ROOT
@@ -316,7 +318,7 @@ void ModelPainter::PaintBondGroupGausMainChain(
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondGroupGausMainChain");
 
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     
     #ifdef HAVE_ROOT
@@ -515,7 +517,7 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
         return;
     }
 
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     
     #ifdef HAVE_ROOT
@@ -747,7 +749,8 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/data/object/LocalPotentialView.hpp>
+#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -775,7 +778,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
 
     #ifdef HAVE_ROOT
     const auto & class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const int col_size{ 4 };
     const int row_size{ 1 };
@@ -799,15 +802,15 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     for (size_t k = 0; k < main_chain_element_size; k++)
     {
         auto group_key{ classifier.GetMainChainSimpleAtomClassGroupKey(k) };
-        if (entry_iter->IsAvailableAtomGroupKey(group_key, class_key) == false) continue;
+        if (!entry_iter->HasAtomGroup(group_key, class_key)) continue;
         for (auto atom : entry_iter->GetAtomObjectList(group_key, class_key))
         {
-            auto atom_iter{ std::make_unique<PotentialEntryQuery>(atom) };
+            auto atom_iter{ std::make_unique<LocalPotentialView>(*atom) };
             auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
             auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
-            auto map_value_range{ atom_iter->GetMapValueRange(0.0) };
+            auto map_value_range{ series_ops::ComputeMapValueRange(*atom_iter, 0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
@@ -943,7 +946,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
 
     #ifdef HAVE_ROOT
     const auto & class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const int col_size{ 4 };
     const int row_size{ 1 };
@@ -968,16 +971,16 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
     for (size_t k = 0; k < main_chain_element_size; k++)
     {
         auto group_key{ classifier.GetMainChainSimpleBondClassGroupKey(k) };
-        if (entry_iter->IsAvailableBondGroupKey(group_key, class_key, true) == false) continue;
+        if (!entry_iter->HasBondGroup(group_key, class_key, true)) continue;
 
         for (auto bond : entry_iter->GetBondObjectList(group_key, class_key))
         {
-            auto bond_iter{ std::make_unique<PotentialEntryQuery>(bond) };
+            auto bond_iter{ std::make_unique<LocalPotentialView>(*bond) };
             auto bond_plot_builder{ std::make_unique<PotentialPlotBuilder>(bond) };
             auto graph{ bond_plot_builder->CreateBinnedDistanceToMapValueGraph() };
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
-            auto map_value_range{ bond_iter->GetMapValueRange(0.0) };
+            auto map_value_range{ series_ops::ComputeMapValueRange(*bond_iter, 0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
@@ -1120,7 +1123,8 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/data/object/LocalPotentialView.hpp>
+#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -1164,7 +1168,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
     (void)par_id;
     (void)draw_box_plot;
 
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -1193,7 +1197,7 @@ void ModelPainter::PaintGroupWidthScatterPlot(
             for (auto residue : ChemicalDataHelper::GetStandardAminoAcidList())
             {
                 auto group_key{ m_atom_classifier->GetMainChainComponentAtomClassGroupKey(i, residue) };
-                if (entry_iter->IsAvailableAtomGroupKey(group_key, residue_class) == false) continue;
+                if (!entry_iter->HasAtomGroup(group_key, residue_class)) continue;
                 auto gaus_graph
                 {
                     (par_id == 0) ?
@@ -1298,7 +1302,7 @@ void ModelPainter::PaintAtomXYPosition(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomXYPosition");
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -1393,7 +1397,7 @@ void ModelPainter::PaintAtomGausScatterPlot(
     (void)do_normalize;
 
     #ifdef HAVE_ROOT
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     auto amplitude_min{ entry_iter->GetAtomGausEstimateMinimum(0, Element::OXYGEN) };
 
@@ -1501,7 +1505,7 @@ void ModelPainter::PaintBondGausScatterPlot(
     (void)do_normalize;
 
     #ifdef HAVE_ROOT
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     auto amplitude_min{ entry_iter->GetBondGausEstimateMinimum(0) };
 
@@ -1601,7 +1605,7 @@ void ModelPainter::PaintAtomGausMainChain(ModelObject * model_object, const std:
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomGausMainChain");
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -1752,7 +1756,7 @@ void ModelPainter::PaintBondGausMainChain(ModelObject * model_object, const std:
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintBondGausMainChain");
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT
@@ -1904,7 +1908,7 @@ void ModelPainter::PaintAtomRankMainChain(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, " ModelPainter::PaintAtomRankMainChain");
-    auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object) };
+    auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
 
     #ifdef HAVE_ROOT

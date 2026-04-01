@@ -43,29 +43,6 @@ public:
     void SetPriorEstimate(GroupKey group_key, const GaussianEstimate & estimate);
     void SetPriorVariance(GroupKey group_key, const GaussianEstimate & variance);
     void SetAlphaG(GroupKey group_key, double value);
-    int GetAtomMemberCount(GroupKey group_key) const;
-    int GetBondMemberCount(GroupKey group_key) const;
-    double GetAlphaG(GroupKey group_key) const;
-    const std::vector<AtomObject *> & GetAtomMembers(GroupKey group_key) const;
-    const std::vector<BondObject *> & GetBondMembers(GroupKey group_key) const;
-    const GaussianEstimate & GetMeanEstimate(GroupKey group_key) const;
-    const GaussianEstimate & GetMDPDEEstimate(GroupKey group_key) const;
-    const GaussianEstimate & GetPriorEstimate(GroupKey group_key) const;
-    const GaussianEstimate & GetPriorVariance(GroupKey group_key) const;
-    double GetMuEstimateMean(GroupKey group_key, int par_id) const;
-    double GetMuEstimateMDPDE(GroupKey group_key, int par_id) const;
-    double GetMuEstimatePrior(GroupKey group_key, int par_id) const;
-    double GetGausEstimateMean(GroupKey group_key, int par_id) const;
-    double GetGausEstimateMDPDE(GroupKey group_key, int par_id) const;
-    double GetGausEstimatePrior(GroupKey group_key, int par_id) const;
-    double GetGausVariancePrior(GroupKey group_key, int par_id) const;
-
-private:
-    double GetGausEstimate(const GaussianEstimate & estimate, int par_id) const;
-    double GetGausVariance(
-        const GaussianEstimate & estimate,
-        const GaussianEstimate & variance,
-        int par_id) const;
 };
 
 } // namespace rhbm_gem

@@ -429,7 +429,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & atom_list{ group_potential_entry->GetAtomMembers(group_key) };
+            const auto & atom_list{ group_potential_entry->GetGroup(group_key).atom_members };
             auto group_size{ atom_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;
@@ -451,7 +451,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
                 data_covariance_list.emplace_back(entry->GetDataCovariance());
             }
             auto alpha_g{ (RequestOptions().training_alpha_flag) ?
-                group_potential_entry->GetAlphaG(group_key) : RequestOptions().alpha_g
+                group_potential_entry->GetGroup(group_key).alpha_g : RequestOptions().alpha_g
             };
             const auto input = HRLDataTransform::BuildGroupInput(
                 basis_size,
@@ -932,7 +932,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     atom_list_set.reserve(component_group_potential_entry->GetGroupKeys().size());
     for (auto group_key : component_group_potential_entry->GetGroupKeys())
     {
-        auto & group_atom_list{ component_group_potential_entry->GetAtomMembers(group_key) };
+        const auto & group_atom_list{ component_group_potential_entry->GetGroup(group_key).atom_members };
         if (group_atom_list.size() < 10) continue;
         if (group_atom_list.front()->IsMainChainAtom() == false) continue;
         atom_list_set.emplace_back(group_atom_list);

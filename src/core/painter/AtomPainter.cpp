@@ -1,8 +1,9 @@
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
-#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
+#include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include "detail/PainterTypeCheck.hpp"
@@ -89,10 +90,10 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     auto pad_main{ ROOTHelper::CreatePad("pad","", 0.00, 0.00, 1.00, 1.00) };
     pad_main->Draw();
 
-    auto atom_iter{ std::make_unique<PotentialEntryQuery>(atom_object) };
+    LocalPotentialView atom_view{ *atom_object };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
-    auto map_value_range{ atom_iter->GetMapValueRange(0.3) };
-    auto distance_range{ atom_iter->GetDistanceRange(0.0) };
+    auto map_value_range{ series_ops::ComputeMapValueRange(atom_view, 0.3) };
+    auto distance_range{ series_ops::ComputeDistanceRange(atom_view, 0.0) };
 
     auto map_value_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
     auto map_value_ref_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
@@ -142,8 +143,9 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     ROOTHelper::SetLineAttribute(map_value_hist.get(), 1, 2, kAzure-5);
     map_value_hist->Draw("CANDLE2 SAME");
 
-    auto amplitude{ atom_iter->GetAmplitudeEstimateMDPDE() };
-    auto width{ atom_iter->GetWidthEstimateMDPDE() };
+    const auto & estimate{ atom_view.GetEstimateMDPDE() };
+    auto amplitude{ estimate.amplitude };
+    auto width{ estimate.width };
     auto gaus_func{ ROOTHelper::CreateGaus3DFunctionIn1D("gaus", amplitude, width) };
     ROOTHelper::SetLineAttribute(gaus_func.get(), 9, 4, kRed+1);
     gaus_func->Draw("SAME");
@@ -180,7 +182,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     
     for (auto atom_object : m_atom_object_list)
     {
-        auto entry_iter{ std::make_unique<PotentialEntryQuery>(atom_object) };
+        LocalPotentialView entry_view{ *atom_object };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
         auto data_graph{ plot_builder->CreateDistanceToMapValueGraph() };
         auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(15) };
@@ -225,8 +227,9 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         ROOTHelper::SetPaveTextDefaultStyle(result_text.get());
         ROOTHelper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
         ROOTHelper::SetFillAttribute(result_text.get(), 4000);
-        auto amplitude_prior{ entry_iter->GetAmplitudeEstimateMDPDE() };
-        auto width_prior{ entry_iter->GetWidthEstimateMDPDE() };
+        const auto & estimate_mdpde{ entry_view.GetEstimateMDPDE() };
+        auto amplitude_prior{ estimate_mdpde.amplitude };
+        auto width_prior{ estimate_mdpde.width };
         result_text->AddText(Form("#font[2]{A} = %.2f", amplitude_prior));
         result_text->AddText(Form("#tau = %.2f", width_prior));
         //result_text->Draw();
@@ -247,7 +250,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         frame->GetYaxis()->CenterTitle();
         frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
         frame->GetYaxis()->SetTitle("Map Value");
-        auto y_range{ entry_iter->GetMapValueRange(0.1) };
+        auto y_range{ series_ops::ComputeMapValueRange(entry_view, 0.1) };
         auto x_min{ 0.01 };
         auto x_max{ 1.49 };
         auto y_min{ std::get<0>(y_range) };
@@ -286,7 +289,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         ROOTHelper::SetPaveTextDefaultStyle(alpha_text.get());
         ROOTHelper::SetTextAttribute(alpha_text.get(), 50.0f, 133, 12, 0.0, kRed);
         ROOTHelper::SetFillAttribute(alpha_text.get(), 4000);
-        auto alpha_r{ entry_iter->GetAlphaR() };
+        auto alpha_r{ entry_view.GetAlphaR() };
         alpha_text->AddText(Form("#alpha_{r} = %.1f", alpha_r));
         //alpha_text->Draw();
 

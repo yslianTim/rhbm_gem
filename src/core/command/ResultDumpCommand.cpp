@@ -7,7 +7,7 @@
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ChimeraXHelper.hpp>
@@ -292,8 +292,9 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
             auto entry{ atom->GetLocalPotentialEntry() };
-            outfile << atom->GetSerialID() << ',' << entry->GetAmplitudeEstimateMDPDE() << ','
-                    << entry->GetWidthEstimateMDPDE() << ',' << atom->GetPosition().at(0) << ','
+            const auto & estimate{ entry->GetEstimateMDPDE() };
+            outfile << atom->GetSerialID() << ',' << estimate.amplitude << ','
+                    << estimate.width << ',' << atom->GetPosition().at(0) << ','
                     << atom->GetPosition().at(1) << ',' << atom->GetPosition().at(2) << ','
                     << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
                     << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','
@@ -325,7 +326,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
 
     for (const auto & model_object : m_model_object_list)
     {
-        auto entry_iter{ std::make_unique<PotentialEntryQuery>(model_object.get()) };
+        const ModelPotentialView entry_view{ *model_object };
 
         const std::string file_name{ "group_gaus_list_" + model_object->GetPdbID() };
         const auto output_path{ BuildOutputPath(file_name, ".csv") };
@@ -347,10 +348,10 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
                 const auto atom_key{ static_cast<uint16_t>(spot) };
                 const auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
                 const auto atom_id{ model_object->GetAtomKeySystemPtr()->GetAtomId(atom_key) };
-                if (!entry_iter->IsAvailableAtomGroupKey(group_key, class_key)) continue;
+                if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
-                        << entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 0) << ','
-                        << entry_iter->GetAtomGausEstimatePrior(group_key, class_key, 1) << '\n';
+                        << entry_view.GetAtomGausEstimatePrior(group_key, class_key, 0) << ','
+                        << entry_view.GetAtomGausEstimatePrior(group_key, class_key, 1) << '\n';
             }
         }
 

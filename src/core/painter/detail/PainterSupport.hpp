@@ -6,11 +6,14 @@
 #include <vector>
 
 #include <rhbm_gem/data/object/DataObjectBase.hpp>
+#include <rhbm_gem/data/object/LocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/PotentialEntryQuery.hpp>
+#include <rhbm_gem/data/object/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
+
+#include <detail/PotentialSeriesOps.hpp>
 
 #include "PainterTypeCheck.hpp"
 
@@ -128,21 +131,21 @@ inline void BuildMapValueScatterGraph(
     double x_min = 0.0,
     double x_max = 1.5)
 {
-    PotentialEntryQuery entry1_iter{ model1 };
-    PotentialEntryQuery entry2_iter{ model2 };
-    if (!entry1_iter.IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()))
+    const ModelPotentialView entry1_view{ *model1 };
+    const ModelPotentialView entry2_view{ *model2 };
+    if (!entry1_view.HasAtomGroup(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()))
     {
         return;
     }
-    if (!entry2_iter.IsAvailableAtomGroupKey(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()))
+    if (!entry2_view.HasAtomGroup(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()))
     {
         return;
     }
 
     auto model1_atom_map{
-        entry1_iter.GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
+        entry1_view.GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
     auto model2_atom_map{
-        entry2_iter.GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
+        entry2_view.GetAtomObjectMap(group_key, ChemicalDataHelper::GetSimpleAtomClassKey()) };
     auto count{ 0 };
     for (auto & [atom_id, atom_object1] : model1_atom_map)
     {
@@ -151,10 +154,12 @@ inline void BuildMapValueScatterGraph(
             continue;
         }
         auto * atom_object2{ model2_atom_map.at(atom_id) };
-        PotentialEntryQuery atom1_iter{ atom_object1 };
-        PotentialEntryQuery atom2_iter{ atom_object2 };
-        auto data1_array{ atom1_iter.GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
-        auto data2_array{ atom2_iter.GetBinnedDistanceAndMapValueList(bin_size, x_min, x_max) };
+        const LocalPotentialView atom1_view{ *atom_object1 };
+        const LocalPotentialView atom2_view{ *atom_object2 };
+        auto data1_array{
+            series_ops::BuildBinnedDistanceAndMapValueList(atom1_view, bin_size, x_min, x_max) };
+        auto data2_array{
+            series_ops::BuildBinnedDistanceAndMapValueList(atom2_view, bin_size, x_min, x_max) };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
             graph->SetPoint(count, std::get<1>(data1_array.at(i)), std::get<1>(data2_array.at(i)));

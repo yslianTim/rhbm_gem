@@ -23,8 +23,7 @@ TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
         "data/object/LocalPotentialView.hpp",
         "data/object/MapObject.hpp",
         "data/object/ModelObject.hpp",
-        "data/object/ModelPotentialView.hpp",
-        "data/object/PotentialEntryQuery.hpp" };
+        "data/object/ModelPotentialView.hpp" };
 
     EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("data"), expected);
 }
