@@ -61,6 +61,7 @@ public:
     const std::map<BondKey, ComponentBondEntry> & BondEntries() const { return m_component_bond_entry_map; }
     void AddComponentAtomEntry(AtomKey atom_key, const ComponentAtomEntry & atom_info);
     void AddComponentBondEntry(BondKey bond_key, const ComponentBondEntry & bond_info);
+    bool HasComponentBondEntry(BondKey bond_key) const;
     const ComponentAtomEntry * FindComponentAtomEntry(AtomKey atom_key) const;
     const ComponentBondEntry * FindComponentBondEntry(BondKey bond_key) const;
 

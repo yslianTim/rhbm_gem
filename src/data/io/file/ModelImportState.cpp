@@ -361,7 +361,7 @@ bool ModelImportState::HasComponentBondEntry(
     if (HasChemicalComponentEntry(comp_key) == false) {
         return false;
     }
-    return m_chemical_component_entry_map.at(comp_key)->FindComponentBondEntry(bond_key) != nullptr;
+    return m_chemical_component_entry_map.at(comp_key)->HasComponentBondEntry(bond_key);
 }
 
 } // namespace rhbm_gem

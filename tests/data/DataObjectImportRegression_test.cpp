@@ -4,9 +4,11 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
 
@@ -118,6 +120,22 @@ TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix)
                     model.FindBondID(model.GetBondList().front()->GetBondKey()),
                     "UNK");
             } },
+        { "ModifiedPeptideFallbackBuildsObservedComponentBonds",
+            command_test::TestDataPath("test_model_modified_peptide_fallback.cif"),
+            [](rg::ModelObject & model)
+            {
+                ASSERT_EQ(model.GetNumberOfAtom(), 6);
+                std::unordered_set<std::string> bond_id_set;
+                for (const auto & bond : model.GetBondList())
+                {
+                    bond_id_set.insert(model.FindBondID(bond->GetBondKey()));
+                }
+                EXPECT_TRUE(bond_id_set.find("N_CA") != bond_id_set.end());
+                EXPECT_TRUE(bond_id_set.find("CA_C") != bond_id_set.end());
+                EXPECT_TRUE(bond_id_set.find("C_O") != bond_id_set.end());
+                EXPECT_TRUE(bond_id_set.find("C_N") != bond_id_set.end());
+                EXPECT_GE(model.GetNumberOfBond(), 5);
+            } },
     };
 
     for (const auto & case_data : cases)
@@ -126,4 +144,23 @@ TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix)
         auto model{ data_test::LoadFixtureModel(case_data.path) };
         case_data.verify(*model);
     }
+}
+
+TEST(DataObjectImportRegressionTest, ModifiedPeptideFallbackDoesNotEmitComponentBondMissWarnings)
+{
+    Logger::SetLogLevel(LogLevel::Warning);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    auto model{
+        data_test::LoadFixtureModel(
+            command_test::TestDataPath("test_model_modified_peptide_fallback.cif")) };
+    const auto stdout_output{ testing::internal::GetCapturedStdout() };
+    const auto stderr_output{ testing::internal::GetCapturedStderr() };
+    ASSERT_NE(model, nullptr);
+    EXPECT_TRUE(stdout_output.empty());
+    EXPECT_EQ(
+        stderr_output.find("Component bond entry (bond_key: 62) not found in chemical component map."),
+        std::string::npos);
+    EXPECT_EQ(stderr_output.find("Component bond entry"), std::string::npos);
+    Logger::SetLogLevel(LogLevel::Info);
 }

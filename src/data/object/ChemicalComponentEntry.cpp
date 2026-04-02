@@ -23,6 +23,11 @@ void ChemicalComponentEntry::AddComponentBondEntry(
     m_component_bond_entry_map[bond_key] = bond_info;
 }
 
+bool ChemicalComponentEntry::HasComponentBondEntry(BondKey bond_key) const
+{
+    return m_component_bond_entry_map.find(bond_key) != m_component_bond_entry_map.end();
+}
+
 const ComponentAtomEntry * ChemicalComponentEntry::FindComponentAtomEntry(AtomKey atom_key) const
 {
     if (m_component_atom_entry_map.find(atom_key) == m_component_atom_entry_map.end())

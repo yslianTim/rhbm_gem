@@ -42,6 +42,8 @@ struct CifFormatState {
     bool find_component_atom_entry{false};
     bool find_component_bond_entry{false};
     std::unordered_map<std::string, std::vector<std::string>> data_item_map;
+    std::unordered_map<std::string, std::unordered_set<std::string>>
+        observed_component_atom_id_set_map;
 
     struct ParsedLoopRow {
         std::vector<std::string> token_list;
@@ -247,6 +249,97 @@ void ResetReadState(CifFormatState& state) {
     state.find_component_bond_entry = false;
     state.loop_category_map.clear();
     state.data_item_map.clear();
+    state.observed_component_atom_id_set_map.clear();
+}
+
+std::string ToLowerCopy(std::string value) {
+    std::transform(
+        value.begin(),
+        value.end(),
+        value.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return value;
+}
+
+bool ContainsCaseInsensitive(std::string haystack, std::string_view needle) {
+    const auto lowered_haystack{ToLowerCopy(std::move(haystack))};
+    const auto lowered_needle{ToLowerCopy(std::string{needle})};
+    return lowered_haystack.find(lowered_needle) != std::string::npos;
+}
+
+std::pair<std::string, std::string> SplitBondIdAtomPair(const std::string& bond_id) {
+    const auto pos{bond_id.find('_')};
+    if (pos == std::string::npos) {
+        return {"", ""};
+    }
+    return {bond_id.substr(0, pos), bond_id.substr(pos + 1)};
+}
+
+std::optional<Residue> ResolveObservedPolymerTemplateResidue(
+    const ChemicalComponentEntry& component_entry) {
+    const auto residue{ChemicalDataHelper::GetResidueFromString(component_entry.GetComponentId(), false)};
+    if (residue != Residue::UNK) {
+        return residue;
+    }
+
+    if (!ContainsCaseInsensitive(component_entry.GetComponentType(), "peptide linking")) {
+        return std::nullopt;
+    }
+
+    static const std::unordered_map<std::string_view, Residue> kModifiedPeptideAliasMap{
+        {"CSX", Residue::CYS},
+    };
+    const auto iter{kModifiedPeptideAliasMap.find(component_entry.GetComponentId())};
+    if (iter == kModifiedPeptideAliasMap.end()) {
+        return std::nullopt;
+    }
+    return iter->second;
+}
+
+void BuildObservedPolymerComponentBondEntry(CifFormatState& state) {
+    auto* bond_key_system{state.data_block->GetBondKeySystemPtr()};
+    for (const auto& [comp_id, observed_atom_id_set] : state.observed_component_atom_id_set_map) {
+        if (observed_atom_id_set.empty()) {
+            continue;
+        }
+
+        auto component_key{state.data_block->GetComponentKeySystemPtr()->GetComponentKey(comp_id)};
+        auto* component_entry{state.data_block->GetChemicalComponentEntryPtr(component_key)};
+        if (component_entry == nullptr) {
+            continue;
+        }
+
+        const auto template_residue{ResolveObservedPolymerTemplateResidue(*component_entry)};
+        if (!template_residue.has_value()) {
+            continue;
+        }
+
+        for (const auto link : ComponentHelper::GetLinkList(*template_residue)) {
+            const auto bond_id{ChemicalDataHelper::GetLabel(link)};
+            const auto [atom_id_1, atom_id_2]{SplitBondIdAtomPair(bond_id)};
+            if (atom_id_1.empty() || atom_id_2.empty()) {
+                continue;
+            }
+            if (observed_atom_id_set.find(atom_id_1) == observed_atom_id_set.end() ||
+                observed_atom_id_set.find(atom_id_2) == observed_atom_id_set.end()) {
+                continue;
+            }
+
+            bond_key_system->RegisterBond(bond_id);
+            const auto bond_key{bond_key_system->GetBondKey(bond_id)};
+            if (component_entry->HasComponentBondEntry(bond_key)) {
+                continue;
+            }
+
+            ComponentBondEntry bond_entry;
+            bond_entry.bond_id = bond_id;
+            bond_entry.bond_type = BondType::COVALENT;
+            bond_entry.bond_order = BondOrder::UNK;
+            bond_entry.aromatic_atom_flag = false;
+            bond_entry.stereo_config = StereoChemistry::NONE;
+            component_entry->AddComponentBondEntry(bond_key, bond_entry);
+        }
+    }
 }
 
 std::optional<std::string> GetFirstDataItemValue(
@@ -1255,6 +1348,7 @@ void LoadAtomSiteBlock(CifFormatState& state) {
             auto element_enum{ChemicalDataHelper::GetElementFromString(element_type)};
             if (element_enum == Element::HYDROGEN)
                 return;
+            state.observed_component_atom_id_set_map[comp_id].insert(atom_id);
 
             auto is_special_atom{group_type == "HETATM"};
 
@@ -1349,6 +1443,7 @@ CanonicalAtomPair BuildCanonicalAtomPair(const AtomObject* atom_1, const AtomObj
 void ConstructBondList(CifFormatState& state) {
     BuildPepetideBondEntry(state);
     BuildPhosphodiesterBondEntry(state);
+    BuildObservedPolymerComponentBondEntry(state);
     const auto bond_count_before{state.data_block->GetBondObjectList().size()};
     const auto& atom_object_map{state.data_block->GetAtomObjectMap()};
     auto bond_key_system{state.data_block->GetBondKeySystemPtr()};
