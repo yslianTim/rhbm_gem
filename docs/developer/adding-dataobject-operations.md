@@ -5,7 +5,7 @@ This guide covers how to extend behavior around the current top-level `DataObjec
 - `ModelObject`
 - `MapObject`
 
-It also covers where command-side object loading belongs. There is no shared manager-owned iteration layer in the current architecture.
+It also covers where file loading, database loading, and command-side orchestration belong in the current codebase.
 
 Related references:
 
@@ -17,11 +17,12 @@ Related references:
 Use the narrowest boundary that matches the change.
 
 - reusable typed object behavior belongs in shared typed helpers or domain-layer code that works on `ModelObject` or `MapObject`
-- file format support and extension dispatch belong in `FileIO` and the format codecs under `/src/data/io/file`
+- file format support and extension dispatch belong in `FileIO` and codecs under `/src/data/io/file`
 - database persistence behavior belongs in `DataRepository` and `/src/data/io/sqlite`
 - command-specific loading, caching, logging, and orchestration belong in `/src/core/command/` and `/src/core/command/detail/`
-- do not promote command-private cache helpers into shared data-layer APIs
-- do not add a shared helper just to forward to a single file or repository call
+- do not promote `CommandObjectCache` or other command-private helpers into shared data-layer APIs
+- do not add a public type-erased dispatch layer unless the actual public surface is changing
+- do not add a shared helper that only forwards to one file I/O or repository call
 
 ## 2. Required File Updates
 
@@ -47,6 +48,7 @@ If you change database persistence behavior:
 - `/src/data/io/sqlite/SQLitePersistence.*`
 - `/src/data/io/sqlite/ModelObjectStorage.*`
 - `/tests/data/DataObjectPersistence_test.cpp`
+- `/tests/data/SQLitePersistenceTypedApi_test.cpp`
 - `/tests/data/DataObjectSchemaBootstrap_test.cpp`
 - `/tests/data/DataObjectSchemaCompatibility_test.cpp`
 - `/tests/data/DataObjectSchemaValidation_test.cpp`
@@ -54,6 +56,7 @@ If you change database persistence behavior:
 If you change command-side loading or persistence orchestration:
 
 - `/src/core/command/detail/CommandBase.hpp`
+- `/src/core/command/detail/CommandObjectCache.hpp`
 - the relevant command implementation under `/src/core/command/`
 - related command tests under `/tests/core/command/`
 
@@ -83,11 +86,12 @@ std::vector<AtomObject *> CollectAtomsWithLocalPotentialEntries(ModelObject & mo
 
 ## 4. Typed Integration Inside Generic Code
 
-- prefer concrete typed methods over shared runtime-dispatch layers
+- prefer concrete typed methods over a shared runtime-dispatch layer
 - if only `ModelObject` is supported, accept `ModelObject &` directly
 - if only `MapObject` is supported, accept `MapObject &` directly
-- keep top-level persistence routing source-private; do not add public dispatch helpers just for catalog naming or repository/file routing
-- if command-local branches start growing, move the multi-step logic into typed helpers instead of adding a new type-erased facade
+- if a command owns mixed top-level objects, keep type bookkeeping inside `CommandObjectCache`
+- keep persistence routing private to `CommandBase` and repository internals; do not add public dispatch helpers just for catalog naming or repository/file routing
+- if command-local branches start growing, move the multi-step logic into typed helpers instead of adding another type-erased facade
 
 ## 5. Command Integration Pattern
 
@@ -96,9 +100,11 @@ Typical command flow:
 1. for file-backed input, call `LoadInputFile<T>(...)` from `CommandBase`, or `ReadModel(...)` / `ReadMap(...)` directly outside command classes
 2. for database-backed input, call `AttachDataRepository(...)` and then `LoadPersistedObject<T>(...)`
 3. when persisting a command-owned object, call `SaveStoredObject(key_tag, persisted_key)` or use `DataRepository::Save*` directly outside commands
-4. wrap failures with command-specific context near the orchestration boundary
-5. keep `ExecuteImpl()` and local workflow helpers focused on typed orchestration
-6. use ordinary container iteration or typed workflow helpers when traversing loaded objects; there is no shared iteration service to extend
+4. let `CommandObjectCache` keep the loaded `shared_ptr` objects keyed by command-local `key_tag`
+5. wrap failures with command-specific context near the orchestration boundary
+6. keep `ExecuteImpl()` and local workflow helpers focused on typed orchestration
+
+Repository-backed command request structs default `database_path` through `GetDefaultDatabasePath()` in `/include/rhbm_gem/core/command/CommandApi.hpp`, so command changes should preserve that behavior unless the command contract is intentionally changing.
 
 ## 6. Test Checklist
 
@@ -113,6 +119,7 @@ Add or update tests for:
 - renamed persisted key semantics
 - missing database key behavior
 - schema bootstrap and invalid schema rejection
+- command-cache type mismatch behavior when command-local routing changes
 - command-level failure context when file or database loading fails
 
 Common suites:
@@ -123,9 +130,11 @@ Common suites:
 - `/tests/data/DataObjectRuntimeBehavior_test.cpp`
 - `/tests/data/DataObjectDispatchAndIngestion_test.cpp`
 - `/tests/data/DataObjectPersistence_test.cpp`
+- `/tests/data/SQLitePersistenceTypedApi_test.cpp`
 - `/tests/data/DataObjectSchemaBootstrap_test.cpp`
 - `/tests/data/DataObjectSchemaCompatibility_test.cpp`
 - `/tests/data/DataObjectSchemaValidation_test.cpp`
+- `/tests/core/command/CommandObjectCache_test.cpp`
 - `/tests/core/command/`
 
 ## 7. Documentation Checklist
