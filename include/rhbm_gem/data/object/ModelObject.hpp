@@ -21,6 +21,7 @@ class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
 class ModelObjectAccess;
+class ModelSelectionView;
 class ModelAnalysisState;
 
 class ModelObject
@@ -54,6 +55,32 @@ public:
     void SetEmdID(const std::string & label) { m_emd_id = label; }
     void SetResolution(double value) { m_resolution = value; }
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
+
+    bool HasStandardRNAComponent() const;
+    bool HasStandardDNAComponent() const;
+    size_t GetNumberOfAtom() const { return m_atom_list.size(); }
+    size_t GetNumberOfBond() const { return m_bond_list.size(); }
+    const std::vector<std::unique_ptr<AtomObject>> & GetAtomList() const { return m_atom_list; }
+    const std::vector<std::unique_ptr<BondObject>> & GetBondList() const { return m_bond_list; }
+    std::string GetPdbID() const { return m_pdb_id; }
+    std::string GetEmdID() const { return m_emd_id; }
+    double GetResolution() const { return m_resolution; }
+    std::string GetResolutionMethod() const { return m_resolution_method; }
+    const std::unordered_map<std::string, std::vector<std::string>> &
+    GetChainIDListMap() const { return m_chain_id_list_map; }
+    std::array<float, 3> GetCenterOfMassPosition();
+    std::tuple<double, double> GetModelPositionRange(int axis);
+    double GetModelPosition(int axis, double normalized_pos);
+    double GetModelLength(int axis);
+    const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
+    GetChemicalComponentEntryMap() const;
+    std::vector<ComponentKey> GetComponentKeyList() const;
+
+private:
+    friend class ModelObjectAccess;
+    friend class ModelSelectionView;
+    AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
+
     void AddAtom(std::unique_ptr<AtomObject> atom);
     void AddBond(std::unique_ptr<BondObject> bond);
     void SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list);
@@ -72,35 +99,6 @@ public:
     void RebuildSelectionIndex();
     void FinalizeLoad();
     void ApplySymmetrySelection(bool is_asymmetry);
-
-    bool HasStandardRNAComponent() const;
-    bool HasStandardDNAComponent() const;
-    size_t GetNumberOfAtom() const { return m_atom_list.size(); }
-    size_t GetNumberOfBond() const { return m_bond_list.size(); }
-    size_t GetNumberOfSelectedAtom() const { return m_selected_atom_list.size(); }
-    size_t GetNumberOfSelectedBond() const { return m_selected_bond_list.size(); }
-    const std::vector<std::unique_ptr<AtomObject>> & GetAtomList() const { return m_atom_list; }
-    const std::vector<std::unique_ptr<BondObject>> & GetBondList() const { return m_bond_list; }
-    const std::vector<AtomObject *> & GetSelectedAtomList() const { return m_selected_atom_list; }
-    const std::vector<BondObject *> & GetSelectedBondList() const { return m_selected_bond_list; }
-    std::string GetPdbID() const { return m_pdb_id; }
-    std::string GetEmdID() const { return m_emd_id; }
-    double GetResolution() const { return m_resolution; }
-    std::string GetResolutionMethod() const { return m_resolution_method; }
-    const std::unordered_map<std::string, std::vector<std::string>> &
-    GetChainIDListMap() const { return m_chain_id_list_map; }
-    std::array<float, 3> GetCenterOfMassPosition();
-    std::tuple<double, double> GetModelPositionRange(int axis);
-    double GetModelPosition(int axis, double normalized_pos);
-    double GetModelLength(int axis);
-    const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
-    GetChemicalComponentEntryMap() const;
-    std::vector<ComponentKey> GetComponentKeyList() const;
-
-private:
-    friend class ModelObjectAccess;
-    AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
-
     void RebuildSelectionState();
     void InvalidateDerivedCaches();
     void SyncDerivedState();

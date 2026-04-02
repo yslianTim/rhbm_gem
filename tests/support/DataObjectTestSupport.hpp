@@ -14,6 +14,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include "data/detail/ModelObjectAccess.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 
@@ -51,7 +52,7 @@ inline std::unique_ptr<rg::ModelObject> MakeModelWithBond()
     bond_list.emplace_back(std::make_unique<rg::BondObject>(
         model->GetAtomList().at(0).get(),
         model->GetAtomList().at(1).get()));
-    model->SetBondList(std::move(bond_list));
+    rg::ModelObjectAccess::SetBondList(*model, std::move(bond_list));
     return model;
 }
 

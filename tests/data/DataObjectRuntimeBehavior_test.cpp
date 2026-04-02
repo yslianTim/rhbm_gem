@@ -14,6 +14,7 @@
 #include "data/detail/MapObjectAccess.hpp"
 #include "data/detail/MapSpatialIndex.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
+#include "data/detail/ModelSelectionView.hpp"
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
@@ -72,9 +73,9 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     {
         bond->SetSelectedFlag(false);
     }
-    model->RebuildSelectionIndex();
-    ASSERT_EQ(model->GetNumberOfSelectedAtom(), 0);
-    ASSERT_EQ(model->GetNumberOfSelectedBond(), 0);
+    rg::ModelObjectAccess::RebuildSelectionIndex(*model);
+    ASSERT_EQ(rg::ModelSelectionView::SelectedAtomCount(*model), 0);
+    ASSERT_EQ(rg::ModelSelectionView::SelectedBondCount(*model), 0);
 
     for (auto & atom : model->GetAtomList())
     {
@@ -84,24 +85,24 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     {
         bond->SetSelectedFlag(true);
     }
-    model->ApplySymmetrySelection(false);
-    for (auto * atom : model->GetSelectedAtomList())
+    rg::ModelObjectAccess::ApplySymmetrySelection(*model, false);
+    for (auto * atom : rg::ModelSelectionView::SelectedAtoms(*model))
     {
         atom->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     }
-    for (auto * bond : model->GetSelectedBondList())
+    for (auto * bond : rg::ModelSelectionView::SelectedBonds(*model))
     {
         bond->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     }
 
-    EXPECT_EQ(model->GetNumberOfSelectedAtom(), model->GetNumberOfAtom());
-    EXPECT_EQ(model->GetNumberOfSelectedBond(), model->GetNumberOfBond());
-    for (const auto * atom : model->GetSelectedAtomList())
+    EXPECT_EQ(rg::ModelSelectionView::SelectedAtomCount(*model), model->GetNumberOfAtom());
+    EXPECT_EQ(rg::ModelSelectionView::SelectedBondCount(*model), model->GetNumberOfBond());
+    for (const auto * atom : rg::ModelSelectionView::SelectedAtoms(*model))
     {
         ASSERT_NE(atom, nullptr);
         EXPECT_NE(atom->GetLocalPotentialEntry(), nullptr);
     }
-    for (const auto * bond : model->GetSelectedBondList())
+    for (const auto * bond : rg::ModelSelectionView::SelectedBonds(*model))
     {
         ASSERT_NE(bond, nullptr);
         EXPECT_NE(bond->GetLocalPotentialEntry(), nullptr);
@@ -128,12 +129,12 @@ TEST(DataObjectRuntimeBehaviorTest, AtomSelectorCanDriveModelSelectionState)
                 atom->GetResidue(),
                 atom->GetElement()));
     }
-    model->RebuildSelectionIndex();
+    rg::ModelObjectAccess::RebuildSelectionIndex(*model);
 
     EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
-    ASSERT_EQ(model->GetSelectedAtomList().size(), 1);
-    EXPECT_EQ(model->GetSelectedAtomList().front(), atom_list.at(0).get());
+    ASSERT_EQ(rg::ModelSelectionView::SelectedAtomCount(*model), 1);
+    EXPECT_EQ(rg::ModelSelectionView::SelectedAtoms(*model).front(), atom_list.at(0).get());
 }
 
 TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQueryable)
@@ -144,9 +145,9 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(false);
     atoms[0]->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
-    model->RebuildSelectionIndex();
+    rg::ModelObjectAccess::RebuildSelectionIndex(*model);
 
-    const auto & selected_only_atoms{ model->GetSelectedAtomList() };
+    const auto & selected_only_atoms{ rg::ModelSelectionView::SelectedAtoms(*model) };
     ASSERT_EQ(selected_only_atoms.size(), 1);
     EXPECT_EQ(selected_only_atoms.front(), atoms[0].get());
 
@@ -207,15 +208,15 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedAtomsAndBondsRemainQueryableForConte
     atoms[0]->SetSelectedFlag(true);
     atoms[1]->SetSelectedFlag(true);
     bonds[0]->SetSelectedFlag(true);
-    model->RebuildSelectionIndex();
+    rg::ModelObjectAccess::RebuildSelectionIndex(*model);
 
     std::unordered_map<int, rg::AtomObject *> atom_map;
     std::unordered_map<int, std::vector<rg::BondObject *>> bond_map;
-    for (auto * atom : model->GetSelectedAtomList())
+    for (auto * atom : rg::ModelSelectionView::SelectedAtoms(*model))
     {
         atom_map.emplace(atom->GetSerialID(), atom);
     }
-    for (auto * bond : model->GetSelectedBondList())
+    for (auto * bond : rg::ModelSelectionView::SelectedBonds(*model))
     {
         bond_map[bond->GetAtomSerialID1()].emplace_back(bond);
         bond_map[bond->GetAtomSerialID2()].emplace_back(bond);
@@ -236,7 +237,7 @@ TEST(DataObjectRuntimeBehaviorTest, AddAtomRebuildsSerialIndexWithoutUsingMovedF
     atom->SetSerialID(42);
     atom->SetPosition(3.0f, 4.0f, 5.0f);
 
-    ASSERT_NO_THROW(model.AddAtom(std::move(atom)));
+    ASSERT_NO_THROW(rg::ModelObjectAccess::AddAtom(model, std::move(atom)));
     EXPECT_EQ(model.GetNumberOfAtom(), 1);
     ASSERT_NE(rg::ModelObjectAccess::FindAtomPtr(model, 42), nullptr);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 3.0f);
@@ -248,8 +249,8 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
     model->GetAtomList().at(0)->SetSelectedFlag(true);
     model->GetAtomList().at(1)->SetSelectedFlag(true);
     model->GetBondList().at(0)->SetSelectedFlag(true);
-    model->RebuildSelectionIndex();
-    model->BuildKDTreeRoot();
+    rg::ModelObjectAccess::RebuildSelectionIndex(*model);
+    rg::ModelObjectAccess::BuildKDTreeRoot(*model);
     ASSERT_NE(rg::ModelObjectAccess::KDTreeRoot(*model), nullptr);
     EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 0.5f);
 
@@ -265,13 +266,13 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
     replacement_atoms.emplace_back(std::move(atom_1));
     replacement_atoms.emplace_back(std::move(atom_2));
 
-    model->SetAtomList(std::move(replacement_atoms));
+    rg::ModelObjectAccess::SetAtomList(*model, std::move(replacement_atoms));
 
     EXPECT_EQ(rg::ModelObjectAccess::KDTreeRoot(*model), nullptr);
     EXPECT_NE(rg::ModelObjectAccess::FindAtomPtr(*model, 11), nullptr);
     EXPECT_NE(rg::ModelObjectAccess::FindAtomPtr(*model, 12), nullptr);
     EXPECT_THROW(rg::ModelObjectAccess::FindAtomPtr(*model, 1), std::out_of_range);
-    EXPECT_EQ(model->GetNumberOfSelectedAtom(), 1);
+    EXPECT_EQ(rg::ModelSelectionView::SelectedAtomCount(*model), 1);
     EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 7.0f);
     const auto x_range{ model->GetModelPositionRange(0) };
     EXPECT_DOUBLE_EQ(std::get<0>(x_range), 5.0);

@@ -1,4 +1,5 @@
 #include "PotentialDisplayCommand.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -37,7 +38,7 @@ void ApplyModelSelection(
         atom->SetSelectedFlag(
             matches_selector && has_local_potential_entry);
     }
-    model_object.RebuildSelectionIndex();
+    rhbm_gem::ModelObjectAccess::RebuildSelectionIndex(model_object);
 }
 
 template <typename PainterType>

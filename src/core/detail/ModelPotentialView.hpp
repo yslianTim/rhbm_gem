@@ -10,6 +10,7 @@
 
 #include "core/detail/LocalPotentialAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
+#include "data/detail/ModelSelectionView.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -33,8 +34,8 @@ public:
     double GetAtomGausEstimateMinimum(int par_id, Element element) const
     {
         std::vector<double> gaus_estimate_list;
-        gaus_estimate_list.reserve(ModelObjectAccess::NumberOfSelectedAtom(m_model_object));
-        for (const auto * atom : ModelObjectAccess::SelectedAtomList(m_model_object))
+        gaus_estimate_list.reserve(ModelSelectionView::SelectedAtomCount(m_model_object));
+        for (const auto * atom : ModelSelectionView::SelectedAtoms(m_model_object))
         {
             if (atom->GetElement() != element) continue;
             auto * entry{ GetLocalPotentialEntry(*atom) };
@@ -46,8 +47,8 @@ public:
     double GetBondGausEstimateMinimum(int par_id) const
     {
         std::vector<double> gaus_estimate_list;
-        gaus_estimate_list.reserve(ModelObjectAccess::NumberOfSelectedBond(m_model_object));
-        for (const auto * bond : ModelObjectAccess::SelectedBondList(m_model_object))
+        gaus_estimate_list.reserve(ModelSelectionView::SelectedBondCount(m_model_object));
+        for (const auto * bond : ModelSelectionView::SelectedBonds(m_model_object))
         {
             auto * entry{ GetLocalPotentialEntry(*bond) };
             gaus_estimate_list.emplace_back(entry->GetEstimateMDPDE().GetParameter(par_id));

@@ -12,6 +12,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/ModelAnalysisState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
+#include "data/detail/ModelSelectionView.hpp"
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -749,7 +750,7 @@ void LoadChainMap(
         }
         chain_id_list.at(static_cast<size_t>(ordinal)) = database.GetColumn<std::string>(2);
     }
-    model_obj.SetChainIDListMap(chain_map);
+    rhbm_gem::ModelObjectAccess::SetChainIDListMap(model_obj, chain_map);
 }
 
 void LoadChemicalComponentEntryList(
@@ -782,7 +783,10 @@ void LoadChemicalComponentEntryList(
         component_entry->SetComponentMolecularWeight(
             static_cast<float>(database.GetColumn<double>(5)));
         component_entry->SetStandardMonomerFlag(static_cast<bool>(database.GetColumn<int>(6)));
-        model_obj.AddChemicalComponentEntry(component_key, std::move(component_entry));
+        rhbm_gem::ModelObjectAccess::AddChemicalComponentEntry(
+            model_obj,
+            component_key,
+            std::move(component_entry));
         rhbm_gem::ModelObjectAccess::ComponentKeySystemRef(model_obj).RegisterComponent(
             component_id,
             component_key);
@@ -976,8 +980,10 @@ void LoadStructure(
     LoadChemicalComponentEntryList(database, model_obj, key_tag);
     LoadComponentAtomEntryList(database, model_obj, key_tag);
     LoadComponentBondEntryList(database, model_obj, key_tag);
-    model_obj.SetAtomList(LoadAtomObjectList(database, key_tag));
-    model_obj.SetBondList(LoadBondObjectList(database, key_tag, model_obj));
+    rhbm_gem::ModelObjectAccess::SetAtomList(model_obj, LoadAtomObjectList(database, key_tag));
+    rhbm_gem::ModelObjectAccess::SetBondList(
+        model_obj,
+        LoadBondObjectList(database, key_tag, model_obj));
     LoadModelObjectRow(database, model_obj, key_tag);
     LoadChainMap(database, model_obj, key_tag);
 }
@@ -1360,7 +1366,7 @@ void LoadAtomGroupPotentialEntryList(
         bucket.alpha_g = database.GetColumn<double>(10);
     }
 
-    for (auto & atom : model_obj.GetSelectedAtomList())
+    for (auto & atom : rhbm_gem::ModelSelectionView::SelectedAtoms(model_obj))
     {
         const auto group_key{ rhbm_gem::AtomClassifier::GetGroupKeyInClass(atom, class_key) };
         group_entry.EnsureGroup(group_key).atom_members.emplace_back(atom);
@@ -1404,7 +1410,7 @@ void LoadBondGroupPotentialEntryList(
         bucket.alpha_g = database.GetColumn<double>(10);
     }
 
-    for (auto & bond : model_obj.GetSelectedBondList())
+    for (auto & bond : rhbm_gem::ModelSelectionView::SelectedBonds(model_obj))
     {
         const auto group_key{ rhbm_gem::BondClassifier::GetGroupKeyInClass(bond, class_key) };
         group_entry.EnsureGroup(group_key).bond_members.emplace_back(bond);
@@ -1489,7 +1495,7 @@ void LoadAnalysis(
     AnalysisState(model_obj).Clear();
     ApplyAtomLocalPotentialEntries(model_obj, LoadAtomLocalPotentialEntryMap(database, key_tag));
     ApplyBondLocalPotentialEntries(model_obj, LoadBondLocalPotentialEntryMap(database, key_tag));
-    model_obj.FinalizeLoad();
+    rhbm_gem::ModelObjectAccess::FinalizeLoad(model_obj);
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
