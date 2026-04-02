@@ -4,8 +4,11 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -169,6 +172,38 @@ struct HasAdlOwnerModelOf<
     T,
     std::void_t<decltype(OwnerModelOf(std::declval<const T &>()))>> : std::true_type {};
 
+bool SourceTreeContains(const std::filesystem::path & root, std::string_view needle)
+{
+    for (const auto & entry : std::filesystem::recursive_directory_iterator(root))
+    {
+        if (!entry.is_regular_file())
+        {
+            continue;
+        }
+
+        const auto extension{ entry.path().extension().string() };
+        if (extension != ".cpp" && extension != ".hpp")
+        {
+            continue;
+        }
+
+        std::ifstream stream(entry.path());
+        if (!stream.is_open())
+        {
+            continue;
+        }
+
+        const std::string content{
+            std::istreambuf_iterator<char>(stream),
+            std::istreambuf_iterator<char>() };
+        if (content.find(needle) != std::string::npos)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
@@ -208,4 +243,13 @@ TEST(DataPublicSurfaceTest, ModelObjectExposesSelectionQueriesButKeepsBuildWorkf
     static_assert(!HasAdlOwnerModelOf<rhbm_gem::AtomObject>::value);
     static_assert(!HasAdlOwnerModelOf<rhbm_gem::BondObject>::value);
     SUCCEED();
+}
+
+TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
+{
+    const auto project_root{ command_test::ProjectRootPath() };
+    EXPECT_FALSE(std::filesystem::exists(project_root / "src/core/detail/LocalPotentialAccess.hpp"));
+    EXPECT_FALSE(std::filesystem::exists(project_root / "src/core/detail/GroupPotentialAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "LocalPotentialAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "GroupPotentialAccess.hpp"));
 }

@@ -16,6 +16,9 @@ namespace rhbm_gem {
 
 class AtomObject;
 class ModelObject;
+namespace painter_internal {
+class PainterModelIngress;
+}
 
 class AtomPainter : public PainterBase
 {
@@ -25,10 +28,13 @@ class AtomPainter : public PainterBase
 public:
     AtomPainter();
     ~AtomPainter();
+    // Compatibility surface: internal call sites should pre-validate via painter detail helpers.
     void AddModel(ModelObject & data_object);
     void Painting() override;
 
 private:
+    friend class painter_internal::PainterModelIngress;
+
     void AppendAtomObject(AtomObject & data_object);
     void PaintDemoPlot(const std::string & name);
     void PaintAtomSamplingDataSummary(const std::string & name);

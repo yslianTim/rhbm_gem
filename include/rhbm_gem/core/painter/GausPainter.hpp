@@ -18,6 +18,9 @@ class TPaveText;
 namespace rhbm_gem {
 
 class ModelObject;
+namespace painter_internal {
+class PainterModelIngress;
+}
 
 class GausPainter : public PainterBase
 {
@@ -26,6 +29,7 @@ class GausPainter : public PainterBase
 public:
     GausPainter();
     ~GausPainter();
+    // Compatibility surface: internal call sites should pre-validate via painter detail helpers.
     void AddModel(ModelObject & data_object);
     void Painting() override;
 #ifdef HAVE_ROOT
@@ -33,6 +37,8 @@ public:
 #endif
 
 private:
+    friend class painter_internal::PainterModelIngress;
+
     void PaintAtomLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAtomQScoreAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);

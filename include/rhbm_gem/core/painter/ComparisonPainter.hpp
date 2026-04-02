@@ -20,6 +20,9 @@ class TGraphErrors;
 namespace rhbm_gem {
 
 class ModelObject;
+namespace painter_internal {
+class PainterModelIngress;
+}
 
 class ComparisonPainter : public PainterBase
 {
@@ -30,11 +33,15 @@ class ComparisonPainter : public PainterBase
 public:
     ComparisonPainter();
     ~ComparisonPainter();
+    // Compatibility surface: internal call sites should pre-validate via painter detail helpers.
     void AddModel(ModelObject & data_object);
+    // Compatibility surface: internal call sites should pre-validate via painter detail helpers.
     void AddReferenceModel(ModelObject & data_object, std::string_view label);
     void Painting() override;
 
 private:
+    friend class painter_internal::PainterModelIngress;
+
     void PaintGroupGausEstimateComparison(const std::string & name);
     void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
     void PainMapValueComparison(const std::string & name, ModelObject * model_object, const std::vector<ModelObject *> & ref_model_object_list);

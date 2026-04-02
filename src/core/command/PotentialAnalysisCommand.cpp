@@ -2,14 +2,13 @@
 #include "MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
 #include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
-#include "core/detail/GroupPotentialAccess.hpp"
-#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -74,12 +73,12 @@ void PrepareModelForPotentialAnalysis(
 
     for (auto * atom : model_object.GetSelectedAtoms())
     {
-        rhbm_gem::EnsureLocalPotentialEntry(model_object, *atom);
+        rhbm_gem::ModelAnalysisAccess::EnsureLocalEntry(model_object, *atom);
         analysis_data.Atoms().EnsureFitState(*atom);
     }
     for (auto * bond : model_object.GetSelectedBonds())
     {
-        rhbm_gem::EnsureLocalPotentialEntry(model_object, *bond);
+        rhbm_gem::ModelAnalysisAccess::EnsureLocalEntry(model_object, *bond);
         analysis_data.Bonds().EnsureFitState(*bond);
     }
 }
@@ -442,7 +441,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
 
         // Group Atom Potential Fitting
         auto group_potential_entry{
-            FindAtomGroupPotentialEntry(*m_model_object, class_key) };
+            ModelAnalysisAccess::FindAtomGroupEntry(*m_model_object, class_key) };
         auto group_keys{ CollectGroupKeys(*group_potential_entry) };
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
@@ -509,7 +508,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
             auto count{ 0 };
             for (const auto & atom : atom_list)
             {
-                auto * atom_entry{ FindLocalPotentialEntry(*m_model_object, *atom) };
+                auto * atom_entry{ ModelAnalysisAccess::FindLocalEntry(*m_model_object, *atom) };
                 const auto beta_vector_posterior{
                     result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
                 };
@@ -782,7 +781,7 @@ void RunAtomSamplingWorkflow(
         {
             auto atom{ atom_list[i] };
             auto * fit_state{ fit_state_list[i] };
-            auto * entry{ FindLocalPotentialEntry(model_object, *atom) };
+            auto * entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *atom) };
             entry->SetDistanceAndMapValueList(
                 SampleMapValues(map_object, *sampler, atom->GetPosition()));
             fit_state->SetDataset(
@@ -806,7 +805,7 @@ void RunAtomSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto * fit_state{ fit_state_list[i] };
-        auto * entry{ FindLocalPotentialEntry(model_object, *atom) };
+        auto * entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *atom) };
         entry->SetDistanceAndMapValueList(
             SampleMapValues(map_object, *sampler, atom->GetPosition()));
         fit_state->SetDataset(
@@ -871,7 +870,7 @@ void RunLocalAtomFittingWorkflow(
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        auto * local_entry{ FindLocalPotentialEntry(model_object, *selected_atom_list[i]) };
+        auto * local_entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *selected_atom_list[i]) };
         auto * fit_state{ fit_state_list[i] };
         const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
@@ -958,7 +957,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     
     for (auto & atom : atom_list)
     {
-        EnsureLocalPotentialEntry(*m_model_object, *atom).SetAlphaR(alpha_r);
+        ModelAnalysisAccess::EnsureLocalEntry(*m_model_object, *atom).SetAlphaR(alpha_r);
     }
     
     

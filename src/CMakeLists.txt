@@ -26,6 +26,7 @@ target_sources(rhbm_gem PRIVATE
     core/painter/GausPainter.cpp
     core/painter/ModelPainter.cpp
     core/painter/PotentialPlotBuilder.cpp
+    core/painter/detail/PainterModelAccess.cpp
     ${RHBM_GEM_COMMAND_SOURCES}
     core/command/MapSampling.cpp
 

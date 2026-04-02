@@ -3,13 +3,12 @@
 #include "command/MapSampling.hpp"
 #include "command/PotentialAnalysisCommand.hpp"
 #include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
-#include "core/detail/GroupPotentialAccess.hpp"
-#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -98,7 +97,7 @@ void RunBondSampling(
         {
             auto bond{ bond_list[i] };
             auto * fit_state{ fit_state_list[i] };
-            auto * entry{ FindLocalPotentialEntry(model_object, *bond) };
+            auto * entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *bond) };
             auto bond_vector{ bond->GetBondVector() };
             auto bond_position{ bond->GetPosition() };
             constexpr float adjusted_rate{ 0.0f };
@@ -131,7 +130,7 @@ void RunBondSampling(
     {
         auto bond{ bond_list[i] };
         auto * fit_state{ fit_state_list[i] };
-        auto * entry{ FindLocalPotentialEntry(model_object, *bond) };
+        auto * entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *bond) };
         entry->SetDistanceAndMapValueList(
             SampleMapValues(
                 map_object,
@@ -208,7 +207,7 @@ void RunLocalBondFitting(
     for (size_t i = 0; i < selected_bond_size; i++)
     {
         auto * local_entry{
-            FindLocalPotentialEntry(context.model_object, *selected_bond_list[i]) };
+            ModelAnalysisAccess::FindLocalEntry(context.model_object, *selected_bond_list[i]) };
         auto * fit_state{ fit_state_list[i] };
         const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
@@ -329,7 +328,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             auto count{ 0 };
             for (const auto & bond : bond_list)
             {
-                auto * bond_entry{ FindLocalPotentialEntry(context.model_object, *bond) };
+                auto * bond_entry{ ModelAnalysisAccess::FindLocalEntry(context.model_object, *bond) };
                 const auto beta_vector_posterior{
                     result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
                 };

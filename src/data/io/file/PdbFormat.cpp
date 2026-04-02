@@ -1,8 +1,9 @@
 #define _CRT_SECURE_NO_WARNINGS // To disable deprecation warnings for sscanf
 #include "PdbFormat.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include "core/detail/LocalPotentialAccess.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include "ModelImportState.hpp"
@@ -129,9 +130,9 @@ void PdbFormat::WriteModel(const ModelObject& model_object, std::ostream& stream
         const auto position{atom->GetPosition()};
         const auto occupancy{atom->GetOccupancy()};
         float b_factor{atom->GetTemperature()};
-        if (FindLocalPotentialEntry(*atom) != nullptr) {
+        if (ModelAnalysisAccess::FindLocalEntry(*atom) != nullptr) {
             b_factor = static_cast<float>(
-                RequireLocalPotentialEntry(*atom).GetEstimateMDPDE().GetParameter(par));
+                ModelAnalysisAccess::RequireLocalEntry(*atom).GetEstimateMDPDE().GetParameter(par));
         }
 
         char line[128];

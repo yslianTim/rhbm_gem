@@ -1,8 +1,9 @@
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <detail/LocalPotentialAccess.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include "PotentialPlotBuilder.hpp"
+#include "detail/PainterModelAccess.hpp"
 #include "detail/PainterSupport.hpp"
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -38,20 +39,14 @@ AtomPainter::~AtomPainter()
 
 void AtomPainter::AddModel(ModelObject & data_object)
 {
-    painter_internal::RequireLocalAnalysisReadyModel(data_object, "AtomPainter");
-    if (m_output_label.empty())
-    {
-        m_output_label = data_object.GetKeyTag();
-    }
-    for (auto * atom : data_object.GetSelectedAtoms())
-    {
-        AppendAtomObject(*atom);
-    }
+    painter_internal::PainterModelIngress::AddModel(
+        *this,
+        painter_internal::RequireLocalAnalyzedModel(data_object, "AtomPainter"));
 }
 
 void AtomPainter::AppendAtomObject(AtomObject & data_object)
 {
-    if (FindLocalPotentialEntry(data_object) == nullptr) return;
+    if (ModelAnalysisAccess::FindLocalEntry(data_object) == nullptr) return;
     m_atom_object_list.push_back(&data_object);
 }
 
@@ -83,7 +78,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     auto pad_main{ ROOTHelper::CreatePad("pad","", 0.00, 0.00, 1.00, 1.00) };
     pad_main->Draw();
 
-    const auto & atom_entry{ RequireLocalPotentialEntry(*atom_object) };
+    const auto & atom_entry{ ModelAnalysisAccess::RequireLocalEntry(*atom_object) };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
     auto map_value_range{ series_ops::ComputeMapValueRange(atom_entry, 0.3) };
     auto distance_range{ series_ops::ComputeDistanceRange(atom_entry, 0.0) };
@@ -175,7 +170,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     
     for (auto atom_object : m_atom_object_list)
     {
-        const auto & entry_view{ RequireLocalPotentialEntry(*atom_object) };
+        const auto & entry_view{ ModelAnalysisAccess::RequireLocalEntry(*atom_object) };
         auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
         auto data_graph{ plot_builder->CreateDistanceToMapValueGraph() };
         auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(15) };

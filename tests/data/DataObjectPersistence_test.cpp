@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <stdexcept>
 
-#include "core/detail/LocalPotentialAccess.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "support/CommandTestHelpers.hpp"
@@ -135,8 +135,8 @@ TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedLocalEntr
     ASSERT_EQ(atoms.size(), 2);
     ASSERT_EQ(bonds.size(), 1);
 
-    rg::EnsureLocalPotentialEntry(*model, *atoms.at(0));
-    rg::EnsureLocalPotentialEntry(*model, *bonds.at(0));
+    rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *atoms.at(0));
+    rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *bonds.at(0));
 
     repository.SaveModel(*model, "model");
 
@@ -149,10 +149,10 @@ TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedLocalEntr
         loaded_model->GetSelectedBonds().front()->GetAtomSerialID1(),
         bonds.at(0)->GetAtomSerialID1());
     EXPECT_NE(
-        rg::FindLocalPotentialEntry(*loaded_model, *loaded_model->GetSelectedAtoms().front()),
+        rg::ModelAnalysisAccess::FindLocalEntry(*loaded_model, *loaded_model->GetSelectedAtoms().front()),
         nullptr);
     EXPECT_NE(
-        rg::FindLocalPotentialEntry(*loaded_model, *loaded_model->GetSelectedBonds().front()),
+        rg::ModelAnalysisAccess::FindLocalEntry(*loaded_model, *loaded_model->GetSelectedBonds().front()),
         nullptr);
 }
 

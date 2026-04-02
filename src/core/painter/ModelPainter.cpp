@@ -1,8 +1,8 @@
 #include <rhbm_gem/core/painter/ModelPainter.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <detail/PotentialSeriesOps.hpp>
@@ -17,6 +17,7 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include "detail/PainterModelAccess.hpp"
 #include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
@@ -52,8 +53,9 @@ ModelPainter::~ModelPainter()
 
 void ModelPainter::AddModel(ModelObject & data_object)
 {
-    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "ModelPainter");
-    m_model_object_list.push_back(&data_object);
+    painter_internal::PainterModelIngress::AddModel(
+        *this,
+        painter_internal::RequireGroupedAnalyzedModel(data_object, "ModelPainter"));
 }
 
 void ModelPainter::Painting()
@@ -730,7 +732,7 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <detail/LocalPotentialAccess.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -790,7 +792,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             auto map_value_range{ series_ops::ComputeMapValueRange(
-                RequireLocalPotentialEntry(*atom), 0.0) };
+                ModelAnalysisAccess::RequireLocalEntry(*atom), 0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
@@ -959,7 +961,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
             ROOTHelper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
             map_value_graph_list[k].emplace_back(std::move(graph));
             auto map_value_range{ series_ops::ComputeMapValueRange(
-                RequireLocalPotentialEntry(*bond), 0.0) };
+                ModelAnalysisAccess::RequireLocalEntry(*bond), 0.0) };
             y_array.emplace_back(std::get<0>(map_value_range));
             y_array.emplace_back(std::get<1>(map_value_range));
         }
@@ -1101,7 +1103,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <detail/LocalPotentialAccess.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>

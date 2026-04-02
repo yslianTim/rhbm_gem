@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "core/detail/LocalPotentialAccess.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/ModelObjectBuilder.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -74,11 +74,11 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     model->ApplySymmetrySelection(false);
     for (auto * atom : model->GetSelectedAtoms())
     {
-        rg::EnsureLocalPotentialEntry(*model, *atom);
+        rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *atom);
     }
     for (auto * bond : model->GetSelectedBonds())
     {
-        rg::EnsureLocalPotentialEntry(*model, *bond);
+        rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *bond);
     }
 
     EXPECT_EQ(model->GetSelectedAtomCount(), model->GetNumberOfAtom());
@@ -86,12 +86,12 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     for (const auto * atom : model->GetSelectedAtoms())
     {
         ASSERT_NE(atom, nullptr);
-        EXPECT_NE(rg::FindLocalPotentialEntry(*atom), nullptr);
+        EXPECT_NE(rg::ModelAnalysisAccess::FindLocalEntry(*atom), nullptr);
     }
     for (const auto * bond : model->GetSelectedBonds())
     {
         ASSERT_NE(bond, nullptr);
-        EXPECT_NE(rg::FindLocalPotentialEntry(*bond), nullptr);
+        EXPECT_NE(rg::ModelAnalysisAccess::FindLocalEntry(*bond), nullptr);
     }
 }
 
@@ -125,7 +125,7 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     ASSERT_EQ(atoms.size(), 2);
     model->SetAtomSelected(1, true);
     model->SetAtomSelected(2, false);
-    rg::EnsureLocalPotentialEntry(*model, *atoms[0]);
+    rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *atoms[0]);
 
     const auto & selected_only_atoms{ model->GetSelectedAtoms() };
     ASSERT_EQ(selected_only_atoms.size(), 1);
@@ -134,7 +134,7 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     std::vector<rg::AtomObject *> require_entry_atoms;
     for (auto & atom : model->GetAtomList())
     {
-        if (rg::FindLocalPotentialEntry(*atom) != nullptr)
+        if (rg::ModelAnalysisAccess::FindLocalEntry(*atom) != nullptr)
         {
             require_entry_atoms.emplace_back(atom.get());
         }

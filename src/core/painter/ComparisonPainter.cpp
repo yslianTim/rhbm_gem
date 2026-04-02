@@ -1,7 +1,7 @@
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include "core/detail/LocalPotentialAccess.hpp"
 #include "core/painter/AtomStyleCatalog.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
@@ -9,6 +9,7 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include "detail/PainterModelAccess.hpp"
 #include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
@@ -41,15 +42,17 @@ ComparisonPainter::~ComparisonPainter()
 
 void ComparisonPainter::AddModel(ModelObject & data_object)
 {
-    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "ComparisonPainter");
-    m_model_object_list.emplace_back(&data_object);
-    m_resolution_list.emplace_back(data_object.GetResolution());
+    painter_internal::PainterModelIngress::AddModel(
+        *this,
+        painter_internal::RequireGroupedAnalyzedModel(data_object, "ComparisonPainter"));
 }
 
 void ComparisonPainter::AddReferenceModel(ModelObject & data_object, std::string_view label)
 {
-    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "ComparisonPainter");
-    m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
+    painter_internal::PainterModelIngress::AddReferenceModel(
+        *this,
+        painter_internal::RequireGroupedAnalyzedModel(data_object, "ComparisonPainter"),
+        label);
 }
 
 void ComparisonPainter::Painting()

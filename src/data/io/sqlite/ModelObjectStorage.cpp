@@ -3,6 +3,7 @@
 #include "SQLiteWrapper.hpp"
 #include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/AtomClassifier.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/ModelObjectBuilder.hpp"
 #include "data/detail/ModelSelectionAccess.hpp"
@@ -11,7 +12,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
-#include "core/detail/LocalPotentialAccess.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
@@ -978,7 +979,7 @@ void SaveAtomLocalPotentialEntryList(
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomLocalSql) };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
-        auto * entry{ rhbm_gem::FindLocalPotentialEntry(model_obj, *atom_object) };
+        auto * entry{ rhbm_gem::ModelAnalysisAccess::FindLocalEntry(model_obj, *atom_object) };
         if (entry == nullptr) continue;
 
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
@@ -1005,7 +1006,7 @@ void SaveBondLocalPotentialEntryList(
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondLocalSql) };
     for (const auto & bond_object : model_obj.GetBondList())
     {
-        auto * entry{ rhbm_gem::FindLocalPotentialEntry(model_obj, *bond_object) };
+        auto * entry{ rhbm_gem::ModelAnalysisAccess::FindLocalEntry(model_obj, *bond_object) };
         if (entry == nullptr) continue;
 
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
@@ -1034,7 +1035,7 @@ void SaveAtomLocalPotentialEntrySubList(
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomPosteriorSql) };
     for (const auto & atom_object : model_obj.GetAtomList())
     {
-        auto * entry{ rhbm_gem::FindLocalPotentialEntry(model_obj, *atom_object) };
+        auto * entry{ rhbm_gem::ModelAnalysisAccess::FindLocalEntry(model_obj, *atom_object) };
         if (entry == nullptr) continue;
         const auto * annotation{ entry->FindAnnotation(class_key) };
         if (annotation == nullptr) continue;
@@ -1063,7 +1064,7 @@ void SaveBondLocalPotentialEntrySubList(
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondPosteriorSql) };
     for (const auto & bond_object : model_obj.GetBondList())
     {
-        auto * entry{ rhbm_gem::FindLocalPotentialEntry(model_obj, *bond_object) };
+        auto * entry{ rhbm_gem::ModelAnalysisAccess::FindLocalEntry(model_obj, *bond_object) };
         if (entry == nullptr) continue;
         const auto * annotation{ entry->FindAnnotation(class_key) };
         if (annotation == nullptr) continue;
@@ -1413,7 +1414,7 @@ void ApplyAtomLocalPotentialEntries(
         auto iter{ entry_map.find(serial_id) };
         if (iter != entry_map.end())
         {
-            rhbm_gem::SetLocalPotentialEntry(model_obj, *atom_object, std::move(iter->second));
+            rhbm_gem::ModelAnalysisAccess::SetLocalEntry(model_obj, *atom_object, std::move(iter->second));
             selected_serial_ids.insert(serial_id);
         }
     }
@@ -1432,7 +1433,7 @@ void ApplyBondLocalPotentialEntries(
         auto iter{ entry_map.find(serial_id_pair) };
         if (iter != entry_map.end())
         {
-            rhbm_gem::SetLocalPotentialEntry(model_obj, *bond_object, std::move(iter->second));
+            rhbm_gem::ModelAnalysisAccess::SetLocalEntry(model_obj, *bond_object, std::move(iter->second));
             selected_serial_pairs.insert(serial_id_pair);
         }
     }

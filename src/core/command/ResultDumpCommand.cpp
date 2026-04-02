@@ -4,7 +4,7 @@
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
-#include "core/detail/LocalPotentialAccess.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <detail/ModelPotentialView.hpp>
@@ -129,7 +129,7 @@ void ResultDumpCommand::RunAtomOutlierDumping()
             for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
             {
                 const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-                const auto * annotation{ RequireLocalPotentialEntry(*atom).FindAnnotation(class_key) };
+                const auto * annotation{ ModelAnalysisAccess::RequireLocalEntry(*atom).FindAnnotation(class_key) };
                 if (annotation == nullptr || !annotation->is_outlier) continue;
                 outfile << atom->GetSerialID() << ',' << class_key << ','
                         << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
@@ -292,7 +292,7 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
-            const auto & entry{ RequireLocalPotentialEntry(*atom) };
+            const auto & entry{ ModelAnalysisAccess::RequireLocalEntry(*atom) };
             const auto & estimate{ entry.GetEstimateMDPDE() };
             outfile << atom->GetSerialID() << ',' << estimate.amplitude << ','
                     << estimate.width << ',' << atom->GetPosition().at(0) << ','

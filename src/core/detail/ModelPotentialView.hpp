@@ -8,9 +8,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "core/detail/LocalPotentialAccess.hpp"
-#include "core/detail/GroupPotentialAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -36,7 +36,7 @@ public:
         for (const auto * atom : m_model_object.GetSelectedAtoms())
         {
             if (atom->GetElement() != element) continue;
-            auto * entry{ FindLocalPotentialEntry(*atom) };
+            auto * entry{ ModelAnalysisAccess::FindLocalEntry(*atom) };
             gaus_estimate_list.emplace_back(entry->GetEstimateMDPDE().GetParameter(par_id));
         }
         return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -48,7 +48,7 @@ public:
         gaus_estimate_list.reserve(m_model_object.GetSelectedBondCount());
         for (const auto * bond : m_model_object.GetSelectedBonds())
         {
-            auto * entry{ FindLocalPotentialEntry(*bond) };
+            auto * entry{ ModelAnalysisAccess::FindLocalEntry(*bond) };
             gaus_estimate_list.emplace_back(entry->GetEstimateMDPDE().GetParameter(par_id));
         }
         return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -167,7 +167,8 @@ public:
         outlier_atom_list.reserve(atom_list.size());
         for (auto * atom : atom_list)
         {
-            const auto * annotation{ RequireLocalPotentialEntry(*atom).FindAnnotation(class_key) };
+            const auto * annotation{
+                ModelAnalysisAccess::RequireLocalEntry(*atom).FindAnnotation(class_key) };
             if (annotation != nullptr && annotation->is_outlier)
             {
                 outlier_atom_list.emplace_back(atom);
@@ -193,7 +194,7 @@ public:
         {
             throw std::runtime_error("Atom group has no members.");
         }
-        return RequireLocalPotentialEntry(*atom_list.front()).GetAlphaR();
+        return ModelAnalysisAccess::RequireLocalEntry(*atom_list.front()).GetAlphaR();
     }
 
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const
@@ -269,12 +270,12 @@ private:
 
     const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
     {
-        return FindAtomGroupPotentialEntry(m_model_object, class_key);
+        return ModelAnalysisAccess::FindAtomGroupEntry(m_model_object, class_key);
     }
 
     const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
     {
-        return FindBondGroupPotentialEntry(m_model_object, class_key);
+        return ModelAnalysisAccess::FindBondGroupEntry(m_model_object, class_key);
     }
 
     static void LogMissingAtomGroup(GroupKey group_key, const std::string & class_key)

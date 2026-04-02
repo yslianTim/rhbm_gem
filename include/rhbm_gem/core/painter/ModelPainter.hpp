@@ -17,6 +17,9 @@ class TPaveText;
 namespace rhbm_gem {
 
 class ModelObject;
+namespace painter_internal {
+class PainterModelIngress;
+}
 
 class ModelPainter : public PainterBase
 {
@@ -25,10 +28,13 @@ class ModelPainter : public PainterBase
 public:
     ModelPainter();
     ~ModelPainter();
+    // Compatibility surface: internal call sites should pre-validate via painter detail helpers.
     void AddModel(ModelObject & data_object);
     void Painting() override;
 
 private:
+    friend class painter_internal::PainterModelIngress;
+
     void PaintAtomGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintBondGroupGausMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomGroupGausNucleotideMainChain(ModelObject * model_object, const std::string & name);

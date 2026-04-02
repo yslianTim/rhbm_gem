@@ -165,6 +165,7 @@ Behavior:
 There is no shared manager-owned iteration API for loaded objects. Traversal and selection stay in typed command workflows or ordinary container iteration.
 
 Analysis-owned state stays behind the internal `ModelAnalysisAccess` layer. Commands and painters should not expose owner lookup, analysis-store access, fit-state clearing, or spatial-range helpers through public data headers.
+Internal painter orchestration should prepare analysis-ready models through painter detail helpers and should not route new code through compatibility-only `AddModel(...)` / `AddReferenceModel(...)` ingestion paths.
 
 ## 10. Key Files
 

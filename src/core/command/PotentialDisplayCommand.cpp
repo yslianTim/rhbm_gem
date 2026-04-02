@@ -1,5 +1,6 @@
 #include "PotentialDisplayCommand.hpp"
-#include "core/detail/LocalPotentialAccess.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
+#include "core/painter/detail/PainterModelAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -33,7 +34,7 @@ void ApplyModelSelection(
                        atom.GetChainID(),
                        atom.GetResidue(),
                        atom.GetElement())
-                && rhbm_gem::FindLocalPotentialEntry(atom) != nullptr;
+                && rhbm_gem::ModelAnalysisAccess::FindLocalEntry(atom) != nullptr;
         });
 }
 }
@@ -165,7 +166,9 @@ void PotentialDisplayCommand::RunDisplay()
             GausPainter painter;
             for (const auto & model_object : m_model_object_list)
             {
-                painter.AddModel(*model_object);
+                painter_internal::PainterModelIngress::AddModel(
+                    painter,
+                    painter_internal::RequireGroupedAnalyzedModel(*model_object, "GausPainter"));
             }
             painter.SetFolder(OutputFolder().string());
             painter.Painting();
@@ -176,7 +179,9 @@ void PotentialDisplayCommand::RunDisplay()
             ModelPainter painter;
             for (const auto & model_object : m_model_object_list)
             {
-                painter.AddModel(*model_object);
+                painter_internal::PainterModelIngress::AddModel(
+                    painter,
+                    painter_internal::RequireGroupedAnalyzedModel(*model_object, "ModelPainter"));
             }
             painter.SetFolder(OutputFolder().string());
             painter.Painting();
@@ -187,13 +192,22 @@ void PotentialDisplayCommand::RunDisplay()
             ComparisonPainter painter;
             for (const auto & model_object : m_model_object_list)
             {
-                painter.AddModel(*model_object);
+                painter_internal::PainterModelIngress::AddModel(
+                    painter,
+                    painter_internal::RequireGroupedAnalyzedModel(
+                        *model_object,
+                        "ComparisonPainter"));
             }
             for (const auto & [class_key, ref_model_list] : m_ref_model_object_list_map)
             {
                 for (const auto & model_object : ref_model_list)
                 {
-                    painter.AddReferenceModel(*model_object, class_key);
+                    painter_internal::PainterModelIngress::AddReferenceModel(
+                        painter,
+                        painter_internal::RequireGroupedAnalyzedModel(
+                            *model_object,
+                            "ComparisonPainter"),
+                        class_key);
                 }
             }
             painter.SetFolder(OutputFolder().string());
@@ -205,13 +219,20 @@ void PotentialDisplayCommand::RunDisplay()
             DemoPainter painter;
             for (const auto & model_object : m_model_object_list)
             {
-                painter.AddModel(*model_object);
+                painter_internal::PainterModelIngress::AddModel(
+                    painter,
+                    painter_internal::RequireGroupedAnalyzedModel(*model_object, "DemoPainter"));
             }
             for (const auto & [class_key, ref_model_list] : m_ref_model_object_list_map)
             {
                 for (const auto & model_object : ref_model_list)
                 {
-                    painter.AddReferenceModel(*model_object, class_key);
+                    painter_internal::PainterModelIngress::AddReferenceModel(
+                        painter,
+                        painter_internal::RequireGroupedAnalyzedModel(
+                            *model_object,
+                            "DemoPainter"),
+                        class_key);
                 }
             }
             painter.SetFolder(OutputFolder().string());
@@ -223,7 +244,9 @@ void PotentialDisplayCommand::RunDisplay()
             AtomPainter painter;
             for (const auto & model_object : m_model_object_list)
             {
-                painter.AddModel(*model_object);
+                painter_internal::PainterModelIngress::AddModel(
+                    painter,
+                    painter_internal::RequireLocalAnalyzedModel(*model_object, "AtomPainter"));
             }
             m_atom_selector->Print();
             painter.SetFolder(OutputFolder().string());

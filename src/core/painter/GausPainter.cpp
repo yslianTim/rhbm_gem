@@ -1,8 +1,8 @@
 #include <rhbm_gem/core/painter/GausPainter.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include "core/painter/AtomStyleCatalog.hpp"
@@ -17,6 +17,7 @@
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include "detail/PainterModelAccess.hpp"
 #include "detail/PainterSupport.hpp"
 
 #ifdef HAVE_ROOT
@@ -49,8 +50,9 @@ GausPainter::~GausPainter()
 
 void GausPainter::AddModel(ModelObject & data_object)
 {
-    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "GausPainter");
-    m_model_object_list.push_back(&data_object);
+    painter_internal::PainterModelIngress::AddModel(
+        *this,
+        painter_internal::RequireGroupedAnalyzedModel(data_object, "GausPainter"));
 }
 
 void GausPainter::Painting()
@@ -239,7 +241,7 @@ void GausPainter::PaintAtomLocalGausSummary(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                const auto * annotation{ RequireLocalPotentialEntry(*atom).FindAnnotation(class_key) };
+                const auto * annotation{ ModelAnalysisAccess::RequireLocalEntry(*atom).FindAnnotation(class_key) };
                 auto is_outlier{ annotation != nullptr && annotation->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
@@ -890,7 +892,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                const auto * annotation{ RequireLocalPotentialEntry(*atom).FindAnnotation(class_key) };
+                const auto * annotation{ ModelAnalysisAccess::RequireLocalEntry(*atom).FindAnnotation(class_key) };
                 auto is_outlier{ annotation != nullptr && annotation->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
@@ -1056,7 +1058,7 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <detail/LocalPotentialAccess.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
@@ -1818,7 +1820,7 @@ std::unique_ptr<TPaveText> GausPainter::CreateResolutionPaveText(
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <detail/LocalPotentialAccess.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>

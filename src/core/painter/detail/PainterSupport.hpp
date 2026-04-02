@@ -1,19 +1,15 @@
 #pragma once
 
 #include <string>
-#include <string_view>
 #include <unordered_map>
-#include <stdexcept>
 #include <vector>
 
 #include "data/detail/ModelAnalysisAccess.hpp"
-#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <rhbm_gem/utils/domain/StringHelper.hpp>
 
-#include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include <detail/PotentialSeriesOps.hpp>
 
@@ -27,73 +23,6 @@
 #endif
 
 namespace rhbm_gem::painter_internal {
-
-inline void RequireSelectedAtomsHaveLocalEntries(
-    const ModelObject & model_object,
-    std::string_view painter_name)
-{
-    if (model_object.GetSelectedAtomCount() == 0)
-    {
-        throw std::runtime_error(
-            std::string(painter_name) + " requires at least one selected atom.");
-    }
-
-    for (const auto * atom : model_object.GetSelectedAtoms())
-    {
-        if (FindLocalPotentialEntry(*atom) == nullptr)
-        {
-            throw std::runtime_error(
-                std::string(painter_name)
-                    + " requires analysis-ready selected atoms with local potential entries.");
-        }
-    }
-}
-
-inline void RequireSelectedBondsHaveLocalEntries(
-    const ModelObject & model_object,
-    std::string_view painter_name)
-{
-    for (const auto * bond : model_object.GetSelectedBonds())
-    {
-        if (FindLocalPotentialEntry(*bond) == nullptr)
-        {
-            throw std::runtime_error(
-                std::string(painter_name)
-                    + " requires analysis-ready selected bonds with local potential entries.");
-        }
-    }
-}
-
-inline void RequireGroupedAnalysisData(
-    const ModelObject & model_object,
-    std::string_view painter_name)
-{
-    const auto & analysis_data{ ModelAnalysisAccess::Read(model_object) };
-    if (!analysis_data.Atoms().Entries().empty() || !analysis_data.Bonds().Entries().empty())
-    {
-        return;
-    }
-
-    throw std::runtime_error(
-        std::string(painter_name)
-            + " requires grouped analysis data. Run potential analysis before painting.");
-}
-
-inline void RequireLocalAnalysisReadyModel(
-    const ModelObject & model_object,
-    std::string_view painter_name)
-{
-    RequireSelectedAtomsHaveLocalEntries(model_object, painter_name);
-    RequireSelectedBondsHaveLocalEntries(model_object, painter_name);
-}
-
-inline void RequireGroupedAnalysisReadyModel(
-    const ModelObject & model_object,
-    std::string_view painter_name)
-{
-    RequireLocalAnalysisReadyModel(model_object, painter_name);
-    RequireGroupedAnalysisData(model_object, painter_name);
-}
 
 inline std::string BuildPainterOutputLabel(const ModelObject & model_object)
 {
@@ -208,9 +137,9 @@ inline void BuildMapValueScatterGraph(
         }
         auto * atom_object2{ model2_atom_map.at(atom_id) };
         auto data1_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            RequireLocalPotentialEntry(*atom_object1), bin_size, x_min, x_max) };
+            ModelAnalysisAccess::RequireLocalEntry(*atom_object1), bin_size, x_min, x_max) };
         auto data2_array{ series_ops::BuildBinnedDistanceAndMapValueList(
-            RequireLocalPotentialEntry(*atom_object2), bin_size, x_min, x_max) };
+            ModelAnalysisAccess::RequireLocalEntry(*atom_object2), bin_size, x_min, x_max) };
         for (size_t i = 0; i < static_cast<size_t>(bin_size); i++)
         {
             graph->SetPoint(count, std::get<1>(data1_array.at(i)), std::get<1>(data2_array.at(i)));
