@@ -10,19 +10,6 @@ namespace rhbm_gem {
 class MapObjectAccess;
 class MapSpatialIndex;
 
-class VoxelNode
-{
-    std::array<float, 3> m_position;
-    float m_value;
-
-public:
-    VoxelNode(const std::array<float, 3> & position, float value) :
-        m_position{ position }, m_value{ value } {}
-    const std::array<float, 3> & GetPosition() const { return m_position; }
-    float GetValue() const { return m_value; }
-    void SetPosition(const std::array<float, 3> & position) { m_position = position; }
-};
-
 class MapObject
 {
     std::string m_key_tag;
@@ -57,7 +44,6 @@ public:
     std::array<int, 3> GetIndexFromPosition(const std::array<float, 3> & position) const;
     std::array<int, 3> GetGridIndex(size_t global_index) const;
     std::array<float, 3> GetGridPosition(size_t global_index) const;
-    size_t GetGlobalIndex(int index_x, int index_y, int index_z) const;
     float GetMapValue(size_t global_index) const;
     float GetMapValue(int index_x, int index_y, int index_z) const;
     float GetMapValueMean() const { return m_map_value_mean; }
@@ -74,6 +60,7 @@ private:
     void SyncValueArrayState();
     void CheckIndex(int index_x, int index_y, int index_z) const;
     void CheckPosition(const std::array<float, 3> & position) const;
+    size_t GetGlobalIndex(int index_x, int index_y, int index_z) const;
     void CalculateMapValueMean();
     void CalculateMapValueMin();
     void CalculateMapValueMax();

@@ -2,12 +2,12 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <string>
+#include <vector>
 
-#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
+#include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 namespace rhbm_gem {
 
@@ -31,7 +31,6 @@ public:
 
 private:
     static bool IsValidMainChainMemberID(size_t id);
-
 };
 
 } // namespace rhbm_gem

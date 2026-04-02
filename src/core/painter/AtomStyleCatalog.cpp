@@ -1,6 +1,6 @@
 #include "core/painter/AtomStyleCatalog.hpp"
 
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <vector>

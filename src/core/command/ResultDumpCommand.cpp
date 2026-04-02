@@ -2,10 +2,10 @@
 
 #include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/GroupPotentialEntry.hpp"
+#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <detail/ModelPotentialView.hpp>

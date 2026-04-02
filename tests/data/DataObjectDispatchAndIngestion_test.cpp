@@ -9,7 +9,7 @@
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include <rhbm_gem/core/painter/ModelPainter.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/LocalPotentialEntry.hpp"
 #include "support/DataObjectTestSupport.hpp"
 
 namespace rg = rhbm_gem;

@@ -2,12 +2,12 @@
 
 #include "data/detail/ModelAnalysisState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/GroupPotentialEntry.hpp"
+#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -986,11 +986,11 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateBondGroupGausFunctionPrior(
 } // namespace rhbm_gem
 #include "PotentialPlotBuilder.hpp"
 
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>

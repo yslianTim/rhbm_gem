@@ -2,13 +2,13 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
-#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
+#include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 namespace rhbm_gem {
 
@@ -34,16 +34,20 @@ public:
 
     static GroupKey GetMainChainSimpleAtomClassGroupKey(size_t member_id);
     static GroupKey GetMainChainComponentAtomClassGroupKey(size_t member_id, Residue residue);
-    static GroupKey GetMainChainStructureAtomClassGroupKey(size_t member_id, Structure structure, Residue residue);
+    static GroupKey GetMainChainStructureAtomClassGroupKey(
+        size_t member_id,
+        Structure structure,
+        Residue residue);
     static std::vector<GroupKey> GetMainChainComponentAtomClassGroupKeyList(size_t member_id);
-    static std::vector<GroupKey> GetMainChainStructureAtomClassGroupKeyList(size_t member_id, Structure structure);
+    static std::vector<GroupKey> GetMainChainStructureAtomClassGroupKeyList(
+        size_t member_id,
+        Structure structure);
 
     static GroupKey GetNucleotideMainChainComponentAtomClassGroupKey(size_t member_id, Residue residue);
     static std::vector<GroupKey> GetNucleotideMainChainComponentAtomClassGroupKeyList(Residue component_id);
 
 private:
     static bool IsValidMainChainMemberID(size_t member_id);
-
 };
 
 } // namespace rhbm_gem

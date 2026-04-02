@@ -1,10 +1,10 @@
 #include "data/detail/ModelAnalysisState.hpp"
 
+#include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 
 namespace rhbm_gem {
 

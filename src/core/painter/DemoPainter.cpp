@@ -1,13 +1,14 @@
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include "data/detail/ModelObjectAccess.hpp"
 #include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include "core/painter/AtomStyleCatalog.hpp"
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/core/painter/GausPainter.hpp>
@@ -66,7 +67,7 @@ void DemoPainter::Painting()
 
     for (auto & model : m_model_object_list)
     {
-        model->BuildKDTreeRoot();
+        ModelObjectAccess::BuildKDTreeRoot(*model);
     }
 
     ModelObject * demo_model_object{ nullptr };
@@ -728,7 +729,7 @@ void DemoPainter::PaintGroupGausMainChainSingle(
 } // namespace rhbm_gem
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include "PotentialPlotBuilder.hpp"
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
@@ -1106,7 +1107,7 @@ void DemoPainter::PaintAtomWidthScatterPlotSingle(
 #include "PotentialPlotBuilder.hpp"
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/core/painter/GausPainter.hpp>

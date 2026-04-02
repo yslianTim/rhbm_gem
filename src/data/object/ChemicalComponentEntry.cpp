@@ -11,18 +11,6 @@ ChemicalComponentEntry::~ChemicalComponentEntry()
 {
 }
 
-void ChemicalComponentEntry::SetComponentAtomEntryMap(
-    std::map<AtomKey, ComponentAtomEntry> & atom_entry_map)
-{
-    m_component_atom_entry_map = std::move(atom_entry_map);
-}
-
-void ChemicalComponentEntry::SetComponentBondEntryMap(
-    std::map<BondKey, ComponentBondEntry> & bond_entry_map)
-{
-    m_component_bond_entry_map = std::move(bond_entry_map);
-}
-
 void ChemicalComponentEntry::AddComponentAtomEntry(
     AtomKey atom_key, const ComponentAtomEntry & atom_info)
 {

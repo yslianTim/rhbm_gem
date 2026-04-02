@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/GroupPotentialEntry.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
 
 namespace rg = rhbm_gem;
 

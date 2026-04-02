@@ -10,8 +10,8 @@
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
 #include "core/painter/AtomStyleCatalog.hpp"
 #include "core/painter/BondStyleCatalog.hpp"
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -726,8 +726,8 @@ void ModelPainter::PaintAtomGroupGausNucleotideMainChain(
 } // namespace rhbm_gem
 #include <rhbm_gem/core/painter/ModelPainter.hpp>
 #include "PotentialPlotBuilder.hpp"
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
@@ -1106,8 +1106,8 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -2032,8 +2032,8 @@ void ModelPainter::PaintAtomRankMainChain(
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>

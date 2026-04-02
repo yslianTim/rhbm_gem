@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/MapObjectAccess.hpp"
@@ -238,7 +238,7 @@ TEST(DataObjectRuntimeBehaviorTest, AddAtomRebuildsSerialIndexWithoutUsingMovedF
 
     ASSERT_NO_THROW(model.AddAtom(std::move(atom)));
     EXPECT_EQ(model.GetNumberOfAtom(), 1);
-    ASSERT_NE(model.GetAtomPtr(42), nullptr);
+    ASSERT_NE(rg::ModelObjectAccess::FindAtomPtr(model, 42), nullptr);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 3.0f);
 }
 
@@ -268,9 +268,9 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
     model->SetAtomList(std::move(replacement_atoms));
 
     EXPECT_EQ(rg::ModelObjectAccess::KDTreeRoot(*model), nullptr);
-    EXPECT_NE(model->GetAtomPtr(11), nullptr);
-    EXPECT_NE(model->GetAtomPtr(12), nullptr);
-    EXPECT_THROW(model->GetAtomPtr(1), std::out_of_range);
+    EXPECT_NE(rg::ModelObjectAccess::FindAtomPtr(*model, 11), nullptr);
+    EXPECT_NE(rg::ModelObjectAccess::FindAtomPtr(*model, 12), nullptr);
+    EXPECT_THROW(rg::ModelObjectAccess::FindAtomPtr(*model, 1), std::out_of_range);
     EXPECT_EQ(model->GetNumberOfSelectedAtom(), 1);
     EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 7.0f);
     const auto x_range{ model->GetModelPositionRange(0) };

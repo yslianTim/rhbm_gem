@@ -1,4 +1,4 @@
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
+#include "data/detail/GroupPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 

@@ -1,6 +1,6 @@
 #include "core/painter/BondStyleCatalog.hpp"
 
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <vector>

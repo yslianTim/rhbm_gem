@@ -1,11 +1,11 @@
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "core/detail/LocalPotentialAccess.hpp"
 #include "core/painter/AtomStyleCatalog.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>

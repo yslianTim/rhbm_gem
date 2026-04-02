@@ -1,4 +1,6 @@
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/BondClassifier.hpp"
+#include "data/detail/BondObjectAccess.hpp"
+#include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
@@ -60,7 +62,7 @@ GroupKey BondClassifier::GetGroupKeyInClass(
     if (class_key == ChemicalDataHelper::GetComponentBondClassKey())
     {
         return KeyPackerComponentBondClass::Pack(
-            bond_object->GetComponentKey(),
+            bond_object->GetAtomObject1()->GetComponentKey(),
             bond_object->GetBondKey());
     }
     throw std::runtime_error("Unsupported class key." + class_key);

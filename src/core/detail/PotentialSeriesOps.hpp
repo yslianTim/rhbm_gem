@@ -7,7 +7,7 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 

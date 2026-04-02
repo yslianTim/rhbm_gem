@@ -10,8 +10,8 @@
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -1058,8 +1058,8 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -1810,7 +1810,7 @@ std::unique_ptr<TPaveText> GausPainter::CreateResolutionPaveText(
 } // namespace rhbm_gem
 #include <rhbm_gem/core/painter/GausPainter.hpp>
 #include "PotentialPlotBuilder.hpp"
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <detail/LocalPotentialAccess.hpp>

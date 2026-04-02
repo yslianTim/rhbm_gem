@@ -4,7 +4,7 @@
 #include <tuple>
 #include <vector>
 
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/math/GausLinearTransformHelper.hpp>
 
 #include "detail/PotentialSeriesOps.hpp"

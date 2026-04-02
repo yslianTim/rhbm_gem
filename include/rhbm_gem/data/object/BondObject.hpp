@@ -12,6 +12,7 @@ namespace rhbm_gem {
 
 class AtomObject;
 class LocalPotentialEntry;
+class BondObjectAccess;
 
 class BondObject
 {
@@ -39,14 +40,9 @@ public:
     void SetBondType(BondType value) { m_bond_type = value; }
     void SetBondOrder(BondOrder value) { m_bond_order = value; }
     void SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
-
     std::string GetInfo() const;
     int GetAtomSerialID1() const { return m_atom_serial_id_1; }
     int GetAtomSerialID2() const { return m_atom_serial_id_2; }
-    float GetBondLength() const;
-    ComponentKey GetComponentKey() const;
-    AtomKey GetAtomKey1() const;
-    AtomKey GetAtomKey2() const;
     BondKey GetBondKey() const { return m_bond_key; }
     BondType GetBondType() const { return m_bond_type; }
     BondOrder GetBondOrder() const { return m_bond_order; }
@@ -54,11 +50,12 @@ public:
     bool GetSpecialBondFlag() const { return m_is_special_bond; }
     std::array<float, 3> GetPosition() const { return m_position; }
     std::array<float, 3> GetBondVector() const { return m_bond_vector; }
-    std::array<float, 3> GetUnitVector() const { return m_unit_vector; }
     AtomObject * GetAtomObject1() const { return m_atom_object_1; }
     AtomObject * GetAtomObject2() const { return m_atom_object_2; }
     LocalPotentialEntry * GetLocalPotentialEntry() const { return m_local_potential_entry.get(); }
 
+private:
+    friend class BondObjectAccess;
 };
 
 } // namespace rhbm_gem

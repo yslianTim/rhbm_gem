@@ -12,6 +12,8 @@
 
 namespace rhbm_gem {
 
+class ChemicalComponentEntryAccess;
+
 struct ComponentAtomEntry
 {
     std::string atom_id;
@@ -50,10 +52,6 @@ public:
     void SetComponentFormula(const std::string & formula) { m_component_formula = formula; }
     void SetComponentMolecularWeight(float weight) { m_component_molecular_weight = weight; }
     void SetStandardMonomerFlag(bool flag) { m_standard_monomer_flag = flag; }
-    void SetComponentAtomEntryMap(std::map<AtomKey, ComponentAtomEntry> & atom_entry_map);
-    void SetComponentBondEntryMap(std::map<BondKey, ComponentBondEntry> & bond_entry_map);
-    void AddComponentAtomEntry(AtomKey atom_key, const ComponentAtomEntry & atom_info);
-    void AddComponentBondEntry(BondKey bond_key, const ComponentBondEntry & bond_info);
 
     std::string GetComponentId() const { return m_component_id; }
     std::string GetComponentName() const { return m_component_name; }
@@ -63,9 +61,13 @@ public:
     bool IsStandardMonomer() const { return m_standard_monomer_flag; }
     const std::map<AtomKey, ComponentAtomEntry> & AtomEntries() const { return m_component_atom_entry_map; }
     const std::map<BondKey, ComponentBondEntry> & BondEntries() const { return m_component_bond_entry_map; }
+    void AddComponentAtomEntry(AtomKey atom_key, const ComponentAtomEntry & atom_info);
+    void AddComponentBondEntry(BondKey bond_key, const ComponentBondEntry & bond_info);
     const ComponentAtomEntry * FindComponentAtomEntry(AtomKey atom_key) const;
     const ComponentBondEntry * FindComponentBondEntry(BondKey bond_key) const;
 
+private:
+    friend class ChemicalComponentEntryAccess;
 };
 
 } // namespace rhbm_gem

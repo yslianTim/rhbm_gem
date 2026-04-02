@@ -1,4 +1,4 @@
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>

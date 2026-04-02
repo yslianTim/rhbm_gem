@@ -1,4 +1,7 @@
 #include "ModelImportState.hpp"
+#include "data/detail/AtomObjectAccess.hpp"
+#include "data/detail/ChemicalComponentEntryAccess.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -93,7 +96,10 @@ void ModelImportState::AddComponentAtomEntry(
                         " not found in chemical component map.");
         return;
     }
-    m_chemical_component_entry_map.at(comp_key)->AddComponentAtomEntry(atom_key, atom_entry);
+    ChemicalComponentEntryAccess::AddComponentAtomEntry(
+        *m_chemical_component_entry_map.at(comp_key),
+        atom_key,
+        atom_entry);
 }
 
 void ModelImportState::AddComponentBondEntry(
@@ -106,7 +112,10 @@ void ModelImportState::AddComponentBondEntry(
                         " not found in chemical component map.");
         return;
     }
-    m_chemical_component_entry_map.at(comp_key)->AddComponentBondEntry(bond_key, bond_entry);
+    ChemicalComponentEntryAccess::AddComponentBondEntry(
+        *m_chemical_component_entry_map.at(comp_key),
+        bond_key,
+        bond_entry);
 }
 
 void ModelImportState::SetStructureInfo(AtomObject* atom_object) {
@@ -117,7 +126,9 @@ void ModelImportState::SetStructureInfo(AtomObject* atom_object) {
         (void)helix_id;
         if (chain_id == range.chain_id_beg || chain_id == range.chain_id_end) {
             if (sequence_id >= range.seq_id_beg && sequence_id <= range.seq_id_end) {
-                atom_object->SetStructure(ChemicalDataHelper::GetStructureFromString(range.conf_type));
+                AtomObjectAccess::SetStructure(
+                    *atom_object,
+                    ChemicalDataHelper::GetStructureFromString(range.conf_type));
                 return;
             }
         }
@@ -127,13 +138,13 @@ void ModelImportState::SetStructureInfo(AtomObject* atom_object) {
         (void)composite_sheet_id;
         if (chain_id == range.chain_id_beg || chain_id == range.chain_id_end) {
             if (sequence_id >= range.seq_id_beg && sequence_id <= range.seq_id_end) {
-                atom_object->SetStructure(Structure::SHEET);
+                AtomObjectAccess::SetStructure(*atom_object, Structure::SHEET);
                 return;
             }
         }
     }
 
-    atom_object->SetStructure(Structure::FREE);
+    AtomObjectAccess::SetStructure(*atom_object, Structure::FREE);
 }
 
 std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_model_number) {
@@ -178,13 +189,15 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
     model_object->SetEmdID(GetEmdID());
     model_object->SetResolution(GetResolution());
     model_object->SetResolutionMethod(GetResolutionMethod());
-    model_object->SetChainIDListMap(GetChainIDListMap());
-    model_object->SetChemicalComponentEntryMap(std::move(GetChemicalComponentEntryMap()));
-    model_object->SetComponentKeySystem(MoveComponentKeySystem());
-    model_object->SetAtomKeySystem(MoveAtomKeySystem());
-    model_object->SetBondKeySystem(MoveBondKeySystem());
-    model_object->SetBondList(std::move(filtered_bond_list));
-    model_object->FinalizeLoad();
+    ModelObjectAccess::SetChainIDListMap(*model_object, GetChainIDListMap());
+    ModelObjectAccess::SetChemicalComponentEntryMap(
+        *model_object,
+        std::move(GetChemicalComponentEntryMap()));
+    ModelObjectAccess::SetComponentKeySystem(*model_object, MoveComponentKeySystem());
+    ModelObjectAccess::SetAtomKeySystem(*model_object, MoveAtomKeySystem());
+    ModelObjectAccess::SetBondKeySystem(*model_object, MoveBondKeySystem());
+    ModelObjectAccess::SetBondList(*model_object, std::move(filtered_bond_list));
+    ModelObjectAccess::FinalizeLoad(*model_object);
     return model_object;
 }
 
@@ -342,7 +355,7 @@ const ComponentBondEntry* ModelImportState::GetComponentBondEntryPtr(
                     "Component bond entry (comp_key: " + std::to_string(comp_key) + ", bond_key: " + std::to_string(bond_key) + ") not found in chemical component map.");
         return nullptr;
     }
-    return comp_entry_ptr->FindComponentBondEntry(bond_key);
+    return ChemicalComponentEntryAccess::FindComponentBondEntry(*comp_entry_ptr, bond_key);
 }
 
 std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>>&
@@ -359,7 +372,9 @@ bool ModelImportState::HasComponentBondEntry(
     if (HasChemicalComponentEntry(comp_key) == false) {
         return false;
     }
-    return m_chemical_component_entry_map.at(comp_key)->FindComponentBondEntry(bond_key) != nullptr;
+    return ChemicalComponentEntryAccess::FindComponentBondEntry(
+        *m_chemical_component_entry_map.at(comp_key),
+        bond_key) != nullptr;
 }
 
 } // namespace rhbm_gem

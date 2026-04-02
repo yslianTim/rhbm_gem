@@ -50,15 +50,14 @@ public:
     ModelObject(const ModelObject & other);
     void SetKeyTag(const std::string & label) { m_key_tag = label; }
     std::string GetKeyTag() const { return m_key_tag; }
-
-    void AddAtom(std::unique_ptr<AtomObject> atom);
-    void AddBond(std::unique_ptr<BondObject> bond);
-    void SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list);
-    void SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list);
     void SetPdbID(const std::string & label) { m_pdb_id = label; }
     void SetEmdID(const std::string & label) { m_emd_id = label; }
     void SetResolution(double value) { m_resolution = value; }
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
+    void AddAtom(std::unique_ptr<AtomObject> atom);
+    void AddBond(std::unique_ptr<BondObject> bond);
+    void SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list);
+    void SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list);
     void SetChainIDListMap(
         const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
     void AddChemicalComponentEntry(
@@ -94,13 +93,13 @@ public:
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
-    AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
     GetChemicalComponentEntryMap() const;
     std::vector<ComponentKey> GetComponentKeyList() const;
 
 private:
     friend class ModelObjectAccess;
+    AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
 
     void RebuildSelectionState();
     void InvalidateDerivedCaches();

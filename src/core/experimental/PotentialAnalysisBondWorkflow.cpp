@@ -5,10 +5,10 @@
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/GroupPotentialEntry.hpp"
+#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>

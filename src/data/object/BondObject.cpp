@@ -1,8 +1,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 
 #include <stdexcept>
@@ -89,31 +88,9 @@ std::string BondObject::GetInfo() const
            std::to_string(m_bond_vector.at(2)) + ")";
 }
 
-ComponentKey BondObject::GetComponentKey() const
-{
-    return m_atom_object_1->GetComponentKey();
-}
-
-AtomKey BondObject::GetAtomKey1() const
-{
-    return m_atom_object_1->GetAtomKey();
-}
-
-AtomKey BondObject::GetAtomKey2() const
-{
-    return m_atom_object_2->GetAtomKey();
-}
-
 void BondObject::SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
 {
     m_local_potential_entry = std::move(entry);
-}
-
-float BondObject::GetBondLength() const
-{
-    if (m_atom_object_1 == nullptr || m_atom_object_2 == nullptr) return 0.0f;
-    return ArrayStats<float>::ComputeNorm(
-        m_atom_object_1->GetPositionRef(), m_atom_object_2->GetPositionRef());
 }
 
 } // namespace rhbm_gem

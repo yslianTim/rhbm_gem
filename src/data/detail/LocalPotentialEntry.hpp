@@ -1,11 +1,11 @@
 #pragma once
 
-#include <vector>
-#include <tuple>
 #include <string>
+#include <tuple>
 #include <unordered_map>
+#include <vector>
 
-#include <rhbm_gem/data/object/GaussianStatistics.hpp>
+#include "data/detail/GaussianStatistics.hpp"
 
 namespace rhbm_gem {
 

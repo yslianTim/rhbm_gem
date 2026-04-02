@@ -1,13 +1,14 @@
 #include "ModelObjectStorage.hpp"
 
 #include "SQLiteWrapper.hpp"
-#include <rhbm_gem/data/object/AtomClassifier.hpp>
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/BondClassifier.hpp>
+#include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
-#include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
+#include "data/detail/ChemicalComponentEntryAccess.hpp"
+#include "data/detail/GroupPotentialEntry.hpp"
+#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/ModelAnalysisState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
@@ -938,8 +939,10 @@ std::vector<std::unique_ptr<rhbm_gem::BondObject>> LoadBondObjectList(
             throw std::runtime_error("Step failed: " + database.ErrorMessage());
         }
 
-        auto atom_object_1{ model_obj.GetAtomPtr(database.GetColumn<int>(0)) };
-        auto atom_object_2{ model_obj.GetAtomPtr(database.GetColumn<int>(1)) };
+        auto atom_object_1{
+            rhbm_gem::ModelObjectAccess::FindAtomPtr(model_obj, database.GetColumn<int>(0)) };
+        auto atom_object_2{
+            rhbm_gem::ModelObjectAccess::FindAtomPtr(model_obj, database.GetColumn<int>(1)) };
         auto bond_object{ std::make_unique<rhbm_gem::BondObject>(atom_object_1, atom_object_2) };
         bond_object->SetBondKey(database.GetColumn<BondKey>(2));
         bond_object->SetBondType(static_cast<BondType>(database.GetColumn<int>(3)));
