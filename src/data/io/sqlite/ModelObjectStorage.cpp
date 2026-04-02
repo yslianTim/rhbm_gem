@@ -4,6 +4,7 @@
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/ModelObjectBuilder.hpp"
+#include "data/detail/ModelSelectionAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -16,6 +17,7 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 
 #include <array>
 #include <map>
@@ -24,6 +26,7 @@
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace {
@@ -1409,6 +1412,8 @@ void ApplyAtomLocalPotentialEntries(
     rhbm_gem::ModelObject & model_obj,
     std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> entry_map)
 {
+    std::unordered_set<int> selected_serial_ids;
+    selected_serial_ids.reserve(entry_map.size());
     for (const auto & atom_object : model_obj.GetAtomList())
     {
         const auto serial_id{ atom_object->GetSerialID() };
@@ -1416,19 +1421,17 @@ void ApplyAtomLocalPotentialEntries(
         if (iter != entry_map.end())
         {
             rhbm_gem::SetLocalPotentialEntry(model_obj, *atom_object, std::move(iter->second));
-            model_obj.SetAtomSelected(serial_id, true);
-        }
-        else
-        {
-            model_obj.SetAtomSelected(serial_id, false);
+            selected_serial_ids.insert(serial_id);
         }
     }
+    rhbm_gem::ModelSelectionAccess::ApplyLoadedAtomSelection(model_obj, selected_serial_ids);
 }
 
 void ApplyBondLocalPotentialEntries(
     rhbm_gem::ModelObject & model_obj,
     std::map<std::pair<int, int>, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> entry_map)
 {
+    std::set<std::pair<int, int>> selected_serial_pairs;
     for (const auto & bond_object : model_obj.GetBondList())
     {
         const auto serial_id_pair{
@@ -1437,13 +1440,10 @@ void ApplyBondLocalPotentialEntries(
         if (iter != entry_map.end())
         {
             rhbm_gem::SetLocalPotentialEntry(model_obj, *bond_object, std::move(iter->second));
-            model_obj.SetBondSelected(serial_id_pair.first, serial_id_pair.second, true);
-        }
-        else
-        {
-            model_obj.SetBondSelected(serial_id_pair.first, serial_id_pair.second, false);
+            selected_serial_pairs.insert(serial_id_pair);
         }
     }
+    rhbm_gem::ModelSelectionAccess::ApplyLoadedBondSelection(model_obj, selected_serial_pairs);
 }
 
 void SaveAnalysis(
@@ -1480,6 +1480,7 @@ void LoadAnalysis(
     rhbm_gem::ModelObject & model_obj,
     const std::string & key_tag)
 {
+    ScopeTimer timer{ "ModelObjectStorage::LoadAnalysis" };
     AnalysisData(model_obj).Clear();
     ApplyAtomLocalPotentialEntries(model_obj, LoadAtomLocalPotentialEntryMap(database, key_tag));
     ApplyBondLocalPotentialEntries(model_obj, LoadBondLocalPotentialEntryMap(database, key_tag));
@@ -1529,6 +1530,7 @@ std::unique_ptr<ModelObject> ModelObjectStorage::Load(
     SQLiteWrapper & database,
     const std::string & key_tag)
 {
+    ScopeTimer timer{ "ModelObjectStorage::Load" };
     ModelObjectBuilder builder;
     LoadStructure(database, builder, key_tag);
     auto model_object{ std::make_unique<ModelObject>(builder.Build()) };

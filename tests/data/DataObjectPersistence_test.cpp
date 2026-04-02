@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <stdexcept>
 
+#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "support/CommandTestHelpers.hpp"
@@ -115,6 +116,44 @@ TEST(DataObjectPersistenceTest, SaveRenamedKeyDoesNotRenameInMemoryObject)
     auto loaded_model{ repository.LoadModel("saved_model") };
     ASSERT_NE(loaded_model, nullptr);
     EXPECT_EQ(loaded_model->GetNumberOfAtom(), model->GetNumberOfAtom());
+}
+
+TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedLocalEntriesInBulk)
+{
+    const command_test::ScopedTempDir temp_dir{ "data_schema_bulk_selection_restore" };
+    const auto database_path{ temp_dir.path() / "bulk_selection.sqlite" };
+
+    rg::DataRepository repository{ database_path };
+    auto model{ data_test::MakeModelWithBond() };
+    model->SetKeyTag("model");
+    model->SetPdbID("BULK_SELECTION");
+    model->SelectAllAtoms(false);
+    model->SelectAllBonds(false);
+
+    auto & atoms{ model->GetAtomList() };
+    auto & bonds{ model->GetBondList() };
+    ASSERT_EQ(atoms.size(), 2);
+    ASSERT_EQ(bonds.size(), 1);
+
+    rg::EnsureLocalPotentialEntry(*model, *atoms.at(0));
+    rg::EnsureLocalPotentialEntry(*model, *bonds.at(0));
+
+    repository.SaveModel(*model, "model");
+
+    auto loaded_model{ repository.LoadModel("model") };
+    ASSERT_NE(loaded_model, nullptr);
+    ASSERT_EQ(loaded_model->GetSelectedAtomCount(), 1);
+    ASSERT_EQ(loaded_model->GetSelectedBondCount(), 1);
+    EXPECT_EQ(loaded_model->GetSelectedAtoms().front()->GetSerialID(), atoms.at(0)->GetSerialID());
+    EXPECT_EQ(
+        loaded_model->GetSelectedBonds().front()->GetAtomSerialID1(),
+        bonds.at(0)->GetAtomSerialID1());
+    EXPECT_NE(
+        rg::FindLocalPotentialEntry(*loaded_model, *loaded_model->GetSelectedAtoms().front()),
+        nullptr);
+    EXPECT_NE(
+        rg::FindLocalPotentialEntry(*loaded_model, *loaded_model->GetSelectedBonds().front()),
+        nullptr);
 }
 
 TEST(DataObjectPersistenceTest, LoadModelThrowsWhenDatabaseKeyIsMissing)

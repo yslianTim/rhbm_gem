@@ -5,9 +5,11 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
@@ -22,6 +24,8 @@ class BondObject;
 class ChemicalComponentEntry;
 class ModelObjectBuilder;
 class ModelAnalysisData;
+class ModelObjectStorage;
+class ModelSelectionAccess;
 struct ModelSpatialCache;
 ModelAnalysisData & MutableAnalysisData(ModelObject & model_object);
 const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object);
@@ -103,6 +107,8 @@ public:
 
 private:
     friend class ModelObjectBuilder;
+    friend class ModelObjectStorage;
+    friend class ModelSelectionAccess;
     friend ModelAnalysisData & MutableAnalysisData(ModelObject & model_object);
     friend const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object);
     friend void ClearAnalysisFitStates(ModelObject & model_object);
@@ -117,6 +123,8 @@ private:
     void InvalidateDerivedCaches();
     void SyncDerivedState();
     void EnsureKDTreeRoot();
+    void SetAtomSelectionBulk(const std::unordered_set<int> & selected_serial_ids);
+    void SetBondSelectionBulk(const std::set<std::pair<int, int>> & selected_serial_pairs);
     void BuildSelectedAtomList();
     void BuildSelectedBondList();
     void FilterSelectionFromSymmetry(bool is_asymmetry);
