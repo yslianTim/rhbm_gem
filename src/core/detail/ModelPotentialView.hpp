@@ -10,7 +10,6 @@
 
 #include "core/detail/LocalPotentialAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
-#include "data/detail/ModelSelectionView.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -34,11 +33,11 @@ public:
     double GetAtomGausEstimateMinimum(int par_id, Element element) const
     {
         std::vector<double> gaus_estimate_list;
-        gaus_estimate_list.reserve(ModelSelectionView::SelectedAtomCount(m_model_object));
-        for (const auto * atom : ModelSelectionView::SelectedAtoms(m_model_object))
+        gaus_estimate_list.reserve(ModelObjectAccess::SelectedAtomCount(m_model_object));
+        for (const auto * atom : ModelObjectAccess::SelectedAtoms(m_model_object))
         {
             if (atom->GetElement() != element) continue;
-            auto * entry{ GetLocalPotentialEntry(*atom) };
+            auto * entry{ atom->GetLocalPotentialEntry() };
             gaus_estimate_list.emplace_back(entry->GetEstimateMDPDE().GetParameter(par_id));
         }
         return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -47,10 +46,10 @@ public:
     double GetBondGausEstimateMinimum(int par_id) const
     {
         std::vector<double> gaus_estimate_list;
-        gaus_estimate_list.reserve(ModelSelectionView::SelectedBondCount(m_model_object));
-        for (const auto * bond : ModelSelectionView::SelectedBonds(m_model_object))
+        gaus_estimate_list.reserve(ModelObjectAccess::SelectedBondCount(m_model_object));
+        for (const auto * bond : ModelObjectAccess::SelectedBonds(m_model_object))
         {
-            auto * entry{ GetLocalPotentialEntry(*bond) };
+            auto * entry{ bond->GetLocalPotentialEntry() };
             gaus_estimate_list.emplace_back(entry->GetEstimateMDPDE().GetParameter(par_id));
         }
         return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -155,7 +154,7 @@ public:
         outlier_atom_list.reserve(atom_list.size());
         for (auto * atom : atom_list)
         {
-            const auto * annotation{ GetLocalPotentialEntry(*atom)->FindAnnotation(class_key) };
+            const auto * annotation{ atom->GetLocalPotentialEntry()->FindAnnotation(class_key) };
             if (annotation != nullptr && annotation->is_outlier)
             {
                 outlier_atom_list.emplace_back(atom);
@@ -181,7 +180,7 @@ public:
         {
             throw std::runtime_error("Atom group has no members.");
         }
-        auto * local_entry{ GetLocalPotentialEntry(*atom_list.front()) };
+        auto * local_entry{ atom_list.front()->GetLocalPotentialEntry() };
         if (local_entry == nullptr)
         {
             throw std::runtime_error("Local entry of the first atom member is not available.");

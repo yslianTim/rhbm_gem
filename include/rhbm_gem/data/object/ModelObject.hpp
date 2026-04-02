@@ -21,7 +21,6 @@ class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
 class ModelObjectAccess;
-class ModelSelectionView;
 class ModelAnalysisState;
 
 class ModelObject
@@ -78,7 +77,6 @@ public:
 
 private:
     friend class ModelObjectAccess;
-    friend class ModelSelectionView;
     AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
 
     void AddAtom(std::unique_ptr<AtomObject> atom);

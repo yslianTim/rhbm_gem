@@ -1,5 +1,4 @@
 #include "data/detail/BondClassifier.hpp"
-#include "data/detail/BondObjectAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>

@@ -6,7 +6,6 @@
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "data/detail/ModelObjectAccess.hpp"
-#include "data/detail/ModelSelectionView.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
 
@@ -64,7 +63,7 @@ TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmet
         atom->SetSelectedFlag(true);
     }
     rg::ModelObjectAccess::ApplySymmetrySelection(*original_model, false);
-    const auto original_selected_count{ rg::ModelSelectionView::SelectedAtomCount(*original_model) };
+    const auto original_selected_count{ rg::ModelObjectAccess::SelectedAtomCount(*original_model) };
 
     rg::DataRepository repository{ database_path };
     auto stored_model{ rg::ReadModel(model_path) };
@@ -80,7 +79,7 @@ TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmet
         atom->SetSelectedFlag(true);
     }
     rg::ModelObjectAccess::ApplySymmetrySelection(*loaded_model, false);
-    EXPECT_EQ(rg::ModelSelectionView::SelectedAtomCount(*loaded_model), original_selected_count);
+    EXPECT_EQ(rg::ModelObjectAccess::SelectedAtomCount(*loaded_model), original_selected_count);
 }
 
 TEST(DataObjectPersistenceTest, DistinctUnsanitizedKeysDoNotCollideInV2Schema)

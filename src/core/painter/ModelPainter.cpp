@@ -2,7 +2,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
-#include "data/detail/ModelSelectionView.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
@@ -778,7 +778,7 @@ void ModelPainter::PaintAtomMapValueMainChain(ModelObject * model_object, const 
     double amplitude_prior[main_chain_element_size];
     double width_prior[main_chain_element_size];
     std::vector<double> y_array;
-    y_array.reserve(ModelSelectionView::SelectedAtomCount(*model_object));
+    y_array.reserve(ModelObjectAccess::SelectedAtomCount(*model_object));
         for (size_t k = 0; k < main_chain_element_size; k++)
     {
         auto group_key{ AtomClassifier::GetMainChainSimpleAtomClassGroupKey(k) };
@@ -946,7 +946,7 @@ void ModelPainter::PaintBondMapValueMainChain(ModelObject * model_object, const 
     double width_prior[main_chain_element_size];
     int member_entries[main_chain_element_size];
     std::vector<double> y_array;
-    y_array.reserve(ModelSelectionView::SelectedBondCount(*model_object));
+    y_array.reserve(ModelObjectAccess::SelectedBondCount(*model_object));
         for (size_t k = 0; k < main_chain_element_size; k++)
     {
         auto group_key{ BondClassifier::GetMainChainSimpleBondClassGroupKey(k) };
@@ -1389,8 +1389,8 @@ void ModelPainter::PaintAtomGausScatterPlot(
     std::unique_ptr<TH2> frame;
     std::unordered_map<Element, std::unique_ptr<TGraphErrors>> graph_map;
     std::vector<double> x_array, y_array;
-    x_array.reserve(ModelSelectionView::SelectedAtomCount(*model_object));
-    y_array.reserve(ModelSelectionView::SelectedAtomCount(*model_object));
+    x_array.reserve(ModelObjectAccess::SelectedAtomCount(*model_object));
+    y_array.reserve(ModelObjectAccess::SelectedAtomCount(*model_object));
     for (auto & [element_type, element_name] : ChemicalDataHelper::GetElementLabelMap())
     {
         auto graph
@@ -1497,8 +1497,8 @@ void ModelPainter::PaintBondGausScatterPlot(
     std::unique_ptr<TH2> frame;
     std::unordered_map<Element, std::unique_ptr<TGraphErrors>> graph_map;
     std::vector<double> x_array, y_array;
-    x_array.reserve(ModelSelectionView::SelectedBondCount(*model_object));
-    y_array.reserve(ModelSelectionView::SelectedBondCount(*model_object));
+    x_array.reserve(ModelObjectAccess::SelectedBondCount(*model_object));
+    y_array.reserve(ModelObjectAccess::SelectedBondCount(*model_object));
     for (auto & [element_type, element_name] : ChemicalDataHelper::GetElementLabelMap())
     {
         auto graph

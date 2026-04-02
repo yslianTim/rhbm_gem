@@ -12,8 +12,6 @@
 
 namespace rhbm_gem {
 
-class ChemicalComponentEntryAccess;
-
 struct ComponentAtomEntry
 {
     std::string atom_id;
@@ -66,8 +64,6 @@ public:
     const ComponentAtomEntry * FindComponentAtomEntry(AtomKey atom_key) const;
     const ComponentBondEntry * FindComponentBondEntry(BondKey bond_key) const;
 
-private:
-    friend class ChemicalComponentEntryAccess;
 };
 
 } // namespace rhbm_gem

@@ -6,13 +6,11 @@
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include "data/detail/ChemicalComponentEntryAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/ModelAnalysisState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
-#include "data/detail/ModelSelectionView.hpp"
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -1366,7 +1364,7 @@ void LoadAtomGroupPotentialEntryList(
         bucket.alpha_g = database.GetColumn<double>(10);
     }
 
-    for (auto & atom : rhbm_gem::ModelSelectionView::SelectedAtoms(model_obj))
+    for (auto & atom : rhbm_gem::ModelObjectAccess::SelectedAtoms(model_obj))
     {
         const auto group_key{ rhbm_gem::AtomClassifier::GetGroupKeyInClass(atom, class_key) };
         group_entry.EnsureGroup(group_key).atom_members.emplace_back(atom);
@@ -1410,7 +1408,7 @@ void LoadBondGroupPotentialEntryList(
         bucket.alpha_g = database.GetColumn<double>(10);
     }
 
-    for (auto & bond : rhbm_gem::ModelSelectionView::SelectedBonds(model_obj))
+    for (auto & bond : rhbm_gem::ModelObjectAccess::SelectedBonds(model_obj))
     {
         const auto group_key{ rhbm_gem::BondClassifier::GetGroupKeyInClass(bond, class_key) };
         group_entry.EnsureGroup(group_key).bond_members.emplace_back(bond);

@@ -1,6 +1,4 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include "data/detail/MapObjectAccess.hpp"
-#include "data/detail/MapSpatialIndex.hpp"
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -14,13 +12,13 @@
 namespace rhbm_gem {
 
 MapObject::MapObject() :
-    m_key_tag{ "" }, m_thread_size{ 1 },
+    m_key_tag{ "" },
     m_voxel_size{ 1 },
     m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
     m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
     m_grid_size{ 1, 1, 1 }, m_grid_spacing{ 1.0f, 1.0f, 1.0f }, m_origin{ 0.0f, 0.0f, 0.0f },
     m_map_length{}, m_overflow{}, m_underflow{ m_origin }, m_upper_bound{}, m_lower_bound{},
-    m_map_value_array{ nullptr }, m_spatial_index{ std::make_unique<MapSpatialIndex>(*this) }
+    m_map_value_array{ nullptr }
 {
 }
 
@@ -28,14 +26,13 @@ MapObject::MapObject(
     const std::array<int, 3> & grid_size,
     const std::array<float, 3> & grid_spacing,
     const std::array<float, 3> & origin) :
-    m_key_tag{ "" }, m_thread_size{ 1 },
+    m_key_tag{ "" },
     m_voxel_size{ static_cast<size_t>(grid_size.at(0) * grid_size.at(1) * grid_size.at(2)) },
     m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
     m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
     m_grid_size{ grid_size }, m_grid_spacing{ grid_spacing }, m_origin{ origin },
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
-    m_map_value_array{ std::make_unique<float[]>(m_voxel_size) },
-    m_spatial_index{ std::make_unique<MapSpatialIndex>(*this) }
+    m_map_value_array{ std::make_unique<float[]>(m_voxel_size) }
 {
     for (size_t i = 0; i < 3; i++)
     {
@@ -51,14 +48,13 @@ MapObject::MapObject(
     const std::array<float, 3> & grid_spacing,
     const std::array<float, 3> & origin,
     std::unique_ptr<float[]> map_value_array) :
-    m_key_tag{ "" }, m_thread_size{ 1 },
+    m_key_tag{ "" },
     m_voxel_size{ static_cast<size_t>(grid_size.at(0) * grid_size.at(1) * grid_size.at(2)) },
     m_map_value_mean{ 0.0f }, m_map_value_min{ 0.0f },
     m_map_value_max{ 0.0f }, m_map_value_sd{ 0.0f },
     m_grid_size{ grid_size }, m_grid_spacing{ grid_spacing }, m_origin{ origin },
     m_map_length{}, m_overflow{}, m_underflow{ origin }, m_upper_bound{}, m_lower_bound{},
-    m_map_value_array{ std::move(map_value_array) },
-    m_spatial_index{ std::make_unique<MapSpatialIndex>(*this) }
+    m_map_value_array{ std::move(map_value_array) }
 {
     for (size_t i = 0; i < 3; i++)
     {
@@ -77,14 +73,13 @@ MapObject::~MapObject()
 
 MapObject::MapObject(const MapObject & other) :
     m_key_tag{ other.m_key_tag },
-    m_thread_size{ other.m_thread_size }, m_voxel_size{ other.m_voxel_size },
+    m_voxel_size{ other.m_voxel_size },
     m_map_value_mean{ other.m_map_value_mean }, m_map_value_min{ other.m_map_value_min },
     m_map_value_max{ other.m_map_value_max }, m_map_value_sd{ other.m_map_value_sd },
     m_grid_size{ other.m_grid_size }, m_grid_spacing{ other.m_grid_spacing }, m_origin{ other.m_origin },
     m_map_length{ other.m_map_length }, m_overflow{ other.m_overflow }, m_underflow{ other.m_underflow },
     m_upper_bound{ other.m_upper_bound }, m_lower_bound{ other.m_lower_bound },
-    m_map_value_array{ std::make_unique<float[]>(other.m_voxel_size) },
-    m_spatial_index{ std::make_unique<MapSpatialIndex>(*this) }
+    m_map_value_array{ std::make_unique<float[]>(other.m_voxel_size) }
 {
     std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(float));
     SyncValueArrayState();
@@ -100,7 +95,6 @@ void MapObject::RecomputeStatistics()
 
 void MapObject::SyncValueArrayState()
 {
-    m_spatial_index->Invalidate();
     RecomputeStatistics();
 }
 
@@ -234,25 +228,25 @@ void MapObject::CheckPosition(const std::array<float, 3> & position) const
 void MapObject::CalculateMapValueMean()
 {
     m_map_value_mean = ArrayStats<float>::ComputeMean(
-        m_map_value_array.get(), m_voxel_size, m_thread_size);
+        m_map_value_array.get(), m_voxel_size);
 }
 
 void MapObject::CalculateMapValueMin()
 {
     m_map_value_min = ArrayStats<float>::ComputeMin(
-        m_map_value_array.get(), m_voxel_size, m_thread_size);
+        m_map_value_array.get(), m_voxel_size);
 }
 
 void MapObject::CalculateMapValueMax()
 {
     m_map_value_max = ArrayStats<float>::ComputeMax(
-        m_map_value_array.get(), m_voxel_size, m_thread_size);
+        m_map_value_array.get(), m_voxel_size);
 }
 
 void MapObject::CalculateMapValueSD()
 {
     m_map_value_sd = ArrayStats<float>::ComputeStandardDeviation(
-        m_map_value_array.get(), m_voxel_size, m_map_value_mean, m_thread_size);
+        m_map_value_array.get(), m_voxel_size, m_map_value_mean);
 }
 
 void MapObject::MapValueArrayNormalization()

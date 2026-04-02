@@ -1,7 +1,6 @@
 #include "ResultDumpCommand.hpp"
 
 #include "data/detail/ModelObjectAccess.hpp"
-#include "data/detail/ModelSelectionView.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -87,7 +86,7 @@ bool ResultDumpCommand::BuildDataObjectList()
         {
             auto model_object{ LoadPersistedObject<ModelObject>(key) };
             m_model_object_list.emplace_back(model_object);
-            const auto & selected_atom_list{ ModelSelectionView::SelectedAtoms(*model_object) };
+            const auto & selected_atom_list{ ModelObjectAccess::SelectedAtoms(*model_object) };
             m_selected_atom_list_map[key] = {
                 selected_atom_list.begin(),
                 selected_atom_list.end()

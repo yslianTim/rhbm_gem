@@ -7,20 +7,15 @@
 
 namespace rhbm_gem {
 
-class MapObjectAccess;
-class MapSpatialIndex;
-
 class MapObject
 {
     std::string m_key_tag;
-    int m_thread_size;
     size_t m_voxel_size;
     float m_map_value_mean, m_map_value_min, m_map_value_max, m_map_value_sd;
     std::array<int, 3> m_grid_size;
     std::array<float, 3> m_grid_spacing, m_origin, m_map_length;
     std::array<float, 3> m_overflow, m_underflow, m_upper_bound, m_lower_bound;
     std::unique_ptr<float[]> m_map_value_array;
-    std::unique_ptr<MapSpatialIndex> m_spatial_index;
 
 public:
     MapObject();
@@ -54,8 +49,6 @@ public:
     void MapValueArrayNormalization();
 
 private:
-    friend class MapObjectAccess;
-
     void RecomputeStatistics();
     void SyncValueArrayState();
     void CheckIndex(int index_x, int index_y, int index_z) const;

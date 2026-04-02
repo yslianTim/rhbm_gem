@@ -2,13 +2,11 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include "data/detail/BondObjectAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
-#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -74,16 +72,15 @@ ModelObject::ModelObject(const ModelObject & other) :
         auto * atom_1{ atom_ptr_map.at(bond->GetAtomObject1()) };
         auto * atom_2{ atom_ptr_map.at(bond->GetAtomObject2()) };
         auto cloned_bond{ std::make_unique<BondObject>(atom_1, atom_2) };
-        BondObjectAccess::SetSelectedFlag(*cloned_bond, bond->GetSelectedFlag());
-        BondObjectAccess::SetSpecialBondFlag(*cloned_bond, bond->GetSpecialBondFlag());
-        BondObjectAccess::SetBondKey(*cloned_bond, bond->GetBondKey());
-        BondObjectAccess::SetBondType(*cloned_bond, bond->GetBondType());
-        BondObjectAccess::SetBondOrder(*cloned_bond, bond->GetBondOrder());
-        if (GetLocalPotentialEntry(*bond) != nullptr)
+        cloned_bond->SetSelectedFlag(bond->GetSelectedFlag());
+        cloned_bond->SetSpecialBondFlag(bond->GetSpecialBondFlag());
+        cloned_bond->SetBondKey(bond->GetBondKey());
+        cloned_bond->SetBondType(bond->GetBondType());
+        cloned_bond->SetBondOrder(bond->GetBondOrder());
+        if (bond->GetLocalPotentialEntry() != nullptr)
         {
-            SetLocalPotentialEntry(
-                *cloned_bond,
-                std::make_unique<LocalPotentialEntry>(*GetLocalPotentialEntry(*bond)));
+            cloned_bond->SetLocalPotentialEntry(
+                std::make_unique<LocalPotentialEntry>(*bond->GetLocalPotentialEntry()));
         }
         bond_ptr_map[bond.get()] = cloned_bond.get();
         m_bond_list.emplace_back(std::move(cloned_bond));
@@ -381,12 +378,12 @@ void ModelObject::FilterSelectionFromSymmetry(bool is_asymmetry)
             if (chain_id_list.empty()) continue;
             if (chain_id == chain_id_list.front())
             {
-                AtomObjectAccess::SetSelectedFlag(*atom, original_selection_flag);
+                atom->SetSelectedFlag(original_selection_flag);
                 in_candidate_chain = true;
                 break;
             }
         }
-        if (in_candidate_chain == false) AtomObjectAccess::SetSelectedFlag(*atom, false);
+        if (in_candidate_chain == false) atom->SetSelectedFlag(false);
     }
 
     for (auto & bond : m_bond_list)
@@ -400,12 +397,12 @@ void ModelObject::FilterSelectionFromSymmetry(bool is_asymmetry)
             if (chain_id_list.empty()) continue;
             if (chain_id == chain_id_list.front())
             {
-                BondObjectAccess::SetSelectedFlag(*bond, original_selection_flag);
+                bond->SetSelectedFlag(original_selection_flag);
                 in_candidate_chain = true;
                 break;
             }
         }
-        if (in_candidate_chain == false) BondObjectAccess::SetSelectedFlag(*bond, false);
+        if (in_candidate_chain == false) bond->SetSelectedFlag(false);
     }
 }
 

@@ -5,7 +5,6 @@
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
-#include "data/detail/ModelSelectionView.hpp"
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
@@ -89,7 +88,7 @@ void RunBondSampling(
     sampler->SetHeight(options.sampling_height);
     sampler->Print();
 
-    const auto & bond_list{ ModelSelectionView::SelectedBonds(model_object) };
+    const auto & bond_list{ ModelObjectAccess::SelectedBonds(model_object) };
     const auto bond_size{ bond_list.size() };
     size_t bond_count{ 0 };
     std::vector<LocalPotentialFitState *> fit_state_list;
@@ -167,7 +166,7 @@ void RunBondGrouping(ModelObject & model_object)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
-        for (auto bond : ModelSelectionView::SelectedBonds(model_object))
+        for (auto bond : ModelObjectAccess::SelectedBonds(model_object))
         {
             auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
             group_potential_entry->EnsureGroup(group_key).bond_members.emplace_back(bond);
@@ -199,7 +198,7 @@ void RunLocalBondFitting(
     ScopeTimer timer("PotentialAnalysisBondWorkflow::RunLocalBondFitting");
 
     std::atomic<size_t> bond_count{ 0 };
-    const auto & selected_bond_list{ ModelSelectionView::SelectedBonds(context.model_object) };
+    const auto & selected_bond_list{ ModelObjectAccess::SelectedBonds(context.model_object) };
     const auto selected_bond_size{ selected_bond_list.size() };
     std::vector<LocalPotentialFitState *> fit_state_list;
     fit_state_list.reserve(selected_bond_size);

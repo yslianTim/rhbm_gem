@@ -12,7 +12,6 @@ namespace rhbm_gem {
 
 class AtomObject;
 class LocalPotentialEntry;
-class BondObjectAccess;
 
 class BondObject
 {
@@ -54,8 +53,6 @@ public:
     AtomObject * GetAtomObject2() const { return m_atom_object_2; }
     LocalPotentialEntry * GetLocalPotentialEntry() const { return m_local_potential_entry.get(); }
 
-private:
-    friend class BondObjectAccess;
 };
 
 } // namespace rhbm_gem

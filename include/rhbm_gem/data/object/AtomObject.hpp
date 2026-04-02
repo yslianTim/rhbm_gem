@@ -11,7 +11,6 @@
 namespace rhbm_gem {
 
 class LocalPotentialEntry;
-class AtomObjectAccess;
 
 class AtomObject
 {
@@ -88,8 +87,6 @@ public:
     const std::unordered_map<std::string, float> & GetAlternateTemperatures() const;
     LocalPotentialEntry * GetLocalPotentialEntry() const { return m_local_potential_entry.get(); }
 
-private:
-    friend class AtomObjectAccess;
 };
 
 } // namespace rhbm_gem

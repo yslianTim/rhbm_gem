@@ -1,6 +1,5 @@
 #include "data/detail/MapSpatialIndex.hpp"
 
-#include "data/detail/MapObjectAccess.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
@@ -38,17 +37,12 @@ struct MapSpatialIndex::Impl
     std::vector<GridNode> grid_node_list;
 };
 
-MapSpatialIndex::MapSpatialIndex(const MapObject & map_object) :
-    m_map_object{ &map_object }
+MapSpatialIndex::MapSpatialIndex(const MapObject & map_object, int thread_size) :
+    m_map_object{ &map_object }, m_thread_size{ thread_size > 0 ? thread_size : 1 }
 {
 }
 
 MapSpatialIndex::~MapSpatialIndex() = default;
-
-void MapSpatialIndex::Invalidate()
-{
-    m_impl.reset();
-}
 
 void MapSpatialIndex::Build() const
 {
@@ -67,13 +61,11 @@ void MapSpatialIndex::Build() const
     const auto voxel_size{ m_map_object->GetMapValueArraySize() };
     m_impl->grid_node_list.reserve(voxel_size);
 
-    const auto thread_size{ MapObjectAccess::ThreadSize(*m_map_object) };
-
 #ifdef USE_OPENMP
-    #pragma omp parallel num_threads(thread_size)
+    #pragma omp parallel num_threads(m_thread_size)
     {
         std::vector<GridNode> thread_local_list;
-        thread_local_list.reserve(voxel_size / static_cast<size_t>(thread_size) + 1);
+        thread_local_list.reserve(voxel_size / static_cast<size_t>(m_thread_size) + 1);
 
         #pragma omp for schedule(static)
         for (size_t i = 0; i < voxel_size; i++)
@@ -109,7 +101,7 @@ void MapSpatialIndex::Build() const
     m_impl->kd_tree_root = KDTreeAlgorithm<GridNode>::BuildKDTree(
         m_impl->grid_node_list,
         0,
-        thread_size,
+        m_thread_size,
         true);
 }
 

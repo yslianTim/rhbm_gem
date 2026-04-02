@@ -11,10 +11,8 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/MapObjectAccess.hpp"
 #include "data/detail/MapSpatialIndex.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
-#include "data/detail/ModelSelectionView.hpp"
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
@@ -37,7 +35,7 @@ TEST(DataObjectRuntimeBehaviorTest, SetMapValueArrayRefreshesStatisticsAndPreser
 {
     auto map{ data_test::MakeMapObject() };
     std::vector<size_t> initial_hits;
-    rg::MapObjectAccess::SpatialIndex(map).CollectGridIndicesInRange(
+    rg::MapSpatialIndex(map).CollectGridIndicesInRange(
         map.GetGridPosition(0),
         0.1f,
         initial_hits);
@@ -52,7 +50,7 @@ TEST(DataObjectRuntimeBehaviorTest, SetMapValueArrayRefreshesStatisticsAndPreser
     map.SetMapValueArray(std::move(replacement_values));
 
     std::vector<size_t> refreshed_hits;
-    rg::MapObjectAccess::SpatialIndex(map).CollectGridIndicesInRange(
+    rg::MapSpatialIndex(map).CollectGridIndicesInRange(
         map.GetGridPosition(0),
         0.1f,
         refreshed_hits);
@@ -74,8 +72,8 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
         bond->SetSelectedFlag(false);
     }
     rg::ModelObjectAccess::RebuildSelectionIndex(*model);
-    ASSERT_EQ(rg::ModelSelectionView::SelectedAtomCount(*model), 0);
-    ASSERT_EQ(rg::ModelSelectionView::SelectedBondCount(*model), 0);
+    ASSERT_EQ(rg::ModelObjectAccess::SelectedAtomCount(*model), 0);
+    ASSERT_EQ(rg::ModelObjectAccess::SelectedBondCount(*model), 0);
 
     for (auto & atom : model->GetAtomList())
     {
@@ -86,23 +84,23 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
         bond->SetSelectedFlag(true);
     }
     rg::ModelObjectAccess::ApplySymmetrySelection(*model, false);
-    for (auto * atom : rg::ModelSelectionView::SelectedAtoms(*model))
+    for (auto * atom : rg::ModelObjectAccess::SelectedAtoms(*model))
     {
         atom->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     }
-    for (auto * bond : rg::ModelSelectionView::SelectedBonds(*model))
+    for (auto * bond : rg::ModelObjectAccess::SelectedBonds(*model))
     {
         bond->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     }
 
-    EXPECT_EQ(rg::ModelSelectionView::SelectedAtomCount(*model), model->GetNumberOfAtom());
-    EXPECT_EQ(rg::ModelSelectionView::SelectedBondCount(*model), model->GetNumberOfBond());
-    for (const auto * atom : rg::ModelSelectionView::SelectedAtoms(*model))
+    EXPECT_EQ(rg::ModelObjectAccess::SelectedAtomCount(*model), model->GetNumberOfAtom());
+    EXPECT_EQ(rg::ModelObjectAccess::SelectedBondCount(*model), model->GetNumberOfBond());
+    for (const auto * atom : rg::ModelObjectAccess::SelectedAtoms(*model))
     {
         ASSERT_NE(atom, nullptr);
         EXPECT_NE(atom->GetLocalPotentialEntry(), nullptr);
     }
-    for (const auto * bond : rg::ModelSelectionView::SelectedBonds(*model))
+    for (const auto * bond : rg::ModelObjectAccess::SelectedBonds(*model))
     {
         ASSERT_NE(bond, nullptr);
         EXPECT_NE(bond->GetLocalPotentialEntry(), nullptr);
@@ -133,8 +131,8 @@ TEST(DataObjectRuntimeBehaviorTest, AtomSelectorCanDriveModelSelectionState)
 
     EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
     EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
-    ASSERT_EQ(rg::ModelSelectionView::SelectedAtomCount(*model), 1);
-    EXPECT_EQ(rg::ModelSelectionView::SelectedAtoms(*model).front(), atom_list.at(0).get());
+    ASSERT_EQ(rg::ModelObjectAccess::SelectedAtomCount(*model), 1);
+    EXPECT_EQ(rg::ModelObjectAccess::SelectedAtoms(*model).front(), atom_list.at(0).get());
 }
 
 TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQueryable)
@@ -147,7 +145,7 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     atoms[0]->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
     rg::ModelObjectAccess::RebuildSelectionIndex(*model);
 
-    const auto & selected_only_atoms{ rg::ModelSelectionView::SelectedAtoms(*model) };
+    const auto & selected_only_atoms{ rg::ModelObjectAccess::SelectedAtoms(*model) };
     ASSERT_EQ(selected_only_atoms.size(), 1);
     EXPECT_EQ(selected_only_atoms.front(), atoms[0].get());
 
@@ -212,11 +210,11 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedAtomsAndBondsRemainQueryableForConte
 
     std::unordered_map<int, rg::AtomObject *> atom_map;
     std::unordered_map<int, std::vector<rg::BondObject *>> bond_map;
-    for (auto * atom : rg::ModelSelectionView::SelectedAtoms(*model))
+    for (auto * atom : rg::ModelObjectAccess::SelectedAtoms(*model))
     {
         atom_map.emplace(atom->GetSerialID(), atom);
     }
-    for (auto * bond : rg::ModelSelectionView::SelectedBonds(*model))
+    for (auto * bond : rg::ModelObjectAccess::SelectedBonds(*model))
     {
         bond_map[bond->GetAtomSerialID1()].emplace_back(bond);
         bond_map[bond->GetAtomSerialID2()].emplace_back(bond);
@@ -272,7 +270,7 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
     EXPECT_NE(rg::ModelObjectAccess::FindAtomPtr(*model, 11), nullptr);
     EXPECT_NE(rg::ModelObjectAccess::FindAtomPtr(*model, 12), nullptr);
     EXPECT_THROW(rg::ModelObjectAccess::FindAtomPtr(*model, 1), std::out_of_range);
-    EXPECT_EQ(rg::ModelSelectionView::SelectedAtomCount(*model), 1);
+    EXPECT_EQ(rg::ModelObjectAccess::SelectedAtomCount(*model), 1);
     EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 7.0f);
     const auto x_range{ model->GetModelPositionRange(0) };
     EXPECT_DOUBLE_EQ(std::get<0>(x_range), 5.0);

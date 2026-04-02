@@ -4,7 +4,6 @@
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisState.hpp"
 #include "data/detail/ModelObjectAccess.hpp"
-#include "data/detail/ModelSelectionView.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -90,12 +89,12 @@ void PrepareModelForPotentialAnalysis(
     SelectAllBonds(model_object);
     rhbm_gem::ModelObjectAccess::ApplySymmetrySelection(model_object, asymmetry_flag);
 
-    for (auto * atom : rhbm_gem::ModelSelectionView::SelectedAtoms(model_object))
+    for (auto * atom : rhbm_gem::ModelObjectAccess::SelectedAtoms(model_object))
     {
         atom->SetLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
         analysis_state.Atoms().EnsureFitState(*atom);
     }
-    for (auto * bond : rhbm_gem::ModelSelectionView::SelectedBonds(model_object))
+    for (auto * bond : rhbm_gem::ModelObjectAccess::SelectedBonds(model_object))
     {
         bond->SetLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
         analysis_state.Bonds().EnsureFitState(*bond);
@@ -442,12 +441,12 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing()
     PrepareModelForPotentialAnalysis(*m_model_object, RequestOptions().asymmetry_flag);
     Logger::Log(LogLevel::Info,
         "Number of selected atom = "
-            + std::to_string(ModelSelectionView::SelectedAtomCount(*m_model_object)));
+            + std::to_string(ModelObjectAccess::SelectedAtomCount(*m_model_object)));
     Logger::Log(LogLevel::Info,
         "Number of selected bond = "
-            + std::to_string(ModelSelectionView::SelectedBondCount(*m_model_object)));
+            + std::to_string(ModelObjectAccess::SelectedBondCount(*m_model_object)));
     if (m_model_object->GetNumberOfAtom() > 0 &&
-        ModelSelectionView::SelectedAtomCount(*m_model_object) == 0)
+        ModelObjectAccess::SelectedAtomCount(*m_model_object) == 0)
     {
         Logger::Log(LogLevel::Warning,
             "No atoms are selected after symmetry filtering. "
@@ -789,7 +788,7 @@ void RunAtomSamplingWorkflow(
     sampler->SetDistanceRangeMaximum(options.sampling_range_max);
     sampler->Print();
 
-    const auto & atom_list{ ModelSelectionView::SelectedAtoms(model_object) };
+    const auto & atom_list{ ModelObjectAccess::SelectedAtoms(model_object) };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     std::vector<LocalPotentialFitState *> fit_state_list;
@@ -857,7 +856,7 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
-        for (auto atom : ModelSelectionView::SelectedAtoms(model_object))
+        for (auto atom : ModelObjectAccess::SelectedAtoms(model_object))
         {
             auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
             group_potential_entry->EnsureGroup(group_key).atom_members.emplace_back(atom);
@@ -879,7 +878,7 @@ void RunLocalAtomFittingWorkflow(
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
     std::atomic<size_t> atom_count{ 0 };
-    const auto & selected_atom_list{ ModelSelectionView::SelectedAtoms(model_object) };
+    const auto & selected_atom_list{ ModelObjectAccess::SelectedAtoms(model_object) };
     const auto selected_atom_size{ selected_atom_list.size() };
     std::vector<LocalPotentialFitState *> fit_state_list;
     fit_state_list.reserve(selected_atom_size);
@@ -959,7 +958,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     const auto ordered_alpha_r_list{ detail::BuildOrderedAlphaRTrainingList() };
     
     // Alpha_R Training
-    const auto & atom_list{ ModelSelectionView::SelectedAtoms(*m_model_object) };
+    const auto & atom_list{ ModelObjectAccess::SelectedAtoms(*m_model_object) };
     std::vector<AtomObject *> selected_atom_list;
     selected_atom_list.reserve(atom_list.size());
     for (auto & atom : atom_list)
