@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <stdexcept>
 
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "support/CommandTestHelpers.hpp"

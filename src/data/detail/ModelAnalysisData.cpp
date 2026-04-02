@@ -1,10 +1,11 @@
-#include "data/detail/ModelAnalysisState.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
+#include <rhbm_gem/data/object/ModelObject.hpp>
 
 namespace rhbm_gem {
 
@@ -208,20 +209,35 @@ BondAnalysisStore::FitStateKey BondAnalysisStore::BuildFitStateKey(const BondObj
     return { bond_object.GetAtomSerialID1(), bond_object.GetAtomSerialID2() };
 }
 
-ModelAnalysisState::ModelAnalysisState() = default;
+ModelAnalysisData::ModelAnalysisData() = default;
 
-ModelAnalysisState::~ModelAnalysisState() = default;
+ModelAnalysisData::~ModelAnalysisData() = default;
 
-void ModelAnalysisState::Clear()
+void ModelAnalysisData::Clear()
 {
     m_atoms.Clear();
     m_bonds.Clear();
 }
 
-void ModelAnalysisState::ClearFitStates()
+void ModelAnalysisData::ClearFitStates()
 {
     m_atoms.ClearFitStates();
     m_bonds.ClearFitStates();
+}
+
+ModelAnalysisData & MutableAnalysisData(ModelObject & model_object)
+{
+    return *model_object.m_analysis_data;
+}
+
+const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object)
+{
+    return *model_object.m_analysis_data;
+}
+
+void ClearAnalysisFitStates(ModelObject & model_object)
+{
+    model_object.m_analysis_data->ClearFitStates();
 }
 
 } // namespace rhbm_gem

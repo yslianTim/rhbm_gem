@@ -2,33 +2,39 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
-#include "data/detail/ModelAnalysisState.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
 
+struct ModelSpatialCache
+{
+    std::unique_ptr<::KDNode<AtomObject>> kd_tree_root;
+};
+
 ModelObject::ModelObject() :
-    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
+    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" },
+    m_spatial_cache{ std::make_unique<ModelSpatialCache>() },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
     m_bond_key_system{ std::make_unique<BondKeySystem>() },
-    m_analysis_state{ std::make_unique<ModelAnalysisState>() }
+    m_analysis_data{ std::make_unique<ModelAnalysisData>() }
 {
 }
 
 ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_list) :
     m_atom_list{ std::move(atom_object_list) },
-    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" }, m_kd_tree_root{ nullptr },
+    m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" },
+    m_spatial_cache{ std::make_unique<ModelSpatialCache>() },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
     m_bond_key_system{ std::make_unique<BondKeySystem>() },
-    m_analysis_state{ std::make_unique<ModelAnalysisState>() }
+    m_analysis_data{ std::make_unique<ModelAnalysisData>() }
 {
     AttachOwnedObjects();
     SyncDerivedState();
@@ -39,11 +45,114 @@ ModelObject::~ModelObject()
 
 }
 
+ModelObject::ModelObject(ModelObject && other) noexcept :
+    m_atom_list{ std::move(other.m_atom_list) },
+    m_bond_list{ std::move(other.m_bond_list) },
+    m_selected_atom_list{ std::move(other.m_selected_atom_list) },
+    m_selected_bond_list{ std::move(other.m_selected_bond_list) },
+    m_key_tag{ std::move(other.m_key_tag) },
+    m_pdb_id{ std::move(other.m_pdb_id) },
+    m_emd_id{ std::move(other.m_emd_id) },
+    m_resolution_method{ std::move(other.m_resolution_method) },
+    m_resolution{ other.m_resolution },
+    m_serial_id_atom_map{ std::move(other.m_serial_id_atom_map) },
+    m_chain_id_list_map{ std::move(other.m_chain_id_list_map) },
+    m_chemical_component_entry_map{ std::move(other.m_chemical_component_entry_map) },
+    m_spatial_cache{ std::move(other.m_spatial_cache) },
+    m_center_of_mass_position{ std::move(other.m_center_of_mass_position) },
+    m_component_key_system{ std::move(other.m_component_key_system) },
+    m_atom_key_system{ std::move(other.m_atom_key_system) },
+    m_bond_key_system{ std::move(other.m_bond_key_system) },
+    m_analysis_data{ std::move(other.m_analysis_data) }
+{
+    for (size_t axis = 0; axis < std::size(m_model_position_range); ++axis)
+    {
+        m_model_position_range[axis] = std::move(other.m_model_position_range[axis]);
+    }
+    if (m_spatial_cache == nullptr)
+    {
+        m_spatial_cache = std::make_unique<ModelSpatialCache>();
+    }
+    if (m_analysis_data == nullptr)
+    {
+        m_analysis_data = std::make_unique<ModelAnalysisData>();
+    }
+    if (m_component_key_system == nullptr)
+    {
+        m_component_key_system = std::make_unique<ComponentKeySystem>();
+    }
+    if (m_atom_key_system == nullptr)
+    {
+        m_atom_key_system = std::make_unique<AtomKeySystem>();
+    }
+    if (m_bond_key_system == nullptr)
+    {
+        m_bond_key_system = std::make_unique<BondKeySystem>();
+    }
+    AttachOwnedObjects();
+    SyncDerivedState();
+}
+
+ModelObject & ModelObject::operator=(ModelObject && other) noexcept
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+
+    m_atom_list = std::move(other.m_atom_list);
+    m_bond_list = std::move(other.m_bond_list);
+    m_selected_atom_list = std::move(other.m_selected_atom_list);
+    m_selected_bond_list = std::move(other.m_selected_bond_list);
+    m_key_tag = std::move(other.m_key_tag);
+    m_pdb_id = std::move(other.m_pdb_id);
+    m_emd_id = std::move(other.m_emd_id);
+    m_resolution_method = std::move(other.m_resolution_method);
+    m_resolution = other.m_resolution;
+    m_serial_id_atom_map = std::move(other.m_serial_id_atom_map);
+    m_chain_id_list_map = std::move(other.m_chain_id_list_map);
+    m_chemical_component_entry_map = std::move(other.m_chemical_component_entry_map);
+    m_spatial_cache = std::move(other.m_spatial_cache);
+    m_center_of_mass_position = std::move(other.m_center_of_mass_position);
+    for (size_t axis = 0; axis < std::size(m_model_position_range); ++axis)
+    {
+        m_model_position_range[axis] = std::move(other.m_model_position_range[axis]);
+    }
+    m_component_key_system = std::move(other.m_component_key_system);
+    m_atom_key_system = std::move(other.m_atom_key_system);
+    m_bond_key_system = std::move(other.m_bond_key_system);
+    m_analysis_data = std::move(other.m_analysis_data);
+
+    if (m_spatial_cache == nullptr)
+    {
+        m_spatial_cache = std::make_unique<ModelSpatialCache>();
+    }
+    if (m_analysis_data == nullptr)
+    {
+        m_analysis_data = std::make_unique<ModelAnalysisData>();
+    }
+    if (m_component_key_system == nullptr)
+    {
+        m_component_key_system = std::make_unique<ComponentKeySystem>();
+    }
+    if (m_atom_key_system == nullptr)
+    {
+        m_atom_key_system = std::make_unique<AtomKeySystem>();
+    }
+    if (m_bond_key_system == nullptr)
+    {
+        m_bond_key_system = std::make_unique<BondKeySystem>();
+    }
+    AttachOwnedObjects();
+    SyncDerivedState();
+    return *this;
+}
+
 ModelObject::ModelObject(const ModelObject & other) :
     m_key_tag{ other.m_key_tag }, m_pdb_id{ other.m_pdb_id }, m_emd_id{ other.m_emd_id },
     m_resolution_method{ other.m_resolution_method }, m_resolution{ other.m_resolution },
     m_chain_id_list_map{ other.m_chain_id_list_map },
-    m_kd_tree_root{ nullptr },
+    m_spatial_cache{ std::make_unique<ModelSpatialCache>() },
     m_component_key_system{
         other.m_component_key_system != nullptr ?
             std::make_unique<ComponentKeySystem>(*other.m_component_key_system) : nullptr },
@@ -53,7 +162,7 @@ ModelObject::ModelObject(const ModelObject & other) :
     m_bond_key_system{
         other.m_bond_key_system != nullptr ?
             std::make_unique<BondKeySystem>(*other.m_bond_key_system) : nullptr },
-    m_analysis_state{ std::make_unique<ModelAnalysisState>() }
+    m_analysis_data{ std::make_unique<ModelAnalysisData>() }
 {
     m_atom_list.reserve(other.m_atom_list.size());
     std::unordered_map<const AtomObject *, AtomObject *> atom_ptr_map;
@@ -75,7 +184,7 @@ ModelObject::ModelObject(const ModelObject & other) :
         auto * atom_1{ atom_ptr_map.at(bond->GetAtomObject1()) };
         auto * atom_2{ atom_ptr_map.at(bond->GetAtomObject2()) };
         auto cloned_bond{ std::make_unique<BondObject>(atom_1, atom_2) };
-        cloned_bond->SetSelectedFlag(bond->GetSelectedFlag());
+        cloned_bond->SetSelectedFlag(bond->m_is_selected);
         cloned_bond->SetSpecialBondFlag(bond->GetSpecialBondFlag());
         cloned_bond->SetBondKey(bond->GetBondKey());
         cloned_bond->SetBondType(bond->GetBondType());
@@ -123,59 +232,53 @@ ModelObject::ModelObject(const ModelObject & other) :
             }
         };
 
-    const auto & source_analysis_state{ ModelAnalysisAccess::AnalysisState(other) };
+    const auto & source_analysis_data{ ReadAnalysisData(other) };
     copy_group_entries(
-        source_analysis_state.Atoms().Entries(),
+        source_analysis_data.Atoms().Entries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
         {
-            m_analysis_state->Atoms().EnsureGroupEntry(class_key) = std::move(*entry);
+            m_analysis_data->Atoms().EnsureGroupEntry(class_key) = std::move(*entry);
         });
     copy_group_entries(
-        source_analysis_state.Bonds().Entries(),
+        source_analysis_data.Bonds().Entries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
         {
-            m_analysis_state->Bonds().EnsureGroupEntry(class_key) = std::move(*entry);
+            m_analysis_data->Bonds().EnsureGroupEntry(class_key) = std::move(*entry);
         });
 
     for (const auto & atom : m_atom_list)
     {
-        if (const auto * local_entry{ source_analysis_state.Atoms().FindLocalEntry(*atom) };
+        if (const auto * local_entry{ source_analysis_data.Atoms().FindLocalEntry(*atom) };
             local_entry != nullptr)
         {
-            m_analysis_state->Atoms().SetLocalEntry(
+            m_analysis_data->Atoms().SetLocalEntry(
                 *atom,
                 std::make_unique<LocalPotentialEntry>(*local_entry));
         }
-        if (const auto * fit_state{ source_analysis_state.Atoms().FindFitState(*atom) };
+        if (const auto * fit_state{ source_analysis_data.Atoms().FindFitState(*atom) };
             fit_state != nullptr)
         {
-            m_analysis_state->Atoms().EnsureFitState(*atom) = *fit_state;
+            m_analysis_data->Atoms().EnsureFitState(*atom) = *fit_state;
         }
     }
     for (const auto & bond : m_bond_list)
     {
-        if (const auto * local_entry{ source_analysis_state.Bonds().FindLocalEntry(*bond) };
+        if (const auto * local_entry{ source_analysis_data.Bonds().FindLocalEntry(*bond) };
             local_entry != nullptr)
         {
-            m_analysis_state->Bonds().SetLocalEntry(
+            m_analysis_data->Bonds().SetLocalEntry(
                 *bond,
                 std::make_unique<LocalPotentialEntry>(*local_entry));
         }
-        if (const auto * fit_state{ source_analysis_state.Bonds().FindFitState(*bond) };
+        if (const auto * fit_state{ source_analysis_data.Bonds().FindFitState(*bond) };
             fit_state != nullptr)
         {
-            m_analysis_state->Bonds().EnsureFitState(*bond) = *fit_state;
+            m_analysis_data->Bonds().EnsureFitState(*bond) = *fit_state;
         }
     }
 
     RebuildObjectIndex();
     RebuildSelection();
-}
-
-void ModelObject::FinalizeLoad()
-{
-    AttachOwnedObjects();
-    SyncDerivedState();
 }
 
 void ModelObject::RebuildObjectIndex()
@@ -224,7 +327,7 @@ void ModelObject::InvalidateDerivedCaches()
     {
         axis_range.reset();
     }
-    m_kd_tree_root.reset();
+    m_spatial_cache = std::make_unique<ModelSpatialCache>();
 }
 
 void ModelObject::SyncDerivedState()
@@ -233,83 +336,40 @@ void ModelObject::SyncDerivedState()
     RebuildSelectionState();
 }
 
-void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)
-{
-    atom->SetOwnerModel(this);
-    m_atom_list.emplace_back(std::move(atom));
-    m_analysis_state->Clear();
-    SyncDerivedState();
-}
-
-void ModelObject::AddBond(std::unique_ptr<BondObject> bond)
-{
-    bond->SetOwnerModel(this);
-    m_bond_list.emplace_back(std::move(bond));
-    m_analysis_state->Clear();
-    SyncDerivedState();
-}
-
-void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list)
-{
-    m_atom_list = std::move(atom_list);
-    AttachOwnedObjects();
-    m_analysis_state->Clear();
-    SyncDerivedState();
-}
-
-void ModelObject::SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list)
-{
-    m_bond_list = std::move(bond_list);
-    AttachOwnedObjects();
-    m_analysis_state->Clear();
-    SyncDerivedState();
-}
-
-void ModelObject::AddChemicalComponentEntry(
-    ComponentKey key, std::unique_ptr<ChemicalComponentEntry> entry)
-{
-    m_chemical_component_entry_map[key] = std::move(entry);
-}
-
-void ModelObject::SetChemicalComponentEntryMap(
-    std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> entry_map)
-{
-    m_chemical_component_entry_map = std::move(entry_map);
-}
-
-void ModelObject::SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system)
-{
-    if (m_component_key_system != nullptr) m_component_key_system = nullptr;
-    m_component_key_system = std::move(component_key_system);
-}
-
-void ModelObject::SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system)
-{
-    if (m_atom_key_system != nullptr) m_atom_key_system = nullptr;
-    m_atom_key_system = std::move(atom_key_system);
-}
-
-void ModelObject::SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system)
-{
-    if (m_bond_key_system != nullptr) m_bond_key_system = nullptr;
-    m_bond_key_system = std::move(bond_key_system);
-}
-
 AtomObject * ModelObject::FindAtomPtr(int serial_id) const
 {
     return m_serial_id_atom_map.at(serial_id);
 }
 
-void ModelObject::BuildKDTreeRoot()
+std::string ModelObject::FindComponentID(ComponentKey component_key) const
 {
-    if (m_kd_tree_root != nullptr) return;
+    return m_component_key_system->GetComponentId(component_key);
+}
+
+std::string ModelObject::FindAtomID(AtomKey atom_key) const
+{
+    return m_atom_key_system->GetAtomId(atom_key);
+}
+
+std::string ModelObject::FindBondID(BondKey bond_key) const
+{
+    return m_bond_key_system->GetBondId(bond_key);
+}
+
+void ModelObject::EnsureKDTreeRoot()
+{
+    if (m_spatial_cache != nullptr && m_spatial_cache->kd_tree_root != nullptr) return;
+    if (m_spatial_cache == nullptr)
+    {
+        m_spatial_cache = std::make_unique<ModelSpatialCache>();
+    }
     std::vector<AtomObject *> atom_ptr_list;
     atom_ptr_list.reserve(m_atom_list.size());
     for (auto & atom : m_atom_list)
     {
         atom_ptr_list.emplace_back(atom.get());
     }
-    m_kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0);
+    m_spatial_cache->kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0);
 }
 
 std::array<float, 3> ModelObject::GetCenterOfMassPosition()
@@ -367,10 +427,15 @@ double ModelObject::GetModelLength(int axis)
     return std::get<1>(range_tuple) - std::get<0>(range_tuple);
 }
 
-const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
-ModelObject::GetChemicalComponentEntryMap() const
+bool ModelObject::HasChemicalComponentEntry(ComponentKey component_key) const
 {
-    return m_chemical_component_entry_map;
+    return m_chemical_component_entry_map.find(component_key) != m_chemical_component_entry_map.end();
+}
+
+const ChemicalComponentEntry * ModelObject::FindChemicalComponentEntry(ComponentKey component_key) const
+{
+    const auto iter{ m_chemical_component_entry_map.find(component_key) };
+    return iter == m_chemical_component_entry_map.end() ? nullptr : iter->second.get();
 }
 
 void ModelObject::SelectAllAtoms(bool selected)
@@ -436,7 +501,7 @@ void ModelObject::BuildSelectedAtomList()
     m_selected_atom_list.reserve(m_atom_list.size());
     for (auto & atom : m_atom_list)
     {
-        if (atom->GetSelectedFlag() == false) continue;
+        if (atom->m_is_selected == false) continue;
         m_selected_atom_list.emplace_back(atom.get());
     }
 }
@@ -447,7 +512,7 @@ void ModelObject::BuildSelectedBondList()
     m_selected_bond_list.reserve(m_bond_list.size());
     for (auto & bond : m_bond_list)
     {
-        if (bond->GetSelectedFlag() == false) continue;
+        if (bond->m_is_selected == false) continue;
         m_selected_bond_list.emplace_back(bond.get());
     }
 }
@@ -468,7 +533,7 @@ void ModelObject::FilterSelectionFromSymmetry(bool is_asymmetry)
 
     for (auto & atom : m_atom_list)
     {
-        auto original_selection_flag{ atom->GetSelectedFlag() };
+        auto original_selection_flag{ atom->m_is_selected };
         auto chain_id{ atom->GetChainID() };
         bool in_candidate_chain{ false };
         for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
@@ -487,7 +552,7 @@ void ModelObject::FilterSelectionFromSymmetry(bool is_asymmetry)
 
     for (auto & bond : m_bond_list)
     {
-        auto original_selection_flag{ bond->GetSelectedFlag() };
+        auto original_selection_flag{ bond->m_is_selected };
         auto chain_id{ bond->GetAtomObject1()->GetChainID() };
         bool in_candidate_chain{ false };
         for (auto & [entity_id, chain_id_list] : m_chain_id_list_map)
@@ -546,6 +611,23 @@ bool ModelObject::HasStandardDNAComponent() const
         }
     }
     return false;
+}
+
+std::vector<AtomObject *> FindAtomsInRange(
+    ModelObject & model_object,
+    const AtomObject & center_atom,
+    double range)
+{
+    model_object.EnsureKDTreeRoot();
+    if (model_object.m_spatial_cache == nullptr ||
+        model_object.m_spatial_cache->kd_tree_root == nullptr)
+    {
+        return {};
+    }
+    return KDTreeAlgorithm<AtomObject>::RangeSearch(
+        model_object.m_spatial_cache->kd_tree_root.get(),
+        const_cast<AtomObject *>(&center_atom),
+        range);
 }
 
 } // namespace rhbm_gem

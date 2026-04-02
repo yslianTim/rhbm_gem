@@ -10,9 +10,10 @@
 
 namespace rhbm_gem {
 
+class AtomObject;
 class ModelObject;
-class ModelBuilder;
-class ModelAnalysisAccess;
+class ModelObjectBuilder;
+ModelObject * OwnerModelOf(const AtomObject & atom_object);
 
 class AtomObject
 {
@@ -53,9 +54,6 @@ public:
     void SetElement(Element value);
     void SetSpot(Spot value);
     void SetStructure(Structure value);
-    void SetResidue(const std::string & name);
-    void SetElement(const std::string & name);
-    void SetSpot(const std::string & name);
     void SetPosition(float x, float y, float z);
     void SetPosition(const std::array<float, 3> & value) { m_position = value; }
     void AddAlternatePosition(const std::string & indicator, const std::array<float, 3> & value);
@@ -70,7 +68,6 @@ public:
     Structure GetStructure() const;
     bool IsUnknownAtom() const;
     bool IsMainChainAtom() const;
-    bool GetSelectedFlag() const { return m_is_selected; }
     bool GetSpecialAtomFlag() const { return m_is_special_atom; }
     int GetSerialID() const { return m_serial_id; }
     int GetSequenceID() const { return m_residue_id; }
@@ -88,12 +85,11 @@ public:
 
 private:
     friend class ModelObject;
-    friend class ModelBuilder;
-    friend class ModelAnalysisAccess;
+    friend class ModelObjectBuilder;
+    friend ModelObject * OwnerModelOf(const AtomObject & atom_object);
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetOwnerModel(ModelObject * value) { m_owner_model = value; }
-    ModelObject * GetOwnerModel() const { return m_owner_model; }
 };
 
 } // namespace rhbm_gem

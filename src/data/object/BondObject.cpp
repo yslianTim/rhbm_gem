@@ -83,4 +83,9 @@ std::string BondObject::GetInfo() const
            std::to_string(m_bond_vector.at(2)) + ")";
 }
 
+ModelObject * OwnerModelOf(const BondObject & bond_object)
+{
+    return bond_object.m_owner_model;
+}
+
 } // namespace rhbm_gem

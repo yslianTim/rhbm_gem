@@ -50,7 +50,6 @@ void AtomPainter::AddModel(ModelObject & data_object)
 void AtomPainter::AppendAtomObject(AtomObject & data_object)
 {
     if (FindLocalPotentialEntry(data_object) == nullptr) return;
-    if (data_object.GetSelectedFlag() == false) return;
     m_atom_object_list.push_back(&data_object);
 }
 

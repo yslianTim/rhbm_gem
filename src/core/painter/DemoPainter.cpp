@@ -64,11 +64,6 @@ void DemoPainter::Painting()
     Logger::Log(LogLevel::Info, "DemoPainter::Painting() called.");
     Logger::Log(LogLevel::Info, "Folder path: " + m_folder_path);
 
-    for (auto & model : m_model_object_list)
-    {
-        model->BuildKDTreeRoot();
-    }
-
     ModelObject * demo_model_object{ nullptr };
     std::vector<ModelObject *> demo_model_list{ nullptr, nullptr, nullptr, nullptr };
     std::vector<ModelObject *> demo_fsc_model_list

@@ -44,7 +44,7 @@ target_sources(rhbm_gem PRIVATE
     data/detail/LocalPotentialFitState.cpp
     data/object/MapObject.cpp
     data/detail/MapSpatialIndex.cpp
-    data/detail/ModelAnalysisState.cpp
+    data/detail/ModelAnalysisData.cpp
     data/object/ModelObject.cpp
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp

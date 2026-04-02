@@ -2,12 +2,12 @@
 
 #include "command/MapSampling.hpp"
 #include "command/PotentialAnalysisCommand.hpp"
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
-#include "data/detail/ModelAnalysisState.hpp"
+#include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
+#include "core/detail/GroupPotentialAccess.hpp"
 #include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -52,14 +52,14 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     return execution_options;
 }
 
-ModelAnalysisState & AnalysisState(ModelObject & model_object)
+ModelAnalysisData & AnalysisData(ModelObject & model_object)
 {
-    return ModelAnalysisAccess::AnalysisState(model_object);
+    return MutableAnalysisData(model_object);
 }
 
-const ModelAnalysisState & AnalysisState(const ModelObject & model_object)
+const ModelAnalysisData & AnalysisData(const ModelObject & model_object)
 {
-    return ModelAnalysisAccess::AnalysisState(model_object);
+    return ReadAnalysisData(model_object);
 }
 
 std::vector<GroupKey> CollectGroupKeys(const GroupPotentialEntry & entry)
@@ -95,7 +95,7 @@ void RunBondSampling(
     fit_state_list.reserve(bond_size);
     for (auto * bond : bond_list)
     {
-        fit_state_list.emplace_back(&AnalysisState(model_object).Bonds().EnsureFitState(*bond));
+        fit_state_list.emplace_back(&AnalysisData(model_object).Bonds().EnsureFitState(*bond));
     }
 
 #ifdef USE_OPENMP
@@ -106,7 +106,7 @@ void RunBondSampling(
         {
             auto bond{ bond_list[i] };
             auto * fit_state{ fit_state_list[i] };
-            auto * entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *bond) };
+            auto * entry{ FindLocalPotentialEntry(model_object, *bond) };
             auto bond_vector{ bond->GetBondVector() };
             auto bond_position{ bond->GetPosition() };
             constexpr float adjusted_rate{ 0.0f };
@@ -139,7 +139,7 @@ void RunBondSampling(
     {
         auto bond{ bond_list[i] };
         auto * fit_state{ fit_state_list[i] };
-        auto * entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *bond) };
+        auto * entry{ FindLocalPotentialEntry(model_object, *bond) };
         entry->SetDistanceAndMapValueList(
             SampleMapValues(
                 map_object,
@@ -172,7 +172,7 @@ void RunBondGrouping(ModelObject & model_object)
             group_potential_entry->EnsureGroup(group_key).bond_members.emplace_back(bond);
         }
         const auto group_size{ group_potential_entry->Entries().size() };
-        AnalysisState(model_object).Bonds().EnsureGroupEntry(class_key) =
+        AnalysisData(model_object).Bonds().EnsureGroupEntry(class_key) =
             std::move(*group_potential_entry);
         Logger::Log(
             LogLevel::Info,
@@ -204,7 +204,7 @@ void RunLocalBondFitting(
     fit_state_list.reserve(selected_bond_size);
     for (auto * bond : selected_bond_list)
     {
-        fit_state_list.emplace_back(&AnalysisState(context.model_object).Bonds().EnsureFitState(*bond));
+        fit_state_list.emplace_back(&AnalysisData(context.model_object).Bonds().EnsureFitState(*bond));
     }
     Logger::Log(
         LogLevel::Info,
@@ -215,7 +215,7 @@ void RunLocalBondFitting(
     for (size_t i = 0; i < selected_bond_size; i++)
     {
         auto * local_entry{
-            ModelAnalysisAccess::FindLocalEntry(context.model_object, *selected_bond_list[i]) };
+            FindLocalPotentialEntry(context.model_object, *selected_bond_list[i]) };
         auto * fit_state{ fit_state_list[i] };
         const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
@@ -266,7 +266,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
-        const auto & analysis_state{ AnalysisState(context.model_object) };
+        const auto & analysis_state{ AnalysisData(context.model_object) };
         auto group_potential_entry{
             analysis_state.Bonds().FindGroupEntry(class_key) };
         auto group_keys{ CollectGroupKeys(*group_potential_entry) };
@@ -336,7 +336,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             auto count{ 0 };
             for (const auto & bond : bond_list)
             {
-                auto * bond_entry{ ModelAnalysisAccess::FindLocalEntry(context.model_object, *bond) };
+                auto * bond_entry{ FindLocalPotentialEntry(context.model_object, *bond) };
                 const auto beta_vector_posterior{
                     result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
                 };

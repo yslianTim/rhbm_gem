@@ -14,16 +14,22 @@
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
 #include <rhbm_gem/utils/domain/ComponentKeySystem.hpp>
 
-template <typename T> struct KDNode;
-
 namespace rhbm_gem {
 
+class ModelObject;
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
-class ModelBuilder;
-class ModelAnalysisAccess;
-class ModelAnalysisState;
+class ModelObjectBuilder;
+class ModelAnalysisData;
+struct ModelSpatialCache;
+ModelAnalysisData & MutableAnalysisData(ModelObject & model_object);
+const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object);
+void ClearAnalysisFitStates(ModelObject & model_object);
+std::vector<AtomObject *> FindAtomsInRange(
+    ModelObject & model_object,
+    const AtomObject & center_atom,
+    double range);
 
 class ModelObject
 {
@@ -37,19 +43,21 @@ class ModelObject
     std::map<int, AtomObject*> m_serial_id_atom_map;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
-    std::unique_ptr<::KDNode<AtomObject>> m_kd_tree_root;
+    std::unique_ptr<ModelSpatialCache> m_spatial_cache;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
     std::unique_ptr<ComponentKeySystem> m_component_key_system;
     std::unique_ptr<AtomKeySystem> m_atom_key_system;
     std::unique_ptr<BondKeySystem> m_bond_key_system;
-    std::unique_ptr<ModelAnalysisState> m_analysis_state;
+    std::unique_ptr<ModelAnalysisData> m_analysis_data;
 
 public:
     ModelObject();
     explicit ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_list);
     ~ModelObject();
     ModelObject(const ModelObject & other);
+    ModelObject(ModelObject && other) noexcept;
+    ModelObject & operator=(ModelObject && other) noexcept;
     void SetKeyTag(const std::string & label) { m_key_tag = label; }
     std::string GetKeyTag() const { return m_key_tag; }
     void SetPdbID(const std::string & label) { m_pdb_id = label; }
@@ -78,10 +86,11 @@ public:
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
     AtomObject * FindAtomPtr(int serial_id) const;
-    ::KDNode<AtomObject> * PeekKDTreeRoot() const { return m_kd_tree_root.get(); }
-    void BuildKDTreeRoot();
-    const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
-    GetChemicalComponentEntryMap() const;
+    std::string FindComponentID(ComponentKey component_key) const;
+    std::string FindAtomID(AtomKey atom_key) const;
+    std::string FindBondID(BondKey bond_key) const;
+    bool HasChemicalComponentEntry(ComponentKey component_key) const;
+    const ChemicalComponentEntry * FindChemicalComponentEntry(ComponentKey component_key) const;
     std::vector<ComponentKey> GetComponentKeyList() const;
     void SelectAllAtoms(bool selected = true);
     void SelectAllBonds(bool selected = true);
@@ -93,29 +102,21 @@ public:
     void ApplySymmetrySelection(bool is_asymmetry);
 
 private:
-    friend class ModelBuilder;
-    friend class ModelAnalysisAccess;
+    friend class ModelObjectBuilder;
+    friend ModelAnalysisData & MutableAnalysisData(ModelObject & model_object);
+    friend const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object);
+    friend void ClearAnalysisFitStates(ModelObject & model_object);
+    friend std::vector<AtomObject *> FindAtomsInRange(
+        ModelObject & model_object,
+        const AtomObject & center_atom,
+        double range);
 
-    void AddAtom(std::unique_ptr<AtomObject> atom);
-    void AddBond(std::unique_ptr<BondObject> bond);
-    void SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list);
-    void SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list);
-    void SetChainIDListMap(
-        const std::unordered_map<std::string, std::vector<std::string>> & value) { m_chain_id_list_map = value; }
-    void AddChemicalComponentEntry(
-        ComponentKey component_key,
-        std::unique_ptr<ChemicalComponentEntry> entry);
-    void SetChemicalComponentEntryMap(
-        std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> entry_map);
-    void SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system);
-    void SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system);
-    void SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system);
-    void FinalizeLoad();
     void RebuildSelectionState();
     void RebuildObjectIndex();
     void AttachOwnedObjects();
     void InvalidateDerivedCaches();
     void SyncDerivedState();
+    void EnsureKDTreeRoot();
     void BuildSelectedAtomList();
     void BuildSelectedBondList();
     void FilterSelectionFromSymmetry(bool is_asymmetry);

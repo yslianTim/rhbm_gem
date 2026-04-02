@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 #include <memory>
@@ -46,6 +48,84 @@ struct HasPublicSetAtomList<
         std::declval<T &>().SetAtomList(
             std::declval<std::vector<std::unique_ptr<rhbm_gem::AtomObject>>>()))>> : std::true_type {};
 
+template <typename T, typename = void>
+struct HasPublicFindChemicalComponentEntry : std::false_type {};
+
+template <typename T>
+struct HasPublicFindChemicalComponentEntry<
+    T,
+    std::void_t<decltype(std::declval<const T &>().FindChemicalComponentEntry(
+        std::declval<ComponentKey>()))>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasPublicHasChemicalComponentEntry : std::false_type {};
+
+template <typename T>
+struct HasPublicHasChemicalComponentEntry<
+    T,
+    std::void_t<decltype(std::declval<const T &>().HasChemicalComponentEntry(
+        std::declval<ComponentKey>()))>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasPublicChemicalComponentEntryMap : std::false_type {};
+
+template <typename T>
+struct HasPublicChemicalComponentEntryMap<
+    T,
+    std::void_t<decltype(std::declval<const T &>().GetChemicalComponentEntryMap())>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct HasPublicBuildKDTreeRoot : std::false_type {};
+
+template <typename T>
+struct HasPublicBuildKDTreeRoot<
+    T,
+    std::void_t<decltype(std::declval<T &>().BuildKDTreeRoot())>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasPublicPeekKDTreeRoot : std::false_type {};
+
+template <typename T>
+struct HasPublicPeekKDTreeRoot<
+    T,
+    std::void_t<decltype(std::declval<T &>().PeekKDTreeRoot())>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasPublicGetSelectedFlag : std::false_type {};
+
+template <typename T>
+struct HasPublicGetSelectedFlag<
+    T,
+    std::void_t<decltype(std::declval<const T &>().GetSelectedFlag())>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasStringResidueSetter : std::false_type {};
+
+template <typename T>
+struct HasStringResidueSetter<
+    T,
+    std::void_t<decltype(std::declval<T &>().SetResidue(std::declval<const std::string &>()))>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct HasStringElementSetter : std::false_type {};
+
+template <typename T>
+struct HasStringElementSetter<
+    T,
+    std::void_t<decltype(std::declval<T &>().SetElement(std::declval<const std::string &>()))>>
+    : std::true_type {};
+
+template <typename T, typename = void>
+struct HasStringSpotSetter : std::false_type {};
+
+template <typename T>
+struct HasStringSpotSetter<
+    T,
+    std::void_t<decltype(std::declval<T &>().SetSpot(std::declval<const std::string &>()))>>
+    : std::true_type {};
+
 } // namespace
 
 TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
@@ -67,6 +147,16 @@ TEST(DataPublicSurfaceTest, ModelObjectExposesSelectionQueriesButKeepsBuildWorkf
     static_assert(HasPublicRebuildSelection<rhbm_gem::ModelObject>::value);
     static_assert(HasPublicApplySymmetrySelection<rhbm_gem::ModelObject>::value);
     static_assert(HasPublicSelectedAtoms<rhbm_gem::ModelObject>::value);
+    static_assert(HasPublicFindChemicalComponentEntry<rhbm_gem::ModelObject>::value);
+    static_assert(HasPublicHasChemicalComponentEntry<rhbm_gem::ModelObject>::value);
     static_assert(!HasPublicSetAtomList<rhbm_gem::ModelObject>::value);
+    static_assert(!HasPublicChemicalComponentEntryMap<rhbm_gem::ModelObject>::value);
+    static_assert(!HasPublicBuildKDTreeRoot<rhbm_gem::ModelObject>::value);
+    static_assert(!HasPublicPeekKDTreeRoot<rhbm_gem::ModelObject>::value);
+    static_assert(!HasPublicGetSelectedFlag<rhbm_gem::AtomObject>::value);
+    static_assert(!HasPublicGetSelectedFlag<rhbm_gem::BondObject>::value);
+    static_assert(!HasStringResidueSetter<rhbm_gem::AtomObject>::value);
+    static_assert(!HasStringElementSetter<rhbm_gem::AtomObject>::value);
+    static_assert(!HasStringSpotSetter<rhbm_gem::AtomObject>::value);
     SUCCEED();
 }

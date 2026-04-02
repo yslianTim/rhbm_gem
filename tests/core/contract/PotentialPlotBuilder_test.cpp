@@ -4,7 +4,6 @@
 #include <string>
 
 #include "core/detail/LocalPotentialAccess.hpp"
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "painter/PotentialPlotBuilder.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
@@ -34,14 +33,14 @@ void EnsureLocalPotentialEntries(rg::ModelObject & model)
     {
         if (rg::FindLocalPotentialEntry(*atom) == nullptr)
         {
-            rg::ModelAnalysisAccess::EnsureLocalEntry(model, *atom);
+            rg::EnsureLocalPotentialEntry(model, *atom);
         }
     }
     for (auto & bond : model.GetBondList())
     {
         if (rg::FindLocalPotentialEntry(*bond) == nullptr)
         {
-            rg::ModelAnalysisAccess::EnsureLocalEntry(model, *bond);
+            rg::EnsureLocalPotentialEntry(model, *bond);
         }
     }
 }

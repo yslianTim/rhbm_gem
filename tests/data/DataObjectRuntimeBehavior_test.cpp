@@ -9,8 +9,7 @@
 #include <vector>
 
 #include "core/detail/LocalPotentialAccess.hpp"
-#include "data/detail/ModelAnalysisAccess.hpp"
-#include "data/detail/ModelBuilder.hpp"
+#include "data/detail/ModelObjectBuilder.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -75,11 +74,11 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedModelEntriesCanBeInitializedForTyped
     model->ApplySymmetrySelection(false);
     for (auto * atom : model->GetSelectedAtoms())
     {
-        rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *atom);
+        rg::EnsureLocalPotentialEntry(*model, *atom);
     }
     for (auto * bond : model->GetSelectedBonds())
     {
-        rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *bond);
+        rg::EnsureLocalPotentialEntry(*model, *bond);
     }
 
     EXPECT_EQ(model->GetSelectedAtomCount(), model->GetNumberOfAtom());
@@ -115,8 +114,6 @@ TEST(DataObjectRuntimeBehaviorTest, AtomSelectorCanDriveModelSelectionState)
                 atom.GetElement());
         });
 
-    EXPECT_TRUE(atom_list.at(0)->GetSelectedFlag());
-    EXPECT_FALSE(atom_list.at(1)->GetSelectedFlag());
     ASSERT_EQ(model->GetSelectedAtomCount(), 1);
     EXPECT_EQ(model->GetSelectedAtoms().front(), atom_list.at(0).get());
 }
@@ -128,7 +125,7 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     ASSERT_EQ(atoms.size(), 2);
     model->SetAtomSelected(1, true);
     model->SetAtomSelected(2, false);
-    rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *atoms[0]);
+    rg::EnsureLocalPotentialEntry(*model, *atoms[0]);
 
     const auto & selected_only_atoms{ model->GetSelectedAtoms() };
     ASSERT_EQ(selected_only_atoms.size(), 1);
@@ -213,26 +210,21 @@ TEST(DataObjectRuntimeBehaviorTest, SelectedAtomsAndBondsRemainQueryableForConte
 
 TEST(DataObjectRuntimeBehaviorTest, AddAtomRebuildsSerialIndexWithoutUsingMovedFromPointer)
 {
-    rg::ModelObject model;
+    rg::ModelObjectBuilder builder;
     auto atom{ std::make_unique<rg::AtomObject>() };
     atom->SetSerialID(42);
     atom->SetPosition(3.0f, 4.0f, 5.0f);
 
-    ASSERT_NO_THROW(rg::ModelBuilder::AddAtom(model, std::move(atom)));
+    ASSERT_NO_THROW(builder.AddAtom(std::move(atom)));
+    auto model{ builder.Build() };
     EXPECT_EQ(model.GetNumberOfAtom(), 1);
     ASSERT_NE(model.FindAtomPtr(42), nullptr);
     EXPECT_FLOAT_EQ(model.GetCenterOfMassPosition().at(0), 3.0f);
 }
 
-    TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidatesDerivedCaches)
+TEST(DataObjectRuntimeBehaviorTest, BuilderBuildsModelWithFreshIndicesAndDerivedCaches)
 {
-    auto model{ data_test::MakeModelWithBond() };
-    model->SelectAllAtoms();
-    model->SelectAllBonds();
-    model->BuildKDTreeRoot();
-    ASSERT_NE(model->PeekKDTreeRoot(), nullptr);
-    EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 0.5f);
-
+    rg::ModelObjectBuilder builder;
     std::vector<std::unique_ptr<rg::AtomObject>> replacement_atoms;
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(11);
@@ -243,11 +235,11 @@ TEST(DataObjectRuntimeBehaviorTest, AddAtomRebuildsSerialIndexWithoutUsingMovedF
     replacement_atoms.emplace_back(std::move(atom_1));
     replacement_atoms.emplace_back(std::move(atom_2));
 
-    rg::ModelBuilder::SetAtomList(*model, std::move(replacement_atoms));
+    builder.SetAtomList(std::move(replacement_atoms));
+    auto model{ std::make_unique<rg::ModelObject>(builder.Build()) };
     model->SetAtomSelected(11, true);
     model->SetAtomSelected(12, false);
 
-    EXPECT_EQ(model->PeekKDTreeRoot(), nullptr);
     EXPECT_NE(model->FindAtomPtr(11), nullptr);
     EXPECT_NE(model->FindAtomPtr(12), nullptr);
     EXPECT_THROW(model->FindAtomPtr(1), std::out_of_range);

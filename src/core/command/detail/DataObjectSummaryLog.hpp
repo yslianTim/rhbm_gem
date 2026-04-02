@@ -25,11 +25,12 @@ inline void LogModelSummary(const ModelObject & model_object)
         " - #Atoms = " + std::to_string(model_object.GetNumberOfAtom()) + "\n"
         " - #Bonds = " + std::to_string(model_object.GetNumberOfBond()) + "\n"
         " - #Unique Components = "
-            + std::to_string(model_object.GetChemicalComponentEntryMap().size()) + "\n");
+            + std::to_string(model_object.GetComponentKeyList().size()) + "\n");
 
-    for (const auto & [component_key, entry] : model_object.GetChemicalComponentEntryMap())
+    for (const auto component_key : model_object.GetComponentKeyList())
     {
-        (void)component_key;
+        const auto * entry{ model_object.FindChemicalComponentEntry(component_key) };
+        if (entry == nullptr) continue;
         Logger::Log(LogLevel::Debug,
             "   - Component ID = " + entry->GetComponentId() + " "
             " (#Atoms = " + std::to_string(entry->AtomEntries().size()) +

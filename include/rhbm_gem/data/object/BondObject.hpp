@@ -11,9 +11,10 @@
 namespace rhbm_gem {
 
 class AtomObject;
+class BondObject;
 class ModelObject;
-class ModelBuilder;
-class ModelAnalysisAccess;
+class ModelObjectBuilder;
+ModelObject * OwnerModelOf(const BondObject & bond_object);
 
 class BondObject
 {
@@ -45,7 +46,6 @@ public:
     BondKey GetBondKey() const { return m_bond_key; }
     BondType GetBondType() const { return m_bond_type; }
     BondOrder GetBondOrder() const { return m_bond_order; }
-    bool GetSelectedFlag() const { return m_is_selected; }
     bool GetSpecialBondFlag() const { return m_is_special_bond; }
     std::array<float, 3> GetPosition() const { return m_position; }
     std::array<float, 3> GetBondVector() const { return m_bond_vector; }
@@ -54,12 +54,11 @@ public:
 
 private:
     friend class ModelObject;
-    friend class ModelBuilder;
-    friend class ModelAnalysisAccess;
+    friend class ModelObjectBuilder;
+    friend ModelObject * OwnerModelOf(const BondObject & bond_object);
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetOwnerModel(ModelObject * value) { m_owner_model = value; }
-    ModelObject * GetOwnerModel() const { return m_owner_model; }
 };
 
 } // namespace rhbm_gem

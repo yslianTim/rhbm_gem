@@ -7,7 +7,6 @@
 #include <vector>
 
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelBuilder.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
 
@@ -115,9 +114,8 @@ TEST(DataObjectImportRegressionTest, CifEdgeCaseMatrix)
             {
                 ASSERT_EQ(model.GetNumberOfAtom(), 2);
                 ASSERT_GE(model.GetNumberOfBond(), 1);
-                auto & bond_key_system{ rg::ModelBuilder::BondKeySystemRef(model) };
                 EXPECT_NE(
-                    bond_key_system.GetBondId(model.GetBondList().front()->GetBondKey()),
+                    model.FindBondID(model.GetBondList().front()->GetBondKey()),
                     "UNK");
             } },
     };

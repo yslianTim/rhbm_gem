@@ -1300,7 +1300,7 @@ void LoadAtomSiteBlock(CifFormatState& state) {
             atom_object->SetComponentKey(component_key);
             atom_object->SetAtomID(atom_id);
             atom_object->SetAtomKey(atom_key);
-            atom_object->SetElement(element_type);
+            atom_object->SetElement(element_enum);
             atom_object->SetIndicator(indicator);
             atom_object->SetSequenceID(sequence_id_value);
             atom_object->SetSerialID(serial_id_value);

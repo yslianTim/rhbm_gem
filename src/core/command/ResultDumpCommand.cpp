@@ -1,6 +1,5 @@
 #include "ResultDumpCommand.hpp"
 
-#include "data/detail/ModelBuilder.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -345,12 +344,11 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
         {
                 const auto residue_name{ ChemicalDataHelper::GetLabel(residue) };
                 const auto component_key{ static_cast<ComponentKey>(residue) };
-                auto & atom_key_system{ ModelBuilder::AtomKeySystemRef(*model_object) };
                 for (auto & spot : ComponentHelper::GetSpotList(residue))
                 {
                     const auto atom_key{ static_cast<uint16_t>(spot) };
                     const auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
-                    const auto atom_id{ atom_key_system.GetAtomId(atom_key) };
+                    const auto atom_id{ model_object->FindAtomID(atom_key) };
                     if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
                         << entry_view.GetAtomGausEstimatePrior(group_key, class_key, 0) << ','

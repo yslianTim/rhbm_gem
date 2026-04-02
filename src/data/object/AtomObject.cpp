@@ -58,21 +58,6 @@ void AtomObject::SetAtomID(const std::string & value)
     m_spot = ChemicalDataHelper::GetSpotFromString(m_atom_id, false);
 }
 
-void AtomObject::SetResidue(const std::string & name)
-{
-    m_residue = ChemicalDataHelper::GetResidueFromString(name, false);
-}
-
-void AtomObject::SetElement(const std::string & name)
-{
-    m_element = ChemicalDataHelper::GetElementFromString(name);
-}
-
-void AtomObject::SetSpot(const std::string & name)
-{
-    m_spot = ChemicalDataHelper::GetSpotFromString(name, false);
-}
-
 void AtomObject::SetPosition(float x, float y, float z)
 {
     m_position.at(0) = x;
@@ -151,6 +136,11 @@ bool AtomObject::IsMainChainAtom() const
 {
     size_t dummy_id;
     return AtomClassifier::IsMainChainMember(m_spot, dummy_id);
+}
+
+ModelObject * OwnerModelOf(const AtomObject & atom_object)
+{
+    return atom_object.m_owner_model;
 }
 
 } // namespace rhbm_gem

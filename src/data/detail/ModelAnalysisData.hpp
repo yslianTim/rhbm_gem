@@ -13,7 +13,7 @@ class BondObject;
 class GroupPotentialEntry;
 class LocalPotentialEntry;
 class LocalPotentialFitState;
-class ModelAnalysisAccess;
+class ModelObject;
 
 class AtomAnalysisStore
 {
@@ -44,7 +44,7 @@ public:
     const LocalPotentialFitState * FindFitState(const AtomObject & atom_object) const;
 
 private:
-    friend class ModelAnalysisState;
+    friend class ModelAnalysisData;
 
     void ClearGroupEntries();
     void ClearLocalEntries();
@@ -84,7 +84,7 @@ public:
     const LocalPotentialFitState * FindFitState(const BondObject & bond_object) const;
 
 private:
-    friend class ModelAnalysisState;
+    friend class ModelAnalysisData;
 
     void ClearGroupEntries();
     void ClearLocalEntries();
@@ -94,14 +94,14 @@ private:
     static FitStateKey BuildFitStateKey(const BondObject & bond_object);
 };
 
-class ModelAnalysisState
+class ModelAnalysisData
 {
     AtomAnalysisStore m_atoms;
     BondAnalysisStore m_bonds;
 
 public:
-    ModelAnalysisState();
-    ~ModelAnalysisState();
+    ModelAnalysisData();
+    ~ModelAnalysisData();
 
     void Clear();
 
@@ -111,9 +111,13 @@ public:
     const BondAnalysisStore & Bonds() const { return m_bonds; }
 
 private:
-    friend class ModelAnalysisAccess;
+    friend void ClearAnalysisFitStates(ModelObject & model_object);
 
     void ClearFitStates();
 };
+
+ModelAnalysisData & MutableAnalysisData(ModelObject & model_object);
+const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object);
+void ClearAnalysisFitStates(ModelObject & model_object);
 
 } // namespace rhbm_gem

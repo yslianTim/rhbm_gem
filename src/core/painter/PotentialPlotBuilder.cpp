@@ -1,18 +1,17 @@
 #include "PotentialPlotBuilder.hpp"
 
-#include "data/detail/ModelAnalysisState.hpp"
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
+#include "data/detail/ModelSpatialAccess.hpp"
+#include "core/detail/GroupPotentialAccess.hpp"
 #include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
-#include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <detail/PotentialSeriesOps.hpp>
 
 #ifdef HAVE_ROOT
@@ -44,7 +43,7 @@ const GroupPotentialBucket & RequireAtomGroup(
     GroupKey group_key,
     const std::string & class_key)
 {
-    const auto * entry{ ModelAnalysisAccess::AnalysisState(model_object).Atoms().FindGroupEntry(class_key) };
+    const auto * entry{ FindAtomGroupPotentialEntry(model_object, class_key) };
     if (entry == nullptr)
     {
         throw std::runtime_error("Atom group entry is not available.");
@@ -62,7 +61,7 @@ const GroupPotentialBucket & RequireBondGroup(
     GroupKey group_key,
     const std::string & class_key)
 {
-    const auto * entry{ ModelAnalysisAccess::AnalysisState(model_object).Bonds().FindGroupEntry(class_key) };
+    const auto * entry{ FindBondGroupPotentialEntry(model_object, class_key) };
     if (entry == nullptr)
     {
         throw std::runtime_error("Bond group entry is not available.");
@@ -788,17 +787,11 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
     }
     auto model_object{ m_model_object };
     auto graph{ ROOTHelper::CreateGraphErrors() };
-    auto kd_tree_root{ model_object->PeekKDTreeRoot() };
-    if (kd_tree_root == nullptr)
-    {
-        Logger::Log(LogLevel::Error, "KDTree is not available for the model object.");
-        return nullptr;
-    }
 
     auto count{ 0 };
     for (auto & atom : GetModelView().GetAtomObjectList(group_key, class_key))
     {
-        auto in_range_atom_list{ KDTreeAlgorithm<AtomObject>::RangeSearch(kd_tree_root, atom, range) };
+        auto in_range_atom_list{ FindAtomsInRange(*model_object, *atom, range) };
         auto * atom_entry{ FindLocalPotentialEntry(*atom) };
         graph->SetPoint(
             count,

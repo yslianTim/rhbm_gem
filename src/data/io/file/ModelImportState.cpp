@@ -1,5 +1,5 @@
 #include "ModelImportState.hpp"
-#include "data/detail/ModelBuilder.hpp"
+#include "data/detail/ModelObjectBuilder.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -152,12 +152,11 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
             "Model " + std::to_string(preferred_model_number) + " not found. Fallback to model " + std::to_string(selected_model_number) + ".");
     }
 
-    auto model_object{
-        std::make_unique<ModelObject>(MoveAtomObjectList(selected_model_number))};
+    auto atom_list{ MoveAtomObjectList(selected_model_number) };
 
     std::unordered_set<const AtomObject*> selected_atom_set;
-    selected_atom_set.reserve(model_object->GetAtomList().size());
-    for (const auto& atom : model_object->GetAtomList()) {
+    selected_atom_set.reserve(atom_list.size());
+    for (const auto& atom : atom_list) {
         selected_atom_set.insert(atom.get());
     }
 
@@ -176,19 +175,18 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
         filtered_bond_list.emplace_back(std::move(bond));
     }
 
+    ModelObjectBuilder builder{ std::move(atom_list) };
+    builder.SetChainIDListMap(GetChainIDListMap());
+    builder.SetChemicalComponentEntryMap(std::move(GetChemicalComponentEntryMap()));
+    builder.SetComponentKeySystem(MoveComponentKeySystem());
+    builder.SetAtomKeySystem(MoveAtomKeySystem());
+    builder.SetBondKeySystem(MoveBondKeySystem());
+    builder.SetBondList(std::move(filtered_bond_list));
+    auto model_object{ std::make_unique<ModelObject>(builder.Build()) };
     model_object->SetPdbID(GetPdbID());
     model_object->SetEmdID(GetEmdID());
     model_object->SetResolution(GetResolution());
     model_object->SetResolutionMethod(GetResolutionMethod());
-    ModelBuilder::SetChainIDListMap(*model_object, GetChainIDListMap());
-    ModelBuilder::SetChemicalComponentEntryMap(
-        *model_object,
-        std::move(GetChemicalComponentEntryMap()));
-    ModelBuilder::SetComponentKeySystem(*model_object, MoveComponentKeySystem());
-    ModelBuilder::SetAtomKeySystem(*model_object, MoveAtomKeySystem());
-    ModelBuilder::SetBondKeySystem(*model_object, MoveBondKeySystem());
-    ModelBuilder::SetBondList(*model_object, std::move(filtered_bond_list));
-    ModelBuilder::FinalizeLoad(*model_object);
     return model_object;
 }
 

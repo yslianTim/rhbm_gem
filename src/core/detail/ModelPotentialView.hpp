@@ -9,12 +9,11 @@
 #include <vector>
 
 #include "core/detail/LocalPotentialAccess.hpp"
-#include "data/detail/ModelAnalysisAccess.hpp"
+#include "core/detail/GroupPotentialAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelAnalysisState.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -256,12 +255,12 @@ private:
 
     const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
     {
-        return ModelAnalysisAccess::AnalysisState(m_model_object).Atoms().FindGroupEntry(class_key);
+        return FindAtomGroupPotentialEntry(m_model_object, class_key);
     }
 
     const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
     {
-        return ModelAnalysisAccess::AnalysisState(m_model_object).Bonds().FindGroupEntry(class_key);
+        return FindBondGroupPotentialEntry(m_model_object, class_key);
     }
 
     static void LogMissingAtomGroup(GroupKey group_key, const std::string & class_key)

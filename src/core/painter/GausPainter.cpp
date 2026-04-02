@@ -82,10 +82,10 @@ void GausPainter::PaintAtomLocalGausSummary(
 
     auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
+    const auto component_key_list{ model_object->GetComponentKeyList() };
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     auto show_outlier{ false };
-    (void)chemical_component_map;
+    (void)component_key_list;
     (void)show_outlier;
 
     #ifdef HAVE_ROOT
@@ -105,8 +105,10 @@ void GausPainter::PaintAtomLocalGausSummary(
     pad[3] = ROOTHelper::CreatePad("pad3","", 0.55, 0.60, 0.90, 0.80); // The top-middle pad
     pad[4] = ROOTHelper::CreatePad("pad4","", 0.90, 0.00, 1.00, 0.60); // The bottom-right pad
 
-    for (auto & [component_key, component_entry] : chemical_component_map)
+    for (const auto component_key : component_key_list)
     {
+        const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
+        if (component_entry == nullptr) continue;
         const auto & component_atom_map{ component_entry->AtomEntries() };
         auto component_id{ component_entry->GetComponentId() };
         for (auto & [atom_key, atom_entry] : component_atom_map)
@@ -337,8 +339,8 @@ void GausPainter::PaintAtomGroupGausSummary(
 
     auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
-    (void)chemical_component_map;
+    const auto component_key_list{ model_object->GetComponentKeyList() };
+    (void)component_key_list;
     #ifdef HAVE_ROOT
 
     gStyle->SetLineScalePS(2.0);
@@ -370,8 +372,10 @@ void GausPainter::PaintAtomGroupGausSummary(
 
     auto class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     auto struct_class_key{ ChemicalDataHelper::GetStructureAtomClassKey() };
-    for (auto & [component_key, component_entry] : chemical_component_map)
+    for (const auto component_key : component_key_list)
     {
+        const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
+        if (component_entry == nullptr) continue;
         if (component_entry->GetComponentType() == "non-polymer") continue;
         const auto & component_atom_map{ component_entry->AtomEntries() };
         auto component_id{ component_entry->GetComponentId() };
@@ -819,12 +823,10 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
 
     auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     const auto & class_key{ ChemicalDataHelper::GetComponentAtomClassKey() };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
     bool show_outlier{ false };
-    (void)chemical_component_map;
     (void)class_key;
     (void)standard_residue_list;
     (void)show_outlier;
@@ -868,7 +870,9 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
         {
             auto residue{ entry_iter->GetResidueFromAtomGroupKey(group_key, class_key) };
             auto component_key{ static_cast<ComponentKey>(residue) };
-            auto component_id{ chemical_component_map.at(component_key)->GetComponentId() };
+            const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
+            if (component_entry == nullptr) continue;
+            auto component_id{ component_entry->GetComponentId() };
             component_id_map.emplace(residue, component_id);
 
             auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key, class_key) };
@@ -1093,9 +1097,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
 
     auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
-    (void)chemical_component_map;
 
     #ifdef HAVE_ROOT
 
@@ -1149,7 +1151,9 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponentSimple(
     {
         auto residue{ entry_iter->GetResidueFromAtomGroupKey(group_key, class_key) };
         auto component_key{ static_cast<ComponentKey>(residue) };
-        auto component_id{ chemical_component_map.at(component_key)->GetComponentId() };
+        const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
+        if (component_entry == nullptr) continue;
+        auto component_id{ component_entry->GetComponentId() };
         component_id_list.emplace_back(component_id);
     }
 
@@ -1280,10 +1284,8 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
 
     auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const std::vector<Structure> structure_list{ Structure::FREE, Structure::HELX_P, Structure::SHEET };
-    (void)chemical_component_map;
     
     #ifdef HAVE_ROOT
 
@@ -1347,7 +1349,9 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainStructure(
         for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
         {
             auto component_key{ static_cast<ComponentKey>(residue) };
-            auto component_id{ chemical_component_map.at(component_key)->GetComponentId() };
+            const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
+            if (component_entry == nullptr) continue;
+            auto component_id{ component_entry->GetComponentId() };
             component_id_list.emplace_back(component_id);
         }
 
@@ -1843,9 +1847,7 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
 
     auto entry_iter{ std::make_unique<ModelPotentialView>(*model_object) };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const auto & chemical_component_map{ model_object->GetChemicalComponentEntryMap() };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N };
-    (void)chemical_component_map;
 
     #ifdef HAVE_ROOT
 
@@ -1905,7 +1907,9 @@ void GausPainter::PaintAtomGroupGausAminoAcidMainChainComponent(
     {
         auto residue{ entry_iter->GetResidueFromAtomGroupKey(group_key, class_key) };
         auto component_key{ static_cast<ComponentKey>(residue) };
-        auto component_id{ chemical_component_map.at(component_key)->GetComponentId() };
+        const auto * component_entry{ model_object->FindChemicalComponentEntry(component_key) };
+        if (component_entry == nullptr) continue;
+        auto component_id{ component_entry->GetComponentId() };
         component_id_list.emplace_back(component_id);
     }
 
