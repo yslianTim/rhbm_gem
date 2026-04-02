@@ -1,6 +1,7 @@
 #include "ModelObjectStorage.hpp"
 
 #include "SQLiteWrapper.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/ModelObjectBuilder.hpp"
@@ -32,16 +33,6 @@
 namespace {
 
 using namespace std::literals;
-
-rhbm_gem::ModelAnalysisData & AnalysisData(rhbm_gem::ModelObject & model_object)
-{
-    return rhbm_gem::MutableAnalysisData(model_object);
-}
-
-const rhbm_gem::ModelAnalysisData & AnalysisData(const rhbm_gem::ModelObject & model_object)
-{
-    return rhbm_gem::ReadAnalysisData(model_object);
-}
 
 inline constexpr std::string_view kCreateModelObjectTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_object (
@@ -1326,7 +1317,8 @@ void LoadAtomGroupPotentialEntryList(
     const std::string & key_tag,
     const std::string & class_key)
 {
-    auto & group_entry{ AnalysisData(model_obj).Atoms().EnsureGroupEntry(class_key) };
+    auto & group_entry{
+        rhbm_gem::ModelAnalysisAccess::Mutable(model_obj).Atoms().EnsureGroupEntry(class_key) };
     database.Prepare(std::string(kSelectModelAtomGroupSql));
     rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
@@ -1370,7 +1362,8 @@ void LoadBondGroupPotentialEntryList(
     const std::string & key_tag,
     const std::string & class_key)
 {
-    auto & group_entry{ AnalysisData(model_obj).Bonds().EnsureGroupEntry(class_key) };
+    auto & group_entry{
+        rhbm_gem::ModelAnalysisAccess::Mutable(model_obj).Bonds().EnsureGroupEntry(class_key) };
     database.Prepare(std::string(kSelectModelBondGroupSql));
     rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
@@ -1453,7 +1446,7 @@ void SaveAnalysis(
 {
     SaveAtomLocalPotentialEntryList(database, model_obj, key_tag);
     SaveBondLocalPotentialEntryList(database, model_obj, key_tag);
-    const auto & analysis_data{ AnalysisData(model_obj) };
+    const auto & analysis_data{ rhbm_gem::ModelAnalysisAccess::Read(model_obj) };
 
     for (const auto & [class_key, group_entry] : analysis_data.Atoms().Entries())
     {
@@ -1481,21 +1474,21 @@ void LoadAnalysis(
     const std::string & key_tag)
 {
     ScopeTimer timer{ "ModelObjectStorage::LoadAnalysis" };
-    AnalysisData(model_obj).Clear();
+    rhbm_gem::ModelAnalysisAccess::Mutable(model_obj).Clear();
     ApplyAtomLocalPotentialEntries(model_obj, LoadAtomLocalPotentialEntryMap(database, key_tag));
     ApplyBondLocalPotentialEntries(model_obj, LoadBondLocalPotentialEntryMap(database, key_tag));
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        AnalysisData(model_obj).Atoms().EnsureGroupEntry(class_key);
+        rhbm_gem::ModelAnalysisAccess::Mutable(model_obj).Atoms().EnsureGroupEntry(class_key);
         LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        AnalysisData(model_obj).Bonds().EnsureGroupEntry(class_key);
+        rhbm_gem::ModelAnalysisAccess::Mutable(model_obj).Bonds().EnsureGroupEntry(class_key);
         LoadBondGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 }

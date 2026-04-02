@@ -116,6 +116,20 @@ public:
         return TryGetBondGroup(group_key, class_key, verbose) != nullptr;
     }
 
+    const GroupPotentialBucket & GetAtomGroup(
+        GroupKey group_key,
+        const std::string & class_key) const
+    {
+        return *RequireAtomGroup(group_key, class_key);
+    }
+
+    const GroupPotentialBucket & GetBondGroup(
+        GroupKey group_key,
+        const std::string & class_key) const
+    {
+        return *RequireBondGroup(group_key, class_key);
+    }
+
     double GetAtomGausEstimatePrior(GroupKey group_key, const std::string & class_key, int par_id) const
     {
         return RequireAtomGroup(group_key, class_key)->prior.GetParameter(par_id);

@@ -126,6 +126,49 @@ struct HasStringSpotSetter<
     std::void_t<decltype(std::declval<T &>().SetSpot(std::declval<const std::string &>()))>>
     : std::true_type {};
 
+template <typename T, typename = void>
+struct HasAdlMutableAnalysisData : std::false_type {};
+
+template <typename T>
+struct HasAdlMutableAnalysisData<
+    T,
+    std::void_t<decltype(MutableAnalysisData(std::declval<T &>()))>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasAdlReadAnalysisData : std::false_type {};
+
+template <typename T>
+struct HasAdlReadAnalysisData<
+    T,
+    std::void_t<decltype(ReadAnalysisData(std::declval<const T &>()))>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasAdlClearAnalysisFitStates : std::false_type {};
+
+template <typename T>
+struct HasAdlClearAnalysisFitStates<
+    T,
+    std::void_t<decltype(ClearAnalysisFitStates(std::declval<T &>()))>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasAdlFindAtomsInRange : std::false_type {};
+
+template <typename T>
+struct HasAdlFindAtomsInRange<
+    T,
+    std::void_t<decltype(FindAtomsInRange(
+        std::declval<T &>(),
+        std::declval<const rhbm_gem::AtomObject &>(),
+        std::declval<double>()))>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasAdlOwnerModelOf : std::false_type {};
+
+template <typename T>
+struct HasAdlOwnerModelOf<
+    T,
+    std::void_t<decltype(OwnerModelOf(std::declval<const T &>()))>> : std::true_type {};
+
 } // namespace
 
 TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
@@ -158,5 +201,11 @@ TEST(DataPublicSurfaceTest, ModelObjectExposesSelectionQueriesButKeepsBuildWorkf
     static_assert(!HasStringResidueSetter<rhbm_gem::AtomObject>::value);
     static_assert(!HasStringElementSetter<rhbm_gem::AtomObject>::value);
     static_assert(!HasStringSpotSetter<rhbm_gem::AtomObject>::value);
+    static_assert(!HasAdlMutableAnalysisData<rhbm_gem::ModelObject>::value);
+    static_assert(!HasAdlReadAnalysisData<rhbm_gem::ModelObject>::value);
+    static_assert(!HasAdlClearAnalysisFitStates<rhbm_gem::ModelObject>::value);
+    static_assert(!HasAdlFindAtomsInRange<rhbm_gem::ModelObject>::value);
+    static_assert(!HasAdlOwnerModelOf<rhbm_gem::AtomObject>::value);
+    static_assert(!HasAdlOwnerModelOf<rhbm_gem::BondObject>::value);
     SUCCEED();
 }

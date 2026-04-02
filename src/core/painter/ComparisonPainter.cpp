@@ -41,12 +41,14 @@ ComparisonPainter::~ComparisonPainter()
 
 void ComparisonPainter::AddModel(ModelObject & data_object)
 {
+    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "ComparisonPainter");
     m_model_object_list.emplace_back(&data_object);
     m_resolution_list.emplace_back(data_object.GetResolution());
 }
 
 void ComparisonPainter::AddReferenceModel(ModelObject & data_object, std::string_view label)
 {
+    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "ComparisonPainter");
     m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
 }
 

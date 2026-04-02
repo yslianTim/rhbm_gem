@@ -138,9 +138,4 @@ bool AtomObject::IsMainChainAtom() const
     return AtomClassifier::IsMainChainMember(m_spot, dummy_id);
 }
 
-ModelObject * OwnerModelOf(const AtomObject & atom_object)
-{
-    return atom_object.m_owner_model;
-}
-
 } // namespace rhbm_gem

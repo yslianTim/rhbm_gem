@@ -2,6 +2,7 @@
 
 #include "command/MapSampling.hpp"
 #include "command/PotentialAnalysisCommand.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/BondClassifier.hpp"
@@ -52,16 +53,6 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     return execution_options;
 }
 
-ModelAnalysisData & AnalysisData(ModelObject & model_object)
-{
-    return MutableAnalysisData(model_object);
-}
-
-const ModelAnalysisData & AnalysisData(const ModelObject & model_object)
-{
-    return ReadAnalysisData(model_object);
-}
-
 std::vector<GroupKey> CollectGroupKeys(const GroupPotentialEntry & entry)
 {
     std::vector<GroupKey> group_keys;
@@ -95,7 +86,8 @@ void RunBondSampling(
     fit_state_list.reserve(bond_size);
     for (auto * bond : bond_list)
     {
-        fit_state_list.emplace_back(&AnalysisData(model_object).Bonds().EnsureFitState(*bond));
+        fit_state_list.emplace_back(
+            &ModelAnalysisAccess::Mutable(model_object).Bonds().EnsureFitState(*bond));
     }
 
 #ifdef USE_OPENMP
@@ -172,7 +164,7 @@ void RunBondGrouping(ModelObject & model_object)
             group_potential_entry->EnsureGroup(group_key).bond_members.emplace_back(bond);
         }
         const auto group_size{ group_potential_entry->Entries().size() };
-        AnalysisData(model_object).Bonds().EnsureGroupEntry(class_key) =
+        ModelAnalysisAccess::Mutable(model_object).Bonds().EnsureGroupEntry(class_key) =
             std::move(*group_potential_entry);
         Logger::Log(
             LogLevel::Info,
@@ -204,7 +196,8 @@ void RunLocalBondFitting(
     fit_state_list.reserve(selected_bond_size);
     for (auto * bond : selected_bond_list)
     {
-        fit_state_list.emplace_back(&AnalysisData(context.model_object).Bonds().EnsureFitState(*bond));
+        fit_state_list.emplace_back(
+            &ModelAnalysisAccess::Mutable(context.model_object).Bonds().EnsureFitState(*bond));
     }
     Logger::Log(
         LogLevel::Info,
@@ -266,7 +259,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
-        const auto & analysis_state{ AnalysisData(context.model_object) };
+        const auto & analysis_state{ ModelAnalysisAccess::Read(context.model_object) };
         auto group_potential_entry{
             analysis_state.Bonds().FindGroupEntry(class_key) };
         auto group_keys{ CollectGroupKeys(*group_potential_entry) };

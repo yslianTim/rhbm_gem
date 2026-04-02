@@ -49,6 +49,7 @@ GausPainter::~GausPainter()
 
 void GausPainter::AddModel(ModelObject & data_object)
 {
+    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "GausPainter");
     m_model_object_list.push_back(&data_object);
 }
 

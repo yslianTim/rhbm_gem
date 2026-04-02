@@ -225,19 +225,4 @@ void ModelAnalysisData::ClearFitStates()
     m_bonds.ClearFitStates();
 }
 
-ModelAnalysisData & MutableAnalysisData(ModelObject & model_object)
-{
-    return *model_object.m_analysis_data;
-}
-
-const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object)
-{
-    return *model_object.m_analysis_data;
-}
-
-void ClearAnalysisFitStates(ModelObject & model_object)
-{
-    model_object.m_analysis_data->ClearFitStates();
-}
-
 } // namespace rhbm_gem

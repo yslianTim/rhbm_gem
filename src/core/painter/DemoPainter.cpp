@@ -51,11 +51,13 @@ DemoPainter::~DemoPainter()
 
 void DemoPainter::AddModel(ModelObject & data_object)
 {
+    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "DemoPainter");
     m_model_object_list.push_back(&data_object);
 }
 
 void DemoPainter::AddReferenceModel(ModelObject & data_object, std::string_view label)
 {
+    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "DemoPainter");
     m_ref_model_object_list_map[std::string(label)].push_back(&data_object);
 }
 

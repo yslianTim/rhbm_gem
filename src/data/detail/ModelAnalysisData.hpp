@@ -13,6 +13,7 @@ class BondObject;
 class GroupPotentialEntry;
 class LocalPotentialEntry;
 class LocalPotentialFitState;
+class ModelAnalysisAccess;
 class ModelObject;
 
 class AtomAnalysisStore
@@ -111,13 +112,9 @@ public:
     const BondAnalysisStore & Bonds() const { return m_bonds; }
 
 private:
-    friend void ClearAnalysisFitStates(ModelObject & model_object);
+    friend class ModelAnalysisAccess;
 
     void ClearFitStates();
 };
-
-ModelAnalysisData & MutableAnalysisData(ModelObject & model_object);
-const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object);
-void ClearAnalysisFitStates(ModelObject & model_object);
 
 } // namespace rhbm_gem

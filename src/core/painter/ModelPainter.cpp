@@ -52,6 +52,7 @@ ModelPainter::~ModelPainter()
 
 void ModelPainter::AddModel(ModelObject & data_object)
 {
+    painter_internal::RequireGroupedAnalysisReadyModel(data_object, "ModelPainter");
     m_model_object_list.push_back(&data_object);
 }
 

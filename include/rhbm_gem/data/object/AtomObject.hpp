@@ -11,9 +11,9 @@
 namespace rhbm_gem {
 
 class AtomObject;
+class ModelAnalysisAccess;
 class ModelObject;
 class ModelObjectBuilder;
-ModelObject * OwnerModelOf(const AtomObject & atom_object);
 
 class AtomObject
 {
@@ -84,9 +84,9 @@ public:
     const std::unordered_map<std::string, float> & GetAlternateTemperatures() const;
 
 private:
+    friend class ModelAnalysisAccess;
     friend class ModelObject;
     friend class ModelObjectBuilder;
-    friend ModelObject * OwnerModelOf(const AtomObject & atom_object);
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetOwnerModel(ModelObject * value) { m_owner_model = value; }

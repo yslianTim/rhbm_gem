@@ -36,40 +36,6 @@ void ApplyModelSelection(
                 && rhbm_gem::FindLocalPotentialEntry(atom) != nullptr;
         });
 }
-
-template <typename PainterType>
-void AddModelsToPainter(
-    PainterType & painter,
-    const std::vector<std::shared_ptr<rhbm_gem::ModelObject>> & model_object_list)
-{
-    for (const auto & model_object : model_object_list)
-    {
-        painter.AddModel(*model_object);
-    }
-}
-
-template <typename PainterType>
-void AddReferenceModelsToPainter(
-    PainterType & painter,
-    const std::unordered_map<std::string, std::vector<std::shared_ptr<rhbm_gem::ModelObject>>> &
-        ref_model_object_list_map)
-{
-    for (const auto & [class_key, ref_model_list] : ref_model_object_list_map)
-    {
-        for (const auto & model_object : ref_model_list)
-        {
-            painter.AddReferenceModel(*model_object, class_key);
-        }
-    }
-}
-
-void RunPainter(
-    rhbm_gem::PainterBase & painter,
-    const std::filesystem::path & output_folder)
-{
-    painter.SetFolder(output_folder.string());
-    painter.Painting();
-}
 }
 
 namespace rhbm_gem {
@@ -197,31 +163,59 @@ void PotentialDisplayCommand::RunDisplay()
         case PainterType::GAUS:
         {
             GausPainter painter;
-            AddModelsToPainter(painter, m_model_object_list);
-            RunPainter(painter, OutputFolder());
+            for (const auto & model_object : m_model_object_list)
+            {
+                painter.AddModel(*model_object);
+            }
+            painter.SetFolder(OutputFolder().string());
+            painter.Painting();
             break;
         }
         case PainterType::MODEL:
         {
             ModelPainter painter;
-            AddModelsToPainter(painter, m_model_object_list);
-            RunPainter(painter, OutputFolder());
+            for (const auto & model_object : m_model_object_list)
+            {
+                painter.AddModel(*model_object);
+            }
+            painter.SetFolder(OutputFolder().string());
+            painter.Painting();
             break;
         }
         case PainterType::COMPARISON:
         {
             ComparisonPainter painter;
-            AddModelsToPainter(painter, m_model_object_list);
-            AddReferenceModelsToPainter(painter, m_ref_model_object_list_map);
-            RunPainter(painter, OutputFolder());
+            for (const auto & model_object : m_model_object_list)
+            {
+                painter.AddModel(*model_object);
+            }
+            for (const auto & [class_key, ref_model_list] : m_ref_model_object_list_map)
+            {
+                for (const auto & model_object : ref_model_list)
+                {
+                    painter.AddReferenceModel(*model_object, class_key);
+                }
+            }
+            painter.SetFolder(OutputFolder().string());
+            painter.Painting();
             break;
         }
         case PainterType::DEMO:
         {
             DemoPainter painter;
-            AddModelsToPainter(painter, m_model_object_list);
-            AddReferenceModelsToPainter(painter, m_ref_model_object_list_map);
-            RunPainter(painter, OutputFolder());
+            for (const auto & model_object : m_model_object_list)
+            {
+                painter.AddModel(*model_object);
+            }
+            for (const auto & [class_key, ref_model_list] : m_ref_model_object_list_map)
+            {
+                for (const auto & model_object : ref_model_list)
+                {
+                    painter.AddReferenceModel(*model_object, class_key);
+                }
+            }
+            painter.SetFolder(OutputFolder().string());
+            painter.Painting();
             break;
         }
         case PainterType::ATOM:
@@ -232,7 +226,8 @@ void PotentialDisplayCommand::RunDisplay()
                 painter.AddModel(*model_object);
             }
             m_atom_selector->Print();
-            RunPainter(painter, OutputFolder());
+            painter.SetFolder(OutputFolder().string());
+            painter.Painting();
             break;
         }
         default:

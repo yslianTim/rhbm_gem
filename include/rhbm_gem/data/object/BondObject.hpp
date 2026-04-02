@@ -12,9 +12,9 @@ namespace rhbm_gem {
 
 class AtomObject;
 class BondObject;
+class ModelAnalysisAccess;
 class ModelObject;
 class ModelObjectBuilder;
-ModelObject * OwnerModelOf(const BondObject & bond_object);
 
 class BondObject
 {
@@ -53,9 +53,9 @@ public:
     AtomObject * GetAtomObject2() const { return m_atom_object_2; }
 
 private:
+    friend class ModelAnalysisAccess;
     friend class ModelObject;
     friend class ModelObjectBuilder;
-    friend ModelObject * OwnerModelOf(const BondObject & bond_object);
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetOwnerModel(ModelObject * value) { m_owner_model = value; }

@@ -16,6 +16,7 @@ Related references:
 
 - only `/include/rhbm_gem/data/**` is public data-layer API
 - headers under `/src/data/io/file` and `/src/data/io/sqlite` are internal implementation details
+- `/src/data/detail/ModelAnalysisAccess.hpp` is the internal access layer for model-owned analysis state, owner lookup, and spatial lookup
 - headers under `/src/core/command/detail/**` are command-internal orchestration helpers
 - there is no public `DataObjectDispatch` header in the current project surface
 
@@ -162,6 +163,8 @@ Behavior:
 - repository-backed command request structs in `CommandApi.hpp` default `database_path` to `GetDefaultDatabasePath()`
 
 There is no shared manager-owned iteration API for loaded objects. Traversal and selection stay in typed command workflows or ordinary container iteration.
+
+Analysis-owned state stays behind the internal `ModelAnalysisAccess` layer. Commands and painters should not expose owner lookup, analysis-store access, fit-state clearing, or spatial-range helpers through public data headers.
 
 ## 10. Key Files
 

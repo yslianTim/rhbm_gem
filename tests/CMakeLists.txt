@@ -97,9 +97,12 @@ set(CORE_CONTRACT_TEST_SOURCES
     core/contract/CommandCatalog_test.cpp
     core/contract/CommandExecutionContract_test.cpp
     core/contract/DocumentationLayout_test.cpp
-    core/contract/PotentialPlotBuilder_test.cpp
     core/contract/PotentialSeriesOps_test.cpp
     core/contract/PublicHeaderSurface_test.cpp
+)
+
+set(CORE_PAINTER_TEST_SOURCES
+    core/painter/PotentialPlotBuilder_test.cpp
 )
 
 set(DATA_CONTRACT_TEST_SOURCES
@@ -160,6 +163,7 @@ set(INTEGRATION_COMMAND_TEST_SOURCES
 set(RHBM_GEM_ALL_GTEST_SOURCES
     ${CORE_COMMAND_TEST_SOURCES}
     ${CORE_CONTRACT_TEST_SOURCES}
+    ${CORE_PAINTER_TEST_SOURCES}
     ${DATA_CONTRACT_TEST_SOURCES}
     ${DATA_RUNTIME_TEST_SOURCES}
     ${DATA_SCHEMA_TEST_SOURCES}
@@ -198,6 +202,12 @@ add_rhbm_gtest_group(rhbm_tests_core_contract
     DOMAIN core
     INTENTS contract
     SOURCES ${CORE_CONTRACT_TEST_SOURCES}
+)
+
+add_rhbm_gtest_group(rhbm_tests_core_painter
+    DOMAIN core
+    INTENTS painter
+    SOURCES ${CORE_PAINTER_TEST_SOURCES}
 )
 
 add_rhbm_gtest_group(rhbm_tests_data_contract

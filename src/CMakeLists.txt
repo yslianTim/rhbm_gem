@@ -39,6 +39,7 @@ target_sources(rhbm_gem PRIVATE
     core/painter/BondStyleCatalog.cpp
     data/object/BondObject.cpp
     data/object/ChemicalComponentEntry.cpp
+    data/detail/ModelAnalysisAccess.cpp
     data/detail/GroupPotentialEntry.cpp
     data/detail/LocalPotentialEntry.cpp
     data/detail/LocalPotentialFitState.cpp

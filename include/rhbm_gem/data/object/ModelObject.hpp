@@ -22,18 +22,12 @@ class ModelObject;
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
+class ModelAnalysisAccess;
 class ModelObjectBuilder;
 class ModelAnalysisData;
 class ModelObjectStorage;
 class ModelSelectionAccess;
 struct ModelSpatialCache;
-ModelAnalysisData & MutableAnalysisData(ModelObject & model_object);
-const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object);
-void ClearAnalysisFitStates(ModelObject & model_object);
-std::vector<AtomObject *> FindAtomsInRange(
-    ModelObject & model_object,
-    const AtomObject & center_atom,
-    double range);
 
 class ModelObject
 {
@@ -106,16 +100,10 @@ public:
     void ApplySymmetrySelection(bool is_asymmetry);
 
 private:
+    friend class ModelAnalysisAccess;
     friend class ModelObjectBuilder;
     friend class ModelObjectStorage;
     friend class ModelSelectionAccess;
-    friend ModelAnalysisData & MutableAnalysisData(ModelObject & model_object);
-    friend const ModelAnalysisData & ReadAnalysisData(const ModelObject & model_object);
-    friend void ClearAnalysisFitStates(ModelObject & model_object);
-    friend std::vector<AtomObject *> FindAtomsInRange(
-        ModelObject & model_object,
-        const AtomObject & center_atom,
-        double range);
 
     void RebuildSelectionState();
     void RebuildObjectIndex();

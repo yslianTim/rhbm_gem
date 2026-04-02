@@ -2,6 +2,8 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelSpatialCache.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
@@ -11,11 +13,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 namespace rhbm_gem {
-
-struct ModelSpatialCache
-{
-    std::unique_ptr<::KDNode<AtomObject>> kd_tree_root;
-};
 
 ModelObject::ModelObject() :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" },
@@ -232,7 +229,7 @@ ModelObject::ModelObject(const ModelObject & other) :
             }
         };
 
-    const auto & source_analysis_data{ ReadAnalysisData(other) };
+    const auto & source_analysis_data{ ModelAnalysisAccess::Read(other) };
     copy_group_entries(
         source_analysis_data.Atoms().Entries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
@@ -633,23 +630,6 @@ bool ModelObject::HasStandardDNAComponent() const
         }
     }
     return false;
-}
-
-std::vector<AtomObject *> FindAtomsInRange(
-    ModelObject & model_object,
-    const AtomObject & center_atom,
-    double range)
-{
-    model_object.EnsureKDTreeRoot();
-    if (model_object.m_spatial_cache == nullptr ||
-        model_object.m_spatial_cache->kd_tree_root == nullptr)
-    {
-        return {};
-    }
-    return KDTreeAlgorithm<AtomObject>::RangeSearch(
-        model_object.m_spatial_cache->kd_tree_root.get(),
-        const_cast<AtomObject *>(&center_atom),
-        range);
 }
 
 } // namespace rhbm_gem
