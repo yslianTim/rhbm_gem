@@ -10,7 +10,9 @@
 
 namespace rhbm_gem {
 
-class LocalPotentialEntry;
+class ModelObject;
+class ModelBuilder;
+class ModelAnalysisAccess;
 
 class AtomObject
 {
@@ -25,18 +27,17 @@ class AtomObject
     Element m_element;
     Spot m_spot;
     Structure m_structure;
+    ModelObject * m_owner_model;
     std::array<float, 3> m_position;
     std::unordered_map<std::string, std::array<float, 3>> m_alternate_position_map;
     std::unordered_map<std::string, float> m_alternate_occupancy_map;
     std::unordered_map<std::string, float> m_alternate_temperature_map;
-    std::unique_ptr<LocalPotentialEntry> m_local_potential_entry;
 
 public:
     AtomObject();
     ~AtomObject();
     AtomObject(const AtomObject & other);
 
-    void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialAtomFlag(bool value) { m_is_special_atom = value; }
     void SetSerialID(int value) { m_serial_id = value; }
     void SetSequenceID(int value) { m_residue_id = value; }
@@ -57,7 +58,6 @@ public:
     void SetSpot(const std::string & name);
     void SetPosition(float x, float y, float z);
     void SetPosition(const std::array<float, 3> & value) { m_position = value; }
-    void SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
     void AddAlternatePosition(const std::string & indicator, const std::array<float, 3> & value);
     void AddAlternateOccupancy(const std::string & indicator, float value);
     void AddAlternateTemperature(const std::string & indicator, float value);
@@ -85,8 +85,15 @@ public:
     const std::unordered_map<std::string, std::array<float, 3>> & GetAlternatePositions() const;
     const std::unordered_map<std::string, float> & GetAlternateOccupancies() const;
     const std::unordered_map<std::string, float> & GetAlternateTemperatures() const;
-    LocalPotentialEntry * GetLocalPotentialEntry() const { return m_local_potential_entry.get(); }
 
+private:
+    friend class ModelObject;
+    friend class ModelBuilder;
+    friend class ModelAnalysisAccess;
+
+    void SetSelectedFlag(bool value) { m_is_selected = value; }
+    void SetOwnerModel(ModelObject * value) { m_owner_model = value; }
+    ModelObject * GetOwnerModel() const { return m_owner_model; }
 };
 
 } // namespace rhbm_gem

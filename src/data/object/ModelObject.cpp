@@ -2,11 +2,11 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisState.hpp"
-#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -30,6 +30,7 @@ ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_li
     m_bond_key_system{ std::make_unique<BondKeySystem>() },
     m_analysis_state{ std::make_unique<ModelAnalysisState>() }
 {
+    AttachOwnedObjects();
     SyncDerivedState();
 }
 
@@ -64,6 +65,8 @@ ModelObject::ModelObject(const ModelObject & other) :
         m_atom_list.emplace_back(std::move(cloned_atom));
     }
 
+    AttachOwnedObjects();
+
     m_bond_list.reserve(other.m_bond_list.size());
     std::unordered_map<const BondObject *, BondObject *> bond_ptr_map;
     bond_ptr_map.reserve(other.m_bond_list.size());
@@ -77,14 +80,11 @@ ModelObject::ModelObject(const ModelObject & other) :
         cloned_bond->SetBondKey(bond->GetBondKey());
         cloned_bond->SetBondType(bond->GetBondType());
         cloned_bond->SetBondOrder(bond->GetBondOrder());
-        if (bond->GetLocalPotentialEntry() != nullptr)
-        {
-            cloned_bond->SetLocalPotentialEntry(
-                std::make_unique<LocalPotentialEntry>(*bond->GetLocalPotentialEntry()));
-        }
         bond_ptr_map[bond.get()] = cloned_bond.get();
         m_bond_list.emplace_back(std::move(cloned_bond));
     }
+
+    AttachOwnedObjects();
 
     for (const auto & [component_key, entry] : other.m_chemical_component_entry_map)
     {
@@ -123,7 +123,7 @@ ModelObject::ModelObject(const ModelObject & other) :
             }
         };
 
-    const auto & source_analysis_state{ ModelObjectAccess::AnalysisState(other) };
+    const auto & source_analysis_state{ ModelAnalysisAccess::AnalysisState(other) };
     copy_group_entries(
         source_analysis_state.Atoms().Entries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
@@ -139,6 +139,13 @@ ModelObject::ModelObject(const ModelObject & other) :
 
     for (const auto & atom : m_atom_list)
     {
+        if (const auto * local_entry{ source_analysis_state.Atoms().FindLocalEntry(*atom) };
+            local_entry != nullptr)
+        {
+            m_analysis_state->Atoms().SetLocalEntry(
+                *atom,
+                std::make_unique<LocalPotentialEntry>(*local_entry));
+        }
         if (const auto * fit_state{ source_analysis_state.Atoms().FindFitState(*atom) };
             fit_state != nullptr)
         {
@@ -147,6 +154,13 @@ ModelObject::ModelObject(const ModelObject & other) :
     }
     for (const auto & bond : m_bond_list)
     {
+        if (const auto * local_entry{ source_analysis_state.Bonds().FindLocalEntry(*bond) };
+            local_entry != nullptr)
+        {
+            m_analysis_state->Bonds().SetLocalEntry(
+                *bond,
+                std::make_unique<LocalPotentialEntry>(*local_entry));
+        }
         if (const auto * fit_state{ source_analysis_state.Bonds().FindFitState(*bond) };
             fit_state != nullptr)
         {
@@ -154,34 +168,53 @@ ModelObject::ModelObject(const ModelObject & other) :
         }
     }
 
-    RebuildSelectionIndex();
-}
-
-void ModelObject::RebuildSelectionIndex()
-{
-    SyncDerivedState();
+    RebuildObjectIndex();
+    RebuildSelection();
 }
 
 void ModelObject::FinalizeLoad()
 {
+    AttachOwnedObjects();
     SyncDerivedState();
 }
 
-void ModelObject::ApplySymmetrySelection(bool is_asymmetry)
-{
-    FilterSelectionFromSymmetry(is_asymmetry);
-    SyncDerivedState();
-}
-
-void ModelObject::RebuildSelectionState()
+void ModelObject::RebuildObjectIndex()
 {
     m_serial_id_atom_map.clear();
     for (auto & atom : m_atom_list)
     {
         m_serial_id_atom_map[atom->GetSerialID()] = atom.get();
     }
+}
+
+void ModelObject::RebuildSelection()
+{
     BuildSelectedAtomList();
     BuildSelectedBondList();
+}
+
+void ModelObject::RebuildSelectionState()
+{
+    RebuildObjectIndex();
+    RebuildSelection();
+}
+
+void ModelObject::AttachOwnedObjects()
+{
+    for (auto & atom : m_atom_list)
+    {
+        atom->SetOwnerModel(this);
+    }
+    for (auto & bond : m_bond_list)
+    {
+        bond->SetOwnerModel(this);
+    }
+}
+
+void ModelObject::ApplySymmetrySelection(bool is_asymmetry)
+{
+    FilterSelectionFromSymmetry(is_asymmetry);
+    RebuildSelection();
 }
 
 void ModelObject::InvalidateDerivedCaches()
@@ -202,6 +235,7 @@ void ModelObject::SyncDerivedState()
 
 void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)
 {
+    atom->SetOwnerModel(this);
     m_atom_list.emplace_back(std::move(atom));
     m_analysis_state->Clear();
     SyncDerivedState();
@@ -209,6 +243,7 @@ void ModelObject::AddAtom(std::unique_ptr<AtomObject> atom)
 
 void ModelObject::AddBond(std::unique_ptr<BondObject> bond)
 {
+    bond->SetOwnerModel(this);
     m_bond_list.emplace_back(std::move(bond));
     m_analysis_state->Clear();
     SyncDerivedState();
@@ -217,6 +252,7 @@ void ModelObject::AddBond(std::unique_ptr<BondObject> bond)
 void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list)
 {
     m_atom_list = std::move(atom_list);
+    AttachOwnedObjects();
     m_analysis_state->Clear();
     SyncDerivedState();
 }
@@ -224,6 +260,7 @@ void ModelObject::SetAtomList(std::vector<std::unique_ptr<AtomObject>> atom_list
 void ModelObject::SetBondList(std::vector<std::unique_ptr<BondObject>> bond_list)
 {
     m_bond_list = std::move(bond_list);
+    AttachOwnedObjects();
     m_analysis_state->Clear();
     SyncDerivedState();
 }
@@ -256,6 +293,11 @@ void ModelObject::SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_syste
 {
     if (m_bond_key_system != nullptr) m_bond_key_system = nullptr;
     m_bond_key_system = std::move(bond_key_system);
+}
+
+AtomObject * ModelObject::FindAtomPtr(int serial_id) const
+{
+    return m_serial_id_atom_map.at(serial_id);
 }
 
 void ModelObject::BuildKDTreeRoot()
@@ -329,6 +371,63 @@ const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> 
 ModelObject::GetChemicalComponentEntryMap() const
 {
     return m_chemical_component_entry_map;
+}
+
+void ModelObject::SelectAllAtoms(bool selected)
+{
+    for (auto & atom : m_atom_list)
+    {
+        atom->SetSelectedFlag(selected);
+    }
+    RebuildSelection();
+}
+
+void ModelObject::SelectAllBonds(bool selected)
+{
+    for (auto & bond : m_bond_list)
+    {
+        bond->SetSelectedFlag(selected);
+    }
+    RebuildSelection();
+}
+
+void ModelObject::SelectAtoms(const std::function<bool(const AtomObject &)> & predicate)
+{
+    for (auto & atom : m_atom_list)
+    {
+        atom->SetSelectedFlag(predicate(*atom));
+    }
+    RebuildSelection();
+}
+
+void ModelObject::SelectBonds(const std::function<bool(const BondObject &)> & predicate)
+{
+    for (auto & bond : m_bond_list)
+    {
+        bond->SetSelectedFlag(predicate(*bond));
+    }
+    RebuildSelection();
+}
+
+void ModelObject::SetAtomSelected(int serial_id, bool selected)
+{
+    FindAtomPtr(serial_id)->SetSelectedFlag(selected);
+    RebuildSelection();
+}
+
+void ModelObject::SetBondSelected(int atom_serial_id_1, int atom_serial_id_2, bool selected)
+{
+    for (auto & bond : m_bond_list)
+    {
+        if (bond->GetAtomSerialID1() == atom_serial_id_1 &&
+            bond->GetAtomSerialID2() == atom_serial_id_2)
+        {
+            bond->SetSelectedFlag(selected);
+            RebuildSelection();
+            return;
+        }
+    }
+    throw std::out_of_range("Bond serial pair is not available.");
 }
 
 void ModelObject::BuildSelectedAtomList()

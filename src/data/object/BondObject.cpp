@@ -1,6 +1,5 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 
@@ -13,8 +12,8 @@ BondObject::BondObject() :
     m_bond_type{ BondType::UNK }, m_bond_order{ BondOrder::UNK },
     m_atom_serial_id_1{ 0 }, m_atom_serial_id_2{ 0 },
     m_atom_object_1{ nullptr }, m_atom_object_2{ nullptr },
-    m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 }, m_unit_vector{ 0.0, 0.0, 0.0 },
-    m_local_potential_entry{ nullptr }
+    m_owner_model{ nullptr },
+    m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 }, m_unit_vector{ 0.0, 0.0, 0.0 }
 {
 
 }
@@ -25,8 +24,8 @@ BondObject::BondObject(AtomObject * atom_object_1, AtomObject * atom_object_2) :
     m_atom_serial_id_1{ atom_object_1->GetSerialID() },
     m_atom_serial_id_2{ atom_object_2->GetSerialID() },
     m_atom_object_1{ atom_object_1 }, m_atom_object_2{ atom_object_2 },
-    m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 }, m_unit_vector{ 0.0, 0.0, 0.0 },
-    m_local_potential_entry{ nullptr }
+    m_owner_model{ nullptr },
+    m_position{ 0.0, 0.0, 0.0 }, m_bond_vector{ 0.0, 0.0, 0.0 }, m_unit_vector{ 0.0, 0.0, 0.0 }
 {
     auto position_1{ m_atom_object_1->GetPosition() };
     auto position_2{ m_atom_object_2->GetPosition() };
@@ -62,14 +61,10 @@ BondObject::BondObject(const BondObject & other) :
     m_atom_serial_id_1{ other.m_atom_serial_id_1 },
     m_atom_serial_id_2{ other.m_atom_serial_id_2 },
     m_atom_object_1{ other.m_atom_object_1 }, m_atom_object_2{ other.m_atom_object_2 },
+    m_owner_model{ nullptr },
     m_position{ other.m_position }, m_bond_vector{ other.m_bond_vector },
-    m_unit_vector{ other.m_unit_vector },
-    m_local_potential_entry{ nullptr }
+    m_unit_vector{ other.m_unit_vector }
 {
-    if (other.m_local_potential_entry != nullptr)
-    {
-        m_local_potential_entry = std::make_unique<LocalPotentialEntry>(*other.m_local_potential_entry);
-    }
 }
 
 std::string BondObject::GetInfo() const
@@ -86,11 +81,6 @@ std::string BondObject::GetInfo() const
            std::to_string(m_bond_vector.at(0)) + ", " +
            std::to_string(m_bond_vector.at(1)) + ", " +
            std::to_string(m_bond_vector.at(2)) + ")";
-}
-
-void BondObject::SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
-{
-    m_local_potential_entry = std::move(entry);
 }
 
 } // namespace rhbm_gem

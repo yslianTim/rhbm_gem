@@ -1,8 +1,8 @@
 #include "data/detail/ModelAnalysisState.hpp"
 
 #include "data/detail/GroupPotentialEntry.hpp"
+#include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
-#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 
@@ -13,6 +13,11 @@ void AtomAnalysisStore::ClearGroupEntries()
     m_group_entry_map.clear();
 }
 
+void AtomAnalysisStore::ClearLocalEntries()
+{
+    m_local_entry_map.clear();
+}
+
 void AtomAnalysisStore::ClearFitStates()
 {
     m_fit_state_map.clear();
@@ -21,6 +26,7 @@ void AtomAnalysisStore::ClearFitStates()
 void AtomAnalysisStore::Clear()
 {
     ClearGroupEntries();
+    ClearLocalEntries();
     ClearFitStates();
 }
 
@@ -44,6 +50,40 @@ const GroupPotentialEntry * AtomAnalysisStore::FindGroupEntry(const std::string 
 const AtomAnalysisStore::GroupEntryMap & AtomAnalysisStore::Entries() const
 {
     return m_group_entry_map;
+}
+
+LocalPotentialEntry & AtomAnalysisStore::EnsureLocalEntry(const AtomObject & atom_object)
+{
+    auto & entry{ m_local_entry_map[BuildFitStateKey(atom_object)] };
+    if (entry == nullptr)
+    {
+        entry = std::make_unique<LocalPotentialEntry>();
+    }
+    return *entry;
+}
+
+void AtomAnalysisStore::SetLocalEntry(
+    const AtomObject & atom_object,
+    std::unique_ptr<LocalPotentialEntry> entry)
+{
+    m_local_entry_map[BuildFitStateKey(atom_object)] = std::move(entry);
+}
+
+LocalPotentialEntry * AtomAnalysisStore::FindLocalEntry(const AtomObject & atom_object)
+{
+    const auto iter{ m_local_entry_map.find(BuildFitStateKey(atom_object)) };
+    return (iter == m_local_entry_map.end() || iter->second == nullptr) ? nullptr : iter->second.get();
+}
+
+const LocalPotentialEntry * AtomAnalysisStore::FindLocalEntry(const AtomObject & atom_object) const
+{
+    const auto iter{ m_local_entry_map.find(BuildFitStateKey(atom_object)) };
+    return (iter == m_local_entry_map.end() || iter->second == nullptr) ? nullptr : iter->second.get();
+}
+
+const AtomAnalysisStore::LocalEntryMap & AtomAnalysisStore::LocalEntries() const
+{
+    return m_local_entry_map;
 }
 
 LocalPotentialFitState & AtomAnalysisStore::EnsureFitState(const AtomObject & atom_object)
@@ -73,6 +113,11 @@ void BondAnalysisStore::ClearGroupEntries()
     m_group_entry_map.clear();
 }
 
+void BondAnalysisStore::ClearLocalEntries()
+{
+    m_local_entry_map.clear();
+}
+
 void BondAnalysisStore::ClearFitStates()
 {
     m_fit_state_map.clear();
@@ -81,6 +126,7 @@ void BondAnalysisStore::ClearFitStates()
 void BondAnalysisStore::Clear()
 {
     ClearGroupEntries();
+    ClearLocalEntries();
     ClearFitStates();
 }
 
@@ -104,6 +150,40 @@ const GroupPotentialEntry * BondAnalysisStore::FindGroupEntry(const std::string 
 const BondAnalysisStore::GroupEntryMap & BondAnalysisStore::Entries() const
 {
     return m_group_entry_map;
+}
+
+LocalPotentialEntry & BondAnalysisStore::EnsureLocalEntry(const BondObject & bond_object)
+{
+    auto & entry{ m_local_entry_map[BuildFitStateKey(bond_object)] };
+    if (entry == nullptr)
+    {
+        entry = std::make_unique<LocalPotentialEntry>();
+    }
+    return *entry;
+}
+
+void BondAnalysisStore::SetLocalEntry(
+    const BondObject & bond_object,
+    std::unique_ptr<LocalPotentialEntry> entry)
+{
+    m_local_entry_map[BuildFitStateKey(bond_object)] = std::move(entry);
+}
+
+LocalPotentialEntry * BondAnalysisStore::FindLocalEntry(const BondObject & bond_object)
+{
+    const auto iter{ m_local_entry_map.find(BuildFitStateKey(bond_object)) };
+    return (iter == m_local_entry_map.end() || iter->second == nullptr) ? nullptr : iter->second.get();
+}
+
+const LocalPotentialEntry * BondAnalysisStore::FindLocalEntry(const BondObject & bond_object) const
+{
+    const auto iter{ m_local_entry_map.find(BuildFitStateKey(bond_object)) };
+    return (iter == m_local_entry_map.end() || iter->second == nullptr) ? nullptr : iter->second.get();
+}
+
+const BondAnalysisStore::LocalEntryMap & BondAnalysisStore::LocalEntries() const
+{
+    return m_local_entry_map;
 }
 
 LocalPotentialFitState & BondAnalysisStore::EnsureFitState(const BondObject & bond_object)
@@ -142,11 +222,6 @@ void ModelAnalysisState::ClearFitStates()
 {
     m_atoms.ClearFitStates();
     m_bonds.ClearFitStates();
-}
-
-void ModelObjectAccess::ClearAnalysisFitStates(ModelObject & model_object)
-{
-    model_object.m_analysis_state->ClearFitStates();
 }
 
 } // namespace rhbm_gem

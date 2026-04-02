@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -20,7 +21,8 @@ namespace rhbm_gem {
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
-class ModelObjectAccess;
+class ModelBuilder;
+class ModelAnalysisAccess;
 class ModelAnalysisState;
 
 class ModelObject
@@ -61,6 +63,10 @@ public:
     size_t GetNumberOfBond() const { return m_bond_list.size(); }
     const std::vector<std::unique_ptr<AtomObject>> & GetAtomList() const { return m_atom_list; }
     const std::vector<std::unique_ptr<BondObject>> & GetBondList() const { return m_bond_list; }
+    const std::vector<AtomObject *> & GetSelectedAtoms() const { return m_selected_atom_list; }
+    const std::vector<BondObject *> & GetSelectedBonds() const { return m_selected_bond_list; }
+    size_t GetSelectedAtomCount() const { return m_selected_atom_list.size(); }
+    size_t GetSelectedBondCount() const { return m_selected_bond_list.size(); }
     std::string GetPdbID() const { return m_pdb_id; }
     std::string GetEmdID() const { return m_emd_id; }
     double GetResolution() const { return m_resolution; }
@@ -71,13 +77,24 @@ public:
     std::tuple<double, double> GetModelPositionRange(int axis);
     double GetModelPosition(int axis, double normalized_pos);
     double GetModelLength(int axis);
+    AtomObject * FindAtomPtr(int serial_id) const;
+    ::KDNode<AtomObject> * PeekKDTreeRoot() const { return m_kd_tree_root.get(); }
+    void BuildKDTreeRoot();
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
     GetChemicalComponentEntryMap() const;
     std::vector<ComponentKey> GetComponentKeyList() const;
+    void SelectAllAtoms(bool selected = true);
+    void SelectAllBonds(bool selected = true);
+    void SelectAtoms(const std::function<bool(const AtomObject &)> & predicate);
+    void SelectBonds(const std::function<bool(const BondObject &)> & predicate);
+    void SetAtomSelected(int serial_id, bool selected);
+    void SetBondSelected(int atom_serial_id_1, int atom_serial_id_2, bool selected);
+    void RebuildSelection();
+    void ApplySymmetrySelection(bool is_asymmetry);
 
 private:
-    friend class ModelObjectAccess;
-    AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
+    friend class ModelBuilder;
+    friend class ModelAnalysisAccess;
 
     void AddAtom(std::unique_ptr<AtomObject> atom);
     void AddBond(std::unique_ptr<BondObject> bond);
@@ -93,11 +110,10 @@ private:
     void SetComponentKeySystem(std::unique_ptr<ComponentKeySystem> component_key_system);
     void SetAtomKeySystem(std::unique_ptr<AtomKeySystem> atom_key_system);
     void SetBondKeySystem(std::unique_ptr<BondKeySystem> bond_key_system);
-    void BuildKDTreeRoot();
-    void RebuildSelectionIndex();
     void FinalizeLoad();
-    void ApplySymmetrySelection(bool is_asymmetry);
     void RebuildSelectionState();
+    void RebuildObjectIndex();
+    void AttachOwnedObjects();
     void InvalidateDerivedCaches();
     void SyncDerivedState();
     void BuildSelectedAtomList();

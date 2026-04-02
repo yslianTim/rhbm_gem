@@ -1,9 +1,10 @@
 #include "PotentialAnalysisCommand.hpp"
 #include "MapSampling.hpp"
 #include "experimental/PotentialAnalysisBondWorkflow.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
+#include "data/detail/ModelBuilder.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisState.hpp"
-#include "data/detail/ModelObjectAccess.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -65,18 +66,12 @@ std::vector<GroupKey> CollectGroupKeys(const rhbm_gem::GroupPotentialEntry & ent
 
 void SelectAllAtoms(rhbm_gem::ModelObject & model_object)
 {
-    for (auto & atom : model_object.GetAtomList())
-    {
-        atom->SetSelectedFlag(true);
-    }
+    model_object.SelectAllAtoms();
 }
 
 void SelectAllBonds(rhbm_gem::ModelObject & model_object)
 {
-    for (auto & bond : model_object.GetBondList())
-    {
-        bond->SetSelectedFlag(true);
-    }
+    model_object.SelectAllBonds();
 }
 
 void PrepareModelForPotentialAnalysis(
@@ -87,16 +82,16 @@ void PrepareModelForPotentialAnalysis(
     analysis_state.Clear();
     SelectAllAtoms(model_object);
     SelectAllBonds(model_object);
-    rhbm_gem::ModelObjectAccess::ApplySymmetrySelection(model_object, asymmetry_flag);
+    model_object.ApplySymmetrySelection(asymmetry_flag);
 
-    for (auto * atom : rhbm_gem::ModelObjectAccess::SelectedAtoms(model_object))
+    for (auto * atom : model_object.GetSelectedAtoms())
     {
-        atom->SetLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+        rhbm_gem::ModelAnalysisAccess::EnsureLocalEntry(model_object, *atom);
         analysis_state.Atoms().EnsureFitState(*atom);
     }
-    for (auto * bond : rhbm_gem::ModelObjectAccess::SelectedBonds(model_object))
+    for (auto * bond : model_object.GetSelectedBonds())
     {
-        bond->SetLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+        rhbm_gem::ModelAnalysisAccess::EnsureLocalEntry(model_object, *bond);
         analysis_state.Bonds().EnsureFitState(*bond);
     }
 }
@@ -113,12 +108,12 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
 
 rhbm_gem::ModelAnalysisState & AnalysisState(rhbm_gem::ModelObject & model_object)
 {
-    return rhbm_gem::ModelObjectAccess::AnalysisState(model_object);
+    return rhbm_gem::ModelAnalysisAccess::AnalysisState(model_object);
 }
 
 const rhbm_gem::ModelAnalysisState & AnalysisState(const rhbm_gem::ModelObject & model_object)
 {
-    return rhbm_gem::ModelObjectAccess::AnalysisState(model_object);
+    return rhbm_gem::ModelAnalysisAccess::AnalysisState(model_object);
 }
 
 std::vector<GroupKey> CollectGroupKeys(const rhbm_gem::GroupPotentialEntry & entry)
@@ -441,12 +436,12 @@ void PotentialAnalysisCommand::RunModelObjectPreprocessing()
     PrepareModelForPotentialAnalysis(*m_model_object, RequestOptions().asymmetry_flag);
     Logger::Log(LogLevel::Info,
         "Number of selected atom = "
-            + std::to_string(ModelObjectAccess::SelectedAtomCount(*m_model_object)));
+            + std::to_string(m_model_object->GetSelectedAtomCount()));
     Logger::Log(LogLevel::Info,
         "Number of selected bond = "
-            + std::to_string(ModelObjectAccess::SelectedBondCount(*m_model_object)));
+            + std::to_string(m_model_object->GetSelectedBondCount()));
     if (m_model_object->GetNumberOfAtom() > 0 &&
-        ModelObjectAccess::SelectedAtomCount(*m_model_object) == 0)
+        m_model_object->GetSelectedAtomCount() == 0)
     {
         Logger::Log(LogLevel::Warning,
             "No atoms are selected after symmetry filtering. "
@@ -534,7 +529,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
             auto count{ 0 };
             for (const auto & atom : atom_list)
             {
-                auto atom_entry{ atom->GetLocalPotentialEntry() };
+                auto * atom_entry{ ModelAnalysisAccess::FindLocalEntry(*m_model_object, *atom) };
                 const auto beta_vector_posterior{
                     result.beta_posterior_array.col(static_cast<Eigen::Index>(count))
                 };
@@ -766,7 +761,7 @@ void PotentialAnalysisCommand::SavePreparedModel()
     if (m_model_object == nullptr) return;
 
     SaveStoredObject(m_model_key_tag, RequestOptions().saved_key_tag);
-    ModelObjectAccess::ClearAnalysisFitStates(*m_model_object);
+    ModelAnalysisAccess::ClearAnalysisFitStates(*m_model_object);
 }
 
 
@@ -788,7 +783,7 @@ void RunAtomSamplingWorkflow(
     sampler->SetDistanceRangeMaximum(options.sampling_range_max);
     sampler->Print();
 
-    const auto & atom_list{ ModelObjectAccess::SelectedAtoms(model_object) };
+    const auto & atom_list{ model_object.GetSelectedAtoms() };
     const auto atom_size{ atom_list.size() };
     size_t atom_count{ 0 };
     std::vector<LocalPotentialFitState *> fit_state_list;
@@ -806,7 +801,7 @@ void RunAtomSamplingWorkflow(
         {
             auto atom{ atom_list[i] };
             auto * fit_state{ fit_state_list[i] };
-            auto entry{ atom->GetLocalPotentialEntry() };
+            auto * entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *atom) };
             entry->SetDistanceAndMapValueList(
                 SampleMapValues(map_object, *sampler, atom->GetPosition()));
             fit_state->SetDataset(
@@ -830,7 +825,7 @@ void RunAtomSamplingWorkflow(
     {
         auto atom{ atom_list[i] };
         auto * fit_state{ fit_state_list[i] };
-        auto entry{ atom->GetLocalPotentialEntry() };
+        auto * entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *atom) };
         entry->SetDistanceAndMapValueList(
             SampleMapValues(map_object, *sampler, atom->GetPosition()));
         fit_state->SetDataset(
@@ -856,7 +851,7 @@ void RunAtomGroupingWorkflow(ModelObject & model_object)
     {
         const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
         auto group_potential_entry{ std::make_unique<GroupPotentialEntry>() };
-        for (auto atom : ModelObjectAccess::SelectedAtoms(model_object))
+        for (auto atom : model_object.GetSelectedAtoms())
         {
             auto group_key{ AtomClassifier::GetGroupKeyInClass(atom, class_key) };
             group_potential_entry->EnsureGroup(group_key).atom_members.emplace_back(atom);
@@ -878,7 +873,7 @@ void RunLocalAtomFittingWorkflow(
 {
     ScopeTimer timer("PotentialAnalysisCommand::RunLocalAtomFitting");
     std::atomic<size_t> atom_count{ 0 };
-    const auto & selected_atom_list{ ModelObjectAccess::SelectedAtoms(model_object) };
+    const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
     const auto selected_atom_size{ selected_atom_list.size() };
     std::vector<LocalPotentialFitState *> fit_state_list;
     fit_state_list.reserve(selected_atom_size);
@@ -894,7 +889,7 @@ void RunLocalAtomFittingWorkflow(
 #endif
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        auto local_entry{ selected_atom_list[i]->GetLocalPotentialEntry() };
+        auto * local_entry{ ModelAnalysisAccess::FindLocalEntry(model_object, *selected_atom_list[i]) };
         auto * fit_state{ fit_state_list[i] };
         const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
@@ -958,7 +953,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     const auto ordered_alpha_r_list{ detail::BuildOrderedAlphaRTrainingList() };
     
     // Alpha_R Training
-    const auto & atom_list{ ModelObjectAccess::SelectedAtoms(*m_model_object) };
+    const auto & atom_list{ m_model_object->GetSelectedAtoms() };
     std::vector<AtomObject *> selected_atom_list;
     selected_atom_list.reserve(atom_list.size());
     for (auto & atom : atom_list)
@@ -980,7 +975,7 @@ void PotentialAnalysisCommand::RunAtomAlphaTraining()
     
     for (auto & atom : atom_list)
     {
-        atom->GetLocalPotentialEntry()->SetAlphaR(alpha_r);
+        ModelAnalysisAccess::EnsureLocalEntry(*m_model_object, *atom).SetAlphaR(alpha_r);
     }
     
     

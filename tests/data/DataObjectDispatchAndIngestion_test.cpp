@@ -3,6 +3,7 @@
 #include <memory>
 #include <type_traits>
 
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/core/painter/ComparisonPainter.hpp>
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
@@ -18,9 +19,8 @@ TEST(DataObjectPainterIngestionTest, PainterTypedIngestionUsesConcreteModelApis)
 {
     auto model{ data_test::MakeModelWithBond() };
     model->SetKeyTag("model");
-    model->GetAtomList().front()->SetSelectedFlag(true);
-    model->GetAtomList().front()->SetLocalPotentialEntry(
-        std::make_unique<rg::LocalPotentialEntry>());
+    model->SetAtomSelected(model->GetAtomList().front()->GetSerialID(), true);
+    rg::ModelAnalysisAccess::EnsureLocalEntry(*model, *model->GetAtomList().front());
 
     rg::AtomPainter atom_painter;
     EXPECT_NO_THROW(atom_painter.AddModel(*model));

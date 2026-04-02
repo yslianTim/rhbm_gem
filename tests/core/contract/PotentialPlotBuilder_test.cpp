@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 
+#include "core/detail/LocalPotentialAccess.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "painter/PotentialPlotBuilder.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
@@ -30,16 +32,16 @@ void EnsureLocalPotentialEntries(rg::ModelObject & model)
 {
     for (auto & atom : model.GetAtomList())
     {
-        if (atom->GetLocalPotentialEntry() == nullptr)
+        if (rg::FindLocalPotentialEntry(*atom) == nullptr)
         {
-            atom->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+            rg::ModelAnalysisAccess::EnsureLocalEntry(model, *atom);
         }
     }
     for (auto & bond : model.GetBondList())
     {
-        if (bond->GetLocalPotentialEntry() == nullptr)
+        if (rg::FindLocalPotentialEntry(*bond) == nullptr)
         {
-            bond->SetLocalPotentialEntry(std::make_unique<rg::LocalPotentialEntry>());
+            rg::ModelAnalysisAccess::EnsureLocalEntry(model, *bond);
         }
     }
 }

@@ -1,7 +1,6 @@
 #include <rhbm_gem/core/painter/DemoPainter.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include "data/detail/ModelObjectAccess.hpp"
 #include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
@@ -67,7 +66,7 @@ void DemoPainter::Painting()
 
     for (auto & model : m_model_object_list)
     {
-        ModelObjectAccess::BuildKDTreeRoot(*model);
+        model->BuildKDTreeRoot();
     }
 
     ModelObject * demo_model_object{ nullptr };

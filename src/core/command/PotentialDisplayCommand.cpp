@@ -1,5 +1,5 @@
 #include "PotentialDisplayCommand.hpp"
-#include "data/detail/ModelObjectAccess.hpp"
+#include "core/detail/LocalPotentialAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -26,19 +26,15 @@ void ApplyModelSelection(
     rhbm_gem::ModelObject & model_object,
     ::AtomSelector & selector)
 {
-    for (auto & atom : model_object.GetAtomList())
-    {
-        const bool matches_selector{
-            selector.GetSelectionFlag(
-                atom->GetChainID(),
-                atom->GetResidue(),
-                atom->GetElement())
-        };
-        const bool has_local_potential_entry{ atom->GetLocalPotentialEntry() != nullptr };
-        atom->SetSelectedFlag(
-            matches_selector && has_local_potential_entry);
-    }
-    rhbm_gem::ModelObjectAccess::RebuildSelectionIndex(model_object);
+    model_object.SelectAtoms(
+        [&selector](const rhbm_gem::AtomObject & atom)
+        {
+            return selector.GetSelectionFlag(
+                       atom.GetChainID(),
+                       atom.GetResidue(),
+                       atom.GetElement())
+                && rhbm_gem::FindLocalPotentialEntry(atom) != nullptr;
+        });
 }
 
 template <typename PainterType>

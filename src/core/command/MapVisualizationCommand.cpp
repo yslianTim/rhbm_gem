@@ -1,6 +1,5 @@
 #include "MapVisualizationCommand.hpp"
 #include "MapSampling.hpp"
-#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -41,34 +40,17 @@ struct ModelAtomBondContext
     std::unordered_map<int, std::vector<rhbm_gem::BondObject *>> bond_map;
 };
 
-void SelectAllAtoms(rhbm_gem::ModelObject & model_object)
-{
-    for (auto & atom : model_object.GetAtomList())
-    {
-        atom->SetSelectedFlag(true);
-    }
-}
-
-void SelectAllBonds(rhbm_gem::ModelObject & model_object)
-{
-    for (auto & bond : model_object.GetBondList())
-    {
-        bond->SetSelectedFlag(true);
-    }
-}
-
 void PrepareModelForVisualization(rhbm_gem::ModelObject & model_object)
 {
-    SelectAllAtoms(model_object);
-    SelectAllBonds(model_object);
-    rhbm_gem::ModelObjectAccess::RebuildSelectionIndex(model_object);
+    model_object.SelectAllAtoms();
+    model_object.SelectAllBonds();
 }
 
 ModelAtomBondContext BuildModelAtomBondContext(rhbm_gem::ModelObject & model_object)
 {
     ModelAtomBondContext result;
-    const auto & selected_atom_list{ rhbm_gem::ModelObjectAccess::SelectedAtoms(model_object) };
-    const auto & selected_bond_list{ rhbm_gem::ModelObjectAccess::SelectedBonds(model_object) };
+    const auto & selected_atom_list{ model_object.GetSelectedAtoms() };
+    const auto & selected_bond_list{ model_object.GetSelectedBonds() };
     result.atom_map.reserve(selected_atom_list.size());
     result.bond_map.reserve(selected_atom_list.size());
 
@@ -177,12 +159,12 @@ void MapVisualizationCommand::RunModelObjectPreprocessing()
 {
     ScopeTimer timer("MapVisualizationCommand::RunModelObjectPreprocessing");
     PrepareModelForVisualization(*m_model_object);
-    Logger::Log(LogLevel::Info,
-        "Number of selected atom = "
-            + std::to_string(rhbm_gem::ModelObjectAccess::SelectedAtomCount(*m_model_object)));
-    Logger::Log(LogLevel::Info,
-        "Number of selected bond = "
-            + std::to_string(rhbm_gem::ModelObjectAccess::SelectedBondCount(*m_model_object)));
+        Logger::Log(LogLevel::Info,
+            "Number of selected atom = "
+            + std::to_string(m_model_object->GetSelectedAtomCount()));
+        Logger::Log(LogLevel::Info,
+            "Number of selected bond = "
+            + std::to_string(m_model_object->GetSelectedBondCount()));
 }
 
 bool MapVisualizationCommand::RunAtomMapValueSampling()

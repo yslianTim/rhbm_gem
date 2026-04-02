@@ -9,12 +9,12 @@
 #include <vector>
 
 #include "core/detail/LocalPotentialAccess.hpp"
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/ModelAnalysisState.hpp"
-#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -33,11 +33,11 @@ public:
     double GetAtomGausEstimateMinimum(int par_id, Element element) const
     {
         std::vector<double> gaus_estimate_list;
-        gaus_estimate_list.reserve(ModelObjectAccess::SelectedAtomCount(m_model_object));
-        for (const auto * atom : ModelObjectAccess::SelectedAtoms(m_model_object))
+        gaus_estimate_list.reserve(m_model_object.GetSelectedAtomCount());
+        for (const auto * atom : m_model_object.GetSelectedAtoms())
         {
             if (atom->GetElement() != element) continue;
-            auto * entry{ atom->GetLocalPotentialEntry() };
+            auto * entry{ FindLocalPotentialEntry(*atom) };
             gaus_estimate_list.emplace_back(entry->GetEstimateMDPDE().GetParameter(par_id));
         }
         return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -46,10 +46,10 @@ public:
     double GetBondGausEstimateMinimum(int par_id) const
     {
         std::vector<double> gaus_estimate_list;
-        gaus_estimate_list.reserve(ModelObjectAccess::SelectedBondCount(m_model_object));
-        for (const auto * bond : ModelObjectAccess::SelectedBonds(m_model_object))
+        gaus_estimate_list.reserve(m_model_object.GetSelectedBondCount());
+        for (const auto * bond : m_model_object.GetSelectedBonds())
         {
-            auto * entry{ bond->GetLocalPotentialEntry() };
+            auto * entry{ FindLocalPotentialEntry(*bond) };
             gaus_estimate_list.emplace_back(entry->GetEstimateMDPDE().GetParameter(par_id));
         }
         return ArrayStats<double>::ComputeMin(gaus_estimate_list.data(), gaus_estimate_list.size());
@@ -154,7 +154,7 @@ public:
         outlier_atom_list.reserve(atom_list.size());
         for (auto * atom : atom_list)
         {
-            const auto * annotation{ atom->GetLocalPotentialEntry()->FindAnnotation(class_key) };
+            const auto * annotation{ RequireLocalPotentialEntry(*atom).FindAnnotation(class_key) };
             if (annotation != nullptr && annotation->is_outlier)
             {
                 outlier_atom_list.emplace_back(atom);
@@ -180,12 +180,7 @@ public:
         {
             throw std::runtime_error("Atom group has no members.");
         }
-        auto * local_entry{ atom_list.front()->GetLocalPotentialEntry() };
-        if (local_entry == nullptr)
-        {
-            throw std::runtime_error("Local entry of the first atom member is not available.");
-        }
-        return local_entry->GetAlphaR();
+        return RequireLocalPotentialEntry(*atom_list.front()).GetAlphaR();
     }
 
     double GetAtomAlphaG(GroupKey group_key, const std::string & class_key) const
@@ -261,12 +256,12 @@ private:
 
     const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
     {
-        return ModelObjectAccess::AnalysisState(m_model_object).Atoms().FindGroupEntry(class_key);
+        return ModelAnalysisAccess::AnalysisState(m_model_object).Atoms().FindGroupEntry(class_key);
     }
 
     const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
     {
-        return ModelObjectAccess::AnalysisState(m_model_object).Bonds().FindGroupEntry(class_key);
+        return ModelAnalysisAccess::AnalysisState(m_model_object).Bonds().FindGroupEntry(class_key);
     }
 
     static void LogMissingAtomGroup(GroupKey group_key, const std::string & class_key)

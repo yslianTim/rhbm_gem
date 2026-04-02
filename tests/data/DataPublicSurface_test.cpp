@@ -13,12 +13,12 @@
 namespace {
 
 template <typename T, typename = void>
-struct HasPublicRebuildSelectionIndex : std::false_type {};
+struct HasPublicRebuildSelection : std::false_type {};
 
 template <typename T>
-struct HasPublicRebuildSelectionIndex<
+struct HasPublicRebuildSelection<
     T,
-    std::void_t<decltype(std::declval<T &>().RebuildSelectionIndex())>> : std::true_type {};
+    std::void_t<decltype(std::declval<T &>().RebuildSelection())>> : std::true_type {};
 
 template <typename T, typename = void>
 struct HasPublicApplySymmetrySelection : std::false_type {};
@@ -29,12 +29,12 @@ struct HasPublicApplySymmetrySelection<
     std::void_t<decltype(std::declval<T &>().ApplySymmetrySelection(false))>> : std::true_type {};
 
 template <typename T, typename = void>
-struct HasPublicSelectedAtomList : std::false_type {};
+struct HasPublicSelectedAtoms : std::false_type {};
 
 template <typename T>
-struct HasPublicSelectedAtomList<
+struct HasPublicSelectedAtoms<
     T,
-    std::void_t<decltype(std::declval<const T &>().GetSelectedAtomList())>> : std::true_type {};
+    std::void_t<decltype(std::declval<const T &>().GetSelectedAtoms())>> : std::true_type {};
 
 template <typename T, typename = void>
 struct HasPublicSetAtomList : std::false_type {};
@@ -62,11 +62,11 @@ TEST(DataPublicSurfaceTest, DataPublicHeadersMatchApprovedSurface)
     EXPECT_EQ(contract_test_support::CollectPublicHeadersForDomain("data"), expected);
 }
 
-TEST(DataPublicSurfaceTest, ModelObjectKeepsSelectionAndBuildWorkflowPrivate)
+TEST(DataPublicSurfaceTest, ModelObjectExposesSelectionQueriesButKeepsBuildWorkflowPrivate)
 {
-    static_assert(!HasPublicRebuildSelectionIndex<rhbm_gem::ModelObject>::value);
-    static_assert(!HasPublicApplySymmetrySelection<rhbm_gem::ModelObject>::value);
-    static_assert(!HasPublicSelectedAtomList<rhbm_gem::ModelObject>::value);
+    static_assert(HasPublicRebuildSelection<rhbm_gem::ModelObject>::value);
+    static_assert(HasPublicApplySymmetrySelection<rhbm_gem::ModelObject>::value);
+    static_assert(HasPublicSelectedAtoms<rhbm_gem::ModelObject>::value);
     static_assert(!HasPublicSetAtomList<rhbm_gem::ModelObject>::value);
     SUCCEED();
 }

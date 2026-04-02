@@ -3,9 +3,9 @@
 #include <filesystem>
 #include <stdexcept>
 
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
-#include "data/detail/ModelObjectAccess.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "support/DataObjectTestSupport.hpp"
 
@@ -58,12 +58,9 @@ TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmet
 
     auto original_model{ data_test::LoadFixtureModel(model_path) };
     const auto original_chain_map{ original_model->GetChainIDListMap() };
-    for (const auto & atom : original_model->GetAtomList())
-    {
-        atom->SetSelectedFlag(true);
-    }
-    rg::ModelObjectAccess::ApplySymmetrySelection(*original_model, false);
-    const auto original_selected_count{ rg::ModelObjectAccess::SelectedAtomCount(*original_model) };
+    original_model->SelectAllAtoms();
+    original_model->ApplySymmetrySelection(false);
+    const auto original_selected_count{ original_model->GetSelectedAtomCount() };
 
     rg::DataRepository repository{ database_path };
     auto stored_model{ rg::ReadModel(model_path) };
@@ -74,12 +71,9 @@ TEST(DataObjectPersistenceTest, DatabaseRoundTripPreservesChainMetadataAndSymmet
     EXPECT_EQ(loaded_model->GetChainIDListMap(), original_chain_map);
     EXPECT_GT(data_test::CountRows(database_path, "model_chain_map", "model"), 0);
 
-    for (const auto & atom : loaded_model->GetAtomList())
-    {
-        atom->SetSelectedFlag(true);
-    }
-    rg::ModelObjectAccess::ApplySymmetrySelection(*loaded_model, false);
-    EXPECT_EQ(rg::ModelObjectAccess::SelectedAtomCount(*loaded_model), original_selected_count);
+    loaded_model->SelectAllAtoms();
+    loaded_model->ApplySymmetrySelection(false);
+    EXPECT_EQ(loaded_model->GetSelectedAtomCount(), original_selected_count);
 }
 
 TEST(DataObjectPersistenceTest, DistinctUnsanitizedKeysDoNotCollideInV2Schema)

@@ -1,6 +1,5 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "data/detail/AtomClassifier.hpp"
-#include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
@@ -15,9 +14,8 @@ AtomObject::AtomObject() :
     m_occupancy{ 0.0 }, m_temperature{ 0.0 },
     m_component_key{ 0 }, m_atom_key{ 0 },
     m_residue{ Residue::UNK }, m_element{ Element::UNK }, m_spot{ Spot::UNK },
-    m_structure{ Structure::UNK },
-    m_position{ 0.0, 0.0, 0.0 },
-    m_local_potential_entry{ nullptr }
+    m_structure{ Structure::UNK }, m_owner_model{ nullptr },
+    m_position{ 0.0, 0.0, 0.0 }
 {
 
 }
@@ -35,16 +33,12 @@ AtomObject::AtomObject(const AtomObject & other) :
     m_occupancy{ other.m_occupancy }, m_temperature{ other.m_temperature },
     m_component_key{ other.m_component_key }, m_atom_key{ other.m_atom_key },
     m_residue{ other.m_residue }, m_element{ other.m_element }, m_spot{ other.m_spot },
-    m_structure{ other.m_structure },
+    m_structure{ other.m_structure }, m_owner_model{ nullptr },
     m_position{ other.m_position },
     m_alternate_position_map{ other.m_alternate_position_map },
     m_alternate_occupancy_map{ other.m_alternate_occupancy_map },
     m_alternate_temperature_map{ other.m_alternate_temperature_map }
 {
-    if (other.m_local_potential_entry != nullptr)
-    {
-        m_local_potential_entry = std::make_unique<LocalPotentialEntry>(*other.m_local_potential_entry);
-    }
 }
 
 void AtomObject::SetResidue(Residue value) { m_residue = value; }
@@ -101,11 +95,6 @@ std::string AtomObject::GetInfo() const
            std::to_string(m_position.at(0)) + ", " +
            std::to_string(m_position.at(1)) + ", " +
            std::to_string(m_position.at(2)) + ")";
-}
-
-void AtomObject::SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry)
-{
-    m_local_potential_entry = std::move(entry);
 }
 
 void AtomObject::AddAlternatePosition(

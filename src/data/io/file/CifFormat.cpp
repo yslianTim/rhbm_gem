@@ -1488,10 +1488,10 @@ void WriteAtomSiteBlock(
     const int model_number{1};
     for (const auto& atom_ptr : model_object.GetAtomList()) {
         const AtomObject* atom{atom_ptr.get()};
-        if (atom->GetLocalPotentialEntry() == nullptr)
+        if (FindLocalPotentialEntry(*atom) == nullptr)
             continue;
-        auto model_entry{atom->GetLocalPotentialEntry()};
-        auto gaus_estimate{model_entry->GetEstimateMDPDE().GetParameter(model_par)};
+        const auto & model_entry{RequireLocalPotentialEntry(*atom)};
+        auto gaus_estimate{model_entry.GetEstimateMDPDE().GetParameter(model_par)};
         auto position{atom->GetPosition()};
         WriteAtomSiteBlockEntry(
             atom,

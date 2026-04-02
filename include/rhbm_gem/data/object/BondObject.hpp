@@ -11,7 +11,9 @@
 namespace rhbm_gem {
 
 class AtomObject;
-class LocalPotentialEntry;
+class ModelObject;
+class ModelBuilder;
+class ModelAnalysisAccess;
 
 class BondObject
 {
@@ -24,8 +26,8 @@ class BondObject
     int m_atom_serial_id_2;
     AtomObject * m_atom_object_1;
     AtomObject * m_atom_object_2;
+    ModelObject * m_owner_model;
     std::array<float, 3> m_position, m_bond_vector, m_unit_vector;
-    std::unique_ptr<LocalPotentialEntry> m_local_potential_entry;
 
 public:
     BondObject();
@@ -33,12 +35,10 @@ public:
     ~BondObject();
     BondObject(const BondObject & other);
 
-    void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetSpecialBondFlag(bool value) { m_is_special_bond = value; }
     void SetBondKey(BondKey value) { m_bond_key = value; }
     void SetBondType(BondType value) { m_bond_type = value; }
     void SetBondOrder(BondOrder value) { m_bond_order = value; }
-    void SetLocalPotentialEntry(std::unique_ptr<LocalPotentialEntry> entry);
     std::string GetInfo() const;
     int GetAtomSerialID1() const { return m_atom_serial_id_1; }
     int GetAtomSerialID2() const { return m_atom_serial_id_2; }
@@ -51,8 +51,15 @@ public:
     std::array<float, 3> GetBondVector() const { return m_bond_vector; }
     AtomObject * GetAtomObject1() const { return m_atom_object_1; }
     AtomObject * GetAtomObject2() const { return m_atom_object_2; }
-    LocalPotentialEntry * GetLocalPotentialEntry() const { return m_local_potential_entry.get(); }
 
+private:
+    friend class ModelObject;
+    friend class ModelBuilder;
+    friend class ModelAnalysisAccess;
+
+    void SetSelectedFlag(bool value) { m_is_selected = value; }
+    void SetOwnerModel(ModelObject * value) { m_owner_model = value; }
+    ModelObject * GetOwnerModel() const { return m_owner_model; }
 };
 
 } // namespace rhbm_gem

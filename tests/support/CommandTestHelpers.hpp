@@ -10,6 +10,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
+#include "data/detail/ModelAnalysisAccess.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/core/command/CommandApi.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -76,7 +77,7 @@ inline void SeedSavedModel(
     model->SetPdbID(pdb_id);
     for (auto & atom : model->GetAtomList())
     {
-        atom->SetLocalPotentialEntry(std::make_unique<rhbm_gem::LocalPotentialEntry>());
+        rhbm_gem::ModelAnalysisAccess::EnsureLocalEntry(*model, *atom);
     }
     repository.SaveModel(*model, saved_key);
 }

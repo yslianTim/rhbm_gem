@@ -1,5 +1,5 @@
 #include "ModelImportState.hpp"
-#include "data/detail/ModelObjectAccess.hpp"
+#include "data/detail/ModelBuilder.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -180,15 +180,15 @@ std::unique_ptr<ModelObject> ModelImportState::TakeModelObject(int preferred_mod
     model_object->SetEmdID(GetEmdID());
     model_object->SetResolution(GetResolution());
     model_object->SetResolutionMethod(GetResolutionMethod());
-    ModelObjectAccess::SetChainIDListMap(*model_object, GetChainIDListMap());
-    ModelObjectAccess::SetChemicalComponentEntryMap(
+    ModelBuilder::SetChainIDListMap(*model_object, GetChainIDListMap());
+    ModelBuilder::SetChemicalComponentEntryMap(
         *model_object,
         std::move(GetChemicalComponentEntryMap()));
-    ModelObjectAccess::SetComponentKeySystem(*model_object, MoveComponentKeySystem());
-    ModelObjectAccess::SetAtomKeySystem(*model_object, MoveAtomKeySystem());
-    ModelObjectAccess::SetBondKeySystem(*model_object, MoveBondKeySystem());
-    ModelObjectAccess::SetBondList(*model_object, std::move(filtered_bond_list));
-    ModelObjectAccess::FinalizeLoad(*model_object);
+    ModelBuilder::SetComponentKeySystem(*model_object, MoveComponentKeySystem());
+    ModelBuilder::SetAtomKeySystem(*model_object, MoveAtomKeySystem());
+    ModelBuilder::SetBondKeySystem(*model_object, MoveBondKeySystem());
+    ModelBuilder::SetBondList(*model_object, std::move(filtered_bond_list));
+    ModelBuilder::FinalizeLoad(*model_object);
     return model_object;
 }
 

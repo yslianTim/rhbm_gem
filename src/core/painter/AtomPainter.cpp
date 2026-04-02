@@ -1,7 +1,6 @@
 #include <rhbm_gem/core/painter/AtomPainter.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelObjectAccess.hpp"
 #include <detail/LocalPotentialAccess.hpp>
 #include "PotentialPlotBuilder.hpp"
 #include <detail/PotentialSeriesOps.hpp>
@@ -42,7 +41,7 @@ void AtomPainter::AddModel(ModelObject & data_object)
     {
         m_output_label = data_object.GetKeyTag();
     }
-    for (auto * atom : ModelObjectAccess::SelectedAtoms(data_object))
+    for (auto * atom : data_object.GetSelectedAtoms())
     {
         AppendAtomObject(*atom);
     }
@@ -50,7 +49,7 @@ void AtomPainter::AddModel(ModelObject & data_object)
 
 void AtomPainter::AppendAtomObject(AtomObject & data_object)
 {
-    if (data_object.GetLocalPotentialEntry() == nullptr) return;
+    if (FindLocalPotentialEntry(data_object) == nullptr) return;
     if (data_object.GetSelectedFlag() == false) return;
     m_atom_object_list.push_back(&data_object);
 }

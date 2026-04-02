@@ -1,6 +1,6 @@
 #include "ResultDumpCommand.hpp"
 
-#include "data/detail/ModelObjectAccess.hpp"
+#include "data/detail/ModelBuilder.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -86,7 +86,7 @@ bool ResultDumpCommand::BuildDataObjectList()
         {
             auto model_object{ LoadPersistedObject<ModelObject>(key) };
             m_model_object_list.emplace_back(model_object);
-            const auto & selected_atom_list{ ModelObjectAccess::SelectedAtoms(*model_object) };
+            const auto & selected_atom_list{ model_object->GetSelectedAtoms() };
             m_selected_atom_list_map[key] = {
                 selected_atom_list.begin(),
                 selected_atom_list.end()
@@ -130,7 +130,7 @@ void ResultDumpCommand::RunAtomOutlierDumping()
             for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
             {
                 const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-                const auto * annotation{ atom->GetLocalPotentialEntry()->FindAnnotation(class_key) };
+                const auto * annotation{ RequireLocalPotentialEntry(*atom).FindAnnotation(class_key) };
                 if (annotation == nullptr || !annotation->is_outlier) continue;
                 outfile << atom->GetSerialID() << ',' << class_key << ','
                         << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
@@ -293,8 +293,8 @@ void ResultDumpCommand::RunGausEstimatesDumping()
         outfile << "SerialID,Amplitude,Width,X,Y,Z,Residue,Element,Spot\n";
         for (auto & atom : m_selected_atom_list_map.at(key_tag))
         {
-            auto entry{ atom->GetLocalPotentialEntry() };
-            const auto & estimate{ entry->GetEstimateMDPDE() };
+            const auto & entry{ RequireLocalPotentialEntry(*atom) };
+            const auto & estimate{ entry.GetEstimateMDPDE() };
             outfile << atom->GetSerialID() << ',' << estimate.amplitude << ','
                     << estimate.width << ',' << atom->GetPosition().at(0) << ','
                     << atom->GetPosition().at(1) << ',' << atom->GetPosition().at(2) << ','
@@ -345,7 +345,7 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
         {
                 const auto residue_name{ ChemicalDataHelper::GetLabel(residue) };
                 const auto component_key{ static_cast<ComponentKey>(residue) };
-                auto & atom_key_system{ ModelObjectAccess::AtomKeySystemRef(*model_object) };
+                auto & atom_key_system{ ModelBuilder::AtomKeySystemRef(*model_object) };
                 for (auto & spot : ComponentHelper::GetSpotList(residue))
                 {
                     const auto atom_key{ static_cast<uint16_t>(spot) };
