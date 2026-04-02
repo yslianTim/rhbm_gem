@@ -32,8 +32,8 @@ inline void LogModelSummary(const ModelObject & model_object)
         (void)component_key;
         Logger::Log(LogLevel::Debug,
             "   - Component ID = " + entry->GetComponentId() + " "
-            " (#Atoms = " + std::to_string(entry->GetComponentAtomEntryMap().size()) +
-            ", #Bonds = " + std::to_string(entry->GetComponentBondEntryMap().size()) + ")");
+            " (#Atoms = " + std::to_string(entry->AtomEntries().size()) +
+            ", #Bonds = " + std::to_string(entry->BondEntries().size()) + ")");
     }
 }
 

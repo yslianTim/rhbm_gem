@@ -20,7 +20,7 @@ namespace rhbm_gem {
 class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
-class GroupPotentialEntry;
+class ModelObjectAccess;
 class ModelAnalysisState;
 
 class ModelObject
@@ -97,15 +97,11 @@ public:
     AtomObject * GetAtomPtr(int serial_id) const { return m_serial_id_atom_map.at(serial_id); }
     const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> &
     GetChemicalComponentEntryMap() const;
-    ::KDNode<AtomObject> * GetKDTreeRoot() const { return m_kd_tree_root.get(); }
-    ComponentKeySystem * GetComponentKeySystemPtr() { return m_component_key_system.get(); }
-    AtomKeySystem * GetAtomKeySystemPtr() { return m_atom_key_system.get(); }
-    BondKeySystem * GetBondKeySystemPtr() { return m_bond_key_system.get(); }
-    ModelAnalysisState & GetAnalysisState();
-    const ModelAnalysisState & GetAnalysisState() const;
     std::vector<ComponentKey> GetComponentKeyList() const;
 
 private:
+    friend class ModelObjectAccess;
+
     void RebuildSelectionState();
     void InvalidateDerivedCaches();
     void SyncDerivedState();

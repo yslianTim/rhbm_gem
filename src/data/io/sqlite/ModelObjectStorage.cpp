@@ -9,7 +9,8 @@
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/object/ModelAnalysisState.hpp"
+#include "data/detail/ModelAnalysisState.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -28,6 +29,16 @@
 namespace {
 
 using namespace std::literals;
+
+rhbm_gem::ModelAnalysisState & AnalysisState(rhbm_gem::ModelObject & model_object)
+{
+    return rhbm_gem::ModelObjectAccess::AnalysisState(model_object);
+}
+
+const rhbm_gem::ModelAnalysisState & AnalysisState(const rhbm_gem::ModelObject & model_object)
+{
+    return rhbm_gem::ModelObjectAccess::AnalysisState(model_object);
+}
 
 inline constexpr std::string_view kCreateModelObjectTableSql = R"sql(
     CREATE TABLE IF NOT EXISTS model_object (
@@ -579,7 +590,7 @@ void SaveComponentAtomEntryList(
     {
         const auto & component_key{ component_map_entry.first };
         const auto & component_entry{ component_map_entry.second };
-        for (const auto & atom_map_entry : component_entry->GetComponentAtomEntryMap())
+        for (const auto & atom_map_entry : component_entry->AtomEntries())
         {
             const auto & atom_key{ atom_map_entry.first };
             const auto & atom_entry{ atom_map_entry.second };
@@ -607,7 +618,7 @@ void SaveComponentBondEntryList(
     {
         const auto & component_key{ component_map_entry.first };
         const auto & component_entry{ component_map_entry.second };
-        for (const auto & bond_map_entry : component_entry->GetComponentBondEntryMap())
+        for (const auto & bond_map_entry : component_entry->BondEntries())
         {
             const auto & bond_key{ bond_map_entry.first };
             const auto & bond_entry{ bond_map_entry.second };
@@ -771,7 +782,9 @@ void LoadChemicalComponentEntryList(
             static_cast<float>(database.GetColumn<double>(5)));
         component_entry->SetStandardMonomerFlag(static_cast<bool>(database.GetColumn<int>(6)));
         model_obj.AddChemicalComponentEntry(component_key, std::move(component_entry));
-        model_obj.GetComponentKeySystemPtr()->RegisterComponent(component_id, component_key);
+        rhbm_gem::ModelObjectAccess::ComponentKeySystemRef(model_obj).RegisterComponent(
+            component_id,
+            component_key);
     }
 }
 
@@ -810,7 +823,9 @@ void LoadComponentAtomEntryList(
         const auto atom_key{ database.GetColumn<AtomKey>(1) };
         model_obj.GetChemicalComponentEntryMap().at(component_key)->AddComponentAtomEntry(
             atom_key, atom_entry);
-        model_obj.GetAtomKeySystemPtr()->RegisterAtom(atom_entry.atom_id, atom_key);
+        rhbm_gem::ModelObjectAccess::AtomKeySystemRef(model_obj).RegisterAtom(
+            atom_entry.atom_id,
+            atom_key);
     }
 }
 
@@ -850,7 +865,9 @@ void LoadComponentBondEntryList(
             static_cast<StereoChemistry>(database.GetColumn<int>(6));
         model_obj.GetChemicalComponentEntryMap().at(component_key)->AddComponentBondEntry(
             bond_key, bond_entry);
-        model_obj.GetBondKeySystemPtr()->RegisterBond(bond_entry.bond_id, bond_key);
+        rhbm_gem::ModelObjectAccess::BondKeySystemRef(model_obj).RegisterBond(
+            bond_entry.bond_id,
+            bond_key);
     }
 }
 
@@ -1028,18 +1045,20 @@ void SaveAtomLocalPotentialEntrySubList(
     {
         auto entry{ atom_object->GetLocalPotentialEntry() };
         if (entry == nullptr) continue;
+        const auto * annotation{ entry->FindAnnotation(class_key) };
+        if (annotation == nullptr) continue;
 
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
             statement_db.Bind<std::string>(1, key_tag);
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<int>(3, atom_object->GetSerialID());
-            statement_db.Bind<double>(4, entry->GetPosterior(class_key).estimate.amplitude);
-            statement_db.Bind<double>(5, entry->GetPosterior(class_key).estimate.width);
-            statement_db.Bind<double>(6, entry->GetPosterior(class_key).variance.amplitude);
-            statement_db.Bind<double>(7, entry->GetPosterior(class_key).variance.width);
-            statement_db.Bind<int>(8, static_cast<int>(entry->GetOutlierTag(class_key)));
-            statement_db.Bind<double>(9, entry->GetStatisticalDistance(class_key));
+            statement_db.Bind<double>(4, annotation->posterior.estimate.amplitude);
+            statement_db.Bind<double>(5, annotation->posterior.estimate.width);
+            statement_db.Bind<double>(6, annotation->posterior.variance.amplitude);
+            statement_db.Bind<double>(7, annotation->posterior.variance.width);
+            statement_db.Bind<int>(8, static_cast<int>(annotation->is_outlier));
+            statement_db.Bind<double>(9, annotation->statistical_distance);
         });
     }
 }
@@ -1055,6 +1074,8 @@ void SaveBondLocalPotentialEntrySubList(
     {
         auto entry{ bond_object->GetLocalPotentialEntry() };
         if (entry == nullptr) continue;
+        const auto * annotation{ entry->FindAnnotation(class_key) };
+        if (annotation == nullptr) continue;
 
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
@@ -1062,12 +1083,12 @@ void SaveBondLocalPotentialEntrySubList(
             statement_db.Bind<std::string>(2, class_key);
             statement_db.Bind<int>(3, bond_object->GetAtomSerialID1());
             statement_db.Bind<int>(4, bond_object->GetAtomSerialID2());
-            statement_db.Bind<double>(5, entry->GetPosterior(class_key).estimate.amplitude);
-            statement_db.Bind<double>(6, entry->GetPosterior(class_key).estimate.width);
-            statement_db.Bind<double>(7, entry->GetPosterior(class_key).variance.amplitude);
-            statement_db.Bind<double>(8, entry->GetPosterior(class_key).variance.width);
-            statement_db.Bind<int>(9, static_cast<int>(entry->GetOutlierTag(class_key)));
-            statement_db.Bind<double>(10, entry->GetStatisticalDistance(class_key));
+            statement_db.Bind<double>(5, annotation->posterior.estimate.amplitude);
+            statement_db.Bind<double>(6, annotation->posterior.estimate.width);
+            statement_db.Bind<double>(7, annotation->posterior.variance.amplitude);
+            statement_db.Bind<double>(8, annotation->posterior.variance.width);
+            statement_db.Bind<int>(9, static_cast<int>(annotation->is_outlier));
+            statement_db.Bind<double>(10, annotation->statistical_distance);
         });
     }
 }
@@ -1079,7 +1100,7 @@ void SaveAtomGroupPotentialEntryList(
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelAtomGroupSql) };
-    for (const auto & group_pair : group_entry.GetGroups())
+    for (const auto & group_pair : group_entry.Entries())
     {
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
@@ -1109,7 +1130,7 @@ void SaveBondGroupPotentialEntryList(
     const std::string & class_key)
 {
     SQLiteStatementBatch batch{ database, std::string(kInsertModelBondGroupSql) };
-    for (const auto & group_pair : group_entry.GetGroups())
+    for (const auto & group_pair : group_entry.Entries())
     {
         batch.Execute([&](rhbm_gem::SQLiteWrapper & statement_db)
         {
@@ -1163,9 +1184,13 @@ void LoadAtomLocalPotentialEntrySubList(
             database.GetColumn<double>(1), database.GetColumn<double>(2) };
         posterior.variance = rhbm_gem::GaussianEstimate{
             database.GetColumn<double>(3), database.GetColumn<double>(4) };
-        entry->SetPosterior(class_key, posterior);
-        entry->AddOutlierTag(class_key, static_cast<bool>(database.GetColumn<int>(5)));
-        entry->AddStatisticalDistance(class_key, database.GetColumn<double>(6));
+        entry->SetAnnotation(
+            class_key,
+            rhbm_gem::LocalPotentialAnnotation{
+                posterior,
+                static_cast<bool>(database.GetColumn<int>(5)),
+                database.GetColumn<double>(6)
+            });
     }
 }
 
@@ -1201,9 +1226,13 @@ void LoadBondLocalPotentialEntrySubList(
             database.GetColumn<double>(2), database.GetColumn<double>(3) };
         posterior.variance = rhbm_gem::GaussianEstimate{
             database.GetColumn<double>(4), database.GetColumn<double>(5) };
-        entry->SetPosterior(class_key, posterior);
-        entry->AddOutlierTag(class_key, static_cast<bool>(database.GetColumn<int>(6)));
-        entry->AddStatisticalDistance(class_key, database.GetColumn<double>(7));
+        entry->SetAnnotation(
+            class_key,
+            rhbm_gem::LocalPotentialAnnotation{
+                posterior,
+                static_cast<bool>(database.GetColumn<int>(6)),
+                database.GetColumn<double>(7)
+            });
     }
 }
 
@@ -1297,7 +1326,7 @@ void LoadAtomGroupPotentialEntryList(
     const std::string & key_tag,
     const std::string & class_key)
 {
-    auto group_entry{ model_obj.GetAnalysisState().GetAtomGroupPotentialEntry(class_key) };
+    auto & group_entry{ AnalysisState(model_obj).Atoms().EnsureGroupEntry(class_key) };
     database.Prepare(std::string(kSelectModelAtomGroupSql));
     rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
@@ -1315,7 +1344,7 @@ void LoadAtomGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        auto & bucket{ group_entry->EnsureGroup(group_key) };
+        auto & bucket{ group_entry.EnsureGroup(group_key) };
         bucket.atom_members.reserve(static_cast<size_t>(database.GetColumn<int>(1)));
         bucket.mean = rhbm_gem::GaussianEstimate{
             database.GetColumn<double>(2), database.GetColumn<double>(3) };
@@ -1331,7 +1360,7 @@ void LoadAtomGroupPotentialEntryList(
     for (auto & atom : model_obj.GetSelectedAtomList())
     {
         const auto group_key{ rhbm_gem::AtomClassifier::GetGroupKeyInClass(atom, class_key) };
-        group_entry->EnsureGroup(group_key).atom_members.emplace_back(atom);
+        group_entry.EnsureGroup(group_key).atom_members.emplace_back(atom);
     }
 }
 
@@ -1341,7 +1370,7 @@ void LoadBondGroupPotentialEntryList(
     const std::string & key_tag,
     const std::string & class_key)
 {
-    auto group_entry{ model_obj.GetAnalysisState().GetBondGroupPotentialEntry(class_key) };
+    auto & group_entry{ AnalysisState(model_obj).Bonds().EnsureGroupEntry(class_key) };
     database.Prepare(std::string(kSelectModelBondGroupSql));
     rhbm_gem::SQLiteWrapper::StatementGuard guard(database);
     database.Bind<std::string>(1, key_tag);
@@ -1359,7 +1388,7 @@ void LoadBondGroupPotentialEntryList(
         }
 
         const auto group_key{ database.GetColumn<GroupKey>(0) };
-        auto & bucket{ group_entry->EnsureGroup(group_key) };
+        auto & bucket{ group_entry.EnsureGroup(group_key) };
         bucket.bond_members.reserve(static_cast<size_t>(database.GetColumn<int>(1)));
         bucket.mean = rhbm_gem::GaussianEstimate{
             database.GetColumn<double>(2), database.GetColumn<double>(3) };
@@ -1375,7 +1404,7 @@ void LoadBondGroupPotentialEntryList(
     for (auto & bond : model_obj.GetSelectedBondList())
     {
         const auto group_key{ rhbm_gem::BondClassifier::GetGroupKeyInClass(bond, class_key) };
-        group_entry->EnsureGroup(group_key).bond_members.emplace_back(bond);
+        group_entry.EnsureGroup(group_key).bond_members.emplace_back(bond);
     }
 }
 
@@ -1427,25 +1456,25 @@ void SaveAnalysis(
 {
     SaveAtomLocalPotentialEntryList(database, model_obj, key_tag);
     SaveBondLocalPotentialEntryList(database, model_obj, key_tag);
-    const auto & analysis_state{ model_obj.GetAnalysisState() };
+    const auto & analysis_state{ AnalysisState(model_obj) };
 
-    for (const auto & [class_key, group_entry] : analysis_state.GetAtomGroupPotentialEntryMap())
+    for (const auto & [class_key, group_entry] : analysis_state.Atoms().Entries())
     {
-        if (group_entry == nullptr || group_entry->GetGroups().empty())
+        if (group_entry.Entries().empty())
         {
             continue;
         }
         SaveAtomLocalPotentialEntrySubList(database, model_obj, key_tag, class_key);
-        SaveAtomGroupPotentialEntryList(database, *group_entry, key_tag, class_key);
+        SaveAtomGroupPotentialEntryList(database, group_entry, key_tag, class_key);
     }
-    for (const auto & [class_key, group_entry] : analysis_state.GetBondGroupPotentialEntryMap())
+    for (const auto & [class_key, group_entry] : analysis_state.Bonds().Entries())
     {
-        if (group_entry == nullptr || group_entry->GetGroups().empty())
+        if (group_entry.Entries().empty())
         {
             continue;
         }
         SaveBondLocalPotentialEntrySubList(database, model_obj, key_tag, class_key);
-        SaveBondGroupPotentialEntryList(database, *group_entry, key_tag, class_key);
+        SaveBondGroupPotentialEntryList(database, group_entry, key_tag, class_key);
     }
 }
 
@@ -1454,7 +1483,7 @@ void LoadAnalysis(
     rhbm_gem::ModelObject & model_obj,
     const std::string & key_tag)
 {
-    model_obj.GetAnalysisState().Clear();
+    AnalysisState(model_obj).Clear();
     ApplyAtomLocalPotentialEntries(model_obj, LoadAtomLocalPotentialEntryMap(database, key_tag));
     ApplyBondLocalPotentialEntries(model_obj, LoadBondLocalPotentialEntryMap(database, key_tag));
     model_obj.FinalizeLoad();
@@ -1462,16 +1491,14 @@ void LoadAnalysis(
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        auto group_entry{ std::make_unique<rhbm_gem::GroupPotentialEntry>() };
-        model_obj.GetAnalysisState().SetAtomGroupPotentialEntry(class_key, std::move(group_entry));
+        AnalysisState(model_obj).Atoms().EnsureGroupEntry(class_key);
         LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 
     for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
     {
         auto class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        auto group_entry{ std::make_unique<rhbm_gem::GroupPotentialEntry>() };
-        model_obj.GetAnalysisState().SetBondGroupPotentialEntry(class_key, std::move(group_entry));
+        AnalysisState(model_obj).Bonds().EnsureGroupEntry(class_key);
         LoadBondGroupPotentialEntryList(database, model_obj, key_tag, class_key);
     }
 }

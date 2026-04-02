@@ -3,9 +3,10 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include "data/object/LocalPotentialFitState.hpp"
-#include "data/object/ModelAnalysisState.hpp"
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
+#include "data/detail/LocalPotentialFitState.hpp"
+#include "data/detail/ModelAnalysisState.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -98,14 +99,8 @@ ModelObject::ModelObject(const ModelObject & other) :
         {
             for (const auto & [class_key, entry] : source_map)
             {
-                if (entry == nullptr)
-                {
-                    set_entry(class_key, nullptr);
-                    continue;
-                }
-
                 auto cloned_entry{ std::make_unique<GroupPotentialEntry>() };
-                for (const auto & [group_key, bucket] : entry->GetGroups())
+                for (const auto & [group_key, bucket] : entry.Entries())
                 {
                     auto & cloned_bucket{ cloned_entry->EnsureGroup(group_key) };
                     cloned_bucket.mean = bucket.mean;
@@ -128,34 +123,34 @@ ModelObject::ModelObject(const ModelObject & other) :
             }
         };
 
-    const auto & source_analysis_state{ other.GetAnalysisState() };
+    const auto & source_analysis_state{ ModelObjectAccess::AnalysisState(other) };
     copy_group_entries(
-        source_analysis_state.GetAtomGroupPotentialEntryMap(),
+        source_analysis_state.Atoms().Entries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
         {
-            m_analysis_state->SetAtomGroupPotentialEntry(class_key, std::move(entry));
+            m_analysis_state->Atoms().EnsureGroupEntry(class_key) = std::move(*entry);
         });
     copy_group_entries(
-        source_analysis_state.GetBondGroupPotentialEntryMap(),
+        source_analysis_state.Bonds().Entries(),
         [this](const std::string & class_key, std::unique_ptr<GroupPotentialEntry> entry)
         {
-            m_analysis_state->SetBondGroupPotentialEntry(class_key, std::move(entry));
+            m_analysis_state->Bonds().EnsureGroupEntry(class_key) = std::move(*entry);
         });
 
     for (const auto & atom : m_atom_list)
     {
-        if (const auto * fit_state{ source_analysis_state.FindAtomFitState(*atom) };
+        if (const auto * fit_state{ source_analysis_state.Atoms().FindFitState(*atom) };
             fit_state != nullptr)
         {
-            m_analysis_state->EnsureAtomFitState(*atom) = *fit_state;
+            m_analysis_state->Atoms().EnsureFitState(*atom) = *fit_state;
         }
     }
     for (const auto & bond : m_bond_list)
     {
-        if (const auto * fit_state{ source_analysis_state.FindBondFitState(*bond) };
+        if (const auto * fit_state{ source_analysis_state.Bonds().FindFitState(*bond) };
             fit_state != nullptr)
         {
-            m_analysis_state->EnsureBondFitState(*bond) = *fit_state;
+            m_analysis_state->Bonds().EnsureFitState(*bond) = *fit_state;
         }
     }
 
@@ -334,16 +329,6 @@ const std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> 
 ModelObject::GetChemicalComponentEntryMap() const
 {
     return m_chemical_component_entry_map;
-}
-
-ModelAnalysisState & ModelObject::GetAnalysisState()
-{
-    return *m_analysis_state;
-}
-
-const ModelAnalysisState & ModelObject::GetAnalysisState() const
-{
-    return *m_analysis_state;
 }
 
 void ModelObject::BuildSelectedAtomList()

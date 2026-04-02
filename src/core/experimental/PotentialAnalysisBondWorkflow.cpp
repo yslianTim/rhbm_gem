@@ -2,8 +2,9 @@
 
 #include "command/MapSampling.hpp"
 #include "command/PotentialAnalysisCommand.hpp"
-#include "data/object/LocalPotentialFitState.hpp"
-#include "data/object/ModelAnalysisState.hpp"
+#include "data/detail/LocalPotentialFitState.hpp"
+#include "data/detail/ModelAnalysisState.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
@@ -51,6 +52,28 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     return execution_options;
 }
 
+ModelAnalysisState & AnalysisState(ModelObject & model_object)
+{
+    return ModelObjectAccess::AnalysisState(model_object);
+}
+
+const ModelAnalysisState & AnalysisState(const ModelObject & model_object)
+{
+    return ModelObjectAccess::AnalysisState(model_object);
+}
+
+std::vector<GroupKey> CollectGroupKeys(const GroupPotentialEntry & entry)
+{
+    std::vector<GroupKey> group_keys;
+    group_keys.reserve(entry.Entries().size());
+    for (const auto & [group_key, bucket] : entry.Entries())
+    {
+        (void)bucket;
+        group_keys.emplace_back(group_key);
+    }
+    return group_keys;
+}
+
 void RunBondSampling(
     ModelObject & model_object,
     const MapObject & map_object,
@@ -72,7 +95,7 @@ void RunBondSampling(
     fit_state_list.reserve(bond_size);
     for (auto * bond : bond_list)
     {
-        fit_state_list.emplace_back(&model_object.GetAnalysisState().EnsureBondFitState(*bond));
+        fit_state_list.emplace_back(&AnalysisState(model_object).Bonds().EnsureFitState(*bond));
     }
 
 #ifdef USE_OPENMP
@@ -98,7 +121,7 @@ void RunBondSampling(
                     *sampler,
                     adjusted_position,
                     bond_vector));
-            fit_state->SetBasisAndResponseEntryList(
+            fit_state->SetDataset(
                 GausLinearTransformHelper::MapValueTransform(
                     entry->GetDistanceAndMapValueList(),
                     options.fit_range_min,
@@ -123,7 +146,7 @@ void RunBondSampling(
                 *sampler,
                 bond->GetPosition(),
                 bond->GetBondVector()));
-        fit_state->SetBasisAndResponseEntryList(
+        fit_state->SetDataset(
             GausLinearTransformHelper::MapValueTransform(
                 entry->GetDistanceAndMapValueList(),
                 options.fit_range_min,
@@ -148,10 +171,9 @@ void RunBondGrouping(ModelObject & model_object)
             auto group_key{ BondClassifier::GetGroupKeyInClass(bond, class_key) };
             group_potential_entry->EnsureGroup(group_key).bond_members.emplace_back(bond);
         }
-        const auto group_size{ group_potential_entry->GetGroupKeys().size() };
-        model_object.GetAnalysisState().SetBondGroupPotentialEntry(
-            class_key,
-            std::move(group_potential_entry));
+        const auto group_size{ group_potential_entry->Entries().size() };
+        AnalysisState(model_object).Bonds().EnsureGroupEntry(class_key) =
+            std::move(*group_potential_entry);
         Logger::Log(
             LogLevel::Info,
             " - Class type: " + class_key + " include "
@@ -182,7 +204,7 @@ void RunLocalBondFitting(
     fit_state_list.reserve(selected_bond_size);
     for (auto * bond : selected_bond_list)
     {
-        fit_state_list.emplace_back(&context.model_object.GetAnalysisState().EnsureBondFitState(*bond));
+        fit_state_list.emplace_back(&AnalysisState(context.model_object).Bonds().EnsureFitState(*bond));
     }
     Logger::Log(
         LogLevel::Info,
@@ -194,7 +216,7 @@ void RunLocalBondFitting(
     {
         auto local_entry{ selected_bond_list[i]->GetLocalPotentialEntry() };
         auto * fit_state{ fit_state_list[i] };
-        auto & data_entry_list{ fit_state->GetBasisAndResponseEntryList() };
+        const auto & data_entry_list{ fit_state->GetDataset().basis_and_response_entry_list };
         const auto dataset{ HRLDataTransform::BuildMemberDataset(data_entry_list) };
         const auto result{
             HRLModelAlgorithms::EstimateBetaMDPDE(
@@ -204,11 +226,13 @@ void RunLocalBondFitting(
                 MakePotentialAnalysisExecutionOptions(context.thread_size, true))
         };
 
-        fit_state->SetBetaEstimateOLS(result.beta_ols);
-        fit_state->SetBetaEstimateMDPDE(result.beta_mdpde);
-        fit_state->SetSigmaSquare(result.sigma_square);
-        fit_state->SetDataWeight(result.data_weight);
-        fit_state->SetDataCovariance(result.data_covariance);
+        fit_state->SetFitResult(LocalPotentialFitState::FitResult{
+            result.beta_ols,
+            result.beta_mdpde,
+            result.sigma_square,
+            result.data_weight,
+            result.data_covariance
+        });
 
         Eigen::VectorXd model_par_init{ Eigen::VectorXd::Zero(3) };
         model_par_init(0) = local_entry->GetMomentZeroEstimate();
@@ -241,10 +265,10 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         const auto & class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
         Logger::Log(LogLevel::Info, "Class type: " + class_key);
 
-        const auto & analysis_state{ context.model_object.GetAnalysisState() };
+        const auto & analysis_state{ AnalysisState(context.model_object) };
         auto group_potential_entry{
-            analysis_state.GetBondGroupPotentialEntry(class_key) };
-        auto group_keys{ group_potential_entry->GetGroupKeys() };
+            analysis_state.Bonds().FindGroupEntry(class_key) };
+        auto group_keys{ CollectGroupKeys(*group_potential_entry) };
         const auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 
@@ -254,7 +278,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         for (size_t idx = 0; idx < group_key_size; idx++)
         {
             auto group_key{ group_keys[idx] };
-            const auto & bond_list{ group_potential_entry->GetGroup(group_key).bond_members };
+            const auto & bond_list{ group_potential_entry->EnsureGroup(group_key).bond_members };
             const auto group_size{ bond_list.size() };
             std::vector<std::vector<Eigen::VectorXd>> data_entry_list;
             std::vector<Eigen::VectorXd> beta_mdpde_list;
@@ -268,16 +292,18 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
             data_covariance_list.reserve(group_size);
             for (const auto & bond : bond_list)
             {
-                auto * fit_state{ analysis_state.FindBondFitState(*bond) };
+                auto * fit_state{ analysis_state.Bonds().FindFitState(*bond) };
                 if (fit_state == nullptr)
                 {
                     throw std::runtime_error("Bond fit state is not available.");
                 }
-                data_entry_list.emplace_back(fit_state->GetBasisAndResponseEntryList());
-                beta_mdpde_list.emplace_back(fit_state->GetBetaEstimateMDPDE());
-                sigma_square_list.emplace_back(fit_state->GetSigmaSquare());
-                data_weight_list.emplace_back(fit_state->GetDataWeight());
-                data_covariance_list.emplace_back(fit_state->GetDataCovariance());
+                const auto & dataset{ fit_state->GetDataset() };
+                const auto & fit_result{ fit_state->GetFitResult() };
+                data_entry_list.emplace_back(dataset.basis_and_response_entry_list);
+                beta_mdpde_list.emplace_back(fit_result.beta_mdpde);
+                sigma_square_list.emplace_back(fit_result.sigma_square);
+                data_weight_list.emplace_back(fit_result.data_weight);
+                data_covariance_list.emplace_back(fit_result.data_covariance);
             }
             const auto input{
                 HRLDataTransform::BuildGroupInput(
@@ -326,11 +352,13 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
                 GaussianPosterior posterior;
                 posterior.estimate = GaussianEstimate{ posterior_estimate(0), posterior_estimate(1) };
                 posterior.variance = GaussianEstimate{ posterior_variance(0), posterior_variance(1) };
-                bond_entry->SetPosterior(class_key, posterior);
-                bond_entry->AddOutlierTag(class_key, result.outlier_flag_array(count));
-                bond_entry->AddStatisticalDistance(
+                bond_entry->SetAnnotation(
                     class_key,
-                    result.statistical_distance_array(count));
+                    LocalPotentialAnnotation{
+                        posterior,
+                        static_cast<bool>(result.outlier_flag_array(count)),
+                        result.statistical_distance_array(count)
+                    });
                 count++;
             }
 

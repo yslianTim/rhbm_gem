@@ -12,7 +12,8 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/GroupPotentialEntry.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/object/ModelAnalysisState.hpp"
+#include "data/detail/ModelAnalysisState.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -67,7 +68,8 @@ public:
             }
             return nullptr;
         }
-        if (!entry->HasGroup(group_key))
+        const auto * group{ entry->FindGroup(group_key) };
+        if (group == nullptr)
         {
             if (verbose)
             {
@@ -75,7 +77,7 @@ public:
             }
             return nullptr;
         }
-        return &entry->GetGroup(group_key);
+        return group;
     }
 
     const GroupPotentialBucket * TryGetBondGroup(
@@ -92,7 +94,8 @@ public:
             }
             return nullptr;
         }
-        if (!entry->HasGroup(group_key))
+        const auto * group{ entry->FindGroup(group_key) };
+        if (group == nullptr)
         {
             if (verbose)
             {
@@ -100,7 +103,7 @@ public:
             }
             return nullptr;
         }
-        return &entry->GetGroup(group_key);
+        return group;
     }
 
     bool HasAtomGroup(GroupKey group_key, const std::string & class_key, bool verbose=false) const
@@ -150,7 +153,8 @@ public:
         outlier_atom_list.reserve(atom_list.size());
         for (auto * atom : atom_list)
         {
-            if (atom->GetLocalPotentialEntry()->GetOutlierTag(class_key))
+            const auto * annotation{ atom->GetLocalPotentialEntry()->FindAnnotation(class_key) };
+            if (annotation != nullptr && annotation->is_outlier)
             {
                 outlier_atom_list.emplace_back(atom);
             }
@@ -256,24 +260,12 @@ private:
 
     const GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key) const
     {
-        const auto & entry_map{ m_model_object.GetAnalysisState().GetAtomGroupPotentialEntryMap() };
-        auto iter{ entry_map.find(class_key) };
-        if (iter == entry_map.end())
-        {
-            return nullptr;
-        }
-        return iter->second.get();
+        return ModelObjectAccess::AnalysisState(m_model_object).Atoms().FindGroupEntry(class_key);
     }
 
     const GroupPotentialEntry * FindBondGroupEntry(const std::string & class_key) const
     {
-        const auto & entry_map{ m_model_object.GetAnalysisState().GetBondGroupPotentialEntryMap() };
-        auto iter{ entry_map.find(class_key) };
-        if (iter == entry_map.end())
-        {
-            return nullptr;
-        }
-        return iter->second.get();
+        return ModelObjectAccess::AnalysisState(m_model_object).Bonds().FindGroupEntry(class_key);
     }
 
     static void LogMissingAtomGroup(GroupKey group_key, const std::string & class_key)

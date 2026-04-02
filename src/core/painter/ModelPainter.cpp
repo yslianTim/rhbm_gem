@@ -8,8 +8,8 @@
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
-#include "data/object/AtomStyleCatalog.hpp"
-#include "data/object/BondStyleCatalog.hpp"
+#include "core/painter/AtomStyleCatalog.hpp"
+#include "core/painter/BondStyleCatalog.hpp"
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>

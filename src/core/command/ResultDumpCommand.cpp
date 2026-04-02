@@ -1,5 +1,6 @@
 #include "ResultDumpCommand.hpp"
 
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -129,7 +130,8 @@ void ResultDumpCommand::RunAtomOutlierDumping()
             for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
             {
                 const auto & class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-                if (!atom->GetLocalPotentialEntry()->GetOutlierTag(class_key)) continue;
+                const auto * annotation{ atom->GetLocalPotentialEntry()->FindAnnotation(class_key) };
+                if (annotation == nullptr || !annotation->is_outlier) continue;
                 outfile << atom->GetSerialID() << ',' << class_key << ','
                         << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ','
                         << ChemicalDataHelper::GetLabel(atom->GetElement()) << ','
@@ -341,14 +343,15 @@ void ResultDumpCommand::RunGroupGausEstimatesDumping()
         outfile << "Residue,Spot,Amplitude,Width\n";
         for (auto & residue : ChemicalDataHelper::GetStandardAminoAcidList())
         {
-            const auto residue_name{ ChemicalDataHelper::GetLabel(residue) };
-            const auto component_key{ static_cast<ComponentKey>(residue) };
-            for (auto & spot : ComponentHelper::GetSpotList(residue))
-            {
-                const auto atom_key{ static_cast<uint16_t>(spot) };
-                const auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
-                const auto atom_id{ model_object->GetAtomKeySystemPtr()->GetAtomId(atom_key) };
-                if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
+                const auto residue_name{ ChemicalDataHelper::GetLabel(residue) };
+                const auto component_key{ static_cast<ComponentKey>(residue) };
+                auto & atom_key_system{ ModelObjectAccess::AtomKeySystemRef(*model_object) };
+                for (auto & spot : ComponentHelper::GetSpotList(residue))
+                {
+                    const auto atom_key{ static_cast<uint16_t>(spot) };
+                    const auto group_key{ AtomClassifier::GetGroupKeyInClass(component_key, atom_key) };
+                    const auto atom_id{ atom_key_system.GetAtomId(atom_key) };
+                    if (!entry_view.HasAtomGroup(group_key, class_key)) continue;
                 outfile << residue_name << ',' << atom_id << ','
                         << entry_view.GetAtomGausEstimatePrior(group_key, class_key, 0) << ','
                         << entry_view.GetAtomGausEstimatePrior(group_key, class_key, 1) << '\n';

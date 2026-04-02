@@ -2,7 +2,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
-#include "data/object/AtomStyleCatalog.hpp"
+#include "core/painter/AtomStyleCatalog.hpp"
 #include <detail/ModelPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>

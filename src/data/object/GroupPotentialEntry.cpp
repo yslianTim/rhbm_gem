@@ -19,31 +19,21 @@ GroupPotentialBucket & GroupPotentialEntry::EnsureGroup(GroupKey group_key)
     return m_group_map[group_key];
 }
 
-bool GroupPotentialEntry::HasGroup(GroupKey group_key) const
+GroupPotentialBucket * GroupPotentialEntry::FindGroup(GroupKey group_key)
 {
-    return m_group_map.find(group_key) != m_group_map.end();
+    const auto iter{ m_group_map.find(group_key) };
+    return (iter == m_group_map.end()) ? nullptr : &iter->second;
 }
 
-const GroupPotentialBucket & GroupPotentialEntry::GetGroup(GroupKey group_key) const
+const GroupPotentialBucket * GroupPotentialEntry::FindGroup(GroupKey group_key) const
 {
-    return m_group_map.at(group_key);
+    const auto iter{ m_group_map.find(group_key) };
+    return (iter == m_group_map.end()) ? nullptr : &iter->second;
 }
 
-const std::unordered_map<GroupKey, GroupPotentialBucket> & GroupPotentialEntry::GetGroups() const
+const std::unordered_map<GroupKey, GroupPotentialBucket> & GroupPotentialEntry::Entries() const
 {
     return m_group_map;
-}
-
-std::vector<GroupKey> GroupPotentialEntry::GetGroupKeys() const
-{
-    std::vector<GroupKey> group_keys;
-    group_keys.reserve(m_group_map.size());
-    for (const auto & [group_key, bucket] : m_group_map)
-    {
-        (void)bucket;
-        group_keys.emplace_back(group_key);
-    }
-    return group_keys;
 }
 
 } // namespace rhbm_gem

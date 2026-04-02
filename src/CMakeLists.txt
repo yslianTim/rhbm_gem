@@ -31,20 +31,20 @@ target_sources(rhbm_gem PRIVATE
 
     # data
     data/object/AtomClassifier.cpp
-    data/object/AtomStyleCatalog.cpp
+    core/painter/AtomStyleCatalog.cpp
     data/object/AtomObject.cpp
     data/io/DataRepository.cpp
     data/io/file/ModelImportState.cpp
     data/object/BondClassifier.cpp
-    data/object/BondStyleCatalog.cpp
+    core/painter/BondStyleCatalog.cpp
     data/object/BondObject.cpp
     data/object/ChemicalComponentEntry.cpp
     data/object/GroupPotentialEntry.cpp
     data/object/LocalPotentialEntry.cpp
-    data/object/LocalPotentialFitState.cpp
+    data/detail/LocalPotentialFitState.cpp
     data/object/MapObject.cpp
-    data/object/MapSpatialIndex.cpp
-    data/object/ModelAnalysisState.cpp
+    data/detail/MapSpatialIndex.cpp
+    data/detail/ModelAnalysisState.cpp
     data/object/ModelObject.cpp
     data/io/file/CCP4Format.cpp
     data/io/file/CifFormat.cpp

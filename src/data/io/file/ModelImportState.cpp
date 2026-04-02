@@ -337,12 +337,12 @@ ChemicalComponentEntry* ModelImportState::GetChemicalComponentEntryPtr(Component
 const ComponentBondEntry* ModelImportState::GetComponentBondEntryPtr(
     ComponentKey comp_key, BondKey bond_key) const {
     auto comp_entry_ptr{GetChemicalComponentEntryPtr(comp_key)};
-    if (comp_entry_ptr == nullptr || comp_entry_ptr->HasComponentBondEntry(bond_key) == false) {
+    if (comp_entry_ptr == nullptr) {
         Logger::Log(LogLevel::Warning,
                     "Component bond entry (comp_key: " + std::to_string(comp_key) + ", bond_key: " + std::to_string(bond_key) + ") not found in chemical component map.");
         return nullptr;
     }
-    return comp_entry_ptr->GetComponentBondEntryPtr(bond_key);
+    return comp_entry_ptr->FindComponentBondEntry(bond_key);
 }
 
 std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>>&
@@ -359,7 +359,7 @@ bool ModelImportState::HasComponentBondEntry(
     if (HasChemicalComponentEntry(comp_key) == false) {
         return false;
     }
-    return m_chemical_component_entry_map.at(comp_key)->HasComponentBondEntry(bond_key);
+    return m_chemical_component_entry_map.at(comp_key)->FindComponentBondEntry(bond_key) != nullptr;
 }
 
 } // namespace rhbm_gem

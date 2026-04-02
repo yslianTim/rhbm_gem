@@ -1,6 +1,7 @@
 #include "MapSimulationCommand.hpp"
 #include "detail/DataObjectSummaryLog.hpp"
-#include "data/object/MapSpatialIndex.hpp"
+#include "data/detail/MapObjectAccess.hpp"
+#include "data/detail/MapSpatialIndex.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -286,13 +287,12 @@ std::unique_ptr<MapObject> MapSimulationCommand::CreateMapObject()
     auto origin{ CalculateOrigin(grid_spacing) };
     auto grid_size{ CalculateGridSize(grid_spacing) };
     auto map_object{ std::make_unique<MapObject>(grid_size, grid_spacing, origin) };
-    map_object->SetThreadSize(ThreadSize());
+    MapObjectAccess::SetThreadSize(*map_object, ThreadSize());
 
     auto voxel_size{ map_object->GetMapValueArraySize() };
     auto map_value_array{ std::make_unique<float[]>(voxel_size) };
     std::fill_n(map_value_array.get(), voxel_size, 0.0f);
     map_object->SetMapValueArray(std::move(map_value_array));
-    map_object->GetSpatialIndex().Build(ThreadSize());
 
     return map_object;
 }
@@ -315,16 +315,14 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
     std::fill_n(map_value_array.get(), voxel_size, 0.0f);
 
     auto atom_size{ m_selected_atom_list.size() };
-    map_object->GetSpatialIndex().Build(ThreadSize());
-    auto kd_tree_root{ map_object->GetSpatialIndex().GetRoot() };
     size_t atom_count{ 0 };
-    std::vector<GridNode*> in_range_grid_node_list;
+    std::vector<size_t> in_range_grid_index_list;
 
     Logger::Log(LogLevel::Info,
         " /- Total number of atoms to be processed: "+ std::to_string(atom_size) + " atoms."
     );
 #ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(ThreadSize()) private(in_range_grid_node_list)
+    #pragma omp parallel for num_threads(ThreadSize()) private(in_range_grid_index_list)
 #endif
     for (size_t i = 0; i < atom_size; i++)
     {
@@ -332,18 +330,19 @@ void MapSimulationCommand::PopulateMapValueArray(MapObject * map_object, double 
         auto charge{ m_atom_charge_map.at(atom->GetSerialID()) };
         auto element{ atom->GetElement() };
         auto atom_position{ atom->GetPosition() };
-        MapObject query_map_object({1, 1, 1}, {1.0, 1.0, 1.0}, atom_position);
-        GridNode query_node(0, &query_map_object);
-
-        KDTreeAlgorithm<GridNode>::RangeSearch(
-            kd_tree_root, &query_node, request.cutoff_distance, in_range_grid_node_list);
+        MapObjectAccess::SpatialIndex(*map_object).CollectGridIndicesInRange(
+            atom_position,
+            static_cast<float>(request.cutoff_distance),
+            in_range_grid_index_list);
         
-        for (auto & grid_node : in_range_grid_node_list)
+        for (const auto grid_index : in_range_grid_index_list)
         {
             auto distance{
-                ArrayStats<float>::ComputeNorm(atom_position, grid_node->GetPosition())
+                ArrayStats<float>::ComputeNorm(
+                    atom_position,
+                    map_object->GetGridPosition(grid_index))
             };
-            map_value_array[grid_node->GetGridIndex()] += static_cast<float>(
+            map_value_array[grid_index] += static_cast<float>(
                 electric_potential->GetPotentialValue(element, distance, charge)
             );
         }

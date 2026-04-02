@@ -5,8 +5,8 @@
 #include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
-#include "data/object/AtomStyleCatalog.hpp"
-#include "data/object/BondStyleCatalog.hpp"
+#include "core/painter/AtomStyleCatalog.hpp"
+#include "core/painter/BondStyleCatalog.hpp"
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/ComponentHelper.hpp>
@@ -107,7 +107,7 @@ void GausPainter::PaintAtomLocalGausSummary(
 
     for (auto & [component_key, component_entry] : chemical_component_map)
     {
-        const auto & component_atom_map{ component_entry->GetComponentAtomEntryMap() };
+        const auto & component_atom_map{ component_entry->AtomEntries() };
         auto component_id{ component_entry->GetComponentId() };
         for (auto & [atom_key, atom_entry] : component_atom_map)
         {
@@ -236,7 +236,8 @@ void GausPainter::PaintAtomLocalGausSummary(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                auto is_outlier{ RequireLocalPotentialEntry(*atom).GetOutlierTag(class_key) };
+                const auto * annotation{ RequireLocalPotentialEntry(*atom).FindAnnotation(class_key) };
+                auto is_outlier{ annotation != nullptr && annotation->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
@@ -372,7 +373,7 @@ void GausPainter::PaintAtomGroupGausSummary(
     for (auto & [component_key, component_entry] : chemical_component_map)
     {
         if (component_entry->GetComponentType() == "non-polymer") continue;
-        const auto & component_atom_map{ component_entry->GetComponentAtomEntryMap() };
+        const auto & component_atom_map{ component_entry->AtomEntries() };
         auto component_id{ component_entry->GetComponentId() };
         std::map<Element, std::map<std::string, GroupKey>> group_key_list_map;
         std::map<Element, std::map<std::string, GroupKey>> helix_group_key_list_map;
@@ -884,7 +885,8 @@ void GausPainter::PaintAtomGroupMapValueAminoAcidMainChainComponent(
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
                 auto graph{ atom_plot_builder->CreateBinnedDistanceToMapValueGraph() };
-                auto is_outlier{ RequireLocalPotentialEntry(*atom).GetOutlierTag(class_key) };
+                const auto * annotation{ RequireLocalPotentialEntry(*atom).FindAnnotation(class_key) };
+                auto is_outlier{ annotation != nullptr && annotation->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
                 ROOTHelper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);

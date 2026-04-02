@@ -32,10 +32,9 @@ public:
     GroupPotentialEntry();
     ~GroupPotentialEntry();
     GroupPotentialBucket & EnsureGroup(GroupKey group_key);
-    bool HasGroup(GroupKey group_key) const;
-    const GroupPotentialBucket & GetGroup(GroupKey group_key) const;
-    const std::unordered_map<GroupKey, GroupPotentialBucket> & GetGroups() const;
-    std::vector<GroupKey> GetGroupKeys() const;
+    GroupPotentialBucket * FindGroup(GroupKey group_key);
+    const GroupPotentialBucket * FindGroup(GroupKey group_key) const;
+    const std::unordered_map<GroupKey, GroupPotentialBucket> & Entries() const;
 };
 
 } // namespace rhbm_gem

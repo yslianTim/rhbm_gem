@@ -1,6 +1,7 @@
 #include "PotentialPlotBuilder.hpp"
 
-#include "data/object/ModelAnalysisState.hpp"
+#include "data/detail/ModelAnalysisState.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/data/object/AtomClassifier.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondClassifier.hpp>
@@ -36,6 +37,42 @@ double GetGroupPriorVariance(const GroupPotentialBucket & group, int par_id)
     posterior.estimate = group.prior;
     posterior.variance = group.prior_variance;
     return posterior.GetVariance(par_id);
+}
+
+const GroupPotentialBucket & RequireAtomGroup(
+    const ModelObject & model_object,
+    GroupKey group_key,
+    const std::string & class_key)
+{
+    const auto * entry{ ModelObjectAccess::AnalysisState(model_object).Atoms().FindGroupEntry(class_key) };
+    if (entry == nullptr)
+    {
+        throw std::runtime_error("Atom group entry is not available.");
+    }
+    const auto * group{ entry->FindGroup(group_key) };
+    if (group == nullptr)
+    {
+        throw std::runtime_error("Atom group bucket is not available.");
+    }
+    return *group;
+}
+
+const GroupPotentialBucket & RequireBondGroup(
+    const ModelObject & model_object,
+    GroupKey group_key,
+    const std::string & class_key)
+{
+    const auto * entry{ ModelObjectAccess::AnalysisState(model_object).Bonds().FindGroupEntry(class_key) };
+    if (entry == nullptr)
+    {
+        throw std::runtime_error("Bond group entry is not available.");
+    }
+    const auto * group{ entry->FindGroup(group_key) };
+    if (group == nullptr)
+    {
+        throw std::runtime_error("Bond group bucket is not available.");
+    }
+    return *group;
 }
 
 } // namespace
@@ -412,8 +449,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResi
             continue;
         }
         auto x_value{ static_cast<int>(GetModelView().GetResidueFromAtomGroupKey(group_key, class_key)) - 1 };
-        const auto & group{
-            model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+        const auto & group{ RequireAtomGroup(*model_object, group_key, class_key) };
         auto y_value{ group.prior.GetParameter(par_id) };
         auto y_error{ GetGroupPriorVariance(group, par_id) };
         graph->SetPoint(count, x_value, y_value);
@@ -441,8 +477,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBondGausEstimateToResi
             continue;
         }
         auto x_value{ static_cast<int>(GetModelView().GetResidueFromBondGroupKey(group_key, class_key)) - 1 };
-        const auto & group{
-            model_object->GetAnalysisState().GetBondGroupPotentialEntry(class_key)->GetGroup(group_key) };
+        const auto & group{ RequireBondGroup(*model_object, group_key, class_key) };
         auto y_value{ group.prior.GetParameter(par_id) };
         auto y_error{ GetGroupPriorVariance(group, par_id) };
         graph->SetPoint(count, x_value, y_value);
@@ -470,8 +505,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToSpot
         {
             continue;
         }
-        const auto & group{
-            model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+        const auto & group{ RequireAtomGroup(*model_object, group_key, class_key) };
         auto x_value{ static_cast<double>(i) };
         auto y_value{ group.prior.GetParameter(par_id) };
         auto y_error{ GetGroupPriorVariance(group, par_id) };
@@ -506,8 +540,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToAtom
         {
             continue;
         }
-        const auto & group{
-            model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+        const auto & group{ RequireAtomGroup(*model_object, group_key, class_key) };
         auto x_value{ static_cast<double>(i) };
         auto y_value{ group.prior.GetParameter(par_id) };
         auto y_error{ GetGroupPriorVariance(group, par_id) };
@@ -531,7 +564,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     for (auto atom : atom_list)
     {
         auto entry{ atom->GetLocalPotentialEntry() };
-        auto is_outlier{ entry->GetOutlierTag(class_key) };
+        const auto * annotation{ entry->FindAnnotation(class_key) };
+        auto is_outlier{ annotation != nullptr && annotation->is_outlier };
         if (select_outliers == true && is_outlier == false)
         {
             continue;
@@ -754,7 +788,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
     }
     auto model_object{ m_model_object };
     auto graph{ ROOTHelper::CreateGraphErrors() };
-    auto kd_tree_root{ model_object->GetKDTreeRoot() };
+    auto kd_tree_root{ ModelObjectAccess::KDTreeRoot(*model_object) };
     if (kd_tree_root == nullptr)
     {
         Logger::Log(LogLevel::Error, "KDTree is not available for the model object.");
@@ -889,8 +923,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionMea
     {
         return nullptr;
     }
-    const auto & group{
-        m_model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{ RequireAtomGroup(*m_model_object, group_key, class_key) };
     auto mu_0{ group.mean.ToBeta()(0) };
     auto mu_1{ group.mean.ToBeta()(1) };
     return ROOTHelper::CreateLinearModelFunction("linear_mean", mu_0, mu_1, x_min, x_max);
@@ -903,8 +936,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupLinearModelFunctionPri
     {
         return nullptr;
     }
-    const auto & group{
-        m_model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{ RequireAtomGroup(*m_model_object, group_key, class_key) };
     auto mu_0{ group.prior.ToBeta()(0) };
     auto mu_1{ group.prior.ToBeta()(1) };
     return ROOTHelper::CreateLinearModelFunction("linear_prior", mu_0, mu_1, x_min, x_max);
@@ -917,8 +949,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(
     {
         return nullptr;
     }
-    const auto & group{
-        m_model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{ RequireAtomGroup(*m_model_object, group_key, class_key) };
     auto amplitude{ group.mean.amplitude };
     auto width{ group.mean.width };
     return ROOTHelper::CreateGaus3DFunctionIn1D("group_gaus_mean", amplitude, width);
@@ -931,8 +962,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionPrior(
     {
         return nullptr;
     }
-    const auto & group{
-        m_model_object->GetAnalysisState().GetAtomGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{ RequireAtomGroup(*m_model_object, group_key, class_key) };
     auto amplitude{ group.prior.amplitude };
     auto width{ group.prior.width };
     return ROOTHelper::CreateGaus3DFunctionIn1D("group_gaus_prior", amplitude, width);
@@ -945,8 +975,7 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateBondGroupGausFunctionPrior(
     {
         return nullptr;
     }
-    const auto & group{
-        m_model_object->GetAnalysisState().GetBondGroupPotentialEntry(class_key)->GetGroup(group_key) };
+    const auto & group{ RequireBondGroup(*m_model_object, group_key, class_key) };
     auto amplitude{ group.prior.amplitude };
     auto width{ group.prior.width };
     return ROOTHelper::CreateGaus2DFunctionIn1D("group_gaus_prior", amplitude, width);
@@ -1243,11 +1272,16 @@ PotentialPlotBuilder::CreateAtomGausEstimatePosteriorToSequenceIDGraphMap(
             count_map[chain_id] = 0;
         }
         auto x_value{ static_cast<double>(sequence_id) };
+        const auto * annotation{ entry->FindAnnotation(class_key) };
+        if (annotation == nullptr)
+        {
+            continue;
+        }
         graph_map[chain_id]->SetPoint(
-            count_map[chain_id], x_value, entry->GetPosterior(class_key).GetEstimate(par_id)
+            count_map[chain_id], x_value, annotation->posterior.GetEstimate(par_id)
         );
         graph_map[chain_id]->SetPointError(
-            count_map[chain_id], 0.0, entry->GetPosterior(class_key).GetVariance(par_id)
+            count_map[chain_id], 0.0, annotation->posterior.GetVariance(par_id)
         );
         count_map[chain_id]++;
     }

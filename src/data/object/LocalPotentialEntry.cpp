@@ -24,21 +24,23 @@ void LocalPotentialEntry::SetDistanceAndMapValueList(std::vector<std::tuple<floa
     m_distance_and_map_value_list = std::move(value);
 }
 
-void LocalPotentialEntry::SetPosterior(
+void LocalPotentialEntry::SetAnnotation(
     const std::string & key,
-    const GaussianPosterior & posterior)
+    LocalPotentialAnnotation annotation)
 {
-    m_gaus_posterior_map[key] = posterior;
+    m_annotation_map[key] = std::move(annotation);
 }
 
-void LocalPotentialEntry::AddOutlierTag(const std::string & key, bool value)
+LocalPotentialAnnotation * LocalPotentialEntry::FindAnnotation(const std::string & key)
 {
-    m_outlier_tag_map[key] = value;
+    const auto iter{ m_annotation_map.find(key) };
+    return (iter == m_annotation_map.end()) ? nullptr : &iter->second;
 }
 
-void LocalPotentialEntry::AddStatisticalDistance(const std::string & key, double value)
+const LocalPotentialAnnotation * LocalPotentialEntry::FindAnnotation(const std::string & key) const
 {
-    m_statistical_distance_map[key] = value;
+    const auto iter{ m_annotation_map.find(key) };
+    return (iter == m_annotation_map.end()) ? nullptr : &iter->second;
 }
 
 int LocalPotentialEntry::GetDistanceAndMapValueListSize() const
@@ -46,9 +48,10 @@ int LocalPotentialEntry::GetDistanceAndMapValueListSize() const
     return static_cast<int>(m_distance_and_map_value_list.size());
 }
 
-const GaussianPosterior & LocalPotentialEntry::GetPosterior(const std::string & key) const
+const std::unordered_map<std::string, LocalPotentialAnnotation> &
+LocalPotentialEntry::Annotations() const
 {
-    return m_gaus_posterior_map.at(key);
+    return m_annotation_map;
 }
 
 const std::vector<std::tuple<float, float>> & LocalPotentialEntry::GetDistanceAndMapValueList() const
@@ -106,16 +109,6 @@ double LocalPotentialEntry::GetMomentTwoEstimate() const
     }
     y_sum /= static_cast<double>(count);
     return std::sqrt(y_sum/m_0/3.0);
-}
-
-bool LocalPotentialEntry::GetOutlierTag(const std::string & key) const
-{
-    return m_outlier_tag_map.at(key);
-}
-
-double LocalPotentialEntry::GetStatisticalDistance(const std::string & key) const
-{
-    return m_statistical_distance_map.at(key);
 }
 
 double LocalPotentialEntry::CalculateQScore(int par_choice) const

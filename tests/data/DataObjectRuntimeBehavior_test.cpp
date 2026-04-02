@@ -11,7 +11,9 @@
 #include <rhbm_gem/data/object/LocalPotentialEntry.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/object/MapSpatialIndex.hpp"
+#include "data/detail/MapObjectAccess.hpp"
+#include "data/detail/MapSpatialIndex.hpp"
+#include "data/detail/ModelObjectAccess.hpp"
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include "support/DataObjectTestSupport.hpp"
 
@@ -30,11 +32,15 @@ TEST(DataObjectRuntimeBehaviorTest, NormalizeMapObjectNormalizesMapValues)
     EXPECT_NEAR(map.GetMapValueSD(), 1.0f, 1.0e-5f);
 }
 
-TEST(DataObjectRuntimeBehaviorTest, SetMapValueArrayRefreshesStatisticsAndInvalidatesSpatialIndex)
+TEST(DataObjectRuntimeBehaviorTest, SetMapValueArrayRefreshesStatisticsAndPreservesSpatialQueries)
 {
     auto map{ data_test::MakeMapObject() };
-    map.GetSpatialIndex().Build(1);
-    ASSERT_NE(map.GetSpatialIndex().GetRoot(), nullptr);
+    std::vector<size_t> initial_hits;
+    rg::MapObjectAccess::SpatialIndex(map).CollectGridIndicesInRange(
+        map.GetGridPosition(0),
+        0.1f,
+        initial_hits);
+    ASSERT_FALSE(initial_hits.empty());
 
     auto replacement_values{ std::make_unique<float[]>(8) };
     for (size_t i = 0; i < 8; ++i)
@@ -44,7 +50,12 @@ TEST(DataObjectRuntimeBehaviorTest, SetMapValueArrayRefreshesStatisticsAndInvali
 
     map.SetMapValueArray(std::move(replacement_values));
 
-    EXPECT_EQ(map.GetSpatialIndex().GetRoot(), nullptr);
+    std::vector<size_t> refreshed_hits;
+    rg::MapObjectAccess::SpatialIndex(map).CollectGridIndicesInRange(
+        map.GetGridPosition(0),
+        0.1f,
+        refreshed_hits);
+    EXPECT_EQ(refreshed_hits, initial_hits);
     EXPECT_FLOAT_EQ(map.GetMapValueMin(), 10.0f);
     EXPECT_FLOAT_EQ(map.GetMapValueMax(), 17.0f);
     EXPECT_FLOAT_EQ(map.GetMapValueMean(), 13.5f);
@@ -239,7 +250,7 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
     model->GetBondList().at(0)->SetSelectedFlag(true);
     model->RebuildSelectionIndex();
     model->BuildKDTreeRoot();
-    ASSERT_NE(model->GetKDTreeRoot(), nullptr);
+    ASSERT_NE(rg::ModelObjectAccess::KDTreeRoot(*model), nullptr);
     EXPECT_FLOAT_EQ(model->GetCenterOfMassPosition().at(0), 0.5f);
 
     std::vector<std::unique_ptr<rg::AtomObject>> replacement_atoms;
@@ -256,7 +267,7 @@ TEST(DataObjectRuntimeBehaviorTest, SetAtomListSyncsSelectionStateAndInvalidates
 
     model->SetAtomList(std::move(replacement_atoms));
 
-    EXPECT_EQ(model->GetKDTreeRoot(), nullptr);
+    EXPECT_EQ(rg::ModelObjectAccess::KDTreeRoot(*model), nullptr);
     EXPECT_NE(model->GetAtomPtr(11), nullptr);
     EXPECT_NE(model->GetAtomPtr(12), nullptr);
     EXPECT_THROW(model->GetAtomPtr(1), std::out_of_range);

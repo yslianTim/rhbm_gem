@@ -1,5 +1,6 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include "data/object/MapSpatialIndex.hpp"
+#include "data/detail/MapObjectAccess.hpp"
+#include "data/detail/MapSpatialIndex.hpp"
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -268,16 +269,6 @@ void MapObject::MapValueArrayNormalization()
         m_map_value_array[i] /= m_map_value_sd;
     }
     SyncValueArrayState();
-}
-
-MapSpatialIndex & MapObject::GetSpatialIndex()
-{
-    return *m_spatial_index;
-}
-
-const MapSpatialIndex & MapObject::GetSpatialIndex() const
-{
-    return *m_spatial_index;
 }
 
 } // namespace rhbm_gem

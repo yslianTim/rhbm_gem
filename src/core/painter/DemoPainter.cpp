@@ -4,7 +4,7 @@
 #include <detail/LocalPotentialAccess.hpp>
 #include <detail/ModelPotentialView.hpp>
 #include "PotentialPlotBuilder.hpp"
-#include "data/object/AtomStyleCatalog.hpp"
+#include "core/painter/AtomStyleCatalog.hpp"
 #include <detail/PotentialSeriesOps.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/data/object/AtomClassifier.hpp>

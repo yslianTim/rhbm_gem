@@ -55,20 +55,16 @@ public:
     void AddComponentAtomEntry(AtomKey atom_key, const ComponentAtomEntry & atom_info);
     void AddComponentBondEntry(BondKey bond_key, const ComponentBondEntry & bond_info);
 
-    bool HasComponentAtomEntry(AtomKey atom_key) const;
-    bool HasComponentBondEntry(BondKey bond_key) const;
     std::string GetComponentId() const { return m_component_id; }
     std::string GetComponentName() const { return m_component_name; }
     std::string GetComponentType() const { return m_component_type; }
     std::string GetComponentFormula() const { return m_component_formula; }
     float GetComponentMolecularWeight() const { return m_component_molecular_weight; }
     bool IsStandardMonomer() const { return m_standard_monomer_flag; }
-    const std::map<AtomKey, ComponentAtomEntry> &
-    GetComponentAtomEntryMap() const { return m_component_atom_entry_map; }
-    const std::map<BondKey, ComponentBondEntry> &
-    GetComponentBondEntryMap() const { return m_component_bond_entry_map; }
-    const ComponentAtomEntry * GetComponentAtomEntryPtr(AtomKey atom_key) const;
-    const ComponentBondEntry * GetComponentBondEntryPtr(BondKey bond_key) const;
+    const std::map<AtomKey, ComponentAtomEntry> & AtomEntries() const { return m_component_atom_entry_map; }
+    const std::map<BondKey, ComponentBondEntry> & BondEntries() const { return m_component_bond_entry_map; }
+    const ComponentAtomEntry * FindComponentAtomEntry(AtomKey atom_key) const;
+    const ComponentBondEntry * FindComponentBondEntry(BondKey bond_key) const;
 
 };
 

@@ -7,6 +7,7 @@
 
 namespace rhbm_gem {
 
+class MapObjectAccess;
 class MapSpatialIndex;
 
 class VoxelNode
@@ -63,13 +64,12 @@ public:
     float GetMapValueMin() const { return m_map_value_min; }
     float GetMapValueMax() const { return m_map_value_max; }
     float GetMapValueSD() const { return m_map_value_sd; }
-    MapSpatialIndex & GetSpatialIndex();
-    const MapSpatialIndex & GetSpatialIndex() const;
-    void SetThreadSize(int value) { m_thread_size = value; }
     void SetMapValueArray(std::unique_ptr<float[]> map_value_array);
     void MapValueArrayNormalization();
 
 private:
+    friend class MapObjectAccess;
+
     void RecomputeStatistics();
     void SyncValueArrayState();
     void CheckIndex(int index_x, int index_y, int index_z) const;
