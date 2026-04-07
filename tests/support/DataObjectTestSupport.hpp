@@ -14,7 +14,7 @@
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include "data/detail/ModelObjectBuilder.hpp"
+#include "data/detail/ModelObjectAssembly.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 
@@ -33,9 +33,8 @@ inline std::shared_ptr<rg::ModelObject> LoadFixtureModel(
 
 inline std::unique_ptr<rg::ModelObject> MakeModelWithBond()
 {
-    rg::ModelObjectBuilder builder;
-    std::vector<std::unique_ptr<rg::AtomObject>> atom_list;
-    atom_list.reserve(2);
+    rg::ModelObjectAssembly assembly;
+    assembly.atom_list.reserve(2);
 
     auto atom_1{ std::make_unique<rg::AtomObject>() };
     atom_1->SetSerialID(1);
@@ -47,16 +46,13 @@ inline std::unique_ptr<rg::ModelObject> MakeModelWithBond()
 
     auto * atom_1_ptr{ atom_1.get() };
     auto * atom_2_ptr{ atom_2.get() };
-    atom_list.emplace_back(std::move(atom_1));
-    atom_list.emplace_back(std::move(atom_2));
-    builder.SetAtomList(std::move(atom_list));
+    assembly.atom_list.emplace_back(std::move(atom_1));
+    assembly.atom_list.emplace_back(std::move(atom_2));
 
-    std::vector<std::unique_ptr<rg::BondObject>> bond_list;
-    bond_list.emplace_back(std::make_unique<rg::BondObject>(
+    assembly.bond_list.emplace_back(std::make_unique<rg::BondObject>(
         atom_1_ptr,
         atom_2_ptr));
-    builder.SetBondList(std::move(bond_list));
-    return std::make_unique<rg::ModelObject>(builder.Build());
+    return std::make_unique<rg::ModelObject>(rg::AssembleModelObject(std::move(assembly)));
 }
 
 inline rg::MapObject MakeMapObject()

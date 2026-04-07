@@ -172,11 +172,18 @@ struct HasAdlOwnerModelOf<
     T,
     std::void_t<decltype(OwnerModelOf(std::declval<const T &>()))>> : std::true_type {};
 
-bool SourceTreeContains(const std::filesystem::path & root, std::string_view needle)
+bool SourceTreeContains(
+    const std::filesystem::path & root,
+    std::string_view needle,
+    const std::vector<std::filesystem::path> & ignored_paths = {})
 {
     for (const auto & entry : std::filesystem::recursive_directory_iterator(root))
     {
         if (!entry.is_regular_file())
+        {
+            continue;
+        }
+        if (std::find(ignored_paths.begin(), ignored_paths.end(), entry.path()) != ignored_paths.end())
         {
             continue;
         }
@@ -248,11 +255,17 @@ TEST(DataPublicSurfaceTest, ModelObjectExposesSelectionQueriesButKeepsBuildWorkf
 TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
 {
     const auto project_root{ command_test::ProjectRootPath() };
+    const std::vector<std::filesystem::path> ignored_test_files{
+        project_root / "tests/data/DataPublicSurface_test.cpp" };
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/core/detail/LocalPotentialAccess.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/core/detail/GroupPotentialAccess.hpp"));
+    EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelObjectBuilder.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelSelectionAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "LocalPotentialAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "GroupPotentialAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelObjectBuilder"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSelectionAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelObjectBuilder", ignored_test_files));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectBuilder"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSelectionAccess"));
 }

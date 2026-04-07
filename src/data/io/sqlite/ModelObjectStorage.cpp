@@ -5,7 +5,7 @@
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
-#include "data/detail/ModelObjectBuilder.hpp"
+#include "data/detail/ModelObjectAssembly.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
@@ -715,7 +715,7 @@ void LoadModelObjectRow(
 
 void LoadChainMap(
     rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectBuilder & builder,
+    rhbm_gem::ModelObjectAssembly & assembly,
     const std::string & key_tag)
 {
     std::unordered_map<std::string, std::vector<std::string>> chain_map;
@@ -741,12 +741,12 @@ void LoadChainMap(
         }
         chain_id_list.at(static_cast<size_t>(ordinal)) = database.GetColumn<std::string>(2);
     }
-    builder.SetChainIDListMap(chain_map);
+    assembly.chain_id_list_map = std::move(chain_map);
 }
 
 void LoadChemicalComponentEntryList(
     rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectBuilder & builder,
+    rhbm_gem::ModelObjectAssembly & assembly,
     const std::string & key_tag)
 {
     database.Prepare(std::string(kSelectModelComponentSql));
@@ -774,14 +774,14 @@ void LoadChemicalComponentEntryList(
         component_entry->SetComponentMolecularWeight(
             static_cast<float>(database.GetColumn<double>(5)));
         component_entry->SetStandardMonomerFlag(static_cast<bool>(database.GetColumn<int>(6)));
-        builder.AddChemicalComponentEntry(component_key, std::move(component_entry));
-        builder.MutableComponentKeySystem().RegisterComponent(component_id, component_key);
+        assembly.chemical_component_entry_map[component_key] = std::move(component_entry);
+        assembly.component_key_system->RegisterComponent(component_id, component_key);
     }
 }
 
 void LoadComponentAtomEntryList(
     rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectBuilder & builder,
+    rhbm_gem::ModelObjectAssembly & assembly,
     const std::string & key_tag)
 {
     database.Prepare(std::string(kSelectModelComponentAtomSql));
@@ -800,11 +800,14 @@ void LoadComponentAtomEntryList(
         }
 
         const auto component_key{ database.GetColumn<ComponentKey>(0) };
-        auto * component_entry{ builder.FindChemicalComponentEntry(component_key) };
-        if (component_entry == nullptr)
+        const auto component_iter{ assembly.chemical_component_entry_map.find(component_key) };
+        if (component_iter == assembly.chemical_component_entry_map.end() ||
+            component_iter->second == nullptr)
         {
             continue;
         }
+
+        auto * component_entry{ component_iter->second.get() };
         const rhbm_gem::ComponentAtomEntry atom_entry{
             database.GetColumn<std::string>(2),
             static_cast<Element>(database.GetColumn<int>(3)),
@@ -813,13 +816,13 @@ void LoadComponentAtomEntryList(
         };
         const auto atom_key{ database.GetColumn<AtomKey>(1) };
         component_entry->AddComponentAtomEntry(atom_key, atom_entry);
-        builder.MutableAtomKeySystem().RegisterAtom(atom_entry.atom_id, atom_key);
+        assembly.atom_key_system->RegisterAtom(atom_entry.atom_id, atom_key);
     }
 }
 
 void LoadComponentBondEntryList(
     rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectBuilder & builder,
+    rhbm_gem::ModelObjectAssembly & assembly,
     const std::string & key_tag)
 {
     database.Prepare(std::string(kSelectModelComponentBondSql));
@@ -838,11 +841,14 @@ void LoadComponentBondEntryList(
         }
 
         const auto component_key{ database.GetColumn<ComponentKey>(0) };
-        auto * component_entry{ builder.FindChemicalComponentEntry(component_key) };
-        if (component_entry == nullptr)
+        const auto component_iter{ assembly.chemical_component_entry_map.find(component_key) };
+        if (component_iter == assembly.chemical_component_entry_map.end() ||
+            component_iter->second == nullptr)
         {
             continue;
         }
+
+        auto * component_entry{ component_iter->second.get() };
         rhbm_gem::ComponentBondEntry bond_entry;
         const auto bond_key{ database.GetColumn<BondKey>(1) };
         bond_entry.bond_id = database.GetColumn<std::string>(2);
@@ -852,7 +858,7 @@ void LoadComponentBondEntryList(
         bond_entry.stereo_config =
             static_cast<StereoChemistry>(database.GetColumn<int>(6));
         component_entry->AddComponentBondEntry(bond_key, bond_entry);
-        builder.MutableBondKeySystem().RegisterBond(bond_entry.bond_id, bond_key);
+        assembly.bond_key_system->RegisterBond(bond_entry.bond_id, bond_key);
     }
 }
 
@@ -954,19 +960,18 @@ void SaveStructure(
     SaveBondObjectList(database, model_obj, key_tag);
 }
 
-void LoadStructure(
+rhbm_gem::ModelObjectAssembly LoadStructure(
     rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObjectBuilder & builder,
     const std::string & key_tag)
 {
-    LoadChemicalComponentEntryList(database, builder, key_tag);
-    LoadComponentAtomEntryList(database, builder, key_tag);
-    LoadComponentBondEntryList(database, builder, key_tag);
-    auto atom_list{ LoadAtomObjectList(database, key_tag) };
-    auto bond_list{ LoadBondObjectList(database, key_tag, atom_list) };
-    builder.SetAtomList(std::move(atom_list));
-    builder.SetBondList(std::move(bond_list));
-    LoadChainMap(database, builder, key_tag);
+    rhbm_gem::ModelObjectAssembly assembly;
+    LoadChemicalComponentEntryList(database, assembly, key_tag);
+    LoadComponentAtomEntryList(database, assembly, key_tag);
+    LoadComponentBondEntryList(database, assembly, key_tag);
+    assembly.atom_list = LoadAtomObjectList(database, key_tag);
+    assembly.bond_list = LoadBondObjectList(database, key_tag, assembly.atom_list);
+    LoadChainMap(database, assembly, key_tag);
+    return assembly;
 }
 
 void SaveAtomLocalPotentialEntryList(
@@ -1517,9 +1522,8 @@ std::unique_ptr<ModelObject> ModelObjectStorage::Load(
     const std::string & key_tag)
 {
     ScopeTimer timer{ "ModelObjectStorage::Load" };
-    ModelObjectBuilder builder;
-    LoadStructure(database, builder, key_tag);
-    auto model_object{ std::make_unique<ModelObject>(builder.Build()) };
+    auto assembly{ LoadStructure(database, key_tag) };
+    auto model_object{ std::make_unique<ModelObject>(AssembleModelObject(std::move(assembly))) };
     LoadModelObjectRow(database, *model_object, key_tag);
     LoadAnalysis(database, *model_object, key_tag);
     return model_object;

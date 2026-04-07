@@ -13,7 +13,6 @@ namespace rhbm_gem {
 class AtomObject;
 class ModelAnalysisAccess;
 class ModelObject;
-class ModelObjectBuilder;
 
 class AtomObject
 {
@@ -86,7 +85,6 @@ public:
 private:
     friend class ModelAnalysisAccess;
     friend class ModelObject;
-    friend class ModelObjectBuilder;
 
     void SetSelectedFlag(bool value) { m_is_selected = value; }
     void SetOwnerModel(ModelObject * value) { m_owner_model = value; }
