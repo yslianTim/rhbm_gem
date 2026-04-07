@@ -6,13 +6,11 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/ModelObjectBuilder.hpp"
-#include "data/detail/ModelSelectionAccess.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "data/detail/BondClassifier.hpp"
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
 #include "data/detail/GroupPotentialEntry.hpp"
-#include "data/detail/ModelAnalysisAccess.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/BondKeySystem.hpp>
@@ -1402,44 +1400,6 @@ void LoadBondGroupPotentialEntryList(
     }
 }
 
-void ApplyAtomLocalPotentialEntries(
-    rhbm_gem::ModelObject & model_obj,
-    std::unordered_map<int, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> entry_map)
-{
-    std::unordered_set<int> selected_serial_ids;
-    selected_serial_ids.reserve(entry_map.size());
-    for (const auto & atom_object : model_obj.GetAtomList())
-    {
-        const auto serial_id{ atom_object->GetSerialID() };
-        auto iter{ entry_map.find(serial_id) };
-        if (iter != entry_map.end())
-        {
-            rhbm_gem::ModelAnalysisAccess::SetLocalEntry(model_obj, *atom_object, std::move(iter->second));
-            selected_serial_ids.insert(serial_id);
-        }
-    }
-    rhbm_gem::ModelSelectionAccess::ApplyLoadedAtomSelection(model_obj, selected_serial_ids);
-}
-
-void ApplyBondLocalPotentialEntries(
-    rhbm_gem::ModelObject & model_obj,
-    std::map<std::pair<int, int>, std::unique_ptr<rhbm_gem::LocalPotentialEntry>> entry_map)
-{
-    std::set<std::pair<int, int>> selected_serial_pairs;
-    for (const auto & bond_object : model_obj.GetBondList())
-    {
-        const auto serial_id_pair{
-            std::make_pair(bond_object->GetAtomSerialID1(), bond_object->GetAtomSerialID2()) };
-        auto iter{ entry_map.find(serial_id_pair) };
-        if (iter != entry_map.end())
-        {
-            rhbm_gem::ModelAnalysisAccess::SetLocalEntry(model_obj, *bond_object, std::move(iter->second));
-            selected_serial_pairs.insert(serial_id_pair);
-        }
-    }
-    rhbm_gem::ModelSelectionAccess::ApplyLoadedBondSelection(model_obj, selected_serial_pairs);
-}
-
 void SaveAnalysis(
     rhbm_gem::SQLiteWrapper & database,
     const rhbm_gem::ModelObject & model_obj,
@@ -1469,31 +1429,6 @@ void SaveAnalysis(
     }
 }
 
-void LoadAnalysis(
-    rhbm_gem::SQLiteWrapper & database,
-    rhbm_gem::ModelObject & model_obj,
-    const std::string & key_tag)
-{
-    ScopeTimer timer{ "ModelObjectStorage::LoadAnalysis" };
-    rhbm_gem::ModelAnalysisAccess::Mutable(model_obj).Clear();
-    ApplyAtomLocalPotentialEntries(model_obj, LoadAtomLocalPotentialEntryMap(database, key_tag));
-    ApplyBondLocalPotentialEntries(model_obj, LoadBondLocalPotentialEntryMap(database, key_tag));
-
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
-    {
-        auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
-        rhbm_gem::ModelAnalysisAccess::Mutable(model_obj).Atoms().EnsureGroupEntry(class_key);
-        LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
-    }
-
-    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
-    {
-        auto class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
-        rhbm_gem::ModelAnalysisAccess::Mutable(model_obj).Bonds().EnsureGroupEntry(class_key);
-        LoadBondGroupPotentialEntryList(database, model_obj, key_tag, class_key);
-    }
-}
-
 } // namespace
 
 namespace rhbm_gem {
@@ -1518,6 +1453,63 @@ void ModelObjectStorage::Save(
 
     SaveStructure(database, model_obj, key_tag);
     SaveAnalysis(database, model_obj, key_tag);
+}
+
+void ModelObjectStorage::LoadAnalysis(
+    SQLiteWrapper & database,
+    ModelObject & model_obj,
+    const std::string & key_tag)
+{
+    ScopeTimer timer{ "ModelObjectStorage::LoadAnalysis" };
+    ModelAnalysisAccess::Mutable(model_obj).Clear();
+
+    auto atom_entry_map{ LoadAtomLocalPotentialEntryMap(database, key_tag) };
+    std::unordered_set<int> selected_serial_ids;
+    selected_serial_ids.reserve(atom_entry_map.size());
+    for (const auto & atom_object : model_obj.GetAtomList())
+    {
+        const auto serial_id{ atom_object->GetSerialID() };
+        auto iter{ atom_entry_map.find(serial_id) };
+        if (iter == atom_entry_map.end())
+        {
+            continue;
+        }
+
+        ModelAnalysisAccess::SetLocalEntry(model_obj, *atom_object, std::move(iter->second));
+        selected_serial_ids.insert(serial_id);
+    }
+    model_obj.RestoreAtomSelectionBulk(selected_serial_ids);
+
+    auto bond_entry_map{ LoadBondLocalPotentialEntryMap(database, key_tag) };
+    std::set<std::pair<int, int>> selected_serial_pairs;
+    for (const auto & bond_object : model_obj.GetBondList())
+    {
+        const auto serial_id_pair{
+            std::make_pair(bond_object->GetAtomSerialID1(), bond_object->GetAtomSerialID2()) };
+        auto iter{ bond_entry_map.find(serial_id_pair) };
+        if (iter == bond_entry_map.end())
+        {
+            continue;
+        }
+
+        ModelAnalysisAccess::SetLocalEntry(model_obj, *bond_object, std::move(iter->second));
+        selected_serial_pairs.insert(serial_id_pair);
+    }
+    model_obj.RestoreBondSelectionBulk(selected_serial_pairs);
+
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupAtomClassCount(); i++)
+    {
+        auto class_key{ ChemicalDataHelper::GetGroupAtomClassKey(i) };
+        ModelAnalysisAccess::Mutable(model_obj).Atoms().EnsureGroupEntry(class_key);
+        LoadAtomGroupPotentialEntryList(database, model_obj, key_tag, class_key);
+    }
+
+    for (size_t i = 0; i < ChemicalDataHelper::GetGroupBondClassCount(); i++)
+    {
+        auto class_key{ ChemicalDataHelper::GetGroupBondClassKey(i) };
+        ModelAnalysisAccess::Mutable(model_obj).Bonds().EnsureGroupEntry(class_key);
+        LoadBondGroupPotentialEntryList(database, model_obj, key_tag, class_key);
+    }
 }
 
 std::unique_ptr<ModelObject> ModelObjectStorage::Load(

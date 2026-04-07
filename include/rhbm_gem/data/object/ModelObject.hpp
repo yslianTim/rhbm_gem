@@ -26,7 +26,6 @@ class ModelAnalysisAccess;
 class ModelObjectBuilder;
 class ModelAnalysisData;
 class ModelObjectStorage;
-class ModelSelectionAccess;
 struct ModelSpatialCache;
 
 class ModelObject
@@ -103,17 +102,21 @@ private:
     friend class ModelAnalysisAccess;
     friend class ModelObjectBuilder;
     friend class ModelObjectStorage;
-    friend class ModelSelectionAccess;
 
+    // Object graph and derived-state maintenance.
     void RebuildObjectIndex();
     void AttachOwnedObjects();
     void SyncDerivedState();
     void EnsureKDTreeRoot();
-    void SetAtomSelectionBulk(const std::unordered_set<int> & selected_serial_ids);
-    void SetBondSelectionBulk(const std::set<std::pair<int, int>> & selected_serial_pairs);
+
+    // Selection maintenance.
     void BuildSelectedAtomList();
     void BuildSelectedBondList();
     void FilterSelectionFromSymmetry(bool is_asymmetry);
+
+    // Persistence hydration.
+    void RestoreAtomSelectionBulk(const std::unordered_set<int> & selected_serial_ids);
+    void RestoreBondSelectionBulk(const std::set<std::pair<int, int>> & selected_serial_pairs);
 };
 
 } // namespace rhbm_gem

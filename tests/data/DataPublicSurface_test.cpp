@@ -250,6 +250,9 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     const auto project_root{ command_test::ProjectRootPath() };
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/core/detail/LocalPotentialAccess.hpp"));
     EXPECT_FALSE(std::filesystem::exists(project_root / "src/core/detail/GroupPotentialAccess.hpp"));
+    EXPECT_FALSE(std::filesystem::exists(project_root / "src/data/detail/ModelSelectionAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "LocalPotentialAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "GroupPotentialAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSelectionAccess.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSelectionAccess"));
 }

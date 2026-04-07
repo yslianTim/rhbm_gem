@@ -482,7 +482,7 @@ void ModelObject::SetBondSelected(int atom_serial_id_1, int atom_serial_id_2, bo
     throw std::out_of_range("Bond serial pair is not available.");
 }
 
-void ModelObject::SetAtomSelectionBulk(const std::unordered_set<int> & selected_serial_ids)
+void ModelObject::RestoreAtomSelectionBulk(const std::unordered_set<int> & selected_serial_ids)
 {
     for (auto & atom : m_atom_list)
     {
@@ -492,7 +492,7 @@ void ModelObject::SetAtomSelectionBulk(const std::unordered_set<int> & selected_
     RebuildSelection();
 }
 
-void ModelObject::SetBondSelectionBulk(
+void ModelObject::RestoreBondSelectionBulk(
     const std::set<std::pair<int, int>> & selected_serial_pairs)
 {
     for (auto & bond : m_bond_list)
