@@ -297,6 +297,48 @@ TEST(DataObjectRuntimeBehaviorTest, RebuildBondGroupEntriesFromSelectionTracksOn
     EXPECT_EQ(member_count, 1U);
 }
 
+TEST(DataObjectRuntimeBehaviorTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
+    const auto & simple_class_key{ ChemicalDataHelper::GetSimpleAtomClassKey() };
+
+    model->SelectAllAtoms();
+    analysis_data.RebuildAtomGroupEntriesFromSelection(*model);
+
+    const auto group_keys{ analysis_data.CollectAtomGroupKeys(simple_class_key) };
+    const auto * group_entry{ analysis_data.FindAtomGroupEntry(simple_class_key) };
+    ASSERT_NE(group_entry, nullptr);
+    EXPECT_EQ(group_keys.size(), group_entry->Entries().size());
+    for (const auto & group_key : group_keys)
+    {
+        EXPECT_NE(group_entry->FindGroup(group_key), nullptr);
+    }
+
+    EXPECT_TRUE(analysis_data.CollectAtomGroupKeys("missing_atom_class").empty());
+}
+
+TEST(DataObjectRuntimeBehaviorTest, CollectBondGroupKeysReturnsRebuiltGroupKeySet)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
+    const auto & simple_class_key{ ChemicalDataHelper::GetSimpleBondClassKey() };
+
+    model->SelectAllBonds();
+    analysis_data.RebuildBondGroupEntriesFromSelection(*model);
+
+    const auto group_keys{ analysis_data.CollectBondGroupKeys(simple_class_key) };
+    const auto * group_entry{ analysis_data.FindBondGroupEntry(simple_class_key) };
+    ASSERT_NE(group_entry, nullptr);
+    EXPECT_EQ(group_keys.size(), group_entry->Entries().size());
+    for (const auto & group_key : group_keys)
+    {
+        EXPECT_NE(group_entry->FindGroup(group_key), nullptr);
+    }
+
+    EXPECT_TRUE(analysis_data.CollectBondGroupKeys("missing_bond_class").empty());
+}
+
 TEST(DataObjectRuntimeBehaviorTest, ModelAtomsExposeStableSerialAndPositionInputsForTypedWorkflows)
 {
     auto model{ data_test::MakeModelWithBond() };

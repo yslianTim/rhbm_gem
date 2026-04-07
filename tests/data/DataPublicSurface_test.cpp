@@ -282,6 +282,8 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSelectionAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src/core/command", "data/detail/AtomClassifier.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src/core/experimental", "data/detail/BondClassifier.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src/core/command", "CollectGroupKeys("));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src/core/experimental", "CollectGroupKeys("));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "AtomAnalysisStore", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "BondAnalysisStore", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", ".Atoms()", ignored_test_files));

@@ -50,18 +50,6 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     return execution_options;
 }
 
-std::vector<GroupKey> CollectGroupKeys(const GroupPotentialEntry & entry)
-{
-    std::vector<GroupKey> group_keys;
-    group_keys.reserve(entry.Entries().size());
-    for (const auto & [group_key, bucket] : entry.Entries())
-    {
-        (void)bucket;
-        group_keys.emplace_back(group_key);
-    }
-    return group_keys;
-}
-
 void RunBondSampling(
     ModelObject & model_object,
     const MapObject & map_object,
@@ -256,7 +244,7 @@ void RunBondPotentialFitting(const PotentialAnalysisBondWorkflowContext & contex
         const auto & analysis_state{ ModelAnalysisData::Of(context.model_object) };
         auto group_potential_entry{
             analysis_state.FindBondGroupEntry(class_key) };
-        auto group_keys{ CollectGroupKeys(*group_potential_entry) };
+        auto group_keys{ analysis_state.CollectBondGroupKeys(class_key) };
         const auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 

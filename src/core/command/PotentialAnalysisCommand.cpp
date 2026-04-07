@@ -59,8 +59,6 @@ constexpr std::string_view kAlphaGOption{ "--alpha-g" };
 constexpr std::string_view kSamplingRangeIssue{ "--sampling-range" };
 constexpr std::string_view kFitRangeIssue{ "--fit-range" };
 
-std::vector<GroupKey> CollectGroupKeys(const rhbm_gem::GroupPotentialEntry & entry);
-
 void PrepareModelForPotentialAnalysis(
     rhbm_gem::ModelObject & model_object,
     bool asymmetry_flag)
@@ -91,18 +89,6 @@ HRLExecutionOptions MakePotentialAnalysisExecutionOptions(
     execution_options.quiet_mode = quiet_mode;
     execution_options.thread_size = thread_size;
     return execution_options;
-}
-
-std::vector<GroupKey> CollectGroupKeys(const rhbm_gem::GroupPotentialEntry & entry)
-{
-    std::vector<GroupKey> group_keys;
-    group_keys.reserve(entry.Entries().size());
-    for (const auto & [group_key, bucket] : entry.Entries())
-    {
-        (void)bucket;
-        group_keys.emplace_back(group_key);
-    }
-    return group_keys;
 }
 
 rhbm_gem::LocalPotentialFitState & RequireAtomFitState(
@@ -442,7 +428,7 @@ void PotentialAnalysisCommand::RunAtomPotentialFitting()
         // Group Atom Potential Fitting
         auto group_potential_entry{
             ModelAnalysisData::Of(*m_model_object).FindAtomGroupEntry(class_key) };
-        auto group_keys{ CollectGroupKeys(*group_potential_entry) };
+        auto group_keys{ ModelAnalysisData::Of(*m_model_object).CollectAtomGroupKeys(class_key) };
         auto group_key_size{ group_keys.size() };
         std::atomic<size_t> key_count{ 0 };
 

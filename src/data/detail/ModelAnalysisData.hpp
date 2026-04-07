@@ -5,6 +5,9 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
+
+#include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
 namespace rhbm_gem {
 
@@ -56,6 +59,8 @@ public:
     void ClearTransientFitStates();
     void RebuildAtomGroupEntriesFromSelection(const ModelObject & model_object);
     void RebuildBondGroupEntriesFromSelection(const ModelObject & model_object);
+    std::vector<GroupKey> CollectAtomGroupKeys(const std::string & class_key) const;
+    std::vector<GroupKey> CollectBondGroupKeys(const std::string & class_key) const;
 
     GroupPotentialEntry & EnsureAtomGroupEntry(const std::string & class_key);
     GroupPotentialEntry * FindAtomGroupEntry(const std::string & class_key);

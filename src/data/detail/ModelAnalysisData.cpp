@@ -12,8 +12,30 @@
 
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace rhbm_gem {
+
+namespace {
+
+std::vector<GroupKey> CollectGroupKeys(const GroupPotentialEntry * entry)
+{
+    if (entry == nullptr)
+    {
+        return {};
+    }
+
+    std::vector<GroupKey> group_keys;
+    group_keys.reserve(entry->Entries().size());
+    for (const auto & [group_key, bucket] : entry->Entries())
+    {
+        (void)bucket;
+        group_keys.emplace_back(group_key);
+    }
+    return group_keys;
+}
+
+} // namespace
 
 ModelAnalysisData::ModelAnalysisData() = default;
 
@@ -115,6 +137,16 @@ void ModelAnalysisData::RebuildBondGroupEntriesFromSelection(const ModelObject &
             group_entry.EnsureGroup(group_key).bond_members.emplace_back(bond);
         }
     }
+}
+
+std::vector<GroupKey> ModelAnalysisData::CollectAtomGroupKeys(const std::string & class_key) const
+{
+    return CollectGroupKeys(FindAtomGroupEntry(class_key));
+}
+
+std::vector<GroupKey> ModelAnalysisData::CollectBondGroupKeys(const std::string & class_key) const
+{
+    return CollectGroupKeys(FindBondGroupEntry(class_key));
 }
 
 GroupPotentialEntry & ModelAnalysisData::EnsureAtomGroupEntry(const std::string & class_key)
