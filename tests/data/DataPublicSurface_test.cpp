@@ -274,6 +274,7 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSpatialAccess"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelObjectBuilder"));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelObjectAssembly"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelAnalysisData::ClearFitStates("));
     EXPECT_FALSE(SourceTreeContains(project_root / "src", "ModelSelectionAccess.hpp"));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelAnalysisAccess", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelSpatialData", ignored_test_files));
@@ -281,6 +282,7 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelSpatialAccess", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelObjectBuilder", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelObjectAssembly", ignored_test_files));
+    EXPECT_FALSE(SourceTreeContains(project_root / "tests", "ModelAnalysisData::ClearFitStates(", ignored_test_files));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelAnalysisAccess"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSpatialData"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSpatialCache"));
@@ -288,5 +290,6 @@ TEST(DataPublicSurfaceTest, InternalTransitionWrappersAreNotAvailableOrIncluded)
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectBuilder"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectAssembly"));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelObjectParts.hpp"));
+    EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelAnalysisData::ClearFitStates("));
     EXPECT_FALSE(SourceTreeContains(project_root / "include", "ModelSelectionAccess"));
 }

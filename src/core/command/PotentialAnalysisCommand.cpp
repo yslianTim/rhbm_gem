@@ -6,6 +6,7 @@
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/AtomClassifier.hpp"
+
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -739,7 +740,7 @@ void PotentialAnalysisCommand::SavePreparedModel()
     if (m_model_object == nullptr) return;
 
     SaveStoredObject(m_model_key_tag, RequestOptions().saved_key_tag);
-    ModelAnalysisData::ClearFitStates(*m_model_object);
+    ModelAnalysisData::Of(*m_model_object).ClearTransientFitStates();
 }
 
 

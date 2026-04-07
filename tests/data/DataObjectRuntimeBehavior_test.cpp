@@ -145,6 +145,61 @@ TEST(DataObjectRuntimeBehaviorTest, ModelSelectionAndLocalEntriesRemainDirectlyQ
     EXPECT_EQ(require_entry_atoms.front(), atoms[0].get());
 }
 
+TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataCanClearTransientFitStatesWithoutDroppingEntries)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto * bond{ model->GetBondList().at(0).get() };
+    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
+
+    analysis_data.Atoms().EnsureLocalEntry(*atom);
+    analysis_data.Bonds().EnsureLocalEntry(*bond);
+    analysis_data.Atoms().EnsureGroupEntry("atom_class");
+    analysis_data.Bonds().EnsureGroupEntry("bond_class");
+    analysis_data.Atoms().EnsureFitState(*atom);
+    analysis_data.Bonds().EnsureFitState(*bond);
+
+    ASSERT_NE(analysis_data.Atoms().FindLocalEntry(*atom), nullptr);
+    ASSERT_NE(analysis_data.Bonds().FindLocalEntry(*bond), nullptr);
+    ASSERT_NE(analysis_data.Atoms().FindGroupEntry("atom_class"), nullptr);
+    ASSERT_NE(analysis_data.Bonds().FindGroupEntry("bond_class"), nullptr);
+    ASSERT_NE(analysis_data.Atoms().FindFitState(*atom), nullptr);
+    ASSERT_NE(analysis_data.Bonds().FindFitState(*bond), nullptr);
+
+    analysis_data.ClearTransientFitStates();
+
+    EXPECT_NE(analysis_data.Atoms().FindLocalEntry(*atom), nullptr);
+    EXPECT_NE(analysis_data.Bonds().FindLocalEntry(*bond), nullptr);
+    EXPECT_NE(analysis_data.Atoms().FindGroupEntry("atom_class"), nullptr);
+    EXPECT_NE(analysis_data.Bonds().FindGroupEntry("bond_class"), nullptr);
+    EXPECT_EQ(analysis_data.Atoms().FindFitState(*atom), nullptr);
+    EXPECT_EQ(analysis_data.Bonds().FindFitState(*bond), nullptr);
+}
+
+TEST(DataObjectRuntimeBehaviorTest, ModelAnalysisDataClearDropsEntriesAndFitStates)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    auto * atom{ model->GetAtomList().at(0).get() };
+    auto * bond{ model->GetBondList().at(0).get() };
+    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
+
+    analysis_data.Atoms().EnsureLocalEntry(*atom);
+    analysis_data.Bonds().EnsureLocalEntry(*bond);
+    analysis_data.Atoms().EnsureGroupEntry("atom_class");
+    analysis_data.Bonds().EnsureGroupEntry("bond_class");
+    analysis_data.Atoms().EnsureFitState(*atom);
+    analysis_data.Bonds().EnsureFitState(*bond);
+
+    analysis_data.Clear();
+
+    EXPECT_EQ(analysis_data.Atoms().FindLocalEntry(*atom), nullptr);
+    EXPECT_EQ(analysis_data.Bonds().FindLocalEntry(*bond), nullptr);
+    EXPECT_EQ(analysis_data.Atoms().FindGroupEntry("atom_class"), nullptr);
+    EXPECT_EQ(analysis_data.Bonds().FindGroupEntry("bond_class"), nullptr);
+    EXPECT_EQ(analysis_data.Atoms().FindFitState(*atom), nullptr);
+    EXPECT_EQ(analysis_data.Bonds().FindFitState(*bond), nullptr);
+}
+
 TEST(DataObjectRuntimeBehaviorTest, ModelAtomsExposeStableSerialAndPositionInputsForTypedWorkflows)
 {
     auto model{ data_test::MakeModelWithBond() };

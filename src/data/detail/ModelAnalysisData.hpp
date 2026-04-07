@@ -19,13 +19,13 @@ class AtomAnalysisStore
 {
 public:
     using GroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
-    using FitStateMap = std::unordered_map<int, LocalPotentialFitState>;
     using LocalEntryMap = std::unordered_map<int, std::unique_ptr<LocalPotentialEntry>>;
+    using FitStateMap = std::unordered_map<int, LocalPotentialFitState>;
 
 private:
     GroupEntryMap m_group_entry_map;
-    FitStateMap m_fit_state_map;
     LocalEntryMap m_local_entry_map;
+    FitStateMap m_fit_state_map;
 
 public:
     GroupPotentialEntry & EnsureGroupEntry(const std::string & class_key);
@@ -46,9 +46,7 @@ public:
 private:
     friend class ModelAnalysisData;
 
-    void ClearGroupEntries();
-    void ClearLocalEntries();
-    void ClearFitStates();
+    void ClearTransientFitStates();
     void Clear();
 
     static int BuildFitStateKey(const AtomObject & atom_object);
@@ -59,13 +57,13 @@ class BondAnalysisStore
 public:
     using GroupEntryMap = std::unordered_map<std::string, GroupPotentialEntry>;
     using FitStateKey = std::pair<int, int>;
-    using FitStateMap = std::map<FitStateKey, LocalPotentialFitState>;
     using LocalEntryMap = std::map<FitStateKey, std::unique_ptr<LocalPotentialEntry>>;
+    using FitStateMap = std::map<FitStateKey, LocalPotentialFitState>;
 
 private:
     GroupEntryMap m_group_entry_map;
-    FitStateMap m_fit_state_map;
     LocalEntryMap m_local_entry_map;
+    FitStateMap m_fit_state_map;
 
 public:
     GroupPotentialEntry & EnsureGroupEntry(const std::string & class_key);
@@ -86,9 +84,7 @@ public:
 private:
     friend class ModelAnalysisData;
 
-    void ClearGroupEntries();
-    void ClearLocalEntries();
-    void ClearFitStates();
+    void ClearTransientFitStates();
     void Clear();
 
     static FitStateKey BuildFitStateKey(const BondObject & bond_object);
@@ -105,7 +101,6 @@ public:
 
     static ModelAnalysisData & Of(ModelObject & model_object);
     static const ModelAnalysisData & Of(const ModelObject & model_object);
-    static void ClearFitStates(ModelObject & model_object);
 
     static ModelObject * OwnerOf(const AtomObject & atom_object);
     static ModelObject * OwnerOf(const BondObject & bond_object);
@@ -119,14 +114,12 @@ public:
     static const LocalPotentialEntry & RequireLocalEntry(const BondObject & bond_object);
 
     void Clear();
+    void ClearTransientFitStates();
 
     AtomAnalysisStore & Atoms() { return m_atoms; }
     const AtomAnalysisStore & Atoms() const { return m_atoms; }
     BondAnalysisStore & Bonds() { return m_bonds; }
     const BondAnalysisStore & Bonds() const { return m_bonds; }
-
-private:
-    void ClearFitStates();
 };
 
 } // namespace rhbm_gem

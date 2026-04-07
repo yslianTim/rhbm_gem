@@ -12,26 +12,16 @@
 
 namespace rhbm_gem {
 
-void AtomAnalysisStore::ClearGroupEntries()
-{
-    m_group_entry_map.clear();
-}
-
-void AtomAnalysisStore::ClearLocalEntries()
-{
-    m_local_entry_map.clear();
-}
-
-void AtomAnalysisStore::ClearFitStates()
+void AtomAnalysisStore::ClearTransientFitStates()
 {
     m_fit_state_map.clear();
 }
 
 void AtomAnalysisStore::Clear()
 {
-    ClearGroupEntries();
-    ClearLocalEntries();
-    ClearFitStates();
+    m_group_entry_map.clear();
+    m_local_entry_map.clear();
+    ClearTransientFitStates();
 }
 
 GroupPotentialEntry & AtomAnalysisStore::EnsureGroupEntry(const std::string & class_key)
@@ -112,26 +102,16 @@ int AtomAnalysisStore::BuildFitStateKey(const AtomObject & atom_object)
     return atom_object.GetSerialID();
 }
 
-void BondAnalysisStore::ClearGroupEntries()
-{
-    m_group_entry_map.clear();
-}
-
-void BondAnalysisStore::ClearLocalEntries()
-{
-    m_local_entry_map.clear();
-}
-
-void BondAnalysisStore::ClearFitStates()
+void BondAnalysisStore::ClearTransientFitStates()
 {
     m_fit_state_map.clear();
 }
 
 void BondAnalysisStore::Clear()
 {
-    ClearGroupEntries();
-    ClearLocalEntries();
-    ClearFitStates();
+    m_group_entry_map.clear();
+    m_local_entry_map.clear();
+    ClearTransientFitStates();
 }
 
 GroupPotentialEntry & BondAnalysisStore::EnsureGroupEntry(const std::string & class_key)
@@ -226,11 +206,6 @@ const ModelAnalysisData & ModelAnalysisData::Of(const ModelObject & model_object
     return *model_object.m_analysis_data;
 }
 
-void ModelAnalysisData::ClearFitStates(ModelObject & model_object)
-{
-    Of(model_object).ClearFitStates();
-}
-
 ModelObject * ModelAnalysisData::OwnerOf(const AtomObject & atom_object)
 {
     return atom_object.m_owner_model;
@@ -280,10 +255,10 @@ void ModelAnalysisData::Clear()
     m_bonds.Clear();
 }
 
-void ModelAnalysisData::ClearFitStates()
+void ModelAnalysisData::ClearTransientFitStates()
 {
-    m_atoms.ClearFitStates();
-    m_bonds.ClearFitStates();
+    m_atoms.ClearTransientFitStates();
+    m_bonds.ClearTransientFitStates();
 }
 
 } // namespace rhbm_gem
