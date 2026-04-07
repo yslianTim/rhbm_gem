@@ -1,7 +1,7 @@
 #include "PotentialPlotBuilder.hpp"
 
 #include "data/detail/ModelAnalysisData.hpp"
-#include "data/detail/ModelSpatialAccess.hpp"
+#include "data/detail/ModelSpatialData.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include "data/detail/BondClassifier.hpp"
@@ -755,7 +755,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
     for (auto & atom : GetModelView().GetAtomObjectList(group_key, class_key))
     {
         auto in_range_atom_list{
-            ModelSpatialAccess::FindAtomsInRange(*model_object, *atom, range) };
+            ModelSpatialData::FindAtomsInRange(*model_object, *atom, range) };
         auto * atom_entry{ ModelAnalysisData::FindLocalEntry(*atom) };
         graph->SetPoint(
             count,

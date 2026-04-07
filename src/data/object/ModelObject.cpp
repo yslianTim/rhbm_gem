@@ -2,12 +2,11 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/BondObject.hpp>
 #include <rhbm_gem/data/object/ChemicalComponentEntry.hpp>
-#include "data/detail/ModelSpatialCache.hpp"
+#include "data/detail/ModelSpatialData.hpp"
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/LocalPotentialFitState.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
-#include <rhbm_gem/utils/math/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/math/ArrayStats.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
@@ -15,7 +14,7 @@ namespace rhbm_gem {
 
 ModelObject::ModelObject() :
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" },
-    m_spatial_cache{ std::make_unique<ModelSpatialCache>() },
+    m_spatial_data{ std::make_unique<ModelSpatialData>() },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
     m_bond_key_system{ std::make_unique<BondKeySystem>() },
@@ -26,7 +25,7 @@ ModelObject::ModelObject() :
 ModelObject::ModelObject(std::vector<std::unique_ptr<AtomObject>> atom_object_list) :
     m_atom_list{ std::move(atom_object_list) },
     m_key_tag{ "" }, m_pdb_id{ "" }, m_emd_id{ "" },
-    m_spatial_cache{ std::make_unique<ModelSpatialCache>() },
+    m_spatial_data{ std::make_unique<ModelSpatialData>() },
     m_component_key_system{ std::make_unique<ComponentKeySystem>() },
     m_atom_key_system{ std::make_unique<AtomKeySystem>() },
     m_bond_key_system{ std::make_unique<BondKeySystem>() },
@@ -54,7 +53,7 @@ ModelObject::ModelObject(ModelObject && other) noexcept :
     m_serial_id_atom_map{ std::move(other.m_serial_id_atom_map) },
     m_chain_id_list_map{ std::move(other.m_chain_id_list_map) },
     m_chemical_component_entry_map{ std::move(other.m_chemical_component_entry_map) },
-    m_spatial_cache{ std::move(other.m_spatial_cache) },
+    m_spatial_data{ std::move(other.m_spatial_data) },
     m_center_of_mass_position{ std::move(other.m_center_of_mass_position) },
     m_component_key_system{ std::move(other.m_component_key_system) },
     m_atom_key_system{ std::move(other.m_atom_key_system) },
@@ -64,10 +63,6 @@ ModelObject::ModelObject(ModelObject && other) noexcept :
     for (size_t axis = 0; axis < std::size(m_model_position_range); ++axis)
     {
         m_model_position_range[axis] = std::move(other.m_model_position_range[axis]);
-    }
-    if (m_spatial_cache == nullptr)
-    {
-        m_spatial_cache = std::make_unique<ModelSpatialCache>();
     }
     if (m_analysis_data == nullptr)
     {
@@ -108,7 +103,7 @@ ModelObject & ModelObject::operator=(ModelObject && other) noexcept
     m_serial_id_atom_map = std::move(other.m_serial_id_atom_map);
     m_chain_id_list_map = std::move(other.m_chain_id_list_map);
     m_chemical_component_entry_map = std::move(other.m_chemical_component_entry_map);
-    m_spatial_cache = std::move(other.m_spatial_cache);
+    m_spatial_data = std::move(other.m_spatial_data);
     m_center_of_mass_position = std::move(other.m_center_of_mass_position);
     for (size_t axis = 0; axis < std::size(m_model_position_range); ++axis)
     {
@@ -119,10 +114,6 @@ ModelObject & ModelObject::operator=(ModelObject && other) noexcept
     m_bond_key_system = std::move(other.m_bond_key_system);
     m_analysis_data = std::move(other.m_analysis_data);
 
-    if (m_spatial_cache == nullptr)
-    {
-        m_spatial_cache = std::make_unique<ModelSpatialCache>();
-    }
     if (m_analysis_data == nullptr)
     {
         m_analysis_data = std::make_unique<ModelAnalysisData>();
@@ -148,7 +139,7 @@ ModelObject::ModelObject(const ModelObject & other) :
     m_key_tag{ other.m_key_tag }, m_pdb_id{ other.m_pdb_id }, m_emd_id{ other.m_emd_id },
     m_resolution_method{ other.m_resolution_method }, m_resolution{ other.m_resolution },
     m_chain_id_list_map{ other.m_chain_id_list_map },
-    m_spatial_cache{ std::make_unique<ModelSpatialCache>() },
+    m_spatial_data{ std::make_unique<ModelSpatialData>() },
     m_component_key_system{
         other.m_component_key_system != nullptr ?
             std::make_unique<ComponentKeySystem>(*other.m_component_key_system) : nullptr },
@@ -317,7 +308,14 @@ void ModelObject::SyncDerivedState()
     {
         axis_range.reset();
     }
-    m_spatial_cache = std::make_unique<ModelSpatialCache>();
+    if (m_spatial_data == nullptr)
+    {
+        m_spatial_data = std::make_unique<ModelSpatialData>();
+    }
+    else
+    {
+        m_spatial_data->Clear();
+    }
     RebuildObjectIndex();
     RebuildSelection();
 }
@@ -340,22 +338,6 @@ std::string ModelObject::FindAtomID(AtomKey atom_key) const
 std::string ModelObject::FindBondID(BondKey bond_key) const
 {
     return m_bond_key_system->GetBondId(bond_key);
-}
-
-void ModelObject::EnsureKDTreeRoot()
-{
-    if (m_spatial_cache != nullptr && m_spatial_cache->kd_tree_root != nullptr) return;
-    if (m_spatial_cache == nullptr)
-    {
-        m_spatial_cache = std::make_unique<ModelSpatialCache>();
-    }
-    std::vector<AtomObject *> atom_ptr_list;
-    atom_ptr_list.reserve(m_atom_list.size());
-    for (auto & atom : m_atom_list)
-    {
-        atom_ptr_list.emplace_back(atom.get());
-    }
-    m_spatial_cache->kd_tree_root = KDTreeAlgorithm<AtomObject>::BuildKDTree(atom_ptr_list, 0);
 }
 
 std::array<float, 3> ModelObject::GetCenterOfMassPosition()

@@ -23,10 +23,9 @@ class AtomObject;
 class BondObject;
 class ChemicalComponentEntry;
 class ModelAnalysisData;
+class ModelSpatialData;
 struct ModelObjectAssembly;
 class ModelObjectStorage;
-class ModelSpatialAccess;
-struct ModelSpatialCache;
 
 ModelObject AssembleModelObject(ModelObjectAssembly assembly);
 
@@ -42,7 +41,7 @@ class ModelObject
     std::map<int, AtomObject*> m_serial_id_atom_map;
     std::unordered_map<std::string, std::vector<std::string>> m_chain_id_list_map;
     std::unordered_map<ComponentKey, std::unique_ptr<ChemicalComponentEntry>> m_chemical_component_entry_map;
-    std::unique_ptr<ModelSpatialCache> m_spatial_cache;
+    std::unique_ptr<ModelSpatialData> m_spatial_data;
     std::unique_ptr<std::array<float, 3>> m_center_of_mass_position;
     std::unique_ptr<std::tuple<double, double>> m_model_position_range[3];
     std::unique_ptr<ComponentKeySystem> m_component_key_system;
@@ -103,14 +102,13 @@ public:
 private:
     friend class ModelAnalysisData;
     friend class ModelObjectStorage;
-    friend class ModelSpatialAccess;
+    friend class ModelSpatialData;
     friend ModelObject AssembleModelObject(ModelObjectAssembly assembly);
 
     // Object graph and derived-state maintenance.
     void RebuildObjectIndex();
     void AttachOwnedObjects();
     void SyncDerivedState();
-    void EnsureKDTreeRoot();
 
     // Selection maintenance.
     void BuildSelectedAtomList();

@@ -11,6 +11,7 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
 #include "data/detail/ModelObjectAssembly.hpp"
+#include "data/detail/ModelSpatialData.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include "data/detail/MapSpatialIndex.hpp"
@@ -279,4 +280,79 @@ TEST(DataObjectRuntimeBehaviorTest, AssemblyInitializesOwnersSelectionAndDerived
     const auto x_range{ model.GetModelPositionRange(0) };
     EXPECT_DOUBLE_EQ(std::get<0>(x_range), 0.0);
     EXPECT_DOUBLE_EQ(std::get<1>(x_range), 1.0);
+}
+
+TEST(DataObjectRuntimeBehaviorTest, SpatialQueriesBuildAndReuseRangeSearchCache)
+{
+    auto model{ data_test::MakeModelWithBond() };
+    const auto & atoms{ model->GetAtomList() };
+    ASSERT_EQ(atoms.size(), 2);
+
+    const auto first_hits{
+        rg::ModelSpatialData::FindAtomsInRange(*model, *atoms.at(0), 0.25) };
+    ASSERT_EQ(first_hits.size(), 1);
+    EXPECT_EQ(first_hits.front(), atoms.at(0).get());
+
+    const auto repeated_hits{
+        rg::ModelSpatialData::FindAtomsInRange(*model, *atoms.at(0), 1.5) };
+    const auto repeated_hits_again{
+        rg::ModelSpatialData::FindAtomsInRange(*model, *atoms.at(0), 1.5) };
+    ASSERT_EQ(repeated_hits.size(), 2);
+    ASSERT_EQ(repeated_hits_again.size(), 2);
+    EXPECT_EQ(repeated_hits.at(0)->GetSerialID(), repeated_hits_again.at(0)->GetSerialID());
+    EXPECT_EQ(repeated_hits.at(1)->GetSerialID(), repeated_hits_again.at(1)->GetSerialID());
+}
+
+TEST(DataObjectRuntimeBehaviorTest, SpatialQueriesRemainAvailableAfterAssemblyCopyAndMove)
+{
+    rg::ModelObjectAssembly assembly;
+    assembly.atom_list.reserve(2);
+    auto atom_1{ std::make_unique<rg::AtomObject>() };
+    atom_1->SetSerialID(41);
+    atom_1->SetPosition(0.0f, 0.0f, 0.0f);
+    auto atom_2{ std::make_unique<rg::AtomObject>() };
+    atom_2->SetSerialID(42);
+    atom_2->SetPosition(1.0f, 0.0f, 0.0f);
+    assembly.atom_list.emplace_back(std::move(atom_1));
+    assembly.atom_list.emplace_back(std::move(atom_2));
+
+    auto assembled_model{ rg::AssembleModelObject(std::move(assembly)) };
+    const auto assembled_hits{
+        rg::ModelSpatialData::FindAtomsInRange(
+            assembled_model,
+            *assembled_model.GetAtomList().at(0),
+            1.5) };
+    ASSERT_EQ(assembled_hits.size(), 2);
+
+    auto copied_model{ assembled_model };
+    const auto copied_hits{
+        rg::ModelSpatialData::FindAtomsInRange(
+            copied_model,
+            *copied_model.GetAtomList().at(0),
+            1.5) };
+    ASSERT_EQ(copied_hits.size(), 2);
+    std::vector<int> copied_serials;
+    copied_serials.reserve(copied_hits.size());
+    for (auto * atom : copied_hits)
+    {
+        copied_serials.emplace_back(atom->GetSerialID());
+    }
+    std::sort(copied_serials.begin(), copied_serials.end());
+    EXPECT_EQ(copied_serials, (std::vector<int>{ 41, 42 }));
+
+    auto moved_model{ std::move(copied_model) };
+    const auto moved_hits{
+        rg::ModelSpatialData::FindAtomsInRange(
+            moved_model,
+            *moved_model.GetAtomList().at(0),
+            1.5) };
+    ASSERT_EQ(moved_hits.size(), 2);
+    std::vector<int> moved_serials;
+    moved_serials.reserve(moved_hits.size());
+    for (auto * atom : moved_hits)
+    {
+        moved_serials.emplace_back(atom->GetSerialID());
+    }
+    std::sort(moved_serials.begin(), moved_serials.end());
+    EXPECT_EQ(moved_serials, (std::vector<int>{ 41, 42 }));
 }
